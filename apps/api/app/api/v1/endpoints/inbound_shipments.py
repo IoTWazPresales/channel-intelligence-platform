@@ -5,6 +5,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
+from app.core.security import get_optional_current_user
+from app.core.tenant_scope import where_tenant
 from app.models.dimensions import DimDistributor, DimProduct
 from app.models.facts import FactInboundShipment
 
@@ -20,8 +22,15 @@ class ClearConfirmBody(BaseModel):
 
 
 @router.get("")
-async def list_inbound(db: AsyncSession = Depends(get_db)):
-    res = await db.execute(select(FactInboundShipment).order_by(FactInboundShipment.updated_at.desc()))
+async def list_inbound(
+    db: AsyncSession = Depends(get_db),
+    user: dict | None = Depends(get_optional_current_user),
+):
+    res = await db.execute(
+        select(FactInboundShipment)
+        .where(where_tenant(FactInboundShipment.tenant_id, user))
+        .order_by(FactInboundShipment.updated_at.desc())
+    )
     rows = res.scalars().all()
     out = []
     for s in rows:

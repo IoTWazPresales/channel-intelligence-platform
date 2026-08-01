@@ -8,6 +8,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
+from app.core.security import get_optional_current_user
+from app.core.tenant_scope import tenant_id_from_user, where_tenant
 from app.models.dimensions import DimDistributor, DistributorContact, DistributorLocation
 from app.models.facts import FactInboundShipment, FactSalesSellout
 from app.models.import_distributor_si import DistributorSourceTokenAlias
@@ -307,6 +309,7 @@ async def list_distributors(
     alias_link: str | None = Query(default=None, description="Filter: linked (≥1 alias) or unlinked (0 aliases)"),
     sort_by: str = Query(default="distributor_code"),
     sort_dir: str = Query(default="asc"),
+    user: dict | None = Depends(get_optional_current_user),
 ):
     sellout_agg = (
         select(
@@ -314,7 +317,10 @@ async def list_distributors(
             func.count(FactSalesSellout.id).label("linked_sellout_rows"),
             func.max(FactSalesSellout.period_start).label("latest_sellout_period_start"),
         )
-        .where(FactSalesSellout.distributor_id.is_not(None))
+        .where(
+            FactSalesSellout.distributor_id.is_not(None),
+            where_tenant(FactSalesSellout.tenant_id, user),
+        )
         .group_by(FactSalesSellout.distributor_id)
         .subquery()
     )
@@ -324,18 +330,27 @@ async def list_distributors(
             func.count(FactInboundShipment.id).label("linked_inbound_rows"),
             func.max(FactInboundShipment.eta_date).label("latest_inbound_eta_date"),
         )
-        .where(FactInboundShipment.distributor_id.is_not(None))
+        .where(
+            FactInboundShipment.distributor_id.is_not(None),
+            where_tenant(FactInboundShipment.tenant_id, user),
+        )
         .group_by(FactInboundShipment.distributor_id)
         .subquery()
     )
     sellout_unmapped = (
         select(func.count(FactSalesSellout.id))
-        .where(FactSalesSellout.distributor_id.is_(None))
+        .where(
+            FactSalesSellout.distributor_id.is_(None),
+            where_tenant(FactSalesSellout.tenant_id, user),
+        )
         .scalar_subquery()
     )
     inbound_unmapped = (
         select(func.count(FactInboundShipment.id))
-        .where(FactInboundShipment.distributor_id.is_(None))
+        .where(
+            FactInboundShipment.distributor_id.is_(None),
+            where_tenant(FactInboundShipment.tenant_id, user),
+        )
         .scalar_subquery()
     )
 
@@ -402,6 +417,7 @@ async def list_distributors(
         .outerjoin(inbound_agg, inbound_agg.c.distributor_id == DimDistributor.id)
         .outerjoin(location_count_subq, location_count_subq.c.distributor_id == DimDistributor.id)
         .outerjoin(contact_count_subq, contact_count_subq.c.distributor_id == DimDistributor.id)
+        .where(where_tenant(DimDistributor.tenant_id, user))
     )
 
     q_val = q.strip()
@@ -587,11 +603,25 @@ async def get_distributor_detail(distributor_id: int, db: AsyncSession = Depends
 
 
 @router.post("", status_code=201)
-async def create_distributor(body: DistributorCreate, db: AsyncSession = Depends(get_db)):
-    existing = await db.execute(select(DimDistributor).where(DimDistributor.code == body.distributor_code.strip()))
+async def create_distributor(
+    body: DistributorCreate,
+    db: AsyncSession = Depends(get_db),
+    user: dict | None = Depends(get_optional_current_user),
+):
+    tid = tenant_id_from_user(user)
+    existing = await db.execute(
+        select(DimDistributor).where(
+            DimDistributor.code == body.distributor_code.strip(),
+            where_tenant(DimDistributor.tenant_id, user),
+        )
+    )
     if existing.scalars().first():
         raise HTTPException(status_code=409, detail="Distributor code already exists")
-    row = DimDistributor(code=body.distributor_code.strip(), name=body.distributor_name.strip())
+    row = DimDistributor(
+        code=body.distributor_code.strip(),
+        name=body.distributor_name.strip(),
+        tenant_id=tid,
+    )
     db.add(row)
     await db.commit()
     await db.refresh(row)

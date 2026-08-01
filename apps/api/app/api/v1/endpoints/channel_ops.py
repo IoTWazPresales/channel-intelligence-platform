@@ -25,6 +25,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.inspection import inspect as sa_inspect
 
 from app.api.deps import get_db
+from app.core.security import get_optional_current_user
+from app.core.tenant_scope import where_tenant
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.fact_customer_velocity import FactCustomerVelocity
 from app.models.fact_dsi_forecast import FactDsiForecast
@@ -250,10 +252,12 @@ async def channel_ops_sell_out(
     date_to: str | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
+    user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
     df = _parse_opt_date(date_from)
     dt = _parse_opt_date(date_to)
     skip = (page - 1) * page_size
+    tenant_f = where_tenant(FactSalesSellout.tenant_id, user)
 
     q = (
         select(
@@ -266,6 +270,7 @@ async def channel_ops_sell_out(
         .join(DimProduct, FactSalesSellout.product_id == DimProduct.id)
         .join(DimCustomer, FactSalesSellout.customer_id == DimCustomer.id)
         .outerjoin(DimDistributor, FactSalesSellout.distributor_id == DimDistributor.id)
+        .where(tenant_f)
     )
     if distributor_id is not None:
         q = q.where(FactSalesSellout.distributor_id == int(distributor_id))
@@ -295,6 +300,7 @@ async def channel_ops_sell_out(
             .where(
                 FactSalesSellout.transaction_date >= p_start,
                 FactSalesSellout.transaction_date <= p_end,
+                tenant_f,
             )
             .group_by(
                 FactSalesSellout.distributor_id,

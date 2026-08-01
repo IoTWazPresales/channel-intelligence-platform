@@ -11,6 +11,8 @@ from sqlalchemy.orm import aliased
 
 from app.api.deps import get_db
 from app.api.v1.bulk_delete_sql_probe import apply_sql_probe_headers, bulk_delete_sql_probe
+from app.core.security import get_optional_current_user
+from app.core.tenant_scope import tenant_id_from_user, where_tenant
 from app.models.dimensions import (
     CustomerContact,
     CustomerLocation,
@@ -266,6 +268,7 @@ async def list_customers(
     ),
     sort_by: str = Query(default="code"),
     sort_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
+    user: dict | None = Depends(get_optional_current_user),
 ):
     pref_dist = aliased(DimDistributor)
     location_count_sq = (
@@ -340,7 +343,7 @@ async def list_customers(
         .join(pref_dist, pref_dist.id == DimCustomer.preferred_distributor_id, isouter=True)
     )
 
-    filters = []
+    filters = [where_tenant(DimCustomer.tenant_id, user)]
     if q and q.strip():
         needle = f"%{q.strip()}%"
         filters.append(
@@ -752,7 +755,11 @@ async def customer_full_merge_task_status(task_id: str):
 
 
 @router.post("", status_code=201)
-async def create_customer(body: CustomerCreate, db: AsyncSession = Depends(get_db)):
+async def create_customer(
+    body: CustomerCreate,
+    db: AsyncSession = Depends(get_db),
+    user: dict | None = Depends(get_optional_current_user),
+):
     customer_name = body.customer_name.strip()
     if not customer_name:
         raise HTTPException(status_code=400, detail="customer_name is required")
@@ -770,6 +777,8 @@ async def create_customer(body: CustomerCreate, db: AsyncSession = Depends(get_d
         preferred_distributor = await db.get(DimDistributor, body.preferred_distributor_id)
         if not preferred_distributor:
             raise HTTPException(status_code=400, detail="Invalid preferred_distributor_id")
+        if (preferred_distributor.tenant_id or "default") != tenant_id_from_user(user):
+            raise HTTPException(status_code=400, detail="Invalid preferred_distributor_id")
 
     requested_code = (body.customer_code or "").strip()
     customer_code = requested_code or await _generate_tmp_customer_code(db)
@@ -784,6 +793,7 @@ async def create_customer(body: CustomerCreate, db: AsyncSession = Depends(get_d
         region_id=body.region_id,
         channel_id=body.channel_id,
         preferred_distributor_id=body.preferred_distributor_id,
+        tenant_id=tenant_id_from_user(user),
     )
     db.add(row)
     try:

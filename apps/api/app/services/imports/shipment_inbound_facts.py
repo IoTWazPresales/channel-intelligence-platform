@@ -71,6 +71,7 @@ _UPSERT_REFRESH_COLUMNS: tuple[str, ...] = (
     "eta_date",
     "reference",
     "status",
+    "tenant_id",
 )
 
 _UPSERT_CHUNK_SIZE = 500
@@ -96,7 +97,7 @@ def _derive_inbound_status(line: ShipmentEvidenceLine) -> str:
     return "received" if line.pod_date is not None else "scheduled"
 
 
-def _row_values_from_evidence(line: ShipmentEvidenceLine) -> dict[str, Any]:
+def _row_values_from_evidence(line: ShipmentEvidenceLine, *, tenant_id: str = "default") -> dict[str, Any]:
     eta = _coalesce_shipment_dates(line)
     raw = line.raw_source_row if isinstance(line.raw_source_row, dict) else {}
     base = {
@@ -152,6 +153,7 @@ def _row_values_from_evidence(line: ShipmentEvidenceLine) -> dict[str, Any]:
         "eta_date": eta,
         "reference": line.order_no,
         "status": _derive_inbound_status(line),
+        "tenant_id": (tenant_id or "default").strip() or "default",
     }
     base["fact_upsert_key"] = fact_upsert_key_for_evidence_values(base)
     return base
@@ -209,8 +211,10 @@ def _upsert_open_order_chunk(db: Session, tbl: Any, rows: list[dict[str, Any]]) 
     db.execute(stmt)
 
 
-def _upsert_single_evidence_row(db: Session, tbl: Any, line: ShipmentEvidenceLine) -> None:
-    row_values = _row_values_from_evidence(line)
+def _upsert_single_evidence_row(
+    db: Session, tbl: Any, line: ShipmentEvidenceLine, *, tenant_id: str = "default"
+) -> None:
+    row_values = _row_values_from_evidence(line, tenant_id=tenant_id)
     line_state = (row_values.get("line_state") or "").strip().lower()
     if line_state == "shipped":
         _upsert_shipped_chunk(db, tbl, [row_values])
@@ -223,6 +227,8 @@ def _upsert_evidence_chunk(
     tbl: Any,
     chunk: list[ShipmentEvidenceLine],
     row_values: list[dict[str, Any]],
+    *,
+    tenant_id: str = "default",
 ) -> None:
     shipped_rows = [r for r in row_values if (r.get("line_state") or "").strip().lower() == "shipped"]
     open_rows = [r for r in row_values if (r.get("line_state") or "").strip().lower() != "shipped"]
@@ -232,7 +238,7 @@ def _upsert_evidence_chunk(
     except Exception as chunk_exc:
         for line in chunk:
             try:
-                _upsert_single_evidence_row(db, tbl, line)
+                _upsert_single_evidence_row(db, tbl, line, tenant_id=tenant_id)
             except Exception as row_exc:
                 raise ShipmentApplyRowError(
                     f"Fact write failed for evidence line {line.id}: {row_exc}",
@@ -274,6 +280,10 @@ def upsert_inbound_shipment_facts_for_job(
     Shipped rows replace by PO-inclusive ``fact_upsert_key`` (invoice lines within PO sum).
     keep per-job ``source_key`` upsert semantics.
     """
+    from app.models.ingestion import ImportJob
+
+    job = db.get(ImportJob, int(import_job_id))
+    tid = (getattr(job, "tenant_id", None) or "default").strip() or "default" if job else "default"
     lines = list(
         db.scalars(
             select(ShipmentEvidenceLine)
@@ -286,8 +296,8 @@ def upsert_inbound_shipment_facts_for_job(
     n = 0
     for start in range(0, total, chunk_size):
         chunk = lines[start : start + chunk_size]
-        row_values = [_row_values_from_evidence(line) for line in chunk]
-        _upsert_evidence_chunk(db, tbl, chunk, row_values)
+        row_values = [_row_values_from_evidence(line, tenant_id=tid) for line in chunk]
+        _upsert_evidence_chunk(db, tbl, chunk, row_values, tenant_id=tid)
         n += len(chunk)
         if on_progress is not None:
             on_progress(n, total)

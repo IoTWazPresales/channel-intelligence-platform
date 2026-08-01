@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.core.security import get_optional_current_user
+from app.core.tenant_scope import tenant_id_from_user
 from app.db.session_sync import SessionLocal
 from app.services.channel_intelligence.cst_read_model import (
     DEFAULT_AGED_LOOKBACK_WEEKS,
@@ -26,6 +28,7 @@ def get_channel_intelligence(
     page_size: int = Query(default=50, ge=1, le=500),
     min_observed_weeks: int = Query(default=DEFAULT_MIN_OBSERVED_WEEKS, ge=1, le=52),
     aged_lookback_weeks: int = Query(default=DEFAULT_AGED_LOOKBACK_WEEKS, ge=1, le=52),
+    user: dict | None = Depends(get_optional_current_user),
 ):
     """Read-only CST channel intelligence. FLAG≠BLOCK; no writes."""
     try:
@@ -40,6 +43,7 @@ def get_channel_intelligence(
                 page_size=page_size,
                 min_observed_weeks=min_observed_weeks,
                 aged_lookback_weeks=aged_lookback_weeks,
+                tenant_id=tenant_id_from_user(user),
             )
     except Exception as exc:  # pragma: no cover — defensive empty-state
         raise HTTPException(
