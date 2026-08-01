@@ -3,6 +3,9 @@
 from app.semantics.registry import (
     SemanticCatalog,
     ValidationResult,
+    catalog_for_tenant,
+    catalog_for_tenant_cached,
+    clear_catalog_cache,
     default_catalog,
     load_catalog,
     validate_metric_grain,
@@ -11,6 +14,9 @@ from app.semantics.registry import (
 __all__ = [
     "SemanticCatalog",
     "ValidationResult",
+    "catalog_for_tenant",
+    "catalog_for_tenant_cached",
+    "clear_catalog_cache",
     "default_catalog",
     "load_catalog",
     "validate_metric_grain",

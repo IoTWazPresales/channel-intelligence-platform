@@ -7,6 +7,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
+from app.core.security import get_optional_current_user
+from app.core.tenant_scope import tenant_id_from_user, where_tenant
 from app.db.session_sync import SessionLocal
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.fact_demand_forecast import FactDemandForecast
@@ -135,8 +137,13 @@ async def list_forecasts(
     db: AsyncSession = Depends(get_db),
     limit: int = Query(default=500, ge=1, le=5000),
     method: str | None = Query(default=None),
+    user: dict | None = Depends(get_optional_current_user),
 ):
-    q = select(FactDemandForecast).order_by(FactDemandForecast.period_start.desc())
+    q = (
+        select(FactDemandForecast)
+        .where(where_tenant(FactDemandForecast.tenant_id, user))
+        .order_by(FactDemandForecast.period_start.desc())
+    )
     if method:
         q = q.where(FactDemandForecast.method == method)
     q = q.limit(limit)
@@ -205,6 +212,7 @@ async def compute_analogue_forecasts(body: AnalogueComputeBody):
 async def forecast_rollups(
     group_by: str = Query(..., pattern="^(product|distributor|customer|period)$"),
     period_start: str | None = None,
+    user: dict | None = Depends(get_optional_current_user),
 ):
     """Sum-rollup proof endpoint — Σ(atomic) by axis."""
     period: date | None = None
@@ -213,10 +221,15 @@ async def forecast_rollups(
             period = _parse_iso_date(period_start)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
+    tid = tenant_id_from_user(user)
     with SessionLocal() as db:
-        rows = sum_rollup(db, group_by=group_by, period_start=period)
+        rows = sum_rollup(db, group_by=group_by, period_start=period, tenant_id=tid)
         atomic_total = float(
-            db.execute(select(func.coalesce(func.sum(FactDemandForecast.forecast_units), 0))).scalar()
+            db.execute(
+                select(func.coalesce(func.sum(FactDemandForecast.forecast_units), 0)).where(
+                    FactDemandForecast.tenant_id == tid
+                )
+            ).scalar()
             or 0
         )
         rollup_total = sum(r["forecast_units"] for r in rows)
@@ -229,13 +242,16 @@ async def forecast_rollups(
         }
 
 
-async def _upsert_manual_row(db: AsyncSession, row: ForecastRowIn) -> FactDemandForecast:
+async def _upsert_manual_row(
+    db: AsyncSession, row: ForecastRowIn, *, tenant_id: str = "default"
+) -> FactDemandForecast:
     period = _parse_iso_date(row.period_start)
     prod = await _require_product(db, row.sku)
     cust_id = await _resolve_customer_id(db, row.customer_code)
     dist_id = await _resolve_distributor_id(db, row.distributor_code)
     conf = _confidence_for_manual(is_override=row.is_override, placeholder=row.confidence_placeholder)
     units = float(row.forecast_units)
+    tid = (tenant_id or "default").strip() or "default"
     existing = (
         await db.execute(
             select(FactDemandForecast).where(
@@ -243,6 +259,7 @@ async def _upsert_manual_row(db: AsyncSession, row: ForecastRowIn) -> FactDemand
                 FactDemandForecast.product_id == prod.id,
                 FactDemandForecast.customer_id == cust_id,
                 FactDemandForecast.period_start == period,
+                FactDemandForecast.tenant_id == tid,
             )
         )
     ).scalar_one_or_none()
@@ -258,6 +275,7 @@ async def _upsert_manual_row(db: AsyncSession, row: ForecastRowIn) -> FactDemand
             method="manual",
             confidence_level=conf,
             is_override=row.is_override,
+            tenant_id=tid,
         )
         db.add(f)
         return f
@@ -272,9 +290,13 @@ async def _upsert_manual_row(db: AsyncSession, row: ForecastRowIn) -> FactDemand
 
 
 @router.post("", status_code=201)
-async def create_forecast(row: ForecastRowIn, db: AsyncSession = Depends(get_db)):
+async def create_forecast(
+    row: ForecastRowIn,
+    db: AsyncSession = Depends(get_db),
+    user: dict | None = Depends(get_optional_current_user),
+):
     try:
-        f = await _upsert_manual_row(db, row)
+        f = await _upsert_manual_row(db, row, tenant_id=tenant_id_from_user(user))
         await db.commit()
         await db.refresh(f)
         return {"id": f.id}
@@ -283,13 +305,18 @@ async def create_forecast(row: ForecastRowIn, db: AsyncSession = Depends(get_db)
 
 
 @router.post("/bulk", status_code=200)
-async def bulk_create_forecasts(body: ForecastBulkBody, db: AsyncSession = Depends(get_db)):
+async def bulk_create_forecasts(
+    body: ForecastBulkBody,
+    db: AsyncSession = Depends(get_db),
+    user: dict | None = Depends(get_optional_current_user),
+):
     if len(body.rows) > 5000:
         raise HTTPException(status_code=400, detail="Too many rows (max 5000)")
+    tid = tenant_id_from_user(user)
     n = 0
     for row in body.rows:
         try:
-            await _upsert_manual_row(db, row)
+            await _upsert_manual_row(db, row, tenant_id=tid)
             n += 1
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e

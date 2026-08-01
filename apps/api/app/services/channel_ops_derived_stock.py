@@ -192,6 +192,8 @@ def yoy_pct_or_none(
 
 def _latest_snapshot_subquery(
     distributor_id: int | None = None,
+    *,
+    tenant_id: str | None = None,
 ) -> Select[Any]:
     """Distinct (distributor_id, product_id) with max(as_of_date)."""
     q = select(
@@ -204,6 +206,8 @@ def _latest_snapshot_subquery(
     )
     if distributor_id is not None:
         q = q.where(FactInventoryDistributor.distributor_id == int(distributor_id))
+    if tenant_id is not None:
+        q = q.where(FactInventoryDistributor.tenant_id == tenant_id)
     return q.subquery()
 
 
@@ -211,14 +215,19 @@ def _shipped_landed_filter(
     distributor_id: int,
     product_id: int,
     snapshot_date: date,
+    *,
+    tenant_id: str | None = None,
 ):
-    return and_(
+    clauses = [
         FactInboundShipment.distributor_id == int(distributor_id),
         FactInboundShipment.product_id == int(product_id),
         FactInboundShipment.pod_date.isnot(None),
         FactInboundShipment.pod_date > snapshot_date,
         func.lower(FactInboundShipment.line_state) == "shipped",
-    )
+    ]
+    if tenant_id is not None:
+        clauses.append(FactInboundShipment.tenant_id == tenant_id)
+    return and_(*clauses)
 
 
 def compute_derived_for_pair_sync(
@@ -424,9 +433,11 @@ async def derived_stock_rows_for_distributor(
     *,
     distributor_id: int,
     product_id: int | None = None,
+    tenant_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """Per-product derived stock rows for Channel Ops inventory tab."""
-    latest = _latest_snapshot_subquery(int(distributor_id))
+    tid = (tenant_id or "default").strip() or "default"
+    latest = _latest_snapshot_subquery(int(distributor_id), tenant_id=tid)
     q = (
         select(
             FactInventoryDistributor.distributor_id,
@@ -445,7 +456,10 @@ async def derived_stock_rows_for_distributor(
                 FactInventoryDistributor.as_of_date == latest.c.snapshot_date,
             ),
         )
-        .where(FactInventoryDistributor.distributor_id == int(distributor_id))
+        .where(
+            FactInventoryDistributor.distributor_id == int(distributor_id),
+            FactInventoryDistributor.tenant_id == tid,
+        )
     )
     if product_id is not None:
         q = q.where(FactInventoryDistributor.product_id == int(product_id))
@@ -461,6 +475,7 @@ async def derived_stock_rows_for_distributor(
                         FactSalesSellout.distributor_id == dist_id,
                         FactSalesSellout.product_id == prod_id,
                         FactSalesSellout.transaction_date > snap_date,
+                        FactSalesSellout.tenant_id == tid,
                     )
                 )
                 or 0
@@ -470,7 +485,7 @@ async def derived_stock_rows_for_distributor(
             str(
                 await db.scalar(
                     select(func.coalesce(func.sum(FactInboundShipment.quantity), 0)).where(
-                        _shipped_landed_filter(dist_id, prod_id, snap_date)
+                        _shipped_landed_filter(dist_id, prod_id, snap_date, tenant_id=tid)
                     )
                 )
                 or 0

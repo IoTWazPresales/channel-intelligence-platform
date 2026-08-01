@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-01 — **P3-1 complete (pre-P3-2):** full SEMANTICS catalog + tenant overlay merge; forecasts/inventory/channel-ops inventory tenant filters. Stop before P3-2.
 - 2026-08-01 — **P3-1 semantic layer scaffold:** YAML catalog + `validate_metric_grain` (WoC/SOH/claim_rate refusals); API `/semantics/*`. No P3-2 SQL. Tests 7/7.
 - 2026-08-01 — **P2 residual tenant filters:** dim product/customer/distributor list+create; sellout/shipping/channel-ops sell-out/CST/inbound reads via `where_tenant`; DSI/shipment/CST apply stamp `tenant_id` from ImportJob. Next: P3-1 semantic layer.
 - 2026-08-01 — **P2 complete (local):** P2-4 freshness landing + P2-5 Ops/`health/ready`/backup+restore smoke (`cip_alembic_smoke` dim_product parity). P2-1 hosting still deferred. Branch `feat/p2-auth-rbac` @ `5fa4798`.

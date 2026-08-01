@@ -357,12 +357,16 @@ async def channel_ops_inventory(
     db: AsyncSession = Depends(get_db),
     distributor_id: int | None = Query(None),
     product_id: int | None = None,
+    user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
     if distributor_id is None:
         raise HTTPException(status_code=400, detail="distributor_id is required")
 
+    from app.core.tenant_scope import tenant_id_from_user
+
+    tid = tenant_id_from_user(user)
     derived_rows = await derived_stock_rows_for_distributor(
-        db, distributor_id=int(distributor_id), product_id=product_id
+        db, distributor_id=int(distributor_id), product_id=product_id, tenant_id=tid
     )
     product_ids = [int(r["product_id"]) for r in derived_rows]
     product_meta: dict[int, tuple[str | None, str | None]] = {}
@@ -405,6 +409,7 @@ async def channel_ops_inventory(
                     FactDemandForecast.distributor_id == int(distributor_id),
                     FactDemandForecast.period_start >= today,
                     FactDemandForecast.period_start <= horizon,
+                    FactDemandForecast.tenant_id == tid,
                 )
                 .group_by(FactDemandForecast.product_id)
             )

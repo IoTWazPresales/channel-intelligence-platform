@@ -1,25 +1,19 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-01 (P3-1 semantic layer scaffold)
-**Branch:** `feat/p2-auth-rbac` @ `0e12aa5`
+**Last updated:** 2026-08-01 (P3-1 complete for this branch; stop before P3-2)
+**Branch:** `feat/p2-auth-rbac` @ (pending push)
 **Alembic:** `20260801_0005` on cip
 
-## Done
+## Done this session
 
-- **P2** usable-by-others locally (P2-1 hosting deferred; P2-2→P2-5 + residual tenant filters)
-- **P3-1 Semantic layer (scaffold)** — YAML metric/dimension registry + grain validity API
-  - `GET /api/v1/semantics/catalog|metrics|dimensions`
-  - `POST /api/v1/semantics/validate` refuses invalid metric×grain with explanation
-  - Config: `apps/api/app/semantics/catalog/default.yaml` (from COMMERCIAL_SEMANTICS)
-  - **Not** P3-2 query engine / report builder
+- **P2 residual tenant filters** — dim/sellout/shipping/channel-ops/CST/inbound + forecasts + inventory/customer + channel-ops inventory derived stock; apply writers stamp `tenant_id` from ImportJob
+- **P3-1 Semantic layer** — full IMPLEMENTED catalog from COMMERCIAL_SEMANTICS; grain validity; tenant overlay path `catalog/tenants/{tenant_id}.yaml`; API `/semantics/*`
+- **Not done (by design):** P3-2 query engine / report builder / dashboards
 
-## Not done / next
+## Next (new chat)
 
-1. **Stop before P3-2+** (per session goal) — query engine is next phase when Warren asks
-2. Expand catalog to full IMPLEMENTED metric set (A1-03..06, A1-08, A2-01/04/05, B1-02..)
-3. Tenant overlay YAML path (config not code for tenant #2) — stub not wired yet
-4. Open PR for `feat/p2-auth-rbac` when ready (Warren: not yet)
-5. **X-1 CST Unit E VERIFY** (prefer new chat)
-6. Remaining tenant P1: channel-ops inventory derived internals, forecasts list, inventory/customer
+1. **P3-2 Query engine** (metric+dim→SQL) when Warren starts it
+2. Open PR for `feat/p2-auth-rbac` when ready (not yet)
+3. **X-1 CST Unit E VERIFY** (prefer dedicated chat)
 
 **Env:** local Windows. API `:8001` session, web `:3000`. Seed `admin@local` / `changeme`.

@@ -1,6 +1,7 @@
 """P3-1 governed semantic layer — metric/dimension registry + grain validity.
 
 Config-driven (YAML). Does not compose SQL — that is P3-2.
+Tenant overlays: ``catalog/tenants/{tenant_id}.yaml`` merge metrics by id/key.
 """
 
 from __future__ import annotations
@@ -12,7 +13,9 @@ from typing import Any
 
 import yaml
 
-_CATALOG_PATH = Path(__file__).resolve().parent / "catalog" / "default.yaml"
+_CATALOG_DIR = Path(__file__).resolve().parent / "catalog"
+_CATALOG_PATH = _CATALOG_DIR / "default.yaml"
+_TENANT_DIR = _CATALOG_DIR / "tenants"
 
 
 @dataclass(frozen=True)
@@ -70,6 +73,8 @@ class SemanticCatalog:
     source_doc: str
     dimensions: tuple[DimensionDef, ...]
     metrics: tuple[MetricDef, ...]
+    tenant_id: str = "default"
+    overlay_applied: bool = False
 
     def dimension_ids(self) -> frozenset[str]:
         return frozenset(d.id for d in self.dimensions)
@@ -85,6 +90,8 @@ class SemanticCatalog:
         return {
             "version": self.version,
             "source_doc": self.source_doc,
+            "tenant_id": self.tenant_id,
+            "overlay_applied": self.overlay_applied,
             "dimensions": [
                 {"id": d.id, "label": d.label, "description": d.description} for d in self.dimensions
             ],
@@ -135,11 +142,19 @@ def _parse_metric(raw: dict[str, Any]) -> MetricDef:
     )
 
 
-def load_catalog(path: Path | None = None) -> SemanticCatalog:
-    catalog_path = path or _CATALOG_PATH
-    data = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
+def _load_yaml(path: Path) -> dict[str, Any]:
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
-        raise ValueError(f"Invalid semantic catalog at {catalog_path}")
+        raise ValueError(f"Invalid semantic catalog at {path}")
+    return data
+
+
+def _catalog_from_data(
+    data: dict[str, Any],
+    *,
+    tenant_id: str = "default",
+    overlay_applied: bool = False,
+) -> SemanticCatalog:
     dims = tuple(
         DimensionDef(
             id=str(d["id"]),
@@ -154,12 +169,95 @@ def load_catalog(path: Path | None = None) -> SemanticCatalog:
         source_doc=str(data.get("source_doc") or ""),
         dimensions=dims,
         metrics=metrics,
+        tenant_id=tenant_id,
+        overlay_applied=overlay_applied,
     )
+
+
+def load_catalog(path: Path | None = None) -> SemanticCatalog:
+    return _catalog_from_data(_load_yaml(path or _CATALOG_PATH))
+
+
+def _tenant_overlay_path(tenant_id: str) -> Path:
+    safe = "".join(c for c in (tenant_id or "default").strip() if c.isalnum() or c in ("-", "_"))
+    if not safe or safe.startswith("_"):
+        safe = "default"
+    return _TENANT_DIR / f"{safe}.yaml"
+
+
+def _merge_overlay(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    """Merge tenant overlay into base: metrics replace by id then key; dimensions append/replace by id."""
+    out = dict(base)
+    out["version"] = int(overlay.get("version") or base.get("version") or 1)
+    if overlay.get("source_doc"):
+        out["source_doc"] = overlay["source_doc"]
+
+    dim_by_id: dict[str, dict[str, Any]] = {
+        str(d["id"]): dict(d) for d in (base.get("dimensions") or []) if d.get("id")
+    }
+    for d in overlay.get("dimensions") or []:
+        if d.get("id"):
+            dim_by_id[str(d["id"])] = dict(d)
+    out["dimensions"] = list(dim_by_id.values())
+
+    met_by_id: dict[str, dict[str, Any]] = {}
+    met_by_key: dict[str, str] = {}
+    for m in base.get("metrics") or []:
+        mid = str(m["id"])
+        met_by_id[mid] = dict(m)
+        met_by_key[str(m.get("key") or "").lower()] = mid
+    for m in overlay.get("metrics") or []:
+        mid = str(m.get("id") or "")
+        key = str(m.get("key") or "").lower()
+        if mid and mid in met_by_id:
+            met_by_id[mid] = {**met_by_id[mid], **dict(m)}
+        elif key and key in met_by_key:
+            existing_id = met_by_key[key]
+            met_by_id[existing_id] = {**met_by_id[existing_id], **dict(m), "id": existing_id}
+        elif mid:
+            met_by_id[mid] = dict(m)
+            if key:
+                met_by_key[key] = mid
+        elif key:
+            # new metric without id — invent id from key
+            mid = key.upper().replace(" ", "_")
+            met_by_id[mid] = {**dict(m), "id": mid, "key": m.get("key") or key}
+            met_by_key[key] = mid
+    out["metrics"] = list(met_by_id.values())
+    return out
+
+
+def catalog_for_tenant(tenant_id: str | None = None) -> SemanticCatalog:
+    """Load default catalog merged with optional ``tenants/{tenant_id}.yaml`` overlay."""
+    tid = (tenant_id or "default").strip() or "default"
+    base = _load_yaml(_CATALOG_PATH)
+    overlay_path = _tenant_overlay_path(tid)
+    if tid != "default" and overlay_path.is_file():
+        overlay = _load_yaml(overlay_path)
+        merged = _merge_overlay(base, overlay)
+        return _catalog_from_data(merged, tenant_id=tid, overlay_applied=True)
+    # Also allow default tenant overlay file named default.yaml
+    if overlay_path.is_file() and overlay_path.name != "_example.yaml":
+        overlay = _load_yaml(overlay_path)
+        if overlay.get("metrics") or overlay.get("dimensions"):
+            merged = _merge_overlay(base, overlay)
+            return _catalog_from_data(merged, tenant_id=tid, overlay_applied=True)
+    return _catalog_from_data(base, tenant_id=tid, overlay_applied=False)
 
 
 @lru_cache(maxsize=1)
 def default_catalog() -> SemanticCatalog:
     return load_catalog()
+
+
+def clear_catalog_cache() -> None:
+    default_catalog.cache_clear()
+    catalog_for_tenant_cached.cache_clear()
+
+
+@lru_cache(maxsize=32)
+def catalog_for_tenant_cached(tenant_id: str) -> SemanticCatalog:
+    return catalog_for_tenant(tenant_id)
 
 
 def normalize_grains(grains: list[str] | tuple[str, ...] | set[str] | None) -> frozenset[str]:
@@ -178,9 +276,10 @@ def validate_metric_grain(
     grains: list[str] | tuple[str, ...] | set[str] | None,
     *,
     catalog: SemanticCatalog | None = None,
+    tenant_id: str | None = None,
 ) -> ValidationResult:
     """Refuse invalid metric×grain combinations with an explanation (P3-1 exit bar)."""
-    cat = catalog or default_catalog()
+    cat = catalog or (catalog_for_tenant_cached(tenant_id or "default") if tenant_id else default_catalog())
     requested = sorted(normalize_grains(grains))
     req_set = frozenset(requested)
     metric = cat.metric_by_key(metric_key)
@@ -209,7 +308,7 @@ def validate_metric_grain(
             allowed_grains=allowed_sorted,
         )
 
-    known_dims = cat.dimension_ids() | {"lineup_quarter"}  # explicit refuse target, not a slice dim
+    known_dims = cat.dimension_ids() | {"lineup_quarter"}
     unknown = sorted(g for g in req_set if g not in known_dims)
     if unknown:
         return ValidationResult(
@@ -242,7 +341,6 @@ def validate_metric_grain(
             allowed_grains=allowed_sorted,
         )
 
-    # Prefer specific refuse text when requested grain is a known bad pattern subset/superset
     for ex in metric.refuse_examples:
         if ex.grains <= req_set or req_set <= ex.grains:
             return ValidationResult(
