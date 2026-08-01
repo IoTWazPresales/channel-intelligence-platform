@@ -22,6 +22,7 @@ const ALL: UserRole[] = ['admin', 'steward', 'planner', 'viewer'];
 const STEWARD_PLUS: UserRole[] = ['admin', 'steward'];
 const PLANNER_PLUS: UserRole[] = ['admin', 'planner'];
 const ADMIN_ONLY: UserRole[] = ['admin'];
+const ADMIN_STEWARD: UserRole[] = ['admin', 'steward'];
 
 /** Web feature flag — default on when unset. */
 export function isCommercialPlannerEnabled(): boolean {
@@ -134,6 +135,7 @@ export const navGroups: NavGroup[] = [
     label: 'Admin',
     items: [
       { label: 'Users', href: '/admin/users', roles: ADMIN_ONLY },
+      { label: 'Steward audit', href: '/admin/steward-audit', roles: ADMIN_STEWARD },
       { label: 'Settings', href: '/settings', roles: ADMIN_ONLY },
     ],
   },

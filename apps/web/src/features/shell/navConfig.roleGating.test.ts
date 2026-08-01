@@ -3,10 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { filterNavGroupsForRole, roleMayAccess, shellNavGroups } from '@/features/shell/navConfig';
 
 describe('nav role gating', () => {
-  it('admin sees Users and commercial + steward surfaces', () => {
+  it('admin sees Users and steward audit', () => {
     const groups = shellNavGroups('admin');
     const hrefs = groups.flatMap((g) => g.items.map((i) => i.href));
     expect(hrefs).toContain('/admin/users');
+    expect(hrefs).toContain('/admin/steward-audit');
     expect(hrefs).toContain('/commercial-planner');
     expect(hrefs).toContain('/admin/imports');
   });
@@ -29,11 +30,12 @@ describe('nav role gating', () => {
     expect(hrefs).not.toContain('/admin/imports');
   });
 
-  it('steward sees imports/master but not commercial planner', () => {
+  it('steward sees imports/master and steward audit but not Users', () => {
     const groups = shellNavGroups('steward');
     const hrefs = groups.flatMap((g) => g.items.map((i) => i.href));
     expect(hrefs).toContain('/admin/imports');
     expect(hrefs).toContain('/admin/products');
+    expect(hrefs).toContain('/admin/steward-audit');
     expect(hrefs).not.toContain('/commercial-planner');
     expect(hrefs).not.toContain('/admin/users');
   });

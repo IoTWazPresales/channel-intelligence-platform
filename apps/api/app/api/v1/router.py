@@ -40,6 +40,7 @@ from app.api.v1.endpoints import (
     sellout,
     shipment_evidence,
     shipping,
+    steward_audit,
 )
 
 api_router = APIRouter()
@@ -85,6 +86,7 @@ api_router.include_router(
     tags=["imports-product-master"],
 )
 api_router.include_router(mappings.router, prefix="/mappings", tags=["mappings"])
+api_router.include_router(steward_audit.router, prefix="/admin", tags=["admin"])
 api_router.include_router(product_master_gaps.router, prefix="/product-master-gaps", tags=["product-master-gaps"])
 api_router.include_router(exceptions.router, prefix="/exceptions", tags=["exceptions"])
 api_router.include_router(dev_wipe.router, prefix="/dev", tags=["dev"])

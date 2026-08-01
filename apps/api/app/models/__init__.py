@@ -121,6 +121,7 @@ from app.models.commercial_lineup import (
 )
 from app.models.task_run import TaskRun
 from app.models.iam import AppUser, AuthSession, Tenant
+from app.models.steward_audit import StewardAuditEvent
 
 __all__ = [
     "DimProduct",
@@ -232,4 +233,5 @@ __all__ = [
     "Tenant",
     "AppUser",
     "AuthSession",
+    "StewardAuditEvent",
 ]
