@@ -2954,14 +2954,17 @@ export function CurrentLineupSection({
 
   const unresolvedTokenCountByCase = useMemo(() => {
     const map = new Map<number, number>();
-    if (!planEntitySummary) return map;
+    const customerTokens = planEntitySummary?.customer_tokens;
+    const distributorTokens = planEntitySummary?.distributor_tokens;
+    // Guards: mocks / partial payloads may not be a full EntityResolutionCandidatesResponse.
+    if (!Array.isArray(customerTokens) || !Array.isArray(distributorTokens)) return map;
     const bumpToken = (caseIds: number[] | undefined) => {
       for (const id of caseIds ?? []) {
         map.set(id, (map.get(id) ?? 0) + 1);
       }
     };
-    for (const t of planEntitySummary.customer_tokens) bumpToken(t.case_ids);
-    for (const t of planEntitySummary.distributor_tokens) bumpToken(t.case_ids);
+    for (const t of customerTokens) bumpToken(t.case_ids);
+    for (const t of distributorTokens) bumpToken(t.case_ids);
     return map;
   }, [planEntitySummary]);
 

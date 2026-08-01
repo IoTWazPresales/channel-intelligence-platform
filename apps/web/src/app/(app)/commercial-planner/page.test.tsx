@@ -335,7 +335,7 @@ describe('CommercialPlannerPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /How this workspace fits together/i }));
     expect(guide).toHaveTextContent('open the builder');
     expect(guide).toHaveTextContent('Planner defaults');
-    expect(guide).toHaveTextContent('Data map');
+    expect(guide).toHaveTextContent('Plan vs Executed');
   });
 
   it('renders plan selector chips and action buttons in the compact plan controls', async () => {
@@ -2001,7 +2001,17 @@ describe('CurrentLineupSection — sync to plan', () => {
       typeof import('@/features/commercial-planner/CurrentLineupSection')
     >('@/features/commercial-planner/CurrentLineupSection');
 
-    mockState.apiGetMock.mockImplementation(casesImpl);
+    mockState.apiGetMock.mockImplementation(async (url: string) => {
+      if (String(url).includes('entity-resolution-candidates')) {
+        return {
+          customer_tokens: [],
+          distributor_tokens: [],
+          token_count: 0,
+          eligible_case_count: 0,
+        };
+      }
+      return casesImpl(url);
+    });
     mockState.apiPostMock.mockClear();
 
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
