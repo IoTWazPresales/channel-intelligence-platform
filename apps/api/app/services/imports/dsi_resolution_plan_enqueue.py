@@ -7,6 +7,7 @@ import uuid
 from typing import Any, Callable
 
 from app.core.config import get_settings
+from app.core.dev_celery_logging import DEV_CELERY_LOGGER
 from app.services.imports.dsi_resolution_plan_apply_sync import run_dsi_resolution_plan_apply_sync
 from app.services.imports.dsi_resolution_plan_compute_sync import run_dsi_resolution_plan_compute_sync
 from app.services.task_run_ledger import (
@@ -28,6 +29,49 @@ _dev_dsi_bulk_task_results: dict[str, dict[str, Any]] = {}
 
 def dev_dsi_bulk_task_results() -> dict[str, dict[str, Any]]:
     return _dev_dsi_bulk_task_results
+
+
+def _spawn_dsi_plan_thread(
+    *,
+    task_name: str,
+    job_id: int,
+    task_id: str,
+    thread_name: str,
+    run_sync: Callable[[], dict[str, Any]],
+    on_success: Callable[[dict[str, Any]], None] | None = None,
+) -> None:
+    create_queued_task_run(
+        task_run_id=task_id,
+        task_name=task_name,
+        entity_type=ENTITY_IMPORT_JOB,
+        entity_id=job_id,
+        transport=TRANSPORT_IN_PROCESS_THREAD,
+    )
+
+    def _in_process() -> None:
+        try:
+            out = run_sync()
+            _dev_dsi_bulk_task_results[task_id] = {"state": "SUCCESS", "result": out}
+            if on_success is not None:
+                on_success(out)
+        except Exception as exc:
+            logger.exception(
+                "%s in-process failed job_id=%s task_id=%s",
+                task_name,
+                job_id,
+                task_id,
+            )
+            _dev_dsi_bulk_task_results[task_id] = {
+                "state": "FAILURE",
+                "error": str(exc)[:800],
+            }
+            raise
+
+    spawn_in_process_thread_with_ledger(
+        task_run_id=task_id,
+        thread_name=thread_name,
+        target=_in_process,
+    )
 
 
 def enqueue_dsi_resolution_plan_apply(
@@ -53,6 +97,23 @@ def enqueue_dsi_resolution_plan_apply(
         if on_complete is not None:
             on_complete(out)
 
+    use_thread = detach_from_caller or settings.cip_dev_celery_dispatch == "in_process_thread"
+    if use_thread:
+        task_id = f"dev-plan-apply-{uuid.uuid4().hex}"
+        DEV_CELERY_LOGGER.warning(
+            "ENQUEUE: dsi_resolution_plan_apply job_id=%s — in-process thread (DEV ONLY).",
+            job_id,
+        )
+        _spawn_dsi_plan_thread(
+            task_name=task_name,
+            job_id=job_id,
+            task_id=task_id,
+            thread_name=f"dsi-plan-apply-{job_id}",
+            run_sync=_run_sync,
+            on_success=lambda out: _finish(out, state="SUCCESS"),
+        )
+        return task_id, True
+
     try:
         result = celery_app.send_task(task_name, args=[job_id, payload])
         task_id = str(result.id)
@@ -68,42 +129,6 @@ def enqueue_dsi_resolution_plan_apply(
         logger.exception(
             "dsi_resolution_plan_apply: Celery enqueue failed job_id=%s task=%s", job_id, task_name
         )
-
-    use_thread = detach_from_caller or settings.cip_dev_celery_dispatch == "in_process_thread"
-    if use_thread:
-        task_id = f"dev-plan-apply-{uuid.uuid4().hex}"
-        create_queued_task_run(
-            task_run_id=task_id,
-            task_name=task_name,
-            entity_type=ENTITY_IMPORT_JOB,
-            entity_id=job_id,
-            transport=TRANSPORT_IN_PROCESS_THREAD,
-        )
-
-        def _in_process() -> None:
-            try:
-                out = _run_sync()
-                _dev_dsi_bulk_task_results[task_id] = {"state": "SUCCESS", "result": out}
-                _finish(out, state="SUCCESS")
-            except Exception as exc:
-                logger.exception(
-                    "dsi_resolution_plan_apply in-process failed job_id=%s task_id=%s",
-                    job_id,
-                    task_id,
-                )
-                _dev_dsi_bulk_task_results[task_id] = {
-                    "state": "FAILURE",
-                    "error": str(exc)[:800],
-                }
-                _finish({}, state="FAILURE", error=str(exc))
-                raise
-
-        spawn_in_process_thread_with_ledger(
-            task_run_id=task_id,
-            thread_name=f"dsi-plan-apply-{job_id}",
-            target=_in_process,
-        )
-        return task_id, True
 
     task_id = f"sync-plan-apply-{uuid.uuid4().hex}"
     create_queued_task_run(
@@ -135,6 +160,21 @@ def enqueue_dsi_resolution_plan_compute(
     def _run_sync() -> dict[str, Any]:
         return run_dsi_resolution_plan_compute_sync(job_id, payload)
 
+    if settings.cip_dev_celery_dispatch == "in_process_thread":
+        task_id = f"dev-plan-compute-{uuid.uuid4().hex}"
+        DEV_CELERY_LOGGER.warning(
+            "ENQUEUE: dsi_resolution_plan_compute job_id=%s — in-process thread (DEV ONLY).",
+            job_id,
+        )
+        _spawn_dsi_plan_thread(
+            task_name=task_name,
+            job_id=job_id,
+            task_id=task_id,
+            thread_name=f"dsi-plan-compute-{job_id}",
+            run_sync=_run_sync,
+        )
+        return task_id, True
+
     try:
         result = celery_app.send_task(task_name, args=[job_id, payload])
         task_id = str(result.id)
@@ -150,39 +190,6 @@ def enqueue_dsi_resolution_plan_compute(
         logger.exception(
             "dsi_resolution_plan_compute: Celery enqueue failed job_id=%s task=%s", job_id, task_name
         )
-
-    if settings.cip_dev_celery_dispatch == "in_process_thread":
-        task_id = f"dev-plan-compute-{uuid.uuid4().hex}"
-        create_queued_task_run(
-            task_run_id=task_id,
-            task_name=task_name,
-            entity_type=ENTITY_IMPORT_JOB,
-            entity_id=job_id,
-            transport=TRANSPORT_IN_PROCESS_THREAD,
-        )
-
-        def _in_process() -> None:
-            try:
-                out = _run_sync()
-                _dev_dsi_bulk_task_results[task_id] = {"state": "SUCCESS", "result": out}
-            except Exception as exc:
-                logger.exception(
-                    "dsi_resolution_plan_compute in-process failed job_id=%s task_id=%s",
-                    job_id,
-                    task_id,
-                )
-                _dev_dsi_bulk_task_results[task_id] = {
-                    "state": "FAILURE",
-                    "error": str(exc)[:800],
-                }
-                raise
-
-        spawn_in_process_thread_with_ledger(
-            task_run_id=task_id,
-            thread_name=f"dsi-plan-compute-{job_id}",
-            target=_in_process,
-        )
-        return task_id, True
 
     task_id = f"sync-plan-compute-{uuid.uuid4().hex}"
     create_queued_task_run(

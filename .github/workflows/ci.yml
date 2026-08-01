@@ -28,6 +28,8 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://cip:cip@localhost:5432/cip_test
       DATABASE_URL_SYNC: postgresql://cip:cip@localhost:5432/cip_test
       DATABASE_URL_SYNC_MIGRATE: postgresql://cip:cip@localhost:5432/cip_test
+      # No Redis in CI — skip broker retry loops; use in-process thread fallback for import tasks.
+      CIP_DEV_CELERY_DISPATCH: in_process_thread
     steps:
       - uses: actions/checkout@v4
 

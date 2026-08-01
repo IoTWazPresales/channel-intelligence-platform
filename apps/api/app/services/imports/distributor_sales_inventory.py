@@ -251,6 +251,16 @@ def _channel_raw_from_mapped(mapped: dict[str, Any] | None) -> str | None:
     return None
 
 
+def blank_customer_auto_exclude_suppressed_by_channel(channel_raw: str | None) -> bool:
+    """Blank customer + non-open channel evidence stays sellout-blocked (not ignore_no_customer)."""
+    ch_norm = _norm_key(channel_raw)
+    if not _region_channel_evidence_norm_usable(ch_norm, channel_raw):
+        return False
+    if any(sub in ch_norm for sub in CHANNEL_OPEN_SUBSTRINGS):
+        return False
+    return True
+
+
 def _region_raw_from_mapped(mapped: dict[str, Any] | None) -> str | None:
     if not mapped or not isinstance(mapped, dict):
         return None
@@ -2539,6 +2549,7 @@ def process_distributor_sales_inventory(
             normalized_candidate_key=ckey_for_customer_exclude,
             customer_dealer_raw=cust_raw,
             dealer_group_raw=dg_raw,
+            channel_raw=ch_raw,
             diag=diag,
         )
         sellout_blocked_no_tx = bool(
@@ -3423,6 +3434,7 @@ def refresh_dsi_staging_line_resolution(
         normalized_candidate_key=ckey_for_customer_exclude,
         customer_dealer_raw=cust_raw,
         dealer_group_raw=dg_raw,
+        channel_raw=ch_raw,
         diag=diag,
     )
     sellout_blocked_no_tx = bool(qty_sold is not None and qty_sold != 0 and tx_date is None)

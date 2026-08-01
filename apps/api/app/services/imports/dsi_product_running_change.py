@@ -308,12 +308,19 @@ def infer_validate_auto_exclude_customer_reason(
     normalized_candidate_key: str,
     customer_dealer_raw: str | None = None,
     dealer_group_raw: str | None = None,
+    channel_raw: str | None = None,
 ) -> str | None:
     """Genuinely blank/placeholder customer on sellout/return — not an unmapped real dealer token."""
     if not sellout_or_return_attempt or rcustomer_id is not None:
         return None
     nk = (normalized_candidate_key or "").strip().lower()
     if nk == "__blank__":
+        from app.services.imports.distributor_sales_inventory import (
+            blank_customer_auto_exclude_suppressed_by_channel,
+        )
+
+        if blank_customer_auto_exclude_suppressed_by_channel(channel_raw):
+            return None
         return IGNORE_REASON_NO_CUSTOMER
     diag_set = set(cust_diag or [])
     if "dealer_group_placeholder" in diag_set:
@@ -325,16 +332,21 @@ def infer_validate_auto_exclude_customer_reason(
         _customer_token_is_placeholder,
         _dealer_group_is_placeholder,
         _norm_key,
+        blank_customer_auto_exclude_suppressed_by_channel,
     )
 
     cu_nt = _norm_key(customer_dealer_raw)
     if not cu_nt and _dealer_group_is_placeholder(dealer_group_raw):
+        if blank_customer_auto_exclude_suppressed_by_channel(channel_raw):
+            return None
         return IGNORE_REASON_NO_CUSTOMER
     if cu_nt in SENTINEL_CUSTOMER_TOKENS:
         return None
     if _customer_token_is_placeholder(cu_nt, customer_dealer_raw) and cu_nt not in SENTINEL_CUSTOMER_TOKENS:
         return IGNORE_REASON_NO_CUSTOMER
     if not cu_nt:
+        if blank_customer_auto_exclude_suppressed_by_channel(channel_raw):
+            return None
         return IGNORE_REASON_NO_CUSTOMER
     return None
 
@@ -373,6 +385,7 @@ def compute_dsi_sellout_block_with_customer_auto_exclude(
     normalized_candidate_key: str,
     customer_dealer_raw: str | None,
     dealer_group_raw: str | None,
+    channel_raw: str | None = None,
     diag: list[str],
 ) -> tuple[bool, str | None]:
     """Returns (sellout_blocked_no_customer, auto_exclude_reason)."""
@@ -393,6 +406,7 @@ def compute_dsi_sellout_block_with_customer_auto_exclude(
         normalized_candidate_key=normalized_candidate_key,
         customer_dealer_raw=customer_dealer_raw,
         dealer_group_raw=dealer_group_raw,
+        channel_raw=channel_raw,
     )
     if auto_reason:
         apply_product_auto_exclude_diagnostic(diag, auto_reason)

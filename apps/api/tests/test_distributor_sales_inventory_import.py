@@ -80,6 +80,11 @@ def _seed_dsi_catalog() -> int:
                 )
             )
         db.commit()
+        from app.services.imports.product_resolution_index_cache import (
+            invalidate_product_resolution_index_cache,
+        )
+
+        invalidate_product_resolution_index_cache()
         return _dsi_source_id(db)
 
 
