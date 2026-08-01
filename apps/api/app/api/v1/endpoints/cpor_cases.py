@@ -29,6 +29,7 @@ from app.services.cpor.lifecycle import (
     target_status,
 )
 from app.services.cpor.pivot import build_case_pivot
+from app.services.cpor.norms_and_comparable import build_comparable_cases, build_support_norms
 from app.services.cpor.portfolio_intelligence import build_portfolio_intelligence
 from app.services.cpor.promotion_type_vocab import CPOR_CASE_STATUS_SET, CPOR_PROMOTION_TYPE_SET
 from app.services.cpor.recompute import recompute_case, recompute_case_line
@@ -873,6 +874,25 @@ def cpor_portfolio_intelligence() -> dict[str, Any]:
     """A2-U1: support spend, delivery rate, support per unit sold (USD + ZAR display)."""
     with SessionLocal() as session:
         return build_portfolio_intelligence(session)
+
+
+@router.get("/intelligence/norms")
+def cpor_support_norms(
+    trailing_quarters: int | None = Query(default=None, ge=1, le=16),
+) -> dict[str, Any]:
+    """A2-04: trailing-quarter support norms (absolute USD/ZAR + % of SRP)."""
+    with SessionLocal() as session:
+        return build_support_norms(session, trailing_quarters=trailing_quarters)
+
+
+@router.get("/intelligence/comparable-cases")
+def cpor_comparable_cases(
+    case_id: int = Query(..., ge=1),
+    limit: int = Query(25, ge=1, le=200),
+) -> dict[str, Any]:
+    """A2-05: ranked comparable cases (customer → BU → promo → quarter → volume)."""
+    with SessionLocal() as session:
+        return build_comparable_cases(session, case_id=case_id, limit=limit)
 
 
 @router.get("/meta/promotion-types")

@@ -27,6 +27,8 @@ import { PageHeader } from '@/components/PageHeader';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { apiGet, apiPost, apiPostFormData } from '@/lib/api';
 
+import { CporComparableCasesPanel } from './CporComparableCasesPanel';
+
 type LineRow = {
   id: number;
   product_id: number;
@@ -370,6 +372,7 @@ export default function CporCaseDetailPage() {
         {data.roe_snapshot != null ? ` · ROE ${data.roe_snapshot}` : ''}
         {data.last_comment ? ` · PM: ${data.last_comment}` : ''}
       </Typography>
+      <CporComparableCasesPanel caseId={caseId} />
       <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap">
         {actions.map(([action, label]) => (
           <Button

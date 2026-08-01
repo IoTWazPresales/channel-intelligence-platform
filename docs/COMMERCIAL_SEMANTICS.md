@@ -139,15 +139,13 @@ domain §1.5). **Never** convert a USD portfolio total through one period FX rat
 |---|---|---|---|---|
 | A2-01 | Support spend by customer / BU / promo type | IMPLEMENTED (A2-U1) | Σ `ttl_support_usd` (compute) + Σ `ttl_support` ZAR (display); voided excluded | CPOR |
 | A2-02 | **Delivery rate** | IMPLEMENTED (A2-U1) | Σ `result_qty` / Σ `estimate_qty` (voided / zero-estimate excluded) | CPOR |
-| A2-04 | Support norms | SPEC ONLY | Trailing **4** quarters; **%** and **absolute**; window length is **tenant config** | CPOR |
-| A2-05 | Comparable-case lookup | SPEC ONLY | **Ranked** (never filtered): customer → BU → promo type → quarter proximity → volume | CPOR |
+| A2-04 | Support norms | IMPLEMENTED (A2-U2) | Trailing **4** quarters (tenant config `SUPPORT_NORMS_TRAILING_QUARTERS`); **absolute** support USD+ZAR; **%** = mean(`support_unit / srp`) | CPOR |
+| A2-05 | Comparable-case lookup | IMPLEMENTED (A2-U2) | **Ranked** (never filtered): customer → BU → promo type → quarter proximity → volume | CPOR |
 | A2-06 | **Support cost per unit sold under promo** | IMPLEMENTED (A2-U1) | Σ `ttl_support_usd` / Σ `result_qty` (result > 0); ZAR companion = Σ `ttl_support` / Σ `result_qty` | CPOR |
 | A2-X | Cost per **incremental** unit | **DO NOT BUILD** | No counterfactual/baseline → would fabricate. BACKLOG trigger: validated baseline model exists | — |
 
 #### Non-computable register
 
-| Former ID | Name | Reason | TRIGGER to reconsider |
-|---|---|---|---|
 | Former ID | Name | Reason | TRIGGER to reconsider |
 |---|---|---|---|
 | A2-03 | Claim rate (`owed ÷ approved`) | Settlement does **not** capture an **owed** amount independent of `support_unit × result_qty`. Claim evidence is units (+ optional `unit_price`); rollup writes `result_qty`; `ttl_result` is recomputed from the **same** `support_unit` as approved estimate. Owed÷approved money collapses to delivery rate (`result/estimate`). Building both would be two names for one number. **Not “paid”:** paid = distributor payment reconciliation (Ken / admin) — a separate future input, not U5 settlement. | Settlement captures an **owed** amount **distinct from computed support** (and/or support-per-unit can differ between approval and settlement). |

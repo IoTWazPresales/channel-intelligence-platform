@@ -14,7 +14,7 @@
 | **HEAD** | tip of `main` (verify) |
 | **Pushed?** | verify before claiming |
 | **Current phase** | **A-lane** — A2-U1 shipped; A3 WoC grain fixed |
-| **Next** | A2-04/05 norms + comparable; A1 bias/slip SPEC ONLY tiles; BACKLOG-091 UI rename on next A1 touch |
+| **Next** | A1 bias/slip SPEC ONLY tiles; BACKLOG-091 UI rename on next A1 touch; BACKLOG-092 paid recon when Ken files land |
 
 ---
 
@@ -39,7 +39,7 @@ Stubs: `SURFACE_OWNERSHIP.md`, `PLAN_VS_EXECUTED_SHIPPED_TAXONOMY.md`, `PLAN_VS_
 | Item | Evidence |
 |------|----------|
 | **Q-008** | Claim rate **non-computable** (D-027); no distinct **owed** amount in U5 settlement (not “paid” — paid = Ken payment recon) |
-| **A2-U1** | `GET /cpor/intelligence/portfolio` + panel on CPOR Cases — A2-01/02/06; USD+ZAR per-case FX |
+| **A2-U2** | Norms + comparable cases (`/intelligence/norms`, `/comparable-cases`) |
 | **A3 WoC** | Sell-out velocity at dist×product; portfolio Σstock/Σvelocity. **Before** ~78 956 weeks · **After** ~13.6 weeks (cip; stock 33 571) |
 | **BACKLOG-090** | Resolved |
 

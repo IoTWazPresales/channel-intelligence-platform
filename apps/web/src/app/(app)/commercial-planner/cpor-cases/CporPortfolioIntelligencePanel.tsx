@@ -124,6 +124,72 @@ export function CporPortfolioIntelligencePanel() {
           {` · ${data.cases_in_scope} cases / ${data.lines_included} lines`}
         </Typography>
       ) : null}
+
+      <CporSupportNormsSection />
+    </Stack>
+  );
+}
+
+type NormsPayload = {
+  trailing_quarters: number;
+  window_quarters: string[];
+  anchor_quarter: string | null;
+  by_customer: Array<{
+    customer_id: number;
+    customer_code: string | null;
+    customer_name: string | null;
+    quarters_present: number;
+    absolute_support_usd_avg: number;
+    absolute_support_zar_avg: number;
+    absolute_support_usd_total: number;
+    support_pct_of_srp_avg: number | null;
+  }>;
+};
+
+function CporSupportNormsSection() {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['cpor', 'intelligence', 'norms'],
+    queryFn: ({ signal }) => apiGet<NormsPayload>('/api/v1/cpor/intelligence/norms', { signal }),
+  });
+
+  if (isError) {
+    return (
+      <Alert severity="warning" data-testid="cpor-norms-error">
+        Support norms unavailable.
+      </Alert>
+    );
+  }
+
+  const top = data?.by_customer?.slice(0, 5) ?? [];
+
+  return (
+    <Stack spacing={0.75} data-testid="cpor-support-norms" sx={{ mt: 1 }}>
+      <Typography variant="subtitle2">Support norms (trailing {data?.trailing_quarters ?? 4}Q)</Typography>
+      <Typography variant="caption" color="text.secondary">
+        Absolute USD/ZAR · % = support_unit / SRP · window {data?.window_quarters?.join(' · ') ?? '…'}
+        {data?.anchor_quarter ? ` · anchor ${data.anchor_quarter}` : ''}
+      </Typography>
+      {isLoading ? (
+        <Typography variant="body2">Loading norms…</Typography>
+      ) : (
+        <Stack spacing={0.5}>
+          {top.map((c) => (
+            <Typography key={c.customer_id} variant="body2" data-testid={`cpor-norm-row-${c.customer_id}`}>
+              {c.customer_code ?? c.customer_id} — {c.customer_name ?? '—'} · avg{' '}
+              {fmtUsd(c.absolute_support_usd_avg)} ({fmtZar(c.absolute_support_zar_avg)}) ·{' '}
+              {c.support_pct_of_srp_avg != null
+                ? `${(c.support_pct_of_srp_avg * 100).toFixed(1)}% of SRP`
+                : 'SRP % n/a'}{' '}
+              · {c.quarters_present}Q present
+            </Typography>
+          ))}
+          {!top.length ? (
+            <Typography variant="body2" color="text.secondary">
+              No trailing-quarter support yet.
+            </Typography>
+          ) : null}
+        </Stack>
+      )}
     </Stack>
   );
 }
