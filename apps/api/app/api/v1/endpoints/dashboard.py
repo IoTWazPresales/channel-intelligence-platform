@@ -110,8 +110,8 @@ async def summary(
             0,
             {
                 "title": f"{failed_open} failed import job(s)",
-                "href": "/admin/imports",
-                "reason": "Open Import Center to inspect failed jobs (Ops monitoring in P2-5).",
+                "href": "/admin/ops",
+                "reason": "Open Ops monitoring to inspect job failures.",
             },
         )
 

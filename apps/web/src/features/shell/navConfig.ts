@@ -135,6 +135,7 @@ export const navGroups: NavGroup[] = [
     label: 'Admin',
     items: [
       { label: 'Users', href: '/admin/users', roles: ADMIN_ONLY },
+      { label: 'Ops / monitoring', href: '/admin/ops', roles: ADMIN_STEWARD },
       { label: 'Steward audit', href: '/admin/steward-audit', roles: ADMIN_STEWARD },
       { label: 'Settings', href: '/settings', roles: ADMIN_ONLY },
     ],

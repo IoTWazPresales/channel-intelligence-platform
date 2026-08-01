@@ -121,6 +121,7 @@ export default function DashboardPage() {
             <Chip component={NextLink} href="/sell-out" label="Channel Operations" clickable />
             <Chip component={NextLink} href="/shipping" label="Inbound shipments" clickable />
             <Chip component={NextLink} href="/admin/imports" label="Import Center" clickable />
+            <Chip component={NextLink} href="/admin/ops" label="Ops / monitoring" clickable />
             <Chip component={NextLink} href="/getting-started" label="Getting started" clickable />
             <Chip component={NextLink} href="/admin/steward-audit" label="Steward audit" clickable />
           </Stack>
