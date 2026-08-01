@@ -21,11 +21,11 @@ from app.services.imports.cst_mapping_candidates import (
     CST_PRODUCT_ENTITY,
     _CST_ENTITY_TYPES,
     _CST_TERMINAL_STATUSES,
+    classify_cst_candidate_plan_class,
     serialize_cst_candidate,
 )
 
 TEMPLATE_SLUG = "customer_sell_through"
-_READY_SCORE_THRESHOLD = 0.90
 
 _ACTION_BY_ENTITY: dict[str, str] = {
     "product": "map_product",
@@ -42,35 +42,11 @@ def _entity_label(entity_type: str) -> str:
     return _ENTITY_FROM_TYPE.get(entity_type, "")
 
 
-def _classify_cst_candidate(cand: dict[str, Any]) -> tuple[str, bool]:
-    """Return (plan_class, ready) for a serialized CST candidate."""
-    status = str(cand.get("status") or "")
-    if status in _CST_TERMINAL_STATUSES:
-        return "needs_review", False
-
-    suggestions = cand.get("suggestions") or []
-    if not suggestions:
-        return "no_match", False
-    if len(suggestions) != 1:
-        return "needs_review", False
-
-    top = suggestions[0]
-    score = float(top.get("score") or 0)
-    if score < _READY_SCORE_THRESHOLD:
-        return "needs_review", False
-
-    dim_id = top.get("dim_id")
-    if dim_id is None:
-        return "needs_review", False
-
-    return "ready_to_map", True
-
-
 def _plan_row_from_candidate(cand: dict[str, Any]) -> dict[str, Any]:
     entity_type = str(cand.get("entity_type") or "")
     entity = _entity_label(entity_type)
     suggestions = cand.get("suggestions") or []
-    plan_class, ready = _classify_cst_candidate(cand)
+    plan_class, ready = classify_cst_candidate_plan_class(cand)
     top = suggestions[0] if suggestions else None
     target_id = int(top["dim_id"]) if ready and top is not None else None
     return {

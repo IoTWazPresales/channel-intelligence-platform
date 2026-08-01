@@ -23,9 +23,11 @@ import {
   confidenceBandColor,
   confidenceBandLabel,
 } from '@/features/import-steward/confidenceBand';
+import { StewardBulkSection } from '@/features/import-steward/StewardBulkSection';
 import { StewardResolutionPlanToolbar } from '@/features/import-steward/StewardResolutionPlanToolbar';
 import { StewardPendingButton } from '@/features/import-steward/StewardPendingButton';
 import type { StewardPlanApplyFeedback } from '@/features/import-steward/stewardEngine.types';
+import { useStewardBulkSteward } from '@/features/import-steward/useStewardBulkSteward';
 import { useStewardResolutionPlan } from '@/features/import-steward/useStewardResolutionPlan';
 import { ImportStewardCandidateWorkspace } from '@/features/import-steward/ImportStewardCandidateWorkspace';
 import { StewardCandidateFilters } from '@/features/import-steward/StewardCandidateFilters';
@@ -40,6 +42,7 @@ import { computeImportStewardSelectionHeaderState } from '@/features/import-stew
 import type { ImportStewardCandidateRowBase } from '@/features/import-steward/importStewardCandidateWorkspace.types';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 
+import { CstBulkActionInlineForm } from './CstBulkActionInlineForm';
 import { CstCandidateStewardDrawer } from './CstCandidateStewardDrawer';
 import {
   CST_ENTITY_TAB_DEFS,
@@ -55,6 +58,8 @@ import { useCstCandidatesPage } from './useCstCandidatesPage';
 
 export type CstStewardRow = ImportStewardCandidateRowBase & {
   token: string;
+  plan_class?: string | null;
+  ready?: boolean | null;
   suggestions?: CstMappingCandidate['suggestions'];
 };
 
@@ -177,7 +182,6 @@ export function CstImportJobResolutionSection({
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [bulkMode, setBulkMode] = useState<BulkTableSelectionMode>('normal');
-  const [bulkEntityId, setBulkEntityId] = useState('');
   const [detailCandidate, setDetailCandidate] = useState<CstStewardRow | null>(null);
   const [actionFeedback, setActionFeedback] = useState<{
     message: string;
@@ -253,6 +257,8 @@ export function CstImportJobResolutionSection({
         total_reported_value: c.total_reported_value ?? null,
         sample_raw_values: c.sample_raw_values ?? [],
         status: c.status,
+        plan_class: c.plan_class ?? null,
+        ready: c.ready ?? null,
         match_reason: c.match_reason ?? null,
         confidence_score: c.confidence_score ?? null,
         context: c.context ?? null,
@@ -277,13 +283,39 @@ export function CstImportJobResolutionSection({
     formatPlanApplySummary: formatCstPlanApplySummary,
   });
 
+  const bulk = useStewardBulkSteward({
+    importJobId,
+    selectedIds,
+    setSelectedIds,
+    setBulkMode,
+    onInvalidate,
+    onPlanRefresh: () => plan.refreshSuggestions(),
+    onEvictResolvedCandidates: plan.evictResolvedCandidates,
+    onShrinkPlanScope: plan.shrinkPlanScope,
+    config: CST_IMPORT_ENGINE_CONFIG,
+  });
+
   const planSummary = plan.suggestionsQuery.data?.summary as Record<string, unknown> | undefined;
+
+  const openBulkWorkflow = (action: string) => {
+    setBulkMode('selecting');
+    bulk.setBulkAction(action);
+    if (action === 'resolve_product') {
+      bulk.setBulkProductId('');
+    }
+  };
+
+  const closeBulkForm = () => {
+    setBulkMode('normal');
+    setSelectedIds([]);
+    bulk.setBulkProductId('');
+    bulk.setBulkAction('ignore');
+  };
 
   useEffect(() => {
     setDetailCandidate(null);
     setSelectedIds([]);
     setBulkMode('normal');
-    setBulkEntityId('');
     setSearchInput('');
     setDebouncedSearch('');
     setActiveFilters(defaultCstFiltersForTab(activeTab));
@@ -352,25 +384,11 @@ export function CstImportJobResolutionSection({
     onError: (e) => setActionFeedback({ message: safeDisplayError(e), severity: 'error' }),
   });
 
-  const bulkResolveMutation = useMutation({
-    mutationFn: async (args: { candidateIds: number[]; entityId: number }) =>
-      apiPost(`/api/v1/imports/jobs/${importJobId}/cst-candidates/bulk-resolve`, {
-        candidate_ids: args.candidateIds,
-        entity_id: args.entityId,
-      }),
-    onSuccess: () => {
-      setActionMsg('Bulk mapped selected candidates (same target).');
-      setActionFeedback(null);
-      setSelectedIds([]);
-      setBulkMode('normal');
-      setBulkEntityId('');
-      onInvalidate();
-    },
-    onError: (e) => setActionFeedback({ message: safeDisplayError(e), severity: 'error' }),
-  });
-
   const busy =
-    resolveMutation.isPending || ignoreMutation.isPending || bulkResolveMutation.isPending;
+    resolveMutation.isPending ||
+    ignoreMutation.isPending ||
+    bulk.bulkPreview.isPending ||
+    bulk.bulkApply.isPending;
 
   const candidatesLoading =
     candidatesPage.query.isLoading ||
@@ -498,6 +516,18 @@ export function CstImportJobResolutionSection({
                 cell: (r) => <Chip size="small" label={r.status} />,
               },
               {
+                id: 'plan_class',
+                header: 'Plan',
+                cell: (r) =>
+                  r.plan_class ? (
+                    <Chip size="small" label={String(r.plan_class).replace(/_/g, ' ')} />
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      —
+                    </Typography>
+                  ),
+              },
+              {
                 id: 'top_suggestion',
                 header: 'Top suggestion',
                 cell: (r) => {
@@ -597,57 +627,47 @@ export function CstImportJobResolutionSection({
             }
             toolbarSlot={
               <Stack spacing={1} data-testid="cst-import-bulk-toolbar">
-                <BulkSelectionToolbar
-                  mode={bulkMode}
-                  selectedCount={selectedIds.length}
-                  visibleRowCount={filteredRows.length}
-                  busy={busy}
-                  onEnterSelectionMode={() => setBulkMode('selecting')}
-                  onExitSelectionMode={() => {
-                    setBulkMode('normal');
-                    setSelectedIds([]);
-                    setBulkEntityId('');
-                  }}
-                  onSelectAllVisible={() => setSelectedIds(visibleRowIds)}
-                  onDeselectAll={() => setSelectedIds([])}
-                  onPreviewDangerAction={() => undefined}
-                  previewDangerLabel="Map selected"
-                  previewDangerDisabled
-                />
                 {bulkMode === 'selecting' ? (
+                  <BulkSelectionToolbar
+                    mode={bulkMode}
+                    selectedCount={selectedIds.length}
+                    visibleRowCount={filteredRows.length}
+                    busy={busy}
+                    onEnterSelectionMode={() => setBulkMode('selecting')}
+                    onExitSelectionMode={closeBulkForm}
+                    onSelectAllVisible={() => setSelectedIds(visibleRowIds)}
+                    onDeselectAll={() => setSelectedIds([])}
+                    previewDangerLabel="Preview bulk steward"
+                    previewDangerDisabled={
+                      selectedIds.length === 0 || bulk.bulkPreview.isPending || !bulk.bulkFormReady
+                    }
+                    onPreviewDangerAction={() => void bulk.bulkPreview.mutateAsync()}
+                  />
+                ) : (
                   <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                    <TextField
-                      size="small"
-                      label="Target entity id"
-                      value={bulkEntityId}
-                      onChange={(e) => setBulkEntityId(e.target.value)}
-                      sx={{ width: 160 }}
-                      data-testid="cst-import-bulk-entity-id"
-                    />
                     <Button
                       size="small"
-                      variant="contained"
-                      disabled={busy || selectedIds.length === 0 || !bulkEntityId.trim()}
-                      onClick={() => {
-                        const entityId = Number(bulkEntityId);
-                        if (!Number.isFinite(entityId) || entityId < 1) {
-                          setActionFeedback({
-                            message: 'Enter a valid target entity id for bulk map.',
-                            severity: 'warning',
-                          });
-                          return;
-                        }
-                        void bulkResolveMutation.mutateAsync({
-                          candidateIds: selectedIds,
-                          entityId,
-                        });
-                      }}
-                      data-testid="cst-import-bulk-map"
+                      variant="outlined"
+                      disabled={filteredRows.length === 0 && selectedIds.length === 0}
+                      onClick={() => openBulkWorkflow('resolve_product')}
+                      data-testid="cst-bulk-map-open"
                     >
-                      Map selected
+                      Bulk map…
                     </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      disabled={filteredRows.length === 0 && selectedIds.length === 0}
+                      onClick={() => openBulkWorkflow('ignore')}
+                      data-testid="cst-bulk-ignore-open"
+                    >
+                      Bulk ignore…
+                    </Button>
+                    <Typography variant="caption" color="text.secondary">
+                      {selectedIds.length} selected · Ready {plan.readyPlanCandidateIds.length}
+                    </Typography>
                   </Stack>
-                ) : null}
+                )}
                 <StewardCandidatesPagination
                   page={candidatesPage.page}
                   pageCount={candidatesPage.pageCount}
@@ -660,6 +680,16 @@ export function CstImportJobResolutionSection({
                   onPageSizeChange={candidatesPage.setPageSize}
                 />
               </Stack>
+            }
+            bulkFormSlot={
+              bulkMode === 'selecting' && selectedIds.length > 0 ? (
+                <CstBulkActionInlineForm
+                  bulk={bulk}
+                  entityTab={activeTab}
+                  onCancel={closeBulkForm}
+                  testIds={CST_IMPORT_ENGINE_CONFIG.bulkTestIds}
+                />
+              ) : null
             }
           />
         }
@@ -678,6 +708,8 @@ export function CstImportJobResolutionSection({
                   match_reason: effectiveDetailCandidate.match_reason,
                   confidence_score: effectiveDetailCandidate.confidence_score,
                   status: effectiveDetailCandidate.status,
+                  plan_class: effectiveDetailCandidate.plan_class,
+                  ready: effectiveDetailCandidate.ready,
                   context: effectiveDetailCandidate.context,
                   suggestions: effectiveDetailCandidate.suggestions,
                 }}
@@ -706,6 +738,25 @@ export function CstImportJobResolutionSection({
             </Box>
           )
         }
+      />
+
+      <StewardBulkSection
+        bulk={bulk}
+        plan={{
+          applyAllConfirmOpen: plan.applyAllConfirmOpen,
+          setApplyAllConfirmOpen: plan.setApplyAllConfirmOpen,
+          readyPlanCandidateIds: plan.readyPlanCandidateIds,
+          applyResolutionPlan: plan.applyResolutionPlan,
+          applyAllProvisionalStats: {
+            provisionalCustomerReady: 0,
+            unassignedGeoReady: 0,
+            fallbackGeoReady: 0,
+          },
+        }}
+        testIds={CST_IMPORT_ENGINE_CONFIG.bulkTestIds}
+        formatProposedLabel={CST_IMPORT_ENGINE_CONFIG.formatBulkProposedLabel}
+        formatAliasEvidence={CST_IMPORT_ENGINE_CONFIG.formatBulkAliasEvidence}
+        showApplyAllDialog={false}
       />
     </Stack>
   );

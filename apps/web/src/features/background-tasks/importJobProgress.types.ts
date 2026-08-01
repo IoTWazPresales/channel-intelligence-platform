@@ -42,7 +42,8 @@ export type BackgroundTaskKind =
   | 'commercial_planner_lineup_parse'
   | 'cpor_historical_import'
   | 'cpor_resolution_plan'
-  | 'cst_resolution_plan';
+  | 'cst_resolution_plan'
+  | 'cst_bulk';
 
 export type BackgroundTaskStatus = 'running' | 'succeeded' | 'failed';
 

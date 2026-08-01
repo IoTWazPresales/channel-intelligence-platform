@@ -343,6 +343,18 @@ def cst_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dict:
         raise
 
 
+@celery_app.task(name="imports.cst_bulk_ignore", bind=True, ack_late=True)
+def cst_bulk_ignore_task(self, job_id: int, payload: dict) -> dict:
+    """Background CST bulk ignore (Unit E S8)."""
+    from app.services.imports.cst_steward_bulk_enqueue import run_cst_bulk_ignore_sync
+
+    try:
+        return run_cst_bulk_ignore_sync(job_id, payload)
+    except Exception:
+        logger.exception("cst_bulk_ignore failed job_id=%s", job_id)
+        raise
+
+
 @celery_app.task(name="imports.cpor_historical_apply", bind=True, ack_late=True)
 def cpor_historical_apply_task(self, job_id: int) -> dict:
     """Background apply for ``cpor_historical_cases`` (staging → case/line upsert)."""

@@ -34,6 +34,34 @@ CST_PRODUCT_ENTITY = "cst_product_token"
 CST_LOCATION_ENTITY = "cst_location_token"
 _CST_ENTITY_TYPES = (CST_PRODUCT_ENTITY, CST_LOCATION_ENTITY)
 _CST_TERMINAL_STATUSES = frozenset({"resolved", "ignored"})
+_CST_READY_SCORE_THRESHOLD = 0.90
+
+
+def classify_cst_candidate_plan_class(cand: dict[str, Any]) -> tuple[str, bool]:
+    """Return (plan_class, ready) for a serialized CST candidate (S4 / S9).
+
+    Ready rule (D-019): open status, exactly one suggestion with score ≥ 0.90.
+    """
+    status = str(cand.get("status") or "")
+    if status in _CST_TERMINAL_STATUSES:
+        return "needs_review", False
+
+    suggestions = cand.get("suggestions") or []
+    if not suggestions:
+        return "no_match", False
+    if len(suggestions) != 1:
+        return "needs_review", False
+
+    top = suggestions[0]
+    score = float(top.get("score") or 0)
+    if score < _CST_READY_SCORE_THRESHOLD:
+        return "needs_review", False
+
+    dim_id = top.get("dim_id")
+    if dim_id is None:
+        return "needs_review", False
+
+    return "ready_to_map", True
 
 
 class CstCandidateOpError(Exception):
@@ -286,7 +314,8 @@ def serialize_cst_candidate(r: ImportEntityMappingCandidate) -> dict[str, Any]:
 
 
 def _serialize_cst_candidate(r: ImportEntityMappingCandidate) -> dict[str, Any]:
-    return {
+    suggestions = _suggestions_from_candidate(r)
+    payload: dict[str, Any] = {
         "id": r.id,
         "import_job_id": r.import_job_id,
         "entity_type": r.entity_type,
@@ -299,10 +328,14 @@ def _serialize_cst_candidate(r: ImportEntityMappingCandidate) -> dict[str, Any]:
         "confidence_score": float(r.confidence_score) if r.confidence_score is not None else None,
         "status": r.status,
         "context": r.context,
-        "suggestions": _suggestions_from_candidate(r),
+        "suggestions": suggestions,
         "created_at": r.created_at.isoformat() if r.created_at is not None else None,
         "updated_at": r.updated_at.isoformat() if r.updated_at is not None else None,
     }
+    plan_class, ready = classify_cst_candidate_plan_class(payload)
+    payload["plan_class"] = plan_class
+    payload["ready"] = ready
+    return payload
 
 
 def _get_cst_candidate_or_raise(

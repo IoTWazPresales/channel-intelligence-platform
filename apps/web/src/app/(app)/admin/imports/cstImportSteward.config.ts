@@ -24,6 +24,8 @@ export type CstMappingCandidate = {
   match_reason?: string | null;
   confidence_score?: number | null;
   status: string;
+  plan_class?: string | null;
+  ready?: boolean | null;
   context?: Record<string, unknown> | null;
   suggestions?: CstCandidateSuggestion[];
 };

@@ -1,16 +1,25 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-01 (post PR #11 — ready for X-1)
-**Branch:** `feat/x1-cst-unit-e-verify` @ `34d6285` (= main tip)
+**Last updated:** 2026-08-01 (X-1 Unit E VERIFY PASS)
+
+**Branch:** `feat/x1-cst-unit-e-verify` (uncommitted S4/S8 fixes; tip docs `7f2b06a` on origin)
+
 **Alembic:** `20260801_0008` on cip / code head
 
-## Done (prior)
+## Done (this session)
 
-- **PR #11 merged:** P2 + P3 on `main` (`1e6008f`); docs tip `34d6285`
+- **X-1 CST Unit E VERIFY:** Opus `VERDICT: PASS` (re-VERIFY after S4/S8 fix)
+  - **S4:** `plan_class`/`ready` on candidate serialize + Plan list column
+  - **S8:** `StewardBulkSection` preview→apply (`cst-steward-bulk-*`, `SLOT_CST_BULK`)
+  - Evidence: `.tmp/x1_unit_e_fix_cursor_report.md`, `.tmp/x1_unit_e_reverify_opus_response.md`
+  - Browser `#606`: Plan column + Bulk steward preview dialog ok
 
 ## Next
 
-1. **X-1 CST Unit E VERIFY** — walk `docs/STEWARD_EXPERIENCE_CONTRACT.md` rows for CST **import** steward (`customer_sell_through` on Import Centre). Per D-018: **not** `/admin/cst-steward` ops page.
-2. Evidence = code + browser against running app; docs “done” are claims only.
+1. Warren: **commit** S4/S8 code (explicit paths) then push / open PR when ready.
+2. Optional cleanup (non-blocking): delete orphaned `POST .../cst-candidates/bulk-resolve` (Opus note).
+3. Optional env: `CIP_DEV_CELERY_DISPATCH=in_process_thread` or run worker (plan UI Computing… without worker).
 
-**Env:** local Windows. API `:8001` session, web `:3000`. Seed `admin@local` / `changeme`.
+**Env:** local Windows. API `:8001`, web `:3000`. `admin@local` / `changeme`.
+
+**Smoke leftover on cip:** job `#606`, source `cst_unit_e_verify_smoke` (ok to leave or delete).
