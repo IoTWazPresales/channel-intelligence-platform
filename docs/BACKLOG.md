@@ -34,16 +34,16 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-01 |
+| **Status / parked** | **Resolved 2026-08-01** — `needs_reapproval` on `cpor_case` (alembic `20260801_0002`); gates on approve/export; UI reapprove CTA; `HARD_ENFORCE_BUDGET=true`; optional `MONEY_CEILING_USD` |
 | **Effort** | Medium–Large (case lifecycle + gate) |
 | **Source** | Warren Q-001 2026-08-01 — money ceiling binding; over → case must be reapproved |
 | **Idea** | When drawn/planned spend exceeds money reservation, mark CPOR case as needing **reapproval** (and eventually block approve/export until reapproved). Honour `over_budget_action` from commercial tenant profile. |
-| **Why it matters / deferrable** | Prevents silent overspend vs target reservation. Deferrable until profile stub + CPOR approve-path audit; `hard_enforce` stays false until this ships. |
-| **What the work is** | Audit CPOR approval states; add `needs_reapproval` (or equivalent) when money track status=`over`; UI banner + gate; wire `HARD_ENFORCE_BUDGET` when ready. |
-| **Regression traps** | Do not block on support-% when `constraint_axis=money`. Do not invent a separate budget pot. Reservation remains derived-from-profit unless profile says otherwise. |
+| **Why it matters / deferrable** | Prevents silent overspend vs target reservation. |
+| **What the work is** | Done: flag + `confirm_over_budget_reapproval` on approve; export 409 while flagged/over; banner on case detail. |
+| **Regression traps** | Do not block on support-% when `constraint_axis=money`. Ceiling optional — without `MONEY_CEILING_USD`, gate is flag-only. |
 | **Behavior to retain** | Dual-track explainability; cancel frees budget (domain §1.6). |
 | **Out of scope** | Hosting; support-% as binding axis (unless profile changes). |
-| **TRIGGER** | After commercial tenant profile stub is on the branch **and** Warren asks for reapproval gate / next CPOR lifecycle unit. |
+| **TRIGGER** | — shipped — |
 
 ---
 

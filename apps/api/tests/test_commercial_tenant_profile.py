@@ -15,7 +15,8 @@ def test_profile_defaults_asus_sa():
     assert snap["over_budget_action"] == "require_reapproval"
     assert snap["reservation_source"] == "derived_from_profit"
     assert snap["pm_attribution_mode"] == "business_line"
-    assert snap["hard_enforce_budget"] is False
+    assert snap["hard_enforce_budget"] is True
+    assert "money_ceiling_usd" in snap
 
 
 def test_budget_position_payload_uses_profile():
@@ -41,7 +42,7 @@ def test_budget_position_payload_uses_profile():
     assert out["over_budget_action"] == "require_reapproval"
     assert out["reservation_source"] == "derived_from_profit"
     assert out["q002_reservation_source"] == "derived_from_profit"
-    assert out["hard_enforce"] is False
+    assert out["hard_enforce"] is True
     assert out["tracks"]["money"]["binding"] is True
     assert out["tracks"]["support_pct"]["binding"] is False
     assert out["tracks"]["money"]["status"] == "over"

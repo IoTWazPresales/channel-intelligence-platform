@@ -25,8 +25,13 @@ OVER_BUDGET_ACTION: OverBudgetAction = "require_reapproval"
 RESERVATION_SOURCE: ReservationSource = "derived_from_profit"
 PM_ATTRIBUTION_MODE: PmAttributionMode = "business_line"
 
-# Hard enforce stays off until CPOR over-money reapproval workflow ships.
-HARD_ENFORCE_BUDGET: bool = False
+# Optional absolute money ceiling (USD). When set and portfolio committed support
+# exceeds it, cases are flagged needs_reapproval and approve/export are gated.
+# None = flag-only enforcement (needs_reapproval must already be True).
+MONEY_CEILING_USD: float | None = None
+
+# Hard enforce on when reapproval gates ship (BACKLOG-095).
+HARD_ENFORCE_BUDGET: bool = True
 
 
 def profile_snapshot() -> dict[str, object]:
@@ -37,4 +42,5 @@ def profile_snapshot() -> dict[str, object]:
         "reservation_source": RESERVATION_SOURCE,
         "pm_attribution_mode": PM_ATTRIBUTION_MODE,
         "hard_enforce_budget": HARD_ENFORCE_BUDGET,
+        "money_ceiling_usd": MONEY_CEILING_USD,
     }

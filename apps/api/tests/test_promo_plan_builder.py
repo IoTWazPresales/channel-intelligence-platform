@@ -22,7 +22,7 @@ def test_build_promo_plan_draft_case_not_found(monkeypatch):
     out = build_promo_plan_draft(FakeSession(), seed_case_id=999999)
     assert out["draft"] is True
     assert out["comparables"]["error"] == "case_not_found"
-    assert out["budget_check"]["hard_enforce"] is False
+    assert out["budget_check"]["hard_enforce"] is True
     assert out["budget_check"]["binding_axis"] == "money"
     assert out["budget_check"]["reservation_source"] == "derived_from_profit"
     assert out["budget_check"]["over_budget_action"] == "require_reapproval"
