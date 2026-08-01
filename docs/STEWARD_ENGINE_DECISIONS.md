@@ -272,10 +272,12 @@ bulk applies (physically irreversible pointer rewrites). **Still require Warren�
 approval:** Alembic migrations against `cip`, and any schema change (STOP and report).
 **Do not** reintroduce a second contradicting blanket ban in skills or overlays.
 
-## D-027 · 2026-08-01 · CPOR claim rate is non-computable (no distinct paid amount)
+## D-027 · 2026-08-01 · CPOR claim rate is non-computable (no distinct owed amount)
 **Locked.** Do not ship a “claim rate” KPI alongside delivery rate. Settlement / claim evidence
 captures **units**, then recomputes `ttl_result = support_unit × result_qty` with approval
-`support_unit` — no independent paid/settled amount. Former A2-03 lives in
-`COMMERCIAL_SEMANTICS` **non-computable register**. **TRIGGER:** settlement stores paid ≠
-computed support. **Currency for A2:** USD aggregate; ZAR display summed per-case FX
-(never one period rate on a USD total).
+`support_unit` — no independent **owed** amount. Former A2-03 lives in
+`COMMERCIAL_SEMANTICS` **non-computable register**. **TRIGGER:** settlement stores **owed** ≠
+computed support. **Not “paid”:** paid would require reconciling distributor payments
+(Ken / admin) — separate from claim rate / settlement owed. **Currency for A2:** USD aggregate;
+ZAR display summed per-case FX (never one period rate on a USD total).
+**Correction 2026-08-01:** wording was briefly “paid”; Warren clarified owed vs paid.

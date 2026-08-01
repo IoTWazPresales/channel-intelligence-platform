@@ -13,6 +13,23 @@
 **P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
+## BACKLOG-092 — CPOR “paid” vs owed — distributor payment reconciliation
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-01 |
+| **Effort** | Large (new evidence type + recon surface) |
+| **Source** | Warren 2026-08-01 (owed vs paid wording on Q-008 / D-027) |
+| **Idea** | Capture what distributors **paid** (processed payments), separate from **owed** (settlement support due). Source: Ken / admin payment extracts. |
+| **Why it matters / deferrable** | Paid ≠ owed; without payments, any “paid rate” fabricates. Deferrable until payment files + Ken process exist. |
+| **What the work is** | Import/recon path for payment evidence; join to cases/lines; metrics that compare paid vs owed. |
+| **Regression traps** | Do not rename “owed” to “paid”; do not use claim-evidence units as paid. |
+| **Behavior to retain** | Delivery rate; computed `ttl_result`; claim-rate stays non-computable until distinct **owed** exists. |
+| **Out of scope** | Inventing paid from result_qty × support_unit. |
+| **TRIGGER** | Ken (or Warren) provides distributor payment extracts **and** asks for a paid-vs-owed surface. |
+
+---
+
 ## BACKLOG-091 — Rename PvE “Deal-stock landing” tile → “Over-plan intake”
 
 | Field | Detail |

@@ -148,7 +148,9 @@ domain §1.5). **Never** convert a USD portfolio total through one period FX rat
 
 | Former ID | Name | Reason | TRIGGER to reconsider |
 |---|---|---|---|
-| A2-03 | Claim rate (`settled ÷ approved`) | Settlement does **not** capture a paid/settled amount independent of `support_unit × result_qty`. Claim evidence is units (+ optional `unit_price`); rollup writes `result_qty`; `ttl_result` is recomputed from the **same** `support_unit` as approved estimate. Settled÷approved money collapses to delivery rate (`result/estimate`). Building both would be two names for one number. | Settlement captures a **paid amount distinct from computed support** (and/or support-per-unit can differ between approval and settlement). |
+| Former ID | Name | Reason | TRIGGER to reconsider |
+|---|---|---|---|
+| A2-03 | Claim rate (`owed ÷ approved`) | Settlement does **not** capture an **owed** amount independent of `support_unit × result_qty`. Claim evidence is units (+ optional `unit_price`); rollup writes `result_qty`; `ttl_result` is recomputed from the **same** `support_unit` as approved estimate. Owed÷approved money collapses to delivery rate (`result/estimate`). Building both would be two names for one number. **Not “paid”:** paid = distributor payment reconciliation (Ken / admin) — a separate future input, not U5 settlement. | Settlement captures an **owed** amount **distinct from computed support** (and/or support-per-unit can differ between approval and settlement). |
 
 ### 4.4 Channel Ops — `/sell-out`
 

@@ -75,7 +75,7 @@ Each entry: what is unclear · why it matters · interim assumption · what woul
 
 | Field | Value |
 |-------|--------|
-| **Answer** | **No** independent settled/paid amount. U5 claim evidence = product × date × **units** (+ optional unit_price); rollup sets `result_qty`; `ttl_result` = `support_unit × result_qty` with the **same** approval `support_unit`. Settlement tab shows estimate/result/ttl_* — no paid/short-paid field. Therefore claim rate collapses into delivery rate → **do not build**; removed from catalogue → non-computable register (TRIGGER: paid amount distinct from computed support). |
+| **Answer** | **No** independent **owed** amount. U5 claim evidence = product × date × **units** (+ optional unit_price); rollup sets `result_qty`; `ttl_result` = `support_unit × result_qty` with the **same** approval `support_unit`. Settlement tab shows estimate/result/ttl_* — no owed field distinct from computed support. Therefore claim rate collapses into delivery rate → **do not build**; removed from catalogue → non-computable register (TRIGGER: **owed** amount distinct from computed support). **Paid** is out of scope here — it needs distributor payment reconciliation from Ken / admin, not claim-evidence settlement. |
 | **Source** | Tree audit `claim_evidence*.py`, `settlement.py`, `waterfall.py`, settlement UI; Warren 2026-08-01 |
 
 ### Q-005 — A1 PM planning bias surface — **Resolved 2026-08-01**
@@ -89,7 +89,7 @@ Each entry: what is unclear · why it matters · interim assumption · what woul
 
 | Field | Value |
 |-------|--------|
-| **Answer** | Formulas locked in `COMMERCIAL_SEMANTICS` §4.3 (A2-01…A2-06). Cost per **incremental** unit = DO NOT BUILD (BACKLOG-089). BU = `dim_product.product_line`. Charter: A2 is GREEN once formulas locked. Remaining: implement on CPOR Cases; **A2-03 still needs Q-008** column mapping. |
+| **Answer** | Formulas locked in `COMMERCIAL_SEMANTICS` §4.3. Cost per **incremental** unit = DO NOT BUILD (BACKLOG-089). BU = `dim_product.product_line`. A2-01/02/06 implemented (A2-U1). A2-03 claim rate → non-computable (Q-008 / D-027: need distinct **owed**, not paid). A2-04/05 still SPEC ONLY. |
 | **Source** | Warren → COMMERCIAL_SEMANTICS / ROADMAP A2 |
 
 ### Q-007 — A3 replenishment + WoC grain — **Resolved 2026-08-01**

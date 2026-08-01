@@ -150,7 +150,8 @@ on reservation-column discovery. Do not put on Plan vs Executed.
 (customer → BU → promo type → quarter proximity → volume).
 **Currency:** USD compute/aggregate; display ZAR alongside; ZAR sums at each case’s FX.
 **Out of scope:** cost per **incremental** unit (BACKLOG-089); **claim rate** (non-computable
-until settlement stores a paid amount ≠ computed support — see `COMMERCIAL_SEMANTICS`).
+until settlement stores an **owed** amount ≠ computed support — see `COMMERCIAL_SEMANTICS`.
+**Paid** = distributor payment reconciliation via Ken — separate future input).
 **Exit:** promo effectiveness surface.
 
 ### A3 — Channel stock + velocity

@@ -79,7 +79,8 @@ export function CporPortfolioIntelligencePanel() {
     <Stack spacing={1.5} sx={{ mb: 2 }} data-testid="cpor-portfolio-intel">
       <Typography variant="subtitle2">Portfolio intelligence</Typography>
       <Typography variant="caption" color="text.secondary">
-        Compute USD · display ZAR at each case FX · voided excluded · no claim-rate (collapses to delivery)
+        Compute USD · display ZAR at each case FX · voided excluded · no claim-rate (no distinct
+        owed vs computed support; paid is payment recon — separate)
       </Typography>
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} useFlexGap flexWrap="wrap">
         <Paper variant="outlined" sx={{ p: 2, flex: '1 1 180px' }}>
