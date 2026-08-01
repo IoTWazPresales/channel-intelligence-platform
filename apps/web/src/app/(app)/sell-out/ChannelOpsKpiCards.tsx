@@ -14,6 +14,10 @@ export type ChannelOpsSummary = {
   sell_out_yoy_pct: number | null;
   total_inventory_units: number;
   weeks_of_cover: number | null;
+  replenishment_threshold_weeks?: number;
+  replenishment_flag?: boolean;
+  replenishment_pairs_below_threshold?: number;
+  replenishment_pair_count?: number;
   distributors_reporting: number;
   distributors_expected: number;
   active_customers_this_period: number;
@@ -81,6 +85,19 @@ export function ChannelOpsKpiCards({ distributorId }: { distributorId?: number |
               ? `${data.weeks_of_cover.toFixed(1)} weeks of cover`
               : 'n/a weeks of cover'}
         </Typography>
+        {!isLoading && data?.replenishment_pairs_below_threshold != null ? (
+          <Typography
+            variant="caption"
+            color={data.replenishment_flag || data.replenishment_pairs_below_threshold > 0 ? 'warning.main' : 'text.secondary'}
+            data-testid="channel-ops-replenishment"
+            title={`Threshold ${data.replenishment_threshold_weeks ?? 4} weeks of cover (tenant config). Flag only — not a buy recommendation.`}
+          >
+            Replenish flag: {data.replenishment_pairs_below_threshold} pair
+            {data.replenishment_pairs_below_threshold === 1 ? '' : 's'} below{' '}
+            {data.replenishment_threshold_weeks ?? 4}w
+            {data.replenishment_flag ? ' · portfolio below threshold' : ''}
+          </Typography>
+        ) : null}
       </Paper>
       <Paper variant="outlined" sx={{ p: 2, flex: '1 1 200px' }}>
         <Typography variant="overline" color="text.secondary">

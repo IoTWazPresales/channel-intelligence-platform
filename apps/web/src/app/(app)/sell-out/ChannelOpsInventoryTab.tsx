@@ -42,6 +42,8 @@ type InvRow = {
   velocity_52wk: number | null;
   weeks_of_cover: number | null;
   computed_through_date: string | null;
+  replenishment_flag?: boolean;
+  replenishment_threshold_weeks?: number;
   reorder_signal: boolean;
 };
 
@@ -116,9 +118,9 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
                     <>
                       <TableCell align="right">Velocity 52wk</TableCell>
                       <TableCell align="right">Weeks of cover</TableCell>
+                      <TableCell>Replenish</TableCell>
                     </>
                   )}
-                  {depthAtLeast(depth, 'forecast') && <TableCell>Reorder</TableCell>}
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -149,16 +151,19 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
                         <TableCell align="right">
                           {r.weeks_of_cover != null ? r.weeks_of_cover.toFixed(1) : 'n/a'}
                         </TableCell>
+                        <TableCell>
+                          {r.replenishment_flag ?? r.reorder_signal ? (
+                            <WarningAmberIcon
+                              color="warning"
+                              fontSize="small"
+                              titleAccess={`Below ${r.replenishment_threshold_weeks ?? 4}w cover — replenishment flag`}
+                              data-testid="channel-ops-replenish-row"
+                            />
+                          ) : (
+                            '—'
+                          )}
+                        </TableCell>
                       </>
-                    )}
-                    {depthAtLeast(depth, 'forecast') && (
-                      <TableCell>
-                        {r.reorder_signal ? (
-                          <WarningAmberIcon color="warning" fontSize="small" titleAccess="Reorder signal" />
-                        ) : (
-                          '—'
-                        )}
-                      </TableCell>
                     )}
                   </TableRow>
                 ))}

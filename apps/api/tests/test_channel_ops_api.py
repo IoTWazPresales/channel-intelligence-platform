@@ -23,7 +23,7 @@ async def test_summary_returns_zeros_on_empty_tables() -> None:
 
     with patch.object(co, "_table_exists", AsyncMock(return_value=False)):
         with patch.object(co, "_has_rows", AsyncMock(return_value=False)):
-            with patch.object(co, "sum_derived_channel_stock", AsyncMock(return_value=(0, 0))):
+            with patch.object(co, "derived_stock_by_dist_product", AsyncMock(return_value={})):
                 with patch.object(
                     co, "sellout_velocity_52wk_by_dist_product", AsyncMock(return_value={})
                 ):
@@ -33,6 +33,9 @@ async def test_summary_returns_zeros_on_empty_tables() -> None:
     assert out["total_inventory_units"] == 0
     assert out["sell_out_yoy_pct"] is None
     assert out["weeks_of_cover"] is None
+    assert out["replenishment_threshold_weeks"] == 4.0
+    assert out["replenishment_flag"] is False
+    assert out["replenishment_pairs_below_threshold"] == 0
     assert out["has_velocity_data"] is False
     assert out["has_forecast_data"] is False
 
@@ -50,7 +53,11 @@ async def test_summary_yoy_none_when_prior_zero() -> None:
     )
     with patch.object(co, "_table_exists", AsyncMock(return_value=False)):
         with patch.object(co, "_has_rows", AsyncMock(return_value=False)):
-            with patch.object(co, "sum_derived_channel_stock", AsyncMock(return_value=(42, 3))):
+            with patch.object(
+                co,
+                "derived_stock_by_dist_product",
+                AsyncMock(return_value={(1, 10): 20.0, (1, 11): 22.0}),
+            ):
                 with patch.object(
                     co,
                     "sellout_velocity_52wk_by_dist_product",
@@ -61,6 +68,38 @@ async def test_summary_yoy_none_when_prior_zero() -> None:
     assert out["sell_out_yoy_pct"] is None
     assert out["weeks_of_cover"] == 42 / 5.0
     assert out["velocity_grain"] == "distributor_product"
+    # pair (1,10): 20/2=10w — not below 4; (1,11): 22/3≈7.3 — not below
+    assert out["replenishment_pairs_below_threshold"] == 0
+    assert out["replenishment_flag"] is False  # portfolio 8.4w
+
+
+@pytest.mark.anyio
+async def test_summary_replenishment_pairs_below_threshold() -> None:
+    db = AsyncMock()
+    db.scalar = AsyncMock(return_value=0)
+    db.execute = AsyncMock(
+        side_effect=[
+            MagicMock(one=MagicMock(return_value=(0.0, 0.0))),
+            MagicMock(one=MagicMock(return_value=(0.0, 0.0))),
+        ]
+    )
+    with patch.object(co, "_table_exists", AsyncMock(return_value=False)):
+        with patch.object(co, "_has_rows", AsyncMock(return_value=False)):
+            with patch.object(
+                co,
+                "derived_stock_by_dist_product",
+                AsyncMock(return_value={(1, 10): 6.0, (1, 11): 40.0}),
+            ):
+                with patch.object(
+                    co,
+                    "sellout_velocity_52wk_by_dist_product",
+                    AsyncMock(return_value={(1, 10): 3.0, (1, 11): 2.0}),
+                ):
+                    out = await co.channel_ops_summary(db)
+    # 6/3=2w → flag; 40/2=20w → no; portfolio 46/5=9.2 → no
+    assert out["replenishment_pairs_below_threshold"] == 1
+    assert out["replenishment_flag"] is False
+    assert out["replenishment_threshold_weeks"] == 4.0
 
 
 @pytest.mark.anyio

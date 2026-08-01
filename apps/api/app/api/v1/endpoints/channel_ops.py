@@ -29,10 +29,12 @@ from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.fact_customer_velocity import FactCustomerVelocity
 from app.models.fact_dsi_forecast import FactDsiForecast
 from app.models.facts import FactInventoryReconciliation, FactSalesSellout
+from app.services.channel_ops_config import REPLENISHMENT_WOC_THRESHOLD_WEEKS
 from app.services.channel_ops_derived_stock import (
+    derived_stock_by_dist_product,
     derived_stock_rows_for_distributor,
+    replenishment_flag_v1,
     sellout_velocity_52wk_by_dist_product,
-    sum_derived_channel_stock,
     weeks_of_cover_or_none,
     yoy_pct_or_none,
 )
@@ -165,10 +167,11 @@ async def channel_ops_summary(
 
     # Channel stock = sum of derived latest per (distributor, product).
     # NEVER sum raw snapshots across periods.
-    total_inv_i, _pair_count = await sum_derived_channel_stock(
+    stock_by_pair = await derived_stock_by_dist_product(
         db, distributor_id=int(distributor_id) if distributor_id is not None else None
     )
-    total_inv = float(total_inv_i)
+    total_inv = float(sum(stock_by_pair.values())) if stock_by_pair else 0.0
+    pair_count = len(stock_by_pair)
 
     # WoC grain = distributor × product only (COMMERCIAL_SEMANTICS A3-02).
     # Never average FactCustomerVelocity (customer grain) against channel stock.
@@ -178,6 +181,14 @@ async def channel_ops_summary(
     total_weekly_velocity = sum(vel_by_pair.values()) if vel_by_pair else 0.0
     weeks_of_cover = weeks_of_cover_or_none(total_inv, total_weekly_velocity or None)
     has_sellout_velocity = bool(vel_by_pair)
+
+    threshold = float(REPLENISHMENT_WOC_THRESHOLD_WEEKS)
+    pairs_below = 0
+    for key, stock in stock_by_pair.items():
+        woc = weeks_of_cover_or_none(stock, vel_by_pair.get(key))
+        if replenishment_flag_v1(woc, threshold_weeks=threshold):
+            pairs_below += 1
+    portfolio_replenishment = replenishment_flag_v1(weeks_of_cover, threshold_weeks=threshold)
 
     since_35 = today - timedelta(days=35)
     dist_reporting_q = select(func.count(func.distinct(FactSalesSellout.distributor_id))).where(
@@ -212,6 +223,10 @@ async def channel_ops_summary(
         "sell_out_yoy_pct": yoy_pct,
         "total_inventory_units": int(total_inv),
         "weeks_of_cover": weeks_of_cover,
+        "replenishment_threshold_weeks": threshold,
+        "replenishment_flag": portfolio_replenishment,
+        "replenishment_pairs_below_threshold": pairs_below,
+        "replenishment_pair_count": pair_count,
         "distributors_reporting": distributors_reporting,
         "distributors_expected": distributors_expected,
         "active_customers_this_period": int(await db.scalar(cust_now_q) or 0),
@@ -363,6 +378,7 @@ async def channel_ops_inventory(
         db, distributor_id=int(distributor_id)
     )
     velocity_by_product = {pid: vel for (_did, pid), vel in vel_by_pair.items()}
+    threshold = float(REPLENISHMENT_WOC_THRESHOLD_WEEKS)
 
     items: list[dict[str, Any]] = []
     for row in derived_rows:
@@ -371,6 +387,7 @@ async def channel_ops_inventory(
         v52 = velocity_by_product.get(pid)
         derived = float(row["derived_stock"])
         weeks = weeks_of_cover_or_none(derived, v52)
+        flag = replenishment_flag_v1(weeks, threshold_weeks=threshold)
         items.append(
             {
                 "distributor_id": int(row["distributor_id"]),
@@ -390,12 +407,19 @@ async def channel_ops_inventory(
                 "velocity_52wk": v52,
                 "weeks_of_cover": weeks,
                 "computed_through_date": None,
-                "reorder_signal": bool(weeks is not None and 0 < weeks < 4),
+                "replenishment_flag": flag,
+                "replenishment_threshold_weeks": threshold,
+                "reorder_signal": flag,  # alias — prefer replenishment_flag (A3-03)
                 "velocity_grain": "distributor_product",
             }
         )
 
-    return {"items": items, "total": len(items)}
+    return {
+        "items": items,
+        "total": len(items),
+        "replenishment_threshold_weeks": threshold,
+        "replenishment_pairs_below_threshold": sum(1 for i in items if i["replenishment_flag"]),
+    }
 
 
 @router.get("/movements")

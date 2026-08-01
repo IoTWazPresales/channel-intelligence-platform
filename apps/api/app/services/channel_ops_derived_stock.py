@@ -106,6 +106,25 @@ def weeks_of_cover_or_none(
     return float(Decimal(str(stock)) / vel)
 
 
+def replenishment_flag_v1(
+    weeks_of_cover: float | None,
+    *,
+    threshold_weeks: float | None = None,
+) -> bool:
+    """A3-03 — True when WoC is defined and strictly below the cover threshold.
+
+    Uses tenant config default (4 weeks). Zero / undefined WoC does not flag
+    (zero-velocity → undefined; empty stock is not a replenish signal here).
+    """
+    from app.services.channel_ops_config import REPLENISHMENT_WOC_THRESHOLD_WEEKS
+
+    thr = float(REPLENISHMENT_WOC_THRESHOLD_WEEKS if threshold_weeks is None else threshold_weeks)
+    if weeks_of_cover is None:
+        return False
+    w = float(weeks_of_cover)
+    return 0 < w < thr
+
+
 VELOCITY_WINDOW_DAYS = 364
 VELOCITY_WEEK_DIVISOR = Decimal("52")
 
@@ -327,16 +346,12 @@ def variance_at_latest_snapshot_sync(
     )
 
 
-async def sum_derived_channel_stock(
+async def derived_stock_by_dist_product(
     db: AsyncSession,
     *,
     distributor_id: int | None = None,
-) -> tuple[int, int]:
-    """Sum derived latest stock across (distributor, product).
-
-    Returns (total_derived_units_rounded, pair_count).
-    Never sums raw snapshots across periods.
-    """
+) -> dict[tuple[int, int], float]:
+    """Latest derived stock per (distributor, product). Never sums snapshot history."""
     latest = _latest_snapshot_subquery(distributor_id)
     inv_rows = (
         await db.execute(
@@ -355,10 +370,7 @@ async def sum_derived_channel_stock(
             )
         )
     ).all()
-    if not inv_rows:
-        return 0, 0
-
-    total = Decimal("0")
+    out: dict[tuple[int, int], float] = {}
     for dist_id, prod_id, snap_date, on_hand in inv_rows:
         reported = Decimal(str(on_hand or 0))
         sell_out = Decimal(
@@ -383,10 +395,28 @@ async def sum_derived_channel_stock(
                 or 0
             )
         )
-        total += compute_derived_stock(
-            reported_soh=reported, sell_out_since=sell_out, landed_since=landed
+        out[(int(dist_id), int(prod_id))] = float(
+            compute_derived_stock(
+                reported_soh=reported, sell_out_since=sell_out, landed_since=landed
+            )
         )
-    return int(total), len(inv_rows)
+    return out
+
+
+async def sum_derived_channel_stock(
+    db: AsyncSession,
+    *,
+    distributor_id: int | None = None,
+) -> tuple[int, int]:
+    """Sum derived latest stock across (distributor, product).
+
+    Returns (total_derived_units_rounded, pair_count).
+    Never sums raw snapshots across periods.
+    """
+    by_pair = await derived_stock_by_dist_product(db, distributor_id=distributor_id)
+    if not by_pair:
+        return 0, 0
+    return int(round(sum(by_pair.values()))), len(by_pair)
 
 
 async def derived_stock_rows_for_distributor(

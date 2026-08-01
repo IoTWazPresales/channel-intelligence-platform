@@ -9,6 +9,7 @@ from app.services.channel_ops_derived_stock import (
     VARIANCE_FLAG_PCT,
     compute_derived_stock,
     compute_snapshot_variance,
+    replenishment_flag_v1,
     weeks_of_cover_or_none,
     yoy_pct_or_none,
 )
@@ -80,6 +81,15 @@ def test_weeks_of_cover_near_zero_velocity_is_none() -> None:
     assert weeks_of_cover_or_none(100, 0.005) is None
     assert weeks_of_cover_or_none(100, None) is None
     assert weeks_of_cover_or_none(None, 10) is None
+
+
+def test_replenishment_flag_v1_default_four_weeks() -> None:
+    assert replenishment_flag_v1(3.9) is True
+    assert replenishment_flag_v1(4.0) is False
+    assert replenishment_flag_v1(0) is False
+    assert replenishment_flag_v1(None) is False
+    assert replenishment_flag_v1(2.0, threshold_weeks=2.0) is False
+    assert replenishment_flag_v1(1.5, threshold_weeks=2.0) is True
 
 
 def test_yoy_pct_denominator_guard() -> None:
