@@ -1,21 +1,22 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-01 (P2-3g tenant_id applied + smoke PASS)
-**Branch:** `feat/p2-auth-rbac` @ `bea77a8`
-**Alembic:** `20260801_0005` on cip (tenant_id on core facts/dims)
+**Last updated:** 2026-08-01 (P2 complete locally — P2-1 hosting deferred)
+**Branch:** `feat/p2-auth-rbac` @ `5fa4798`
+**Alembic:** `20260801_0005` on cip
 
-## Done
+## Done (P2 usable-by-others)
 
-- P2-3 → P2-3d identity/shell/nav/users (smoke PASS)
-- P2-3e steward audit live (`20260801_0004`) — DSI + admin UI
-- **P2-3f** steward audit on shipment / CPOR historical / CST writes
-- **P2-3g tenant_id MVP:** migration `20260801_0005` applied on cip; columns on facts/dims/import_job/cpor_case; `tenant_scope` helpers; CPOR list/get/create scoped. Browser: CPOR Cases grid loads (297 default-tenant); steward audit smoke row still visible
+- **P2-1 Deployment** — deferred (no hosting target)
+- **P2-2 Alembic replayability** — DONE (squash baseline)
+- **P2-3 Auth + RBAC** — session login, roles, users, steward audit, tenant_id MVP + CPOR scope
+- **P2-4 App shell + landing** — Control tower freshness banner + shortcuts; getting-started session copy (browser PASS)
+- **P2-5 Monitoring + backup/DR** — `/health` + `/health/ready`; `/admin/ops` failed-job board; `docs/BACKUP_AND_DR.md`; backup + restore smoke into `cip_alembic_smoke` (`dim_product` 18168 = live)
 
 ## Not done / next
 
-1. Broader tenant filters on more read/write paths (DSI/shipment/CST lists) — columns exist; not all endpoints filter yet
-2. P2-4 shell/landing · P2-5 monitoring
+1. Open PR for `feat/p2-auth-rbac` when ready
+2. Broader tenant filters beyond CPOR/import_job (columns exist)
 3. **X-1 CST Unit E VERIFY** (prefer new chat)
-4. Open PR for `feat/p2-auth-rbac` when ready
+4. **P3** analytics platform (new phase — not part of P2)
 
 **Env:** local Windows. API `:8001` session, web `:3000`. Seed `admin@local` / `changeme`.

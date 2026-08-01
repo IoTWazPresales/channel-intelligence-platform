@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-01 — **P2 complete (local):** P2-4 freshness landing + P2-5 Ops/`health/ready`/backup+restore smoke (`cip_alembic_smoke` dim_product parity). P2-1 hosting still deferred. Branch `feat/p2-auth-rbac` @ `5fa4798`.
 - 2026-08-01 — **P2-3g tenant_id MVP on cip:** alembic `20260801_0005`; CPOR list/get/create scoped; browser CPOR Cases + steward audit PASS. Broader endpoint filters still open.
 - 2026-08-01 — **P2-3f steward audit:** shipment / CPOR historical / CST write hooks via `record_steward_audit_sync`.
 - 2026-08-01 — **P2-3e applied on cip:** alembic `20260801_0004`; browser Steward audit shows smoke row. Optional: shipment/CPOR/CST hooks; fact tenant_id still needs separate migration approval.
