@@ -124,6 +124,7 @@ from app.models.iam import AppUser, AuthSession, Tenant
 from app.models.steward_audit import StewardAuditEvent
 from app.models.saved_reports import Dashboard, DashboardTile, SavedReport
 from app.models.report_delivery import ReportDelivery, ReportSchedule
+from app.models.sql_viewer_audit import SqlViewerAudit
 
 __all__ = [
     "DimProduct",
@@ -241,4 +242,5 @@ __all__ = [
     "DashboardTile",
     "ReportDelivery",
     "ReportSchedule",
+    "SqlViewerAudit",
 ]
