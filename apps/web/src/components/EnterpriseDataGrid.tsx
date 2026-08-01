@@ -7,7 +7,7 @@ import { AgGridReact } from 'ag-grid-react';
 import { Box } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { usePathname } from 'next/navigation';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ForwardedRef, ReactElement } from 'react';
 import { forwardRef, useMemo } from 'react';
 
 import 'ag-grid-community/styles/ag-grid.css';
@@ -22,9 +22,9 @@ type Props<T> = {
   gridOptions?: GridOptions<T>;
 };
 
-export const EnterpriseDataGrid = forwardRef(function EnterpriseDataGrid<T>(
+function EnterpriseDataGridInner<T>(
   { rowData, columnDefs, height = 480, gridOptions }: Props<T>,
-  ref: React.ForwardedRef<AgGridReact<T>>
+  ref: ForwardedRef<AgGridReact<T>>
 ) {
   const pathname = usePathname();
   const theme = useTheme();
@@ -67,9 +67,10 @@ export const EnterpriseDataGrid = forwardRef(function EnterpriseDataGrid<T>(
           borderRadius: 0,
           backgroundColor: `${theme.palette.background.paper} !important`,
         },
-        '& .ag-body-viewport, & .ag-center-cols-viewport, & .ag-body-horizontal-scroll-viewport, & .ag-body, & .ag-center-cols-container, & .ag-overlay, & .ag-overlay-wrapper, & .ag-overlay-no-rows-wrapper': {
-          backgroundColor: `${theme.palette.background.paper} !important`,
-        },
+        '& .ag-body-viewport, & .ag-center-cols-viewport, & .ag-body-horizontal-scroll-viewport, & .ag-body, & .ag-center-cols-container, & .ag-overlay, & .ag-overlay-wrapper, & .ag-overlay-no-rows-wrapper':
+          {
+            backgroundColor: `${theme.palette.background.paper} !important`,
+          },
         '& .ag-row': {
           backgroundColor: `${theme.palette.background.paper} !important`,
         },
@@ -112,4 +113,9 @@ export const EnterpriseDataGrid = forwardRef(function EnterpriseDataGrid<T>(
       />
     </Box>
   );
-});
+}
+
+/** Preserve row-type generics through forwardRef (default forwardRef collapses T → unknown). */
+export const EnterpriseDataGrid = forwardRef(EnterpriseDataGridInner) as <T>(
+  props: Props<T> & { ref?: ForwardedRef<AgGridReact<T>> }
+) => ReactElement | null;

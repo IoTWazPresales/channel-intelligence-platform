@@ -675,13 +675,13 @@ export function UnresolvedGeoStewardPanel({
                           .catch(() => {});
                       }
                     }}
-                    onRegisterChannelFromFile={(args) =>
-                      chCreateMut.mutateAsync({
+                    onRegisterChannelFromFile={(args) => {
+                      void chCreateMut.mutateAsync({
                         raw_token: args.raw_token,
                         channel_code: args.code,
                         channel_name: args.name,
-                      })
-                    }
+                      });
+                    }}
                     onRegisterFromHint={
                       isGeographicChannel && !regionAliasRegistered
                         ? () =>

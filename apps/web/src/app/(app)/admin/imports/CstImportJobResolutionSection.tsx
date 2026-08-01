@@ -73,9 +73,10 @@ function emptyCounts(): CstEntityTabCounts {
 }
 
 function defaultCstFiltersForTab(tab: CstEntityTabId): StewardCandidateFilterState {
+  // Shared StewardEntityFilter has no `location`; tab scopes the API (entity filter is hidden).
   return {
     ...defaultStewardCandidateFilterState(),
-    entity: tab,
+    entity: tab === 'product' ? 'product' : 'all',
     party: 'all',
     queue: 'needs_review',
   };

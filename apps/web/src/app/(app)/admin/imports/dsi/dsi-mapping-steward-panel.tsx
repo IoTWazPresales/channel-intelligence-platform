@@ -114,7 +114,7 @@ function buildStewardMutationLifecycle(
 ) {
   return {
     onMutate: async () => {
-      if (candidateId == null) return undefined;
+      if (candidateId == null) return {} satisfies StewardMutationContext;
       onRowActionStart?.(candidateId);
       const snapshot = removeCandidatesFromDsiCache(qc, importJobId, [candidateId]);
       onStewardFastComplete?.([candidateId]);
@@ -312,7 +312,7 @@ export function DsiMappingStewardPanel({
       plan_suggested_target_id?: number;
       audit_note?: string;
     }) =>
-      apiPost<{ ok: boolean }>(
+      apiPost<{ ok: boolean; candidate_id?: number; peer_candidate_id?: number }>(
         `/api/v1/mappings/import-candidates/${candidate?.id}/duplicate-review/same-entity`,
         body
       ),
@@ -493,15 +493,7 @@ export function DsiMappingStewardPanel({
     return { customerAccount, sourceCustomer, distributorOrProductLabel: String(sampleFirst) };
   }, [candidate]);
 
-  if (!candidate) {
-    return (
-      <Typography variant="body2" color="text.secondary" data-testid="dsi-steward-no-selection">
-        Select a candidate row in the grid to run steward actions (map, provisional create, Open Channel, ignore).
-      </Typography>
-    );
-  }
-
-  const ctx = (candidate.context ?? null) as Record<string, unknown> | null;
+  const ctx = candidate ? ((candidate.context ?? null) as Record<string, unknown> | null) : null;
   const strat = strategicHint(ctx);
   const distCollision = contextDistributorMasterCollision(ctx);
   const dupHints = contextPossibleDuplicateOf(ctx);
@@ -511,12 +503,15 @@ export function DsiMappingStewardPanel({
       : null;
   const dupDecision = duplicateReviewDecision(ctx);
   const dupUnresolved =
-    candidate.entity_type === 'customer_dealer_token' && hasUnresolvedDuplicateReview(ctx);
-  const isTerminal = DSI_STEWARD_TERMINAL_STATUSES.has((candidate.status || '').trim());
-  const rowActionsBlocked = isDsiStewardRowActionBlocked(candidate.status);
+    !!candidate &&
+    candidate.entity_type === 'customer_dealer_token' &&
+    hasUnresolvedDuplicateReview(ctx);
+  const isTerminal = DSI_STEWARD_TERMINAL_STATUSES.has((candidate?.status || '').trim());
+  const rowActionsBlocked = isDsiStewardRowActionBlocked(candidate?.status);
   const stewardActionsDisabled = isTerminal || rowActionsBlocked || actionBusy;
   const planDuplicateBlocked = planRow?.duplicate_review_required === true;
   const planProductReady =
+    !!candidate &&
     candidate.entity_type === 'product_identifier' &&
     planRow?.ready === true &&
     planRow?.suggested_action === 'resolve_product' &&
@@ -529,11 +524,11 @@ export function DsiMappingStewardPanel({
       setPickProductId(tid);
       setShowAlternateProductPicker(false);
     }
-  }, [candidate.id, planProductReady, planRow?.suggested_target_id]);
+  }, [candidate?.id, planProductReady, planRow?.suggested_target_id]);
   const dupPeerHintsExcludingSelf = useMemo(() => {
-    const own = (candidate.normalized_key || '').trim();
+    const own = (candidate?.normalized_key || '').trim();
     return dupHints.filter((h) => h.normalized_key.trim() !== own);
-  }, [dupHints, candidate.normalized_key]);
+  }, [dupHints, candidate?.normalized_key]);
   const dupPeerKeyDefault = dupPeerHintsExcludingSelf[0]?.normalized_key ?? '';
   const dupPeerForSameEntity = useMemo(
     () => (dupPeerKeyDefault && lookupPeerCandidate ? lookupPeerCandidate(dupPeerKeyDefault) : null),
@@ -542,30 +537,38 @@ export function DsiMappingStewardPanel({
   const dupSameEntityCaseLive = useMemo(
     () =>
       classifyDuplicateSameEntityCase(
-        candidate.suggested_entity_id,
+        candidate?.suggested_entity_id,
         dupPeerForSameEntity?.suggested_entity_id,
         planRow?.suggested_target_id
       ),
-    [candidate.suggested_entity_id, dupPeerForSameEntity?.suggested_entity_id, planRow?.suggested_target_id]
+    [candidate?.suggested_entity_id, dupPeerForSameEntity?.suggested_entity_id, planRow?.suggested_target_id]
   );
   const dupSameEntityConflict = dupUnresolved && !isTerminal && dupSameEntityCaseLive === 'conflict';
   const suffixTokenFamily = useMemo(
     () =>
-      candidate.entity_type === 'customer_dealer_token' && customerNormalizedKeysOnPage?.length
+      candidate?.entity_type === 'customer_dealer_token' && customerNormalizedKeysOnPage?.length
         ? detectSuffixTokenFamily(candidate.normalized_key, customerNormalizedKeysOnPage)
         : null,
-    [candidate.entity_type, candidate.normalized_key, customerNormalizedKeysOnPage]
+    [candidate?.entity_type, candidate?.normalized_key, customerNormalizedKeysOnPage]
   );
   const clusterPeersExcludingSelf = useMemo(() => {
-    const own = (candidate.normalized_key || '').trim();
+    const own = (candidate?.normalized_key || '').trim();
     const members = duplicateClusterMembers ?? [];
     return members.filter((k) => k.trim() !== own);
-  }, [duplicateClusterMembers, candidate.normalized_key]);
+  }, [duplicateClusterMembers, candidate?.normalized_key]);
 
   useEffect(() => {
     const first = dupPeerHintsExcludingSelf[0]?.normalized_key ?? '';
     setDupDifferentPeerKey(first);
-  }, [candidate.id, dupPeerHintsExcludingSelf]);
+  }, [candidate?.id, dupPeerHintsExcludingSelf]);
+
+  if (!candidate) {
+    return (
+      <Typography variant="body2" color="text.secondary" data-testid="dsi-steward-no-selection">
+        Select a candidate row in the grid to run steward actions (map, provisional create, Open Channel, ignore).
+      </Typography>
+    );
+  }
 
   return (
     <Stack spacing={2} sx={{ mt: 2 }} data-testid="dsi-steward-panel">
@@ -1333,7 +1336,9 @@ export function DsiMappingStewardPanel({
                 </Box>
               ) : null}
               {ctx.product_match_status === 'ambiguous_eligible' &&
-              Array.isArray(ctx.product_ambiguous_eligible?.eligible_products) &&
+              Array.isArray(
+                (ctx.product_ambiguous_eligible as Record<string, unknown> | undefined)?.eligible_products
+              ) &&
               (showAlternateProductPicker || !planProductReady) ? (
                 <Box sx={{ mt: 1 }}>
                   <DsiEligibleProductPicker

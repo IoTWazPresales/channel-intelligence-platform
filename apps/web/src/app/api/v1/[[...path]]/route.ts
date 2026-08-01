@@ -79,7 +79,7 @@ function proxyFetchInitNeedsLongTimeout(method: string, pathSuffix: string): boo
 /** Undici's headersTimeout is independent of AbortSignal — raise both for long routes. */
 function longProxyDispatcher(): import('undici').Dispatcher | undefined {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    // Optional: lengthen undici timeouts for long import proxy routes when undici is installed.
     const { Agent } = require('undici') as typeof import('undici');
     return new Agent({
       headersTimeout: LONG_PROXY_TIMEOUT_MS,

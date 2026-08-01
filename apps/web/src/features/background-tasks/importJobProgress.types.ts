@@ -27,6 +27,8 @@ export type BulkProvisionalTaskProgress = {
   total_rows?: number;
   pct?: number;
   error?: string;
+  /** Present on SUCCESS for bulk provisional / plan apply / compute tasks. */
+  result?: unknown;
 };
 
 export type BackgroundTaskKind =

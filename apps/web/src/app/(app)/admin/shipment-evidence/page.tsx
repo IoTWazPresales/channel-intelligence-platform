@@ -720,14 +720,18 @@ export default function ShipmentEvidenceAdminPage() {
         ) : null}
 
         <ModuleDataSection
-          title="Evidence lines"
-          description="Click a row for raw JSON and tokens. Product resolution stays visible in the grid; distributor stewardship is above."
+          intro={
+            <>
+              <strong>Evidence lines</strong> — Click a row for raw JSON and tokens. Product resolution stays visible in
+              the grid; distributor stewardship is above.
+            </>
+          }
           isLoading={isLoading}
           isError={isError}
           error={toQueryError(error)}
           onRetry={() => void refetch()}
           isEmpty={!isLoading && (data?.items?.length ?? 0) === 0}
-          emptyState={{
+          empty={{
             title: 'No evidence rows yet',
             description: 'Run a Shipment / order evidence import job first.',
           }}

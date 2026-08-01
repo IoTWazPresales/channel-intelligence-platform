@@ -147,7 +147,7 @@ export default function ListingCapturePage() {
       <PageHeader
         crumbs={[{ label: 'Channel Intelligence' }, { label: 'Listing Capture' }]}
         title="Listing Capture v0"
-        action={
+        actions={
           <Stack direction="row" spacing={1}>
             <Button size="small" variant="outlined" onClick={() => refetch()}>
               Refresh

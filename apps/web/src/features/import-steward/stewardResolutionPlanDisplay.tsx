@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { InputHTMLAttributes, ReactNode } from "react";
 import {
   Checkbox,
   Chip,
@@ -634,7 +634,7 @@ export function PlanDialogRowDetail({
               size="small"
               checked={r.hold_for_manual_review === true}
               onChange={(e) => patchPlanOverride(id, { hold_for_manual_review: e.target.checked })}
-              inputProps={{ 'data-testid': `dsi-plan-hold-${id}` }}
+              inputProps={{ 'data-testid': `dsi-plan-hold-${id}` } as unknown as InputHTMLAttributes<HTMLInputElement>}
             />
           }
           label="Hold (skip in apply)"
@@ -650,7 +650,7 @@ export function PlanDialogRowDetail({
                     confirm_for_suspicious_distributor_token: e.target.checked,
                   })
                 }
-                inputProps={{ 'data-testid': `dsi-plan-dist-confirm-${id}` }}
+                inputProps={{ 'data-testid': `dsi-plan-dist-confirm-${id}` } as unknown as InputHTMLAttributes<HTMLInputElement>}
               />
             }
             label="Confirm placeholder-like distributor token"
@@ -685,7 +685,7 @@ export function PlanDialogRowDetail({
                 size="small"
                 checked={planOverrideMap[id]?.ack_strategic_channel_hint === true}
                 onChange={(e) => patchPlanOverride(id, { ack_strategic_channel_hint: e.target.checked })}
-                inputProps={{ 'data-testid': `dsi-plan-strategic-${id}` }}
+                inputProps={{ 'data-testid': `dsi-plan-strategic-${id}` } as unknown as InputHTMLAttributes<HTMLInputElement>}
               />
             }
             label="Acknowledge strategic / marketplace evidence"

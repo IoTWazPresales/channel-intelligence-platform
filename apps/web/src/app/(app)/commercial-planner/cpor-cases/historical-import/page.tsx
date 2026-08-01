@@ -365,7 +365,7 @@ export default function CporHistoricalImportPage() {
         </Stack>
       ) : null}
 
-      {(step === 'apply' || (pollProgress && step === 'apply')) && jobId != null ? (
+      {step === 'apply' && jobId != null ? (
         <Stack spacing={2} sx={{ mt: 2 }}>
           <ImportJobValidateProgressPanel
             progress={progress}

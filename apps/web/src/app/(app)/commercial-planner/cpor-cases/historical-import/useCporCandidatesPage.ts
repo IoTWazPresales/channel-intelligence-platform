@@ -8,6 +8,7 @@ import { STEWARD_CANDIDATE_PAGE_SIZE_OPTIONS, type StewardCandidatePageSize } fr
 import { fetchCporHistoricalCandidates } from './cporHistoricalImportApi';
 import {
   CPOR_HISTORICAL_STEWARD_CONFIG,
+  type CporCandidatesPageResponse,
   type CporEntityTabId,
   type CporPlanClass,
 } from './cporHistoricalSteward.config';
@@ -42,7 +43,7 @@ export function useCporCandidatesPage(
     [importJobId, entity, skip, pageSize, planClass]
   );
 
-  const query = useQuery({
+  const query = useQuery<CporCandidatesPageResponse>({
     queryKey,
     enabled: queryEnabled,
     refetchOnWindowFocus: false,
