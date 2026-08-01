@@ -13,11 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.core.security import get_current_user
 from app.db.session_sync import SessionLocal
 from app.ingestion.pipeline import STAGE_LOADED, STAGE_VALIDATED
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.import_distributor_si import ImportEntityMappingCandidate
 from app.models.ingestion import ImportJob
+from app.services.steward_audit import record_steward_audit_sync
 from app.services.imports.shipment_evidence_read import (
     apply_active_evidence_filter,
     shipment_evidence_read_model,
@@ -658,6 +660,7 @@ async def shipment_import_job_bulk_apply_confirmed_plans(
 async def shipment_import_candidates_bulk_map_customer(
     body: ShipmentBulkMapCustomerBody,
     x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Enqueue bulk-map of many shipment customer candidates to one existing customer (background task).
 
@@ -679,6 +682,16 @@ async def shipment_import_candidates_bulk_map_customer(
     )
     if job_id_for_slot is not None:
         _write_shipment_bulk_slot(job_id_for_slot, task_id, async_poll=async_poll, label="Mapping channel partners…")
+    record_steward_audit_sync(
+        user,
+        action="bulk_map",
+        importer="shipment",
+        entity_type="customer",
+        import_job_id=job_id_for_slot,
+        target_dim="customer",
+        target_id=int(body.customer_id),
+        payload={"candidate_count": len(body.candidate_ids), "task_id": task_id, "async_poll": async_poll},
+    )
     return {
         "import_job_id": job_id_for_slot,
         "task_id": task_id,
@@ -692,6 +705,7 @@ async def shipment_import_candidate_map_distributor(
     candidate_id: int,
     body: ShipmentMapDistributorBody,
     x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     _require_admin(x_user_role)
     with SessionLocal() as s:
@@ -699,11 +713,25 @@ async def shipment_import_candidate_map_distributor(
         if not cand or cand.entity_type != SHIPMENT_DISTRIBUTOR_ENTITY:
             raise HTTPException(status_code=404, detail="Shipment distributor candidate not found")
         try:
-            return execute_map_shipment_distributor(
+            out = execute_map_shipment_distributor(
                 s, cand, distributor_id=body.distributor_id, raw_token=body.raw_token
             )
         except ShipmentStewardOpError as exc:
             raise HTTPException(status_code=exc.status_code, detail={"message": exc.detail}) from exc
+        job_id = cand.import_job_id
+        token = cand.normalized_key
+    record_steward_audit_sync(
+        user,
+        action="map",
+        importer="shipment",
+        entity_type="distributor",
+        entity_token=token,
+        import_job_id=job_id,
+        candidate_id=candidate_id,
+        target_dim="distributor",
+        target_id=body.distributor_id,
+    )
+    return out
 
 
 @router.post("/import-candidates/{candidate_id}/create-provisional-distributor")
@@ -711,6 +739,7 @@ async def shipment_import_candidate_create_provisional_distributor(
     candidate_id: int,
     body: ShipmentCreateProvisionalDistributorBody,
     x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     _require_admin(x_user_role)
     with SessionLocal() as s:
@@ -718,7 +747,7 @@ async def shipment_import_candidate_create_provisional_distributor(
         if not cand or cand.entity_type != SHIPMENT_DISTRIBUTOR_ENTITY:
             raise HTTPException(status_code=404, detail="Shipment distributor candidate not found")
         try:
-            return execute_create_provisional_shipment_distributor(
+            out = execute_create_provisional_shipment_distributor(
                 s,
                 cand,
                 display_name=body.display_name,
@@ -727,6 +756,20 @@ async def shipment_import_candidate_create_provisional_distributor(
             )
         except ShipmentStewardOpError as exc:
             raise HTTPException(status_code=exc.status_code, detail={"message": exc.detail}) from exc
+        job_id = cand.import_job_id
+        token = cand.normalized_key
+    record_steward_audit_sync(
+        user,
+        action="provisional_create",
+        importer="shipment",
+        entity_type="distributor",
+        entity_token=token,
+        import_job_id=job_id,
+        candidate_id=candidate_id,
+        target_dim="distributor",
+        target_id=out.get("distributor_id") if isinstance(out, dict) else None,
+    )
+    return out
 
 
 @router.post("/import-candidates/{candidate_id}/map-customer")
@@ -734,6 +777,7 @@ async def shipment_import_candidate_map_customer(
     candidate_id: int,
     body: ShipmentMapCustomerBody,
     x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     _require_admin(x_user_role)
     with SessionLocal() as s:
@@ -741,11 +785,25 @@ async def shipment_import_candidate_map_customer(
         if not cand or cand.entity_type != SHIPMENT_CUSTOMER_ENTITY:
             raise HTTPException(status_code=404, detail="Shipment customer candidate not found")
         try:
-            return execute_map_shipment_customer(
+            out = execute_map_shipment_customer(
                 s, cand, customer_id=body.customer_id, raw_token=body.raw_token
             )
         except ShipmentStewardOpError as exc:
             raise HTTPException(status_code=exc.status_code, detail={"message": exc.detail}) from exc
+        job_id = cand.import_job_id
+        token = cand.normalized_key
+    record_steward_audit_sync(
+        user,
+        action="map",
+        importer="shipment",
+        entity_type="customer",
+        entity_token=token,
+        import_job_id=job_id,
+        candidate_id=candidate_id,
+        target_dim="customer",
+        target_id=body.customer_id,
+    )
+    return out
 
 
 class ShipmentManualSpecialCategoryBody(BaseModel):
@@ -791,6 +849,7 @@ async def shipment_import_candidate_clear_special_category(
 async def shipment_import_candidate_reject(
     candidate_id: int,
     x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     _require_admin(x_user_role)
     with SessionLocal() as s:
@@ -798,9 +857,22 @@ async def shipment_import_candidate_reject(
         if not cand or cand.entity_type not in (SHIPMENT_DISTRIBUTOR_ENTITY, SHIPMENT_CUSTOMER_ENTITY):
             raise HTTPException(status_code=404, detail="Shipment mapping candidate not found")
         try:
-            return execute_reject_shipment_mapping_candidate(s, cand)
+            out = execute_reject_shipment_mapping_candidate(s, cand)
         except ShipmentStewardOpError as exc:
             raise HTTPException(status_code=exc.status_code, detail={"message": exc.detail}) from exc
+        job_id = cand.import_job_id
+        token = cand.normalized_key
+        entity_type = cand.entity_type
+    record_steward_audit_sync(
+        user,
+        action="ignore",
+        importer="shipment",
+        entity_type=entity_type,
+        entity_token=token,
+        import_job_id=job_id,
+        candidate_id=candidate_id,
+    )
+    return out
 
 
 @router.post("/import-candidates/{candidate_id}/create-provisional-customer")
@@ -808,6 +880,7 @@ async def shipment_import_candidate_create_provisional_customer(
     candidate_id: int,
     body: ShipmentCreateProvisionalCustomerBody,
     x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     _require_admin(x_user_role)
     with SessionLocal() as s:
@@ -815,7 +888,7 @@ async def shipment_import_candidate_create_provisional_customer(
         if not cand or cand.entity_type != SHIPMENT_CUSTOMER_ENTITY:
             raise HTTPException(status_code=404, detail="Shipment customer candidate not found")
         try:
-            return execute_create_provisional_shipment_customer(
+            out = execute_create_provisional_shipment_customer(
                 s,
                 cand,
                 display_name=body.display_name,
@@ -827,6 +900,20 @@ async def shipment_import_candidate_create_provisional_customer(
             )
         except ShipmentStewardOpError as exc:
             raise HTTPException(status_code=exc.status_code, detail={"message": exc.detail}) from exc
+        job_id = cand.import_job_id
+        token = cand.normalized_key
+    record_steward_audit_sync(
+        user,
+        action="provisional_create",
+        importer="shipment",
+        entity_type="customer",
+        entity_token=token,
+        import_job_id=job_id,
+        candidate_id=candidate_id,
+        target_dim="customer",
+        target_id=out.get("customer_id") if isinstance(out, dict) else None,
+    )
+    return out
 
 
 @router.post("/import-jobs/{job_id}/bulk-create-provisional-customers", status_code=202)
