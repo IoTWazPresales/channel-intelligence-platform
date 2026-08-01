@@ -34,7 +34,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-01 |
+| **Status / parked** | **Resolved 2026-08-01** — UI label **Over-plan intake**; exception “Over-ships / over-plan intake”; API `over_plan_intake_*` aliases |
 | **Effort** | Trivial (UI string + tooltip; optional test ids) |
 | **Source** | `docs/COMMERCIAL_SEMANTICS.md` A1-02; Warren 2026-08-01 (end POD collision) |
 | **Idea** | Rename scorecard label “Deal-stock landing” to **Over-plan intake** (and exception copy “Over-ships / deal-stock” accordingly) so it cannot be read as POD landing. |

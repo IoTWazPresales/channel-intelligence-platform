@@ -67,6 +67,20 @@ Each entry: what is unclear · why it matters · interim assumption · what woul
 | **Raise by** | P4 entry / first customer file |
 | **Source** | Domain rules Still open #4 |
 
+### Q-009 — Lineup PM attribution source for volume bias
+
+| Field | Value |
+|-------|--------|
+| **What is unclear** | Where does **product manager / PM** attribution live for lineup plan lines — workbook column, case field, customer `account_owner_internal`, or elsewhere? |
+| **Why it matters** | A1-07 requires bias by **BU and PM**. Tree has no PM field on `commercial_lineup_case` / line `raw_row_payload`; customer `account_owner_internal` is empty on cip. BU bias ships without inventing a PM dimension. |
+| **Interim assumption** | Compute **BU-only** volume bias; `pm_attribution: unavailable` until source locked |
+| **What would change** | `by_pm` buckets on PvE read model + UI tile; possible import/mapping of PM onto case or line |
+| **Blocking?** | **No for BU bias / A1-08 slip**; **Yes for PM volume-bias buckets** |
+| **Blocks** | A1-07 PM dimension only |
+| **Owner** | Warren / PMs |
+| **Raise by** | Before claiming full A1-07 PM bias |
+| **Source** | Tree audit 2026-08-01; A1 bias/slip unit |
+
 ---
 
 ## Resolved
@@ -82,8 +96,8 @@ Each entry: what is unclear · why it matters · interim assumption · what woul
 
 | Field | Value |
 |-------|--------|
-| **Answer** | Not present as a live tile. Locked as **SPEC ONLY** in `COMMERCIAL_SEMANTICS` A1-07 (signed volume bias by BU×PM) and A1-08 (slip = ship-date quarter delta, not POD). Building those tiles is a later A1 unit (AMBER design-stage for new tiles if formulas change; formulas already locked). |
-| **Source** | Warren → COMMERCIAL_SEMANTICS consolidation |
+| **Answer** | Formulas locked in `COMMERCIAL_SEMANTICS` A1-07/A1-08. **Built 2026-08-01:** BU volume bias + ship-quarter slip on `/plan-vs-executed` (`volume_bias`, `slip`). **PM** bias remains blocked on **Q-009** (no PM source in tree). |
+| **Source** | Warren → COMMERCIAL_SEMANTICS consolidation; A1 bias/slip unit |
 
 ### Q-006 — A2 promo-effectiveness metrics — **Resolved 2026-08-01**
 

@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-08-01 (A2-U1 + A3 WoC grain fix)
+**Last updated:** 2026-08-01 (A1 bias/slip + over-plan rename)
 **Verify git:** `git branch --show-current` · `git rev-parse --short HEAD`
 
 ---
@@ -13,8 +13,8 @@
 | **Alembic (DB)** | **`20260730_0075` on cip** |
 | **HEAD** | tip of `main` (verify) |
 | **Pushed?** | verify before claiming |
-| **Current phase** | **A-lane** — A2-U1 shipped; A3 WoC grain fixed |
-| **Next** | A1 bias/slip SPEC ONLY tiles; BACKLOG-091 UI rename on next A1 touch; BACKLOG-092 paid recon when Ken files land |
+| **Current phase** | **A-lane** — A1 bias/slip + A2-U1/U2 + A3 WoC shipped |
+| **Next** | A3 replenishment flag v1 (tenant config; default 4 weeks); BACKLOG-092 paid recon when Ken files land; Q-001/002/003 still open |
 
 ---
 
@@ -38,10 +38,11 @@ Stubs: `SURFACE_OWNERSHIP.md`, `PLAN_VS_EXECUTED_SHIPPED_TAXONOMY.md`, `PLAN_VS_
 
 | Item | Evidence |
 |------|----------|
-| **Q-008** | Claim rate **non-computable** (D-027); no distinct **owed** amount in U5 settlement (not “paid” — paid = Ken payment recon) |
-| **A2-U2** | Norms + comparable cases (`/intelligence/norms`, `/comparable-cases`) |
-| **A3 WoC** | Sell-out velocity at dist×product; portfolio Σstock/Σvelocity. **Before** ~78 956 weeks · **After** ~13.6 weeks (cip; stock 33 571) |
-| **BACKLOG-090** | Resolved |
+| **A1-07 / A1-08** | BU volume bias + ship-quarter slip on `/plan-vs-executed` (`volume_bias`, `slip`). PM bias = `unavailable` until **Q-009** |
+| **BACKLOG-091** | Resolved — UI **Over-plan intake** (+ API aliases) |
+| **Q-008** | Claim rate **non-computable** (D-027) |
+| **A2-U2** | Norms + comparable cases |
+| **A3 WoC** | Dist×product velocity; cip ~13.6 weeks. **BACKLOG-090** resolved |
 
 ---
 

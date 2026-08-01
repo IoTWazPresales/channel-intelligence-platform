@@ -16,9 +16,18 @@ def _no_live_duplicate_ingestion_audit(monkeypatch):
     async def _no_lineup_quarters(_db):
         return set()
 
+    async def _noop_ship_quarters(_db, rows):
+        for r in rows:
+            y, q = r.get("year"), r.get("quarter")
+            if y is not None and q is not None:
+                r["plan_quarter_ordinal"] = int(y) * 4 + int(q)
+            if r.get("ship_quarter_ordinal") is None and r.get("first_ship_date"):
+                pass
+
     monkeypatch.setattr(mod, "_load_duplicate_ingestion_samples", _empty)
     # Read-model tests use AsyncMock db; avoid live SQL in default-period path.
     monkeypatch.setattr(mod, "lineup_linked_year_quarters", _no_lineup_quarters)
+    monkeypatch.setattr(mod, "attach_ship_quarters", _noop_ship_quarters)
 
 
 def _cov_for_periods(period_labels: list[str]) -> dict[str, Any]:
@@ -78,8 +87,41 @@ def test_fill_rate_over_ship_does_not_reduce_fill_rate():
     sc = mod.compute_scorecard_from_execution_rows(rows)
     # sum_min = min(150,100) + min(50,100) = 100 + 50 = 150; sum_p = 200
     assert sc["fill_rate"] == 0.75
-    assert sc["deal_stock_units"] == 50
-    assert sc["short_exposure_units"] == 50
+    assert sc["over_plan_intake_units"] == sc["deal_stock_units"] == 50
+
+
+def test_volume_bias_by_bu_signed_mean():
+    rows = [
+        {**_row(planned=100, shipped=120), "business_unit_label": "NB"},
+        {**_row(planned=100, shipped=80, customer_id=2, product_id=11), "business_unit_label": "NB"},
+        {**_row(planned=100, shipped=100, customer_id=3, product_id=12), "business_unit_label": "NB"},
+        {**_row(planned=0, shipped=10, customer_id=4, product_id=13), "business_unit_label": "NB"},  # excluded
+    ]
+    out = mod.compute_volume_bias(rows, min_lines=3)
+    assert out["excluded_zero_plan_lines"] == 1
+    assert out["pm_attribution"] == "unavailable"
+    assert len(out["by_bu"]) == 1
+    assert out["by_bu"][0]["bu"] == "NB"
+    assert abs(out["by_bu"][0]["mean_signed_bias"] - 0.0) < 1e-9  # (+0.2 -0.2 +0)/3
+
+
+def test_slip_summary_mean_quarter_delta():
+    rows = [
+        {
+            **_row(planned=100, shipped=100),
+            "plan_quarter_ordinal": 2026 * 4 + 2,
+            "ship_quarter_ordinal": 2026 * 4 + 3,
+        },
+        {
+            **_row(planned=50, shipped=40, customer_id=2, product_id=11),
+            "plan_quarter_ordinal": 2026 * 4 + 2,
+            "ship_quarter_ordinal": 2026 * 4 + 2,
+        },
+    ]
+    out = mod.compute_slip_summary(rows)
+    assert out["line_count_with_ship_date"] == 2
+    assert abs(out["mean_signed_quarter_delta"] - 0.5) < 1e-9
+    assert out["direction"] == "later"
 
 
 def test_pipeline_excluded_from_fill_included_in_pipeline_tile():
@@ -329,7 +371,12 @@ def test_plan_vs_executed_read_model_wires_scorecard():
     out = asyncio.run(_run())
     assert out["data_unavailable"] is False
     assert out["scorecard"]["fill_rate"] == 1.0
+    assert out["scorecard"]["over_plan_intake_units"] == out["scorecard"]["deal_stock_units"]
     assert out["exceptions"]["customer"]["short_ships"] == []
+    assert "volume_bias" in out
+    assert out["volume_bias"]["pm_attribution"] == "unavailable"
+    assert "slip" in out
+    assert out["slip"]["uses"].startswith("ship_confirm_date")
 
 
 def _period_row(period_label: str, *, planned: float, shipped: float, **extra) -> dict:

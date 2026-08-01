@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from datetime import date
 from typing import Any, Literal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupCasePo
@@ -27,8 +28,15 @@ from app.services.commercial_planner.po_management import (
     coverage,
     product_row_matches_group_line,
 )
+from app.services.imports.shipment_evidence_read import (
+    apply_active_evidence_filter,
+    shipment_evidence_read_model,
+)
 
 logger = logging.getLogger(__name__)
+
+EV = shipment_evidence_read_model()
+LINE_SHIPPED = "shipped"
 
 RankBy = Literal["units", "value"]
 ProductGroupBy = Literal["description", "sku", "sales_model"]
@@ -38,6 +46,9 @@ ProductGroupBy = Literal["description", "sku", "sales_model"]
 _BUCKET_EXECUTED = ("matched", "short", "over")
 _BUCKET_OFF_PLAN = ("unplanned", "amended")
 _BUCKET_PENDING = ("unshipped",)
+
+# A1-07 — minimum in-plan lines before a BU/PM bias bucket is displayed.
+VOLUME_BIAS_MIN_LINES = 3
 
 
 def scorecard_tie_out_fields(scorecard: dict[str, Any]) -> dict[str, Any]:
@@ -49,6 +60,7 @@ def scorecard_tie_out_fields(scorecard: dict[str, Any]) -> dict[str, Any]:
         "fill_rate": scorecard["fill_rate"],
         "short_exposure_units": scorecard["short_exposure_units"],
         "deal_stock_units": scorecard["deal_stock_units"],
+        "over_plan_intake_units": scorecard.get("over_plan_intake_units", scorecard["deal_stock_units"]),
         "unplanned_intake_units": scorecard["unplanned_intake_units"],
         "no_po_blind_spot": scorecard["no_po_blind_spot"],
     }
@@ -465,6 +477,7 @@ def compute_scorecard_from_execution_rows(rows: list[dict[str, Any]]) -> dict[st
         "pipeline_units_in_plan": pipeline_units_in_plan,
         "short_exposure_units": short_units,
         "deal_stock_units": deal_stock_units,
+        "over_plan_intake_units": deal_stock_units,  # A1-02 rename alias (API key + UI label)
         "unplanned_intake_units": unplanned_units,
         "no_po_blind_spot": {
             "line_count": no_po_line_count,
@@ -483,6 +496,7 @@ def compute_scorecard_from_execution_rows(rows: list[dict[str, Any]]) -> dict[st
             "shipped_value_cost": shipped_value_cost,
             "short_exposure_value_plan": short_value_plan,
             "deal_stock_value_plan": deal_stock_value_plan,
+            "over_plan_intake_value_plan": deal_stock_value_plan,
             "unplanned_intake_value_plan": unplanned_value_plan,
             "fx_partial": fx_partial,
         },
@@ -490,6 +504,168 @@ def compute_scorecard_from_execution_rows(rows: list[dict[str, Any]]) -> dict[st
         "buckets": buckets,
         "awaiting_po_line_count": awaiting_po_line_count,
     }
+
+
+def _quarter_key_from_date(d: date | None) -> str | None:
+    if d is None:
+        return None
+    return quarter_key_from_period_start(d)
+
+
+def compute_volume_bias(
+    rows: list[dict[str, Any]],
+    *,
+    min_lines: int = VOLUME_BIAS_MIN_LINES,
+) -> dict[str, Any]:
+    """A1-07 — mean signed (shipped − planned) / planned by BU (and PM when available).
+
+    Excludes planned = 0. Direction is the finding. PM buckets are unavailable until a
+    lineup PM attribution source exists (Q-009).
+    """
+    excluded_zero_plan = sum(1 for r in rows if float(r.get("planned_units") or 0) <= 0)
+    in_plan = [r for r in rows if float(r.get("planned_units") or 0) > 0]
+
+    by_bu: dict[str, list[float]] = defaultdict(list)
+    for r in in_plan:
+        p = float(r["planned_units"])
+        s = float(r.get("shipped_units") or 0)
+        bu = (r.get("business_unit_label") or r.get("product_line") or "(unassigned)").strip() or "(unassigned)"
+        by_bu[bu].append((s - p) / p)
+
+    bu_out: list[dict[str, Any]] = []
+    suppressed = 0
+    for bu, biases in sorted(by_bu.items(), key=lambda kv: -abs(sum(kv[1]) / len(kv[1])) if kv[1] else 0):
+        n = len(biases)
+        if n < min_lines:
+            suppressed += 1
+            continue
+        mean_bias = sum(biases) / n
+        bu_out.append(
+            {
+                "bu": bu,
+                "line_count": n,
+                "mean_signed_bias": mean_bias,
+                "direction": "over" if mean_bias > 0 else ("under" if mean_bias < 0 else "flat"),
+            }
+        )
+
+    return {
+        "min_lines": min_lines,
+        "excluded_zero_plan_lines": excluded_zero_plan,
+        "suppressed_below_min_lines": suppressed,
+        "by_bu": bu_out,
+        "by_pm": [],
+        "pm_attribution": "unavailable",
+        "pm_attribution_reason": (
+            "No PM / product-manager field on commercial_lineup_case or line payloads. "
+            "BU bias is computed; PM bias waits on Q-009 source lock."
+        ),
+        "formula": "mean((shipped - planned) / planned) on in-plan lines; planned=0 excluded",
+    }
+
+
+def compute_slip_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """A1-08 — mean signed quarter delta (ship quarter − plan quarter); ship date not POD."""
+    deltas: list[int] = []
+    missing_ship_date = 0
+    for r in rows:
+        if float(r.get("shipped_units") or 0) <= 0:
+            continue
+        if float(r.get("planned_units") or 0) <= 0:
+            continue
+        plan_ord = r.get("plan_quarter_ordinal")
+        ship_ord = r.get("ship_quarter_ordinal")
+        if plan_ord is None or ship_ord is None:
+            missing_ship_date += 1
+            continue
+        deltas.append(int(ship_ord) - int(plan_ord))
+
+    mean_delta = (sum(deltas) / len(deltas)) if deltas else None
+    return {
+        "line_count_with_ship_date": len(deltas),
+        "lines_missing_ship_date": missing_ship_date,
+        "mean_signed_quarter_delta": mean_delta,
+        "direction": (
+            None
+            if mean_delta is None
+            else ("later" if mean_delta > 0 else ("earlier" if mean_delta < 0 else "on_plan_quarter"))
+        ),
+        "uses": "ship_confirm_date then schedule_ship_date — never pod_date",
+        "formula": "mean(ship_quarter_ordinal - plan_quarter_ordinal) on in-plan shipped lines",
+    }
+
+
+async def attach_ship_quarters(db: AsyncSession, rows: list[dict[str, Any]]) -> None:
+    """Mutate rows with first ship date / quarter (ship date, not POD) for slip."""
+    case_ids = sorted({int(r["case_id"]) for r in rows if r.get("case_id") is not None})
+    if not case_ids:
+        return
+
+    links = (
+        await db.execute(
+            select(CommercialLineupCasePo.case_id, CommercialLineupCasePo.purchase_order_id).where(
+                CommercialLineupCasePo.case_id.in_(case_ids)
+            )
+        )
+    ).all()
+    pos_by_case: dict[int, list[int]] = defaultdict(list)
+    all_po_ids: set[int] = set()
+    for case_id, po_id in links:
+        pos_by_case[int(case_id)].append(int(po_id))
+        all_po_ids.add(int(po_id))
+
+    # (case_id, product_id) -> earliest ship date
+    ship_date_by_case_product: dict[tuple[int, int], date] = {}
+    if all_po_ids:
+        ship_anchor = func.coalesce(EV.ship_confirm_date, EV.schedule_ship_date)
+        ship_rows = (
+            await db.execute(
+                apply_active_evidence_filter(
+                    select(
+                        CommercialLineupCasePo.case_id,
+                        EV.product_id,
+                        func.min(ship_anchor),
+                    )
+                    .join(
+                        CommercialLineupCasePo,
+                        CommercialLineupCasePo.purchase_order_id == EV.purchase_order_id,
+                    )
+                    .where(
+                        CommercialLineupCasePo.case_id.in_(case_ids),
+                        EV.purchase_order_id.in_(list(all_po_ids)),
+                        EV.product_id.isnot(None),
+                        EV.line_state == LINE_SHIPPED,
+                        ship_anchor.isnot(None),
+                    )
+                    .group_by(CommercialLineupCasePo.case_id, EV.product_id),
+                    model=EV,
+                )
+            )
+        ).all()
+        for case_id, product_id, first_ship in ship_rows:
+            if case_id is None or product_id is None or first_ship is None:
+                continue
+            ship_date_by_case_product[(int(case_id), int(product_id))] = first_ship
+
+    for r in rows:
+        case_id = r.get("case_id")
+        product_id = r.get("product_id")
+        year, quarter = r.get("year"), r.get("quarter")
+        if year is not None and quarter is not None:
+            r["plan_quarter_ordinal"] = _period_ordinal(int(year), int(quarter))
+        else:
+            r["plan_quarter_ordinal"] = None
+        first = None
+        if case_id is not None and product_id is not None:
+            first = ship_date_by_case_product.get((int(case_id), int(product_id)))
+        r["first_ship_date"] = first.isoformat() if first else None
+        ship_q = _quarter_key_from_date(first)
+        r["ship_quarter_label"] = ship_q
+        if first is not None:
+            sy, sq = quarter_from_period_start(first)
+            r["ship_quarter_ordinal"] = _period_ordinal(sy, sq)
+        else:
+            r["ship_quarter_ordinal"] = None
 
 
 def _enrich_execution_row(
@@ -882,6 +1058,9 @@ async def plan_vs_executed_read_model(
         return {"data_unavailable": True}
 
     scorecard = compute_scorecard_from_execution_rows(rows)
+    await attach_ship_quarters(db, rows)
+    volume_bias = compute_volume_bias(rows)
+    slip = compute_slip_summary(rows)
     exceptions = _aggregate_exceptions(rows, rank_by=rank_by, product_group_by=product_group_by)
 
     period_slots = _period_slots_in_range(
@@ -977,6 +1156,8 @@ async def plan_vs_executed_read_model(
         "drill": drill_context,
         "available_periods": all_periods,
         "scorecard": scorecard,
+        "volume_bias": volume_bias,
+        "slip": slip,
         "exceptions": exceptions,
         "trend": trend,
         "drill_rows": drill_rows,

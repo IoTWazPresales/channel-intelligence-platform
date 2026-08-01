@@ -245,6 +245,13 @@ pnpm --filter @cip/web lint      # Web only
 
 ---
 
+## Smoke verification (UI)
+
+**Browser automation only.** Prove shipped UI/workflows in Playwright / browser MCP
+against the live web app. Do **not** treat `curl`, Invoke-RestMethod, or one-shot
+backend/service scripts as smoke proof. See `.cursor/rules/smoke-via-browser.mdc`.
+Unit/pytest and SQL path validation remain for logic and SQL — they are not UI smoke.
+
 ## Working Safely Without Breaking Existing Features
 
 1. **Read before editing.** Always read the full relevant file before making

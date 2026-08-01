@@ -41,7 +41,7 @@ export type ExceptionCategory =
 
 export const EXCEPTION_CATEGORY_LABELS: Record<ExceptionCategory, string> = {
   short_ships: 'Short-ships',
-  over_ships: 'Over-ships / deal-stock',
+  over_ships: 'Over-ships / over-plan intake',
   unplanned_intake: 'Unplanned intake',
   no_po_blind_spots: 'No-PO blind spots',
 };

@@ -1,0 +1,39 @@
+---
+description: Smoke verification must use browser automation — never raw API or backend sync scripts as proof.
+alwaysApply: true
+---
+
+# Smoke tests = browser automation only
+
+When verifying that a **shipped UI surface or operator workflow** works end-to-end
+(smoke / soak / “prove it in the running system”):
+
+## Required
+
+- Use **browser automation** (Playwright MCP / cursor-ide-browser) against the
+  live web app (`http://localhost:3000` or the running topology).
+- Assert what the **operator sees**: labels, tiles, tables, empty states,
+  error banners, testids, navigation — not JSON payloads.
+
+## Prohibited as smoke proof
+
+- `curl` / `Invoke-RestMethod` / `fetch` against API routes
+- One-shot Python/Node scripts that call services or `AsyncSession` directly
+- Celery sync / in-process orchestrator runs treated as UI smoke
+- Claiming “smoke passed” from pytest or API response shape alone
+
+## Still allowed (not smoke)
+
+| Kind | Purpose |
+|------|---------|
+| **Unit / focused pytest** | Logic, formulas, mocked read models |
+| **SQL path validation** | Real DB execution for VALUES/CASE/type correctness (project SQL rule) — proves SQL, **not** UI smoke |
+| **API contract tests** | Schema / status codes in the test suite |
+
+If the web or API process is down, **start the app stack and open the page in the
+browser** — do not substitute a backend call for the missing UI check.
+
+## Done bar
+
+A UI/feature unit is not smoke-verified until a browser session has loaded the
+owning route and confirmed the visible outcome that the unit claimed to ship.

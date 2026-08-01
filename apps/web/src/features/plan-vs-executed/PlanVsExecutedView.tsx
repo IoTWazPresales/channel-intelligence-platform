@@ -61,6 +61,7 @@ type Scorecard = {
   pipeline_units_in_plan: number;
   short_exposure_units: number;
   deal_stock_units: number;
+  over_plan_intake_units?: number;
   unplanned_intake_units: number;
   no_po_blind_spot: {
     line_count: number;
@@ -79,6 +80,7 @@ type Scorecard = {
     shipped_value_cost: number;
     short_exposure_value_plan: number;
     deal_stock_value_plan: number;
+    over_plan_intake_value_plan?: number;
     unplanned_intake_value_plan: number;
     fx_partial: boolean;
   };
@@ -114,6 +116,27 @@ type PlanVsExecutedResponse = {
   };
   available_periods: { year: number; quarter: number; label: string }[];
   scorecard: Scorecard;
+  volume_bias?: {
+    by_bu: Array<{
+      bu: string;
+      line_count: number;
+      mean_signed_bias: number;
+      direction: string;
+    }>;
+    by_pm: unknown[];
+    pm_attribution: string;
+    pm_attribution_reason?: string;
+    excluded_zero_plan_lines: number;
+    suppressed_below_min_lines: number;
+    min_lines: number;
+  };
+  slip?: {
+    mean_signed_quarter_delta: number | null;
+    direction: string | null;
+    line_count_with_ship_date: number;
+    lines_missing_ship_date: number;
+    uses: string;
+  };
   exceptions: { customer: LensExceptions; product: LensExceptions; bu: LensExceptions };
   trend: {
     period_label: string;
@@ -657,10 +680,12 @@ export function PlanVsExecutedView() {
                   tone="warning"
                 />
                 <KpiTile
-                  label="Deal-stock landing"
-                  primary={fmtUnits(sc.deal_stock_units)}
-                  secondary={`${fmtValue(sc.value.deal_stock_value_plan)} plan${fxNote}`}
+                  label="Over-plan intake"
+                  title="Σ max(shipped − planned, 0) on in-plan rows — overship vs plan, not POD landing."
+                  primary={fmtUnits(sc.over_plan_intake_units ?? sc.deal_stock_units)}
+                  secondary={`${fmtValue(sc.value.over_plan_intake_value_plan ?? sc.value.deal_stock_value_plan)} plan${fxNote}`}
                   tone="positive"
+                  data-testid="pve-over-plan-intake"
                 />
                 <KpiTile
                   label="Unplanned intake"
@@ -682,6 +707,60 @@ export function PlanVsExecutedView() {
                 <Chip size="small" color="warning" label={`Pending: ${sc.buckets.pending}`} />
                 <ReconSummaryChips summary={sc.flag_summary} />
               </Stack>
+
+              {(data?.volume_bias || data?.slip) && (
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }} data-testid="pve-bias-slip">
+                  <KpiTile
+                    label="Ship quarter slip"
+                    title="Mean signed quarter delta (ship quarter − plan quarter) on in-plan shipped lines. Uses ship_confirm_date then schedule_ship_date — never POD."
+                    primary={
+                      data.slip?.mean_signed_quarter_delta == null
+                        ? '—'
+                        : `${data.slip.mean_signed_quarter_delta > 0 ? '+' : ''}${data.slip.mean_signed_quarter_delta.toFixed(2)} Q`
+                    }
+                    secondary={
+                      data.slip
+                        ? `${data.slip.direction ?? 'n/a'} · ${data.slip.line_count_with_ship_date} lines w/ ship date${
+                            data.slip.lines_missing_ship_date
+                              ? ` · ${data.slip.lines_missing_ship_date} missing`
+                              : ''
+                          }`
+                        : '—'
+                    }
+                    tone="neutral"
+                    data-testid="pve-slip"
+                  />
+                  <KpiTile
+                    label="Volume bias (by BU)"
+                    title="Mean signed (shipped − planned) / planned on in-plan lines. Direction is the finding. PM bias unavailable until PM source locked (Q-009)."
+                    primary={
+                      data.volume_bias?.by_bu?.[0]
+                        ? `${data.volume_bias.by_bu[0].bu}: ${(data.volume_bias.by_bu[0].mean_signed_bias * 100).toFixed(1)}%`
+                        : '—'
+                    }
+                    secondary={
+                      data.volume_bias?.by_bu?.length
+                        ? data.volume_bias.by_bu
+                            .slice(0, 3)
+                            .map(
+                              (b) =>
+                                `${b.bu} ${(b.mean_signed_bias * 100).toFixed(0)}% (${b.direction}, n=${b.line_count})`,
+                            )
+                            .join(' · ')
+                        : data.volume_bias?.pm_attribution === 'unavailable'
+                          ? 'No BU buckets above min lines'
+                          : '—'
+                    }
+                    tone="neutral"
+                    data-testid="pve-volume-bias"
+                  />
+                  {data.volume_bias?.pm_attribution === 'unavailable' ? (
+                    <Typography variant="caption" color="text.secondary" sx={{ width: '100%' }} data-testid="pve-pm-bias-unavailable">
+                      PM volume bias: unavailable — {data.volume_bias.pm_attribution_reason}
+                    </Typography>
+                  ) : null}
+                </Stack>
+              )}
 
               {data?.trend?.length ? (
                 <Card variant="outlined" sx={{ mb: 2 }}>

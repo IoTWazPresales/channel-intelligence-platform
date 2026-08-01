@@ -113,11 +113,11 @@ Status values: **IMPLEMENTED** (transcribed from tree) · **SPEC ONLY** (defined
 | A1-04 | **Unplanned intake** | IMPLEMENTED | Σ shipped on rows with planned = 0 and shipped > 0 | same | same | Plan vs Executed |
 | A1-05 | **No-PO blind spot** | IMPLEMENTED | In-plan lines with `awaiting_po`; count + Σ planned units | same | lineup without linked PO | Plan vs Executed |
 | A1-06 | **Pipeline (inbound)** | IMPLEMENTED | Σ `pipeline_units` (open_order) on in-plan rows; pending split = inbound vs cold | same | open_order evidence on linked POs | Plan vs Executed |
-| A1-07 | **PM volume bias** | SPEC ONLY | Mean **signed** (shipped − planned) / planned, by **BU** and **PM** across quarters. Exclude planned = 0; report excluded count. Minimum line count per bucket before display (config). Direction is the finding. | BU × PM × multi-quarter | same as fill | Plan vs Executed |
-| A1-08 | **Slip** | SPEC ONLY | Lineup quarter vs **actual ship quarter** on linked POs; signed quarter delta. Uses **ship date**, **not** POD. | linked PO / plan line | shipped evidence ship date + lineup `inferred_period_start` | Plan vs Executed |
+| A1-07 | **Volume bias (BU)** · PM pending Q-009 | IMPLEMENTED (BU) · SPEC ONLY (PM) | Mean **signed** (shipped − planned) / planned by **BU**. Exclude planned = 0; report excluded count. Min lines per bucket (`VOLUME_BIAS_MIN_LINES`). Direction is the finding. **PM buckets:** unavailable until Q-009 (no PM field on lineup case/payload). | BU (implemented); PM blocked | same as fill | Plan vs Executed |
+| A1-08 | **Slip** | IMPLEMENTED | Lineup quarter vs **actual ship quarter** on linked POs; signed quarter delta. Uses **ship_confirm_date** then **schedule_ship_date** — **not** POD. | linked PO / plan line × product | shipped evidence ship date + lineup period | Plan vs Executed |
 | A1-09 | **Support bias** | SPEC ONLY · **blocked** | Planned reservation vs actual CPOR spend. **CPOR-owned**, not PvE. Blocked until lineup discovery answers whether reservation is an explicit column or derived (Q-002 / domain Still open #2). | TBD after discovery | lineup reservation + CPOR spend | **CPOR Cases** |
 
-UI label note: scorecard still shows “Deal-stock landing” in code — rename to **Over-plan intake** when the UI is next touched (docs lead).
+UI label: scorecard shows **Over-plan intake** (A1-02; BACKLOG-091 resolved 2026-08-01). API keeps `deal_stock_*` keys with `over_plan_intake_*` aliases.
 
 ### 4.2 Shipping — `/shipping`
 
