@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-01 — **P2-3e applied on cip:** alembic `20260801_0004`; browser Steward audit shows smoke row. Optional: shipment/CPOR/CST hooks; fact tenant_id still needs separate migration approval.
 - 2026-08-01 — **P2-3e steward audit authored:** migration `20260801_0004` + DSI write hooks + `/admin/steward-audit` UI. **NOT applied on cip** — awaiting Warren upgrade approval. Then smoke + optional shipment/CPOR/CST wiring.
 - 2026-08-01 — **P2-3d browser smoke PASS:** API restarted session mode; shell Local Admin; created viewer@local on /admin/users. Remaining P2: steward audit; fact tenant_id (migration approval).
 - 2026-08-01 — **P2-3d admin users:** `GET /auth/users` + `/admin/users` create form; nav Users link from P2-3c. Remaining: steward audit; fact tenant_id (migration).

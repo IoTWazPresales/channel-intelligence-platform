@@ -1,20 +1,20 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-01 (P2-3e steward audit authored — migration NOT applied)
-**Branch:** `feat/p2-auth-rbac` @ `3fa1018` (in sync with origin)
-**Alembic:** code head `20260801_0004` (steward_audit_event) — **cip still on `20260801_0003` until Warren approves upgrade**
+**Last updated:** 2026-08-01 (P2-3e applied + smoke PASS)
+**Branch:** `feat/p2-auth-rbac` @ `0cd2225`+
+**Alembic:** `20260801_0004` on cip (steward_audit_event)
 
 ## Done
 
-- P2-3 → P2-3d pushed + browser smoke PASS
-- **P2-3e steward audit (code):** `steward_audit_event` migration+model; `record_steward_audit`; DSI resolve/map/ignore/provisional/bulk wired; `GET /admin/steward-audit`; Admin → Steward audit UI
+- P2-3 → P2-3d identity/shell/nav/users (smoke PASS)
+- **P2-3e steward audit live:** `20260801_0004` applied on cip; `GET /admin/steward-audit` shows smoke row (Local Admin / dsi / P2-3e-SMOKE); DSI write hooks wired
 
-## Blocked / next
+## Not done / next
 
-1. **Approve `alembic upgrade` to `20260801_0004`** on cip (steward audit unusable until applied)
-2. Then browser smoke: ignore/resolve → audit row appears
-3. Wire shipment/CPOR/CST audit (same helper) — optional follow-on
-4. Fact `tenant_id` isolation — separate migration approval
-5. X-1 CST VERIFY (new chat)
+1. Optional: wire shipment/CPOR/CST to same `record_steward_audit`
+2. **Fact `tenant_id` isolation** — needs separate migration approval
+3. P2-4 shell/landing · P2-5 monitoring
+4. **X-1 CST Unit E VERIFY** (prefer new chat)
+5. Open PR for `feat/p2-auth-rbac` when ready
 
-**Env:** local Windows. API `:8001` session, web `:3000`.
+**Env:** local Windows. API `:8001` session, web `:3000`. Seed `admin@local` / `changeme`.
