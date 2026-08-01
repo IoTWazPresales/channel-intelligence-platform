@@ -1,7 +1,7 @@
 ﻿# CURRENT state
 
 **Last updated:** 2026-08-01 (P2 complete locally — P2-1 hosting deferred)
-**Branch:** `feat/p2-auth-rbac` @ `5fa4798`
+**Branch:** `feat/p2-auth-rbac` @ `638b5e5`
 **Alembic:** `20260801_0005` on cip
 
 ## Done (P2 usable-by-others)
