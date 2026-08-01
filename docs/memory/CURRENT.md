@@ -11,8 +11,8 @@
 |-------|--------|
 | **Branch** | `main` |
 | **Alembic (DB)** | **`20260730_0075` on cip** |
-| **HEAD** | tip of `main` (verify after push) |
-| **Pushed?** | verify before claiming |
+| **HEAD** | `d6de3e0` |
+| **Pushed?** | yes (`origin/main`) |
 | **Current phase** | **A-lane** — A1 + A2 + A3 WoC + A3-03 replenishment shipped |
 | **Next** | BACKLOG-092 paid recon when Ken files land; Q-001/002/003/009 still open; B-lane when A closed |
 
