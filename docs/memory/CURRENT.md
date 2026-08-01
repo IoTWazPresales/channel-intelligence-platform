@@ -1,7 +1,7 @@
 ﻿# CURRENT state
 
 **Last updated:** 2026-08-01 (P3-3 report builder v1; BACKLOG-097 resolved)
-**Branch:** `feat/p2-auth-rbac` @ `01c6975` (+ uncommitted P3-3)
+**Branch:** `feat/p2-auth-rbac` @ `de8a78b`
 **Alembic:** `20260801_0005` on cip
 
 ## Done this session
