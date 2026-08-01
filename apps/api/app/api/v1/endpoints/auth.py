@@ -124,6 +124,34 @@ async def logout(
     return {"ok": True}
 
 
+@router.get("/users")
+async def list_users(
+    db: AsyncSession = Depends(get_db),
+    admin: dict = Depends(require_roles(Role.ADMIN)),
+):
+    tenant_id = (admin.get("tenant_id") or "default").strip() or "default"
+    result = await db.execute(
+        select(AppUser)
+        .where(AppUser.tenant_id == tenant_id)
+        .order_by(AppUser.email.asc())
+    )
+    users = result.scalars().all()
+    return {
+        "tenant_id": tenant_id,
+        "users": [
+            {
+                "id": str(u.id),
+                "email": u.email,
+                "display_name": u.display_name,
+                "role": u.role,
+                "tenant_id": u.tenant_id,
+                "is_active": u.is_active,
+            }
+            for u in users
+        ],
+    }
+
+
 @router.post("/users", status_code=status.HTTP_201_CREATED)
 async def create_user(
     body: CreateUserRequest,
