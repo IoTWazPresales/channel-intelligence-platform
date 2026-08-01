@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Paper, Stack, Switch, TextField } from '@mui/material';
+import { Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Paper, Stack, Switch, TextField } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColDef } from 'ag-grid-community';
 import { useMemo, useState } from 'react';
@@ -73,9 +73,15 @@ export default function ForecastsPage() {
   const [cust, setCust] = useState('');
   const [override, setOverride] = useState(false);
 
+  const [methodFilter, setMethodFilter] = useState<string | null>(null);
+
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['forecasts'],
-    queryFn: ({ signal }) => apiGet<Row[]>('/api/v1/forecasts', { signal }),
+    queryKey: ['forecasts', methodFilter],
+    queryFn: ({ signal }) => {
+      const q = new URLSearchParams({ limit: '500' });
+      if (methodFilter) q.set('method', methodFilter);
+      return apiGet<Row[]>(`/api/v1/forecasts?${q}`, { signal });
+    },
   });
 
   const bulk = useMutation({
@@ -137,10 +143,28 @@ export default function ForecastsPage() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Forecast' }]} title="Forecast & overrides" />
+      <PageHeader crumbs={[{ label: 'Forecast' }]} title="Demand Forecast" />
       <Paper sx={{ p: 2 }}>
+        <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} flexWrap="wrap" useFlexGap>
+          {[
+            { id: null, label: 'All methods' },
+            { id: 'velocity', label: 'Velocity' },
+            { id: 'analogue', label: 'Analogue' },
+            { id: 'manual', label: 'Manual / override' },
+          ].map((opt) => (
+            <Chip
+              key={opt.label}
+              size="small"
+              label={opt.label}
+              color={methodFilter === opt.id ? 'primary' : 'default'}
+              variant={methodFilter === opt.id ? 'filled' : 'outlined'}
+              onClick={() => setMethodFilter(opt.id)}
+              data-testid={`forecast-method-filter-${opt.id ?? 'all'}`}
+            />
+          ))}
+        </Stack>
         <ModuleDataSection
-          intro="Demand forecast contract (fact_demand_forecast). Manual rows are overrides at distributor × product × customer × period. Unknown SKUs/customers are rejected — resolve in masters first. Missing customer → OPEN_CHANNEL; missing distributor → UNASSIGNED."
+          intro="Demand forecast contract (fact_demand_forecast). Atomic grain: distributor × product × customer × period. Rollups are plain sums. Method chips filter velocity / analogue / manual overrides."
           isLoading={isLoading}
           isError={isError}
           error={toQueryError(error)}

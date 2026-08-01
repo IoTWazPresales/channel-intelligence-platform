@@ -45,6 +45,7 @@ type InvRow = {
   replenishment_flag?: boolean;
   replenishment_threshold_weeks?: number;
   reorder_signal: boolean;
+  demand_forecast_units_13w?: number | null;
 };
 
 export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
@@ -118,6 +119,7 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
                     <>
                       <TableCell align="right">Velocity 52wk</TableCell>
                       <TableCell align="right">Weeks of cover</TableCell>
+                      <TableCell align="right">Demand fcst 13w</TableCell>
                       <TableCell>Replenish</TableCell>
                     </>
                   )}
@@ -150,6 +152,13 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
                         </TableCell>
                         <TableCell align="right">
                           {r.weeks_of_cover != null ? r.weeks_of_cover.toFixed(1) : 'n/a'}
+                        </TableCell>
+                        <TableCell align="right" data-testid="channel-ops-demand-forecast">
+                          {r.demand_forecast_units_13w != null
+                            ? r.demand_forecast_units_13w.toLocaleString(undefined, {
+                                maximumFractionDigits: 2,
+                              })
+                            : '—'}
                         </TableCell>
                         <TableCell>
                           {r.replenishment_flag ?? r.reorder_signal ? (
