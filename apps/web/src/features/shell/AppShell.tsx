@@ -145,6 +145,8 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
     }
   }, [invalidateMe, logoutBusy, router]);
 
+  const navGroupsForRole = useMemo(() => shellNavGroups(me?.role ? String(me.role) : null), [me?.role]);
+
   useEffect(() => {
     setNavCollapsed(readCollapsed());
     setGroupExpanded(readGroupExpanded());
@@ -278,7 +280,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
       <Divider sx={{ borderColor: sidebarBorder }} />
 
       <Box sx={{ flex: 1, overflow: 'auto', py: 1 }}>
-        {shellNavGroups().map((group) => {
+        {navGroupsForRole.map((group) => {
           const GroupIcon = GROUP_ICONS[group.id] ?? DashboardOutlinedIcon;
           const expanded = groupExpanded[group.id] !== false;
 
