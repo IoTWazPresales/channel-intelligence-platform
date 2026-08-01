@@ -367,14 +367,33 @@ async def derived_stock_by_dist_product(
     distributor_id: int | None = None,
     tenant_id: str | None = None,
 ) -> dict[tuple[int, int], float]:
-    """Latest derived stock per (distributor, product). Never sums snapshot history."""
+    """Latest derived stock per (distributor, product). Never sums snapshot history.
+
+    Set-based: one latest-snapshot join + aggregated sell-out / POD-landed since
+    (no per-pair scalar round-trips).
+    """
+    components = await derived_stock_components_by_dist_product(
+        db, distributor_id=distributor_id, tenant_id=tenant_id
+    )
+    return {k: float(v.derived_stock) for k, v in components.items()}
+
+
+async def derived_stock_components_by_dist_product(
+    db: AsyncSession,
+    *,
+    distributor_id: int | None = None,
+    tenant_id: str | None = None,
+    product_id: int | None = None,
+) -> dict[tuple[int, int], DerivedStockComponents]:
+    """Set-based derived stock components keyed by (distributor_id, product_id)."""
     tid = (tenant_id or "").strip() or None
     latest = _latest_snapshot_subquery(distributor_id, tenant_id=tid)
+
     inv_q = select(
-        FactInventoryDistributor.distributor_id,
-        FactInventoryDistributor.product_id,
-        FactInventoryDistributor.as_of_date,
-        FactInventoryDistributor.on_hand_units,
+        FactInventoryDistributor.distributor_id.label("distributor_id"),
+        FactInventoryDistributor.product_id.label("product_id"),
+        FactInventoryDistributor.as_of_date.label("snapshot_date"),
+        FactInventoryDistributor.on_hand_units.label("on_hand_units"),
     ).join(
         latest,
         and_(
@@ -385,41 +404,102 @@ async def derived_stock_by_dist_product(
     )
     if tid is not None:
         inv_q = inv_q.where(FactInventoryDistributor.tenant_id == tid)
-    inv_rows = (await db.execute(inv_q)).all()
-    out: dict[tuple[int, int], float] = {}
-    for dist_id, prod_id, snap_date, on_hand in inv_rows:
+    if product_id is not None:
+        inv_q = inv_q.where(FactInventoryDistributor.product_id == int(product_id))
+    inv = inv_q.subquery("inv_latest")
+
+    sell_q = (
+        select(
+            FactSalesSellout.distributor_id.label("distributor_id"),
+            FactSalesSellout.product_id.label("product_id"),
+            func.coalesce(func.sum(FactSalesSellout.units), 0).label("sell_out"),
+        )
+        .join(
+            latest,
+            and_(
+                FactSalesSellout.distributor_id == latest.c.distributor_id,
+                FactSalesSellout.product_id == latest.c.product_id,
+                FactSalesSellout.transaction_date > latest.c.snapshot_date,
+            ),
+        )
+        .group_by(FactSalesSellout.distributor_id, FactSalesSellout.product_id)
+    )
+    if tid is not None:
+        sell_q = sell_q.where(FactSalesSellout.tenant_id == tid)
+    if distributor_id is not None:
+        sell_q = sell_q.where(FactSalesSellout.distributor_id == int(distributor_id))
+    if product_id is not None:
+        sell_q = sell_q.where(FactSalesSellout.product_id == int(product_id))
+    sell = sell_q.subquery("sell_since")
+
+    land_q = (
+        select(
+            FactInboundShipment.distributor_id.label("distributor_id"),
+            FactInboundShipment.product_id.label("product_id"),
+            func.coalesce(func.sum(FactInboundShipment.quantity), 0).label("landed"),
+        )
+        .join(
+            latest,
+            and_(
+                FactInboundShipment.distributor_id == latest.c.distributor_id,
+                FactInboundShipment.product_id == latest.c.product_id,
+                FactInboundShipment.pod_date.isnot(None),
+                FactInboundShipment.pod_date > latest.c.snapshot_date,
+                func.lower(FactInboundShipment.line_state) == "shipped",
+            ),
+        )
+        .group_by(FactInboundShipment.distributor_id, FactInboundShipment.product_id)
+    )
+    if tid is not None:
+        land_q = land_q.where(FactInboundShipment.tenant_id == tid)
+    if distributor_id is not None:
+        land_q = land_q.where(FactInboundShipment.distributor_id == int(distributor_id))
+    if product_id is not None:
+        land_q = land_q.where(FactInboundShipment.product_id == int(product_id))
+    land = land_q.subquery("land_since")
+
+    q = (
+        select(
+            inv.c.distributor_id,
+            inv.c.product_id,
+            inv.c.snapshot_date,
+            inv.c.on_hand_units,
+            func.coalesce(sell.c.sell_out, 0),
+            func.coalesce(land.c.landed, 0),
+        )
+        .select_from(inv)
+        .outerjoin(
+            sell,
+            and_(
+                sell.c.distributor_id == inv.c.distributor_id,
+                sell.c.product_id == inv.c.product_id,
+            ),
+        )
+        .outerjoin(
+            land,
+            and_(
+                land.c.distributor_id == inv.c.distributor_id,
+                land.c.product_id == inv.c.product_id,
+            ),
+        )
+    )
+    rows = (await db.execute(q)).all()
+    out: dict[tuple[int, int], DerivedStockComponents] = {}
+    for dist_id, prod_id, snap_date, on_hand, sell_out, landed in rows:
         reported = Decimal(str(on_hand or 0))
-        sell_clauses = [
-            FactSalesSellout.distributor_id == int(dist_id),
-            FactSalesSellout.product_id == int(prod_id),
-            FactSalesSellout.transaction_date > snap_date,
-        ]
-        if tid is not None:
-            sell_clauses.append(FactSalesSellout.tenant_id == tid)
-        sell_out = Decimal(
-            str(
-                await db.scalar(
-                    select(func.coalesce(func.sum(FactSalesSellout.units), 0)).where(*sell_clauses)
-                )
-                or 0
-            )
-        )
-        landed = Decimal(
-            str(
-                await db.scalar(
-                    select(func.coalesce(func.sum(FactInboundShipment.quantity), 0)).where(
-                        _shipped_landed_filter(
-                            int(dist_id), int(prod_id), snap_date, tenant_id=tid
-                        )
-                    )
-                )
-                or 0
-            )
-        )
-        out[(int(dist_id), int(prod_id))] = float(
-            compute_derived_stock(
-                reported_soh=reported, sell_out_since=sell_out, landed_since=landed
-            )
+        sell_d = Decimal(str(sell_out or 0))
+        land_d = Decimal(str(landed or 0))
+        key = (int(dist_id), int(prod_id))
+        out[key] = DerivedStockComponents(
+            distributor_id=key[0],
+            product_id=key[1],
+            snapshot_date=snap_date,
+            reported_soh=reported,
+            sell_out_since=sell_d,
+            landed_since=land_d,
+            derived_stock=compute_derived_stock(
+                reported_soh=reported, sell_out_since=sell_d, landed_since=land_d
+            ),
         )
     return out
 
@@ -452,13 +532,20 @@ async def derived_stock_rows_for_distributor(
 ) -> list[dict[str, Any]]:
     """Per-product derived stock rows for Channel Ops inventory tab."""
     tid = (tenant_id or "default").strip() or "default"
+    components = await derived_stock_components_by_dist_product(
+        db,
+        distributor_id=int(distributor_id),
+        tenant_id=tid,
+        product_id=int(product_id) if product_id is not None else None,
+    )
+    if not components:
+        return []
+
+    # Enrich with reconciliation columns from the latest inventory row (set-based).
     latest = _latest_snapshot_subquery(int(distributor_id), tenant_id=tid)
-    q = (
+    meta_q = (
         select(
-            FactInventoryDistributor.distributor_id,
             FactInventoryDistributor.product_id,
-            FactInventoryDistributor.as_of_date,
-            FactInventoryDistributor.on_hand_units,
             FactInventoryDistributor.calculated_soh,
             FactInventoryDistributor.soh_variance,
             FactInventoryDistributor.reconciliation_status,
@@ -477,50 +564,27 @@ async def derived_stock_rows_for_distributor(
         )
     )
     if product_id is not None:
-        q = q.where(FactInventoryDistributor.product_id == int(product_id))
-    rows = (await db.execute(q)).all()
+        meta_q = meta_q.where(FactInventoryDistributor.product_id == int(product_id))
+    meta_rows = (await db.execute(meta_q)).all()
+    meta_by_product = {
+        int(r[0]): (r[1], r[2], r[3]) for r in meta_rows if r[0] is not None
+    }
+
     out: list[dict[str, Any]] = []
-    for r in rows:
-        dist_id, prod_id, snap_date, on_hand = int(r[0]), int(r[1]), r[2], r[3]
-        reported = Decimal(str(on_hand or 0))
-        sell_out = Decimal(
-            str(
-                await db.scalar(
-                    select(func.coalesce(func.sum(FactSalesSellout.units), 0)).where(
-                        FactSalesSellout.distributor_id == dist_id,
-                        FactSalesSellout.product_id == prod_id,
-                        FactSalesSellout.transaction_date > snap_date,
-                        FactSalesSellout.tenant_id == tid,
-                    )
-                )
-                or 0
-            )
-        )
-        landed = Decimal(
-            str(
-                await db.scalar(
-                    select(func.coalesce(func.sum(FactInboundShipment.quantity), 0)).where(
-                        _shipped_landed_filter(dist_id, prod_id, snap_date, tenant_id=tid)
-                    )
-                )
-                or 0
-            )
-        )
-        derived = compute_derived_stock(
-            reported_soh=reported, sell_out_since=sell_out, landed_since=landed
-        )
+    for (dist_id, prod_id), comp in sorted(components.items()):
+        calc, var, status = meta_by_product.get(prod_id, (None, None, None))
         out.append(
             {
                 "distributor_id": dist_id,
                 "product_id": prod_id,
-                "snapshot_date": snap_date.isoformat() if snap_date else None,
-                "reported_soh": float(reported),
-                "sell_out_since": float(sell_out),
-                "landed_since": float(landed),
-                "derived_stock": float(derived),
-                "calculated_soh": float(r[4]) if r[4] is not None else None,
-                "variance_units": float(r[5]) if r[5] is not None else None,
-                "reconciliation_status": r[6],
+                "snapshot_date": comp.snapshot_date.isoformat() if comp.snapshot_date else None,
+                "reported_soh": float(comp.reported_soh),
+                "sell_out_since": float(comp.sell_out_since),
+                "landed_since": float(comp.landed_since),
+                "derived_stock": float(comp.derived_stock),
+                "calculated_soh": float(calc) if calc is not None else None,
+                "variance_units": float(var) if var is not None else None,
+                "reconciliation_status": status,
             }
         )
     return out
