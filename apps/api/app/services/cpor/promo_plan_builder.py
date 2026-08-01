@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.models.cpor import CporCaseLine
 from app.models.fact_demand_forecast import FactDemandForecast
+from app.services import commercial_tenant_profile as tenant_profile
 from app.services.cpor.norms_and_comparable import build_comparable_cases
 
 
@@ -80,8 +81,11 @@ def build_promo_plan_draft(
         support_pct = reserved / float(planned_revenue_usd)
 
     budget = {
-        "hard_enforce": False,
-        "constraint_type": "undetermined",
+        "hard_enforce": bool(tenant_profile.HARD_ENFORCE_BUDGET),
+        "constraint_type": tenant_profile.CONSTRAINT_AXIS,
+        "binding_axis": tenant_profile.CONSTRAINT_AXIS,
+        "over_budget_action": tenant_profile.OVER_BUDGET_ACTION,
+        "tenant_profile": tenant_profile.profile_snapshot(),
         "tracks": {
             "money": {
                 "planned_reservation_usd": reserved,
@@ -92,12 +96,17 @@ def build_promo_plan_draft(
                     if reserved > 0 and drawn > reserved
                     else ("ok" if reserved > 0 else "no_planned_reservation")
                 ),
+                "binding": tenant_profile.CONSTRAINT_AXIS in ("money", "dual"),
             },
-            "support_pct": {"planned_support_pct_of_sell_in": support_pct},
+            "support_pct": {
+                "planned_support_pct_of_sell_in": support_pct,
+                "binding": tenant_profile.CONSTRAINT_AXIS in ("support_pct", "dual"),
+            },
         },
         "cpor_line_count": int(line_n or 0),
         "period_label": period_label,
-        "q002_reservation_source": "derived_interim",
+        "reservation_source": tenant_profile.RESERVATION_SOURCE,
+        "q002_reservation_source": tenant_profile.RESERVATION_SOURCE,
     }
 
     top = (comparables.get("items") or [])[:3]
@@ -121,7 +130,10 @@ def build_promo_plan_draft(
         "budget_check": budget,
         "next_step": "Create/edit CPOR case via existing /cpor/cases; export via CPOR export",
         "notes": [
-            "Reservation Q-002 interim derived — dual-track, no hard enforce",
+            f"Reservation source={tenant_profile.RESERVATION_SOURCE}; "
+            f"binding_axis={tenant_profile.CONSTRAINT_AXIS}; "
+            f"over_action={tenant_profile.OVER_BUDGET_ACTION} (hard_enforce="
+            f"{tenant_profile.HARD_ENFORCE_BUDGET})",
             "Volume from fact_demand_forecast (B1); comparable volume is fallback only",
         ],
     }

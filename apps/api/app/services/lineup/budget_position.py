@@ -1,7 +1,7 @@
-"""B2 budget position — dual track (money + support-%), no hard enforce.
+"""B2 budget position — dual track (money + support-%), profile-driven binding axis.
 
-Domain §1.8: track both views; do not hard-enforce until constraint type is settled.
-Drawn spend aggregates ``cpor_case_line.ttl_support_usd`` (prefer filter on pod_quarter).
+Domain §1.8 / Q-001: money is binding for current tenant; support-% informational.
+Hard enforce stays off until over-budget reapproval workflow ships.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_planner import CommercialSkuAssumption
 from app.models.cpor import CporCaseLine
+from app.services import commercial_tenant_profile as tenant_profile
 
 
 async def build_budget_position(
@@ -52,6 +53,11 @@ async def build_budget_position(
 
     remaining_money = reserved_money - drawn_usd_f
     money_util = (drawn_usd_f / reserved_money) if reserved_money > 0 else None
+    money_status = (
+        "over"
+        if reserved_money > 0 and drawn_usd_f > reserved_money
+        else ("ok" if reserved_money > 0 else "no_planned_reservation")
+    )
 
     try:
         sku_n = int(
@@ -61,11 +67,15 @@ async def build_budget_position(
     except Exception:
         sku_n = 0
 
+    profile = tenant_profile.profile_snapshot()
     return {
         "as_of": date.today().isoformat(),
         "period_label": period_label,
-        "hard_enforce": False,
-        "constraint_type": "undetermined",
+        "hard_enforce": bool(tenant_profile.HARD_ENFORCE_BUDGET),
+        "constraint_type": tenant_profile.CONSTRAINT_AXIS,
+        "binding_axis": tenant_profile.CONSTRAINT_AXIS,
+        "over_budget_action": tenant_profile.OVER_BUDGET_ACTION,
+        "tenant_profile": profile,
         "tracks": {
             "money": {
                 "planned_reservation_usd": round(reserved_money, 4),
@@ -73,15 +83,13 @@ async def build_budget_position(
                 "drawn_cpor_zar_display": round(drawn_zar_f, 4),
                 "remaining_usd": round(remaining_money, 4),
                 "utilisation": money_util,
-                "status": (
-                    "over"
-                    if reserved_money > 0 and drawn_usd_f > reserved_money
-                    else ("ok" if reserved_money > 0 else "no_planned_reservation")
-                ),
+                "status": money_status,
+                "binding": tenant_profile.CONSTRAINT_AXIS in ("money", "dual"),
             },
             "support_pct": {
                 "planned_support_pct_of_sell_in": reserved_pct,
-                "note": "Planned % from reservation÷sell-in revenue; actual % from A2 norms",
+                "note": "Informational for money-binding tenants; planned % from reservation÷sell-in",
+                "binding": tenant_profile.CONSTRAINT_AXIS in ("support_pct", "dual"),
             },
         },
         "cpor_line_count": line_count,
@@ -89,5 +97,6 @@ async def build_budget_position(
         "sku_assumption_count": sku_n,
         "planned_line_count": len(planned),
         "basis": "cpor_case_line.ttl_support_usd; optional pod_quarter filter (landed)",
-        "q002_reservation_source": "derived_interim",
+        "reservation_source": tenant_profile.RESERVATION_SOURCE,
+        "q002_reservation_source": tenant_profile.RESERVATION_SOURCE,
     }

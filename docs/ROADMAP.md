@@ -139,7 +139,7 @@ See `docs/COMMERCIAL_SEMANTICS.md`. Two axes coexist: fill rate / plan execution
 **Support bias:** planned reservation vs actual CPOR spend — **CPOR-owned**, not PvE; blocked
 on reservation-column discovery. Do not put on Plan vs Executed.
 **Window:** all quarters with lineup coverage; credible core 26Q1 → current.
-**Exit:** plan-accuracy surface (fill + exceptions). Credibility artifact. *(A-lane wrap 2026-08-01: fill/exceptions/bias-slip BU/over-plan intake shipped; PM bias → Q-009; support bias still blocked.)*
+**Exit:** plan-accuracy surface (fill + exceptions). Credibility artifact. *(A-lane wrap 2026-08-01: fill/exceptions/bias-slip BU/over-plan intake shipped; Q-009 → PM=business_line; Q-002 → derived-from-profit planned side for support bias — metric still SPEC ONLY on CPOR Cases.)*
 
 ### A2 — CPOR intelligence
 **Entry:** P1 CPOR historical signed off.

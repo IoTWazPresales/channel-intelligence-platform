@@ -21,13 +21,14 @@ export default function ChannelOperationsPage() {
       <PageHeader
         crumbs={[{ label: 'Commercial' }, { label: 'Channel Operations' }]}
         title="Channel Operations"
-        action={
+        actions={
           <ToggleButtonGroup
             exclusive
             size="small"
             value={depth}
             onChange={(_e, v) => v && setDepth(v)}
             aria-label="Intelligence depth"
+            sx={{ mb: 2 }}
           >
             {INTEL_DEPTH_OPTIONS.map((o) => (
               <ToggleButton key={o.value} value={o.value}>

@@ -13,6 +13,40 @@
 **P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
+## BACKLOG-096 — Commercial tenant profile onboarding UI
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-01 |
+| **Effort** | Medium (settings/onboarding form + persistence) |
+| **Source** | Warren 2026-08-01 Q-resolve — answers are current-tenant defaults; must stay TENANT-VARIABLE |
+| **Idea** | Expose `commercial_tenant_profile` keys in Getting Started / tenant settings: `constraint_axis`, `over_budget_action`, `reservation_source`, `pm_attribution_mode`. Persist per tenant; stop relying on module-level defaults alone. |
+| **Why it matters / deferrable** | Second customer / multi-tenant readiness (P6); ASUS SA answers must not be baked into application law. Deferrable while single-tenant local. |
+| **What the work is** | Settings or onboarding step; API read/write; seed defaults from current profile module; document in domain rules. |
+| **Regression traps** | Do not hardcode NB/NR/NV/NX or ZAR-only assumptions in UI copy as the only options. |
+| **Behavior to retain** | Profile stub defaults remain valid until overridden. |
+| **Out of scope** | Full multi-tenant IAM; hosting (Q-003). |
+| **TRIGGER** | Tenant onboarding / second customer work starts **or** Warren asks to edit commercial profile in UI. |
+
+---
+
+## BACKLOG-095 — CPOR over-money-ceiling reapproval
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-01 |
+| **Effort** | Medium–Large (case lifecycle + gate) |
+| **Source** | Warren Q-001 2026-08-01 — money ceiling binding; over → case must be reapproved |
+| **Idea** | When drawn/planned spend exceeds money reservation, mark CPOR case as needing **reapproval** (and eventually block approve/export until reapproved). Honour `over_budget_action` from commercial tenant profile. |
+| **Why it matters / deferrable** | Prevents silent overspend vs target reservation. Deferrable until profile stub + CPOR approve-path audit; `hard_enforce` stays false until this ships. |
+| **What the work is** | Audit CPOR approval states; add `needs_reapproval` (or equivalent) when money track status=`over`; UI banner + gate; wire `HARD_ENFORCE_BUDGET` when ready. |
+| **Regression traps** | Do not block on support-% when `constraint_axis=money`. Do not invent a separate budget pot. Reservation remains derived-from-profit unless profile says otherwise. |
+| **Behavior to retain** | Dual-track explainability; cancel frees budget (domain §1.6). |
+| **Out of scope** | Hosting; support-% as binding axis (unless profile changes). |
+| **TRIGGER** | After commercial tenant profile stub is on the branch **and** Warren asks for reapproval gate / next CPOR lifecycle unit. |
+
+---
+
 ## BACKLOG-094 — Promo planning: auto MAC + price-delta sales forecast
 
 | Field | Detail |

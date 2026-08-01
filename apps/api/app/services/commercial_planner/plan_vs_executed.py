@@ -517,11 +517,13 @@ def compute_volume_bias(
     *,
     min_lines: int = VOLUME_BIAS_MIN_LINES,
 ) -> dict[str, Any]:
-    """A1-07 — mean signed (shipped − planned) / planned by BU (and PM when available).
+    """A1-07 — mean signed (shipped − planned) / planned by BU (and PM per tenant profile).
 
-    Excludes planned = 0. Direction is the finding. PM buckets are unavailable until a
-    lineup PM attribution source exists (Q-009).
+    Excludes planned = 0. Direction is the finding. When
+    ``pm_attribution_mode=business_line`` (Q-009), PM buckets mirror business-line / BU.
     """
+    from app.services import commercial_tenant_profile as tenant_profile
+
     excluded_zero_plan = sum(1 for r in rows if float(r.get("planned_units") or 0) <= 0)
     in_plan = [r for r in rows if float(r.get("planned_units") or 0) > 0]
 
@@ -549,17 +551,42 @@ def compute_volume_bias(
             }
         )
 
+    mode = tenant_profile.PM_ATTRIBUTION_MODE
+    if mode == "business_line":
+        by_pm = [
+            {
+                "pm": b["bu"],
+                "line_count": b["line_count"],
+                "mean_signed_bias": b["mean_signed_bias"],
+                "direction": b["direction"],
+            }
+            for b in bu_out
+        ]
+        pm_attribution = "business_line"
+        pm_reason = (
+            "Tenant profile pm_attribution_mode=business_line; "
+            "PM buckets = business line (e.g. NB/NR/NV/NX) — same grain as by_bu."
+        )
+    elif mode == "person_field":
+        by_pm = []
+        pm_attribution = "unavailable"
+        pm_reason = (
+            "Tenant profile pm_attribution_mode=person_field but no person PM field "
+            "is mapped on lineup case/line yet."
+        )
+    else:
+        by_pm = []
+        pm_attribution = "none"
+        pm_reason = "Tenant profile pm_attribution_mode=none; PM volume bias not computed."
+
     return {
         "min_lines": min_lines,
         "excluded_zero_plan_lines": excluded_zero_plan,
         "suppressed_below_min_lines": suppressed,
         "by_bu": bu_out,
-        "by_pm": [],
-        "pm_attribution": "unavailable",
-        "pm_attribution_reason": (
-            "No PM / product-manager field on commercial_lineup_case or line payloads. "
-            "BU bias is computed; PM bias waits on Q-009 source lock."
-        ),
+        "by_pm": by_pm,
+        "pm_attribution": pm_attribution,
+        "pm_attribution_reason": pm_reason,
         "formula": "mean((shipped - planned) / planned) on in-plan lines; planned=0 excluded",
     }
 

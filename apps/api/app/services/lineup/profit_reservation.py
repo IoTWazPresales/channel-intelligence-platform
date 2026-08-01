@@ -60,8 +60,10 @@ def compute_profit_with_reservation(
     """Profit + embedded reservation for a suggested lineup quantity.
 
     Uses the existing commercial planner economics calculator so B2 stays aligned
-    with CP line math. Reservation source flagged as ``derived_q002_interim``.
+    with CP line math. Reservation source from tenant profile (Q-002).
     """
+    from app.services import commercial_tenant_profile as tenant_profile
+
     treatments = split_volume_treatments(
         net_requirement_units, normal_price_share=normal_price_share
     )
@@ -103,12 +105,12 @@ def compute_profit_with_reservation(
         "oem_sell_in_per_unit": calc.calc_oem_sell_in_amount,
         "internal_gp_amount": calc.calc_internal_gp_amount,
         "reservation": {
-            "source": "derived_q002_interim",
+            "source": tenant_profile.RESERVATION_SOURCE,
             "campaign_support": calc.calc_campaign_support_reserve_amount,
             "non_campaign": calc.calc_non_campaign_reserve_amount,
             "total": round(reserved_total, 4),
             "support_pct_of_sell_in": support_pct_of_sell_in,
-            "hard_enforce": False,
+            "hard_enforce": bool(tenant_profile.HARD_ENFORCE_BUDGET),
         },
         "flags": calc.flags,
         "explanation": calc.explanation,

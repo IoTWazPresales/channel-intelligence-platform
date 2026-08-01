@@ -344,11 +344,13 @@ export default function LineupPage() {
             </Typography>
             {budgetPos ? (
               <Typography variant="caption" display="block" sx={{ mb: 1 }} data-testid="lineup-budget-position">
-                Budget (dual-track, no hard enforce): reserved{' '}
+                Budget (binding={(budgetPos as { binding_axis?: string }).binding_axis ?? 'money'}, no hard
+                enforce yet): reserved{' '}
                 {String((budgetPos as { tracks?: { money?: { planned_reservation_usd?: number } } }).tracks?.money?.planned_reservation_usd ?? 0)}{' '}
                 · drawn CPOR{' '}
                 {String((budgetPos as { tracks?: { money?: { drawn_cpor_usd?: number } } }).tracks?.money?.drawn_cpor_usd ?? 0)}{' '}
-                USD · Q-002 reservation = derived interim
+                USD · reservation ={' '}
+                {String((budgetPos as { reservation_source?: string }).reservation_source ?? 'derived_from_profit')}
               </Typography>
             ) : null}
             <Table size="small">

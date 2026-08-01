@@ -99,9 +99,11 @@ def test_volume_bias_by_bu_signed_mean():
     ]
     out = mod.compute_volume_bias(rows, min_lines=3)
     assert out["excluded_zero_plan_lines"] == 1
-    assert out["pm_attribution"] == "unavailable"
+    assert out["pm_attribution"] == "business_line"
     assert len(out["by_bu"]) == 1
     assert out["by_bu"][0]["bu"] == "NB"
+    assert len(out["by_pm"]) == 1
+    assert out["by_pm"][0]["pm"] == "NB"
     assert abs(out["by_bu"][0]["mean_signed_bias"] - 0.0) < 1e-9  # (+0.2 -0.2 +0)/3
 
 
@@ -374,7 +376,7 @@ def test_plan_vs_executed_read_model_wires_scorecard():
     assert out["scorecard"]["over_plan_intake_units"] == out["scorecard"]["deal_stock_units"]
     assert out["exceptions"]["customer"]["short_ships"] == []
     assert "volume_bias" in out
-    assert out["volume_bias"]["pm_attribution"] == "unavailable"
+    assert out["volume_bias"]["pm_attribution"] == "business_line"
     assert "slip" in out
     assert out["slip"]["uses"].startswith("ship_confirm_date")
 

@@ -10,34 +10,6 @@ Each entry: what is unclear · why it matters · interim assumption · what woul
 
 ## Open
 
-### Q-001 — Budget constraint type
-
-| Field | Value |
-|-------|--------|
-| **What is unclear** | Is the binding constraint a **money ceiling** or a **support-% ceiling per unit**? (`COMMERCIAL_DOMAIN_RULES` §1.8) |
-| **Why it matters** | Determines how budget enforcement is coded in B2; wrong hard-enforcement would block valid spend or allow overspend |
-| **Interim assumption** | Track spend against **both** money and support-% views; do **not** hard-enforce either until Warren confirms |
-| **What would change** | Enforcement gates, validation errors, and B2 budget-position UI would bind to one axis instead of dual tracking |
-| **Blocking?** | No for tracking/build; **Yes** for hard enforcement |
-| **Blocks** | Budget enforcement |
-| **Owner** | Warren |
-| **Raise by** | A2 entry (charter interview trigger) |
-| **Source** | Domain rules Still open #1 |
-
-### Q-002 — Lineup reservation column vs derived
-
-| Field | Value |
-|-------|--------|
-| **What is unclear** | Is the lineup reservation an **explicit column** in the PM workbook, or **purely derived** from PM bottom vs planned price? |
-| **Why it matters** | Lineup schema, CPOR linkage, budget consumption, and support-bias inputs depend on the answer |
-| **Interim assumption** | P1-5 leave-alone: no new lineup file discovery this phase. Existing `po_issued` cases (3 / 285 lines / 52 PO links) power A1 **fill** without reservation discovery. Support-bias remains CPOR-owned (`SURFACE_OWNERSHIP`); do not invent a PvE support tile until this is answered |
-| **What would change** | Schema columns, import mapping, and any cross-read of reservation into A1/CPOR |
-| **Blocking?** | **No for A1 fill-rate surface**; **Yes for support-bias / B2 reservation authoring** |
-| **Blocks** | Support-bias attribution; B2 lineup schema |
-| **Owner** | Warren / PMs |
-| **Raise by** | Before A1 claims support-bias; before B2 |
-| **Source** | Domain rules Still open #2; P1-5 leave-alone 2026-08-01 |
-
 ### Q-003 — Hosting target
 
 | Field | Value |
@@ -50,7 +22,6 @@ Each entry: what is unclear · why it matters · interim assumption · what woul
 | **Blocks** | Deployment |
 | **Owner** | Warren (deferred by choice) |
 | **Raise by** | When Warren sets a hosting target |
-| **Source** | Domain rules Still open #3 |
 | **Source** | Domain rules Still open #3 |
 
 ### Q-004 — Per-customer CST file formats
@@ -67,23 +38,30 @@ Each entry: what is unclear · why it matters · interim assumption · what woul
 | **Raise by** | P4 entry / first customer file |
 | **Source** | Domain rules Still open #4 |
 
-### Q-009 — Lineup PM attribution source for volume bias
-
-| Field | Value |
-|-------|--------|
-| **What is unclear** | Where does **product manager / PM** attribution live for lineup plan lines — workbook column, case field, customer `account_owner_internal`, or elsewhere? |
-| **Why it matters** | A1-07 requires bias by **BU and PM**. Tree has no PM field on `commercial_lineup_case` / line `raw_row_payload`; customer `account_owner_internal` is empty on cip. BU bias ships without inventing a PM dimension. |
-| **Interim assumption** | Compute **BU-only** volume bias; `pm_attribution: unavailable` until source locked |
-| **What would change** | `by_pm` buckets on PvE read model + UI tile; possible import/mapping of PM onto case or line |
-| **Blocking?** | **No for BU bias / A1-08 slip**; **Yes for PM volume-bias buckets** |
-| **Blocks** | A1-07 PM dimension only |
-| **Owner** | Warren / PMs |
-| **Raise by** | Before claiming full A1-07 PM bias |
-| **Source** | Tree audit 2026-08-01; A1 bias/slip unit |
-
 ---
 
 ## Resolved
+
+### Q-001 — Budget constraint type — **Resolved 2026-08-01**
+
+| Field | Value |
+|-------|--------|
+| **Answer** | Binding axis = **money (rand/USD) ceiling**. Over ceiling → **case must be reapproved** (no silent overspend). Support-% is weak for this tenant — reservation is more a **target** than a % cap; little % headroom and no per-line customer sales cap today. **TENANT-VARIABLE:** profile keys `constraint_axis` (`money` \| `support_pct` \| `dual` \| `none`) and `over_budget_action` (`require_reapproval` \| `warn` \| `block`). Current tenant default: `money` + `require_reapproval`. Hard reapproval workflow = BACKLOG (profile stub ships first; `hard_enforce` stays false until that unit). |
+| **Source** | Warren 2026-08-01; `commercial_tenant_profile.py`; domain §1.8 |
+
+### Q-002 — Lineup reservation column vs derived — **Resolved 2026-08-01**
+
+| Field | Value |
+|-------|--------|
+| **Answer** | Reservation **comes from profit** — derived from PM bottom vs planned economics (not a separate handed-down pot). Commercial context: local P&L is often not profitable; **HQ inflates PM bottom** so support room is already embedded in the floor — do not invent an external budget pot. **TENANT-VARIABLE:** `reservation_source` = `derived_from_profit` \| `explicit_column` \| `hybrid`. Current tenant default: `derived_from_profit`. Support-bias planned side may use this derived reservation. |
+| **Source** | Warren 2026-08-01; domain §1.1 / §1.8 data-model; `commercial_tenant_profile.py` |
+
+### Q-009 — Lineup PM attribution source for volume bias — **Resolved 2026-08-01**
+
+| Field | Value |
+|-------|--------|
+| **Answer** | This tenant: PMs are allocated **per business line** (NB, NR, NV, NX) — not a separate person field on lineup. Volume-bias PM grain = existing **BU / product_line** buckets (`by_bu`); `pm_attribution: business_line`. Other businesses may use person fields — **TENANT-VARIABLE** `pm_attribution_mode` = `business_line` \| `person_field` \| `none`. Do not invent a person PM column for the current tenant. Onboarding/settings later override the profile. |
+| **Source** | Warren 2026-08-01; `commercial_tenant_profile.py`; PvE `compute_volume_bias` |
 
 ### Q-008 — A2-03 claim rate — **Resolved 2026-08-01 (non-computable)**
 
@@ -96,8 +74,8 @@ Each entry: what is unclear · why it matters · interim assumption · what woul
 
 | Field | Value |
 |-------|--------|
-| **Answer** | Formulas locked in `COMMERCIAL_SEMANTICS` A1-07/A1-08. **Built 2026-08-01:** BU volume bias + ship-quarter slip on `/plan-vs-executed` (`volume_bias`, `slip`). **PM** bias remains blocked on **Q-009** (no PM source in tree). |
-| **Source** | Warren → COMMERCIAL_SEMANTICS consolidation; A1 bias/slip unit |
+| **Answer** | Formulas locked in `COMMERCIAL_SEMANTICS` A1-07/A1-08. **Built 2026-08-01:** BU volume bias + ship-quarter slip on `/plan-vs-executed` (`volume_bias`, `slip`). **PM** for current tenant = business-line mode (Q-009 resolved 2026-08-01) — same grain as `by_bu`. |
+| **Source** | Warren → COMMERCIAL_SEMANTICS consolidation; A1 bias/slip unit; Q-009 |
 
 ### Q-006 — A2 promo-effectiveness metrics — **Resolved 2026-08-01**
 

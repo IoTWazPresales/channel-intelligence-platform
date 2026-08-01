@@ -1,7 +1,7 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-01 (B-lane complete — handover)
-**Branch:** `feat/b1-forecasting` @ `176672a` (pushed)
+**Last updated:** 2026-08-01 (Q-001/002/009 resolved — tenant profile)
+**Branch:** `feat/b1-forecasting`
 **Alembic:** `20260801_0001` on cip (squash baseline; empty-DB replay proven)
 
 ## B-lane tips on this branch
@@ -17,23 +17,20 @@
 | B4 | `4ab3813` |
 | docs tip | `176672a` |
 
-## What works (claims — VERIFY still open)
+## What works
 
-- Demand forecast SoT: `fact_demand_forecast` (velocity + analogue + manual override)
-- Net requirement: `GET /lineup/net-requirement` (dist×product stock subtract)
-- Budget dual-track: `GET/POST /lineup/budget-position` (no hard enforce; Q-002 interim)
-- Promo draft: `GET /cpor/intelligence/promo-plan-draft`
-- Surfaces: `/forecasts`, `/lineup` (B2 panel), `/promotions` (B4 panel), Channel Ops 13w column
+- Demand forecast SoT + B-lane surfaces (browser VERIFY PASS 2026-08-01)
+- Tenant commercial profile stub (`commercial_tenant_profile.py`): money ceiling, derived-from-profit reservation, PM=business_line
+- Q-001 / Q-002 / Q-009 **Resolved**; Q-003 hosting still open
 
-## Parked (do not chase unless asked)
+## Parked
 
-- Q-001, Q-002 (reservation column — interim derived), Q-003, Q-009 (PM bias)
-- BACKLOG-092 / 093 / 094
+- Q-003 hosting · BACKLOG-092 / 093 / 094 · over-money reapproval + profile onboarding UI (new BACKLOG)
 
 ## Next
 
-1. Browser VERIFY B-lane (smoke-via-browser rule), or
-2. Open PR `feat/b1-forecasting` → `main`, or
-3. New lane: P2 / X / parked Qs
+1. Commit Channel Ops VERIFY fixes (if still dirty) + this Q-resolve unit
+2. BACKLOG reapproval / onboarding when TRIGGER fires
+3. PR → main or P2/X when Warren picks
 
 **Env:** local Windows — no Docker. API `:8001`, web `:3000`, DB `cip`.

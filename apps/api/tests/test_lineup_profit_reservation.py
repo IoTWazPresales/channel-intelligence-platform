@@ -24,7 +24,7 @@ def test_profit_reservation_derived_q002():
         promo_reserve_split_pct=0.5,
         fx_plan_currency_per_cost_currency=1.0,
     )
-    assert out["reservation"]["source"] == "derived_q002_interim"
+    assert out["reservation"]["source"] == "derived_from_profit"
     assert out["reservation"]["hard_enforce"] is False
     assert out["reservation"]["total"] > 0
     assert out["treatments"]["normal_price_units"] == 50.0
