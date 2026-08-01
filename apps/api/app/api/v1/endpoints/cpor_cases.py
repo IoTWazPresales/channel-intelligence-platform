@@ -30,6 +30,7 @@ from app.services.cpor.lifecycle import (
 )
 from app.services.cpor.pivot import build_case_pivot
 from app.services.cpor.norms_and_comparable import build_comparable_cases, build_support_norms
+from app.services.cpor.promo_plan_builder import build_promo_plan_draft
 from app.services.cpor.portfolio_intelligence import build_portfolio_intelligence
 from app.services.cpor.promotion_type_vocab import CPOR_CASE_STATUS_SET, CPOR_PROMOTION_TYPE_SET
 from app.services.cpor.recompute import recompute_case, recompute_case_line
@@ -893,6 +894,32 @@ def cpor_comparable_cases(
     """A2-05: ranked comparable cases (customer → BU → promo → quarter → volume)."""
     with SessionLocal() as session:
         return build_comparable_cases(session, case_id=case_id, limit=limit)
+
+
+@router.get("/intelligence/promo-plan-draft")
+def cpor_promo_plan_draft(
+    seed_case_id: int = Query(..., ge=1),
+    product_id: int | None = Query(default=None),
+    customer_id: int | None = Query(default=None),
+    planned_support_usd: float | None = Query(default=None, ge=0),
+    planned_revenue_usd: float | None = Query(default=None, ge=0),
+    period_label: str | None = Query(default=None),
+    horizon_weeks: int = Query(default=13, ge=1, le=52),
+    comparable_limit: int = Query(default=10, ge=1, le=50),
+) -> dict[str, Any]:
+    """B4 — draft promo plan: A2 comparables + B1 forecast volume + B2 budget check."""
+    with SessionLocal() as session:
+        return build_promo_plan_draft(
+            session,
+            seed_case_id=seed_case_id,
+            product_id=product_id,
+            customer_id=customer_id,
+            planned_support_usd=planned_support_usd,
+            planned_revenue_usd=planned_revenue_usd,
+            period_label=period_label,
+            horizon_weeks=horizon_weeks,
+            comparable_limit=comparable_limit,
+        )
 
 
 @router.get("/meta/promotion-types")

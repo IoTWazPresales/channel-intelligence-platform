@@ -1,10 +1,10 @@
 # CURRENT state
 
-**Last updated:** 2026-08-01 (B2-03)
-**Branch:** `feat/b1-forecasting`  
+**Last updated:** 2026-08-01 (B4)
+**Branch:** `feat/b1-forecasting` (@ tip after B4 push)  
 **Alembic:** `20260801_0001` on cip
 
-## B-lane progress
+## B-lane — units shipped this branch
 
 | Unit | Tip |
 |------|-----|
@@ -13,8 +13,12 @@
 | B1-04 | `d1f0ea3` |
 | B2-01 | `34a5166` |
 | B2-02 | `0f43998` |
-| B2-03 | commit pending |
+| B2-03 | `9e4f72e` |
+| B4 | commit pending |
+
+## Parked questions (end of B)
+Q-001 / Q-002 / Q-003 / Q-009 — see chat wrap. BACKLOG-092/093/094 untouched.
 
 ## Next
-**B4** promo plan builder (comparables + B1 volume + B2 budget check).
+Warren VERIFY / PR, or pick next lane (P2 / X / parked Qs).
 

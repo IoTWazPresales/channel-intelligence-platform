@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-01 — **B4:** promo-plan-draft compose (`GET /cpor/intelligence/promo-plan-draft`) — A2 comparables + B1 forecast volume + B2 dual-track budget check; Promotions B4 panel. B-lane scaffold complete on `feat/b1-forecasting`.
 - 2026-08-01 — **B2-03:** net-requirement CSV export, 1H→Q1+Q2 slots, apply-net-requirement → draft lineup. Next B4.
 - 2026-08-01 — **B2-02:** A1 bias optional on net-req; profit+reservation (Q-002 derived via CP calculator); dual-track budget-position (money+% , no hard enforce); 50/50 treatments. Next B2-03 author/export.
 - 2026-08-01 — **B2-01:** net requirement read model `GET /lineup/net-requirement` (forecast−stock−in-transit+target cover at dist×product; PO-linked in-transit). Lineup page panel. Next B2-02 bias/profit/budget.
