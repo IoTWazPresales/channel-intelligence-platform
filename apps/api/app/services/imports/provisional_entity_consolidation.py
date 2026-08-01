@@ -20,6 +20,8 @@ def repoint_customer_id_references_full(db: Session, *, loser_id: int, keeper_id
     updates = 0
     for _label, col in _SPECS:
         model = col.class_
+        if model.__table__.info.get("is_view"):
+            continue
         result = db.execute(update(model).where(col == loser_id).values({col.key: keeper_id}))
         updates += int(result.rowcount or 0)
 

@@ -40,19 +40,16 @@ def _skip_mutations_on_shared_cip() -> None:
         pytest.skip("Set ALLOW_TESTS_ON_DEV_DB=1 for observation DB tests on cip")
 
 
-def test_corroboration_relation_defaults_to_legacy() -> None:
-    assert corroboration_evidence_relation() == "shipment_evidence_line"
+def test_corroboration_relation_defaults_to_current_view() -> None:
+    assert corroboration_evidence_relation() == "shipment_evidence_current"
 
 
 def test_observation_append_idempotent() -> None:
     _skip_mutations_on_shared_cip()
     with SessionLocal() as db:
-        db_name = db.scalar(text("SELECT current_database()"))
-        assert db_name == "cip"
-
         src = db.scalar(select(SourceDefinition).limit(1))
         if src is None:
-            pytest.skip("no source_definition row in cip")
+            pytest.skip("no source_definition row in configured test database")
 
         job = ImportJob(
             source_id=int(src.id),

@@ -31,7 +31,6 @@ def test_purchase_order_model_round_trip():
     po_id: int | None = None
     try:
         with SessionLocal() as db:
-            assert db.scalar(text("SELECT current_database()")) == "cip"
             if db.scalar(text("SELECT to_regclass('public.purchase_order')")) is None:
                 pytest.skip("purchase_order table not migrated (20260628_0053)")
             dist_id = db.scalar(

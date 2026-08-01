@@ -20,6 +20,7 @@ from app.services.customer_alias_scope_merge import (
     preview_customer_alias_scope_merge,
 )
 from app.services.imports.provisional_entity_consolidation import repoint_customer_id_references_full
+from app.services.commercial_planner.unassigned_distributor import UNASSIGNED_DISTRIBUTOR_CODE
 from app.services.seed_demo import _seed_import_core
 
 
@@ -56,10 +57,26 @@ def _seed_dims(session) -> tuple[int, int, int, int]:
         channel = DimChannel(code="RET", name="Retail")
         session.add(channel)
         session.flush()
-    dist = session.scalar(select(DimDistributor).limit(1))
-    assert dist is not None
+    dist = session.scalar(
+        select(DimDistributor).where(DimDistributor.code == UNASSIGNED_DISTRIBUTOR_CODE)
+    )
+    if dist is None:
+        dist = session.scalar(select(DimDistributor).limit(1))
+    if dist is None:
+        dist = DimDistributor(
+            code=f"DIST-ALIAS-{secrets.token_hex(4)}",
+            name="Alias Test Distributor",
+        )
+        session.add(dist)
+        session.flush()
     prod = session.scalar(select(DimProduct).limit(1))
-    assert prod is not None
+    if prod is None:
+        prod = DimProduct(
+            sku=f"SKU-ALIAS-{secrets.token_hex(4)}",
+            name="Alias Test Product",
+        )
+        session.add(prod)
+        session.flush()
     return int(region.id), int(channel.id), int(dist.id), int(prod.id)
 
 

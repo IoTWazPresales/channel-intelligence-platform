@@ -87,7 +87,6 @@ def test_supabase_dsi_validate_bulk_staging_e2e(supabase_db_name: str) -> None:
                     sku="SKU-ALPHA-01",
                     name="Alpha Pro E2E",
                     category="Audio",
-                    channel_id=ch.id if ch else None,
                 )
             )
         db.commit()

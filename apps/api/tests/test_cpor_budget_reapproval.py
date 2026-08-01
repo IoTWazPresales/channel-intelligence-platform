@@ -27,7 +27,7 @@ def test_evaluate_money_position_over_ceiling(monkeypatch):
     monkeypatch.setattr(mod.tenant_profile, "CONSTRAINT_AXIS", "money")
     monkeypatch.setattr(mod.tenant_profile, "OVER_BUDGET_ACTION", "require_reapproval")
     monkeypatch.setattr(mod.tenant_profile, "HARD_ENFORCE_BUDGET", True)
-    monkeypatch.setattr(mod.tenant_profile, "MONEY_CEILING_USD", 50.0)
+    monkeypatch.setattr(mod, "money_ceiling_usd", lambda: 50.0)
     monkeypatch.setattr(mod, "case_support_usd", lambda _s, _cid: 80.0)
     monkeypatch.setattr(mod, "portfolio_committed_usd", lambda _s, include_case_id=None: 80.0)
 

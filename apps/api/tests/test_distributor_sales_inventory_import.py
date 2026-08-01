@@ -77,7 +77,6 @@ def _seed_dsi_catalog() -> int:
                     sku="SKU-ALPHA-01",
                     name="Alpha Pro 200",
                     category="Audio",
-                    channel_id=ch.id,
                 )
             )
         db.commit()

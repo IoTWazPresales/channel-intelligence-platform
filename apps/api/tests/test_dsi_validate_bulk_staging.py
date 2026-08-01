@@ -516,7 +516,6 @@ def test_dsi_validate_bulk_staging_checkpoint_on_process(dsi_source_id: int) -> 
                     sku="SKU-ALPHA-01",
                     name="Alpha Pro 200",
                     category="Audio",
-                    channel_id=ch.id if ch else None,
                 )
             )
         db.commit()

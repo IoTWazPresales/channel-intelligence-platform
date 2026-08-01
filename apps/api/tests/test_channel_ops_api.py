@@ -108,7 +108,7 @@ async def test_sell_out_filters_by_distributor_id() -> None:
     db.scalar = AsyncMock(return_value=0)
     db.execute = AsyncMock(return_value=MagicMock(all=MagicMock(return_value=[])))
 
-    await co.channel_ops_sell_out(db, distributor_id=42, page=1, page_size=50)
+    await co.channel_ops_sell_out(db, distributor_id=42, page=1, page_size=50, user=None)
     assert db.scalar.called
 
 

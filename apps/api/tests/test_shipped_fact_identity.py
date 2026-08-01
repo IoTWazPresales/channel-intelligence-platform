@@ -300,7 +300,7 @@ def test_upsert_splits_shipped_and_open_order_paths(monkeypatch) -> None:
     monkeypatch.setattr(
         facts_mod,
         "_row_values_from_evidence",
-        lambda line: {
+        lambda line, **_: {
             "source_key": "k",
             "fact_upsert_key": f"ship:OU|D|I|{AMAZON_PO}",
             "import_job_id": 1,

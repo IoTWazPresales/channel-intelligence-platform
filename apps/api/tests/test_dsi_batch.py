@@ -179,7 +179,6 @@ def _seed_dsi_source_for_batch_e2e() -> int:
                     sku="SKU-ALPHA-01",
                     name="Alpha Pro 200",
                     category="Audio",
-                    channel_id=ch.id,
                 )
             )
         db.commit()

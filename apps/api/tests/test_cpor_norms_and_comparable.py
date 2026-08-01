@@ -57,10 +57,9 @@ def test_norms_absolute_and_pct() -> None:
     scalars = MagicMock()
     scalars.unique.return_value.all.return_value = [case]
     session.scalars.return_value = scalars
-    session.execute.side_effect = [
-        MagicMock(all=MagicMock(return_value=[(1, "NB")])),  # products
-        MagicMock(all=MagicMock(return_value=[(7, "C1", "Cust")])),  # customers
-    ]
+    session.execute.return_value = MagicMock(
+        all=MagicMock(return_value=[(7, "C1", "Cust")])
+    )
     out = build_support_norms(session, trailing_quarters=4)
     assert out["anchor_quarter"] == "2025Q2"
     assert out["trailing_quarters"] == 4

@@ -11,6 +11,7 @@ from app.db.session_sync import SessionLocal
 from app.models.ingestion import ImportJob, SourceDefinition
 from app.models.purchase_order import PurchaseOrder
 from app.models.shipment_evidence import ShipmentEvidenceLine
+from app.services.seed_demo import _seed_import_core
 from scripts.backfill_shipment_customer_po import run
 
 
@@ -31,16 +32,24 @@ def _require_schema(db) -> None:
         pytest.skip("shipment customer_po / purchase_order_id columns not migrated (0052+0054)")
 
 
+def _ensure_inbound_source(db) -> int:
+    _seed_import_core(db)
+    db.flush()
+    source_id = db.scalar(
+        select(SourceDefinition.id).where(SourceDefinition.code == "inbound_default")
+    )
+    if source_id is None:
+        pytest.skip("inbound_default source missing after import core seed")
+    return int(source_id)
+
+
 def test_backfill_dry_run_writes_nothing():
     token = secrets.token_hex(4)
     job_id: int | None = None
     try:
         with SessionLocal() as db:
             _require_schema(db)
-            source_id = db.scalar(
-                select(SourceDefinition.id).where(SourceDefinition.code == "inbound_default")
-            )
-            assert source_id
+            source_id = _ensure_inbound_source(db)
             job = ImportJob(
                 source_id=int(source_id),
                 template_slug="inbound_shipments",
@@ -93,10 +102,7 @@ def test_backfill_missing_po_column_stays_null():
     try:
         with SessionLocal() as db:
             _require_schema(db)
-            source_id = db.scalar(
-                select(SourceDefinition.id).where(SourceDefinition.code == "inbound_default")
-            )
-            assert source_id
+            source_id = _ensure_inbound_source(db)
             job = ImportJob(
                 source_id=int(source_id),
                 template_slug="inbound_shipments",
@@ -148,10 +154,7 @@ def test_backfill_confirm_updates_and_dedupes_normalized_po():
     try:
         with SessionLocal() as db:
             _require_schema(db)
-            source_id = db.scalar(
-                select(SourceDefinition.id).where(SourceDefinition.code == "inbound_default")
-            )
-            assert source_id
+            source_id = _ensure_inbound_source(db)
             job = ImportJob(
                 source_id=int(source_id),
                 template_slug="inbound_shipments",
@@ -220,10 +223,7 @@ def test_backfill_defers_when_resolved_distributor_null():
     try:
         with SessionLocal() as db:
             _require_schema(db)
-            source_id = db.scalar(
-                select(SourceDefinition.id).where(SourceDefinition.code == "inbound_default")
-            )
-            assert source_id
+            source_id = _ensure_inbound_source(db)
             job = ImportJob(
                 source_id=int(source_id),
                 template_slug="inbound_shipments",

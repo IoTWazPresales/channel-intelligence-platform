@@ -42,10 +42,14 @@ def test_promo_product_ids_uses_cpor_case_line() -> None:
     from app.services.commercial_planner.intelligence import product_rankings as pr
 
     db = AsyncMock()
-    result = MagicMock()
-    result.scalars.return_value.all.return_value = [10, 20]
-    db.execute.return_value = result
-    ids = asyncio.get_event_loop().run_until_complete(pr._promo_product_ids(db, [10, 20, 30]))
+
+    async def _run() -> set[int]:
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = [10, 20]
+        db.execute.return_value = result
+        return await pr._promo_product_ids(db, [10, 20, 30])
+
+    ids = asyncio.run(_run())
     assert ids == {10, 20}
     stmt = db.execute.call_args[0][0]
     assert "cpor_case_line" in str(stmt).lower() or "CporCaseLine" in str(stmt)

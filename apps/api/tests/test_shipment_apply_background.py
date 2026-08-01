@@ -28,7 +28,7 @@ def test_upsert_batches_into_chunked_statements(monkeypatch) -> None:
     monkeypatch.setattr(
         facts_mod,
         "_row_values_from_evidence",
-        lambda line: {"source_key": "k", "fact_upsert_key": "k", "import_job_id": 1, "line_state": "open_order"},
+        lambda line, **_: {"source_key": "k", "fact_upsert_key": "k", "import_job_id": 1, "line_state": "open_order"},
     )
     monkeypatch.setattr(facts_mod, "_upsert_shipped_chunk", lambda db, tbl, rows: None)
     monkeypatch.setattr(facts_mod, "_upsert_open_order_chunk", lambda db, tbl, rows: db.execute(MagicMock()) or None)
@@ -50,7 +50,7 @@ def test_upsert_single_chunk_and_empty(monkeypatch) -> None:
     monkeypatch.setattr(
         facts_mod,
         "_row_values_from_evidence",
-        lambda line: {"source_key": "k", "fact_upsert_key": "k", "import_job_id": 1, "line_state": "open_order"},
+        lambda line, **_: {"source_key": "k", "fact_upsert_key": "k", "import_job_id": 1, "line_state": "open_order"},
     )
     monkeypatch.setattr(facts_mod, "_upsert_shipped_chunk", lambda db, tbl, rows: None)
     monkeypatch.setattr(facts_mod, "_upsert_open_order_chunk", lambda db, tbl, rows: db.execute(MagicMock()) or None)

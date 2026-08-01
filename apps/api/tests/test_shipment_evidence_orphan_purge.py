@@ -23,7 +23,6 @@ def _skip_mutations_on_shared_cip() -> None:
 def test_purge_orphan_shipment_evidence_lines() -> None:
     _skip_mutations_on_shared_cip()
     with SessionLocal() as db:
-        assert db.scalar(text("SELECT current_database()")) == "cip"
         src = db.scalar(select(SourceDefinition).limit(1))
         if src is None:
             pytest.skip("no source_definition")

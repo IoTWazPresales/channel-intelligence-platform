@@ -248,11 +248,8 @@ def test_dsi_format_drift_recorded_when_enabled() -> None:
 # --- Shipment evidence ---
 
 
-def test_shipment_ai_product_auto_resolved_in_post_resolve() -> None:
-    from app.services.imports.shipment_evidence_import import _resolve_unresolved_shipment_lines_for_job
-
-    idx = SimpleNamespace(sku_to_id={"A": 1})
-    line = SimpleNamespace(
+def _shipment_line_stub(**overrides):
+    base = dict(
         product_id=None,
         item_code="UNKNOWN",
         ean_code=None,
@@ -266,8 +263,29 @@ def test_shipment_ai_product_auto_resolved_in_post_resolve() -> None:
         ship_to_raw=None,
         distributor_resolution_status="resolved",
         distributor_resolution_token=None,
+        pod_date=None,
+        est_pod_date=None,
+        promise_date=None,
+        schedule_ship_date=None,
+        ship_confirm_date=None,
+        erd_date=None,
+        exwork_date=None,
+        customer_id=None,
+        customer_dealer_token=None,
+        resolved_customer_id=None,
+        crad_date=None,
+        raw_source_row=None,
     )
-    job = SimpleNamespace(id=1)
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+def test_shipment_ai_product_auto_resolved_in_post_resolve() -> None:
+    from app.services.imports.shipment_evidence_import import _resolve_unresolved_shipment_lines_for_job
+
+    idx = SimpleNamespace(sku_to_id={"A": 1})
+    line = _shipment_line_stub()
+    job = SimpleNamespace(id=1, source_id=1)
     db = MagicMock()
     db.scalars.return_value.all.return_value = [line]
 
@@ -294,22 +312,8 @@ def test_shipment_ai_failure_graceful() -> None:
     from app.services.imports.shipment_evidence_import import _resolve_unresolved_shipment_lines_for_job
 
     idx = SimpleNamespace(sku_to_id={})
-    line = SimpleNamespace(
-        product_id=None,
-        item_code="X",
-        ean_code=None,
-        upc_code=None,
-        sales_model_name=None,
-        product_resolution_status=None,
-        product_resolution_token=None,
-        product_resolution_detail=None,
-        distributor_id=1,
-        bill_to_raw=None,
-        ship_to_raw=None,
-        distributor_resolution_status="resolved",
-        distributor_resolution_token=None,
-    )
-    job = SimpleNamespace(id=1)
+    line = _shipment_line_stub(item_code="X", distributor_id=1)
+    job = SimpleNamespace(id=1, source_id=1)
     db = MagicMock()
     db.scalars.return_value.all.return_value = [line]
 

@@ -17,6 +17,10 @@ def _fake_customer(**overrides):
         "code": "CUST-001",
         "name": "Metro Market",
         "customer_status": "active",
+        "no_code_disposition": None,
+        "is_key_account": False,
+        "created_at": None,
+        "updated_at": None,
         "partner_tier": "strategic",
         "account_owner_internal": "owner@cip.local",
         "notes_summary": "Priority partner",
@@ -34,8 +38,8 @@ def test_customers_list_response_shape_and_pagination_contract():
     count_res.scalar_one.return_value = 2
     rows_res = MagicMock()
     rows_res.all.return_value = [
-        (_fake_customer(id=1, code="A-CUST"), "NA-W", "RET", "DIST-01", "Summit Supply", 2, 1),
-        (_fake_customer(id=2, code="B-CUST", partner_tier=None), None, None, None, None, 0, 0),
+        (_fake_customer(id=1, code="A-CUST"), "NA-W", "RET", "DIST-01", "Summit Supply", 2, 1, 3, None),
+        (_fake_customer(id=2, code="B-CUST", partner_tier=None), None, None, None, None, 0, 0, 0, None),
     ]
     sess.execute = AsyncMock(side_effect=[count_res, rows_res])
 

@@ -56,11 +56,13 @@ jobs:
       - name: Install psql client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      - name: Create cip_test database
+      - name: Create disposable CI databases
         run: |
           PGPASSWORD=cip psql -h localhost -U cip -d postgres -v ON_ERROR_STOP=1 \
             -c "SELECT current_database();" \
-            -c "CREATE DATABASE cip_test;"
+            -c "CREATE DATABASE cip_test;" \
+            -c "CREATE DATABASE cip_bulk_smoke;" \
+            -c "CREATE DATABASE cip_alembic_smoke;"
 
       - name: Print resolved database URLs
         working-directory: apps/api
@@ -122,6 +124,20 @@ jobs:
                   )
               ).scalar()
           PY
+
+      - name: Alembic migrate disposable smoke DBs
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          for dbname in cip_bulk_smoke cip_alembic_smoke; do
+            echo "Migrating ${dbname} to tip..."
+            DATABASE_URL="postgresql+asyncpg://cip:cip@localhost:5432/${dbname}" \
+            DATABASE_URL_SYNC="postgresql://cip:cip@localhost:5432/${dbname}" \
+            DATABASE_URL_SYNC_MIGRATE="postgresql://cip:cip@localhost:5432/${dbname}" \
+              alembic upgrade head
+            PGPASSWORD=cip psql -h localhost -U cip -d "${dbname}" -v ON_ERROR_STOP=1 \
+              -c "SELECT current_database(), version_num FROM alembic_version;"
+          done
 
       - name: API tests
         id: api_tests

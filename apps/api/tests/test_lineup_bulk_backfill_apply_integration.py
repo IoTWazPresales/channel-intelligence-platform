@@ -132,7 +132,7 @@ def bulk_smoke_env():
         db = conn.execute(text("SELECT current_database()")).scalar_one()
         assert db == BULK_SMOKE_DB, db
         rev = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
-        assert rev == "20260702_0066", f"expected 0066 on {BULK_SMOKE_DB}, got {rev}"
+        assert rev == "20260801_0008", f"expected tip 20260801_0008 on {BULK_SMOKE_DB}, got {rev}"
         col = conn.execute(
             text(
                 """

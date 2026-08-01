@@ -30,7 +30,7 @@ def test_list_jobs_returns_paginated_items_without_jsonb_blobs() -> None:
 
         db.execute = AsyncMock(side_effect=[count_result, list_result])
 
-        out = await list_jobs(db=db, include_archived=False, limit=50, offset=0)
+        out = await list_jobs(db=db, include_archived=False, limit=50, offset=0, user=None)
 
         assert out["total"] == 1
         assert out["limit"] == 50
