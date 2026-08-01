@@ -1,21 +1,21 @@
-﻿# CURRENT state
-
-**Last updated:** 2026-08-01 (PR #12 merged)
-
-**Branch:** `main` @ `3a2f974`
-
-**Alembic:** `20260801_0008` on cip / code head
-
-## Done (this session)
-
-- **PR #12 merged** → `3a2f974` — X-1 CST Unit E S4+S8 (Opus VERIFY PASS)
-  - Import Centre CST steward: `plan_class` Plan column + StewardBulkSection preview→apply
-
-## Next
-
-1. Pick next TRIGGER (Warren): CI alembic fresh-upgrade fix (`0001` tip ORM vs `0002` DuplicateColumn — red on main since squash); **or** delete orphaned CST `bulk-resolve`; **or** next product unit from BACKLOG.
-2. Optional: new feature branch off `main` once next work is chosen.
-
-**Env:** local Windows. API `:8001`, web `:3000`. Smoke leftover: job `#606` / `cst_unit_e_verify_smoke`.
-
-**Known:** GitHub CI `test` still fails on `alembic upgrade head` for ephemeral `cip_test` (pre-existing; same on main before #12). Merged with same precedent as PR #11.
+﻿# CURRENT state
+
+**Last updated:** 2026-08-01 (CI alembic fresh-upgrade fix)
+
+**Branch:** `fix/ci-alembic-fresh-upgrade` (off `main` @ `2dfe764`)
+
+**Alembic:** `20260801_0008` on cip / code head
+
+## Done (this session)
+
+- **CI alembic fresh-upgrade:** tip-ORM `0001` already creates post-squash objects; made `0002`–`0008` idempotent; CI assert tip → `20260801_0008`. Empty-DB proof `cip_alembic_empty` → PASS (`EMPTY_DB_REPLAY_OK`).
+
+## Next
+
+1. Commit + push `fix/ci-alembic-fresh-upgrade`; open PR; confirm GitHub CI migrate step green.
+2. Then: delete orphaned CST `bulk-resolve` **or** next BACKLOG TRIGGER (Warren pick).
+
+**Env:** local Windows. API `:8001`, web `:3000`.
+
+**Known:** Prior main CI red was DuplicateColumn on `0002` + stale tip assert — not PR #12 regress.
+

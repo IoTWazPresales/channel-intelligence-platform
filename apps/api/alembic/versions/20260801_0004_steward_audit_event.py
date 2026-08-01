@@ -5,7 +5,8 @@ Revises: 20260801_0003
 Create Date: 2026-08-01
 
 Append-only log of steward decisions (resolve/map/ignore/bulk/provisional).
-NOT applied until Warren approves alembic upgrade.
+
+Idempotent: tip-ORM ``20260801_0001`` create_all may already have the table.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy import inspect
 from sqlalchemy.dialects import postgresql
 
 revision: str = "20260801_0004"
@@ -23,10 +25,33 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    if "steward_audit_event" in inspect(bind).get_table_names():
+        # Grants still apply when tip-ORM already created the table.
+        op.execute(
+            sa.text(
+                """
+                DO $$
+                BEGIN
+                  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cip') THEN
+                    EXECUTE 'GRANT SELECT, INSERT ON steward_audit_event TO cip';
+                    EXECUTE 'GRANT USAGE, SELECT ON SEQUENCE steward_audit_event_id_seq TO cip';
+                  END IF;
+                END $$;
+                """
+            )
+        )
+        return
+
     op.create_table(
         "steward_audit_event",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("tenant_id", sa.Text(), nullable=False),
         sa.Column("actor_user_id", sa.BigInteger(), nullable=True),
         sa.Column("actor", sa.Text(), nullable=False),
@@ -75,6 +100,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    if "steward_audit_event" not in inspect(bind).get_table_names():
+        return
     op.drop_index("ix_steward_audit_event_actor_user_id", table_name="steward_audit_event")
     op.drop_index("ix_steward_audit_event_import_job_id", table_name="steward_audit_event")
     op.drop_index("ix_steward_audit_event_importer", table_name="steward_audit_event")

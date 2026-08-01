@@ -83,7 +83,8 @@ jobs:
         run: |
           set -euo pipefail
           # Squashed baseline (20260801_0001): tip ORM create_all + view + system
-          # reference rows. Full chain upgrade — no stamp head workaround.
+          # reference rows. Post-squash 0002–0008 are idempotent when tip ORM
+          # already created their objects. Full chain — no stamp head workaround.
           alembic upgrade head
           alembic current
           python - <<'PY'
@@ -101,11 +102,23 @@ jobs:
               tip = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
               print(f"current_database={db} alembic_version={tip}")
               assert db == "cip_test", db
-              assert tip == "20260801_0001", tip
+              assert tip == "20260801_0008", tip
               assert conn.execute(
                   text(
                       "SELECT 1 FROM information_schema.tables "
                       "WHERE table_name = 'fact_demand_forecast'"
+                  )
+              ).scalar()
+              assert conn.execute(
+                  text(
+                      "SELECT 1 FROM information_schema.columns "
+                      "WHERE table_name = 'cpor_case' AND column_name = 'needs_reapproval'"
+                  )
+              ).scalar()
+              assert conn.execute(
+                  text(
+                      "SELECT 1 FROM information_schema.tables "
+                      "WHERE table_name = 'sql_viewer_audit'"
                   )
               ).scalar()
           PY
