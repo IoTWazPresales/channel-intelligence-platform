@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-01 — **PR #11 merged to main** (`1e6008f`): P2 auth/RBAC + P3 analytics. Next: X-1 CST Unit E VERIFY on new branch.
 - 2026-08-01 — **P3 complete:** P3-6 admin SQL viewer live (`20260801_0008`); read-only+timeout+row cap+audit; browser cip SELECT + DELETE refuse + audit PASS. Next: open PR or X-1.
 - 2026-08-01 — **P3-5 live on cip:** applied `20260801_0007`; browser export + inbox WoC≈13.6 / vintage pair_count=2481 PASS. Beat→BACKLOG-098. Next P3-6 or PR.
 - 2026-08-01 — **P3-5 authored (halt for `20260801_0007`):** export xlsx/pdf + vintage; delivery/schedule schema+API; `/inbox` UI; BACKLOG-098 beat/import-event. cip still at `0006`.
