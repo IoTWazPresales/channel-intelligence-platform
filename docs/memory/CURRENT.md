@@ -11,8 +11,8 @@
 |-------|--------|
 | **Branch** | `main` |
 | **Alembic (DB)** | **`20260730_0075` on cip** |
-| **HEAD** | tip of `main` (verify) |
-| **Pushed?** | verify before claiming |
+| **HEAD** | `8110cb3` |
+| **Pushed?** | yes (`origin/main`) |
 | **Current phase** | **A-lane** — A1 bias/slip + A2-U1/U2 + A3 WoC shipped |
 | **Next** | A3 replenishment flag v1 (tenant config; default 4 weeks); BACKLOG-092 paid recon when Ken files land; Q-001/002/003 still open |
 
