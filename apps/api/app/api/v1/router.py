@@ -12,6 +12,7 @@ from app.api.v1.endpoints import (
     cpor_exports,
     cpor_historical_import,
     cst_steward,
+    dashboards,
     dev_wipe,
     catalog,
     competition,
@@ -39,6 +40,7 @@ from app.api.v1.endpoints import (
     query,
     reference,
     roadmap,
+    saved_reports,
     sellout,
     semantics,
     shipment_evidence,
@@ -57,6 +59,8 @@ api_router.include_router(distributors.router, prefix="/distributors", tags=["di
 api_router.include_router(sellout.router, prefix="/sellout", tags=["sellout"])
 api_router.include_router(semantics.router, prefix="/semantics", tags=["semantics"])
 api_router.include_router(query.router, prefix="/query", tags=["query"])
+api_router.include_router(saved_reports.router, prefix="/saved-reports", tags=["saved-reports"])
+api_router.include_router(dashboards.router, prefix="/dashboards", tags=["dashboards"])
 api_router.include_router(channel_ops.router, prefix="/channel-ops", tags=["channel-ops"])
 api_router.include_router(
     channel_intelligence.router, prefix="/channel-intelligence", tags=["channel-intelligence"]

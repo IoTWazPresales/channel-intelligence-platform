@@ -5,18 +5,27 @@ import {
   Box,
   Button,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControl,
+  FormControlLabel,
   InputLabel,
+  List,
+  ListItemButton,
+  ListItemText,
   MenuItem,
   Paper,
   Select,
   Stack,
+  Switch,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
 } from '@mui/material';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColDef } from 'ag-grid-community';
 import { useMemo, useState } from 'react';
 import {
@@ -68,6 +77,18 @@ type QueryResult = {
   handler: string | null;
 };
 
+type SavedReport = {
+  id: number;
+  name: string;
+  description: string | null;
+  visibility: string;
+  shared_roles: string[];
+  metric_key: string;
+  grains: string[];
+  filters: Record<string, unknown>;
+  visual: VisualMode;
+};
+
 export type VisualMode = 'kpi' | 'table' | 'bar';
 
 function formatValue(v: unknown): string {
@@ -93,9 +114,16 @@ function rowChartLabel(row: Record<string, unknown>): string {
 }
 
 export function ReportBuilderView() {
+  const qc = useQueryClient();
   const catalogQ = useQuery({
     queryKey: ['semantics-catalog'],
     queryFn: ({ signal }) => apiGet<CatalogResponse>('/api/v1/semantics/catalog', { signal }),
+  });
+  const savedQ = useQuery({
+    queryKey: ['saved-reports'],
+    queryFn: ({ signal }) =>
+      apiGet<{ items: SavedReport[] }>('/api/v1/saved-reports', { signal }),
+    retry: false,
   });
 
   const queryableMetrics = useMemo(() => {
@@ -111,6 +139,9 @@ export function ReportBuilderView() {
   const [bu, setBu] = useState('');
   const [visual, setVisual] = useState<VisualMode>('kpi');
   const [result, setResult] = useState<QueryResult | null>(null);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveName, setSaveName] = useState('');
+  const [publishOnSave, setPublishOnSave] = useState(false);
 
   const selected = queryableMetrics.find((m) => m.key === metricKey) ?? null;
 
@@ -124,23 +155,56 @@ export function ReportBuilderView() {
   const needsPeriod = grains.includes('period');
   const needsDistProduct = grains.includes('distributor') || grains.includes('product');
 
+  const buildFilters = () => {
+    const filters: Record<string, string> = {};
+    if (needsPeriod) {
+      if (periodFrom.trim()) filters.period_from = periodFrom.trim();
+      if (periodTo.trim()) filters.period_to = periodTo.trim();
+    }
+    if (distributorId.trim()) filters.distributor_id = distributorId.trim();
+    if (bu.trim()) filters.bu = bu.trim();
+    return filters;
+  };
+
   const runMut = useMutation({
-    mutationFn: async () => {
-      const filters: Record<string, string> = {};
-      if (needsPeriod) {
-        if (periodFrom.trim()) filters.period_from = periodFrom.trim();
-        if (periodTo.trim()) filters.period_to = periodTo.trim();
-      }
-      if (distributorId.trim()) filters.distributor_id = distributorId.trim();
-      if (bu.trim()) filters.bu = bu.trim();
-      return apiPost<QueryResult>('/api/v1/query/execute', {
+    mutationFn: async () =>
+      apiPost<QueryResult>('/api/v1/query/execute', {
         metric: metricKey,
         grains,
-        filters,
-      });
-    },
+        filters: buildFilters(),
+      }),
     onSuccess: (data) => setResult(data),
   });
+
+  const saveMut = useMutation({
+    mutationFn: async () =>
+      apiPost<SavedReport>('/api/v1/saved-reports', {
+        name: saveName.trim() || `${metricKey} report`,
+        metric: metricKey,
+        grains,
+        filters: buildFilters(),
+        visual,
+        visibility: publishOnSave ? 'published' : 'personal',
+        shared_roles: [],
+      }),
+    onSuccess: async () => {
+      setSaveOpen(false);
+      setSaveName('');
+      await qc.invalidateQueries({ queryKey: ['saved-reports'] });
+    },
+  });
+
+  const loadSaved = (s: SavedReport) => {
+    setMetricKey(s.metric_key);
+    setGrains([...(s.grains || [])]);
+    setVisual(s.visual || 'kpi');
+    const f = s.filters || {};
+    setPeriodFrom(String(f.period_from || f.period || '26Q2'));
+    setPeriodTo(String(f.period_to || f.period || '26Q2'));
+    setDistributorId(f.distributor_id != null ? String(f.distributor_id) : '');
+    setBu(f.bu != null ? String(f.bu) : f.product_line != null ? String(f.product_line) : '');
+    setResult(null);
+  };
 
   const columns = useMemo<ColDef[]>(() => {
     const rows = result?.rows ?? [];
@@ -164,7 +228,8 @@ export function ReportBuilderView() {
   }, [result]);
 
   return (
-    <Stack spacing={2}>
+    <Stack spacing={2} direction={{ xs: 'column', lg: 'row' }} alignItems="stretch">
+      <Stack spacing={2} sx={{ flex: 1, minWidth: 0 }}>
       <Paper sx={{ p: 2 }} data-testid="report-builder-author">
         <Typography variant="subtitle1" fontWeight={700} gutterBottom>
           Author
@@ -290,6 +355,16 @@ export function ReportBuilderView() {
           >
             {runMut.isPending ? 'Running…' : 'Run report'}
           </Button>
+          <Button
+            variant="outlined"
+            onClick={() => {
+              setSaveName(`${selected?.label || metricKey}`);
+              setSaveOpen(true);
+            }}
+            data-testid="report-save"
+          >
+            Save
+          </Button>
         </Stack>
       </Paper>
 
@@ -381,6 +456,75 @@ export function ReportBuilderView() {
           </Stack>
         )}
       </ModuleDataSection>
+      </Stack>
+
+      <Paper sx={{ p: 2, width: { lg: 300 }, flexShrink: 0 }} data-testid="saved-reports-panel">
+        <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+          Saved reports
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          Personal + published (role-aware). Requires migration <code>20260801_0006</code>.
+        </Typography>
+        {savedQ.isError && (
+          <Alert severity="warning" sx={{ mb: 1 }}>
+            Saved reports unavailable — apply alembic <code>20260801_0006</code> on cip.
+          </Alert>
+        )}
+        <List dense>
+          {(savedQ.data?.items ?? []).map((s) => (
+            <ListItemButton key={s.id} onClick={() => loadSaved(s)} data-testid={`saved-report-${s.id}`}>
+              <ListItemText
+                primary={s.name}
+                secondary={`${s.metric_key} · ${s.visibility}`}
+                primaryTypographyProps={{ variant: 'body2' }}
+                secondaryTypographyProps={{ variant: 'caption' }}
+              />
+            </ListItemButton>
+          ))}
+          {!savedQ.isLoading && !savedQ.isError && (savedQ.data?.items?.length ?? 0) === 0 && (
+            <Typography variant="body2" color="text.secondary">
+              No saved reports yet.
+            </Typography>
+          )}
+        </List>
+      </Paper>
+
+      <Dialog open={saveOpen} onClose={() => setSaveOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle>Save report</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              label="Name"
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              fullWidth
+              autoFocus
+              data-testid="report-save-name"
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={publishOnSave}
+                  onChange={(e) => setPublishOnSave(e.target.checked)}
+                />
+              }
+              label="Publish to tenant (all roles)"
+            />
+            {saveMut.isError && <Alert severity="error">{safeDisplayError(saveMut.error)}</Alert>}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSaveOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={() => saveMut.mutate()}
+            disabled={saveMut.isPending || !saveName.trim()}
+            data-testid="report-save-confirm"
+          >
+            {saveMut.isPending ? 'Saving…' : 'Save'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 }

@@ -68,6 +68,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: 'Dashboard', href: '/dashboard', roles: ALL },
       { label: 'Report builder', href: '/reports', roles: ALL },
+      { label: 'Dashboards', href: '/dashboards', roles: ALL },
     ],
   },
   {

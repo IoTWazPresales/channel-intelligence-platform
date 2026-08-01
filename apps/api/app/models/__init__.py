@@ -122,6 +122,7 @@ from app.models.commercial_lineup import (
 from app.models.task_run import TaskRun
 from app.models.iam import AppUser, AuthSession, Tenant
 from app.models.steward_audit import StewardAuditEvent
+from app.models.saved_reports import Dashboard, DashboardTile, SavedReport
 
 __all__ = [
     "DimProduct",
@@ -234,4 +235,7 @@ __all__ = [
     "AppUser",
     "AuthSession",
     "StewardAuditEvent",
+    "SavedReport",
+    "Dashboard",
+    "DashboardTile",
 ]

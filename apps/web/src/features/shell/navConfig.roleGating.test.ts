@@ -18,6 +18,7 @@ describe('nav role gating', () => {
     const hrefs = groups.flatMap((g) => g.items.map((i) => i.href));
     expect(hrefs).toContain('/dashboard');
     expect(hrefs).toContain('/reports');
+    expect(hrefs).toContain('/dashboards');
     expect(hrefs).toContain('/sell-out');
     expect(hrefs).not.toContain('/admin/users');
     expect(hrefs).not.toContain('/admin/imports');
