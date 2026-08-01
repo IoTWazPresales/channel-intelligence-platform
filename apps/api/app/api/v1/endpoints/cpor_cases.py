@@ -5,12 +5,14 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, File, Form, Header, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.security import get_current_user
+from app.core.tenant_scope import tenant_id_from_user, where_tenant
 from app.db.session_sync import SessionLocal
 from app.models.cpor import CporCase, CporCaseEvent, CporCaseLine
 from app.models.dimensions import DimCustomer, DimProduct
@@ -194,9 +196,11 @@ def _case_json(
     return out
 
 
-def _load_case(session: Session, case_id: int) -> CporCase:
+def _load_case(session: Session, case_id: int, user: dict | None = None) -> CporCase:
     case = session.get(CporCase, case_id)
     if not case:
+        raise HTTPException(status_code=404, detail="CPOR case not found")
+    if user is not None and (case.tenant_id or "default") != tenant_id_from_user(user):
         raise HTTPException(status_code=404, detail="CPOR case not found")
     return case
 
@@ -326,11 +330,13 @@ def list_cases(
     status: str | None = Query(default=None),
     customer_id: int | None = Query(default=None),
     q: str | None = Query(default=None),
+    user: dict = Depends(get_current_user),
 ):
     with SessionLocal() as session:
         stmt = (
             select(CporCase, DimCustomer)
             .join(DimCustomer, DimCustomer.id == CporCase.customer_id)
+            .where(where_tenant(CporCase.tenant_id, user))
             .order_by(CporCase.id.desc())
         )
         if status:
@@ -358,8 +364,12 @@ def list_cases(
 
 
 @router.post("/cases", status_code=201)
-def create_case(body: CaseCreate, x_user_id: str | None = Header(default=None, alias="X-User-Id")):
-    actor = _actor(x_user_id)
+def create_case(
+    body: CaseCreate,
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    user: dict = Depends(get_current_user),
+):
+    actor = _actor(x_user_id) or (user.get("email") if isinstance(user.get("email"), str) else None) or "system"
     if body.promotion_type not in CPOR_PROMOTION_TYPE_SET:
         raise HTTPException(
             status_code=400,
@@ -371,10 +381,13 @@ def create_case(body: CaseCreate, x_user_id: str | None = Header(default=None, a
         cust = session.get(DimCustomer, body.customer_id)
         if not cust:
             raise HTTPException(status_code=400, detail=f"Unknown customer_id={body.customer_id}")
+        if (getattr(cust, "tenant_id", None) or "default") != tenant_id_from_user(user):
+            raise HTTPException(status_code=400, detail=f"Unknown customer_id={body.customer_id}")
         code = (body.case_code or "").strip() or _generate_case_code(session)
         case = CporCase(
             case_code=code,
             case_name=(body.case_name or "").strip() or None,
+            tenant_id=tenant_id_from_user(user),
             customer_id=body.customer_id,
             promotion_type=body.promotion_type,
             window_start=body.window_start,
@@ -401,9 +414,9 @@ def create_case(body: CaseCreate, x_user_id: str | None = Header(default=None, a
 
 
 @router.get("/cases/{case_id}")
-def get_case(case_id: int):
+def get_case(case_id: int, user: dict = Depends(get_current_user)):
     with SessionLocal() as session:
-        case = _load_case(session, case_id)
+        case = _load_case(session, case_id, user=user)
         cust = session.get(DimCustomer, case.customer_id)
         lines = session.scalars(select(CporCaseLine).where(CporCaseLine.case_id == case.id)).all()
         pmap = _products_map(session, [int(l.product_id) for l in lines])

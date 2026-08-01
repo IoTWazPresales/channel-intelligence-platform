@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy import Boolean, Date, ForeignKey, Index, Integer, Numeric, String
+from sqlalchemy import Boolean, Date, ForeignKey, Index, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -30,6 +30,7 @@ class FactCustomerSellthrough(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     source_key: Mapped[str] = mapped_column(String(256), nullable=False, unique=True)
+    tenant_id: Mapped[str] = mapped_column(Text, nullable=False, default="default", server_default="default", index=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("dim_customer.id"), nullable=False)
     customer_location_id: Mapped[int | None] = mapped_column(
         ForeignKey("customer_location.id"), nullable=True

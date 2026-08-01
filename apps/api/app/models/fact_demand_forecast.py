@@ -47,7 +47,7 @@ class FactDemandForecast(Base, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tenant_id: Mapped[str] = mapped_column(Text, nullable=False, default="default", server_default="default")
     distributor_id: Mapped[int] = mapped_column(ForeignKey("dim_distributor.id"), nullable=False)
     product_id: Mapped[int] = mapped_column(ForeignKey("dim_product.id"), nullable=False)
     customer_id: Mapped[int] = mapped_column(ForeignKey("dim_customer.id"), nullable=False)

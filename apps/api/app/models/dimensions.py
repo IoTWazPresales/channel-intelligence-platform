@@ -27,6 +27,7 @@ class DimDistributor(Base, TimestampMixin):
     __tablename__ = "dim_distributor"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(Text, nullable=False, default="default", server_default="default", index=True)
     code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(256), nullable=False)
     distributor_status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
@@ -80,6 +81,7 @@ class DimCustomer(Base, TimestampMixin):
     __tablename__ = "dim_customer"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(Text, nullable=False, default="default", server_default="default", index=True)
     code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(256), nullable=False)
     customer_status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
@@ -143,6 +145,7 @@ class DimProduct(Base, TimestampMixin):
     __tablename__ = "dim_product"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(Text, nullable=False, default="default", server_default="default", index=True)
     sku: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
     part_number: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True)
     name: Mapped[str] = mapped_column(String(512), nullable=False)

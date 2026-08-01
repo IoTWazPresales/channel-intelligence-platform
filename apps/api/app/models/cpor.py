@@ -22,6 +22,7 @@ class CporCase(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     case_code: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     case_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    tenant_id: Mapped[str] = mapped_column(Text, nullable=False, default="default", server_default="default", index=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("dim_customer.id"), nullable=False, index=True)
     promotion_type: Mapped[str] = mapped_column(String(128), nullable=False)
     window_start: Mapped[date] = mapped_column(Date, nullable=False)
