@@ -12,7 +12,7 @@
 | **Branch** | `main` |
 | **Alembic (DB)** | **`20260730_0075` on cip** |
 | **HEAD** | tip of `main` (verify) |
-| **Pushed?** | verify before claiming |
+| **Pushed?** | yes (`origin/main`) |
 | **Current phase** | **A-lane wrapped** — core A1/A2/A3 IMPLEMENTED; exit criteria met for intelligence surfaces |
 | **Next** | **P2 / B-lane** (or Warren-chosen). Do **not** chase BACKLOG-092 payment files (Warren-owned). Promo automation → BACKLOG-093/094 |
 
