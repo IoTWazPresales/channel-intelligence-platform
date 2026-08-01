@@ -1,21 +1,19 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-01 (PR #12 merged)
+**Last updated:** 2026-08-01 (CI alembic + web vitest fix)
 
-**Branch:** `main` @ `3a2f974`
+**Branch:** `fix/ci-alembic-fresh-upgrade` (PR #13)
 
 **Alembic:** `20260801_0008` on cip / code head
 
 ## Done (this session)
 
-- **PR #12 merged** → `3a2f974` — X-1 CST Unit E S4+S8 (Opus VERIFY PASS)
-  - Import Centre CST steward: `plan_class` Plan column + StewardBulkSection preview→apply
+- **CI alembic fresh-upgrade:** idempotent `0002`–`0008`; CI assert tip → `20260801_0008`; empty-DB PASS.
+- **Web vitest CI red:** HTML `readFetchError` leak; `CurrentLineupSection` token-array guard; stale guide/PO chip assertions. Focused 99/99 PASS locally.
 
 ## Next
 
-1. Pick next TRIGGER (Warren): CI alembic fresh-upgrade fix (`0001` tip ORM vs `0002` DuplicateColumn — red on main since squash); **or** delete orphaned CST `bulk-resolve`; **or** next product unit from BACKLOG.
-2. Optional: new feature branch off `main` once next work is chosen.
+1. Wait for PR #13 CI green → merge.
+2. Then: delete orphaned CST `bulk-resolve` **or** next BACKLOG TRIGGER (Warren pick).
 
-**Env:** local Windows. API `:8001`, web `:3000`. Smoke leftover: job `#606` / `cst_unit_e_verify_smoke`.
-
-**Known:** GitHub CI `test` still fails on `alembic upgrade head` for ephemeral `cip_test` (pre-existing; same on main before #12). Merged with same precedent as PR #11.
+**Env:** local Windows. API `:8001`, web `:3000`.

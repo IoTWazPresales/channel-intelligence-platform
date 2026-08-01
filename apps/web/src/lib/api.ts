@@ -27,6 +27,11 @@ export function apiUrl(path: string): string {
 export function parseApiErrorDetailText(text: string): string {
   const t = text.trim();
   if (!t) return '';
+  const lower = t.toLowerCase();
+  // HTML must be checked before the non-JSON early return (otherwise error pages leak into UI).
+  if (lower.includes('<!doctype') || lower.includes('<html')) {
+    return 'Server error. Check API logs or try again.';
+  }
   if (!t.startsWith('{')) return t.length > 600 ? `${t.slice(0, 600)}…` : t;
   try {
     const j = JSON.parse(t) as { detail?: unknown };
@@ -63,10 +68,6 @@ export function parseApiErrorDetailText(text: string): string {
   } catch {
     /* fall through */
   }
-  const lower = t.toLowerCase();
-  if (lower.includes('<!doctype') || lower.includes('<html')) {
-    return 'Server error. Check API logs or try again.';
-  }
   return t.length > 600 ? `${t.slice(0, 600)}…` : t;
 }
 
@@ -74,9 +75,18 @@ export function parseApiErrorDetailText(text: string): string {
 export async function readFetchError(res: Response): Promise<string> {
   const text = (await res.text()).trim();
   if (!text) return `Request failed (${res.status})`;
-  const parsed = parseApiErrorDetailText(text);
-  if (parsed) return parsed;
-  return `Request failed (${res.status})`;
+  const lower = text.toLowerCase();
+  if (lower.includes('<!doctype') || lower.includes('<html')) {
+    return `Server error (${res.status})`;
+  }
+  if (text.startsWith('{')) {
+    const parsed = parseApiErrorDetailText(text);
+    if (parsed) return parsed;
+    return `Request failed (${res.status})`;
+  }
+  // Plain-text bodies: keep content but always surface the HTTP status.
+  const body = text.length > 600 ? `${text.slice(0, 600)}…` : text;
+  return `Request failed (${res.status}): ${body}`;
 }
 
 /** Safe string for React alert children when displaying mutation errors. */

@@ -226,7 +226,7 @@ describe('PoManagementView', () => {
     expect(await screen.findByTestId('po-worklist-summary')).toBeInTheDocument();
     expect(screen.getByTestId('po-worklist-unlinked')).toHaveTextContent('3 POs unlinked');
     expect(screen.getByTestId('po-worklist-upload-needed')).toHaveTextContent('0 period×BU need lineup upload');
-    expect(screen.getByTestId('po-worklist-gaps')).toHaveTextContent('1 shipment gap');
+    expect(screen.getByTestId('po-worklist-gaps')).toHaveTextContent('1 gap line');
   });
 
   it('shows pending link chip in coverage when proposals exist', async () => {

@@ -103,12 +103,37 @@ def main() -> None:
         oc = conn.execute(
             text("SELECT 1 FROM dim_customer WHERE code = 'OPEN_CHANNEL'")
         ).scalar()
-        print(f"db={db} tip={tip} fact_demand_forecast={has_table} view={has_view} OPEN_CHANNEL={oc}")
+        needs_reapproval = conn.execute(
+            text(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name='cpor_case' AND column_name='needs_reapproval'"
+            )
+        ).scalar()
+        has_sql_viewer = conn.execute(
+            text(
+                "SELECT 1 FROM information_schema.tables "
+                "WHERE table_schema='public' AND table_name='sql_viewer_audit'"
+            )
+        ).scalar()
+        has_admin = conn.execute(
+            text(
+                "SELECT 1 FROM app_user "
+                "WHERE tenant_id='default' AND email='admin@local'"
+            )
+        ).scalar()
+        print(
+            f"db={db} tip={tip} fact_demand_forecast={has_table} view={has_view} "
+            f"OPEN_CHANNEL={oc} needs_reapproval={needs_reapproval} "
+            f"sql_viewer_audit={has_sql_viewer} admin={has_admin}"
+        )
         assert db == SMOKE_DB, db
-        assert tip == "20260801_0001", tip
+        assert tip == "20260801_0008", tip
         assert has_table
         assert has_view
         assert oc
+        assert needs_reapproval
+        assert has_sql_viewer
+        assert has_admin
     print("EMPTY_DB_REPLAY_OK")
 
 

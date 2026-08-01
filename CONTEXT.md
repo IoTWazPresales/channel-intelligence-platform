@@ -17,6 +17,8 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-01 — **PR #13 web vitest fix** (`4f57ebf`): HTML readFetchError + lineup token guard + stale assertions; focused 99/99. Await CI green → merge.
+- 2026-08-01 — **CI alembic fresh-upgrade fix** (branch `fix/ci-alembic-fresh-upgrade`): idempotent `0002`–`0008` for tip-ORM create_all; CI assert tip=`20260801_0008`; empty-DB replay PASS. Next: commit/PR.
 - 2026-08-01 — **PR #12 merged to main** (`3a2f974`): X-1 CST Unit E S4+S8 VERIFY PASS. Next: CI alembic fresh-upgrade fix or next BACKLOG TRIGGER.
 - 2026-08-01 — **PR #12 opened** (`4b85387`): X-1 CST Unit E S4+S8 VERIFY PASS. Next: review/merge when ready.
 - 2026-08-01 — **X-1 CST Unit E VERIFY PASS (Opus):** S4 plan_class + Plan column; S8 StewardBulkSection preview→apply (`cst-steward-bulk-*`).
