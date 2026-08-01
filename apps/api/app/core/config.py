@@ -1,12 +1,20 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_API_ROOT = Path(__file__).resolve().parents[2]
+_ENV_FILE = _API_ROOT / ".env"
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=str(_ENV_FILE) if _ENV_FILE.exists() else ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     app_name: str = "Channel Intelligence API"
     api_v1_prefix: str = "/api/v1"
@@ -92,6 +100,21 @@ class Settings(BaseSettings):
             "Calendar month (1=January) when the fiscal year starts for lineup 1H quarter mapping "
             "(env LINEUP_FISCAL_YEAR_START_MONTH)."
         ),
+    )
+
+    # P2-3 auth: "stub" = forgeable X-User-* headers (local transition); "session" = Bearer required.
+    cip_auth_mode: Literal["stub", "session"] = Field(
+        default="stub",
+        description="Auth mode (env CIP_AUTH_MODE). Use session after IAM migration + seed admin.",
+    )
+
+    money_ceiling_usd: float | None = Field(
+        default=None,
+        description="Optional CPOR portfolio money ceiling in USD (env MONEY_CEILING_USD).",
+    )
+    hard_enforce_budget: bool = Field(
+        default=True,
+        description="Hard-gate approve/export when over money ceiling (env HARD_ENFORCE_BUDGET).",
     )
 
     @property

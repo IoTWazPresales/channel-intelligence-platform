@@ -17,6 +17,9 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-01 — **P2-3 IAM live:** applied `20260801_0003` on cip; `CIP_AUTH_MODE=session`; login smoke PASS (`admin@local` → `/dashboard`). Next: X-1 VERIFY in new chat; commit `feat/p2-auth-rbac` when asked.
+- 2026-08-01 — **Sequence PR→P2→soak:** PR #10 merged (`9906b17`); `feat/p2-auth-rbac` P2-3 IAM slice authored (`20260801_0003` NOT applied); `MONEY_CEILING_USD` env-wired; soak case #46 chip+banner PASS + export 409. X-1 VERIFY not started.
+- 2026-08-01 — **PR #10 merged** (`9906b17`): B-lane + tenant Qs + BACKLOG-095. Branch `feat/p2-auth-rbac`: P2-3 IAM slice authored (`20260801_0003` NOT applied); `MONEY_CEILING_USD` env-wired; soak `.env` set to 1 for reapproval browser proof.
 - 2026-08-01 — **BACKLOG-095 hard reapproval:** `cpor_case.needs_reapproval` (alembic `20260801_0002`); approve/export gated when money over / flagged; `confirm_over_budget_reapproval`; UI Reapprove CTA; `HARD_ENFORCE_BUDGET=true`; optional `MONEY_CEILING_USD`.
 - 2026-08-01 — **Q-001/002/009 resolved (tenant-flexible):** money ceiling + reapproval intent; reservation derived from profit (HQ-inflated PM bottom context); PM attribution = business line (NB/NR/NV/NX). Profile stub `commercial_tenant_profile.py`. Q-003 hosting still open. B-lane VERIFY PASS earlier same day.
 - 2026-08-01 — **B4:** promo-plan-draft compose (`GET /cpor/intelligence/promo-plan-draft`) — A2 comparables + B1 forecast volume + B2 dual-track budget check; Promotions B4 panel. B-lane scaffold complete on `feat/b1-forecasting`.

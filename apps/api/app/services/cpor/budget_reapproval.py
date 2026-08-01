@@ -49,14 +49,10 @@ def portfolio_committed_usd(session: Session, *, include_case_id: int | None = N
 
 
 def money_ceiling_usd() -> float | None:
-    raw = getattr(tenant_profile, "MONEY_CEILING_USD", None)
-    if raw is None:
-        return None
-    try:
-        val = float(raw)
-    except (TypeError, ValueError):
-        return None
-    return val if val > 0 else None
+    # Prefer live env/settings over module import-time snapshot.
+    from app.services.commercial_tenant_profile import _env_float
+
+    return _env_float("MONEY_CEILING_USD")
 
 
 def evaluate_money_position(
@@ -78,7 +74,7 @@ def evaluate_money_position(
     return {
         "binding_axis": tenant_profile.CONSTRAINT_AXIS,
         "over_budget_action": tenant_profile.OVER_BUDGET_ACTION,
-        "hard_enforce": bool(tenant_profile.HARD_ENFORCE_BUDGET),
+        "hard_enforce": tenant_profile._env_bool("HARD_ENFORCE_BUDGET", True),
         "money_ceiling_usd": ceiling,
         "portfolio_committed_usd": round(drawn, 4),
         "case_support_usd": round(case_usd, 4),

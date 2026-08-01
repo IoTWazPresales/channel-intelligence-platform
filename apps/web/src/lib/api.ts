@@ -1,3 +1,5 @@
+import { getAuthToken } from '@/lib/authSession';
+
 /**
  * API origin for browser `fetch`.
  *
@@ -84,12 +86,20 @@ export function safeDisplayError(e: unknown): string {
   return 'Something went wrong.';
 }
 
-const defaultHeaders = (init?: RequestInit, includeJsonContentType = true): HeadersInit => ({
-  ...(includeJsonContentType ? { 'Content-Type': 'application/json' } : {}),
-  'X-User-Role': 'admin',
-  'X-User-Id': 'demo-user',
-  ...init?.headers,
-});
+const defaultHeaders = (init?: RequestInit, includeJsonContentType = true): HeadersInit => {
+  const token = getAuthToken();
+  const headers: Record<string, string> = {
+    ...(includeJsonContentType ? { 'Content-Type': 'application/json' } : {}),
+    // Stub-mode fallback while CIP_AUTH_MODE=stub; ignored once session mode is enforced.
+    'X-User-Role': 'admin',
+    'X-User-Id': 'demo-user',
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return {
+    ...headers,
+    ...init?.headers,
+  };
+};
 
 /**
  * Browser `fetch` for JSON GET. Pass `{ signal }` from TanStack Query `queryFn` so superseded
@@ -127,11 +137,7 @@ export async function apiPostFormData<T>(path: string, formData: FormData, init?
   const res = await fetch(apiUrl(path), {
     method: 'POST',
     ...init,
-    headers: {
-      'X-User-Role': 'admin',
-      'X-User-Id': 'demo-user',
-      ...init?.headers,
-    },
+    headers: defaultHeaders(init, false),
     body: formData,
     cache: 'no-store',
   });

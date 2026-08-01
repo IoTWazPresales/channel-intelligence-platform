@@ -120,6 +120,7 @@ from app.models.commercial_lineup import (
     CommercialLineupLine,
 )
 from app.models.task_run import TaskRun
+from app.models.iam import AppUser, AuthSession, Tenant
 
 __all__ = [
     "DimProduct",
@@ -228,4 +229,7 @@ __all__ = [
     "ShipmentEvidenceCurrent",
     "ShipmentEvidenceObservation",
     "TaskRun",
+    "Tenant",
+    "AppUser",
+    "AuthSession",
 ]
