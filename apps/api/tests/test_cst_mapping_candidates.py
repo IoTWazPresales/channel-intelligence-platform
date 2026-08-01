@@ -390,6 +390,8 @@ def test_serialize_suggestions_from_context():
     assert out["suggestions"] == [
         {"dim_id": 42, "label": "Widget", "score": 1.0, "reason": "item_code"},
     ]
+    assert out["plan_class"] == "ready_to_map"
+    assert out["ready"] is True
 
 
 def test_serialize_suggestions_fallback_from_columns():
@@ -413,6 +415,30 @@ def test_serialize_suggestions_fallback_from_columns():
     assert len(out["suggestions"]) == 1
     assert out["suggestions"][0]["dim_id"] == 7
     assert out["suggestions"][0]["reason"] == "location_code_exact"
+    assert out["plan_class"] == "ready_to_map"
+    assert out["ready"] is True
+
+
+def test_serialize_plan_class_no_match():
+    cand = SimpleNamespace(
+        id=3,
+        import_job_id=9,
+        entity_type=CST_PRODUCT_ENTITY,
+        normalized_key="unknown",
+        row_count=1,
+        total_units=None,
+        sample_raw_values=["UNKNOWN"],
+        suggested_entity_id=None,
+        match_reason=None,
+        confidence_score=None,
+        status="needs_review",
+        context={"suggestions": []},
+        created_at=None,
+        updated_at=None,
+    )
+    out = _serialize_cst_candidate(cand)
+    assert out["plan_class"] == "no_match"
+    assert out["ready"] is False
 
 
 # ---------------------------------------------------------------------------

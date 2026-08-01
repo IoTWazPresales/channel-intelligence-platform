@@ -47,6 +47,7 @@ from app.models.historical_lineup import HistoricalLineupImportHeader, Historica
 from app.models.ingestion import ImportJob, ImportRowResult, ImportTemplate, RawFileMetadata, SourceDefinition
 from app.storage.local import get_storage_backend
 from app.services.imports.import_background_slots import (
+    SLOT_CST_BULK,
     SLOT_CST_RESOLUTION_PLAN,
     SLOT_MAIN,
     clear_task_slot_on_job,
@@ -1679,6 +1680,177 @@ async def bulk_resolve_cst_candidates(
         },
     )
     return result
+
+
+class CstStewardBulkBody(BaseModel):
+    action: str = Field(..., min_length=1)
+    candidate_ids: list[int] = Field(..., min_length=1)
+    product_id: int | None = Field(default=None, ge=1)
+    notes: str | None = None
+    raw_token: str | None = None
+    confirm_ineligible_product: bool | None = None
+    audit_note: str | None = None
+
+
+@router.post("/jobs/{job_id}/cst-steward-bulk-preview", status_code=200)
+def cst_steward_bulk_preview(job_id: int, body: CstStewardBulkBody) -> dict[str, Any]:
+    from app.services.imports.cst_steward_bulk import preview_cst_steward_bulk
+
+    with SessionLocal() as sync_db:
+        _get_cst_job_sync(sync_db, job_id)
+        try:
+            return preview_cst_steward_bulk(
+                sync_db,
+                job_id,
+                action=body.action,
+                candidate_ids=body.candidate_ids,
+                product_id=body.product_id,
+            )
+        except CstCandidateOpError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@router.post("/jobs/{job_id}/cst-steward-bulk-apply", status_code=200)
+def cst_steward_bulk_apply(
+    job_id: int,
+    body: CstStewardBulkBody,
+    user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    from app.services.imports.cst_steward_bulk import apply_cst_steward_bulk
+
+    if body.action == "ignore":
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Use async bulk ignore for CST ignore action",
+                "code": "use_async_bulk_ignore",
+            },
+        )
+    with SessionLocal() as sync_db:
+        _get_cst_job_sync(sync_db, job_id)
+        try:
+            result = apply_cst_steward_bulk(
+                sync_db,
+                job_id,
+                action=body.action,
+                candidate_ids=body.candidate_ids,
+                product_id=body.product_id,
+            )
+            sync_db.commit()
+        except CstCandidateOpError as exc:
+            sync_db.rollback()
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    record_steward_audit_sync(
+        user,
+        action="bulk_apply",
+        importer="cst",
+        import_job_id=job_id,
+        target_id=body.product_id,
+        payload={"action": body.action, "result": result},
+    )
+    return result
+
+
+@router.post("/jobs/{job_id}/cst-steward-bulk-ignore/apply-async", status_code=202)
+def cst_steward_bulk_ignore_apply_async(
+    job_id: int,
+    body: CstStewardBulkBody,
+    user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    from app.services.imports.cst_steward_bulk_enqueue import (
+        TASK_CST_BULK_IGNORE,
+        enqueue_cst_bulk_task,
+        run_cst_bulk_ignore_sync,
+    )
+    from app.services.imports.import_background_slots import SLOT_CST_BULK
+
+    with SessionLocal() as sync_db:
+        job = _get_cst_job_sync(sync_db, job_id)
+    payload = {"candidate_ids": body.candidate_ids, "notes": body.notes}
+    task_id, async_poll = enqueue_cst_bulk_task(
+        task_name=TASK_CST_BULK_IGNORE,
+        job_id=job_id,
+        payload=payload,
+        run_sync=lambda: run_cst_bulk_ignore_sync(job_id, payload),
+        dev_prefix="cst-bulk-ignore",
+    )
+    with SessionLocal() as sync_db:
+        job = _get_cst_job_sync(sync_db, job_id)
+        set_task_slot_on_job(
+            job,
+            SLOT_CST_BULK,
+            task_id=task_id,
+            async_poll=async_poll,
+            label=f"Ignoring CST candidates (job {job_id})",
+        )
+        sync_db.commit()
+    record_steward_audit_sync(
+        user,
+        action="bulk_ignore_enqueue",
+        importer="cst",
+        import_job_id=job_id,
+        payload={"candidate_count": len(body.candidate_ids), "task_id": task_id},
+    )
+    return {"import_job_id": job_id, "task_id": task_id, "async_poll": async_poll, "async": True}
+
+
+@router.post("/jobs/{job_id}/cst-steward-bulk-provisional-customers/apply-async", status_code=400)
+def cst_steward_bulk_provisional_not_supported(job_id: int) -> dict[str, Any]:
+    raise HTTPException(
+        status_code=400,
+        detail={
+            "message": "CST import steward does not create provisional masters from bulk actions",
+            "code": "cst_bulk_provisional_unsupported",
+        },
+    )
+
+
+@router.get("/jobs/{job_id}/cst-steward-bulk-task/{task_id}", status_code=200)
+def cst_steward_bulk_task_status(job_id: int, task_id: str) -> dict[str, Any]:
+    from app.services.imports.cst_steward_bulk_enqueue import dev_cst_bulk_task_results
+    from app.services.imports.import_background_slots import SLOT_CST_BULK
+
+    with SessionLocal() as sync_db:
+        _get_cst_job_sync(sync_db, job_id)
+
+    dev_store = dev_cst_bulk_task_results()
+    if task_id in dev_store:
+        entry = dev_store[task_id]
+        state = str(entry.get("state") or "PENDING").upper()
+        if state in ("SUCCESS", "FAILURE"):
+            with SessionLocal() as sync_db:
+                job = _get_cst_job_sync(sync_db, job_id)
+                clear_task_slot_on_job(job, SLOT_CST_BULK)
+                sync_db.commit()
+        out: dict[str, Any] = {
+            "import_job_id": job_id,
+            "task_id": task_id,
+            "state": state,
+        }
+        if state == "FAILURE":
+            out["error"] = entry.get("error") or "CST bulk task failed"
+        else:
+            out["result"] = entry.get("result")
+        return out
+
+    async_result = celery_app.AsyncResult(task_id)
+    state = str(async_result.state or "PENDING").upper()
+    out = {"import_job_id": job_id, "task_id": task_id, "state": state}
+    if state == "SUCCESS":
+        out["result"] = async_result.result
+        with SessionLocal() as sync_db:
+            job = _get_cst_job_sync(sync_db, job_id)
+            clear_task_slot_on_job(job, SLOT_CST_BULK)
+            sync_db.commit()
+    elif state == "FAILURE":
+        out["error"] = str(async_result.result)[:800] if async_result.result else "CST bulk task failed"
+        with SessionLocal() as sync_db:
+            job = _get_cst_job_sync(sync_db, job_id)
+            clear_task_slot_on_job(job, SLOT_CST_BULK)
+            sync_db.commit()
+    elif state == "PROGRESS" and isinstance(async_result.info, dict):
+        out.update(async_result.info)
+    return out
 
 
 CST_TEMPLATE_SLUG = "customer_sell_through"

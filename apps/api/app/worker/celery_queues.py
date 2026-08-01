@@ -25,6 +25,7 @@ INTERACTIVE_TASK_NAMES: frozenset[str] = frozenset(
         "imports.cpor_historical_resolution_plan_apply",
         "imports.cst_resolution_plan_compute",
         "imports.cst_resolution_plan_apply",
+        "imports.cst_bulk_ignore",
     }
 )
 

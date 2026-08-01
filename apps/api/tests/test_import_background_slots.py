@@ -160,4 +160,5 @@ def test_slot_meta_keys_cover_all_known_slots() -> None:
         "shipment_bulk_task",
         "cpor_resolution_plan_task",
         "cst_resolution_plan_task",
+        "cst_bulk_task",
     }

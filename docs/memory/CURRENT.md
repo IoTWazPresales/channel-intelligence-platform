@@ -1,17 +1,23 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-01 (PR #11 merged — P2+P3 on main)
-**Branch:** `main` @ `1e6008f`
-**Alembic:** code head `20260801_0008` (applied on local cip)
+**Last updated:** 2026-08-01 (X-1 Unit E PR #12)
 
-## Done
+**Branch:** `feat/x1-cst-unit-e-verify` @ `4b85387` (in sync with origin)
 
-- **Merged PR #11** — `feat/p2-auth-rbac` → `main` (P2 auth/RBAC + P3 analytics)
-- Local cip already at `20260801_0008` from pre-merge smoke
+**Open PR:** [#12](https://github.com/IoTWazPresales/channel-intelligence-platform/pull/12) — cst Unit E S4+S8 VERIFY PASS
+
+**Alembic:** `20260801_0008` on cip / code head
+
+## Done (this session)
+
+- **X-1 CST Unit E VERIFY:** Opus `VERDICT: PASS`
+  - S4 `plan_class`/`ready` + Plan column; S8 StewardBulkSection preview→apply
+  - Commit `4b85387`; pushed; PR #12 open
 
 ## Next
 
-1. **X-1 CST Unit E VERIFY** — new chat / new branch `feat/x1-cst-unit-e-verify`
-2. Do not re-do P2/P3
+1. Warren: review/merge PR #12 when ready (“promote to main” / merge).
+2. Optional follow-up: delete orphaned `POST .../cst-candidates/bulk-resolve`.
+3. After merge: new branch for next TRIGGER.
 
-**Env:** local Windows. API `:8001` session, web `:3000`. Seed `admin@local` / `changeme`.
+**Env:** local Windows. API `:8001`, web `:3000`. Smoke leftover: job `#606` / `cst_unit_e_verify_smoke`.

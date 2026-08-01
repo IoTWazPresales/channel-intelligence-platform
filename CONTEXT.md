@@ -17,6 +17,9 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-01 — **PR #12 opened** (`4b85387`): X-1 CST Unit E S4+S8 VERIFY PASS. Next: review/merge when ready.
+- 2026-08-01 — **X-1 CST Unit E VERIFY PASS (Opus):** S4 plan_class + Plan column; S8 StewardBulkSection preview→apply (`cst-steward-bulk-*`).
+- 2026-08-01 — **X-1 CST Unit E VERIFY STOP (Opus):** S4 plan_class column/payload missing; S8 no StewardBulkSection preview→apply. Browser smoke job `#606` Import Centre steward mounted. Next: waive S4+S8 or fix + re-VERIFY.
 - 2026-08-01 — **PR #11 merged to main** (`1e6008f`): P2 auth/RBAC + P3 analytics. Next: X-1 CST Unit E VERIFY on new branch.
 - 2026-08-01 — **P3 complete:** P3-6 admin SQL viewer live (`20260801_0008`); read-only+timeout+row cap+audit; browser cip SELECT + DELETE refuse + audit PASS. Next: open PR or X-1.
 - 2026-08-01 — **P3-5 live on cip:** applied `20260801_0007`; browser export + inbox WoC≈13.6 / vintage pair_count=2481 PASS. Beat→BACKLOG-098. Next P3-6 or PR.
