@@ -1,0 +1,186 @@
+# P3-1 semantic catalog — config, not code.
+# Source of truth for formulas/ownership: docs/COMMERCIAL_SEMANTICS.md
+# Metrics not listed here are not queryable via the governed layer.
+
+version: 1
+source_doc: docs/COMMERCIAL_SEMANTICS.md
+
+dimensions:
+  - id: period
+    label: Period
+    description: Plan or calendar period (quarter / week / date window)
+  - id: customer
+    label: Customer / account
+    description: dim_customer identity
+  - id: distributor
+    label: Distributor
+    description: dim_distributor identity
+  - id: product
+    label: Product
+    description: dim_product identity
+  - id: bu
+    label: Business unit / product line
+    description: dim_product.product_line (NB/NR/NV/NX etc.)
+  - id: sales_model
+    label: Sales model
+    description: Product sales model name
+  - id: channel
+    label: Channel
+    description: Go-to-market channel
+  - id: region
+    label: Region
+    description: Geographic region
+  - id: site_label
+    label: Site label
+    description: CST site / location label (customer sell-through grain)
+
+# allowed_grains: each entry is a frozenset of dimension ids that may appear together.
+# empty list + refuse_all means never queryable (non-computable / DO NOT BUILD).
+# rollup_ok: when true, subsets of an allowed grain are accepted if they are
+# strict supersets-only policy is NOT used — only exact match OR listed rollups.
+
+metrics:
+  - id: A1-01
+    key: fill_rate
+    label: Fill rate
+    status: implemented
+    owner_surface: plan-vs-executed
+    formula: "Σ min(shipped, planned) / Σ planned on in-plan rows; shipped = line_state=shipped only"
+    source_facts: [lineup_plan_qty, linked_po_shipped_qty]
+    allowed_grains:
+      - [period]
+      - [period, bu]
+    refuse_examples:
+      - grains: [lineup_quarter]
+        reason: "Fill rate is not defined at lineup-quarter alone without plan period context; use period (± BU)."
+      - grains: [distributor, product]
+        reason: "Fill rate is plan-vs-executed (period × optional BU), not channel stock grain."
+
+  - id: A1-01b
+    key: line_hit_rate
+    label: Line-hit rate
+    status: implemented
+    owner_surface: plan-vs-executed
+    formula: "Share of in-plan lines with shipped ≥ planned"
+    source_facts: [lineup_plan_qty, linked_po_shipped_qty]
+    allowed_grains:
+      - [period]
+      - [period, bu]
+
+  - id: A1-02
+    key: over_plan_intake_rate
+    label: Over-plan intake rate
+    status: implemented
+    owner_surface: plan-vs-executed
+    formula: "Σ max(shipped − planned, 0) on in-plan rows — overship vs plan, not POD"
+    source_facts: [lineup_plan_qty, linked_po_shipped_qty]
+    allowed_grains:
+      - [period]
+      - [period, bu]
+
+  - id: A1-07
+    key: volume_bias
+    label: Volume bias (BU / PM)
+    status: implemented
+    owner_surface: plan-vs-executed
+    formula: "Mean signed (shipped − planned) / planned by BU (product_line); PM mirrors BU when pm_attribution_mode=business_line"
+    source_facts: [lineup_plan_qty, linked_po_shipped_qty]
+    allowed_grains:
+      - [bu]
+      - [period, bu]
+
+  - id: A2-02
+    key: delivery_rate
+    label: Delivery rate
+    status: implemented
+    owner_surface: cpor-cases
+    formula: "Σ result_qty / Σ estimate_qty (voided / zero-estimate excluded)"
+    source_facts: [cpor_case_line]
+    allowed_grains:
+      - [customer]
+      - [bu]
+      - [customer, bu]
+      - [period, customer]
+      - [period, bu]
+
+  - id: A2-06
+    key: support_cost_per_unit_sold
+    label: Support cost per unit sold under promo
+    status: implemented
+    owner_surface: cpor-cases
+    formula: "Σ ttl_support_usd / Σ result_qty (result > 0); ZAR companion = Σ ttl_support / Σ result_qty"
+    source_facts: [cpor_case_line]
+    allowed_grains:
+      - [customer]
+      - [bu]
+      - [customer, bu]
+      - [period, customer]
+      - [period, bu]
+
+  - id: A2-03
+    key: claim_rate
+    label: Claim rate
+    status: do_not_build
+    owner_surface: none
+    formula: "Non-computable — owed ≠ computed support; see COMMERCIAL_SEMANTICS non-computable register"
+    source_facts: []
+    allowed_grains: []
+    refuse_all: true
+    refuse_reason: "Claim rate is non-computable until settlement captures an owed amount distinct from support_unit × result_qty (D-027 / A2-03 register)."
+
+  - id: A3-01
+    key: channel_stock
+    label: Derived channel stock
+    status: implemented
+    owner_surface: channel-ops
+    formula: "latest reported SOH − sell-out since snapshot + POD-landed shipped since; never sum snapshots; pipeline never counts"
+    source_facts: [fact_inventory_distributor, fact_sales_sellout, fact_inbound_shipment]
+    allowed_grains:
+      - [distributor, product]
+    refuse_examples:
+      - grains: [period]
+        reason: "Channel stock is latest-per-(distributor, product) — not a period sum. SOH by lineup quarter is refused."
+      - grains: [lineup_quarter]
+        reason: "SOH by lineup quarter is refused — derived channel stock grain is distributor × product only."
+      - grains: [customer, product]
+        reason: "Channel Ops stock grain is distributor × product, not customer × product (CST is a separate surface)."
+
+  - id: A3-02
+    key: weeks_of_cover
+    label: Weeks of cover
+    status: implemented
+    owner_surface: channel-ops
+    formula: "derived_stock / velocity at distributor × product; velocity = sell-out units over 364d ÷ 52; near-zero velocity → undefined"
+    source_facts: [fact_inventory_distributor, fact_sales_sellout]
+    allowed_grains:
+      - [distributor, product]
+    refuse_examples:
+      - grains: [period, bu]
+        reason: "Weeks of cover is only meaningful at distributor × product (A3 grain lock)."
+      - grains: [customer, product, site_label]
+        reason: "CST customer×product×site velocity is a separate surface — do not conflate with Channel Ops WoC."
+
+  - id: A3-03
+    key: replenishment_flag
+    label: Replenishment flag (v1)
+    status: implemented
+    owner_surface: channel-ops
+    formula: "0 < weeks_of_cover < REPLENISHMENT_WOC_THRESHOLD_WEEKS (default 4)"
+    source_facts: [derived_channel_stock, velocity]
+    allowed_grains:
+      - [distributor, product]
+
+  - id: B1-01
+    key: forecast_units
+    label: Forecast units
+    status: implemented
+    owner_surface: forecasts
+    formula: "Stored at atomic grain; rollup = Σ across any axis"
+    source_facts: [fact_demand_forecast]
+    allowed_grains:
+      - [distributor, product, customer, period]
+      - [distributor, product, period]
+      - [distributor, product]
+      - [product, period]
+      - [period]
+    notes: "Atomic = distributor × product × customer × period. Subsets listed are explicit SUM rollups."

@@ -39,6 +39,7 @@ from app.api.v1.endpoints import (
     reference,
     roadmap,
     sellout,
+    semantics,
     shipment_evidence,
     shipping,
     steward_audit,
@@ -53,6 +54,7 @@ api_router.include_router(products.router, prefix="/products", tags=["products"]
 api_router.include_router(customers.router, prefix="/customers", tags=["customers"])
 api_router.include_router(distributors.router, prefix="/distributors", tags=["distributors"])
 api_router.include_router(sellout.router, prefix="/sellout", tags=["sellout"])
+api_router.include_router(semantics.router, prefix="/semantics", tags=["semantics"])
 api_router.include_router(channel_ops.router, prefix="/channel-ops", tags=["channel-ops"])
 api_router.include_router(
     channel_intelligence.router, prefix="/channel-intelligence", tags=["channel-intelligence"]
