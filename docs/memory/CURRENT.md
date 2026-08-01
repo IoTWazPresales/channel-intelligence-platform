@@ -1,25 +1,23 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-01 (X-1 Unit E VERIFY PASS)
+**Last updated:** 2026-08-01 (X-1 Unit E PR #12)
 
-**Branch:** `feat/x1-cst-unit-e-verify` (uncommitted S4/S8 fixes; tip docs `7f2b06a` on origin)
+**Branch:** `feat/x1-cst-unit-e-verify` @ `4b85387` (in sync with origin)
+
+**Open PR:** [#12](https://github.com/IoTWazPresales/channel-intelligence-platform/pull/12) — cst Unit E S4+S8 VERIFY PASS
 
 **Alembic:** `20260801_0008` on cip / code head
 
 ## Done (this session)
 
-- **X-1 CST Unit E VERIFY:** Opus `VERDICT: PASS` (re-VERIFY after S4/S8 fix)
-  - **S4:** `plan_class`/`ready` on candidate serialize + Plan list column
-  - **S8:** `StewardBulkSection` preview→apply (`cst-steward-bulk-*`, `SLOT_CST_BULK`)
-  - Evidence: `.tmp/x1_unit_e_fix_cursor_report.md`, `.tmp/x1_unit_e_reverify_opus_response.md`
-  - Browser `#606`: Plan column + Bulk steward preview dialog ok
+- **X-1 CST Unit E VERIFY:** Opus `VERDICT: PASS`
+  - S4 `plan_class`/`ready` + Plan column; S8 StewardBulkSection preview→apply
+  - Commit `4b85387`; pushed; PR #12 open
 
 ## Next
 
-1. Warren: **commit** S4/S8 code (explicit paths) then push / open PR when ready.
-2. Optional cleanup (non-blocking): delete orphaned `POST .../cst-candidates/bulk-resolve` (Opus note).
-3. Optional env: `CIP_DEV_CELERY_DISPATCH=in_process_thread` or run worker (plan UI Computing… without worker).
+1. Warren: review/merge PR #12 when ready (“promote to main” / merge).
+2. Optional follow-up: delete orphaned `POST .../cst-candidates/bulk-resolve`.
+3. After merge: new branch for next TRIGGER.
 
-**Env:** local Windows. API `:8001`, web `:3000`. `admin@local` / `changeme`.
-
-**Smoke leftover on cip:** job `#606`, source `cst_unit_e_verify_smoke` (ok to leave or delete).
+**Env:** local Windows. API `:8001`, web `:3000`. Smoke leftover: job `#606` / `cst_unit_e_verify_smoke`.
