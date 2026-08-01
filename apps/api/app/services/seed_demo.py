@@ -1,7 +1,7 @@
 """Demo / dev catalog seed: **wipes the database** then reloads import templates + dimension rows.
 
 For production-like environments, controlled Commercial Planner reference rows (**OPEN_CHANNEL**,
-**UNASSIGNED**) are ensured by **Alembic migration** ``20260429_0022`` and/or
+**UNASSIGNED**) are ensured by the squashed Alembic baseline ``20260801_0001`` and/or
 ``python scripts/seed.py --commercial-system-reference-only`` (no wipe).
 
 This module is not the sole portability path for those two rows — see ``reference_bootstrap``."""
@@ -38,6 +38,7 @@ from app.models.dimensions import (
 )
 from app.models.lineup import FactLineupPlanItem
 from app.models.promo_export import PromoPlanExport, PromoPlanExportEvent
+from app.models.fact_demand_forecast import FactDemandForecast
 from app.models.facts import (
     FactBudgetAllocation,
     FactBudgetActual,
@@ -46,7 +47,6 @@ from app.models.facts import (
     FactBuyPlan,
     FactCompetitorMapping,
     FactCompetitorPrice,
-    FactForecast,
     FactInboundShipment,
     FactInventoryCustomer,
     FactPricing,
@@ -296,12 +296,15 @@ def run(session: Session, *, full_demo: bool = False) -> None:
                 reference="PO-77821",
                 status="scheduled",
             ),
-            FactForecast(
+            FactDemandForecast(
+                distributor_id=distributors[0].id,
                 product_id=products[0].id,
                 customer_id=customers[0].id,
                 period_start=date.today(),
                 forecast_units=95,
-                confidence_placeholder="medium",
+                method="manual",
+                confidence_level="medium",
+                is_override=False,
             ),
             FactPricing(
                 product_id=products[0].id,

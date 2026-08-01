@@ -16,10 +16,10 @@ from app.models.commercial_planner import (
     CommercialSkuAssumption,
 )
 from app.models.dimensions import DimProduct
+from app.models.fact_demand_forecast import FactDemandForecast
 from app.models.facts import (
     FactBudgetRequest,
     FactBuyPlan,
-    FactForecast,
     FactPricing,
     FactSalesSellout,
 )
@@ -189,21 +189,21 @@ async def _forecast_by_product(
         return {}
     forecast_sq = (
         select(
-            FactForecast.product_id,
-            FactForecast.forecast_units,
+            FactDemandForecast.product_id,
+            FactDemandForecast.forecast_units,
             func.row_number()
             .over(
-                partition_by=FactForecast.product_id,
+                partition_by=FactDemandForecast.product_id,
                 order_by=(
-                    (FactForecast.customer_id == customer_id).desc(),
-                    FactForecast.period_start.desc(),
+                    (FactDemandForecast.customer_id == customer_id).desc(),
+                    FactDemandForecast.period_start.desc(),
                 ),
             )
             .label("rn"),
         )
         .where(
-            FactForecast.product_id.in_(product_ids),
-            (FactForecast.customer_id == customer_id) | (FactForecast.customer_id.is_(None)),
+            FactDemandForecast.product_id.in_(product_ids),
+            FactDemandForecast.customer_id == customer_id,
         )
         .subquery()
     )
@@ -269,10 +269,8 @@ async def _candidate_product_ids(
 
     forecast_ids = (
         await db.execute(
-            select(FactForecast.product_id)
-            .where(
-                (FactForecast.customer_id == customer_id) | (FactForecast.customer_id.is_(None)),
-            )
+            select(FactDemandForecast.product_id)
+            .where(FactDemandForecast.customer_id == customer_id)
             .distinct()
         )
     ).scalars().all()

@@ -54,6 +54,7 @@ from app.models.customer_code_mint_setting import CustomerCodeMintSetting
 from app.models.distributor_code_mint_setting import DistributorCodeMintSetting
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.fact_customer_velocity import FactCustomerVelocity
+from app.models.fact_demand_forecast import FactDemandForecast
 from app.models.fact_dsi_forecast import FactDsiForecast
 from app.models.import_customer_sellthrough_staging import ImportCustomerSellthroughStagingLine
 from app.models.facts import (
@@ -153,6 +154,7 @@ __all__ = [
     "CustomerCodeMintSetting",
     "DistributorCodeMintSetting",
     "FactCustomerVelocity",
+    "FactDemandForecast",
     "FactDsiForecast",
     "FactInboundShipment",
     "FactPricing",

@@ -59,6 +59,7 @@ Print audit output in the unit report.
 | Listing registry | Listing Capture | `/listing-capture` |
 | Confirmed lineups / plan economics | Commercial Planner | `/commercial-planner` |
 | Line-up planning items CRUD | Line-up Planning | `/lineup` |
+| **Demand forecast** (units, confidence, bands, method, analogue) | Demand Forecast | `/forecasts` |
 | Masters / merges / gaps / channels | Admin masters | `/admin/customers` · `/products` · `/distributors` · … |
 
 ### Split surfaces (same domain, different job)
@@ -161,6 +162,26 @@ domain §1.5). **Never** convert a USD portfolio total through one period FX rat
 | A3-03 | **Replenishment flag (v1)** | IMPLEMENTED | Threshold flag when `0 < weeks_of_cover < REPLENISHMENT_WOC_THRESHOLD_WEEKS` (tenant config default **4**). Not a recommendation engine. Portfolio summary reports pair count below threshold + portfolio flag. Row field `replenishment_flag` (`reorder_signal` alias). | distributor × product | Channel Operations |
 
 CST `/channel-intelligence` remains a **separate** customer×product×site velocity surface — do not conflate with Channel Ops WoC grain.
+
+### 4.5 Demand forecast — `/forecasts`
+
+**Source of truth table:** `fact_demand_forecast` (sole B2/B4 consumable contract).  
+**Upstream signal (not the contract):** `fact_dsi_forecast` — DSI velocity projection cache; Channel Ops may label it “DSI velocity projection.”  
+**Legacy:** `fact_forecast` — superseded; rows migrate as `method=manual`. Do not write new business logic against it.
+
+**Atomic grain:** distributor × product × customer × period. Roll up by **SUM** on any axis (no double-count). Quarter totals are a **comparison re-derivation** only — never the primary stored grain.
+
+**B2 net-requirement note:** A3 channel stock is distributor × product. Subtract forecast from stock at the **distributor × product rollup**, not at customer-atomic grain.
+
+| ID | Metric / concept | Status | Formula / rule | Grain | Owner |
+|---|---|---|---|---|---|
+| B1-01 | **forecast_units** | IMPLEMENTED (B1-01/02) | Stored at atomic grain; rollup = Σ across any axis (`GET /forecasts/rollups`) | distributor × product × customer × period | Demand Forecast |
+| B1-02 | **confidence_level** | IMPLEMENTED (velocity) | Ordinal `{low, medium, high, override}`. Velocity: from `fact_customer_velocity.model_confidence`. Analogue: capped `low` (B1-03). Manual override: `override`. | same | Demand Forecast |
+| B1-03 | **Forecast band** | IMPLEMENTED (velocity) | `lower_band` / `upper_band`. Velocity: 4wk-vs-52wk variance. Analogue: widened + confidence capped low (B1-03). Override: band = point. | same | Demand Forecast |
+| B1-04 | **Forecast method** | PARTIAL | `{velocity}` live; `{analogue, manual, blend}` — manual via `/forecasts` write; analogue → B1-03 | same | Demand Forecast |
+| B1-05 | **Analogue provenance** | SPEC (schema B1-01) | Required when `method=analogue`: `analogue_product_id` + `analogue_basis` JSON `{spec, segment, price_band, gpu, predecessor, scale}`. | same | Demand Forecast |
+| B1-06 | **Channel pseudo-customer** | SPEC (schema B1-01) | `customer_id` is **NOT NULL**. Channel-only / missing-customer demand uses controlled `dim_customer.code = OPEN_CHANNEL`. Missing distributor on manual override uses `dim_distributor.code = UNASSIGNED`. | — | Demand Forecast |
+| B1-07 | **Forecast layer invariant** | SPEC (schema B1-01) | Forecast is **never merged into actuals**. Separate table, separate labelled surface. Missing actual ≠ gap-filled with prediction. | — | Demand Forecast |
 
 ---
 

@@ -19,6 +19,7 @@ from app.models.derived import StockHealth, StockRisk, WeeksOfStock
 from app.models.dimensions import CustomerContact, CustomerLocation, DimCustomer
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.fact_customer_velocity import FactCustomerVelocity
+from app.models.fact_demand_forecast import FactDemandForecast
 from app.models.facts import (
     FactBudgetRequest,
     FactForecast,
@@ -62,7 +63,8 @@ _SPECS: list[tuple[str, object]] = [
     ("Customer sell-through", FactCustomerSellthrough.customer_id),
     ("Customer velocity", FactCustomerVelocity.customer_id),
     ("Pricing (customer-specific)", FactPricing.customer_id),
-    ("Forecasts", FactForecast.customer_id),
+    ("Forecasts (legacy)", FactForecast.customer_id),
+    ("Demand forecasts", FactDemandForecast.customer_id),
     ("Lineup plan items", FactLineupPlanItem.customer_id),
     ("Commercial customer terms", CommercialCustomerTerm.customer_id),
     ("Commercial plan lines", CommercialPlanLine.customer_id),

@@ -20,6 +20,8 @@ type Row = {
   period_start: string;
   forecast_units: number;
   confidence_placeholder: string | null;
+  confidence_level?: string | null;
+  method?: string | null;
   is_override: boolean;
 };
 
@@ -121,6 +123,7 @@ export default function ForecastsPage() {
       { field: 'sku', headerName: 'SKU', pinned: 'left' },
       { field: 'period_start', headerName: 'Period' },
       { field: 'forecast_units', headerName: 'Units', type: 'numericColumn' },
+      { field: 'method', headerName: 'Method' },
       { field: 'confidence_placeholder', headerName: 'Confidence' },
       { field: 'is_override', headerName: 'Override' },
       gridDeleteColumn<Row>((id) => void delRow.mutate(id), { busy: busyDel }),
@@ -135,7 +138,7 @@ export default function ForecastsPage() {
       <PageHeader crumbs={[{ label: 'Forecast' }]} title="Forecast & overrides" />
       <Paper sx={{ p: 2 }}>
         <ModuleDataSection
-          intro="Forecast rows are stored in fact_forecast. Unknown SKUs create placeholder products; optional customer codes create or attach customers."
+          intro="Demand forecast contract (fact_demand_forecast). Manual rows are overrides at distributor × product × customer × period. Unknown SKUs/customers are rejected — resolve in masters first. Missing customer → OPEN_CHANNEL; missing distributor → UNASSIGNED."
           isLoading={isLoading}
           isError={isError}
           error={toQueryError(error)}

@@ -117,7 +117,7 @@ logged · committed and pushed · CURRENT + CONTEXT updated.
 | **A2 CPOR intelligence** | Spend by customer/BU/promo type; delivery rate; claim rate; support cost per unit sold; norms; comparable-case | Totals reconcile to loaded CPOR cases | GREEN once formulas locked in semantics | 2 sessions |
 | **A3 Channel stock + velocity** | Derived SOH, weeks of cover (dist×product), zero-velocity guard, replenishment flag v1 | Latest-per-(distributor, product) proven; no snapshot summing | GREEN | 2 sessions |
 | **P2-1 Deployment** | *(deferred — no hosting target set)* | — | RED until hosting decided | — |
-| **P2-2 Alembic replayability** | Chain replays on empty DB without `stamp head` | Fresh DB provisions from migrations alone | GREEN | 1 session |
+| **P2-2 Alembic replayability** | Chain replays on empty DB without `stamp head` | Fresh DB provisions from migrations alone | **DONE (B1-01 squash `20260801_0001`)** | — |
 | **P2-3 Auth + RBAC + user mgmt** | Login, sessions, 4 roles, admin-adds-users, tenant scoping, steward audit | Cross-tenant leakage impossible; roles enforced server-side | AMBER | 2 sessions |
 | **P2-4 App shell + landing** | Navigation, IA, landing surface, freshness banner | A manager reaches any surface unaided | AMBER | 2 sessions |
 | **P2-5 Monitoring + backup/DR** | Error tracking, job-failure alerts, automated backup, tested restore | A restore has actually been performed | GREEN | 1 session |
