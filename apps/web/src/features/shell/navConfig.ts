@@ -65,7 +65,10 @@ export const navGroups: NavGroup[] = [
   {
     id: 'overview',
     label: 'Overview',
-    items: [{ label: 'Dashboard', href: '/dashboard', roles: ALL }],
+    items: [
+      { label: 'Dashboard', href: '/dashboard', roles: ALL },
+      { label: 'Report builder', href: '/reports', roles: ALL },
+    ],
   },
   {
     id: 'channel-intelligence',

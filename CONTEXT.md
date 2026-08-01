@@ -17,6 +17,8 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-01 — **P3-3 report builder v1:** `/reports` metric→grain→visual→`/query/execute`; nav + browser WoC smoke PASS. Save/share still P3-4.
+- 2026-08-01 — **BACKLOG-097 resolved:** set-based derived stock; cold WoC ~3.2s parity 13.60w on cip (`01c6975`).
 - 2026-08-01 — **P3-2 query engine v1:** `/query/execute`+`/explain`; A3/A1/A2 handlers + cache; live WoC~13.6w / fill~0.465; BACKLOG-097 cold NFR. Stop before P3-3.
 - 2026-08-01 — **P3-1 complete (pre-P3-2):** full SEMANTICS catalog + tenant overlay merge; forecasts/inventory/channel-ops inventory tenant filters. Stop before P3-2.
 - 2026-08-01 — **P3-1 semantic layer scaffold:** YAML catalog + `validate_metric_grain` (WoC/SOH/claim_rate refusals); API `/semantics/*`. No P3-2 SQL. Tests 7/7.
