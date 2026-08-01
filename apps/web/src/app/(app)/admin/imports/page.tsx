@@ -1281,7 +1281,7 @@ function AdminImportsPageContent() {
       setDsiNestedMapDraft((prev) =>
         hydrateDsiNestedMapDraft({
           sheetKeys: dsiSheetKeys,
-          serverNested: dsiMappingState.field_mapping,
+        serverNested: dsiMappingState.field_mapping as Record<string, Record<string, string>>,
           sheetFieldMappings: dsiMappingState.sheet_field_mappings,
           prev,
           canonSet: dsiCanonSet,
@@ -1325,6 +1325,7 @@ function AdminImportsPageContent() {
       return res.json() as Promise<DsiMappingState>;
     },
     onSuccess: () => {
+      if (lastJobId == null) return;
       void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(lastJobId) });
       setDsiContinueGateKey(null);
     },
@@ -1370,6 +1371,7 @@ function AdminImportsPageContent() {
         setDsiValidateAsync(false);
       }
       const jid = lastJobIdRef.current;
+      if (jid == null) return;
       void qc.invalidateQueries({ queryKey: ['import-job', jid] });
       void qc.invalidateQueries({ queryKey: ['dsi-async-validate-import-job', jid] });
       void qc.invalidateQueries({ queryKey: ['import-job-rows', jid] });
@@ -1381,6 +1383,7 @@ function AdminImportsPageContent() {
     onError: () => {
       setDsiContinueGateKey(null);
       setDsiValidateAsync(false);
+      if (lastJobId == null) return;
       void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
       void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(lastJobId) });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
@@ -1529,6 +1532,7 @@ function AdminImportsPageContent() {
         setDsiApplyAsync(true);
       }
       void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
+      if (lastJobId == null) return;
       void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(lastJobId) });
       void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.candidatesQueryKey(lastJobId) });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
@@ -1536,6 +1540,7 @@ function AdminImportsPageContent() {
     },
     onError: () => {
       void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
+      if (lastJobId == null) return;
       void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(lastJobId) });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
     },
@@ -1566,6 +1571,7 @@ function AdminImportsPageContent() {
         setDsiApplyAsync(true);
       }
       void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
+      if (lastJobId == null) return;
       void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(lastJobId) });
       void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.candidatesQueryKey(lastJobId) });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
@@ -1573,6 +1579,7 @@ function AdminImportsPageContent() {
     },
     onError: () => {
       void qc.invalidateQueries({ queryKey: ['import-job-rows', lastJobId] });
+      if (lastJobId == null) return;
       void qc.invalidateQueries({ queryKey: DSI_STEWARD_CONFIG.dsiMappingStateQueryKey(lastJobId) });
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
     },
@@ -3128,7 +3135,7 @@ function AdminImportsPageContent() {
                 {pmStateLoadMessage}
               </Alert>
             ) : null}
-            {pmStateLoading && !pmJobState?.file_headers?.length && !pmStateIsError ? (
+            {pmStateLoading && pmJobState == null && !pmStateIsError ? (
               <Stack spacing={1}>
                 <LinearProgress />
                 <Typography variant="body2" color="text.secondary">
@@ -3698,7 +3705,7 @@ function AdminImportsPageContent() {
             ) : null}
             {(pmJobState?.staged_row_count ?? 0) > 0 ? (
               <Alert severity="info">
-                Staged metadata rows: <strong>{pmJobState.staged_row_count}</strong> row(s) with stage_raw values —
+                Staged metadata rows: <strong>{pmJobState?.staged_row_count ?? 0}</strong> row(s) with stage_raw values —
                 merged into <code>specs_json.import_staging</code> on commit (derived from the file, not stored on the job).
               </Alert>
             ) : null}

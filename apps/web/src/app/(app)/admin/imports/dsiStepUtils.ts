@@ -444,12 +444,22 @@ export function dsiSelectValue(raw: string | undefined, canonSet: Set<string>): 
 }
 
 /** Stable JSON for field_mapping so gate keys match across renders / ref snapshots. */
-export function stableFieldMappingJson(fieldMapping: Record<string, string> | undefined): string {
+export function stableFieldMappingJson(
+  fieldMapping: Record<string, string> | Record<string, Record<string, string>> | undefined
+): string {
   const m = fieldMapping ?? {};
-  const sorted: Record<string, string> = {};
+  const sorted: Record<string, string | Record<string, string>> = {};
   for (const k of Object.keys(m).sort()) {
     const v = m[k];
-    if (v) sorted[k] = v;
+    if (typeof v === 'string') {
+      if (v) sorted[k] = v;
+    } else if (v && typeof v === 'object') {
+      const nested: Record<string, string> = {};
+      for (const nestedKey of Object.keys(v).sort()) {
+        if (v[nestedKey]) nested[nestedKey] = v[nestedKey];
+      }
+      if (Object.keys(nested).length > 0) sorted[k] = nested;
+    }
   }
   return JSON.stringify(sorted);
 }
@@ -537,7 +547,7 @@ export function parseDistributorSiSummaryFromRows(
 export function dsiContinueToApplyAllowed(
   gateKey: string | null,
   jobId: number | null,
-  fieldMapping: Record<string, string> | undefined,
+  fieldMapping: Record<string, string> | Record<string, Record<string, string>> | undefined,
   summary: DistributorSiSummary | null,
   opts: { isValidating: boolean; hasServerGate: boolean }
 ): boolean {
@@ -552,7 +562,7 @@ export function dsiContinueToApplyAllowed(
 /** Gate key after a successful validate when blockers are cleared (null when apply must stay blocked). */
 export function computeDsiContinueGateKey(
   jobId: number | null,
-  fieldMapping: Record<string, string> | undefined,
+  fieldMapping: Record<string, string> | Record<string, Record<string, string>> | undefined,
   summary: DistributorSiSummary | null
 ): string | null {
   if (jobId == null || summary == null) return null;

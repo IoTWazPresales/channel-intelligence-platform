@@ -4,6 +4,8 @@ import { Alert, Box, Button, Paper, Stack, Tab, Tabs, TextField, Typography } fr
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import type { ColDef } from 'ag-grid-community';
+import NextLink from 'next/link';
+import Link from '@mui/material/Link';
 
 import { EmptyWorkspace } from '@/components/EmptyWorkspace';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
@@ -237,7 +239,10 @@ export default function PromotionsPage() {
       <Alert severity="info" sx={{ mb: 2 }}>
         Scaffold plans/readiness are parked (CPOR U6 / spec §7). Use{' '}
         <strong>Commercial Planning → CPOR Cases</strong> (
-        <a href="/commercial-planner/cpor-cases">/commercial-planner/cpor-cases</a>) for live promotion cases and
+        <Link component={NextLink} href="/commercial-planner/cpor-cases">
+          /commercial-planner/cpor-cases
+        </Link>
+        ) for live promotion cases and
         U4 XLSX export. Legacy export tab below remains for empty scaffold only.
       </Alert>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>

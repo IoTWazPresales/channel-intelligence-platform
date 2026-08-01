@@ -149,6 +149,7 @@ type PlanVsExecutedResponse = {
   }[];
   drill_rows: {
     case_id: number;
+    customer_id?: number | null;
     period_label: string;
     business_unit_label: string;
     customer_label: string;

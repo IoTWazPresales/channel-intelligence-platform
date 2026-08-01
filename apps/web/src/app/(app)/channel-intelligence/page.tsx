@@ -107,7 +107,7 @@ export default function ChannelIntelligencePage() {
       <PageHeader
         crumbs={[{ label: 'Channel Intelligence' }, { label: 'CST velocity' }]}
         title="Channel intelligence (CST)"
-        action={
+        actions={
           <Button size="small" variant="outlined" onClick={() => refetch()}>
             Refresh
           </Button>

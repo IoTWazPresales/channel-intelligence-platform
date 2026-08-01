@@ -199,7 +199,7 @@ export default function CporCaseDetailPage() {
   });
 
   const transition = useMutation({
-    mutationFn: (payload: { action: string; comment?: string }) =>
+    mutationFn: (payload: { action: string; comment?: string; confirm_over_budget_reapproval?: boolean }) =>
       apiPost(`/api/v1/cpor/cases/${caseId}/transition`, payload),
     onSuccess: async () => {
       setRejectOpen(false);

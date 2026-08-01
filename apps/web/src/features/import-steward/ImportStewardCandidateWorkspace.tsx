@@ -202,10 +202,7 @@ export function ImportStewardCandidateWorkspace<TRow extends ImportStewardCandid
                     return (
                     <TableRow
                       key={r.id}
-                      sx={[
-                        selection || onRowClick ? { cursor: 'pointer' } : undefined,
-                        ...(rowSx != null ? [rowSx] : []),
-                      ]}
+                      sx={rowSx ?? (selection || onRowClick ? { cursor: 'pointer' } : undefined)}
                       onClick={(e: MouseEvent<HTMLTableRowElement>) => {
                         const el = e.target as HTMLElement;
                         if (el.closest('input[type="checkbox"]') || el.closest('.MuiCheckbox-root')) return;

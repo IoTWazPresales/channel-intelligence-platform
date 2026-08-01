@@ -95,7 +95,7 @@ export function useDsiEntityTabCounts(importJobId: number, enabled: boolean) {
           no_match: tabCountsQuery.data.counts.product.no_match ?? 0,
           ambiguous_eligible: tabCountsQuery.data.counts.product.ambiguous_eligible ?? 0,
         }
-      : { no_match: null, ambiguous_eligible: null };
+      : { no_match: 0, ambiguous_eligible: 0 };
 
   return { counts, openByTab, isLoading, unresolvedGeoQuery: geoQuery, productMatchStatusCounts };
 }

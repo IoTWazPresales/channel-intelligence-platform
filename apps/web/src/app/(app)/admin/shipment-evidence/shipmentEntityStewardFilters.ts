@@ -46,7 +46,7 @@ function contextSpecialCategory(ctx: Record<string, unknown> | null): string | n
 function contextPossibleDuplicateOf(ctx: Record<string, unknown> | null): string[] {
   if (!ctx || !Array.isArray(ctx.possible_duplicate_of)) return [];
   return ctx.possible_duplicate_of
-    .filter((x): x is string => typeof x === 'string' && x.trim())
+    .filter((x): x is string => typeof x === 'string' && Boolean(x.trim()))
     .slice(0, 8);
 }
 

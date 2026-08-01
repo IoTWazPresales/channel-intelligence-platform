@@ -76,7 +76,7 @@ export function useDsiCandidatesPage(
     [importJobId, fetchSkip, fetchLimit, serverFilterSlice]
   );
 
-  const query = useQuery({
+  const query = useQuery<StewardMappingCandidatesPageResponse>({
     queryKey,
     enabled: queryEnabled,
     refetchOnWindowFocus: false,

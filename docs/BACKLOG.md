@@ -13,6 +13,38 @@
 **P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
+## BACKLOG-100 — Make `pnpm test:api` on cip_test a hard CI merge gate
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-01 |
+| **Effort** | Large (batch-fix known defect classes on disposable DB) |
+| **Source** | `docs/CI_API_DEFECT_LOG_2026-07-29.md`; CI run on PR #14 (~87 failed / 30 errors); workflow had a hard `exit 1` after record-only API step which blocked merge despite green e2e/build |
+| **Idea** | Fix API suite against ephemeral `cip_test` so CI can hard-fail on API regressions (restore real merge gate for backend). |
+| **Why it matters / deferrable** | Today API runs with `continue-on-error` + artifact log; e2e/web/build are the merge gate. Known classes: hard-coded `current_database()=="cip"`, `DimProduct(channel_id=...)`, missing `pod_date` mocks, missing `cip_bulk_smoke` DB. |
+| **What the work is** | Batch-fix defect classes in the 2026-07-29 log; drop continue-on-error; restore hard fail step; keep `ALLOW_TESTS_ON_DEV_DB` unset in CI. |
+| **Regression traps** | Do not point CI API tests at `cip`; do not set `ALLOW_TESTS_ON_DEV_DB=1` in Actions. |
+| **Behavior to retain** | Defect artifact upload until suite is green; alembic migrate assert tip `20260801_0008`. |
+| **Out of scope** | Live e2e API wiring (BACKLOG-099); required-check unlock (BACKLOG-087). |
+| **TRIGGER** | Warren prioritizes green API on GitHub CI **or** a backend regression ships that e2e/web cannot catch. |
+
+---
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-01 |
+| **Effort** | Medium (CI job wiring + seed/auth for live specs) |
+| **Source** | PR #13 CI — e2e red: Next proxy `ECONNREFUSED :8001`; wipe/products specs need live API (`CIP_E2E_API_URL` / `:8010`) |
+| **Idea** | Run FastAPI in GitHub Actions against already-migrated `cip_test`, point Next proxy + `CIP_E2E_API_URL` at it, enable `wipe-and-products-delete` (and future live specs). |
+| **Why it matters / deferrable** | Live wipe/delete e2e currently skipped in CI (`CIP_E2E_LIVE_API` gate). Mocked/static e2e still run. Deferrable while docker:e2e / local API cover the live path. |
+| **What the work is** | CI step: start uvicorn on :8001 with `cip_test` URLs + `CIP_AUTH_MODE=stub` (or session + login helper); seed minimal products (`SKU-ALPHA-01`); set `CIP_E2E_LIVE_API=1` / `CIP_E2E_API_URL`; unset `CIP_DISABLE_NEXT_API_PROXY` for webServer. |
+| **Regression traps** | Do not point CI e2e at `cip`; keep `ALLOW_TESTS_ON_DEV_DB` unset; do not weaken steward/wipe safety flags. |
+| **Behavior to retain** | Mocked e2e (dashboard / getting-started / navigation) stay API-free and green without this. |
+| **Out of scope** | Full browser soak of Import Centre; required-check unlock (BACKLOG-087). |
+| **TRIGGER** | Warren asks for green live e2e on GitHub CI **or** live wipe/products specs start failing locally without a clear docker:e2e path. |
+
+---
+
 ## BACKLOG-098 — P3-5 Celery beat + import-complete report schedules
 
 | Field | Detail |

@@ -37,7 +37,7 @@ export function ChannelOpsOverviewTab({
 }) {
   const { data: summary } = useChannelOpsSummary(distributorId);
   const [dismissed, setDismissed] = useState<Record<string, boolean>>(() => {
-    if (typeof window === 'undefined') return {};
+    if (typeof window === 'undefined') return { recon: false, velocity: false, forecast: false };
     return {
       recon: sessionStorage.getItem(bannerKey('recon')) === '1',
       velocity: sessionStorage.getItem(bannerKey('velocity')) === '1',

@@ -252,7 +252,7 @@ export default function CstStewardPage() {
             rowData={accounts ?? []}
             columnDefs={accountCols}
             height={520}
-            gridOptions={{ getRowId: (p) => String(p.data.customer_id), loading: loadingAccounts }}
+            gridOptions={{ getRowId: (p) => String(p.data!.customer_id), loading: loadingAccounts }}
           />
         </>
       ) : null}
@@ -278,7 +278,7 @@ export default function CstStewardPage() {
             rowData={worklist?.items ?? []}
             columnDefs={slotCols}
             height={520}
-            gridOptions={{ getRowId: (p) => String(p.data.id), loading: loadingSlots }}
+            gridOptions={{ getRowId: (p) => String(p.data!.id), loading: loadingSlots }}
           />
         </>
       ) : null}
@@ -288,7 +288,7 @@ export default function CstStewardPage() {
           rowData={aliases ?? []}
           columnDefs={aliasCols}
           height={560}
-          gridOptions={{ getRowId: (p) => String(p.data.id), loading: loadingAliases }}
+          gridOptions={{ getRowId: (p) => String(p.data!.id), loading: loadingAliases }}
         />
       ) : null}
 
