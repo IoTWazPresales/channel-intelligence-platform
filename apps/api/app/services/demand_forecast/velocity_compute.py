@@ -196,6 +196,7 @@ def sum_rollup(
     *,
     group_by: str,
     period_start: date | None = None,
+    tenant_id: str | None = None,
 ) -> list[dict]:
     """Sum ``forecast_units`` by axis. ``group_by`` ∈ product|distributor|customer|period."""
     from sqlalchemy import func
@@ -214,6 +215,8 @@ def sum_rollup(
         func.sum(FactDemandForecast.forecast_units).label("forecast_units"),
         func.count().label("row_count"),
     ).group_by(key_col)
+    tid = (tenant_id or "default").strip() or "default"
+    q = q.where(FactDemandForecast.tenant_id == tid)
     if period_start is not None:
         q = q.where(FactDemandForecast.period_start == period_start)
     rows = db.execute(q).all()

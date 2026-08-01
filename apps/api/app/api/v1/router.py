@@ -12,6 +12,7 @@ from app.api.v1.endpoints import (
     cpor_exports,
     cpor_historical_import,
     cst_steward,
+    dashboards,
     dev_wipe,
     catalog,
     competition,
@@ -28,6 +29,7 @@ from app.api.v1.endpoints import (
     listing_capture,
     mappings,
     market,
+    ops,
     plan_vs_executed,
     po_management,
     product_master_gaps,
@@ -35,11 +37,17 @@ from app.api.v1.endpoints import (
     products,
     promo_exports,
     promotions,
+    query,
     reference,
+    report_exports,
     roadmap,
+    saved_reports,
     sellout,
+    semantics,
     shipment_evidence,
     shipping,
+    sql_viewer,
+    steward_audit,
 )
 
 api_router = APIRouter()
@@ -51,6 +59,11 @@ api_router.include_router(products.router, prefix="/products", tags=["products"]
 api_router.include_router(customers.router, prefix="/customers", tags=["customers"])
 api_router.include_router(distributors.router, prefix="/distributors", tags=["distributors"])
 api_router.include_router(sellout.router, prefix="/sellout", tags=["sellout"])
+api_router.include_router(semantics.router, prefix="/semantics", tags=["semantics"])
+api_router.include_router(query.router, prefix="/query", tags=["query"])
+api_router.include_router(saved_reports.router, prefix="/saved-reports", tags=["saved-reports"])
+api_router.include_router(dashboards.router, prefix="/dashboards", tags=["dashboards"])
+api_router.include_router(report_exports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(channel_ops.router, prefix="/channel-ops", tags=["channel-ops"])
 api_router.include_router(
     channel_intelligence.router, prefix="/channel-intelligence", tags=["channel-intelligence"]
@@ -85,6 +98,9 @@ api_router.include_router(
     tags=["imports-product-master"],
 )
 api_router.include_router(mappings.router, prefix="/mappings", tags=["mappings"])
+api_router.include_router(steward_audit.router, prefix="/admin", tags=["admin"])
+api_router.include_router(sql_viewer.router, prefix="/admin", tags=["admin"])
+api_router.include_router(ops.router, prefix="/admin", tags=["admin"])
 api_router.include_router(product_master_gaps.router, prefix="/product-master-gaps", tags=["product-master-gaps"])
 api_router.include_router(exceptions.router, prefix="/exceptions", tags=["exceptions"])
 api_router.include_router(dev_wipe.router, prefix="/dev", tags=["dev"])

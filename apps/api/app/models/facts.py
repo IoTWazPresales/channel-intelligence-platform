@@ -16,6 +16,7 @@ class FactSalesSellout(Base, TimestampMixin):
     staging_line_id: Mapped[int | None] = mapped_column(
         ForeignKey("import_distributor_si_staging_line.id", ondelete="SET NULL"), nullable=True
     )
+    tenant_id: Mapped[str] = mapped_column(Text, nullable=False, default="default", server_default="default", index=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("dim_product.id"), nullable=False)
     customer_id: Mapped[int] = mapped_column(ForeignKey("dim_customer.id"), nullable=False)
     channel_id: Mapped[int | None] = mapped_column(ForeignKey("dim_channel.id"), nullable=True)
@@ -68,6 +69,7 @@ class FactInventoryCustomer(Base, TimestampMixin):
     __tablename__ = "fact_inventory_customer"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(Text, nullable=False, default="default", server_default="default", index=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("dim_product.id"), nullable=False)
     customer_id: Mapped[int] = mapped_column(ForeignKey("dim_customer.id"), nullable=False)
     as_of_date: Mapped[date] = mapped_column(Date, nullable=False)
@@ -81,6 +83,7 @@ class FactInventoryDistributor(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     source_key: Mapped[str] = mapped_column(String(256), nullable=False, unique=True)
+    tenant_id: Mapped[str] = mapped_column(Text, nullable=False, default="default", server_default="default", index=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("dim_product.id"), nullable=False)
     distributor_id: Mapped[int] = mapped_column(ForeignKey("dim_distributor.id"), nullable=False)
     as_of_date: Mapped[date] = mapped_column(Date, nullable=False)
@@ -128,6 +131,7 @@ class FactInboundShipment(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
+    tenant_id: Mapped[str] = mapped_column(Text, nullable=False, default="default", server_default="default", index=True)
     import_job_id: Mapped[int | None] = mapped_column(ForeignKey("import_job.id", ondelete="SET NULL"), nullable=True)
     source_key: Mapped[str] = mapped_column(String(256), nullable=False)
     fact_upsert_key: Mapped[str | None] = mapped_column(String(256), nullable=True)

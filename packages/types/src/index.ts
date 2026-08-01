@@ -9,14 +9,7 @@ export type ExceptionType =
   | 'competitor_undercut'
   | 'budget_gap';
 
-export type UserRole =
-  | 'admin'
-  | 'data_steward'
-  | 'commercial_manager'
-  | 'planner'
-  | 'product_manager'
-  | 'finance_reviewer'
-  | 'executive_viewer';
+export type UserRole = 'admin' | 'steward' | 'planner' | 'viewer';
 
 export interface NavItem {
   label: string;

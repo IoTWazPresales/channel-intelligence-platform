@@ -1,0 +1,7 @@
+# Example tenant overlay — copy/rename to {tenant_id}.yaml to enable.
+# Merges into default catalog by metric id (or key). Dimensions append by id.
+#
+# Example: add a tenant-specific metric without redeploying default.yaml.
+version: 1
+metrics: []
+dimensions: []

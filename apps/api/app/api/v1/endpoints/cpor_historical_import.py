@@ -15,9 +15,11 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.core.config import get_settings
 from app.core.dev_celery_logging import DEV_CELERY_LOGGER
+from app.core.security import get_current_user
 from app.db.session_sync import SessionLocal
 from app.models.cpor_historical import CporHistoricalMappingProfile, ImportCporHistoricalStagingLine
 from app.models.ingestion import ImportJob
+from app.services.steward_audit import record_steward_audit_sync
 from app.services.cpor.historical_import.apply_sync import run_cpor_historical_apply_sync
 from app.services.cpor.historical_import.pipeline import ensure_default_mapping_profile
 from app.services.cpor.historical_import.resolution_plan import build_cpor_historical_resolution_plan_sync
@@ -341,6 +343,7 @@ def historical_map_token(
     job_id: int,
     body: MapTokenBody,
     x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     _require_admin(x_user_role)
     with SessionLocal() as db:
@@ -349,7 +352,18 @@ def historical_map_token(
             db, job_id=job_id, entity=body.entity, token=body.token, dim_id=body.dim_id
         )
         db.commit()
-        return {"updated": updated, "entity": body.entity, "token": body.token, "dim_id": body.dim_id}
+    record_steward_audit_sync(
+        user,
+        action="map",
+        importer="cpor",
+        entity_type=body.entity,
+        entity_token=body.token,
+        import_job_id=job_id,
+        target_dim=body.entity,
+        target_id=body.dim_id,
+        payload={"updated": updated},
+    )
+    return {"updated": updated, "entity": body.entity, "token": body.token, "dim_id": body.dim_id}
 
 
 @router.post("/historical-import/jobs/{job_id}/bulk-map-token")
@@ -357,6 +371,7 @@ def historical_bulk_map_token(
     job_id: int,
     body: BulkMapTokenBody,
     x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     _require_admin(x_user_role)
     tokens = [t.strip() for t in body.tokens if (t or "").strip()]
@@ -368,12 +383,22 @@ def historical_bulk_map_token(
             db, job_id=job_id, entity=body.entity, tokens=tokens, dim_id=body.dim_id
         )
         db.commit()
-        return {
-            "updated": updated,
-            "entity": body.entity,
-            "token_count": len(tokens),
-            "dim_id": body.dim_id,
-        }
+    record_steward_audit_sync(
+        user,
+        action="bulk_map",
+        importer="cpor",
+        entity_type=body.entity,
+        import_job_id=job_id,
+        target_dim=body.entity,
+        target_id=body.dim_id,
+        payload={"updated": updated, "token_count": len(tokens)},
+    )
+    return {
+        "updated": updated,
+        "entity": body.entity,
+        "token_count": len(tokens),
+        "dim_id": body.dim_id,
+    }
 
 
 @router.post("/historical-import/jobs/{job_id}/validate")

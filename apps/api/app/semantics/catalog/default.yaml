@@ -1,0 +1,409 @@
+# P3-1 semantic catalog — config, not code.
+# Source of truth: docs/COMMERCIAL_SEMANTICS.md
+# Metrics not listed here are not queryable via the governed layer.
+# Tenant overlays: catalog/tenants/{tenant_id}.yaml (merge metrics by id/key).
+
+version: 1
+source_doc: docs/COMMERCIAL_SEMANTICS.md
+
+dimensions:
+  - id: period
+    label: Period
+    description: Plan or calendar period (quarter / week / date window)
+  - id: customer
+    label: Customer / account
+    description: dim_customer identity
+  - id: distributor
+    label: Distributor
+    description: dim_distributor identity
+  - id: product
+    label: Product
+    description: dim_product identity
+  - id: bu
+    label: Business unit / product line
+    description: dim_product.product_line (NB/NR/NV/NX etc.)
+  - id: sales_model
+    label: Sales model
+    description: Product sales model name
+  - id: channel
+    label: Channel
+    description: Go-to-market channel
+  - id: region
+    label: Region
+    description: Geographic region
+  - id: site_label
+    label: Site label
+    description: CST site / location label (customer sell-through grain)
+  - id: promo_type
+    label: Promo type
+    description: CPOR promotion type / case classification
+
+metrics:
+  # --- Plan vs Executed (A1) ---
+  - id: A1-01
+    key: fill_rate
+    label: Fill rate
+    status: implemented
+    owner_surface: plan-vs-executed
+    formula: "Σ min(shipped, planned) / Σ planned on in-plan rows; shipped = line_state=shipped only"
+    source_facts: [lineup_plan_qty, linked_po_shipped_qty]
+    allowed_grains:
+      - [period]
+      - [period, bu]
+    refuse_examples:
+      - grains: [lineup_quarter]
+        reason: "Fill rate is not defined at lineup-quarter alone without plan period context; use period (± BU)."
+      - grains: [distributor, product]
+        reason: "Fill rate is plan-vs-executed (period × optional BU), not channel stock grain."
+
+  - id: A1-01b
+    key: line_hit_rate
+    label: Line-hit rate
+    status: implemented
+    owner_surface: plan-vs-executed
+    formula: "Share of in-plan lines with shipped ≥ planned"
+    source_facts: [lineup_plan_qty, linked_po_shipped_qty]
+    allowed_grains:
+      - [period]
+      - [period, bu]
+
+  - id: A1-02
+    key: over_plan_intake_rate
+    label: Over-plan intake rate
+    status: implemented
+    owner_surface: plan-vs-executed
+    formula: "Σ max(shipped − planned, 0) on in-plan rows — overship vs plan, not POD"
+    source_facts: [lineup_plan_qty, linked_po_shipped_qty]
+    allowed_grains:
+      - [period]
+      - [period, bu]
+
+  - id: A1-03
+    key: short_exposure
+    label: Short exposure
+    status: implemented
+    owner_surface: plan-vs-executed
+    formula: "Σ max(planned − shipped, 0) on in-plan rows"
+    source_facts: [lineup_plan_qty, linked_po_shipped_qty]
+    allowed_grains:
+      - [period]
+      - [period, bu]
+
+  - id: A1-04
+    key: unplanned_intake
+    label: Unplanned intake
+    status: implemented
+    owner_surface: plan-vs-executed
+    formula: "Σ shipped on rows with planned = 0 and shipped > 0"
+    source_facts: [lineup_plan_qty, linked_po_shipped_qty]
+    allowed_grains:
+      - [period]
+      - [period, bu]
+
+  - id: A1-05
+    key: no_po_blind_spot
+    label: No-PO blind spot
+    status: implemented
+    owner_surface: plan-vs-executed
+    formula: "In-plan lines with awaiting_po; count + Σ planned units"
+    source_facts: [lineup_without_linked_po]
+    allowed_grains:
+      - [period]
+      - [period, bu]
+
+  - id: A1-06
+    key: pipeline_inbound
+    label: Pipeline (inbound)
+    status: implemented
+    owner_surface: plan-vs-executed
+    formula: "Σ pipeline_units (open_order) on in-plan rows; pending split = inbound vs cold"
+    source_facts: [open_order_evidence_on_linked_pos]
+    allowed_grains:
+      - [period]
+      - [period, bu]
+    refuse_examples:
+      - grains: [distributor, product]
+        reason: "Pipeline here is plan-linked open_order on PvE — not Channel Ops derived stock."
+
+  - id: A1-07
+    key: volume_bias
+    label: Volume bias (BU / PM)
+    status: implemented
+    owner_surface: plan-vs-executed
+    formula: "Mean signed (shipped − planned) / planned by BU (product_line); PM mirrors BU when pm_attribution_mode=business_line"
+    source_facts: [lineup_plan_qty, linked_po_shipped_qty]
+    allowed_grains:
+      - [bu]
+      - [period, bu]
+
+  - id: A1-08
+    key: slip
+    label: Slip
+    status: implemented
+    owner_surface: plan-vs-executed
+    formula: "Lineup quarter vs actual ship quarter on linked POs; signed quarter delta (ship_confirm then schedule_ship — not POD)"
+    source_facts: [shipped_evidence_ship_date, lineup_period]
+    allowed_grains:
+      - [period]
+      - [period, bu]
+      - [period, product]
+      - [period, bu, product]
+
+  - id: A1-09
+    key: support_bias
+    label: Support bias
+    status: spec_only
+    owner_surface: cpor-cases
+    formula: "Planned reservation vs actual CPOR spend (reservation_source=derived_from_profit)"
+    source_facts: [derived_lineup_reservation, cpor_spend]
+    allowed_grains:
+      - [customer]
+      - [period, customer]
+      - [bu]
+      - [period, bu]
+    notes: "SPEC ONLY — planned-side unblocked; metric surface still to build on CPOR Cases."
+
+  # --- Shipping (SH) ---
+  - id: SH-01
+    key: lifecycle_buckets
+    label: Lifecycle buckets (shipped / pipeline / landed)
+    status: implemented
+    owner_surface: shipping
+    formula: "Chips + filters on line_state / pod_date"
+    source_facts: [fact_inbound_shipment]
+    allowed_grains:
+      - [period]
+      - [distributor]
+      - [period, distributor]
+      - [distributor, product]
+      - [period, distributor, product]
+
+  - id: SH-02
+    key: commercial_cohorts
+    label: Commercial cohorts (arriving / overdue / landed week)
+    status: implemented
+    owner_surface: shipping
+    formula: "shipping_commercial_kpis predicates on fact pod_date / effective arrival"
+    source_facts: [fact_inbound_shipment]
+    allowed_grains:
+      - [period]
+      - [distributor]
+      - [period, distributor]
+      - [distributor, product]
+
+  - id: SH-03
+    key: pod_completeness
+    label: POD completeness / awaiting ageing
+    status: partial
+    owner_surface: shipping
+    formula: "awaiting_pod_days; truthful completeness blocked by BACKLOG-088"
+    source_facts: [fact_inbound_shipment]
+    allowed_grains:
+      - [period]
+      - [distributor]
+      - [period, distributor]
+
+  # --- CPOR (A2) ---
+  - id: A2-01
+    key: support_spend
+    label: Support spend by customer / BU / promo type
+    status: implemented
+    owner_surface: cpor-cases
+    formula: "Σ ttl_support_usd (compute) + Σ ttl_support ZAR (display); voided excluded"
+    source_facts: [cpor_case_line]
+    allowed_grains:
+      - [customer]
+      - [bu]
+      - [promo_type]
+      - [customer, bu]
+      - [period, customer]
+      - [period, bu]
+      - [customer, promo_type]
+      - [bu, promo_type]
+      - [period, customer, bu]
+
+  - id: A2-02
+    key: delivery_rate
+    label: Delivery rate
+    status: implemented
+    owner_surface: cpor-cases
+    formula: "Σ result_qty / Σ estimate_qty (voided / zero-estimate excluded)"
+    source_facts: [cpor_case_line]
+    allowed_grains:
+      - [customer]
+      - [bu]
+      - [customer, bu]
+      - [period, customer]
+      - [period, bu]
+
+  - id: A2-03
+    key: claim_rate
+    label: Claim rate
+    status: do_not_build
+    owner_surface: none
+    formula: "Non-computable — owed ≠ computed support; see COMMERCIAL_SEMANTICS non-computable register"
+    source_facts: []
+    allowed_grains: []
+    refuse_all: true
+    refuse_reason: "Claim rate is non-computable until settlement captures an owed amount distinct from support_unit × result_qty (D-027 / A2-03 register)."
+
+  - id: A2-04
+    key: support_norms
+    label: Support norms
+    status: implemented
+    owner_surface: cpor-cases
+    formula: "Trailing 4Q absolute support USD+ZAR; % = mean(support_unit / srp)"
+    source_facts: [cpor_case_line]
+    allowed_grains:
+      - [customer]
+      - [bu]
+      - [promo_type]
+      - [customer, bu]
+      - [bu, promo_type]
+
+  - id: A2-05
+    key: comparable_cases
+    label: Comparable-case lookup
+    status: implemented
+    owner_surface: cpor-cases
+    formula: "Ranked (never filtered): customer → BU → promo type → quarter proximity → volume"
+    source_facts: [cpor_case]
+    allowed_grains:
+      - [customer]
+      - [bu]
+      - [promo_type]
+      - [customer, bu]
+      - [customer, bu, promo_type]
+      - [period, customer, bu]
+
+  - id: A2-06
+    key: support_cost_per_unit_sold
+    label: Support cost per unit sold under promo
+    status: implemented
+    owner_surface: cpor-cases
+    formula: "Σ ttl_support_usd / Σ result_qty (result > 0); ZAR companion = Σ ttl_support / Σ result_qty"
+    source_facts: [cpor_case_line]
+    allowed_grains:
+      - [customer]
+      - [bu]
+      - [customer, bu]
+      - [period, customer]
+      - [period, bu]
+
+  - id: A2-X
+    key: cost_per_incremental_unit
+    label: Cost per incremental unit
+    status: do_not_build
+    owner_surface: none
+    formula: "No counterfactual/baseline → would fabricate"
+    source_facts: []
+    allowed_grains: []
+    refuse_all: true
+    refuse_reason: "DO NOT BUILD — no validated baseline/counterfactual model (BACKLOG trigger)."
+
+  # --- Channel Ops (A3) ---
+  - id: A3-01
+    key: channel_stock
+    label: Derived channel stock
+    status: implemented
+    owner_surface: channel-ops
+    formula: "latest reported SOH − sell-out since snapshot + POD-landed shipped since; never sum snapshots; pipeline never counts"
+    source_facts: [fact_inventory_distributor, fact_sales_sellout, fact_inbound_shipment]
+    allowed_grains:
+      - [distributor, product]
+    refuse_examples:
+      - grains: [period]
+        reason: "Channel stock is latest-per-(distributor, product) — not a period sum. SOH by lineup quarter is refused."
+      - grains: [lineup_quarter]
+        reason: "SOH by lineup quarter is refused — derived channel stock grain is distributor × product only."
+      - grains: [customer, product]
+        reason: "Channel Ops stock grain is distributor × product, not customer × product (CST is a separate surface)."
+
+  - id: A3-02
+    key: weeks_of_cover
+    label: Weeks of cover
+    status: implemented
+    owner_surface: channel-ops
+    formula: "derived_stock / velocity at distributor × product; velocity = sell-out units over 364d ÷ 52; near-zero velocity → undefined"
+    source_facts: [fact_inventory_distributor, fact_sales_sellout]
+    allowed_grains:
+      - [distributor, product]
+    refuse_examples:
+      - grains: [period, bu]
+        reason: "Weeks of cover is only meaningful at distributor × product (A3 grain lock)."
+      - grains: [customer, product, site_label]
+        reason: "CST customer×product×site velocity is a separate surface — do not conflate with Channel Ops WoC."
+
+  - id: A3-03
+    key: replenishment_flag
+    label: Replenishment flag (v1)
+    status: implemented
+    owner_surface: channel-ops
+    formula: "0 < weeks_of_cover < REPLENISHMENT_WOC_THRESHOLD_WEEKS (default 4)"
+    source_facts: [derived_channel_stock, velocity]
+    allowed_grains:
+      - [distributor, product]
+
+  # --- Demand forecast (B1) ---
+  - id: B1-01
+    key: forecast_units
+    label: Forecast units
+    status: implemented
+    owner_surface: forecasts
+    formula: "Stored at atomic grain; rollup = Σ across any axis"
+    source_facts: [fact_demand_forecast]
+    allowed_grains:
+      - [distributor, product, customer, period]
+      - [distributor, product, period]
+      - [distributor, product]
+      - [product, period]
+      - [period]
+    notes: "Atomic = distributor × product × customer × period. Subsets listed are explicit SUM rollups."
+
+  - id: B1-02
+    key: forecast_confidence
+    label: Forecast confidence level
+    status: implemented
+    owner_surface: forecasts
+    formula: "Ordinal {low, medium, high, override}"
+    source_facts: [fact_demand_forecast]
+    allowed_grains:
+      - [distributor, product, customer, period]
+      - [distributor, product, period]
+      - [product, period]
+
+  - id: B1-03
+    key: forecast_band
+    label: Forecast band
+    status: implemented
+    owner_surface: forecasts
+    formula: "lower_band / upper_band (velocity variance or analogue widened; override = point)"
+    source_facts: [fact_demand_forecast]
+    allowed_grains:
+      - [distributor, product, customer, period]
+      - [distributor, product, period]
+      - [product, period]
+
+  - id: B1-04
+    key: forecast_method
+    label: Forecast method
+    status: implemented
+    owner_surface: forecasts
+    formula: "Taxonomy {velocity, analogue, manual}; precedence override/manual > analogue > velocity"
+    source_facts: [fact_demand_forecast]
+    allowed_grains:
+      - [distributor, product, customer, period]
+      - [distributor, product, period]
+      - [product, period]
+
+  - id: B1-05
+    key: analogue_provenance
+    label: Analogue provenance
+    status: implemented
+    owner_surface: forecasts
+    formula: "Required when method=analogue: analogue_product_id + analogue_basis JSON"
+    source_facts: [fact_demand_forecast]
+    allowed_grains:
+      - [distributor, product, customer, period]
+      - [product, period]
+      - [product]

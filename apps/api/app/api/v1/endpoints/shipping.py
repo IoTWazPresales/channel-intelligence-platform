@@ -13,6 +13,8 @@ from sqlalchemy.inspection import inspect as sa_inspect
 from sqlalchemy.orm import InstrumentedAttribute
 
 from app.api.deps import get_db
+from app.core.security import get_optional_current_user
+from app.core.tenant_scope import DEFAULT_TENANT_ID, tenant_id_from_user, where_tenant
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.facts import FactInboundShipment
 from app.models.shipment_evidence_observation import ShipmentEvidenceObservation
@@ -171,6 +173,9 @@ def _apply_fact_where_clause(
     operating_unit = kwargs.get("operating_unit")
     product_family = kwargs.get("product_family")
     product_model = kwargs.get("product_model")
+    tenant_id = (kwargs.get("tenant_id") or DEFAULT_TENANT_ID).strip() or DEFAULT_TENANT_ID
+
+    stmt = stmt.where(FactInboundShipment.tenant_id == tenant_id)
 
     if import_job_id is not None:
         stmt = stmt.where(FactInboundShipment.import_job_id == import_job_id)
@@ -321,6 +326,7 @@ def _build_shipping_fact_filters(
     product_family: str | None = None,
     product_model: str | None = None,
     cohort: str | None = None,
+    tenant_id: str | None = None,
 ) -> dict[str, Any]:
     """Shared filter kwargs for ``/lines`` and ``/commercial-summary`` (must stay aligned)."""
     df = str(date_field or "eta_date").strip()
@@ -349,6 +355,7 @@ def _build_shipping_fact_filters(
         "product_family": product_family,
         "product_model": product_model,
         "cohort": normalize_cohort(cohort),
+        "tenant_id": (tenant_id or DEFAULT_TENANT_ID).strip() or DEFAULT_TENANT_ID,
     }
 
 
@@ -857,15 +864,18 @@ async def _eta_shift_metrics(
 async def shipping_filter_options(
     db: AsyncSession = Depends(get_db),
     limit: int = Query(8000, ge=1, le=20000),
+    user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
     """Canonical distributors and customers for inbound filter dropdowns (no search required)."""
     dr = await db.execute(
         select(DimDistributor.id, DimDistributor.code, DimDistributor.name)
+        .where(where_tenant(DimDistributor.tenant_id, user))
         .order_by(DimDistributor.name.asc(), DimDistributor.code.asc())
         .limit(limit)
     )
     cr = await db.execute(
         select(DimCustomer.id, DimCustomer.code, DimCustomer.name)
+        .where(where_tenant(DimCustomer.tenant_id, user))
         .order_by(DimCustomer.name.asc(), DimCustomer.code.asc())
         .limit(limit)
     )
@@ -907,6 +917,7 @@ async def shipping_commercial_summary(
     lifecycle_bucket: str | None = None,
     slip_direction: str | None = None,
     cohort: str | None = None,
+    user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
     """KPI payloads for inbound commercial dashboard cards (same filter contract as ``/lines``).
 
@@ -935,6 +946,7 @@ async def shipping_commercial_summary(
         product_family=product_family,
         product_model=product_model,
         cohort=cohort,
+        tenant_id=tenant_id_from_user(user),
     )
     _attach_lineup_filter_keys(
         filt,
@@ -1160,6 +1172,7 @@ async def shipping_eta_shifts(
     lifecycle_bucket: str | None = None,
     slip_direction: str | None = None,
     cohort: str | None = None,
+    user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
     """ETA / promise slip vs prior observation — scoped to current-incoming ∩ filters."""
     filt = _build_shipping_fact_filters(
@@ -1185,6 +1198,7 @@ async def shipping_eta_shifts(
         product_family=product_family,
         product_model=product_model,
         cohort=cohort,
+        tenant_id=tenant_id_from_user(user),
     )
     _attach_lineup_filter_keys(
         filt,
@@ -1265,15 +1279,21 @@ async def shipping_lineup_quarter_summary(
 
 
 @router.get("/summary")
-async def shipping_evidence_summary(db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+async def shipping_evidence_summary(
+    db: AsyncSession = Depends(get_db),
+    user: dict | None = Depends(get_optional_current_user),
+) -> dict[str, Any]:
     """Structured counts for dashboard tiles (``fact_inbound_shipment``)."""
+    tenant_f = where_tenant(FactInboundShipment.tenant_id, user)
     by_state = await db.execute(
         select(FactInboundShipment.line_state, func.count())
+        .where(tenant_f)
         .group_by(FactInboundShipment.line_state)
         .order_by(FactInboundShipment.line_state)
     )
     by_cargo = await db.execute(
         select(FactInboundShipment.status, func.count())
+        .where(tenant_f)
         .group_by(FactInboundShipment.status)
         .order_by(FactInboundShipment.status)
     )
@@ -1290,10 +1310,11 @@ async def shipping_evidence_summary(db: AsyncSession = Depends(get_db)) -> dict[
         select(dist_bucket, func.count())
         .select_from(FactInboundShipment)
         .outerjoin(DimDistributor, FactInboundShipment.distributor_id == DimDistributor.id)
+        .where(tenant_f)
         .group_by(dist_bucket)
         .order_by(dist_bucket)
     )
-    total = await db.scalar(select(func.count()).select_from(FactInboundShipment)) or 0
+    total = await db.scalar(select(func.count()).select_from(FactInboundShipment).where(tenant_f)) or 0
 
     def rows_to_items(res: Any) -> list[dict[str, Any]]:
         return [{"key": str(r[0]), "count": int(r[1])} for r in res.all() if r[0] is not None]
@@ -1340,6 +1361,7 @@ async def shipping_evidence_lines(
     lifecycle_bucket: str | None = None,
     slip_direction: str | None = None,
     cohort: str | None = None,
+    user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
     df = str(date_field or "eta_date").strip()
     if df not in DATE_FIELD_MAP and df != EFFECTIVE_ARRIVAL_DATE_FIELD:
@@ -1368,6 +1390,7 @@ async def shipping_evidence_lines(
         product_family=product_family,
         product_model=product_model,
         cohort=cohort,
+        tenant_id=tenant_id_from_user(user),
     )
     _attach_lineup_filter_keys(
         filt,

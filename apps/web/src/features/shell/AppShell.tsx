@@ -8,6 +8,7 @@ import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import HelpOutlineOutlinedIcon from '@mui/icons-material/HelpOutlineOutlined';
 import HubOutlinedIcon from '@mui/icons-material/HubOutlined';
+import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import StorageOutlinedIcon from '@mui/icons-material/StorageOutlined';
@@ -36,7 +37,7 @@ import {
 import { alpha, useTheme } from '@mui/material/styles';
 import type { SvgIconComponent } from '@mui/icons-material';
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { GlobalBackgroundTasksIndicator } from '@/features/background-tasks/GlobalBackgroundTasksIndicator';
@@ -49,6 +50,9 @@ import {
   navHrefMatches,
   type NavGroup,
 } from '@/features/shell/navConfig';
+import { useCurrentUser, useInvalidateCurrentUser } from '@/features/shell/useCurrentUser';
+import { apiPost } from '@/lib/api';
+import { clearAuthToken } from '@/lib/authSession';
 import { useUiStore } from '@/stores/uiStore';
 
 const DRAWER_WIDTH_EXPANDED = 280;
@@ -84,8 +88,21 @@ function readGroupExpanded(): Record<string, boolean> {
   }
 }
 
+function roleLabel(role: string | undefined | null): string {
+  if (!role) return 'guest';
+  return role.replace(/_/g, ' ');
+}
+
+function initialsFrom(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0] ?? ''}${parts[1][0] ?? ''}`.toUpperCase();
+}
+
 export function AppShell({ title, children }: { title: string; children: ReactNode }) {
   const theme = useTheme();
+  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const search = searchParams.toString() ? `?${searchParams.toString()}` : '';
@@ -96,6 +113,39 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
   const [collapsedMenuAnchor, setCollapsedMenuAnchor] = useState<HTMLElement | null>(null);
   const [collapsedMenuGroup, setCollapsedMenuGroup] = useState<NavGroup | null>(null);
   const { density, setDensity, drawerOpen, drawerTitle, drawerContent, closeDrawer } = useUiStore((s) => s);
+  const { data: me, isError: meError } = useCurrentUser();
+  const invalidateMe = useInvalidateCurrentUser();
+  const [logoutBusy, setLogoutBusy] = useState(false);
+
+  const displayName =
+    (me?.display_name && me.display_name.trim()) ||
+    (me?.email && me.email.trim()) ||
+    (meError ? 'Signed out' : '…');
+  const subtitle = me
+    ? `${roleLabel(String(me.role))} · ${me.email ?? me.id}`
+    : meError
+      ? 'Sign in required'
+      : 'Loading…';
+  const avatarLetters = initialsFrom(displayName === '…' || displayName === 'Signed out' ? 'CIP' : displayName);
+
+  const handleLogout = useCallback(async () => {
+    if (logoutBusy) return;
+    setLogoutBusy(true);
+    try {
+      try {
+        await apiPost('/api/v1/auth/logout');
+      } catch {
+        /* revoke best-effort */
+      }
+      clearAuthToken();
+      await invalidateMe();
+      router.replace('/login');
+    } finally {
+      setLogoutBusy(false);
+    }
+  }, [invalidateMe, logoutBusy, router]);
+
+  const navGroupsForRole = useMemo(() => shellNavGroups(me?.role ? String(me.role) : null), [me?.role]);
 
   useEffect(() => {
     setNavCollapsed(readCollapsed());
@@ -230,7 +280,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
       <Divider sx={{ borderColor: sidebarBorder }} />
 
       <Box sx={{ flex: 1, overflow: 'auto', py: 1 }}>
-        {shellNavGroups().map((group) => {
+        {navGroupsForRole.map((group) => {
           const GroupIcon = GROUP_ICONS[group.id] ?? DashboardOutlinedIcon;
           const expanded = groupExpanded[group.id] !== false;
 
@@ -311,22 +361,57 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
       <Box sx={{ p: navCollapsed ? 1 : 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
         {!navCollapsed ? (
           <>
-            <Avatar sx={{ width: 36, height: 36, bgcolor: alpha(theme.palette.primary.main, 0.35), fontSize: 14 }}>
-              WE
+            <Avatar
+              sx={{ width: 36, height: 36, bgcolor: alpha(theme.palette.primary.main, 0.35), fontSize: 14 }}
+              data-testid="shell-user-avatar"
+            >
+              {avatarLetters}
             </Avatar>
             <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Typography variant="body2" fontWeight={600} noWrap>
-                Warren Eliason
+              <Typography variant="body2" fontWeight={600} noWrap data-testid="shell-user-name">
+                {displayName}
               </Typography>
-              <Typography variant="caption" sx={{ color: alpha(theme.palette.common.white, 0.5) }} noWrap>
-                Admin · demo-user
+              <Typography
+                variant="caption"
+                sx={{ color: alpha(theme.palette.common.white, 0.5) }}
+                noWrap
+                data-testid="shell-user-meta"
+              >
+                {subtitle}
               </Typography>
             </Box>
+            {meError ? (
+              <Tooltip title="Sign in">
+                <IconButton
+                  size="small"
+                  component={Link}
+                  href="/login"
+                  sx={{ color: alpha(theme.palette.common.white, 0.7) }}
+                  aria-label="Sign in"
+                  data-testid="shell-sign-in"
+                >
+                  <LogoutOutlinedIcon fontSize="small" sx={{ transform: 'rotate(180deg)' }} />
+                </IconButton>
+              </Tooltip>
+            ) : (
+              <Tooltip title="Sign out">
+                <IconButton
+                  size="small"
+                  onClick={() => void handleLogout()}
+                  disabled={logoutBusy}
+                  sx={{ color: alpha(theme.palette.common.white, 0.7) }}
+                  aria-label="Sign out"
+                  data-testid="shell-sign-out"
+                >
+                  <LogoutOutlinedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
           </>
         ) : (
-          <Tooltip title="Warren Eliason" placement="right">
+          <Tooltip title={displayName} placement="right">
             <Avatar sx={{ width: 36, height: 36, mx: 'auto', bgcolor: alpha(theme.palette.primary.main, 0.35) }}>
-              WE
+              {avatarLetters}
             </Avatar>
           </Tooltip>
         )}

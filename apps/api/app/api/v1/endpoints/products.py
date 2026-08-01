@@ -6,6 +6,8 @@ from sqlalchemy import Date, and_, asc, desc, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db
+from app.core.security import get_optional_current_user
+from app.core.tenant_scope import tenant_id_from_user, where_tenant
 from app.models.dimensions import DimProduct
 from app.models.ingestion import ImportJob
 from app.models.product_catalog import CatalogProduct
@@ -96,6 +98,7 @@ async def list_products(
     retired_date_to: date | None = Query(default=None),
     sort_by: str = Query(default="sku"),
     sort_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
+    user: dict | None = Depends(get_optional_current_user),
 ):
     allowed_sort = {
         "sku": DimProduct.sku,
@@ -118,6 +121,7 @@ async def list_products(
         .select_from(DimProduct)
         .join(CatalogProduct, CatalogProduct.canonical_product_id == DimProduct.id, isouter=True)
         .join(ImportJob, ImportJob.id == CatalogProduct.last_import_job_id, isouter=True)
+        .where(where_tenant(DimProduct.tenant_id, user))
         .group_by(DimProduct.id)
         .subquery()
     )
@@ -126,7 +130,7 @@ async def list_products(
         last_import_subq, last_import_subq.c.product_id == DimProduct.id, isouter=True
     )
     count_stmt = select(func.count()).select_from(DimProduct)
-    filters = []
+    filters = [where_tenant(DimProduct.tenant_id, user)]
 
     if q and q.strip():
         needle = f"%{q.strip()}%"
@@ -347,23 +351,30 @@ async def patch_product(product_id: int, body: ProductPatch, db: AsyncSession = 
 
 
 @router.post("/bulk", status_code=200)
-async def bulk_upsert_products(body: ProductBulkBody, db: AsyncSession = Depends(get_db)):
+async def bulk_upsert_products(
+    body: ProductBulkBody,
+    db: AsyncSession = Depends(get_db),
+    user: dict | None = Depends(get_optional_current_user),
+):
     if len(body.rows) > 5000:
         raise HTTPException(status_code=400, detail="Too many rows (max 5000)")
+    tid = tenant_id_from_user(user)
     created = 0
     updated = 0
     for r in body.rows:
         sku = r.sku.strip()
         name = r.name.strip()
         cat = r.category.strip() if r.category else None
-        existing = await db.execute(select(DimProduct).where(DimProduct.sku == sku))
+        existing = await db.execute(
+            select(DimProduct).where(DimProduct.sku == sku, where_tenant(DimProduct.tenant_id, user))
+        )
         row = existing.scalar_one_or_none()
         if row:
             row.name = name
             row.category = cat
             updated += 1
         else:
-            db.add(DimProduct(sku=sku, name=name, category=cat))
+            db.add(DimProduct(sku=sku, name=name, category=cat, tenant_id=tid))
             created += 1
     await db.commit()
     return {"created": created, "updated": updated, "total": len(body.rows)}

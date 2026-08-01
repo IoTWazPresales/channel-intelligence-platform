@@ -103,7 +103,7 @@ function AdminMappingsPageContent() {
     mutationFn: async ({ id, entityId }: { id: number; entityId: number }) => {
       const res = await fetch(apiUrl(`/api/v1/mappings/queue/${id}/approve?entity_id=${entityId}`), {
         method: 'POST',
-        headers: { 'X-User-Role': 'data_steward' },
+        headers: { 'X-User-Role': 'steward' },
       });
       return res.json();
     },

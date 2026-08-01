@@ -1,3 +1,5 @@
+import { getAuthToken } from '@/lib/authSession';
+
 /**
  * API origin for browser `fetch`.
  *
@@ -84,12 +86,23 @@ export function safeDisplayError(e: unknown): string {
   return 'Something went wrong.';
 }
 
-const defaultHeaders = (init?: RequestInit, includeJsonContentType = true): HeadersInit => ({
-  ...(includeJsonContentType ? { 'Content-Type': 'application/json' } : {}),
-  'X-User-Role': 'admin',
-  'X-User-Id': 'demo-user',
-  ...init?.headers,
-});
+const defaultHeaders = (init?: RequestInit, includeJsonContentType = true): HeadersInit => {
+  const token = getAuthToken();
+  const headers: Record<string, string> = {
+    ...(includeJsonContentType ? { 'Content-Type': 'application/json' } : {}),
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  } else {
+    // Stub-mode fallback while CIP_AUTH_MODE=stub; session mode rejects these without Bearer.
+    headers['X-User-Role'] = 'admin';
+    headers['X-User-Id'] = 'demo-user';
+  }
+  return {
+    ...headers,
+    ...init?.headers,
+  };
+};
 
 /**
  * Browser `fetch` for JSON GET. Pass `{ signal }` from TanStack Query `queryFn` so superseded
@@ -127,11 +140,7 @@ export async function apiPostFormData<T>(path: string, formData: FormData, init?
   const res = await fetch(apiUrl(path), {
     method: 'POST',
     ...init,
-    headers: {
-      'X-User-Role': 'admin',
-      'X-User-Id': 'demo-user',
-      ...init?.headers,
-    },
+    headers: defaultHeaders(init, false),
     body: formData,
     cache: 'no-store',
   });
@@ -309,13 +318,28 @@ export async function fetchProductReferenceBreakdown(
 }
 
 export async function apiDownloadBlob(path: string, filename: string, init?: RequestInit): Promise<void> {
+  const method = String(init?.method || 'GET').toUpperCase();
+  const wantsJson =
+    Boolean(init?.body) &&
+    !(typeof FormData !== 'undefined' && init?.body instanceof FormData) &&
+    method !== 'GET' &&
+    method !== 'HEAD';
+  const base = defaultHeaders(init, wantsJson) as Record<string, string>;
+  const extra =
+    init?.headers == null
+      ? {}
+      : init.headers instanceof Headers
+        ? Object.fromEntries(init.headers.entries())
+        : Array.isArray(init.headers)
+          ? Object.fromEntries(init.headers)
+          : { ...(init.headers as Record<string, string>) };
   const res = await fetch(apiUrl(path), {
     ...init,
-    headers: defaultHeaders(init, false),
+    headers: { ...base, ...extra },
     cache: 'no-store',
   });
   if (!res.ok) {
-    throw new Error(`${res.status} ${await res.text()}`);
+    throw new Error(`${res.status} ${await readFetchError(res)}`);
   }
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);

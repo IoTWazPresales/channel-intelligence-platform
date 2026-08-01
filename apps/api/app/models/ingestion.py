@@ -59,6 +59,7 @@ class ImportJob(Base, TimestampMixin):
     __tablename__ = "import_job"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(Text, nullable=False, default="default", server_default="default", index=True)
     source_id: Mapped[int] = mapped_column(ForeignKey("source_definition.id"), nullable=False)
     template_slug: Mapped[str | None] = mapped_column(String(64), nullable=True)
     import_mode: Mapped[str] = mapped_column(String(32), default="apply", nullable=False)

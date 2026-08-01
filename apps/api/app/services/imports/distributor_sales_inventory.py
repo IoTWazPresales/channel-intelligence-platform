@@ -3550,6 +3550,7 @@ def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, 
     sell_tbl = FactSalesSellout.__table__
     ret_tbl = FactReturns.__table__
     inv_tbl = FactInventoryDistributor.__table__
+    tid = (getattr(job, "tenant_id", None) or "default").strip() or "default"
     lines = db.scalars(
         select(ImportDistributorSiStagingLine)
         .where(ImportDistributorSiStagingLine.import_job_id == job.id)
@@ -3608,6 +3609,7 @@ def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, 
                         computed_revenue_amount=line.computed_revenue_amount,
                         currency_code=line.currency_code,
                         source_import_job_id=job.id,
+                        tenant_id=tid,
                     )
                     .on_conflict_do_update(
                         constraint="uq_fact_sales_sellout_source_key",
@@ -3622,6 +3624,7 @@ def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, 
                             "computed_revenue_amount": text("EXCLUDED.computed_revenue_amount"),
                             "currency_code": text("EXCLUDED.currency_code"),
                             "source_import_job_id": text("EXCLUDED.source_import_job_id"),
+                            "tenant_id": text("EXCLUDED.tenant_id"),
                             "updated_at": text("now()"),
                         },
                     )
@@ -3710,12 +3713,14 @@ def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, 
                         as_of_date=snap,
                         on_hand_units=float(line.stock_on_hand),
                         source_import_job_id=job.id,
+                        tenant_id=tid,
                     )
                     .on_conflict_do_update(
                         constraint="uq_fact_inventory_distributor_source_key",
                         set_={
                             "on_hand_units": text("EXCLUDED.on_hand_units"),
                             "source_import_job_id": text("EXCLUDED.source_import_job_id"),
+                            "tenant_id": text("EXCLUDED.tenant_id"),
                             "updated_at": text("now()"),
                         },
                     )

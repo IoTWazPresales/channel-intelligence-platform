@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.core.config import get_settings
 from app.core.dev_celery_logging import DEV_CELERY_LOGGER
+from app.core.security import get_current_user
 from app.db.session_sync import SessionLocal
 from app.worker.celery_app import celery_app
 from app.ingestion.pipeline import process_import_job_sync
@@ -41,6 +42,7 @@ from app.services.imports.import_background_slots import (
     SLOT_DSI_BULK,
     set_task_slot_on_job,
 )
+from app.services.steward_audit import record_steward_audit
 from app.services.imports.dsi_apply_completion import DsiApplyCompletionError, complete_dsi_import_job_to_loaded
 from app.services.imports.dsi_resolution_plan import (
     build_dsi_resolution_plan_effective_sync,
@@ -327,11 +329,14 @@ class ResolveProductCandidateBody(BaseModel):
 
 @router.post("/import-candidates/{candidate_id}/resolve-product", status_code=200)
 async def resolve_dsi_product_candidate(
-    candidate_id: int, body: ResolveProductCandidateBody, db: AsyncSession = Depends(get_db)
+    candidate_id: int,
+    body: ResolveProductCandidateBody,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     cand = await _get_dsi_candidate_or_404(candidate_id, db)
     try:
-        return await execute_resolve_dsi_product(
+        out = await execute_resolve_dsi_product(
             db,
             cand,
             product_id=body.product_id,
@@ -342,19 +347,49 @@ async def resolve_dsi_product_candidate(
         )
     except StewardOpError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    await record_steward_audit(
+        db,
+        user,
+        action="resolve",
+        importer="dsi",
+        entity_type="product",
+        entity_token=cand.normalized_key,
+        import_job_id=cand.import_job_id,
+        candidate_id=cand.id,
+        target_dim="product",
+        target_id=body.product_id,
+        payload={"audit_note": body.audit_note} if body.audit_note else None,
+    )
+    return out
 
 
 @router.post("/import-candidates/{candidate_id}/map-customer", status_code=200)
 async def map_dsi_candidate_to_customer(
-    candidate_id: int, body: MapCustomerBody, db: AsyncSession = Depends(get_db)
+    candidate_id: int,
+    body: MapCustomerBody,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     cand = await _get_dsi_candidate_or_404(candidate_id, db)
     try:
-        return await execute_map_dsi_customer(
+        out = await execute_map_dsi_customer(
             db, cand, customer_id=body.customer_id, raw_token=body.raw_token
         )
     except StewardOpError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    await record_steward_audit(
+        db,
+        user,
+        action="map",
+        importer="dsi",
+        entity_type="customer",
+        entity_token=cand.normalized_key,
+        import_job_id=cand.import_job_id,
+        candidate_id=cand.id,
+        target_dim="customer",
+        target_id=body.customer_id,
+    )
+    return out
 
 
 class DsiDuplicateReviewPeerBody(BaseModel):
@@ -433,7 +468,10 @@ async def resolve_dsi_duplicate_cluster_same_entity(
 
 @router.post("/import-candidates/{candidate_id}/create-provisional-customer", status_code=200)
 async def create_provisional_customer_from_dsi_candidate(
-    candidate_id: int, body: CreateProvisionalCustomerBody, db: AsyncSession = Depends(get_db)
+    candidate_id: int,
+    body: CreateProvisionalCustomerBody,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     cand = await _get_dsi_candidate_or_404(candidate_id, db)
 
@@ -452,7 +490,7 @@ async def create_provisional_customer_from_dsi_candidate(
         g = await db.run_sync(_geo)
         er = int(body.region_id) if body.region_id is not None else g.get("effective_region_id")
         ec = int(body.channel_id) if body.channel_id is not None else g.get("effective_channel_id")
-        return await execute_create_provisional_dsi_customer(
+        out = await execute_create_provisional_dsi_customer(
             db,
             cand,
             display_name_override=body.display_name,
@@ -464,6 +502,20 @@ async def create_provisional_customer_from_dsi_candidate(
         )
     except StewardOpError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    await record_steward_audit(
+        db,
+        user,
+        action="provisional_create",
+        importer="dsi",
+        entity_type="customer",
+        entity_token=cand.normalized_key,
+        import_job_id=cand.import_job_id,
+        candidate_id=cand.id,
+        target_dim="customer",
+        target_id=out.get("customer_id") if isinstance(out, dict) else None,
+        payload={"display_name": body.display_name},
+    )
+    return out
 
 
 @router.post("/import-candidates/{candidate_id}/mark-open-channel", status_code=200)
@@ -519,34 +571,70 @@ async def mark_dsi_candidate_open_channel(
 
 
 @router.post("/import-candidates/{candidate_id}/ignore", status_code=200)
-async def ignore_dsi_candidate(candidate_id: int, body: IgnoreCandidateBody, db: AsyncSession = Depends(get_db)):
+async def ignore_dsi_candidate(
+    candidate_id: int,
+    body: IgnoreCandidateBody,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     cand = await _get_dsi_candidate_or_404(candidate_id, db)
     try:
-        return await execute_ignore_dsi_candidate(db, cand, notes=body.notes, reason_code=body.reason_code)
+        out = await execute_ignore_dsi_candidate(db, cand, notes=body.notes, reason_code=body.reason_code)
     except StewardOpError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    await record_steward_audit(
+        db,
+        user,
+        action="ignore",
+        importer="dsi",
+        entity_type=cand.entity_type,
+        entity_token=cand.normalized_key,
+        import_job_id=cand.import_job_id,
+        candidate_id=cand.id,
+        payload={"notes": body.notes, "reason_code": body.reason_code},
+    )
+    return out
 
 
 @router.post("/import-candidates/{candidate_id}/map-distributor", status_code=200)
 async def map_dsi_candidate_to_distributor(
-    candidate_id: int, body: MapDistributorBody, db: AsyncSession = Depends(get_db)
+    candidate_id: int,
+    body: MapDistributorBody,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     cand = await _get_dsi_candidate_or_404(candidate_id, db)
     try:
-        return await execute_map_dsi_distributor(
+        out = await execute_map_dsi_distributor(
             db, cand, distributor_id=body.distributor_id, raw_token=body.raw_token
         )
     except StewardOpError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    await record_steward_audit(
+        db,
+        user,
+        action="map",
+        importer="dsi",
+        entity_type="distributor",
+        entity_token=cand.normalized_key,
+        import_job_id=cand.import_job_id,
+        candidate_id=cand.id,
+        target_dim="distributor",
+        target_id=body.distributor_id,
+    )
+    return out
 
 
 @router.post("/import-candidates/{candidate_id}/create-provisional-distributor", status_code=200)
 async def create_provisional_distributor_from_dsi_candidate(
-    candidate_id: int, body: CreateProvisionalDistributorBody, db: AsyncSession = Depends(get_db)
+    candidate_id: int,
+    body: CreateProvisionalDistributorBody,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     cand = await _get_dsi_candidate_or_404(candidate_id, db)
     try:
-        return await execute_create_provisional_dsi_distributor(
+        out = await execute_create_provisional_dsi_distributor(
             db,
             cand,
             display_name_override=body.display_name,
@@ -555,6 +643,20 @@ async def create_provisional_distributor_from_dsi_candidate(
         )
     except StewardOpError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    await record_steward_audit(
+        db,
+        user,
+        action="provisional_create",
+        importer="dsi",
+        entity_type="distributor",
+        entity_token=cand.normalized_key,
+        import_job_id=cand.import_job_id,
+        candidate_id=cand.id,
+        target_dim="distributor",
+        target_id=out.get("distributor_id") if isinstance(out, dict) else None,
+        payload={"display_name": body.display_name},
+    )
+    return out
 
 
 async def _assert_dsi_import_job(db: AsyncSession, job_id: int) -> ImportJob:
@@ -1067,7 +1169,12 @@ async def dsi_steward_bulk_task_status(job_id: int, task_id: str) -> dict[str, A
 
 
 @router.post("/import-jobs/{job_id}/dsi-steward-bulk-apply", status_code=200)
-async def dsi_steward_bulk_apply(job_id: int, body: DsiBulkStewardBody, db: AsyncSession = Depends(get_db)):
+async def dsi_steward_bulk_apply(
+    job_id: int,
+    body: DsiBulkStewardBody,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     await _assert_dsi_import_job(db, job_id)
     if body.action == "create_provisional_customer":
         raise HTTPException(
@@ -1181,7 +1288,7 @@ async def dsi_steward_bulk_apply(job_id: int, body: DsiBulkStewardBody, db: Asyn
                 }
             )
     ok_n = sum(1 for r in results if r.get("ok"))
-    return {
+    response = {
         "import_job_id": job_id,
         "action": body.action,
         "applied": ok_n,
@@ -1189,6 +1296,22 @@ async def dsi_steward_bulk_apply(job_id: int, body: DsiBulkStewardBody, db: Asyn
         "results": results,
         "totals": _dsi_bulk_totals_from_rows(results),
     }
+    await record_steward_audit(
+        db,
+        user,
+        action="bulk_map" if body.action.startswith("map_") else f"bulk_{body.action}",
+        importer="dsi",
+        import_job_id=job_id,
+        payload={
+            "action": body.action,
+            "candidate_count": len(body.candidate_ids),
+            "applied": ok_n,
+            "failed": len(results) - ok_n,
+            "customer_id": body.customer_id,
+            "distributor_id": body.distributor_id,
+        },
+    )
+    return response
 
 
 def _enqueue_dsi_resolution_plan_compute(

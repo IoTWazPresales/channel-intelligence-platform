@@ -1,24 +1,17 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-01 (hard reapproval BACKLOG-095)
-**Branch:** `feat/b1-forecasting`
-**Alembic:** `20260801_0002` on cip (`needs_reapproval` on `cpor_case`)
+**Last updated:** 2026-08-01 (P3 complete — merging to main)
+**Branch:** `feat/p2-auth-rbac` @ `6a847ed`
+**Alembic:** `20260801_0008` on cip (code head)
 
-## Shipped on this branch
+## Done this session
 
-- B-lane (B1–B4) + browser VERIFY PASS
-- Q-001/002/009 resolved via `commercial_tenant_profile`
-- Channel Ops depth/picker VERIFY fixes
-- **Hard reapproval:** approve/export gated when money over or `needs_reapproval`; confirm CTA; `HARD_ENFORCE_BUDGET=true`
+- **P2 + P3 complete** on this branch (auth/RBAC through admin SQL viewer)
+- Ready to merge → `main`
 
-## Open / parked
+## Next (after merge)
 
-- Q-003 hosting
-- BACKLOG-096 commercial profile onboarding UI
-- BACKLOG-092/093/094
+1. **X-1 CST Unit E VERIFY** — new chat
+2. Then Lane X items as TRIGGERs fire
 
-## Next
-
-P2 / X lane (Warren pick) — or PR → main. Prefer **new chat** for a new phase.
-
-**Env:** local Windows — no Docker. API `:8001`, web `:3000`, DB `cip`.
+**Env:** local Windows. API `:8001` session, web `:3000`. Seed `admin@local` / `changeme`.

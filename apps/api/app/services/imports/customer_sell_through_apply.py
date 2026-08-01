@@ -26,6 +26,7 @@ _CONFLICT_SET = {
     "vat_basis": text("EXCLUDED.vat_basis"),
     "import_job_id": text("EXCLUDED.import_job_id"),
     "raw_source_row": text("EXCLUDED.raw_source_row"),
+    "tenant_id": text("EXCLUDED.tenant_id"),
     "updated_at": text("EXCLUDED.updated_at"),
 }
 
@@ -54,10 +55,13 @@ def apply_customer_sellthrough_staging(
     within a chunk is required: Postgres rejects an ``ON CONFLICT DO UPDATE`` that touches the same
     key twice in one statement. ``on_progress(current, total)`` reports per chunk (optional).
     """
+    from app.models.ingestion import ImportJob
     from app.services.imports.customer_sell_through import customer_sellthrough_source_key
 
     summary = ApplySummary()
     tbl = FactCustomerSellthrough.__table__
+    job = db.get(ImportJob, int(job_id))
+    tid = (getattr(job, "tenant_id", None) or "default").strip() or "default" if job else "default"
 
     lines = list(
         db.scalars(
@@ -125,6 +129,7 @@ def apply_customer_sellthrough_staging(
             "vat_basis": getattr(line, "vat_basis", None) or "ex_vat",
             "import_job_id": job_id,
             "raw_source_row": line.raw_row_payload,
+            "tenant_id": tid,
             "updated_at": now,
         }
         if sk in grouped:

@@ -7,6 +7,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
+from app.core.security import get_optional_current_user
+from app.core.tenant_scope import tenant_id_from_user, where_tenant
 from app.models.dimensions import DimCustomer, DimProduct
 from app.models.facts import FactInventoryCustomer
 from app.services.facts_upsert import get_or_create_customer, get_or_create_product
@@ -42,8 +44,15 @@ def _parse_iso_date(s: str) -> date:
 
 
 @router.get("/customer")
-async def inventory_customer(db: AsyncSession = Depends(get_db)):
-    res = await db.execute(select(FactInventoryCustomer).order_by(FactInventoryCustomer.as_of_date.desc()))
+async def inventory_customer(
+    db: AsyncSession = Depends(get_db),
+    user: dict | None = Depends(get_optional_current_user),
+):
+    res = await db.execute(
+        select(FactInventoryCustomer)
+        .where(where_tenant(FactInventoryCustomer.tenant_id, user))
+        .order_by(FactInventoryCustomer.as_of_date.desc())
+    )
     rows = res.scalars().all()
     out = []
     for inv in rows:
@@ -64,7 +73,11 @@ async def inventory_customer(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/customer", status_code=201)
-async def create_inventory_customer(row: InventoryCustomerRowIn, db: AsyncSession = Depends(get_db)):
+async def create_inventory_customer(
+    row: InventoryCustomerRowIn,
+    db: AsyncSession = Depends(get_db),
+    user: dict | None = Depends(get_optional_current_user),
+):
     try:
         as_of = _parse_iso_date(row.as_of_date)
         prod = await get_or_create_product(db, row.sku)
@@ -75,6 +88,7 @@ async def create_inventory_customer(row: InventoryCustomerRowIn, db: AsyncSessio
             as_of_date=as_of,
             on_hand_units=row.on_hand_units,
             on_order_units=row.on_order_units,
+            tenant_id=tenant_id_from_user(user),
         )
         db.add(inv)
         await db.commit()

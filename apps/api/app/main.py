@@ -2,10 +2,13 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.dev_celery_logging import DEV_CELERY_LOGGER
+from app.db.session import AsyncSessionLocal
 
 settings = get_settings()
 
@@ -46,4 +49,29 @@ app.include_router(api_router, prefix=settings.api_v1_prefix)
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    """Liveness — process is up (no dependency checks)."""
+    return {"status": "ok", "service": "cip-api"}
+
+
+@app.get("/health/ready")
+async def health_ready():
+    """Readiness — Postgres reachable."""
+    db_name = None
+    try:
+        async with AsyncSessionLocal() as session:
+            db_name = await session.scalar(text("SELECT current_database()"))
+            await session.execute(text("SELECT 1"))
+    except Exception as exc:  # noqa: BLE001 — surface as not-ready
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "not_ready",
+                "database": db_name,
+                "error": type(exc).__name__,
+            },
+        )
+    return {
+        "status": "ready",
+        "database": db_name,
+        "ok": True,
+    }

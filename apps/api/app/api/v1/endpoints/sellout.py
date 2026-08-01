@@ -7,6 +7,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
+from app.core.security import get_optional_current_user
+from app.core.tenant_scope import where_tenant
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.facts import FactSalesSellout
 
@@ -34,14 +36,17 @@ class ClearConfirmBody(BaseModel):
 async def sellout_filter_options(
     db: AsyncSession = Depends(get_db),
     limit: int = Query(8000, ge=1, le=20000),
+    user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, object]:
     dr = await db.execute(
         select(DimDistributor.id, DimDistributor.code, DimDistributor.name)
+        .where(where_tenant(DimDistributor.tenant_id, user))
         .order_by(DimDistributor.name.asc(), DimDistributor.code.asc())
         .limit(limit)
     )
     cr = await db.execute(
         select(DimCustomer.id, DimCustomer.code, DimCustomer.name)
+        .where(where_tenant(DimCustomer.tenant_id, user))
         .order_by(DimCustomer.name.asc(), DimCustomer.code.asc())
         .limit(limit)
     )
@@ -51,11 +56,21 @@ async def sellout_filter_options(
 
 
 @router.get("/commercial-summary")
-async def sellout_commercial_summary(db: AsyncSession = Depends(get_db)) -> dict[str, object]:
-    total_rows = int(await db.scalar(select(func.count()).select_from(FactSalesSellout)) or 0)
-    total_units = float(await db.scalar(select(func.coalesce(func.sum(FactSalesSellout.units), 0))) or 0)
-    total_revenue = float(await db.scalar(select(func.coalesce(func.sum(FactSalesSellout.revenue), 0))) or 0)
-    latest = await db.scalar(select(func.max(FactSalesSellout.period_start)))
+async def sellout_commercial_summary(
+    db: AsyncSession = Depends(get_db),
+    user: dict | None = Depends(get_optional_current_user),
+) -> dict[str, object]:
+    tenant_f = where_tenant(FactSalesSellout.tenant_id, user)
+    total_rows = int(
+        await db.scalar(select(func.count()).select_from(FactSalesSellout).where(tenant_f)) or 0
+    )
+    total_units = float(
+        await db.scalar(select(func.coalesce(func.sum(FactSalesSellout.units), 0)).where(tenant_f)) or 0
+    )
+    total_revenue = float(
+        await db.scalar(select(func.coalesce(func.sum(FactSalesSellout.revenue), 0)).where(tenant_f)) or 0
+    )
+    latest = await db.scalar(select(func.max(FactSalesSellout.period_start)).where(tenant_f))
     return {
         "total_rows": total_rows,
         "total_units": total_units,
@@ -75,10 +90,12 @@ async def sellout_commercial_lines(
     period_from: str | None = None,
     period_to: str | None = None,
     smart_view: str | None = None,
+    user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, object]:
     pf = _parse_opt_date(period_from)
     pt = _parse_opt_date(period_to)
     smart = (smart_view or "").strip().lower()
+    tenant_f = where_tenant(FactSalesSellout.tenant_id, user)
 
     q = (
         select(
@@ -93,6 +110,7 @@ async def sellout_commercial_lines(
         .join(DimProduct, FactSalesSellout.product_id == DimProduct.id)
         .join(DimCustomer, FactSalesSellout.customer_id == DimCustomer.id)
         .outerjoin(DimDistributor, FactSalesSellout.distributor_id == DimDistributor.id)
+        .where(tenant_f)
     )
 
     if distributor_id is not None:
@@ -119,7 +137,7 @@ async def sellout_commercial_lines(
         cutoff = date.today() - timedelta(days=365)
         agg = (
             select(FactSalesSellout.product_id.label("pid"), func.sum(FactSalesSellout.units).label("tu"))
-            .where(FactSalesSellout.period_start >= cutoff)
+            .where(FactSalesSellout.period_start >= cutoff, tenant_f)
             .group_by(FactSalesSellout.product_id)
             .subquery()
         )
@@ -130,7 +148,7 @@ async def sellout_commercial_lines(
         d_prev_start = date.today() - timedelta(days=180)
         cur = (
             select(FactSalesSellout.customer_id.label("cid"), func.sum(FactSalesSellout.units).label("su"))
-            .where(FactSalesSellout.period_start >= d_now)
+            .where(FactSalesSellout.period_start >= d_now, tenant_f)
             .group_by(FactSalesSellout.customer_id)
             .subquery()
         )
@@ -139,6 +157,7 @@ async def sellout_commercial_lines(
             .where(
                 FactSalesSellout.period_start >= d_prev_start,
                 FactSalesSellout.period_start < d_now,
+                tenant_f,
             )
             .group_by(FactSalesSellout.customer_id)
             .subquery()
@@ -155,7 +174,7 @@ async def sellout_commercial_lines(
         d_prev_start = date.today() - timedelta(days=180)
         cur = (
             select(FactSalesSellout.customer_id.label("cid"), func.sum(FactSalesSellout.units).label("su"))
-            .where(FactSalesSellout.period_start >= d_now)
+            .where(FactSalesSellout.period_start >= d_now, tenant_f)
             .group_by(FactSalesSellout.customer_id)
             .subquery()
         )
@@ -164,6 +183,7 @@ async def sellout_commercial_lines(
             .where(
                 FactSalesSellout.period_start >= d_prev_start,
                 FactSalesSellout.period_start < d_now,
+                tenant_f,
             )
             .group_by(FactSalesSellout.customer_id)
             .subquery()
@@ -217,12 +237,20 @@ async def sellout_zero_products(
     db: AsyncSession = Depends(get_db),
     lookback_days: int = Query(365, ge=30, le=1095),
     limit: int = Query(100, ge=1, le=500),
+    user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, object]:
     since = date.today() - timedelta(days=lookback_days)
-    sold_sub = select(FactSalesSellout.product_id).where(FactSalesSellout.period_start >= since).distinct()
+    sold_sub = (
+        select(FactSalesSellout.product_id)
+        .where(
+            FactSalesSellout.period_start >= since,
+            where_tenant(FactSalesSellout.tenant_id, user),
+        )
+        .distinct()
+    )
     res = await db.execute(
         select(DimProduct.id, DimProduct.sku, DimProduct.name)
-        .where(DimProduct.is_active.is_(True))
+        .where(DimProduct.is_active.is_(True), where_tenant(DimProduct.tenant_id, user))
         .where(DimProduct.id.not_in(sold_sub))
         .order_by(DimProduct.sku.asc())
         .limit(limit)
@@ -235,8 +263,15 @@ async def sellout_zero_products(
 
 
 @router.get("")
-async def list_sellout(db: AsyncSession = Depends(get_db)):
-    res = await db.execute(select(FactSalesSellout).order_by(FactSalesSellout.period_start.desc()))
+async def list_sellout(
+    db: AsyncSession = Depends(get_db),
+    user: dict | None = Depends(get_optional_current_user),
+):
+    res = await db.execute(
+        select(FactSalesSellout)
+        .where(where_tenant(FactSalesSellout.tenant_id, user))
+        .order_by(FactSalesSellout.period_start.desc())
+    )
     rows = res.scalars().all()
     out = []
     for s in rows:

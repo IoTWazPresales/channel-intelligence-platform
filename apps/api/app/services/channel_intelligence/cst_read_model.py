@@ -264,9 +264,11 @@ def load_cst_read_model(
     page_size: int = 50,
     min_observed_weeks: int = DEFAULT_MIN_OBSERVED_WEEKS,
     aged_lookback_weeks: int = DEFAULT_AGED_LOOKBACK_WEEKS,
+    tenant_id: str = "default",
 ) -> dict[str, Any]:
     """Aggregate CST facts → per-entity metrics. Compute-on-read; no writes."""
-    stmt = select(FactCustomerSellthrough)
+    tid = (tenant_id or "default").strip() or "default"
+    stmt = select(FactCustomerSellthrough).where(FactCustomerSellthrough.tenant_id == tid)
     if customer_id is not None:
         stmt = stmt.where(FactCustomerSellthrough.customer_id == customer_id)
     if product_id is not None:

@@ -17,6 +17,29 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-01 — **P3 complete:** P3-6 admin SQL viewer live (`20260801_0008`); read-only+timeout+row cap+audit; browser cip SELECT + DELETE refuse + audit PASS. Next: open PR or X-1.
+- 2026-08-01 — **P3-5 live on cip:** applied `20260801_0007`; browser export + inbox WoC≈13.6 / vintage pair_count=2481 PASS. Beat→BACKLOG-098. Next P3-6 or PR.
+- 2026-08-01 — **P3-5 authored (halt for `20260801_0007`):** export xlsx/pdf + vintage; delivery/schedule schema+API; `/inbox` UI; BACKLOG-098 beat/import-event. cip still at `0006`.
+- 2026-08-01 — **P3-4 live on cip:** applied `20260801_0006`; browser dashboard tile WoC ≈13.6 PASS. Next P3-5 or PR.
+- 2026-08-01 — **P3-4 authored (await apply):** alembic `20260801_0006` saved_report/dashboard/tiles + APIs + `/reports` save + `/dashboards`. Stop before upgrade on cip.
+- 2026-08-01 — **P3-3 report builder v1:** `/reports` metric→grain→visual→`/query/execute`; nav + browser WoC smoke PASS. Save/share still P3-4.
+- 2026-08-01 — **BACKLOG-097 resolved:** set-based derived stock; cold WoC ~3.2s parity 13.60w on cip (`01c6975`).
+- 2026-08-01 — **P3-2 query engine v1:** `/query/execute`+`/explain`; A3/A1/A2 handlers + cache; live WoC~13.6w / fill~0.465; BACKLOG-097 cold NFR. Stop before P3-3.
+- 2026-08-01 — **P3-1 complete (pre-P3-2):** full SEMANTICS catalog + tenant overlay merge; forecasts/inventory/channel-ops inventory tenant filters. Stop before P3-2.
+- 2026-08-01 — **P3-1 semantic layer scaffold:** YAML catalog + `validate_metric_grain` (WoC/SOH/claim_rate refusals); API `/semantics/*`. No P3-2 SQL. Tests 7/7.
+- 2026-08-01 — **P2 residual tenant filters:** dim product/customer/distributor list+create; sellout/shipping/channel-ops sell-out/CST/inbound reads via `where_tenant`; DSI/shipment/CST apply stamp `tenant_id` from ImportJob. Next: P3-1 semantic layer.
+- 2026-08-01 — **P2 complete (local):** P2-4 freshness landing + P2-5 Ops/`health/ready`/backup+restore smoke (`cip_alembic_smoke` dim_product parity). P2-1 hosting still deferred. Branch `feat/p2-auth-rbac` @ `5fa4798`.
+- 2026-08-01 — **P2-3g tenant_id MVP on cip:** alembic `20260801_0005`; CPOR list/get/create scoped; browser CPOR Cases + steward audit PASS. Broader endpoint filters still open.
+- 2026-08-01 — **P2-3f steward audit:** shipment / CPOR historical / CST write hooks via `record_steward_audit_sync`.
+- 2026-08-01 — **P2-3e applied on cip:** alembic `20260801_0004`; browser Steward audit shows smoke row. Optional: shipment/CPOR/CST hooks; fact tenant_id still needs separate migration approval.
+- 2026-08-01 — **P2-3e steward audit authored:** migration `20260801_0004` + DSI write hooks + `/admin/steward-audit` UI. **NOT applied on cip** — awaiting Warren upgrade approval. Then smoke + optional shipment/CPOR/CST wiring.
+- 2026-08-01 — **P2-3d browser smoke PASS:** API restarted session mode; shell Local Admin; created viewer@local on /admin/users. Remaining P2: steward audit; fact tenant_id (migration approval).
+- 2026-08-01 — **P2-3d admin users:** `GET /auth/users` + `/admin/users` create form; nav Users link from P2-3c. Remaining: steward audit; fact tenant_id (migration).
+- 2026-08-01 — **P2-3c nav role gating:** filter shell nav by admin/steward/planner/viewer; Admin → Users link. Vitest 6/6.
+- 2026-08-01 — **P2-3b AppShell session user:** `/auth/me` display_name; shell shows real user + logout; Bearer-only headers when token present. Next: nav role gating → admin create-user UI.
+- 2026-08-01 — **P2-3 IAM live:** applied `20260801_0003` on cip; `CIP_AUTH_MODE=session`; login smoke PASS (`admin@local` → `/dashboard`). Next: X-1 VERIFY in new chat; commit `feat/p2-auth-rbac` when asked.
+- 2026-08-01 — **Sequence PR→P2→soak:** PR #10 merged (`9906b17`); `feat/p2-auth-rbac` P2-3 IAM slice authored (`20260801_0003` NOT applied); `MONEY_CEILING_USD` env-wired; soak case #46 chip+banner PASS + export 409. X-1 VERIFY not started.
+- 2026-08-01 — **PR #10 merged** (`9906b17`): B-lane + tenant Qs + BACKLOG-095. Branch `feat/p2-auth-rbac`: P2-3 IAM slice authored (`20260801_0003` NOT applied); `MONEY_CEILING_USD` env-wired; soak `.env` set to 1 for reapproval browser proof.
 - 2026-08-01 — **BACKLOG-095 hard reapproval:** `cpor_case.needs_reapproval` (alembic `20260801_0002`); approve/export gated when money over / flagged; `confirm_over_budget_reapproval`; UI Reapprove CTA; `HARD_ENFORCE_BUDGET=true`; optional `MONEY_CEILING_USD`.
 - 2026-08-01 — **Q-001/002/009 resolved (tenant-flexible):** money ceiling + reapproval intent; reservation derived from profit (HQ-inflated PM bottom context); PM attribution = business line (NB/NR/NV/NX). Profile stub `commercial_tenant_profile.py`. Q-003 hosting still open. B-lane VERIFY PASS earlier same day.
 - 2026-08-01 — **B4:** promo-plan-draft compose (`GET /cpor/intelligence/promo-plan-draft`) — A2 comparables + B1 forecast volume + B2 dual-track budget check; Promotions B4 panel. B-lane scaffold complete on `feat/b1-forecasting`.

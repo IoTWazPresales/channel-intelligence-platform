@@ -13,6 +13,40 @@
 **P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
+## BACKLOG-098 — P3-5 Celery beat + import-complete report schedules
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-01 |
+| **Effort** | Medium (beat task + import hook; small) |
+| **Source** | P3-5 authored 2026-08-01 — `report_schedule` + `run-now` inbox path; ROADMAP P3-5 calendar + event delivery |
+| **Idea** | Wire Celery beat for `weekly_monday_0700` / `daily_0700` and fan-out `on_import_complete` schedules after DSI/shipment apply completes. |
+| **Why it matters / deferrable** | True unattended Monday 07:00 delivery. Deferrable while `POST /reports/schedules/{id}/run-now` + UI “Schedule + run now” prove vintage inbox path. |
+| **What the work is** | Beat entry + task iterating enabled schedules due; import apply progress-complete hook for `on_import_complete`; optional email_stub channel later. |
+| **Regression traps** | Never skip delivery when metric returns empty — missing data is the alert; always stamp `data_vintage`. |
+| **Behavior to retain** | Inbox channel + missing_data_alert + tenant scope. |
+| **Out of scope** | External SMTP productization; P3-6 SQL viewer. |
+| **TRIGGER** | After P3-5 smoke on cip with `20260801_0007` **and** Warren asks for unattended Monday delivery / import-event fan-out. |
+
+---
+
+## BACKLOG-097 — P3-2 materialised aggregates / set-based A3 stock
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Resolved 2026-08-01** — set-based `derived_stock_components_by_dist_product` (latest join + aggregated sell-out/POD-landed); cold WoC ~7.4s→~3.2s; value parity 13.600643219087154 on cip. No MV needed yet. |
+| **Effort** | Medium–Large (SQL rewrite + optional refresh job; maybe MV) |
+| **Source** | P3-2 live soak 2026-08-01 — cold `weeks_of_cover` full portfolio ~7.4s / `fill_rate` ~5.7s vs ROADMAP report render &lt;5s p95; warm cache &lt;1ms OK |
+| **Idea** | Replace per-pair scalar sell-out/landed loops in `derived_stock_by_dist_product` with set-based CTEs; optionally Postgres MATERIALIZED VIEW + refresh on import apply; keep latest-per-(distributor,product) invariant. |
+| **Why it matters / deferrable** | Meets NFR for cold governed report without relying only on 60s result cache. Deferrable while warm-cache path + report builder (P3-3) are primary; P3-2 ships process-local/Redis TTL cache. |
+| **What the work is** | Done for set-based path; MV deferred unless cold misses return. |
+| **Regression traps** | Never sum SOH snapshot history; pipeline/open_order must stay out; tenant_id filter required. |
+| **Behavior to retain** | Formula: latest reported − sell-out since + POD-landed shipped since; WoC at distributor×product only. |
+| **Out of scope** | Report builder UI (P3-3); changing COMMERCIAL_SEMANTICS formulas. |
+| **TRIGGER** | — shipped set-based; reopen only if cold `/query/execute` regularly exceeds 5s again — then consider MV. |
+
+---
+
 ## BACKLOG-096 — Commercial tenant profile onboarding UI
 
 | Field | Detail |

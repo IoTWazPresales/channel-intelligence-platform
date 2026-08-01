@@ -25,6 +25,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.inspection import inspect as sa_inspect
 
 from app.api.deps import get_db
+from app.core.security import get_optional_current_user
+from app.core.tenant_scope import where_tenant
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.fact_customer_velocity import FactCustomerVelocity
 from app.models.fact_dsi_forecast import FactDsiForecast
@@ -250,10 +252,12 @@ async def channel_ops_sell_out(
     date_to: str | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
+    user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
     df = _parse_opt_date(date_from)
     dt = _parse_opt_date(date_to)
     skip = (page - 1) * page_size
+    tenant_f = where_tenant(FactSalesSellout.tenant_id, user)
 
     q = (
         select(
@@ -266,6 +270,7 @@ async def channel_ops_sell_out(
         .join(DimProduct, FactSalesSellout.product_id == DimProduct.id)
         .join(DimCustomer, FactSalesSellout.customer_id == DimCustomer.id)
         .outerjoin(DimDistributor, FactSalesSellout.distributor_id == DimDistributor.id)
+        .where(tenant_f)
     )
     if distributor_id is not None:
         q = q.where(FactSalesSellout.distributor_id == int(distributor_id))
@@ -295,6 +300,7 @@ async def channel_ops_sell_out(
             .where(
                 FactSalesSellout.transaction_date >= p_start,
                 FactSalesSellout.transaction_date <= p_end,
+                tenant_f,
             )
             .group_by(
                 FactSalesSellout.distributor_id,
@@ -351,12 +357,16 @@ async def channel_ops_inventory(
     db: AsyncSession = Depends(get_db),
     distributor_id: int | None = Query(None),
     product_id: int | None = None,
+    user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
     if distributor_id is None:
         raise HTTPException(status_code=400, detail="distributor_id is required")
 
+    from app.core.tenant_scope import tenant_id_from_user
+
+    tid = tenant_id_from_user(user)
     derived_rows = await derived_stock_rows_for_distributor(
-        db, distributor_id=int(distributor_id), product_id=product_id
+        db, distributor_id=int(distributor_id), product_id=product_id, tenant_id=tid
     )
     product_ids = [int(r["product_id"]) for r in derived_rows]
     product_meta: dict[int, tuple[str | None, str | None]] = {}
@@ -399,6 +409,7 @@ async def channel_ops_inventory(
                     FactDemandForecast.distributor_id == int(distributor_id),
                     FactDemandForecast.period_start >= today,
                     FactDemandForecast.period_start <= horizon,
+                    FactDemandForecast.tenant_id == tid,
                 )
                 .group_by(FactDemandForecast.product_id)
             )
