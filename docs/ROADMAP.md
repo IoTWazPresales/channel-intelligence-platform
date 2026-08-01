@@ -139,7 +139,7 @@ See `docs/COMMERCIAL_SEMANTICS.md`. Two axes coexist: fill rate / plan execution
 **Support bias:** planned reservation vs actual CPOR spend — **CPOR-owned**, not PvE; blocked
 on reservation-column discovery. Do not put on Plan vs Executed.
 **Window:** all quarters with lineup coverage; credible core 26Q1 → current.
-**Exit:** plan-accuracy surface (fill + exceptions). Credibility artifact.
+**Exit:** plan-accuracy surface (fill + exceptions). Credibility artifact. *(A-lane wrap 2026-08-01: fill/exceptions/bias-slip BU/over-plan intake shipped; PM bias → Q-009; support bias still blocked.)*
 
 ### A2 — CPOR intelligence
 **Entry:** P1 CPOR historical signed off.
@@ -151,14 +151,15 @@ on reservation-column discovery. Do not put on Plan vs Executed.
 **Currency:** USD compute/aggregate; display ZAR alongside; ZAR sums at each case’s FX.
 **Out of scope:** cost per **incremental** unit (BACKLOG-089); **claim rate** (non-computable
 until settlement stores an **owed** amount ≠ computed support — see `COMMERCIAL_SEMANTICS`.
-**Paid** = distributor payment reconciliation via Ken — separate future input).
-**Exit:** promo effectiveness surface.
+**Paid** = distributor payment reconciliation via Ken — separate future input; **Warren owns files** — BACKLOG-092).
+**Exit:** promo effectiveness surface. *(A-lane wrap 2026-08-01: A2-01/02/04/05/06 shipped.)*
 
 ### A3 — Channel stock + velocity
 **Entry:** P1 DSI + shipment signed off.
 **Scope:** derived channel stock (latest reported SOH per distributor×product − sell-out since
 snapshot + POD-landed since; pipeline never counts); velocity; weeks of cover with
 zero-velocity guard; replenishment signal.
+**Exit:** *(A-lane wrap 2026-08-01: A3-01/02/03 shipped — WoC dist×product + 4w replenishment flag.)*
 
 ---
 

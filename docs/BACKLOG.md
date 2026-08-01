@@ -13,20 +13,54 @@
 **P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
-## BACKLOG-092 — CPOR “paid” vs owed — distributor payment reconciliation
+## BACKLOG-094 — Promo planning: auto MAC + price-delta sales forecast
 
 | Field | Detail |
 |-------|--------|
 | **Status / parked** | **Parked** · 2026-08-01 |
+| **Effort** | Large (planning write-path + cost/forecast contracts) |
+| **Source** | Warren 2026-08-01 A-lane wrap — automated promo planning economics |
+| **Idea** | When **promotion planning** runs: (1) **MAC auto-computed** from **current MAC** and **buy plan** (not free-typed); (2) if planned **new dealer / sell-out price** differs from current MAC, surface **forecasted sales** under that price delta (elasticity/volume lift path — define formula in semantics before build). |
+| **Why it matters / deferrable** | Funding + volume truth for promo cases; wrong MAC or silent price-delta = bad support math. Deferrable until promotion-planning authoring surface / B-lane promo planning is active. |
+| **What the work is** | Lock MAC formula (current MAC × buy-plan mix — exact weights TBD); wire into planning UI/API; price≠MAC → forecasted units with explainable factors; AMBER design gate on formulas in `COMMERCIAL_SEMANTICS`. |
+| **Regression traps** | Do not auto-rewrite **approved** cost basis (existing MAC staleness rule — flag drift, KAM/PM decides). Do not invent elasticity without a locked formula. DAP ≠ MAC ≠ controlled_cost. |
+| **Behavior to retain** | Cost-basis as-of dates; `cost_basis_drift` flag on recompute; steward approval for master creates. |
+| **Out of scope** | Distributor **paid** recon (BACKLOG-092); customer promo-load recon (BACKLOG-093). |
+| **TRIGGER** | Promotion planning authoring unit starts **or** Warren locks MAC + price-delta forecast formulas in semantics. |
+
+---
+
+## BACKLOG-093 — Case-scoped customer sales recon for promo load correctness
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-01 |
+| **Effort** | Large (CST/customer-file join × CPOR case window) |
+| **Source** | Warren 2026-08-01 A-lane wrap — automated promo verification path |
+| **Idea** | For a specific CPOR case, reconcile **customer sales / sell-through files** against the case’s promo window and products to check whether the **customer loaded the promotion correctly** (price/units/timing vs approved support). |
+| **Why it matters / deferrable** | Closes the loop between approved CPOR and what the retailer actually ran. Deferrable until automated promo-ops path is prioritized; not needed to close A-lane. |
+| **What the work is** | Case-scoped recon surface: expected promo terms vs customer-file observed sell-through; exception buckets (missing load, wrong price, wrong window). Prefer shared import/steward patterns — no one-off sync scripts as smoke. |
+| **Regression traps** | Sell-out (disti→reseller) ≠ sell-through (retailer→end user). Do not treat DSI sell-out as customer promo load proof. |
+| **Behavior to retain** | CPOR case truth for approved support; CST facts as evidence; no auto-create masters. |
+| **Out of scope** | Distributor payment paid-vs-owed (BACKLOG-092); inventing claim “owed”. |
+| **TRIGGER** | Warren starts automated promo-ops / asks for case-level customer-file promo recon **after** payment path is separate. |
+
+---
+
+## BACKLOG-092 — CPOR “paid” vs owed — distributor payment reconciliation
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked · Warren-owned** · 2026-08-01 — leave payment **file supply** to Warren; agents do not chase Ken extracts |
 | **Effort** | Large (new evidence type + recon surface) |
-| **Source** | Warren 2026-08-01 (owed vs paid wording on Q-008 / D-027) |
+| **Source** | Warren 2026-08-01 (owed vs paid wording on Q-008 / D-027); wrap 2026-08-01 leave files to Warren |
 | **Idea** | Capture what distributors **paid** (processed payments), separate from **owed** (settlement support due). Source: Ken / admin payment extracts. |
-| **Why it matters / deferrable** | Paid ≠ owed; without payments, any “paid rate” fabricates. Deferrable until payment files + Ken process exist. |
-| **What the work is** | Import/recon path for payment evidence; join to cases/lines; metrics that compare paid vs owed. |
+| **Why it matters / deferrable** | Paid ≠ owed; without payments, any “paid rate” fabricates. Deferrable until payment files + Ken process exist. **Warren owns bringing the files.** |
+| **What the work is** | Import/recon path for payment evidence; join to cases/lines; metrics that compare paid vs owed. Later: more automated approach (not this A-lane). |
 | **Regression traps** | Do not rename “owed” to “paid”; do not use claim-evidence units as paid. |
 | **Behavior to retain** | Delivery rate; computed `ttl_result`; claim-rate stays non-computable until distinct **owed** exists. |
-| **Out of scope** | Inventing paid from result_qty × support_unit. |
-| **TRIGGER** | Ken (or Warren) provides distributor payment extracts **and** asks for a paid-vs-owed surface. |
+| **Out of scope** | Inventing paid from result_qty × support_unit; agent-chasing Ken without Warren files. |
+| **TRIGGER** | Warren provides distributor payment extracts **and** asks for a paid-vs-owed surface. |
 
 ---
 

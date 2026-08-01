@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-01 — **A-lane wrap:** core A1/A2/A3 done. BACKLOG-092 left Warren-owned (payment files). Parked **093** case-scoped customer promo-load recon; **094** promo-planning auto MAC + price≠MAC sales forecast. Next: P2/B-lane (Warren choose) — not payment chase.
 - 2026-08-01 — **A3-03:** replenishment flag v1 (tenant config default 4w) on Channel Ops summary + inventory; UI Replenish column at strategic depth. Not a buy engine.
 - 2026-08-01 — **A1 bias/slip + rename:** BU volume bias + ship-quarter slip on `/plan-vs-executed`; Over-plan intake UI (BACKLOG-091); Q-009 PM source open; PM bias unavailable.
 - 2026-08-01 — **A2-U2:** support norms (trailing 4Q absolute + % of SRP) + comparable-case ranked lookup on CPOR Cases / case detail. Endpoints `/cpor/intelligence/norms` · `/comparable-cases`.
