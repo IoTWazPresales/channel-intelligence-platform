@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-01 — **P2-3d browser smoke PASS:** API restarted session mode; shell Local Admin; created viewer@local on /admin/users. Remaining P2: steward audit; fact tenant_id (migration approval).
 - 2026-08-01 — **P2-3d admin users:** `GET /auth/users` + `/admin/users` create form; nav Users link from P2-3c. Remaining: steward audit; fact tenant_id (migration).
 - 2026-08-01 — **P2-3c nav role gating:** filter shell nav by admin/steward/planner/viewer; Admin → Users link. Vitest 6/6.
 - 2026-08-01 — **P2-3b AppShell session user:** `/auth/me` display_name; shell shows real user + logout; Bearer-only headers when token present. Next: nav role gating → admin create-user UI.
