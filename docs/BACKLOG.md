@@ -13,6 +13,23 @@
 **P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
+## BACKLOG-099 — CI live Playwright e2e (start API against cip_test)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-01 |
+| **Effort** | Medium (CI job wiring + seed/auth for live specs) |
+| **Source** | PR #13 CI — e2e red: Next proxy `ECONNREFUSED :8001`; wipe/products specs need live API (`CIP_E2E_API_URL` / `:8010`) |
+| **Idea** | Run FastAPI in GitHub Actions against already-migrated `cip_test`, point Next proxy + `CIP_E2E_API_URL` at it, enable `wipe-and-products-delete` (and future live specs). |
+| **Why it matters / deferrable** | Live wipe/delete e2e currently skipped in CI (`CIP_E2E_LIVE_API` gate). Mocked/static e2e still run. Deferrable while docker:e2e / local API cover the live path. |
+| **What the work is** | CI step: start uvicorn on :8001 with `cip_test` URLs + `CIP_AUTH_MODE=stub` (or session + login helper); seed minimal products (`SKU-ALPHA-01`); set `CIP_E2E_LIVE_API=1` / `CIP_E2E_API_URL`; unset `CIP_DISABLE_NEXT_API_PROXY` for webServer. |
+| **Regression traps** | Do not point CI e2e at `cip`; keep `ALLOW_TESTS_ON_DEV_DB` unset; do not weaken steward/wipe safety flags. |
+| **Behavior to retain** | Mocked e2e (dashboard / getting-started / navigation) stay API-free and green without this. |
+| **Out of scope** | Full browser soak of Import Centre; required-check unlock (BACKLOG-087). |
+| **TRIGGER** | Warren asks for green live e2e on GitHub CI **or** live wipe/products specs start failing locally without a clear docker:e2e path. |
+
+---
+
 ## BACKLOG-098 — P3-5 Celery beat + import-complete report schedules
 
 | Field | Detail |

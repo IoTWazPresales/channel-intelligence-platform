@@ -2,6 +2,19 @@ import { expect, test } from '@playwright/test';
 
 test.describe('Dashboard (mocked API)', () => {
   test.beforeEach(async ({ page }) => {
+    await page.route('**/api/v1/auth/me', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 1,
+          email: 'admin@local',
+          display_name: 'Local Admin',
+          role: 'admin',
+          tenant_id: 'default',
+        }),
+      });
+    });
     await page.route('**/api/v1/dashboard/summary', async (route) => {
       await route.fulfill({
         status: 200,

@@ -1,9 +1,24 @@
 import { expect, test } from '@playwright/test';
 
+/**
+ * Live-API e2e — requires a running FastAPI + migrated DB.
+ *
+ * Local Docker stack: `pnpm docker:e2e` (API on host :8010).
+ * Native API: `$env:CIP_E2E_API_URL = "http://127.0.0.1:8001"; pnpm test:e2e`
+ *
+ * Skipped in GitHub CI (no API process). See BACKLOG-099.
+ */
+const LIVE_API =
+  Boolean(process.env.CIP_E2E_API_URL) ||
+  process.env.CIP_E2E_LIVE_API === '1' ||
+  process.env.CIP_E2E_LIVE_API === 'true';
+
 /** Docker full-stack maps the API to host :8010 (see infra/docker/docker-compose.yml). */
 const API_BASE = process.env.CIP_E2E_API_URL ?? 'http://127.0.0.1:8010';
 
 test.describe('Wipe status + product delete (live API)', () => {
+  test.skip(!LIVE_API, 'Set CIP_E2E_API_URL or CIP_E2E_LIVE_API=1 with API up (see BACKLOG-099)');
+
   test('Settings loads wipe status without fetch error', async ({ page }) => {
     await page.goto('/settings');
     await expect(page.getByText('Could not read wipe status')).toHaveCount(0);
