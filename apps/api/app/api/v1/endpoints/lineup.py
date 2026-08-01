@@ -14,6 +14,10 @@ from app.models.dimensions import DimChannel, DimCustomer, DimProduct
 from app.models.lineup import FactLineupPlanItem, LineupPlanItemEvent
 from app.services.lineup.audit import record_lineup_approval_event
 from app.services.lineup.bulk import bulk_upsert_lineup_items
+from app.services.lineup.net_requirement import (
+    DEFAULT_TARGET_COVER_WEEKS,
+    build_net_requirement_rows,
+)
 
 router = APIRouter()
 
@@ -234,3 +238,46 @@ async def clear_lineup_items(body: ClearConfirmBody, db: AsyncSession = Depends(
         await db.rollback()
         raise HTTPException(status_code=409, detail="Cannot clear: rows are still referenced by other tables. Delete dependent rows first.")
     return {"deleted": res.rowcount or 0}
+
+
+@router.get("/net-requirement")
+async def get_lineup_net_requirement(
+    distributor_id: int | None = Query(default=None),
+    product_id: int | None = Query(default=None),
+    horizon_weeks: int = Query(default=13, ge=1, le=52),
+    target_cover_weeks: float = Query(default=DEFAULT_TARGET_COVER_WEEKS, ge=0, le=52),
+    include_customer_shares: bool = Query(default=True),
+    limit: int = Query(default=200, ge=1, le=2000),
+    db: AsyncSession = Depends(get_db),
+):
+    """B2-01 — net requirement at distributor × product (stock subtract at that grain).
+
+    Customer shares are allocation hints only. Bias factor is 0 until B2-02 wires A1.
+    """
+    try:
+        product_bu: dict[int, str] = {}
+        prod_res = await db.execute(
+            select(DimProduct.id, DimProduct.product_line, DimProduct.business_unit)
+        )
+        for pid, pl, bu in prod_res.all():
+            label = (bu or pl or "").strip()
+            if label:
+                product_bu[int(pid)] = label
+
+        return await build_net_requirement_rows(
+            db,
+            horizon_weeks=horizon_weeks,
+            target_cover_weeks=target_cover_weeks,
+            distributor_id=distributor_id,
+            product_id=product_id,
+            product_bu=product_bu,
+            include_customer_shares=include_customer_shares,
+            limit=limit,
+        )
+    except Exception:
+        return {
+            "data_unavailable": True,
+            "row_count": 0,
+            "rows": [],
+            "message": "Net requirement read model unavailable",
+        }

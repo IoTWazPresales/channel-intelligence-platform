@@ -84,6 +84,26 @@ type LineupEventRow = {
   created_at: string | null;
 };
 
+type NetRequirementResponse = {
+  data_unavailable?: boolean;
+  row_count: number;
+  formula?: string;
+  horizon_weeks?: number;
+  target_cover_weeks?: number;
+  rows: Array<{
+    distributor_id: number;
+    product_id: number;
+    business_unit: string | null;
+    forecast_demand: number;
+    bias_adjusted_forecast: number;
+    channel_stock: number;
+    in_transit: number;
+    target_cover_units: number;
+    net_requirement: number;
+    weekly_velocity: number;
+  }>;
+};
+
 export default function LineupPage() {
   const qc = useQueryClient();
   const [patchMsg, setPatchMsg] = useState<string | null>(null);
@@ -97,6 +117,19 @@ export default function LineupPage() {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['lineup-items'],
     queryFn: ({ signal }) => apiGet<Row[]>('/api/v1/lineup/items', { signal }),
+  });
+
+  const {
+    data: netReq,
+    isLoading: netReqLoading,
+    isError: netReqError,
+    refetch: refetchNetReq,
+  } = useQuery({
+    queryKey: ['lineup-net-requirement'],
+    queryFn: ({ signal }) =>
+      apiGet<NetRequirementResponse>('/api/v1/lineup/net-requirement?limit=50&include_customer_shares=false', {
+        signal,
+      }),
   });
 
   const delRow = useMutation({
@@ -272,11 +305,61 @@ export default function LineupPage() {
           <Link component={NextLink} href="/roadmap">
             roadmap
           </Link>
-          . Use <strong>Bulk CSV import</strong> to upsert rows (optional replace). Click a row to inspect{' '}
-          <strong>approval history</strong>. Edit <strong>Approval</strong> or <strong>Notes</strong> inline; other
-          columns stay read-only until deeper edit flows land.
+          . Net requirement = forecast − channel stock − in-transit + target cover (distributor × product grain). Use{' '}
+          <strong>Bulk CSV import</strong> to upsert rows. Click a row for <strong>approval history</strong>.
         </Typography>
       </Alert>
+      <Paper sx={{ p: 2, mb: 2 }} data-testid="lineup-net-requirement">
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+          <Typography variant="subtitle1">Net requirement (B2)</Typography>
+          <Button size="small" onClick={() => void refetchNetReq()} disabled={netReqLoading}>
+            Refresh
+          </Button>
+        </Stack>
+        {netReqError ? (
+          <Alert severity="warning">Could not load net requirement</Alert>
+        ) : netReq?.data_unavailable ? (
+          <Alert severity="info">Net requirement data unavailable</Alert>
+        ) : (
+          <>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+              Horizon {netReq?.horizon_weeks ?? 13}w · target cover {netReq?.target_cover_weeks ?? 4}w ·{' '}
+              {netReq?.row_count ?? 0} pairs · stock subtract at distributor × product only
+            </Typography>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Dist</TableCell>
+                  <TableCell>Product</TableCell>
+                  <TableCell align="right">Forecast</TableCell>
+                  <TableCell align="right">Stock</TableCell>
+                  <TableCell align="right">In-transit</TableCell>
+                  <TableCell align="right">Target cover</TableCell>
+                  <TableCell align="right">Net req</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {(netReq?.rows ?? []).slice(0, 15).map((r) => (
+                  <TableRow key={`${r.distributor_id}-${r.product_id}`}>
+                    <TableCell>{r.distributor_id}</TableCell>
+                    <TableCell>{r.product_id}</TableCell>
+                    <TableCell align="right">{Math.round(r.forecast_demand)}</TableCell>
+                    <TableCell align="right">{Math.round(r.channel_stock)}</TableCell>
+                    <TableCell align="right">{Math.round(r.in_transit)}</TableCell>
+                    <TableCell align="right">{Math.round(r.target_cover_units)}</TableCell>
+                    <TableCell align="right">{Math.round(r.net_requirement)}</TableCell>
+                  </TableRow>
+                ))}
+                {!netReqLoading && (netReq?.rows?.length ?? 0) === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7}>No forecast/stock pairs in horizon</TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          </>
+        )}
+      </Paper>
       {patchMsg ? (
         <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setPatchMsg(null)}>
           {patchMsg}

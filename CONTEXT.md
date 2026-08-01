@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-01 — **B2-01:** net requirement read model `GET /lineup/net-requirement` (forecast−stock−in-transit+target cover at dist×product; PO-linked in-transit). Lineup page panel. Next B2-02 bias/profit/budget.
 - 2026-08-01 — **B1-04:** Demand Forecast method chips + title; Channel Ops inventory strategic column `demand_forecast_units_13w` (dist×product sum next 13w). B1 exit complete pending VERIFY. Next B2.
 - 2026-08-01 — **B1-03:** analogue path for no-history lineup SKUs (`product_line`/`series`/`form_factor`/…); proven `90NB13Y1-M01XE0` ← `90NB1021-M02MV0`; manual override precedence (999 units / confidence=override). Next B1-04 polish.
 - 2026-08-01 — **B1-02:** velocity → `fact_demand_forecast` at dist×product×customer (no collapse); ~27k rows on cip; rollups reconcile; wired after DSI forecast sync; browser Method=velocity. Next B1-03 analogue.
