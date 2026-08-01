@@ -1,7 +1,7 @@
 ﻿# CURRENT state
 
 **Last updated:** 2026-08-01 (P3-5 live on cip)
-**Branch:** `feat/p2-auth-rbac` @ `59d5da1`
+**Branch:** `feat/p2-auth-rbac` @ `f91e668` (P3-5 @ `59d5da1`)
 **Alembic:** `20260801_0007` on cip
 
 ## Done this session
