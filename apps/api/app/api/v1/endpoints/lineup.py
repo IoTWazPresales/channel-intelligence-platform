@@ -13,13 +13,30 @@ from app.api.deps import get_db
 from app.models.dimensions import DimChannel, DimCustomer, DimProduct
 from app.models.lineup import FactLineupPlanItem, LineupPlanItemEvent
 from app.services.lineup.audit import record_lineup_approval_event
+from app.services.lineup.bias_correction import volume_bias_by_bu
+from app.services.lineup.budget_position import build_budget_position
 from app.services.lineup.bulk import bulk_upsert_lineup_items
 from app.services.lineup.net_requirement import (
     DEFAULT_TARGET_COVER_WEEKS,
     build_net_requirement_rows,
 )
+from app.services.lineup.profit_reservation import compute_profit_with_reservation
+from app.models.commercial_planner import CommercialSkuAssumption
 
 router = APIRouter()
+
+
+class BudgetPositionBody(BaseModel):
+    planned_reservations: list[dict] = Field(default_factory=list)
+    period_label: str | None = None
+
+
+class BuilderEconomicsBody(BaseModel):
+    product_id: int
+    net_requirement_units: float = Field(ge=0)
+    target_srp_local: float | None = None
+    promo_srp_local: float | None = None
+    normal_price_share: float = Field(default=0.5, ge=0, le=1)
 
 
 class ClearConfirmBody(BaseModel):
@@ -247,12 +264,16 @@ async def get_lineup_net_requirement(
     horizon_weeks: int = Query(default=13, ge=1, le=52),
     target_cover_weeks: float = Query(default=DEFAULT_TARGET_COVER_WEEKS, ge=0, le=52),
     include_customer_shares: bool = Query(default=True),
+    apply_bias: bool = Query(
+        default=False,
+        description="When true, apply A1 volume bias by BU to inflate/deflate forecast",
+    ),
     limit: int = Query(default=200, ge=1, le=2000),
     db: AsyncSession = Depends(get_db),
 ):
-    """B2-01 — net requirement at distributor × product (stock subtract at that grain).
+    """B2 — net requirement at distributor × product (stock subtract at that grain).
 
-    Customer shares are allocation hints only. Bias factor is 0 until B2-02 wires A1.
+    Customer shares are allocation hints only. Optional A1 bias correction (B2-02).
     """
     try:
         product_bu: dict[int, str] = {}
@@ -264,16 +285,26 @@ async def get_lineup_net_requirement(
             if label:
                 product_bu[int(pid)] = label
 
-        return await build_net_requirement_rows(
+        bias_meta: dict | None = None
+        bias_by_bu: dict[str, float] = {}
+        if apply_bias:
+            bias_meta = await volume_bias_by_bu(db)
+            bias_by_bu = dict(bias_meta.get("by_bu") or {})
+
+        out = await build_net_requirement_rows(
             db,
             horizon_weeks=horizon_weeks,
             target_cover_weeks=target_cover_weeks,
             distributor_id=distributor_id,
             product_id=product_id,
+            bias_by_bu=bias_by_bu,
             product_bu=product_bu,
             include_customer_shares=include_customer_shares,
             limit=limit,
         )
+        out["bias"] = bias_meta or {"applied": False, "by_bu": {}}
+        out["bias"]["applied"] = bool(apply_bias and bias_by_bu)
+        return out
     except Exception:
         return {
             "data_unavailable": True,
@@ -281,3 +312,62 @@ async def get_lineup_net_requirement(
             "rows": [],
             "message": "Net requirement read model unavailable",
         }
+
+
+@router.post("/builder-economics")
+async def post_lineup_builder_economics(
+    body: BuilderEconomicsBody,
+    db: AsyncSession = Depends(get_db),
+):
+    """B2-02 — profit + embedded reservation + 50/50 treatments for a net-requirement qty.
+
+    Q-002 interim: reservation derived from SKU ``reserve_total_pct`` (not explicit column).
+    """
+    sku = (
+        await db.execute(
+            select(CommercialSkuAssumption).where(
+                CommercialSkuAssumption.product_id == int(body.product_id)
+            )
+        )
+    ).scalar_one_or_none()
+    if sku is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No commercial_sku_assumption for product — set PM bottom / reserve first",
+        )
+    srp = body.target_srp_local
+    if srp is None or srp <= 0:
+        raise HTTPException(status_code=400, detail="target_srp_local required (> 0)")
+    return compute_profit_with_reservation(
+        net_requirement_units=body.net_requirement_units,
+        target_srp_local=float(srp),
+        promo_srp_local=body.promo_srp_local,
+        controlled_cost_amount=float(sku.controlled_cost_amount),
+        reserve_total_pct=float(sku.reserve_total_pct),
+        promo_reserve_split_pct=float(sku.promo_reserve_split_pct),
+        vat_rate_pct=float(sku.vat_rate_pct),
+        fx_plan_currency_per_cost_currency=float(sku.fx_plan_currency_per_cost_currency),
+        normal_price_share=body.normal_price_share,
+    )
+
+
+@router.get("/budget-position")
+async def get_lineup_budget_position(
+    period_label: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """B2-02 — dual-track budget position (money + support-%); no hard enforce."""
+    return await build_budget_position(db, period_label=period_label)
+
+
+@router.post("/budget-position")
+async def post_lineup_budget_position(
+    body: BudgetPositionBody,
+    db: AsyncSession = Depends(get_db),
+):
+    """B2-02 — budget position with caller-supplied planned reservations."""
+    return await build_budget_position(
+        db,
+        planned_reservations=body.planned_reservations,
+        period_label=body.period_label,
+    )

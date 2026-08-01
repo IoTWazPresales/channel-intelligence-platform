@@ -127,9 +127,15 @@ export default function LineupPage() {
   } = useQuery({
     queryKey: ['lineup-net-requirement'],
     queryFn: ({ signal }) =>
-      apiGet<NetRequirementResponse>('/api/v1/lineup/net-requirement?limit=50&include_customer_shares=false', {
-        signal,
-      }),
+      apiGet<NetRequirementResponse>(
+        '/api/v1/lineup/net-requirement?limit=50&include_customer_shares=false&apply_bias=true',
+        { signal },
+      ),
+  });
+
+  const { data: budgetPos } = useQuery({
+    queryKey: ['lineup-budget-position'],
+    queryFn: ({ signal }) => apiGet<Record<string, unknown>>('/api/v1/lineup/budget-position', { signal }),
   });
 
   const delRow = useMutation({
@@ -324,8 +330,17 @@ export default function LineupPage() {
           <>
             <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
               Horizon {netReq?.horizon_weeks ?? 13}w · target cover {netReq?.target_cover_weeks ?? 4}w ·{' '}
-              {netReq?.row_count ?? 0} pairs · stock subtract at distributor × product only
+              {netReq?.row_count ?? 0} pairs · A1 bias applied when available · stock at dist×product
             </Typography>
+            {budgetPos ? (
+              <Typography variant="caption" display="block" sx={{ mb: 1 }} data-testid="lineup-budget-position">
+                Budget (dual-track, no hard enforce): reserved{' '}
+                {String((budgetPos as { tracks?: { money?: { planned_reservation_usd?: number } } }).tracks?.money?.planned_reservation_usd ?? 0)}{' '}
+                · drawn CPOR{' '}
+                {String((budgetPos as { tracks?: { money?: { drawn_cpor_usd?: number } } }).tracks?.money?.drawn_cpor_usd ?? 0)}{' '}
+                USD · Q-002 reservation = derived interim
+              </Typography>
+            ) : null}
             <Table size="small">
               <TableHead>
                 <TableRow>
