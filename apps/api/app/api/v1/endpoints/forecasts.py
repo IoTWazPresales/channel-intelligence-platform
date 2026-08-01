@@ -12,6 +12,7 @@ from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.fact_demand_forecast import FactDemandForecast
 from app.services.commercial_planner.open_channel_customer import OPEN_CHANNEL_CUSTOMER_CODE
 from app.services.commercial_planner.unassigned_distributor import UNASSIGNED_DISTRIBUTOR_CODE
+from app.services.demand_forecast.analogue_compute import generate_analogue_demand_forecasts
 from app.services.demand_forecast.velocity_compute import (
     generate_velocity_demand_forecasts,
     sum_rollup,
@@ -124,6 +125,8 @@ def _serialize(f: FactDemandForecast, prod: DimProduct | None) -> dict:
         "customer_id": f.customer_id,
         "lower_band": float(f.lower_band) if f.lower_band is not None else None,
         "upper_band": float(f.upper_band) if f.upper_band is not None else None,
+        "analogue_product_id": f.analogue_product_id,
+        "analogue_basis": f.analogue_basis,
     }
 
 
@@ -152,6 +155,13 @@ class VelocityComputeBody(BaseModel):
     confirm: bool = False
 
 
+class AnalogueComputeBody(BaseModel):
+    product_ids: list[int] | None = None
+    weeks_ahead: int = Field(default=13, ge=1, le=52)
+    max_products: int = Field(default=50, ge=1, le=500)
+    confirm: bool = False
+
+
 @router.post("/compute-velocity", status_code=200)
 async def compute_velocity_forecasts(body: VelocityComputeBody):
     """Project fact_customer_velocity → fact_demand_forecast at full grain (sync)."""
@@ -163,6 +173,26 @@ async def compute_velocity_forecasts(body: VelocityComputeBody):
                 db,
                 distributor_id=body.distributor_id,
                 weeks_ahead=body.weeks_ahead,
+            )
+            db.commit()
+            return result
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/compute-analogue", status_code=200)
+async def compute_analogue_forecasts(body: AnalogueComputeBody):
+    """Forecast no-history products from analogue SKUs (confidence capped low)."""
+    if not body.confirm:
+        raise HTTPException(status_code=400, detail="Set confirm=true to run analogue compute")
+    with SessionLocal() as db:
+        try:
+            result = generate_analogue_demand_forecasts(
+                db,
+                product_ids=body.product_ids,
+                weeks_ahead=body.weeks_ahead,
+                max_products=body.max_products,
             )
             db.commit()
             return result

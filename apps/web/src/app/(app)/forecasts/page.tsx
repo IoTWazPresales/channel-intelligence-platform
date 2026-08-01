@@ -23,6 +23,7 @@ type Row = {
   confidence_level?: string | null;
   method?: string | null;
   is_override: boolean;
+  analogue_product_id?: number | null;
 };
 
 type ForecastPasteRow = {
@@ -124,6 +125,7 @@ export default function ForecastsPage() {
       { field: 'period_start', headerName: 'Period' },
       { field: 'forecast_units', headerName: 'Units', type: 'numericColumn' },
       { field: 'method', headerName: 'Method' },
+      { field: 'analogue_product_id', headerName: 'Analogue product id', hide: true },
       { field: 'confidence_placeholder', headerName: 'Confidence' },
       { field: 'is_override', headerName: 'Override' },
       gridDeleteColumn<Row>((id) => void delRow.mutate(id), { busy: busyDel }),

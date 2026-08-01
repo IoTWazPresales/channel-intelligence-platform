@@ -178,8 +178,8 @@ CST `/channel-intelligence` remains a **separate** customer×product×site veloc
 | B1-01 | **forecast_units** | IMPLEMENTED (B1-01/02) | Stored at atomic grain; rollup = Σ across any axis (`GET /forecasts/rollups`) | distributor × product × customer × period | Demand Forecast |
 | B1-02 | **confidence_level** | IMPLEMENTED (velocity) | Ordinal `{low, medium, high, override}`. Velocity: from `fact_customer_velocity.model_confidence`. Analogue: capped `low` (B1-03). Manual override: `override`. | same | Demand Forecast |
 | B1-03 | **Forecast band** | IMPLEMENTED (velocity) | `lower_band` / `upper_band`. Velocity: 4wk-vs-52wk variance. Analogue: widened + confidence capped low (B1-03). Override: band = point. | same | Demand Forecast |
-| B1-04 | **Forecast method** | PARTIAL | `{velocity}` live; `{analogue, manual, blend}` — manual via `/forecasts` write; analogue → B1-03 | same | Demand Forecast |
-| B1-05 | **Analogue provenance** | SPEC (schema B1-01) | Required when `method=analogue`: `analogue_product_id` + `analogue_basis` JSON `{spec, segment, price_band, gpu, predecessor, scale}`. | same | Demand Forecast |
+| B1-04 | **Forecast method** | IMPLEMENTED (velocity + analogue + manual) | Taxonomy `{velocity, analogue, manual}` live; `blend` deferred. Precedence: override/manual > analogue > velocity. | same | Demand Forecast |
+| B1-05 | **Analogue provenance** | IMPLEMENTED (B1-03) | Required when `method=analogue`: `analogue_product_id` + `analogue_basis` JSON `{matched[], scale}` from product_line / series / form_factor / price_band / gpu / predecessor. | same | Demand Forecast |
 | B1-06 | **Channel pseudo-customer** | SPEC (schema B1-01) | `customer_id` is **NOT NULL**. Channel-only / missing-customer demand uses controlled `dim_customer.code = OPEN_CHANNEL`. Missing distributor on manual override uses `dim_distributor.code = UNASSIGNED`. | — | Demand Forecast |
 | B1-07 | **Forecast layer invariant** | SPEC (schema B1-01) | Forecast is **never merged into actuals**. Separate table, separate labelled surface. Missing actual ≠ gap-filled with prediction. | — | Demand Forecast |
 
