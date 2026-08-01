@@ -1,7 +1,7 @@
 ﻿# CURRENT state
 
 **Last updated:** 2026-08-01 (P3-1 complete for this branch; stop before P3-2)
-**Branch:** `feat/p2-auth-rbac` @ (pending push)
+**Branch:** `feat/p2-auth-rbac` @ `2fe8f5f`
 **Alembic:** `20260801_0005` on cip
 
 ## Done this session
