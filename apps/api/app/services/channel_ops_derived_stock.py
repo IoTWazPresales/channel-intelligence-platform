@@ -133,17 +133,21 @@ async def sellout_velocity_52wk_by_dist_product(
     db: AsyncSession,
     *,
     distributor_id: int | None = None,
+    tenant_id: str | None = None,
 ) -> dict[tuple[int, int], float]:
     """Weekly avg sell-out units over 364d, grain distributor × product only.
 
     Matches DSI velocity window math (sum units in window / 52) without customer grain.
     """
+    tid = (tenant_id or "").strip() or None
     anchor_q = select(func.max(FactSalesSellout.transaction_date)).where(
         FactSalesSellout.distributor_id.isnot(None),
         FactSalesSellout.product_id.isnot(None),
     )
     if distributor_id is not None:
         anchor_q = anchor_q.where(FactSalesSellout.distributor_id == int(distributor_id))
+    if tid is not None:
+        anchor_q = anchor_q.where(FactSalesSellout.tenant_id == tid)
     anchor = await db.scalar(anchor_q)
     if anchor is None:
         return {}
@@ -165,6 +169,8 @@ async def sellout_velocity_52wk_by_dist_product(
     )
     if distributor_id is not None:
         q = q.where(FactSalesSellout.distributor_id == int(distributor_id))
+    if tid is not None:
+        q = q.where(FactSalesSellout.tenant_id == tid)
     rows = (await db.execute(q)).all()
     out: dict[tuple[int, int], float] = {}
     for dist_id, product_id, units in rows:
@@ -359,37 +365,41 @@ async def derived_stock_by_dist_product(
     db: AsyncSession,
     *,
     distributor_id: int | None = None,
+    tenant_id: str | None = None,
 ) -> dict[tuple[int, int], float]:
     """Latest derived stock per (distributor, product). Never sums snapshot history."""
-    latest = _latest_snapshot_subquery(distributor_id)
-    inv_rows = (
-        await db.execute(
-            select(
-                FactInventoryDistributor.distributor_id,
-                FactInventoryDistributor.product_id,
-                FactInventoryDistributor.as_of_date,
-                FactInventoryDistributor.on_hand_units,
-            ).join(
-                latest,
-                and_(
-                    FactInventoryDistributor.distributor_id == latest.c.distributor_id,
-                    FactInventoryDistributor.product_id == latest.c.product_id,
-                    FactInventoryDistributor.as_of_date == latest.c.snapshot_date,
-                ),
-            )
-        )
-    ).all()
+    tid = (tenant_id or "").strip() or None
+    latest = _latest_snapshot_subquery(distributor_id, tenant_id=tid)
+    inv_q = select(
+        FactInventoryDistributor.distributor_id,
+        FactInventoryDistributor.product_id,
+        FactInventoryDistributor.as_of_date,
+        FactInventoryDistributor.on_hand_units,
+    ).join(
+        latest,
+        and_(
+            FactInventoryDistributor.distributor_id == latest.c.distributor_id,
+            FactInventoryDistributor.product_id == latest.c.product_id,
+            FactInventoryDistributor.as_of_date == latest.c.snapshot_date,
+        ),
+    )
+    if tid is not None:
+        inv_q = inv_q.where(FactInventoryDistributor.tenant_id == tid)
+    inv_rows = (await db.execute(inv_q)).all()
     out: dict[tuple[int, int], float] = {}
     for dist_id, prod_id, snap_date, on_hand in inv_rows:
         reported = Decimal(str(on_hand or 0))
+        sell_clauses = [
+            FactSalesSellout.distributor_id == int(dist_id),
+            FactSalesSellout.product_id == int(prod_id),
+            FactSalesSellout.transaction_date > snap_date,
+        ]
+        if tid is not None:
+            sell_clauses.append(FactSalesSellout.tenant_id == tid)
         sell_out = Decimal(
             str(
                 await db.scalar(
-                    select(func.coalesce(func.sum(FactSalesSellout.units), 0)).where(
-                        FactSalesSellout.distributor_id == int(dist_id),
-                        FactSalesSellout.product_id == int(prod_id),
-                        FactSalesSellout.transaction_date > snap_date,
-                    )
+                    select(func.coalesce(func.sum(FactSalesSellout.units), 0)).where(*sell_clauses)
                 )
                 or 0
             )
@@ -398,7 +408,9 @@ async def derived_stock_by_dist_product(
             str(
                 await db.scalar(
                     select(func.coalesce(func.sum(FactInboundShipment.quantity), 0)).where(
-                        _shipped_landed_filter(int(dist_id), int(prod_id), snap_date)
+                        _shipped_landed_filter(
+                            int(dist_id), int(prod_id), snap_date, tenant_id=tid
+                        )
                     )
                 )
                 or 0
@@ -416,13 +428,16 @@ async def sum_derived_channel_stock(
     db: AsyncSession,
     *,
     distributor_id: int | None = None,
+    tenant_id: str | None = None,
 ) -> tuple[int, int]:
     """Sum derived latest stock across (distributor, product).
 
     Returns (total_derived_units_rounded, pair_count).
     Never sums raw snapshots across periods.
     """
-    by_pair = await derived_stock_by_dist_product(db, distributor_id=distributor_id)
+    by_pair = await derived_stock_by_dist_product(
+        db, distributor_id=distributor_id, tenant_id=tenant_id
+    )
     if not by_pair:
         return 0, 0
     return int(round(sum(by_pair.values()))), len(by_pair)

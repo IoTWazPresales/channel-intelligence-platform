@@ -13,6 +13,23 @@
 **P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
+## BACKLOG-097 — P3-2 materialised aggregates / set-based A3 stock
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-01 |
+| **Effort** | Medium–Large (SQL rewrite + optional refresh job; maybe MV) |
+| **Source** | P3-2 live soak 2026-08-01 — cold `weeks_of_cover` full portfolio ~7.4s / `fill_rate` ~5.7s vs ROADMAP report render &lt;5s p95; warm cache &lt;1ms OK |
+| **Idea** | Replace per-pair scalar sell-out/landed loops in `derived_stock_by_dist_product` with set-based CTEs; optionally Postgres MATERIALIZED VIEW + refresh on import apply; keep latest-per-(distributor,product) invariant. |
+| **Why it matters / deferrable** | Meets NFR for cold governed report without relying only on 60s result cache. Deferrable while warm-cache path + report builder (P3-3) are primary; P3-2 ships process-local/Redis TTL cache. |
+| **What the work is** | Benchmark set-based derived stock; add MV or aggregate table only if set-based alone misses bar; wire invalidation on DSI/shipment apply; document vintage. |
+| **Regression traps** | Never sum SOH snapshot history; pipeline/open_order must stay out; tenant_id filter required. |
+| **Behavior to retain** | Formula: latest reported − sell-out since + POD-landed shipped since; WoC at distributor×product only. |
+| **Out of scope** | Report builder UI (P3-3); changing COMMERCIAL_SEMANTICS formulas. |
+| **TRIGGER** | Cold `/query/execute` for A3/A1 regularly exceeds 5s after P3-3 starts **or** Warren asks to hit NFR without cache. |
+
+---
+
 ## BACKLOG-096 — Commercial tenant profile onboarding UI
 
 | Field | Detail |

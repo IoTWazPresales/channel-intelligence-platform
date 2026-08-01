@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-01 — **P3-2 query engine v1:** `/query/execute`+`/explain`; A3/A1/A2 handlers + cache; live WoC~13.6w / fill~0.465; BACKLOG-097 cold NFR. Stop before P3-3.
 - 2026-08-01 — **P3-1 complete (pre-P3-2):** full SEMANTICS catalog + tenant overlay merge; forecasts/inventory/channel-ops inventory tenant filters. Stop before P3-2.
 - 2026-08-01 — **P3-1 semantic layer scaffold:** YAML catalog + `validate_metric_grain` (WoC/SOH/claim_rate refusals); API `/semantics/*`. No P3-2 SQL. Tests 7/7.
 - 2026-08-01 — **P2 residual tenant filters:** dim product/customer/distributor list+create; sellout/shipping/channel-ops sell-out/CST/inbound reads via `where_tenant`; DSI/shipment/CST apply stamp `tenant_id` from ImportJob. Next: P3-1 semantic layer.
