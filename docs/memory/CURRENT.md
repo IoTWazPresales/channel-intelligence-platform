@@ -1,6 +1,6 @@
 # CURRENT state
 
-**Last updated:** 2026-08-01 (B2-02)
+**Last updated:** 2026-08-01 (B2-03)
 **Branch:** `feat/b1-forecasting`  
 **Alembic:** `20260801_0001` on cip
 
@@ -12,8 +12,9 @@
 | B1-03 | `098f6d1` |
 | B1-04 | `d1f0ea3` |
 | B2-01 | `34a5166` |
-| B2-02 | commit pending |
+| B2-02 | `0f43998` |
+| B2-03 | commit pending |
 
 ## Next
-**B2-03** authoring apply from net-req + export skeleton. Then **B4** promo plan builder.
+**B4** promo plan builder (comparables + B1 volume + B2 budget check).
 

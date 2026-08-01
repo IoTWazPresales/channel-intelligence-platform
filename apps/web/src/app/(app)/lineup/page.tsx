@@ -318,9 +318,19 @@ export default function LineupPage() {
       <Paper sx={{ p: 2, mb: 2 }} data-testid="lineup-net-requirement">
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
           <Typography variant="subtitle1">Net requirement (B2)</Typography>
-          <Button size="small" onClick={() => void refetchNetReq()} disabled={netReqLoading}>
-            Refresh
-          </Button>
+          <Stack direction="row" spacing={1}>
+            <Button
+              size="small"
+              component="a"
+              href="/api/v1/lineup/net-requirement/export.csv?limit=200"
+              data-testid="lineup-net-requirement-export"
+            >
+              Export CSV
+            </Button>
+            <Button size="small" onClick={() => void refetchNetReq()} disabled={netReqLoading}>
+              Refresh
+            </Button>
+          </Stack>
         </Stack>
         {netReqError ? (
           <Alert severity="warning">Could not load net requirement</Alert>
