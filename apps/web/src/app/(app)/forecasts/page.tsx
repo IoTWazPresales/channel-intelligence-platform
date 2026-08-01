@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Paper, Stack, Switch, TextField } from '@mui/material';
+import { Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Paper, Stack, Switch, TextField } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColDef } from 'ag-grid-community';
 import { useMemo, useState } from 'react';
@@ -20,7 +20,10 @@ type Row = {
   period_start: string;
   forecast_units: number;
   confidence_placeholder: string | null;
+  confidence_level?: string | null;
+  method?: string | null;
   is_override: boolean;
+  analogue_product_id?: number | null;
 };
 
 type ForecastPasteRow = {
@@ -70,9 +73,15 @@ export default function ForecastsPage() {
   const [cust, setCust] = useState('');
   const [override, setOverride] = useState(false);
 
+  const [methodFilter, setMethodFilter] = useState<string | null>(null);
+
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['forecasts'],
-    queryFn: ({ signal }) => apiGet<Row[]>('/api/v1/forecasts', { signal }),
+    queryKey: ['forecasts', methodFilter],
+    queryFn: ({ signal }) => {
+      const q = new URLSearchParams({ limit: '500' });
+      if (methodFilter) q.set('method', methodFilter);
+      return apiGet<Row[]>(`/api/v1/forecasts?${q}`, { signal });
+    },
   });
 
   const bulk = useMutation({
@@ -121,6 +130,8 @@ export default function ForecastsPage() {
       { field: 'sku', headerName: 'SKU', pinned: 'left' },
       { field: 'period_start', headerName: 'Period' },
       { field: 'forecast_units', headerName: 'Units', type: 'numericColumn' },
+      { field: 'method', headerName: 'Method' },
+      { field: 'analogue_product_id', headerName: 'Analogue product id', hide: true },
       { field: 'confidence_placeholder', headerName: 'Confidence' },
       { field: 'is_override', headerName: 'Override' },
       gridDeleteColumn<Row>((id) => void delRow.mutate(id), { busy: busyDel }),
@@ -132,10 +143,28 @@ export default function ForecastsPage() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Forecast' }]} title="Forecast & overrides" />
+      <PageHeader crumbs={[{ label: 'Forecast' }]} title="Demand Forecast" />
       <Paper sx={{ p: 2 }}>
+        <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} flexWrap="wrap" useFlexGap>
+          {[
+            { id: null, label: 'All methods' },
+            { id: 'velocity', label: 'Velocity' },
+            { id: 'analogue', label: 'Analogue' },
+            { id: 'manual', label: 'Manual / override' },
+          ].map((opt) => (
+            <Chip
+              key={opt.label}
+              size="small"
+              label={opt.label}
+              color={methodFilter === opt.id ? 'primary' : 'default'}
+              variant={methodFilter === opt.id ? 'filled' : 'outlined'}
+              onClick={() => setMethodFilter(opt.id)}
+              data-testid={`forecast-method-filter-${opt.id ?? 'all'}`}
+            />
+          ))}
+        </Stack>
         <ModuleDataSection
-          intro="Forecast rows are stored in fact_forecast. Unknown SKUs create placeholder products; optional customer codes create or attach customers."
+          intro="Demand forecast contract (fact_demand_forecast). Atomic grain: distributor × product × customer × period. Rollups are plain sums. Method chips filter velocity / analogue / manual overrides."
           isLoading={isLoading}
           isError={isError}
           error={toQueryError(error)}

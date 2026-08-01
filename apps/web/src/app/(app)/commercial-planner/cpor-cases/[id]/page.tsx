@@ -70,6 +70,7 @@ type CaseDetail = {
   missing_roe: boolean;
   ttl_support_zar: number | null;
   ttl_support_usd: number | null;
+  needs_reapproval?: boolean;
 };
 
 type Pivot = {
@@ -361,11 +362,20 @@ export default function CporCaseDetailPage() {
         <Chip label={data.status} color="primary" size="small" />
         <Chip label={`workflow: ${data.workflow_status}`} size="small" />
         <Chip label={`v${data.export_version}`} size="small" />
+        {data.needs_reapproval ? (
+          <Chip label="needs reapproval (over budget)" color="error" size="small" data-testid="cpor-needs-reapproval" />
+        ) : null}
         {data.missing_roe ? <Chip label="missing_roe" color="warning" size="small" /> : null}
         {(data.flags ?? []).slice(0, 6).map((f) => (
           <Chip key={f} label={f} size="small" variant="outlined" />
         ))}
       </Stack>
+      {data.needs_reapproval ? (
+        <Alert severity="warning" sx={{ mb: 1 }} data-testid="cpor-reapproval-banner">
+          Money ceiling exceeded or reapproval required. Approve with over-budget confirmation, or reduce
+          support / raise the tenant money ceiling.
+        </Alert>
+      ) : null}
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
         {data.customer_code} — {data.customer_name} · {data.promotion_type} · {data.window_start} →{' '}
         {data.window_end}
@@ -383,11 +393,13 @@ export default function CporCaseDetailPage() {
             disabled={transition.isPending}
             onClick={() => {
               if (action === 'reject') setRejectOpen(true);
-              else transition.mutate({ action });
+              else if (action === 'approve' && data.needs_reapproval) {
+                transition.mutate({ action: 'approve', confirm_over_budget_reapproval: true });
+              } else transition.mutate({ action });
             }}
             data-testid={`cpor-action-${action}`}
           >
-            {label}
+            {action === 'approve' && data.needs_reapproval ? 'Reapprove (over budget)' : label}
           </Button>
         ))}
         <Box sx={{ flex: 1 }} />

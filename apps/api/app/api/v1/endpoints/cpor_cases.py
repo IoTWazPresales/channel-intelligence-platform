@@ -30,6 +30,7 @@ from app.services.cpor.lifecycle import (
 )
 from app.services.cpor.pivot import build_case_pivot
 from app.services.cpor.norms_and_comparable import build_comparable_cases, build_support_norms
+from app.services.cpor.promo_plan_builder import build_promo_plan_draft
 from app.services.cpor.portfolio_intelligence import build_portfolio_intelligence
 from app.services.cpor.promotion_type_vocab import CPOR_CASE_STATUS_SET, CPOR_PROMOTION_TYPE_SET
 from app.services.cpor.recompute import recompute_case, recompute_case_line
@@ -177,6 +178,7 @@ def _case_json(
         "submitted_at": case.submitted_at.isoformat() if case.submitted_at else None,
         "decided_at": case.decided_at.isoformat() if case.decided_at else None,
         "decided_by": case.decided_by,
+        "needs_reapproval": bool(getattr(case, "needs_reapproval", False)),
         "superseded_by_case_id": case.superseded_by_case_id,
         "allowed_next": allowed_next(case.status),
         "ttl_support_zar": ttl_zar,
@@ -305,6 +307,7 @@ class RejectBody(BaseModel):
 class TransitionBody(BaseModel):
     action: str
     comment: str | None = None
+    confirm_over_budget_reapproval: bool = False
 
 
 class LayerSplitBody(BaseModel):
@@ -806,6 +809,33 @@ def transition_case(
         from_status = case.status
         new_status = target_status(action)
 
+        from app.services.cpor.budget_reapproval import (
+            apply_reapproval_flag,
+            evaluate_money_position,
+            gate_detail,
+            should_require_reapproval,
+        )
+
+        if action in ("propose", "resend"):
+            # Include this case in committed draw once it becomes proposed.
+            pos = evaluate_money_position(session, case_id=case.id, include_this_case=True)
+            apply_reapproval_flag(session, case, money_over=bool(pos.get("money_over")))
+
+        if action == "approve":
+            pos = evaluate_money_position(session, case_id=case.id, include_this_case=True)
+            apply_reapproval_flag(session, case, money_over=bool(pos.get("money_over")))
+            if (
+                tenant_profile_hard_enforce()
+                and should_require_reapproval(
+                    {**pos, "needs_reapproval": bool(case.needs_reapproval)}
+                )
+                and not body.confirm_over_budget_reapproval
+            ):
+                session.add(case)
+                session.commit()
+                pos = evaluate_money_position(session, case_id=case.id, include_this_case=True)
+                raise HTTPException(status_code=409, detail=gate_detail(pos, action="approve"))
+
         if action == "propose":
             case.status = "proposed"
             case.workflow_status = "pending_approval"
@@ -817,6 +847,7 @@ def transition_case(
             case.decided_at = now
             case.decided_by = actor
             case.last_comment = None
+            case.needs_reapproval = False
             drifts = _run_drift_check(session, case, actor)
         elif action == "reject":
             case.status = "rejected"
@@ -855,6 +886,8 @@ def transition_case(
                 "comment": body.comment,
                 "export_version": case.export_version,
                 "drifts": drifts,
+                "confirm_over_budget_reapproval": body.confirm_over_budget_reapproval,
+                "needs_reapproval": bool(case.needs_reapproval),
             },
         )
         # Fix payload 'from' — we already mutated status; re-read from event is fine for U3
@@ -866,7 +899,14 @@ def transition_case(
         line_jsons = [_line_json(l, pmap.get(int(l.product_id))) for l in lines]
         out = _case_json(case, customer=cust, lines=line_jsons, include_lines=True)
         out["drifts"] = drifts
+        out["budget_gate"] = evaluate_money_position(session, case_id=case.id, include_this_case=True)
         return out
+
+
+def tenant_profile_hard_enforce() -> bool:
+    from app.services import commercial_tenant_profile as tenant_profile
+
+    return bool(tenant_profile.HARD_ENFORCE_BUDGET)
 
 
 @router.get("/intelligence/portfolio")
@@ -893,6 +933,32 @@ def cpor_comparable_cases(
     """A2-05: ranked comparable cases (customer → BU → promo → quarter → volume)."""
     with SessionLocal() as session:
         return build_comparable_cases(session, case_id=case_id, limit=limit)
+
+
+@router.get("/intelligence/promo-plan-draft")
+def cpor_promo_plan_draft(
+    seed_case_id: int = Query(..., ge=1),
+    product_id: int | None = Query(default=None),
+    customer_id: int | None = Query(default=None),
+    planned_support_usd: float | None = Query(default=None, ge=0),
+    planned_revenue_usd: float | None = Query(default=None, ge=0),
+    period_label: str | None = Query(default=None),
+    horizon_weeks: int = Query(default=13, ge=1, le=52),
+    comparable_limit: int = Query(default=10, ge=1, le=50),
+) -> dict[str, Any]:
+    """B4 — draft promo plan: A2 comparables + B1 forecast volume + B2 budget check."""
+    with SessionLocal() as session:
+        return build_promo_plan_draft(
+            session,
+            seed_case_id=seed_case_id,
+            product_id=product_id,
+            customer_id=customer_id,
+            planned_support_usd=planned_support_usd,
+            planned_revenue_usd=planned_revenue_usd,
+            period_label=period_label,
+            horizon_weeks=horizon_weeks,
+            comparable_limit=comparable_limit,
+        )
 
 
 @router.get("/meta/promotion-types")

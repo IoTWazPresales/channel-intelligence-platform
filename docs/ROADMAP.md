@@ -139,7 +139,7 @@ See `docs/COMMERCIAL_SEMANTICS.md`. Two axes coexist: fill rate / plan execution
 **Support bias:** planned reservation vs actual CPOR spend — **CPOR-owned**, not PvE; blocked
 on reservation-column discovery. Do not put on Plan vs Executed.
 **Window:** all quarters with lineup coverage; credible core 26Q1 → current.
-**Exit:** plan-accuracy surface (fill + exceptions). Credibility artifact. *(A-lane wrap 2026-08-01: fill/exceptions/bias-slip BU/over-plan intake shipped; PM bias → Q-009; support bias still blocked.)*
+**Exit:** plan-accuracy surface (fill + exceptions). Credibility artifact. *(A-lane wrap 2026-08-01: fill/exceptions/bias-slip BU/over-plan intake shipped; Q-009 → PM=business_line; Q-002 → derived-from-profit planned side for support bias — metric still SPEC ONLY on CPOR Cases.)*
 
 ### A2 — CPOR intelligence
 **Entry:** P1 CPOR historical signed off.
@@ -185,9 +185,9 @@ only exists on one machine, and dependency is the entire objective.
 **Exit:** a second user logs in, sees a landing page, navigates to a surface, and you are not
 involved. (Remote access awaits a hosting decision; multi-user readiness does not.)
 
-**Note:** the Alembic chain is not replayable from scratch (revision `0001` is `create_all`
-from current models; CI works around it with `upgrade 0001` + `stamp head`). **This must be
-fixed inside P2** — deployment provisioning depends on it.
+**Note:** Alembic chain was squashed to baseline `20260801_0001` (B1-01 / P2-2).
+Fresh DBs: `alembic upgrade head` alone — no `stamp head`. Legacy revisions live under
+`apps/api/alembic/versions_legacy/` for archaeology only.
 
 ---
 

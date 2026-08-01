@@ -71,12 +71,6 @@ export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
     return [...map.entries()].map(([productId, v]) => ({ productId, ...v }));
   }, [data?.items, depth]);
 
-  if (distId == null) {
-    return (
-      <Alert severity="info">Select a distributor to view inbound shipment movements.</Alert>
-    );
-  }
-
   return (
     <Box>
       <Autocomplete
@@ -89,75 +83,81 @@ export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
         isOptionEqualToValue={(a, b) => a.id === b.id}
         renderInput={(params) => <TextField {...params} label="Distributor" required />}
       />
-      {isError && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {(error as Error)?.message ?? 'Failed to load movements.'}
-        </Alert>
-      )}
-      <Paper variant="outlined">
-        <Box sx={{ p: 2 }}>
-          {isLoading ? (
-            <Typography variant="body2">Loading…</Typography>
-          ) : (data?.items ?? []).length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
-              No shipment evidence lines for this distributor.
-            </Typography>
-          ) : (
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Ship date</TableCell>
-                  <TableCell>Product</TableCell>
-                  <TableCell>SKU</TableCell>
-                  <TableCell>Order no</TableCell>
-                  <TableCell>Delivery no</TableCell>
-                  <TableCell align="right">Units</TableCell>
-                  <TableCell>Status</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {data?.items.map((r, i) => (
-                  <TableRow key={`${r.order_no}-${i}`}>
-                    <TableCell>{r.ship_date ?? '—'}</TableCell>
-                    <TableCell>{r.product_name ?? '—'}</TableCell>
-                    <TableCell>{r.sku ?? '—'}</TableCell>
-                    <TableCell>{r.order_no ?? '—'}</TableCell>
-                    <TableCell>{r.delivery_no ?? '—'}</TableCell>
-                    <TableCell align="right">
-                      {r.units_shipped != null ? r.units_shipped.toLocaleString() : '—'}
-                    </TableCell>
-                    <TableCell>{r.line_state}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+      {distId == null ? (
+        <Alert severity="info">Select a distributor to view inbound shipment movements.</Alert>
+      ) : (
+        <>
+          {isError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {(error as Error)?.message ?? 'Failed to load movements.'}
+            </Alert>
           )}
-        </Box>
-      </Paper>
-      {depthAtLeast(depth, 'strategic') && productTotals.length > 0 && (
-        <Paper variant="outlined" sx={{ mt: 2, p: 2 }}>
-          <Typography variant="subtitle2" gutterBottom>
-            Inbound totals by product (filtered page)
-          </Typography>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>SKU</TableCell>
-                <TableCell>Product</TableCell>
-                <TableCell align="right">Inbound units</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {productTotals.map((r) => (
-                <TableRow key={r.productId}>
-                  <TableCell>{r.sku}</TableCell>
-                  <TableCell>{r.name}</TableCell>
-                  <TableCell align="right">{r.inbound.toLocaleString()}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Paper>
+          <Paper variant="outlined">
+            <Box sx={{ p: 2 }}>
+              {isLoading ? (
+                <Typography variant="body2">Loading…</Typography>
+              ) : (data?.items ?? []).length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No shipment evidence lines for this distributor.
+                </Typography>
+              ) : (
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Ship date</TableCell>
+                      <TableCell>Product</TableCell>
+                      <TableCell>SKU</TableCell>
+                      <TableCell>Order no</TableCell>
+                      <TableCell>Delivery no</TableCell>
+                      <TableCell align="right">Units</TableCell>
+                      <TableCell>Status</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {data?.items.map((r, i) => (
+                      <TableRow key={`${r.order_no}-${i}`}>
+                        <TableCell>{r.ship_date ?? '—'}</TableCell>
+                        <TableCell>{r.product_name ?? '—'}</TableCell>
+                        <TableCell>{r.sku ?? '—'}</TableCell>
+                        <TableCell>{r.order_no ?? '—'}</TableCell>
+                        <TableCell>{r.delivery_no ?? '—'}</TableCell>
+                        <TableCell align="right">
+                          {r.units_shipped != null ? r.units_shipped.toLocaleString() : '—'}
+                        </TableCell>
+                        <TableCell>{r.line_state}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </Box>
+          </Paper>
+          {depthAtLeast(depth, 'strategic') && productTotals.length > 0 && (
+            <Paper variant="outlined" sx={{ mt: 2, p: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Inbound totals by product (filtered page)
+              </Typography>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>SKU</TableCell>
+                    <TableCell>Product</TableCell>
+                    <TableCell align="right">Inbound units</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {productTotals.map((r) => (
+                    <TableRow key={r.productId}>
+                      <TableCell>{r.sku}</TableCell>
+                      <TableCell>{r.name}</TableCell>
+                      <TableCell align="right">{r.inbound.toLocaleString()}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Paper>
+          )}
+        </>
       )}
     </Box>
   );

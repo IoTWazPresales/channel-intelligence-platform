@@ -42,6 +42,16 @@ def generate_export(case_id: int, x_user_id: str | None = Header(default=None, a
     storage = LocalStorageBackend()
     with SessionLocal() as session:
         case = _load_case(session, case_id)
+        from app.services import commercial_tenant_profile as tenant_profile
+        from app.services.cpor.budget_reapproval import (
+            evaluate_money_position,
+            gate_detail,
+            should_require_reapproval,
+        )
+
+        pos = evaluate_money_position(session, case_id=case.id, include_this_case=True)
+        if bool(tenant_profile.HARD_ENFORCE_BUDGET) and should_require_reapproval(pos):
+            raise HTTPException(status_code=409, detail=gate_detail(pos, action="export"))
         try:
             data, digest, meta = build_cpor_case_workbook_bytes(session, case_id)
         except ValueError as exc:

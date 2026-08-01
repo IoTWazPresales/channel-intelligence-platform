@@ -185,9 +185,55 @@ export default function PromotionsPage() {
     }
   }
 
+  const [seedCaseId, setSeedCaseId] = useState('');
+  const { data: promoDraft, refetch: refetchPromoDraft } = useQuery({
+    queryKey: ['promo-plan-draft', seedCaseId],
+    queryFn: ({ signal }) =>
+      apiGet<Record<string, unknown>>(
+        `/api/v1/cpor/intelligence/promo-plan-draft?seed_case_id=${encodeURIComponent(seedCaseId)}&planned_support_usd=5000&planned_revenue_usd=50000`,
+        { signal },
+      ),
+    enabled: /^\d+$/.test(seedCaseId),
+  });
+
   return (
     <>
       <PageHeader crumbs={[{ label: 'Promotions' }]} title="Promo calendar & readiness" />
+      <Paper sx={{ p: 2, mb: 2 }} data-testid="promo-plan-builder-b4">
+        <Typography variant="subtitle1" sx={{ mb: 1 }}>
+          Promo plan builder (B4)
+        </Typography>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+          <TextField
+            size="small"
+            label="Seed CPOR case id"
+            value={seedCaseId}
+            onChange={(e) => setSeedCaseId(e.target.value)}
+            sx={{ width: 180 }}
+          />
+          <Button size="small" onClick={() => void refetchPromoDraft()} disabled={!/^\d+$/.test(seedCaseId)}>
+            Build draft
+          </Button>
+          <Button size="small" href="/commercial-planner/cpor-cases">
+            Open CPOR Cases
+          </Button>
+        </Stack>
+        {promoDraft ? (
+          <Typography variant="body2" component="div">
+            Suggested estimate qty: {String(promoDraft.suggested_estimate_qty)} · comparables:{' '}
+            {String((promoDraft.comparables as { count?: number } | undefined)?.count ?? 0)} · budget status:{' '}
+            {String(
+              (promoDraft.budget_check as { tracks?: { money?: { status?: string } } } | undefined)?.tracks?.money
+                ?.status ?? '—',
+            )}{' '}
+            (no hard enforce)
+          </Typography>
+        ) : (
+          <Typography variant="caption" color="text.secondary">
+            Enter a seed case id to compose A2 comparables + B1 forecast volume + B2 budget check.
+          </Typography>
+        )}
+      </Paper>
       <Alert severity="info" sx={{ mb: 2 }}>
         Scaffold plans/readiness are parked (CPOR U6 / spec §7). Use{' '}
         <strong>Commercial Planning → CPOR Cases</strong> (

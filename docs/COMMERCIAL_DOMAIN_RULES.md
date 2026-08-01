@@ -1,6 +1,6 @@
 # Commercial Domain Rules
 
-**Owner:** Warren (domain ground truth) · **Version:** 1.0 · 2026-07-31
+**Owner:** Warren (domain ground truth) · **Version:** 1.1 · 2026-08-01
 **Status:** authoritative. Agents never override these; changes require Warren's written
 correction and a version bump.
 
@@ -39,22 +39,27 @@ potential reuse. Cancelled cases free their budget immediately.
 can be moved between grains. The model must permit reallocation with an audit trail rather
 than enforcing hard partitions.
 
-**1.8 Constraint type: undetermined.** Whether the binding constraint is total money or a
-support-% ceiling per unit is not settled. Implement spend tracking against both views; do not
-hard-enforce either until Warren confirms.
+**1.8 Constraint type: money ceiling (TENANT-VARIABLE).** Binding constraint for the current
+tenant is a **money (rand/USD) ceiling**. When spend exceeds planned reservation, the **case
+must be reapproved**. Support-% is informational / a soft target for this tenant — not the
+binding gate (little % headroom; no per-line customer sales cap today). Other tenants may bind
+to support-%, dual-track, or none — encode via `commercial_tenant_profile` (`constraint_axis`,
+`over_budget_action`). Track both money and support-% views for explainability; enforce only
+the configured binding axis (reapproval workflow = follow-on BACKLOG).
 
 **1.9 PM bottom is fixed per quarter** — not negotiated per deal. A per-SKU floor held for the
-quarter.
+quarter. Commercial context (current tenant): local P&L is often unprofitable; **HQ typically
+inflates PM bottom** so support room is already embedded in the floor. Do not invent a separate
+handed-down funding pot.
 
 **1.10 The 50/50 split is a volume split, not a cost split.** A lineup line divides into
 **stock to be sold at normal price** and **stock to be sold at discount**. The nominal plan is
 50/50 but the actual split follows profit expectation.
 
-**Data-model consequence:** a lineup line carries two commercial treatments. Today this is
-implicit in the PM workbook via PM bottom and the profit line. At P1 lineup load, discovery
-must handle both cases: capture an explicit reservation/split column if present, otherwise
-derive it from PM bottom versus planned price. This affects lineup schema, CPOR linkage,
-budget consumption and fill-rate attribution — settle it before A1 ships.
+**Data-model consequence:** a lineup line carries two commercial treatments. Reservation
+**comes from profit** (PM bottom vs planned price) for the current tenant
+(`reservation_source=derived_from_profit`). TENANT-VARIABLE alternatives: explicit workbook
+column, or hybrid (column if present else derive). See Q-002 resolved.
 
 ---
 
@@ -109,9 +114,8 @@ usable by a PM. Budget is not a separate downstream module; it is part of author
 **4.2 Support bias is CPOR-owned.** Planned reservation versus actual CPOR spend
 ("PMs reserve 12% and spend 19%") is a **CPOR Cases** metric, not a Plan-vs-Executed tile.
 It sits alongside volume bias as a commercial finding but does **not** render on
-`/plan-vs-executed`. **Blocked** until lineup discovery answers whether reservation is an
-explicit workbook column or derived from PM bottom vs planned price (Still open #2). See
-`docs/COMMERCIAL_SEMANTICS.md` A1-09.
+`/plan-vs-executed`. Planned side uses **derived-from-profit** reservation (Q-002 resolved);
+metric build remains a CPOR Cases unit. See `docs/COMMERCIAL_SEMANTICS.md` A1-09.
 
 **4.3 Landing-quarter vs fill.** Fill rate stays **shipped**-basis (Plan vs Executed).
 Budget consumption is **landed**-basis. Landing measurement is **Shipping-owned**;
@@ -167,7 +171,7 @@ into application code.
 
 | # | Question | Blocks | Owner |
 |---|----------|--------|-------|
-| 1 | Constraint type — money ceiling or support-% ceiling per unit? (1.8) | Budget enforcement | Warren |
-| 2 | Is the lineup reservation an explicit column in the PM workbook, or purely derived from PM bottom vs planned price? | Lineup schema | **P1 discovery** |
 | 3 | Hosting target, budget, data residency | Deployment | Warren, deferred |
 | 4 | Per-customer CST file formats | P4 | Discovered at first load |
+
+**Resolved (see `docs/OPEN_QUESTIONS.md`):** #1 constraint → money + reapproval (Q-001); #2 reservation → derived from profit (Q-002); PM attribution → business line (Q-009).

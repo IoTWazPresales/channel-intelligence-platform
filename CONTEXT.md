@@ -17,6 +17,17 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-01 — **BACKLOG-095 hard reapproval:** `cpor_case.needs_reapproval` (alembic `20260801_0002`); approve/export gated when money over / flagged; `confirm_over_budget_reapproval`; UI Reapprove CTA; `HARD_ENFORCE_BUDGET=true`; optional `MONEY_CEILING_USD`.
+- 2026-08-01 — **Q-001/002/009 resolved (tenant-flexible):** money ceiling + reapproval intent; reservation derived from profit (HQ-inflated PM bottom context); PM attribution = business line (NB/NR/NV/NX). Profile stub `commercial_tenant_profile.py`. Q-003 hosting still open. B-lane VERIFY PASS earlier same day.
+- 2026-08-01 — **B4:** promo-plan-draft compose (`GET /cpor/intelligence/promo-plan-draft`) — A2 comparables + B1 forecast volume + B2 dual-track budget check; Promotions B4 panel. B-lane scaffold complete on `feat/b1-forecasting`.
+- 2026-08-01 — **B2-03:** net-requirement CSV export, 1H→Q1+Q2 slots, apply-net-requirement → draft lineup. Next B4.
+- 2026-08-01 — **B2-02:** A1 bias optional on net-req; profit+reservation (Q-002 derived via CP calculator); dual-track budget-position (money+% , no hard enforce); 50/50 treatments. Next B2-03 author/export.
+- 2026-08-01 — **B2-01:** net requirement read model `GET /lineup/net-requirement` (forecast−stock−in-transit+target cover at dist×product; PO-linked in-transit). Lineup page panel. Next B2-02 bias/profit/budget.
+- 2026-08-01 — **B1-04:** Demand Forecast method chips + title; Channel Ops inventory strategic column `demand_forecast_units_13w` (dist×product sum next 13w). B1 exit complete pending VERIFY. Next B2.
+- 2026-08-01 — **B1-03:** analogue path for no-history lineup SKUs (`product_line`/`series`/`form_factor`/…); proven `90NB13Y1-M01XE0` ← `90NB1021-M02MV0`; manual override precedence (999 units / confidence=override). Next B1-04 polish.
+- 2026-08-01 — **B1-02:** velocity → `fact_demand_forecast` at dist×product×customer (no collapse); ~27k rows on cip; rollups reconcile; wired after DSI forecast sync; browser Method=velocity. Next B1-03 analogue.
+- 2026-08-01 — **B1-01 on cip:** squash baseline `20260801_0001` applied+stamped; `fact_demand_forecast` + grants; empty-DB replay proven; browser `/forecasts` empty-state OK. Next B1-02 velocity compute. Branch `feat/b1-forecasting` (uncommitted).
+- 2026-08-01 — **B1-01 (in progress):** Alembic squash to `20260801_0001` (empty-DB replay proven on `cip_alembic_empty`); `fact_demand_forecast` contract + SEMANTICS §4.5; `/forecasts` repointed (no auto-create masters). cip still on `0075` until Warren apply+stamp. Branch `feat/b1-forecasting`.
 - 2026-08-01 — **A-lane wrap:** core A1/A2/A3 done. BACKLOG-092 left Warren-owned (payment files). Parked **093** case-scoped customer promo-load recon; **094** promo-planning auto MAC + price≠MAC sales forecast. Next: P2/B-lane (Warren choose) — not payment chase.
 - 2026-08-01 — **A3-03:** replenishment flag v1 (tenant config default 4w) on Channel Ops summary + inventory; UI Replenish column at strategic depth. Not a buy engine.
 - 2026-08-01 — **A1 bias/slip + rename:** BU volume bias + ship-quarter slip on `/plan-vs-executed`; Over-plan intake UI (BACKLOG-091); Q-009 PM source open; PM bias unavailable.

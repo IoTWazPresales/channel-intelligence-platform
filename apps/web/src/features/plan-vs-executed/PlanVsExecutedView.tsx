@@ -732,7 +732,7 @@ export function PlanVsExecutedView() {
                   />
                   <KpiTile
                     label="Volume bias (by BU)"
-                    title="Mean signed (shipped − planned) / planned on in-plan lines. Direction is the finding. PM bias unavailable until PM source locked (Q-009)."
+                    title="Mean signed (shipped − planned) / planned on in-plan lines. Direction is the finding. PM attribution follows tenant profile (business_line = same as BU)."
                     primary={
                       data.volume_bias?.by_bu?.[0]
                         ? `${data.volume_bias.by_bu[0].bu}: ${(data.volume_bias.by_bu[0].mean_signed_bias * 100).toFixed(1)}%`
@@ -754,6 +754,11 @@ export function PlanVsExecutedView() {
                     tone="neutral"
                     data-testid="pve-volume-bias"
                   />
+                  {data.volume_bias?.pm_attribution === 'business_line' ? (
+                    <Typography variant="caption" color="text.secondary" sx={{ width: '100%' }} data-testid="pve-pm-bias-business-line">
+                      PM volume bias = business line (same as BU) — {data.volume_bias.pm_attribution_reason}
+                    </Typography>
+                  ) : null}
                   {data.volume_bias?.pm_attribution === 'unavailable' ? (
                     <Typography variant="caption" color="text.secondary" sx={{ width: '100%' }} data-testid="pve-pm-bias-unavailable">
                       PM volume bias: unavailable — {data.volume_bias.pm_attribution_reason}

@@ -59,6 +59,7 @@ Print audit output in the unit report.
 | Listing registry | Listing Capture | `/listing-capture` |
 | Confirmed lineups / plan economics | Commercial Planner | `/commercial-planner` |
 | Line-up planning items CRUD | Line-up Planning | `/lineup` |
+| **Demand forecast** (units, confidence, bands, method, analogue) | Demand Forecast | `/forecasts` |
 | Masters / merges / gaps / channels | Admin masters | `/admin/customers` · `/products` · `/distributors` · … |
 
 ### Split surfaces (same domain, different job)
@@ -113,9 +114,9 @@ Status values: **IMPLEMENTED** (transcribed from tree) · **SPEC ONLY** (defined
 | A1-04 | **Unplanned intake** | IMPLEMENTED | Σ shipped on rows with planned = 0 and shipped > 0 | same | same | Plan vs Executed |
 | A1-05 | **No-PO blind spot** | IMPLEMENTED | In-plan lines with `awaiting_po`; count + Σ planned units | same | lineup without linked PO | Plan vs Executed |
 | A1-06 | **Pipeline (inbound)** | IMPLEMENTED | Σ `pipeline_units` (open_order) on in-plan rows; pending split = inbound vs cold | same | open_order evidence on linked POs | Plan vs Executed |
-| A1-07 | **Volume bias (BU)** · PM pending Q-009 | IMPLEMENTED (BU) · SPEC ONLY (PM) | Mean **signed** (shipped − planned) / planned by **BU**. Exclude planned = 0; report excluded count. Min lines per bucket (`VOLUME_BIAS_MIN_LINES`). Direction is the finding. **PM buckets:** unavailable until Q-009 (no PM field on lineup case/payload). | BU (implemented); PM blocked | same as fill | Plan vs Executed |
+| A1-07 | **Volume bias (BU / PM)** | IMPLEMENTED | Mean **signed** (shipped − planned) / planned by **BU** (`product_line` / business line). Exclude planned = 0; report excluded count. Min lines per bucket (`VOLUME_BIAS_MIN_LINES`). Direction is the finding. **PM (Q-009):** tenant `pm_attribution_mode=business_line` → PM grain = same business-line buckets (NB/NR/NV/NX); `by_pm` mirrors `by_bu`. Other tenants may use `person_field` / `none` via commercial profile. | BU + business-line PM | same as fill | Plan vs Executed |
 | A1-08 | **Slip** | IMPLEMENTED | Lineup quarter vs **actual ship quarter** on linked POs; signed quarter delta. Uses **ship_confirm_date** then **schedule_ship_date** — **not** POD. | linked PO / plan line × product | shipped evidence ship date + lineup period | Plan vs Executed |
-| A1-09 | **Support bias** | SPEC ONLY · **blocked** | Planned reservation vs actual CPOR spend. **CPOR-owned**, not PvE. Blocked until lineup discovery answers whether reservation is an explicit column or derived (Q-002 / domain Still open #2). | TBD after discovery | lineup reservation + CPOR spend | **CPOR Cases** |
+| A1-09 | **Support bias** | SPEC ONLY · planned-side unblocked | Planned reservation vs actual CPOR spend. **CPOR-owned**, not PvE. Planned reservation = **derived from profit** (Q-002 resolved; `reservation_source=derived_from_profit`). Metric surface still to build on CPOR Cases. | case / portfolio | derived lineup reservation + CPOR spend | **CPOR Cases** |
 
 UI label: scorecard shows **Over-plan intake** (A1-02; BACKLOG-091 resolved 2026-08-01). API keeps `deal_stock_*` keys with `over_plan_intake_*` aliases.
 
@@ -161,6 +162,26 @@ domain §1.5). **Never** convert a USD portfolio total through one period FX rat
 | A3-03 | **Replenishment flag (v1)** | IMPLEMENTED | Threshold flag when `0 < weeks_of_cover < REPLENISHMENT_WOC_THRESHOLD_WEEKS` (tenant config default **4**). Not a recommendation engine. Portfolio summary reports pair count below threshold + portfolio flag. Row field `replenishment_flag` (`reorder_signal` alias). | distributor × product | Channel Operations |
 
 CST `/channel-intelligence` remains a **separate** customer×product×site velocity surface — do not conflate with Channel Ops WoC grain.
+
+### 4.5 Demand forecast — `/forecasts`
+
+**Source of truth table:** `fact_demand_forecast` (sole B2/B4 consumable contract).  
+**Upstream signal (not the contract):** `fact_dsi_forecast` — DSI velocity projection cache; Channel Ops may label it “DSI velocity projection.”  
+**Legacy:** `fact_forecast` — superseded; rows migrate as `method=manual`. Do not write new business logic against it.
+
+**Atomic grain:** distributor × product × customer × period. Roll up by **SUM** on any axis (no double-count). Quarter totals are a **comparison re-derivation** only — never the primary stored grain.
+
+**B2 net-requirement note:** A3 channel stock is distributor × product. Subtract forecast from stock at the **distributor × product rollup**, not at customer-atomic grain.
+
+| ID | Metric / concept | Status | Formula / rule | Grain | Owner |
+|---|---|---|---|---|---|
+| B1-01 | **forecast_units** | IMPLEMENTED (B1-01/02) | Stored at atomic grain; rollup = Σ across any axis (`GET /forecasts/rollups`) | distributor × product × customer × period | Demand Forecast |
+| B1-02 | **confidence_level** | IMPLEMENTED (velocity) | Ordinal `{low, medium, high, override}`. Velocity: from `fact_customer_velocity.model_confidence`. Analogue: capped `low` (B1-03). Manual override: `override`. | same | Demand Forecast |
+| B1-03 | **Forecast band** | IMPLEMENTED (velocity) | `lower_band` / `upper_band`. Velocity: 4wk-vs-52wk variance. Analogue: widened + confidence capped low (B1-03). Override: band = point. | same | Demand Forecast |
+| B1-04 | **Forecast method** | IMPLEMENTED (velocity + analogue + manual) | Taxonomy `{velocity, analogue, manual}` live; `blend` deferred. Precedence: override/manual > analogue > velocity. | same | Demand Forecast |
+| B1-05 | **Analogue provenance** | IMPLEMENTED (B1-03) | Required when `method=analogue`: `analogue_product_id` + `analogue_basis` JSON `{matched[], scale}` from product_line / series / form_factor / price_band / gpu / predecessor. | same | Demand Forecast |
+| B1-06 | **Channel pseudo-customer** | SPEC (schema B1-01) | `customer_id` is **NOT NULL**. Channel-only / missing-customer demand uses controlled `dim_customer.code = OPEN_CHANNEL`. Missing distributor on manual override uses `dim_distributor.code = UNASSIGNED`. | — | Demand Forecast |
+| B1-07 | **Forecast layer invariant** | SPEC (schema B1-01) | Forecast is **never merged into actuals**. Separate table, separate labelled surface. Missing actual ≠ gap-filled with prediction. | — | Demand Forecast |
 
 ---
 

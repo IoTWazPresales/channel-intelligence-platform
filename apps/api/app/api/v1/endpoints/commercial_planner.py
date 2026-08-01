@@ -29,7 +29,8 @@ from app.models.commercial_planner import (
     CommercialSkuAssumption,
 )
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
-from app.models.facts import FactForecast, FactPricing, FactSalesSellout
+from app.models.fact_demand_forecast import FactDemandForecast
+from app.models.facts import FactPricing, FactSalesSellout
 from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.ingestion import ImportJob
 from app.services.commercial_planner.calculator import CommercialCalcInputs, compute_line_economics
@@ -1006,13 +1007,16 @@ async def get_plan_suggestions(plan_id: int, db: AsyncSession = Depends(get_db))
     # ── 3. Batch latest forecast per product_id (window function) ────────────
     forecast_sq = (
         select(
-            FactForecast.product_id,
-            FactForecast.forecast_units,
+            FactDemandForecast.product_id,
+            FactDemandForecast.forecast_units,
             func.row_number()
-            .over(partition_by=FactForecast.product_id, order_by=FactForecast.period_start.desc())
+            .over(
+                partition_by=FactDemandForecast.product_id,
+                order_by=FactDemandForecast.period_start.desc(),
+            )
             .label("rn"),
         )
-        .where(FactForecast.product_id.in_(product_ids))
+        .where(FactDemandForecast.product_id.in_(product_ids))
         .subquery()
     )
     forecast_rows = (

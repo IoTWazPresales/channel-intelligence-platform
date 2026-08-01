@@ -380,6 +380,31 @@ async def channel_ops_inventory(
     velocity_by_product = {pid: vel for (_did, pid), vel in vel_by_pair.items()}
     threshold = float(REPLENISHMENT_WOC_THRESHOLD_WEEKS)
 
+    # B1-04: distributor×product rollup of demand forecast (next 13 weeks from today).
+    demand_by_product: dict[int, float] = {}
+    if await _table_exists(db, "fact_demand_forecast"):
+        from datetime import date as date_cls
+
+        from app.models.fact_demand_forecast import FactDemandForecast
+
+        today = date_cls.today()
+        horizon = today + timedelta(weeks=13)
+        fc_rows = (
+            await db.execute(
+                select(
+                    FactDemandForecast.product_id,
+                    func.coalesce(func.sum(FactDemandForecast.forecast_units), 0),
+                )
+                .where(
+                    FactDemandForecast.distributor_id == int(distributor_id),
+                    FactDemandForecast.period_start >= today,
+                    FactDemandForecast.period_start <= horizon,
+                )
+                .group_by(FactDemandForecast.product_id)
+            )
+        ).all()
+        demand_by_product = {int(r[0]): float(r[1] or 0) for r in fc_rows}
+
     items: list[dict[str, Any]] = []
     for row in derived_rows:
         pid = int(row["product_id"])
@@ -411,6 +436,7 @@ async def channel_ops_inventory(
                 "replenishment_threshold_weeks": threshold,
                 "reorder_signal": flag,  # alias — prefer replenishment_flag (A3-03)
                 "velocity_grain": "distributor_product",
+                "demand_forecast_units_13w": demand_by_product.get(pid),
             }
         )
 
