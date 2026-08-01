@@ -15,7 +15,8 @@ from sqlalchemy.orm import Session, joinedload
 from app.api.deps import get_db
 from app.core.config import get_settings
 from app.core.dev_celery_logging import DEV_CELERY_LOGGER
-from app.core.security import get_current_user
+from app.core.security import get_current_user, get_optional_current_user
+from app.core.tenant_scope import tenant_id_from_user, where_tenant
 from app.db.session_sync import SessionLocal
 from app.ingestion.pipeline import process_import_job_sync
 from app.services.steward_audit import record_steward_audit_sync
@@ -352,9 +353,11 @@ async def list_jobs(
     include_archived: bool = Query(default=False, description="When true, include jobs with archived_at set."),
     limit: int = Query(default=50, ge=1, le=200, description="Max jobs returned (newest first)."),
     offset: int = Query(default=0, ge=0, description="Pagination offset."),
+    user: dict | None = Depends(get_optional_current_user),
 ):
     """Lightweight job list — omits large JSONB blobs (inferred_schema, field_mapping, staged_metadata)."""
     filters = [] if include_archived else [ImportJob.archived_at.is_(None)]
+    filters.append(where_tenant(ImportJob.tenant_id, user))
 
     count_stmt = select(func.count()).select_from(ImportJob)
     if filters:
@@ -488,6 +491,7 @@ async def create_job(
     mapping_override: str = Form(default=""),
     dsi_workflow_mode: str = Form(default="auto"),
     db: AsyncSession = Depends(get_db),
+    user: dict | None = Depends(get_optional_current_user),
 ):
     run_inline = _wants_inline_import_processing(run_sync)
     source = await db.scalar(
@@ -534,6 +538,7 @@ async def create_job(
         stage="uploaded",
         file_name=file.filename or "upload",
         content_type=file.content_type,
+        tenant_id=tenant_id_from_user(user),
     )
     db.add(job)
     await db.flush()

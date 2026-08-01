@@ -120,6 +120,33 @@ async def get_current_user(
 get_current_user_stub = get_current_user
 
 
+async def get_optional_current_user(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    x_user_role: str | None = Header(default=None, alias="X-User-Role"),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    db: AsyncSession = Depends(get_db),
+) -> dict | None:
+    """Like get_current_user, but returns None when session mode has no bearer (public reads)."""
+    settings = get_settings()
+    mode = (settings.cip_auth_mode or "stub").strip().lower()
+    bearer = None
+    if authorization and authorization.lower().startswith("bearer "):
+        bearer = authorization[7:].strip() or None
+    if not bearer and mode == "session":
+        return None
+    try:
+        return await get_current_user(
+            authorization=authorization,
+            x_user_role=x_user_role,
+            x_user_id=x_user_id,
+            db=db,
+        )
+    except HTTPException:
+        if mode == "session":
+            return None
+        raise
+
+
 def require_roles(*allowed: Role):
     allowed_set = set(allowed)
 

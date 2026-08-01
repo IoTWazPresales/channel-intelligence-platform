@@ -20,15 +20,19 @@ import NextLink from 'next/link';
 
 import { PageHeader } from '@/components/PageHeader';
 
-const steps = ['Bring data in', 'Map columns', 'Review queues', 'Use planning views'];
+const steps = ['Sign in', 'Bring data in', 'Map & steward', 'Use planning views'];
 
 export default function GettingStartedPage() {
   return (
     <>
       <PageHeader crumbs={[{ label: 'Getting started' }]} title="Getting started" />
       <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 720 }}>
-        This build is an internal MVP: there is no production SSO yet. Use the steps below to load demo or your own
-        files, then explore modules. Stub auth sends fixed headers from the web client for now.
+        Sign in with your CIP account (session auth). Admins create users under{' '}
+        <Link component={NextLink} href="/admin/users" fontWeight={600}>
+          Admin → Users
+        </Link>
+        . Nav is role-gated (admin / steward / planner / viewer). After login you land on the Control tower with a data
+        freshness banner.
       </Typography>
       <Paper sx={{ p: 3, mb: 3 }}>
         <Stepper activeStep={0} alternativeLabel sx={{ mb: 2 }}>
@@ -58,7 +62,7 @@ export default function GettingStartedPage() {
                 <Box component="span" sx={{ display: 'block', mt: 0.5 }}>
                   Go to{' '}
                   <Link component={NextLink} href="/admin/imports" fontWeight={600}>
-                    Admin → Data & imports
+                    Admin → Import Center
                   </Link>
                   . Pick a <strong>source</strong> (defines expected columns), then use <strong>Choose file</strong> or
                   drag a CSV/XLSX into the drop zone. The API stores the file, infers columns, applies the source
@@ -76,11 +80,15 @@ export default function GettingStartedPage() {
               primary="2. Fix mapping gaps"
               secondary={
                 <Box component="span" sx={{ display: 'block', mt: 0.5 }}>
-                  Open{' '}
+                  Open the import job steward panel (DSI / shipment / CST) or{' '}
                   <Link component={NextLink} href="/admin/mappings" fontWeight={600}>
                     Admin → Mapping queue
                   </Link>{' '}
-                  to approve or correct entity links the pipeline could not infer automatically.
+                  to approve or correct entity links. Steward decisions are audited under{' '}
+                  <Link component={NextLink} href="/admin/steward-audit" fontWeight={600}>
+                    Steward audit
+                  </Link>
+                  .
                 </Box>
               }
               primaryTypographyProps={{ variant: 'subtitle1', fontWeight: 600 }}
@@ -94,31 +102,27 @@ export default function GettingStartedPage() {
               primary="3. Explore planning modules"
               secondary={
                 <Box component="span" sx={{ display: 'block', mt: 0.5 }}>
-                  Open{' '}
-                  <Link component={NextLink} href="/inventory" fontWeight={600}>
-                    Inventory
+                  From the Control tower shortcuts, open{' '}
+                  <Link component={NextLink} href="/commercial-planner/cpor-cases" fontWeight={600}>
+                    CPOR Cases
+                  </Link>
+                  ,{' '}
+                  <Link component={NextLink} href="/sell-out" fontWeight={600}>
+                    Channel Operations
+                  </Link>
+                  ,{' '}
+                  <Link component={NextLink} href="/shipping" fontWeight={600}>
+                    Inbound shipments
                   </Link>
                   ,{' '}
                   <Link component={NextLink} href="/forecasts" fontWeight={600}>
-                    Forecasts
+                    Forecasting
                   </Link>
-                  ,{' '}
-                  <Link component={NextLink} href="/buy-plans" fontWeight={600}>
-                    Buy plans
-                  </Link>
-                  ,{' '}
+                  , or{' '}
                   <Link component={NextLink} href="/lineup" fontWeight={600}>
                     Line-up planning
                   </Link>
-                  ,{' '}
-                  <Link component={NextLink} href="/promotions" fontWeight={600}>
-                    Promotions
-                  </Link>{' '}
-                  (CPOR Excel export & approval on the third tab), and{' '}
-                  <Link component={NextLink} href="/budgets" fontWeight={600}>
-                    Budgets
-                  </Link>
-                  . Demo seed data is described in the repo README (Docker on <strong>localhost:8010</strong> for the API).
+                  .
                 </Box>
               }
               primaryTypographyProps={{ variant: 'subtitle1', fontWeight: 600 }}
