@@ -1,7 +1,7 @@
 ﻿# CURRENT state
 
 **Last updated:** 2026-08-01 (P2-3e steward audit authored — migration NOT applied)
-**Branch:** `feat/p2-auth-rbac` (committing P2-3e)
+**Branch:** `feat/p2-auth-rbac` @ `3fa1018` (in sync with origin)
 **Alembic:** code head `20260801_0004` (steward_audit_event) — **cip still on `20260801_0003` until Warren approves upgrade**
 
 ## Done
