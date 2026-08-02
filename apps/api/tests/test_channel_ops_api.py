@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -30,8 +31,10 @@ async def test_summary_returns_zeros_on_empty_tables() -> None:
                     out = await co.channel_ops_summary(db)
 
     assert out["sell_out_this_quarter"]["units"] == 0
+    assert out["sell_out_this_quarter"]["has_data"] is False
     assert out["total_inventory_units"] == 0
     assert out["sell_out_yoy_pct"] is None
+    assert out["sell_out_data_vintage"]["current_quarter_has_data"] is False
     assert out["weeks_of_cover"] is None
     assert out["replenishment_threshold_weeks"] == 4.0
     assert out["replenishment_flag"] is False
@@ -71,6 +74,33 @@ async def test_summary_yoy_none_when_prior_zero() -> None:
     # pair (1,10): 20/2=10w — not below 4; (1,11): 22/3≈7.3 — not below
     assert out["replenishment_pairs_below_threshold"] == 0
     assert out["replenishment_flag"] is False  # portfolio 8.4w
+
+
+@pytest.mark.anyio
+async def test_summary_yoy_none_when_current_quarter_has_no_coverage() -> None:
+    """Freshness: empty current quarter must not show −100% YoY vs prior-year volume."""
+    db = AsyncMock()
+    # count=0 (no rows in current quarter), then max sell-out date, then later scalars
+    db.scalar = AsyncMock(side_effect=[0, date(2026, 6, 12)] + [0] * 20)
+    db.execute = AsyncMock(
+        side_effect=[
+            MagicMock(one=MagicMock(return_value=(0.0, 0.0))),
+            MagicMock(one=MagicMock(return_value=(27980.0, 1.0))),
+        ]
+    )
+    with patch.object(co, "_table_exists", AsyncMock(return_value=False)):
+        with patch.object(co, "_has_rows", AsyncMock(return_value=False)):
+            with patch.object(co, "derived_stock_by_dist_product", AsyncMock(return_value={})):
+                with patch.object(
+                    co, "sellout_velocity_52wk_by_dist_product", AsyncMock(return_value={})
+                ):
+                    out = await co.channel_ops_summary(db)
+    assert out["sell_out_this_quarter"]["units"] == 0
+    assert out["sell_out_this_quarter"]["has_data"] is False
+    assert out["sell_out_prior_year_quarter"]["units"] == 27980.0
+    assert out["sell_out_yoy_pct"] is None
+    assert out["sell_out_data_vintage"]["max_transaction_date"] == "2026-06-12"
+    assert out["sell_out_data_vintage"]["current_quarter_has_data"] is False
 
 
 @pytest.mark.anyio

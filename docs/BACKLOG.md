@@ -222,16 +222,16 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-01 · P1-X batch deferral |
+| **Status / parked** | **Resolved** · 2026-08-02 · sticky POD write-path + view `20260802_0009` + fact backfill (5961 rows; 156 remain without evidence POD) on `fix/commercial-foundation-pod` |
 | **Effort** | Medium (apply-path / view COALESCE / optional fact backfill — may need approved migration for view redefine) |
 | **Source** | `docs/P1_LOAD_DEFECT_LOG.md` P1-D004; Shipping owns POD (`docs/SURFACE_OWNERSHIP.md`); apply already copies `pod_date` on new writes (`shipment_inbound_facts.py`) |
 | **Idea** | Make Shipping landed/POD KPIs truthful: `shipment_evidence_current` and `fact_inbound_shipment` must expose the same `pod_date` as active `shipment_evidence_line` for shipped rows (COALESCE or rewrite observation/fact). |
-| **Why it matters / deferrable** | Landed-week / awaiting-POD cohorts under-count when fact/current omit POD that evidence has. Deferrable past P1 exit because fill rate stays shipped-basis and P1 census already measured the gap; blocks accurate Shipping commercial KPIs and A3 POD-landed stock. |
+| **Why it matters / deferrable** | Landed-week / awaiting-POD cohorts under-count when fact/current omit POD that evidence has. Blocks truthful B2 landed-basis budget. |
 | **What the work is** | (1) Root-cause why current observation / older facts lack POD while evidence has it. (2) Fix write path and/or redefine current view. (3) Backfill facts only with approved data repair (clone-proof if destructive). (4) Prove Shipping `/shipping` landed/POD cohorts match evidence. |
 | **Regression traps** | Do **not** put POD completeness tiles on Plan vs Executed; do not gate fill on POD; do not invent a second lifecycle owner. |
-| **Behavior to retain** | Shipping = lifecycle authority; evidence is source of truth for POD; fill = shipped-basis. |
+| **Behavior to retain** | Shipping = lifecycle authority; evidence is source of truth for POD; fill = shipped-basis. Sticky POD: later null snapshots must not clear a prior POD. |
 | **Out of scope** | Landing-quarter reattribution KPI (BACKLOG-068); PvE rebuild. |
-| **TRIGGER** | Shipping commercial KPI soak shows landed under-count; **or** A3 needs POD-landed stock; **or** Warren prioritizes P1-D004. |
+| **TRIGGER** | Warren prioritized 2026-08-02 (mapping-audit Q6). **Done:** observation sticky + fact sticky + view COALESCE + backfill script. |
 
 ---
 

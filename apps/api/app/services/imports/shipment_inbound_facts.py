@@ -6,7 +6,7 @@ from collections import defaultdict
 from datetime import date
 from typing import Any, Callable
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import case, delete, func, literal, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -15,6 +15,15 @@ from app.models.shipment_evidence import ShipmentEvidenceLine
 from app.services.imports.shipment_apply_failure import ShipmentApplyRowError
 from app.services.imports.shipment_evidence_line_identity import fact_upsert_key_for_evidence_values
 from app.utils.json_safe import to_jsonable
+
+
+def _sticky_pod(incoming: date | None, existing: date | None) -> date | None:
+    """Once POD is observed, later null snapshots do not clear it (P1-D004 / BACKLOG-088)."""
+    return incoming if incoming is not None else existing
+
+
+def _status_for_pod(pod: date | None) -> str:
+    return "received" if pod is not None else "scheduled"
 
 # Columns refreshed on ``ON CONFLICT (fact_upsert_key) DO UPDATE`` — every mutable column
 # except ``id``, ``fact_upsert_key``, and ``created_at``. ``source_key`` is refreshed from the
@@ -94,7 +103,7 @@ def _coalesce_shipment_dates(line: ShipmentEvidenceLine) -> date | None:
 
 
 def _derive_inbound_status(line: ShipmentEvidenceLine) -> str:
-    return "received" if line.pod_date is not None else "scheduled"
+    return _status_for_pod(line.pod_date)
 
 
 def _row_values_from_evidence(line: ShipmentEvidenceLine, *, tenant_id: str = "default") -> dict[str, Any]:
@@ -169,8 +178,14 @@ def _merge_shipped_row_into(target: dict[str, Any], incoming: dict[str, Any]) ->
     for col in _UPSERT_REFRESH_COLUMNS:
         if col in ("quantity", "amount"):
             continue
+        if col == "pod_date":
+            target[col] = _sticky_pod(incoming.get(col), target.get(col))
+            continue
+        if col == "status":
+            continue
         if col in incoming:
             target[col] = incoming[col]
+    target["status"] = _status_for_pod(target.get("pod_date"))
 
 
 def _dedupe_rows_for_fact_upsert(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -194,8 +209,13 @@ def _dedupe_rows_for_fact_upsert(rows: list[dict[str, Any]]) -> list[dict[str, A
 
 
 def _conflict_update_set(ins: Any) -> dict[str, Any]:
+    """Open-order upsert: sticky POD (COALESCE incoming, existing) + aligned status."""
     ex = ins.excluded
-    set_ = {col: getattr(ex, col) for col in _UPSERT_REFRESH_COLUMNS}
+    tbl = FactInboundShipment.__table__.c
+    sticky_pod = func.coalesce(ex.pod_date, tbl.pod_date)
+    set_ = {col: getattr(ex, col) for col in _UPSERT_REFRESH_COLUMNS if col not in ("pod_date", "status")}
+    set_["pod_date"] = sticky_pod
+    set_["status"] = case((sticky_pod.is_not(None), literal("received")), else_=literal("scheduled"))
     set_["updated_at"] = func.now()
     return set_
 
@@ -258,12 +278,37 @@ def _upsert_evidence_chunk(
         ) from chunk_exc
 
 
+def _existing_pod_by_fact_keys(db: Session, keys: list[str]) -> dict[str, date]:
+    if not keys:
+        return {}
+    rows = db.execute(
+        select(FactInboundShipment.fact_upsert_key, FactInboundShipment.pod_date).where(
+            FactInboundShipment.fact_upsert_key.in_(keys),
+            FactInboundShipment.pod_date.is_not(None),
+        )
+    ).all()
+    return {str(k): pod for k, pod in rows if pod is not None}
+
+
+def _apply_sticky_pod_to_rows(rows: list[dict[str, Any]], prior_pod: dict[str, date]) -> None:
+    for row in rows:
+        key = str(row["fact_upsert_key"])
+        row["pod_date"] = _sticky_pod(row.get("pod_date"), prior_pod.get(key))
+        row["status"] = _status_for_pod(row.get("pod_date"))
+
+
 def _upsert_shipped_chunk(db: Session, tbl: Any, rows: list[dict[str, Any]]) -> None:
-    """Replace shipped facts by stable ``fact_upsert_key`` (latest job wins for the chunk)."""
+    """Replace shipped facts by stable ``fact_upsert_key`` (latest job wins for the chunk).
+
+    Sticky POD: if the incoming job omits ``pod_date`` but a prior fact for the same key
+    had one, keep the prior POD (P1-D004). Status stays aligned with sticky POD.
+    """
     if not rows:
         return
     aggregated = _dedupe_rows_for_fact_upsert(rows)
     keys = [str(r["fact_upsert_key"]) for r in aggregated]
+    prior_pod = _existing_pod_by_fact_keys(db, keys)
+    _apply_sticky_pod_to_rows(aggregated, prior_pod)
     db.execute(delete(FactInboundShipment).where(FactInboundShipment.fact_upsert_key.in_(keys)))
     db.execute(pg_insert(tbl).values(aggregated))
 
