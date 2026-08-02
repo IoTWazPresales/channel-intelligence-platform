@@ -146,6 +146,18 @@ def complete_dsi_import_job_to_loaded(db: Session, job_id: int) -> dict[str, Any
             except Exception:
                 logger.exception("DSI post-load rollback failed job_id=%s", job.id)
 
+    # BACKLOG-098: fan-out on_import_complete report schedules (best-effort).
+    try:
+        from app.services.report_schedule_runner import dispatch_import_complete_report_fanout
+
+        tid = getattr(job, "tenant_id", None) or "default"
+        dispatch_import_complete_report_fanout(tenant_id=str(tid))
+    except Exception:
+        logger.exception(
+            "DSI post-load report schedule fan-out failed job_id=%s; job remains loaded",
+            job.id,
+        )
+
     return {
         "ok": True,
         "import_job_id": int(job.id),

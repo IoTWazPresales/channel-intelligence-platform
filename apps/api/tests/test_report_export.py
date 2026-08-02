@@ -71,3 +71,42 @@ def test_next_run_daily_rolls_forward():
     nxt = next_run_for_cadence("daily_0700", now=now)
     assert nxt.hour == 7
     assert nxt.date().isoformat() == "2026-08-02"
+
+
+def test_list_due_calendar_schedules_filters_cadence_and_next_run():
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from app.services.report_schedule_runner import list_due_calendar_schedules
+
+    now = datetime(2026, 8, 2, 8, 0, tzinfo=timezone.utc)
+    due = SimpleNamespace(
+        id=1,
+        enabled=True,
+        cadence="daily_0700",
+        next_run_at=datetime(2026, 8, 2, 7, 0, tzinfo=timezone.utc),
+    )
+    db = MagicMock()
+    db.scalars.return_value.all.return_value = [due]
+    rows = list_due_calendar_schedules(db, now=now)
+    assert rows == [due]
+    assert db.scalars.called
+
+
+def test_list_import_complete_schedules_scoped_to_tenant():
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from app.services.report_schedule_runner import list_import_complete_schedules
+
+    row = SimpleNamespace(id=9, cadence="on_import_complete", tenant_id="default", enabled=True)
+    db = MagicMock()
+    db.scalars.return_value.all.return_value = [row]
+    assert list_import_complete_schedules(db, tenant_id="default") == [row]
+
+
+def test_reports_beat_task_registered():
+    from app.worker.celery_app import celery_app
+
+    assert "reports.run_due_schedules" in celery_app.tasks
+    assert "reports.fanout_import_complete" in celery_app.tasks

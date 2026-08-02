@@ -51,7 +51,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-01 |
+| **Status / parked** | **Resolved 2026-08-02** — `reports.run_due_schedules` beat (07:00 UTC) + `reports.fanout_import_complete` after DSI/shipment apply; sync runner in `report_schedule_runner.py`; Report Builder cadence picker (weekly/daily/on_import_complete). |
 | **Effort** | Medium (beat task + import hook; small) |
 | **Source** | P3-5 authored 2026-08-01 — `report_schedule` + `run-now` inbox path; ROADMAP P3-5 calendar + event delivery |
 | **Idea** | Wire Celery beat for `weekly_monday_0700` / `daily_0700` and fan-out `on_import_complete` schedules after DSI/shipment apply completes. |
@@ -60,7 +60,7 @@
 | **Regression traps** | Never skip delivery when metric returns empty — missing data is the alert; always stamp `data_vintage`. |
 | **Behavior to retain** | Inbox channel + missing_data_alert + tenant scope. |
 | **Out of scope** | External SMTP productization; P3-6 SQL viewer. |
-| **TRIGGER** | After P3-5 smoke on cip with `20260801_0007` **and** Warren asks for unattended Monday delivery / import-event fan-out. |
+| **TRIGGER** | — shipped — |
 
 ---
 

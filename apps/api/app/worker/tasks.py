@@ -756,6 +756,26 @@ def cst_advance_report_slots_task() -> dict:
         return result
 
 
+@celery_app.task(name="reports.run_due_schedules")
+def reports_run_due_schedules_task() -> dict:
+    """Beat task: deliver enabled weekly/daily report schedules that are due."""
+    from app.services.report_schedule_runner import run_due_schedules_sync
+    from app.worker.celery_queues import dev_beat_disabled
+
+    if dev_beat_disabled():
+        return {"skipped": True, "reason": "dev_beat_disabled"}
+
+    return run_due_schedules_sync()
+
+
+@celery_app.task(name="reports.fanout_import_complete")
+def reports_fanout_import_complete_task(tenant_id: str) -> dict:
+    """Event task: fan-out on_import_complete schedules after DSI/shipment apply."""
+    from app.services.report_schedule_runner import fanout_on_import_complete_sync
+
+    return fanout_on_import_complete_sync(tenant_id=str(tenant_id or "default"))
+
+
 @celery_app.task(name="listing_capture.poll_listings")
 def listing_capture_poll_listings_task() -> dict:
     """Beat task: gated no-op unless schedule enabled and listings exist. No live HTTP in LC-U1."""
