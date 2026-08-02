@@ -1,21 +1,19 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-01 (PR #15 BACKLOG-100)
+**Last updated:** 2026-08-02 (PR #15 merged)
 
-**Branch:** `feat/cst-orphan-and-api-cip-test` @ tip (PR #15 open)
+**Branch:** `main` @ `2d85048` (PR #15 merge)
 
 **Alembic:** `20260801_0008` on cip / code head
 
 ## Done (this session)
 
-- **CST:** deleted orphan `POST .../cst-candidates/bulk-resolve` (preview-bypass); steward bulk remains canonical.
-- **BACKLOG-100:** API suite green on CI `cip_test` (**1760 passed / 0 failed**); hard merge gate restored (no `continue-on-error`).
-  - Disposable smoke DBs + tip migrate; `CIP_DEV_CELERY_DISPATCH=in_process_thread` in CI.
-  - Merge gate now: alembic + **API** + web vitest + e2e + production build.
+- **PR #15 merged** — CST orphan `bulk-resolve` deleted; **BACKLOG-100 shipped**.
+  - CI API suite hard gate on `cip_test` (1760 passed); merge gate = alembic + API + web vitest + e2e + build.
 
 ## Next
 
-1. Merge PR #15 when hard-gate CI is green.
-2. Fresh branch off `main` for **BACKLOG-099** (live API e2e).
+1. Fresh `feat/` branch off `main` for **BACKLOG-099** (live API e2e in CI) **or** Warren pick other TRIGGER.
+2. ROADMAP outstanding: see chat summary (P4 CST forward, Lane X, open decisions).
 
 **Env:** local Windows. API `:8001`, web `:3000`.
