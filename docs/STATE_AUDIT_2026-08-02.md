@@ -349,4 +349,156 @@ No prior “12 known” list found under `.tmp/` or `docs/`; this audit enumerat
 
 ---
 
-*End of audit. Single committed artifact: this file.*
+## SECTION 5 — PRE-RESTORE FORENSICS
+
+**Mode:** read-only. `SELECT current_database()` = `cip` before queries. No DML/DDL/VACUUM. No pytest. No migrations. No import/apply.
+
+Established (not re-diagnosed): corpus applied then hard-deleted; window after 2026-07-03 15:46 and before 2026-07-27 11:00.
+
+### Q1 — Who deleted it (out-of-DB artifacts)
+
+| # | Source | Result | Evidence |
+|---|---|---|---|
+| 1 | PostgreSQL logs (`postgresql-x64-18`) | **FOUND** log dir; **ABSENT** statement-level DELETE trail | Conf: `C:\Program Files\PostgreSQL\18\data\postgresql.conf` — `logging_collector=on`, `#log_statement = 'none'` (effective `log_statement=none` via `pg_settings`), `log_min_duration_statement=-1`. Log dir `…\data\log` has 124 files including full July window. Grep of window logs for `DELETE FROM` / `TRUNCATE` / `commercial_lineup` found only **SELECT** fragments and one missing-relation error on `commercial_lineup_po_link` (2026-07-03 16:53) — **no DELETE statements**. Statement logging was off; this line cannot identify the actor. |
+| 2 | `.specstory/` | **ABSENT** in window | 3 files total; `files_in_window=0` for mtime in 2026-07-03 15:46–2026-07-27 11:00. Content hits for `ALLOW_TESTS_ON_DEV_DB` / `commercial_lineup_case` only in `2026-04-12_…project-recovery.md` (outside window). No `_clear_bulk` / `DELETE FROM commercial_lineup` hits. |
+| 3 | PSReadLine `ConsoleHost_history.txt` | **ABSENT** for lineup-delete terms | Path exists; mtime 2026-08-02 (file is undated per-line). `lineup`=0, `ALLOW_TESTS_ON_DEV_DB`=0, `commercial_lineup`=0, `bulk_backfill`=0. `pytest` hits are commercial_planner / DSI / health modules — not `test_lineup_bulk_backfill*` / `test_lineup_case_supersession_delete`. `DELETE` hits are redis flush / wipe-pattern *searches*, not SQL against lineup tables. |
+| 4 | `apps/api/.pytest_cache/` | **FOUND** cache; **ABSENT** bulk-clear module nodeids as proof of window run | Dir mtime 2026-04-16; `lastfailed` mtime **2026-08-02 10:54**, `nodeids` mtime **2026-08-02 13:32** (after delete window). Cache lists `test_historical_lineup_*`, `test_lineup_po_auto_link_*`, commercial_planner lineup API tests — **not** `test_lineup_bulk_backfill_apply_integration` / `test_lineup_case_supersession_delete`. Does not timestamp a window execution. |
+| 5 | `git log` 2026-07-03…07-27 on teardown files | **FOUND** code changes in window; **ABSENT** execution proof | `test_lineup_bulk_backfill_apply_integration.py`: `6b84187` **2026-07-03 22:43** (inside window). `_clear_bulk_backfill_cases` / `_assert_not_cip` introduced earlier `c7f45eb` **2026-07-01** (before corpus apply). `conftest.py`: `4f3a434` 2026-07-16 (DSI gates only — lineup modules still not in refuse frozenset). `test_lineup_case_supersession_delete.py`: **no commits in window**. |
+| 6 | `git reflog` + untracked delete scripts | **ABSENT** window delete actor | Reflog entries examined are 2026-08-01/02 merges (after window). Untracked `*.py` under status: `apps/api/scripts/ops/browser_db_parity_audit.py` only (read/audit, not lineup delete). |
+| 7 | Repo-wide grep delete of `commercial_lineup_*` | **FOUND** capable code only (already in §1.4) | Tracked: `test_lineup_bulk_backfill_apply_integration.py` `_clear_bulk_backfill_cases`; `test_data_integrity_audit.py` patterned DELETE; `test_shipment_null_distributor_sibling_po_merge.py` DELETE case_po; `lineup_po_auto_link_actions.py` delete dismiss rows. No new untracked `.tmp` script that mass-deletes commercial lineup cases. |
+
+**Cursor agent-transcripts (extra):** 66 `.jsonl` files with mtime in window. Content search for `_clear_bulk` / `DELETE FROM commercial_lineup` / supersession-delete test: **1** match — transcript `ed653a07-…` **2026-07-05** editing/running bulk/BU lineup tests against **`cip_alembic_smoke` / disposable URLs** (commands set `DATABASE_URL_SYNC=…/cip_alembic_smoke`). Not proof of cip corpus wipe.
+
+#### Q1 verdict: **UNRECOVERABLE**
+
+No timestamped artifact names an actor that executed DELETE against `commercial_lineup_*` on `cip` inside the window. Postgres statement logging was off. Chat/PS/pytest caches do not record a cip-targeted clear. Capable code paths remain those in §1.4; out-of-DB search does not promote any to PROVEN or PROBABLE.
+
+---
+
+### Q2 — Job 217 Numeric(8,4) overflow — restore recurrence
+
+**Columns with Numeric(8,4)** on `commercial_lineup_line` (`information_schema` + `apps/api/app/models/commercial_lineup.py:72-74`):
+
+| column | type | meaning |
+|---|---|---|
+| `rebate_pct_evidence` | numeric(8,4) | file rebate **percentage** evidence |
+| `distributor_margin_pct_evidence` | numeric(8,4) | file distributor margin **percentage** evidence |
+| `vat_pct_evidence` | numeric(8,4) | file VAT **percentage** evidence |
+
+Overflow rule: absolute value must be `< 10^4` (= 10000). Job 217 `error_summary` INSERT parameters include values **`72860.10…`** and **`67585.03…`** in the pct-evidence positions, with diagnostics `invalid_dealer_margin`, `invalid_rebate`, `invalid_distributor_margin`. Raw payload shows `"Dealer margin": "74347…"` / money-scale cells mapped into margin/rebate fields. **Class: parse/mapping error** (currency amounts into pct columns), not a legitimate ≥10000% rate.
+
+**Writer path (shared parser used by unified + bulk):**
+
+```377:412:apps/api/app/services/commercial_planner/lineup_case_parser.py
+        msrp_local = _safe_float(raw.get("msrp_local"))
+        pct_evidence: dict[str, float | None] = {}
+        for field in _PCT_EVIDENCE_FIELDS:
+            raw_pct = _safe_float(raw.get(field))
+            clean_pct = sanitize_pct_evidence(raw_pct, reference_price=msrp_local)
+            ...
+            pct_evidence[field] = clean_pct
+        ...
+                "rebate_pct_evidence": pct_evidence["rebate_pct_evidence"],
+                "distributor_margin_pct_evidence": pct_evidence["distributor_margin_pct_evidence"],
+                "vat_pct_evidence": pct_evidence["vat_pct_evidence"],
+```
+
+```52:73:apps/api/app/services/commercial_planner/lineup_pricing_resolution.py
+def sanitize_pct_evidence(...):
+    """Reject file values that cannot plausibly be a margin/rebate/VAT percentage.
+    ...
+    """
+    ...
+    if av <= _MAX_WHOLE_NUMBER_PCT_EVIDENCE:  # 100.0
+        return v
+    if reference_price is not None and reference_price > 0 and av <= reference_price:
+        return None
+    return None
+```
+
+**Timeline:** Job 217 failed **2026-06-28 18:38**. Guard commit `b26ef24` **2026-06-28 19:27** (“pct overflow guard”) introduced `sanitize_pct_evidence`. Same file later completed as bulk job **262** on **2026-07-02** (after the guard).
+
+**On re-run today:** does **not** fail with NumericValueOutOfRange. Money-scale “Rebate”/“Dealer margin” cells are **nulled** on `*_pct_evidence` (kept in `raw_row_payload`); insert proceeds. Does **not** silently write the overflow into pct columns. Pricing chain still flags invalid margins when calculator inputs are bad — evidence columns stay null for those fields.
+
+---
+
+### Q3 — 1H period split on bulk vs unified
+
+#### Bulk path precedence (implemented)
+
+`lineup_bulk_period_inference.py` module docstring + `resolve_layered_period`:
+
+> Priority: folder path → title band (F1) → filename → manual steward entry.  
+> `1H` always expands to Q1 + Q2.
+
+```238:278:apps/api/app/services/commercial_planner/lineup_bulk_period_inference.py
+    # 1H from ANY tier triggers Q1+Q2 split; folder anchors year (and quarter when present).
+    if half_sig is not None:
+        ...
+        assignments = [
+            LayeredPeriodAssignment(..., flags=... + ["period_half_split_q1"]),
+            LayeredPeriodAssignment(..., flags=... + ["period_half_split_q2"]),
+        ]
+```
+
+Apply wires allocation half into parse options:
+
+```221:259:apps/api/app/services/commercial_planner/lineup_bulk_backfill_apply.py
+    if "period_half_split_q1" in period_flags:
+        half_alloc = "q1"
+    elif "period_half_split_q2" in period_flags:
+        half_alloc = "q2"
+    ...
+            "half_year_allocation_half": half_alloc,
+```
+
+Parser applies `apply_half_year_allocation_to_row_dict` when `half_year_allocation_half` is set (`lineup_case_parser.py:584-587`). That uses `allocate_uniform_half` (`lineup_half_year_quantity.py`); month-derived tier exists in `lineup_month_derived_allocation.py` (post-2026-07-04) as upgrade over pure uniform_half.
+
+**Dry-run (CURRENT code, no DB write)** for job-262 shape `folder_path=PF\Q2` + filename containing `1H 2025`:
+
+- assignments: **2025 Q1** + **2025 Q2** with `period_scope=1h_split` / `period_half_split_q1|q2`
+- report: `half_trigger_tier=filename`, `winning_tier=folder`, `half_split=True`
+
+**Historical job 255/262:** apply result for that file = **one** case_id 16, `supersession_group_key=2025-01-01|47|PF` only. Job 262 `staged_metadata.lineup_parse_options` has `folder_path=PF\Q2` / sheet / BU — **no** `half_year_allocation_half`. So the **historical** load of that 1H file was a **single** case (Q1 start) **without** half allocation in parse options — not the current dual-case split.
+
+#### Unified path precedence
+
+`unified_lineup_import.py` creates one case per file; optional request `period_label` only — **no** folder layered stack:
+
+```57:65:apps/api/app/services/commercial_planner/unified_lineup_import.py
+            case = CommercialLineupCase(
+                ...
+                period_label=period_label,
+                ...
+                source_context="unified_lineup_import",
+            )
+```
+
+Period start inferred in shared parser via `infer_period_start(case.period_label, header_cols)` (`lineup_period_inference.py`: label year + month columns / label quarter; **no** 1H→Q1+Q2 fan-out).
+
+**Surviving unified cases:**
+
+| id | period_label | inferred_period_start | signal notes |
+|---|---|---|---|
+| 7 | 2026 Q2 | 2026-04-01 | Filename contains “Q1 2026”; stored period is Q2 — label/inference won over filename token |
+| 9 | 2026 Q2 | 2026-04-01 | Matches Q2 filename |
+| 90 | 26Q1 | 2026-01-01 | Matches Q1 filename / label |
+
+#### Q3 answer
+
+- **Bulk path (CURRENT):** **yes** — implements 1H → Q1+Q2 with half allocation flags; re-run of a 1H file under `PF\Q2` dry-runs to **both** quarters.  
+- **Bulk path (historical job 262):** **did not** persist dual-half parse options; single Q1-dated case.  
+- **Unified path:** **no** 1H split fan-out — one case per file; 1H files need bulk (or steward re-derivation) for Q1+Q2.
+
+---
+
+### Self-check
+
+- Wrote to any database? **No** (SELECT-only + pure-Python period dry-run).  
+- Ran any test/pytest? **No**.  
+- Modified files other than this audit doc? **No** (append only).  
+- Claims without printed/quoted evidence labelled INFERRED where used.
+
+---
+
+*End of audit (Sections 1–5). Committed artifact: this file only.*
