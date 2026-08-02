@@ -17,6 +17,8 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-02 — **BACKLOG-087 cancelled** (no GitHub Pro); residual burn-down: 099 PR → 098 → B-lane soak → Lane X (E VERIFY + lifecycle). Q-003 stays local.
+- 2026-08-02 — **BACKLOG-099 on `feat/ci-live-e2e`:** CI uvicorn `:8001` + `cip_e2e` seed; live wipe/products e2e enabled. Local live 2/2 PASS. Next: commit/PR → CI green.
 - 2026-08-02 — **ROADMAP v3.1 on main** (`542d31d`): open decisions #1/#2 → resolved (Q-001/Q-002); still open = Q-003 hosting, Q-004 CST formats. Next: BACKLOG-099 or Warren pick.
 - 2026-08-02 — **PR #15 merged to main** (`2d85048`): CST orphan bulk-resolve deleted; BACKLOG-100 hard API gate on cip_test. Next: BACKLOG-099 or Warren pick.
 - 2026-08-01 — **PR #15 BACKLOG-100:** CST orphan bulk-resolve deleted; API suite green on cip_test (1760 pass); hard CI API gate restored. Next: merge #15 → BACKLOG-099.

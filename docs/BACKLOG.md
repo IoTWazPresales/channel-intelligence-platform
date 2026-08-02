@@ -34,7 +34,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-01 |
+| **Status / parked** | **Resolved 2026-08-02** — CI starts uvicorn on `:8001` against disposable `cip_e2e` + `seed_e2e_minimal.py` (`SKU-ALPHA-01` + sell-out); `CIP_E2E_LIVE_API=1` / `CIP_E2E_API_URL` enable wipe/products specs; Next proxy on for live path. Mocked e2e remain API-free when those vars are unset. |
 | **Effort** | Medium (CI job wiring + seed/auth for live specs) |
 | **Source** | PR #13 CI — e2e red: Next proxy `ECONNREFUSED :8001`; wipe/products specs need live API (`CIP_E2E_API_URL` / `:8010`) |
 | **Idea** | Run FastAPI in GitHub Actions against already-migrated `cip_test`, point Next proxy + `CIP_E2E_API_URL` at it, enable `wipe-and-products-delete` (and future live specs). |
@@ -43,7 +43,7 @@
 | **Regression traps** | Do not point CI e2e at `cip`; keep `ALLOW_TESTS_ON_DEV_DB` unset; do not weaken steward/wipe safety flags. |
 | **Behavior to retain** | Mocked e2e (dashboard / getting-started / navigation) stay API-free and green without this. |
 | **Out of scope** | Full browser soak of Import Centre; required-check unlock (BACKLOG-087). |
-| **TRIGGER** | Warren asks for green live e2e on GitHub CI **or** live wipe/products specs start failing locally without a clear docker:e2e path. |
+| **TRIGGER** | — shipped — |
 
 ---
 
@@ -239,16 +239,16 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-29 · GitHub Free private repo |
+| **Status / parked** | **Cancelled 2026-08-02** — Warren will not purchase GitHub Pro for now. Process-only gate remains: **no `--admin` merges**; CI + `scripts/verify-gate` are the discipline gate. Reopen only if Pro/org plan unlocks private-repo rulesets later. |
 | **Effort** | Small (settings once Pro available) |
 | **Source** | ROADMAP P0 “CI becomes a required gate”; PR #7 merged with `--admin` while CI was broken; 2026-07-29 attempt returned HTTP 403 on branch protection + rulesets |
 | **Idea** | Make the `CI` / `test` check a **required** status on `main` so red builds cannot merge (including no `--admin` bypass in normal process). |
-| **Why it matters / deferrable** | Without a required check, green process depends on discipline only. Deferrable because the Free private-repo plan cannot enable protection/rulesets. |
-| **What the work is** | After Pro: enable branch protection or ruleset requiring the CI `test` job on `main` (and PR merges); confirm a red PR cannot merge without override. |
+| **Why it matters / deferrable** | Without a required check, green process depends on discipline only. Cancelled while Free private-repo plan cannot enable protection/rulesets and Pro is out of scope. |
+| **What the work is** | After Pro (if ever): enable branch protection or ruleset requiring the CI `test` job on `main` (and PR merges); confirm a red PR cannot merge without override. |
 | **Regression traps** | Do not re-break pnpm `packageManager` vs `pnpm/action-setup` version clash; keep `ALLOW_TESTS_ON_DEV_DB` unset in CI; keep migrate URL on `DATABASE_URL_SYNC_MIGRATE` for `cip_test`. |
-| **Behavior to retain** | Process-only gate until then: **no `--admin` merges**; treat CI + `scripts/verify-gate` as the gate. |
+| **Behavior to retain** | Process-only gate: **no `--admin` merges**; treat CI + `scripts/verify-gate` as the gate. |
 | **Out of scope** | Making the private repo public solely to unlock free protection; fixing individual API test failures. |
-| **TRIGGER** | **GitHub Pro purchased** (or org plan that unlocks private-repo branch protection / rulesets). |
+| **TRIGGER** | — cancelled — reopen only if GitHub Pro / org plan unlocks private-repo branch protection. |
 
 ---
 

@@ -1,8 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * CI runs mocked / static e2e only (Next webServer, no FastAPI).
- * Live API specs (`wipe-and-products-delete`) require CIP_E2E_API_URL / CIP_E2E_LIVE_API — see BACKLOG-099.
+ * CI enables live API e2e via CIP_E2E_LIVE_API + CIP_E2E_API_URL (BACKLOG-099).
+ * Without those vars, Next proxy is disabled so mocked/static specs stay API-free.
  */
 export default defineConfig({
   testDir: './e2e',
@@ -22,8 +22,7 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       ...process.env,
-      // Avoid Next proxy → :8001 ECONNREFUSED spam when CI has no API process.
-      // Browser `page.route` mocks still intercept `/api/v1/**` for mocked specs.
+      // Proxy to live API when CIP_E2E_* is set; otherwise disable to avoid :8001 ECONNREFUSED.
       CIP_DISABLE_NEXT_API_PROXY: process.env.CIP_E2E_API_URL || process.env.CIP_E2E_LIVE_API ? 'false' : 'true',
     },
   },

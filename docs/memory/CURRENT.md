@@ -1,20 +1,20 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-02 (ROADMAP v3.1 on main)
+**Last updated:** 2026-08-02 (residual burn-down: 087 cancel + 099 PR)
 
-**Branch:** `main` (docs tip after ROADMAP open-decisions sync)
+**Branch:** `feat/ci-live-e2e` (off `main` @ `94540bb`)
 
 **Alembic:** `20260801_0008` on cip / code head
 
 ## Done (this session)
 
-- **PR #15 merged** — CST orphan `bulk-resolve` deleted; **BACKLOG-100 shipped**.
-  - CI API suite hard gate on `cip_test` (1760 passed); merge gate = alembic + API + web vitest + e2e + build.
-- **ROADMAP v3.1** — open decisions #1/#2 → resolved (Q-001/Q-002); still open = Q-003 hosting, Q-004 CST formats; branch/location = deferred by design.
+- **BACKLOG-087 cancelled** — no GitHub Pro; process-only gate retained.
+- **BACKLOG-099 (implemented, local live PASS):** CI uvicorn `:8001` + `cip_e2e` seed; live wipe/products e2e. Q-003 hosting stays local-only.
 
 ## Next
 
-1. Fresh `feat/` branch off `main` for **BACKLOG-099** (live API e2e in CI) **or** Warren pick other TRIGGER.
-2. Roadmap residual: P0 BACKLOG-087 · P2 hosting (Q-003) · P3 BACKLOG-098 · B-lane soak · P4–P6 · Lane X.
+1. PR BACKLOG-099 → CI green → merge.
+2. BACKLOG-098 (beat + import-complete) → B-lane budget wire/soak → Lane X (Unit E VERIFY + lifecycle trio).
+3. Parked: Q-003 hosting · Q-004 CST formats · BACKLOG-076 · distributor merge apply · surface retrofit · standalone 085.
 
 **Env:** local Windows. API `:8001`, web `:3000`.

@@ -102,8 +102,8 @@ its own false PASS).
 **Remaining:** header-vocabulary → template config (D-022 / BACKLOG-082) — **moved into P1**,
 to be done with a real file in hand.
 
-**Deferred:** required-check branch protection (BACKLOG-087, needs GitHub Pro). Until then,
-process-only: no `--admin` merges.
+**Cancelled:** required-check branch protection (BACKLOG-087) — Pro not planned. Process-only:
+no `--admin` merges; CI + `scripts/verify-gate` remain the discipline gate.
 
 ---
 
@@ -330,7 +330,8 @@ Runs alongside all phases in GREEN autonomy. Never blocks a phase; never blocked
 - **Lifecycle defect trio** — `progress_at` heartbeat never fires during validate;
   liveness-aware reaper (check Celery state, not just metadata); retry guard while task active
 - **BACKLOG-076** — corrupt unit amounts (~$36M). Fix before any external demo
-- **BACKLOG-066 → 087** — worked down at phase boundaries, prioritised by trigger
+- **BACKLOG-066 burn-down** — worked down at phase boundaries, prioritised by trigger
+  (BACKLOG-087 cancelled — no GitHub Pro)
 
 ---
 

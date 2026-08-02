@@ -64,7 +64,8 @@ jobs:
             -c "SELECT current_database();" \
             -c "CREATE DATABASE cip_test;" \
             -c "CREATE DATABASE cip_bulk_smoke;" \
-            -c "CREATE DATABASE cip_alembic_smoke;"
+            -c "CREATE DATABASE cip_alembic_smoke;" \
+            -c "CREATE DATABASE cip_e2e;"
 
       - name: Print resolved database URLs
         working-directory: apps/api
@@ -131,7 +132,7 @@ jobs:
         working-directory: apps/api
         run: |
           set -euo pipefail
-          for dbname in cip_bulk_smoke cip_alembic_smoke; do
+          for dbname in cip_bulk_smoke cip_alembic_smoke cip_e2e; do
             echo "Migrating ${dbname} to tip..."
             DATABASE_URL="postgresql+asyncpg://cip:cip@localhost:5432/${dbname}" \
             DATABASE_URL_SYNC="postgresql://cip:cip@localhost:5432/${dbname}" \
@@ -164,10 +165,41 @@ jobs:
       - name: Install Playwright browser
         run: pnpm --filter @cip/web exec playwright install chromium --with-deps
 
+      # BACKLOG-099: live wipe/products e2e against disposable cip_e2e (not cip / not cip_test residue).
+      - name: Seed cip_e2e + start API for live e2e
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgresql+asyncpg://cip:cip@localhost:5432/cip_e2e
+          DATABASE_URL_SYNC: postgresql://cip:cip@localhost:5432/cip_e2e
+          DATABASE_URL_SYNC_MIGRATE: postgresql://cip:cip@localhost:5432/cip_e2e
+          CIP_AUTH_MODE: stub
+          CIP_DEV_CELERY_DISPATCH: in_process_thread
+          # ALLOW_DB_WIPE intentionally unset — Settings must still load status (disabled).
+        run: |
+          set -euo pipefail
+          python scripts/seed_e2e_minimal.py
+          python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 > /tmp/cip-e2e-api.log 2>&1 &
+          echo $! > /tmp/cip-e2e-api.pid
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:8001/health >/dev/null; then
+              echo "API healthy on :8001"
+              curl -sf http://127.0.0.1:8001/api/v1/dev/database-wipe
+              echo
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "API failed to become healthy"
+          cat /tmp/cip-e2e-api.log || true
+          exit 1
+
       - name: End-to-end tests
         run: pnpm test:e2e
         env:
           CI: true
+          CIP_E2E_LIVE_API: '1'
+          CIP_E2E_API_URL: http://127.0.0.1:8001
+          CIP_API_INTERNAL_URL: http://127.0.0.1:8001
 
       - name: Production build
         run: pnpm build
