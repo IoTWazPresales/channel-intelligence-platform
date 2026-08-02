@@ -81,7 +81,7 @@ Each entry: what is unclear · why it matters · interim assumption · what woul
 
 | Field | Value |
 |-------|--------|
-| **Answer** | Formulas locked in `COMMERCIAL_SEMANTICS` §4.3. Cost per **incremental** unit = DO NOT BUILD (BACKLOG-089). BU = `dim_product.product_line`. A2-01/02/06 implemented (A2-U1). A2-03 claim rate → non-computable (Q-008 / D-027: need distinct **owed**, not paid). A2-04/05 still SPEC ONLY. |
+| **Answer** | Formulas locked in `COMMERCIAL_SEMANTICS` §4.3. Cost per **incremental** unit = DO NOT BUILD (BACKLOG-089). BU = `dim_product.product_line`. A2-01/02/06 implemented (A2-U1). A2-03 claim rate → non-computable (Q-008 / D-027: need distinct **owed**, not paid). **A2-04/05 IMPLEMENTED (A2-U2)** — norms + ranked comparable; B4 consumes `build_comparable_cases`. |
 | **Source** | Warren → COMMERCIAL_SEMANTICS / ROADMAP A2 |
 
 ### Q-007 — A3 replenishment + WoC grain — **Resolved 2026-08-01**

@@ -1,23 +1,21 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-02 (POD foundation merged to main; A2-04/05 audit)
+**Last updated:** 2026-08-02 (POD → main; A2-04/05 existence close)
 
-**Branch:** `main` @ `094c3ee` (merge of `fix/commercial-foundation-pod`) · prior schedules work remains on `feat/report-schedules-beat` (PR #17) tip `2ae6192` pushed
+**Branch:** `feat/a2-norms-comparable-close` (from `main` @ `11fd838`) · schedules still on `feat/report-schedules-beat` (PR #17)
 
-**Alembic:** `20260802_0009` on cip / code head (sticky POD view)
+**Alembic:** `20260802_0009` on cip / code head
 
-## Done (this session)
+## Done
 
-- **Merged** `fix/commercial-foundation-pod` → `main` (`094c3ee`) and pushing — same-day; carries real cip data changes.
-- **WoC note:** cover rising ~13.6 → ~25.0 weeks is the **correct** consequence of sticky POD backfill (more landed stock in the WoC cover calc). Not a regression.
-- **BACKLOG-088 / P1-D004:** sticky POD on observation + fact upsert + `shipment_evidence_current` view; fact backfill **5961** rows (156 remain without evidence POD).
-- **YoY coverage (A3-04):** empty current quarter → `has_data=false`, YoY null + vintage.
-- **OPEN_CHANNEL:** absorb clone-proof then cip (skip re-audit).
+- **Merged + pushed** `fix/commercial-foundation-pod` → `main` (`094c3ee` + docs `11fd838`).
+- **WoC:** ~13.6 → ~25.0 weeks is the **correct** POD-backfill consequence — not a regression.
+- **A2-04/05 existence audit:** already shipped as A2-U2 (`norms_and_comparable`, CPOR Cases UI, B4 `build_comparable_cases`). Closed gaps: tenant window on `commercial_tenant_profile` (+ env), comparable UI shows all matching axes, OPEN_QUESTIONS no longer SPEC ONLY.
 
 ## Next
 
-1. A2-04/05 existence audit — tree already has A2-U2 (`norms_and_comparable`); close doc drift + any axis-display gaps; do not rebuild.
-2. Merge PR #17 / #16 when ready; B-lane UI only after SKU economics steward seed.
-3. Remaining residual: P4–P6 / Q-004 CST formats.
+1. Commit/push `feat/a2-norms-comparable-close` when asked; browser smoke CPOR Cases norms + case detail comparables.
+2. Merge PR #17 / #16 when ready; B-lane UI after SKU economics steward seed.
+3. Residuals: P4–P6 / Q-004 CST formats.
 
 **Env:** local Windows. API `:8001`, web `:3000`.

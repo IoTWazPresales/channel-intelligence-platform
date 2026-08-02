@@ -17,6 +17,7 @@ def test_profile_defaults_asus_sa():
     assert snap["pm_attribution_mode"] == "business_line"
     assert snap["hard_enforce_budget"] is True
     assert "money_ceiling_usd" in snap
+    assert snap["support_norms_trailing_quarters"] == 4
 
 
 def test_budget_position_payload_uses_profile():

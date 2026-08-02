@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.cpor import CporCase
 from app.models.dimensions import DimCustomer, DimProduct
-from app.services.cpor.config import SUPPORT_NORMS_TRAILING_QUARTERS
+from app.services.commercial_tenant_profile import support_norms_trailing_quarters
 from app.services.cpor.pivot import _line_ttl_support_usd, is_voided_line
 from app.services.cpor.portfolio_intelligence import _line_ttl_support_zar
 
@@ -91,9 +91,10 @@ def build_support_norms(
     trailing_quarters: int | None = None,
 ) -> dict[str, Any]:
     """A2-04 — per-customer norms over trailing quarters."""
-    n = int(trailing_quarters) if trailing_quarters is not None else SUPPORT_NORMS_TRAILING_QUARTERS
+    tenant_n = support_norms_trailing_quarters()
+    n = int(trailing_quarters) if trailing_quarters is not None else tenant_n
     if n <= 0:
-        n = SUPPORT_NORMS_TRAILING_QUARTERS
+        n = tenant_n
 
     cases = _load_cases(session)
 
@@ -153,6 +154,7 @@ def build_support_norms(
             "by_customer": [],
             "currency_compute": "USD",
             "currency_display_secondary": "ZAR",
+            "window_source": "tenant_config:SUPPORT_NORMS_TRAILING_QUARTERS",
         }
 
     # Latest quarter by index
@@ -232,11 +234,15 @@ def build_support_norms(
         "by_customer": by_customer_out,
         "currency_compute": "USD",
         "currency_display_secondary": "ZAR",
-        "pct_definition": "mean(support_unit / srp) over non-voided lines with srp > 0",
+        "pct_definition": (
+            "mean(support_unit / srp) over non-voided lines with srp > 0 "
+            "(§4.3 case-value % = unit support vs SRP)"
+        ),
         "absolute_definition": (
             f"sum of line ttl_support_(usd|zar) in window, avg over quarters_present "
             f"(trailing {n} from {latest})"
         ),
+        "window_source": "tenant_config:SUPPORT_NORMS_TRAILING_QUARTERS",
     }
 
 
