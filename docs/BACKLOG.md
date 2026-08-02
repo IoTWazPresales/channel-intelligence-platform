@@ -51,16 +51,17 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-02 |
+| **Status / parked** | **Shipped** · 2026-08-02 (verify complete) |
 | **Effort** | Medium (apply + D1–D4 validation) |
 | **Source** | Preview job 752 on cip; archive copy under `.tmp/ProductLineupArchive`; A3 stop gate passed but Phase B unexplained overlap with cases 7/9/90 |
 | **Idea** | Resume Phase C–D: apply ready proposals from session 752 (or re-preview), excluding or steward-confirming overlaps with surviving po_issued cases 7/9/90; then pct/PO/reader/PvE checks. |
-| **Why it matters / deferrable** | Preview complete (35 ready / 15 attention / 3508 lines / PF 1H dual-case OK). Apply blocked until Warren chooses exclude keys or collision-detector fix (BACKLOG-104). |
+| **Why it matters / deferrable** | ~~Preview complete; apply blocked on exclusions.~~ **Done:** Warren exclusion set applied (30 applied / 5 skipped); worker drained parse jobs 753–779; D1–D4 verification recorded in CONTEXT. |
 | **What the work is** | Apply with `excluded_proposal_keys` or confirmations; verify 7/9/90 unchanged; D1–D4; CONTEXT append counts. |
 | **Regression traps** | Never modify cases 7/9/90; no migration; expect session job left `running` (BACKLOG-101). |
 | **Behavior to retain** | Preview session 752 payload; default existing-wins if collisions appear. |
 | **Out of scope** | Fixing BACKLOG-101 in the same unit. |
-| **TRIGGER** | Warren supplies exclude/confirm list for proposals overlapping cases 7/9/90 **or** BACKLOG-104 ships and re-preview shows collisions. |
+| **TRIGGER** | ~~Warren supplies exclude/confirm list~~ — fired and completed. Residual steward work is not this entry (auto-link proposals; failed parses 759/760; period flags on needs_attention). |
+| **Outcome** | Cases 33 (30 active + 3 superseded shells); lines 2450; po_links 52 (unchanged). Survivors 7/9/90 unchanged. Session 752 still `running` (BACKLOG-101). Child parses: 25 completed / 2 failed (`Promo R19999` on `2. ACZA 1H 2026…`, cases 120/121 empty). D1: 0 implausible pct rows (stored fraction-ish 0–1). D2: linked still 52; 355 auto-link proposals waiting. D4: PvE lineup-linked quarters still 2026 Q1+Q2 only (no new PO links). |
 
 ---
 
