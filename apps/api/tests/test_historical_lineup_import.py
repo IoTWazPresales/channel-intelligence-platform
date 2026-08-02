@@ -107,7 +107,7 @@ def _ensure_historical_seed() -> int:
         if not db.scalar(select(DimCustomer).where(DimCustomer.code == "CUST-HL-01")):
             db.add(DimCustomer(code="CUST-HL-01", name="Cust HL", channel_id=ch.id))
         if not db.scalar(select(DimProduct).where(DimProduct.sku == "SKU-HL-01")):
-            db.add(DimProduct(sku="SKU-HL-01", name="Hist Product", category="Audio", channel_id=ch.id))
+            db.add(DimProduct(sku="SKU-HL-01", name="Hist Product", category="Audio"))
         db.commit()
 
         src = db.scalar(select(SourceDefinition).where(SourceDefinition.code == "historical_lineup_default"))
@@ -318,7 +318,7 @@ def test_customer_ilike_fallback_resolves_partial_match() -> None:
         if not db.scalar(select(DimCustomer).where(DimCustomer.code == ilike_code)):
             db.add(DimCustomer(code=ilike_code, name=ilike_name, channel_id=ch.id))
         if not db.scalar(select(DimProduct).where(DimProduct.sku == "SKU-HL-01")):
-            db.add(DimProduct(sku="SKU-HL-01", name="Hist Product", category="Audio", channel_id=ch.id))
+            db.add(DimProduct(sku="SKU-HL-01", name="Hist Product", category="Audio"))
         if not db.scalar(select(DimDistributor).where(DimDistributor.code == "DIST-HL-01")):
             db.add(DimDistributor(code="DIST-HL-01", name="Dist HL"))
         db.commit()
@@ -374,7 +374,7 @@ def test_customer_ilike_ambiguous_emits_diagnostic() -> None:
             if not db.scalar(select(DimCustomer).where(DimCustomer.code == code)):
                 db.add(DimCustomer(code=code, name=name, channel_id=ch.id))
         if not db.scalar(select(DimProduct).where(DimProduct.sku == "SKU-HL-01")):
-            db.add(DimProduct(sku="SKU-HL-01", name="Hist Product", category="Audio", channel_id=ch.id))
+            db.add(DimProduct(sku="SKU-HL-01", name="Hist Product", category="Audio"))
         if not db.scalar(select(DimDistributor).where(DimDistributor.code == "DIST-HL-01")):
             db.add(DimDistributor(code="DIST-HL-01", name="Dist HL"))
         db.commit()

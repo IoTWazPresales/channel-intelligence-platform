@@ -19,7 +19,6 @@ from app.services.imports.cst_mapping_candidates import (
     CstCandidateOpError,
     _location_token_key,
     _serialize_cst_candidate,
-    bulk_resolve_cst_candidates_sync,
     cst_mapping_state_dict,
     enrich_cst_open_candidates,
     ignore_cst_candidate_sync,
@@ -501,22 +500,3 @@ def test_resolve_wrong_job_raises():
         resolve_cst_candidate_sync(session, job_id=5, candidate_id=100, entity_id=1)
 
     assert exc.value.status_code == 404
-
-
-def test_bulk_resolve_returns_all_items():
-    cand_a = _full_candidate(id=1)
-    cand_b = _full_candidate(id=2, normalized_key="other")
-    session = MagicMock()
-
-    def _get(_model, pk):
-        return {1: cand_a, 2: cand_b}.get(pk)
-
-    session.get.side_effect = _get
-    session.scalars.return_value.all.return_value = []
-
-    out = bulk_resolve_cst_candidates_sync(session, job_id=5, candidate_ids=[1, 2], entity_id=77)
-
-    assert out["count"] == 2
-    assert len(out["items"]) == 2
-    assert cand_a.suggested_entity_id == 77
-    assert cand_b.suggested_entity_id == 77

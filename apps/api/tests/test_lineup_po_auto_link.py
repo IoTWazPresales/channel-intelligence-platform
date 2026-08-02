@@ -299,6 +299,8 @@ async def test_purmidr_not_duplicated_per_po_norm_on_26q2():
     assert shipped_sum <= 7000, f"fact shipped sum inflated: {shipped_sum}"
     if already_linked:
         assert len(hits) == 0
+    elif shipped_sum == 0:
+        pytest.skip("PURMIDR26010748 shipment fixtures not present on this database (live cip soak)")
     else:
         assert len(hits) >= 1
         case_ids = {h["case_id"] for h in hits}

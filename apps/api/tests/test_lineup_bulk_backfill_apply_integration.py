@@ -132,7 +132,7 @@ def bulk_smoke_env():
         db = conn.execute(text("SELECT current_database()")).scalar_one()
         assert db == BULK_SMOKE_DB, db
         rev = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
-        assert rev == "20260702_0066", f"expected 0066 on {BULK_SMOKE_DB}, got {rev}"
+        assert rev == "20260801_0008", f"expected tip 20260801_0008 on {BULK_SMOKE_DB}, got {rev}"
         col = conn.execute(
             text(
                 """
@@ -172,6 +172,9 @@ def _clear_bulk_backfill_cases() -> None:
 def _seed_catalog():
     from app.db.session_sync import SessionLocal
     from app.models.dimensions import DimCustomer, DimProduct
+    from app.services.imports.product_resolution_index_cache import (
+        invalidate_product_resolution_index_cache,
+    )
 
     with SessionLocal() as db:
         cust = db.scalar(select(DimCustomer).where(DimCustomer.name == "Amazon"))
@@ -215,6 +218,10 @@ def _seed_catalog():
                 existing.sales_model_name = code
                 existing.is_active = True
         db.commit()
+    invalidate_product_resolution_index_cache()
+    with SessionLocal() as db:
+        cust = db.scalar(select(DimCustomer).where(DimCustomer.name == "Amazon"))
+        assert cust is not None
         return int(cust.id)
 
 

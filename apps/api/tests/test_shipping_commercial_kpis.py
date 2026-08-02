@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+import pytest
 from sqlalchemy import select, text
 
 from app.db.session_sync import SessionLocal
@@ -49,10 +50,16 @@ def test_arriving_week_bounds():
     assert pred is not None
 
 
+def _skip_unless_cip_soak(db) -> None:
+    db_name = db.execute(text("SELECT current_database()")).scalar()
+    if db_name != "cip":
+        pytest.skip(f"soak test requires real cip inventory data, got {db_name!r}")
+
+
 def test_cip_current_incoming_pipeline_below_all_scheduled():
     """SELECT-only: gated cohort must be far below all-scheduled sum (Phase 0 proof)."""
     with SessionLocal() as db:
-        assert db.execute(text("SELECT current_database()")).scalar() == "cip"
+        _skip_unless_cip_soak(db)
         today = date.today()
         horizon = today + timedelta(days=90)
         all_sched = float(
@@ -91,7 +98,7 @@ def test_cip_current_incoming_pipeline_below_all_scheduled():
 
 def test_cip_overdue_contracted_lte_legacy():
     with SessionLocal() as db:
-        assert db.execute(text("SELECT current_database()")).scalar() == "cip"
+        _skip_unless_cip_soak(db)
         today = date.today()
         horizon = today + timedelta(days=90)
         stale_cut = today - timedelta(days=180)

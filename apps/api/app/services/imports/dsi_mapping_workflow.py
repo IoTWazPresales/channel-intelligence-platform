@@ -746,7 +746,9 @@ def dsi_mapping_gate_errors(
                 "message": "Required column mapping missing: product identifier (SKU / part number / model / product code).",
             }
         )
-    needs_inventory_period = "stock_on_hand" in vals and "snapshot_date" not in vals
+    needs_inventory_period = (
+        "stock_on_hand" in vals and "snapshot_date" not in vals and "transaction_date" not in vals
+    )
     has_tx_or_snap_col = "transaction_date" in vals or "snapshot_date" in vals
     has_date = has_tx_or_snap_col or (needs_inventory_period and file_snapshot_satisfied)
     if needs_inventory_period and not file_snapshot_satisfied:

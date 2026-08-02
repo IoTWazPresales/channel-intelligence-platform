@@ -53,7 +53,6 @@ def _seed_resolution_fixtures() -> int:
                     model_name="MODEL-RES-A",
                     sales_model_name="SALES-RES-A",
                     category="NB",
-                    channel_id=ch.id,
                 )
             )
         # Product with a unique model_name (no part_number set)
@@ -64,7 +63,6 @@ def _seed_resolution_fixtures() -> int:
                     name="Resolution Model Product",
                     model_name="UNIQUE-MODEL-B",
                     category="NB",
-                    channel_id=ch.id,
                 )
             )
         # A second product that shares model_name with SKU-RES-03 to test ambiguity guard
@@ -75,7 +73,6 @@ def _seed_resolution_fixtures() -> int:
                     name="Shared Model Alpha",
                     model_name="SHARED-MODEL-X",
                     category="NB",
-                    channel_id=ch.id,
                 )
             )
         if not db.scalar(select(DimProduct).where(DimProduct.sku == "SKU-RES-04")):
@@ -85,7 +82,6 @@ def _seed_resolution_fixtures() -> int:
                     name="Shared Model Beta",
                     model_name="SHARED-MODEL-X",
                     category="NB",
-                    channel_id=ch.id,
                 )
             )
 
@@ -99,7 +95,6 @@ def _seed_resolution_fixtures() -> int:
                     part_number="PART-STEP2-LOOKUP",
                     name="Step2 Part Number Fallback Product",
                     category="NB",
-                    channel_id=ch.id,
                 )
             )
         # Two products for cross-field ambiguity: same token resolves to different products
@@ -111,7 +106,6 @@ def _seed_resolution_fixtures() -> int:
                     name="Cross Field Model Product",
                     model_name="CROSS-FIELD-X",
                     category="NB",
-                    channel_id=ch.id,
                 )
             )
         if not db.scalar(select(DimProduct).where(DimProduct.sku == "SKU-RES-07")):
@@ -121,7 +115,6 @@ def _seed_resolution_fixtures() -> int:
                     name="Cross Field Sales Model Product",
                     sales_model_name="CROSS-FIELD-X",
                     category="NB",
-                    channel_id=ch.id,
                 )
             )
         # Product for single-ILIKE-match positive-path test.
@@ -132,7 +125,6 @@ def _seed_resolution_fixtures() -> int:
                     sku="SKU-RES-ILIKE",
                     name="ILIKE-TESTSENTINEL-2026-PRODUCT",
                     category="NB",
-                    channel_id=ch.id,
                 )
             )
 

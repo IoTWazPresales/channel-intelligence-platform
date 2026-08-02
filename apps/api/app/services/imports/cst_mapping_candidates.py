@@ -407,18 +407,6 @@ def ignore_cst_candidate_sync(
     return serialize_cst_candidate(cand)
 
 
-def bulk_resolve_cst_candidates_sync(
-    session: Session,
-    job_id: int,
-    candidate_ids: list[int],
-    entity_id: int,
-) -> dict[str, Any]:
-    items: list[dict[str, Any]] = []
-    for cid in candidate_ids:
-        items.append(resolve_cst_candidate_sync(session, job_id, int(cid), entity_id))
-    return {"items": items, "count": len(items)}
-
-
 def list_cst_mapping_candidates_sync(
     session: Session,
     job_id: int,

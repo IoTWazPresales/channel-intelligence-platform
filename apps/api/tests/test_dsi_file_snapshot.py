@@ -54,6 +54,16 @@ def test_gate_inventory_needs_snapshot_stamp() -> None:
     assert not any(e["code"] == "missing_column_mapping_date" for e in errs_ok)
 
 
+def test_gate_inventory_allows_transaction_date_as_snapshot_fallback() -> None:
+    mapping = {
+        "Model": "product_identifier",
+        "Date": "transaction_date",
+        "INVENTORY": "stock_on_hand",
+    }
+    errs = dsi_mapping_gate_errors(mapping, file_distributor_satisfied=True, file_snapshot_satisfied=False)
+    assert not any(e["code"] == "missing_snapshot_period_for_inventory_file" for e in errs)
+
+
 def test_gate_sellout_still_needs_transaction_date() -> None:
     mapping = {
         "Model": "product_identifier",

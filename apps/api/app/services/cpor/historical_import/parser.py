@@ -13,16 +13,19 @@ from app.services.cpor.historical_import.profile_defaults import (
     normalize_header,
 )
 
-# openpyxl stylesheet workaround for some ASUS workbooks with duplicate gradient stops
-import openpyxl.reader.excel as _excel_mod
-
-_excel_mod.apply_stylesheet = lambda *a, **k: None  # type: ignore[assignment]
-
-
 def _load_workbook(data: bytes):
+    """Load historical ASUS workbooks; scoped stylesheet workaround for duplicate gradient stops."""
+    import openpyxl.reader.excel as _excel_mod
     from openpyxl.reader.excel import load_workbook
 
-    return load_workbook(io.BytesIO(data), read_only=True, data_only=True, keep_links=False)
+    original_apply = _excel_mod.apply_stylesheet
+    _excel_mod.apply_stylesheet = lambda *a, **k: None  # type: ignore[assignment]
+    try:
+        return load_workbook(
+            io.BytesIO(data), read_only=True, data_only=True, keep_links=False
+        )
+    finally:
+        _excel_mod.apply_stylesheet = original_apply
 
 
 def _excel_serial_to_date(val: Any) -> date | None:

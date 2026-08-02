@@ -8,6 +8,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.ingestion import ImportJob
 from app.services.imports.background_tasks import _read_celery_safe
 from app.services.imports.dsi_resolution_plan_enqueue import enqueue_dsi_resolution_plan_apply
@@ -100,12 +101,30 @@ def schedule_or_enqueue_dsi_post_validate_auto_apply(
     sync_db.add(job)
     sync_db.flush()
 
-    celery_app.send_task(
-        _FLUSH_TASK,
-        args=[int(job.id)],
-        queue=CELERY_QUEUE_BATCH,
-        countdown=15,
-    )
+    settings = get_settings()
+    if settings.cip_dev_celery_dispatch == "in_process_thread":
+        logger.info(
+            "DSI post-validate deferred auto-apply job_id=%s — flushing in-process (no Celery broker)",
+            job.id,
+        )
+        try_flush_deferred_dsi_post_validate_auto_apply(sync_db, int(job.id))
+        sync_db.commit()
+        return
+
+    try:
+        celery_app.send_task(
+            _FLUSH_TASK,
+            args=[int(job.id)],
+            queue=CELERY_QUEUE_BATCH,
+            countdown=15,
+        )
+    except Exception:
+        logger.exception(
+            "DSI post-validate flush schedule failed job_id=%s — running sync flush",
+            job.id,
+        )
+        run_flush_deferred_dsi_post_validate_auto_apply_sync(int(job.id))
+        return
     logger.info(
         "DSI post-validate deferred historical auto-apply job_id=%s candidates=%d",
         job.id,
@@ -205,12 +224,22 @@ def run_flush_deferred_dsi_post_validate_auto_apply_sync(job_id: int) -> dict[st
             job.staged_metadata = to_jsonable(meta)
             sync_db.add(job)
             sync_db.commit()
-            celery_app.send_task(
-                _FLUSH_TASK,
-                args=[job_id],
-                queue=CELERY_QUEUE_BATCH,
-                countdown=30,
-            )
+            settings = get_settings()
+            if settings.cip_dev_celery_dispatch == "in_process_thread":
+                # No delayed Celery countdown without a broker — leave deferred for a later flush.
+                return {"flushed": False, "job_id": job_id, "reason": "steward_busy", "reschedule": count}
+            try:
+                celery_app.send_task(
+                    _FLUSH_TASK,
+                    args=[job_id],
+                    queue=CELERY_QUEUE_BATCH,
+                    countdown=30,
+                )
+            except Exception:
+                logger.exception(
+                    "DSI deferred auto-apply reschedule failed job_id=%s — leaving deferred",
+                    job_id,
+                )
             return {"flushed": False, "job_id": job_id, "reason": "steward_busy", "reschedule": count}
 
         sync_db.commit()

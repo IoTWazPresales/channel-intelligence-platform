@@ -906,7 +906,6 @@ def test_plan_suggestions_latest_historical_job_subquery_joins_header():
 
     try:
         with SessionLocal() as db:
-            assert db.scalar(text("SELECT current_database()")) == "cip"
             ensure_commercial_planner_system_reference_data_sync(db.connection())
             db.commit()
 
@@ -1303,7 +1302,9 @@ def _make_case(
     created_at=None,
     iteration_number=1,
     product_line=None,
+    business_unit=None,
     inferred_period_start=None,
+    superseded_by_case_id=None,
 ):
     from types import SimpleNamespace
     return SimpleNamespace(
@@ -1319,11 +1320,13 @@ def _make_case(
         commercial_status=commercial_status,
         iteration_number=iteration_number,
         product_line=product_line,
+        business_unit=business_unit,
         inferred_period_start=inferred_period_start,
         notes=notes,
         accepted_at=accepted_at,
         accepted_by=accepted_by,
         created_at=created_at,
+        superseded_by_case_id=superseded_by_case_id,
     )
 
 
@@ -1520,6 +1523,9 @@ def test_commercial_lineup_case_delete_draft_only():
     async def fake_db_draft():
         sess = MagicMock()
         sess.get = AsyncMock(return_value=draft_case)
+        children_result = MagicMock()
+        children_result.scalars.return_value.all.return_value = []
+        sess.execute = AsyncMock(return_value=children_result)
         sess.delete = AsyncMock()
         sess.commit = AsyncMock()
         yield sess
@@ -1847,7 +1853,13 @@ def test_parse_upload_creates_import_job_with_correct_source():
 
     fake_source = SimpleNamespace(id=77)
     fake_case = SimpleNamespace(
-        id=10, import_job_id=None, file_name=None, period_label=None, inferred_period_start=None, product_line=None
+        id=10,
+        import_job_id=None,
+        file_name=None,
+        period_label=None,
+        inferred_period_start=None,
+        product_line=None,
+        business_unit=None,
     )
     added: list[object] = []
 
@@ -1889,7 +1901,9 @@ def test_parse_upload_fails_clearly_without_current_lineup_source():
     from app.services.commercial_planner.current_lineup_seed import CurrentLineupSourceNotConfiguredError
     from app.services.commercial_planner.lineup_case_parser import parse_current_lineup_file
 
-    fake_case = SimpleNamespace(id=11, import_job_id=None, file_name=None)
+    fake_case = SimpleNamespace(
+        id=11, import_job_id=None, file_name=None, business_unit=None
+    )
 
     async def run():
         db = MagicMock()
@@ -1975,7 +1989,13 @@ def test_parse_upload_unknown_distributor_diagnostic():
 
     fake_source = SimpleNamespace(id=5)
     fake_case = SimpleNamespace(
-        id=12, import_job_id=None, file_name=None, period_label=None, inferred_period_start=None, product_line=None
+        id=12,
+        import_job_id=None,
+        file_name=None,
+        period_label=None,
+        inferred_period_start=None,
+        product_line=None,
+        business_unit=None,
     )
     added: list[object] = []
 
@@ -2097,6 +2117,9 @@ def _make_lineup_line(
     vat_pct_evidence=None,
     row_status="imported",
     mapping_confidence=None,
+    pricing_chain_json=None,
+    calc_dap_cost_currency=None,
+    calc_profit_total=None,
 ):
     from types import SimpleNamespace
     return SimpleNamespace(
@@ -2122,6 +2145,9 @@ def _make_lineup_line(
         vat_pct_evidence=vat_pct_evidence,
         row_status=row_status,
         mapping_confidence=mapping_confidence,
+        pricing_chain_json=pricing_chain_json,
+        calc_dap_cost_currency=calc_dap_cost_currency,
+        calc_profit_total=calc_profit_total,
     )
 
 
@@ -2529,7 +2555,8 @@ def test_entity_resolution_candidates_lists_abbreviation_token_until_explicit_re
 
 
 def test_entity_resolution_apply_409_when_accepted():
-    case = _make_case(id=53, commercial_status="accepted", commercial_plan_id=5)
+    # Steward work is closed — entity resolution is no longer allowed (accepted remains open).
+    case = _make_case(id=53, commercial_status="work_closed", commercial_plan_id=5)
 
     async def fake_db():
         sess = MagicMock()

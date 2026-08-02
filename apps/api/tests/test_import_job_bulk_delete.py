@@ -131,6 +131,7 @@ def _seed_job_with_artifacts(session) -> int:
             channel_id=None,
             distributor_id=d.id,
             period_start=date(2024, 1, 1),
+            transaction_date=date(2024, 1, 1),
             units=1,
             revenue=1,
             source_import_job_id=job.id,
@@ -138,6 +139,7 @@ def _seed_job_with_artifacts(session) -> int:
     )
     session.add(
         FactInventoryDistributor(
+            source_key=f"bulk-delete-test-inventory-{p.id}-{d.id}-2024-01-01",
             product_id=p.id,
             distributor_id=d.id,
             as_of_date=date(2024, 1, 1),

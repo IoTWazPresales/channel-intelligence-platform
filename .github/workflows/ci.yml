@@ -28,6 +28,8 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://cip:cip@localhost:5432/cip_test
       DATABASE_URL_SYNC: postgresql://cip:cip@localhost:5432/cip_test
       DATABASE_URL_SYNC_MIGRATE: postgresql://cip:cip@localhost:5432/cip_test
+      # No Redis in CI — skip broker retry loops; use in-process thread fallback for import tasks.
+      CIP_DEV_CELERY_DISPATCH: in_process_thread
     steps:
       - uses: actions/checkout@v4
 
@@ -56,11 +58,13 @@ jobs:
       - name: Install psql client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      - name: Create cip_test database
+      - name: Create disposable CI databases
         run: |
           PGPASSWORD=cip psql -h localhost -U cip -d postgres -v ON_ERROR_STOP=1 \
             -c "SELECT current_database();" \
-            -c "CREATE DATABASE cip_test;"
+            -c "CREATE DATABASE cip_test;" \
+            -c "CREATE DATABASE cip_bulk_smoke;" \
+            -c "CREATE DATABASE cip_alembic_smoke;"
 
       - name: Print resolved database URLs
         working-directory: apps/api
@@ -123,46 +127,34 @@ jobs:
               ).scalar()
           PY
 
+      - name: Alembic migrate disposable smoke DBs
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          for dbname in cip_bulk_smoke cip_alembic_smoke; do
+            echo "Migrating ${dbname} to tip..."
+            DATABASE_URL="postgresql+asyncpg://cip:cip@localhost:5432/${dbname}" \
+            DATABASE_URL_SYNC="postgresql://cip:cip@localhost:5432/${dbname}" \
+            DATABASE_URL_SYNC_MIGRATE="postgresql://cip:cip@localhost:5432/${dbname}" \
+              alembic upgrade head
+            PGPASSWORD=cip psql -h localhost -U cip -d "${dbname}" -v ON_ERROR_STOP=1 \
+              -c "SELECT current_database(), version_num FROM alembic_version;"
+          done
+
       - name: API tests
         id: api_tests
-        continue-on-error: true
         run: |
           set -o pipefail
           mkdir -p .tmp
           pnpm test:api 2>&1 | tee .tmp/ci-api-pytest.txt
           echo "API_TEST_EXIT=${PIPESTATUS[0]}" | tee -a .tmp/ci-api-pytest.txt
 
-      - name: Write API defect log (failures recorded, not fixed)
-        if: always() && steps.api_tests.outcome != 'skipped'
-        run: |
-          mkdir -p .tmp
-          {
-            echo "# CI API defect log — $(date -u +%Y-%m-%dT%H:%MZ)"
-            echo
-            echo "Ephemeral DB: cip_test (ALLOW_TESTS_ON_DEV_DB unset)."
-            echo "Non-goal this unit: fixing failing tests — record only."
-            echo
-            echo "## Outcome"
-            echo "api_tests step conclusion: ${{ steps.api_tests.outcome }}"
-            echo
-            echo "## pytest output (tail)"
-            echo '```'
-            if [ -f .tmp/ci-api-pytest.txt ]; then
-              tail -n 200 .tmp/ci-api-pytest.txt
-            else
-              echo "(no pytest capture)"
-            fi
-            echo '```'
-          } > .tmp/CI_API_DEFECT_LOG.md
-          echo "Defect log written to .tmp/CI_API_DEFECT_LOG.md"
-
-      - name: Upload API defect log
-        if: always() && steps.api_tests.outcome != 'skipped'
+      - name: Upload API pytest log (on failure)
+        if: failure() && steps.api_tests.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: ci-api-defect-log
           path: |
-            .tmp/CI_API_DEFECT_LOG.md
             .tmp/ci-api-pytest.txt
           if-no-files-found: warn
 
@@ -179,11 +171,3 @@ jobs:
 
       - name: Production build
         run: pnpm build
-
-      - name: Report API test outcome (record-only; not merge gate)
-        if: always() && steps.api_tests.outcome == 'failure'
-        run: |
-          echo "::warning::API suite failed against cip_test — see ci-api-defect-log artifact."
-          echo "Defects are recorded, not fixed in this unit (see docs/CI_API_DEFECT_LOG_2026-07-29.md)."
-          echo "Merge gate remains: alembic migrate, web vitest, e2e, production build."
-          echo "Hard API gate deferred — BACKLOG-100."

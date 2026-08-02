@@ -26,6 +26,7 @@ from app.services.imports.import_pipeline_dispatch_claim import (
 def _job(
     *,
     status: str = "running",
+    stage: str | None = None,
     checkpoint_at: str | None = None,
     queued_at: str | None = None,
     celery_task_id: str | None = None,
@@ -38,7 +39,9 @@ def _job(
         meta["pipeline_queued_at"] = queued_at
     if celery_task_id is not None:
         meta["celery_task_id"] = celery_task_id
-    return SimpleNamespace(id=jid, status=status, staged_metadata=meta, import_mode="validate")
+    return SimpleNamespace(
+        id=jid, status=status, stage=stage, staged_metadata=meta, import_mode="validate"
+    )
 
 
 def _iso_seconds_ago(seconds: float) -> str:
@@ -73,7 +76,7 @@ def test_active_celery_blocks_regardless_of_job_status(monkeypatch) -> None:
 def test_fresh_pipeline_queued_at_blocks_without_celery(monkeypatch) -> None:
     _patch_state(monkeypatch, None)
     fresh = _iso_seconds_ago(PIPELINE_DISPATCH_CLAIM_SECONDS / 2)
-    assert import_pipeline_dispatch_is_busy(_job(status="completed", queued_at=fresh)) is True
+    assert import_pipeline_dispatch_is_busy(_job(status="validated", queued_at=fresh)) is True
 
 
 def test_lost_celery_with_fresh_checkpoint_blocks(monkeypatch) -> None:

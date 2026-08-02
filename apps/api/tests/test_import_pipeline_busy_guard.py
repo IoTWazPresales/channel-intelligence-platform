@@ -20,6 +20,7 @@ from app.services.imports.import_pipeline_dispatch_claim import (
 def _job(
     *,
     status: str = "running",
+    stage: str | None = None,
     checkpoint_at: str | None = None,
     celery_task_id: str | None = None,
     jid: int = 7,
@@ -29,7 +30,7 @@ def _job(
         meta["dsi_validate_checkpoint_at"] = checkpoint_at
     if celery_task_id is not None:
         meta["celery_task_id"] = celery_task_id
-    return SimpleNamespace(id=jid, status=status, staged_metadata=meta)
+    return SimpleNamespace(id=jid, status=status, stage=stage, staged_metadata=meta)
 
 
 def _iso_seconds_ago(seconds: float) -> str:

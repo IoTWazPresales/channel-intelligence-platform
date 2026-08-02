@@ -61,9 +61,16 @@ def _seed_dims(session) -> tuple[int, int, int, int]:
         session.add(channel)
         session.flush()
     dist = session.scalar(select(DimDistributor).limit(1))
-    assert dist is not None
+    if dist is None:
+        dist = DimDistributor(code="DIST-FULL-01", name="Full Merge Dist")
+        session.add(dist)
+        session.flush()
     prod = session.scalar(select(DimProduct).limit(1))
-    assert prod is not None
+    if prod is None:
+        prod = DimProduct(sku="SKU-FULL-01", name="Full Merge Product", category="NB")
+        session.add(prod)
+        session.flush()
+    session.commit()
     return int(region.id), int(channel.id), int(dist.id), int(prod.id)
 
 

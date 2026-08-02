@@ -22,7 +22,6 @@ from app.ingestion.pipeline import process_import_job_sync
 from app.services.steward_audit import record_steward_audit_sync
 from app.services.imports.cst_mapping_candidates import (
     CstCandidateOpError,
-    bulk_resolve_cst_candidates_sync,
     cst_mapping_state_dict,
     ignore_cst_candidate_sync,
     list_cst_mapping_candidates_sync,
@@ -1597,11 +1596,6 @@ class CstResolveCandidateBody(BaseModel):
     entity_id: int = Field(..., ge=1)
 
 
-class CstBulkResolveCandidatesBody(BaseModel):
-    candidate_ids: list[int] = Field(..., min_length=1)
-    entity_id: int = Field(..., ge=1)
-
-
 @router.post("/jobs/{job_id}/cst-candidates/{candidate_id}/resolve", status_code=200)
 async def resolve_cst_candidate(
     job_id: int,
@@ -1649,35 +1643,6 @@ async def ignore_cst_candidate(
         importer="cst",
         import_job_id=job_id,
         candidate_id=candidate_id,
-    )
-    return result
-
-
-@router.post("/jobs/{job_id}/cst-candidates/bulk-resolve", status_code=200)
-async def bulk_resolve_cst_candidates(
-    job_id: int,
-    body: CstBulkResolveCandidatesBody,
-    user: dict = Depends(get_current_user),
-):
-    with SessionLocal() as sync_db:
-        try:
-            result = bulk_resolve_cst_candidates_sync(
-                sync_db, job_id, body.candidate_ids, body.entity_id
-            )
-            sync_db.commit()
-        except CstCandidateOpError as exc:
-            sync_db.rollback()
-            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-    record_steward_audit_sync(
-        user,
-        action="bulk_map",
-        importer="cst",
-        import_job_id=job_id,
-        target_id=body.entity_id,
-        payload={
-            "candidate_count": len(body.candidate_ids),
-            "result": result if isinstance(result, dict) else None,
-        },
     )
     return result
 

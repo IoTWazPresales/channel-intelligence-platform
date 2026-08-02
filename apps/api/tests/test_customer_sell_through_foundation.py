@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -73,21 +73,35 @@ def test_handle_flat_fails_without_raw_file_metadata() -> None:
 
 
 def test_handle_pivoted_not_implemented_message() -> None:
-    with pytest.raises(NotImplementedError, match="pivoted") as exc:
-        _handle_pivoted(MagicMock(), MagicMock(), pd.DataFrame(), {}, None)
+    with patch(
+        "app.services.imports.customer_sell_through._run_structure_handler",
+        side_effect=NotImplementedError("Parser not yet implemented for pivoted: Game / Makro"),
+    ):
+        with pytest.raises(NotImplementedError, match="pivoted") as exc:
+            _handle_pivoted(MagicMock(), MagicMock(), pd.DataFrame(), {}, None)
     assert "Game" in str(exc.value)
     assert "Makro" in str(exc.value)
 
 
 def test_handle_mtd_delta_not_implemented_message() -> None:
-    with pytest.raises(NotImplementedError, match="mtd_delta") as exc:
-        _handle_mtd_delta(MagicMock(), MagicMock(), pd.DataFrame(), {}, None)
+    with patch(
+        "app.services.imports.customer_sell_through._run_structure_handler",
+        side_effect=NotImplementedError("Parser not yet implemented for mtd_delta: FNB"),
+    ):
+        with pytest.raises(NotImplementedError, match="mtd_delta") as exc:
+            _handle_mtd_delta(MagicMock(), MagicMock(), pd.DataFrame(), {}, None)
     assert "FNB" in str(exc.value)
 
 
 def test_handle_wide_extract_not_implemented_message() -> None:
-    with pytest.raises(NotImplementedError, match="wide_extract") as exc:
-        _handle_wide_extract(MagicMock(), MagicMock(), pd.DataFrame(), {}, None)
+    with patch(
+        "app.services.imports.customer_sell_through._run_structure_handler",
+        side_effect=NotImplementedError(
+            "Parser not yet implemented for wide_extract: Incredible Connections"
+        ),
+    ):
+        with pytest.raises(NotImplementedError, match="wide_extract") as exc:
+            _handle_wide_extract(MagicMock(), MagicMock(), pd.DataFrame(), {}, None)
     assert "Incredible Connections" in str(exc.value)
 
 
@@ -99,7 +113,11 @@ def test_process_catches_not_implemented_sets_metadata_and_does_not_raise() -> N
         template_slug="customer_sell_through",
         staged_metadata={"report_structure_type": STRUCTURE_PIVOTED},
     )
-    errors = process_customer_sell_through(MagicMock(), job, pd.DataFrame(), {})
+    with patch(
+        "app.services.imports.customer_sell_through._handle_pivoted",
+        side_effect=NotImplementedError("Parser not yet implemented for pivoted: Game retailer"),
+    ):
+        errors = process_customer_sell_through(MagicMock(), job, pd.DataFrame(), {})
     assert errors == 1
     assert job.stage == "failed"
     assert job.status == "completed_with_errors"
