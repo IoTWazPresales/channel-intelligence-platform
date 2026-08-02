@@ -322,15 +322,13 @@ tenant #2, per-tenant branding, billing/packaging mechanics, tenant provisioning
 
 Runs alongside all phases in GREEN autonomy. Never blocks a phase; never blocked by one.
 
-- **Unit E (CST steward) VERIFY** — implemented, never verified. Close it
-- **Distributor merge** — same engine as customer merge, extended to `dim_distributor`
-- **Existing surface retrofit** — PO management, PM gaps, channels/regions, product master,
-  admin masters, commercial planner: audit each against the contract, retrofit or waive
-- **Ops-list grid parity** (BACKLOG-085) — fold into whichever phase touches those pages
-- **Lifecycle defect trio** — `progress_at` heartbeat never fires during validate;
-  liveness-aware reaper (check Celery state, not just metadata); retry guard while task active
-- **BACKLOG-076** — corrupt unit amounts (~$36M). Fix before any external demo
-- **BACKLOG-066 → 087** — worked down at phase boundaries, prioritised by trigger
+- **Unit E (CST steward) VERIFY** — **PASS** 2026-08-02 (`docs/memory/UNIT_E_VERIFY_CLOSEOUT_2026-08-02.md`)
+- **Distributor merge** — parked (clone-proof apply to cip); TRIGGER = Warren prioritizes
+- **Existing surface retrofit** — parked epic; TRIGGER = post-P4 steward capacity
+- **Ops-list grid parity** (BACKLOG-085) — parked; fold when those pages are next touched
+- **Lifecycle defect trio** — **closed 2026-08-02**: durable `dsi_validate_checkpoint_at` + Celery `progress_at` on all PROGRESS metas (`_celery_progress_meta`); Celery-aware running-job reaper; retry-while-active via `import_pipeline_dispatch_claim` (tests green)
+- **BACKLOG-076** — parked (destructive amount repair); before external demo only
+- **BACKLOG-066 burn-down** — worked at phase boundaries by trigger (**BACKLOG-087 cancelled** — no GitHub Pro)
 
 ---
 

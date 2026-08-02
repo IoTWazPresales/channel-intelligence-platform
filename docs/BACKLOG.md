@@ -34,7 +34,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-01 |
+| **Status / parked** | **Resolved 2026-08-02** — PR #16 `feat/ci-live-e2e` (await CI); seed_e2e_minimal + live wipe/products filters + CIP_E2E_LIVE_API in Actions |
 | **Effort** | Medium (CI job wiring + seed/auth for live specs) |
 | **Source** | PR #13 CI — e2e red: Next proxy `ECONNREFUSED :8001`; wipe/products specs need live API (`CIP_E2E_API_URL` / `:8010`) |
 | **Idea** | Run FastAPI in GitHub Actions against already-migrated `cip_test`, point Next proxy + `CIP_E2E_API_URL` at it, enable `wipe-and-products-delete` (and future live specs). |
