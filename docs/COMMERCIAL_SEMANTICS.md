@@ -160,6 +160,7 @@ domain §1.5). **Never** convert a USD portfolio total through one period FX rat
 | A3-01 | **Derived channel stock** | IMPLEMENTED | latest reported SOH − sell-out since snapshot + POD-landed shipped since (`line_state='shipped'` ∧ `pod_date` > snapshot). Pipeline/`open_order` **never** counts. Latest-per-(distributor, product) only — never sum all snapshots. | distributor × product | Channel Operations |
 | A3-02 | **Weeks of cover** | IMPLEMENTED | `derived_stock / velocity` at **distributor × product only**. Velocity = sell-out units over 364d ÷ 52 from `fact_sales_sellout` (same grain). Portfolio = Σstock / Σvelocity. Zero / near-zero velocity → **undefined**. | distributor × product | Channel Operations |
 | A3-03 | **Replenishment flag (v1)** | IMPLEMENTED | Threshold flag when `0 < weeks_of_cover < REPLENISHMENT_WOC_THRESHOLD_WEEKS` (tenant config default **4**). Not a recommendation engine. Portfolio summary reports pair count below threshold + portfolio flag. Row field `replenishment_flag` (`reorder_signal` alias). | distributor × product | Channel Operations |
+| A3-04 | **Sell-out YoY / coverage** | IMPLEMENTED | YoY = (current − prior) / prior only when **current calendar quarter has ≥1 sell-out row**. Empty current quarter → `has_data=false`, `sell_out_yoy_pct=null` (never −100%), declare `sell_out_data_vintage.max_transaction_date`. True zero with rows is distinct from no coverage. | portfolio (optional distributor filter) | Channel Operations |
 
 CST `/channel-intelligence` remains a **separate** customer×product×site velocity surface — do not conflate with Channel Ops WoC grain.
 
@@ -182,6 +183,26 @@ CST `/channel-intelligence` remains a **separate** customer×product×site veloc
 | B1-05 | **Analogue provenance** | IMPLEMENTED (B1-03) | Required when `method=analogue`: `analogue_product_id` + `analogue_basis` JSON `{matched[], scale}` from product_line / series / form_factor / price_band / gpu / predecessor. | same | Demand Forecast |
 | B1-06 | **Channel pseudo-customer** | SPEC (schema B1-01) | `customer_id` is **NOT NULL**. Channel-only / missing-customer demand uses controlled `dim_customer.code = OPEN_CHANNEL`. Missing distributor on manual override uses `dim_distributor.code = UNASSIGNED`. | — | Demand Forecast |
 | B1-07 | **Forecast layer invariant** | SPEC (schema B1-01) | Forecast is **never merged into actuals**. Separate table, separate labelled surface. Missing actual ≠ gap-filled with prediction. | — | Demand Forecast |
+
+### 4.6 Buy plan / budget — B2 (SPEC ONLY — catalogue before UI)
+
+**Consumes:** B1 `fact_demand_forecast` (rollup), A3 derived stock, inbound `fact_inbound_shipment`
+(`line_state='shipped'` ∧ `pod_date` for landed; `open_order` + shipped-not-landed for in-transit).
+**SKU economics:** steward-seeded `commercial_sku_assumption` only (never backfilled from
+assumptions). SRP inputs come from plan/lineup authoring, not a silent SKU backfill.
+
+| ID | Metric / concept | Status | Formula / rule | Grain | Owner |
+|---|---|---|---|---|---|
+| B2-01 | **Net requirement** | SPEC ONLY | `forecast_units` (dist×product rollup) − derived channel stock − in-transit (`open_order` + shipped∧`pod_date IS NULL`) + cover policy units. Pipeline never counts as stock. | distributor × product × period | Line-up Planning / Commercial Planner (owner TBD at build) |
+| B2-02 | **Profit with reservation** | SPEC ONLY | Line economics via commercial calculator; reservation = `reserve_total_pct` × sell-in (derived, not workbook column). Hard money ceiling deferred. | plan line / SKU | Commercial Planner |
+| B2-03 | **Budget position (money)** | SPEC ONLY | Planned reservation (B2-02) vs drawn CPOR `ttl_support_usd` by landed/POD quarter. Landed-basis — requires sticky POD (BACKLOG-088). Empty SKU economics → `missing_sku_economics`, not a fake zero. | period × (optional BU) | CPOR Cases / Promotions |
+| B2-04 | **Budget position (support %)** | SPEC ONLY | Drawn support ÷ sell-in (or reserved) as %. Same substrate as B2-03; display companion, not a second ledger. | period | CPOR Cases / Promotions |
+
+### 4.7 Promo draft — B4 (SPEC ONLY — catalogue before UI)
+
+| ID | Metric / concept | Status | Formula / rule | Grain | Owner |
+|---|---|---|---|---|---|
+| B4-01 | **Promo draft composition** | SPEC ONLY | Compose A2 comps + B1 volume + B2 budget check into a draft case. Draft may warn on over-budget; hard enforce follows tenant profile. Do not invent parallel economics. | case / line | Promotions |
 
 ---
 

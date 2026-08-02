@@ -69,7 +69,18 @@ SELECT DISTINCT ON (o.line_identity_key)
     o.exwork_date,
     o.erd_date,
     o.est_pod_date,
-    o.pod_date,
+    COALESCE(
+        o.pod_date,
+        sel.pod_date,
+        (
+            SELECT p.pod_date
+            FROM shipment_evidence_observation p
+            WHERE p.line_identity_key = o.line_identity_key
+              AND p.pod_date IS NOT NULL
+            ORDER BY p.valid_from DESC NULLS LAST, p.id DESC
+            LIMIT 1
+        )
+    ) AS pod_date,
     COALESCE(sel.product_id, o.product_id) AS product_id,
     COALESCE(sel.product_resolution_status, o.product_resolution_status) AS product_resolution_status,
     COALESCE(sel.product_resolution_token, o.product_resolution_token) AS product_resolution_token,

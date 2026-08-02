@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 from sqlalchemy import select
@@ -108,12 +108,48 @@ def _observation_insert_statement(rows: list[dict[str, Any]]):
     return ins.on_conflict_do_nothing(constraint="uq_shipment_ev_obs_job_row_hash")
 
 
+def _prior_pod_by_identity_keys(db: Session, identity_keys: list[str]) -> dict[str, date]:
+    """Last non-null POD per ``line_identity_key`` (any observation history)."""
+    keys = sorted({k for k in identity_keys if k})
+    if not keys:
+        return {}
+    rows = db.execute(
+        select(ShipmentEvidenceObservation.line_identity_key, ShipmentEvidenceObservation.pod_date)
+        .where(
+            ShipmentEvidenceObservation.line_identity_key.in_(keys),
+            ShipmentEvidenceObservation.pod_date.is_not(None),
+        )
+        .order_by(
+            ShipmentEvidenceObservation.line_identity_key,
+            ShipmentEvidenceObservation.valid_from.desc().nulls_last(),
+            ShipmentEvidenceObservation.id.desc(),
+        )
+        .distinct(ShipmentEvidenceObservation.line_identity_key)
+    ).all()
+    return {str(k): pod for k, pod in rows if pod is not None}
+
+
+def _apply_sticky_observation_pods(db: Session, values: list[dict[str, Any]]) -> None:
+    need = [str(v["line_identity_key"]) for v in values if v.get("pod_date") is None and v.get("line_identity_key")]
+    prior = _prior_pod_by_identity_keys(db, need)
+    for v in values:
+        if v.get("pod_date") is not None:
+            continue
+        key = str(v.get("line_identity_key") or "")
+        if key in prior:
+            v["pod_date"] = prior[key]
+
+
 def append_observations_for_job_lines(
     db: Session,
     job: ImportJob,
     lines: list[ShipmentEvidenceLine] | None = None,
 ) -> int:
-    """Append observations for job lines (idempotent per source_row_hash)."""
+    """Append observations for job lines (idempotent per source_row_hash).
+
+    Sticky POD: if the job line omits ``pod_date`` but a prior observation for the same
+    ``line_identity_key`` had one, carry it forward (P1-D004 / BACKLOG-088).
+    """
     if not lines:
         lines = list(
             db.scalars(
@@ -127,6 +163,7 @@ def append_observations_for_job_lines(
     values = [
         _line_to_observation_values(line, valid_from=valid_from, observed_at=observed_at) for line in lines
     ]
+    _apply_sticky_observation_pods(db, values)
 
     attempted = 0
     for i in range(0, len(values), _OBSERVATION_UPSERT_CHUNK):

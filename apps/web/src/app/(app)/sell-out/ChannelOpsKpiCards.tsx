@@ -9,9 +9,25 @@ import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '@/lib/api';
 
 export type ChannelOpsSummary = {
-  sell_out_this_quarter: { units: number; revenue: number };
-  sell_out_prior_year_quarter: { units: number; revenue: number };
+  sell_out_this_quarter: {
+    units: number;
+    revenue: number;
+    has_data?: boolean;
+    period_start?: string;
+    period_end?: string;
+  };
+  sell_out_prior_year_quarter: {
+    units: number;
+    revenue: number;
+    period_start?: string;
+    period_end?: string;
+  };
   sell_out_yoy_pct: number | null;
+  sell_out_data_vintage?: {
+    max_transaction_date: string | null;
+    current_quarter_has_data: boolean;
+    as_of_date: string;
+  };
   total_inventory_units: number;
   weeks_of_cover: number | null;
   replenishment_threshold_weeks?: number;
@@ -47,27 +63,41 @@ export function ChannelOpsKpiCards({ distributorId }: { distributorId?: number |
   }
 
   const yoy = data?.sell_out_yoy_pct;
+  const currentHasData = data?.sell_out_this_quarter?.has_data ?? data?.sell_out_data_vintage?.current_quarter_has_data;
+  const vintage = data?.sell_out_data_vintage?.max_transaction_date;
   const TrendIcon =
     yoy == null ? TrendingFlatIcon : yoy > 0 ? TrendingUpIcon : yoy < 0 ? TrendingDownIcon : TrendingFlatIcon;
 
   return (
     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
-      <Paper variant="outlined" sx={{ p: 2, flex: '1 1 200px' }}>
+      <Paper variant="outlined" sx={{ p: 2, flex: '1 1 200px' }} data-testid="channel-ops-sellout-kpi">
         <Typography variant="overline" color="text.secondary">
-          Sell-out QoQ
+          Sell-out this quarter
         </Typography>
         <Typography variant="h5">
-          {isLoading ? '—' : data?.sell_out_this_quarter.units.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+          {isLoading
+            ? '—'
+            : currentHasData === false
+              ? 'No data'
+              : data?.sell_out_this_quarter.units.toLocaleString(undefined, { maximumFractionDigits: 0 })}
         </Typography>
         <Typography variant="body2" color="text.secondary">
           {isLoading
             ? '—'
-            : `Revenue ${data?.sell_out_this_quarter.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+            : currentHasData === false
+              ? vintage
+                ? `Vintage ${vintage}`
+                : 'No sell-out in this calendar quarter'
+              : `Revenue ${data?.sell_out_this_quarter.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
         </Typography>
         <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 0.5 }}>
           <TrendIcon fontSize="small" color={yoy != null && yoy > 0 ? 'success' : 'inherit'} />
           <Typography variant="caption" color="text.secondary">
-            {yoy == null ? 'YoY n/a' : `YoY ${(yoy * 100).toFixed(1)}%`}
+            {currentHasData === false
+              ? 'YoY n/a (no current-quarter coverage)'
+              : yoy == null
+                ? 'YoY n/a'
+                : `YoY ${(yoy * 100).toFixed(1)}%`}
           </Typography>
         </Stack>
       </Paper>

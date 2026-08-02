@@ -164,8 +164,31 @@ async def channel_ops_summary(
     prior = (await db.execute(sell_py)).one()
     cur_units, cur_rev = float(cur[0]), float(cur[1])
     py_units, py_rev = float(prior[0]), float(prior[1])
-    # Denominator sanity: zero/missing prior quarter → n/a (never divide-by-zero).
-    yoy_pct = yoy_pct_or_none(cur_units, py_units)
+
+    # Coverage (COMMERCIAL_SEMANTICS): zero units with no rows in-window is "no data",
+    # not a true zero — do not emit −100% YoY against a prior quarter that has volume.
+    cur_row_count = int(
+        await db.scalar(
+            select(func.count())
+            .select_from(FactSalesSellout)
+            .where(
+                FactSalesSellout.transaction_date >= q_start,
+                FactSalesSellout.transaction_date <= q_end,
+                *(
+                    [FactSalesSellout.distributor_id == int(distributor_id)]
+                    if distributor_id is not None
+                    else []
+                ),
+            )
+        )
+        or 0
+    )
+    sell_out_max = await db.scalar(select(func.max(FactSalesSellout.transaction_date)))
+    current_quarter_has_data = cur_row_count > 0
+    # Denominator sanity + coverage: missing current OR zero/missing prior → n/a.
+    yoy_pct = (
+        yoy_pct_or_none(cur_units, py_units) if current_quarter_has_data else None
+    )
 
     # Channel stock = sum of derived latest per (distributor, product).
     # NEVER sum raw snapshots across periods.
@@ -220,9 +243,25 @@ async def channel_ops_summary(
         cust_prev_q = cust_prev_q.where(FactSalesSellout.distributor_id == did)
 
     return {
-        "sell_out_this_quarter": {"units": cur_units, "revenue": cur_rev},
-        "sell_out_prior_year_quarter": {"units": py_units, "revenue": py_rev},
+        "sell_out_this_quarter": {
+            "units": cur_units,
+            "revenue": cur_rev,
+            "has_data": current_quarter_has_data,
+            "period_start": q_start.isoformat(),
+            "period_end": q_end.isoformat(),
+        },
+        "sell_out_prior_year_quarter": {
+            "units": py_units,
+            "revenue": py_rev,
+            "period_start": py_start.isoformat(),
+            "period_end": py_end.isoformat(),
+        },
         "sell_out_yoy_pct": yoy_pct,
+        "sell_out_data_vintage": {
+            "max_transaction_date": sell_out_max.isoformat() if sell_out_max else None,
+            "current_quarter_has_data": current_quarter_has_data,
+            "as_of_date": today.isoformat(),
+        },
         "total_inventory_units": int(total_inv),
         "weeks_of_cover": weeks_of_cover,
         "replenishment_threshold_weeks": threshold,
