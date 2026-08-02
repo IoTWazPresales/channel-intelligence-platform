@@ -1,7 +1,9 @@
 # CIP Roadmap — to end state
 
-**Owner:** Warren · **Version:** 3.0 · 2026-07-31
+**Owner:** Warren · **Version:** 3.1 · 2026-08-02
 **Status:** proposed — commit to `docs/ROADMAP.md` after review
+**v3.1 changes:** Open decisions #1/#2 marked resolved (align with OPEN_QUESTIONS Q-001/Q-002);
+register lists only still-open items.
 **v3.0 changes:** B2+B3 merged into one lineup+budget builder (reservation is embedded in the
 profit line) · landing-quarter moved from deferred to A1/A2 core · net-requirement planning
 added to B2 · P2 deployment deferred, multi-user readiness retained · P4 CST is multi-format
@@ -137,7 +139,7 @@ owned by Shipping** (`/shipping`); A1 consumes that measurement, it does not re-
 See `docs/COMMERCIAL_SEMANTICS.md`. Two axes coexist: fill rate / plan execution stays
 **shipped**-basis; budget consumption is **landed**-basis. Never conflated.
 **Support bias:** planned reservation vs actual CPOR spend — **CPOR-owned**, not PvE; blocked
-on reservation-column discovery. Do not put on Plan vs Executed.
+on Q-002 (reservation = derived_from_profit). Do not put on Plan vs Executed.
 **Window:** all quarters with lineup coverage; credible core 26Q1 → current.
 **Exit:** plan-accuracy surface (fill + exceptions). Credibility artifact. *(A-lane wrap 2026-08-01: fill/exceptions/bias-slip BU/over-plan intake shipped; Q-009 → PM=business_line; Q-002 → derived-from-profit planned side for support bias — metric still SPEC ONLY on CPOR Cases.)*
 
@@ -265,7 +267,8 @@ profit-with-reservation is not usable by a PM. See `docs/COMMERCIAL_DOMAIN_RULES
 - **Budget position** — aggregate reservations, drawn down by CPOR actuals, **on landed-quarter
   basis**. Unspent returns on under-delivery; cancelled cases free immediately. Reallocation
   across sales-model/customer permitted with audit trail. Track against both money and
-  support-% views; do not hard-enforce either until the constraint type is settled.
+  support-% views; money ceiling is primary (Q-001); support-% is a view, not an alternate
+  hard constraint type.
 - **FX** — booked or floating per case, USD denominated, derived from ZAR. Tenant-configurable
   pairing.
 - 1H always splits Q1+Q2 (`uniform_half`), steward-overridable. Export to tenant template;
@@ -486,18 +489,30 @@ any section that disappears.
 
 ## Open decisions register
 
-| # | Decision | Blocks | Owner |
-|---|----------|--------|-------|
-| 1 | Budget constraint type — money ceiling or support-% ceiling per unit? | Budget enforcement | Warren |
-| 2 | Is the lineup reservation an explicit workbook column, or derived from PM bottom vs planned price? | Lineup schema — settle before A1 ships | **P1 discovery** |
-| 3 | Hosting target, budget, data residency | Deployment | Warren — deferred by choice |
-| 4 | Per-customer CST file formats (8 customers) | P4 | Discovered at first load |
-| 5 | Branch/location modelling (deferred by design) — blocks tagged-customer sell-through | P4+ | Warren |
+Still open (authoritative detail: `docs/OPEN_QUESTIONS.md`; domain mirror:
+`docs/COMMERCIAL_DOMAIN_RULES.md` § Still open):
+
+| # | Decision | Blocks | Owner | OPEN_QUESTIONS |
+|---|----------|--------|-------|----------------|
+| 3 | Hosting target, budget, data residency | Deployment / P2 residual | Warren — deferred by choice | Q-003 |
+| 4 | Per-customer CST file formats (8 customers) | P4 forward multi-format | Discovered at first load | Q-004 |
+
+**Deferred by design (not an open question — see Out of scope):** branch/location modelling;
+never alias branches to parent customers. Blocks tagged-customer sell-through until a
+deliberate model ships.
+
+**Resolved (do not re-ask):**
+
+| # | Decision | Resolution | Source |
+|---|----------|------------|--------|
+| 1 | Budget constraint type — money vs support-%? | **Money ceiling** is primary; support-% is a view / weak target, not an alternate hard-constraint type. Over ceiling → reapproval. | Q-001 · `COMMERCIAL_DOMAIN_RULES` |
+| 2 | Lineup reservation — workbook column or derived? | **Derived** from PM bottom vs planned price (`derived_from_profit`); not an explicit reservation column. | Q-002 · `COMMERCIAL_DOMAIN_RULES` · A1/B lane shipped on this basis |
 
 **Settled and recorded in `docs/COMMERCIAL_DOMAIN_RULES.md`:** budget derivation · landing-quarter
 basis · currency and FX handling · unspent return and cancellation · pot grain · PM bottom
 cadence · 50/50 volume split · forecast rollup · seasonality · new-product analogue · target
-cover · in-transit definition · user management · reporting audience · IP ownership.
+cover · in-transit definition · user management · reporting audience · IP ownership ·
+budget constraint type (Q-001) · reservation derivation (Q-002).
 
 ## Out of scope
 
