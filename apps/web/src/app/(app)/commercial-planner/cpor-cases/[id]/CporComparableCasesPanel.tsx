@@ -6,6 +6,14 @@ import NextLink from 'next/link';
 
 import { apiGet } from '@/lib/api';
 
+type RankAxes = {
+  same_customer: boolean;
+  bu_overlap_ratio: number;
+  same_promotion_type: boolean;
+  quarter_proximity: number;
+  volume_similarity: number;
+};
+
 type ComparablePayload = {
   case_id: number;
   total_candidates: number;
@@ -18,15 +26,27 @@ type ComparablePayload = {
     promotion_type: string;
     quarter: string | null;
     estimate_qty: number;
-    rank_axes: {
-      same_customer: boolean;
-      bu_overlap_ratio: number;
-      same_promotion_type: boolean;
-      quarter_proximity: number;
-      volume_similarity: number;
-    };
+    bus?: string[];
+    rank_axes: RankAxes;
   }>;
 };
+
+/** Matching axes shown per result — ranked never filtered (§4.3 / A2-05). */
+function formatMatchingAxes(axes: RankAxes): string {
+  const parts: string[] = [];
+  if (axes.same_customer) parts.push('same customer');
+  if (axes.bu_overlap_ratio > 0) {
+    parts.push(`BU overlap ${(axes.bu_overlap_ratio * 100).toFixed(0)}%`);
+  }
+  if (axes.same_promotion_type) parts.push('same promo');
+  if (axes.quarter_proximity > 0) {
+    parts.push(`Q prox ${axes.quarter_proximity.toFixed(2)}`);
+  }
+  if (axes.volume_similarity > 0) {
+    parts.push(`vol ${(axes.volume_similarity * 100).toFixed(0)}%`);
+  }
+  return parts.length ? parts.join(' · ') : 'no shared axes';
+}
 
 export function CporComparableCasesPanel({ caseId }: { caseId: number }) {
   const { data, isLoading, isError, error } = useQuery({
@@ -66,8 +86,10 @@ export function CporComparableCasesPanel({ caseId }: { caseId: number }) {
               </MuiLink>{' '}
               · {row.customer_code ?? '—'} · {row.promotion_type} · {row.quarter ?? '—'} · est{' '}
               {row.estimate_qty.toLocaleString()}
-              {row.rank_axes.same_customer ? ' · same customer' : ''}
-              {row.rank_axes.same_promotion_type ? ' · same promo' : ''}
+              <Typography component="span" variant="caption" color="text.secondary" sx={{ display: 'block', pl: 2 }}>
+                {formatMatchingAxes(row.rank_axes)}
+                {row.bus?.length ? ` · BUs: ${row.bus.join(', ')}` : ''}
+              </Typography>
             </Typography>
           ))}
           {!data?.items?.length ? (

@@ -74,6 +74,37 @@ MONEY_CEILING_USD: float | None = _env_float("MONEY_CEILING_USD")
 HARD_ENFORCE_BUDGET: bool = _env_bool("HARD_ENFORCE_BUDGET", True)
 
 
+def _env_int(name: str, default: int, *, lo: int = 1, hi: int = 16) -> int:
+    raw = os.environ.get(name)
+    if raw is None or str(raw).strip() == "":
+        try:
+            from app.core.config import get_settings
+
+            settings = get_settings()
+            attr = name.lower()
+            if hasattr(settings, attr):
+                raw = getattr(settings, attr)
+        except Exception:
+            raw = None
+    if raw is None or str(raw).strip() == "":
+        return default
+    try:
+        val = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return default
+    return max(lo, min(hi, val))
+
+
+# A2-04 — trailing support-norms window (tenant config; default 4 quarters).
+# Env SUPPORT_NORMS_TRAILING_QUARTERS overrides.
+SUPPORT_NORMS_TRAILING_QUARTERS: int = _env_int("SUPPORT_NORMS_TRAILING_QUARTERS", 4)
+
+
+def support_norms_trailing_quarters() -> int:
+    """Live read of A2-04 window (env / settings may change after import)."""
+    return _env_int("SUPPORT_NORMS_TRAILING_QUARTERS", SUPPORT_NORMS_TRAILING_QUARTERS)
+
+
 def profile_snapshot() -> dict[str, object]:
     """Read-only dict for API payloads / explainability. Re-reads env each call."""
     return {
@@ -83,4 +114,5 @@ def profile_snapshot() -> dict[str, object]:
         "pm_attribution_mode": PM_ATTRIBUTION_MODE,
         "hard_enforce_budget": _env_bool("HARD_ENFORCE_BUDGET", True),
         "money_ceiling_usd": _env_float("MONEY_CEILING_USD"),
+        "support_norms_trailing_quarters": support_norms_trailing_quarters(),
     }
