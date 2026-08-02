@@ -17,7 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
-- 2026-08-02 — **ROADMAP v3.1:** open decisions #1/#2 → resolved (Q-001/Q-002); still open = Q-003 hosting, Q-004 CST formats; #5 branch/location = deferred by design.
+- 2026-08-02 — **ROADMAP v3.1 on main** (`542d31d`): open decisions #1/#2 → resolved (Q-001/Q-002); still open = Q-003 hosting, Q-004 CST formats. Next: BACKLOG-099 or Warren pick.
 - 2026-08-02 — **PR #15 merged to main** (`2d85048`): CST orphan bulk-resolve deleted; BACKLOG-100 hard API gate on cip_test. Next: BACKLOG-099 or Warren pick.
 - 2026-08-01 — **PR #15 BACKLOG-100:** CST orphan bulk-resolve deleted; API suite green on cip_test (1760 pass); hard CI API gate restored. Next: merge #15 → BACKLOG-099.
 - 2026-08-01 — **PR #14 merged to main** (`e66f257`): mocked e2e green; production build unblocked; API suite soft-report + BACKLOG-100. Next: Warren pick TRIGGER.
