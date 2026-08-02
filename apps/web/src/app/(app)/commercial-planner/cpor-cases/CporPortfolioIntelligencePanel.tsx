@@ -134,6 +134,9 @@ type NormsPayload = {
   trailing_quarters: number;
   window_quarters: string[];
   anchor_quarter: string | null;
+  window_source?: string;
+  env_override_active?: boolean;
+  tenant_profile_default?: number;
   by_customer: Array<{
     customer_id: number;
     customer_code: string | null;
@@ -165,9 +168,12 @@ function CporSupportNormsSection() {
   return (
     <Stack spacing={0.75} data-testid="cpor-support-norms" sx={{ mt: 1 }}>
       <Typography variant="subtitle2">Support norms (trailing {data?.trailing_quarters ?? 4}Q)</Typography>
-      <Typography variant="caption" color="text.secondary">
+      <Typography variant="caption" color="text.secondary" data-testid="cpor-norms-window-source">
         Absolute USD/ZAR · % = support_unit / SRP · window {data?.window_quarters?.join(' · ') ?? '…'}
         {data?.anchor_quarter ? ` · anchor ${data.anchor_quarter}` : ''}
+        {data?.window_source
+          ? ` · source ${data.window_source}${data.env_override_active ? ' (env override)' : ''}`
+          : ''}
       </Typography>
       {isLoading ? (
         <Typography variant="body2">Loading norms…</Typography>

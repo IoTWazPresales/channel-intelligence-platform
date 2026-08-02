@@ -9,6 +9,7 @@ Comparable: ranked never filtered — customer → BU → promo type → quarter
 
 from __future__ import annotations
 
+import os
 import re
 from collections import defaultdict
 from datetime import date
@@ -19,11 +20,32 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.cpor import CporCase
 from app.models.dimensions import DimCustomer, DimProduct
-from app.services.commercial_tenant_profile import support_norms_trailing_quarters
+from app.services.commercial_tenant_profile import (
+    SUPPORT_NORMS_TRAILING_QUARTERS as TENANT_NORMS_DEFAULT,
+    support_norms_trailing_quarters,
+)
 from app.services.cpor.pivot import _line_ttl_support_usd, is_voided_line
 from app.services.cpor.portfolio_intelligence import _line_ttl_support_zar
 
 _Q_RE = re.compile(r"^(?:20)?(\d{2})Q([1-4])$", re.IGNORECASE)
+
+
+def _window_provenance(*, query_override: int | None, n: int) -> dict[str, Any]:
+    """Prove whether trailing window came from tenant profile vs env/query."""
+    env_raw = os.environ.get("SUPPORT_NORMS_TRAILING_QUARTERS")
+    env_set = bool(env_raw and str(env_raw).strip())
+    if query_override is not None:
+        source = "query_param"
+    elif env_set:
+        source = "env_override"
+    else:
+        source = "commercial_tenant_profile"
+    return {
+        "window_source": source,
+        "env_override_active": bool(env_set and query_override is None),
+        "tenant_profile_default": int(TENANT_NORMS_DEFAULT),
+        "trailing_quarters": n,
+    }
 
 
 def normalize_quarter_label(raw: str | None, *, fallback: date | None = None) -> str | None:
@@ -91,10 +113,12 @@ def build_support_norms(
     trailing_quarters: int | None = None,
 ) -> dict[str, Any]:
     """A2-04 — per-customer norms over trailing quarters."""
+    query_override = trailing_quarters
     tenant_n = support_norms_trailing_quarters()
     n = int(trailing_quarters) if trailing_quarters is not None else tenant_n
     if n <= 0:
         n = tenant_n
+    provenance = _window_provenance(query_override=query_override, n=n)
 
     cases = _load_cases(session)
 
@@ -154,7 +178,7 @@ def build_support_norms(
             "by_customer": [],
             "currency_compute": "USD",
             "currency_display_secondary": "ZAR",
-            "window_source": "tenant_config:SUPPORT_NORMS_TRAILING_QUARTERS",
+            **provenance,
         }
 
     # Latest quarter by index
@@ -242,7 +266,7 @@ def build_support_norms(
             f"sum of line ttl_support_(usd|zar) in window, avg over quarters_present "
             f"(trailing {n} from {latest})"
         ),
-        "window_source": "tenant_config:SUPPORT_NORMS_TRAILING_QUARTERS",
+        **provenance,
     }
 
 
