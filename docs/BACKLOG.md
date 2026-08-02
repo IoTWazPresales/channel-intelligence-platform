@@ -13,6 +13,23 @@
 **P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
+## BACKLOG-101 — Lineup delete audit actor + bulk apply terminal status
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-02 |
+| **Effort** | Small |
+| **Source** | Corpus-safety unit 2A–2D (2026-08-02); `delete_lineup_case` still has no auth dependency; `apply_bulk_lineup_batch_sync` leaves `import_job.status='running'` after apply |
+| **Idea** | (1) Wire `get_current_user` (or optional user) on `DELETE /lineup-cases/{id}` so steward_audit actor is not always `anonymous`. (2) Set bulk lineup session job to an existing terminal status (`completed` / `completed_with_errors`) when apply finishes so reaper/UI do not treat finished applies as live work. |
+| **Why it matters / deferrable** | Audit trail now exists (2B) but actor is weak without auth. Job 255 was stuck `running` partly because apply never terminals the session job. Deferrable while corpus rebuild proceeds; anonymous audit + manual failed clear already unblock rebuild. |
+| **What the work is** | Auth dependency + tests; terminal status write at end of `apply_bulk_lineup_batch_sync` matching lifecycle vocabulary; do not invent new statuses. |
+| **Regression traps** | Do not change draft_imported-only delete gate; do not auto-create masters; keep steward_audit in same transaction as delete. |
+| **Behavior to retain** | steward_audit row on every lineup case delete path; payload carries case_id/source_context/period/BU/line_count/po_link_count/reason. |
+| **Out of scope** | Schema change to steward_audit; corpus rebuild itself. |
+| **TRIGGER** | Next commercial-planner auth pass **or** next bulk lineup backfill session after corpus rebuild. |
+
+---
+
 ## BACKLOG-100 — Make `pnpm test:api` on cip_test a hard CI merge gate
 
 | Field | Detail |
@@ -24,7 +41,7 @@
 | **Why it matters / deferrable** | ~~Today API runs with `continue-on-error` + artifact log~~ — suite green on cip_test (1760 passed); hard gate restored. |
 | **What the work is** | Batch-fix defect classes in the 2026-07-29 log; drop continue-on-error; restore hard fail step; keep `ALLOW_TESTS_ON_DEV_DB` unset in CI. |
 | **Regression traps** | Do not point CI API tests at `cip`; do not set `ALLOW_TESTS_ON_DEV_DB=1` in Actions. |
-| **Behavior to retain** | Alembic migrate assert tip `20260801_0008`; upload pytest log on API failure. |
+| **Behavior to retain** | Alembic migrate assert tip `20260802_0009`; upload pytest log on API failure. |
 | **Out of scope** | Live e2e API wiring (BACKLOG-099); required-check unlock (BACKLOG-087). |
 | **TRIGGER** | — shipped — |
 

@@ -1,37 +1,19 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-02 (A2-04/05 smoke PASS on main)
+**Last updated:** 2026-08-02 (corpus-safety 2A–2D on main)
 
-**Branch:** `main` @ `d313e57` · prior schedules work on `feat/report-schedules-beat` (PR #17)
+**Branch:** `main` (ahead of origin; unpushed corpus-safety commit pending)
 
-**Alembic:** `20260802_0009` on cip / code head
+**Alembic:** `20260802_0009` on cip / code head · **no migration this unit**
 
 ## Done
 
-- Merged + pushed `fix/commercial-foundation-pod` → main (`094c3ee`); WoC ~13.6→~25.0 = correct POD-backfill consequence.
-- Merged + pushed `feat/a2-norms-comparable-close` → main (`42b61a3` + provenance `d313e57`).
-- **Browser smoke PASS** CPOR Cases:
-  - Norms: trailing **4Q** window `2026Q2·2026Q1·2025Q4·2025Q3`, anchor `2026Q2`, **source=`commercial_tenant_profile`**, `env_override_active=false`.
-  - Top customers (real $): Esquire avg **$25,560** / 11.3% SRP · Computer Mania **$16,946** / 17.8% · Game **$22,139** / 11.8% (19 customers in window).
-  - Case `#292` comparables: **296** candidates ranked; axes visible (same customer · BU overlap · same promo · Q prox · vol).
-  - Empty surfaces: **none** on norms/comparables. Portfolio correctly omits claim-rate (A2-03 non-computable).
-
-## A-lane status (built vs SPEC)
-
-| ID | Status |
-|---|---|
-| A1-01…08 | IMPLEMENTED (PvE) |
-| A1-09 support bias | **SPEC ONLY** — planned side unblocked (Q-002); CPOR surface not built |
-| A2-01/02/04/05/06 | **IMPLEMENTED** (browser-proven for 04/05) |
-| A2-03 claim rate | **DO NOT BUILD** until distinct owed (Q-008/D-027) |
-| A2-X incremental cost | **DO NOT BUILD** (BACKLOG-089) |
-| A3-01…04 | IMPLEMENTED (Channel Ops; YoY coverage rule live) |
-
-**A-lane remains:** A1-09 support-bias surface on CPOR Cases. Everything else A1–A3 is shipped or explicitly blocked.
+- **Corpus-safety (2A–2D):** conftest deny-by-default write-capable guard + `_CIP_WRITE_ALLOWLIST` (`test_lineup_case_supersession_delete.py`); steward_audit on lineup case delete paths; import_job **255** → `failed`/`failed` (Celery inspect idle; no other jobs touched); CI action SHAs pinned + tip assert `20260802_0009`. BACKLOG-101 for anonymous actor + bulk apply terminal status.
+- Prior: A2-04/05 browser smoke PASS; commercial foundation POD merge.
 
 ## Next
 
-1. A1-09 (support bias) **or** leave A-lane and pick B-lane / PR #17 / residuals.
-2. Residuals: P4–P6 / Q-004 CST formats; SKU economics steward seed before B-lane UI.
+1. Rebuild lineup corpus (bulk backfill) — now unblocked by job 255 clear + delete audit + pytest guard.
+2. Then A1-09 / B-lane / PR #17 / BACKLOG-101 as chosen.
 
-**Env:** local Windows. API `:8001` (started this session), web `:3000`.
+**Env:** local Windows. Postgres `cip`. Do not run pytest against cip (`ALLOW_TESTS_ON_DEV_DB` unset).

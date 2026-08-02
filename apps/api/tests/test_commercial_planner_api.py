@@ -1525,8 +1525,12 @@ def test_commercial_lineup_case_delete_draft_only():
         sess.get = AsyncMock(return_value=draft_case)
         children_result = MagicMock()
         children_result.scalars.return_value.all.return_value = []
-        sess.execute = AsyncMock(return_value=children_result)
+        count_result = MagicMock()
+        count_result.scalar.return_value = 0
+        sess.execute = AsyncMock(side_effect=[children_result, count_result, count_result])
         sess.delete = AsyncMock()
+        sess.add = MagicMock()
+        sess.flush = AsyncMock()
         sess.commit = AsyncMock()
         yield sess
 

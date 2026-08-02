@@ -19,6 +19,7 @@ from app.api.deps import get_db
 from app.models.commercial_lineup import (
     COMMERCIAL_LINEUP_STATUSES,
     CommercialLineupCase,
+    CommercialLineupCasePo,
     CommercialLineupLine,
 )
 from app.models.commercial_planner import (
@@ -3297,6 +3298,9 @@ async def delete_lineup_case_preview(case_id: int, db: AsyncSession = Depends(ge
 
 @router.delete("/lineup-cases/{case_id}", status_code=204)
 async def delete_lineup_case(case_id: int, db: AsyncSession = Depends(get_db)):
+    from app.services.commercial_planner.lineup_case_supersession import lineup_case_delete_audit_fields
+    from app.services.steward_audit import record_steward_audit
+
     case = await db.get(CommercialLineupCase, case_id)
     if not case:
         raise HTTPException(status_code=404, detail="Lineup case not found")
@@ -3315,6 +3319,36 @@ async def delete_lineup_case(case_id: int, db: AsyncSession = Depends(get_db)):
     for child in children:
         child.superseded_by_case_id = None
         child.commercial_status = "draft_imported"
+    line_count = int(
+        (
+            await db.execute(
+                select(func.count()).select_from(CommercialLineupLine).where(CommercialLineupLine.case_id == case_id)
+            )
+        ).scalar()
+        or 0
+    )
+    po_link_count = int(
+        (
+            await db.execute(
+                select(func.count())
+                .select_from(CommercialLineupCasePo)
+                .where(CommercialLineupCasePo.case_id == case_id)
+            )
+        ).scalar()
+        or 0
+    )
+    # Actor is anonymous when this route has no auth dependency (same as pre-audit surface).
+    await record_steward_audit(
+        db,
+        None,
+        commit=False,
+        **lineup_case_delete_audit_fields(
+            case,
+            line_count=line_count,
+            po_link_count=po_link_count,
+            reason="api_draft_imported_delete",
+        ),
+    )
     await db.delete(case)
     await db.commit()
     return Response(status_code=204)
