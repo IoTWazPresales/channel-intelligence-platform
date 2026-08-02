@@ -13,6 +13,57 @@
 **P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
+## BACKLOG-104 — Bulk existing_case_collisions miss when case.notes is null (sheet)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-02 |
+| **Effort** | Small |
+| **Source** | Corpus restore preview session_import_job_id=752; surviving cases 7/9/90 have `notes=NULL` so `_sheet_from_case_notes` → None while proposals use sheet `Sheet1`/`NB` → `existing_case_collisions=0` despite same `file_name` |
+| **Idea** | When existing case has no sheet in notes, treat sheet match as wildcard (or compare file_name+BU+period only) so po_issued / unified survivors are surfaced as collisions instead of silent duplicate-ready proposals. |
+| **Why it matters / deferrable** | Apply of ready proposals for filenames of cases 9/90 (and period-shifted 7) would create parallel draft cases without superseding survivors — corpus duplication, not wipe. Deferrable until Warren picks exclude keys or detector fix before apply. |
+| **What the work is** | Adjust `detect_existing_case_collisions` sheet equality; add regression covering notes=NULL vs Sheet1; do not auto-pick winner for po_issued (keep existing-as-default-winner). |
+| **Regression traps** | Do not hard-delete; do not silently supersede po_issued; steward confirmations remain Warren’s. |
+| **Behavior to retain** | Default `winner_member_key=existing:{id}` skip path. |
+| **Out of scope** | Corpus apply itself; BACKLOG-101 terminal status. |
+| **TRIGGER** | Before next bulk lineup apply that overlaps unified_lineup_import survivors **or** Warren asks to resume corpus restore apply. |
+
+---
+
+## BACKLOG-103 — Unified lineup import has no 1H → Q1+Q2 fan-out
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-02 |
+| **Effort** | Medium |
+| **Source** | `docs/STATE_AUDIT_2026-08-02.md` §5 Q3; corpus restore preview 2026-08-02 (bulk path fans via `half_year_allocation_half`) |
+| **Idea** | Port bulk’s 1H → Q1+Q2 fan-out (`period_half_split_q*` + `half_year_allocation_half` / `allocation=uniform_half`) into the unified lineup import path so a single 1H workbook does not land as one half-plan case. |
+| **Why it matters / deferrable** | Silent half-plan loss on unified imports. Bulk already implements fan-out; unified creates one case per file. Deferrable while restores use bulk backfill. |
+| **What the work is** | Resume-context: bulk path in `lineup_bulk_period_inference` / apply parse options; wire equivalent into unified dispatch/parser without changing DSI rules. |
+| **Regression traps** | Do not double-count quantities across Q1+Q2; preserve steward supersession confirmations. |
+| **Behavior to retain** | Bulk fan-out semantics already live. |
+| **Out of scope** | Changing COMMERCIAL_SEMANTICS formulas. |
+| **TRIGGER** | Next 1H import via the **unified** lineup path (not bulk backfill). |
+
+---
+
+## BACKLOG-102 — Lineup corpus restore apply (await collision exclusions)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-02 |
+| **Effort** | Medium (apply + D1–D4 validation) |
+| **Source** | Preview job 752 on cip; archive copy under `.tmp/ProductLineupArchive`; A3 stop gate passed but Phase B unexplained overlap with cases 7/9/90 |
+| **Idea** | Resume Phase C–D: apply ready proposals from session 752 (or re-preview), excluding or steward-confirming overlaps with surviving po_issued cases 7/9/90; then pct/PO/reader/PvE checks. |
+| **Why it matters / deferrable** | Preview complete (35 ready / 15 attention / 3508 lines / PF 1H dual-case OK). Apply blocked until Warren chooses exclude keys or collision-detector fix (BACKLOG-104). |
+| **What the work is** | Apply with `excluded_proposal_keys` or confirmations; verify 7/9/90 unchanged; D1–D4; CONTEXT append counts. |
+| **Regression traps** | Never modify cases 7/9/90; no migration; expect session job left `running` (BACKLOG-101). |
+| **Behavior to retain** | Preview session 752 payload; default existing-wins if collisions appear. |
+| **Out of scope** | Fixing BACKLOG-101 in the same unit. |
+| **TRIGGER** | Warren supplies exclude/confirm list for proposals overlapping cases 7/9/90 **or** BACKLOG-104 ships and re-preview shows collisions. |
+
+---
+
 ## BACKLOG-101 — Lineup delete audit actor + bulk apply terminal status
 
 | Field | Detail |

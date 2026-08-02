@@ -1,19 +1,24 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-02 (corpus-safety 2A–2D on main)
+**Last updated:** 2026-08-02 (corpus restore STOP before apply — collision worklist)
 
-**Branch:** `main` (ahead of origin; unpushed corpus-safety commit pending)
+**Branch:** `main` (ahead of origin)
 
-**Alembic:** `20260802_0009` on cip / code head · **no migration this unit**
+**Alembic:** `20260802_0009` · no migration this unit
 
 ## Done
 
-- **Corpus-safety (2A–2D):** conftest deny-by-default write-capable guard + `_CIP_WRITE_ALLOWLIST` (`test_lineup_case_supersession_delete.py`); steward_audit on lineup case delete paths; import_job **255** → `failed`/`failed` (Celery inspect idle; no other jobs touched); CI action SHAs pinned + tip assert `20260802_0009`. BACKLOG-101 for anonymous actor + bulk apply terminal status.
-- Prior: A2-04/05 browser smoke PASS; commercial foundation POD merge.
+- P2 corpus-safety `01e55d2` present; job 255 terminal `failed`.
+- A0: both delete→steward_audit paths proven on `cip_alembic_smoke` (not cip).
+- A1–A4 + Phase B preview: session_import_job_id=**752**, archive 28 files (+ stray sample), 35 ready / 15 attention / 3508 lines; PF 1H Gaming Desktop → Q1+Q2 ready; `existing_case_collisions=0` despite filename overlap with cases 7/9/90 (sheet/notes null — BACKLOG-104).
+
+## STOP — Phase C not started
+
+Apply would create **duplicate** draft cases for filenames of survivors 9/90 (and period-shifted 7) without modifying them. Awaiting Warren exclude/confirm list (BACKLOG-102) or detector fix (BACKLOG-104).
 
 ## Next
 
-1. Rebuild lineup corpus (bulk backfill) — now unblocked by job 255 clear + delete audit + pytest guard.
-2. Then A1-09 / B-lane / PR #17 / BACKLOG-101 as chosen.
+1. Warren: exclude proposal keys for overlaps with 7/9/90 (or accept duplicates) → resume apply.
+2. Then D1–D4 validation + BACKLOG-103 (unified 1H fan-out) remains parked.
 
-**Env:** local Windows. Postgres `cip`. Do not run pytest against cip (`ALLOW_TESTS_ON_DEV_DB` unset).
+**Env:** local Windows. `cip`. Preview job 752 on cip (no lineup rows written by preview).

@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-02 — **Corpus restore STOP before apply:** A0 delete-audit PASS on cip_alembic_smoke; A3 gate PASS (no hard-delete / default existing-wins); preview job **752** (35 ready / 15 attention / 3508 lines; PF 1H → Q1+Q2); `existing_case_collisions=0` false-negative vs cases 7/9/90 (notes null/sheet). BACKLOG-102/103/104. Cases still 3/285/52. No apply.
 - 2026-08-02 — **Corpus-safety 2A–2D:** deny-by-default conftest write guard + cip allowlist; steward_audit on lineup case delete; cleared stale import_job 255→failed; CI action SHA pins + tip `20260802_0009`. BACKLOG-101 deferred (delete actor auth + bulk apply terminal status). No migration. Ready for lineup corpus rebuild.
 - 2026-08-02 — **A2-04/05 browser smoke PASS on main** (`d313e57`): norms trailing 4Q real $ (Esquire $25.6k / CM $16.9k); `window_source=commercial_tenant_profile` (`env_override_active=false`); case #292 comparables 296 ranked w/ full matching axes. A-lane remains: **A1-09** SPEC ONLY; A2-03/A2-X do-not-build.
 - 2026-08-02 — **A2-04/05 existence close** (`feat/a2-norms-comparable-close`): audit found A2-U2 already live (norms + ranked comparables; B4 consumes `build_comparable_cases`). Closed gaps — window on tenant profile/env; comparable UI shows all matching axes; Q-006 no longer SPEC ONLY. % = support_unit/SRP per §4.3 (not a rebuild).
