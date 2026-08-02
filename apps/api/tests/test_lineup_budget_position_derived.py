@@ -6,7 +6,20 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-from app.services.lineup.budget_position import build_budget_position, derive_planned_reservations_from_lineup
+from app.services.lineup.budget_position import (
+    build_budget_position,
+    derive_planned_reservations_from_lineup,
+    normalize_period_label,
+    period_label_sql_variants,
+)
+
+
+def test_normalize_period_label_variants():
+    assert normalize_period_label("26Q2") == "2026Q2"
+    assert normalize_period_label("2026 Q2") == "2026Q2"
+    assert normalize_period_label("2026Q2") == "2026Q2"
+    assert "26Q2" in period_label_sql_variants("2026Q2")
+    assert "2026 Q2" in period_label_sql_variants("26Q2")
 
 
 def test_derive_planned_reservations_from_fact_lineup(monkeypatch):
@@ -74,3 +87,27 @@ def test_build_budget_position_auto_derives_when_planned_empty(monkeypatch):
     assert out["tracks"]["money"]["drawn_cpor_usd"] == 25.0
     assert out["tracks"]["money"]["status"] == "ok"
     assert out["cpor_line_count"] == 3
+    assert out["period_label_normalized"] == "2026Q2"
+
+
+def test_build_budget_position_missing_sku_economics(monkeypatch):
+    db = AsyncMock()
+
+    async def _fake_derive(*_a, **_k):
+        return []
+
+    monkeypatch.setattr(
+        "app.services.lineup.budget_position.derive_planned_reservations_from_lineup",
+        _fake_derive,
+    )
+
+    db.execute = AsyncMock(
+        side_effect=[
+            MagicMock(one=MagicMock(return_value=(10.0, 100.0, 1))),
+            MagicMock(scalar=MagicMock(return_value=0)),
+        ]
+    )
+
+    out = asyncio.run(build_budget_position(db, period_label="2026Q2"))
+    assert out["tracks"]["money"]["status"] == "missing_sku_economics"
+    assert out["sku_assumption_count"] == 0

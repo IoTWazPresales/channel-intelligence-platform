@@ -23,6 +23,42 @@ from app.services import commercial_tenant_profile as tenant_profile
 from app.services.lineup.profit_reservation import compute_profit_with_reservation
 
 
+def normalize_period_label(label: str | None) -> str | None:
+    """Normalize period tokens for CPOR pod_quarter ↔ lineup period_label joins.
+
+    Examples: ``26Q2`` → ``2026Q2``, ``2026 Q2`` → ``2026Q2``.
+    """
+    if label is None:
+        return None
+    s = str(label).strip().upper().replace(" ", "")
+    if not s:
+        return None
+    if len(s) >= 4 and s[0:2].isdigit() and s[2] == "Q" and len(s) == 4:
+        # YYQn → 20YYQn
+        s = "20" + s
+    return s
+
+
+def period_labels_equivalent(a: str | None, b: str | None) -> bool:
+    return normalize_period_label(a) is not None and normalize_period_label(a) == normalize_period_label(b)
+
+
+def period_label_sql_variants(label: str | None) -> list[str]:
+    """Common stored spellings for one logical quarter (for SQL IN filters)."""
+    n = normalize_period_label(label)
+    if not n:
+        return []
+    out: set[str] = {n}
+    raw = str(label or "").strip()
+    if raw:
+        out.add(raw)
+    if len(n) == 6 and n.startswith("20") and n[4] == "Q":
+        out.add(n[2:])  # 2026Q2 → 26Q2
+        out.add(f"{n[:4]} {n[4:]}")  # 2026 Q2
+        out.add(f"{n[:4]}-{n[4:]}")  # 2026-Q2
+    return sorted(out)
+
+
 async def derive_planned_reservations_from_lineup(
     db: AsyncSession,
     *,
@@ -31,9 +67,10 @@ async def derive_planned_reservations_from_lineup(
 ) -> list[dict[str, Any]]:
     """Build planned reservation rows from draft lineup items, else commercial lineup lines."""
     stmt = select(FactLineupPlanItem).limit(limit)
-    if period_label:
-        stmt = stmt.where(FactLineupPlanItem.period_label == period_label)
     items = list((await db.scalars(stmt)).all())
+    if period_label:
+        want = normalize_period_label(period_label)
+        items = [i for i in items if period_labels_equivalent(i.period_label, want)]
 
     product_ids: set[int] = set()
     raw_lines: list[tuple[int | None, int | None, float, str | None, int | None]] = []
@@ -56,9 +93,9 @@ async def derive_planned_reservations_from_lineup(
         from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
 
         case_stmt = select(CommercialLineupCase.id, CommercialLineupCase.period_label)
-        if period_label:
-            case_stmt = case_stmt.where(CommercialLineupCase.period_label == period_label)
         cases = list((await db.execute(case_stmt.limit(200))).all())
+        if period_label:
+            cases = [(cid, pl) for cid, pl in cases if period_labels_equivalent(pl, period_label)]
         case_period = {int(cid): plabel for cid, plabel in cases}
         if case_period:
             line_stmt = select(CommercialLineupLine).where(
@@ -162,21 +199,24 @@ async def build_budget_position(
             func.count(CporCaseLine.id),
         )
         if period_label:
-            stmt = stmt.where(CporCaseLine.pod_quarter == period_label)
+            variants = period_label_sql_variants(period_label)
+            if variants:
+                stmt = stmt.where(CporCaseLine.pod_quarter.in_(tuple(variants)))
+            else:
+                stmt = stmt.where(CporCaseLine.pod_quarter == period_label)
         drawn_usd, drawn_zar, n = (await db.execute(stmt)).one()
         drawn_usd_f = float(drawn_usd or 0)
         drawn_zar_f = float(drawn_zar or 0)
         line_count = int(n or 0)
+        cpor_ok = True
     except Exception:
         cpor_ok = False
+        drawn_usd_f = 0.0
+        drawn_zar_f = 0.0
+        line_count = 0
 
     remaining_money = reserved_money - drawn_usd_f
     money_util = (drawn_usd_f / reserved_money) if reserved_money > 0 else None
-    money_status = (
-        "over"
-        if reserved_money > 0 and drawn_usd_f > reserved_money
-        else ("ok" if reserved_money > 0 else "no_planned_reservation")
-    )
 
     try:
         sku_n = int(
@@ -186,10 +226,20 @@ async def build_budget_position(
     except Exception:
         sku_n = 0
 
+    if reserved_money > 0 and drawn_usd_f > reserved_money:
+        money_status = "over"
+    elif reserved_money > 0:
+        money_status = "ok"
+    elif sku_n == 0:
+        money_status = "missing_sku_economics"
+    else:
+        money_status = "no_planned_reservation"
+
     profile = tenant_profile.profile_snapshot()
     return {
         "as_of": date.today().isoformat(),
         "period_label": period_label,
+        "period_label_normalized": normalize_period_label(period_label),
         "hard_enforce": bool(tenant_profile.HARD_ENFORCE_BUDGET),
         "constraint_type": tenant_profile.CONSTRAINT_AXIS,
         "binding_axis": tenant_profile.CONSTRAINT_AXIS,
@@ -218,7 +268,7 @@ async def build_budget_position(
         "planned_from_lineup_derived": derived,
         "basis": (
             "planned=fact_lineup_plan_item×SKU economics (Q-002); "
-            "drawn=cpor_case_line.ttl_support_usd filtered by pod_quarter==period_label"
+            "drawn=cpor_case_line.ttl_support_usd filtered by pod_quarter≈period_label"
         ),
         "reservation_source": tenant_profile.RESERVATION_SOURCE,
         "q002_reservation_source": tenant_profile.RESERVATION_SOURCE,
