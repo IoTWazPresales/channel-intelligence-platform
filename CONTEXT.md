@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-02 — **A2-04/05 browser smoke PASS on main** (`d313e57`): norms trailing 4Q real $ (Esquire $25.6k / CM $16.9k); `window_source=commercial_tenant_profile` (`env_override_active=false`); case #292 comparables 296 ranked w/ full matching axes. A-lane remains: **A1-09** SPEC ONLY; A2-03/A2-X do-not-build.
 - 2026-08-02 — **A2-04/05 existence close** (`feat/a2-norms-comparable-close`): audit found A2-U2 already live (norms + ranked comparables; B4 consumes `build_comparable_cases`). Closed gaps — window on tenant profile/env; comparable UI shows all matching axes; Q-006 no longer SPEC ONLY. % = support_unit/SRP per §4.3 (not a rebuild).
 - 2026-08-02 — **Merged `fix/commercial-foundation-pod` → main** (`094c3ee`): sticky POD/`20260802_0009` + fact backfill 5961; YoY coverage; OPEN_CHANNEL absorb. **WoC ~13.6 → ~25.0 weeks is the correct consequence of POD backfill** (more landed stock in cover calc) — not a regression; do not re-investigate. Next: A2-04/05 existence audit (A2-U2 claimed IMPLEMENTED).
 - 2026-08-02 — **Commercial foundation** (`fix/commercial-foundation-pod`): sticky POD P1-D004/`20260802_0009` + fact backfill 5961; YoY no-data vs zero + vintage; OPEN_CHANNEL absorb 5013 (19 already merged) clone-proof then cip; B2/B4 SPEC rows. Schema drift Q1 false-positive (SKU ORM=DB). Next: confirm A2 next step (A2-U1 already IMPLEMENTED for 01/02/06).
