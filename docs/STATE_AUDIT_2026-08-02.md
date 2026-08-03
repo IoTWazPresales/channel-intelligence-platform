@@ -501,4 +501,227 @@ Period start inferred in shared parser via `infer_period_start(case.period_label
 
 ---
 
-*End of audit (Sections 1–5). Committed artifact: this file only.*
+## SECTION 6 — CORPUS VERIFICATION
+
+**Mode:** AUDIT / READ-ONLY. `SELECT current_database()` = `cip` before queries. No DML. No re-apply of session 752. No pytest. No migration. No code changes.
+
+**Established (not re-diagnosed):** folder-tier period derivation is intended; 1H must fan to Q1+Q2; survivors 7/9/90 are correct; corpus-loss attribution closed.
+
+**Archive root used:** `.tmp/ProductLineupArchive` (28 xlsx). Preview session `import_job` **752**.
+
+### Q1 — What is actually missing
+
+`current_database()` printed: **cip**.
+
+#### Archive file → case(s)
+
+| Archive file | Case(s) in cip |
+|---|---|
+| `NB\2025\Q1\1. ACZA Q1 2025 Consumer Lineup - Sales.xlsx` | 114 NB 2025 Q1 lines=197; 115 NV 2025 Q1 lines=2; 116 NV 2025 Q2 lines=2; 141 NB 2025 Q2 lines=0 **superseded→117** |
+| `NB\2025\Q2\1. ACZA Q2 2025 Consumer Lineup - Sales.xlsx` | 117 NB 2025 Q2 lines=190 |
+| `NB\2025\Q3\1. ACZA Q3 2025 Consumer Lineup - Sales.xlsx` | 118 NB 2025 Q3 lines=204 |
+| `NB\2025\Q4\1. ACZA Q4 2025 Consumer Lineup - Sales.xlsx` | **NOT PRESENT** |
+| `NB\2026\26Q1\1. ACZA 1H 2026 Consumer Lineup - Sales.xlsx` | 119 NB 2026 Q1 lines=289 |
+| `NB\2026\26Q1\2. ACZA 1H 2026 Consumer Lineup - Sales.xlsx` | 120 NB 2026 Q1 lines=**0**; 121 NB 2026 Q2 lines=**0** |
+| `NB\2026\26Q2\1. ACZA Q2 2026 Consumer Lineup - Sales.xlsx` | **9** NB 2026 Q2 lines=159 `po_issued` (survivor) |
+| `NB\2026\26Q2\2. ACZA Q2 2026 Consumer Lineup - Sales.xlsx` | 122 NB 2026 Q2 lines=168 |
+| `NB\2026\26Q3\1. ACZA Q3 2026 Consumer NB Lineup - Sales.xlsx` | 123 NB 2026 Q3 lines=221 |
+| `NR\2025\Q2\2. ACZA Q2 2025 Gaming Lineup latest version please use.xlsx` | 124 NR 2025 Q2 lines=131 |
+| `NR\2025\Q2\Do not use, previous Q2 lineup, kept as reference .xlsx` | **NOT PRESENT** (excluded `f10`) |
+| `NR\2025\Q3\1. ACZA Q3 NR Gaming Lineup - Sales Team.xlsx` | 125 NR 2025 Q3 lines=133 |
+| `NR\2025\Q4\1. Q4 Gaming Notebook - Sales Lineup.xlsx` | 126 NR 2025 Q4 lines=141 |
+| `NR\2026\26Q1\2. ACZA Q1 2026 NR Gaming Lineup.xlsx - Sales Team Copy.xlsx` | **90** NR 26Q1 lines=104 `po_issued` |
+| `NR\2026\26Q1\Q1 2026 NR Gaming Lineup Updated.xlsx` | 127 NR 2026 Q1 lines=117 |
+| `NR\2026\26Q2\Q2 Gaming NR Lineup - Sales Team.xlsx` | 128 NB 2026 Q2 lines=6 |
+| `NR\2026\26Q3\1. ACZA Q3 2026 Consumer Gaming NR Lineup - Sales Team.xlsx` | 129 NB / 130 NR / 131 NB — 2026 Q3 — lines 6/14/1 |
+| `NV\2026\2. ACZA Q1 2026 NV Ally Lineup - Sales Team Copy.xlsx` | **7** NV 2026 Q2 lines=22 `po_issued` |
+| `NV\2026\Q2 Ally NV Lineup - Sales Team.xlsx` | 132 NV 2026 Q1 lines=9 |
+| `NV\Q3\1. Q3 ROG Ally RC73 Lineup - Sales Lineup.xlsx` | 142 superseded→133; lines=0 |
+| `NV\Q4\2. ACZA Q4 2025 NV lineup.xlsx` | 133 NV `NV\Q4` / period_start NULL lines=40 |
+| `PF\Q2\Copy of ACZA 1H 2025 Consumer Lineup - Gaming Desktop PD 13 Feb 2025.xlsx` | 134 PF 2025 Q1 lines=63; 135 PF 2025 Q2 lines=63 |
+| `PF\Q3\1. Q3 Gaming Desktop - Sales Lineup.xlsx` | 143 superseded→136; lines=0 |
+| `PF\Q4\1. Q4 Gaming Desktop - Sales Lineup.xlsx` | 136 PF `PF\Q4` / period_start NULL lines=11 |
+| `XB\2025\Q2\1. ACZA Q2 2025 Sales ACCY Lineup.xlsx` | 137 XB 2025 Q2 lines=65 |
+| `XB\2025\Q2\2. ACZA Q2 2025 Sales ACCY Lineup.xlsx` | 138 XB 2025 Q2 lines=27 |
+| `XB\2025\Q3\1. Q3 Accessories - Sales Lineup.xlsx` | 139 XB 2025 Q3 lines=30 |
+| `XB\2025\Q4\1. Q4 Accessories - Sales Lineup.xlsx` | 140 XB 2025 Q4 lines=35 |
+
+DB cases with `file_name` not in archive: **none**.
+
+#### Suspected gaps — confirmed
+
+**(a) `1. ACZA 1H 2026 Consumer Lineup - Sales.xlsx` Q2 half — ABSENT.**  
+Only case **119** (2026 Q1, 289 lines). No case holds this file’s Q2. Ready proposal `f4:NB:NB:2026 Q2` was in `ready_not_applied` with the exclusion set (skipped with `f6`/`f13`/`f17`/`f10`). Absent: a 2026 Q2 case for this filename with half `q2` / `allocation=uniform_half`.
+
+**(b) Cases 120/121 — CONFIRMED.** Shells for `2. ACZA 1H 2026…`, lines=0; parse jobs 759/760 failed (`Promo R19999`).
+
+**(c) Other gaps:**  
+- **`NB\2025\Q4\1. ACZA Q4 2025 Consumer Lineup - Sales.xlsx` — NOT PRESENT.** Preview had it as `f3:NB:NB:unknown` **needs_attention** (`period_signal_conflict`) — never ready, never applied.  
+- **`Do not use…xlsx` — NOT PRESENT** by design (excluded `f10`).  
+- Zero-line **active** cases: **120, 121 only** (superseded shells 141/142/143 also 0 lines — expected).
+
+#### Completeness statement
+
+Corpus is **not** complete apart from (a)(b). At minimum also missing **NB Q4 2025 Consumer** (needs_attention, never applied). Intentional absences: Do-not-use file; overlap exclusions vs survivors 7/9/90 (`f6`/`f13`/`f17` and side-effect `f4` Q2).
+
+---
+
+### Q2 — Monthly quantity grain
+
+#### Columns (printed from `information_schema` + model)
+
+| Column | Type | Role |
+|---|---|---|
+| `quantity_units` | `numeric` | Single persisted quantity (quarter/half allocation target) |
+| `month_split_json` | `jsonb` | Intended monthly map |
+
+**Both exist in schema.** On restored corpus: `month_split_json` non-null = **0** / null = **2450**.
+
+#### Parser that ran (commercial bulk path = `lineup_case_parser.py`)
+
+Quantity read is **only** the mapped `Qty` header via aliases — not per-month columns:
+
+```22:22:apps/api/app/services/commercial_planner/lineup_header_mapping.py
+    "quantity_units": ["qty", "quantity", "units", "forecast_qty"],
+```
+
+```398:398:apps/api/app/services/commercial_planner/lineup_case_parser.py
+                "quantity_units": _safe_float(raw.get("quantity_units")),
+```
+
+`CommercialLineupLine(...)` construction in the same file sets `quantity_units=rd.get("quantity_units")` and **does not set `month_split_json`**. Grep of `lineup_case_parser.py` for `month_split`: **no matches**.
+
+Historical importer **does** collect Jan–Dec abbrev columns into `_month_split` → `month_split_json` (`historical_lineup.py` ~311–352, ~773–796). That path is **not** the restore parse path.
+
+Month cells still appear under `raw_row_payload.uploaded` (full header dump) but are **not** written to `month_split_json`.
+
+#### Sample (5 restored lines, case 114)
+
+| line id | case | uploaded months (evidence) | `quantity_units` | `month_split_json` |
+|---|---|---|---|---|
+| 4299 | 114 | Feb=72, Apr=36, May=36, Qty=144 | 72.0 | null |
+| 4300 | 114 | Feb=114, Apr=76, May=76, Qty=266 | 133.0 | null |
+| 4301 | 114 | Feb=5, Qty=5 | 3.0 | null |
+| 4302 | 114 | Feb=5, Qty=5 | 3.0 | null |
+| 4303 | 114 | Feb=10, Apr=10, May=10, Qty=30 | 15.0 | null |
+
+#### VERDICT Q2
+
+**No** — monthly quantities are **not** parsed into `month_split_json` on the commercial restore path. Grain is lost at `lineup_case_parser` persist (never maps month columns → `month_split_json`). Only a single `quantity_units` (from `Qty`, then often half-split) is stored. Uploaded month cells survive only as opaque JSON in `raw_row_payload.uploaded`.
+
+---
+
+### Q3 — `uniform_half` vs real monthly data
+
+#### Code that sets / applies it
+
+Flag constant and 50/50 math:
+
+```9:31:apps/api/app/services/commercial_planner/lineup_half_year_quantity.py
+HALF_YEAR_ALLOCATION_FLAG = "allocation=uniform_half"
+...
+def allocate_uniform_half(value: float | None, *, half: str) -> float | None:
+    """Q1 gets ceil half; Q2 gets floor half — sum equals source exactly."""
+    ...
+        return float(math.ceil(v / 2.0))
+    ...
+        return float(math.floor(v / 2.0))
+```
+
+Applied on parse when `half_year_allocation_half` is q1/q2:
+
+```584:588:apps/api/app/services/commercial_planner/lineup_case_parser.py
+        half_alloc = parse_opts.get("half_year_allocation_half")
+        if half_alloc in ("q1", "q2"):
+            row_dicts = [
+                apply_half_year_allocation_to_row_dict(rd, half=str(half_alloc)) for rd in row_dicts
+            ]
+```
+
+`apply_half_year_allocation_to_row_dict` **overwrites** `quantity_units` (and listed monetary fields) with `allocate_uniform_half(float(source), half=…)`, snapshotting prior value as `half_year_source_*` in `raw_row_payload`.
+
+#### (i) vs (ii)
+
+**VERDICT: (ii)** — computes a 50/50 estimate and **overwrites** `quantity_units`. It does not leave real monthly values as the stored quantity. Month columns are not inputs to this path (see Q2).
+
+#### Proof — clearer file (case 114 row 1) and PF 134/135
+
+**Case 114 (1H-split NB Q1 2025):** uploaded `Feb=72, Apr=36, May=36, Qty=144`; stored `quantity_units=72`, `half_year_source_quantity_units=144`, diag includes `allocation=uniform_half`. `ceil(144/2)=72` — matches half of **Qty**, **not** a month-derived Q1 sum of real monthly cells.
+
+**PF Gaming Desktop (134/135) vs source file `PD Lineup 13 Feb 25`:**  
+Source row 1: `Qty=0.15`, `Total Qty=1`, `May\n(TBC)=1`.  
+Case 134 row 1: `half_src=0.15`, `quantity_units=1.0` (`ceil(0.15/2)`).  
+Case 135 row 1: `half_src=0.15`, `quantity_units=0.0` (`floor(0.15/2)`).  
+`month_split_json` null on both. Stored quantities do **not** match `Total Qty` / `May (TBC)`; they are the uniform half of the mis-mapped `Qty=0.15` cell. (Separate mapping smell: this workbook’s `Qty` column is not unit totals — noted as evidence only, not fixed.)
+
+**Defect class:** (ii) is a **data-correctness** defect relative to real monthly grain when month columns exist. Change nothing in this audit.
+
+---
+
+### Q4 — Why Promo is parsed at all
+
+#### Offending cell
+
+File: `.tmp/ProductLineupArchive/NB/2026/26Q1/2. ACZA 1H 2026 Consumer Lineup - Sales.xlsx`, sheet **`NB`**, header row 3.  
+Column header **`Promo Price`** (excel col index 51). Example cell: row 7 = `'Promo R19999'` (56 such `Promo R…` values on the sheet).
+
+Column map (printed): `promo_price_evidence_local <- 'Promo Price'` via explicit alias list (not positional catch-all):
+
+```37:49:apps/api/app/services/commercial_planner/lineup_header_mapping.py
+    "promo_price_evidence_local": [
+        "promo_price",
+        "promo_srp",
+        "promo",
+        ...
+        "promo price",
+        ...
+    ],
+```
+
+Initial parse uses `_safe_float` (returns `None` on `'Promo R19999'` — does **not** crash).
+
+Crash site: `apply_half_year_allocation_to_row_dict` falls back to `raw_row_payload['promo_price_evidence_local']` (string kept by `_safe_str`) and calls bare `float(source)`:
+
+```59:68:apps/api/app/services/commercial_planner/lineup_half_year_quantity.py
+        source = out.get(field)
+        if source is None and field in raw:
+            source = raw.get(field)
+        ...
+        allocated = allocate_uniform_half(float(source), half=half)
+```
+
+Reproduced: `_safe_float('Promo R19999')` → `None`; `apply_half_year_allocation_to_row_dict(... half='q1')` → **`ValueError: could not convert string to float: 'Promo R19999'`**. Cases 120/121 are 1H halves → half alloc always runs → fail.
+
+#### Is the field needed?
+
+`promo_price_evidence_local` is an **optional** commercial evidence field on `CommercialLineupLine` (pricing chain). Promo content is not required for lineup quantity/import completeness; it is incidental evidence, not a quantity key.
+
+#### Existing fixes — reachability
+
+| Helper | Exists? | Reaches this path? |
+|---|---|---|
+| `_safe_float` in `lineup_case_parser` | Yes | Soft-nulls promo at row build; **does not** protect half-alloc fallback |
+| `sanitize_pct_evidence` | Yes | Only pct fields; not money/promo strings |
+| Historical `_parse_decimal` | Yes | Soft-fail on historical apply; **not** used by commercial `lineup_case_parser` / half-alloc |
+| Currency/label stripper for `Promo R19999` | **No** match found on commercial parse path |
+
+#### VERDICT Q4 — recommended fix (do not implement)
+
+Prefer **(b) sanitize / safe-coerce** at `apply_half_year_allocation_to_row_dict` (never bare `float` on allocatable fields; skip or null non-numeric) **and/or** strip currency labels before coerce.  
+**(a)** stop reading Promo entirely is optional product choice (field is optional evidence) but would not alone fix other non-numeric strings in allocatable fields.  
+**(c)** also: stop falling back from typed `None` to raw string payload for numeric allocation.
+
+Minimum correct fix for this failure class: make half-alloc resilient like `_safe_float` / `_parse_decimal` so optional promo garbage cannot abort the whole parse.
+
+---
+
+### Self-check (Section 6)
+
+- Wrote to any database? **No**.  
+- Changed any code? **No**.  
+- Modified files other than this audit doc? **No** (append only).  
+- Re-applied 752? **No**.
+
+---
+
+*End of audit (Sections 1–6). Committed artifact: this file only.*
