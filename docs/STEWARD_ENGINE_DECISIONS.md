@@ -281,3 +281,16 @@ computed support. **Not “paid”:** paid would require reconciling distributor
 (Ken / admin) — separate from claim rate / settlement owed. **Currency for A2:** USD aggregate;
 ZAR display summed per-case FX (never one period rate on a USD total).
 **Correction 2026-08-01:** wording was briefly “paid”; Warren clarified owed vs paid.
+
+## D-028 · 2026-08-03 · 1H commercial parse: month-derived split only (no uniform_half)
+**Locked.** When a commercial lineup 1H workbook **has** month phasing columns, Q1/Q2
+case quantities are derived from real monthly values (fiscal Q1 = months 1–3, Q2 = 4–6;
+`month_split_json` written in historical shape `{header: float}`). When a 1H workbook
+has **no** month columns, the parse **refuses** the split, surfaces
+`half_year_split_requires_month_columns` via job `warnings` + `staged_metadata.attention_reasons`
+/ `needs_attention` (existing mechanism), and does **not** fabricate quantities.
+**`allocation=uniform_half` / `allocate_uniform_half` are retired from the commercial
+parse path** (`lineup_case_parser`); `apply_half_year_allocation_to_row_dict` remains
+hardened (safe coerce, no bare `float` on promo labels) but is unreachable from parse.
+**Origin:** STATE_AUDIT §6 Q2–Q4; Warren settled decision 2026-08-03.
+**Rejected:** falling back to ceil/floor(Qty/2) when months are absent.

@@ -13,6 +13,23 @@
 **P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
+## BACKLOG-105 — PF 1H Gaming Desktop Qty column is not unit totals
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-03 |
+| **Effort** | Small |
+| **Source** | STATE_AUDIT §6 Q3; file `Copy of ACZA 1H 2025 Consumer Lineup - Gaming Desktop PD 13 Feb 2025.xlsx` (cases 134/135) |
+| **Idea** | Workbook maps header `Qty` → `quantity_units` via alias, but cell values are ~0.15 while real units live in `Total Qty` / `May\n(TBC)`. Alias map must not be broadened blindly. |
+| **Why it matters / deferrable** | Month-derived half now uses month columns (correct for May), but any path that still trusts `Qty` as units is wrong for this file. Deferrable while month columns drive 1H quantity. |
+| **What the work is** | Steward/mapping decision: prefer `Total Qty` for this template family, or file-specific override — without breaking NB files where `Qty` is correct. |
+| **Regression traps** | Do not change global `quantity_units` aliases without archive-wide proof. |
+| **Behavior to retain** | Month-derived 1H from real month columns (D-028). |
+| **Out of scope** | Re-apply session 752; changing historical_lineup. |
+| **TRIGGER** | Next PF/desktop lineup import or Warren asks to fix Qty vs Total Qty mapping. |
+
+---
+
 ## BACKLOG-104 — Bulk existing_case_collisions miss when case.notes is null (sheet)
 
 | Field | Detail |

@@ -36,3 +36,18 @@ def test_row_dict_allocation_flags_and_preserves_source():
     assert row["dap_evidence_local"] == 50.0
     assert HALF_YEAR_ALLOCATION_FLAG in row["diagnostic_codes"]
     assert row["raw_row_payload"]["half_year_source_quantity_units"] == 9.0
+
+
+def test_row_dict_skips_non_numeric_promo_label():
+    """Bare float on 'Promo R19999' must never raise — optional evidence skipped."""
+    row = apply_half_year_allocation_to_row_dict(
+        {
+            "quantity_units": 10.0,
+            "promo_price_evidence_local": None,
+            "raw_row_payload": {"promo_price_evidence_local": "Promo R19999"},
+            "diagnostic_codes": [],
+        },
+        half="q1",
+    )
+    assert row["quantity_units"] == 5.0
+    assert row.get("promo_price_evidence_local") is None

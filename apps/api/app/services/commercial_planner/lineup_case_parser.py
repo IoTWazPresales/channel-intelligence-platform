@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import pandas as pd
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
@@ -27,8 +27,11 @@ from app.models.commercial_planner import (
 )
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.ingestion import ImportJob, ImportTemplate, SourceDefinition
-from app.services.commercial_planner.lineup_half_year_quantity import (
-    apply_half_year_allocation_to_row_dict,
+from app.services.commercial_planner.lineup_commercial_month_split import (
+    HALF_YEAR_SPLIT_REQUIRES_MONTH_COLUMNS,
+    HalfYearSplitRequiresMonthColumnsError,
+    apply_month_derived_half_to_row_dict,
+    attach_month_split_json_to_row_dict,
 )
 from app.services.commercial_planner.lineup_period_inference import (
     infer_case_product_line,
@@ -583,9 +586,50 @@ async def parse_current_lineup_file(
 
         half_alloc = parse_opts.get("half_year_allocation_half")
         if half_alloc in ("q1", "q2"):
-            row_dicts = [
-                apply_half_year_allocation_to_row_dict(rd, half=str(half_alloc)) for rd in row_dicts
+            # Warren locked: month columns → derive half; no months → refuse (never uniform_half).
+            # allocate_uniform_half / apply_half_year_allocation_to_row_dict are unreachable here.
+            from app.services.commercial_planner.lineup_commercial_month_split import (
+                workbook_has_month_columns,
+            )
+
+            uploaded_rows = [
+                (rd.get("raw_row_payload") or {}).get("uploaded")
+                if isinstance(rd.get("raw_row_payload"), dict)
+                else None
+                for rd in row_dicts
             ]
+            file_has_months = workbook_has_month_columns(uploaded_rows)
+            try:
+                if not file_has_months:
+                    raise HalfYearSplitRequiresMonthColumnsError(
+                        f"{HALF_YEAR_SPLIT_REQUIRES_MONTH_COLUMNS}: "
+                        "1H split requires month phasing columns; refusing uniform_half fabrication"
+                    )
+                row_dicts = [
+                    apply_month_derived_half_to_row_dict(
+                        rd, half=str(half_alloc), file_has_month_columns=True  # type: ignore[arg-type]
+                    )
+                    for rd in row_dicts
+                ]
+            except HalfYearSplitRequiresMonthColumnsError as exc:
+                warnings.append(HALF_YEAR_SPLIT_REQUIRES_MONTH_COLUMNS)
+                meta = dict(job.staged_metadata) if isinstance(job.staged_metadata, dict) else {}
+                meta["needs_attention"] = True
+                reasons = list(meta.get("attention_reasons") or [])
+                if HALF_YEAR_SPLIT_REQUIRES_MONTH_COLUMNS not in reasons:
+                    reasons.append(HALF_YEAR_SPLIT_REQUIRES_MONTH_COLUMNS)
+                meta["attention_reasons"] = reasons
+                job.staged_metadata = meta
+                raise HalfYearSplitRequiresMonthColumnsError(str(exc)) from exc
+        else:
+            row_dicts = [attach_month_split_json_to_row_dict(rd) for rd in row_dicts]
+
+        # Idempotent re-parse for draft cases: replace lines only (never touches case_po).
+        if case.commercial_status == "draft_imported":
+            await db.execute(
+                delete(CommercialLineupLine).where(CommercialLineupLine.case_id == case_id)
+            )
+            await db.flush()
 
         # Trade-term / sku-assumption fallback maps for backwards pricing (one query each).
         sku_assumptions = {
@@ -622,6 +666,11 @@ async def parse_current_lineup_file(
                 model_raw=rd.get("model_raw"),
                 base_unit_raw=rd.get("base_unit_raw"),
                 quantity_units=rd.get("quantity_units"),
+                month_split_json=(
+                    rd.get("month_split_json")
+                    if isinstance(rd.get("month_split_json"), dict) and rd.get("month_split_json")
+                    else None
+                ),
                 msrp_local=rd.get("msrp_local"),
                 promo_price_evidence_local=rd.get("promo_price_evidence_local"),
                 dap_evidence_local=rd.get("dap_evidence_local"),

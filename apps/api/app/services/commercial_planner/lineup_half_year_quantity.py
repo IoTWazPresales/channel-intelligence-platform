@@ -52,8 +52,31 @@ def _append_allocation_flag(diag: list[str] | None) -> list[str]:
     return out
 
 
+def _coerce_alloc_number(value: Any) -> float | None:
+    """Safe numeric coerce for allocatable evidence — never bare float() on labels."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        f = float(value)
+        return None if f != f else f  # NaN guard
+    text = str(value).strip().replace(",", "")
+    if not text or text.lower() in ("nan", "none", "-", "tbc"):
+        return None
+    try:
+        return float(text)
+    except (TypeError, ValueError):
+        return None
+
+
 def apply_half_year_allocation_to_row_dict(row: dict[str, Any], *, half: str) -> dict[str, Any]:
-    """Return a copy of a parse row dict with half-year allocation applied."""
+    """Return a copy of a parse row dict with half-year allocation applied.
+
+    Non-numeric evidence (e.g. promo label ``Promo R19999``) is skipped — never raises.
+    Commercial parse path no longer calls this (month-derived or refuse); kept hardened
+    for any residual/rederivation callers.
+    """
     out = deepcopy(row)
     raw = dict(out.get("raw_row_payload") or {})
     for field in _ALLOCATABLE_FIELDS:
@@ -64,9 +87,12 @@ def apply_half_year_allocation_to_row_dict(row: dict[str, Any], *, half: str) ->
             source = raw.get(field)
         if source is None:
             continue
-        allocated = allocate_uniform_half(float(source), half=half)
+        numeric = _coerce_alloc_number(source)
+        if numeric is None:
+            continue
+        allocated = allocate_uniform_half(numeric, half=half)
         out[field] = allocated
-        raw[f"half_year_source_{field}"] = source
+        raw[f"half_year_source_{field}"] = numeric
     out["raw_row_payload"] = raw
     out["diagnostic_codes"] = _append_allocation_flag(out.get("diagnostic_codes"))
     return out
