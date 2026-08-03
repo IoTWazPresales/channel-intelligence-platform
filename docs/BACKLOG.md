@@ -13,6 +13,23 @@
 **P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
+## BACKLOG-112 — Auto-link `customer_unresolved` when ship is resolved but lineup line customer is null
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-03 |
+| **Effort** | Medium |
+| **Source** | Clear-211 unit: all 17 medium proposals have `fact_inbound_shipment.resolved_customer_id` + exact `customer_source_token_alias` hits; align still `unresolved` because matched lineup lines lack `customer_id` |
+| **Idea** | Steward path to stamp lineup line customer from the already-resolved shipment customer (exact, no fuzzy) then re-propose/accept; or surface this as a distinct reason (`lineup_customer_missing`). |
+| **Why it matters / deferrable** | Blocks ~8–17 residual proposals that look “unresolved” but are not alias misses. Deferrable while Warren clears NB↔NR competitions first. |
+| **What the work is** | Lineup steward customer apply for matched products; do not auto-create dims. |
+| **Regression traps** | Exact match only; FLAG≠BLOCK for over-ship; never touch survivors without override. |
+| **Behavior to retain** | CRAD-primary match key; BU not in key. |
+| **Out of scope** | Fuzzy customer match; ZA legal-form auto-merge as blocker. |
+| **TRIGGER** | Warren starts the residual customer_unresolved queue after NB↔NR competitions. |
+
+---
+
 ## BACKLOG-111 — Lineup parse Celery worker can run stale code (uniform_half after D-028)
 
 | Field | Detail |

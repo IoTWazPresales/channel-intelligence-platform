@@ -303,3 +303,17 @@ must **not** hand-set `period_label` / `inferred_period_start` to “fix” the 
 title band `2025 Q3 NEW PLAN` → 2025 Q3; conflict is by design (`resolve_layered_period`).
 **Warren decides** which signal wins (folder/filename Q4 vs stale title Q3) before apply.
 **Rejected:** silently preferring folder tier over title when quarters conflict.
+
+## D-030 · 2026-08-03 · Lineup file numeric prefix = revision preference
+**Locked.** PMs file newer quarter lineups alongside older ones with an incremented
+leading numeric prefix (`1. X.xlsx`, `2. X.xlsx`). After stripping the leading `N. `
+prefix, when two competing cases share an **identical base name**, the **same period**,
+and the **same customer** (on the competing PO proposal), the **higher prefix wins**.
+The lower-prefix case is **soft-superseded** via existing fields
+(`commercial_status='superseded'`, `superseded_by_case_id=<winner>`). Active filters
+(`active_lineup_case_filters`) exclude losers from planned_units and auto-link.
+**Does not apply** when base names differ — those remain genuine steward conflicts.
+**Does not touch** survivors 7/9/90 without explicit Warren override (version rule may
+match but survivor hard-constraint wins).
+**Origin:** Warren settled decision 2026-08-03 clearing the 211 auto-link queue.
+**Rejected:** inventing a new supersession table/status; hard-delete of loser cases.
