@@ -1,26 +1,28 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-03 (commercial parse month grain + 1H month-derived)
+**Last updated:** 2026-08-03 (corpus f4 + PO auto-link accept)
 
-**Branch:** `main` (ahead of origin)
+**Branch:** `main` (push this unit)
 
 **Alembic:** `20260802_0009` · no migration this unit
 
 ## Done
 
-- **D-028:** commercial `lineup_case_parser` writes `month_split_json`; 1H halves derive qty from real months; refuse when months absent (`half_year_split_requires_month_columns`); `uniform_half` unreachable from parse; Promo bare-float hardened.
-- Re-parsed on cip (no 752 re-apply): **114, 115, 116, 119, 120, 121, 134, 135**. Cases **120/121** now have lines (201 each). `case_po` still **52**. Survivors **7/9/90** unchanged.
-- Sample 114 row1: q1 `quantity_units=72` / `month_split={Feb:72}` (not ceil(144/2) fabrication — month-derived).
+- **f4 applied alone** from session 752 (`approved_proposal_keys` + supersession win over f6): case **144** = 2026 Q2 NB, 289 lines, `allocation=month_derived`, month_split 289/289. Case **9** unchanged (159/28).
+- **PO auto-link:** 218 acceptable proposals accepted via HTTP `POST …/po-auto-link/apply` (service layer). Linked distinct **52→259** (after reverting one mistaken survivor-7 link). **211** left for Warren (87 competing PO norms + 17 customer_unresolved).
+- **PvE lineup-linked quarters:** was `[(2026,1),(2026,2)]` → now **2025 Q1–Q4 + 2026 Q1–Q3**.
+- **D-029:** NB Q4 2025 (`f3`) stays needs_attention — folder Q4 vs title `2025 Q3 NEW PLAN` is a steward call.
 
-## Residual
+## Residual / Warren
 
-- **BACKLOG-105** PF `Qty`≈0.15 vs `Total Qty` / month columns (not fixed).
-- **BACKLOG-101/103/104** still open; session 752 still `running`.
-- Missing archive gaps from §6 remain (NB Q4 2025 needs_attention; 1H-2026 file-1 Q2 excluded).
+- Decide **f3** period (Q4 folder/filename vs Q3 title band).
+- Clear **211** competing/unresolved auto-link proposals (see CONTEXT).
+- **BACKLOG-106–111** (PoAutoLink S1–S14 PARTIAL; competition UX; NR slice_row_mapping_failed; unlink API; survivor guard; stale worker).
+- Session **752** still `running` (**BACKLOG-101**).
 
 ## Next
 
-1. Steward: auto-link proposals + remaining needs_attention.
-2. Optional: BACKLOG-105 PF Qty mapping; BACKLOG-104 before next overlapping bulk apply.
+1. Warren: f3 period + competing PO queue (esp. 119 vs 120).
+2. Optional: BACKLOG-108 to restore full NR 2026 bodies before more NR linking.
 
 **Env:** local Windows. `cip`.

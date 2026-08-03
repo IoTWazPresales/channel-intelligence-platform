@@ -294,3 +294,12 @@ parse path** (`lineup_case_parser`); `apply_half_year_allocation_to_row_dict` re
 hardened (safe coerce, no bare `float` on promo labels) but is unreachable from parse.
 **Origin:** STATE_AUDIT §6 Q2–Q4; Warren settled decision 2026-08-03.
 **Rejected:** falling back to ceil/floor(Qty/2) when months are absent.
+
+## D-029 · 2026-08-03 · period_signal_conflict is a steward call (do not hand-set)
+**Locked.** When layered period inference surfaces `period_signal_conflict` (folder /
+title_band / filename quarters disagree), the proposal stays `needs_attention`. Agents
+must **not** hand-set `period_label` / `inferred_period_start` to “fix” the corpus.
+**Proven example:** `f3:NB:NB:unknown` — folder `NB/2025/Q4` → 2025 Q4, filename → 2025 Q4,
+title band `2025 Q3 NEW PLAN` → 2025 Q3; conflict is by design (`resolve_layered_period`).
+**Warren decides** which signal wins (folder/filename Q4 vs stale title Q3) before apply.
+**Rejected:** silently preferring folder tier over title when quarters conflict.

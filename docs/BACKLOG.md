@@ -13,6 +13,108 @@
 **P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
+## BACKLOG-111 — Lineup parse Celery worker can run stale code (uniform_half after D-028)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-03 |
+| **Effort** | Small |
+| **Source** | f4 apply created case 144 via job 790 with `allocation=uniform_half` / null `month_split_json`; re-parse in-process with current tree → month_derived 289/289 |
+| **Idea** | Ensure worker restart / version pin after parse-path commits so enqueued jobs cannot invent retired allocations. |
+| **Why it matters / deferrable** | Silent wrong quantities until re-parse. Deferrable while operators re-parse after code deploy. |
+| **What the work is** | Dev topology note + optional worker bootstrap hash check; document restart in apply checklist. |
+| **Regression traps** | Do not re-introduce uniform_half on parse path. |
+| **Behavior to retain** | D-028 month-derived / refuse. |
+| **Out of scope** | Rederivation path uniform_half. |
+| **TRIGGER** | Next bulk lineup apply that enqueues parse jobs after a parser commit. |
+
+---
+
+## BACKLOG-110 — Auto-link apply has no survivor / po_issued guard
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-03 |
+| **Effort** | Small |
+| **Source** | Steward PO-link unit: acceptable apply linked `PURMIDR26009976` onto survivor case **7** (pols 1→2); reverted by deleting `commercial_lineup_case_po.id=657` |
+| **Idea** | Refuse (or require explicit confirm) auto-link apply when target case is `po_issued` / survivor, unless Warren opts in. |
+| **Why it matters / deferrable** | Hard constraint “do not modify survivors 7/9/90” is operator policy; API currently allows any confirmable status. Deferrable while Warren reviews competing proposals manually. |
+| **What the work is** | Gate in `apply_auto_link_proposals` / `link_case_to_existing_po` or UI exclude list; audit log. |
+| **Regression traps** | Do not block draft_imported linking; FLAG≠BLOCK for over-ship stays. |
+| **Behavior to retain** | Idempotent re-link no-op; multi-PO append on drafts. |
+| **Out of scope** | Changing match engine. |
+| **TRIGGER** | Next auto-link bulk accept session, or Warren asks for survivor protection. |
+
+---
+
+## BACKLOG-109 — No steward unlink/undo for commercial_lineup_case_po
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-03 |
+| **Effort** | Medium |
+| **Source** | Revert of mistaken case-7 link required direct SQL DELETE — no API/UI unlink |
+| **Idea** | Steward-facing unlink (or undo last apply) that deletes `commercial_lineup_case_po` and adjusts status ladder safely. |
+| **Why it matters / deferrable** | Mistakes and survivor policy need reversible workflow without raw SQL. |
+| **What the work is** | Endpoint + panel action; steward audit; status recompute when last PO removed. |
+| **Regression traps** | Never cascade-delete POs; never touch shipment facts. |
+| **Behavior to retain** | Link idempotency on (case_id, purchase_order_id). |
+| **Out of scope** | Dismiss/restore of *proposals* (already exists). |
+| **TRIGGER** | First production need to reverse a bad link, or BACKLOG-110 ships. |
+
+---
+
+## BACKLOG-108 — Multi-BU slice_row_mapping_failed blocks full NR sheets
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-03 |
+| **Effort** | Medium |
+| **Source** | Session 752: `f15:Sheet1:NR:2026 Q2`, `f16:NR:NR:2026 Q3` status `needs_attention` / `slice_row_mapping_failed`; only thin NB slices applied (cases 128/129/131) |
+| **Idea** | Fix slice→source_row mapping for the residual BU group after multi-BU split so the primary NR body can apply. |
+| **Why it matters / deferrable** | Explains NR 2026 thinness vs 2025 (131–141 lines): files are full (~147/131 rows); corpus missing the NR body cases. Not a silent parser drop on applied slices. |
+| **What the work is** | Reproduce on disposable DB; fix `map_slice_rows_to_source_row_numbers` / preview grouping; re-apply those keys only. |
+| **Regression traps** | Do not auto-create dims; do not re-apply whole session 752. |
+| **Behavior to retain** | Multi-BU sheet → per-BU proposals with `slice_source_rows`. |
+| **Out of scope** | Relabeling NB-from-NR cases (product-derived BU is intentional). |
+| **TRIGGER** | Warren wants full NR 2026 Q2/Q3 corpus before linking those periods. |
+
+---
+
+## BACKLOG-107 — Auto-link UI does not surface PO competition across cases
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-03 |
+| **Effort** | Small–Medium |
+| **Source** | 211 Warren-queued proposals; 87 competing PO norms (e.g. cases 119 vs 120 for same PO; 118 vs 125 NB vs NR) |
+| **Idea** | Show “also proposed for case X” on each row / confirm dialog so steward does not accept both sides blindly. |
+| **Why it matters / deferrable** | Engine correctly emits one proposal per case×PO; competition is domain-real (1H Q1 vs file-2 Q1; NB vs NR). UI hides the conflict. |
+| **What the work is** | Annotate proposals sharing `po_number_norm`; optional single-winner apply. |
+| **Regression traps** | Do not auto-pick winner; catalogue absence / over-ship remain FLAG≠BLOCK. |
+| **Behavior to retain** | Exact customer+product+CRAD-in-period match key. |
+| **Out of scope** | Changing confidence reason codes. |
+| **TRIGGER** | Warren starts clearing the 211-queue, or next auto-link UX pass. |
+
+---
+
+## BACKLOG-106 — PoAutoLink steward surface is PARTIAL vs S1–S14
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-03 |
+| **Effort** | Large |
+| **Source** | S1–S14 grade of `PoAutoLinkProposalsSection.tsx` (2026-08-03) |
+| **Idea** | Bring PO↔lineup link review to import-steward contract bar (or document permanent waivers). |
+| **Why it matters / deferrable** | Works as card UI; gaps are shell/tabs/plan/async. Deferrable while HTTP apply path works. |
+| **What the work is** | See grade table in CONTEXT 2026-08-03; extract shared drawer/bulk where slots apply. |
+| **Regression traps** | Do not invent importer-prefixed files under `features/import-steward/`. |
+| **Behavior to retain** | Chunked POST `/lineup/po-auto-link/apply`; dismiss/restore; over-plan expected copy. |
+| **Out of scope** | Match-engine rewrite. |
+| **TRIGGER** | Steward UX parity pass for commercial PO linking, or VERIFY unit for this surface. |
+
+---
+
 ## BACKLOG-105 — PF 1H Gaming Desktop Qty column is not unit totals
 
 | Field | Detail |
