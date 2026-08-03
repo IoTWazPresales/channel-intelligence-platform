@@ -13,6 +13,91 @@
 **P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
+## BACKLOG-117 — PO auto-link Review dialog omits case id / source file / competitors
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-03 |
+| **Effort** | Small |
+| **Source** | Browser queue unit: Review on `P2605495` / OPEN_CHANNEL showed customer, period, confidence, reason, PO units, matched products — **no case_id, no `file_name`, no competing-case list** (`PoAutoLinkConfirmDialog` ~L259–370) |
+| **Idea** | Show case id + source file + sibling competing proposals for the same PO before Confirm. |
+| **Why it matters / deferrable** | Operator cannot three-source-check from the dialog alone; must leave UI. Deferrable while Warren decides NB↔NR offline. |
+| **What the work is** | Extend confirm + row chips; optional link to lineup case page. |
+| **Regression traps** | Do not invent drawer chrome; keep confirm sync path until S10/S11 addressed. |
+| **Behavior to retain** | Optional notes; matched products table. |
+| **Out of scope** | Full import-steward drawer migration (BACKLOG-116). |
+| **TRIGGER** | Next browser accept session for residual competitions. |
+
+---
+
+## BACKLOG-116 — PO auto-link panel is not on STEWARD_EXPERIENCE_CONTRACT S1–S14
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-03 |
+| **Effort** | Large |
+| **Source** | Browser queue unit grading vs `docs/STEWARD_EXPERIENCE_CONTRACT.md`: panel is bespoke `PoAutoLinkProposalsSection` cards, not `import-steward` engine |
+| **Idea** | Level PO auto-link triage to steward engine slots (or explicitly Warren-waive rows with dated waiver lines). |
+| **Why it matters / deferrable** | Contract gaps block VERIFY PASS; operators feel friction vs DSI/shipment. Deferrable until residual queue policy is settled. |
+| **What the work is** | Gap analysis → shared workspace / drawer / bulk preview / async progress as required; or waive. |
+| **Regression traps** | Do not fork `Dsi*`/`Shipment*` into `import-steward/`; extract generics only. |
+| **Behavior to retain** | CRAD propose; dismiss/restore; over-plan copy; chunked apply. |
+| **Out of scope** | Changing match key / BU-in-key. |
+| **TRIGGER** | Warren prioritizes steward-engine parity for PO auto-link after residual policy decisions. |
+
+---
+
+## BACKLOG-115 — Select-all-high / bulk Link ignores competition + survivor policy
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-03 |
+| **Effort** | Medium |
+| **Source** | Browser unit: **Select all high** selected **81** including competing POs and survivor cases **7/9/90**; no competition warning; bulk confirm breakdown is customer counts only (`openBulkConfirm` / `bulkConfirmBreakdown` ~L978–995) |
+| **Idea** | Exclude survivors/`po_issued` from select-all; flag or block multi-case same-PO selections; preview competing case ids before apply. |
+| **Why it matters / deferrable** | One click would decide Warren conflicts + mutate survivors (policy). Deferrable while agents refuse bulk on residual. |
+| **What the work is** | Selection filters + bulk preview conflict rows; wire BACKLOG-110 guard. |
+| **Regression traps** | Do not auto-pick winners; FLAG≠BLOCK for over-ship stays. |
+| **Behavior to retain** | Select-all-high for clean solo queues. |
+| **Out of scope** | Auto-supersede from UI. |
+| **TRIGGER** | Before any production bulk accept of residual 92, or with BACKLOG-110. |
+
+---
+
+## BACKLOG-114 — Period filter defaults to current quarter and hides residual queue
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-03 |
+| **Effort** | Small |
+| **Source** | Browser unit: expand panel → Period=`26Q3` via `useState(() => currentQuarterLabel())` at `PoAutoLinkProposalsSection.tsx:797`; Select all high disabled until period cleared; residual 2025/Q1–Q2 proposals invisible |
+| **Idea** | Default period empty (or “all”) when opening triage; keep optional current-quarter quick chip. |
+| **Why it matters / deferrable** | Operators believe the queue is empty/small. Deferrable while documented workaround (clear Period + Refresh) exists. |
+| **What the work is** | Change initial state + empty-state copy; optional persist last filter in `cip.*` localStorage. |
+| **Regression traps** | Do not break coverage gap worklist period defaults elsewhere. |
+| **Behavior to retain** | Period/customer/confidence filters. |
+| **Out of scope** | Server-side default period. |
+| **TRIGGER** | Next PO auto-link UX polish unit. |
+
+---
+
+## BACKLOG-113 — PO auto-link has no competition / version-prefix signal in the list
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-03 |
+| **Effort** | Medium |
+| **Source** | Browser residual: 33 competing PO norms all RULE-DOES-NOT-APPLY (NB↔NR / different base / survivor); UI shows per-customer cards with no “competes with case X” chip; D-030 winners already applied offline |
+| **Idea** | Surface `conflicts` / competing case ids + file base/prefix on rows and group headers so operators can apply D-030 / leave Warren conflicts. |
+| **Why it matters / deferrable** | Without signal, Select-all-high looks safe. Deferrable while residual is Warren-only. |
+| **What the work is** | API already has conflict hints in warren export; expose on propose payload + chips. |
+| **Regression traps** | Do not auto-apply version rule from UI without confirm. |
+| **Behavior to retain** | Soft-supersede via `superseded_by_case_id` (D-030). |
+| **Out of scope** | Deciding NB vs NR. |
+| **TRIGGER** | Warren wants browser-led residual triage after NB↔NR policy. |
+
+---
+
 ## BACKLOG-112 — Auto-link `customer_unresolved` when ship is resolved but lineup line customer is null
 
 | Field | Detail |

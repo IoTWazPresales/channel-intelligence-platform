@@ -1,6 +1,6 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-03 (D-030 version-prefix supersession + queue clear)
+**Last updated:** 2026-08-03 (PO auto-link browser steward unit)
 
 **Branch:** `main`
 
@@ -8,22 +8,22 @@
 
 ## Done
 
-- **D-030:** higher numeric file prefix wins on identical base name + same period/customer; soft-supersede via `superseded_by_case_id`.
-- Soft-superseded **119→120** (2026 Q1) and **144→121** (2026 Q2). Case count 34→34. Q1 NB planned **93025→42233** (double-count fixed).
-- Accepted **49** winner PO links via HTTP apply. Linked distinct **259→308**. Remaining proposals **92**.
-- Blocked (survivor): would-be **122→9** version rule — not applied.
-- All **17** customer_unresolved left for Warren (ship already alias-resolved; lineup line customer null — BACKLOG-112).
+- **Browser unit** on `/admin/po-management` via **cursor-ide-browser** (same harness as A2-04/05). API :8001 up; started web :3000 only.
+- Period default `26Q3` cleared → **92** proposals visible (81 high / 11 medium). Exercised Expand, Select all high (81), Review dialog, Cancel — **0 accepts** (UI or HTTP). Residual is all Warren conflict / survivor / customer_unresolved.
+- D-030 already applied prior unit: **119→120**, **144→121**. Case count **34**. Linked **308**. Q1 NB planned active **42233** (if including superseded 119: **93025**). Survivors **7/9/90** pols **1/28/23** unchanged.
+- RULE-APPLIES remaining: **0**. RULE-DOES-NOT-APPLY competing PO norms: **33**. Solo non-survivor accept candidates: **0**.
+- UI defects logged BACKLOG-**113–117** (period default, select-all/competition, contract S1–S14 PARTIAL, confirm missing case/file, no competition chips). No inline fixes.
 
 ## Residual / Warren
 
-- NB↔NR / different-base competitions (118↔125, 117↔124, 125↔126, …).
-- Survivor-involved sets (9+121+122+128; 90+…).
-- Explicit call: allow **122** to supersede survivor **9**?
-- f3 period still open (D-029). BACKLOG-106–112.
+- NB↔NR / different-base / cross-period competitions (117↔124, 118↔125, 125↔126, …).
+- Survivor-involved (9+121+122+128; 90+…). Explicit: allow **122** to supersede survivor **9**?
+- Medium `product_period_customer_unresolved` (11 live) — BACKLOG-112; panel cannot stamp lineup `customer_id`.
+- f3 period still open (D-029).
 
 ## Next
 
 1. Warren: NB vs NR same-period competitions + survivor 9 vs file `2. ACZA Q2 2026…`.
-2. Optional BACKLOG-112 for lineup-customer-null medium proposals.
+2. Optional BACKLOG-114/115 before any bulk UI accept of residual.
 
 **Env:** local Windows. `cip`.
