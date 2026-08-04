@@ -26,7 +26,24 @@
 | **Regression traps** | Do not auto-accept both without steward; FLAG≠BLOCK for over-plan. Do not fold cross-period into (a). |
 | **Behavior to retain** | CRAD-primary key; BU not in key; multiple proposals per PO allowed. |
 | **Out of scope** | Changing propose SQL; bulk-select guard (115/110). |
-| **TRIGGER** | After BACKLOG-118, or Warren starts residual competition triage. |
+| **TRIGGER** | Immediate — 118 + 9→122 landed; or Warren starts residual competition triage. |
+
+---
+
+## BACKLOG-120 — Dedicated supersession_carry provenance column (optional)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-04 |
+| **Effort** | Small |
+| **Source** | BACKLOG-118 B1: carry records provenance in existing `commercial_lineup_case_po.notes` (`supersession_carry:from_case=<id>`). No schema change this unit. |
+| **Idea** | If notes collide with steward free-text, add a dedicated nullable provenance column (or JSONB) for carry/auto-link origin. |
+| **Why it matters / deferrable** | Notes work today; only matters if operators routinely edit link notes and overwrite carry markers. |
+| **What the work is** | Migration + backfill from notes prefix; update carry writer. |
+| **Regression traps** | Do not migrate without Warren approval; never delete loser links. |
+| **Behavior to retain** | Copy-not-move carry; unique (case_id, purchase_order_id). |
+| **Out of scope** | Changing carry semantics. |
+| **TRIGGER** | Steward reports notes overwrite / needs structured provenance filter. |
 
 ---
 
@@ -34,7 +51,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-04 · **BLOCKS** Warren D2 (9→122) and any po_issued D-030 supersession |
+| **Status / parked** | **Closed** · 2026-08-04 · shipped D-032 |
 | **Effort** | Medium |
 | **Source** | 9→122 unit A2 STOP: `lineup_bulk_backfill_apply.py` 377–382 only sets `superseded_by_case_id` + `commercial_status='superseded'`; no carry/move of `commercial_lineup_case_po`. Case 9 has **28** PO links; case 122 has **0**. Active filters would orphan links if 9 superseded without carry. D-031. |
 | **Idea** | On soft-supersession of a loser→winner, copy (or reassign) `commercial_lineup_case_po` rows to the winner idempotently on `(case_id, purchase_order_id)`; leave audit trail; do not delete PO master rows. Prefer a named service used by bulk apply + steward ops. |
@@ -44,6 +61,7 @@
 | **Behavior to retain** | Soft-supersede via existing fields; `link_case_to_existing_po` idempotency semantics. |
 | **Out of scope** | Hand-written SQL inserts as one-off; changing competition detector. |
 | **TRIGGER** | Immediate — next unit before any 9→122 / po_issued D-030 supersession. |
+| **Closed** | `soft_supersede_lineup_case` + `carry_case_po_links_on_supersession`; wired bulk apply; clone C2–C6; cip 9→122 (28/28); f3→case 145 2025 Q4; D-032. Provenance via notes → BACKLOG-120. |
 
 ---
 

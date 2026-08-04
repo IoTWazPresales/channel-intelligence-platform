@@ -65,6 +65,7 @@ _WRITE_CAPABLE_TEST_MODULES: frozenset[str] = frozenset(
         "test_lineup_bulk_backfill_apply_integration.py",
         "test_lineup_business_unit_resolution.py",
         "test_lineup_case_supersession_delete.py",
+        "test_lineup_po_link_carry_supersession.py",
         "test_lineup_po_auto_link.py",
         "test_lineup_po_auto_link_actions.py",
         "test_master_bulk_delete_sql_integration.py",

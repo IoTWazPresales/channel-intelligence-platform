@@ -337,3 +337,22 @@ via steward period override; session 752 still has `f3:NB:NB:unknown` /
 **Origin:** Warren D1/D2 2026-08-04; Cursor discovery STOP A2.
 **Rejected:** superseding po_issued without carry; inventing ad-hoc SQL inserts as “carry”.
 
+## D-032 · 2026-08-04 · PO-link carry on supersession is COPY (not move)
+**Locked.** Soft-supersession of a lineup case **copies** `commercial_lineup_case_po`
+rows from loser → winner via `soft_supersede_lineup_case` /
+`carry_case_po_links_on_supersession` (`lineup_case_supersession.py`).
+- Loser rows are **preserved** (historical record) — never deleted, moved, or
+  repointed.
+- Idempotent on unique `(case_id, purchase_order_id)`; skip-existing when the
+  winner already holds a PO.
+- All-or-nothing with the status change in the same DB transaction (caller commits).
+- Insert path reuses `insert_case_po_link_if_missing` (same semantics as
+  `link_case_to_existing_po`). Provenance on winner `notes`:
+  `supersession_carry:from_case=<loser_id>` (existing Text column — no schema change).
+- Wired into bulk backfill existing-case supersede
+  (`lineup_bulk_backfill_apply.py`). New superseded shells (born empty) need no carry.
+**Proven:** clone `cip_po_carry_smoke` C2–C6; cip 9→122 carried 28/28 (set-diff empty);
+NB 2026 Q2 planned 68881→46830. Cases 7/90 untouched.
+**Origin:** BACKLOG-118; Warren W1 2026-08-04; closes D-031 engine gap.
+**Rejected:** move/repoint loser links; hand-written SQL inserts; provenance column migration.
+

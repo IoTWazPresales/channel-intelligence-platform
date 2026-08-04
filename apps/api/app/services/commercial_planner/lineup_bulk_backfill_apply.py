@@ -18,6 +18,7 @@ from app.services.commercial_planner.lineup_bulk_backfill_preview import (
     BULK_SOURCE_CODE,
     BULK_TEMPLATE_SLUG,
 )
+from app.services.commercial_planner.lineup_case_supersession import soft_supersede_lineup_case
 from app.services.commercial_planner.lineup_period_canonical import display_period_label_from_period_start
 from app.services.commercial_planner.lineup_parse_dispatch import (
     enqueue_lineup_parse_sync,
@@ -377,9 +378,12 @@ def apply_bulk_lineup_batch_sync(
             if pk in existing_supersede:
                 existing_case = db.get(CommercialLineupCase, existing_supersede[pk])
                 if existing_case is not None:
-                    existing_case.superseded_by_case_id = case_id
-                    existing_case.commercial_status = "superseded"
-                    db.flush()
+                    # Shared soft-supersede + PO-link carry (BACKLOG-118 / D-031).
+                    soft_supersede_lineup_case(
+                        db,
+                        loser_case_id=int(existing_case.id),
+                        winner_case_id=int(case_id),
+                    )
             sgk = str(prop.get("supersession_group_key") or "")
             if sgk:
                 winner_case_by_group[sgk] = case_id

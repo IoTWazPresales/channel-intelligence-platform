@@ -15,6 +15,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.models.commercial_lineup import (
     COMMERCIAL_LINEUP_STATUSES,
@@ -178,6 +179,37 @@ async def confirm_case_with_po(
         "po_count": int(total),
         "newly_linked_count": sum(1 for x in linked if x["newly_linked"]),
     }
+
+
+def insert_case_po_link_if_missing(
+    db: Session,
+    *,
+    case_id: int,
+    purchase_order_id: int,
+    notes: str | None = None,
+) -> bool:
+    """Insert ``commercial_lineup_case_po`` when missing (sync).
+
+    Same insert semantics as ``link_case_to_existing_po`` — unique
+    ``(case_id, purchase_order_id)`` skip-existing. Does not commit and does not
+    mutate case status (caller decides). Returns True when a row was inserted.
+    """
+    existing = db.scalars(
+        select(CommercialLineupCasePo).where(
+            CommercialLineupCasePo.case_id == int(case_id),
+            CommercialLineupCasePo.purchase_order_id == int(purchase_order_id),
+        )
+    ).first()
+    if existing is not None:
+        return False
+    db.add(
+        CommercialLineupCasePo(
+            case_id=int(case_id),
+            purchase_order_id=int(purchase_order_id),
+            notes=notes,
+        )
+    )
+    return True
 
 
 async def link_case_to_existing_po(
