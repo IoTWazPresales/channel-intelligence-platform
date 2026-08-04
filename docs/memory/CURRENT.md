@@ -1,29 +1,22 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-03 (PO auto-link browser steward unit)
+**Last updated:** 2026-08-04 (9→122 / f3 unit STOP — no PO-link carry)
 
 **Branch:** `main`
 
 **Alembic:** `20260802_0009` · no migration this unit
 
-## Done
+## Done / STOP
 
-- **Browser unit** on `/admin/po-management` via **cursor-ide-browser** (same harness as A2-04/05). API :8001 up; started web :3000 only.
-- Period default `26Q3` cleared → **92** proposals visible (81 high / 11 medium). Exercised Expand, Select all high (81), Review dialog, Cancel — **0 accepts** (UI or HTTP). Residual is all Warren conflict / survivor / customer_unresolved.
-- D-030 already applied prior unit: **119→120**, **144→121**. Case count **34**. Linked **308**. Q1 NB planned active **42233** (if including superseded 119: **93025**). Survivors **7/9/90** pols **1/28/23** unchanged.
-- RULE-APPLIES remaining: **0**. RULE-DOES-NOT-APPLY competing PO norms: **33**. Solo non-survivor accept candidates: **0**.
-- UI defects logged BACKLOG-**113–117** (period default, select-all/competition, contract S1–S14 PARTIAL, confirm missing case/file, no competition chips). No inline fixes.
-
-## Residual / Warren
-
-- NB↔NR / different-base / cross-period competitions (117↔124, 118↔125, 125↔126, …).
-- Survivor-involved (9+121+122+128; 90+…). Explicit: allow **122** to supersede survivor **9**?
-- Medium `product_period_customer_unresolved` (11 live) — BACKLOG-112; panel cannot stamp lineup `customer_id`.
-- f3 period still open (D-029).
+- **A2 STOP:** supersession does **not** carry `commercial_lineup_case_po` (only status + `superseded_by_case_id`). Case 9 has **28** links; 122 has **0**. Did **not** supersede 9; did **not** apply f3. D-031 recorded.
+- **A6:** f3 still applicable on job 752 as `f3:NB:NB:unknown` / `period_signal_conflict`; supported path = `manual_period_label` steward override → 2025 Q4. Blocked only by unit stop gate (paired with A2).
+- **Phase D (report):** 33 competing PO norms vs shipment∩lineup products → **25** multi-BU legitimate, **7** cross-period, **1** same-BU same-period (`PURMIDR26009979`). Detector does not consult shipment → BACKLOG-119. Detector **not** changed.
+- Cases **7** / **90** / **9** / **122** unchanged. Case count **34**. Linked distinct still **308**.
 
 ## Next
 
-1. Warren: NB vs NR same-period competitions + survivor 9 vs file `2. ACZA Q2 2026…`.
-2. Optional BACKLOG-114/115 before any bulk UI accept of residual.
+1. **BACKLOG-118** — implement PO-link carry on supersession (blocks D2).
+2. Resume: soft-supersede **9→122** with carry; apply **f3** as 2025 Q4 via manual tier.
+3. Residual genuine: 7 cross-period + `PURMIDR26009979` (post-122 supersession may simplify).
 
 **Env:** local Windows. `cip`.

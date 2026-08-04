@@ -13,7 +13,42 @@
 **P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
+## BACKLOG-119 — Competition detector flags multi-BU shared POs as conflicts (phantom)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-04 |
+| **Effort** | Medium |
+| **Source** | 9→122 unit Phase D: 33 competing PO norms; refined vs shipment product∩lineup: **25** class (a) multi-BU legitimate (NB+NR both hit shipped products), **7** cross-period, **1** same-BU same-period (`PURMIDR26009979` / 9·121·122·128). Detector = residual classifier `len(cases for po_norm)>1` (`.tmp/clear_211_queue.py` ~524–536); propose engine emits multi-case proposals without shipment consult |
+| **Idea** | When classifying “competition”, consult shipment product evidence: if ≥2 claiming cases each overlap shipped products on that PO and BUs differ, treat as multi-BU share (not a pick-one conflict). Keep genuine same-BU / cross-period queues. |
+| **Why it matters / deferrable** | 25/33 residual “conflicts” are phantom under Warren’s multi-BU-share-PO rule. Inflates steward queue. Deferrable until carry (118) + 9→122 land. |
+| **What the work is** | Classification helper for residual/UI chips; **do not** change match key (BU stays out). Optional UI badge “multi-BU shared”. |
+| **Regression traps** | Do not auto-accept both without steward; FLAG≠BLOCK for over-plan. Do not fold cross-period into (a). |
+| **Behavior to retain** | CRAD-primary key; BU not in key; multiple proposals per PO allowed. |
+| **Out of scope** | Changing propose SQL; bulk-select guard (115/110). |
+| **TRIGGER** | After BACKLOG-118, or Warren starts residual competition triage. |
+
+---
+
+## BACKLOG-118 — Supersession must carry commercial_lineup_case_po to winner
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-04 · **BLOCKS** Warren D2 (9→122) and any po_issued D-030 supersession |
+| **Effort** | Medium |
+| **Source** | 9→122 unit A2 STOP: `lineup_bulk_backfill_apply.py` 377–382 only sets `superseded_by_case_id` + `commercial_status='superseded'`; no carry/move of `commercial_lineup_case_po`. Case 9 has **28** PO links; case 122 has **0**. Active filters would orphan links if 9 superseded without carry. D-031. |
+| **Idea** | On soft-supersession of a loser→winner, copy (or reassign) `commercial_lineup_case_po` rows to the winner idempotently on `(case_id, purchase_order_id)`; leave audit trail; do not delete PO master rows. Prefer a named service used by bulk apply + steward ops. |
+| **Why it matters / deferrable** | Without carry, superseding po_issued cases silently unlinks POs from active planned/coverage consumers. Not deferrable for D2 — **blocked**. |
+| **What the work is** | Service + call from supersession path; steward audit; test with real case_po rows; then resume 9→122 + f3 apply. |
+| **Regression traps** | Never hard-delete cases; never drop PO numbers; unique (case_id, purchase_order_id); survivors 7/90 untouched unless Warren says. |
+| **Behavior to retain** | Soft-supersede via existing fields; `link_case_to_existing_po` idempotency semantics. |
+| **Out of scope** | Hand-written SQL inserts as one-off; changing competition detector. |
+| **TRIGGER** | Immediate — next unit before any 9→122 / po_issued D-030 supersession. |
+
+---
+
 ## BACKLOG-117 — PO auto-link Review dialog omits case id / source file / competitors
+
 
 | Field | Detail |
 |-------|--------|

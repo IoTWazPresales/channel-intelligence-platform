@@ -317,3 +317,23 @@ The lower-prefix case is **soft-superseded** via existing fields
 match but survivor hard-constraint wins).
 **Origin:** Warren settled decision 2026-08-03 clearing the 211 auto-link queue.
 **Rejected:** inventing a new supersession table/status; hard-delete of loser cases.
+
+## D-031 · 2026-08-04 · D-030 may supersede po_issued; PO links MUST carry (blocker)
+**Locked intent (Warren 2026-08-04):** D-030 applies to `po_issued` cases. Explicit
+authorisation: case **122** (`2. ACZA Q2 2026 Consumer Lineup - Sales.xlsx`) supersedes
+case **9** (`1. …` same base, NB 2026 Q2). Case 9 is exempt from survivor protection for
+that supersession only; cases **7** and **90** remain fully protected.
+**PO-link carry is mandatory:** on supersession, `commercial_lineup_case_po` rows belonging
+to the loser must be preserved on the winner — not dropped, orphaned, or left only on the
+superseded case (active consumers use `active_lineup_case_filters` and would lose the links).
+**Engine gap (STOP):** bulk/apply supersession today only sets
+`superseded_by_case_id` + `commercial_status='superseded'`
+(`lineup_bulk_backfill_apply.py` ~377–382). It does **not** carry, move, or copy
+`commercial_lineup_case_po` rows. No dedicated carry service exists. Unit stopped before
+applying 9→122. **Do not** hand-write link rows to simulate carry.
+**f3 path exists** (manual tier): `resolve_layered_period(..., manual_period_label=...)`
+via steward period override; session 752 still has `f3:NB:NB:unknown` /
+`period_signal_conflict` — applicable once carry + apply resume.
+**Origin:** Warren D1/D2 2026-08-04; Cursor discovery STOP A2.
+**Rejected:** superseding po_issued without carry; inventing ad-hoc SQL inserts as “carry”.
+
