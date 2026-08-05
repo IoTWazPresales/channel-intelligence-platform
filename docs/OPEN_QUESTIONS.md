@@ -10,6 +10,15 @@ Each entry: what is unclear · why it matters · interim assumption · what woul
 
 ## Open
 
+### ASSUMPTION MADE — Unit 2 contested vs service refuse (2026-08-05)
+
+| Field | Value |
+|-------|--------|
+| **Two readings** | (A) Q-011 Q1 lists contested in the PROTECTED predicate for bulk automation → service should refuse contested without `allow_protected`. (B) Q-011 Q4 / D-033: contested is selection-scope only; apply stays unblocked (FLAG≠BLOCK). |
+| **Chose** | (B) for **service refuse**; (A∪B) for **select-all exclusion**. Contested → exclude from select-all; contested-only draft with no PO links → apply without override. Status / PO links / tenant config id → `requires_allow_protected`. |
+| **Why** | Narrower reading that preserves locked D-033; avoids inventing an apply gate Warren rejected. |
+| **Source** | PROGRAM-A Q-011 answers; D-033 |
+
 ### Q-003 — Hosting target
 
 | Field | Value |

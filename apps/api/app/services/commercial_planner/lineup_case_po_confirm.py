@@ -24,6 +24,10 @@ from app.models.commercial_lineup import (
     CommercialLineupLine,
 )
 from app.models.purchase_order import PurchaseOrder
+from app.services.commercial_planner.lineup_case_bulk_protection import (
+    CaseProtectedError,
+    evaluate_case_bulk_protection,
+)
 from app.services.commercial_planner.lineup_case_status import commercial_status_after_po_link
 from app.services.imports.shipment_po_normalization import normalize_po_number
 
@@ -219,13 +223,37 @@ async def link_case_to_existing_po(
     *,
     notes: str | None = None,
     commit: bool = True,
+    allow_protected: bool = False,
 ) -> dict[str, Any]:
-    """Link a case to an existing purchase order (auto-link apply / bulk confirm)."""
+    """Link a case to an existing purchase order (auto-link apply / bulk confirm).
+
+    Protected cases (status beyond draft_imported, existing PO links, or tenant
+    config id) refuse unless ``allow_protected=True``. Contested annotation alone
+    does not refuse (D-033 FLAG≠BLOCK) — selection-scope only.
+    """
     case = await db.get(CommercialLineupCase, case_id)
     if case is None:
         raise CaseNotFoundError(str(case_id))
     if not confirm_allowed_for_status(case.commercial_status):
         raise CaseStatusNotConfirmableError(case.commercial_status)
+
+    existing_count = int(
+        (
+            await db.execute(
+                select(func.count(CommercialLineupCasePo.id)).where(
+                    CommercialLineupCasePo.case_id == case_id
+                )
+            )
+        ).scalar_one()
+        or 0
+    )
+    protection = evaluate_case_bulk_protection(
+        case_id=case_id,
+        commercial_status=case.commercial_status,
+        po_link_count=existing_count,
+    )
+    if protection.requires_allow_protected and not allow_protected:
+        raise CaseProtectedError(case_id, protection)
 
     po = await db.get(PurchaseOrder, purchase_order_id)
     if po is None:

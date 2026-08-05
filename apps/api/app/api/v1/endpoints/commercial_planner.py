@@ -2037,6 +2037,8 @@ class PoAutoLinkApplyItem(BaseModel):
     case_id: int = Field(ge=1)
     purchase_order_id: int = Field(ge=1)
     notes: str | None = Field(default=None, max_length=1024)
+    # Deliberate single-item override only — bulk UI must never set this.
+    allow_protected: bool = False
 
 
 class PoAutoLinkApplyBody(BaseModel):

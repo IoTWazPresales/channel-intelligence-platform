@@ -51,6 +51,20 @@ type MatchedProduct = {
   open_order_units?: number;
 };
 
+export type BulkProtection = {
+  selection_protected: boolean;
+  requires_allow_protected: boolean;
+  reasons: string[];
+  contested: boolean;
+};
+
+export type PoAutoLinkCompetition = {
+  status: string;
+  reason?: string | null;
+  competing_case_ids?: number[];
+  blocks_apply?: boolean;
+};
+
 export type PoAutoLinkProposal = {
   proposal_key: string;
   case_id: number;
@@ -72,7 +86,34 @@ export type PoAutoLinkProposal = {
   total_planned_units: number;
   total_shipped_units: number;
   total_open_order_units?: number;
+  commercial_status?: string | null;
+  po_link_count?: number;
+  competition?: PoAutoLinkCompetition | null;
+  bulk_protection?: BulkProtection | null;
 };
+
+function protectionReasonLabels(p: PoAutoLinkProposal): string[] {
+  const labels: string[] = [];
+  const reasons = p.bulk_protection?.reasons ?? [];
+  for (const r of reasons) {
+    if (r === 'status_advanced') labels.push(`status ${p.commercial_status ?? 'advanced'}`);
+    else if (r === 'confirmed_po_links') labels.push(`has ${p.po_link_count ?? '?'} PO link(s)`);
+    else if (r === 'tenant_protected_id') labels.push('tenant-protected case id');
+    else labels.push(r);
+  }
+  if (p.bulk_protection?.contested || p.competition?.status === 'contested') {
+    labels.push('contested PO');
+  }
+  return labels;
+}
+
+function isSelectionProtected(p: PoAutoLinkProposal): boolean {
+  return Boolean(p.bulk_protection?.selection_protected);
+}
+
+function requiresAllowProtected(p: PoAutoLinkProposal): boolean {
+  return Boolean(p.bulk_protection?.requires_allow_protected);
+}
 
 type GroupCoverageEntry = {
   group_key: string;
@@ -267,13 +308,17 @@ function PoAutoLinkConfirmDialog({
   open: boolean;
   proposal: PoAutoLinkProposal | null;
   onClose: () => void;
-  onConfirm: (notes: string) => void;
+  onConfirm: (notes: string, allowProtected: boolean) => void;
   isPending: boolean;
   error: string | null;
 }) {
   const [notes, setNotes] = useState('');
+  const [allowProtected, setAllowProtected] = useState(false);
 
   if (!proposal) return null;
+
+  const needsOverride = requiresAllowProtected(proposal);
+  const protectionLabels = protectionReasonLabels(proposal);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth data-testid="po-auto-link-confirm-dialog">
@@ -284,6 +329,17 @@ function PoAutoLinkConfirmDialog({
             This links the observed purchase order to the lineup case and sets the case to{' '}
             <strong>PO linked</strong>. Review customer and product overlap before confirming.
           </Typography>
+          {protectionLabels.length > 0 ? (
+            <Alert
+              severity={needsOverride ? 'warning' : 'info'}
+              data-testid="po-auto-link-confirm-protection"
+            >
+              Protected from bulk automation: {protectionLabels.join('; ')}.
+              {needsOverride
+                ? ' Deliberate override required to link.'
+                : ' Contested items stay linkable individually (FLAG≠BLOCK).'}
+            </Alert>
+          ) : null}
           <Box>
             <Typography variant="caption" color="text.secondary">
               Customer
@@ -296,6 +352,9 @@ function PoAutoLinkConfirmDialog({
             <Chip size="small" label={proposal.case_period_label ?? proposal.inferred_period_start ?? '—'} />
             <Chip size="small" color={confidenceColor(proposal.confidence)} label={proposal.confidence} />
             <Chip size="small" variant="outlined" label={reasonLabel(proposal.reason)} />
+            {proposal.commercial_status ? (
+              <Chip size="small" variant="outlined" label={proposal.commercial_status} />
+            ) : null}
           </Stack>
           <Table size="small">
             <TableHead>
@@ -364,6 +423,21 @@ function PoAutoLinkConfirmDialog({
             rows={2}
             fullWidth
           />
+          {needsOverride ? (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  size="small"
+                  checked={allowProtected}
+                  onChange={(e) => setAllowProtected(e.target.checked)}
+                  inputProps={
+                    { 'data-testid': 'po-auto-link-allow-protected' } as InputHTMLAttributes<HTMLInputElement>
+                  }
+                />
+              }
+              label="Allow linking this protected case (deliberate override)"
+            />
+          ) : null}
           {error && (
             <Alert severity="error" data-testid="po-auto-link-confirm-error">
               {error}
@@ -378,8 +452,8 @@ function PoAutoLinkConfirmDialog({
         <Button
           size="small"
           variant="contained"
-          disabled={isPending}
-          onClick={() => onConfirm(notes)}
+          disabled={isPending || (needsOverride && !allowProtected)}
+          onClick={() => onConfirm(notes, allowProtected)}
           data-testid="po-auto-link-confirm-submit"
         >
           {isPending ? 'Linking…' : 'Link PO to case'}
@@ -393,6 +467,7 @@ function BulkLinkConfirmDialog({
   open,
   totalCount,
   byCustomer,
+  excluded,
   onClose,
   onConfirm,
   isPending,
@@ -402,6 +477,7 @@ function BulkLinkConfirmDialog({
   open: boolean;
   totalCount: number;
   byCustomer: { label: string; count: number }[];
+  excluded: { label: string; reasons: string }[];
   onClose: () => void;
   onConfirm: () => void;
   isPending: boolean;
@@ -425,9 +501,16 @@ function BulkLinkConfirmDialog({
           <Typography variant="body2" data-testid="po-auto-link-bulk-confirm-summary">
             Linking {totalCount} proposal{totalCount === 1 ? '' : 's'}: {breakdown}
           </Typography>
+          {excluded.length > 0 ? (
+            <Alert severity="warning" data-testid="po-auto-link-bulk-excluded">
+              Excluded from bulk ({excluded.length}):{' '}
+              {excluded.map((e) => `${e.label} (${e.reasons})`).join('; ')}
+            </Alert>
+          ) : null}
           {!isPending ? (
             <Typography variant="body2" color="text.secondary">
               Each selected PO will be linked to its lineup case (status advances to PO linked; steward work stays open).
+              Protected / contested cases stay out of select-all; override is single-item only.
             </Typography>
           ) : null}
           {isPending && progress ? (
@@ -452,7 +535,7 @@ function BulkLinkConfirmDialog({
         <Button
           size="small"
           variant="contained"
-          disabled={isPending}
+          disabled={isPending || totalCount === 0}
           onClick={onConfirm}
           data-testid="po-auto-link-bulk-confirm-submit"
         >
@@ -567,6 +650,23 @@ function ProposalRow({
           ) : null}
         </Typography>
         <MatchedProductsChip products={proposal.matched_products} />
+        {isSelectionProtected(proposal) ? (
+          <Tooltip title={protectionReasonLabels(proposal).join('; ') || 'Protected'}>
+            <Chip
+              size="small"
+              color="warning"
+              variant="outlined"
+              label={
+                requiresAllowProtected(proposal)
+                  ? 'Protected'
+                  : proposal.competition?.status === 'contested'
+                    ? 'Contested'
+                    : 'Protected'
+              }
+              data-testid={`po-auto-link-protected-${proposal.proposal_key}`}
+            />
+          </Tooltip>
+        ) : null}
       </Stack>
       <Stack direction="row" spacing={0.5} flexShrink={0}>
         {dismissed ? (
@@ -615,10 +715,13 @@ function ProposalGroupCard({
   restorePending: boolean;
   applyPending: boolean;
 }) {
-  const selectable = group.proposals.filter((p) => !p.dismissed);
-  const selectedInCard = selectable.filter((p) => selected.has(p.proposal_key));
-  const allSelected = selectable.length > 0 && selectedInCard.length === selectable.length;
-  const someSelected = selectedInCard.length > 0 && !allSelected;
+  const autoSelectable = group.proposals.filter((p) => !p.dismissed && !isSelectionProtected(p));
+  const selectedInCard = group.proposals.filter((p) => !p.dismissed && selected.has(p.proposal_key));
+  const selectedLinkable = selectedInCard.filter((p) => !requiresAllowProtected(p));
+  const allSelected = autoSelectable.length > 0 && autoSelectable.every((p) => selected.has(p.proposal_key));
+  const someSelected =
+    autoSelectable.some((p) => selected.has(p.proposal_key)) && !allSelected;
+  const protectedInCard = group.proposals.filter((p) => !p.dismissed && isSelectionProtected(p));
   const periodLabel = group.case_period_label ?? group.inferred_period_start ?? '—';
   const customerLabel = customerDisplayLabel(group.proposals[0]);
 
@@ -681,10 +784,10 @@ function ProposalGroupCard({
                     size="small"
                     checked={allSelected}
                     indeterminate={someSelected}
-                    disabled={!selectable.length}
+                    disabled={!autoSelectable.length}
                     onChange={() => {
                       if (allSelected) onSelectAllInCard([]);
-                      else onSelectAllInCard(selectable.map((p) => p.proposal_key));
+                      else onSelectAllInCard(autoSelectable.map((p) => p.proposal_key));
                     }}
                     inputProps={
                       { 'data-testid': `po-auto-link-card-select-all-${group.groupKey}` } as InputHTMLAttributes<HTMLInputElement>
@@ -693,14 +796,23 @@ function ProposalGroupCard({
                 }
                 label="Select all in card"
               />
+              {protectedInCard.length > 0 ? (
+                <Typography
+                  variant="caption"
+                  color="warning.main"
+                  data-testid={`po-auto-link-card-excluded-${group.groupKey}`}
+                >
+                  {protectedInCard.length} excluded from select-all (protected/contested — select individually)
+                </Typography>
+              ) : null}
               <Button
                 size="small"
                 variant="contained"
-                disabled={!selectedInCard.length || applyPending}
-                onClick={() => onLinkSelectedInCard(selectedInCard.map((p) => p.proposal_key))}
+                disabled={!selectedLinkable.length || applyPending}
+                onClick={() => onLinkSelectedInCard(selectedLinkable.map((p) => p.proposal_key))}
                 data-testid={`po-auto-link-card-link-${group.groupKey}`}
               >
-                Link selected ({selectedInCard.length})
+                Link selected ({selectedLinkable.length})
               </Button>
             </Stack>
             <Stack spacing={0.5} divider={<Divider flexItem />}>
@@ -740,7 +852,7 @@ type PoAutoLinkApplyProgress = {
 };
 
 async function applyPoAutoLinkInChunks(
-  items: { case_id: number; purchase_order_id: number; notes?: string }[],
+  items: { case_id: number; purchase_order_id: number; notes?: string; allow_protected?: boolean }[],
   notes?: string,
   onProgress?: (progress: PoAutoLinkApplyProgress) => void,
 ): Promise<PoAutoLinkApplyResponse & { newly_linked_count: number }> {
@@ -971,7 +1083,9 @@ export function PoAutoLinkProposalsSection({
   }, [proposalGroups]);
 
   const selectAllHigh = () => {
-    const keys = filteredProposals.filter((p) => p.confidence === 'high' && !p.dismissed).map((p) => p.proposal_key);
+    const keys = filteredProposals
+      .filter((p) => p.confidence === 'high' && !p.dismissed && !isSelectionProtected(p))
+      .map((p) => p.proposal_key);
     setSelected(new Set(keys));
   };
 
@@ -981,32 +1095,55 @@ export function PoAutoLinkProposalsSection({
     setBulkConfirmKeys(keys);
   };
 
-  const bulkConfirmBreakdown = useMemo(() => {
-    if (!bulkConfirmKeys?.length) return [];
-    const counts = new Map<string, number>();
+  const bulkConfirmPartition = useMemo(() => {
+    if (!bulkConfirmKeys?.length) {
+      return { linkable: [] as PoAutoLinkProposal[], excluded: [] as PoAutoLinkProposal[] };
+    }
+    const linkable: PoAutoLinkProposal[] = [];
+    const excluded: PoAutoLinkProposal[] = [];
     for (const key of bulkConfirmKeys) {
       const p = proposalByKey.get(key);
-      const label = p ? customerDisplayLabel(p) : key;
+      if (!p || p.dismissed) continue;
+      // Bulk never sends allow_protected — drop service-guarded targets; contested-only stays.
+      if (requiresAllowProtected(p)) excluded.push(p);
+      else linkable.push(p);
+    }
+    return { linkable, excluded };
+  }, [bulkConfirmKeys, proposalByKey]);
+
+  const bulkConfirmBreakdown = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of bulkConfirmPartition.linkable) {
+      const label = customerDisplayLabel(p);
       counts.set(label, (counts.get(label) ?? 0) + 1);
     }
     return [...counts.entries()]
       .map(([label, count]) => ({ label, count }))
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [bulkConfirmKeys, proposalByKey]);
+  }, [bulkConfirmPartition]);
+
+  const bulkExcludedRows = useMemo(
+    () =>
+      bulkConfirmPartition.excluded.map((p) => ({
+        label: `${customerDisplayLabel(p)} case ${p.case_id} PO ${p.po_number ?? p.purchase_order_id}`,
+        reasons: protectionReasonLabels(p).join(', ') || 'protected',
+      })),
+    [bulkConfirmPartition]
+  );
 
   const executeBulkApply = () => {
-    if (!bulkConfirmKeys?.length) return;
-    const items = bulkConfirmKeys
-      .map((key) => proposalByKey.get(key))
-      .filter((p): p is PoAutoLinkProposal => !!p && !p.dismissed)
-      .map((p) => ({ case_id: p.case_id, purchase_order_id: p.purchase_order_id }));
+    const items = bulkConfirmPartition.linkable.map((p) => ({
+      case_id: p.case_id,
+      purchase_order_id: p.purchase_order_id,
+      // Bulk path NEVER sets allow_protected.
+    }));
     if (!items.length) return;
     setApplyError(null);
     setApplySuccess(null);
     applyMut.mutate({ items });
   };
 
-  const handleSingleConfirm = (notes: string) => {
+  const handleSingleConfirm = (notes: string, allowProtected: boolean) => {
     if (!confirmProposal) return;
     setApplyError(null);
     applyMut.mutate({
@@ -1015,6 +1152,7 @@ export function PoAutoLinkProposalsSection({
           case_id: confirmProposal.case_id,
           purchase_order_id: confirmProposal.purchase_order_id,
           notes: notes.trim() || undefined,
+          ...(allowProtected ? { allow_protected: true } : {}),
         },
       ],
     });
@@ -1213,8 +1351,9 @@ export function PoAutoLinkProposalsSection({
 
       <BulkLinkConfirmDialog
         open={!!bulkConfirmKeys?.length}
-        totalCount={bulkConfirmKeys?.length ?? 0}
+        totalCount={bulkConfirmPartition.linkable.length}
         byCustomer={bulkConfirmBreakdown}
+        excluded={bulkExcludedRows}
         onClose={() => {
           setBulkConfirmKeys(null);
           setApplyError(null);

@@ -116,6 +116,14 @@ class Settings(BaseSettings):
         default=True,
         description="Hard-gate approve/export when over money ceiling (env HARD_ENFORCE_BUDGET).",
     )
+    cip_lineup_protected_case_ids: str = Field(
+        default="",
+        description=(
+            "Optional comma-separated commercial_lineup_case ids protected from bulk "
+            "PO auto-link automation even when still draft_imported (env "
+            "CIP_LINEUP_PROTECTED_CASE_IDS). Config only — never hardcoded in call sites."
+        ),
+    )
 
     @property
     def cors_origin_list(self) -> list[str]:

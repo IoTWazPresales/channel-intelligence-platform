@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_lineup import CommercialLineupPoAutoLinkDismiss
 from app.models.purchase_order import PurchaseOrder
+from app.services.commercial_planner.lineup_case_bulk_protection import CaseProtectedError
 from app.services.commercial_planner.lineup_case_po_confirm import (
     CaseNotFoundError,
     CaseStatusNotConfirmableError,
@@ -89,18 +90,27 @@ async def apply_auto_link_proposals(
     *,
     items: list[dict[str, Any]],
     notes: str | None = None,
+    allow_protected: bool = False,
 ) -> dict[str, Any]:
-    """Link selected proposals via existing confirm path (one PO per case item)."""
+    """Link selected proposals via existing confirm path (one PO per case item).
+
+    Bulk callers must leave ``allow_protected=False`` (default). Deliberate
+    single-item stewarding may pass ``allow_protected=True`` per item or at the
+    batch level when every item is intentional.
+    """
     if not items:
         raise ValueError("At least one proposal item is required")
 
     applied: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
+    skipped_protected: list[dict[str, Any]] = []
 
     for raw in items:
         case_id = int(raw["case_id"])
         purchase_order_id = int(raw["purchase_order_id"])
         item_notes = raw.get("notes") or notes
+        # Per-item override only when explicitly true; bulk UI never sets this.
+        item_allow = bool(raw.get("allow_protected")) or bool(allow_protected)
         try:
             po = await db.get(PurchaseOrder, purchase_order_id)
             if po is None:
@@ -111,6 +121,7 @@ async def apply_auto_link_proposals(
                 purchase_order_id,
                 notes=item_notes,
                 commit=True,
+                allow_protected=item_allow,
             )
             applied.append(
                 {
@@ -119,6 +130,25 @@ async def apply_auto_link_proposals(
                     "po_number": po.po_number_raw,
                     "commercial_status": result.get("commercial_status"),
                     "newly_linked": result.get("newly_linked"),
+                }
+            )
+        except CaseProtectedError as exc:
+            skipped_protected.append(
+                {
+                    "case_id": case_id,
+                    "purchase_order_id": purchase_order_id,
+                    "error": str(exc),
+                    "protection": exc.protection.as_dict(),
+                    "skipped_reason": "protected",
+                }
+            )
+            errors.append(
+                {
+                    "case_id": case_id,
+                    "purchase_order_id": purchase_order_id,
+                    "error": str(exc),
+                    "skipped_reason": "protected",
+                    "protection": exc.protection.as_dict(),
                 }
             )
         except (CaseNotFoundError, CaseStatusNotConfirmableError, ValueError) as exc:
@@ -135,4 +165,6 @@ async def apply_auto_link_proposals(
         "applied_count": len(applied),
         "error_count": len(errors),
         "errors": errors,
+        "skipped_protected": skipped_protected,
+        "skipped_protected_count": len(skipped_protected),
     }

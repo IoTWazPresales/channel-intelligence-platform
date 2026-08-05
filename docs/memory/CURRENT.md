@@ -1,6 +1,6 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-05 (PROGRAM-A Unit 1 in flight — PR#17 split land)
+**Last updated:** 2026-08-05 (PROGRAM-A Unit 2 shipping)
 
 **Branch:** `main`
 
@@ -8,15 +8,21 @@
 
 ## Done
 
-- **§0 Unit3 check:** Computer Mania **is** in case 146 (14 lines). Case 130 supersession retained. Evidence pack NR=Amazon-only incomplete. D-034 correction + same-customer supersession lock.
-- **BACKLOG-108 / D-034** case 146=120 (prior).
+- **Unit 1** VERIFY PASS `7390921` — PR#17 split land.
+- **§0 / Unit 3** prior.
+- **Unit 2 (in commit):** property-based bulk protection + `allow_protected` + select-all exclude; case 145 via `CIP_LINEUP_PROTECTED_CASE_IDS`.
 
-## In progress
+## Printed before Unit 2 implement
 
-- **Unit 1:** progress_at + WoC guard + beat (enabled-only) + budget via `lineup_period_canonical.normalize_period_label` (no dual path).
+| id | commercial_status | po_links | covered by |
+|----|-------------------|----------|------------|
+| 7 | po_issued | 1 | status + links |
+| 90 | po_issued | 23 | status + links |
+| 122 | po_pending | 28 | status + links |
+| 145 | draft_imported | 0 | **config set only** |
 
 ## Next
 
-Unit 1 VERIFY → Unit 2 bulk-select guard (Q-011 answered).
+Unit 2 VERIFY → Unit 4 contested residual (Q-012).
 
-**Env:** local Windows. `cip`.
+**Env:** local Windows. `cip`. Local `.env` has `CIP_LINEUP_PROTECTED_CASE_IDS=145` (not committed).

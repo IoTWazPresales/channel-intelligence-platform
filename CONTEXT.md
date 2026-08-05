@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-05 — **PROGRAM-A Unit 2 (BACKLOG-110/115):** property-based lineup bulk protection (status beyond draft_imported / PO links / contested select-all / CIP_LINEUP_PROTECTED_CASE_IDS); `allow_protected` override bulk never sets; D-033 intact. Case 145 = config-only.
 - 2026-08-05 — **PROGRAM-A Unit 1 (PR#17 split land):** progress_at helper; WoC grain regression test; BACKLOG-098 beat+import fan-out (enabled schedules only; Windows beat still CIP_ENABLE_DEV_BEAT); budget derive via lineup_period_canonical.normalize_period_label (no dual path). §0: CM in case 146 — 130 supersession retained.
 - 2026-08-05 — **PROGRAM-A Unit 3 / BACKLOG-108 / D-034:** slice identity from apply-parser; Sheet1⊆NR excluded; cip case 146 NR 2026 Q3 = 120 lines (was 130/14); case 130 soft-superseded; protected unchanged; BACKLOG-121 parked. Unit 1/2 NEED_HUMAN Q-010/Q-011.
 - 2026-08-05 — **BACKLOG-119 competition detector:** shipment-aware classify (`product_line` BU); live 35 multi-case → 13 contested / 22 multi_bu_shared / 0 indeterminate; FLAG≠BLOCK; D-033; no DB writes. Residual includes PURMIDR26009979 (121/122/128) + cross-period pairs.

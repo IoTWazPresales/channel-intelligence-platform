@@ -105,6 +105,15 @@ def support_norms_trailing_quarters() -> int:
     return _env_int("SUPPORT_NORMS_TRAILING_QUARTERS", SUPPORT_NORMS_TRAILING_QUARTERS)
 
 
+def protected_lineup_case_ids() -> frozenset[int]:
+    """Optional bulk-automation exception ids (env CIP_LINEUP_PROTECTED_CASE_IDS)."""
+    from app.services.commercial_planner.lineup_case_bulk_protection import (
+        protected_lineup_case_ids_from_config,
+    )
+
+    return protected_lineup_case_ids_from_config()
+
+
 def profile_snapshot() -> dict[str, object]:
     """Read-only dict for API payloads / explainability. Re-reads env each call."""
     return {
@@ -115,4 +124,5 @@ def profile_snapshot() -> dict[str, object]:
         "hard_enforce_budget": _env_bool("HARD_ENFORCE_BUDGET", True),
         "money_ceiling_usd": _env_float("MONEY_CEILING_USD"),
         "support_norms_trailing_quarters": support_norms_trailing_quarters(),
+        "protected_lineup_case_ids": sorted(protected_lineup_case_ids()),
     }

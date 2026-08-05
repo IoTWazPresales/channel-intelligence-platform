@@ -122,7 +122,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-03 |
+| **Status / parked** | **Done** · 2026-08-05 (PROGRAM-A Unit 2) |
 | **Effort** | Medium |
 | **Source** | Browser unit: **Select all high** selected **81** including competing POs and survivor cases **7/9/90**; no competition warning; bulk confirm breakdown is customer counts only (`openBulkConfirm` / `bulkConfirmBreakdown` ~L978–995) |
 | **Idea** | Exclude survivors/`po_issued` from select-all; flag or block multi-case same-PO selections; preview competing case ids before apply. |
@@ -132,6 +132,7 @@
 | **Behavior to retain** | Select-all-high for clean solo queues. |
 | **Out of scope** | Auto-supersede from UI. |
 | **TRIGGER** | Before any production bulk accept of residual 92, or with BACKLOG-110. |
+| **Done note** | Property-based `bulk_protection` on proposals; select-all excludes selection_protected; bulk confirm lists excluded; competition chips via payload. |
 
 ---
 
@@ -207,7 +208,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-03 |
+| **Status / parked** | **Done** · 2026-08-05 (PROGRAM-A Unit 2) |
 | **Effort** | Small |
 | **Source** | Steward PO-link unit: acceptable apply linked `PURMIDR26009976` onto survivor case **7** (pols 1→2); reverted by deleting `commercial_lineup_case_po.id=657` |
 | **Idea** | Refuse (or require explicit confirm) auto-link apply when target case is `po_issued` / survivor, unless Warren opts in. |
@@ -217,6 +218,7 @@
 | **Behavior to retain** | Idempotent re-link no-op; multi-PO append on drafts. |
 | **Out of scope** | Changing match engine. |
 | **TRIGGER** | Next auto-link bulk accept session, or Warren asks for survivor protection. |
+| **Done note** | `evaluate_case_bulk_protection` + `allow_protected` override; bulk never sets override. Case 145 (`draft_imported`, 0 links) needs `CIP_LINEUP_PROTECTED_CASE_IDS`. |
 
 ---
 

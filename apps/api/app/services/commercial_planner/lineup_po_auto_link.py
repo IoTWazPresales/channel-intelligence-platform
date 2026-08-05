@@ -39,6 +39,10 @@ from app.services.commercial_planner.lineup_period_canonical import (
     period_filter_matches_period_start,
     quarter_bounds_from_period_start,
 )
+from app.services.commercial_planner.lineup_case_bulk_protection import (
+    evaluate_case_bulk_protection,
+    protected_lineup_case_ids_from_config,
+)
 from app.services.commercial_planner.lineup_po_competition import (
     annotate_proposals_with_competition,
     classify_proposals_competition,
@@ -714,6 +718,25 @@ async def _po_auto_link_proposals_inner(
         ship_products_by_po_norm=dict(ship_products_by_po_norm),
     )
     annotate_proposals_with_competition(out, competition_map)
+    # BACKLOG-110/115 — property-based bulk protection annotation (selection + service).
+    po_link_counts: dict[int, int] = defaultdict(int)
+    for cid, _po_id in linked_pairs:
+        po_link_counts[int(cid)] += 1
+    protected_ids = protected_lineup_case_ids_from_config()
+    for p in out:
+        cid = int(p["case_id"])
+        case = case_by_id.get(cid)
+        comp = p.get("competition") or {}
+        protection = evaluate_case_bulk_protection(
+            case_id=cid,
+            commercial_status=case.commercial_status if case is not None else None,
+            po_link_count=po_link_counts.get(cid, 0),
+            competition_status=comp.get("status") if isinstance(comp, dict) else None,
+            protected_ids=protected_ids,
+        )
+        p["commercial_status"] = case.commercial_status if case is not None else None
+        p["po_link_count"] = po_link_counts.get(cid, 0)
+        p["bulk_protection"] = protection.as_dict()
     competition_summary = {
         "multi_case_po_norms": len(competition_map),
         "contested": sum(1 for c in competition_map.values() if c.status == "contested"),
