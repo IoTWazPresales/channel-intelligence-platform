@@ -356,3 +356,22 @@ NB 2026 Q2 planned 68881→46830. Cases 7/90 untouched.
 **Origin:** BACKLOG-118; Warren W1 2026-08-04; closes D-031 engine gap.
 **Rejected:** move/repoint loser links; hand-written SQL inserts; provenance column migration.
 
+## D-033 · 2026-08-05 · Contested PO requires shipment evidence that fails to explain claims
+**Locked.** Multiple BUs may legitimately share one PO (domain truth). Competition /
+contested classification consults ``fact_inbound_shipment`` + ``dim_product.product_line``
+(never ``business_unit`` / CONSUMER).
+- **not_contested** ``po_multi_bu_shared``: shipment shows ≥2 BUs and each claiming case
+  overlaps shipped products in its own BU.
+- **contested** ``po_competes_same_bu_same_period`` / ``po_competes_cross_period``.
+- **indeterminate** ``po_compete_indeterminate_no_shipment``: stays visible; never
+  silently cleared; never hard-blocks.
+- FLAG ≠ BLOCK: ``competition.blocks_apply`` is always false; apply/link ignores it.
+- Shared function: ``classify_po_competition`` / ``classify_proposals_competition``
+  in ``lineup_po_competition.py``; wired into ``po_auto_link_proposals`` (preload only —
+  no per-row queries in the classify loop).
+**Live on cip after 9→122:** multi-case norms 35 → contested **13** / multi_bu_shared **22**
+/ indeterminate **0**. Match key unchanged. No acceptances in the detector unit.
+**Origin:** BACKLOG-119; Warren 2026-08-05.
+**Rejected:** BU from ``business_unit``; treating multi-BU share as conflict; gating apply
+on contested; trusting stale warren-queue JSON.
+

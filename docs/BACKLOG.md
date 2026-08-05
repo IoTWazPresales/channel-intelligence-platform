@@ -17,7 +17,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-04 |
+| **Status / parked** | **Closed** · 2026-08-05 · shipped D-033 |
 | **Effort** | Medium |
 | **Source** | 9→122 unit Phase D: 33 competing PO norms; refined vs shipment product∩lineup: **25** class (a) multi-BU legitimate (NB+NR both hit shipped products), **7** cross-period, **1** same-BU same-period (`PURMIDR26009979` / 9·121·122·128). Detector = residual classifier `len(cases for po_norm)>1` (`.tmp/clear_211_queue.py` ~524–536); propose engine emits multi-case proposals without shipment consult |
 | **Idea** | When classifying “competition”, consult shipment product evidence: if ≥2 claiming cases each overlap shipped products on that PO and BUs differ, treat as multi-BU share (not a pick-one conflict). Keep genuine same-BU / cross-period queues. |
@@ -27,6 +27,7 @@
 | **Behavior to retain** | CRAD-primary key; BU not in key; multiple proposals per PO allowed. |
 | **Out of scope** | Changing propose SQL; bulk-select guard (115/110). |
 | **TRIGGER** | Immediate — 118 + 9→122 landed; or Warren starts residual competition triage. |
+| **Closed** | Live re-derive after 9→122: 35 multi-case → **13 contested** / **22 multi_bu_shared** / 0 indeterminate. `lineup_po_competition.py` + wire in `po_auto_link_proposals`. D-033. Residual decision list in CONTEXT. UI chip polish still optional (BACKLOG-113). |
 
 ---
 

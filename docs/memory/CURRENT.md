@@ -1,6 +1,6 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-04 (BACKLOG-118 PO-link carry + 9→122 + f3)
+**Last updated:** 2026-08-05 (BACKLOG-119 shipment-aware competition detector)
 
 **Branch:** `main`
 
@@ -8,13 +8,12 @@
 
 ## Done
 
-- **BACKLOG-118 / D-032:** `soft_supersede_lineup_case` + `carry_case_po_links_on_supersession` (copy-not-move, idempotent, same txn). Wired into `lineup_bulk_backfill_apply` existing-case supersede. Clone `cip_po_carry_smoke` C2–C6 PASS.
-- **9→122 on cip:** case 9 superseded; 28/28 PO links copied to 122 (set-diff empty); loser rows preserved; NB 2026 Q2 planned **68881→46830**. Cases **7/90** unchanged. Case count was 34 → then **35** after f3.
-- **f3:** targeted preview+apply (session 791, not wholesale 752) with `manual_period_label=2025 Q4` → case **145** NB 2025 Q4, 185 lines, period_source=manual. Q4-only (no month_split — parity with other quarter cases); not uniform_half. Product overlap with case 118 (NB 2025 Q3): **41** shared / 79 vs 76 products — evidence only.
+- **BACKLOG-119 / D-033:** `lineup_po_competition.py` classifies multi-case PO proposals via shipment `product_line` BU. Wired into `po_auto_link_proposals` (annotation only; FLAG≠BLOCK). Live cip: multi-case **35** → contested **13** / multi_bu_shared **22** / indeterminate **0**. No accepts/dismisses/supersessions. Cases 7/90/122/145 + case/link counts unchanged. Consumers planned_units delta 0.
+- Prior: BACKLOG-118 carry + 9→122 + f3 case 145.
 
 ## Next
 
-1. **BACKLOG-119** — residual competition triage (25 multi-BU phantom + 7 cross-period + `PURMIDR26009979`; cases 121/128 still live NB 2026 Q2 with 5 links each).
-2. Optional BACKLOG-120 notes-provenance column if steward notes collide.
+1. Warren triage of the **13 contested** residual (see CONTEXT / D2 list) — notably `PURMIDR26009979` (121/122/128 NB 26Q2) and cross-period pairs.
+2. Optional: UI chips for competition status (BACKLOG-113); bulk-select guard (115/110).
 
 **Env:** local Windows. `cip`.

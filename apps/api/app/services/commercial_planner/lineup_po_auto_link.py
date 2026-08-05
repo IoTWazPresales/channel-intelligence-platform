@@ -39,6 +39,10 @@ from app.services.commercial_planner.lineup_period_canonical import (
     period_filter_matches_period_start,
     quarter_bounds_from_period_start,
 )
+from app.services.commercial_planner.lineup_po_competition import (
+    annotate_proposals_with_competition,
+    classify_proposals_competition,
+)
 
 
 def evidence_date_for_period_match(
@@ -569,16 +573,23 @@ async def _po_auto_link_proposals_inner(
         )
 
     product_ids = sorted({m.product_id for acc in proposals_map.values() for m in acc.products.values()})
+    # Also need product_line for every shipped product (competition classifier BU grain).
+    ship_product_ids = sorted(
+        {int(s.product_id) for s in shipment_rows if s.product_id is not None}
+    )
+    product_lookup_ids = sorted(set(product_ids) | set(ship_product_ids))
     prod_meta: dict[int, dict[str, str | None]] = {}
-    if product_ids:
-        for pid, sku, smn, mname in (
+    product_line_by_id: dict[int, str] = {}
+    if product_lookup_ids:
+        for pid, sku, smn, mname, pline in (
             await db.execute(
                 select(
                     DimProduct.id,
                     DimProduct.sku,
                     DimProduct.sales_model_name,
                     DimProduct.marketing_name,
-                ).where(DimProduct.id.in_(product_ids))
+                    DimProduct.product_line,
+                ).where(DimProduct.id.in_(product_lookup_ids))
             )
         ).all():
             prod_meta[int(pid)] = {
@@ -586,6 +597,8 @@ async def _po_auto_link_proposals_inner(
                 "sales_model_name": str(smn) if smn is not None else None,
                 "marketing_name": str(mname) if mname is not None else None,
             }
+            if pline is not None and str(pline).strip():
+                product_line_by_id[int(pid)] = str(pline).strip().upper()
 
     cust_ids = sorted({p.customer_id for p in proposals_map.values() if p.customer_id is not None})
     dist_ids = sorted({p.distributor_id for p in proposals_map.values() if p.distributor_id is not None})
@@ -667,6 +680,49 @@ async def _po_auto_link_proposals_inner(
         )
 
     total = len(out)
+
+    # BACKLOG-119: competition annotation from preloaded shipment product_line maps
+    # (zero per-row queries — reuses shipment_rows + one DimProduct select above).
+    case_meta: dict[int, dict[str, Any]] = {
+        cid: {
+            "bu": (c.business_unit or c.product_line),
+            "inferred_period_start": c.inferred_period_start,
+            "period_label": c.period_label,
+        }
+        for cid, c in case_by_id.items()
+    }
+    case_product_ids: dict[int, set[int]] = {
+        cid: {int(ln.product_id) for ln in lines if ln.product_id is not None}
+        for cid, lines in lineup_by_case.items()
+    }
+    ship_products_by_po_norm: dict[str, dict[int, str]] = defaultdict(dict)
+    for ship in shipment_rows:
+        if ship.purchase_order_id is None or ship.product_id is None:
+            continue
+        po_id = int(ship.purchase_order_id)
+        norm = po_norm_by_id.get(po_id)
+        if not norm:
+            continue
+        pid = int(ship.product_id)
+        bu = product_line_by_id.get(pid)
+        if bu:
+            ship_products_by_po_norm[norm][pid] = bu
+    competition_map = classify_proposals_competition(
+        out,
+        case_meta=case_meta,
+        case_product_ids=case_product_ids,
+        ship_products_by_po_norm=dict(ship_products_by_po_norm),
+    )
+    annotate_proposals_with_competition(out, competition_map)
+    competition_summary = {
+        "multi_case_po_norms": len(competition_map),
+        "contested": sum(1 for c in competition_map.values() if c.status == "contested"),
+        "not_contested_multi_bu_shared": sum(
+            1 for c in competition_map.values() if c.status == "not_contested"
+        ),
+        "indeterminate": sum(1 for c in competition_map.values() if c.status == "indeterminate"),
+    }
+
     if limit > 0:
         out = out[: int(limit)]
 
@@ -694,4 +750,5 @@ async def _po_auto_link_proposals_inner(
         "dismissed_count": len(dismissed_keys),
         "group_coverage": list(group_coverage.values()),
         "group_coverage_by_key": group_coverage,
+        "competition_summary": competition_summary,
     }
