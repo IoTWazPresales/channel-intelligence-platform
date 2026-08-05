@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-05 — **PROGRAM-A Unit 5a VERIFY PASS** `e590897`/`c503e92` (Opus): V1 (a)×5 (target seams) / (b)×1 async slot; V2 target-apply UNPROVEN→BACKLOG-123; 5b will not validate target. Next Unit 5b PoAutoLink migrate.
 - 2026-08-05 — **PROGRAM-A Unit 5a landed** `e590897`: ResolutionWorklist contract + fixtures (PO vs merge/promote target selection); D-036; BACKLOG-123. Awaiting Opus VERIFY. Next 5b on PASS.
 - 2026-08-05 — **PROGRAM-A Unit 5a IMPLEMENT:** `steward-worklist/` ResolutionWorklist contract + component + PO vs merge/promote fixtures (target selection); D-036; BACKLOG-123; vitest 9/9. No consumer migrated. Awaiting VERIFY. Next 5b on PASS.
 - 2026-08-05 — **PROGRAM-A Unit 4 VERIFY PASS** `86f8071` (Opus): contested 13→2 proven on cip; D-035/Q-013/Q-014/BACKLOG-122. Next Unit 5 PoAutoLink steward (BACKLOG-106).
