@@ -752,7 +752,7 @@ function ProposalGroupCard({
             <Chip
               size="small"
               variant="outlined"
-              label={`${selectedInCard.length} of ${selectable.length} selected`}
+              label={`${selectedInCard.length} of ${group.proposals.filter((p) => !p.dismissed).length} selected`}
               data-testid={`po-auto-link-group-selection-${group.groupKey}`}
             />
           </Stack>
