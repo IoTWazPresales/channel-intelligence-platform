@@ -1,14 +1,14 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-05 (PROGRAM-A Unit 5a IMPLEMENT — awaiting VERIFY)
+**Last updated:** 2026-08-05 (PROGRAM-A Unit 5a landed — awaiting VERIFY)
 
-**Branch:** `main` @ `7a40e73` (5a uncommitted until asked)
+**Branch:** `main` @ `e590897`
 
 **Alembic:** `20260802_0009` (unchanged)
 
 ## Done
 
-- **Unit 5a** ResolutionWorklist presentation contract + component + PO/merge fixtures under `apps/web/src/features/steward-worklist/`. D-036. BACKLOG-123. No consumer migrated. Vitest 9/9.
+- **Unit 5a** `e590897` ResolutionWorklist presentation contract + component + PO/merge fixtures under `apps/web/src/features/steward-worklist/`. D-036. BACKLOG-123. No consumer migrated. Vitest 9/9.
 - **Unit 4** `86f8071` contested residual — VERIFY PASS. Contested 13→2; Q-013/Q-014; D-035.
 - Units 1–3 as before.
 

@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-05 — **PROGRAM-A Unit 5a landed** `e590897`: ResolutionWorklist contract + fixtures (PO vs merge/promote target selection); D-036; BACKLOG-123. Awaiting Opus VERIFY. Next 5b on PASS.
 - 2026-08-05 — **PROGRAM-A Unit 5a IMPLEMENT:** `steward-worklist/` ResolutionWorklist contract + component + PO vs merge/promote fixtures (target selection); D-036; BACKLOG-123; vitest 9/9. No consumer migrated. Awaiting VERIFY. Next 5b on PASS.
 - 2026-08-05 — **PROGRAM-A Unit 4 VERIFY PASS** `86f8071` (Opus): contested 13→2 proven on cip; D-035/Q-013/Q-014/BACKLOG-122. Next Unit 5 PoAutoLink steward (BACKLOG-106).
 - 2026-08-05 — **PROGRAM-A Unit 4 complete:** W1+C1 24 links (contested 13→2); W2=0; W3 C2 in-BU ties → Q-013/Q-014 (no auto-pick); D-035 disposition layer; BACKLOG-122 parked. Next Unit 5.
