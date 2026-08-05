@@ -428,3 +428,35 @@ tied → Q-013/Q-014. Clone-first on ``cip_unit4_smoke``.
 **Rejected:** extending D-030 across periods; disposition column; auto-picking W3 ties;
 reclassifying cross-period out of contested in the detector; bulk-through-protection.
 
+## D-036 · 2026-08-05 · ResolutionWorklist presentation contract (extract before PO pilot)
+**Locked.** Extract a presentation-only `ResolutionWorklist` under
+`apps/web/src/features/steward-worklist/`, distinct from the import-job engine
+(`useStewardResolutionPlan` / `importJobId`). Contract is designed against the
+Phase-0 seam table of **nine** surveyed consumers: PoAutoLinkProposalsSection
+(pilot in Unit 5b), CustomerPromoteDialog, CustomerBulkPromoteDialog,
+DistributorPromoteDialog, DistributorBulkPromoteDialog, Distributor-merge
+auto-link grid (**mandated 2nd consumer**), DSI receipt-ambiguous (stays on
+import engine), Catalogue-gap worklist, Unit-4 disposition triage.
+- **Identity** is opaque per consumer (`getItemKey`); PO will use composite
+  `(case_id, purchase_order_id)` at apply time — no new table / Alembic.
+- **Promote/merge verbs + target selection** are first-class contract seams
+  (`requiresTarget`, `targets`, `ResolutionTargetSelection`, `renderTargetPicker`)
+  even though PO never exercises them. Designing against PO alone is rejected.
+- **Async apply** is a **contract slot** (`ResolutionAsyncApplyAdapter`) —
+  unimplemented for PO.
+- **S10 waiver (verbatim):** *Warren waived S10 2026-08-05: PoAutoLink apply is
+  bounded, fast, per-item DB writes with no file parse. The async import-job
+  substrate solves a problem this surface does not have, and building a parallel
+  one risks repeating BACKLOG-101 lifecycle defects.* Non-waived conditions:
+  per-item idempotent apply, per-item partial-success (S13), mid-batch failure
+  resumable without redoing completed items, report p95 apply time + max batch
+  size. Revisit: batch >500 or p95 >30s → BACKLOG.
+- **Unit split:** 5a = extract contract + component + fixtures (no consumer
+  migrated). 5b = migrate PoAutoLink onto the contract and grade S1–S14 (only
+  S10 waived).
+**Origin:** PROGRAM-A Unit 5 CONSULT; Warren answers 2026-08-05; BACKLOG-106.
+**Rejected:** genericizing `useStewardResolutionPlan` off `importJobId`; skipping
+componentization; building a parallel async task-slot for PO; designing the
+contract against PO alone; bundling 5a+5b in one PR.
+
+

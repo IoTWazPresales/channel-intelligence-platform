@@ -13,6 +13,23 @@
 **P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
+## BACKLOG-123 — Migrate promote/merge surfaces onto ResolutionWorklist
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-05 |
+| **Effort** | Large |
+| **Source** | PROGRAM-A Unit 5a / D-036; Phase-0 seam rows 2–6; CONSULT mandate that distributor-merge auto-link grid is the **2nd consumer** validating the non-PO contract seams (target selection + async slot). |
+| **Idea** | After PO pilot (Unit 5b) proves the presentation contract, migrate (in order): (1) distributor-merge auto-link grid when built — exercises `requiresTarget` + `ResolutionAsyncApplyAdapter`; (2) CustomerPromoteDialog; (3) CustomerBulkPromoteDialog; (4) DistributorPromoteDialog; (5) DistributorBulkPromoteDialog. |
+| **Why it matters / deferrable** | Four promote dialogs + merge grid are bespoke today; leaving them off the shared worklist re-fossils PO-shaped naming. Deferrable until 5b VERIFY PASS and merge grid exists (or promote UX rewrite is scheduled). |
+| **What the work is** | Mount `ResolutionWorklist` with promote/merge actions (`requiresTarget`, `targets`, `renderTargetPicker`); wire sync adapters (chunk 500 for bulk) or async Celery for merge; retire bespoke dialog shells once parity proven. |
+| **Regression traps** | Do not genericize `importJobId` engine; never auto-create master on promote/merge; do not invent importer-prefixed files under `features/import-steward/`; keep Unit-2 protection semantics if any contested rows appear. |
+| **Behavior to retain** | Preview→Promote confirm false→true; TMP visibility; merge survivor selection; FLAG≠BLOCK. |
+| **Out of scope** | Migrating promote/merge inside Unit 5a or 5b; absorbing DSI into this contract. |
+| **TRIGGER** | Unit 5b VERIFY PASS **and** (distributor-merge auto-link grid is built **or** Warren schedules promote-dialog UX rewrite). Also resume S10 slot build when merge grid needs Celery, or if PO batch >500 / p95 apply >30s. |
+
+---
+
 ## BACKLOG-122 — W2 same-customer predicate uses majority line customer (no case.customer_id)
 
 | Field | Detail |
