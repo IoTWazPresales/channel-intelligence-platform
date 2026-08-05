@@ -17,6 +17,9 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-05 — **PROGRAM-A Unit 4 complete:** W1+C1 24 links (contested 13→2); W2=0; W3 C2 in-BU ties → Q-013/Q-014 (no auto-pick); D-035 disposition layer; BACKLOG-122 parked. Next Unit 5.
+- 2026-08-05 — **PROGRAM-A Unit 4 W1 on cip:** 24 links (6 slip + 5 leave_live accept-both C1); contested 13→2; clone-first `cip_unit4_smoke`. Remaining W3×2. BACKLOG-122 parked.
+- 2026-08-05 — **PROGRAM-A Unit 4 discovery** (A1/A2/A3): live contested **13/22/0** (Δ0; Unit 3 146/130 named); W1×6 W3-cand×2 leave×5 W2×0; pause before W1. CURRENT pin → `8625874`.
 - 2026-08-05 — **PROGRAM-A Unit 2 VERIFY PASS** `0c97047` (land `d7a514a` + selectable chip smoke fix): BACKLOG-110/115 property-based bulk protection; browser smoke Protected/exclude-from-select-all. Next Unit 4 (Q-012).
 - 2026-08-05 — **PROGRAM-A Unit 2 (BACKLOG-110/115):** property-based lineup bulk protection (status beyond draft_imported / PO links / contested select-all / CIP_LINEUP_PROTECTED_CASE_IDS); `allow_protected` override bulk never sets; D-033 intact. Case 145 = config-only.
 - 2026-08-05 — **PROGRAM-A Unit 1 (PR#17 split land):** progress_at helper; WoC grain regression test; BACKLOG-098 beat+import fan-out (enabled schedules only; Windows beat still CIP_ENABLE_DEV_BEAT); budget derive via lineup_period_canonical.normalize_period_label (no dual path). §0: CM in case 146 — 130 supersession retained.

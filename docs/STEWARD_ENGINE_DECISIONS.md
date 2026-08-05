@@ -405,3 +405,26 @@ inside 146 (Sheet1 ⊆ NR content identity from Unit 3 discovery). Supersession 
 different customer is never a revision. Subset-sheet exclusion remains correct for
 Sheet1⊆NR; do not supersede across distinct majority customers without that lock.
 
+## D-035 · 2026-08-05 · Contested residual disposition is a live layer over D-033
+**Locked.** Unit 4 contested-residual triage is a **live-computed disposition layer** on
+top of the D-033 detector — never a persisted status/column/table. Detector reasons stay
+factual; disposition routes resolution through existing rails only.
+- **W1** ``po_competes_cross_period`` (non coverage-hole) → accept claiming links, keep
+  quarters, annotate ``contested_cross_period:slip`` (A1-08 slip; no new metric; no supersede).
+- **leave_live / coverage hole** (cross-period + diff-BU + diff-name) → **accept all**
+  claiming links + annotate ``contested_leave_live:…`` (Q-012/C1 — not-a-conflict, not
+  “leave unlinked”).
+- **W2** same-period prefix revision → soft-supersede (D-030/D-032) only when same stripped
+  base **and** same period **and SAME CUSTOMER** (hard). W2 beats protection with
+  **individual print** only — never bulk. Cross-period never uses W2 (→ W1).
+- **W3** same-BU same-period → product-level ``fact_inbound_shipment`` **within contested BU
+  only** (C2). Unique in-BU explainer wins (confirm + print if protected). Loser =
+  contested-pending (no supersede, no unlink). Tie → OPEN_QUESTIONS (no auto-pick /
+  no invented max-overlap/recency ordering).
+- **No schema**, no new metric, no detector reclassification.
+**Proven (cip Unit 4):** contested 13→2 after W1+C1 (24 links); W2=0; W3 both residual POs
+tied → Q-013/Q-014. Clone-first on ``cip_unit4_smoke``.
+**Origin:** PROGRAM-A Unit 4; Q-012; Warren A1/A2/A3/C1/C2 2026-08-05.
+**Rejected:** extending D-030 across periods; disposition column; auto-picking W3 ties;
+reclassifying cross-period out of contested in the detector; bulk-through-protection.
+

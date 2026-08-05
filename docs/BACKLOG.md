@@ -13,6 +13,23 @@
 **P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
+## BACKLOG-122 — W2 same-customer predicate uses majority line customer (no case.customer_id)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-05 |
+| **Effort** | Small–Medium |
+| **Source** | PROGRAM-A Unit 4 discovery: `commercial_lineup_case` has no `customer_id` column; W2 A1 same-customer hard predicate resolves via majority `commercial_lineup_line.customer_id`. A mixed-customer case could pass on majority alone. W2=0 today so not live. |
+| **Idea** | Strengthen W2 customer equality: require identical customer *sets* (or explicit single-customer cases only), and/or add a case-level customer identity when the domain warrants it — without inventing silent auto-create. |
+| **Why it matters / deferrable** | Majority-only can mis-classify a multi-customer file as same-customer for prefix supersession. Deferrable while no W2 candidates exist. |
+| **What the work is** | When W2 fires: compare full customer distributions (or refuse W2 when either case has >1 non-null customer); optional schema only if Warren approves. |
+| **Regression traps** | Do not treat null-majority open-channel as a shared customer without OPEN_CHANNEL canon rules; do not weaken A1 hard predicate. |
+| **Behavior to retain** | A1: same stripped base + same period + SAME CUSTOMER; differing → leave_live accept-both. |
+| **Out of scope** | Fixing this before the first real W2 candidate pair. |
+| **TRIGGER** | First time Unit 4 / contested residual W2 produces a candidate pair. |
+
+---
+
 ## BACKLOG-121 — Non-split sheets: preview row_count from parser #1 vs apply parser #2
 
 | Field | Detail |
