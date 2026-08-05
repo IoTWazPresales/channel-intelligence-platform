@@ -150,6 +150,8 @@ export type ResolutionWorklistProps<TItem, TBucketId extends string = string> = 
   onBucketChange?: (id: TBucketId) => void;
 
   groupBy?: (item: TItem) => string;
+  /** When true, group rows are hidden but renderGroupHeader still renders (PO card collapse). */
+  isGroupCollapsed?: (groupKey: string) => boolean;
   renderGroupHeader?: (groupKey: string, items: TItem[]) => ReactNode;
   renderRow: (
     item: TItem,
@@ -200,6 +202,8 @@ export type ResolutionWorklistProps<TItem, TBucketId extends string = string> = 
   renderToolbar?: () => ReactNode;
 
   rootTestId?: string;
+  /** Override default `${rootTestId}-row-check-${key}` checkbox test id. */
+  getCheckboxTestId?: (key: WorkItemKey) => string;
   emptyState?: ReactNode;
   bordered?: boolean;
 };

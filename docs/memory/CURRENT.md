@@ -1,19 +1,19 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-05 (PROGRAM-A Unit 5a VERIFY PASS)
+**Last updated:** 2026-08-05 (PROGRAM-A Unit 5b IMPLEMENT — awaiting commit/VERIFY)
 
-**Branch:** `main` @ `a4c428c` (feature `e590897`)
+**Branch:** `main` @ `3419d64` (+ uncommitted 5b)
 
 **Alembic:** `20260802_0009` (unchanged)
 
 ## Done
 
-- **Unit 5a** `e590897` / pin `c503e92` — Opus VERIFY **PASS**. ResolutionWorklist contract extract; V1 (a)×5 / (b)×1; V2 target-apply UNPROVEN → BACKLOG-123. No consumer migrated.
-- **Unit 4** `86f8071` contested residual — VERIFY PASS. Contested 13→2; Q-013/Q-014; D-035.
-- Units 1–3 as before.
+- **Unit 5b** (uncommitted) PoAutoLink migrated onto `ResolutionWorklist`: S2 buckets, residual-inclusive period default, S7 exact-PO manual link + `GET …/exact-po`, drawer-on-review. Vitest **32/32**. Report `.tmp/unit5b_cursor_report.md`. S10 waived.
+- **Unit 5a** `e590897` Opus VERIFY PASS. Contract extract; V1 (a)×5/(b)×1; V2 target-apply UNPROVEN→BACKLOG-123.
+- **Unit 4** `86f8071` contested residual — VERIFY PASS.
 
 ## Next
 
-**Unit 5b** migrate PoAutoLink onto ResolutionWorklist (S10 waived; full S1–S14). Prompt: `.tmp/unit5b_cursor_prompt.md`. Do not start until ready; 5b will **not** validate `opts.target`.
+Commit + push Unit 5b → Opus VERIFY (S1–S14; only S10 waived). Do not validate `opts.target` in 5b.
 
 **Env:** local Windows. `cip`. Local `.env`: `CIP_LINEUP_PROTECTED_CASE_IDS=145` (not committed).

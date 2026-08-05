@@ -37,6 +37,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState, type InputHTMLAttributes } from 'react';
 
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
+import {
+  ResolutionWorklist,
+  type WorkItemProtection,
+} from '@/features/steward-worklist';
 
 import { PoDismissReasonDialog } from './PoDismissReasonDialog';
 import { currentQuarterLabel } from './poPeriodUtils';
@@ -113,6 +117,38 @@ function isSelectionProtected(p: PoAutoLinkProposal): boolean {
 
 function requiresAllowProtected(p: PoAutoLinkProposal): boolean {
   return Boolean(p.bulk_protection?.requires_allow_protected);
+}
+
+function isContested(p: PoAutoLinkProposal): boolean {
+  return Boolean(p.bulk_protection?.contested || p.competition?.status === 'contested');
+}
+
+function toWorkItemProtection(p: PoAutoLinkProposal): WorkItemProtection | null {
+  const bp = p.bulk_protection;
+  const contested = isContested(p);
+  if (!bp && !contested) return null;
+  return {
+    selectionProtected: Boolean(bp?.selection_protected || contested),
+    requiresOverride: Boolean(bp?.requires_allow_protected),
+    contested,
+    reasonLabels: protectionReasonLabels(p),
+  };
+}
+
+type PoAutoLinkBucketId = 'all' | 'contested' | 'clean' | 'high' | 'medium';
+
+function matchesBucket(p: PoAutoLinkProposal, bucket: PoAutoLinkBucketId): boolean {
+  if (bucket === 'all') return true;
+  if (bucket === 'high') return p.confidence === 'high';
+  if (bucket === 'medium') return p.confidence === 'medium';
+  if (bucket === 'contested') return isContested(p);
+  if (bucket === 'clean') return !isContested(p);
+  return true;
+}
+
+function proposalGroupKey(p: PoAutoLinkProposal): string {
+  const period = p.case_period_label ?? p.inferred_period_start ?? '';
+  return `${period}|${p.customer_id ?? 'null'}`;
 }
 
 type GroupCoverageEntry = {
@@ -243,8 +279,7 @@ export function buildProposalGroups(
 ): PoAutoLinkProposalGroup[] {
   const groups = new Map<string, PoAutoLinkProposal[]>();
   for (const p of proposals) {
-    const period = p.case_period_label ?? p.inferred_period_start ?? '';
-    const key = `${period}|${p.customer_id ?? 'null'}`;
+    const key = proposalGroupKey(p);
     const bucket = groups.get(key) ?? [];
     bucket.push(p);
     groups.set(key, bucket);
@@ -588,18 +623,30 @@ function CoverageLine({
   );
 }
 
-function ProposalRow({
+function CompetitionChip({ proposal }: { proposal: PoAutoLinkProposal }) {
+  const comp = proposal.competition;
+  if (!comp?.status || comp.status === 'not_contested') return null;
+  const label =
+    comp.status === 'contested'
+      ? 'Competition: contested'
+      : comp.status === 'indeterminate'
+        ? 'Competition: indeterminate'
+        : `Competition: ${comp.status}`;
+  return (
+    <Tooltip title={comp.reason ?? label}>
+      <Chip size="small" variant="outlined" color="warning" label={label} />
+    </Tooltip>
+  );
+}
+
+function PoAutoLinkProposalRowContent({
   proposal,
-  selected,
-  onToggleSelect,
   onReview,
   onDismiss,
   onRestore,
   restorePending,
 }: {
   proposal: PoAutoLinkProposal;
-  selected: boolean;
-  onToggleSelect: () => void;
   onReview: () => void;
   onDismiss: () => void;
   onRestore: () => void;
@@ -618,17 +665,10 @@ function ProposalRow({
         borderRadius: 1,
         opacity: dismissed ? 0.55 : 1,
         bgcolor: dismissed ? 'action.hover' : 'transparent',
+        flex: 1,
       }}
-      data-testid={`po-auto-link-row-${proposal.proposal_key}`}
     >
       <Stack direction="row" spacing={1} alignItems="center" flex={1} flexWrap="wrap" useFlexGap>
-        <Checkbox
-          size="small"
-          checked={selected}
-          disabled={dismissed}
-          onChange={onToggleSelect}
-          inputProps={{ 'data-testid': `po-auto-link-select-${proposal.proposal_key}` } as InputHTMLAttributes<HTMLInputElement>}
-        />
         <Tooltip title={reasonLabel(proposal.reason)}>
           <Chip size="small" color={confidenceColor(proposal.confidence)} label={proposal.confidence} />
         </Tooltip>
@@ -650,6 +690,7 @@ function ProposalRow({
           ) : null}
         </Typography>
         <MatchedProductsChip products={proposal.matched_products} />
+        <CompetitionChip proposal={proposal} />
         {isSelectionProtected(proposal) ? (
           <Tooltip title={protectionReasonLabels(proposal).join('; ') || 'Protected'}>
             <Chip
@@ -688,31 +729,21 @@ function ProposalRow({
   );
 }
 
-function ProposalGroupCard({
+function PoAutoLinkGroupHeader({
   group,
   expanded,
   onToggleExpanded,
   selected,
-  onToggleProposal,
   onSelectAllInCard,
   onLinkSelectedInCard,
-  onReview,
-  onDismiss,
-  onRestore,
-  restorePending,
   applyPending,
 }: {
   group: PoAutoLinkProposalGroup;
   expanded: boolean;
   onToggleExpanded: () => void;
   selected: Set<string>;
-  onToggleProposal: (key: string) => void;
   onSelectAllInCard: (keys: string[]) => void;
   onLinkSelectedInCard: (keys: string[]) => void;
-  onReview: (p: PoAutoLinkProposal) => void;
-  onDismiss: (p: PoAutoLinkProposal) => void;
-  onRestore: (key: string) => void;
-  restorePending: boolean;
   applyPending: boolean;
 }) {
   const autoSelectable = group.proposals.filter((p) => !p.dismissed && !isSelectionProtected(p));
@@ -726,7 +757,7 @@ function ProposalGroupCard({
   const customerLabel = customerDisplayLabel(group.proposals[0]);
 
   return (
-    <Card variant="outlined" data-testid={`po-auto-link-group-card-${group.groupKey}`}>
+    <Card variant="outlined" data-testid={`po-auto-link-group-card-${group.groupKey}`} sx={{ mb: 1 }}>
       <CardContent sx={{ pb: expanded ? 2 : '16px !important' }}>
         <Stack spacing={1}>
           <Stack
@@ -815,26 +846,13 @@ function ProposalGroupCard({
                 Link selected ({selectedLinkable.length})
               </Button>
             </Stack>
-            <Stack spacing={0.5} divider={<Divider flexItem />}>
-              {group.proposals.map((p) => (
-                <ProposalRow
-                  key={p.proposal_key}
-                  proposal={p}
-                  selected={selected.has(p.proposal_key)}
-                  onToggleSelect={() => onToggleProposal(p.proposal_key)}
-                  onReview={() => onReview(p)}
-                  onDismiss={() => onDismiss(p)}
-                  onRestore={() => onRestore(p.proposal_key)}
-                  restorePending={restorePending}
-                />
-              ))}
-            </Stack>
           </Collapse>
         </Stack>
       </CardContent>
     </Card>
   );
 }
+
 const PO_AUTO_LINK_APPLY_CHUNK = 100;
 
 type PoAutoLinkApplyResponse = {
@@ -892,7 +910,6 @@ async function applyPoAutoLinkInChunks(
 
 export const PO_AUTO_LINK_SECTION_ID = 'po-auto-link-section';
 
-
 type PoAutoLinkProposalsSectionProps = {
   /** Prefetch proposals on mount and auto-expand when pending count &gt; 0. */
   autoFetch?: boolean;
@@ -906,11 +923,14 @@ export function PoAutoLinkProposalsSection({
   const qc = useQueryClient();
   const [expanded, setExpanded] = useState(false);
   const manualCollapseRef = useRef(false);
-  const [period, setPeriod] = useState(() => currentQuarterLabel());
+  const [period, setPeriod] = useState('');
   const [confidence, setConfidence] = useState<'all' | 'high' | 'medium'>('all');
   const [customerFilter, setCustomerFilter] = useState('');
+  const [debouncedCustomer, setDebouncedCustomer] = useState('');
+  const [bucket, setBucket] = useState<PoAutoLinkBucketId>('all');
   const [showDismissed, setShowDismissed] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [drawerKey, setDrawerKey] = useState<string | null>(null);
   const [confirmProposal, setConfirmProposal] = useState<PoAutoLinkProposal | null>(null);
   const [bulkConfirmKeys, setBulkConfirmKeys] = useState<string[] | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
@@ -918,6 +938,18 @@ export function PoAutoLinkProposalsSection({
   const [applyProgress, setApplyProgress] = useState<PoAutoLinkApplyProgress | null>(null);
   const [dismissTarget, setDismissTarget] = useState<PoAutoLinkProposal | null>(null);
   const [cardExpanded, setCardExpanded] = useState<Record<string, boolean>>({});
+  const [manualCaseId, setManualCaseId] = useState('');
+  const [manualPoNumber, setManualPoNumber] = useState('');
+  const [manualError, setManualError] = useState<string | null>(null);
+  const [manualPending, setManualPending] = useState(false);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedCustomer(customerFilter), 300);
+    return () => window.clearTimeout(handle);
+  }, [customerFilter]);
+
+  const filtersAtDefault =
+    period === '' && confidence === 'all' && customerFilter === '' && bucket === 'all';
 
   const queryKey = ['po-auto-link', period, confidence, showDismissed] as const;
 
@@ -937,7 +969,7 @@ export function PoAutoLinkProposalsSection({
   });
 
   const applyMut = useMutation({
-    mutationFn: (vars: { items: { case_id: number; purchase_order_id: number; notes?: string }[]; notes?: string }) =>
+    mutationFn: (vars: { items: { case_id: number; purchase_order_id: number; notes?: string; allow_protected?: boolean }[]; notes?: string }) =>
       applyPoAutoLinkInChunks(vars.items, vars.notes, setApplyProgress),
     onSuccess: (data: {
       applied_count?: number;
@@ -964,6 +996,7 @@ export function PoAutoLinkProposalsSection({
         setApplySuccess('Bulk link finished — no changes (all selected proposals were already linked).');
       }
       setConfirmProposal(null);
+      setDrawerKey(null);
       setBulkConfirmKeys(null);
       setSelected(new Set());
       void qc.invalidateQueries({ queryKey: ['po-auto-link'] });
@@ -988,6 +1021,7 @@ export function PoAutoLinkProposalsSection({
     }) => apiPost('/api/v1/commercial-planner/lineup/po-auto-link/dismiss', vars),
     onSuccess: () => {
       setDismissTarget(null);
+      setDrawerKey(null);
       void qc.invalidateQueries({ queryKey: ['po-auto-link'] });
     },
   });
@@ -1009,26 +1043,38 @@ export function PoAutoLinkProposalsSection({
     [proposals, showDismissed]
   );
 
-  const filteredProposals = useMemo(() => {
-    const q = customerFilter.trim().toLowerCase();
+  const customerFilteredProposals = useMemo(() => {
+    const q = debouncedCustomer.trim().toLowerCase();
     if (!q) return activeProposals;
     return activeProposals.filter((p) => {
       const label = (p.customer_label ?? '').toLowerCase();
       const idToken = p.customer_id != null ? String(p.customer_id) : '';
       return label.includes(q) || idToken.includes(q);
     });
-  }, [activeProposals, customerFilter]);
+  }, [activeProposals, debouncedCustomer]);
+
+  const bucketFilteredProposals = useMemo(
+    () => customerFilteredProposals.filter((p) => matchesBucket(p, bucket)),
+    [customerFilteredProposals, bucket],
+  );
 
   const proposalGroups = useMemo(
-    () => buildProposalGroups(filteredProposals, proposalsQ.data?.group_coverage_by_key),
-    [filteredProposals, proposalsQ.data?.group_coverage_by_key],
+    () => buildProposalGroups(bucketFilteredProposals, proposalsQ.data?.group_coverage_by_key),
+    [bucketFilteredProposals, proposalsQ.data?.group_coverage_by_key],
   );
+
+  const proposalGroupByKey = useMemo(() => {
+    const map = new Map<string, PoAutoLinkProposalGroup>();
+    for (const g of proposalGroups) map.set(g.groupKey, g);
+    return map;
+  }, [proposalGroups]);
 
   const proposalByKey = useMemo(() => {
     const map = new Map<string, PoAutoLinkProposal>();
-    for (const p of filteredProposals) map.set(p.proposal_key, p);
+    for (const p of bucketFilteredProposals) map.set(p.proposal_key, p);
     return map;
-  }, [filteredProposals]);
+  }, [bucketFilteredProposals]);
+
 
   useEffect(() => {
     if (!proposalGroups.length) return;
@@ -1041,6 +1087,17 @@ export function PoAutoLinkProposalsSection({
       return next;
     });
   }, [proposalGroups]);
+
+  const bucketCounts = useMemo(
+    () => ({
+      all: customerFilteredProposals.length,
+      contested: customerFilteredProposals.filter((p) => matchesBucket(p, 'contested')).length,
+      clean: customerFilteredProposals.filter((p) => matchesBucket(p, 'clean')).length,
+      high: customerFilteredProposals.filter((p) => matchesBucket(p, 'high')).length,
+      medium: customerFilteredProposals.filter((p) => matchesBucket(p, 'medium')).length,
+    }),
+    [customerFilteredProposals],
+  );
 
   const pendingCount = Math.max(0, (proposalsQ.data?.total ?? 0) - (proposalsQ.data?.dismissed_count ?? 0));
 
@@ -1083,10 +1140,24 @@ export function PoAutoLinkProposalsSection({
   }, [proposalGroups]);
 
   const selectAllHigh = () => {
-    const keys = filteredProposals
+    const keys = bucketFilteredProposals
       .filter((p) => p.confidence === 'high' && !p.dismissed && !isSelectionProtected(p))
       .map((p) => p.proposal_key);
     setSelected(new Set(keys));
+  };
+
+  const clearFiltersToDefault = () => {
+    setPeriod('');
+    setConfidence('all');
+    setCustomerFilter('');
+    setDebouncedCustomer('');
+    setBucket('all');
+    setSelected(new Set());
+  };
+
+  const handleBucketChange = (id: PoAutoLinkBucketId) => {
+    setBucket(id);
+    setSelected(new Set());
   };
 
   const openBulkConfirm = (keys: string[]) => {
@@ -1104,7 +1175,6 @@ export function PoAutoLinkProposalsSection({
     for (const key of bulkConfirmKeys) {
       const p = proposalByKey.get(key);
       if (!p || p.dismissed) continue;
-      // Bulk never sends allow_protected — drop service-guarded targets; contested-only stays.
       if (requiresAllowProtected(p)) excluded.push(p);
       else linkable.push(p);
     }
@@ -1135,7 +1205,6 @@ export function PoAutoLinkProposalsSection({
     const items = bulkConfirmPartition.linkable.map((p) => ({
       case_id: p.case_id,
       purchase_order_id: p.purchase_order_id,
-      // Bulk path NEVER sets allow_protected.
     }));
     if (!items.length) return;
     setApplyError(null);
@@ -1157,6 +1226,50 @@ export function PoAutoLinkProposalsSection({
       ],
     });
   };
+
+  const handleManualLink = async () => {
+    setManualError(null);
+    const caseId = Number.parseInt(manualCaseId.trim(), 10);
+    if (!Number.isFinite(caseId) || caseId < 1) {
+      setManualError('Enter a valid case id');
+      return;
+    }
+    if (!manualPoNumber.trim()) {
+      setManualError('Enter an exact PO number');
+      return;
+    }
+    setManualPending(true);
+    try {
+      const po = await apiGet<{
+        purchase_order_id: number;
+        po_number: string;
+        po_number_norm: string;
+      }>(
+        `/api/v1/commercial-planner/lineup/po-auto-link/exact-po?po_number=${encodeURIComponent(manualPoNumber.trim())}`,
+      );
+      await applyPoAutoLinkInChunks(
+        [{ case_id: caseId, purchase_order_id: po.purchase_order_id }],
+        undefined,
+        setApplyProgress,
+      );
+      setManualCaseId('');
+      setManualPoNumber('');
+      setApplySuccess(`Manual link applied for case ${caseId} ↔ ${po.po_number}.`);
+      void qc.invalidateQueries({ queryKey: ['po-auto-link'] });
+      void qc.invalidateQueries({ queryKey: ['po-management'] });
+      void qc.invalidateQueries({ queryKey: ['lineup-cases'] });
+      void qc.invalidateQueries({ queryKey: ['commercial-lineup-cases'] });
+      setApplyProgress(null);
+    } catch (e) {
+      setManualError(safeDisplayError(e));
+      setApplyProgress(null);
+    } finally {
+      setManualPending(false);
+    }
+  };
+
+  const isGroupExpanded = (groupKey: string) =>
+    cardExpanded[groupKey] ?? proposalGroups.length <= 3;
 
   return (
     <Card variant="outlined" id={PO_AUTO_LINK_SECTION_ID} data-testid="po-auto-link-section">
@@ -1186,7 +1299,7 @@ export function PoAutoLinkProposalsSection({
             )}
           </Stack>
 
-          {(applyMut.isPending || applyProgress) && (
+          {(applyMut.isPending || applyProgress || manualPending) && (
             <Box data-testid="po-auto-link-apply-progress">
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
                 <Typography variant="body2">
@@ -1229,107 +1342,255 @@ export function PoAutoLinkProposalsSection({
 
           <Collapse in={expanded}>
             <Stack spacing={2}>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }} flexWrap="wrap" useFlexGap>
-                <TextField
-                  size="small"
-                  label="Period filter"
-                  placeholder="e.g. 26Q1"
-                  value={period}
-                  onChange={(e) => setPeriod(e.target.value)}
-                  sx={{ minWidth: 140 }}
-                  data-testid="po-auto-link-period"
-                />
-                <TextField
-                  size="small"
-                  label="Customer filter"
-                  placeholder="Name or customer id"
-                  value={customerFilter}
-                  onChange={(e) => setCustomerFilter(e.target.value)}
-                  sx={{ minWidth: 160 }}
-                  data-testid="po-auto-link-customer"
-                />
-                <FormControl size="small" sx={{ minWidth: 140 }}>
-                  <InputLabel id="po-auto-link-confidence-label">Confidence</InputLabel>
-                  <Select
-                    labelId="po-auto-link-confidence-label"
-                    label="Confidence"
-                    value={confidence}
-                    onChange={(e) => setConfidence(e.target.value as 'all' | 'high' | 'medium')}
-                    data-testid="po-auto-link-confidence"
-                  >
-                    <MenuItem value="all">All</MenuItem>
-                    <MenuItem value="high">High only</MenuItem>
-                    <MenuItem value="medium">Medium only</MenuItem>
-                  </Select>
-                </FormControl>
-                <Button size="small" onClick={() => void proposalsQ.refetch()} disabled={proposalsQ.isFetching}>
-                  Refresh
-                </Button>
-                <Button size="small" onClick={() => setShowDismissed((v) => !v)} data-testid="po-auto-link-toggle-dismissed">
-                  {showDismissed ? 'Hide dismissed' : 'Show dismissed'}
-                </Button>
-                <Button size="small" onClick={selectAllHigh} disabled={!filteredProposals.some((p) => p.confidence === 'high')}>
-                  Select all high
-                </Button>
-                <Button
-                  size="small"
-                  variant="contained"
-                  disabled={selected.size === 0 || applyMut.isPending}
-                  onClick={() => openBulkConfirm([...selected])}
-                  data-testid="po-auto-link-bulk-apply"
-                >
-                  Link selected ({selected.size})
-                </Button>
-              </Stack>
-
               {proposalsQ.isLoading ? (
                 <Typography variant="body2" color="text.secondary" data-testid="po-auto-link-loading">
                   Computing proposals…
                 </Typography>
               ) : proposalsQ.data?.data_unavailable ? (
                 <Alert severity="info">Auto-link proposals are temporarily unavailable.</Alert>
-              ) : !filteredProposals.length && !showDismissed ? (
-                <Alert severity="info" data-testid="po-auto-link-empty">
-                  No link proposals for the current filters. Try clearing the period or customer filter or lowering confidence.
-                </Alert>
               ) : (
                 <>
                   <Typography variant="caption" color="text.secondary">
-                    Showing {filteredProposals.length} of {proposalsQ.data?.total ?? 0} proposals
-                    {customerFilter.trim() && activeProposals.length !== filteredProposals.length
-                      ? ` (${activeProposals.length} before customer filter)`
+                    Showing {bucketFilteredProposals.length} of {proposalsQ.data?.total ?? 0} proposals
+                    {debouncedCustomer.trim() && activeProposals.length !== bucketFilteredProposals.length
+                      ? ` (${activeProposals.length} before customer/bucket filter)`
                       : ''}
                     {(proposalsQ.data?.dismissed_count ?? 0) > 0
                       ? ` · ${proposalsQ.data?.dismissed_count} dismissed`
                       : ''}
                   </Typography>
-                  <Stack spacing={1.5} data-testid="po-auto-link-cards">
-                    {proposalGroups.map((group) => (
-                      <ProposalGroupCard
-                        key={group.groupKey}
-                        group={group}
-                        expanded={cardExpanded[group.groupKey] ?? proposalGroups.length <= 3}
-                        onToggleExpanded={() =>
-                          setCardExpanded((prev) => ({
-                            ...prev,
-                            [group.groupKey]: !(prev[group.groupKey] ?? proposalGroups.length <= 3),
-                          }))
-                        }
-                        selected={selected}
-                        onToggleProposal={toggleProposalSelection}
-                        onSelectAllInCard={(keys) => replaceCardSelection(group.groupKey, keys)}
-                        onLinkSelectedInCard={openBulkConfirm}
-                        onReview={(p) => {
-                          setApplyError(null);
-                          setConfirmProposal(p);
-                        }}
-                        onDismiss={setDismissTarget}
-                        onRestore={(key) => restoreMut.mutate(key)}
-                        restorePending={restoreMut.isPending}
-                        applyPending={applyMut.isPending}
-                      />
-                    ))}
-                  </Stack>
+                  {!bucketFilteredProposals.length && !showDismissed ? (
+                    <Alert severity="info" data-testid="po-auto-link-empty">
+                      No link proposals for the current filters. Try clearing the period or customer filter or lowering confidence.
+                    </Alert>
+                  ) : null}
+                  <Box data-testid="po-auto-link-cards">
+                    <ResolutionWorklist<PoAutoLinkProposal, PoAutoLinkBucketId>
+                      rootTestId="po-auto-link"
+                      getCheckboxTestId={(k) => `po-auto-link-select-${k}`}
+                      bordered
+                      items={bucketFilteredProposals}
+                      getItemKey={(p) => p.proposal_key}
+                      getProtection={toWorkItemProtection}
+                      buckets={[
+                        { id: 'all', label: 'All', count: bucketCounts.all },
+                        { id: 'contested', label: 'Contested', count: bucketCounts.contested },
+                        { id: 'clean', label: 'Clean', count: bucketCounts.clean },
+                        { id: 'high', label: 'High', count: bucketCounts.high },
+                        { id: 'medium', label: 'Medium', count: bucketCounts.medium },
+                      ]}
+                      activeBucket={bucket}
+                      onBucketChange={handleBucketChange}
+                      groupBy={proposalGroupKey}
+                      isGroupCollapsed={(groupKey) => !isGroupExpanded(groupKey)}
+                      renderGroupHeader={(groupKey) => {
+                        const group = proposalGroupByKey.get(groupKey);
+                        if (!group) return null;
+                        return (
+                          <PoAutoLinkGroupHeader
+                            group={group}
+                            expanded={isGroupExpanded(groupKey)}
+                            onToggleExpanded={() =>
+                              setCardExpanded((prev) => ({
+                                ...prev,
+                                [groupKey]: !isGroupExpanded(groupKey),
+                              }))
+                            }
+                            selected={selected}
+                            onSelectAllInCard={(keys) => replaceCardSelection(groupKey, keys)}
+                            onLinkSelectedInCard={openBulkConfirm}
+                            applyPending={applyMut.isPending}
+                          />
+                        );
+                      }}
+                      renderRow={(proposal) => (
+                        <PoAutoLinkProposalRowContent
+                          proposal={proposal}
+                          onReview={() => {
+                            setApplyError(null);
+                            setDrawerKey(proposal.proposal_key);
+                          }}
+                          onDismiss={() => setDismissTarget(proposal)}
+                          onRestore={() => restoreMut.mutate(proposal.proposal_key)}
+                          restorePending={restoreMut.isPending}
+                        />
+                      )}
+                      selection={{
+                        selected,
+                        onToggle: toggleProposalSelection,
+                        onReplace: (keys) => setSelected(new Set(keys)),
+                      }}
+                      renderFilters={() => (
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }} flexWrap="wrap" useFlexGap>
+                          <TextField
+                            size="small"
+                            label="Period filter"
+                            placeholder="All periods / include residual"
+                            value={period}
+                            onChange={(e) => setPeriod(e.target.value)}
+                            sx={{ minWidth: 180 }}
+                            inputProps={{ 'data-testid': 'po-auto-link-period' }}
+                          />
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => setPeriod(currentQuarterLabel())}
+                            data-testid="po-auto-link-period-this-quarter"
+                          >
+                            This quarter
+                          </Button>
+                          <TextField
+                            size="small"
+                            label="Customer filter"
+                            placeholder="Name or customer id"
+                            value={customerFilter}
+                            onChange={(e) => setCustomerFilter(e.target.value)}
+                            sx={{ minWidth: 160 }}
+                            data-testid="po-auto-link-customer"
+                          />
+                          <FormControl size="small" sx={{ minWidth: 140 }}>
+                            <InputLabel id="po-auto-link-confidence-label">Confidence</InputLabel>
+                            <Select
+                              labelId="po-auto-link-confidence-label"
+                              label="Confidence"
+                              value={confidence}
+                              onChange={(e) => setConfidence(e.target.value as 'all' | 'high' | 'medium')}
+                              data-testid="po-auto-link-confidence"
+                            >
+                              <MenuItem value="all">All</MenuItem>
+                              <MenuItem value="high">High only</MenuItem>
+                              <MenuItem value="medium">Medium only</MenuItem>
+                            </Select>
+                          </FormControl>
+                          <Button size="small" onClick={() => void proposalsQ.refetch()} disabled={proposalsQ.isFetching}>
+                            Refresh
+                          </Button>
+                          {!filtersAtDefault ? (
+                            <Button size="small" onClick={clearFiltersToDefault} data-testid="po-auto-link-clear-filters">
+                              Clear filters
+                            </Button>
+                          ) : null}
+                        </Stack>
+                      )}
+                      renderToolbar={() => (
+                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                          <Button size="small" onClick={() => setShowDismissed((v) => !v)} data-testid="po-auto-link-toggle-dismissed">
+                            {showDismissed ? 'Hide dismissed' : 'Show dismissed'}
+                          </Button>
+                          <Button
+                            size="small"
+                            onClick={selectAllHigh}
+                            disabled={!bucketFilteredProposals.some((p) => p.confidence === 'high')}
+                          >
+                            Select all high
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            disabled={selected.size === 0 || applyMut.isPending}
+                            onClick={() => openBulkConfirm([...selected])}
+                            data-testid="po-auto-link-bulk-apply"
+                          >
+                            Link selected ({selected.size})
+                          </Button>
+                        </Stack>
+                      )}
+                      renderManualLinkSlot={() => (
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'flex-start' }} flexWrap="wrap" useFlexGap>
+                          <TextField
+                            size="small"
+                            label="Case id"
+                            value={manualCaseId}
+                            onChange={(e) => setManualCaseId(e.target.value)}
+                            sx={{ minWidth: 100 }}
+                            inputProps={{ 'data-testid': 'po-auto-link-manual-case-id' }}
+                          />
+                          <TextField
+                            size="small"
+                            label="Exact PO number"
+                            value={manualPoNumber}
+                            onChange={(e) => setManualPoNumber(e.target.value)}
+                            sx={{ minWidth: 160 }}
+                            inputProps={{ 'data-testid': 'po-auto-link-manual-po-number' }}
+                          />
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            disabled={manualPending || applyMut.isPending}
+                            onClick={() => void handleManualLink()}
+                            data-testid="po-auto-link-manual-link-btn"
+                          >
+                            Manual link
+                          </Button>
+                          {manualError ? (
+                            <Alert severity="error" sx={{ flex: 1 }} data-testid="po-auto-link-manual-error">
+                              {manualError}
+                            </Alert>
+                          ) : null}
+                        </Stack>
+                      )}
+                      drawer={{
+                        activeKey: drawerKey,
+                        onClose: () => setDrawerKey(null),
+                        title: (p) => `PO ${p.po_number ?? p.purchase_order_id} ↔ case ${p.case_id}`,
+                        renderEvidence: (p) => (
+                          <Stack spacing={1}>
+                            <Typography variant="body2">
+                              <strong>Case id:</strong> {p.case_id}
+                            </Typography>
+                            <Typography variant="body2">
+                              <strong>Period:</strong> {p.case_period_label ?? p.inferred_period_start ?? '—'}
+                            </Typography>
+                            <Typography variant="body2">
+                              <strong>Distributor:</strong>{' '}
+                              {[p.distributor_code, p.distributor_name].filter(Boolean).join(' — ') || '—'}
+                            </Typography>
+                            <Typography variant="body2">
+                              <strong>Reason:</strong> {reasonLabel(p.reason)}
+                            </Typography>
+                            {p.competition?.competing_case_ids?.length ? (
+                              <Typography variant="body2">
+                                <strong>Competing case ids:</strong> {p.competition.competing_case_ids.join(', ')}
+                              </Typography>
+                            ) : null}
+                            {p.matched_products.length > 0 ? (
+                              <Box>
+                                <Typography variant="subtitle2" gutterBottom>
+                                  Matched products ({p.matched_products.length})
+                                </Typography>
+                                <Stack spacing={0.5}>
+                                  {p.matched_products.map((m) => (
+                                    <Typography key={m.product_id} variant="body2">
+                                      {productDisplayLabel(m)} — planned {fmtUnits(m.planned_units)}, shipped{' '}
+                                      {fmtUnits(m.shipped_units)}
+                                    </Typography>
+                                  ))}
+                                </Stack>
+                              </Box>
+                            ) : null}
+                          </Stack>
+                        ),
+                        renderDispositionActions: (p) => (
+                          <Stack direction="row" spacing={1}>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              onClick={() => {
+                                setApplyError(null);
+                                setConfirmProposal(p);
+                              }}
+                              data-testid={`po-auto-link-drawer-link-${p.proposal_key}`}
+                            >
+                              Link
+                            </Button>
+                            <Button size="small" color="warning" onClick={() => setDismissTarget(p)}>
+                              Dismiss
+                            </Button>
+                          </Stack>
+                        ),
+                      }}
+                    />
+                  </Box>
                 </>
               )}
             </Stack>

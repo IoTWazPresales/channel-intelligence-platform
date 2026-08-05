@@ -1,7 +1,7 @@
 'use client';
 
 import { Box, Button, Checkbox, Stack, Typography } from '@mui/material';
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, type InputHTMLAttributes, type ReactNode } from 'react';
 
 import {
   StewardDrawerChrome,
@@ -30,6 +30,7 @@ export function ResolutionWorklist<TItem, TBucketId extends string = string>(
     activeBucket,
     onBucketChange,
     groupBy,
+    isGroupCollapsed,
     renderGroupHeader,
     renderRow,
     selection,
@@ -41,9 +42,13 @@ export function ResolutionWorklist<TItem, TBucketId extends string = string>(
     renderManualLinkSlot,
     renderProgress,
     emptyState,
+    getCheckboxTestId,
     rootTestId = 'resolution-worklist',
     bordered = false,
   } = props;
+
+  const checkboxTestId = (key: WorkItemKey) =>
+    getCheckboxTestId?.(key) ?? `${rootTestId}-row-check-${key}`;
 
   const itemByKey = useMemo(() => {
     const m = new Map<WorkItemKey, TItem>();
@@ -152,6 +157,7 @@ export function ResolutionWorklist<TItem, TBucketId extends string = string>(
                       {groupKey}
                     </Typography>
                   )}
+                  {!isGroupCollapsed?.(groupKey) ? (
                   <Stack spacing={0.5}>
                     {groupItems.map((item) => {
                       const key = getItemKey(item);
@@ -166,10 +172,12 @@ export function ResolutionWorklist<TItem, TBucketId extends string = string>(
                             size="small"
                             checked={selected}
                             onChange={() => selection.onToggle(key)}
-                            inputProps={{
-                              'aria-label': `Select ${key}`,
-                            }}
-                            data-testid={`${rootTestId}-row-check-${key}`}
+                            inputProps={
+                              {
+                                'aria-label': `Select ${key}`,
+                                'data-testid': checkboxTestId(key),
+                              } as InputHTMLAttributes<HTMLInputElement>
+                            }
                           />
                           <Box sx={{ flex: 1, minWidth: 0 }}>
                             {renderRow(item, {
@@ -181,6 +189,7 @@ export function ResolutionWorklist<TItem, TBucketId extends string = string>(
                       );
                     })}
                   </Stack>
+                  ) : null}
                 </Box>
               ))
             : (
@@ -198,10 +207,12 @@ export function ResolutionWorklist<TItem, TBucketId extends string = string>(
                         size="small"
                         checked={selected}
                         onChange={() => selection.onToggle(key)}
-                        inputProps={{
-                          'aria-label': `Select ${key}`,
-                        }}
-                        data-testid={`${rootTestId}-row-check-${key}`}
+                        inputProps={
+                          {
+                            'aria-label': `Select ${key}`,
+                            'data-testid': checkboxTestId(key),
+                          } as InputHTMLAttributes<HTMLInputElement>
+                        }
                       />
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         {renderRow(item, {

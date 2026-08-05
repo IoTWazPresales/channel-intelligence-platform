@@ -109,6 +109,7 @@ describe('PoAutoLinkProposalsSection', () => {
     renderSection();
     await expandSection();
     await user.click(screen.getByTestId('po-auto-link-review-10:5:PO99'));
+    await user.click(screen.getByTestId('po-auto-link-drawer-link-10:5:PO99'));
     expect(await screen.findByTestId('po-auto-link-confirm-dialog')).toBeInTheDocument();
     expect(screen.getByTestId('matched-product-label-7')).toHaveTextContent('Model Seven · SKU-7');
     expect(screen.queryByText(/^7$/)).not.toBeInTheDocument();
@@ -119,6 +120,7 @@ describe('PoAutoLinkProposalsSection', () => {
     renderSection();
     await expandSection();
     await user.click(screen.getByTestId('po-auto-link-review-10:5:PO99'));
+    await user.click(screen.getByTestId('po-auto-link-drawer-link-10:5:PO99'));
     await user.click(screen.getByTestId('po-auto-link-confirm-submit'));
     await waitFor(() => {
       expect(apiPostMock).toHaveBeenCalledWith('/api/v1/commercial-planner/lineup/po-auto-link/apply', {
@@ -396,5 +398,167 @@ describe('PoAutoLinkProposalsSection', () => {
     await waitFor(() => {
       expect(screen.getByTestId('po-auto-link-coverage-line')).toHaveTextContent('80 already linked');
     });
+  });
+
+  it('defaults period filter empty so API fetch is residual-inclusive', async () => {
+    renderSection();
+    await expandSection();
+    expect(screen.getByTestId('po-auto-link-period')).toHaveValue('');
+    expect(apiGetMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/po-auto-link\/proposals\?limit=200$/),
+      expect.anything(),
+    );
+    expect(apiGetMock).toHaveBeenCalledWith(
+      expect.not.stringContaining('period='),
+      expect.anything(),
+    );
+  });
+
+  it('excludes contested proposals from select-all-high but Review still works', async () => {
+    const user = userEvent.setup();
+    const contestedProposal = {
+      ...sampleProposal,
+      proposal_key: 'contested:1',
+      bulk_protection: {
+        selection_protected: true,
+        requires_allow_protected: false,
+        reasons: [],
+        contested: true,
+      },
+      competition: { status: 'contested', competing_case_ids: [11, 12] },
+    };
+    apiGetMock.mockResolvedValue({
+      proposals: [
+        { ...sampleProposal, proposal_key: 'clean-high', confidence: 'high' as const },
+        contestedProposal,
+      ],
+      total: 2,
+      returned: 2,
+      dismissed_count: 0,
+      data_unavailable: false,
+    });
+    renderSection();
+    await expandSection();
+    await user.click(screen.getByRole('button', { name: /select all high/i }));
+    expect(screen.getByTestId('po-auto-link-select-clean-high')).toBeChecked();
+    const contestedCheckbox = screen.getByTestId('po-auto-link-select-contested:1');
+    expect(contestedCheckbox).not.toBeChecked();
+    await user.click(screen.getByTestId('po-auto-link-review-contested:1'));
+    expect(await screen.findByTestId('po-auto-link-drawer-link-contested:1')).toBeInTheDocument();
+  });
+
+  it('bucket contested tab filters visible proposals', async () => {
+    const user = userEvent.setup();
+    apiGetMock.mockResolvedValue({
+      proposals: [
+        { ...sampleProposal, proposal_key: 'clean', competition: { status: 'not_contested' } },
+        {
+          ...sampleProposal,
+          proposal_key: 'hot',
+          competition: { status: 'contested', competing_case_ids: [99] },
+          bulk_protection: {
+            selection_protected: true,
+            requires_allow_protected: false,
+            reasons: [],
+            contested: true,
+          },
+        },
+      ],
+      total: 2,
+      returned: 2,
+      dismissed_count: 0,
+      data_unavailable: false,
+    });
+    renderSection();
+    await expandSection();
+    expect(screen.getByTestId('po-auto-link-row-clean')).toBeInTheDocument();
+    expect(screen.getByTestId('po-auto-link-row-hot')).toBeInTheDocument();
+    await user.click(screen.getByTestId('po-auto-link-bucket-contested'));
+    expect(screen.queryByTestId('po-auto-link-row-clean')).not.toBeInTheDocument();
+    expect(screen.getByTestId('po-auto-link-row-hot')).toBeInTheDocument();
+  });
+
+  it('manual link resolves exact PO then applies', async () => {
+    const user = userEvent.setup();
+    apiGetMock.mockImplementation((path: string) => {
+      if (path.includes('/po-auto-link/proposals')) {
+        return Promise.resolve({
+          proposals: [],
+          total: 0,
+          returned: 0,
+          dismissed_count: 0,
+          data_unavailable: false,
+        });
+      }
+      if (path.includes('/exact-po')) {
+        return Promise.resolve({
+          purchase_order_id: 555,
+          po_number: 'PO-MANUAL',
+          po_number_norm: 'POMANUAL',
+        });
+      }
+      return Promise.reject(new Error(`unexpected GET ${path}`));
+    });
+    renderSection();
+    await expandSection();
+    await user.type(screen.getByTestId('po-auto-link-manual-case-id'), '42');
+    await user.type(screen.getByTestId('po-auto-link-manual-po-number'), 'PO-MANUAL');
+    await user.click(screen.getByTestId('po-auto-link-manual-link-btn'));
+    await waitFor(() => {
+      expect(apiGetMock).toHaveBeenCalledWith(
+        expect.stringContaining('/exact-po?po_number=PO-MANUAL'),
+      );
+      expect(apiPostMock).toHaveBeenCalledWith('/api/v1/commercial-planner/lineup/po-auto-link/apply', {
+        items: [{ case_id: 42, purchase_order_id: 555 }],
+      });
+    });
+  });
+
+  it('manual link surfaces error when exact PO is missing', async () => {
+    const user = userEvent.setup();
+    apiGetMock.mockImplementation((path: string) => {
+      if (path.includes('/po-auto-link/proposals')) {
+        return Promise.resolve({
+          proposals: [],
+          total: 0,
+          returned: 0,
+          dismissed_count: 0,
+          data_unavailable: false,
+        });
+      }
+      if (path.includes('/exact-po')) {
+        return Promise.reject(new Error('404 Purchase order not found'));
+      }
+      return Promise.reject(new Error(`unexpected GET ${path}`));
+    });
+    renderSection();
+    await expandSection();
+    await user.type(screen.getByTestId('po-auto-link-manual-case-id'), '42');
+    await user.type(screen.getByTestId('po-auto-link-manual-po-number'), 'MISSING');
+    await user.click(screen.getByTestId('po-auto-link-manual-link-btn'));
+    expect(await screen.findByTestId('po-auto-link-manual-error')).toHaveTextContent(
+      '404 Purchase order not found',
+    );
+    expect(apiPostMock).not.toHaveBeenCalled();
+  });
+
+  it('re-apply already-linked pair succeeds without error', async () => {
+    const user = userEvent.setup();
+    apiPostMock.mockResolvedValue({
+      applied_count: 1,
+      applied: [{ newly_linked: false }],
+      error_count: 0,
+      errors: [],
+    });
+    renderSection();
+    await expandSection();
+    await user.click(screen.getByTestId('po-auto-link-review-10:5:PO99'));
+    await user.click(screen.getByTestId('po-auto-link-drawer-link-10:5:PO99'));
+    await user.click(screen.getByTestId('po-auto-link-confirm-submit'));
+    await waitFor(() => {
+      expect(apiPostMock).toHaveBeenCalled();
+    });
+    expect(screen.queryByTestId('po-auto-link-apply-error')).not.toBeInTheDocument();
+    expect(await screen.findByTestId('po-auto-link-apply-success')).toBeInTheDocument();
   });
 });

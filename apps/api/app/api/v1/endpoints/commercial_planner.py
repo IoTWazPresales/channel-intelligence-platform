@@ -34,6 +34,7 @@ from app.models.fact_demand_forecast import FactDemandForecast
 from app.models.facts import FactPricing, FactSalesSellout
 from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.ingestion import ImportJob
+from app.models.purchase_order import PurchaseOrder
 from app.services.commercial_planner.calculator import CommercialCalcInputs, compute_line_economics
 from app.services.commercial_planner.economics_trust import (
     classify_line_economics_trust,
@@ -83,6 +84,7 @@ from app.services.commercial_planner.lineup_po_gap import (
     restore_gap_po,
 )
 from app.services.commercial_planner.lineup_po_auto_link import po_auto_link_proposals
+from app.services.imports.shipment_po_normalization import normalize_po_number
 from app.services.commercial_planner.lineup_po_auto_link_actions import (
     ProposalNotFoundError,
     apply_auto_link_proposals,
@@ -2735,6 +2737,30 @@ async def get_po_auto_link_proposals(
         limit=limit,
         include_dismissed=include_dismissed,
     )
+
+
+@router.get("/lineup/po-auto-link/exact-po")
+async def get_po_auto_link_exact_po(
+    po_number: str = Query(..., min_length=1, max_length=128),
+    db: AsyncSession = Depends(get_db),
+):
+    """Exact PO lookup by normalized number — never creates purchase_order rows."""
+    norm = normalize_po_number(po_number)
+    if not norm:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    rows = (
+        await db.scalars(select(PurchaseOrder).where(PurchaseOrder.po_number_norm == norm))
+    ).all()
+    if len(rows) == 0:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    if len(rows) > 1:
+        raise HTTPException(status_code=409, detail="Ambiguous purchase order match")
+    po = rows[0]
+    return {
+        "purchase_order_id": po.id,
+        "po_number": po.po_number_raw,
+        "po_number_norm": po.po_number_norm,
+    }
 
 
 @router.post("/lineup/po-auto-link/dismiss", status_code=200)
