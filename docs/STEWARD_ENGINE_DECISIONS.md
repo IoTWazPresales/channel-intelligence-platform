@@ -375,3 +375,23 @@ contested classification consults ``fact_inbound_shipment`` + ``dim_product.prod
 **Rejected:** BU from ``business_unit``; treating multi-BU share as conflict; gating apply
 on contested; trusting stale warren-queue JSON.
 
+## D-034 · 2026-08-05 · Slice identity comes from the apply parser (never cross-parser align)
+**Locked.** Bulk-backfill BU split emits each slice's `source_row_number` list from
+`_parse_file_to_row_dicts` / parser #2 rows (the parser apply re-runs), by running BU
+resolution over *those* rows. `parse_historical_workbook` (parser #1) remains the source
+for sheet selection / period / title-band / schema, but **never** for per-row slice
+identity. Cross-parser `row_match_key` alignment (`map_slice_rows_to_source_row_numbers`)
+is retired from the identity path — keeping a tolerant/fuzzy match mode is prohibited
+(D-002). Unclassifiable rows → `needs_attention` with `slice_row_unclassified_bu`, never
+a silent mis-slice. Workbook sheets whose content is a subset of a sibling sheet
+(e.g. `Sheet1` ⊆ `NR`) are **excluded** (`sheet_content_subset_ignored`) so apply does
+not double-count — Warren Unit3 2026-08-05.
+**Proven:** NR 2026 Q3 Gaming workbook — open-channel customer nulling made aligner fail
+(49 unmatched); D-034 preview `f0:NR:NR:2026 Q3` ready **120** / NB **6** / Sheet1
+excluded; clone `cip_unit3_smoke` + cip case **146** = **120** lines; case **130**
+(Sheet1, 14 lines) soft-superseded → 146; protected 7/90/122/145 unchanged.
+**Origin:** BACKLOG-108; PROGRAM-A Unit 3 CONSULT 2026-08-05; Warren answers (bar=~120,
+ignore Sheet1).
+**Rejected:** loosening `row_match_key` / `strict=False`; unifying both parsers in this
+unit; hand-inserting the 126 sheet rows; treating sheet-row count as case-line count.
+

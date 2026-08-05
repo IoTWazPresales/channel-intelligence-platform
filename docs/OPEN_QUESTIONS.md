@@ -10,6 +10,35 @@ Each entry: what is unclear · why it matters · interim assumption · what woul
 
 ## Open
 
+### Q-011 — PROGRAM-A Unit 2 / bulk-select survivor+contested guard predicates
+
+| Field | Value |
+|-------|--------|
+| **What is unclear** | (1) Survivor guard predicate: refuse when target case already has ≥1 linked PO or status `po_issued`+ as proxy for 7/9/90, OR explicit protected-case-id set (incl. 122/145 / D-031 nuance on 9)? (2) Any protected survivors currently at pre-PO status (`draft_imported`/`accepted`)? Status proxy unsafe if yes. (3) Guarded target: hard-refuse vs allow with per-item override (`allow_protected=true`) that bulk cannot pass? (4) Contested: confirm D-033 — UI exclude + preview competing ids + annotation, **no service gate** — or supersede D-033 for contested bulk ack? |
+| **Why it matters** | Blocks BACKLOG-115/110 service+UI guard. Payload already has `competition`; web type drops it. No `is_survivor` column exists. |
+| **Interim assumption** | Unit 2 parked NEED_HUMAN. Programme continues Unit 3+. Do not implement guard until Warren answers. Contested stays FLAG≠BLOCK unless Warren supersedes D-033. |
+| **What would change** | Service refuse semantics; select-all exclusion set; whether D-033 is superseded. |
+| **Blocking?** | **Yes for Unit 2 only** |
+| **Blocks** | PROGRAM-A Unit 2; feeds Unit 5 S14 |
+| **Owner** | Warren |
+| **Raise by** | PROGRAM-A Unit 2 CONSULT NEED_HUMAN |
+| **Source** | `.tmp/unit2_bulk_select_consult_opus_response.md` 2026-08-05 |
+
+### Q-010 — PROGRAM-A Unit 1 / PR #17 promotion decomposition
+
+| Field | Value |
+|-------|--------|
+| **What is unclear** | (1) Is BACKLOG-098 Celery beat (`87e5be1`) ready to promote now, or hold until a named readiness bar? STATE_AUDIT_2026-08-02 #7 deferred merge until beat ready. (2) Are lineup budget commits `120a62a` + `3ed1348` still valid after D-028/D-029/D-030, or must drawdown route through `resolve_layered_period` instead of branch `normalize_period_label`? (3) Approve split: land `eb333fe` + `2ae6192` now; gate beat on (1); gate budget on (2)? (4) Doc conflict rule confirm: preserve main, ADD branch; CONTEXT add-only; re-check contract edit vs 1.6. |
+| **Why it matters** | Blocks Unit 1 main promotion; Unit 8 scopes against post-Unit-1 tree. All-or-nothing promote is a false binary (Opus CONSULT 2026-08-05). |
+| **Interim assumption** | Unit 1 parked NEED_HUMAN. Programme continues Unit 2+. Do not land any of the five commits until Warren answers. |
+| **What would change** | Which commits land on main; whether budget_position / beat remain stranded; Unit 8 baseline. |
+| **Blocking?** | **Yes for Unit 1 only** |
+| **Blocks** | PROGRAM-A Unit 1; Unit 8 post-merge scope |
+| **Owner** | Warren |
+| **Raise by** | PROGRAM-A Unit 1 CONSULT NEED_HUMAN |
+| **Source** | `.tmp/unit1_pr17_consult_opus_response.md` 2026-08-05 |
+| **Note** | Warren 2026-08-05 ("complete also open") still needs explicit answers to Q-010 1–4 and Q-011 1–4 before Units 1–2 IMPLEMENT. |
+
 ### Q-003 — Hosting target
 
 | Field | Value |
@@ -41,6 +70,13 @@ Each entry: what is unclear · why it matters · interim assumption · what woul
 ---
 
 ## Resolved
+
+### Q-U3 — PROGRAM-A Unit 3 NR line-count / Sheet1 — **Resolved 2026-08-05**
+
+| Field | Value |
+|-------|--------|
+| **Answer** | Done bar = **~120** NR case lines (BU-sliced from 126 sheet rows). Ignore Sheet1 (content ⊆ NR → exclude). Resume D-034 → clone → cip. Shipped case **146** = 120 lines; case **130** soft-superseded. |
+| **Source** | Warren 2026-08-05 PROGRAM-A chat |
 
 ### Q-001 — Budget constraint type — **Resolved 2026-08-01**
 

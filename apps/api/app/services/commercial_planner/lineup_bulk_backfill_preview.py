@@ -245,9 +245,45 @@ def _workbook_title_rows(file_bytes: bytes, sheet_name: str) -> list[list[Any]]:
 from app.services.commercial_planner.lineup_period_canonical import supersession_group_key_from_period_start
 from app.services.commercial_planner.lineup_bulk_slice_rows import (
     load_lineup_parser_context_sync,
-    map_slice_rows_to_source_row_numbers,
     parser_row_dicts_for_sheet,
+    row_match_key,
 )
+
+
+def _content_identity_key(row: dict[str, Any]) -> tuple[str | None, str | None, str | None, str | None]:
+    """Product+qty identity for cross-sheet subset checks (customer omitted — open-channel nulling)."""
+    sku, part, model, _cust, qty = row_match_key(row)
+    return (sku, part, model, qty)
+
+
+def _sheet_content_keys(rows: list[dict[str, Any]]) -> set[tuple[str | None, str | None, str | None, str | None]]:
+    return {_content_identity_key(r) for r in rows}
+
+
+def _subset_sheet_targets(
+    sheet_keys: dict[str, set[tuple[str | None, str | None, str | None, str | None]]],
+) -> dict[str, str]:
+    """Map sheet_name → covering sheet when content is a non-empty proper/equal subset of another."""
+    ignored: dict[str, str] = {}
+    names = list(sheet_keys.keys())
+    for name in names:
+        keys = sheet_keys[name]
+        if not keys:
+            continue
+        for other in names:
+            if other == name:
+                continue
+            other_keys = sheet_keys[other]
+            if not other_keys:
+                continue
+            # Prefer ignoring the smaller / secondary sheet when it is ⊆ a larger sibling.
+            if keys <= other_keys and (
+                len(keys) < len(other_keys)
+                or (len(keys) == len(other_keys) and name.lower() == "sheet1")
+            ):
+                ignored[name] = other
+                break
+    return ignored
 
 
 def build_case_proposals_for_file(
@@ -315,9 +351,58 @@ def build_case_proposals_for_file(
         )
         return proposals, catalogue_misses, file_report
 
+    # D-034: identity rows come from the apply parser (#2). Preload once for subset detection.
     for sheet in parsed_sheets:
+        if parser_ctx:
+            _parser_rows(sheet.sheet_name)
+
+    subset_of = _subset_sheet_targets(
+        {
+            sheet.sheet_name: _sheet_content_keys(parser_rows_by_sheet.get(sheet.sheet_name) or [])
+            for sheet in parsed_sheets
+        }
+    )
+
+    for sheet in parsed_sheets:
+        covering = subset_of.get(sheet.sheet_name)
+        if covering:
+            # Warren 2026-08-05 Unit3: ignore Sheet1 when content ⊆ primary sheet (no double-count).
+            proposals.append(
+                CaseProposal(
+                    proposal_key=f"{file_key}:{sheet.sheet_name}:ignored:subset",
+                    file_key=file_key,
+                    filename=spec.filename,
+                    folder_path=spec.folder_path,
+                    sheet_name=sheet.sheet_name,
+                    period_label=None,
+                    period_start=None,
+                    period_source_tier=None,
+                    period_flags=[],
+                    business_unit=None,
+                    bu_report={},
+                    customer_token=None,
+                    customer_id=None,
+                    row_count=0,
+                    resolved_product_count=0,
+                    unresolved_product_count=0,
+                    status="excluded",
+                    attention_reasons=[f"sheet_content_subset_of:{covering}"],
+                    flags=["sheet_content_subset_ignored"],
+                )
+            )
+            file_report.setdefault("sheets", []).append(
+                {
+                    "sheet_name": sheet.sheet_name,
+                    "ignored_subset_of": covering,
+                    "status": "excluded",
+                }
+            )
+            continue
+
         accepted = [r for r in sheet.rows if r.status != "dropped"]
-        row_payloads = [r.payload for r in accepted]
+        # Parser #1 payloads remain for period/title/schema context only when #2 is absent.
+        parser2 = _parser_rows(sheet.sheet_name) if parser_ctx else []
+        identity_rows: list[dict[str, Any]] = parser2 if parser2 else [r.payload for r in accepted]
         title_band = scan_title_band_from_workbook_rows(_workbook_title_rows(spec.file_bytes, sheet.sheet_name))
         period_assignments, period_report = resolve_layered_period(
             folder_path=spec.folder_path,
@@ -326,7 +411,7 @@ def build_case_proposals_for_file(
             manual_period_label=manual_period_label,
         )
 
-        resolved_n, unresolved_n, misses = _resolve_rows_products(row_payloads, product_index)
+        resolved_n, unresolved_n, misses = _resolve_rows_products(identity_rows, product_index)
         for m in misses:
             catalogue_misses.append(
                 {
@@ -338,7 +423,7 @@ def build_case_proposals_for_file(
             )
 
         bu_report = resolve_lineup_business_unit(
-            rows=_rows_to_product_tokens(row_payloads),
+            rows=_rows_to_product_tokens(identity_rows),
             product_index=product_index,
             business_unit_by_product_id=business_unit_by_product_id,
             sheet_name=sheet.sheet_name,
@@ -359,22 +444,22 @@ def build_case_proposals_for_file(
         if "period_signal_conflict" in (period_assignments[0].flags if period_assignments else []):
             status = "needs_attention"
             attention.append("period_signal_conflict")
-        if not row_payloads:
+        if not identity_rows:
             status = "needs_attention"
             attention.append("empty_sheet")
 
-        cust_token, cust_id = _majority_customer(row_payloads, customer_map)
+        cust_token, cust_id = _majority_customer(identity_rows, customer_map)
 
         row_groups: list[tuple[str, list[dict[str, Any]]]] = []
         if "bu_multi_bu_in_sheet" in bu_report.flags and not manual_business_unit:
-            buckets = _split_rows_by_bu(row_payloads, product_index, business_unit_by_product_id)
+            buckets = _split_rows_by_bu(identity_rows, product_index, business_unit_by_product_id)
             for bu_key, group_rows in buckets.items():
                 if bu_key == "_unresolved":
-                    row_groups.append((bu_report.business_unit or sheet.sheet_name, group_rows))
+                    row_groups.append(("_unresolved", group_rows))
                 else:
                     row_groups.append((bu_key, group_rows))
         else:
-            row_groups.append((bu_report.business_unit or sheet.sheet_name, row_payloads))
+            row_groups.append((bu_report.business_unit or sheet.sheet_name, identity_rows))
 
         for bu_slice, slice_rows in row_groups:
             slice_resolved, slice_unresolved, _ = _resolve_rows_products(slice_rows, product_index)
@@ -384,7 +469,9 @@ def build_case_proposals_for_file(
                 business_unit_by_product_id=business_unit_by_product_id,
                 sheet_name=sheet.sheet_name,
                 folder_path=spec.folder_path,
-                manual_business_unit=manual_business_unit or (bu_slice if bu_slice not in ("_unresolved", sheet.sheet_name) else None),
+                manual_business_unit=manual_business_unit or (
+                    bu_slice if bu_slice not in ("_unresolved", sheet.sheet_name) else None
+                ),
                 tenant_bu_codes=tenant_bu_codes,
             )
             half_split_active = any(
@@ -437,16 +524,21 @@ def build_case_proposals_for_file(
                 if prop_status == "ready" and "period_unknown" in effective_period.flags:
                     prop_status = "needs_attention"
                     prop_attention.append("period_unknown")
+
+                # D-034: native source_row_number from apply-parser rows — never cross-parser align.
                 slice_source_rows: list[int] | None = None
-                if len(row_groups) > 1 and parser_ctx:
-                    try:
-                        slice_source_rows = map_slice_rows_to_source_row_numbers(
-                            slice_rows,
-                            _parser_rows(sheet.sheet_name),
-                        )
-                    except ValueError:
+                if len(row_groups) > 1 and parser2:
+                    missing_nums = [r for r in slice_rows if r.get("source_row_number") is None]
+                    if missing_nums:
                         prop_status = "needs_attention"
-                        prop_attention.append("slice_row_mapping_failed")
+                        prop_attention.append("slice_row_missing_source_row_number")
+                    else:
+                        slice_source_rows = sorted(int(r["source_row_number"]) for r in slice_rows)
+                if bu_slice == "_unresolved":
+                    prop_status = "needs_attention"
+                    if "slice_row_unclassified_bu" not in prop_attention:
+                        prop_attention.append("slice_row_unclassified_bu")
+
                 sgk = supersession_group_key_from_period_start(
                     effective_period.period_start.isoformat() if effective_period.period_start else None,
                     customer_id=cust_id,
@@ -465,7 +557,7 @@ def build_case_proposals_for_file(
                         period_start=effective_period.period_start.isoformat() if effective_period.period_start else None,
                         period_source_tier=effective_period.source_tier if not pk_over.get("period_label") else "manual",
                         period_flags=list(effective_period.flags),
-                        business_unit=effective_bu_report.business_unit,
+                        business_unit=effective_bu_report.business_unit if bu_slice != "_unresolved" else None,
                         bu_report=effective_bu_report.to_dict(),
                         customer_token=cust_token,
                         customer_id=cust_id,
@@ -488,6 +580,8 @@ def build_case_proposals_for_file(
                 "period_report": period_report,
                 "bu_report": bu_dict,
                 "header_row_number": sheet.header_row_number,
+                "identity_row_count": len(identity_rows),
+                "identity_source": "parser2" if parser2 else "parser1",
             }
         )
 

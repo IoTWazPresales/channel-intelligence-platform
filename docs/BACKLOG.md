@@ -13,6 +13,23 @@
 **P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` — BACKLOG-**079**–**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
 
 
+## BACKLOG-121 — Non-split sheets: preview row_count from parser #1 vs apply parser #2
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-05 |
+| **Effort** | Medium |
+| **Source** | PROGRAM-A Unit 3 CONSULT latent finding: even for non-split sheets, preview `row_count` historically came from parser #1 while apply persists parser #2 rows — they can disagree; NB 221==221 was coincidence. D-034 fixed multi-BU identity only. |
+| **Idea** | For all bulk-backfill proposals (including single-BU sheets), derive `row_count` from apply-parser (#2) rows when `parser_ctx` is present so preview totals always match apply. |
+| **Why it matters / deferrable** | Silent preview/apply count drift on non-split sheets misleads steward review. Deferrable while multi-BU identity (108/D-034) is the active corpus risk. |
+| **What the work is** | Extend D-034 identity_rows path to non-split proposals; regression tests with engineered header/summary divergence. |
+| **Regression traps** | Do not reintroduce cross-parser aligner; do not fuzzy-match. |
+| **Behavior to retain** | D-034 multi-BU native `source_row_number`; subset-sheet exclusion. |
+| **Out of scope** | Unifying the two parsers into one module. |
+| **TRIGGER** | Steward reports preview vs applied line-count mismatch on a single-BU sheet, or next bulk-backfill corpus restore. |
+
+---
+
 ## BACKLOG-119 — Competition detector flags multi-BU shared POs as conflicts (phantom)
 
 | Field | Detail |
@@ -224,7 +241,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-03 |
+| **Status / parked** | **Closed** · 2026-08-05 (PROGRAM-A Unit 3 / D-034) |
 | **Effort** | Medium |
 | **Source** | Session 752: `f15:Sheet1:NR:2026 Q2`, `f16:NR:NR:2026 Q3` status `needs_attention` / `slice_row_mapping_failed`; only thin NB slices applied (cases 128/129/131) |
 | **Idea** | Fix slice→source_row mapping for the residual BU group after multi-BU split so the primary NR body can apply. |
@@ -234,6 +251,7 @@
 | **Behavior to retain** | Multi-BU sheet → per-BU proposals with `slice_source_rows`. |
 | **Out of scope** | Relabeling NB-from-NR cases (product-derived BU is intentional). |
 | **TRIGGER** | Warren wants full NR 2026 Q2/Q3 corpus before linking those periods. |
+| **Resolution** | D-034: identity from apply-parser rows; Sheet1 ⊆ NR excluded. cip case **146** NR 2026 Q3 = **120** lines (was case 130 Sheet1 = 14). Evidence-pack "~126" was sheet rows before BU split. |
 
 ---
 

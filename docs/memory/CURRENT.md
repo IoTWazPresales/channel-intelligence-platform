@@ -1,6 +1,6 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-05 (BACKLOG-119 shipment-aware competition detector)
+**Last updated:** 2026-08-05 (PROGRAM-A Unit 3 / BACKLOG-108 / D-034)
 
 **Branch:** `main`
 
@@ -8,12 +8,14 @@
 
 ## Done
 
-- **BACKLOG-119 / D-033:** `lineup_po_competition.py` classifies multi-case PO proposals via shipment `product_line` BU. Wired into `po_auto_link_proposals` (annotation only; FLAG≠BLOCK). Live cip: multi-case **35** → contested **13** / multi_bu_shared **22** / indeterminate **0**. No accepts/dismisses/supersessions. Cases 7/90/122/145 + case/link counts unchanged. Consumers planned_units delta 0.
-- Prior: BACKLOG-118 carry + 9→122 + f3 case 145.
+- **BACKLOG-108 / D-034:** Bulk BU-slice identity from apply-parser (#2) native `source_row_number`; Sheet1 ⊆ primary sheet excluded. Discovery: open-channel customer nulling caused 49 aligner misses (not header-offset). Warren: done bar **~120** (not pack’s ~126 sheet rows); ignore Sheet1. cip case **146** NR 2026 Q3 = **120** lines; case **130** soft-superseded; protected 7/90/122/145 unchanged. BACKLOG-121 parked (non-split preview/apply count drift).
+- Prior: BACKLOG-119 / D-033 competition detector; BACKLOG-118 carry.
 
 ## Next
 
-1. Warren triage of the **13 contested** residual (see CONTEXT / D2 list) — notably `PURMIDR26009979` (121/122/128 NB 26Q2) and cross-period pairs.
-2. Optional: UI chips for competition status (BACKLOG-113); bulk-select guard (115/110).
+1. **Q-010** Unit 1 / PR #17 decomposition (beat / budget / split land) — NEED_HUMAN.
+2. **Q-011** Unit 2 bulk-select survivor+contested guard predicates — NEED_HUMAN.
+3. PROGRAM-A Unit 4 contested residual triage (W1–W3) once Unit 3 VERIFY PASS.
 
 **Env:** local Windows. `cip`.
+**Data not in git:** case 146 apply + case 130 supersession on cip (and clone `cip_unit3_smoke`).

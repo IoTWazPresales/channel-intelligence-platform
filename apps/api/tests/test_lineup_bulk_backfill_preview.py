@@ -197,3 +197,81 @@ def test_out_of_catalogue_still_parses_ready_with_misses():
     assert any(p.status == "ready" for p in proposals)
     assert len(misses) >= 1
     assert any(m["token"] == "unknown-sku" for m in misses)
+
+
+def test_d034_multi_bu_native_slice_source_rows_with_parser_ctx():
+    """D-034: multi-BU split emits native parser#2 source_row_number — no aligner."""
+    xlsx = _minimal_xlsx(
+        sheets={
+            "NR": [
+                ["SKU", "Qty", "Customer"],
+                ["sku-nb", "10", "Amazon"],
+                ["sku-nr", "5", "Amazon"],
+            ],
+        }
+    )
+    idx = _idx(sku_to_id={"sku-nb": 1, "sku-nr": 2})
+    bu_map = {1: "NB", 2: "NR"}
+    parser_ctx = {
+        "product_map": {},
+        "customer_map": {},
+        "distributor_map": {},
+        "customer_alias_map": {},
+        "customers_by_id": {},
+    }
+    proposals, _, _ = build_case_proposals_for_file(
+        "f0",
+        BulkFileInput(filename="nr.xlsx", file_bytes=xlsx, folder_path=r"NR\2026\26Q3"),
+        product_index=idx,
+        business_unit_by_product_id=bu_map,
+        customer_map={},
+        parser_ctx=parser_ctx,
+    )
+    ready = [p for p in proposals if p.status == "ready"]
+    assert len(ready) >= 2
+    by_bu = {p.business_unit: p for p in ready}
+    assert by_bu["NB"].row_count == 1 and by_bu["NR"].row_count == 1
+    assert by_bu["NB"].slice_source_rows is not None
+    assert by_bu["NR"].slice_source_rows is not None
+    assert set(by_bu["NB"].slice_source_rows) | set(by_bu["NR"].slice_source_rows) == {1, 2}
+    assert all("slice_row_mapping_failed" not in (p.attention_reasons or []) for p in proposals)
+
+
+def test_sheet1_subset_of_primary_sheet_excluded():
+    """Warren Unit3: Sheet1 content ⊆ NR → excluded (no double-count)."""
+    xlsx = _minimal_xlsx(
+        sheets={
+            "NR": [
+                ["SKU", "Qty", "Customer"],
+                ["sku-a", "10", "Amazon"],
+                ["sku-b", "5", "Amazon"],
+            ],
+            "Sheet1": [
+                ["SKU", "Qty", "Customer"],
+                ["sku-a", "10", "Amazon"],
+            ],
+        }
+    )
+    idx = _idx(sku_to_id={"sku-a": 1, "sku-b": 2})
+    parser_ctx = {
+        "product_map": {},
+        "customer_map": {},
+        "distributor_map": {},
+        "customer_alias_map": {},
+        "customers_by_id": {},
+    }
+    proposals, _, _ = build_case_proposals_for_file(
+        "f0",
+        BulkFileInput(filename="nr.xlsx", file_bytes=xlsx, folder_path=r"NR\2026\26Q3"),
+        product_index=idx,
+        business_unit_by_product_id={1: "NR", 2: "NR"},
+        customer_map={},
+        parser_ctx=parser_ctx,
+    )
+    sheet1 = [p for p in proposals if p.sheet_name == "Sheet1"]
+    assert sheet1
+    assert all(p.status == "excluded" for p in sheet1)
+    assert any("sheet_content_subset_of:NR" in (p.attention_reasons or []) for p in sheet1)
+    nr = [p for p in proposals if p.sheet_name == "NR" and p.status == "ready"]
+    assert nr
+    assert sum(p.row_count for p in nr) == 2
