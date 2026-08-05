@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-05 — **PROGRAM-A Unit 5b landed** `9e9de34`: PoAutoLink → ResolutionWorklist; exact-po API; vitest 32/32. Awaiting Opus VERIFY.
 - 2026-08-05 — **PROGRAM-A Unit 5b IMPLEMENT** (uncommitted): PoAutoLink → ResolutionWorklist; S2 buckets; period default residual-inclusive; S7 exact-po API+UI; vitest 32/32. Awaiting commit/VERIFY.
 - 2026-08-05 — **PROGRAM-A Unit 5a VERIFY PASS** `e590897`/`c503e92` (Opus): V1 (a)×5 (target seams) / (b)×1 async slot; V2 target-apply UNPROVEN→BACKLOG-123; 5b will not validate target. Next Unit 5b PoAutoLink migrate.
 - 2026-08-05 — **PROGRAM-A Unit 5a landed** `e590897`: ResolutionWorklist contract + fixtures (PO vs merge/promote target selection); D-036; BACKLOG-123. Awaiting Opus VERIFY. Next 5b on PASS.
