@@ -104,6 +104,36 @@ async def test_summary_yoy_none_when_current_quarter_has_no_coverage() -> None:
 
 
 @pytest.mark.anyio
+async def test_summary_woc_never_uses_customer_velocity_avg() -> None:
+    """Guard against regressing to stock ÷ avg(FactCustomerVelocity) (~78k weeks on cip)."""
+    db = AsyncMock()
+    db.scalar = AsyncMock(return_value=0)
+    db.execute = AsyncMock(
+        side_effect=[
+            MagicMock(one=MagicMock(return_value=(0.0, 0.0))),
+            MagicMock(one=MagicMock(return_value=(0.0, 0.0))),
+        ]
+    )
+    stock = {(7, 1): 100.0, (7, 2): 50.0}
+    vel = {(7, 1): 10.0, (7, 2): 5.0}
+
+    with patch.object(co, "_table_exists", AsyncMock(return_value=False)):
+        with patch.object(co, "_has_rows", AsyncMock(return_value=False)):
+            with patch.object(co, "derived_stock_by_dist_product", AsyncMock(return_value=stock)):
+                with patch.object(
+                    co,
+                    "sellout_velocity_52wk_by_dist_product",
+                    AsyncMock(return_value=vel),
+                ) as vel_fn:
+                    out = await co.channel_ops_summary(db)
+
+    vel_fn.assert_awaited_once()
+    assert out["velocity_grain"] == "distributor_product"
+    assert out["weeks_of_cover"] == pytest.approx(10.0)
+    assert out["total_inventory_units"] == 150
+
+
+@pytest.mark.anyio
 async def test_summary_replenishment_pairs_below_threshold() -> None:
     db = AsyncMock()
     db.scalar = AsyncMock(return_value=0)

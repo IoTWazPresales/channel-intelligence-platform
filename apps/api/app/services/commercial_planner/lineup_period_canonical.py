@@ -67,6 +67,43 @@ def period_filter_matches_period_start(period_filter: str | None, period_start: 
     return True
 
 
+def normalize_period_label(label: str | None) -> str | None:
+    """Normalize period tokens for joins (``26Q2`` / ``2026 Q2`` / ``2026Q2`` → ``2026Q2``).
+
+    Label *canonicalisation* only — not layered signal inference (use
+    ``resolve_layered_period`` for folder/title/filename). Used by CPOR
+    ``pod_quarter`` ↔ lineup ``period_label`` joins.
+    """
+    if label is None:
+        return None
+    s = str(label).strip().upper().replace(" ", "")
+    if not s:
+        return None
+    if len(s) >= 4 and s[0:2].isdigit() and s[2] == "Q" and len(s) == 4:
+        s = "20" + s
+    return s
+
+
+def period_labels_equivalent(a: str | None, b: str | None) -> bool:
+    return normalize_period_label(a) is not None and normalize_period_label(a) == normalize_period_label(b)
+
+
+def period_label_sql_variants(label: str | None) -> list[str]:
+    """Common stored spellings for one logical quarter (for SQL IN filters)."""
+    n = normalize_period_label(label)
+    if not n:
+        return []
+    out: set[str] = {n}
+    raw = str(label or "").strip()
+    if raw:
+        out.add(raw)
+    if len(n) == 6 and n.startswith("20") and n[4] == "Q":
+        out.add(n[2:])  # 2026Q2 → 26Q2
+        out.add(f"{n[:4]} {n[4:]}")  # 2026 Q2
+        out.add(f"{n[:4]}-{n[4:]}")  # 2026-Q2
+    return sorted(out)
+
+
 def canonical_case_line_code(case: CommercialLineupCase) -> str | None:
     """Archive folder / card product-line code — ``business_unit`` wins over inferred ``product_line``."""
     for raw in (case.business_unit, case.product_line):

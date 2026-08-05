@@ -42,6 +42,12 @@ else:
             "task": "listing_capture.poll_listings",
             "schedule": crontab(minute="*/30"),
         },
+        # BACKLOG-098: calendar report schedules (daily/weekly 07:00 UTC).
+        # Only delivers ReportSchedule rows with enabled=True (config/opt-in).
+        "reports-run-due-schedules": {
+            "task": "reports.run_due_schedules",
+            "schedule": crontab(hour=7, minute=0),
+        },
     }
 
 # Interactive steward tasks vs batch validate/apply (BACKLOG-039). Workers must subscribe with

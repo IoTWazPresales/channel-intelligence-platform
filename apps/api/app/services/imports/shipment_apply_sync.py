@@ -208,6 +208,19 @@ def run_shipment_apply_sync(
         persist_clear_background_task_metadata(db, job)
         db.commit()
 
+    # BACKLOG-098: fan-out on_import_complete report schedules (best-effort).
+    # Only delivers ReportSchedule rows with enabled=True (config/opt-in).
+    try:
+        from app.services.report_schedule_runner import dispatch_import_complete_report_fanout
+
+        tid = getattr(job, "tenant_id", None) if job is not None else None
+        dispatch_import_complete_report_fanout(tenant_id=str(tid or "default"))
+    except Exception:
+        logger.exception(
+            "Shipment post-apply report schedule fan-out failed job_id=%s; apply remains complete",
+            job_id,
+        )
+
     _emit("complete", "Apply complete", fact_rows, fact_rows)
     return {
         "id": job_id,

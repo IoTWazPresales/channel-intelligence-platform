@@ -133,9 +133,14 @@ export default function LineupPage() {
       ),
   });
 
+  const budgetPeriod = '2026Q2';
   const { data: budgetPos } = useQuery({
-    queryKey: ['lineup-budget-position'],
-    queryFn: ({ signal }) => apiGet<Record<string, unknown>>('/api/v1/lineup/budget-position', { signal }),
+    queryKey: ['lineup-budget-position', budgetPeriod],
+    queryFn: ({ signal }) =>
+      apiGet<Record<string, unknown>>(
+        `/api/v1/lineup/budget-position?period_label=${encodeURIComponent(budgetPeriod)}`,
+        { signal },
+      ),
   });
 
   const delRow = useMutation({
@@ -344,12 +349,19 @@ export default function LineupPage() {
             </Typography>
             {budgetPos ? (
               <Typography variant="caption" display="block" sx={{ mb: 1 }} data-testid="lineup-budget-position">
-                Budget (binding={(budgetPos as { binding_axis?: string }).binding_axis ?? 'money'}, no hard
-                enforce yet): reserved{' '}
+                Budget {budgetPeriod} (binding={(budgetPos as { binding_axis?: string }).binding_axis ?? 'money'}
+                {(budgetPos as { planned_from_lineup_derived?: boolean }).planned_from_lineup_derived
+                  ? ', lineup-derived'
+                  : ''}
+                ): reserved{' '}
                 {String((budgetPos as { tracks?: { money?: { planned_reservation_usd?: number } } }).tracks?.money?.planned_reservation_usd ?? 0)}{' '}
                 · drawn CPOR{' '}
                 {String((budgetPos as { tracks?: { money?: { drawn_cpor_usd?: number } } }).tracks?.money?.drawn_cpor_usd ?? 0)}{' '}
-                USD · reservation ={' '}
+                USD · status{' '}
+                {String((budgetPos as { tracks?: { money?: { status?: string } } }).tracks?.money?.status ?? '—')} ·
+                sku econ{' '}
+                {String((budgetPos as { sku_assumption_count?: number }).sku_assumption_count ?? 0)} ·
+                reservation ={' '}
                 {String((budgetPos as { reservation_source?: string }).reservation_source ?? 'derived_from_profit')}
               </Typography>
             ) : null}

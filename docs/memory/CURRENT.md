@@ -1,6 +1,6 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-05 (PROGRAM-A Unit 3 / BACKLOG-108 / D-034)
+**Last updated:** 2026-08-05 (PROGRAM-A Unit 1 in flight — PR#17 split land)
 
 **Branch:** `main`
 
@@ -8,14 +8,15 @@
 
 ## Done
 
-- **BACKLOG-108 / D-034:** Bulk BU-slice identity from apply-parser (#2) native `source_row_number`; Sheet1 ⊆ primary sheet excluded. Discovery: open-channel customer nulling caused 49 aligner misses (not header-offset). Warren: done bar **~120** (not pack’s ~126 sheet rows); ignore Sheet1. cip case **146** NR 2026 Q3 = **120** lines; case **130** soft-superseded; protected 7/90/122/145 unchanged. BACKLOG-121 parked (non-split preview/apply count drift).
-- Prior: BACKLOG-119 / D-033 competition detector; BACKLOG-118 carry.
+- **§0 Unit3 check:** Computer Mania **is** in case 146 (14 lines). Case 130 supersession retained. Evidence pack NR=Amazon-only incomplete. D-034 correction + same-customer supersession lock.
+- **BACKLOG-108 / D-034** case 146=120 (prior).
+
+## In progress
+
+- **Unit 1:** progress_at + WoC guard + beat (enabled-only) + budget via `lineup_period_canonical.normalize_period_label` (no dual path).
 
 ## Next
 
-1. **Q-010** Unit 1 / PR #17 decomposition (beat / budget / split land) — NEED_HUMAN.
-2. **Q-011** Unit 2 bulk-select survivor+contested guard predicates — NEED_HUMAN.
-3. PROGRAM-A Unit 4 contested residual triage (W1–W3) once Unit 3 VERIFY PASS.
+Unit 1 VERIFY → Unit 2 bulk-select guard (Q-011 answered).
 
 **Env:** local Windows. `cip`.
-**Data not in git:** case 146 apply + case 130 supersession on cip (and clone `cip_unit3_smoke`).

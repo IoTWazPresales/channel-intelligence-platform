@@ -145,6 +145,9 @@ export function ReportBuilderView() {
   const [loadedSavedId, setLoadedSavedId] = useState<number | null>(null);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleName, setScheduleName] = useState('');
+  const [scheduleCadence, setScheduleCadence] = useState<
+    'weekly_monday_0700' | 'daily_0700' | 'on_import_complete'
+  >('weekly_monday_0700');
   const [exportBusy, setExportBusy] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
@@ -223,9 +226,9 @@ export function ReportBuilderView() {
     mutationFn: async () => {
       if (loadedSavedId == null) throw new Error('Load or save a report first');
       const sched = await apiPost<{ id: number }>('/api/v1/reports/schedules', {
-        name: scheduleName.trim() || `${metricKey} weekly`,
+        name: scheduleName.trim() || `${metricKey} schedule`,
         saved_report_id: loadedSavedId,
-        cadence: 'weekly_monday_0700',
+        cadence: scheduleCadence,
         format: 'xlsx',
         enabled: true,
         subscriber_user_ids: [],
@@ -236,6 +239,7 @@ export function ReportBuilderView() {
     onSuccess: (sched) => {
       setScheduleOpen(false);
       setScheduleName('');
+      setScheduleCadence('weekly_monday_0700');
       setActionErr(null);
       setActionMsg(`Schedule #${sched.id} created and run — check Inbox.`);
     },
@@ -470,12 +474,13 @@ export function ReportBuilderView() {
             variant="outlined"
             disabled={loadedSavedId == null}
             onClick={() => {
-              setScheduleName(`${selected?.label || metricKey} weekly`);
+              setScheduleName(`${selected?.label || metricKey} schedule`);
+              setScheduleCadence('weekly_monday_0700');
               setScheduleOpen(true);
             }}
             data-testid="report-schedule"
           >
-            Schedule Mon 07:00
+            Schedule delivery
           </Button>
         </Stack>
         {loadedSavedId != null && (
@@ -663,9 +668,28 @@ export function ReportBuilderView() {
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <Typography variant="body2" color="text.secondary">
-              Cadence: Monday 07:00 UTC (tenant weekly rule). Missing data is still delivered — that is the
-              intelligence. Creates the schedule and runs once into Inbox now.
+              Missing data is still delivered — that is the intelligence. Creates the schedule and runs
+              once into Inbox now. Calendar cadences are also run by Celery beat at 07:00 UTC;
+              import-complete cadences fire after DSI/shipment apply.
             </Typography>
+            <FormControl fullWidth>
+              <InputLabel id="report-schedule-cadence-label">Cadence</InputLabel>
+              <Select
+                labelId="report-schedule-cadence-label"
+                label="Cadence"
+                value={scheduleCadence}
+                onChange={(e) =>
+                  setScheduleCadence(
+                    e.target.value as 'weekly_monday_0700' | 'daily_0700' | 'on_import_complete'
+                  )
+                }
+                inputProps={{ 'data-testid': 'report-schedule-cadence' }}
+              >
+                <MenuItem value="weekly_monday_0700">Weekly Monday 07:00 UTC</MenuItem>
+                <MenuItem value="daily_0700">Daily 07:00 UTC</MenuItem>
+                <MenuItem value="on_import_complete">On import complete (DSI/shipment)</MenuItem>
+              </Select>
+            </FormControl>
             <TextField
               label="Schedule name"
               value={scheduleName}

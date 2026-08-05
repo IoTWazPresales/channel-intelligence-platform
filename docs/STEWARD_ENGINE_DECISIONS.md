@@ -395,3 +395,13 @@ ignore Sheet1).
 **Rejected:** loosening `row_match_key` / `strict=False`; unifying both parsers in this
 unit; hand-inserting the 126 sheet rows; treating sheet-row count as case-line count.
 
+**Correction 2026-08-05 (PROGRAM-A §0):** Evidence pack implication that sheet `NR` =
+Amazon-only and `Sheet1` = Computer Mania-only was **incomplete**. Live cip case **146**
+(`sheet=NR`) customer_token breakdown includes Computer Mania **14**, Amazon **5**,
+Evetech **20**, IC **17**, null/open-channel **49**, plus others (120 total). Case **130**
+(`sheet=Sheet1`, superseded→146) is Computer Mania **14** only — those rows are present
+inside 146 (Sheet1 ⊆ NR content identity from Unit 3 discovery). Supersession retained.
+**New lock (Warren §0/§5):** supersession requires **same period AND same customer**;
+different customer is never a revision. Subset-sheet exclusion remains correct for
+Sheet1⊆NR; do not supersede across distinct majority customers without that lock.
+

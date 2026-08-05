@@ -1,10 +1,20 @@
 import logging
+from datetime import datetime, timezone
+from typing import Any
 
 from app.core.dev_celery_logging import DEV_CELERY_LOGGER
 from app.ingestion.pipeline import process_import_job_sync
 from app.worker.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
+
+
+def _celery_progress_meta(**fields: Any) -> dict[str, Any]:
+    """PROGRESS meta with ``progress_at`` heartbeat for reaper / UI liveness."""
+    return {
+        **fields,
+        "progress_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 def _write_task_level_failure(job_id: int) -> None:
@@ -87,18 +97,17 @@ def process_import_job_task(self, job_id: int) -> int:
 
     def _on_progress(phase: str, phase_label: str, current_row: int, total_rows: int) -> None:
         try:
-            from datetime import datetime, timezone
-
             self.update_state(
                 state="PROGRESS",
-                meta={
-                    "phase": phase,
-                    "phase_label": phase_label,
-                    "current_row": current_row,
-                    "total_rows": total_rows,
-                    "pct": round(current_row / total_rows * 100) if total_rows else 0,
-                    "progress_at": datetime.now(timezone.utc).isoformat(),
-                },
+                meta=_celery_progress_meta(
+
+                    phase=phase,
+                    phase_label=phase_label,
+                    current_row=current_row,
+                    total_rows=total_rows,
+                    pct=round(current_row / total_rows * 100) if total_rows else 0,
+                
+                ),
             )
         except Exception:
             pass
@@ -123,13 +132,15 @@ def shipment_apply_task(self, job_id: int) -> dict:
         try:
             self.update_state(
                 state="PROGRESS",
-                meta={
-                    "phase": phase,
-                    "phase_label": phase_label,
-                    "current_row": current_row,
-                    "total_rows": total_rows,
-                    "pct": round(current_row / total_rows * 100) if total_rows else 0,
-                },
+                meta=_celery_progress_meta(
+
+                    phase=phase,
+                    phase_label=phase_label,
+                    current_row=current_row,
+                    total_rows=total_rows,
+                    pct=round(current_row / total_rows * 100) if total_rows else 0,
+                
+                ),
             )
         except Exception:
             pass
@@ -152,13 +163,15 @@ def _shipment_bulk_progress(self, phase: str, phase_label: str):
         try:
             self.update_state(
                 state="PROGRESS",
-                meta={
-                    "phase": phase,
-                    "phase_label": phase_label,
-                    "current_row": current,
-                    "total_rows": total,
-                    "pct": round(current / total * 100) if total else 0,
-                },
+                meta=_celery_progress_meta(
+
+                    phase=phase,
+                    phase_label=phase_label,
+                    current_row=current,
+                    total_rows=total,
+                    pct=round(current / total * 100) if total else 0,
+                
+                ),
             )
         except Exception:
             pass
@@ -223,13 +236,15 @@ def shipment_bulk_ignore_task(self, job_id: int, payload: dict) -> dict:
         try:
             self.update_state(
                 state="PROGRESS",
-                meta={
-                    "phase": "rejecting_candidates",
-                    "phase_label": "Rejecting steward candidates",
-                    "current_row": current,
-                    "total_rows": total,
-                    "pct": round(current / total * 100) if total else 0,
-                },
+                meta=_celery_progress_meta(
+
+                    phase="rejecting_candidates",
+                    phase_label="Rejecting steward candidates",
+                    current_row=current,
+                    total_rows=total,
+                    pct=round(current / total * 100) if total else 0,
+                
+                ),
             )
         except Exception:
             pass
@@ -364,13 +379,15 @@ def cpor_historical_apply_task(self, job_id: int) -> dict:
         try:
             self.update_state(
                 state="PROGRESS",
-                meta={
-                    "phase": phase,
-                    "phase_label": phase_label,
-                    "current_row": current_row,
-                    "total_rows": total_rows,
-                    "pct": round(current_row / total_rows * 100) if total_rows else 0,
-                },
+                meta=_celery_progress_meta(
+
+                    phase=phase,
+                    phase_label=phase_label,
+                    current_row=current_row,
+                    total_rows=total_rows,
+                    pct=round(current_row / total_rows * 100) if total_rows else 0,
+                
+                ),
             )
         except Exception:
             pass
@@ -392,13 +409,15 @@ def dsi_apply_task(self, job_id: int) -> dict:
         try:
             self.update_state(
                 state="PROGRESS",
-                meta={
-                    "phase": phase,
-                    "phase_label": phase_label,
-                    "current_row": current_row,
-                    "total_rows": total_rows,
-                    "pct": round(current_row / total_rows * 100) if total_rows else 0,
-                },
+                meta=_celery_progress_meta(
+
+                    phase=phase,
+                    phase_label=phase_label,
+                    current_row=current_row,
+                    total_rows=total_rows,
+                    pct=round(current_row / total_rows * 100) if total_rows else 0,
+                
+                ),
             )
         except Exception:
             pass
@@ -435,13 +454,15 @@ def dsi_bulk_ignore_task(self, job_id: int, payload: dict) -> dict:
         try:
             self.update_state(
                 state="PROGRESS",
-                meta={
-                    "phase": "ignoring_candidates",
-                    "phase_label": "Ignoring steward candidates",
-                    "current_row": current,
-                    "total_rows": total,
-                    "pct": round(current / total * 100) if total else 0,
-                },
+                meta=_celery_progress_meta(
+
+                    phase="ignoring_candidates",
+                    phase_label="Ignoring steward candidates",
+                    current_row=current,
+                    total_rows=total,
+                    pct=round(current / total * 100) if total else 0,
+                
+                ),
             )
         except Exception:
             pass
@@ -470,13 +491,15 @@ def dsi_bulk_provisional_customers_task(self, job_id: int, payload: dict) -> dic
         try:
             self.update_state(
                 state="PROGRESS",
-                meta={
-                    "phase": "creating_provisional_customers",
-                    "phase_label": "Creating provisional customers",
-                    "current_row": current,
-                    "total_rows": total,
-                    "pct": round(current / total * 100) if total else 0,
-                },
+                meta=_celery_progress_meta(
+
+                    phase="creating_provisional_customers",
+                    phase_label="Creating provisional customers",
+                    current_row=current,
+                    total_rows=total,
+                    pct=round(current / total * 100) if total else 0,
+                
+                ),
             )
         except Exception:
             pass
@@ -511,13 +534,15 @@ def dsi_resolution_plan_apply_task(self, job_id: int, payload: dict) -> dict:
         try:
             self.update_state(
                 state="PROGRESS",
-                meta={
-                    "phase": "applying_resolution_plan",
-                    "phase_label": "Applying resolution plan",
-                    "current_row": current,
-                    "total_rows": total or total_rows,
-                    "pct": round(current / total * 100) if total else 0,
-                },
+                meta=_celery_progress_meta(
+
+                    phase="applying_resolution_plan",
+                    phase_label="Applying resolution plan",
+                    current_row=current,
+                    total_rows=total or total_rows,
+                    pct=round(current / total * 100) if total else 0,
+                
+                ),
             )
         except Exception:
             pass
@@ -545,13 +570,15 @@ def dsi_resolution_plan_compute_task(self, job_id: int, payload: dict) -> dict:
         try:
             self.update_state(
                 state="PROGRESS",
-                meta={
-                    "phase": "computing_resolution_plan",
-                    "phase_label": "Computing resolution plan",
-                    "current_row": current,
-                    "total_rows": total,
-                    "pct": round(current / total * 100) if total else 0,
-                },
+                meta=_celery_progress_meta(
+
+                    phase="computing_resolution_plan",
+                    phase_label="Computing resolution plan",
+                    current_row=current,
+                    total_rows=total,
+                    pct=round(current / total * 100) if total else 0,
+                
+                ),
             )
         except Exception:
             pass
@@ -754,6 +781,26 @@ def cst_advance_report_slots_task() -> dict:
         result = advance_cst_report_slots(session)
         session.commit()
         return result
+
+
+@celery_app.task(name="reports.run_due_schedules")
+def reports_run_due_schedules_task() -> dict:
+    """Beat task: deliver enabled weekly/daily report schedules that are due."""
+    from app.services.report_schedule_runner import run_due_schedules_sync
+    from app.worker.celery_queues import dev_beat_disabled
+
+    if dev_beat_disabled():
+        return {"skipped": True, "reason": "dev_beat_disabled"}
+
+    return run_due_schedules_sync()
+
+
+@celery_app.task(name="reports.fanout_import_complete")
+def reports_fanout_import_complete_task(tenant_id: str) -> dict:
+    """Event task: fan-out on_import_complete schedules after DSI/shipment apply."""
+    from app.services.report_schedule_runner import fanout_on_import_complete_sync
+
+    return fanout_on_import_complete_sync(tenant_id=str(tenant_id or "default"))
 
 
 @celery_app.task(name="listing_capture.poll_listings")
