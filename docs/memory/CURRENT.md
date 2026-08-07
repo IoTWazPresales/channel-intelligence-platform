@@ -9,7 +9,7 @@
 ## Done
 
 - **Unit 6a** `d1d9000` / pin `b9756bd` — Opus VERIFY **PASS**. BACKLOG-109 closed.
-- **Unit 6b** (uncommitted until land) — customer-token stamp (C) + first live `opts.target`:
+- **Unit 6b** (c143c94) — customer-token stamp (C) + first live `opts.target`:
   - Service `lineup_customer_token_stamp.py` (preview/apply/revoke + worklist)
   - API stamp/preview/apply/revoke + worklist + minted-aliases
   - `CustomerTokenWorklistSection` on Po Management (requiresTarget + applyAdapter opts.target)
@@ -23,3 +23,4 @@ Opus **VERIFY** 6b → must declare `opts.target` **PROVEN** or STOP. Then PROGR
 **Skip re-audit:** D-032…D-037, Unit 2, S10 (PoAutoLink), 6a unlink.
 
 **Env:** local Windows. `cip`. Local `.env`: `CIP_LINEUP_PROTECTED_CASE_IDS=145` (not committed).
+
