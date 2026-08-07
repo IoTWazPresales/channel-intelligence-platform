@@ -1,19 +1,24 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-05 (PROGRAM-A Unit 5b VERIFY PASS)
+**Last updated:** 2026-08-07 (PROGRAM-A Unit 6a landed — awaiting Opus VERIFY)
 
-**Branch:** `main` @ `eb087c3` (feature `9e9de34`)
+**Branch:** `feat/unit6a-po-unlink`
 
-**Alembic:** `20260802_0009` (unchanged)
+**Alembic:** `20260802_0009` (unchanged — no migration)
 
 ## Done
 
-- **Unit 5b** `9e9de34` / pin `eb087c3` — Opus VERIFY **PASS**. PoAutoLink on ResolutionWorklist; S1–S14 (S10 waived); 114 residual-inclusive; S7 exact-po; opts.target not validated (BACKLOG-123).
-- **Unit 5a** `e590897` Opus VERIFY PASS.
-- **Unit 4** `86f8071` contested residual — VERIFY PASS.
+- **Unit 6a** BACKLOG-109 / W6-2 / W6-3 / D-037: steward unlink of active `commercial_lineup_case_po`.
+  - Service `lineup_case_po_unlink.py`; API `GET/POST …/lineup/case-po-links[/unlink]`.
+  - Web `PoCaseLinkWorklistSection` → `ResolutionWorklist` Unlink (`requiresTarget: false`) on Po Management.
+  - Unit tests 2/2; vitest 2/2; clone C1–C4 PASS on `cip_unit6a_smoke`.
+  - VERIFY seed: `.tmp/unit6a_verify_opus_seed.md`
 
 ## Next
 
-PROGRAM-A Unit 5 queue empty. Next consumer per Phase-0: promote/merge (BACKLOG-123) when trigger fires — first real `opts.target` / async validation.
+1. Opus **VERIFY** 6a → PASS before **6b IMPLEMENT**.
+2. Unit **6b**: customer stamp via alias (C) + first live `opts.target` (BACKLOG-112 / BACKLOG-123).
 
-**Env:** local Windows. `cip`. Local `.env`: `CIP_LINEUP_PROTECTED_CASE_IDS=145` (not committed).
+**Skip re-audit:** D-032…D-036, Unit 2 protection, S10 waiver (PoAutoLink only).
+
+**Env:** local Windows. `cip` for app; clone proofs via TEMPLATE + `DATABASE_URL_SYNC_MIGRATE`. Local `.env`: `CIP_LINEUP_PROTECTED_CASE_IDS=145` (not committed).

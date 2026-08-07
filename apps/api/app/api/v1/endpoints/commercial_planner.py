@@ -91,6 +91,13 @@ from app.services.commercial_planner.lineup_po_auto_link_actions import (
     dismiss_auto_link_proposal,
     restore_auto_link_proposal,
 )
+from app.services.commercial_planner.lineup_case_po_unlink import (
+    CasePoLinkNotFoundError,
+    HistoricalCasePoLinkError,
+    list_active_case_po_links,
+    unlink_case_po_links,
+)
+from app.services.commercial_planner.lineup_case_bulk_protection import CaseProtectedError
 from app.services.commercial_planner.lineup_case_parser import (
     parse_current_lineup_file,
     preview_current_lineup_file,
@@ -2048,6 +2055,19 @@ class PoAutoLinkApplyBody(BaseModel):
     notes: str | None = Field(default=None, max_length=1024)
 
 
+class CasePoUnlinkItem(BaseModel):
+    case_id: int = Field(ge=1)
+    purchase_order_id: int = Field(ge=1)
+    # Deliberate single-item override only — bulk UI must never set this.
+    allow_protected: bool = False
+
+
+class CasePoUnlinkBody(BaseModel):
+    items: list[CasePoUnlinkItem] = Field(min_length=1, max_length=200)
+    reason: str = Field(min_length=1, max_length=512)
+    allow_protected: bool = False
+
+
 class CommercialLineupLinePatch(BaseModel):
     quantity_units: float | None = None
     msrp_local: float | None = None
@@ -2803,6 +2823,57 @@ async def post_po_auto_link_apply(body: PoAutoLinkApplyBody, db: AsyncSession = 
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/lineup/case-po-links", status_code=200)
+async def get_case_po_links(
+    case_id: int | None = Query(default=None, ge=1),
+    limit: int = Query(default=500, ge=1, le=2000),
+    db: AsyncSession = Depends(get_db),
+):
+    """Active (non-superseded) case↔PO links for steward unlink worklist (Unit 6a)."""
+    return await list_active_case_po_links(db, case_id=case_id, limit=limit)
+
+
+@router.post("/lineup/case-po-links/unlink", status_code=200)
+async def post_case_po_unlink(body: CasePoUnlinkBody, db: AsyncSession = Depends(get_db)):
+    """Delete active ``commercial_lineup_case_po`` rows; refuse historical/superseded (W6-2)."""
+    try:
+        return await unlink_case_po_links(
+            db,
+            items=[item.model_dump() for item in body.items],
+            reason=body.reason,
+            allow_protected=body.allow_protected,
+            user=None,
+        )
+    except HistoricalCasePoLinkError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": str(exc),
+                "code": "historical_link",
+                "case_id": exc.case_id,
+                "purchase_order_id": exc.purchase_order_id,
+                "link_id": exc.link_id,
+            },
+        ) from exc
+    except CaseProtectedError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": str(exc),
+                "code": "protected_case",
+                "case_id": exc.case_id,
+                "protection": exc.protection.as_dict() if hasattr(exc, "protection") else None,
+            },
+        ) from exc
+    except CasePoLinkNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Link not found case={exc.case_id} po={exc.purchase_order_id}",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _lineup_row_needs_resolution(ln: CommercialLineupLine, raw_payload: dict) -> bool:

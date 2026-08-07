@@ -260,7 +260,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-03 |
+| **Status / parked** | **Implemented · awaiting Opus VERIFY** · 2026-08-07 (PROGRAM-A Unit 6a) |
 | **Effort** | Medium |
 | **Source** | Revert of mistaken case-7 link required direct SQL DELETE — no API/UI unlink |
 | **Idea** | Steward-facing unlink (or undo last apply) that deletes `commercial_lineup_case_po` and adjusts status ladder safely. |
@@ -270,6 +270,7 @@
 | **Behavior to retain** | Link idempotency on (case_id, purchase_order_id). |
 | **Out of scope** | Dismiss/restore of *proposals* (already exists). |
 | **TRIGGER** | First production need to reverse a bad link, or BACKLOG-110 ships. |
+| **Done note** | Unit 6a: `lineup_case_po_unlink` + `PoCaseLinkWorklistSection` on ResolutionWorklist; W6-2 refuse superseded; W6-3 DELETE+audit; Unit 2 `allow_protected`; clone C1–C4 on `cip_unit6a_smoke`. Close after VERIFY PASS. |
 
 ---
 

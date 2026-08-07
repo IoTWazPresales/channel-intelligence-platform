@@ -459,4 +459,19 @@ import engine), Catalogue-gap worklist, Unit-4 disposition triage.
 componentization; building a parallel async task-slot for PO; designing the
 contract against PO alone; bundling 5a+5b in one PR.
 
+## D-037 · 2026-08-07 · Case↔PO unlink history is steward_audit (no soft-delete)
+**Locked.** Steward unlink of active `commercial_lineup_case_po` is a **real DELETE**
+of the join row. History lives in `steward_audit_event` (`action=lineup_case_po_unlink`,
+`payload_json` includes case_id, purchase_order_id, po_number, reason,
+`carried_under_d032`, before/after status + po counts) in the **same transaction**
+as the DELETE. No soft-delete column / Alembic for this path.
+- **W6-2:** refuse when case `commercial_status == 'superseded'` (preserves D-032
+  trail on loser cases). Active winners remain unlinkable.
+- **Status ladder:** only `po_pending` with zero remaining links → `draft_imported`;
+  never downgrade `po_issued`+.
+- **Unit 2:** protected cases need `allow_protected`; bulk never sets it.
+**Origin:** PROGRAM-A Unit 6a / BACKLOG-109; Warren option A 2026-08-06.
+**Rejected:** soft-delete column; clearing lineup `customer_id` as “unlink”;
+case hard-delete; PoAutoLink one-off bypassing ResolutionWorklist.
+
 

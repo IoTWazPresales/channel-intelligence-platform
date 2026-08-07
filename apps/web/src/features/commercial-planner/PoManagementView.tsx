@@ -23,6 +23,7 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 
 import { PoAutoLinkProposalsSection, PO_AUTO_LINK_SECTION_ID } from './PoAutoLinkProposalsSection';
+import { PoCaseLinkWorklistSection } from './PoCaseLinkWorklistSection';
 import { LineupDuplicatePartitionPanel } from './LineupDuplicatePartitionPanel';
 import { PoDismissReasonDialog } from './PoDismissReasonDialog';
 import { buildPlanVsExecutedHref } from '@/features/plan-vs-executed/productDisplay';
@@ -386,6 +387,8 @@ export function PoManagementView() {
           </CardContent>
         </Card>
       ) : null}
+
+      <PoCaseLinkWorklistSection />
 
       <PoAutoLinkProposalsSection autoFetch onPendingCountChange={setPendingLinkProposals} />
 
