@@ -474,4 +474,41 @@ as the DELETE. No soft-delete column / Alembic for this path.
 **Rejected:** soft-delete column; clearing lineup `customer_id` as “unlink”;
 case hard-delete; PoAutoLink one-off bypassing ResolutionWorklist.
 
+## D-038 · 2026-08-07 · Distributor-named customer-column token = Open Channel + line.distributor_id
+**Locked.** When a lineup `customer_token` **names a distributor** (exact `_norm_key`
+match on `dim_distributor.name` / approved distributor alias, after optional structured
+strip of prefixes `sadc - ` / `channel - ` / `channel ` or suffix ` distribution`),
+the steward stamp dual-writes in **one transaction**:
+1. **Global** approved `customer_source_token_alias` → **OPEN_CHANNEL** (`customer_id=1`;
+   `source_definition_id=NULL`, `distributor_id=NULL` on the alias — the claim is about
+   the **token name**, not a scoped distributor alias).
+2. **`commercial_lineup_line.distributor_id`** = the matched distributor on every stamped
+   line.
+
+Token carries identity; **never** infer distributor from case alone when the token
+already names one. Exact match only — no fuzzy, no substring, no auto-create of dims.
+No-dim stems (`smd`, `superdisti`, `sadc homeless`) stay free-picker / park — not this rule.
+
+**Justification (E5/E6):** prior stamps of `sadc - compuspeed`→customer 107 and
+`mitsumi distribution`→customer 18 treated distributor-parked tokens as retailers
+because ship/product bleed and missing dual-write. Revoked + restamped under this rule
+(Compuspeed 12 / Mitsumi 22 + OC).
+
+**Origin:** PROGRAM-A Unit 6c / BACKLOG-112 close-out; Warren W1–W2 + STOP GATE strip lock.
+**Rejected:** scoped alias with `alias.distributor_id` as attribution; case-level
+distributor inference replacing the token; fuzzy/substring match; auto-create dims.
+
+## D-039 · 2026-08-07 · No global alias from a single pre-selected ship-derived candidate
+**Locked.** Candidate provenance is first-class: each candidate carries `source`
+(`alias`|`ship`) and ship rows include `purchase_order_id`, PO `distributor_id`,
+`product_id`. A candidate that is **ship-only** (no supporting approved alias) must
+**never** be pre-selected for stamp — steward must make an explicit choice (including
+free named-customer pick where allowed). Stamp audit `payload_json` records
+`candidates_presented`, `candidate_source`, `was_preselected`, and provenance.
+W6 product isolation: drop products shared with another differently-resolved
+`customer_token` on the same case before building ship candidates.
+**Origin:** PROGRAM-A Unit 6c W5/W6/W7; E5/E6 false retailer stamps.
+**Rejected:** auto-stamp from a lone ship candidate; minting global aliases without
+provenance in audit.
+
 

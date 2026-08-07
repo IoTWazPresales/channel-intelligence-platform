@@ -2904,10 +2904,11 @@ async def post_case_po_unlink(body: CasePoUnlinkBody, db: AsyncSession = Depends
 @router.get("/lineup/customer-token/worklist", status_code=200)
 async def get_customer_token_worklist(
     limit: int = Query(default=200, ge=1, le=500),
+    exclude_prefix: str | None = Query(default="unit6b-"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Unresolved / contested lineup customer tokens for stamp steward (Unit 6b)."""
-    return await list_customer_token_worklist(db, limit=limit)
+    """Unresolved / contested lineup customer tokens for stamp steward (Unit 6b/6c)."""
+    return await list_customer_token_worklist(db, limit=limit, exclude_prefix=exclude_prefix)
 
 
 @router.get("/lineup/customer-token/minted-aliases", status_code=200)

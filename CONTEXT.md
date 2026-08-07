@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-07 — **PROGRAM-A Unit 6c / BACKLOG-112 steward-complete** on `feat/unit6c-backlog-112-closeout`: D-038 distributor-token→OC+`line.distributor_id`; D-039 ship-only never preselect; W4 revoke/restamp cip; clone C1–C9; BACKLOG-125/126 parked; 124 still empty_token. Next: free-picker residual or 124.
 - 2026-08-07 — **PROGRAM-A Unit 6 → main** `f49a7c8` (FF merge+push). 109 closed; 112 stampable cleared; opts.target PROVEN; ship-scope via case_po. Residual: genuine_conflict routing + 124 empty_token + 123 promote/merge migrate. Roadmap next: A1∥A2∥A3 or named PROGRAM residual.
 - 2026-08-07 — **112 stampable residual stewarded (browser):** ship-scope fix `09506fa`; stamped sadc-compuspeed→107 + mitsumi distribution→18; stampable-left=0. 124 deferred. Unlink+stamp smoke PASS (unlink cancel). Next: merge PR; 123 stays parked.
 - 2026-08-07 — **PROGRAM-A Unit 6b VERIFY PASS** `c143c94`/`1dcdaa7` (Opus): opts.target **PROVEN**; stamp/preview/revoke/conflict gates; DB proofs apply/rollback/conflict/revoke. Unit 6 queue mergeable on `feat/unit6a-po-unlink`.
