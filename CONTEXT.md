@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-07 — **112 stampable residual stewarded (browser):** ship-scope fix `09506fa`; stamped sadc-compuspeed→107 + mitsumi distribution→18; stampable-left=0. 124 deferred. Unlink+stamp smoke PASS (unlink cancel). Next: merge PR; 123 stays parked.
 - 2026-08-07 — **PROGRAM-A Unit 6b VERIFY PASS** `c143c94`/`1dcdaa7` (Opus): opts.target **PROVEN**; stamp/preview/revoke/conflict gates; DB proofs apply/rollback/conflict/revoke. Unit 6 queue mergeable on `feat/unit6a-po-unlink`.
 - 2026-08-07 — **PROGRAM-A Unit 6b IMPLEMENT** (on `feat/unit6a-po-unlink`): customer-token stamp (C) + worklist + first live `opts.target`; BACKLOG-124; pytest 5/vitest 3. Awaiting commit + Opus VERIFY (must declare opts.target PROVEN).
 - 2026-08-07 — **PROGRAM-A Unit 6a VERIFY PASS** `d1d9000`/`b9756bd` (Opus): W6-2/W6-3/D-037 gates; ResolutionWorklist Unlink; clone C1–C4. Next Unit **6b** alias stamp (C) + opts.target.

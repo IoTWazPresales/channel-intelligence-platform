@@ -226,7 +226,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **In progress via Unit 6b** · 2026-08-07 (alias stamp (C) + worklist) |
+| **Status / parked** | **Partially cleared** · 2026-08-07 — stampable residual stewarded in browser (sadc-compuspeed→107, mitsumi distribution→18). Remaining: genuine_conflict tokens + clean-without-candidates + empty_token (124). |
 | **Effort** | Medium |
 | **Source** | Clear-211 unit: all 17 medium proposals have `fact_inbound_shipment.resolved_customer_id` + exact `customer_source_token_alias` hits; align still `unresolved` because matched lineup lines lack `customer_id` |
 | **Idea** | Steward path to stamp lineup line customer from the already-resolved shipment customer (exact, no fuzzy) then re-propose/accept; or surface this as a distinct reason (`lineup_customer_missing`). |
