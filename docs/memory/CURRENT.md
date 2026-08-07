@@ -1,24 +1,19 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-07 (PROGRAM-A Unit 6a landed — awaiting Opus VERIFY)
+**Last updated:** 2026-08-07 (PROGRAM-A Unit 6a VERIFY PASS)
 
-**Branch:** `feat/unit6a-po-unlink` @ `d1d9000`
+**Branch:** `feat/unit6a-po-unlink` @ `b9756bd` (feature `d1d9000`)
 
-**Alembic:** `20260802_0009` (unchanged — no migration)
+**Alembic:** `20260802_0009` (unchanged)
 
 ## Done
 
-- **Unit 6a** `d1d9000` — BACKLOG-109 / W6-2 / W6-3 / D-037: steward unlink of active `commercial_lineup_case_po`.
-  - Service `lineup_case_po_unlink.py`; API `GET/POST …/lineup/case-po-links[/unlink]`.
-  - Web `PoCaseLinkWorklistSection` → `ResolutionWorklist` Unlink (`requiresTarget: false`) on Po Management.
-  - Unit tests 2/2; vitest 2/2; clone C1–C4 PASS on `cip_unit6a_smoke`.
-  - VERIFY seed: `.tmp/unit6a_verify_opus_seed.md`
+- **Unit 6a** `d1d9000` / pin `b9756bd` — Opus VERIFY **PASS**. BACKLOG-109 unlink; D-037; W6-2/W6-3; clone C1–C4.
 
 ## Next
 
-1. Opus **VERIFY** 6a → PASS before **6b IMPLEMENT**.
-2. Unit **6b**: customer stamp via alias (C) + first live `opts.target` (BACKLOG-112 / BACKLOG-123).
+**Unit 6b IMPLEMENT** — customer stamp via alias (C) + first live `opts.target` (BACKLOG-112 / BACKLOG-123). Prompt: `.tmp/unit6b_cursor_prompt.md`.
 
-**Skip re-audit:** D-032…D-036, Unit 2 protection, S10 waiver (PoAutoLink only).
+**Skip re-audit:** D-032…D-037, Unit 2 protection, S10 waiver (PoAutoLink only), 6a unlink path.
 
-**Env:** local Windows. `cip` for app; clone proofs via TEMPLATE + `DATABASE_URL_SYNC_MIGRATE`. Local `.env`: `CIP_LINEUP_PROTECTED_CASE_IDS=145` (not committed).
+**Env:** local Windows. `cip`. Local `.env`: `CIP_LINEUP_PROTECTED_CASE_IDS=145` (not committed).
