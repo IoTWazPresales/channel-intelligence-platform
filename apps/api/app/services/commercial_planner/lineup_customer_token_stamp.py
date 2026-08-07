@@ -67,43 +67,71 @@ async def _load_approved_alias_rows(
     return list((await db.execute(q)).all())
 
 
+async def _ship_customer_ids_for_token_lines(
+    db: AsyncSession,
+    *,
+    token_lines: list[CommercialLineupLine],
+) -> set[int]:
+    """Ship-resolved customers scoped to POs linked to the same cases as these lines.
+
+    Broad product-only fan-out pulls unrelated customers who bought the same SKU
+    and falsely marks specificity tokens as genuine_conflict.
+    """
+    case_ids = {int(ln.case_id) for ln in token_lines}
+    product_ids = {int(ln.product_id) for ln in token_lines if ln.product_id is not None}
+    if not case_ids or not product_ids:
+        return set()
+    from app.models.commercial_lineup import CommercialLineupCasePo
+
+    po_ids = list(
+        (
+            await db.execute(
+                select(CommercialLineupCasePo.purchase_order_id).where(
+                    CommercialLineupCasePo.case_id.in_(list(case_ids))
+                )
+            )
+        ).scalars().all()
+    )
+    if not po_ids:
+        return set()
+    ship_cids = list(
+        (
+            await db.execute(
+                select(FactInboundShipment.resolved_customer_id)
+                .where(
+                    FactInboundShipment.purchase_order_id.in_([int(p) for p in po_ids]),
+                    FactInboundShipment.product_id.in_(list(product_ids)),
+                    FactInboundShipment.resolved_customer_id.isnot(None),
+                )
+                .distinct()
+            )
+        ).scalars().all()
+    )
+    return {int(c) for c in ship_cids if c is not None}
+
+
 async def _named_competitors(
     db: AsyncSession,
     *,
     norm_token: str,
     open_channel_id: int | None,
+    token_lines: list[CommercialLineupLine] | None = None,
 ) -> list[int]:
-    """Distinct non–OPEN_CHANNEL customers from approved aliases + ship evidence on token lines."""
+    """Distinct non–OPEN_CHANNEL customers from approved aliases + case-PO-scoped ship evidence."""
     alias_rows = await _load_approved_alias_rows(db, norm_token=norm_token)
     ids: set[int] = {int(cid) for _, cid, _ in alias_rows}
 
-    # Ship evidence for products on lines that carry this token
-    lines = list(
-        (
-            await db.execute(
-                select(CommercialLineupLine).where(CommercialLineupLine.customer_token.isnot(None))
-            )
-        ).scalars().all()
-    )
-    product_ids = {
-        int(ln.product_id)
-        for ln in lines
-        if ln.product_id is not None and _norm_key(ln.customer_token) == norm_token
-    }
-    if product_ids:
-        ship_cids = list(
+    if token_lines is None:
+        all_lines = list(
             (
                 await db.execute(
-                    select(FactInboundShipment.resolved_customer_id)
-                    .where(
-                        FactInboundShipment.product_id.in_(product_ids),
-                        FactInboundShipment.resolved_customer_id.isnot(None),
-                    )
-                    .distinct()
+                    select(CommercialLineupLine).where(CommercialLineupLine.customer_token.isnot(None))
                 )
             ).scalars().all()
         )
-        ids.update(int(c) for c in ship_cids if c is not None)
+        token_lines = [ln for ln in all_lines if _norm_key(ln.customer_token) == norm_token]
+
+    ids.update(await _ship_customer_ids_for_token_lines(db, token_lines=token_lines))
 
     if open_channel_id is not None:
         ids.discard(int(open_channel_id))
@@ -211,7 +239,10 @@ async def apply_customer_token_stamp(
         raise CustomerTokenStampError(f"target customer {target_customer_id} does not exist")
 
     oc_id = await get_open_channel_customer_id(db)
-    named = await _named_competitors(db, norm_token=nt, open_channel_id=oc_id)
+    lines = await _lines_for_norm_token(db, nt)
+    named = await _named_competitors(
+        db, norm_token=nt, open_channel_id=oc_id, token_lines=lines
+    )
     if len(named) > 1:
         raise CustomerTokenConflictError(nt, named)
 
@@ -228,7 +259,7 @@ async def apply_customer_token_stamp(
     ).scalars().first()
 
     raw_sample = next(
-        (ln.customer_token for ln in await _lines_for_norm_token(db, nt) if ln.customer_token),
+        (ln.customer_token for ln in lines if ln.customer_token),
         nt,
     )
     if existing is None:
@@ -275,7 +306,6 @@ async def apply_customer_token_stamp(
         if c.code:
             customer_map[c.code.strip().lower()] = c
 
-    lines = await _lines_for_norm_token(db, nt)
     per_line: list[dict[str, Any]] = []
     line_ids: list[int] = []
     prior_customer_ids: dict[str, int | None] = {}
@@ -472,26 +502,9 @@ async def list_customer_token_worklist(
     items: list[dict[str, Any]] = []
 
     for nt, token_lines in sorted(by_token.items(), key=lambda x: (-len(x[1]), x[0])):
-        named = await _named_competitors(db, norm_token=nt, open_channel_id=oc_id)
-        # Also include OC if ship evidence has it
         alias_rows = await _load_approved_alias_rows(db, norm_token=nt)
         all_cands = {int(cid) for _, cid, _ in alias_rows}
-        # ship cids including OC
-        product_ids = {int(ln.product_id) for ln in token_lines if ln.product_id is not None}
-        if product_ids:
-            ship_cids = list(
-                (
-                    await db.execute(
-                        select(FactInboundShipment.resolved_customer_id)
-                        .where(
-                            FactInboundShipment.product_id.in_(product_ids),
-                            FactInboundShipment.resolved_customer_id.isnot(None),
-                        )
-                        .distinct()
-                    )
-                ).scalars().all()
-            )
-            all_cands.update(int(c) for c in ship_cids if c is not None)
+        all_cands.update(await _ship_customer_ids_for_token_lines(db, token_lines=token_lines))
 
         named_only = sorted(c for c in all_cands if oc_id is None or c != int(oc_id))
         has_oc = oc_id is not None and int(oc_id) in all_cands
@@ -503,7 +516,7 @@ async def list_customer_token_worklist(
         elif len(named_only) == 1 or (len(all_cands) == 1):
             bucket = "clean"
         elif not all_cands:
-            bucket = "clean"  # stampable once steward picks via candidates empty — still show
+            bucket = "clean"
         else:
             bucket = "clean"
 
@@ -530,7 +543,7 @@ async def list_customer_token_worklist(
                 "bucket": bucket,
                 "alias_candidate_ids": sorted(all_cands),
                 "preferred_target_id": preferred,
-                "stamp_enabled": bucket in {"clean", "specificity"},
+                "stamp_enabled": bucket in {"clean", "specificity"} and bool(all_cands),
                 "conflict": bucket == "genuine_conflict",
                 "competing_customer_ids": named_only if bucket == "genuine_conflict" else [],
                 "dispositions": list(CONFLICT_DISPOSITIONS) if bucket == "genuine_conflict" else [],
