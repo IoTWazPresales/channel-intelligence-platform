@@ -27,6 +27,24 @@
 | **Behavior to retain** | Preview→Promote confirm false→true; TMP visibility; merge survivor selection; FLAG≠BLOCK. |
 | **Out of scope** | Migrating promote/merge inside Unit 5a or 5b; absorbing DSI into this contract. |
 | **TRIGGER** | Unit 5b VERIFY PASS **and** (distributor-merge auto-link grid is built **or** Warren schedules promote-dialog UX rewrite). Also resume S10 slot build when merge grid needs Celery, or if PO batch >500 / p95 apply >30s. |
+| **Note** | Unit 6b is the **first live** `opts.target` consumer (customer-token stamp). Promote/merge migration remains parked per TRIGGER. |
+
+---
+
+## BACKLOG-124 — Tokenless customer acquisition for blank lineup customer_token
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-07 |
+| **Effort** | Medium |
+| **Source** | PROGRAM-A Unit 6 CONSULT Q0/D6; Unit 6b scope — empty_token bucket (esp. case 127 matched-null lines) |
+| **Idea** | Acquisition path for lineup lines with blank/null `customer_token` that still need a customer stamp (cannot mint `CustomerSourceTokenAlias` without a token). Hint: D6 showed 13/13 medium POs were single-customer on ship side. |
+| **Why it matters / deferrable** | Blocks residual `customer_unresolved` where ship is resolved but lineup token is empty. Stamp (C) cannot run. Deferrable while stampable tokens (clean/specificity) clear first. |
+| **What the work is** | Steward UX to attach a token or stamp from PO/ship customer without inventing fuzzy aliases; may use PO single-customer evidence as acquisition hint only with explicit confirm. |
+| **Regression traps** | Never auto-create dim_customer; never invent tokens silently; FLAG≠BLOCK. |
+| **Behavior to retain** | Empty-token rows remain visible in worklist with stamp disabled. |
+| **Out of scope** | Unit 6b stamp/alias path for non-empty tokens. |
+| **TRIGGER** | After Unit 6b VERIFY PASS when Warren clears empty-token residual, or case 127 / tokenless volume blocks planning. |
 
 ---
 
@@ -208,7 +226,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-03 |
+| **Status / parked** | **In progress via Unit 6b** · 2026-08-07 (alias stamp (C) + worklist) |
 | **Effort** | Medium |
 | **Source** | Clear-211 unit: all 17 medium proposals have `fact_inbound_shipment.resolved_customer_id` + exact `customer_source_token_alias` hits; align still `unresolved` because matched lineup lines lack `customer_id` |
 | **Idea** | Steward path to stamp lineup line customer from the already-resolved shipment customer (exact, no fuzzy) then re-propose/accept; or surface this as a distinct reason (`lineup_customer_missing`). |
@@ -260,7 +278,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Implemented · awaiting Opus VERIFY** · 2026-08-07 (PROGRAM-A Unit 6a) |
+| **Status / parked** | **Closed** · 2026-08-07 (PROGRAM-A Unit 6a VERIFY PASS) |
 | **Effort** | Medium |
 | **Source** | Revert of mistaken case-7 link required direct SQL DELETE — no API/UI unlink |
 | **Idea** | Steward-facing unlink (or undo last apply) that deletes `commercial_lineup_case_po` and adjusts status ladder safely. |

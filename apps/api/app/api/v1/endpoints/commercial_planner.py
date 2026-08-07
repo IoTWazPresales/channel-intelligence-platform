@@ -97,6 +97,15 @@ from app.services.commercial_planner.lineup_case_po_unlink import (
     list_active_case_po_links,
     unlink_case_po_links,
 )
+from app.services.commercial_planner.lineup_customer_token_stamp import (
+    CustomerTokenConflictError,
+    CustomerTokenStampError,
+    apply_customer_token_stamp,
+    list_customer_token_worklist,
+    list_minted_global_aliases,
+    preview_customer_token_stamp,
+    revoke_customer_token_alias,
+)
 from app.services.commercial_planner.lineup_case_bulk_protection import CaseProtectedError
 from app.services.commercial_planner.lineup_case_parser import (
     parse_current_lineup_file,
@@ -2068,6 +2077,22 @@ class CasePoUnlinkBody(BaseModel):
     allow_protected: bool = False
 
 
+class CustomerTokenStampBody(BaseModel):
+    norm_token: str = Field(min_length=1, max_length=512)
+    target_customer_id: int = Field(ge=1)
+    reason: str = Field(default="steward stamp", min_length=1, max_length=512)
+
+
+class CustomerTokenStampPreviewBody(BaseModel):
+    norm_token: str = Field(min_length=1, max_length=512)
+    target_customer_id: int = Field(ge=1)
+
+
+class CustomerTokenAliasRevokeBody(BaseModel):
+    alias_id: int = Field(ge=1)
+    reason: str = Field(min_length=1, max_length=512)
+
+
 class CommercialLineupLinePatch(BaseModel):
     quantity_units: float | None = None
     msrp_local: float | None = None
@@ -2873,6 +2898,74 @@ async def post_case_po_unlink(body: CasePoUnlinkBody, db: AsyncSession = Depends
             detail=f"Link not found case={exc.case_id} po={exc.purchase_order_id}",
         ) from exc
     except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/lineup/customer-token/worklist", status_code=200)
+async def get_customer_token_worklist(
+    limit: int = Query(default=200, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+):
+    """Unresolved / contested lineup customer tokens for stamp steward (Unit 6b)."""
+    return await list_customer_token_worklist(db, limit=limit)
+
+
+@router.get("/lineup/customer-token/minted-aliases", status_code=200)
+async def get_minted_customer_token_aliases(
+    limit: int = Query(default=100, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+):
+    return await list_minted_global_aliases(db, limit=limit)
+
+
+@router.post("/lineup/customer-token/stamp/preview", status_code=200)
+async def post_customer_token_stamp_preview(
+    body: CustomerTokenStampPreviewBody, db: AsyncSession = Depends(get_db)
+):
+    try:
+        return await preview_customer_token_stamp(
+            db, norm_token=body.norm_token, target_customer_id=body.target_customer_id
+        )
+    except CustomerTokenStampError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/lineup/customer-token/stamp/apply", status_code=200)
+async def post_customer_token_stamp_apply(
+    body: CustomerTokenStampBody, db: AsyncSession = Depends(get_db)
+):
+    try:
+        return await apply_customer_token_stamp(
+            db,
+            None,
+            norm_token=body.norm_token,
+            target_customer_id=body.target_customer_id,
+            reason=body.reason,
+        )
+    except CustomerTokenConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "conflict": True,
+                "message": str(exc),
+                "norm_token": exc.norm_token,
+                "competing_customer_ids": exc.competing_customer_ids,
+                "dispositions": exc.dispositions,
+            },
+        ) from exc
+    except CustomerTokenStampError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/lineup/customer-token/alias/revoke", status_code=200)
+async def post_customer_token_alias_revoke(
+    body: CustomerTokenAliasRevokeBody, db: AsyncSession = Depends(get_db)
+):
+    try:
+        return await revoke_customer_token_alias(
+            db, None, alias_id=body.alias_id, reason=body.reason
+        )
+    except CustomerTokenStampError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 

@@ -1,19 +1,25 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-07 (PROGRAM-A Unit 6a VERIFY PASS)
+**Last updated:** 2026-08-07 (PROGRAM-A Unit 6b IMPLEMENT — awaiting VERIFY)
 
-**Branch:** `feat/unit6a-po-unlink` @ `b9756bd` (feature `d1d9000`)
+**Branch:** `feat/unit6a-po-unlink` (6a+6b sequential)
 
 **Alembic:** `20260802_0009` (unchanged)
 
 ## Done
 
-- **Unit 6a** `d1d9000` / pin `b9756bd` — Opus VERIFY **PASS**. BACKLOG-109 unlink; D-037; W6-2/W6-3; clone C1–C4.
+- **Unit 6a** `d1d9000` / pin `b9756bd` — Opus VERIFY **PASS**. BACKLOG-109 closed.
+- **Unit 6b** (uncommitted until land) — customer-token stamp (C) + first live `opts.target`:
+  - Service `lineup_customer_token_stamp.py` (preview/apply/revoke + worklist)
+  - API stamp/preview/apply/revoke + worklist + minted-aliases
+  - `CustomerTokenWorklistSection` on Po Management (requiresTarget + applyAdapter opts.target)
+  - BACKLOG-124 tokenless; BACKLOG-112 in progress
+  - pytest 5/5; vitest 3/3
 
 ## Next
 
-**Unit 6b IMPLEMENT** — customer stamp via alias (C) + first live `opts.target` (BACKLOG-112 / BACKLOG-123). Prompt: `.tmp/unit6b_cursor_prompt.md`.
+Opus **VERIFY** 6b → must declare `opts.target` **PROVEN** or STOP. Then PROGRAM-A Unit 6 queue empty / merge PR.
 
-**Skip re-audit:** D-032…D-037, Unit 2 protection, S10 waiver (PoAutoLink only), 6a unlink path.
+**Skip re-audit:** D-032…D-037, Unit 2, S10 (PoAutoLink), 6a unlink.
 
 **Env:** local Windows. `cip`. Local `.env`: `CIP_LINEUP_PROTECTED_CASE_IDS=145` (not committed).

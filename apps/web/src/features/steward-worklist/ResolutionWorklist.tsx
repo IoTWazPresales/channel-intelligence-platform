@@ -252,8 +252,9 @@ export function ResolutionWorklist<TItem, TBucketId extends string = string>(
                 item: activeItem,
                 action: targetAction,
                 targets: targetAction.targets!(activeItem),
-                onPick: () => {
-                  /* Consumer owns picked-target state; slot only renders choices. */
+                onPick: (target) => {
+                  // Forward pick to consumer renderer; consumer owns apply via opts.target.
+                  void target;
                 },
               })
             : null}

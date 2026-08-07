@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-07 — **PROGRAM-A Unit 6b IMPLEMENT** (on `feat/unit6a-po-unlink`): customer-token stamp (C) + worklist + first live `opts.target`; BACKLOG-124; pytest 5/vitest 3. Awaiting commit + Opus VERIFY (must declare opts.target PROVEN).
 - 2026-08-07 — **PROGRAM-A Unit 6a VERIFY PASS** `d1d9000`/`b9756bd` (Opus): W6-2/W6-3/D-037 gates; ResolutionWorklist Unlink; clone C1–C4. Next Unit **6b** alias stamp (C) + opts.target.
 - 2026-08-07 — **PROGRAM-A Unit 6a landed** `d1d9000` on `feat/unit6a-po-unlink`: BACKLOG-109 unlink active `commercial_lineup_case_po`; ResolutionWorklist Unlink; W6-2/W6-3/D-037; clone C1–C4 PASS on `cip_unit6a_smoke`. Awaiting Opus VERIFY before 6b.
 - 2026-08-05 — **PROGRAM-A Unit 5b VERIFY PASS** `9e9de34`/`eb087c3` (Opus): S1–S14 (S10 waived); 114/S7/Unit-2 gates; opts.target not validated→BACKLOG-123. Unit 5 queue empty; next promote/merge when TRIGGER.
