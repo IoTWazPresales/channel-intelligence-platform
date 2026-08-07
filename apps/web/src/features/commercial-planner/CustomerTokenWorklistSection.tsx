@@ -158,37 +158,7 @@ export function CustomerTokenWorklistSection() {
       apiPost<PreviewResponse>('/api/v1/commercial-planner/lineup/customer-token/stamp/preview', vars),
   });
 
-  const applyMut = useMutation({
-    mutationFn: (vars: { norm_token: string; target_customer_id: number; reason: string }) =>
-      apiPost<ApplyResponse>('/api/v1/commercial-planner/lineup/customer-token/stamp/apply', vars),
-    onSuccess: (data) => {
-      setSuccess(`Stamped ${data.stamped_count} line(s) → customer ${data.target_customer_id} (alias ${data.alias_id})`);
-      setStampItem(null);
-      setPreview(null);
-      setPicked(null);
-      void qc.invalidateQueries({ queryKey: ['customer-token-worklist'] });
-      void qc.invalidateQueries({ queryKey: ['customer-token-minted-aliases'] });
-    },
-    onError: (err: unknown) => {
-      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-      if (detail && typeof detail === 'object' && (detail as { conflict?: boolean }).conflict) {
-        const d = detail as {
-          norm_token: string;
-          competing_customer_ids: number[];
-          dispositions: string[];
-          message?: string;
-        };
-        setConflictBanner({
-          norm_token: d.norm_token,
-          competing_customer_ids: d.competing_customer_ids ?? [],
-          dispositions: d.dispositions ?? ['scoped', 'merge', 'data_error'],
-        });
-        setError(d.message ?? 'Genuine conflict — stamp refused');
-      } else {
-        setError(err instanceof Error ? err.message : 'Stamp failed');
-      }
-    },
-  });
+  const [stampPending, setStampPending] = useState(false);
 
   const revokeMut = useMutation({
     mutationFn: (vars: { alias_id: number; reason: string }) =>
@@ -294,15 +264,20 @@ export function CustomerTokenWorklistSection() {
 
   const confirmStamp = async () => {
     if (!stampItem || !picked) return;
-    // Prove opts.target path: apply via adapter, not a side-channel body builder
-    const result = await applyAdapter.applyItems([stampItem], { target: picked });
-    if (result.applied > 0) {
-      setSuccess(`Stamped via opts.target → ${picked.label}`);
-      setStampItem(null);
-      setPreview(null);
-      setPicked(null);
-    } else if (result.errors > 0) {
-      setError(result.results[0]?.message ?? 'Stamp failed');
+    setStampPending(true);
+    try {
+      // Prove opts.target path: apply via adapter, not a side-channel body builder
+      const result = await applyAdapter.applyItems([stampItem], { target: picked });
+      if (result.applied > 0) {
+        setSuccess(`Stamped via opts.target → ${picked.label}`);
+        setStampItem(null);
+        setPreview(null);
+        setPicked(null);
+      } else if (result.errors > 0) {
+        setError(result.results[0]?.message ?? 'Stamp failed');
+      }
+    } finally {
+      setStampPending(false);
     }
   };
 
@@ -554,7 +529,7 @@ export function CustomerTokenWorklistSection() {
           <Button onClick={() => { setStampItem(null); setPreview(null); }}>Cancel</Button>
           <Button
             variant="contained"
-            disabled={!reason.trim() || applyMut.isPending}
+            disabled={!reason.trim() || stampPending}
             onClick={() => void confirmStamp()}
             data-testid="customer-token-stamp-submit"
           >
