@@ -37,13 +37,26 @@ export type CustomerTokenWorkItem = {
   norm_token: string;
   sample_token: string;
   line_count: number;
-  bucket: 'clean' | 'specificity' | 'genuine_conflict' | 'empty_token' | string;
+  bucket: 'clean' | 'specificity' | 'genuine_conflict' | 'empty_token' | 'distributor_token' | string;
   alias_candidates: ResolutionTargetSelection[];
   preferred_target_id: number | null;
   stamp_enabled: boolean;
+  free_target_allowed?: boolean;
   conflict: boolean;
   competing_customer_ids: number[];
   dispositions: string[];
+  distributor_token_match?: {
+    distributor_id: number;
+    matched_via: string;
+    matched_key: string;
+  } | null;
+  would_set_attribution_status?: string | null;
+  ship_corroboration_offer?: {
+    distributor_id: number;
+    reason: string;
+    exact_qty_ship_count?: number;
+    eligible_dist_count?: number;
+  } | null;
 };
 
 type WorklistResponse = {
@@ -77,7 +90,7 @@ type MintedAliasesResponse = {
   }>;
 };
 
-type BucketId = 'all' | 'clean' | 'specificity' | 'genuine_conflict' | 'empty_token';
+type BucketId = 'all' | 'clean' | 'specificity' | 'genuine_conflict' | 'distributor_token' | 'empty_token';
 
 function preferredTarget(item: CustomerTokenWorkItem): ResolutionTargetSelection | null {
   if (!item.alias_candidates.length) return null;
@@ -103,6 +116,7 @@ export function CustomerTokenWorklistSection() {
   const [stampItem, setStampItem] = useState<CustomerTokenWorkItem | null>(null);
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [reason, setReason] = useState('steward customer-token stamp');
+  const [freeTargetId, setFreeTargetId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [conflictBanner, setConflictBanner] = useState<{
     norm_token: string;
@@ -148,6 +162,7 @@ export function CustomerTokenWorklistSection() {
       { id: 'all', label: 'All', count: c.all ?? items.length },
       { id: 'clean', label: 'Clean', count: c.clean ?? 0 },
       { id: 'specificity', label: 'Specificity', count: c.specificity ?? 0 },
+      { id: 'distributor_token', label: 'Distributor', count: c.distributor_token ?? 0 },
       { id: 'genuine_conflict', label: 'Conflict', count: c.genuine_conflict ?? 0 },
       { id: 'empty_token', label: 'Empty token', count: c.empty_token ?? 0 },
     ];
@@ -174,6 +189,25 @@ export function CustomerTokenWorklistSection() {
     },
     onError: (err: unknown) => {
       setError(err instanceof Error ? err.message : 'Revoke failed');
+    },
+  });
+
+  const acceptShipMut = useMutation({
+    mutationFn: (vars: { norm_token: string; distributor_id: number; reason: string }) =>
+      apiPost<{ stamped_count: number; distributor_id: number; status: string }>(
+        '/api/v1/commercial-planner/lineup/distributor-attribution/accept-ship',
+        vars,
+      ),
+    onSuccess: (data) => {
+      setSuccess(
+        `Accepted ship-corroborated distributor ${data.distributor_id} on ${data.stamped_count} line(s) (${data.status})`,
+      );
+      void qc.invalidateQueries({ queryKey: ['customer-token-worklist'] });
+      void qc.invalidateQueries({ queryKey: ['customer-token-minted-aliases'] });
+      void qc.invalidateQueries({ queryKey: ['distributor-attribution-review'] });
+    },
+    onError: (err: unknown) => {
+      setError(err instanceof Error ? err.message : 'Accept ship corroboration failed');
     },
   });
 
@@ -374,6 +408,39 @@ export function CustomerTokenWorklistSection() {
                   </Alert>
                 );
               }
+              if (item.bucket === 'distributor_token' && item.distributor_token_match) {
+                const oc =
+                  targets.find((t) => t.meta?.is_open_channel) ??
+                  ({
+                    targetKey: String(worklistQ.data?.open_channel_customer_id ?? 1),
+                    label: 'Open Channel',
+                    meta: { is_open_channel: true, preferred: true },
+                  } satisfies ResolutionTargetSelection);
+                return (
+                  <Stack spacing={1} data-testid="customer-token-distributor-picker">
+                    <Alert severity="info">
+                      Distributor token → Open Channel + distributor_id=
+                      {item.distributor_token_match.distributor_id} (
+                      {item.distributor_token_match.matched_via}:{' '}
+                      {item.distributor_token_match.matched_key})
+                      {item.would_set_attribution_status
+                        ? ` · status=${item.would_set_attribution_status}`
+                        : ''}
+                    </Alert>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      onClick={() => {
+                        setPicked(oc);
+                        onPick(oc);
+                      }}
+                      data-testid="customer-token-target-open-channel"
+                    >
+                      Stamp as Open Channel
+                    </Button>
+                  </Stack>
+                );
+              }
               return (
                 <Stack spacing={1} data-testid="customer-token-target-picker">
                   <Typography variant="subtitle2">Pick customer target</Typography>
@@ -391,8 +458,65 @@ export function CustomerTokenWorklistSection() {
                       {t.label}
                       {t.meta?.preferred ? ' · preferred' : ''}
                       {t.meta?.is_open_channel ? ' · OPEN_CHANNEL' : ''}
+                      {t.meta?.source ? ` · ${String(t.meta.source)}` : ''}
                     </Button>
                   ))}
+                  {item.free_target_allowed ? (
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <TextField
+                        size="small"
+                        label="Free customer id"
+                        value={freeTargetId}
+                        onChange={(e) => setFreeTargetId(e.target.value)}
+                        inputProps={{ 'data-testid': 'customer-token-free-target-id' }}
+                      />
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        data-testid="customer-token-free-target-apply"
+                        onClick={() => {
+                          const id = Number(freeTargetId);
+                          if (!Number.isFinite(id) || id < 1) return;
+                          const t: ResolutionTargetSelection = {
+                            targetKey: String(id),
+                            label: `customer:${id} (free pick)`,
+                            meta: { customer_id: id, preferred: false },
+                          };
+                          setPicked(t);
+                          onPick(t);
+                        }}
+                      >
+                        Use free pick
+                      </Button>
+                    </Stack>
+                  ) : null}
+                  {item.ship_corroboration_offer ? (
+                    <Alert
+                      severity="success"
+                      data-testid={`customer-token-ship-offer-${item.item_key}`}
+                      action={
+                        <Button
+                          color="inherit"
+                          size="small"
+                          data-testid={`customer-token-accept-ship-${item.item_key}`}
+                          disabled={acceptShipMut.isPending}
+                          onClick={() => {
+                            acceptShipMut.mutate({
+                              norm_token: item.norm_token,
+                              distributor_id: item.ship_corroboration_offer!.distributor_id,
+                              reason: 'steward accept ship-corroborated distributor',
+                            });
+                          }}
+                        >
+                          Accept OC + dist {item.ship_corroboration_offer.distributor_id}
+                        </Button>
+                      }
+                    >
+                      Ship corroboration: sole distributor{' '}
+                      {item.ship_corroboration_offer.distributor_id} (
+                      {item.ship_corroboration_offer.reason})
+                    </Alert>
+                  ) : null}
                 </Stack>
               );
             }}
@@ -408,6 +532,14 @@ export function CustomerTokenWorklistSection() {
                 sx={{ cursor: 'pointer' }}
               >
                 <Chip size="small" label={item.bucket} data-testid={`customer-token-bucket-${item.item_key}`} />
+                {item.ship_corroboration_offer ? (
+                  <Chip
+                    size="small"
+                    color="success"
+                    label={`ship→${item.ship_corroboration_offer.distributor_id}`}
+                    data-testid={`customer-token-ship-chip-${item.item_key}`}
+                  />
+                ) : null}
                 <Typography variant="body2">
                   {item.sample_token || '(empty token)'} · {item.line_count} line(s)
                 </Typography>

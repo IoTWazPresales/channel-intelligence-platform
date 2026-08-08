@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-07 — **PROGRAM-A Unit 6c / BACKLOG-112 steward-complete** on `feat/unit6c-backlog-112-closeout`: D-038 distributor-token→OC+`line.distributor_id`; D-039 ship-only never preselect; W4 revoke/restamp cip; clone C1–C9; BACKLOG-125/126 parked; 124 still empty_token. Next: free-picker residual or 124.
 - 2026-08-07 — **PROGRAM-A Unit 6 → main** `f49a7c8` (FF merge+push). 109 closed; 112 stampable cleared; opts.target PROVEN; ship-scope via case_po. Residual: genuine_conflict routing + 124 empty_token + 123 promote/merge migrate. Roadmap next: A1∥A2∥A3 or named PROGRAM residual.
 - 2026-08-07 — **112 stampable residual stewarded (browser):** ship-scope fix `09506fa`; stamped sadc-compuspeed→107 + mitsumi distribution→18; stampable-left=0. 124 deferred. Unlink+stamp smoke PASS (unlink cancel). Next: merge PR; 123 stays parked.
 - 2026-08-07 — **PROGRAM-A Unit 6b VERIFY PASS** `c143c94`/`1dcdaa7` (Opus): opts.target **PROVEN**; stamp/preview/revoke/conflict gates; DB proofs apply/rollback/conflict/revoke. Unit 6 queue mergeable on `feat/unit6a-po-unlink`.
@@ -235,6 +236,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 | Date | Summary |
 |------|---------|
+| 2026-08-08 | **Unit 6f / D-040:** propose→confirm distributor attribution (`20260807_0010`); confirmer + Accept ship + soft-clear; homeless→Stylus 45; DCC left; BACKLOG-127/128 parked. Branch `feat/unit6f-distributor-attribution-confirm`. |
 | 2026-07-10 | **BACKLOG-061-U2b Fable PASS (`66003db`):** mint verified; Warren applies 0070 next. |
 | 2026-07-10 | **BACKLOG-061-U2a:** mint research note — 3 candidates (rec A `CUST-######`); settings/API sketch; disposition deferred. Awaiting VERIFY + Warren pick. |
 | 2026-07-10 | **BACKLOG-061 Fable PASS B2–B4 (`9cfb67f`):** promote UI+distributor API; verified remap; 0069 on cip + GRANTs to `cip`. Queue empty — recommend merge PR. |

@@ -20,6 +20,14 @@ COMMERCIAL_LINEUP_STATUSES = {
     "superseded",
 }
 
+# D-040 — lineup distributor attribution lifecycle (nullable when no distributor_id).
+DISTRIBUTOR_ATTRIBUTION_STATUSES = {
+    "token_proposed",
+    "steward_set",
+    "shipment_confirmed",
+    "conflict",
+}
+
 
 class CommercialLineupCase(Base, TimestampMixin):
     __tablename__ = "commercial_lineup_case"
@@ -59,6 +67,7 @@ class CommercialLineupLine(Base, TimestampMixin):
     product_id: Mapped[int | None] = mapped_column(ForeignKey("dim_product.id"), nullable=True, index=True)
     customer_id: Mapped[int | None] = mapped_column(ForeignKey("dim_customer.id"), nullable=True, index=True)
     distributor_id: Mapped[int | None] = mapped_column(ForeignKey("dim_distributor.id"), nullable=True, index=True)
+    distributor_attribution_status: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     customer_token: Mapped[str | None] = mapped_column(String(256), nullable=True)
     sku_raw: Mapped[str | None] = mapped_column(String(128), nullable=True)
     part_number_raw: Mapped[str | None] = mapped_column(String(128), nullable=True)

@@ -1,23 +1,28 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-07 (PROGRAM-A Unit 6 merged to main)
+**Last updated:** 2026-08-08 (PROGRAM-A Unit 6f — D-040 distributor attribution propose→confirm)
 
-**Branch:** `main` @ `f49a7c8` (pushed; in sync with `origin/main`)
+**Branch:** `feat/unit6f-distributor-attribution-confirm` (from Unit 6c @ `03a5c19`)
 
-**Alembic:** `20260802_0009` (unchanged)
+**Alembic:** `20260807_0010` (distributor_attribution_status on commercial_lineup_line)
 
 ## Done
 
-- **PROGRAM-A Unit 6 merged** (fast-forward `189246c`→`f49a7c8`): 6a unlink (BACKLOG-109 / D-037) + 6b customer-token stamp (BACKLOG-112 path) + first live `opts.target` (PROVEN).
-- Ship-candidate scope via `commercial_lineup_case_po`→PO→shipment (`09506fa`) — architecture fix, not a workaround.
-- Stampable 112 residual cleared in browser (sadc-compuspeed→107, mitsumi distribution→18). stampable-left=0.
-- Smoke: stamp confirm + opts.target success; unlink dialog open/cancel (no unlink write).
+- **Unit 6f / D-040:** first-class `distributor_attribution_status`
+  (`token_proposed` | `steward_set` | `shipment_confirmed` | `conflict`).
+- Stamp sets `token_proposed`; confirmer (product+period+exact qty) confirms / conflicts
+  without auto-clearing FK; Accept ship-corroborated; soft-clear dist-only; override.
+- Worklist ship-offer CTA + `DistributorAttributionReviewSection` on PO management.
+- cip remediation: backfill proposed; confirmer; `sadc homeless`→OC+Stylus 45
+  (`steward_set`); **DCC left**; protected cases 7/90/122/145 stable.
+- Docs: D-038 amended; D-040 locked; BACKLOG-127 (DAP), BACKLOG-128 (Stylus PO-link).
+- CONSULT CLI Opus/Fable WAIVED (spend limit) — Human-approved plan = lock.
 
 ## Next
 
-1. **Residual genuine_conflict** (~53 unresolved-with-token): steward routing only — SCOPED / MERGE / DATA_ERROR. Agent must not pick winners.
-2. **BACKLOG-124** — empty_token (~939 lines): parked until empty-token blocks planning.
-3. **BACKLOG-123** — promote/merge → ResolutionWorklist: parked; opts.target already PROVEN; TRIGGER = promote/merge migration.
-4. **Roadmap (v3.1):** P1 exited; startable lanes **A1 / A2 / A3** (∥ allowed) + continuous **X**. PROGRAM-A residual steward queue is done for stampable path — next PROGRAM unit only if Warren names one.
+1. **Browser smoke** residual if not done in-session: attribution review + Accept ship CTA.
+2. **BACKLOG-124** — empty_token (mandate resumes after 6f).
+3. BACKLOG-125 / 126 residual stems without ship sole.
+4. Roadmap A1∥A2∥A3 only after Warren confirms 124 handling.
 
-**Env:** local Windows. `cip`.
+**Env:** local Windows. `cip` @ `20260807_0010`. Smoke clone `cip_unit6c_smoke` also at head.

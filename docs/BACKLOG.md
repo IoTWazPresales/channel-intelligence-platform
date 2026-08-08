@@ -226,7 +226,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Partially cleared** · 2026-08-07 — stampable residual stewarded in browser (sadc-compuspeed→107, mitsumi distribution→18). Remaining: genuine_conflict tokens + clean-without-candidates + empty_token (124). |
+| **Status / parked** | **Closed steward-complete** · 2026-08-07 · Unit 6c (D-038/D-039). Distributor-token residual stamped OC+`line.distributor_id`; W4 false stamps 5767/5768 revoked+restamped; free-picker residual remains for retailer/no-dim tokens; empty_token → BACKLOG-124. Count need not be 0. |
 | **Effort** | Medium |
 | **Source** | Clear-211 unit: all 17 medium proposals have `fact_inbound_shipment.resolved_customer_id` + exact `customer_source_token_alias` hits; align still `unresolved` because matched lineup lines lack `customer_id` |
 | **Idea** | Steward path to stamp lineup line customer from the already-resolved shipment customer (exact, no fuzzy) then re-propose/accept; or surface this as a distinct reason (`lineup_customer_missing`). |
@@ -235,7 +235,76 @@
 | **Regression traps** | Exact match only; FLAG≠BLOCK for over-ship; never touch survivors without override. |
 | **Behavior to retain** | CRAD-primary match key; BU not in key. |
 | **Out of scope** | Fuzzy customer match; ZA legal-form auto-merge as blocker. |
-| **TRIGGER** | Warren starts the residual customer_unresolved queue after NB↔NR competitions. |
+| **TRIGGER** | — closed. Free-picker leftovers + 124 empty_token are separate. |
+| **Closed** | Unit 6c: classifier + dual-write stamp; clone C1–C9; cip D1–D7. Residual free-picker: `jd furn`, `pick & pay`, `sadc - superdisti`, `sadc homeless`, `smd`, `88`. |
+
+---
+
+## BACKLOG-125 — Distributor-as-customer masters (dim_customer 1152 / 4145 / syntech→4145)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-07 |
+| **Effort** | Medium |
+| **Source** | Unit 6c Phase A E12: approved customer alias `syntech`→`dim_customer` 4145; related distributor-as-customer master pollution (also noted around 1152). Masters problem — not a lineup stamp rule. |
+| **Idea** | Steward masters cleanup: retire/merge distributor-named `dim_customer` rows; revoke misleading customer aliases; ensure Syntech identity lives only on `dim_distributor` 51 + OPEN_CHANNEL for channel tokens. |
+| **Why it matters / deferrable** | Customer alias can pre-select wrong named customers for tokens that should be distributor-parked. Deferrable while D-038 stamp path correctly forces OC for distributor tokens. |
+| **What the work is** | Audit dim_customer + customer_source_token_alias for distributor names; steward merge/revoke; no auto-create. |
+| **Regression traps** | Do not delete unit6b-* fixtures; do not change D-038 strip/match; never auto-create dims. |
+| **Behavior to retain** | D-038 distributor-token dual-write; OPEN_CHANNEL canon. |
+| **Out of scope** | Unit 6c stamp path; inventing new distributors. |
+| **TRIGGER** | Warren opens masters cleanup for distributor-named customers, or a stamp/worklist shows named customer preferred for a distributor token despite D-038. |
+
+---
+
+## BACKLOG-126 — No-dim distributor stems in customer column (`smd` / `superdisti` / `sadc homeless`)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-07 · partial relief via D-040 ship-Accept for sole-exact tokens |
+| **Effort** | Small |
+| **Source** | Unit 6c A1 + D5 residual: tokens with no `dim_distributor` exact match after strip; free-picker only under D-038. |
+| **Idea** | Either mint/approve real `dim_distributor` (+ aliases) for these stems, or steward free-pick retailer/OC with reason — do not invent fuzzy distributor match. `sadc homeless` can Accept OC+Stylus via ship corroboration when sole+exact qty (D-040). |
+| **Why it matters / deferrable** | Leaves unresolved free-picker stems without ship sole. Deferrable while planning is not blocked. |
+| **What the work is** | Masters decision + optional distributor create (steward-initiated) or free-pick stamp. |
+| **Regression traps** | No substring/fuzzy distributor match; no auto-create from stamp. |
+| **Behavior to retain** | Free picker + preview-first; D-040 Accept ship-corroborated. |
+| **Out of scope** | Expanding D-038 strip patterns without Warren lock. |
+| **TRIGGER** | Warren names the correct distributor dims for these stems, or free-picker volume blocks planning. |
+
+---
+
+## BACKLOG-127 — Shipment DAP (or priced confirm) for distributor attribution
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-08 |
+| **Effort** | Medium |
+| **Source** | Unit 6d/6e discovery: `fact_inbound_shipment` has `unit_price`/`amount` only — no DAP field; qty-only confirmer cannot collapse multi-dist INDETERMINATE tokens. |
+| **Idea** | Persist DAP (or a defined map to ship price + currency rules) on shipment facts so confirmer Phase 2 can confirm/conflict on price as well as product+period+qty. |
+| **Why it matters / deferrable** | Raises confirmation hit-rate for OC distributor tokens. Deferrable while Phase-1 sole-qty confirmer + steward review work. |
+| **What the work is** | Schema/contract for DAP on ship facts or evidence→fact mapping; currency rules; extend D-040 confirmer; never invent DAP from margin. |
+| **Regression traps** | Do not conflate DAP with PM bottom / landed cost; do not use margin→distributor. |
+| **Behavior to retain** | D-040 Phase-1 rules; exact token match. |
+| **Out of scope** | Drive Control rename; DSI resolution order. |
+| **TRIGGER** | Warren opens priced shipment confirmation or multi-dist unproven volume blocks planning. |
+
+---
+
+## BACKLOG-128 — PO-linkage gap: Stylus / case_po incomplete vs shipment sole
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-08 |
+| **Effort** | Small–Medium |
+| **Source** | Unit 6e: `sadc homeless` ships sole Stylus 45 with exact qty; Stylus absent from some case_po sets (e.g. case 114) — PO-linkage gap, not cancel. |
+| **Idea** | Worklist / auto-link repair so shipment-resolved distributors appear on case_po when commercially linked. |
+| **Why it matters / deferrable** | Attribution can be correct while case_po still incomplete. Deferrable after D-040 Accept. |
+| **What the work is** | Diagnose missing case_po for Stylus; steward or auto-link path without treating case_po as attribution oracle. |
+| **Regression traps** | Do not use case_po absence to revoke D-038/D-040 stamps. |
+| **Behavior to retain** | D-040 propose/confirm; PO auto-link competition rules. |
+| **Out of scope** | Changing auto-link key / D-033 / D-034. |
+| **TRIGGER** | After D-040 Accept for homeless, or case_po gaps block planning for Stylus volume. |
 
 ---
 
