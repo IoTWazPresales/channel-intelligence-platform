@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-08 — **BACKLOG-125/126 Warren lock applied on cip** (`feat/backlog-125-126-masters-stems`): Syntech→OC+51; absorb 4145/1152→OC; superdisti→50; SMD left free-picker. Next: commit/PR.
 - 2026-08-08 — **PR #19 merged to main (`5436e45`):** BACKLOG-124 tokenless empty_token. Next: 125/126 or roadmap when Warren clears gate.
 - 2026-08-08 — **BACKLOG-124 tokenless empty_token** on `feat/backlog-124-empty-token`: Mechanism D `line_ids` stamp (no alias/token invent); worklist per-case empty items; UI free-pick+confirm; pytest 13 / vitest 3; browser Empty token 20 + case 127 preview PASS (cancel). Next: commit/push/PR.
 - 2026-08-07 — **PROGRAM-A Unit 6c / BACKLOG-112 steward-complete** on `feat/unit6c-backlog-112-closeout`: D-038 distributor-token→OC+`line.distributor_id`; D-039 ship-only never preselect; W4 revoke/restamp cip; clone C1–C9; BACKLOG-125/126 parked; 124 still empty_token. Next: free-picker residual or 124.
@@ -238,6 +239,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 | Date | Summary |
 |------|---------|
+| 2026-08-08 | **BACKLOG-125/126 Warren lock on cip:** Syntech→OC+51; absorb 4145/1152; superdisti→50; SMD residual free-picker. Branch `feat/backlog-125-126-masters-stems`. |
 | 2026-08-08 | **PR #19 merged to main (`5436e45`):** BACKLOG-124 tokenless empty_token. Next 125/126 or roadmap gate. |
 | 2026-08-08 | **BACKLOG-124 tokenless empty_token** on `feat/backlog-124-empty-token`: Mechanism D `line_ids` stamp; worklist per-case; browser Empty token 20 + case 127 preview PASS (cancel). Awaiting commit/push. |
 | 2026-08-08 | **PR #18 merged to main (`d9857ee`):** Unit 6c+6f / D-040; browser smoke PASS (Proposed 1016). Next BACKLOG-124. |
