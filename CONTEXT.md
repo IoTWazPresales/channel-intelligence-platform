@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-08 — **PR #23+#24 on main (`3d2ef49`):** B2 author loop + B4 promo draft create-case. Next: CI alembic tip pin or Lane X / parked TRIGGER.
 - 2026-08-08 — **B4 promo draft** on `feat/b4-promo-draft`: B2 trusted (budget+econ+xlsx); draft compose uses lineup-derived budget; create-case POST + `/promotions` CTA. Next: smoke/commit/PR.
 - 2026-08-08 — **B2 Units 1–3** on `feat/b2-author-loop`: author loop + half-year/bias UX + XLSX on-ramp + commercial_lineup_case write on apply. Next: PR; then B4 or Lane X.
 - 2026-08-08 — **B2 Unit 1 author loop** on `feat/b2-author-loop`: SRP fix (lineup evidence, no sku.target_srp); `/lineup` Apply + builder-economics; B2-01…04 IMPLEMENTED in semantics (CSV caveat). Browser VERIFY PASS. Next: commit/PR when Warren asks.
