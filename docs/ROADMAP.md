@@ -306,6 +306,11 @@ layout profiles are the shape; header-vocabulary config (D-022) is a hard prereq
 **Scope:** live weekly ingest across customer formats, article-alias steward, SOH
 reconciliation (reported SOH is a check, never truth), listing seed emission.
 
+**Progress 2026-08-08:** **Takealot forward path Done** on `feat/cst-takealot-pilot-config`
+(`flat` + feed_profile + multi-file batch UI; live job 799 WEEK 28–31 → 4 periods / 96 rows;
+browser smoke PASS period strip + bulk CTA + steward section). Remaining 7 customers: config +
+sample WEEK files still required (Q-004 discovery per load).
+
 ---
 
 ## P5 — Listings + channel execution
@@ -399,6 +404,9 @@ rewrite.)*
 
 Anything whose blocker is satisfied. **P1 exited 2026-08-01** (census + defect log sealed).
 **A1 / A2 / A3** core + residuals closed 2026-08-08 (A1-09, A2-093, A3-V). Parked remain: 068 / 089 / 092 / 097.
+**B1 / B2 author loop / B4-01 / P2 auth / P3 report builder** already on `main` — do not rebuild;
+prove demo gate + close remaining holes (password reset, schedule soak, BACKLOG-076).
+**P4 Takealot** forward path smoke-proven (promote branch); next = second CST customer or demo gate.
 Lane X runs continuously in GREEN alongside anything.
 
 ### What you cannot do

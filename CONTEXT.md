@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-08 — **Wave 0 CST browser smoke PASS** job 799: period strip WEEK 28–31 (4 files); bulk CTA + steward section; VERIFY WAIVED (roadmap completion). Next: PR → Wave 1 demo gate.
 - 2026-08-08 — **CST multi-file batch (DSI parity)** on `feat/cst-takealot-pilot-config`: one job + N raws, per-file period from content; dialog + `/cst/batch-*`; live job 799 WEEK 28–31 → 4 periods / 96 rows. Consult deferred. Next: browser smoke UI / commit / historical backfill.
 - 2026-08-08 — **Soft-data hygiene:** 31 SKU assumptions from shipment median USD + FX 18.61; case #300 (`C26C00002`) smoke PASS; A1-09 planned/bias live (partial missing-SKU remains). Next: CST multi-file → DSI parity or commit.
 - 2026-08-08 — **BACKLOG-129 closed:** CST unmappable → ignore_no_catalogue + catalogue-gap `source=cst` (worklist/UI/resolve); job 797 accessories ignored into gaps. No consult this lane. Next: soft-data hygiene or commit.
