@@ -144,26 +144,121 @@ def resolve_customer_id_for_job(db: Session, job: ImportJob) -> int | None:
     return None
 
 
+# Extra product identifiers often present beside the mapped primary column.
+# Order is preference among *tokens* (each token still runs full PM single-match tiers).
+# Sales-model / SKU before barcode so feeds without EAN (and polluted EAN masters) still resolve.
+_CST_PAYLOAD_PRODUCT_HEADER_PREFERENCE: tuple[str, ...] = (
+    "supplier code",
+    "sales model name",
+    "sales model",
+    "sales_model_name",
+    "sku",
+    "item code",
+    "item_code",
+    "product code",
+    "product_code",
+    "article",
+    "model name",
+    "model_name",
+    "barcode",
+    "ean",
+    "upc",
+)
+
+
+def collect_cst_product_lookup_tokens(
+    *,
+    primary: str | None,
+    article_token: str | None = None,
+    raw_row_payload: dict[str, Any] | None = None,
+) -> list[str]:
+    """Deduped product lookup tokens for one CST line (primary + article + payload IDs).
+
+    Not every retailer ships barcodes — payload may only have sales model / SKU / article.
+    """
+    ordered: list[str] = []
+    seen: set[str] = set()
+
+    def _add(raw: Any) -> None:
+        if raw is None:
+            return
+        text = str(raw).strip()
+        if not text or text.lower() == "nan":
+            return
+        key = _product_token_key(text)
+        if not key or key in seen:
+            return
+        seen.add(key)
+        ordered.append(text)
+
+    _add(primary)
+    _add(article_token)
+
+    if isinstance(raw_row_payload, dict) and raw_row_payload:
+        by_fold: dict[str, Any] = {}
+        for hdr, val in raw_row_payload.items():
+            fold = str(hdr).strip().lower().replace("_", " ")
+            if fold and fold not in by_fold:
+                by_fold[fold] = val
+        for pref in _CST_PAYLOAD_PRODUCT_HEADER_PREFERENCE:
+            fold = pref.replace("_", " ")
+            if fold in by_fold:
+                _add(by_fold[fold])
+            underscored = pref.replace(" ", "_")
+            if underscored in raw_row_payload:
+                _add(raw_row_payload[underscored])
+
+    return ordered
+
+
 def resolve_product_id_for_sellthrough(
     idx: ProductResolutionIndex,
-    token: str,
+    token: str | None,
     *,
     session: Session | None = None,
     customer_id: int | None = None,
     article_token: str | None = None,
+    raw_row_payload: dict[str, Any] | None = None,
 ) -> int | None:
-    """PM single-match tiers, then customer_article_alias (exact-key, confirmed only)."""
-    pid = resolve_product_id_single_match(idx, token)
-    if pid is not None:
-        return pid
+    """PM single-match tiers on each candidate token, then customer_article_alias (confirmed only).
+
+    Candidate tokens = mapped primary + article + common payload product columns
+    (supplier code / sales model / sku / barcode / …). First single-match wins.
+    """
+    tokens = collect_cst_product_lookup_tokens(
+        primary=token,
+        article_token=article_token,
+        raw_row_payload=raw_row_payload,
+    )
+    for candidate in tokens:
+        pid = resolve_product_id_single_match(idx, candidate)
+        if pid is not None:
+            return pid
     if session is not None and customer_id is not None:
-        # Prefer explicit article token; else try the product token as article key.
-        for candidate in (article_token, token):
+        for candidate in tokens:
             alias_pid = resolve_customer_article_alias(
                 session, customer_id=customer_id, article_token=candidate
             )
             if alias_pid is not None:
                 return alias_pid
+    return None
+
+
+def _steward_resolved_product_id(
+    resolved_products: dict[str, int],
+    *,
+    primary: str | None,
+    article_token: str | None = None,
+    raw_row_payload: dict[str, Any] | None = None,
+) -> int | None:
+    for candidate in collect_cst_product_lookup_tokens(
+        primary=primary,
+        article_token=article_token,
+        raw_row_payload=raw_row_payload,
+    ):
+        key = _product_token_key(candidate)
+        if key and key in resolved_products:
+            return int(resolved_products[key])
     return None
 
 
@@ -193,6 +288,7 @@ def _build_parse_mapping(
     template: ImportTemplate | None,
 ) -> tuple[dict, list[str]]:
     from app.ingestion.pipeline import effective_mapping_template
+    from app.services.imports.parsers.customer_sell_through_flat import normalize_cst_expected_columns
 
     expected = effective_mapping_template(job.source) if job.source else {}
     if template and template.expected_columns:
@@ -201,7 +297,7 @@ def _build_parse_mapping(
                 expected.setdefault(k, {"aliases": list(v.get("aliases", []))})
 
     parse_mapping = dict(mapping or {})
-    parse_mapping[EXPECTED_COLUMNS_META_KEY] = expected
+    parse_mapping[EXPECTED_COLUMNS_META_KEY] = normalize_cst_expected_columns(expected)
     return parse_mapping, []
 
 
@@ -230,12 +326,24 @@ def _format_drift_warnings(job: ImportJob, current_headers: list[str]) -> list[s
     ]
 
 
+def _list_job_raw_files(db: Session, job: ImportJob) -> list[RawFileMetadata]:
+    from app.services.imports.cst_batch import list_raw_files_for_job
+
+    return list_raw_files_for_job(db, int(job.id))
+
+
+def _raw_display_name(raw: RawFileMetadata) -> str:
+    from app.services.imports.dsi_workbook import raw_file_display_name
+
+    return raw_file_display_name(raw.storage_key)
+
+
 def _load_job_file_bytes(db: Session, job: ImportJob) -> tuple[bytes | None, str | None]:
-    raw_meta = db.scalars(select(RawFileMetadata).where(RawFileMetadata.job_id == job.id)).first()
-    if not raw_meta:
+    raws = _list_job_raw_files(db, job)
+    if not raws:
         return None, "No raw file metadata for this import job."
     storage = get_storage_backend()
-    return storage.read(raw_meta.storage_key), None
+    return storage.read(raws[0].storage_key), None
 
 
 def _product_candidates(idx: ProductResolutionIndex, token: str, limit: int = 10) -> list[dict[str, Any]]:
@@ -398,13 +506,15 @@ def _ingest_parse_result(
             line.vat_basis = vat_basis
 
         article_tok = getattr(line, "raw_article_token", None)
-        if line.raw_product_token:
+        payload = line.raw_row_payload if isinstance(line.raw_row_payload, dict) else None
+        if line.raw_product_token or payload:
             pid = resolve_product_id_for_sellthrough(
                 prod_idx,
                 line.raw_product_token,
                 session=db,
                 customer_id=customer_id,
                 article_token=article_tok,
+                raw_row_payload=payload,
             )
             if pid is not None:
                 line.resolved_product_id = pid
@@ -417,23 +527,29 @@ def _ingest_parse_result(
             ai_assist_used=ai_assist_used,
         )
 
-        if not product_ok and line.raw_product_token:
+        if not product_ok and (line.raw_product_token or payload):
             pid = resolve_product_id_for_sellthrough(
                 prod_idx,
                 line.raw_product_token,
                 session=db,
                 customer_id=customer_id,
                 article_token=article_tok,
+                raw_row_payload=payload,
             )
             if pid is not None:
                 line.resolved_product_id = pid
                 product_ok = True
 
         # Candidate resolution fallback (steward-resolved tokens from a prior validate pass)
-        if not product_ok and line.raw_product_token:
-            key = _product_token_key(line.raw_product_token)
-            if key and key in resolved_products:
-                line.resolved_product_id = resolved_products[key]
+        if not product_ok:
+            pid = _steward_resolved_product_id(
+                resolved_products,
+                primary=line.raw_product_token,
+                article_token=article_tok,
+                raw_row_payload=payload,
+            )
+            if pid is not None:
+                line.resolved_product_id = pid
                 product_ok = True
         if not location_ok and line.raw_location_token:
             loc_key = (line.raw_location_token or "").strip().lower()
@@ -608,29 +724,30 @@ def _handle_flat(
         )
         return 1
 
-    raw_meta = db.scalars(select(RawFileMetadata).where(RawFileMetadata.job_id == job.id)).first()
-    if not raw_meta:
+    raws = _list_job_raw_files(db, job)
+    if not raws:
         _write_parse_failed(job, "No raw file metadata for this import job.")
         return 1
 
+    from app.services.imports.cst_batch import get_cst_excluded_filenames, get_cst_file_period_stamps
+
+    excluded = get_cst_excluded_filenames(job)
+    period_stamps = get_cst_file_period_stamps(job)
     storage = get_storage_backend()
-    file_bytes = storage.read(raw_meta.storage_key)
+    parse_mapping, _ = _build_parse_mapping(db, job, mapping, template)
+    cfg = db.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer_id))
+    feed_profile = cfg.feed_profile_json if cfg and isinstance(cfg.feed_profile_json, dict) else None
+    vat_basis = feed_profile_vat_basis(cfg)
 
-    from app.ingestion.pipeline import effective_mapping_template
-
-    expected = effective_mapping_template(job.source) if job.source else {}
-    if template and template.expected_columns:
-        for k, v in template.expected_columns.items():
-            if isinstance(v, dict):
-                expected.setdefault(k, {"aliases": list(v.get("aliases", []))})
-
-    parse_mapping = dict(mapping or {})
-    parse_mapping[EXPECTED_COLUMNS_META_KEY] = expected
-
-    result = parse_flat_report(file_bytes, job.file_name or "upload", parse_mapping, int(job.id))
-    if result.error:
-        _write_parse_failed(job, result.error)
-        return 1
+    # Job-level steward declare (fallback when a file has no inference).
+    meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
+    job_steward_period: date | None = None
+    raw_declared = meta.get("declared_period_start") or meta.get("steward_period_start")
+    if isinstance(raw_declared, str) and raw_declared.strip():
+        try:
+            job_steward_period = date.fromisoformat(raw_declared.strip()[:10])
+        except ValueError:
+            pass
 
     db.execute(
         delete(ImportCustomerSellthroughStagingLine).where(
@@ -646,103 +763,207 @@ def _handle_flat(
 
     resolved_products, resolved_locations = load_resolved_cst_candidates(db, job.id)
     prod_idx = _load_product_resolution_index(db)
-    cfg = db.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer_id))
-    vat_basis = feed_profile_vat_basis(cfg)
     resolved_n = 0
     unresolved_n = 0
+    all_warnings: list[str] = []
+    file_period_reports: list[dict[str, Any]] = []
+    total_rows = 0
+    periods_marked: set[date] = set()
+    parse_errors: list[str] = []
 
-    for row in result.rows:
-        line = ImportCustomerSellthroughStagingLine(**row)
-        line.resolved_customer_id = customer_id
-        if not getattr(line, "site_label", None) and line.raw_location_token:
-            line.site_label = str(line.raw_location_token).strip() or None
-        if not getattr(line, "vat_basis", None):
-            line.vat_basis = vat_basis
-
-        product_ok = False
-        article_tok = getattr(line, "raw_article_token", None)
-        if line.raw_product_token:
-            pid = resolve_product_id_for_sellthrough(
-                prod_idx,
-                line.raw_product_token,
-                session=db,
-                customer_id=customer_id,
-                article_token=article_tok,
+    for file_idx, raw in enumerate(raws):
+        fname = _raw_display_name(raw)
+        if fname in excluded:
+            file_period_reports.append(
+                {
+                    "filename": fname,
+                    "excluded": True,
+                    "period_start_date": None,
+                    "flags": ["excluded"],
+                }
             )
-            if pid is None:
-                key = _product_token_key(line.raw_product_token)
-                pid = resolved_products.get(key)
-            if pid is not None:
-                line.resolved_product_id = pid
-                product_ok = True
+            continue
 
-        if line.raw_location_token:
-            loc_id = db.scalar(
-                select(CustomerLocation.id).where(
-                    CustomerLocation.customer_id == customer_id,
-                    CustomerLocation.location_code == line.raw_location_token,
-                )
+        file_bytes = storage.read(raw.storage_key)
+        result = parse_flat_report(
+            file_bytes,
+            fname,
+            parse_mapping,
+            int(job.id),
+            feed_profile=feed_profile,
+        )
+        if result.error:
+            parse_errors.append(f"{fname}: {result.error}")
+            file_period_reports.append(
+                {
+                    "filename": fname,
+                    "excluded": False,
+                    "period_start_date": None,
+                    "flags": ["parse_error"],
+                    "error": result.error,
+                }
             )
-            if loc_id is None:
-                loc_key = (line.raw_location_token or "").strip().lower()
-                loc_id = resolved_locations.get(loc_key)
-            if loc_id is not None:
-                line.resolved_location_id = int(loc_id)
+            continue
 
-        # FLAG != BLOCK: product alone resolves the line for apply.
-        if product_ok:
-            line.resolution_status = "resolved"
-            resolved_n += 1
-            if article_tok and line.resolved_product_id is not None:
-                propose_customer_article_alias(
-                    db,
+        drift_warnings = _format_drift_warnings(job, _sniff_file_headers(file_bytes, fname))
+        if drift_warnings:
+            all_warnings.extend(f"{fname}: {w}" for w in drift_warnings)
+        if result.warnings:
+            all_warnings.extend(f"{fname}: {w}" for w in result.warnings)
+
+        # Per-file steward stamp wins over job-level declare for corroboration.
+        steward_period = job_steward_period
+        stamp_raw = period_stamps.get(fname)
+        if stamp_raw:
+            try:
+                steward_period = date.fromisoformat(stamp_raw[:10])
+            except ValueError:
+                all_warnings.append(f"{fname}: invalid cst_file_period_stamps={stamp_raw!r}")
+
+        period_report = corroborate_period(
+            steward_declared=steward_period,
+            file_inferred=result.period_start_date,
+            filename=fname,
+        )
+        effective_period = period_report["period_start_date"] or result.period_start_date
+        if period_report["flags"]:
+            all_warnings.extend(f"{fname}: {f}" for f in period_report["flags"])
+
+        file_period_reports.append(
+            {
+                "filename": fname,
+                "excluded": False,
+                "period_start_date": str(effective_period) if effective_period else None,
+                "file_inferred": (
+                    result.period_start_date.isoformat() if result.period_start_date else None
+                ),
+                "source": period_report.get("source"),
+                "flags": list(period_report.get("flags") or []),
+            }
+        )
+
+        for row in result.rows:
+            # Keep source_row_number unique across files in one job.
+            row["source_row_number"] = int(file_idx) * 1_000_000 + int(row["source_row_number"])
+            payload = dict(row.get("raw_row_payload") or {})
+            payload["_cst_source_file"] = fname
+            row["raw_row_payload"] = payload
+            if effective_period is not None:
+                row["period_start_date"] = effective_period
+
+            line = ImportCustomerSellthroughStagingLine(**row)
+            line.resolved_customer_id = customer_id
+            if not getattr(line, "site_label", None) and line.raw_location_token:
+                line.site_label = str(line.raw_location_token).strip() or None
+            if not getattr(line, "vat_basis", None):
+                line.vat_basis = vat_basis
+
+            product_ok = False
+            article_tok = getattr(line, "raw_article_token", None)
+            payload_dict = line.raw_row_payload if isinstance(line.raw_row_payload, dict) else None
+            if line.raw_product_token or payload_dict:
+                pid = resolve_product_id_for_sellthrough(
+                    prod_idx,
+                    line.raw_product_token,
+                    session=db,
                     customer_id=customer_id,
                     article_token=article_tok,
-                    product_id=int(line.resolved_product_id),
-                    evidence={"co_occurred_with": line.raw_product_token, "import_job_id": job.id},
+                    raw_row_payload=payload_dict,
                 )
-            upsert_cst_listing_seed(
+                if pid is None:
+                    pid = _steward_resolved_product_id(
+                        resolved_products,
+                        primary=line.raw_product_token,
+                        article_token=article_tok,
+                        raw_row_payload=payload_dict,
+                    )
+                if pid is not None:
+                    line.resolved_product_id = pid
+                    product_ok = True
+
+            if line.raw_location_token:
+                loc_id = db.scalar(
+                    select(CustomerLocation.id).where(
+                        CustomerLocation.customer_id == customer_id,
+                        CustomerLocation.location_code == line.raw_location_token,
+                    )
+                )
+                if loc_id is None:
+                    loc_key = (line.raw_location_token or "").strip().lower()
+                    loc_id = resolved_locations.get(loc_key)
+                if loc_id is not None:
+                    line.resolved_location_id = int(loc_id)
+
+            if product_ok:
+                line.resolution_status = "resolved"
+                resolved_n += 1
+                if article_tok and line.resolved_product_id is not None:
+                    propose_customer_article_alias(
+                        db,
+                        customer_id=customer_id,
+                        article_token=article_tok,
+                        product_id=int(line.resolved_product_id),
+                        evidence={"co_occurred_with": line.raw_product_token, "import_job_id": job.id},
+                    )
+                upsert_cst_listing_seed(
+                    db,
+                    customer_id=customer_id,
+                    marketplace=getattr(line, "listing_marketplace", None),
+                    external_id=getattr(line, "listing_external_id", None),
+                    product_id=int(line.resolved_product_id) if line.resolved_product_id else None,
+                    import_job_id=job.id,
+                    raw=line.raw_row_payload if isinstance(line.raw_row_payload, dict) else None,
+                )
+            else:
+                line.resolution_status = "unresolved"
+                unresolved_n += 1
+
+            db.add(line)
+            total_rows += 1
+
+        if effective_period is not None and effective_period not in periods_marked:
+            mark_cst_report_slot_received(
                 db,
                 customer_id=customer_id,
-                marketplace=getattr(line, "listing_marketplace", None),
-                external_id=getattr(line, "listing_external_id", None),
-                product_id=int(line.resolved_product_id) if line.resolved_product_id else None,
+                period_start_date=effective_period,
                 import_job_id=job.id,
-                raw=line.raw_row_payload if isinstance(line.raw_row_payload, dict) else None,
             )
-        else:
-            line.resolution_status = "unresolved"
-            unresolved_n += 1
+            periods_marked.add(effective_period)
 
-        db.add(line)
+    if parse_errors and total_rows == 0:
+        _write_parse_failed(job, "; ".join(parse_errors))
+        return 1
 
     db.flush()
     upsert_cst_mapping_candidates(db, job.id)
 
+    # Primary period for config last_report = latest file period (or sole).
+    primary_period: date | None = None
+    dated = [date.fromisoformat(r["period_start_date"]) for r in file_period_reports if r.get("period_start_date")]
+    if dated:
+        primary_period = max(dated)
+
     meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
     meta["customer_sellthrough_flat"] = to_jsonable(
         {
-            "period_start_date": str(result.period_start_date) if result.period_start_date else None,
-            "total_rows": len(result.rows),
+            "period_start_date": str(primary_period) if primary_period else None,
+            "total_rows": total_rows,
             "resolved": resolved_n,
             "unresolved": unresolved_n,
-            "warnings": list(result.warnings),
+            "warnings": all_warnings + ([f"file_errors: {parse_errors}"] if parse_errors else []),
             "vat_basis": vat_basis,
+            "file_count": len(raws),
         }
     )
+    meta["cst_file_periods"] = to_jsonable(file_period_reports)
+    meta["cst_multi_file"] = len(raws) > 1
     job.staged_metadata = to_jsonable(meta)
 
     _upsert_customer_report_config(
         db,
         customer_id=customer_id,
-        period_start_date=result.period_start_date,
+        period_start_date=primary_period,
         report_structure_type=STRUCTURE_FLAT,
-    )
-    mark_cst_report_slot_received(
-        db,
-        customer_id=customer_id,
-        period_start_date=result.period_start_date,
-        import_job_id=job.id,
     )
 
     if (job.import_mode or "").strip().lower() == "apply":
@@ -750,7 +971,7 @@ def _handle_flat(
 
         apply_customer_sellthrough_staging(db, job.id)
 
-    return 0 if result.rows else 0
+    return 0 if total_rows else 0
 
 
 def _handle_pivoted(

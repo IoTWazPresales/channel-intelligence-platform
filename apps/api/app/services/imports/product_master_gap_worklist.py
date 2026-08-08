@@ -21,7 +21,7 @@ from app.services.imports.dsi_product_running_change import (
     infer_dsi_ignore_reason_code,
 )
 
-SourceKind = Literal["shipment", "dsi", "cpor_claim"]
+SourceKind = Literal["shipment", "dsi", "cpor_claim", "cst"]
 WorklistStatus = Literal["unresolved", "ignored"]
 
 _SHIPMENT_UNRESOLVED_STATUSES = frozenset({"no_match", "inactive_only", "ambiguous", "no_identifier"})
@@ -66,6 +66,8 @@ async def product_master_gap_worklist(
         await _merge_dsi_tokens(db, rows_by_token)
     if source in (None, "cpor_claim"):
         await _merge_cpor_claim_tokens(db, rows_by_token)
+    if source in (None, "cst"):
+        await _merge_cst_tokens(db, rows_by_token)
 
     out = sorted(rows_by_token.values(), key=lambda r: (-int(r["occurrence_count"]), r["token"]))
     if status:
@@ -85,6 +87,7 @@ async def product_master_gap_worklist(
             "shipment": sorted(_SHIPMENT_UNRESOLVED_STATUSES),
             "dsi": ["needs_review", "ignored", "resolved"],
             "cpor_claim": ["unresolved", "ambiguous"],
+            "cst": ["needs_review", "ignored", "resolved"],
             "worklist": ["unresolved", "ignored"],
         },
         "data_unavailable": False,
@@ -231,6 +234,51 @@ async def _merge_cpor_claim_tokens(db: AsyncSession, rows_by_token: dict[str, di
         )
 
 
+async def _merge_cst_tokens(db: AsyncSession, rows_by_token: dict[str, dict[str, Any]]) -> None:
+    """CST product tokens (needs_review / ignored) — catalogue-gap surface (BACKLOG-129)."""
+    from app.services.imports.cst_mapping_candidates import CST_PRODUCT_ENTITY
+
+    candidates = (
+        await db.execute(
+            select(ImportEntityMappingCandidate).where(
+                ImportEntityMappingCandidate.entity_type == CST_PRODUCT_ENTITY,
+                ImportEntityMappingCandidate.status.in_(("needs_review", "ignored")),
+            )
+        )
+    ).scalars().all()
+
+    for cand in candidates:
+        token = _norm_token(cand.normalized_key)
+        if not token:
+            continue
+        ctx = cand.context if isinstance(cand.context, dict) else {}
+        ignored_reason = None
+        if cand.status == "ignored":
+            ignored_reason = str(
+                ctx.get("steward_ignore_reason_code") or "ignore_no_catalogue"
+            )
+        wl_status: WorklistStatus = "ignored" if cand.status == "ignored" else "unresolved"
+        pstatus = str(ctx.get("product_match_status") or cand.match_reason or "needs_review")
+        sample = (
+            cand.sample_raw_values[0]
+            if isinstance(cand.sample_raw_values, list) and cand.sample_raw_values
+            else None
+        )
+        _upsert_token_row(
+            rows_by_token,
+            token=token,
+            source="cst",
+            status=wl_status,
+            resolution_status=pstatus if wl_status == "unresolved" else (ignored_reason or "ignored"),
+            occurrence_count=int(cand.row_count or 0),
+            quantity_impact=float(cand.total_units or 0),
+            sample_identifiers=str(sample) if sample else token,
+            job_ids={int(cand.import_job_id)} if cand.import_job_id is not None else set(),
+            first_seen=cand.created_at,
+            last_seen=cand.updated_at or cand.created_at,
+        )
+
+
 def _sample_ids(item: str | None, ean: str | None, model: str | None) -> str:
     parts = [p for p in (item, ean, model) if p and str(p).strip()]
     return " · ".join(parts[:3])
@@ -302,5 +350,10 @@ def _deep_link(source: str, job_ids: set[int]) -> dict[str, str]:
         return {
             "href": "/commercial-planner/cpor-cases",
             "label": "CPOR cases",
+        }
+    if source == "cst" and jid is not None:
+        return {
+            "href": f"/admin/imports?job={jid}",
+            "label": "CST steward",
         }
     return {"href": "/admin/imports", "label": "Import center"}

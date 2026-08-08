@@ -58,6 +58,7 @@ type PreviewItem = {
     shipment: number;
     dsi_staging: number;
     cpor_claim: number;
+    cst_staging?: number;
     dsi_facts: number;
   };
   flags?: string[];
@@ -78,7 +79,7 @@ type ApplyResponse = {
 };
 
 export function ProductMasterGapWorklistView() {
-  const [source, setSource] = useState<'all' | 'shipment' | 'dsi' | 'cpor_claim'>('all');
+  const [source, setSource] = useState<'all' | 'shipment' | 'dsi' | 'cpor_claim' | 'cst'>('all');
   const [status, setStatus] = useState<'all' | 'unresolved' | 'ignored'>('all');
   const [selectedCount, setSelectedCount] = useState(0);
   const [gridApi, setGridApi] = useState<GridApi<GapRow> | null>(null);
@@ -253,9 +254,9 @@ export function ProductMasterGapWorklistView() {
   return (
     <Stack spacing={2}>
       <Alert severity="info">
-        Catalogue gaps across shipment evidence, DSI staging, and CPOR claims. Select tokens → Preview →
-        Confirm resolve. This surface never creates Product Master rows; DSI facts are not rewritten
-        (FLAG only).
+        Catalogue gaps across shipment evidence, DSI staging, CST sell-through, and CPOR claims. Select
+        tokens → Preview → Confirm resolve. This surface never creates Product Master rows; DSI facts are
+        not rewritten (FLAG only).
       </Alert>
       {banner ? (
         <Alert severity={banner.severity} onClose={() => setBanner(null)} data-testid="pmg-banner">
@@ -276,6 +277,7 @@ export function ProductMasterGapWorklistView() {
             <MenuItem value="shipment">Shipment</MenuItem>
             <MenuItem value="dsi">DSI</MenuItem>
             <MenuItem value="cpor_claim">CPOR claim</MenuItem>
+            <MenuItem value="cst">CST</MenuItem>
           </Select>
         </FormControl>
         <FormControl size="small" sx={{ minWidth: 140 }}>
@@ -375,7 +377,7 @@ export function ProductMasterGapWorklistView() {
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   shipment {item.counts?.shipment ?? 0} · DSI staging {item.counts?.dsi_staging ?? 0} ·
-                  CPOR {item.counts?.cpor_claim ?? 0} · jobs{' '}
+                  CPOR {item.counts?.cpor_claim ?? 0} · CST {item.counts?.cst_staging ?? 0} · jobs{' '}
                   {(item.affected_job_ids ?? []).join(', ') || '—'}
                 </Typography>
               </Box>

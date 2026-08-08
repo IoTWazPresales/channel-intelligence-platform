@@ -399,11 +399,27 @@ def ignore_cst_candidate_sync(
     session: Session,
     job_id: int,
     candidate_id: int,
+    *,
+    reason_code: str = "ignore_no_catalogue",
 ) -> dict[str, Any]:
+    """Ignore a CST product/location candidate.
+
+    Product ignores default to ``ignore_no_catalogue`` so tokens land on the
+    Product catalogue gaps worklist (BACKLOG-129) — never auto-create PM.
+    """
     cand = _get_cst_candidate_or_raise(session, job_id, candidate_id)
     if cand.status != "ignored":
         cand.status = "ignored"
-        session.flush()
+    ctx = dict(cand.context) if isinstance(cand.context, dict) else {}
+    code = (reason_code or "ignore_no_catalogue").strip() or "ignore_no_catalogue"
+    if cand.entity_type == CST_PRODUCT_ENTITY:
+        ctx["steward_ignore_reason_code"] = code
+        ctx["catalogue_gap"] = True
+    elif "steward_ignore_reason_code" not in ctx:
+        ctx["steward_ignore_reason_code"] = code
+    cand.context = to_jsonable(ctx)
+    session.add(cand)
+    session.flush()
     return serialize_cst_candidate(cand)
 
 

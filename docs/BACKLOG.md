@@ -6,6 +6,23 @@
 
 ---
 
+## BACKLOG-129 — CST unmappable products → catalogue-gap worklist (`ignore_no_catalogue`)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Closed** · 2026-08-08 · CST source on catalogue-gap worklist + ignore_no_catalogue stamp |
+| **Effort** | Medium |
+| **Source** | Warren (2026-08-08 Takealot WEEK pilot): unmappable CST tokens must be ignored and filed into the missing-PM / Product catalogue gaps surface — same as DSI `ignore_no_catalogue`, not left as permanent open steward on the import job. |
+| **Idea** | Extend `product_master_gap_worklist` with `source=cst` (CST `ImportEntityMappingCandidate` product tokens status `needs_review`/`ignored`); CST Bulk ignore stamps `context.steward_ignore_reason_code=ignore_no_catalogue` (and optional `catalogue_gap=true`); gap Confirm-resolve can clear them after PM lands. |
+| **Why it matters / deferrable** | Without this, CST ignore is job-local only — operators lose the token when the job scrolls away. Deferrable while WEEK pilot uses job Bulk ignore; wire before multi-retailer CST scale. |
+| **What the work is** | (1) `ignore_cst_candidate_sync` / bulk ignore accept reason code default `ignore_no_catalogue`; (2) `_merge_cst_tokens` in `product_master_gap_worklist.py` + API `source=cst`; (3) UI filter chip on `/admin/product-master-gaps`; (4) gap resolve applies to CST candidates + re-opens staging when PM matches. |
+| **Regression traps** | Never auto-create dim_product from CST; FLAG≠BLOCK — ignored tokens must not block apply of resolved lines; do not fork DSI ignore UI — reuse gap worklist. |
+| **Behavior to retain** | Job steward Bulk ignore still works; resolved CST lines still apply; multi-token resolve (sales model / barcode / sku) unchanged. |
+| **Out of scope** | PM catalogue load itself; auto-map accessories; changing DSI/shipment gap sources. |
+| **TRIGGER** | — closed (Warren continue 2026-08-08). |
+
+---
+
 **Prune note (2026-07-20):** Removed shipped items (001, 005, 007, 012, 015, 022–024, 028, 030, 033, 035–036, 038–042, 043, 050, 056, 061, 061-U2, 069, 072) and ignored Supabase/deploy items (002, 003). Plan D follow-ons renumbered **057-D4** / **058-D5** to end the 057/058 ID collision with bulk-backfill entries. Full disposition archive: `.tmp/backlog_prune_consult_opus_response.md`.
 
 **ID remap (2026-07-27 merge):** On merge of `feat/dsi-unified-multifile`, that branch’s **074** (email ingest) and **075** (layout-coalesce) were renumbered to **077** / **078** because this branch already used 074/075 for CST E2 / Unit F (shipped) and **076** for amount-scale junk.

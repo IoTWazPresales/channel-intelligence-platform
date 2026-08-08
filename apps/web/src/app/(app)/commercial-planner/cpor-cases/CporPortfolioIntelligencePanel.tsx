@@ -161,7 +161,8 @@ function CporSupportBiasSection() {
   }
 
   const t = data?.totals;
-  const missing = (data?.missing_sku_lines ?? 0) > 0 || t?.planned_usd == null;
+  const missingLines = (data?.missing_sku_lines ?? 0) > 0;
+  const plannedMissing = t?.planned_usd == null;
 
   return (
     <Paper variant="outlined" sx={{ p: 2 }} data-testid="cpor-support-bias">
@@ -176,7 +177,7 @@ function CporSupportBiasSection() {
         <Stack spacing={0.5}>
           <Typography variant="body2" data-testid="cpor-support-bias-planned">
             Planned: {fmtUsd(t?.planned_usd ?? null)}
-            {missing ? ' (seed SKU economics to compute)' : ''}
+            {plannedMissing ? ' (seed SKU economics to compute)' : ''}
           </Typography>
           <Typography variant="body2" data-testid="cpor-support-bias-actual">
             Actual: {fmtUsd(t?.actual_usd)}
@@ -187,7 +188,7 @@ function CporSupportBiasSection() {
               ? `${(t.bias_pct * 100).toFixed(1)}% (actual − planned) / planned`
               : '—'}
           </Typography>
-          {missing ? (
+          {missingLines ? (
             <Alert severity="info" data-testid="cpor-support-bias-missing-sku">
               Missing SKU assumptions on {data?.missing_sku_lines ?? 0} lines. Seed via Commercial Planner
               SKU economics or product admin — never silent zero.

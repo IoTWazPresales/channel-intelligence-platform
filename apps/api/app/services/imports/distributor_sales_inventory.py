@@ -352,11 +352,19 @@ def _parse_decimal(v: Any) -> Decimal | None:
 
 
 def _product_token_key(raw: str | None) -> str:
-    """Normalize a distributor-reported product token for identity lookup (matches legacy SKU path: strip + lower)."""
+    """Normalize a distributor-reported product token for identity lookup (matches legacy SKU path: strip + lower).
+
+    Also strips Excel float pollution on barcode/EAN cells (``4711….0`` → ``4711…``).
+    """
     if raw is None:
         return ""
     t = str(raw).strip().lower()
-    return t if t and t != "nan" else ""
+    if not t or t == "nan":
+        return ""
+    # Stored/imported identifiers sometimes keep a trailing ".0" from Excel numeric cells.
+    if t.endswith(".0") and t[:-2].isdigit():
+        t = t[:-2]
+    return t
 
 
 _LIFECYCLE_INELIGIBLE_EXACT = frozenset(

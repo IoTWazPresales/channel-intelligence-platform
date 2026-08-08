@@ -36,6 +36,13 @@ CANONICAL_FIELDS = (
     "listing_marketplace",
 )
 
+# Import-template / steward keys historically used synonyms; parsers resolve CANONICAL_FIELDS.
+_TEMPLATE_KEY_TO_CANONICAL = {
+    "product_identifier": "raw_product_token",
+    "location_token": "raw_location_token",
+    "period_ref": "raw_period_ref",
+}
+
 _PERIOD_RANGE_RE = re.compile(r"(\d{8})[_\-\s]+(\d{8})")
 _PERIOD_SINGLE_RE = re.compile(r"(\d{8})")
 _WEEK_RE = re.compile(r"week[\s_]*(\d{1,2})|w(\d{1,2})", re.IGNORECASE)
@@ -76,38 +83,98 @@ def _parse_decimal(value: Any) -> float | None:
     s = _normalize_text(value)
     if not s:
         return None
+    # Takealot / ZA currency cells: "R  1 486.00", "R1,999.00"
     s = s.replace(",", "")
+    s = re.sub(r"^[^\d\-]+", "", s)
+    s = re.sub(r"\s+", "", s)
+    if not s or s in {".", "-", "-."}:
+        return None
     try:
         return float(Decimal(s))
     except (InvalidOperation, ValueError):
         return None
 
 
+def _alias_folds(alias: str) -> set[str]:
+    """Match 'Transaction Week' to alias 'transaction_week' (and the reverse)."""
+    a = alias.strip().lower()
+    if not a:
+        return set()
+    return {a, a.replace("_", " "), a.replace(" ", "_")}
+
+
+def normalize_cst_expected_columns(expected_columns: dict[str, Any] | None) -> dict[str, Any]:
+    """Map template synonym keys onto parser CANONICAL_FIELDS and merge aliases."""
+    out: dict[str, Any] = {}
+    for key, meta in (expected_columns or {}).items():
+        if not isinstance(meta, dict):
+            continue
+        canon = _TEMPLATE_KEY_TO_CANONICAL.get(str(key), str(key))
+        aliases: list[str] = []
+        seen: set[str] = set()
+        for a in meta.get("aliases") or []:
+            if not isinstance(a, str) or not a.strip():
+                continue
+            low = a.strip().lower()
+            if low in seen:
+                continue
+            aliases.append(a.strip())
+            seen.add(low)
+        if canon in out and isinstance(out[canon], dict):
+            existing = list(out[canon].get("aliases") or [])
+            for a in aliases:
+                low = a.lower()
+                if low not in {str(x).lower() for x in existing}:
+                    existing.append(a)
+            merged = dict(out[canon])
+            merged["aliases"] = existing
+            if meta.get("required"):
+                merged["required"] = True
+            out[canon] = merged
+        else:
+            out[canon] = {
+                "aliases": aliases,
+                "required": bool(meta.get("required", False)),
+            }
+    return out
+
+
 def _aliases_for_canonical(
     canonical: str,
     field_mapping: dict[str, str],
     expected_columns: dict[str, Any],
-) -> set[str]:
-    aliases: set[str] = {canonical.lower()}
-    meta = expected_columns.get(canonical)
-    if isinstance(meta, dict):
-        for a in meta.get("aliases") or []:
-            if isinstance(a, str) and a.strip():
-                aliases.add(a.strip().lower())
+) -> list[str]:
+    """Ordered alias folds — first match wins when resolving source columns."""
+    ordered: list[str] = []
+    seen: set[str] = set()
+
+    def _add(raw: str) -> None:
+        for fold in _alias_folds(raw):
+            if fold not in seen:
+                ordered.append(fold)
+                seen.add(fold)
+
     for src_col, tgt in field_mapping.items():
         if src_col == EXPECTED_COLUMNS_META_KEY:
             continue
         if tgt == canonical:
-            aliases.add(str(src_col).strip().lower())
-    return aliases
+            _add(str(src_col))
+    meta = expected_columns.get(canonical)
+    if isinstance(meta, dict):
+        for a in meta.get("aliases") or []:
+            if isinstance(a, str) and a.strip():
+                _add(a)
+    _add(canonical)
+    return ordered
 
 
 def _build_alias_index(
     field_mapping: dict[str, str],
     expected_columns: dict[str, Any],
 ) -> dict[str, set[str]]:
+    expected = normalize_cst_expected_columns(expected_columns)
     return {
-        c: _aliases_for_canonical(c, field_mapping, expected_columns)
+        c: set(_aliases_for_canonical(c, field_mapping, expected))
         for c in CANONICAL_FIELDS
     }
 
@@ -175,6 +242,7 @@ def _resolve_source_columns(
     expected_columns: dict[str, Any],
 ) -> dict[str, str | None]:
     """Map canonical field -> source column name in the dataframe."""
+    expected = normalize_cst_expected_columns(expected_columns)
     col_lower = {str(c).strip().lower(): str(c) for c in columns}
     resolved: dict[str, str | None] = {c: None for c in CANONICAL_FIELDS}
 
@@ -187,11 +255,155 @@ def _resolve_source_columns(
     for canon in CANONICAL_FIELDS:
         if resolved[canon] is not None:
             continue
-        for alias in _aliases_for_canonical(canon, field_mapping, expected_columns):
+        for alias in _aliases_for_canonical(canon, field_mapping, expected):
             if alias in col_lower:
                 resolved[canon] = col_lower[alias]
                 break
     return resolved
+
+
+def _first_matching_column(col_lower: dict[str, str], alias_names: list[str]) -> str | None:
+    for name in alias_names:
+        for fold in _alias_folds(name):
+            if fold in col_lower:
+                return col_lower[fold]
+    return None
+
+
+def enrich_flat_rows_from_companion_soh(
+    file_bytes: bytes,
+    filename: str,
+    rows: list[dict[str, Any]],
+    feed_profile: dict[str, Any] | None,
+    warnings: list[str],
+) -> list[dict[str, Any]]:
+    """Fill missing sell/cost/SOH from a companion SOH sheet described by feed_profile.
+
+    Takealot WEEK workbooks carry qty on the sales sheet and prices/SOH on ``soh``.
+    Join key defaults to barcode (override via ``soh_join_columns``).
+    """
+    if not rows or not isinstance(feed_profile, dict):
+        return rows
+    soh_names = {
+        str(n).strip().lower()
+        for n in (feed_profile.get("soh_sheet_names") or [])
+        if isinstance(n, str) and n.strip()
+    }
+    if not soh_names:
+        return rows
+
+    join_names = [str(n) for n in (feed_profile.get("soh_join_columns") or ["barcode"]) if n]
+    cost_names = [
+        str(n)
+        for n in (feed_profile.get("soh_cost_columns") or ["Cost Price", "Weighted Average Cost Price"])
+        if n
+    ]
+    sell_names = [
+        str(n)
+        for n in (feed_profile.get("soh_sell_price_columns") or ["Selling Price Inc", "List Price Inc"])
+        if n
+    ]
+    soh_qty_names = [
+        str(n)
+        for n in (feed_profile.get("soh_qty_columns") or ["Qty Sellable", "total_sellable_soh", "soh"])
+        if n
+    ]
+
+    soh_body: pd.DataFrame | None = None
+    try:
+        sheets = _read_workbook_sheets(file_bytes, filename)
+    except ValueError:
+        warnings.append("Companion SOH enrichment skipped: unsupported workbook type")
+        return rows
+
+    for name, raw_df in sheets:
+        if raw_df is None or raw_df.empty:
+            continue
+        if str(name).strip().lower() not in soh_names:
+            continue
+        # Prefer a header that includes the join column; fall back to row 0.
+        header_idx = 0
+        for i in range(min(5, len(raw_df))):
+            cells = [_normalize_text(c) or "" for c in raw_df.iloc[i].tolist()]
+            lowers = {c.lower() for c in cells if c}
+            if any(fold in lowers for jn in join_names for fold in _alias_folds(jn)):
+                header_idx = i
+                break
+        headers = [_normalize_text(c) or f"col_{i}" for i, c in enumerate(raw_df.iloc[header_idx].tolist())]
+        body = raw_df.iloc[header_idx + 1 :].copy()
+        body.columns = headers
+        soh_body = body.reset_index(drop=True)
+        break
+
+    if soh_body is None or soh_body.empty:
+        warnings.append("Companion SOH sheet not found for price enrichment")
+        return rows
+
+    col_lower = {str(c).strip().lower(): str(c) for c in soh_body.columns}
+    join_col = _first_matching_column(col_lower, join_names)
+    if join_col is None:
+        warnings.append("Companion SOH enrichment skipped: join column not found")
+        return rows
+    cost_col = _first_matching_column(col_lower, cost_names)
+    sell_col = _first_matching_column(col_lower, sell_names)
+    soh_col = _first_matching_column(col_lower, soh_qty_names)
+
+    by_token: dict[str, dict[str, float | None]] = {}
+    for pos in range(len(soh_body)):
+        series = soh_body.iloc[pos]
+        tok = _normalize_text(series.get(join_col))
+        if not tok:
+            continue
+        key = tok.strip().lower()
+        if key in by_token:
+            continue
+        by_token[key] = {
+            "unit_cost": _parse_decimal(series.get(cost_col)) if cost_col else None,
+            "unit_sell_price": _parse_decimal(series.get(sell_col)) if sell_col else None,
+            "reported_soh": _parse_decimal(series.get(soh_col)) if soh_col else None,
+        }
+
+    if not by_token:
+        warnings.append("Companion SOH enrichment found no join keys")
+        return rows
+
+    filled = 0
+    for row in rows:
+        candidates: list[str] = []
+        tok = _normalize_text(row.get("raw_product_token"))
+        if tok:
+            candidates.append(tok.strip().lower())
+        payload = row.get("raw_row_payload")
+        if isinstance(payload, dict):
+            for key in ("Barcode", "barcode", "EAN", "ean"):
+                alt = _normalize_text(payload.get(key))
+                if alt:
+                    candidates.append(alt.strip().lower())
+        hit = None
+        for key in candidates:
+            hit = by_token.get(key)
+            if hit:
+                break
+        if not hit:
+            continue
+        changed = False
+        if row.get("unit_cost") is None and hit.get("unit_cost") is not None:
+            row["unit_cost"] = hit["unit_cost"]
+            changed = True
+        if row.get("unit_sell_price") is None and hit.get("unit_sell_price") is not None:
+            row["unit_sell_price"] = hit["unit_sell_price"]
+            changed = True
+        if row.get("reported_soh") is None and hit.get("reported_soh") is not None:
+            row["reported_soh"] = hit["reported_soh"]
+            changed = True
+        if changed:
+            filled += 1
+
+    if filled:
+        warnings.append(f"Companion SOH enriched {filled} sales row(s) with price/SOH")
+    else:
+        warnings.append("Companion SOH present but no sales rows matched on join key")
+    return rows
 
 
 def _monday_of_week(d: date) -> date:
@@ -299,12 +511,15 @@ def parse_flat_report(
     filename: str,
     field_mapping: dict,
     job_id: int,
+    *,
+    feed_profile: dict[str, Any] | None = None,
 ) -> ParseResult:
     """Parse a single-sheet flat sell-through file into staging-ready row dicts."""
     fm = dict(field_mapping or {})
     expected_columns = fm.pop(EXPECTED_COLUMNS_META_KEY, None)
     if not isinstance(expected_columns, dict):
         expected_columns = {}
+    expected_columns = normalize_cst_expected_columns(expected_columns)
 
     alias_index = _build_alias_index(fm, expected_columns)
     try:
@@ -394,6 +609,14 @@ def parse_flat_report(
 
     if skipped:
         warnings.append(f"Skipped {skipped} row(s) with missing product token or units_sold")
+
+    rows = enrich_flat_rows_from_companion_soh(
+        file_bytes,
+        filename,
+        rows,
+        feed_profile,
+        warnings,
+    )
 
     return ParseResult(
         rows=rows,

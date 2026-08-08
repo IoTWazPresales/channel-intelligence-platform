@@ -465,7 +465,9 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
                 ],
                 "required": True,
             },
-            "product_identifier": {
+            # Canonical parser keys (raw_*). Synonym product_identifier is still accepted
+            # via normalize_cst_expected_columns for older template rows / steward memory.
+            "raw_product_token": {
                 "aliases": [
                     "product_code",
                     "sku",
@@ -477,20 +479,43 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
                 ],
                 "required": True,
             },
-            "location_token": {
+            "raw_location_token": {
                 "aliases": ["site_code", "site_name", "store_code", "store_name", "site"],
                 "required": False,
             },
-            "period_ref": {
-                "aliases": ["week", "transaction_week", "period", "report_week", "week_no"],
+            "raw_period_ref": {
+                "aliases": [
+                    "week",
+                    "transaction_week",
+                    "transaction week",
+                    "period",
+                    "report_week",
+                    "week_no",
+                ],
                 "required": False,
             },
             "unit_sell_price": {
-                "aliases": ["sell_price", "unit_price", "price", "selling_price", "retail_price"],
+                "aliases": [
+                    "sell_price",
+                    "unit_price",
+                    "price",
+                    "selling_price",
+                    "retail_price",
+                    "selling price inc",
+                    "list price inc",
+                ],
                 "required": False,
             },
             "unit_cost": {
-                "aliases": ["cost", "unit_cost", "mac", "moving_avg_cost", "cost_price"],
+                "aliases": [
+                    "cost",
+                    "unit_cost",
+                    "mac",
+                    "moving_avg_cost",
+                    "cost_price",
+                    "cost price",
+                    "weighted average cost price",
+                ],
                 "required": False,
             },
             "reported_soh": {
@@ -503,6 +528,7 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
                     "on_hand",
                     "total_soh",
                     "total_sellable_soh",
+                    "qty sellable",
                 ],
                 "required": False,
             },

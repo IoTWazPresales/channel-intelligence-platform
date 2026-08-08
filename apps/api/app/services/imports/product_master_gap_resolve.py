@@ -1,7 +1,7 @@
 """BACKLOG-072 — catalogue-gap scan / preview / confirm-apply (no schema).
 
 Tier matching: ``resolve_product_id_single_match`` + steward/exact alias only (no fuzzy).
-Repoint: shipment evidence (+ fact resolution FKs) + DSI staging + CPOR claims.
+Repoint: shipment evidence (+ fact resolution FKs) + DSI staging + CPOR claims + CST staging.
 DSI facts: FLAG only — ``source_key`` includes product_id (STOP until designed).
 Observations are append-only — never mutated here.
 """
@@ -92,6 +92,7 @@ def preview_gap_resolve(
         ship_n, ship_jobs = _count_shipment(session, tok)
         dsi_n, dsi_jobs = _count_dsi_staging(session, tok)
         claim_n, claim_jobs = _count_cpor_claims(session, tok)
+        cst_n, cst_jobs = _count_cst_staging(session, tok)
         flags: list[str] = []
         flag_detail: str | None = None
         if dsi_n > 0:
@@ -107,11 +108,12 @@ def preview_gap_resolve(
                     "shipment": ship_n,
                     "dsi_staging": dsi_n,
                     "cpor_claim": claim_n,
+                    "cst_staging": cst_n,
                     "dsi_facts": 0,
                 },
                 "flags": flags,
                 "flag_detail": flag_detail,
-                "affected_job_ids": sorted(ship_jobs | dsi_jobs | claim_jobs),
+                "affected_job_ids": sorted(ship_jobs | dsi_jobs | claim_jobs | cst_jobs),
             }
         )
     return {
@@ -185,6 +187,25 @@ def _count_cpor_claims(session: Session, tok: str) -> tuple[int, set[int]]:
     return n, jobs
 
 
+def _count_cst_staging(session: Session, tok: str) -> tuple[int, set[int]]:
+    from app.services.imports.cst_mapping_candidates import CST_PRODUCT_ENTITY
+
+    cands = session.scalars(
+        select(ImportEntityMappingCandidate).where(
+            ImportEntityMappingCandidate.entity_type == CST_PRODUCT_ENTITY,
+            ImportEntityMappingCandidate.status.in_(("needs_review", "ignored")),
+        )
+    ).all()
+    jobs: set[int] = set()
+    n = 0
+    for c in cands:
+        if _norm_token(c.normalized_key) == tok:
+            n += int(c.row_count or 1)
+            if c.import_job_id is not None:
+                jobs.add(int(c.import_job_id))
+    return n, jobs
+
+
 def apply_gap_resolve(
     session: Session,
     *,
@@ -213,9 +234,10 @@ def apply_gap_resolve(
         ship_u = _repoint_shipment(session, tok, pid)
         dsi_u = _repoint_dsi_staging(session, tok, pid)
         claim_u = _repoint_cpor_claims(session, tok, pid)
+        cst_u = _repoint_cst_staging(session, tok, pid)
         alias_written = False
         alias_skipped_conflict = False
-        if write_alias and (ship_u or dsi_u or claim_u):
+        if write_alias and (ship_u or dsi_u or claim_u or cst_u):
             alias_written, alias_skipped_conflict = _ensure_product_alias(session, tok, pid)
         applied.append(
             {
@@ -227,6 +249,7 @@ def apply_gap_resolve(
                     "shipment_lines": ship_u,
                     "dsi_staging_candidates": dsi_u,
                     "cpor_claim_lines": claim_u,
+                    "cst_staging_candidates": cst_u,
                     "dsi_facts": 0,
                 },
                 "flags": item.get("flags") or [],
@@ -345,6 +368,48 @@ def _repoint_cpor_claims(session: Session, tok: str, product_id: int) -> int:
     return n
 
 
+def _repoint_cst_staging(session: Session, tok: str, product_id: int) -> int:
+    """Resolve CST mapping candidates + patch sell-through staging lines. FLAG≠BLOCK."""
+    from app.models.import_customer_sellthrough_staging import ImportCustomerSellthroughStagingLine
+    from app.services.imports.cst_mapping_candidates import CST_PRODUCT_ENTITY
+
+    cands = session.scalars(
+        select(ImportEntityMappingCandidate).where(
+            ImportEntityMappingCandidate.entity_type == CST_PRODUCT_ENTITY,
+            ImportEntityMappingCandidate.status.in_(("needs_review", "ignored")),
+        )
+    ).all()
+    n = 0
+    job_ids: set[int] = set()
+    for c in cands:
+        if _norm_token(c.normalized_key) != tok:
+            continue
+        c.status = "resolved"
+        c.suggested_entity_id = int(product_id)
+        c.match_reason = "catalogue_gap_bulk_resolve"
+        ctx = dict(c.context) if isinstance(c.context, dict) else {}
+        ctx["catalogue_gap_bulk_resolve"] = True
+        ctx["steward_resolved_entity_id"] = int(product_id)
+        c.context = to_jsonable(ctx)
+        session.add(c)
+        n += 1
+        if c.import_job_id is not None:
+            job_ids.add(int(c.import_job_id))
+    if job_ids:
+        staging = session.scalars(
+            select(ImportCustomerSellthroughStagingLine).where(
+                ImportCustomerSellthroughStagingLine.import_job_id.in_(tuple(job_ids)),
+                ImportCustomerSellthroughStagingLine.resolved_product_id.is_(None),
+            )
+        ).all()
+        for row in staging:
+            if _norm_token(row.raw_product_token) == tok:
+                row.resolved_product_id = int(product_id)
+                row.resolution_status = "resolved"
+                session.add(row)
+    return n
+
+
 def _ensure_product_alias(session: Session, tok: str, product_id: int) -> tuple[bool, bool]:
     """Return (written, skipped_conflict). Never auto-creates dim_product."""
     alias_val = tok[:256]
@@ -393,6 +458,17 @@ def scan_open_gaps_for_matches(session: Session, *, limit: int = 500) -> dict[st
         select(ImportEntityMappingCandidate).where(
             ImportEntityMappingCandidate.entity_type == "product_identifier",
             ImportEntityMappingCandidate.status == "needs_review",
+        )
+    ).all():
+        t = _norm_token(c.normalized_key)
+        if t:
+            tokens.add(t)
+    from app.services.imports.cst_mapping_candidates import CST_PRODUCT_ENTITY
+
+    for c in session.scalars(
+        select(ImportEntityMappingCandidate).where(
+            ImportEntityMappingCandidate.entity_type == CST_PRODUCT_ENTITY,
+            ImportEntityMappingCandidate.status.in_(("needs_review", "ignored")),
         )
     ).all():
         t = _norm_token(c.normalized_key)

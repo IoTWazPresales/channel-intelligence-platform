@@ -1,27 +1,24 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-08 (VERIFY PASS 6f→B4; Takealot CST config closed)
+**Last updated:** 2026-08-08 (CST multi-file batch shipped)
 
 **Branch:** `feat/cst-takealot-pilot-config`
 
 **Alembic:** `20260807_0010`
 
+## Locked CST product rule (Warren)
+
+Unmappable CST product → **Ignore** (`ignore_no_catalogue`) → **Product catalogue gaps** (`source=cst`). Never auto-create PM. FLAG ≠ BLOCK.
+
 ## Done this session
 
-- **Opus VERIFY PASS** retrospective Unit 6f → B4 (`VERDICT: PASS` in `.tmp/retro_6f_b4_verify_opus_response.md`)
-- Takealot `customer_report_config`: key account, `reports_expected`, cadence weekly, **`report_structure_type=flat`**, feed_profile JSON for WEEK SALES/SOH
-- Slot advance created Takealot week `2026-07-27` status **missing** (worklist 0/0/1)
-- CST steward UI/API: structure type editable + grid column
-- Pilot files copied: `.tmp/cst_pilot_takealot/ASUS WEEK 28–31.xlsx`
-- Browser smoke: `/admin/cst-steward` Takealot flat + Report slots missing row
+- Takealot CST pilot + multi-token resolve; BACKLOG-129; soft-data hygiene
+- **CST multi-file → DSI parity:** `cst_batch.py` + `/cst/batch-propose|batch-jobs` + `CstBulkUploadDialog` + period strip; flat process iterates all raws with per-file period. Live job **799**: WEEK 28–31 → 4 periods, 96 staging rows.
 
 ## Next
 
-1. **Takealot WEEK pilot** via Import Centre (upload WEEK 31, steward aliases, apply) — browser
-2. Soft-data hygiene (SKU assumptions + case #300)
-3. CST multi-file batch → DSI parity
-4. Historical backfill via product UI
+1. Browser smoke CST multi-file batch UI (Import Centre) / Opus VERIFY when available
+2. Historical backfill via product UI
+3. Open PR for `feat/cst-takealot-pilot-config` when ready to promote
 
-**Hydration note:** OneDrive full pin incomplete (~57 readable of 513 priority files). Pilot uses local copies of WEEK 28–31.
-
-**Env:** local Windows. `cip` @ `20260807_0010`. Takealot customer_id=20 (`TMP-CUST-…`).
+**Env:** local Windows. `cip` @ `20260807_0010`. Takealot customer_id=20. Consult deferred (limit); Codex not wired.

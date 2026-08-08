@@ -76,8 +76,22 @@ def scalar_to_clean_str(val: Any) -> str | None:
     v = normalize_scalar_for_pm(val)
     if v is None:
         return None
+    if isinstance(v, bool):
+        return str(v).strip() or None
+    if isinstance(v, float):
+        if v.is_integer() and abs(v) < 1e16:
+            return str(int(v))
+        return str(v).strip() or None
+    if isinstance(v, int):
+        return str(v)
     if isinstance(v, str):
-        return v.strip() or None
+        t = v.strip()
+        if not t:
+            return None
+        # Excel float pollution persisted as text: "4711387767535.0"
+        if t.endswith(".0") and t[:-2].isdigit():
+            return t[:-2]
+        return t
     if isinstance(v, (pd.Timestamp,)):
         return None if pd.isna(v) else str(v)
     return str(v).strip() or None
