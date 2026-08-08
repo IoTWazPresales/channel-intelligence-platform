@@ -811,6 +811,7 @@ async def list_customer_token_worklist(
         by_token[nt].append(ln)
 
     case_ids = {int(ln.case_id) for tlines in by_token.values() for ln in tlines}
+    case_ids |= {int(ln.case_id) for ln in empty_lines}
 
     # Preload case lines (for W6 isolation) — only cases we need
     case_lines_by_case: dict[int, list[CommercialLineupLine]] = defaultdict(list)
@@ -819,7 +820,6 @@ async def list_customer_token_worklist(
             await db.execute(
                 select(CommercialLineupLine).where(
                     CommercialLineupLine.case_id.in_(list(case_ids)),
-                    CommercialLineupLine.customer_token.isnot(None),
                 )
             )
         ).scalars().all():
@@ -982,26 +982,87 @@ async def list_customer_token_worklist(
         )
 
     if empty_lines:
-        items.append(
-            {
-                "item_key": "__empty_token__",
-                "norm_token": "",
-                "sample_token": "",
-                "line_count": len(empty_lines),
-                "bucket": "empty_token",
-                "alias_candidate_ids": [],
-                "preferred_target_id": None,
-                "stamp_enabled": False,
-                "free_target_allowed": False,
-                "conflict": False,
-                "competing_customer_ids": [],
-                "dispositions": [],
-                "distributor_token_match": None,
-                "would_set_attribution_status": None,
-                "ship_corroboration_offer": None,
-                "candidate_provenance": [],
+        empty_by_case: dict[int, list[CommercialLineupLine]] = defaultdict(list)
+        for ln in empty_lines:
+            empty_by_case[int(ln.case_id)].append(ln)
+
+        for case_id, case_empty in sorted(
+            empty_by_case.items(), key=lambda x: (-len(x[1]), x[0])
+        ):
+            product_ids = {
+                int(ln.product_id) for ln in case_empty if ln.product_id is not None
             }
-        )
+            t_pos = set(po_ids_by_case.get(case_id, []))
+            ship_cids: set[int] = set()
+            ship_prov: list[dict[str, Any]] = []
+            seen: set[tuple[int, int, int]] = set()
+            sole_po_customers: dict[int, int] = {}
+            po_cust_sets: dict[int, set[int]] = defaultdict(set)
+            for po_id, product_id, resolved_cid, po_dist in ship_rows_all:
+                if int(po_id) not in t_pos:
+                    continue
+                if product_ids and (product_id is None or int(product_id) not in product_ids):
+                    continue
+                rc = int(resolved_cid)
+                ship_cids.add(rc)
+                po_cust_sets[int(po_id)].add(rc)
+                key = (rc, int(po_id), int(product_id) if product_id is not None else 0)
+                if key in seen:
+                    continue
+                seen.add(key)
+                ship_prov.append(
+                    {
+                        "source": "ship",
+                        "customer_id": rc,
+                        "purchase_order_id": int(po_id),
+                        "po_distributor_id": int(po_dist) if po_dist is not None else None,
+                        "product_id": int(product_id) if product_id is not None else None,
+                    }
+                )
+            for po_id, custs in po_cust_sets.items():
+                if len(custs) == 1:
+                    sole_po_customers[po_id] = next(iter(custs))
+
+            # Ship/PO customers are hints only — never preferred auto-pick (D-039 spirit).
+            hint_ids = set(ship_cids)
+            sole_hint = None
+            named = sorted(c for c in ship_cids if oc_id is None or c != int(oc_id))
+            if len(ship_cids) == 1:
+                sole_hint = next(iter(ship_cids))
+            elif len(named) == 1:
+                sole_hint = named[0]
+
+            cand_ids = set(hint_ids)
+            if oc_id is not None:
+                cand_ids.add(int(oc_id))
+            cust_ids_needed.update(cand_ids)
+
+            line_ids = [int(ln.id) for ln in case_empty]
+            items.append(
+                {
+                    "item_key": f"__empty_token__:case:{case_id}",
+                    "norm_token": "",
+                    "sample_token": f"(empty token · case {case_id})",
+                    "line_count": len(case_empty),
+                    "line_ids": line_ids,
+                    "case_id": case_id,
+                    "bucket": "empty_token",
+                    "alias_candidate_ids": sorted(cand_ids),
+                    "preferred_target_id": None,
+                    "stamp_enabled": True,
+                    "free_target_allowed": True,
+                    "tokenless": True,
+                    "conflict": False,
+                    "competing_customer_ids": [],
+                    "dispositions": [],
+                    "distributor_token_match": None,
+                    "would_set_attribution_status": None,
+                    "ship_corroboration_offer": None,
+                    "sole_po_customer_count": len(sole_po_customers),
+                    "sole_ship_hint_customer_id": sole_hint,
+                    "candidate_provenance": ship_prov,
+                }
+            )
 
     # D-040: attach sole-exact ship corroboration offers for free-pick / clean tokens
     offer_tokens = [
@@ -1009,6 +1070,7 @@ async def list_customer_token_worklist(
         for it in items
         if it["bucket"] not in {"distributor_token", "empty_token", "genuine_conflict"}
         and it.get("free_target_allowed")
+        and it.get("norm_token")
     ]
     if offer_tokens:
         from app.services.commercial_planner.lineup_distributor_attribution import (
@@ -1034,12 +1096,19 @@ async def list_customer_token_worklist(
 
     for it in items:
         cands = []
+        sole_hint = it.get("sole_ship_hint_customer_id")
         for cid in it["alias_candidate_ids"]:
             src = "alias"
             for p in it.get("candidate_provenance") or []:
                 if int(p.get("customer_id") or 0) == cid:
                     src = p.get("source") or src
                     break
+            # empty_token: visual ship hint only — preferred_target_id stays null
+            is_hint = (
+                it.get("bucket") == "empty_token"
+                and sole_hint is not None
+                and int(cid) == int(sole_hint)
+            )
             cands.append(
                 {
                     "targetKey": str(cid),
@@ -1047,7 +1116,7 @@ async def list_customer_token_worklist(
                     "meta": {
                         "customer_id": cid,
                         "is_open_channel": oc_id is not None and cid == int(oc_id),
-                        "preferred": it["preferred_target_id"] == cid,
+                        "preferred": it["preferred_target_id"] == cid or is_hint,
                         "source": src,
                     },
                 }
@@ -1060,9 +1129,14 @@ async def list_customer_token_worklist(
         counts[it["bucket"]] += 1
         counts["all"] += 1
 
+    # BACKLOG-124: empty_token first so default limit does not starve the bucket
+    empty_first = [it for it in items if it["bucket"] == "empty_token"]
+    rest = [it for it in items if it["bucket"] != "empty_token"]
+    ordered = empty_first + rest
+
     return {
-        "items": items[: max(1, min(int(limit), 500))],
-        "total": len(items),
+        "items": ordered[: max(1, min(int(limit), 500))],
+        "total": len(ordered),
         "bucket_counts": dict(counts),
         "open_channel_customer_id": oc_id,
         "exclude_prefix": excl or None,

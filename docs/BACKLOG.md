@@ -35,16 +35,16 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-07 |
+| **Status / parked** | **Closed** · 2026-08-08 · Mechanism D on `feat/backlog-124-empty-token` |
 | **Effort** | Medium |
 | **Source** | PROGRAM-A Unit 6 CONSULT Q0/D6; Unit 6b scope — empty_token bucket (esp. case 127 matched-null lines) |
 | **Idea** | Acquisition path for lineup lines with blank/null `customer_token` that still need a customer stamp (cannot mint `CustomerSourceTokenAlias` without a token). Hint: D6 showed 13/13 medium POs were single-customer on ship side. |
 | **Why it matters / deferrable** | Blocks residual `customer_unresolved` where ship is resolved but lineup token is empty. Stamp (C) cannot run. Deferrable while stampable tokens (clean/specificity) clear first. |
-| **What the work is** | Steward UX to attach a token or stamp from PO/ship customer without inventing fuzzy aliases; may use PO single-customer evidence as acquisition hint only with explicit confirm. |
-| **Regression traps** | Never auto-create dim_customer; never invent tokens silently; FLAG≠BLOCK. |
-| **Behavior to retain** | Empty-token rows remain visible in worklist with stamp disabled. |
-| **Out of scope** | Unit 6b stamp/alias path for non-empty tokens. |
-| **TRIGGER** | After Unit 6b VERIFY PASS when Warren clears empty-token residual, or case 127 / tokenless volume blocks planning. |
+| **What the work is** | Steward stamps `customer_id` by `line_ids` with explicit confirm; ship/PO customers are hints only; never invent `customer_token`; never mint alias; never auto-create dims. API: `…/tokenless/preview|apply`. Worklist: per-case empty_token items with free pick. |
+| **Regression traps** | Never auto-create dim_customer; never invent tokens silently; FLAG≠BLOCK; do not use Mechanism C stamp path for blank tokens. |
+| **Behavior to retain** | Empty-token rows remain visible in worklist; stamp enabled via tokenless path only after explicit target pick + reason + confirm. |
+| **Out of scope** | Unit 6b stamp/alias path for non-empty tokens; Drive Control rename; DAP confirmer. |
+| **TRIGGER** | — closed. |
 
 ---
 

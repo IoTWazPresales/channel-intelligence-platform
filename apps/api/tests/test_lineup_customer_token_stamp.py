@@ -56,6 +56,156 @@ def test_backlog_tokenless_entry_present():
     text = Path(__file__).resolve().parents[3].joinpath("docs", "BACKLOG.md").read_text(encoding="utf-8")
     assert "BACKLOG-124" in text
     assert "tokenless customer acquisition" in text.lower()
+    assert "**Closed**" in text.split("BACKLOG-124", 1)[1].split("## BACKLOG-", 1)[0]
+
+
+@pytest.mark.anyio
+async def test_tokenless_stamp_sets_customer_id_no_alias():
+    from app.db.session import AsyncSessionLocal
+    from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
+    from app.models.import_distributor_si import CustomerSourceTokenAlias
+    from app.models.steward_audit import StewardAuditEvent
+    from app.services.commercial_planner.lineup_tokenless_customer_stamp import (
+        apply_tokenless_customer_stamp,
+        preview_tokenless_customer_stamp,
+    )
+
+    async with AsyncSessionLocal() as db:
+        c1, _, _ = await _two_named_customers(db)
+        case_id = (await db.execute(select(CommercialLineupCase.id).limit(1))).scalar_one_or_none()
+        if case_id is None:
+            pytest.skip("no commercial_lineup_case")
+        lines = []
+        for i in range(2):
+            ln = CommercialLineupLine(
+                case_id=int(case_id),
+                customer_token=None,
+                customer_id=None,
+                row_status="imported",
+                diagnostic_codes=["unknown_customer"],
+                source_row_number=9100 + i,
+            )
+            db.add(ln)
+            lines.append(ln)
+        await db.commit()
+        for ln in lines:
+            await db.refresh(ln)
+        line_ids = [int(ln.id) for ln in lines]
+        try:
+            prev = await preview_tokenless_customer_stamp(
+                db, line_ids=line_ids, target_customer_id=c1
+            )
+            assert prev["line_count"] == 2
+            assert prev["mints_alias"] is False
+            assert prev["writes_customer_token"] is False
+
+            out = await apply_tokenless_customer_stamp(
+                db,
+                {"display_name": "b124-test"},
+                line_ids=line_ids,
+                target_customer_id=c1,
+                reason="b124 tokenless proof",
+            )
+            assert out["stamped_count"] == 2
+            assert out["mints_alias"] is False
+            for lid in line_ids:
+                ln = await db.get(CommercialLineupLine, lid)
+                assert ln is not None
+                assert int(ln.customer_id) == c1
+                assert not (ln.customer_token or "").strip()
+
+            # Mechanism D must not mint an alias for blank tokens
+            blank_alias = (
+                await db.execute(
+                    select(CustomerSourceTokenAlias).where(
+                        CustomerSourceTokenAlias.normalized_token == "",
+                        CustomerSourceTokenAlias.status == "approved",
+                    )
+                )
+            ).scalars().first()
+            assert blank_alias is None
+
+            audits = list(
+                (
+                    await db.execute(
+                        select(StewardAuditEvent).where(
+                            StewardAuditEvent.action == "lineup_tokenless_customer_stamp",
+                        )
+                    )
+                ).scalars().all()
+            )
+            assert any(
+                set(a.payload_json.get("line_ids") or []) == set(line_ids) for a in audits
+            )
+        finally:
+            await db.execute(delete(CommercialLineupLine).where(CommercialLineupLine.id.in_(line_ids)))
+            await db.commit()
+
+
+@pytest.mark.anyio
+async def test_tokenless_rejects_non_blank_token_lines():
+    from app.db.session import AsyncSessionLocal
+    from app.services.commercial_planner.lineup_tokenless_customer_stamp import (
+        preview_tokenless_customer_stamp,
+    )
+
+    async with AsyncSessionLocal() as db:
+        c1, _, _ = await _two_named_customers(db)
+        tok = f"unit6b-not-empty-{secrets.token_hex(4)}"
+        lines = await _seed_token_lines(db, norm_token=tok, n=1)
+        line_ids = [int(ln.id) for ln in lines]
+        try:
+            prev = await preview_tokenless_customer_stamp(
+                db, line_ids=line_ids, target_customer_id=c1
+            )
+            assert prev["line_count"] == 0
+            assert prev["rejected_count"] == 1
+            assert prev["rejected"][0]["reason"] == "customer_token_not_blank"
+        finally:
+            await _cleanup(db, line_ids=line_ids, alias_ids=[], norm_token=tok)
+
+
+@pytest.mark.anyio
+async def test_worklist_empty_token_per_case_stampable():
+    from app.db.session import AsyncSessionLocal
+    from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
+    from app.services.commercial_planner.lineup_customer_token_stamp import (
+        list_customer_token_worklist,
+    )
+
+    async with AsyncSessionLocal() as db:
+        case_id = (await db.execute(select(CommercialLineupCase.id).limit(1))).scalar_one_or_none()
+        if case_id is None:
+            pytest.skip("no commercial_lineup_case")
+        ln = CommercialLineupLine(
+            case_id=int(case_id),
+            customer_token="",
+            customer_id=None,
+            row_status="imported",
+            diagnostic_codes=["unknown_customer"],
+            source_row_number=9200,
+        )
+        db.add(ln)
+        await db.commit()
+        await db.refresh(ln)
+        try:
+            wl = await list_customer_token_worklist(db, limit=500)
+            hits = [
+                it
+                for it in wl["items"]
+                if it.get("bucket") == "empty_token" and int(it.get("case_id") or 0) == int(case_id)
+            ]
+            assert hits, "expected empty_token worklist item for seeded case"
+            hit = next((h for h in hits if int(ln.id) in (h.get("line_ids") or [])), hits[0])
+            assert hit["tokenless"] is True
+            assert hit["stamp_enabled"] is True
+            assert hit["preferred_target_id"] is None
+            assert hit["free_target_allowed"] is True
+            assert int(ln.id) in hit["line_ids"]
+            assert wl["bucket_counts"].get("empty_token", 0) >= 1
+        finally:
+            await db.execute(delete(CommercialLineupLine).where(CommercialLineupLine.id == int(ln.id)))
+            await db.commit()
 
 
 async def _two_named_customers(db):

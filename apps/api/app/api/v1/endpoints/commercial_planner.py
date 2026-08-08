@@ -106,6 +106,10 @@ from app.services.commercial_planner.lineup_customer_token_stamp import (
     preview_customer_token_stamp,
     revoke_customer_token_alias,
 )
+from app.services.commercial_planner.lineup_tokenless_customer_stamp import (
+    apply_tokenless_customer_stamp,
+    preview_tokenless_customer_stamp,
+)
 from app.services.commercial_planner.lineup_distributor_attribution import (
     DistributorAttributionError,
     accept_ship_corroborated_distributor,
@@ -2103,6 +2107,17 @@ class CustomerTokenAliasRevokeBody(BaseModel):
     reason: str = Field(min_length=1, max_length=512)
 
 
+class TokenlessCustomerStampBody(BaseModel):
+    line_ids: list[int] = Field(min_length=1, max_length=2000)
+    target_customer_id: int = Field(ge=1)
+    reason: str = Field(default="steward tokenless stamp", min_length=1, max_length=512)
+
+
+class TokenlessCustomerStampPreviewBody(BaseModel):
+    line_ids: list[int] = Field(min_length=1, max_length=2000)
+    target_customer_id: int = Field(ge=1)
+
+
 class DistributorConfirmerBody(BaseModel):
     norm_tokens: list[str] | None = None
     case_ids: list[int] | None = None
@@ -2997,6 +3012,36 @@ async def post_customer_token_alias_revoke(
     try:
         return await revoke_customer_token_alias(
             db, None, alias_id=body.alias_id, reason=body.reason
+        )
+    except CustomerTokenStampError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/lineup/customer-token/tokenless/preview", status_code=200)
+async def post_tokenless_customer_stamp_preview(
+    body: TokenlessCustomerStampPreviewBody, db: AsyncSession = Depends(get_db)
+):
+    """BACKLOG-124: preview stamp of blank-token lines (no alias mint)."""
+    try:
+        return await preview_tokenless_customer_stamp(
+            db, line_ids=body.line_ids, target_customer_id=body.target_customer_id
+        )
+    except CustomerTokenStampError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/lineup/customer-token/tokenless/apply", status_code=200)
+async def post_tokenless_customer_stamp_apply(
+    body: TokenlessCustomerStampBody, db: AsyncSession = Depends(get_db)
+):
+    """BACKLOG-124: stamp blank-token lines to customer_id — never invents token/alias."""
+    try:
+        return await apply_tokenless_customer_stamp(
+            db,
+            None,
+            line_ids=body.line_ids,
+            target_customer_id=body.target_customer_id,
+            reason=body.reason,
         )
     except CustomerTokenStampError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

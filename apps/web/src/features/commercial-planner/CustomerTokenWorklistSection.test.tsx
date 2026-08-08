@@ -119,14 +119,81 @@ describe('CustomerTokenWorklistSection', () => {
     });
   });
 
-  it('shows conflict dispositions without inline resolve control', async () => {
+  it('tokenless empty_token uses line_ids apply path', async () => {
+    apiGet.mockImplementation(async (path: string) => {
+      if (path.includes('/minted-aliases')) return { aliases: [], total: 0 };
+      return {
+        items: [
+          {
+            item_key: '__empty_token__:case:127',
+            norm_token: '',
+            sample_token: '(empty token · case 127)',
+            line_count: 2,
+            line_ids: [501, 502],
+            case_id: 127,
+            bucket: 'empty_token',
+            preferred_target_id: null,
+            stamp_enabled: true,
+            free_target_allowed: true,
+            tokenless: true,
+            conflict: false,
+            competing_customer_ids: [],
+            dispositions: [],
+            sole_po_customer_count: 1,
+            alias_candidates: [
+              {
+                targetKey: '299',
+                label: 'Amazon (id 299)',
+                meta: { customer_id: 299, preferred: true, source: 'ship' },
+              },
+            ],
+          },
+        ],
+        total: 1,
+        bucket_counts: { all: 1, empty_token: 1 },
+        open_channel_customer_id: 1,
+      };
+    });
+    apiPost.mockImplementation(async (path: string, body: Record<string, unknown>) => {
+      if (path.includes('/tokenless/preview')) {
+        return {
+          line_count: 2,
+          target_customer_label: 'Amazon (id 299)',
+          mints_alias: false,
+          writes_customer_token: false,
+          case_ids: [127],
+          rejected_count: 0,
+        };
+      }
+      if (path.includes('/tokenless/apply')) {
+        return { stamped_count: 2, target_customer_id: body.target_customer_id, mints_alias: false };
+      }
+      return {};
+    });
+
     wrap(<CustomerTokenWorklistSection />);
-    await screen.findByText(/sadc - dcc/i);
-    await userEvent.click(screen.getByText(/sadc - dcc/i));
-    expect(await screen.findByTestId('customer-token-drawer-conflict')).toBeInTheDocument();
-    expect(screen.getByTestId('customer-token-drawer-conflict')).toHaveTextContent('SCOPED');
-    expect(screen.getByTestId('customer-token-drawer-conflict')).toHaveTextContent('MERGE');
-    expect(screen.getByTestId('customer-token-drawer-conflict')).toHaveTextContent('DATA_ERROR');
-    expect(screen.queryByTestId('customer-token-conflict-override')).not.toBeInTheDocument();
+    await screen.findByText(/empty token · case 127/i);
+    await userEvent.click(screen.getByTestId('customer-token-worklist-bucket-empty_token'));
+    await userEvent.click(screen.getByText(/empty token · case 127/i));
+    expect(await screen.findByTestId('customer-token-empty-hint')).toBeInTheDocument();
+    await userEvent.click(screen.getByTestId('customer-token-empty-target-299'));
+    await userEvent.click(screen.getByTestId('customer-token-stamp-__empty_token__:case:127'));
+    expect(await screen.findByTestId('customer-token-stamp-dialog')).toBeInTheDocument();
+    expect(screen.getByTestId('customer-token-preview-blast')).toHaveTextContent('tokenless');
+    await userEvent.click(screen.getByTestId('customer-token-stamp-submit'));
+    await waitFor(() => {
+      const applyCalls = apiPost.mock.calls.filter((c: unknown[]) =>
+        String(c[0]).includes('/tokenless/apply'),
+      );
+      expect(applyCalls.length).toBeGreaterThan(0);
+      expect(applyCalls[0][1]).toMatchObject({
+        line_ids: [501, 502],
+        target_customer_id: 299,
+      });
+      const stampApply = apiPost.mock.calls.filter((c: unknown[]) =>
+        String(c[0]).includes('/stamp/apply'),
+      );
+      expect(stampApply.length).toBe(0);
+    });
   });
 });
