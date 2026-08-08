@@ -512,7 +512,7 @@
 | **Why it matters / deferrable** | ~~Today API runs with `continue-on-error` + artifact log~~ — suite green on cip_test (1760 passed); hard gate restored. |
 | **What the work is** | Batch-fix defect classes in the 2026-07-29 log; drop continue-on-error; restore hard fail step; keep `ALLOW_TESTS_ON_DEV_DB` unset in CI. |
 | **Regression traps** | Do not point CI API tests at `cip`; do not set `ALLOW_TESTS_ON_DEV_DB=1` in Actions. |
-| **Behavior to retain** | Alembic migrate assert tip `20260802_0009`; upload pytest log on API failure. |
+| **Behavior to retain** | Alembic migrate assert tip == sole `ScriptDirectory` head (tracks migrations); upload pytest log on API failure. |
 | **Out of scope** | Live e2e API wiring (BACKLOG-099); required-check unlock (BACKLOG-087). |
 | **TRIGGER** | — shipped — |
 

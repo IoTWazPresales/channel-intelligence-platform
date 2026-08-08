@@ -121,13 +121,20 @@ def main() -> None:
                 "WHERE tenant_id='default' AND email='admin@local'"
             )
         ).scalar()
+        from alembic.config import Config
+        from alembic.script import ScriptDirectory
+
+        heads = set(ScriptDirectory.from_config(Config("alembic.ini")).get_heads())
+        assert len(heads) == 1, f"expected single alembic head, got {sorted(heads)}"
+        expected_tip = next(iter(heads))
         print(
-            f"db={db} tip={tip} fact_demand_forecast={has_table} view={has_view} "
+            f"db={db} tip={tip} expected_tip={expected_tip} "
+            f"fact_demand_forecast={has_table} view={has_view} "
             f"OPEN_CHANNEL={oc} needs_reapproval={needs_reapproval} "
             f"sql_viewer_audit={has_sql_viewer} admin={has_admin}"
         )
         assert db == SMOKE_DB, db
-        assert tip == "20260801_0008", tip
+        assert tip == expected_tip, tip
         assert has_table
         assert has_view
         assert oc
