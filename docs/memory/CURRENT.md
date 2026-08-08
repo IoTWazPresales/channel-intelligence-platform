@@ -16,14 +16,14 @@
 
 | Item | Notes |
 |------|--------|
-| Commit / PR / merge | Ship branch when Warren asks merge |
+| **PR #23** | Open — merge only on explicit “merge” |
 | Full ASUS workbook column parity | Only if tenant rejects on-ramp |
 | B4 promo draft | After B2 author loop trusted |
 | Parked A-lane | 068 / 089 / 092 / 097 |
 
 ## Next
 
-1. Open/push PR for `feat/b2-author-loop` (do not merge without explicit merge).
+1. Review/merge **PR #23** when ready (do not merge without explicit merge).
 2. B4 promo draft **or** Lane X / parked TRIGGER.
 
 **Env:** local Windows. `cip` @ `20260807_0010`.
