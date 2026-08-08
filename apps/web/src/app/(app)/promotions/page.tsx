@@ -188,15 +188,45 @@ export default function PromotionsPage() {
   }
 
   const [seedCaseId, setSeedCaseId] = useState('');
-  const { data: promoDraft, refetch: refetchPromoDraft } = useQuery({
-    queryKey: ['promo-plan-draft', seedCaseId],
+  const [periodLabel, setPeriodLabel] = useState('2026Q2');
+  const [createMsg, setCreateMsg] = useState<string | null>(null);
+
+  const { data: promoDraft, refetch: refetchPromoDraft, isFetching: draftLoading } = useQuery({
+    queryKey: ['promo-plan-draft', seedCaseId, periodLabel],
     queryFn: ({ signal }) =>
       apiGet<Record<string, unknown>>(
-        `/api/v1/cpor/intelligence/promo-plan-draft?seed_case_id=${encodeURIComponent(seedCaseId)}&planned_support_usd=5000&planned_revenue_usd=50000`,
+        `/api/v1/cpor/intelligence/promo-plan-draft?seed_case_id=${encodeURIComponent(seedCaseId)}&period_label=${encodeURIComponent(periodLabel)}`,
         { signal },
       ),
     enabled: /^\d+$/.test(seedCaseId),
   });
+
+  const createFromDraft = useMutation({
+    mutationFn: () =>
+      apiPost<Record<string, unknown>>('/api/v1/cpor/intelligence/promo-plan-draft/create-case', {
+        seed_case_id: Number(seedCaseId),
+        period_label: periodLabel.trim() || null,
+        confirm_over_budget: true,
+      }),
+    onSuccess: (res) => {
+      setCreateMsg(
+        `Created draft case #${String(res.case_id)} (${String(res.case_code)}) · budget ${String(res.budget_status)}${res.over_budget_warn ? ' (over-budget warn)' : ''}`,
+      );
+    },
+    onError: (err) => {
+      setCreateMsg(err instanceof Error ? err.message : String(err));
+    },
+  });
+
+  const budgetCheck = promoDraft?.budget_check as
+    | {
+        over_budget_warn?: boolean;
+        create_blocked?: boolean;
+        planned_from_lineup_derived?: boolean;
+        reservation_source?: string;
+        tracks?: { money?: { status?: string; planned_reservation_usd?: number; drawn_cpor_usd?: number } };
+      }
+    | undefined;
 
   return (
     <>
@@ -205,34 +235,84 @@ export default function PromotionsPage() {
         <Typography variant="subtitle1" sx={{ mb: 1 }}>
           Promo plan builder (B4)
         </Typography>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }} flexWrap="wrap" useFlexGap>
           <TextField
             size="small"
             label="Seed CPOR case id"
             value={seedCaseId}
             onChange={(e) => setSeedCaseId(e.target.value)}
+            inputProps={{ 'data-testid': 'b4-seed-case-id' }}
             sx={{ width: 180 }}
           />
-          <Button size="small" onClick={() => void refetchPromoDraft()} disabled={!/^\d+$/.test(seedCaseId)}>
-            Build draft
+          <TextField
+            size="small"
+            label="Period label"
+            value={periodLabel}
+            onChange={(e) => setPeriodLabel(e.target.value)}
+            inputProps={{ 'data-testid': 'b4-period-label' }}
+            sx={{ width: 140 }}
+          />
+          <Button
+            size="small"
+            data-testid="b4-build-draft"
+            onClick={() => void refetchPromoDraft()}
+            disabled={!/^\d+$/.test(seedCaseId) || draftLoading}
+          >
+            {draftLoading ? 'Building…' : 'Build draft'}
+          </Button>
+          <Button
+            size="small"
+            variant="contained"
+            data-testid="b4-create-case"
+            disabled={!promoDraft || createFromDraft.isPending || !/^\d+$/.test(seedCaseId)}
+            onClick={() => {
+              const over = Boolean(budgetCheck?.over_budget_warn);
+              if (
+                over &&
+                !window.confirm(
+                  'Budget check is over reserved support. Create draft case anyway? (hard enforce may still block server-side)',
+                )
+              ) {
+                return;
+              }
+              setCreateMsg(null);
+              void createFromDraft.mutate();
+            }}
+          >
+            {createFromDraft.isPending ? 'Creating…' : 'Create draft CPOR case'}
           </Button>
           <Button size="small" href="/commercial-planner/cpor-cases">
             Open CPOR Cases
           </Button>
         </Stack>
+        {createMsg ? (
+          <Alert
+            severity={createFromDraft.isError ? 'warning' : 'success'}
+            sx={{ mb: 1 }}
+            onClose={() => setCreateMsg(null)}
+            data-testid="b4-create-result"
+          >
+            {createMsg}
+          </Alert>
+        ) : null}
+        {budgetCheck?.over_budget_warn ? (
+          <Alert severity="warning" sx={{ mb: 1 }} data-testid="b4-over-budget-warn">
+            Over-budget vs B2 planned reservation (warn only unless hard enforce blocks create).
+          </Alert>
+        ) : null}
         {promoDraft ? (
-          <Typography variant="body2" component="div">
+          <Typography variant="body2" component="div" data-testid="b4-draft-summary">
             Suggested estimate qty: {String(promoDraft.suggested_estimate_qty)} · comparables:{' '}
-            {String((promoDraft.comparables as { count?: number } | undefined)?.count ?? 0)} · budget status:{' '}
-            {String(
-              (promoDraft.budget_check as { tracks?: { money?: { status?: string } } } | undefined)?.tracks?.money
-                ?.status ?? '—',
-            )}{' '}
-            (no hard enforce)
+            {String((promoDraft.comparables as { count?: number } | undefined)?.count ?? 0)} · budget status{' '}
+            {String(budgetCheck?.tracks?.money?.status ?? '—')} · reserved{' '}
+            {String(budgetCheck?.tracks?.money?.planned_reservation_usd ?? 0)} · drawn{' '}
+            {String(budgetCheck?.tracks?.money?.drawn_cpor_usd ?? 0)} · reservation ={' '}
+            {String(budgetCheck?.reservation_source ?? 'derived_from_profit')}
+            {budgetCheck?.planned_from_lineup_derived ? ' (lineup-derived)' : ''}
           </Typography>
         ) : (
           <Typography variant="caption" color="text.secondary">
-            Enter a seed case id to compose A2 comparables + B1 forecast volume + B2 budget check.
+            Enter a seed case id to compose A2 comparables + B1 forecast volume + B2 lineup budget check.
           </Typography>
         )}
       </Paper>

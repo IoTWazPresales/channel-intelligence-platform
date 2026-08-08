@@ -32,7 +32,7 @@ from app.services.cpor.lifecycle import (
 )
 from app.services.cpor.pivot import build_case_pivot
 from app.services.cpor.norms_and_comparable import build_comparable_cases, build_support_norms
-from app.services.cpor.promo_plan_builder import build_promo_plan_draft
+from app.services.cpor.promo_plan_builder import build_promo_plan_draft, create_case_from_promo_draft
 from app.services.cpor.portfolio_intelligence import build_portfolio_intelligence
 from app.services.cpor.support_bias import build_support_bias
 from app.services.cpor.promo_load_recon import build_promo_load_recon
@@ -1004,6 +1004,50 @@ def cpor_promo_plan_draft(
             horizon_weeks=horizon_weeks,
             comparable_limit=comparable_limit,
         )
+
+
+class PromoPlanCreateFromDraftBody(BaseModel):
+    seed_case_id: int = Field(ge=1)
+    product_id: int | None = None
+    period_label: str | None = None
+    planned_support_usd: float | None = Field(default=None, ge=0)
+    planned_revenue_usd: float | None = Field(default=None, ge=0)
+    horizon_weeks: int = Field(default=13, ge=1, le=52)
+    confirm_over_budget: bool = False
+
+
+@router.post("/intelligence/promo-plan-draft/create-case", status_code=201)
+def cpor_promo_plan_create_case(
+    body: PromoPlanCreateFromDraftBody,
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    """B4 — write a draft CPOR case from compose output (existing case/line path)."""
+    actor = _actor(x_user_id) or (user.get("email") if isinstance(user.get("email"), str) else None) or "b4_promo_draft"
+    with SessionLocal() as session:
+        try:
+            return create_case_from_promo_draft(
+                session,
+                seed_case_id=body.seed_case_id,
+                product_id=body.product_id,
+                period_label=body.period_label,
+                planned_support_usd=body.planned_support_usd,
+                planned_revenue_usd=body.planned_revenue_usd,
+                horizon_weeks=body.horizon_weeks,
+                confirm_over_budget=body.confirm_over_budget,
+                actor=actor,
+                generate_case_code=_generate_case_code,
+                record_event=_record_event,
+                recompute_case_line=recompute_case_line,
+                resolve_default_margin=resolve_default_margin,
+                suggest_cost_basis=suggest_cost_basis,
+            )
+        except ValueError as exc:
+            msg = str(exc)
+            code = 400
+            if msg.startswith("seed_case_not_found"):
+                code = 404
+            raise HTTPException(status_code=code, detail=msg) from exc
 
 
 @router.get("/meta/promotion-types")

@@ -1,29 +1,27 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-08 (B2 Units 1–3 author loop on feature branch)
+**Last updated:** 2026-08-08 (B4 promo draft on `feat/b4-promo-draft`)
 
-**Branch:** `feat/b2-author-loop` (from `main` @ `3745cc0`)
+**Branch:** `feat/b4-promo-draft` (from `feat/b2-author-loop` / PR #23)
 
 **Alembic:** `20260807_0010` — no new migration
 
-## Done this branch
+## Done
 
-- B2-1: SRP fix; Apply CTA; builder-economics; B2-01…04 IMPLEMENTED; browser VERIFY PASS
-- B2-2: half-year period slots, A1 bias toggle, period picker wired into net-req + apply
-- B2-3: XLSX on-ramp (`export.xlsx` NetRequirement+DraftLineup); apply writes `commercial_lineup_case` + lines (toggleable)
+- **B2 trusted (browser):** budget `reservation_source=derived_from_profit` + builder-economics reservation + XLSX export PASS.
+- **B4-01:** promo-plan-draft uses B2 lineup-derived budget; `POST …/create-case` writes draft CPOR case; `/promotions` UI create CTA; semantics IMPLEMENTED.
 
 ## Outstanding
 
 | Item | Notes |
 |------|--------|
-| **PR #23** | Open — merge only on explicit “merge” |
-| Full ASUS workbook column parity | Only if tenant rejects on-ramp |
-| B4 promo draft | After B2 author loop trusted |
+| **PR #23** | B2 author loop — merge first (or with #24 stack) |
+| **PR #24** | B4 promo draft — base `feat/b2-author-loop` |
 | Parked A-lane | 068 / 089 / 092 / 097 |
 
 ## Next
 
-1. Review/merge **PR #23** when ready (do not merge without explicit merge).
-2. B4 promo draft **or** Lane X / parked TRIGGER.
+1. Merge **PR #23** then **PR #24** when you say merge (or retarget #24 → main after #23 lands).
+2. Lane X / parked TRIGGER.
 
 **Env:** local Windows. `cip` @ `20260807_0010`.
