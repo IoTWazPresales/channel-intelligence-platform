@@ -174,6 +174,20 @@ export async function apiPatch<T>(path: string, body?: unknown, init?: RequestIn
   return res.json() as Promise<T>;
 }
 
+export async function apiPut<T>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
+  const res = await fetch(apiUrl(path), {
+    method: 'PUT',
+    ...init,
+    headers: defaultHeaders(init, body !== undefined),
+    body: body === undefined ? undefined : JSON.stringify(body),
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    throw new Error(await readFetchError(res));
+  }
+  return res.json() as Promise<T>;
+}
+
 function errorMessageFromResponse(status: number, text: string): string {
   const parsed = parseApiErrorDetailText(text);
   if (parsed.trim()) return parsed;

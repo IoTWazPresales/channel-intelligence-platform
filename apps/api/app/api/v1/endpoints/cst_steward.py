@@ -9,11 +9,12 @@ import json
 from datetime import date, datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.core.security import Role, require_roles
 from app.db.session_sync import SessionLocal
 from app.models.customer_article_alias import CustomerArticleAlias
 from app.models.customer_cst_report_slot import CustomerCstReportSlot
@@ -25,6 +26,7 @@ from app.services.imports.cst_d1 import (
     list_cst_report_worklist_slots,
     reject_customer_article_alias,
 )
+from app.services.imports.cst_p4_customer_bootstrap import bootstrap_p4_customer_configs
 from app.utils.json_safe import to_jsonable
 
 router = APIRouter()
@@ -89,10 +91,14 @@ def _slot_json(slot: CustomerCstReportSlot, customer: DimCustomer | None) -> dic
     }
 
 
+_STRUCTURE_TYPES = {"flat", "pivoted", "multi_sheet", "mtd_delta", "wide_extract"}
+
+
 class KeyAccountPatch(BaseModel):
     is_key_account: bool | None = None
     reports_expected: bool | None = None
     expected_cadence: str | None = Field(default=None, max_length=16)
+    report_structure_type: str | None = Field(default=None, max_length=16)
     overdue_threshold_days: int | None = Field(default=None, ge=0, le=365)
     notes: str | None = Field(default=None, max_length=512)
     feed_profile_json: dict[str, Any] | None = None
@@ -107,6 +113,18 @@ class KeyAccountPatch(BaseModel):
         if v.strip().lower() not in allowed:
             raise ValueError(f"expected_cadence must be one of {sorted(allowed)}")
         return v.strip().lower()
+
+    @field_validator("report_structure_type")
+    @classmethod
+    def structure_ok(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        cleaned = v.strip().lower()
+        if cleaned == "":
+            return None
+        if cleaned not in _STRUCTURE_TYPES:
+            raise ValueError(f"report_structure_type must be one of {sorted(_STRUCTURE_TYPES)}")
+        return cleaned
 
 
 class AliasRejectBody(BaseModel):
@@ -191,6 +209,7 @@ def patch_key_account_steward(
             for k in (
                 "reports_expected",
                 "expected_cadence",
+                "report_structure_type",
                 "overdue_threshold_days",
                 "notes",
                 "feed_profile_json",
@@ -205,6 +224,8 @@ def patch_key_account_steward(
                 cfg.reports_expected = bool(data["reports_expected"])
             if "expected_cadence" in data and data["expected_cadence"] is not None:
                 cfg.expected_cadence = str(data["expected_cadence"])
+            if "report_structure_type" in data:
+                cfg.report_structure_type = data["report_structure_type"]
             if "overdue_threshold_days" in data and data["overdue_threshold_days"] is not None:
                 cfg.overdue_threshold_days = int(data["overdue_threshold_days"])
             if "notes" in data:
@@ -264,6 +285,21 @@ def advance_report_slots(
     as_of = body.as_of if body else None
     with SessionLocal() as session:
         result = advance_cst_report_slots(session, as_of=as_of, now=datetime.now(timezone.utc))
+        session.commit()
+        return result
+
+
+@router.post("/p4-bootstrap-configs")
+def p4_bootstrap_configs(
+    _admin: dict = Depends(require_roles(Role.ADMIN)),
+):
+    """P4 — upsert placeholder customer_report_config rows for the remaining pilot roster.
+
+    Admin-only. Idempotent; never touches Takealot (customer_id=20) or any row that
+    already has a richer config (see cst_p4_customer_bootstrap._has_richer_config).
+    """
+    with SessionLocal() as session:
+        result = bootstrap_p4_customer_configs(session)
         session.commit()
         return result
 

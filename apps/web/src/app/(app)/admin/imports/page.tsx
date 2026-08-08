@@ -65,6 +65,8 @@ import { toQueryError } from '@/lib/queryError';
 import { ImportFileUploadZone } from './ImportFileUploadZone';
 import { BulkLineupBackfillDialog } from './BulkLineupBackfillDialog';
 import { DsiBulkUploadDialog } from './DsiBulkUploadDialog';
+import { CstBulkUploadDialog } from './CstBulkUploadDialog';
+import { CstFilePeriodStrip, type CstFilePeriodRow } from './CstFilePeriodStrip';
 import { DsiCoveragePanel } from './DsiCoveragePanel';
 import { DsiFileReviewStrip } from './DsiFileReviewStrip';
 import { UnifiedLineupImportDialog } from './UnifiedLineupImportDialog';
@@ -578,6 +580,7 @@ function AdminImportsPageContent() {
   const [dsiDetachedLayoutKeys, setDsiDetachedLayoutKeys] = useState<string[]>([]);
   const [dsiActiveLayoutSignature, setDsiActiveLayoutSignature] = useState<string | null>(null);
   const [dsiBulkUploadOpen, setDsiBulkUploadOpen] = useState(false);
+  const [cstBulkUploadOpen, setCstBulkUploadOpen] = useState(false);
   const [jobsBulkSelectionMode, setJobsBulkSelectionMode] = useState<'normal' | 'selecting'>('normal');
   const [jobsSelectedCount, setJobsSelectedCount] = useState(0);
   const [jobsVisibleRowCount, setJobsVisibleRowCount] = useState(0);
@@ -714,6 +717,12 @@ function AdminImportsPageContent() {
     queryKey: ['import-job-rows', lastJobId],
     queryFn: ({ signal }) => apiGet<RowResult[]>(`/api/v1/imports/jobs/${lastJobId}/rows`, { signal }),
     enabled: lastJobId != null,
+  });
+
+  const { data: cstJobDetail } = useQuery({
+    queryKey: ['import-job', lastJobId, 'cst'],
+    queryFn: ({ signal }) => apiGet<Job>(`/api/v1/imports/jobs/${lastJobId}`, { signal }),
+    enabled: lastJobId != null && selectedSlug === 'customer_sell_through',
   });
 
   const {
@@ -2792,6 +2801,18 @@ function AdminImportsPageContent() {
           void qc.invalidateQueries({ queryKey: ['import-jobs'] });
         }}
       />
+      <CstBulkUploadDialog
+        open={cstBulkUploadOpen}
+        onClose={() => setCstBulkUploadOpen(false)}
+        sourceId={typeof sourceId === 'number' ? sourceId : null}
+        onJobsCreated={(ids) => {
+          if (ids[0] != null) {
+            setLastJobId(ids[0]);
+            void qc.invalidateQueries({ queryKey: ['import-job', ids[0], 'cst'] });
+          }
+          void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+        }}
+      />
       <BulkLineupBackfillDialog
         open={bulkLineupBackfillOpen}
         onClose={() => setBulkLineupBackfillOpen(false)}
@@ -4780,6 +4801,16 @@ function AdminImportsPageContent() {
               subtitle="Or choose a file. Pipeline runs according to import mode."
               testIdPrefix="generic-upload"
             />
+            {isCst ? (
+              <Button
+                variant="outlined"
+                disabled={!canGoUpload || upload.isPending}
+                onClick={() => setCstBulkUploadOpen(true)}
+                data-testid="cst-bulk-upload-open"
+              >
+                Unified batch upload
+              </Button>
+            ) : null}
             {upload.isSuccess && lastJobId != null && upload.data?.import_mode !== 'apply' ? (
               <Alert severity="success">
                 Job <strong>#{lastJobId}</strong> created.{' '}
@@ -4787,6 +4818,18 @@ function AdminImportsPageContent() {
                   Refresh validation preview
                 </Button>
               </Alert>
+            ) : null}
+            {isCst && lastJobId != null ? (
+              <CstFilePeriodStrip
+                files={
+                  (Array.isArray(
+                    (cstJobDetail?.staged_metadata as { cst_file_periods?: unknown } | null)?.cst_file_periods
+                  )
+                    ? (cstJobDetail?.staged_metadata as { cst_file_periods: CstFilePeriodRow[] })
+                        .cst_file_periods
+                    : []) as CstFilePeriodRow[]
+                }
+              />
             ) : null}
             {isCst && lastJobId != null ? (
               <CstImportJobResolutionSection

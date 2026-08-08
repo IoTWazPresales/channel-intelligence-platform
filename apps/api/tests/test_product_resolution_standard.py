@@ -36,3 +36,14 @@ def test_standard_order_ean_before_sales_model() -> None:
 def test_standard_ambiguous_tier_returns_none() -> None:
     idx = _idx(ean_to_ids={"abc": (5, 6)})
     assert resolve_product_id_single_match(idx, "abc") is None
+
+
+def test_ean_excel_float_suffix_matches_clean_index_key() -> None:
+    """PM often stores EAN as '4711….0'; importer tokens are clean digits."""
+    from app.services.imports.distributor_sales_inventory import _product_token_key
+
+    assert _product_token_key("4711636287296.0") == "4711636287296"
+    assert _product_token_key("4711636287296") == "4711636287296"
+    idx = _idx(ean_to_ids={_product_token_key("4711636287296.0"): (2972,)})
+    assert resolve_product_id_single_match(idx, "4711636287296") == 2972
+    assert resolve_product_id_single_match(idx, "4711636287296.0") == 2972

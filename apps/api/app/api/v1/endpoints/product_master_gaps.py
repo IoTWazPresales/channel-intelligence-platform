@@ -37,7 +37,7 @@ def _actor(x_user_id: str | None) -> str:
 @router.get("/worklist")
 async def get_product_master_gap_worklist(
     db: AsyncSession = Depends(get_db),
-    source: Literal["shipment", "dsi", "cpor_claim"] | None = Query(default=None),
+    source: Literal["shipment", "dsi", "cpor_claim", "cst"] | None = Query(default=None),
     status: Literal["unresolved", "ignored"] | None = Query(default=None),
     search: str | None = Query(default=None, max_length=128),
     limit: int = Query(default=2000, ge=1, le=5000),

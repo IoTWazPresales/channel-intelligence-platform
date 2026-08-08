@@ -9,6 +9,7 @@ import pytest
 
 from app.services.imports.parsers.customer_sell_through_flat import (
     EXPECTED_COLUMNS_META_KEY,
+    normalize_cst_expected_columns,
     parse_flat_report,
 )
 
@@ -248,3 +249,81 @@ def test_raw_mtd_units_none_and_is_mtd_estimate_false() -> None:
     for row in result.rows:
         assert row["raw_mtd_units"] is None
         assert row["is_mtd_estimate"] is False
+
+
+def test_normalize_template_synonym_keys_to_canonical() -> None:
+    normalized = normalize_cst_expected_columns(
+        {
+            "product_identifier": {"aliases": ["barcode", "sku"], "required": True},
+            "period_ref": {"aliases": ["transaction_week"], "required": False},
+            "units_sold": {"aliases": ["sales"], "required": True},
+        }
+    )
+    assert "raw_product_token" in normalized
+    assert "product_identifier" not in normalized
+    assert "raw_period_ref" in normalized
+    assert "barcode" in normalized["raw_product_token"]["aliases"]
+
+
+def test_template_synonym_keys_detect_takealot_like_headers() -> None:
+    """Production templates historically used product_identifier/period_ref — must still parse."""
+    import io
+
+    import pandas as pd
+
+    bio = io.BytesIO()
+    with pd.ExcelWriter(bio, engine="openpyxl") as writer:
+        pd.DataFrame(
+            [
+                ["Barcode", "Transaction Week", "sales"],
+                ["4711387767535", "2026-07-27", 2],
+                ["4711636154963", "2026-07-27", 1],
+            ]
+        ).to_excel(writer, sheet_name="sales", index=False, header=False)
+        pd.DataFrame(
+            [
+                ["Barcode", "Cost Price", "Selling Price Inc", "Qty Sellable"],
+                ["4711387767535", 100.0, 199.0, 5],
+                ["4711636154963", 50.0, 89.0, 3],
+            ]
+        ).to_excel(writer, sheet_name="soh", index=False, header=False)
+
+    template_shaped = {
+        "units_sold": {"aliases": ["sales", "units"], "required": True},
+        "product_identifier": {"aliases": ["barcode", "sku"], "required": True},
+        "period_ref": {"aliases": ["transaction_week", "week"], "required": False},
+        "unit_cost": {"aliases": ["cost_price"], "required": False},
+        "unit_sell_price": {"aliases": ["selling_price"], "required": False},
+        "reported_soh": {"aliases": ["qty sellable"], "required": False},
+    }
+    mapping = {EXPECTED_COLUMNS_META_KEY: template_shaped}
+    feed_profile = {
+        "soh_sheet_names": ["soh", "SOH"],
+        "soh_cost_columns": ["Cost Price"],
+        "soh_sell_price_columns": ["Selling Price Inc"],
+        "soh_qty_columns": ["Qty Sellable"],
+        "soh_join_columns": ["barcode"],
+    }
+    result = parse_flat_report(
+        bio.getvalue(),
+        "ASUS WEEK 31.xlsx",
+        mapping,
+        12,
+        feed_profile=feed_profile,
+    )
+    assert result.error is None, result.error
+    assert len(result.rows) == 2
+    by_tok = {r["raw_product_token"]: r for r in result.rows}
+    assert by_tok["4711387767535"]["units_sold"] == 2.0
+    assert by_tok["4711387767535"]["unit_cost"] == 100.0
+    assert by_tok["4711387767535"]["unit_sell_price"] == 199.0
+    assert by_tok["4711387767535"]["reported_soh"] == 5.0
+    assert any("Companion SOH enriched" in w for w in result.warnings)
+
+
+def test_parse_decimal_za_currency_strings() -> None:
+    from app.services.imports.parsers.customer_sell_through_flat import _parse_decimal
+
+    assert _parse_decimal("R  1 486.00") == 1486.0
+    assert _parse_decimal("R1,999.00") == 1999.0
+    assert _parse_decimal(336) == 336.0

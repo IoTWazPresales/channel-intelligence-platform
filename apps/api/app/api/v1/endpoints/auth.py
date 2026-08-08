@@ -14,6 +14,7 @@ from app.core.config import get_settings
 from app.core.password import hash_password, hash_session_token, new_session_token, verify_password
 from app.core.security import Role, get_current_user, normalize_role, require_roles
 from app.models.iam import AppUser, AuthSession, Tenant
+from app.services import commercial_tenant_profile
 
 router = APIRouter()
 
@@ -189,3 +190,70 @@ async def create_user(
         "display_name": user.display_name,
         "is_active": user.is_active,
     }
+
+
+class SetPasswordRequest(BaseModel):
+    """Admin password reset — local multi-user path until SMTP productisation."""
+
+    new_password: str = Field(min_length=8, max_length=200)
+    revoke_sessions: bool = True
+
+
+@router.post("/users/{user_id}/set-password")
+async def admin_set_password(
+    user_id: int,
+    body: SetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: dict = Depends(require_roles(Role.ADMIN)),
+):
+    tenant_id = (admin.get("tenant_id") or "default").strip() or "default"
+    user = await db.get(AppUser, user_id)
+    if user is None or user.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    user.password_hash = hash_password(body.new_password)
+    user.updated_at = datetime.now(timezone.utc)
+    if body.revoke_sessions:
+        result = await db.execute(
+            select(AuthSession).where(
+                AuthSession.user_id == user.id,
+                AuthSession.revoked_at.is_(None),
+            )
+        )
+        now = datetime.now(timezone.utc)
+        for sess in result.scalars().all():
+            sess.revoked_at = now
+    await db.commit()
+    return {"ok": True, "user_id": str(user.id), "sessions_revoked": body.revoke_sessions}
+
+
+class TenantCommercialProfileUpdate(BaseModel):
+    """BACKLOG-096 (P6) — onboarding-editable subset only; other profile fields stay env-only."""
+
+    constraint_axis: str | None = None
+    over_budget_action: str | None = None
+    reservation_source: str | None = None
+    pm_attribution_mode: str | None = None
+
+
+@router.get("/tenant-commercial-profile")
+async def get_tenant_commercial_profile(
+    user: dict = Depends(get_current_user),
+):
+    tenant_id = (user.get("tenant_id") or "default").strip() or "default"
+    return commercial_tenant_profile.profile_snapshot(tenant_id)
+
+
+@router.put("/tenant-commercial-profile")
+async def put_tenant_commercial_profile(
+    body: TenantCommercialProfileUpdate,
+    admin: dict = Depends(require_roles(Role.ADMIN)),
+):
+    tenant_id = (admin.get("tenant_id") or "default").strip() or "default"
+    try:
+        commercial_tenant_profile.save_tenant_profile_overrides(
+            tenant_id, body.model_dump(exclude_unset=True)
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return commercial_tenant_profile.profile_snapshot(tenant_id)

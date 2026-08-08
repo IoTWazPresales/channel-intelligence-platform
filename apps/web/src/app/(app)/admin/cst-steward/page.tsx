@@ -32,6 +32,7 @@ type KeyAccountRow = {
   is_key_account: boolean;
   reports_expected: boolean;
   expected_cadence: string;
+  report_structure_type: string | null;
   overdue_threshold_days: number;
   notes: string | null;
   feed_profile_json: Record<string, unknown> | null;
@@ -64,6 +65,7 @@ export default function CstStewardPage() {
   const [keyFlag, setKeyFlag] = useState(false);
   const [reportsExpected, setReportsExpected] = useState(false);
   const [cadence, setCadence] = useState('weekly');
+  const [structureType, setStructureType] = useState('');
   const [threshold, setThreshold] = useState('10');
   const [notes, setNotes] = useState('');
   const [feedRaw, setFeedRaw] = useState('');
@@ -102,6 +104,7 @@ export default function CstStewardPage() {
         is_key_account: keyFlag,
         reports_expected: reportsExpected,
         expected_cadence: cadence,
+        report_structure_type: structureType.trim() || null,
         overdue_threshold_days: Number(threshold),
         notes: notes.trim() || null,
         feed_profile_raw: feedRaw.trim() || '',
@@ -140,6 +143,7 @@ export default function CstStewardPage() {
     setKeyFlag(Boolean(row.is_key_account));
     setReportsExpected(Boolean(row.reports_expected));
     setCadence(row.expected_cadence || 'weekly');
+    setStructureType(row.report_structure_type || '');
     setThreshold(String(row.overdue_threshold_days ?? 10));
     setNotes(row.notes ?? '');
     setFeedRaw(row.feed_profile_json ? JSON.stringify(row.feed_profile_json, null, 2) : '');
@@ -162,6 +166,12 @@ export default function CstStewardPage() {
         valueFormatter: (p) => (p.value ? 'Yes' : 'No'),
       },
       { field: 'expected_cadence', headerName: 'Cadence', width: 110 },
+      {
+        field: 'report_structure_type',
+        headerName: 'Structure',
+        width: 120,
+        valueFormatter: (p) => (p.value ? String(p.value) : '—'),
+      },
       {
         headerName: '',
         width: 100,
@@ -318,6 +328,24 @@ export default function CstStewardPage() {
               <option value="weekly">weekly</option>
               <option value="monthly">monthly</option>
               <option value="adhoc">adhoc</option>
+            </TextField>
+            <TextField
+              select
+              SelectProps={{ native: true }}
+              size="small"
+              label="Report structure type"
+              value={structureType}
+              onChange={(e) => setStructureType(e.target.value)}
+              fullWidth
+              helperText="Parser family for this customer's files. Empty = unset."
+              data-testid="cst-structure-type"
+            >
+              <option value="">(unset)</option>
+              <option value="flat">flat</option>
+              <option value="pivoted">pivoted</option>
+              <option value="multi_sheet">multi_sheet</option>
+              <option value="mtd_delta">mtd_delta</option>
+              <option value="wide_extract">wide_extract</option>
             </TextField>
             <TextField
               size="small"

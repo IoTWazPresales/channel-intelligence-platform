@@ -135,3 +135,68 @@ def test_customer_report_config_defaults() -> None:
     assert cfg.reports_expected is False
     assert cfg.expected_cadence == "weekly"
     assert cfg.overdue_threshold_days == 10
+
+
+def test_collect_cst_tokens_includes_sales_model_when_barcode_primary() -> None:
+    from app.services.imports.customer_sell_through import collect_cst_product_lookup_tokens
+
+    tokens = collect_cst_product_lookup_tokens(
+        primary="4711636287296",
+        raw_row_payload={
+            "Barcode": "4711636287296",
+            "Supplier Code": "E1504TA-N82B0W",
+            "Tsin Title": "ASUS Vivobook",
+        },
+    )
+    assert tokens[0] == "4711636287296"
+    assert "E1504TA-N82B0W" in tokens
+
+
+def test_resolve_sellthrough_falls_back_to_sales_model() -> None:
+    from app.services.imports.customer_sell_through import resolve_product_id_for_sellthrough
+    from app.services.imports.distributor_sales_inventory import ProductResolutionIndex
+    from app.services.imports.product_resolution_standard import resolve_product_id_single_match
+
+    idx = ProductResolutionIndex(
+        sku_to_id={},
+        part_number_to_ids={},
+        sales_model_name_to_ids={"e1504ta-n82b0w": (2972,)},
+        model_name_to_ids={},
+        marketing_name_to_ids={},
+        ean_to_ids={},
+        upc_to_ids={},
+        alias_value_to_ids={},
+        steward_alias_by_key={},
+        products_by_id={},
+    )
+    pid = resolve_product_id_for_sellthrough(
+        idx,
+        "4711636287296",
+        raw_row_payload={"Barcode": "4711636287296", "Supplier Code": "E1504TA-N82B0W"},
+    )
+    assert pid == 2972
+    assert resolve_product_id_single_match(idx, "4711636287296") is None
+
+
+def test_resolve_sellthrough_works_without_barcode_column() -> None:
+    from app.services.imports.customer_sell_through import resolve_product_id_for_sellthrough
+    from app.services.imports.distributor_sales_inventory import ProductResolutionIndex
+
+    idx = ProductResolutionIndex(
+        sku_to_id={},
+        part_number_to_ids={},
+        sales_model_name_to_ids={"x1504vap-i716512bl1w": (99,)},
+        model_name_to_ids={},
+        marketing_name_to_ids={},
+        ean_to_ids={},
+        upc_to_ids={},
+        alias_value_to_ids={},
+        steward_alias_by_key={},
+        products_by_id={},
+    )
+    pid = resolve_product_id_for_sellthrough(
+        idx,
+        "X1504VAP-I716512BL1W",
+        raw_row_payload={"Supplier Code": "X1504VAP-I716512BL1W", "sales": 2},
+    )
+    assert pid == 99

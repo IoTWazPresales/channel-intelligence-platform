@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
+import os
 from datetime import datetime, timezone
 from typing import Any
 
@@ -26,8 +27,17 @@ from app.services.listing_capture.observation import (
     should_backoff_dead_link,
 )
 
-# Tenant gate — default disabled (env or meta_json later; module constant for v0).
-LISTING_CAPTURE_SCHEDULE_ENABLED = False
+
+def _listing_capture_schedule_enabled_from_env() -> bool:
+    """Live env read — `CIP_LISTING_CAPTURE_SCHEDULE` truthy values: 1/true/on."""
+    raw = os.environ.get("CIP_LISTING_CAPTURE_SCHEDULE", "")
+    return raw.strip().lower() in ("1", "true", "on")
+
+
+# Tenant gate — default disabled. Evaluated once at import for callers that read the
+# module constant directly; `scheduler_should_run` re-reads the env live so tests
+# (monkeypatch) and runtime toggles take effect without a process restart.
+LISTING_CAPTURE_SCHEDULE_ENABLED = _listing_capture_schedule_enabled_from_env()
 
 
 def _now() -> datetime:
@@ -242,7 +252,7 @@ def reparse_observation(session: Session, observation: ListingObservation, *, ma
 
 def scheduler_should_run(session: Session, *, schedule_enabled: bool | None = None) -> dict[str, Any]:
     """Beat gate: no-op unless enabled AND at least one listing exists."""
-    enabled = LISTING_CAPTURE_SCHEDULE_ENABLED if schedule_enabled is None else schedule_enabled
+    enabled = _listing_capture_schedule_enabled_from_env() if schedule_enabled is None else schedule_enabled
     n = session.scalar(select(func.count()).select_from(CustomerListing)) or 0
     run = bool(enabled and int(n) > 0)
     return {"enabled": enabled, "listing_count": int(n), "should_run": run}

@@ -17,6 +17,15 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-08 — **Roadmap completion Waves 0–4 + Lane X 076** on `feat/cst-takealot-pilot-config` (PR #25): password reset; P4 bootstrap ×7; listing live-fetch gated; tenant profile Settings (096); shipping amount-scale KPI exclude (076); backup+restore smoke PASS; 098 closed. Next: Warren promote #25; sample WEEK files; approve alembic 0011.
+- 2026-08-08 — **Wave 0 CST browser smoke PASS** job 799: period strip WEEK 28–31 (4 files); bulk CTA + steward section; VERIFY WAIVED (roadmap completion). Next: PR → Wave 1 demo gate.
+- 2026-08-08 — **CST multi-file batch (DSI parity)** on `feat/cst-takealot-pilot-config`: one job + N raws, per-file period from content; dialog + `/cst/batch-*`; live job 799 WEEK 28–31 → 4 periods / 96 rows. Consult deferred. Next: browser smoke UI / commit / historical backfill.
+- 2026-08-08 — **Soft-data hygiene:** 31 SKU assumptions from shipment median USD + FX 18.61; case #300 (`C26C00002`) smoke PASS; A1-09 planned/bias live (partial missing-SKU remains). Next: CST multi-file → DSI parity or commit.
+- 2026-08-08 — **BACKLOG-129 closed:** CST unmappable → ignore_no_catalogue + catalogue-gap `source=cst` (worklist/UI/resolve); job 797 accessories ignored into gaps. No consult this lane. Next: soft-data hygiene or commit.
+- 2026-08-08 — **CST rule locked:** unmappable products → Ignore + catalogue-gap (`ignore_no_catalogue`); BACKLOG-129 (CST not yet in gap worklist). Job 797 has 3 accessory leftovers in that class.
+- 2026-08-08 — **CST multi-token product resolve** on `feat/cst-takealot-pilot-config`: sales model/Supplier Code (+ sku/article/barcode) fallbacks; WEEK 31 job 797 → 32/35 resolved (3 accessory steward). Next: steward 3 or soft-data hygiene.
+- 2026-08-08 — **Takealot WEEK 31 CST pilot** on `feat/cst-takealot-pilot-config`: flat parser synonym-key remap + ZA currency + companion SOH enrich; job 796 loaded (35 priced / 33 steward); browser Import Centre CST section PASS. Next: steward barcodes or soft-data hygiene.
+- 2026-08-08 — **VERIFY PASS 6f→B4** (Opus); Takealot CST config closed (`flat` + feed_profile + missing slot 2026-07-27); structure_type patchable in cst-steward. Next: Takealot WEEK Import Centre pilot.
 - 2026-08-08 — **CI alembic tip** on `fix/ci-alembic-tip-0010`: assert tip == sole ScriptDirectory head (was stale `20260802_0009`); column check for `distributor_attribution_status`. Next: merge → then soft data / Lane X.
 - 2026-08-08 — **PR #23+#24 on main (`3d2ef49`):** B2 author loop + B4 promo draft create-case. Next: CI alembic tip pin or Lane X / parked TRIGGER.
 - 2026-08-08 — **B4 promo draft** on `feat/b4-promo-draft`: B2 trusted (budget+econ+xlsx); draft compose uses lineup-derived budget; create-case POST + `/promotions` CTA. Next: smoke/commit/PR.
