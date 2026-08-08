@@ -28,6 +28,10 @@ from app.services.commercial_planner.inbound_lineup_quarter import (
     row_matches_lineup_filters,
 )
 from app.services.commercial_planner.lineup_period_canonical import parse_period_filter_to_year_quarter
+from app.services.shipping.amount_scale import (
+    amount_scale_not_suspect_clause,
+    amount_scale_suspect_clause,
+)
 from app.services.shipping_commercial_kpis import (
     COHORT_DEFINITIONS,
     effective_arrival_expr,
@@ -981,6 +985,7 @@ async def shipping_commercial_summary(
         overdue_cur, overdue_qty, overdue_lines = [], 0.0, 0
         landed_cur, landed_qty, landed_lines = [], 0.0, 0
         stale_lines = 0
+        amount_scale_suspect_excluded = 0
         arriving_by_distributor: list[dict[str, Any]] = []
         shifts_light = {
             "slipped_count": 0,
@@ -994,11 +999,25 @@ async def shipping_commercial_summary(
         pipe_cur, pipe_qty, pipe_lines = await _aggregate_currency_qty_lines(
             db, filt, *base_extras, predicate_current_incoming(today), require_amount=False
         )
-        # Value by currency only counts rows with amount; keep separate amount-aware currency list
+        # Value by currency only counts rows with amount; keep separate amount-aware currency list.
+        # BACKLOG-076: exclude unit-price-scale-suspect rows from valuation (FLAG != BLOCK — the
+        # rows themselves are untouched, only excluded from this KPI's amount aggregation).
         pipe_amt_cur, _, _ = await _aggregate_currency_qty_lines(
-            db, filt, *base_extras, predicate_current_incoming(today), require_amount=True
+            db,
+            filt,
+            *base_extras,
+            predicate_current_incoming(today),
+            amount_scale_not_suspect_clause(),
+            require_amount=True,
         )
         pipe_cur = pipe_amt_cur
+        amount_scale_suspect_excluded = await _count_shipment_facts(
+            db,
+            filt,
+            *base_extras,
+            predicate_current_incoming(today),
+            amount_scale_suspect_clause(),
+        )
 
         arr_cur, arr_qty, arr_lines = await _aggregate_currency_qty_lines(
             db, filt, *base_extras, predicate_arriving_week(w0, w1)
@@ -1096,6 +1115,7 @@ async def shipping_commercial_summary(
             "line_count": pipe_lines,
             "cohort_definition": "current_incoming",
             "grain": "value",
+            "amount_scale_suspect_excluded": amount_scale_suspect_excluded,
         },
         "arriving_this_week": {
             "quantity": arr_qty,

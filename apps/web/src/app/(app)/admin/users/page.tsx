@@ -192,6 +192,7 @@ export default function AdminUsersPage() {
                 <TableCell>Name</TableCell>
                 <TableCell>Role</TableCell>
                 <TableCell>Active</TableCell>
+                <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -201,11 +202,36 @@ export default function AdminUsersPage() {
                   <TableCell>{u.display_name}</TableCell>
                   <TableCell>{u.role}</TableCell>
                   <TableCell>{u.is_active ? 'yes' : 'no'}</TableCell>
+                  <TableCell align="right">
+                    <Button
+                      size="small"
+                      data-testid={`users-reset-password-${u.id}`}
+                      onClick={() => {
+                        const next = window.prompt(`New password for ${u.email} (min 8 chars)`);
+                        if (!next || next.length < 8) {
+                          if (next != null) setFormError('Password must be at least 8 characters');
+                          return;
+                        }
+                        setFormError(null);
+                        setFormOk(null);
+                        apiPost(`/api/v1/auth/users/${u.id}/set-password`, {
+                          new_password: next,
+                          revoke_sessions: true,
+                        })
+                          .then(() => {
+                            setFormOk(`Password reset for ${u.email}`);
+                          })
+                          .catch((err) => setFormError(safeDisplayError(err)));
+                      }}
+                    >
+                      Reset password
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
               {!usersQuery.isLoading && (usersQuery.data?.users?.length ?? 0) === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4}>No users yet.</TableCell>
+                  <TableCell colSpan={5}>No users yet.</TableCell>
                 </TableRow>
               ) : null}
             </TableBody>

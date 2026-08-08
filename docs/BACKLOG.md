@@ -556,16 +556,16 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-01 |
+| **Status / parked** | **Shipped 2026-08-08** — code on `main` (`reports.run_due_schedules` beat task + `reports.fanout_import_complete` fan-out, `apps/api/app/worker/tasks.py`); `report_schedule` id=1 (`weekly_monday_0700`, `tenant_id=default`, `enabled=true`) exists on `cip` with a real `last_run_at` (2026-08-01), confirming the run-now path has executed against it. |
 | **Effort** | Medium (beat task + import hook; small) |
 | **Source** | P3-5 authored 2026-08-01 — `report_schedule` + `run-now` inbox path; ROADMAP P3-5 calendar + event delivery |
 | **Idea** | Wire Celery beat for `weekly_monday_0700` / `daily_0700` and fan-out `on_import_complete` schedules after DSI/shipment apply completes. |
-| **Why it matters / deferrable** | True unattended Monday 07:00 delivery. Deferrable while `POST /reports/schedules/{id}/run-now` + UI “Schedule + run now” prove vintage inbox path. |
-| **What the work is** | Beat entry + task iterating enabled schedules due; import apply progress-complete hook for `on_import_complete`; optional email_stub channel later. |
+| **Caveat** | Confirmed proof so far is the **run-now path** (`POST /reports/schedules/{id}/run-now`) and the fan-out task existing and being callable — not an unattended overnight Monday-07:00 beat firing in production. Unattended beat requires `CIP_ENABLE_DEV_BEAT=1` locally (Windows dev defaults beat **off** — see `dev_beat_disabled()` in `apps/api/app/worker/celery_queues.py`); production beat scheduling posture is untouched by this note. |
+| **What the work is** | Done — beat entry + task iterating enabled schedules due; import apply progress-complete hook for `on_import_complete`; optional email_stub channel later remains a separate idea, not required for "shipped". |
 | **Regression traps** | Never skip delivery when metric returns empty — missing data is the alert; always stamp `data_vintage`. |
 | **Behavior to retain** | Inbox channel + missing_data_alert + tenant scope. |
 | **Out of scope** | External SMTP productization; P3-6 SQL viewer. |
-| **TRIGGER** | After P3-5 smoke on cip with `20260801_0007` **and** Warren asks for unattended Monday delivery / import-event fan-out. |
+| **TRIGGER** | — shipped — reopen only if Warren wants true unattended overnight delivery proven end-to-end with `CIP_ENABLE_DEV_BEAT=1` left running across a real Monday 07:00. |
 
 ---
 
@@ -590,16 +590,17 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-01 |
+| **Status / parked** | **Done / shipped 2026-08-08** (P6) |
 | **Effort** | Medium (settings/onboarding form + persistence) |
 | **Source** | Warren 2026-08-01 Q-resolve — answers are current-tenant defaults; must stay TENANT-VARIABLE |
 | **Idea** | Expose `commercial_tenant_profile` keys in Getting Started / tenant settings: `constraint_axis`, `over_budget_action`, `reservation_source`, `pm_attribution_mode`. Persist per tenant; stop relying on module-level defaults alone. |
-| **Why it matters / deferrable** | Second customer / multi-tenant readiness (P6); ASUS SA answers must not be baked into application law. Deferrable while single-tenant local. |
-| **What the work is** | Settings or onboarding step; API read/write; seed defaults from current profile module; document in domain rules. |
+| **Shipped 2026-08-08** | File-persistence (no migration): `apps/api/app/services/commercial_tenant_profile.py` — `load_tenant_profile_overrides` / `save_tenant_profile_overrides` read/write `{local_storage_path}/tenant_profiles/{tenant_id}.json`; `profile_snapshot(tenant_id="default")` merges file overrides over module defaults (back-compat — existing no-arg call sites unaffected). API: `GET`/`PUT /api/v1/auth/tenant-commercial-profile` (GET any authenticated role, PUT admin-only via `require_roles(Role.ADMIN)`). UI: new "Commercial tenant profile" section on `/settings` (`apps/web/src/app/(app)/settings/page.tsx`) — four selects + save, `data-testid="tenant-profile-*"`, read-only for non-admins. |
+| **Why it matters / deferrable** | Second customer / multi-tenant readiness (P6); ASUS SA answers must not be baked into application law. Now editable per tenant without a migration. |
+| **What the work is** | Done — settings form; API read/write; file persistence keyed by `tenant_id`; module defaults remain the fallback when no override file exists. |
 | **Regression traps** | Do not hardcode NB/NR/NV/NX or ZAR-only assumptions in UI copy as the only options. |
 | **Behavior to retain** | Profile stub defaults remain valid until overridden. |
-| **Out of scope** | Full multi-tenant IAM; hosting (Q-003). |
-| **TRIGGER** | Tenant onboarding / second customer work starts **or** Warren asks to edit commercial profile in UI. |
+| **Out of scope** | Full multi-tenant IAM; hosting (Q-003); moving these keys into a DB table (file persistence chosen deliberately — no migration). |
+| **TRIGGER** | — shipped — |
 
 ---
 
@@ -1646,15 +1647,16 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-07-27 |
+| **Status / parked** | **Mitigated 2026-08-08** — KPI-level exclusion shipped; root-cause mapping audit / corrective re-import still open (kept parked below the line). |
 | **Effort** | Medium (import mapping audit + optional purge of junk job facts) |
 | **Source** | Shipping KPI Phase 0 (`docs/SHIPPING_COMMERCIAL_KPI_CONTRACT.md` §Phase 0; `.tmp/shipping_kpi_phase0_diag.json`). Old “Pipeline value” = **$288M**; **$214M** of that is on **267** scheduled lines with **null ETA and null promise**. Top rows show qty **36** with amount **~$36M** each (`~1e6` unit price) from `acza_workbook_unship` source keys. |
 | **Idea** | Diagnose whether OEM amount/unit_price columns were mapped with wrong scale or currency; quarantine or re-import affected jobs. Do **not** silently rewrite amounts from the `/shipping` UI. |
-| **Why deferrable** | KPI rewrite gates Pipeline to current-incoming (excludes no-date $214M). Remaining current-incoming (~$63M) may still include inflated lines with dates — separate from card semantics. |
-| **What the work is** | (1) Reproduce top-20 amount rows vs raw workbook. (2) Confirm mapping/unit semantics. (3) Job-scoped purge or corrective re-import (pairs with BACKLOG-073). (4) Regression test on amount reasonableness. |
+| **Mitigation shipped 2026-08-08** | `apps/api/app/services/shipping/amount_scale.py` — `is_unit_price_scale_suspect(amount, quantity)` / SQL clauses flag rows where `abs(amount)/quantity > 100_000`. Wired into `/shipping` pipeline-in-transit KPI (`apps/api/app/api/v1/endpoints/shipping.py`): current-incoming amount aggregation now excludes suspect rows (FLAG ≠ BLOCK — rows untouched, only excluded from this KPI's valuation) and reports `pipeline_in_transit.amount_scale_suspect_excluded`. **Verified against `cip`:** 17 suspect rows (all `acza_workbook_unship` source keys, qty 36–38 at ~$1M implied unit price, matching the Phase 0 sample exactly) out of 14,366 scheduled shipment facts; all-scheduled amount $464.2M → $68.2M excluding suspect rows (separate axis from the existing ETA-window current-incoming gate). |
+| **Why deferrable (remaining root-cause work)** | KPI exclusion removes the commercial distortion from the card. Root-cause mapping audit / corrective re-import / possible purge is still deferrable — no user-facing harm while the 17 rows are excluded from valuation. |
+| **What the work is (remaining)** | (1) Reproduce top-20 amount rows vs raw workbook. (2) Confirm mapping/unit semantics. (3) Job-scoped purge or corrective re-import (pairs with BACKLOG-073). |
 | **Regression traps** | Do not change DAP vs PM cost concepts; do not mass-UPDATE fact amounts without audit trail; preserve `source_key` upsert semantics. |
 | **Out of scope** | Changing commercial KPI predicates again; MasterDataGridShell rewrite. |
-| **TRIGGER** | Warren prioritizes cleaning ACZA unship amount inflation; **or** current-incoming Pipeline still commercially unbelievable after KPI rewrite. |
+| **TRIGGER** | Warren prioritizes cleaning ACZA unship amount inflation at the source (mapping fix / re-import) — the KPI-level symptom is now mitigated. |
 
 ---
 

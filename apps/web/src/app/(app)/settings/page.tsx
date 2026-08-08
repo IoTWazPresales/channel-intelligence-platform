@@ -2,26 +2,54 @@
 
 import {
   Alert,
+  Box,
   Button,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
+  FormControl,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
-import { apiPost, getApiBase } from '@/lib/api';
+import { useCurrentUser } from '@/features/shell/useCurrentUser';
+import { apiGet, apiPost, apiPut, getApiBase, safeDisplayError } from '@/lib/api';
 import { loadWipeAvailability } from '@/lib/wipeAvailability';
 import { useUiStore } from '@/stores/uiStore';
 
 const WIPE_CONFIRM_PHRASE = 'DELETE ALL APPLICATION DATA';
+
+type ConstraintAxis = 'money' | 'support_pct' | 'dual' | 'none';
+type OverBudgetAction = 'require_reapproval' | 'warn' | 'block';
+type ReservationSource = 'derived_from_profit' | 'explicit_column' | 'hybrid';
+type PmAttributionMode = 'business_line' | 'person_field' | 'none';
+
+type TenantCommercialProfile = {
+  tenant_id: string;
+  constraint_axis: ConstraintAxis;
+  over_budget_action: OverBudgetAction;
+  reservation_source: ReservationSource;
+  pm_attribution_mode: PmAttributionMode;
+  overrides_present: string[];
+  hard_enforce_budget: boolean;
+  money_ceiling_usd: number | null;
+  support_norms_trailing_quarters: number;
+};
+
+const CONSTRAINT_AXIS_OPTIONS: ConstraintAxis[] = ['money', 'support_pct', 'dual', 'none'];
+const OVER_BUDGET_ACTION_OPTIONS: OverBudgetAction[] = ['require_reapproval', 'warn', 'block'];
+const RESERVATION_SOURCE_OPTIONS: ReservationSource[] = ['derived_from_profit', 'explicit_column', 'hybrid'];
+const PM_ATTRIBUTION_MODE_OPTIONS: PmAttributionMode[] = ['business_line', 'person_field', 'none'];
 
 export default function SettingsPage() {
   const apiDisplay =
@@ -31,6 +59,49 @@ export default function SettingsPage() {
   const qc = useQueryClient();
   const [wipeOpen, setWipeOpen] = useState(false);
   const [wipePhrase, setWipePhrase] = useState('');
+
+  const { data: me } = useCurrentUser();
+  const isAdmin = String(me?.role || '').toLowerCase() === 'admin';
+
+  const tenantProfileQuery = useQuery({
+    queryKey: ['auth', 'tenant-commercial-profile'],
+    queryFn: () => apiGet<TenantCommercialProfile>('/api/v1/auth/tenant-commercial-profile'),
+    staleTime: 30_000,
+  });
+
+  const [constraintAxis, setConstraintAxis] = useState<ConstraintAxis>('money');
+  const [overBudgetAction, setOverBudgetAction] = useState<OverBudgetAction>('require_reapproval');
+  const [reservationSource, setReservationSource] = useState<ReservationSource>('derived_from_profit');
+  const [pmAttributionMode, setPmAttributionMode] = useState<PmAttributionMode>('business_line');
+  const [profileSaveOk, setProfileSaveOk] = useState<string | null>(null);
+  const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!tenantProfileQuery.data) return;
+    setConstraintAxis(tenantProfileQuery.data.constraint_axis);
+    setOverBudgetAction(tenantProfileQuery.data.over_budget_action);
+    setReservationSource(tenantProfileQuery.data.reservation_source);
+    setPmAttributionMode(tenantProfileQuery.data.pm_attribution_mode);
+  }, [tenantProfileQuery.data]);
+
+  const tenantProfileMutation = useMutation({
+    mutationFn: () =>
+      apiPut<TenantCommercialProfile>('/api/v1/auth/tenant-commercial-profile', {
+        constraint_axis: constraintAxis,
+        over_budget_action: overBudgetAction,
+        reservation_source: reservationSource,
+        pm_attribution_mode: pmAttributionMode,
+      }),
+    onSuccess: async (data) => {
+      setProfileSaveError(null);
+      setProfileSaveOk('Saved.');
+      qc.setQueryData(['auth', 'tenant-commercial-profile'], data);
+    },
+    onError: (err) => {
+      setProfileSaveOk(null);
+      setProfileSaveError(safeDisplayError(err));
+    },
+  });
 
   const { data: wipeStatus, isPending: wipeStatusPending } = useQuery({
     queryKey: ['dev-database-wipe-status'],
@@ -78,6 +149,125 @@ export default function SettingsPage() {
             Current: <strong>{density}</strong> — toggle from the toolbar (compact rows icon).
           </Typography>
         </Stack>
+
+        <Divider sx={{ my: 3 }} />
+        <Typography variant="subtitle1" fontWeight={600} gutterBottom data-testid="tenant-profile-heading">
+          Commercial tenant profile
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Tenant-variable commercial policy (BACKLOG-096). These four answers are onboarding
+          decisions, not application law — do not assume they match another tenant. Saved
+          overrides persist to <code>tenant_profiles/&lt;tenant_id&gt;.json</code> on the API host;
+          unset fields fall back to the module defaults shown below.
+        </Typography>
+        {tenantProfileQuery.isError ? (
+          <Alert severity="error" data-testid="tenant-profile-load-error">
+            {safeDisplayError(tenantProfileQuery.error)}
+          </Alert>
+        ) : (
+          <Stack spacing={2} maxWidth={480} data-testid="tenant-profile-form">
+            {profileSaveError ? (
+              <Alert severity="error" data-testid="tenant-profile-save-error">
+                {profileSaveError}
+              </Alert>
+            ) : null}
+            {profileSaveOk ? (
+              <Alert severity="success" data-testid="tenant-profile-save-ok">
+                {profileSaveOk}
+              </Alert>
+            ) : null}
+            {!isAdmin ? (
+              <Alert severity="info">Admin role required to edit — showing current values read-only.</Alert>
+            ) : null}
+            <FormControl fullWidth disabled={!isAdmin}>
+              <InputLabel id="tenant-profile-constraint-axis-label">Constraint axis (Q-001)</InputLabel>
+              <Select
+                labelId="tenant-profile-constraint-axis-label"
+                label="Constraint axis (Q-001)"
+                value={constraintAxis}
+                onChange={(ev) => setConstraintAxis(ev.target.value as ConstraintAxis)}
+                inputProps={{ 'data-testid': 'tenant-profile-constraint-axis' }}
+              >
+                {CONSTRAINT_AXIS_OPTIONS.map((v) => (
+                  <MenuItem key={v} value={v}>
+                    {v}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth disabled={!isAdmin}>
+              <InputLabel id="tenant-profile-over-budget-action-label">Over-budget action</InputLabel>
+              <Select
+                labelId="tenant-profile-over-budget-action-label"
+                label="Over-budget action"
+                value={overBudgetAction}
+                onChange={(ev) => setOverBudgetAction(ev.target.value as OverBudgetAction)}
+                inputProps={{ 'data-testid': 'tenant-profile-over-budget-action' }}
+              >
+                {OVER_BUDGET_ACTION_OPTIONS.map((v) => (
+                  <MenuItem key={v} value={v}>
+                    {v}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth disabled={!isAdmin}>
+              <InputLabel id="tenant-profile-reservation-source-label">Reservation source (Q-002)</InputLabel>
+              <Select
+                labelId="tenant-profile-reservation-source-label"
+                label="Reservation source (Q-002)"
+                value={reservationSource}
+                onChange={(ev) => setReservationSource(ev.target.value as ReservationSource)}
+                inputProps={{ 'data-testid': 'tenant-profile-reservation-source' }}
+              >
+                {RESERVATION_SOURCE_OPTIONS.map((v) => (
+                  <MenuItem key={v} value={v}>
+                    {v}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth disabled={!isAdmin}>
+              <InputLabel id="tenant-profile-pm-attribution-mode-label">PM attribution mode (Q-009)</InputLabel>
+              <Select
+                labelId="tenant-profile-pm-attribution-mode-label"
+                label="PM attribution mode (Q-009)"
+                value={pmAttributionMode}
+                onChange={(ev) => setPmAttributionMode(ev.target.value as PmAttributionMode)}
+                inputProps={{ 'data-testid': 'tenant-profile-pm-attribution-mode' }}
+              >
+                {PM_ATTRIBUTION_MODE_OPTIONS.map((v) => (
+                  <MenuItem key={v} value={v}>
+                    {v}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            {isAdmin ? (
+              <Box>
+                <Button
+                  variant="contained"
+                  disabled={tenantProfileMutation.isPending || tenantProfileQuery.isPending}
+                  onClick={() => {
+                    setProfileSaveOk(null);
+                    setProfileSaveError(null);
+                    tenantProfileMutation.mutate();
+                  }}
+                  data-testid="tenant-profile-save"
+                >
+                  {tenantProfileMutation.isPending ? 'Saving…' : 'Save tenant profile'}
+                </Button>
+              </Box>
+            ) : null}
+            {tenantProfileQuery.data ? (
+              <Typography variant="caption" color="text.disabled">
+                Overrides currently set: {tenantProfileQuery.data.overrides_present.length > 0
+                  ? tenantProfileQuery.data.overrides_present.join(', ')
+                  : 'none (using module defaults)'}
+              </Typography>
+            ) : null}
+          </Stack>
+        )}
 
         <Divider sx={{ my: 3 }} />
         <Typography variant="subtitle1" fontWeight={600} gutterBottom>

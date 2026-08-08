@@ -9,11 +9,12 @@ import json
 from datetime import date, datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.core.security import Role, require_roles
 from app.db.session_sync import SessionLocal
 from app.models.customer_article_alias import CustomerArticleAlias
 from app.models.customer_cst_report_slot import CustomerCstReportSlot
@@ -25,6 +26,7 @@ from app.services.imports.cst_d1 import (
     list_cst_report_worklist_slots,
     reject_customer_article_alias,
 )
+from app.services.imports.cst_p4_customer_bootstrap import bootstrap_p4_customer_configs
 from app.utils.json_safe import to_jsonable
 
 router = APIRouter()
@@ -283,6 +285,21 @@ def advance_report_slots(
     as_of = body.as_of if body else None
     with SessionLocal() as session:
         result = advance_cst_report_slots(session, as_of=as_of, now=datetime.now(timezone.utc))
+        session.commit()
+        return result
+
+
+@router.post("/p4-bootstrap-configs")
+def p4_bootstrap_configs(
+    _admin: dict = Depends(require_roles(Role.ADMIN)),
+):
+    """P4 — upsert placeholder customer_report_config rows for the remaining pilot roster.
+
+    Admin-only. Idempotent; never touches Takealot (customer_id=20) or any row that
+    already has a richer config (see cst_p4_customer_bootstrap._has_richer_config).
+    """
+    with SessionLocal() as session:
+        result = bootstrap_p4_customer_configs(session)
         session.commit()
         return result
 

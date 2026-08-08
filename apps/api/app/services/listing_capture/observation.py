@@ -5,11 +5,16 @@ from __future__ import annotations
 import gzip
 import json
 import re
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
 from app.services.listing_capture.marketplace_vocab import PARSER_VERSION
+
+LISTING_CAPTURE_USER_AGENT = "CIP-listing-capture/1.0"
+LISTING_CAPTURE_HTTP_TIMEOUT_SECONDS = 20
 
 # Polite defaults (seconds between fetches per marketplace).
 RATE_LIMIT_SECONDS: dict[str, float] = {
@@ -92,6 +97,25 @@ def should_backoff_dead_link(
         return False
     now = now or datetime.now(timezone.utc)
     return now < last_fetch_at + timedelta(hours=DEAD_LINK_BACKOFF_HOURS)
+
+
+def default_http_get(url: str) -> tuple[int, str]:
+    """Live HTTP fetch — only invoked when the caller explicitly enables live fetch (P5).
+
+    Uses urllib (stdlib, no new dependency) with a declared User-Agent and a bounded
+    timeout so a slow/unreachable marketplace host cannot hang the beat task.
+    """
+    request = urllib.request.Request(url, headers={"User-Agent": LISTING_CAPTURE_USER_AGENT})
+    try:
+        with urllib.request.urlopen(request, timeout=LISTING_CAPTURE_HTTP_TIMEOUT_SECONDS) as response:
+            status = int(getattr(response, "status", None) or response.getcode())
+            body = response.read().decode("utf-8", errors="replace")
+            return status, body
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+        return int(exc.code), body
+    except urllib.error.URLError:
+        return 0, ""
 
 
 def fetch_url_text(

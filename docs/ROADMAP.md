@@ -308,8 +308,10 @@ reconciliation (reported SOH is a check, never truth), listing seed emission.
 
 **Progress 2026-08-08:** **Takealot forward path Done** on `feat/cst-takealot-pilot-config`
 (`flat` + feed_profile + multi-file batch UI; live job 799 WEEK 28–31 → 4 periods / 96 rows;
-browser smoke PASS period strip + bulk CTA + steward section). Remaining 7 customers: config +
-sample WEEK files still required (Q-004 discovery per load).
+browser smoke PASS period strip + bulk CTA + steward section). **Remaining 7 customers** have
+placeholder `customer_report_config` rows (`reports_expected`, cadence weekly,
+`feed_profile_json.status=awaiting_sample_file`) — structure discovery still needs sample WEEK
+files (Q-004).
 
 ---
 

@@ -803,11 +803,27 @@ def reports_fanout_import_complete_task(tenant_id: str) -> dict:
     return fanout_on_import_complete_sync(tenant_id=str(tenant_id or "default"))
 
 
+def _listing_live_fetch_enabled() -> bool:
+    """`CIP_LISTING_LIVE_FETCH` truthy values: 1/true/on — default off (P5)."""
+    import os
+
+    return os.environ.get("CIP_LISTING_LIVE_FETCH", "").strip().lower() in ("1", "true", "on")
+
+
 @celery_app.task(name="listing_capture.poll_listings")
 def listing_capture_poll_listings_task() -> dict:
-    """Beat task: gated no-op unless schedule enabled and listings exist. No live HTTP in LC-U1."""
+    """Beat task: gated no-op unless schedule enabled and listings exist.
+
+    Live HTTP fetch only runs when `CIP_LISTING_LIVE_FETCH` is truthy AND the
+    schedule gate (`CIP_LISTING_CAPTURE_SCHEDULE`) passes — otherwise this stays a
+    no-op with a skip reason (P5).
+    """
+    from sqlalchemy import select
+
     from app.db.session_sync import SessionLocal
-    from app.services.listing_capture.registry import scheduler_should_run
+    from app.models.listing_capture import CustomerListing
+    from app.services.listing_capture.observation import default_http_get
+    from app.services.listing_capture.registry import record_observation, scheduler_should_run
     from app.worker.celery_queues import dev_beat_disabled
 
     if dev_beat_disabled():
@@ -817,8 +833,31 @@ def listing_capture_poll_listings_task() -> dict:
         gate = scheduler_should_run(session)
         if not gate["should_run"]:
             return {"skipped": True, "reason": "schedule_disabled_or_empty", **gate}
-        # Live fetch intentionally not wired — Warren enables schedule + injects fetcher later.
-        return {"skipped": True, "reason": "live_fetch_not_enabled_in_lc_u1", **gate}
+
+        if not _listing_live_fetch_enabled():
+            return {"skipped": True, "reason": "live_fetch_not_enabled", **gate}
+
+        listings = list(
+            session.scalars(
+                select(CustomerListing).where(CustomerListing.status == "active")
+            ).all()
+        )
+        polled = 0
+        failed = 0
+        for listing in listings:
+            try:
+                record_observation(session, listing, http_get=default_http_get)
+                polled += 1
+            except Exception:  # noqa: BLE001 — per-listing FLAG≠BLOCK; keep polling the rest
+                failed += 1
+                logger.exception("listing_capture live fetch failed for listing_id=%s", listing.id)
+        return {
+            "skipped": False,
+            "polled": polled,
+            "failed": failed,
+            "listing_count": len(listings),
+            **gate,
+        }
 
 
 @celery_app.task(name="imports.flush_deferred_dsi_post_validate_auto_apply")

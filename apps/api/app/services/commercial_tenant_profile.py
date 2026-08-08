@@ -2,12 +2,17 @@
 
 Defaults encode the current tenant (ASUS SA answers from Q-001/002/009).
 Other tenants / onboarding must override these — never treat ASUS values as
-application law. Persistence via settings/onboarding is a follow-on BACKLOG.
+application law. BACKLOG-096 (P6): per-tenant overrides persist as JSON files
+under ``{local_storage_path}/tenant_profiles/{tenant_id}.json`` — no migration,
+no new table. `profile_snapshot()` merges the file over the module defaults.
 """
 
 from __future__ import annotations
 
+import json
 import os
+import re
+from pathlib import Path
 from typing import Literal
 
 # Q-001 — binding budget axis
@@ -114,13 +119,96 @@ def protected_lineup_case_ids() -> frozenset[int]:
     return protected_lineup_case_ids_from_config()
 
 
-def profile_snapshot() -> dict[str, object]:
-    """Read-only dict for API payloads / explainability. Re-reads env each call."""
+# BACKLOG-096 (P6) — onboarding-editable subset. Everything else on this module
+# (money ceiling, support-norms window, protected case ids) stays env-only.
+TENANT_PROFILE_OVERRIDE_KEYS: tuple[str, ...] = (
+    "constraint_axis",
+    "over_budget_action",
+    "reservation_source",
+    "pm_attribution_mode",
+)
+
+_TENANT_PROFILE_VALID_VALUES: dict[str, frozenset[str]] = {
+    "constraint_axis": frozenset({"money", "support_pct", "dual", "none"}),
+    "over_budget_action": frozenset({"require_reapproval", "warn", "block"}),
+    "reservation_source": frozenset({"derived_from_profit", "explicit_column", "hybrid"}),
+    "pm_attribution_mode": frozenset({"business_line", "person_field", "none"}),
+}
+
+_TENANT_ID_SAFE_RE = re.compile(r"[^A-Za-z0-9_-]+")
+
+
+def _tenant_profiles_dir() -> Path:
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    d = Path(settings.local_storage_path) / "tenant_profiles"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _tenant_profile_override_path(tenant_id: str) -> Path:
+    safe = _TENANT_ID_SAFE_RE.sub("", str(tenant_id or "").strip()) or "default"
+    return _tenant_profiles_dir() / f"{safe}.json"
+
+
+def load_tenant_profile_overrides(tenant_id: str = "default") -> dict[str, str]:
+    """Read persisted overrides for ``tenant_id``. Missing/unreadable file → ``{}`` (FLAG != BLOCK)."""
+    path = _tenant_profile_override_path(tenant_id)
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
     return {
-        "constraint_axis": CONSTRAINT_AXIS,
-        "over_budget_action": OVER_BUDGET_ACTION,
-        "reservation_source": RESERVATION_SOURCE,
-        "pm_attribution_mode": PM_ATTRIBUTION_MODE,
+        k: str(v)
+        for k, v in data.items()
+        if k in TENANT_PROFILE_OVERRIDE_KEYS and v is not None and str(v).strip()
+    }
+
+
+def save_tenant_profile_overrides(tenant_id: str, overrides: dict[str, object]) -> dict[str, str]:
+    """Validate + persist overrides to ``{local_storage_path}/tenant_profiles/{tenant_id}.json``.
+
+    Unknown keys are dropped silently; empty/None values clear that key. Invalid
+    values raise ``ValueError`` — the API layer turns this into a 400.
+    """
+    clean: dict[str, str] = {}
+    for key in TENANT_PROFILE_OVERRIDE_KEYS:
+        if key not in overrides:
+            continue
+        raw = overrides[key]
+        if raw is None or str(raw).strip() == "":
+            continue
+        val = str(raw).strip()
+        if val not in _TENANT_PROFILE_VALID_VALUES[key]:
+            raise ValueError(
+                f"{key}: invalid value {val!r}; expected one of "
+                f"{sorted(_TENANT_PROFILE_VALID_VALUES[key])}"
+            )
+        clean[key] = val
+    path = _tenant_profile_override_path(tenant_id)
+    path.write_text(json.dumps(clean, indent=2, sort_keys=True), encoding="utf-8")
+    return clean
+
+
+def profile_snapshot(tenant_id: str = "default") -> dict[str, object]:
+    """Read-only dict for API payloads / explainability.
+
+    Re-reads env each call; merges persisted ``tenant_id`` file overrides
+    (BACKLOG-096) over the module defaults for the four onboarding-editable keys.
+    """
+    overrides = load_tenant_profile_overrides(tenant_id)
+    return {
+        "tenant_id": tenant_id,
+        "constraint_axis": overrides.get("constraint_axis", CONSTRAINT_AXIS),
+        "over_budget_action": overrides.get("over_budget_action", OVER_BUDGET_ACTION),
+        "reservation_source": overrides.get("reservation_source", RESERVATION_SOURCE),
+        "pm_attribution_mode": overrides.get("pm_attribution_mode", PM_ATTRIBUTION_MODE),
+        "overrides_present": sorted(overrides.keys()),
         "hard_enforce_budget": _env_bool("HARD_ENFORCE_BUDGET", True),
         "money_ceiling_usd": _env_float("MONEY_CEILING_USD"),
         "support_norms_trailing_quarters": support_norms_trailing_quarters(),
