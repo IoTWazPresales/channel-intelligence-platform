@@ -19,6 +19,7 @@ from app.services.lineup.budget_position import build_budget_position
 from app.services.lineup.bulk import bulk_upsert_lineup_items
 from app.services.lineup.export_apply import (
     apply_net_requirement_to_lineup,
+    build_tenant_workbook_export,
     half_year_period_starts,
     net_requirement_to_csv,
 )
@@ -52,6 +53,8 @@ class ApplyNetRequirementBody(BaseModel):
     target_cover_weeks: float = Field(default=DEFAULT_TARGET_COVER_WEEKS, ge=0, le=52)
     replace_matching: bool = True
     limit: int = Field(default=200, ge=1, le=2000)
+    apply_bias: bool = False
+    write_commercial_case: bool = True
     confirm: bool = False
 
 
@@ -139,6 +142,7 @@ async def list_lineup_items(
                 "channel_code": ch.code if ch else None,
                 "period_start": r.period_start.isoformat(),
                 "period_label": r.period_label,
+                "product_id": int(r.product_id),
                 "sku": prod.sku if prod else None,
                 "product_name": prod.name if prod else None,
                 "predecessor_sku": pred.sku if pred else None,
@@ -398,7 +402,7 @@ async def export_lineup_net_requirement_csv(
     limit: int = Query(default=500, ge=1, le=2000),
     db: AsyncSession = Depends(get_db),
 ):
-    """B2-03 — CSV export skeleton of net-requirement (tenant-format on-ramp)."""
+    """B2 — CSV export skeleton of net-requirement (tenant-format on-ramp)."""
     product_bu: dict[int, str] = {}
     for pid, pl, bu in (
         await db.execute(select(DimProduct.id, DimProduct.product_line, DimProduct.business_unit))
@@ -425,6 +429,35 @@ async def export_lineup_net_requirement_csv(
         content=csv_text,
         media_type="text/csv",
         headers={"Content-Disposition": 'attachment; filename="lineup_net_requirement.csv"'},
+    )
+
+
+@router.get("/net-requirement/export.xlsx")
+async def export_lineup_net_requirement_xlsx(
+    distributor_id: int | None = Query(default=None),
+    horizon_weeks: int = Query(default=13, ge=1, le=52),
+    target_cover_weeks: float = Query(default=DEFAULT_TARGET_COVER_WEEKS, ge=0, le=52),
+    apply_bias: bool = Query(default=False),
+    period_start: date | None = Query(default=None),
+    period_label: str | None = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=2000),
+    db: AsyncSession = Depends(get_db),
+):
+    """B2-3 — tenant workbook on-ramp (NetRequirement + DraftLineup sheets). Full ASUS template later."""
+    data = await build_tenant_workbook_export(
+        db,
+        period_start=period_start,
+        period_label=period_label,
+        distributor_id=distributor_id,
+        horizon_weeks=horizon_weeks,
+        target_cover_weeks=target_cover_weeks,
+        apply_bias=apply_bias,
+        limit=limit,
+    )
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="lineup_net_requirement.xlsx"'},
     )
 
 
@@ -461,6 +494,8 @@ async def post_apply_net_requirement(
             target_cover_weeks=body.target_cover_weeks,
             replace_matching=body.replace_matching,
             limit=body.limit,
+            apply_bias=body.apply_bias,
+            write_commercial_case=body.write_commercial_case,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

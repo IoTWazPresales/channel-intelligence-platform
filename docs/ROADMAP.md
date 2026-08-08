@@ -277,6 +277,12 @@ profit-with-reservation is not usable by a PM. See `docs/COMMERCIAL_DOMAIN_RULES
 **Exit:** a next-quarter lineup authored in CIP with profit and reservation, exported in tenant
 format. **This is the dependency moment.**
 
+**Unit 1–3 (author loop) on `feat/b2-author-loop`:** net req → Apply → draft
+`fact_lineup_plan_item` (+ optional `commercial_lineup_case`) → builder-economics + budget position
+(`reservation_source=derived_from_profit`); half-year slots + A1 bias toggle; CSV + XLSX on-ramp.
+Remaining B2 polish: full ASUS column-parity workbook if tenant rejects on-ramp. **B4** next when
+author loop trusted.
+
 ### B4 — Promotion plan builder
 **Entry:** A2 + B1 + B2.
 **Scope:** author a new CPOR case — comparable historical cases from A2, volume from B1, budget

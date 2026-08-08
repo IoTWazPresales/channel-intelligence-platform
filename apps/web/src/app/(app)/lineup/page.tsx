@@ -9,9 +9,13 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
   FormControlLabel,
+  InputLabel,
   Link,
+  MenuItem,
   Paper,
+  Select,
   Stack,
   Table,
   TableBody,
@@ -43,6 +47,7 @@ type Row = {
   channel_code: string | null;
   period_start: string;
   period_label: string | null;
+  product_id?: number | null;
   sku: string | null;
   product_name?: string | null;
   predecessor_sku: string | null;
@@ -62,6 +67,66 @@ type Row = {
   link_budget_request_id: number | null;
   link_roadmap_id: number | null;
   notes?: string | null;
+};
+
+type ApplyNetRequirementResponse = {
+  inserted: number;
+  updated: number;
+  skipped: number;
+  errors: number;
+  skipped_zero_net?: number;
+  skipped_no_allocation?: number;
+  source_row_count?: number;
+  draft_rows_built?: number;
+  apply_bias?: boolean;
+  commercial_case_id?: number | null;
+  commercial_lines_written?: number;
+  results?: Array<{ row_index: number; status: string; id?: number; errors: string[] }>;
+};
+
+type HalfYearPeriodsResponse = {
+  year: number;
+  half: number;
+  rule?: string;
+  periods: Array<{ period_start: string; period_label: string }>;
+};
+
+type BuilderEconomicsResponse = {
+  oem_sell_in_per_unit?: number;
+  profit_per_unit?: number;
+  reservation?: {
+    total?: number;
+    campaign_support?: number;
+    non_campaign?: number;
+    source?: string;
+  };
+  treatments?: {
+    normal_price_units?: number;
+    discount_units?: number;
+    normal_price_share?: number;
+    note?: string;
+  };
+  [key: string]: unknown;
+};
+
+type BudgetPositionResponse = {
+  binding_axis?: string;
+  planned_from_lineup_derived?: boolean;
+  reservation_source?: string;
+  sku_assumption_count?: number;
+  planned_line_count?: number;
+  derive_diagnostics?: {
+    skipped_missing_sku?: number;
+    skipped_missing_srp?: number;
+    skipped_zero_qty?: number;
+  };
+  tracks?: {
+    money?: {
+      planned_reservation_usd?: number;
+      drawn_cpor_usd?: number;
+      status?: string;
+    };
+  };
 };
 
 const APPROVAL_STATUSES = ['draft', 'pending_approval', 'submitted', 'approved', 'rejected'] as const;
@@ -112,6 +177,16 @@ export default function LineupPage() {
   const [replaceMatching, setReplaceMatching] = useState(false);
   const [importParseMsg, setImportParseMsg] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [applyPeriodStart, setApplyPeriodStart] = useState('2026-04-01');
+  const [applyPeriodLabel, setApplyPeriodLabel] = useState('2026Q2');
+  const [applyMsg, setApplyMsg] = useState<string | null>(null);
+  const [applyBias, setApplyBias] = useState(true);
+  const [halfYear, setHalfYear] = useState(2026);
+  const [halfSlot, setHalfSlot] = useState<1 | 2>(1);
+  const [writeCommercialCase, setWriteCommercialCase] = useState(true);
+  const [econSrp, setEconSrp] = useState('');
+  const [econResult, setEconResult] = useState<BuilderEconomicsResponse | null>(null);
+  const [econError, setEconError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -125,19 +200,28 @@ export default function LineupPage() {
     isError: netReqError,
     refetch: refetchNetReq,
   } = useQuery({
-    queryKey: ['lineup-net-requirement'],
+    queryKey: ['lineup-net-requirement', applyBias],
     queryFn: ({ signal }) =>
       apiGet<NetRequirementResponse>(
-        '/api/v1/lineup/net-requirement?limit=50&include_customer_shares=false&apply_bias=true',
+        `/api/v1/lineup/net-requirement?limit=50&include_customer_shares=false&apply_bias=${applyBias ? 'true' : 'false'}`,
         { signal },
       ),
   });
 
-  const budgetPeriod = '2026Q2';
+  const { data: halfYearPeriods } = useQuery({
+    queryKey: ['lineup-half-year', halfYear, halfSlot],
+    queryFn: ({ signal }) =>
+      apiGet<HalfYearPeriodsResponse>(
+        `/api/v1/lineup/half-year-periods?year=${halfYear}&half=${halfSlot}`,
+        { signal },
+      ),
+  });
+
+  const budgetPeriod = applyPeriodLabel.trim() || '2026Q2';
   const { data: budgetPos } = useQuery({
     queryKey: ['lineup-budget-position', budgetPeriod],
     queryFn: ({ signal }) =>
-      apiGet<Record<string, unknown>>(
+      apiGet<BudgetPositionResponse>(
         `/api/v1/lineup/budget-position?period_label=${encodeURIComponent(budgetPeriod)}`,
         { signal },
       ),
@@ -149,7 +233,10 @@ export default function LineupPage() {
   });
   const clearAll = useMutation({
     mutationFn: () => apiPost<{ deleted: number }>('/api/v1/lineup/items/clear-all', { confirm: true }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['lineup-items'] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['lineup-items'] });
+      void qc.invalidateQueries({ queryKey: ['lineup-budget-position'] });
+    },
   });
 
   const bulkImport = useMutation({
@@ -158,6 +245,55 @@ export default function LineupPage() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['lineup-items'] });
       void qc.invalidateQueries({ queryKey: ['lineup-events'] });
+      void qc.invalidateQueries({ queryKey: ['lineup-budget-position'] });
+    },
+  });
+
+  const applyNetReq = useMutation({
+    mutationFn: () =>
+      apiPost<ApplyNetRequirementResponse>('/api/v1/lineup/apply-net-requirement', {
+        confirm: true,
+        period_start: applyPeriodStart,
+        period_label: applyPeriodLabel.trim() || null,
+        replace_matching: true,
+        limit: 200,
+        horizon_weeks: 13,
+        target_cover_weeks: 4,
+        apply_bias: applyBias,
+        write_commercial_case: writeCommercialCase,
+      }),
+    onSuccess: (res) => {
+      const caseBit =
+        res.commercial_case_id != null
+          ? ` · commercial case #${res.commercial_case_id} (${res.commercial_lines_written ?? 0} lines)`
+          : '';
+      setApplyMsg(
+        `Applied net requirement → draft: inserted ${res.inserted}, updated ${res.updated}, ` +
+          `built ${res.draft_rows_built ?? res.inserted + res.updated}, ` +
+          `skipped zero-net ${res.skipped_zero_net ?? 0}, no-alloc ${res.skipped_no_allocation ?? 0}` +
+          ` · bias=${res.apply_bias ? 'on' : 'off'}${caseBit}`,
+      );
+      void qc.invalidateQueries({ queryKey: ['lineup-items'] });
+      void qc.invalidateQueries({ queryKey: ['lineup-budget-position'] });
+    },
+    onError: (err) => {
+      setApplyMsg(err instanceof Error ? err.message : String(err));
+    },
+  });
+
+  const builderEcon = useMutation({
+    mutationFn: (body: {
+      product_id: number;
+      net_requirement_units: number;
+      target_srp_local: number;
+    }) => apiPost<BuilderEconomicsResponse>('/api/v1/lineup/builder-economics', body),
+    onSuccess: (res) => {
+      setEconResult(res);
+      setEconError(null);
+    },
+    onError: (err) => {
+      setEconResult(null);
+      setEconError(err instanceof Error ? err.message : String(err));
     },
   });
 
@@ -166,6 +302,11 @@ export default function LineupPage() {
     queryFn: ({ signal }) => apiGet<LineupEventRow[]>(`/api/v1/lineup/items/${selectedId}/events`, { signal }),
     enabled: selectedId != null,
   });
+
+  const selectedRow = useMemo(
+    () => (data ?? []).find((r) => r.id === selectedId) ?? null,
+    [data, selectedId],
+  );
 
   const onCellValueChanged = useCallback(
     async (e: CellValueChangedEvent<Row>) => {
@@ -253,6 +394,9 @@ export default function LineupPage() {
   const onRowClicked = useCallback((e: RowClickedEvent<Row>) => {
     const id = e.data?.id;
     setSelectedId(id != null ? id : null);
+    setEconResult(null);
+    setEconError(null);
+    setEconSrp('');
   }, []);
 
   const gridOptions: GridOptions<Row> = useMemo(
@@ -323,20 +467,144 @@ export default function LineupPage() {
       <Paper sx={{ p: 2, mb: 2 }} data-testid="lineup-net-requirement">
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
           <Typography variant="subtitle1">Net requirement (B2)</Typography>
-          <Stack direction="row" spacing={1}>
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
             <Button
               size="small"
               component="a"
-              href="/api/v1/lineup/net-requirement/export.csv?limit=200"
+              href={`/api/v1/lineup/net-requirement/export.csv?limit=200&apply_bias=${applyBias ? 'true' : 'false'}`}
               data-testid="lineup-net-requirement-export"
             >
               Export CSV
             </Button>
+            <Button
+              size="small"
+              component="a"
+              href={`/api/v1/lineup/net-requirement/export.xlsx?limit=200&apply_bias=${applyBias ? 'true' : 'false'}&period_start=${encodeURIComponent(applyPeriodStart)}&period_label=${encodeURIComponent(applyPeriodLabel)}`}
+              data-testid="lineup-net-requirement-export-xlsx"
+            >
+              Export XLSX
+            </Button>
             <Button size="small" onClick={() => void refetchNetReq()} disabled={netReqLoading}>
               Refresh
             </Button>
+            <Button
+              size="small"
+              variant="contained"
+              data-testid="lineup-apply-net-requirement"
+              disabled={applyNetReq.isPending || !(netReq?.rows?.length)}
+              onClick={() => {
+                if (
+                  !window.confirm(
+                    `Apply net requirement into draft lineup for ${applyPeriodLabel} (period_start=${applyPeriodStart})? Matching keys are replaced.${writeCommercialCase ? ' Also writes a commercial_lineup_case.' : ''}`,
+                  )
+                ) {
+                  return;
+                }
+                setApplyMsg(null);
+                void applyNetReq.mutate();
+              }}
+            >
+              {applyNetReq.isPending ? 'Applying…' : 'Apply net requirement'}
+            </Button>
           </Stack>
         </Stack>
+        <Stack direction="row" spacing={2} sx={{ mb: 1 }} flexWrap="wrap" useFlexGap alignItems="center">
+          <FormControl size="small" sx={{ minWidth: 110 }}>
+            <InputLabel id="lineup-half-year-label">Year</InputLabel>
+            <Select
+              labelId="lineup-half-year-label"
+              label="Year"
+              value={halfYear}
+              onChange={(e) => setHalfYear(Number(e.target.value))}
+              inputProps={{ 'data-testid': 'lineup-half-year' }}
+            >
+              {[2025, 2026, 2027].map((y) => (
+                <MenuItem key={y} value={y}>
+                  {y}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl size="small" sx={{ minWidth: 100 }}>
+            <InputLabel id="lineup-half-slot-label">Half</InputLabel>
+            <Select
+              labelId="lineup-half-slot-label"
+              label="Half"
+              value={halfSlot}
+              onChange={(e) => setHalfSlot(Number(e.target.value) === 2 ? 2 : 1)}
+              inputProps={{ 'data-testid': 'lineup-half-slot' }}
+            >
+              <MenuItem value={1}>1H</MenuItem>
+              <MenuItem value={2}>2H</MenuItem>
+            </Select>
+          </FormControl>
+          {(halfYearPeriods?.periods ?? []).map((p) => (
+            <Button
+              key={`${p.period_start}-${p.period_label}`}
+              size="small"
+              variant={
+                applyPeriodStart === p.period_start && applyPeriodLabel === p.period_label
+                  ? 'contained'
+                  : 'outlined'
+              }
+              data-testid={`lineup-period-slot-${p.period_label}`}
+              onClick={() => {
+                setApplyPeriodStart(p.period_start);
+                setApplyPeriodLabel(p.period_label);
+              }}
+            >
+              {p.period_label} ({p.period_start})
+            </Button>
+          ))}
+          <TextField
+            size="small"
+            label="Apply period start"
+            value={applyPeriodStart}
+            onChange={(e) => setApplyPeriodStart(e.target.value)}
+            inputProps={{ 'data-testid': 'lineup-apply-period-start' }}
+            sx={{ width: 160 }}
+          />
+          <TextField
+            size="small"
+            label="Period label"
+            value={applyPeriodLabel}
+            onChange={(e) => setApplyPeriodLabel(e.target.value)}
+            inputProps={{ 'data-testid': 'lineup-apply-period-label' }}
+            sx={{ width: 140 }}
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={applyBias}
+                onChange={(_, c) => setApplyBias(c)}
+                inputProps={{ 'data-testid': 'lineup-apply-bias' }}
+              />
+            }
+            label="A1 bias on forecast"
+            data-testid="lineup-apply-bias-label"
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={writeCommercialCase}
+                onChange={(_, c) => setWriteCommercialCase(c)}
+                inputProps={{ 'data-testid': 'lineup-write-commercial-case' }}
+              />
+            }
+            label="Write commercial lineup case"
+            data-testid="lineup-write-commercial-case-label"
+          />
+        </Stack>
+        {applyMsg ? (
+          <Alert
+            severity={applyNetReq.isError ? 'warning' : 'success'}
+            sx={{ mb: 1 }}
+            onClose={() => setApplyMsg(null)}
+            data-testid="lineup-apply-result"
+          >
+            {applyMsg}
+          </Alert>
+        ) : null}
         {netReqError ? (
           <Alert severity="warning">Could not load net requirement</Alert>
         ) : netReq?.data_unavailable ? (
@@ -345,24 +613,21 @@ export default function LineupPage() {
           <>
             <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
               Horizon {netReq?.horizon_weeks ?? 13}w · target cover {netReq?.target_cover_weeks ?? 4}w ·{' '}
-              {netReq?.row_count ?? 0} pairs · A1 bias applied when available · stock at dist×product
+              {netReq?.row_count ?? 0} pairs · A1 bias {applyBias ? 'ON' : 'OFF'} · stock at dist×product · half-year
+              rule {halfYearPeriods?.rule ?? 'uniform_half'}
             </Typography>
             {budgetPos ? (
               <Typography variant="caption" display="block" sx={{ mb: 1 }} data-testid="lineup-budget-position">
-                Budget {budgetPeriod} (binding={(budgetPos as { binding_axis?: string }).binding_axis ?? 'money'}
-                {(budgetPos as { planned_from_lineup_derived?: boolean }).planned_from_lineup_derived
-                  ? ', lineup-derived'
-                  : ''}
-                ): reserved{' '}
-                {String((budgetPos as { tracks?: { money?: { planned_reservation_usd?: number } } }).tracks?.money?.planned_reservation_usd ?? 0)}{' '}
-                · drawn CPOR{' '}
-                {String((budgetPos as { tracks?: { money?: { drawn_cpor_usd?: number } } }).tracks?.money?.drawn_cpor_usd ?? 0)}{' '}
-                USD · status{' '}
-                {String((budgetPos as { tracks?: { money?: { status?: string } } }).tracks?.money?.status ?? '—')} ·
-                sku econ{' '}
-                {String((budgetPos as { sku_assumption_count?: number }).sku_assumption_count ?? 0)} ·
-                reservation ={' '}
-                {String((budgetPos as { reservation_source?: string }).reservation_source ?? 'derived_from_profit')}
+                Budget {budgetPeriod} (binding={budgetPos.binding_axis ?? 'money'}
+                {budgetPos.planned_from_lineup_derived ? ', lineup-derived' : ''}
+                ): reserved {String(budgetPos.tracks?.money?.planned_reservation_usd ?? 0)} · drawn CPOR{' '}
+                {String(budgetPos.tracks?.money?.drawn_cpor_usd ?? 0)} USD · status{' '}
+                {String(budgetPos.tracks?.money?.status ?? '—')} · sku econ{' '}
+                {String(budgetPos.sku_assumption_count ?? 0)} · planned lines{' '}
+                {String(budgetPos.planned_line_count ?? 0)} · missing SKU skips{' '}
+                {String(budgetPos.derive_diagnostics?.skipped_missing_sku ?? 0)} · missing SRP skips{' '}
+                {String(budgetPos.derive_diagnostics?.skipped_missing_srp ?? 0)} · reservation ={' '}
+                {String(budgetPos.reservation_source ?? 'derived_from_profit')}
               </Typography>
             ) : null}
             <Table size="small">
@@ -426,7 +691,7 @@ export default function LineupPage() {
           empty={{
             title: 'No line-up plan rows',
             description:
-              'Line-up rows appear when fact_lineup_plan_item is populated via imports or internal planning writes.',
+              'Use Apply net requirement above (when forecast pairs exist), or Bulk CSV import. Rows map to fact_lineup_plan_item.',
             primary: { label: 'Data imports', href: '/admin/imports' },
             secondary: { label: 'Buy plans', href: '/buy-plans' },
           }}
@@ -484,6 +749,80 @@ export default function LineupPage() {
           </Table>
         </Paper>
       ) : null}
+
+      <Paper sx={{ p: 2, mt: 2 }} data-testid="lineup-builder-economics">
+        <Typography variant="subtitle1" gutterBottom>
+          Builder economics (profit + reservation)
+        </Typography>
+        {selectedRow == null ? (
+          <Typography variant="body2" color="text.secondary">
+            Select a draft grid row, enter target SRP (plan/evidence — never fabricated), then compute.
+          </Typography>
+        ) : selectedRow.product_id == null ? (
+          <Alert severity="warning">Selected row has no product_id — cannot compute economics.</Alert>
+        ) : (
+          <Stack spacing={1.5}>
+            <Typography variant="body2" color="text.secondary">
+              Item #{selectedRow.id} · product {selectedRow.product_id} · {selectedRow.sku ?? '—'} · planned vol{' '}
+              {selectedRow.planned_volume_units}
+            </Typography>
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <TextField
+                size="small"
+                label="Target SRP (local)"
+                value={econSrp}
+                onChange={(e) => setEconSrp(e.target.value)}
+                inputProps={{ 'data-testid': 'lineup-econ-srp' }}
+                sx={{ width: 180 }}
+              />
+              <Button
+                size="small"
+                variant="outlined"
+                data-testid="lineup-econ-compute"
+                disabled={builderEcon.isPending || !econSrp.trim()}
+                onClick={() => {
+                  const srp = Number(econSrp);
+                  if (!Number.isFinite(srp) || srp <= 0) {
+                    setEconError('Enter a positive target SRP');
+                    setEconResult(null);
+                    return;
+                  }
+                  void builderEcon.mutate({
+                    product_id: Number(selectedRow.product_id),
+                    net_requirement_units: Number(selectedRow.planned_volume_units) || 0,
+                    target_srp_local: srp,
+                  });
+                }}
+              >
+                {builderEcon.isPending ? 'Computing…' : 'Compute reservation'}
+              </Button>
+            </Stack>
+            {econError ? (
+              <Alert severity="warning" data-testid="lineup-econ-error">
+                {econError.includes('No commercial_sku_assumption') || econError.includes('404')
+                  ? `Missing SKU economics for product ${selectedRow.product_id} — seed commercial_sku_assumption first. (${econError})`
+                  : econError}
+              </Alert>
+            ) : null}
+            {econResult ? (
+              <Box data-testid="lineup-econ-result">
+                <Typography variant="body2">
+                  Sell-in/unit {String(econResult.oem_sell_in_per_unit ?? '—')} · reservation total{' '}
+                  {String(econResult.reservation?.total ?? '—')} · source{' '}
+                  {String(econResult.reservation?.source ?? 'derived_from_profit')}
+                </Typography>
+                {econResult.treatments ? (
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                    Treatments: normal {String(econResult.treatments.normal_price_units ?? '—')} · discount{' '}
+                    {String(econResult.treatments.discount_units ?? '—')} · share{' '}
+                    {String(econResult.treatments.normal_price_share ?? '—')}
+                  </Typography>
+                ) : null}
+              </Box>
+            ) : null}
+          </Stack>
+        )}
+      </Paper>
 
       <Paper sx={{ p: 2, mt: 2 }}>
         <Typography variant="subtitle1" gutterBottom>
