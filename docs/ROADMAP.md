@@ -289,6 +289,9 @@ author loop trusted.
 check against B2 reservations, waterfall math from CPOR v1, export in tenant format. Upload
 path preserved.
 
+**Unit B4-01 on `feat/b4-promo-draft`:** `/promotions` compose uses B2 lineup-derived budget;
+`POST …/promo-plan-draft/create-case` writes a draft CPOR case (browser smoke: case #300 from seed 298).
+
 ## P4 — CST (forward-only)
 
 **Deliberate de-risk:** do **not** backfill history first. Start from next week's files with

@@ -207,11 +207,11 @@ Apply can also write `commercial_lineup_case` + lines (`write_commercial_case`, 
 | B2-03 | **Budget position (money)** | IMPLEMENTED | Planned reservation (B2-02) derived from draft/commercial lineup × SKU × SRP evidence vs drawn CPOR `ttl_support_usd` by `pod_quarter`≈period_label (string join). Missing SKU → `missing_sku_economics`; missing SRP → skip + `missing_srp` — never fabricate. | period × (optional BU) | Line-up Planning / CPOR |
 | B2-04 | **Budget position (support %)** | IMPLEMENTED | Planned support % = reservation÷sell-in companion track on same payload as B2-03. Informational when money-binding. | period | Line-up Planning / CPOR |
 
-### 4.7 Promo draft — B4 (SPEC ONLY — catalogue before UI)
+### 4.7 Promo draft — B4 (IMPLEMENTED — compose + draft create)
 
 | ID | Metric / concept | Status | Formula / rule | Grain | Owner |
 |---|---|---|---|---|---|
-| B4-01 | **Promo draft composition** | SPEC ONLY | Compose A2 comps + B1 volume + B2 budget check into a draft case. Draft may warn on over-budget; hard enforce follows tenant profile. Do not invent parallel economics. | case / line | Promotions |
+| B4-01 | **Promo draft composition** | IMPLEMENTED | Compose A2 comps + B1 volume + B2 budget check into a draft case. `GET /cpor/intelligence/promo-plan-draft` (budget from lineup-derived reservation when `planned_support_usd` omitted). `POST …/promo-plan-draft/create-case` writes a **draft** CPOR case via existing case/line path. Draft may warn on over-budget; hard enforce follows tenant profile (`confirm_over_budget`). Do not invent parallel economics. UI: `/promotions` B4 panel. | case / line | Promotions |
 
 ---
 
