@@ -278,7 +278,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-08 |
+| **Status / parked** | **Done** · 2026-08-08 · `feat/backlog-127-128-dap-case-po` |
 | **Effort** | Medium |
 | **Source** | Unit 6d/6e discovery: `fact_inbound_shipment` has `unit_price`/`amount` only — no DAP field; qty-only confirmer cannot collapse multi-dist INDETERMINATE tokens. |
 | **Idea** | Persist DAP (or a defined map to ship price + currency rules) on shipment facts so confirmer Phase 2 can confirm/conflict on price as well as product+period+qty. |
@@ -288,6 +288,7 @@
 | **Behavior to retain** | D-040 Phase-1 rules; exact token match. |
 | **Out of scope** | Drive Control rename; DSI resolution order. |
 | **TRIGGER** | Warren opens priced shipment confirmation or multi-dist unproven volume blocks planning. |
+| **Resolution** | D-041: reuse ship `unit_price` as DAP-evidence (no migration); Phase-2 unique within 2% of `dap_evidence_local` → confirm_price / conflict_price / offer_accept_price. |
 
 ---
 
@@ -295,7 +296,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-08 |
+| **Status / parked** | **Done** · 2026-08-08 · `feat/backlog-127-128-dap-case-po` |
 | **Effort** | Small–Medium |
 | **Source** | Unit 6e: `sadc homeless` ships sole Stylus 45 with exact qty; Stylus absent from some case_po sets (e.g. case 114) — PO-linkage gap, not cancel. |
 | **Idea** | Worklist / auto-link repair so shipment-resolved distributors appear on case_po when commercially linked. |
@@ -305,6 +306,7 @@
 | **Behavior to retain** | D-040 propose/confirm; PO auto-link competition rules. |
 | **Out of scope** | Changing auto-link key / D-033 / D-034. |
 | **TRIGGER** | After D-040 Accept for homeless, or case_po gaps block planning for Stylus volume. |
+| **Resolution** | `…/case-po-attribution-gap/preview|apply` — unique PO covering attributed products via PO-bearing ships; never clears attribution. cip: case 114 ↔ PO 10473 (Stylus). |
 
 ---
 

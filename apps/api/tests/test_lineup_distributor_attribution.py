@@ -10,6 +10,7 @@ from app.services.commercial_planner.lineup_distributor_attribution import (
     STATUS_TOKEN_PROPOSED,
     _ShipHit,
     _evaluate_token_group,
+    _sole_dap_price_distributor,
 )
 
 
@@ -21,6 +22,7 @@ def _ln(**kw):
         quantity_units=36.0,
         distributor_id=None,
         distributor_attribution_status=None,
+        dap_evidence_local=None,
     )
     defaults.update(kw)
     return SimpleNamespace(**defaults)
@@ -77,3 +79,76 @@ def test_no_ships_noop():
         token_lines=lines, ships=[], isolated_products={100}
     )
     assert out["per_line"][0]["action"] == "no_ships"
+
+
+def test_sole_dap_helper_unique_within_tol():
+    ships = [
+        _ShipHit(100, 12, 36.0, 1, unit_price=100.0),
+        _ShipHit(100, 21, 36.0, 2, unit_price=200.0),
+    ]
+    assert _sole_dap_price_distributor(dap=100.0, ships=ships) == 12
+
+
+def test_sole_dap_helper_ambiguous_when_two_within_tol():
+    ships = [
+        _ShipHit(100, 12, 36.0, 1, unit_price=100.0),
+        _ShipHit(100, 21, 36.0, 2, unit_price=101.0),
+    ]
+    assert _sole_dap_price_distributor(dap=100.0, ships=ships) is None
+
+
+def test_phase2_dap_confirms_when_multi_exact_qty():
+    lines = [
+        _ln(
+            id=1,
+            distributor_id=12,
+            distributor_attribution_status=STATUS_TOKEN_PROPOSED,
+            dap_evidence_local=100.0,
+        )
+    ]
+    ships = [
+        _ShipHit(100, 12, 36.0, 1, unit_price=100.0),
+        _ShipHit(100, 21, 36.0, 2, unit_price=200.0),
+    ]
+    out = _evaluate_token_group(
+        token_lines=lines, ships=ships, isolated_products={100}
+    )
+    assert out["sole_exact_distributor_id"] is None
+    assert out["per_line"][0]["action"] == "confirm_price"
+    assert out["per_line"][0]["confirm_via"] == "dap_unit_price"
+    assert out["per_line"][0]["new_status"] == STATUS_SHIPMENT_CONFIRMED
+    assert out["ship_corroboration_offer"]["reason"] == "sole_resolved_distributor_dap_unit_price"
+
+
+def test_phase2_dap_conflict_when_proposed_differs():
+    lines = [
+        _ln(
+            id=1,
+            distributor_id=21,
+            distributor_attribution_status=STATUS_TOKEN_PROPOSED,
+            dap_evidence_local=100.0,
+        )
+    ]
+    ships = [
+        _ShipHit(100, 12, 36.0, 1, unit_price=100.0),
+        _ShipHit(100, 21, 36.0, 2, unit_price=200.0),
+    ]
+    out = _evaluate_token_group(
+        token_lines=lines, ships=ships, isolated_products={100}
+    )
+    assert out["per_line"][0]["action"] == "conflict_price"
+    assert out["per_line"][0]["new_status"] == STATUS_CONFLICT
+    assert out["per_line"][0]["distributor_id"] == 21
+
+
+def test_phase2_dap_offer_when_null_dist():
+    lines = [_ln(id=1, distributor_id=None, dap_evidence_local=100.0)]
+    ships = [
+        _ShipHit(100, 12, 36.0, 1, unit_price=100.0),
+        _ShipHit(100, 21, 36.0, 2, unit_price=200.0),
+    ]
+    out = _evaluate_token_group(
+        token_lines=lines, ships=ships, isolated_products={100}
+    )
+    assert out["per_line"][0]["action"] == "offer_accept_price"
+    assert out["ship_corroboration_offer"]["distributor_id"] == 12

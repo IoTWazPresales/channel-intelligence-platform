@@ -3,7 +3,13 @@
 Token (D-038) writes distributor_id as a working FK with status token_proposed.
 Shipment confirmer upgrades to shipment_confirmed, leaves proposed when multi/no
 ships, or sets conflict when ships exist and the proposed dist is absent.
-Never auto-clears distributor_id. No DAP. No fuzzy match. No auto-create dims.
+
+Phase-2 (BACKLOG-127 / D-041): when exact-qty ships span multiple distributors,
+unique nearest ``unit_price`` to line ``dap_evidence_local`` within 2% relative
+tolerance confirms/conflicts/offers. Ship ``unit_price`` is OEM sell-in evidence
+used as DAP-evidence — never invent DAP from margin; never conflate PM bottom.
+
+Never auto-clears distributor_id. No fuzzy match. No auto-create dims.
 """
 
 from __future__ import annotations
@@ -49,6 +55,9 @@ STATUS_STEWARD_SET = "steward_set"
 STATUS_SHIPMENT_CONFIRMED = "shipment_confirmed"
 STATUS_CONFLICT = "conflict"
 
+# BACKLOG-127 / D-041 — relative |unit_price - dap_evidence_local| / dap
+DAP_PRICE_REL_TOLERANCE = 0.02
+
 
 class DistributorAttributionError(Exception):
     """Validation / missing target errors for attribution steward actions."""
@@ -60,12 +69,37 @@ class _ShipHit:
     distributor_id: int
     quantity: float | None
     shipment_id: int
+    unit_price: float | None = None
 
 
 def _qty_key(q: float | Decimal | None) -> float | None:
     if q is None:
         return None
     return float(q)
+
+
+def _sole_dap_price_distributor(
+    *,
+    dap: float,
+    ships: list[_ShipHit],
+    rel_tol: float = DAP_PRICE_REL_TOLERANCE,
+) -> int | None:
+    """Return sole distributor whose nearest unit_price is within rel_tol of dap."""
+    if dap == 0 or not ships:
+        return None
+    best: dict[int, float] = {}
+    for s in ships:
+        if s.unit_price is None:
+            continue
+        rel = abs(float(s.unit_price) - dap) / abs(dap)
+        prev = best.get(s.distributor_id)
+        if prev is None or rel < prev:
+            best[s.distributor_id] = rel
+    within = {d for d, r in best.items() if r <= rel_tol}
+    if len(within) != 1:
+        return None
+    return next(iter(within))
+
 
 
 async def _cases_by_id(db: AsyncSession, case_ids: set[int]) -> dict[int, CommercialLineupCase]:
@@ -103,6 +137,7 @@ async def _eligible_ships_for_products(
                 FactInboundShipment.product_id,
                 FactInboundShipment.resolved_distributor_id,
                 FactInboundShipment.quantity,
+                FactInboundShipment.unit_price,
                 FactInboundShipment.crad_date,
                 FactInboundShipment.schedule_ship_date,
                 FactInboundShipment.ship_confirm_date,
@@ -114,7 +149,7 @@ async def _eligible_ships_for_products(
     ).all()
     windows = [quarter_bounds_from_period_start(ps) for ps in period_starts]
     hits: list[_ShipHit] = []
-    for sid, pid, dist_id, qty, crad, sched, ship_c in rows:
+    for sid, pid, dist_id, qty, unit_price, crad, sched, ship_c in rows:
         ev, _src = evidence_date_for_period_match(
             crad_date=crad, schedule_ship_date=sched, ship_confirm_date=ship_c
         )
@@ -128,6 +163,7 @@ async def _eligible_ships_for_products(
                 distributor_id=int(dist_id),
                 quantity=_qty_key(qty),
                 shipment_id=int(sid),
+                unit_price=_qty_key(unit_price),
             )
         )
     return hits
@@ -166,10 +202,13 @@ def _evaluate_token_group(
         current = (ln.distributor_attribution_status or "").strip() or None
         action = "noop"
         new_status = current
+        sole_price: int | None = None
+        confirm_via: str | None = None
 
         if not eligible:
             action = "no_ships"
         elif sole_exact is not None:
+            confirm_via = "exact_qty"
             if proposed is None:
                 action = "offer_accept"
             elif proposed == sole_exact:
@@ -181,19 +220,48 @@ def _evaluate_token_group(
             else:
                 action = "conflict"
                 new_status = STATUS_CONFLICT
-        elif proposed is not None and proposed not in dists:
-            action = "conflict"
-            new_status = STATUS_CONFLICT
-        elif proposed is not None and proposed in dists:
-            if current == STATUS_CONFLICT:
-                action = "leave_conflict"
-            elif current is None:
-                new_status = STATUS_TOKEN_PROPOSED
-                action = "backfill_proposed"
-            else:
-                action = "leave_proposed"
         else:
-            action = "unproven_multi"
+            # Phase-2 DAP price (D-041): unique dist within tolerance of line dap
+            dap = _qty_key(getattr(ln, "dap_evidence_local", None))
+            q = _qty_key(ln.quantity_units)
+            if (
+                dap is not None
+                and dap != 0
+                and ln.product_id is not None
+                and q is not None
+            ):
+                line_ships = [
+                    s
+                    for s in exact_qty_ships
+                    if s.product_id == int(ln.product_id) and s.quantity == q
+                ]
+                sole_price = _sole_dap_price_distributor(dap=dap, ships=line_ships)
+            if sole_price is not None:
+                confirm_via = "dap_unit_price"
+                if proposed is None:
+                    action = "offer_accept_price"
+                elif proposed == sole_price:
+                    if current != STATUS_SHIPMENT_CONFIRMED:
+                        action = "confirm_price"
+                        new_status = STATUS_SHIPMENT_CONFIRMED
+                    else:
+                        action = "already_confirmed"
+                else:
+                    action = "conflict_price"
+                    new_status = STATUS_CONFLICT
+            elif proposed is not None and proposed not in dists:
+                action = "conflict"
+                new_status = STATUS_CONFLICT
+            elif proposed is not None and proposed in dists:
+                if current == STATUS_CONFLICT:
+                    action = "leave_conflict"
+                elif current is None:
+                    new_status = STATUS_TOKEN_PROPOSED
+                    action = "backfill_proposed"
+                else:
+                    action = "leave_proposed"
+            else:
+                action = "unproven_multi"
 
         per_line.append(
             {
@@ -205,6 +273,8 @@ def _evaluate_token_group(
                 "current_status": current,
                 "action": action,
                 "new_status": new_status,
+                "confirm_via": confirm_via,
+                "sole_price_distributor_id": sole_price,
             }
         )
 
@@ -216,6 +286,20 @@ def _evaluate_token_group(
             "exact_qty_ship_count": len(exact_qty_ships),
             "eligible_dist_count": len(dists),
         }
+    else:
+        price_offers = {
+            int(pl["sole_price_distributor_id"])
+            for pl in per_line
+            if pl.get("sole_price_distributor_id") is not None
+            and pl["action"] in {"offer_accept_price", "confirm_price"}
+        }
+        if len(price_offers) == 1:
+            offer = {
+                "distributor_id": next(iter(price_offers)),
+                "reason": "sole_resolved_distributor_dap_unit_price",
+                "exact_qty_ship_count": len(exact_qty_ships),
+                "eligible_dist_count": len(dists),
+            }
 
     return {
         "eligible_distributor_ids": sorted(dists),
@@ -312,7 +396,7 @@ async def apply_distributor_confirmer(
         int(pl["line_id"])
         for it in preview["items"]
         for pl in it["per_line"]
-        if pl["action"] in {"confirm", "conflict", "backfill_proposed"}
+        if pl["action"] in {"confirm", "conflict", "backfill_proposed", "confirm_price", "conflict_price"}
     ]
     if not line_ids:
         return {
@@ -333,7 +417,13 @@ async def apply_distributor_confirmer(
     updates: list[dict[str, Any]] = []
     for it in preview["items"]:
         for pl in it["per_line"]:
-            if pl["action"] not in {"confirm", "conflict", "backfill_proposed"}:
+            if pl["action"] not in {
+                "confirm",
+                "conflict",
+                "backfill_proposed",
+                "confirm_price",
+                "conflict_price",
+            }:
                 continue
             ln = lines.get(int(pl["line_id"]))
             if ln is None:
@@ -416,7 +506,8 @@ async def accept_ship_corroborated_distributor(
     offer = await ship_corroboration_offer_for_token(db, norm_token=nt)
     if offer is None or int(offer["distributor_id"]) != int(distributor_id):
         raise DistributorAttributionError(
-            "distributor_id does not match current sole-exact ship corroboration offer"
+            "distributor_id does not match current ship corroboration offer "
+            "(exact-qty or DAP unit_price)"
         )
 
     oc_id = await get_open_channel_customer_id(db)

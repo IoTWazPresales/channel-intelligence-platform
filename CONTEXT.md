@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-08 — **BACKLOG-127/128** on `feat/backlog-127-128-dap-case-po`: D-041 Phase-2 DAP via ship `unit_price` (2%); case-po attribution-gap preview/apply; cip 114↔10473 Stylus. Next: commit/PR when Warren asks; then roadmap gate.
 - 2026-08-08 — **PR #20 merged to main (`a307229`):** BACKLOG-125/126 Syntech+Superdist remediation. Next: 127/128 or roadmap gate.
 - 2026-08-08 — **BACKLOG-125/126 Warren lock applied on cip** (`feat/backlog-125-126-masters-stems`): Syntech→OC+51; absorb 4145/1152→OC; superdisti→50; SMD left free-picker. Next: commit/PR.
 - 2026-08-08 — **PR #19 merged to main (`5436e45`):** BACKLOG-124 tokenless empty_token. Next: 125/126 or roadmap when Warren clears gate.
