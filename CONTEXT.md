@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-08 — **A-lane residual close-out** on `feat/a-lane-residual-closeout`: A3-V/A2-V VERIFY PASS; A1-09 support-bias; BACKLOG-093 Promo load tab (CST). 068/089/092/097 stay parked. Next: commit/PR.
 - 2026-08-08 — **PR #21 merged to main (`3efe1e8`):** BACKLOG-127/128 D-041 DAP Phase-2 + case-po attribution-gap (114↔10473). Mandate backlog slice clear; next = roadmap A residuals / B2 or Warren pick.
 - 2026-08-08 — **BACKLOG-127/128** on `feat/backlog-127-128-dap-case-po`: D-041 Phase-2 DAP via ship `unit_price` (2%); case-po attribution-gap preview/apply; cip 114↔10473 Stylus. Next: commit/PR when Warren asks; then roadmap gate.
 - 2026-08-08 — **PR #20 merged to main (`a307229`):** BACKLOG-125/126 Syntech+Superdist remediation. Next: 127/128 or roadmap gate.
