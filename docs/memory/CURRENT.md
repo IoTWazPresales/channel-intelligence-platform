@@ -15,13 +15,13 @@
 
 | Item | Notes |
 |------|--------|
-| **PR #23** | B2 author loop — still open; merge separately when asked |
-| B4 commit/PR | This branch |
+| **PR #23** | B2 author loop — merge first (or with #24 stack) |
+| **PR #24** | B4 promo draft — base `feat/b2-author-loop` |
 | Parked A-lane | 068 / 089 / 092 / 097 |
 
 ## Next
 
-1. Browser smoke B4 on `/promotions` with seed case (e.g. 298).
-2. Commit/PR for B4 when ready; merge only on explicit merge.
+1. Merge **PR #23** then **PR #24** when you say merge (or retarget #24 → main after #23 lands).
+2. Lane X / parked TRIGGER.
 
 **Env:** local Windows. `cip` @ `20260807_0010`.
