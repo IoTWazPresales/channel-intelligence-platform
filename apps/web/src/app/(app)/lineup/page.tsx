@@ -9,9 +9,13 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
   FormControlLabel,
+  InputLabel,
   Link,
+  MenuItem,
   Paper,
+  Select,
   Stack,
   Table,
   TableBody,
@@ -74,7 +78,17 @@ type ApplyNetRequirementResponse = {
   skipped_no_allocation?: number;
   source_row_count?: number;
   draft_rows_built?: number;
+  apply_bias?: boolean;
+  commercial_case_id?: number | null;
+  commercial_lines_written?: number;
   results?: Array<{ row_index: number; status: string; id?: number; errors: string[] }>;
+};
+
+type HalfYearPeriodsResponse = {
+  year: number;
+  half: number;
+  rule?: string;
+  periods: Array<{ period_start: string; period_label: string }>;
 };
 
 type BuilderEconomicsResponse = {
@@ -166,6 +180,10 @@ export default function LineupPage() {
   const [applyPeriodStart, setApplyPeriodStart] = useState('2026-04-01');
   const [applyPeriodLabel, setApplyPeriodLabel] = useState('2026Q2');
   const [applyMsg, setApplyMsg] = useState<string | null>(null);
+  const [applyBias, setApplyBias] = useState(true);
+  const [halfYear, setHalfYear] = useState(2026);
+  const [halfSlot, setHalfSlot] = useState<1 | 2>(1);
+  const [writeCommercialCase, setWriteCommercialCase] = useState(true);
   const [econSrp, setEconSrp] = useState('');
   const [econResult, setEconResult] = useState<BuilderEconomicsResponse | null>(null);
   const [econError, setEconError] = useState<string | null>(null);
@@ -182,10 +200,19 @@ export default function LineupPage() {
     isError: netReqError,
     refetch: refetchNetReq,
   } = useQuery({
-    queryKey: ['lineup-net-requirement'],
+    queryKey: ['lineup-net-requirement', applyBias],
     queryFn: ({ signal }) =>
       apiGet<NetRequirementResponse>(
-        '/api/v1/lineup/net-requirement?limit=50&include_customer_shares=false&apply_bias=true',
+        `/api/v1/lineup/net-requirement?limit=50&include_customer_shares=false&apply_bias=${applyBias ? 'true' : 'false'}`,
+        { signal },
+      ),
+  });
+
+  const { data: halfYearPeriods } = useQuery({
+    queryKey: ['lineup-half-year', halfYear, halfSlot],
+    queryFn: ({ signal }) =>
+      apiGet<HalfYearPeriodsResponse>(
+        `/api/v1/lineup/half-year-periods?year=${halfYear}&half=${halfSlot}`,
         { signal },
       ),
   });
@@ -232,12 +259,19 @@ export default function LineupPage() {
         limit: 200,
         horizon_weeks: 13,
         target_cover_weeks: 4,
+        apply_bias: applyBias,
+        write_commercial_case: writeCommercialCase,
       }),
     onSuccess: (res) => {
+      const caseBit =
+        res.commercial_case_id != null
+          ? ` · commercial case #${res.commercial_case_id} (${res.commercial_lines_written ?? 0} lines)`
+          : '';
       setApplyMsg(
         `Applied net requirement → draft: inserted ${res.inserted}, updated ${res.updated}, ` +
           `built ${res.draft_rows_built ?? res.inserted + res.updated}, ` +
-          `skipped zero-net ${res.skipped_zero_net ?? 0}, no-alloc ${res.skipped_no_allocation ?? 0}`,
+          `skipped zero-net ${res.skipped_zero_net ?? 0}, no-alloc ${res.skipped_no_allocation ?? 0}` +
+          ` · bias=${res.apply_bias ? 'on' : 'off'}${caseBit}`,
       );
       void qc.invalidateQueries({ queryKey: ['lineup-items'] });
       void qc.invalidateQueries({ queryKey: ['lineup-budget-position'] });
@@ -437,10 +471,18 @@ export default function LineupPage() {
             <Button
               size="small"
               component="a"
-              href="/api/v1/lineup/net-requirement/export.csv?limit=200"
+              href={`/api/v1/lineup/net-requirement/export.csv?limit=200&apply_bias=${applyBias ? 'true' : 'false'}`}
               data-testid="lineup-net-requirement-export"
             >
               Export CSV
+            </Button>
+            <Button
+              size="small"
+              component="a"
+              href={`/api/v1/lineup/net-requirement/export.xlsx?limit=200&apply_bias=${applyBias ? 'true' : 'false'}&period_start=${encodeURIComponent(applyPeriodStart)}&period_label=${encodeURIComponent(applyPeriodLabel)}`}
+              data-testid="lineup-net-requirement-export-xlsx"
+            >
+              Export XLSX
             </Button>
             <Button size="small" onClick={() => void refetchNetReq()} disabled={netReqLoading}>
               Refresh
@@ -453,7 +495,7 @@ export default function LineupPage() {
               onClick={() => {
                 if (
                   !window.confirm(
-                    `Apply net requirement into draft lineup for ${applyPeriodLabel} (period_start=${applyPeriodStart})? Matching keys are replaced.`,
+                    `Apply net requirement into draft lineup for ${applyPeriodLabel} (period_start=${applyPeriodStart})? Matching keys are replaced.${writeCommercialCase ? ' Also writes a commercial_lineup_case.' : ''}`,
                   )
                 ) {
                   return;
@@ -466,7 +508,54 @@ export default function LineupPage() {
             </Button>
           </Stack>
         </Stack>
-        <Stack direction="row" spacing={2} sx={{ mb: 1 }} flexWrap="wrap" useFlexGap>
+        <Stack direction="row" spacing={2} sx={{ mb: 1 }} flexWrap="wrap" useFlexGap alignItems="center">
+          <FormControl size="small" sx={{ minWidth: 110 }}>
+            <InputLabel id="lineup-half-year-label">Year</InputLabel>
+            <Select
+              labelId="lineup-half-year-label"
+              label="Year"
+              value={halfYear}
+              onChange={(e) => setHalfYear(Number(e.target.value))}
+              inputProps={{ 'data-testid': 'lineup-half-year' }}
+            >
+              {[2025, 2026, 2027].map((y) => (
+                <MenuItem key={y} value={y}>
+                  {y}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl size="small" sx={{ minWidth: 100 }}>
+            <InputLabel id="lineup-half-slot-label">Half</InputLabel>
+            <Select
+              labelId="lineup-half-slot-label"
+              label="Half"
+              value={halfSlot}
+              onChange={(e) => setHalfSlot(Number(e.target.value) === 2 ? 2 : 1)}
+              inputProps={{ 'data-testid': 'lineup-half-slot' }}
+            >
+              <MenuItem value={1}>1H</MenuItem>
+              <MenuItem value={2}>2H</MenuItem>
+            </Select>
+          </FormControl>
+          {(halfYearPeriods?.periods ?? []).map((p) => (
+            <Button
+              key={`${p.period_start}-${p.period_label}`}
+              size="small"
+              variant={
+                applyPeriodStart === p.period_start && applyPeriodLabel === p.period_label
+                  ? 'contained'
+                  : 'outlined'
+              }
+              data-testid={`lineup-period-slot-${p.period_label}`}
+              onClick={() => {
+                setApplyPeriodStart(p.period_start);
+                setApplyPeriodLabel(p.period_label);
+              }}
+            >
+              {p.period_label} ({p.period_start})
+            </Button>
+          ))}
           <TextField
             size="small"
             label="Apply period start"
@@ -482,6 +571,28 @@ export default function LineupPage() {
             onChange={(e) => setApplyPeriodLabel(e.target.value)}
             inputProps={{ 'data-testid': 'lineup-apply-period-label' }}
             sx={{ width: 140 }}
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={applyBias}
+                onChange={(_, c) => setApplyBias(c)}
+                inputProps={{ 'data-testid': 'lineup-apply-bias' }}
+              />
+            }
+            label="A1 bias on forecast"
+            data-testid="lineup-apply-bias-label"
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={writeCommercialCase}
+                onChange={(_, c) => setWriteCommercialCase(c)}
+                inputProps={{ 'data-testid': 'lineup-write-commercial-case' }}
+              />
+            }
+            label="Write commercial lineup case"
+            data-testid="lineup-write-commercial-case-label"
           />
         </Stack>
         {applyMsg ? (
@@ -502,7 +613,8 @@ export default function LineupPage() {
           <>
             <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
               Horizon {netReq?.horizon_weeks ?? 13}w · target cover {netReq?.target_cover_weeks ?? 4}w ·{' '}
-              {netReq?.row_count ?? 0} pairs · A1 bias applied when available · stock at dist×product
+              {netReq?.row_count ?? 0} pairs · A1 bias {applyBias ? 'ON' : 'OFF'} · stock at dist×product · half-year
+              rule {halfYearPeriods?.rule ?? 'uniform_half'}
             </Typography>
             {budgetPos ? (
               <Typography variant="caption" display="block" sx={{ mb: 1 }} data-testid="lineup-budget-position">

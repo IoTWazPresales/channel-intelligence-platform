@@ -194,13 +194,15 @@ assumptions). SRP inputs come from plan/lineup authoring evidence (`dap_evidence
 `msrp_local` or operator-entered SRP) — never a silent SKU backfill (`CommercialSkuAssumption`
 has cost + reserve % only).
 
-**Caveats (Unit 1):** tenant Excel workbook export = **CSV on-ramp** (`GET …/net-requirement/export.csv`);
-full ASUS workbook format later (B2-3). `/lineup` owns the author loop; nav merge into commercial-planner
-deferred. Hard budget enforce stays off until reapproval workflow.
+**Caveats (Unit 1–3):** tenant Excel workbook = **XLSX on-ramp** (`GET …/net-requirement/export.xlsx`
+with NetRequirement + DraftLineup sheets) plus CSV; full ASUS reseller workbook format still later if
+tenant demands column parity beyond on-ramp. `/lineup` owns the author loop; nav merge into
+commercial-planner deferred. Hard budget enforce stays off until reapproval workflow.
+Apply can also write `commercial_lineup_case` + lines (`write_commercial_case`, default true).
 
 | ID | Metric / concept | Status | Formula / rule | Grain | Owner |
 |---|---|---|---|---|---|
-| B2-01 | **Net requirement** | IMPLEMENTED | `forecast_units` (dist×product rollup) − derived channel stock − in-transit (`open_order` + shipped∧`pod_date IS NULL`) + cover policy units. Pipeline never counts as stock. Optional A1 bias. `GET /api/v1/lineup/net-requirement`; apply → `POST /apply-net-requirement` → `fact_lineup_plan_item`. | distributor × product × period | Line-up Planning (`/lineup`) |
+| B2-01 | **Net requirement** | IMPLEMENTED | `forecast_units` (dist×product rollup) − derived channel stock − in-transit (`open_order` + shipped∧`pod_date IS NULL`) + cover policy units. Pipeline never counts as stock. Optional A1 bias (UI toggle). `GET /api/v1/lineup/net-requirement`; apply → `POST /apply-net-requirement` → `fact_lineup_plan_item` (+ optional commercial case). Half-year period slots via `GET /half-year-periods`. | distributor × product × period | Line-up Planning (`/lineup`) |
 | B2-02 | **Profit with reservation** | IMPLEMENTED | Line economics via commercial calculator; reservation = `reserve_total_pct` × sell-in (derived, not workbook column). `POST /api/v1/lineup/builder-economics` (requires SKU + target SRP). Hard money ceiling deferred. | plan line / SKU | Line-up Planning |
 | B2-03 | **Budget position (money)** | IMPLEMENTED | Planned reservation (B2-02) derived from draft/commercial lineup × SKU × SRP evidence vs drawn CPOR `ttl_support_usd` by `pod_quarter`≈period_label (string join). Missing SKU → `missing_sku_economics`; missing SRP → skip + `missing_srp` — never fabricate. | period × (optional BU) | Line-up Planning / CPOR |
 | B2-04 | **Budget position (support %)** | IMPLEMENTED | Planned support % = reservation÷sell-in companion track on same payload as B2-03. Informational when money-binding. | period | Line-up Planning / CPOR |

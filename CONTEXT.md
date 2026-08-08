@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-08 — **B2 Units 1–3** on `feat/b2-author-loop`: author loop + half-year/bias UX + XLSX on-ramp + commercial_lineup_case write on apply. Next: PR; then B4 or Lane X.
 - 2026-08-08 — **B2 Unit 1 author loop** on `feat/b2-author-loop`: SRP fix (lineup evidence, no sku.target_srp); `/lineup` Apply + builder-economics; B2-01…04 IMPLEMENTED in semantics (CSV caveat). Browser VERIFY PASS. Next: commit/PR when Warren asks.
 - 2026-08-08 — **PR #22 merged to main (`120e020`):** A-lane residual — A1-09 support-bias + BACKLOG-093 Promo load; A2/A3 VERIFY. Next: B2 or Lane X or parked TRIGGER.
 - 2026-08-08 — **A-lane residual close-out** on `feat/a-lane-residual-closeout`: A3-V/A2-V VERIFY PASS; A1-09 support-bias; BACKLOG-093 Promo load tab (CST). 068/089/092/097 stay parked. Next: commit/PR.
