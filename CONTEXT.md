@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-08 — **VERIFY PASS 6f→B4** (Opus); Takealot CST config closed (`flat` + feed_profile + missing slot 2026-07-27); structure_type patchable in cst-steward. Next: Takealot WEEK Import Centre pilot.
 - 2026-08-08 — **CI alembic tip** on `fix/ci-alembic-tip-0010`: assert tip == sole ScriptDirectory head (was stale `20260802_0009`); column check for `distributor_attribution_status`. Next: merge → then soft data / Lane X.
 - 2026-08-08 — **PR #23+#24 on main (`3d2ef49`):** B2 author loop + B4 promo draft create-case. Next: CI alembic tip pin or Lane X / parked TRIGGER.
 - 2026-08-08 — **B4 promo draft** on `feat/b4-promo-draft`: B2 trusted (budget+econ+xlsx); draft compose uses lineup-derived budget; create-case POST + `/promotions` CTA. Next: smoke/commit/PR.
