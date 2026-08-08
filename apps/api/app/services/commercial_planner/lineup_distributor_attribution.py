@@ -30,9 +30,7 @@ from app.services.commercial_planner.lineup_customer_alias_resolution import (
 )
 from app.services.commercial_planner.lineup_customer_token_stamp import (
     _isolated_product_ids,
-    _load_distributor_match_maps,
 )
-from app.services.commercial_planner.lineup_distributor_token import match_distributor_token
 from app.services.commercial_planner.lineup_period_canonical import (
     quarter_bounds_from_period_start,
 )
