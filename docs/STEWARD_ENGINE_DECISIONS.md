@@ -528,9 +528,9 @@ First-class column `distributor_attribution_status`:
 - `conflict` — eligible ships exist and proposed dist is absent (FK **kept**; never auto-clear)
 
 Phase-1 confirmer: product + case period (evidence date crad→schedule→ship_confirm) + exact
-qty; W6 product isolation. No DAP. No margin→distributor. Case-PO is not an oracle.
-No fuzzy/substring. No auto-create dims. Drive Control rename of dim DCC is out of scope
-(shipping-shaped name aids match).
+qty; W6 product isolation. Case-PO is not an oracle. No fuzzy/substring. No auto-create dims.
+Drive Control rename of dim DCC is out of scope (shipping-shaped name aids match).
+Phase-2 DAP unit_price confirm is **D-041** (BACKLOG-127) — not this decision's Phase-1.
 
 Steward actions: Accept ship-corroborated (OC + dist + `steward_set`); soft-clear
 distributor only (null FK + clear status; leave OC alias/customer); override conflict →
@@ -539,5 +539,22 @@ distributor only (null FK + clear status; leave OC alias/customer); override con
 **Origin:** PROGRAM-A Unit 6f; Warren plan 2026-08-07/08; discovery 6d/6e.
 **Rejected:** JSONB-only status patch; auto-clear on conflict; fuzzy token match;
 margin/DAP confirmer this unit; treating Unit 6e DCC Q2 absence as auto-revoke.
+
+## D-041 · 2026-08-08 · Phase-2 DAP unit_price confirmer (BACKLOG-127)
+**Locked.** When Phase-1 exact-qty ships span multiple distributors, confirmer Phase-2
+may confirm / conflict / offer using ship ``fact_inbound_shipment.unit_price`` as
+DAP-evidence against lineup ``dap_evidence_local``.
+
+Rules:
+- Relative tolerance **2%**: `|unit_price − dap| / |dap| ≤ 0.02`
+- Unique distributor within tolerance among exact-qty ships for that line product+qty
+- Actions: `confirm_price` / `conflict_price` / `offer_accept_price` (FK never auto-cleared)
+- No migration: reuse existing ``unit_price`` (OEM sell-in evidence ≈ DAP evidence)
+- Never invent DAP from margin; never conflate DAP with PM bottom (`controlled_cost`)
+  or landed cost
+
+**Origin:** BACKLOG-127; Unit 6d/6e discovery; Warren 2026-08-08.
+**Rejected:** inventing a new DAP column for v1; margin→distributor; treating case_po
+absence as attribution revoke (see BACKLOG-128).
 
 

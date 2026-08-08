@@ -120,6 +120,10 @@ from app.services.commercial_planner.lineup_distributor_attribution import (
     preview_distributor_confirmer,
     soft_clear_line_distributor,
 )
+from app.services.commercial_planner.lineup_case_po_attribution_gap import (
+    apply_attributed_distributor_case_po_links,
+    preview_attributed_distributor_case_po_gaps,
+)
 from app.services.commercial_planner.lineup_case_bulk_protection import CaseProtectedError
 from app.services.commercial_planner.lineup_case_parser import (
     parse_current_lineup_file,
@@ -2140,6 +2144,25 @@ class DistributorOverrideBody(BaseModel):
     reason: str = Field(min_length=1, max_length=512)
 
 
+class CasePoAttributionGapPreviewBody(BaseModel):
+    case_ids: list[int] | None = None
+    distributor_ids: list[int] | None = None
+    limit: int = Field(default=200, ge=1, le=500)
+
+
+class CasePoAttributionGapLinkItem(BaseModel):
+    case_id: int = Field(ge=1)
+    purchase_order_id: int = Field(ge=1)
+
+
+class CasePoAttributionGapApplyBody(BaseModel):
+    case_ids: list[int] | None = None
+    distributor_ids: list[int] | None = None
+    links: list[CasePoAttributionGapLinkItem] | None = None
+    allow_partial: bool = False
+    allow_protected: bool = True
+
+
 class CommercialLineupLinePatch(BaseModel):
     quantity_units: float | None = None
     msrp_local: float | None = None
@@ -3122,6 +3145,43 @@ async def post_distributor_override(
 @router.post("/lineup/distributor-attribution/backfill-proposed", status_code=200)
 async def post_backfill_token_proposed(db: AsyncSession = Depends(get_db)):
     return await backfill_token_proposed_status(db, None)
+
+
+@router.post("/lineup/case-po-attribution-gap/preview", status_code=200)
+async def post_case_po_attribution_gap_preview(
+    body: CasePoAttributionGapPreviewBody, db: AsyncSession = Depends(get_db)
+):
+    """BACKLOG-128: preview missing case_po for attributed distributors (read-only)."""
+    return await preview_attributed_distributor_case_po_gaps(
+        db,
+        case_ids=body.case_ids,
+        distributor_ids=body.distributor_ids,
+        limit=body.limit,
+    )
+
+
+@router.post("/lineup/case-po-attribution-gap/apply", status_code=200)
+async def post_case_po_attribution_gap_apply(
+    body: CasePoAttributionGapApplyBody, db: AsyncSession = Depends(get_db)
+):
+    """BACKLOG-128: link unique PO-bearing ships for attributed-distributor gaps.
+
+    Never clears distributor attribution. Default applies only full-cover unique POs.
+    """
+    links = (
+        [{"case_id": x.case_id, "purchase_order_id": x.purchase_order_id} for x in body.links]
+        if body.links
+        else None
+    )
+    return await apply_attributed_distributor_case_po_links(
+        db,
+        None,
+        case_ids=body.case_ids,
+        distributor_ids=body.distributor_ids,
+        links=links,
+        allow_partial=body.allow_partial,
+        allow_protected=body.allow_protected,
+    )
 
 
 def _lineup_row_needs_resolution(ln: CommercialLineupLine, raw_payload: dict) -> bool:
