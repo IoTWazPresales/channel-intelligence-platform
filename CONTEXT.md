@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-08 — **PR #19 merged to main (`5436e45`):** BACKLOG-124 tokenless empty_token. Next: 125/126 or roadmap when Warren clears gate.
 - 2026-08-08 — **BACKLOG-124 tokenless empty_token** on `feat/backlog-124-empty-token`: Mechanism D `line_ids` stamp (no alias/token invent); worklist per-case empty items; UI free-pick+confirm; pytest 13 / vitest 3; browser Empty token 20 + case 127 preview PASS (cancel). Next: commit/push/PR.
 - 2026-08-07 — **PROGRAM-A Unit 6c / BACKLOG-112 steward-complete** on `feat/unit6c-backlog-112-closeout`: D-038 distributor-token→OC+`line.distributor_id`; D-039 ship-only never preselect; W4 revoke/restamp cip; clone C1–C9; BACKLOG-125/126 parked; 124 still empty_token. Next: free-picker residual or 124.
 - 2026-08-07 — **PROGRAM-A Unit 6 → main** `f49a7c8` (FF merge+push). 109 closed; 112 stampable cleared; opts.target PROVEN; ship-scope via case_po. Residual: genuine_conflict routing + 124 empty_token + 123 promote/merge migrate. Roadmap next: A1∥A2∥A3 or named PROGRAM residual.
@@ -237,6 +238,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 | Date | Summary |
 |------|---------|
+| 2026-08-08 | **PR #19 merged to main (`5436e45`):** BACKLOG-124 tokenless empty_token. Next 125/126 or roadmap gate. |
 | 2026-08-08 | **BACKLOG-124 tokenless empty_token** on `feat/backlog-124-empty-token`: Mechanism D `line_ids` stamp; worklist per-case; browser Empty token 20 + case 127 preview PASS (cancel). Awaiting commit/push. |
 | 2026-08-08 | **PR #18 merged to main (`d9857ee`):** Unit 6c+6f / D-040; browser smoke PASS (Proposed 1016). Next BACKLOG-124. |
 | 2026-08-08 | **Unit 6f / D-040:** propose→confirm distributor attribution (`20260807_0010`); confirmer + Accept ship + soft-clear; homeless→Stylus 45; DCC left; BACKLOG-127/128 parked. Branch `feat/unit6f-distributor-attribution-confirm`. |

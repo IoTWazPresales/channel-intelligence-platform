@@ -1,25 +1,21 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-08 (BACKLOG-124 PR #19)
+**Last updated:** 2026-08-08 (PR #19 merged — BACKLOG-124 on main)
 
-**Branch:** `feat/backlog-124-empty-token` @ `6324f7d`
-
-**PR:** https://github.com/IoTWazPresales/channel-intelligence-platform/pull/19
+**Branch:** `main` @ `5436e45` (merge of `feat/backlog-124-empty-token`)
 
 **Alembic:** `20260807_0010` — applied on local `cip`
 
 ## Done
 
-- **PR #18 MERGED** (Unit 6c+6f / D-040) on main.
-- **BACKLOG-124** on PR #19: Mechanism D tokenless stamp — per-case empty_token
-  worklist; `…/tokenless/preview|apply`; no alias / no invented token; ship/PO
-  hints never auto-picked. pytest 13 / vitest 3 / browser smoke PASS (preview cancel).
+- **PR #18 MERGED:** Unit 6c+6f / D-040.
+- **PR #19 MERGED:** BACKLOG-124 tokenless empty_token (Mechanism D) —
+  `…/tokenless/preview|apply`; per-case worklist; ship/PO hints never auto-picked.
 
 ## Next
 
-1. Merge PR #19 when Warren confirms.
-2. BACKLOG-125 / 126 residual stems without ship sole.
-3. BACKLOG-127 DAP confirmer / BACKLOG-128 Stylus PO-link when TRIGGER fires.
-4. Roadmap A1∥A2∥A3 after 124 on main.
+1. BACKLOG-125 / 126 residual stems without ship sole (or Warren-named next).
+2. BACKLOG-127 DAP confirmer / BACKLOG-128 Stylus PO-link when TRIGGER fires.
+3. Roadmap A1∥A2∥A3 when Warren clears the mandate gate.
 
 **Env:** local Windows. `cip` @ `20260807_0010`.
