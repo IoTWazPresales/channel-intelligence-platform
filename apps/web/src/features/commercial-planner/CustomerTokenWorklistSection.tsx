@@ -37,14 +37,18 @@ export type CustomerTokenWorkItem = {
   norm_token: string;
   sample_token: string;
   line_count: number;
+  line_ids?: number[];
+  case_id?: number;
   bucket: 'clean' | 'specificity' | 'genuine_conflict' | 'empty_token' | 'distributor_token' | string;
   alias_candidates: ResolutionTargetSelection[];
   preferred_target_id: number | null;
   stamp_enabled: boolean;
   free_target_allowed?: boolean;
+  tokenless?: boolean;
   conflict: boolean;
   competing_customer_ids: number[];
   dispositions: string[];
+  sole_po_customer_count?: number;
   distributor_token_match?: {
     distributor_id: number;
     matched_via: string;
@@ -69,9 +73,14 @@ type WorklistResponse = {
 type PreviewResponse = {
   line_count: number;
   target_customer_label: string;
-  current_resolution_breakdown: Record<string, number>;
-  would_create_alias: boolean;
-  sample_lines: Array<{ line_id: number; case_id: number; customer_id: number | null }>;
+  current_resolution_breakdown?: Record<string, number>;
+  would_create_alias?: boolean;
+  mints_alias?: boolean;
+  writes_customer_token?: boolean;
+  sample_lines?: Array<{ line_id: number; case_id: number; customer_id: number | null }>;
+  sample_line_ids?: number[];
+  case_ids?: number[];
+  rejected_count?: number;
 };
 
 type ApplyResponse = {
@@ -93,6 +102,8 @@ type MintedAliasesResponse = {
 type BucketId = 'all' | 'clean' | 'specificity' | 'genuine_conflict' | 'distributor_token' | 'empty_token';
 
 function preferredTarget(item: CustomerTokenWorkItem): ResolutionTargetSelection | null {
+  // BACKLOG-124: ship/PO hints only — never auto-select for empty_token
+  if (item.tokenless || item.bucket === 'empty_token') return null;
   if (!item.alias_candidates.length) return null;
   const pref = item.preferred_target_id;
   if (pref != null) {
@@ -169,8 +180,24 @@ export function CustomerTokenWorklistSection() {
   }, [worklistQ.data?.bucket_counts, items.length]);
 
   const previewMut = useMutation({
-    mutationFn: (vars: { norm_token: string; target_customer_id: number }) =>
-      apiPost<PreviewResponse>('/api/v1/commercial-planner/lineup/customer-token/stamp/preview', vars),
+    mutationFn: (vars: {
+      mode: 'token' | 'tokenless';
+      norm_token?: string;
+      line_ids?: number[];
+      target_customer_id: number;
+    }) =>
+      vars.mode === 'tokenless'
+        ? apiPost<PreviewResponse>(
+            '/api/v1/commercial-planner/lineup/customer-token/tokenless/preview',
+            {
+              line_ids: vars.line_ids ?? [],
+              target_customer_id: vars.target_customer_id,
+            },
+          )
+        : apiPost<PreviewResponse>('/api/v1/commercial-planner/lineup/customer-token/stamp/preview', {
+            norm_token: vars.norm_token ?? '',
+            target_customer_id: vars.target_customer_id,
+          }),
   });
 
   const [stampPending, setStampPending] = useState(false);
@@ -248,11 +275,26 @@ export function CustomerTokenWorklistSection() {
       let errors = 0;
       for (const item of batch) {
         try {
-          await apiPost<ApplyResponse>('/api/v1/commercial-planner/lineup/customer-token/stamp/apply', {
-            norm_token: item.norm_token,
-            target_customer_id: targetCustomerId,
-            reason,
-          });
+          if (item.tokenless || item.bucket === 'empty_token') {
+            const lineIds = item.line_ids ?? [];
+            if (!lineIds.length) {
+              throw new Error('tokenless stamp requires line_ids');
+            }
+            await apiPost<{ stamped_count: number }>(
+              '/api/v1/commercial-planner/lineup/customer-token/tokenless/apply',
+              {
+                line_ids: lineIds,
+                target_customer_id: targetCustomerId,
+                reason,
+              },
+            );
+          } else {
+            await apiPost<ApplyResponse>('/api/v1/commercial-planner/lineup/customer-token/stamp/apply', {
+              norm_token: item.norm_token,
+              target_customer_id: targetCustomerId,
+              reason,
+            });
+          }
           results.push({ key: item.item_key, status: 'applied' });
           applied += 1;
         } catch (err: unknown) {
@@ -289,10 +331,20 @@ export function CustomerTokenWorklistSection() {
     setConflictBanner(null);
     setStampItem(item);
     setPicked(target);
-    const prev = await previewMut.mutateAsync({
-      norm_token: item.norm_token,
-      target_customer_id: Number(target.targetKey),
-    });
+    const tokenless = Boolean(item.tokenless || item.bucket === 'empty_token');
+    const prev = await previewMut.mutateAsync(
+      tokenless
+        ? {
+            mode: 'tokenless',
+            line_ids: item.line_ids ?? [],
+            target_customer_id: Number(target.targetKey),
+          }
+        : {
+            mode: 'token',
+            norm_token: item.norm_token,
+            target_customer_id: Number(target.targetKey),
+          },
+    );
     setPreview(prev);
   };
 
@@ -392,9 +444,61 @@ export function CustomerTokenWorklistSection() {
             renderTargetPicker={({ item, targets, onPick }) => {
               if (item.bucket === 'empty_token') {
                 return (
-                  <Typography variant="body2" color="text.secondary" data-testid="customer-token-empty-hint">
-                    No token — see backlog tokenless acquisition. Stamp disabled.
-                  </Typography>
+                  <Stack spacing={1} data-testid="customer-token-empty-picker">
+                    <Alert severity="info" data-testid="customer-token-empty-hint">
+                      Empty token · case {item.case_id ?? '—'} · {item.line_count} line(s). Stamps{' '}
+                      <strong>customer_id only</strong> — no alias mint, no invented token. Ship/PO
+                      customers are hints (explicit confirm required).
+                      {item.sole_po_customer_count
+                        ? ` · ${item.sole_po_customer_count} sole-customer PO(s)`
+                        : ''}
+                    </Alert>
+                    <Typography variant="subtitle2">Pick customer target</Typography>
+                    {targets.map((t) => (
+                      <Button
+                        key={t.targetKey}
+                        size="small"
+                        variant={picked?.targetKey === t.targetKey ? 'contained' : 'outlined'}
+                        onClick={() => {
+                          setPicked(t);
+                          onPick(t);
+                        }}
+                        data-testid={`customer-token-empty-target-${t.targetKey}`}
+                      >
+                        {t.label}
+                        {t.meta?.preferred ? ' · ship hint' : ''}
+                        {t.meta?.is_open_channel ? ' · OPEN_CHANNEL' : ''}
+                        {t.meta?.source ? ` · ${String(t.meta.source)}` : ''}
+                      </Button>
+                    ))}
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <TextField
+                        size="small"
+                        label="Free customer id"
+                        value={freeTargetId}
+                        onChange={(e) => setFreeTargetId(e.target.value)}
+                        inputProps={{ 'data-testid': 'customer-token-empty-free-id' }}
+                      />
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        data-testid="customer-token-empty-free-apply"
+                        onClick={() => {
+                          const id = Number(freeTargetId);
+                          if (!Number.isFinite(id) || id < 1) return;
+                          const t: ResolutionTargetSelection = {
+                            targetKey: String(id),
+                            label: `customer:${id} (free pick)`,
+                            meta: { customer_id: id, preferred: false },
+                          };
+                          setPicked(t);
+                          onPick(t);
+                        }}
+                      >
+                        Use free pick
+                      </Button>
+                    </Stack>
+                  </Stack>
                 );
               }
               if (item.conflict) {
@@ -558,7 +662,7 @@ export function CustomerTokenWorklistSection() {
                     Stamp
                   </Button>
                 ) : (
-                  <Tooltip title={item.bucket === 'empty_token' ? 'no token — see backlog' : 'stamp refused'}>
+                  <Tooltip title="stamp refused">
                     <span>
                       <Button size="small" disabled data-testid={`customer-token-stamp-${item.item_key}`}>
                         Stamp
@@ -640,11 +744,22 @@ export function CustomerTokenWorklistSection() {
           <Stack spacing={1} sx={{ mt: 1 }}>
             <Typography variant="body2" data-testid="customer-token-preview-blast">
               Blast radius: {preview?.line_count ?? 0} line(s) → {preview?.target_customer_label}
-              {preview?.would_create_alias ? ' (will create global alias)' : ' (reuse existing alias)'}
+              {stampItem?.tokenless || stampItem?.bucket === 'empty_token'
+                ? ' (tokenless — customer_id only, no alias)'
+                : preview?.would_create_alias
+                  ? ' (will create global alias)'
+                  : ' (reuse existing alias)'}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Breakdown: {JSON.stringify(preview?.current_resolution_breakdown ?? {})}
-            </Typography>
+            {stampItem?.tokenless || stampItem?.bucket === 'empty_token' ? (
+              <Typography variant="caption" color="text.secondary" data-testid="customer-token-tokenless-preview">
+                Cases: {(preview?.case_ids ?? []).join(', ') || '—'} · rejected:{' '}
+                {preview?.rejected_count ?? 0}
+              </Typography>
+            ) : (
+              <Typography variant="caption" color="text.secondary">
+                Breakdown: {JSON.stringify(preview?.current_resolution_breakdown ?? {})}
+              </Typography>
+            )}
             <Typography variant="caption" color="text.secondary" data-testid="customer-token-opts-target">
               opts.target.targetKey = {picked?.targetKey ?? '—'}
             </Typography>
