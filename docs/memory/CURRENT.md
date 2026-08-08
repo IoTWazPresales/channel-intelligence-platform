@@ -1,25 +1,32 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-08 (A-lane residual close-out on feature branch)
+**Last updated:** 2026-08-08 (PR #22 merged — A-lane residual close-out)
 
-**Branch:** `feat/a-lane-residual-closeout` (from `main` @ `0c88f99`)
+**Branch:** `main` @ `120e020` (merge of `feat/a-lane-residual-closeout`)
 
 **Alembic:** `20260807_0010` — no new migration
 
-## Done this branch
+## Done
 
-- **A3-V VERIFY PASS:** `/sell-out` — channel stock, 25.0 WoC (dist×product), replenish pairs, YoY n/a when no current-quarter coverage.
-- **A2-V VERIFY PASS:** portfolio spend/delivery/norms live.
-- **A1-09:** `GET /cpor/intelligence/support-bias` + portfolio panel; missing SKU → honest empty (reuse existing SKU assumption steward).
-- **BACKLOG-093:** `GET /cpor/cases/{id}/promo-load-recon` + **Promo load** tab (CST-only buckets).
+- **PR #18–#22 MERGED** (Unit 6c+6f through A-lane residual).
+- A1-09 support bias + BACKLOG-093 Promo load on main.
+- A2/A3 VERIFY PASS.
 
-## Parked (unchanged)
+## Outstanding (parked)
 
-068 Landed · 089 incremental · 092 paid · 097 perf
+| ID | Topic | TRIGGER |
+|----|--------|---------|
+| **068** | PvE Landed tile / shipped-not-landed | Shipping scopes it or transit gap material |
+| **089** | Incremental promo unit cost | Validated baseline model |
+| **092** | Paid vs owed (Ken payments) | Warren supplies payment files |
+| **097** | A3/P3 cold-query perf | Soak says p95 still slow |
+
+Also: seed `commercial_sku_assumption` so A1-09 bias % is computable; load CST so Promo load has real buckets (not just `no_cst`).
 
 ## Next
 
-1. Commit + PR when Warren asks; merge to main.
-2. Roadmap B2 or Lane X — Warren picks.
+1. **B2** — lineup + budget builder (net requirement, profit/reservation, budget position), **or**
+2. **Lane X** continuous (TMP-CUST / steward retrofit), **or**
+3. Fire a parked TRIGGER above.
 
 **Env:** local Windows. `cip` @ `20260807_0010`.
