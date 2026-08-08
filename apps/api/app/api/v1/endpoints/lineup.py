@@ -139,6 +139,7 @@ async def list_lineup_items(
                 "channel_code": ch.code if ch else None,
                 "period_start": r.period_start.isoformat(),
                 "period_label": r.period_label,
+                "product_id": int(r.product_id),
                 "sku": prod.sku if prod else None,
                 "product_name": prod.name if prod else None,
                 "predecessor_sku": pred.sku if pred else None,

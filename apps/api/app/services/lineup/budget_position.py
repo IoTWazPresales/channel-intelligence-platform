@@ -6,6 +6,10 @@ Hard enforce stays off until over-budget reapproval workflow ships.
 Planned reservation is **derived** from lineup draft lines × SKU economics (Q-002),
 not loaded from historical budget facts. CPOR drawdown filters by ``pod_quarter``
 matching ``period_label`` (string join — no FK).
+
+SRP for reservation math comes from plan/lineup authoring evidence
+(``dap_evidence_local`` / ``msrp_local``), never from ``CommercialSkuAssumption``
+(which has cost + reserve % only — no SRP column).
 """
 
 from __future__ import annotations
@@ -29,13 +33,93 @@ from app.services.commercial_planner.lineup_period_canonical import (
 )
 
 
+def _positive_srp(*candidates: float | None) -> float | None:
+    """First positive SRP candidate; never fabricate."""
+    for raw in candidates:
+        if raw is None:
+            continue
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if value > 0:
+            return value
+    return None
+
+
+async def _srp_evidence_by_product(
+    db: AsyncSession,
+    product_ids: set[int],
+) -> dict[int, float]:
+    """Map product_id → SRP from commercial lineup evidence (dap preferred, else msrp)."""
+    if not product_ids:
+        return {}
+    from app.models.commercial_lineup import CommercialLineupLine
+
+    stmt = (
+        select(
+            CommercialLineupLine.product_id,
+            CommercialLineupLine.dap_evidence_local,
+            CommercialLineupLine.msrp_local,
+            CommercialLineupLine.id,
+        )
+        .where(
+            CommercialLineupLine.product_id.in_(tuple(product_ids)),
+        )
+        .order_by(CommercialLineupLine.id.desc())
+    )
+    out: dict[int, float] = {}
+    for pid, dap, msrp, _lid in (await db.execute(stmt)).all():
+        if pid is None:
+            continue
+        key = int(pid)
+        if key in out:
+            continue
+        srp = _positive_srp(
+            float(dap) if dap is not None else None,
+            float(msrp) if msrp is not None else None,
+        )
+        if srp is not None:
+            out[key] = srp
+    return out
+
+
 async def derive_planned_reservations_from_lineup(
     db: AsyncSession,
     *,
     period_label: str | None = None,
     limit: int = 5000,
 ) -> list[dict[str, Any]]:
-    """Build planned reservation rows from draft lineup items, else commercial lineup lines."""
+    """Build planned reservation rows from draft lineup items, else commercial lineup lines.
+
+    Returns planned rows. Skip diagnostics are attached on the list via
+    ``__dict__``-style attribute ``_derive_diagnostics`` for ``build_budget_position``.
+    Prefer :func:`derive_planned_reservations_with_diagnostics` when callers need counts.
+    """
+    planned, _diag = await derive_planned_reservations_with_diagnostics(
+        db, period_label=period_label, limit=limit
+    )
+    return planned
+
+
+async def derive_planned_reservations_with_diagnostics(
+    db: AsyncSession,
+    *,
+    period_label: str | None = None,
+    limit: int = 5000,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Build planned reservations + skip diagnostics (missing SKU / missing SRP)."""
+    diagnostics: dict[str, Any] = {
+        "skipped_missing_sku": 0,
+        "skipped_missing_srp": 0,
+        "skipped_zero_qty": 0,
+        "srp_basis": "commercial_lineup_dap_or_msrp",
+        "note": (
+            "SRP from lineup authoring evidence only; "
+            "CommercialSkuAssumption has no target_srp_local"
+        ),
+    }
+
     stmt = select(FactLineupPlanItem).limit(limit)
     items = list((await db.scalars(stmt)).all())
     if period_label:
@@ -43,8 +127,8 @@ async def derive_planned_reservations_from_lineup(
         items = [i for i in items if period_labels_equivalent(i.period_label, want)]
 
     product_ids: set[int] = set()
-    raw_lines: list[tuple[int | None, int | None, float, str | None, int | None]] = []
-    # (product_id, customer_id, qty, period_label, source_id)
+    # (product_id, customer_id, qty, period_label, source_id, srp_or_none)
+    raw_lines: list[tuple[int | None, int | None, float, str | None, int | None, float | None]] = []
 
     if items:
         for item in items:
@@ -56,8 +140,14 @@ async def derive_planned_reservations_from_lineup(
                     float(item.planned_volume_units or 0),
                     item.period_label,
                     int(item.id),
+                    None,  # resolve via commercial lineup evidence below
                 )
             )
+        srp_by_pid = await _srp_evidence_by_product(db, product_ids)
+        raw_lines = [
+            (pid, cid, qty, plabel, source_id, srp_by_pid.get(pid) if pid is not None else None)
+            for pid, cid, qty, plabel, source_id, _ in raw_lines
+        ]
     else:
         # Fallback: commercial lineup (imported) — still no historical budget facts.
         from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
@@ -77,6 +167,10 @@ async def derive_planned_reservations_from_lineup(
                 if pid is None:
                     continue
                 product_ids.add(pid)
+                srp = _positive_srp(
+                    float(line.dap_evidence_local) if line.dap_evidence_local is not None else None,
+                    float(line.msrp_local) if line.msrp_local is not None else None,
+                )
                 raw_lines.append(
                     (
                         pid,
@@ -84,11 +178,12 @@ async def derive_planned_reservations_from_lineup(
                         float(line.quantity_units or 0),
                         case_period.get(int(line.case_id)),
                         int(line.id),
+                        srp,
                     )
                 )
 
     if not raw_lines:
-        return []
+        return [], diagnostics
 
     sku_by_pid: dict[int, CommercialSkuAssumption] = {}
     if product_ids:
@@ -102,18 +197,20 @@ async def derive_planned_reservations_from_lineup(
             sku_by_pid[int(sku.product_id)] = sku
 
     planned: list[dict[str, Any]] = []
-    for product_id, customer_id, qty, plabel, source_id in raw_lines:
+    for product_id, customer_id, qty, plabel, source_id, srp in raw_lines:
         if product_id is None or qty <= 0:
+            diagnostics["skipped_zero_qty"] += 1
             continue
         sku = sku_by_pid.get(product_id)
         if sku is None:
+            diagnostics["skipped_missing_sku"] += 1
             continue
-        srp = float(sku.target_srp_local or 0)
-        if srp <= 0:
+        if srp is None or srp <= 0:
+            diagnostics["skipped_missing_srp"] += 1
             continue
         economics = compute_profit_with_reservation(
             net_requirement_units=qty,
-            target_srp_local=srp,
+            target_srp_local=float(srp),
             promo_srp_local=None,
             controlled_cost_amount=float(sku.controlled_cost_amount),
             reserve_total_pct=float(sku.reserve_total_pct),
@@ -131,9 +228,11 @@ async def derive_planned_reservations_from_lineup(
                 "revenue": revenue,
                 "source_line_id": source_id,
                 "period_label": plabel,
+                "target_srp_local": float(srp),
+                "srp_source": "commercial_lineup_evidence",
             }
         )
-    return planned
+    return planned, diagnostics
 
 
 async def build_budget_position(
@@ -150,8 +249,15 @@ async def build_budget_position(
     """
     planned = list(planned_reservations or [])
     derived = False
+    derive_diag: dict[str, Any] = {
+        "skipped_missing_sku": 0,
+        "skipped_missing_srp": 0,
+        "skipped_zero_qty": 0,
+    }
     if auto_derive_from_lineup and not planned:
-        planned = await derive_planned_reservations_from_lineup(db, period_label=period_label)
+        planned, derive_diag = await derive_planned_reservations_with_diagnostics(
+            db, period_label=period_label
+        )
         derived = bool(planned)
 
     reserved_money = sum(float(p.get("reserved_amount") or 0) for p in planned)
@@ -202,6 +308,8 @@ async def build_budget_position(
         money_status = "ok"
     elif sku_n == 0:
         money_status = "missing_sku_economics"
+    elif int(derive_diag.get("skipped_missing_srp") or 0) > 0 and not planned:
+        money_status = "missing_srp"
     else:
         money_status = "no_planned_reservation"
 
@@ -236,8 +344,9 @@ async def build_budget_position(
         "sku_assumption_count": sku_n,
         "planned_line_count": len(planned),
         "planned_from_lineup_derived": derived,
+        "derive_diagnostics": derive_diag,
         "basis": (
-            "planned=fact_lineup_plan_item×SKU economics (Q-002); "
+            "planned=fact_lineup_plan_item×SKU economics×lineup SRP evidence (Q-002); "
             "drawn=cpor_case_line.ttl_support_usd filtered by pod_quarter≈period_label"
         ),
         "reservation_source": tenant_profile.RESERVATION_SOURCE,

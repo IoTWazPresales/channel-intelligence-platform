@@ -1,32 +1,30 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-08 (PR #22 merged — A-lane residual close-out)
+**Last updated:** 2026-08-08 (B2 Unit 1 author loop — in progress on feature branch)
 
-**Branch:** `main` @ `120e020` (merge of `feat/a-lane-residual-closeout`)
+**Branch:** `feat/b2-author-loop` (from `main` @ `3745cc0`)
 
 **Alembic:** `20260807_0010` — no new migration
 
-## Done
+## Done this unit
 
-- **PR #18–#22 MERGED** (Unit 6c+6f through A-lane residual).
-- A1-09 support bias + BACKLOG-093 Promo load on main.
-- A2/A3 VERIFY PASS.
+- Fixed budget-position SRP: derive from commercial lineup `dap_evidence_local`/`msrp_local`; never `sku.target_srp_local`. Skip diagnostics `missing_sku` / `missing_srp`.
+- `/lineup` Apply net-requirement CTA → draft `fact_lineup_plan_item`; builder-economics panel; budget caption shows `reservation_source=derived_from_profit`.
+- COMMERCIAL_SEMANTICS §4.6 B2-01…04 marked **IMPLEMENTED** (CSV on-ramp caveat). ROADMAP B2 Unit 1 exit note.
+- Browser VERIFY PASS on live cip: net req 50 pairs → Apply inserted 1647 drafts → budget lineup-derived after smoke SKU seed (3 products) → builder-economics reservation.
 
-## Outstanding (parked)
+## Outstanding
 
-| ID | Topic | TRIGGER |
-|----|--------|---------|
-| **068** | PvE Landed tile / shipped-not-landed | Shipping scopes it or transit gap material |
-| **089** | Incremental promo unit cost | Validated baseline model |
-| **092** | Paid vs owed (Ken payments) | Warren supplies payment files |
-| **097** | A3/P3 cold-query perf | Soak says p95 still slow |
-
-Also: seed `commercial_sku_assumption` so A1-09 bias % is computable; load CST so Promo load has real buckets (not just `no_cst`).
+| Item | Notes |
+|------|--------|
+| Commit / PR | When Warren asks |
+| B2-2 | Richer authoring UX (period picker, bias toggle, half-year slots) |
+| B2-3 | Tenant workbook export + commercial_lineup case write |
+| Parked A-lane | 068 / 089 / 092 / 097 |
 
 ## Next
 
-1. **B2** — lineup + budget builder (net requirement, profit/reservation, budget position), **or**
-2. **Lane X** continuous (TMP-CUST / steward retrofit), **or**
-3. Fire a parked TRIGGER above.
+1. Commit + open PR for B2-1 when asked (do not merge without explicit merge).
+2. Or B2-2 / Lane X / parked TRIGGER.
 
-**Env:** local Windows. `cip` @ `20260807_0010`.
+**Env:** local Windows. `cip` @ `20260807_0010`. Smoke SKUs seeded for products 5376/9908/10928 (dev only).
