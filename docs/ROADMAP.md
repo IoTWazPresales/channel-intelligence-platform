@@ -141,7 +141,7 @@ See `docs/COMMERCIAL_SEMANTICS.md`. Two axes coexist: fill rate / plan execution
 **Support bias:** planned reservation vs actual CPOR spend — **CPOR-owned**, not PvE; blocked
 on Q-002 (reservation = derived_from_profit). Do not put on Plan vs Executed.
 **Window:** all quarters with lineup coverage; credible core 26Q1 → current.
-**Exit:** plan-accuracy surface (fill + exceptions). Credibility artifact. *(A-lane wrap 2026-08-01: fill/exceptions/bias-slip BU/over-plan intake shipped; Q-009 → PM=business_line; Q-002 → derived-from-profit planned side for support bias — metric still SPEC ONLY on CPOR Cases.)*
+**Exit:** plan-accuracy surface (fill + exceptions). Credibility artifact. *(A-lane wrap 2026-08-01: fill/exceptions/bias-slip BU/over-plan intake shipped; Q-009 → PM=business_line; Q-002 → derived-from-profit. **A1-09 Support bias IMPLEMENTED 2026-08-08** on CPOR Cases — `GET /cpor/intelligence/support-bias`. BACKLOG-068 Landed lens remains parked.)*
 
 ### A2 — CPOR intelligence
 **Entry:** P1 CPOR historical signed off.
@@ -154,14 +154,14 @@ on Q-002 (reservation = derived_from_profit). Do not put on Plan vs Executed.
 **Out of scope:** cost per **incremental** unit (BACKLOG-089); **claim rate** (non-computable
 until settlement stores an **owed** amount ≠ computed support — see `COMMERCIAL_SEMANTICS`.
 **Paid** = distributor payment reconciliation via Ken — separate future input; **Warren owns files** — BACKLOG-092).
-**Exit:** promo effectiveness surface. *(A-lane wrap 2026-08-01: A2-01/02/04/05/06 shipped.)*
+**Exit:** promo effectiveness surface. *(A-lane wrap 2026-08-01: A2-01/02/04/05/06 shipped. **BACKLOG-093 Promo load IMPLEMENTED 2026-08-08** — case tab + `…/promo-load-recon`.)*
 
 ### A3 — Channel stock + velocity
 **Entry:** P1 DSI + shipment signed off.
 **Scope:** derived channel stock (latest reported SOH per distributor×product − sell-out since
 snapshot + POD-landed since; pipeline never counts); velocity; weeks of cover with
 zero-velocity guard; replenishment signal.
-**Exit:** *(A-lane wrap 2026-08-01: A3-01/02/03 shipped — WoC dist×product + 4w replenishment flag.)*
+**Exit:** *(A-lane wrap 2026-08-01: A3-01/02/03/04 shipped — WoC dist×product + 4w replenishment + YoY coverage. **A3-V VERIFY PASS 2026-08-08** on `/sell-out`.)*
 
 ---
 
@@ -389,7 +389,8 @@ rewrite.)*
 ### What you can start right now
 
 Anything whose blocker is satisfied. **P1 exited 2026-08-01** (census + defect log sealed).
-**A1 / A2 / A3** are open. Lane X runs continuously in GREEN alongside anything.
+**A1 / A2 / A3** core + residuals closed 2026-08-08 (A1-09, A2-093, A3-V). Parked remain: 068 / 089 / 092 / 097.
+Lane X runs continuously in GREEN alongside anything.
 
 ### What you cannot do
 

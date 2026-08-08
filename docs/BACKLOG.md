@@ -624,7 +624,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-01 |
+| **Status / parked** | **Done** · 2026-08-08 · `feat/a-lane-residual-closeout` |
 | **Effort** | Large (CST/customer-file join × CPOR case window) |
 | **Source** | Warren 2026-08-01 A-lane wrap — automated promo verification path |
 | **Idea** | For a specific CPOR case, reconcile **customer sales / sell-through files** against the case’s promo window and products to check whether the **customer loaded the promotion correctly** (price/units/timing vs approved support). |
@@ -634,6 +634,7 @@
 | **Behavior to retain** | CPOR case truth for approved support; CST facts as evidence; no auto-create masters. |
 | **Out of scope** | Distributor payment paid-vs-owed (BACKLOG-092); inventing claim “owed”. |
 | **TRIGGER** | Warren starts automated promo-ops / asks for case-level customer-file promo recon **after** payment path is separate. |
+| **Resolution** | `GET /cpor/cases/{id}/promo-load-recon` + case detail **Promo load** tab; CST-only; buckets ok/missing_load/wrong_window/wrong_price/price_unknown/no_cst; 2% price tol. |
 
 ---
 

@@ -1,20 +1,25 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-08 (PR #21 merged — BACKLOG-127/128 on main)
+**Last updated:** 2026-08-08 (A-lane residual close-out on feature branch)
 
-**Branch:** `main` @ `3efe1e8` (merge of `feat/backlog-127-128-dap-case-po`)
+**Branch:** `feat/a-lane-residual-closeout` (from `main` @ `0c88f99`)
 
-**Alembic:** `20260807_0010` — applied on local `cip` (no new migration this PR)
+**Alembic:** `20260807_0010` — no new migration
 
-## Done
+## Done this branch
 
-- **PR #18–#21 MERGED:** Unit 6c+6f, 124, 125/126, **127/128**.
-- **127 / D-041:** Phase-2 DAP via ship `unit_price` (2% tol).
-- **128:** case-po attribution-gap API; cip 114↔10473 Stylus.
+- **A3-V VERIFY PASS:** `/sell-out` — channel stock, 25.0 WoC (dist×product), replenish pairs, YoY n/a when no current-quarter coverage.
+- **A2-V VERIFY PASS:** portfolio spend/delivery/norms live.
+- **A1-09:** `GET /cpor/intelligence/support-bias` + portfolio panel; missing SKU → honest empty (reuse existing SKU assumption steward).
+- **BACKLOG-093:** `GET /cpor/cases/{id}/promo-load-recon` + **Promo load** tab (CST-only buckets).
+
+## Parked (unchanged)
+
+068 Landed · 089 incremental · 092 paid · 097 perf
 
 ## Next
 
-1. Roadmap **Lane A** residuals or **Lane B** (B1 done → B2) — Warren picks.
-2. Continuous Lane X / backlog TRIGGERs as they fire.
+1. Commit + PR when Warren asks; merge to main.
+2. Roadmap B2 or Lane X — Warren picks.
 
 **Env:** local Windows. `cip` @ `20260807_0010`.

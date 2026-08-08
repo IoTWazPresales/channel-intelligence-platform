@@ -34,6 +34,8 @@ from app.services.cpor.pivot import build_case_pivot
 from app.services.cpor.norms_and_comparable import build_comparable_cases, build_support_norms
 from app.services.cpor.promo_plan_builder import build_promo_plan_draft
 from app.services.cpor.portfolio_intelligence import build_portfolio_intelligence
+from app.services.cpor.support_bias import build_support_bias
+from app.services.cpor.promo_load_recon import build_promo_load_recon
 from app.services.cpor.promotion_type_vocab import CPOR_CASE_STATUS_SET, CPOR_PROMOTION_TYPE_SET
 from app.services.cpor.recompute import recompute_case, recompute_case_line
 from app.services.cpor.settlement import (
@@ -946,6 +948,36 @@ def cpor_comparable_cases(
     """A2-05: ranked comparable cases (customer → BU → promo → quarter → volume)."""
     with SessionLocal() as session:
         return build_comparable_cases(session, case_id=case_id, limit=limit)
+
+
+@router.get("/intelligence/support-bias")
+def cpor_support_bias(
+    period_start: date | None = Query(default=None),
+    period_end: date | None = Query(default=None),
+    customer_id: int | None = Query(default=None, ge=1),
+    case_id: int | None = Query(default=None, ge=1),
+    limit_cases: int = Query(default=200, ge=1, le=500),
+) -> dict[str, Any]:
+    """A1-09: planned campaign reservation (derived_from_profit) vs actual CPOR support USD."""
+    with SessionLocal() as session:
+        return build_support_bias(
+            session,
+            period_start=period_start,
+            period_end=period_end,
+            customer_id=customer_id,
+            case_id=case_id,
+            limit_cases=limit_cases,
+        )
+
+
+@router.get("/cases/{case_id}/promo-load-recon")
+def cpor_promo_load_recon(case_id: int) -> dict[str, Any]:
+    """BACKLOG-093: CST vs approved case terms (promo load). Not settlement claim recon."""
+    with SessionLocal() as session:
+        try:
+            return build_promo_load_recon(session, case_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/intelligence/promo-plan-draft")
