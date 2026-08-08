@@ -1,30 +1,28 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-07 (PROGRAM-A Unit 6c — BACKLOG-112 steward-complete)
+**Last updated:** 2026-08-08 (PROGRAM-A Unit 6f — D-040 distributor attribution propose→confirm)
 
-**Branch:** `feat/unit6c-backlog-112-closeout` (from `main` @ `81524d5`)
+**Branch:** `feat/unit6f-distributor-attribution-confirm` (from Unit 6c @ `03a5c19`)
 
-**Alembic:** `20260802_0009` (unchanged — no migration)
+**Alembic:** `20260807_0010` (distributor_attribution_status on commercial_lineup_line)
 
 ## Done
 
-- **Unit 6c / BACKLOG-112 closed steward-complete** (D-038 / D-039): distributor-token
-  classifier (exact + structured strip) dual-writes OPEN_CHANNEL + `line.distributor_id`
-  in one txn; W5 ship-only never preselected; W6 product isolation; W7 audit provenance;
-  free picker + `exclude_prefix=unit6b-`; worklist ~285ms (was ~2092ms baseline).
-- W4 false stamps revoked+restamped on cip: `sadc - compuspeed`→OC+Compuspeed(12);
-  `mitsumi distribution`→OC+Mitsumi(22). D4 also: `mitsumi`, `dcc`, `sadc - dcc`,
-  `channel syntech`.
-- Clone C1–C9 PASS on `cip_unit6c_smoke`; cip D1–D7 PASS (cases/links unchanged;
-  protected 7/90/122/145 status+line+po counts stable; case 122 `n_dist` 43→51 expected).
+- **Unit 6f / D-040:** first-class `distributor_attribution_status`
+  (`token_proposed` | `steward_set` | `shipment_confirmed` | `conflict`).
+- Stamp sets `token_proposed`; confirmer (product+period+exact qty) confirms / conflicts
+  without auto-clearing FK; Accept ship-corroborated; soft-clear dist-only; override.
+- Worklist ship-offer CTA + `DistributorAttributionReviewSection` on PO management.
+- cip remediation: backfill proposed; confirmer; `sadc homeless`→OC+Stylus 45
+  (`steward_set`); **DCC left**; protected cases 7/90/122/145 stable.
+- Docs: D-038 amended; D-040 locked; BACKLOG-127 (DAP), BACKLOG-128 (Stylus PO-link).
+- CONSULT CLI Opus/Fable WAIVED (spend limit) — Human-approved plan = lock.
 
 ## Next
 
-1. **Free-picker residual** (not 112): `jd furn`, `pick & pay`, `sadc - superdisti`,
-   `sadc homeless`, `smd`, `88` — steward free pick or BACKLOG-126 masters.
-2. **BACKLOG-124** — empty_token (~962 null-customer lines scanned; empty bucket remains).
-3. **BACKLOG-125** — distributor-as-customer masters (E12 / syntech→4145).
-4. **BACKLOG-123** — promote/merge → ResolutionWorklist (parked; opts.target PROVEN).
-5. Roadmap A1∥A2∥A3 only after Warren confirms 124 handling (ship or re-park).
+1. **Browser smoke** residual if not done in-session: attribution review + Accept ship CTA.
+2. **BACKLOG-124** — empty_token (mandate resumes after 6f).
+3. BACKLOG-125 / 126 residual stems without ship sole.
+4. Roadmap A1∥A2∥A3 only after Warren confirms 124 handling.
 
-**Env:** local Windows. `cip`. Disposable clone `cip_unit6c_smoke` may be dropped.
+**Env:** local Windows. `cip` @ `20260807_0010`. Smoke clone `cip_unit6c_smoke` also at head.

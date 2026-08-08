@@ -236,6 +236,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 | Date | Summary |
 |------|---------|
+| 2026-08-08 | **Unit 6f / D-040:** propose→confirm distributor attribution (`20260807_0010`); confirmer + Accept ship + soft-clear; homeless→Stylus 45; DCC left; BACKLOG-127/128 parked. Branch `feat/unit6f-distributor-attribution-confirm`. |
 | 2026-07-10 | **BACKLOG-061-U2b Fable PASS (`66003db`):** mint verified; Warren applies 0070 next. |
 | 2026-07-10 | **BACKLOG-061-U2a:** mint research note — 3 candidates (rec A `CUST-######`); settings/API sketch; disposition deferred. Awaiting VERIFY + Warren pick. |
 | 2026-07-10 | **BACKLOG-061 Fable PASS B2–B4 (`9cfb67f`):** promote UI+distributor API; verified remap; 0069 on cip + GRANTs to `cip`. Queue empty — recommend merge PR. |

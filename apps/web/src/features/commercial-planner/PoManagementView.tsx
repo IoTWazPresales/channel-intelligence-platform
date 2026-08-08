@@ -25,6 +25,7 @@ import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 import { PoAutoLinkProposalsSection, PO_AUTO_LINK_SECTION_ID } from './PoAutoLinkProposalsSection';
 import { PoCaseLinkWorklistSection } from './PoCaseLinkWorklistSection';
 import { CustomerTokenWorklistSection } from './CustomerTokenWorklistSection';
+import { DistributorAttributionReviewSection } from './DistributorAttributionReviewSection';
 import { LineupDuplicatePartitionPanel } from './LineupDuplicatePartitionPanel';
 import { PoDismissReasonDialog } from './PoDismissReasonDialog';
 import { buildPlanVsExecutedHref } from '@/features/plan-vs-executed/productDisplay';
@@ -392,6 +393,8 @@ export function PoManagementView() {
       <PoCaseLinkWorklistSection />
 
       <CustomerTokenWorklistSection />
+
+      <DistributorAttributionReviewSection />
 
       <PoAutoLinkProposalsSection autoFetch onPendingCountChange={setPendingLinkProposals} />
 

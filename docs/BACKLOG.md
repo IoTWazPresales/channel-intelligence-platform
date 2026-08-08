@@ -261,16 +261,50 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-07 |
+| **Status / parked** | **Parked** · 2026-08-07 · partial relief via D-040 ship-Accept for sole-exact tokens |
 | **Effort** | Small |
 | **Source** | Unit 6c A1 + D5 residual: tokens with no `dim_distributor` exact match after strip; free-picker only under D-038. |
-| **Idea** | Either mint/approve real `dim_distributor` (+ aliases) for these stems, or steward free-pick retailer/OC with reason — do not invent fuzzy distributor match. |
-| **Why it matters / deferrable** | Leaves ~7 unresolved lines on free-picker. Deferrable while planning is not blocked. |
+| **Idea** | Either mint/approve real `dim_distributor` (+ aliases) for these stems, or steward free-pick retailer/OC with reason — do not invent fuzzy distributor match. `sadc homeless` can Accept OC+Stylus via ship corroboration when sole+exact qty (D-040). |
+| **Why it matters / deferrable** | Leaves unresolved free-picker stems without ship sole. Deferrable while planning is not blocked. |
 | **What the work is** | Masters decision + optional distributor create (steward-initiated) or free-pick stamp. |
 | **Regression traps** | No substring/fuzzy distributor match; no auto-create from stamp. |
-| **Behavior to retain** | Free picker + preview-first. |
+| **Behavior to retain** | Free picker + preview-first; D-040 Accept ship-corroborated. |
 | **Out of scope** | Expanding D-038 strip patterns without Warren lock. |
 | **TRIGGER** | Warren names the correct distributor dims for these stems, or free-picker volume blocks planning. |
+
+---
+
+## BACKLOG-127 — Shipment DAP (or priced confirm) for distributor attribution
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-08 |
+| **Effort** | Medium |
+| **Source** | Unit 6d/6e discovery: `fact_inbound_shipment` has `unit_price`/`amount` only — no DAP field; qty-only confirmer cannot collapse multi-dist INDETERMINATE tokens. |
+| **Idea** | Persist DAP (or a defined map to ship price + currency rules) on shipment facts so confirmer Phase 2 can confirm/conflict on price as well as product+period+qty. |
+| **Why it matters / deferrable** | Raises confirmation hit-rate for OC distributor tokens. Deferrable while Phase-1 sole-qty confirmer + steward review work. |
+| **What the work is** | Schema/contract for DAP on ship facts or evidence→fact mapping; currency rules; extend D-040 confirmer; never invent DAP from margin. |
+| **Regression traps** | Do not conflate DAP with PM bottom / landed cost; do not use margin→distributor. |
+| **Behavior to retain** | D-040 Phase-1 rules; exact token match. |
+| **Out of scope** | Drive Control rename; DSI resolution order. |
+| **TRIGGER** | Warren opens priced shipment confirmation or multi-dist unproven volume blocks planning. |
+
+---
+
+## BACKLOG-128 — PO-linkage gap: Stylus / case_po incomplete vs shipment sole
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-08 |
+| **Effort** | Small–Medium |
+| **Source** | Unit 6e: `sadc homeless` ships sole Stylus 45 with exact qty; Stylus absent from some case_po sets (e.g. case 114) — PO-linkage gap, not cancel. |
+| **Idea** | Worklist / auto-link repair so shipment-resolved distributors appear on case_po when commercially linked. |
+| **Why it matters / deferrable** | Attribution can be correct while case_po still incomplete. Deferrable after D-040 Accept. |
+| **What the work is** | Diagnose missing case_po for Stylus; steward or auto-link path without treating case_po as attribution oracle. |
+| **Regression traps** | Do not use case_po absence to revoke D-038/D-040 stamps. |
+| **Behavior to retain** | D-040 propose/confirm; PO auto-link competition rules. |
+| **Out of scope** | Changing auto-link key / D-033 / D-034. |
+| **TRIGGER** | After D-040 Accept for homeless, or case_po gaps block planning for Stylus volume. |
 
 ---
 

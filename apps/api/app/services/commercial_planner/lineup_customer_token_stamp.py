@@ -579,9 +579,14 @@ async def apply_customer_token_stamp(
             continue
         changed = prior != int(resolved)
         dist_changed = False
-        if line_distributor_id is not None and prior_dist != line_distributor_id:
-            ln.distributor_id = line_distributor_id
-            dist_changed = True
+        if line_distributor_id is not None:
+            if prior_dist != line_distributor_id:
+                ln.distributor_id = line_distributor_id
+                dist_changed = True
+            # D-040: token match writes FK as proposal (even if dist already set)
+            if (ln.distributor_attribution_status or "") != "token_proposed":
+                ln.distributor_attribution_status = "token_proposed"
+                dist_changed = True
         if not changed and not dist_changed:
             continue
         if changed:
@@ -724,6 +729,7 @@ async def revoke_customer_token_alias(
             ln.customer_id = prior
             if int(ln.id) in prior_dist_map:
                 ln.distributor_id = prior_dist_map[int(ln.id)]
+                ln.distributor_attribution_status = None
             if prior is None:
                 diag = list(ln.diagnostic_codes or [])
                 if "unknown_customer" not in diag:
@@ -967,6 +973,8 @@ async def list_customer_token_worklist(
                     if dist_match
                     else None
                 ),
+                "would_set_attribution_status": "token_proposed" if dist_match else None,
+                "ship_corroboration_offer": None,
                 "candidate_provenance": (
                     [{"source": "alias", "customer_id": c} for c in sorted(alias_cids)] + ship_prov
                 ),
@@ -989,9 +997,33 @@ async def list_customer_token_worklist(
                 "competing_customer_ids": [],
                 "dispositions": [],
                 "distributor_token_match": None,
+                "would_set_attribution_status": None,
+                "ship_corroboration_offer": None,
                 "candidate_provenance": [],
             }
         )
+
+    # D-040: attach sole-exact ship corroboration offers for free-pick / clean tokens
+    offer_tokens = [
+        it["norm_token"]
+        for it in items
+        if it["bucket"] not in {"distributor_token", "empty_token", "genuine_conflict"}
+        and it.get("free_target_allowed")
+    ]
+    if offer_tokens:
+        from app.services.commercial_planner.lineup_distributor_attribution import (
+            preview_distributor_confirmer,
+        )
+
+        offer_preview = await preview_distributor_confirmer(
+            db, norm_tokens=offer_tokens, limit_tokens=len(offer_tokens)
+        )
+        offer_by_token = {
+            it["norm_token"]: it.get("ship_corroboration_offer") for it in offer_preview["items"]
+        }
+        for it in items:
+            if it["norm_token"] in offer_by_token:
+                it["ship_corroboration_offer"] = offer_by_token[it["norm_token"]]
 
     labels: dict[int, str] = {}
     if cust_ids_needed:

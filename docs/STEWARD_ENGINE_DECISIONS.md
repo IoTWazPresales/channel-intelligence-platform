@@ -484,17 +484,21 @@ the steward stamp dual-writes in **one transaction**:
    the **token name**, not a scoped distributor alias).
 2. **`commercial_lineup_line.distributor_id`** = the matched distributor on every stamped
    line.
+3. **`distributor_attribution_status` = `token_proposed`** (D-040) — FK is a proposal until
+   shipment confirmation.
 
 Token carries identity; **never** infer distributor from case alone when the token
 already names one. Exact match only — no fuzzy, no substring, no auto-create of dims.
-No-dim stems (`smd`, `superdisti`, `sadc homeless`) stay free-picker / park — not this rule.
+No-dim stems (`smd`, `superdisti`, `sadc homeless`) stay free-picker / park — not this rule
+(ship-corroborated Accept is a separate steward action under D-040).
 
 **Justification (E5/E6):** prior stamps of `sadc - compuspeed`→customer 107 and
 `mitsumi distribution`→customer 18 treated distributor-parked tokens as retailers
 because ship/product bleed and missing dual-write. Revoked + restamped under this rule
 (Compuspeed 12 / Mitsumi 22 + OC).
 
-**Origin:** PROGRAM-A Unit 6c / BACKLOG-112 close-out; Warren W1–W2 + STOP GATE strip lock.
+**Origin:** PROGRAM-A Unit 6c / BACKLOG-112 close-out; Warren W1–W2 + STOP GATE strip lock;
+semantics amended by D-040 (Unit 6f).
 **Rejected:** scoped alias with `alias.distributor_id` as attribution; case-level
 distributor inference replacing the token; fuzzy/substring match; auto-create dims.
 
@@ -510,5 +514,30 @@ W6 product isolation: drop products shared with another differently-resolved
 **Origin:** PROGRAM-A Unit 6c W5/W6/W7; E5/E6 false retailer stamps.
 **Rejected:** auto-stamp from a lone ship candidate; minting global aliases without
 provenance in audit.
+
+## D-040 · 2026-08-08 · Distributor attribution is propose → confirm (amend D-038 semantics)
+**Locked.** D-038 still dual-writes OPEN_CHANNEL + `commercial_lineup_line.distributor_id`
+in one txn when the customer-column token exact-matches a distributor name/alias after
+structured strip. That FK is the **working** attribution for planning/PO suggest — **not**
+proven commercial truth until shipment evidence confirms it.
+
+First-class column `distributor_attribution_status`:
+- `token_proposed` — set by D-038 distributor-token stamp
+- `steward_set` — free-pick Accept ship-corroborated, or conflict override
+- `shipment_confirmed` — confirmer upgraded (sole resolved distributor + exact qty match)
+- `conflict` — eligible ships exist and proposed dist is absent (FK **kept**; never auto-clear)
+
+Phase-1 confirmer: product + case period (evidence date crad→schedule→ship_confirm) + exact
+qty; W6 product isolation. No DAP. No margin→distributor. Case-PO is not an oracle.
+No fuzzy/substring. No auto-create dims. Drive Control rename of dim DCC is out of scope
+(shipping-shaped name aids match).
+
+Steward actions: Accept ship-corroborated (OC + dist + `steward_set`); soft-clear
+distributor only (null FK + clear status; leave OC alias/customer); override conflict →
+`steward_set`.
+
+**Origin:** PROGRAM-A Unit 6f; Warren plan 2026-08-07/08; discovery 6d/6e.
+**Rejected:** JSONB-only status patch; auto-clear on conflict; fuzzy token match;
+margin/DAP confirmer this unit; treating Unit 6e DCC Q2 absence as auto-revoke.
 
 

@@ -50,6 +50,13 @@ export type CustomerTokenWorkItem = {
     matched_via: string;
     matched_key: string;
   } | null;
+  would_set_attribution_status?: string | null;
+  ship_corroboration_offer?: {
+    distributor_id: number;
+    reason: string;
+    exact_qty_ship_count?: number;
+    eligible_dist_count?: number;
+  } | null;
 };
 
 type WorklistResponse = {
@@ -182,6 +189,25 @@ export function CustomerTokenWorklistSection() {
     },
     onError: (err: unknown) => {
       setError(err instanceof Error ? err.message : 'Revoke failed');
+    },
+  });
+
+  const acceptShipMut = useMutation({
+    mutationFn: (vars: { norm_token: string; distributor_id: number; reason: string }) =>
+      apiPost<{ stamped_count: number; distributor_id: number; status: string }>(
+        '/api/v1/commercial-planner/lineup/distributor-attribution/accept-ship',
+        vars,
+      ),
+    onSuccess: (data) => {
+      setSuccess(
+        `Accepted ship-corroborated distributor ${data.distributor_id} on ${data.stamped_count} line(s) (${data.status})`,
+      );
+      void qc.invalidateQueries({ queryKey: ['customer-token-worklist'] });
+      void qc.invalidateQueries({ queryKey: ['customer-token-minted-aliases'] });
+      void qc.invalidateQueries({ queryKey: ['distributor-attribution-review'] });
+    },
+    onError: (err: unknown) => {
+      setError(err instanceof Error ? err.message : 'Accept ship corroboration failed');
     },
   });
 
@@ -397,6 +423,9 @@ export function CustomerTokenWorklistSection() {
                       {item.distributor_token_match.distributor_id} (
                       {item.distributor_token_match.matched_via}:{' '}
                       {item.distributor_token_match.matched_key})
+                      {item.would_set_attribution_status
+                        ? ` · status=${item.would_set_attribution_status}`
+                        : ''}
                     </Alert>
                     <Button
                       size="small"
@@ -461,6 +490,33 @@ export function CustomerTokenWorklistSection() {
                       </Button>
                     </Stack>
                   ) : null}
+                  {item.ship_corroboration_offer ? (
+                    <Alert
+                      severity="success"
+                      data-testid={`customer-token-ship-offer-${item.item_key}`}
+                      action={
+                        <Button
+                          color="inherit"
+                          size="small"
+                          data-testid={`customer-token-accept-ship-${item.item_key}`}
+                          disabled={acceptShipMut.isPending}
+                          onClick={() => {
+                            acceptShipMut.mutate({
+                              norm_token: item.norm_token,
+                              distributor_id: item.ship_corroboration_offer!.distributor_id,
+                              reason: 'steward accept ship-corroborated distributor',
+                            });
+                          }}
+                        >
+                          Accept OC + dist {item.ship_corroboration_offer.distributor_id}
+                        </Button>
+                      }
+                    >
+                      Ship corroboration: sole distributor{' '}
+                      {item.ship_corroboration_offer.distributor_id} (
+                      {item.ship_corroboration_offer.reason})
+                    </Alert>
+                  ) : null}
                 </Stack>
               );
             }}
@@ -476,6 +532,14 @@ export function CustomerTokenWorklistSection() {
                 sx={{ cursor: 'pointer' }}
               >
                 <Chip size="small" label={item.bucket} data-testid={`customer-token-bucket-${item.item_key}`} />
+                {item.ship_corroboration_offer ? (
+                  <Chip
+                    size="small"
+                    color="success"
+                    label={`ship→${item.ship_corroboration_offer.distributor_id}`}
+                    data-testid={`customer-token-ship-chip-${item.item_key}`}
+                  />
+                ) : null}
                 <Typography variant="body2">
                   {item.sample_token || '(empty token)'} · {item.line_count} line(s)
                 </Typography>

@@ -106,6 +106,16 @@ from app.services.commercial_planner.lineup_customer_token_stamp import (
     preview_customer_token_stamp,
     revoke_customer_token_alias,
 )
+from app.services.commercial_planner.lineup_distributor_attribution import (
+    DistributorAttributionError,
+    accept_ship_corroborated_distributor,
+    apply_distributor_confirmer,
+    backfill_token_proposed_status,
+    list_distributor_attribution_review,
+    override_distributor_attribution,
+    preview_distributor_confirmer,
+    soft_clear_line_distributor,
+)
 from app.services.commercial_planner.lineup_case_bulk_protection import CaseProtectedError
 from app.services.commercial_planner.lineup_case_parser import (
     parse_current_lineup_file,
@@ -2093,6 +2103,28 @@ class CustomerTokenAliasRevokeBody(BaseModel):
     reason: str = Field(min_length=1, max_length=512)
 
 
+class DistributorConfirmerBody(BaseModel):
+    norm_tokens: list[str] | None = None
+    case_ids: list[int] | None = None
+
+
+class ShipCorroboratedAcceptBody(BaseModel):
+    norm_token: str = Field(min_length=1, max_length=512)
+    distributor_id: int = Field(ge=1)
+    reason: str = Field(min_length=1, max_length=512)
+
+
+class DistributorSoftClearBody(BaseModel):
+    line_ids: list[int] = Field(min_length=1, max_length=500)
+    reason: str = Field(min_length=1, max_length=512)
+
+
+class DistributorOverrideBody(BaseModel):
+    line_ids: list[int] = Field(min_length=1, max_length=500)
+    distributor_id: int = Field(ge=1)
+    reason: str = Field(min_length=1, max_length=512)
+
+
 class CommercialLineupLinePatch(BaseModel):
     quantity_units: float | None = None
     msrp_local: float | None = None
@@ -2968,6 +3000,83 @@ async def post_customer_token_alias_revoke(
         )
     except CustomerTokenStampError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/lineup/distributor-attribution/review", status_code=200)
+async def get_distributor_attribution_review(
+    limit: int = Query(default=200, ge=1, le=500),
+    status: str | None = Query(default=None, description="Comma-separated statuses"),
+    db: AsyncSession = Depends(get_db),
+):
+    statuses = [s.strip() for s in (status or "").split(",") if s.strip()] or None
+    return await list_distributor_attribution_review(db, limit=limit, statuses=statuses)
+
+
+@router.post("/lineup/distributor-attribution/confirmer/preview", status_code=200)
+async def post_distributor_confirmer_preview(
+    body: DistributorConfirmerBody, db: AsyncSession = Depends(get_db)
+):
+    return await preview_distributor_confirmer(
+        db, norm_tokens=body.norm_tokens, case_ids=body.case_ids
+    )
+
+
+@router.post("/lineup/distributor-attribution/confirmer/apply", status_code=200)
+async def post_distributor_confirmer_apply(
+    body: DistributorConfirmerBody, db: AsyncSession = Depends(get_db)
+):
+    return await apply_distributor_confirmer(
+        db, None, norm_tokens=body.norm_tokens, case_ids=body.case_ids
+    )
+
+
+@router.post("/lineup/distributor-attribution/accept-ship", status_code=200)
+async def post_accept_ship_corroborated(
+    body: ShipCorroboratedAcceptBody, db: AsyncSession = Depends(get_db)
+):
+    try:
+        return await accept_ship_corroborated_distributor(
+            db,
+            None,
+            norm_token=body.norm_token,
+            distributor_id=body.distributor_id,
+            reason=body.reason,
+        )
+    except DistributorAttributionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/lineup/distributor-attribution/soft-clear", status_code=200)
+async def post_distributor_soft_clear(
+    body: DistributorSoftClearBody, db: AsyncSession = Depends(get_db)
+):
+    try:
+        return await soft_clear_line_distributor(
+            db, None, line_ids=body.line_ids, reason=body.reason
+        )
+    except DistributorAttributionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/lineup/distributor-attribution/override", status_code=200)
+async def post_distributor_override(
+    body: DistributorOverrideBody, db: AsyncSession = Depends(get_db)
+):
+    try:
+        return await override_distributor_attribution(
+            db,
+            None,
+            line_ids=body.line_ids,
+            distributor_id=body.distributor_id,
+            reason=body.reason,
+        )
+    except DistributorAttributionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/lineup/distributor-attribution/backfill-proposed", status_code=200)
+async def post_backfill_token_proposed(db: AsyncSession = Depends(get_db)):
+    return await backfill_token_proposed_status(db, None)
 
 
 def _lineup_row_needs_resolution(ln: CommercialLineupLine, raw_payload: dict) -> bool:
