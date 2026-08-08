@@ -1,25 +1,20 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-08 (CI alembic tip tracks ScriptDirectory head)
+**Last updated:** 2026-08-08 (CI alembic tip fix on main)
 
-**Branch:** `fix/ci-alembic-tip-0010`
+**Branch:** `main` @ `94c3ac0`
 
 **Alembic:** `20260807_0010`
 
 ## Done
 
-- PR #23/#24 on main (B2 + B4)
-- CI tip assert no longer hardcodes `20260802_0009` — equals sole script head; also asserts `distributor_attribution_status` column
+- PR #23/#24: B2 author loop + B4 promo draft
+- CI tip assert tracks sole ScriptDirectory head (no more stale `20260802_0009` pin); `distributor_attribution_status` column check
 
-## Outstanding (priority order — see chat)
+## Next (priority)
 
-1. Soft data gaps for B-lane usefulness (assumptions seed, CST load)
-2. Lane X / steward retrofit continuous
-3. Parked TRIGGERs only when fired (068, 089, 092, 123, …)
-4. Full ASUS workbook parity only if tenant rejects XLSX on-ramp
-
-## Next
-
-Merge this CI fix → main, then soft data / Lane X.
+1. Soft data for B-lane usefulness (SKU assumptions + CST)
+2. Lane X steward retrofit
+3. Parked TRIGGERs only when fired
 
 **Env:** local Windows. `cip` @ `20260807_0010`.
