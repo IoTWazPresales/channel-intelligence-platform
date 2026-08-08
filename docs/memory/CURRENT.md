@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-08-08 (PR #23 + #24 on main — B2 author loop + B4 promo draft)
 
-**Branch:** `main` @ `3d2ef49`
+**Branch:** `main` @ `ae9d8da`
 
 **Alembic:** `20260807_0010` — no new migration this ship
 
