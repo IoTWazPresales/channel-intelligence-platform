@@ -1,35 +1,25 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-08 (PR #23 + #24 on main — B2 author loop + B4 promo draft)
+**Last updated:** 2026-08-08 (CI alembic tip tracks ScriptDirectory head)
 
-**Branch:** `main` @ `03043d4`
+**Branch:** `fix/ci-alembic-tip-0010`
 
-**Alembic:** `20260807_0010` — no new migration this ship
+**Alembic:** `20260807_0010`
 
 ## Done
 
-- **PR #23 MERGED** — B2 Units 1–3 author loop (SRP fix, Apply, half-year/bias, XLSX, commercial case write)
-- **PR #24 MERGED** — B4-01 promo draft compose + create-case (lineup-derived budget); browser smoke case #300
-- B-lane core (B1–B4) scaffold + author/create paths now on main
+- PR #23/#24 on main (B2 + B4)
+- CI tip assert no longer hardcodes `20260802_0009` — equals sole script head; also asserts `distributor_attribution_status` column
 
-## Outstanding
+## Outstanding (priority order — see chat)
 
-| Item | Notes |
-|------|--------|
-| **CI tip assert** | Workflow still asserts alembic `20260802_0009`; real head `20260807_0010` — fix CI pin (unrelated to B2/B4) |
-| **Full ASUS workbook column parity** | Only if tenant rejects XLSX on-ramp |
-| **BACKLOG-068** | PvE Landed tile — Shipping TRIGGER |
-| **BACKLOG-089** | Incremental promo unit cost |
-| **BACKLOG-092** | Paid vs owed (Ken payments) |
-| **BACKLOG-097** | A3/P3 cold-query perf |
-| **BACKLOG-123** | Migrate promote/merge onto ResolutionWorklist |
-| **Lane X** | Steward retrofit / TMP-CUST continuous |
-
-Also: seed more `commercial_sku_assumption` so bias/% reservation covers more SKUs; load CST for Promo load buckets beyond empty-state.
+1. Soft data gaps for B-lane usefulness (assumptions seed, CST load)
+2. Lane X / steward retrofit continuous
+3. Parked TRIGGERs only when fired (068, 089, 092, 123, …)
+4. Full ASUS workbook parity only if tenant rejects XLSX on-ramp
 
 ## Next
 
-1. Fix CI alembic tip assert → `20260807_0010`, **or**
-2. Lane X / fire a parked TRIGGER above.
+Merge this CI fix → main, then soft data / Lane X.
 
 **Env:** local Windows. `cip` @ `20260807_0010`.
