@@ -187,17 +187,32 @@ def _build_alias_index(
     }
 
 
+# Identity canons outweigh repeated measure hits (Game 2026 week band = 6× "Sales U TY").
+_HEADER_IDENTITY_CANONS = frozenset(
+    {"raw_product_token", "raw_location_token", "raw_article_token", "listing_external_id"}
+)
+
+
 def _score_header_row(row_values: list[Any], alias_index: dict[str, set[str]]) -> int:
-    score = 0
+    """Score by distinct canonical coverage — not per-cell hits.
+
+    Repeated measure labels (``Sales U TY`` × N) must not beat a dimension row
+    that only hits Article + Site once each.
+    """
+    hit_canons: set[str] = set()
     for cell in row_values:
         norm = _normalize_text(cell)
         if not norm:
             continue
         key = norm.lower()
-        for aliases in alias_index.values():
+        for canon, aliases in alias_index.items():
             if key in aliases:
-                score += 1
+                hit_canons.add(canon)
                 break
+    score = len(hit_canons)
+    for canon in hit_canons:
+        if canon in _HEADER_IDENTITY_CANONS:
+            score += 2
     return score
 
 
@@ -241,28 +256,104 @@ def _read_workbook_sheets(file_bytes: bytes, filename: str) -> list[tuple[str, p
     raise ValueError("Unsupported file type; use .csv, .xlsx, .xlsm, or .xls")
 
 
-_WEAK_HEADER_RE = re.compile(r"^(zar|usd|eur|gbp|r|\$|%)$", re.IGNORECASE)
+# Currency / UOM stubs that sit under measure labels in SAP dual-header exports.
+_WEAK_HEADER_RE = re.compile(
+    r"^(zar|usd|eur|gbp|r|\$|%|ea|each|uom|pc|pcs|unit)$",
+    re.IGNORECASE,
+)
+# Period-band titles / week codes — not measure names; never promote into blank/weak cells.
+_PERIOD_BAND_RE = re.compile(
+    r"^(fiscal week|calendar day|calendar week|\d{3}\.\d{4}|\d{4}-w\d{1,2})$",
+    re.IGNORECASE,
+)
+
+
+def _is_period_band_label(text: str | None) -> bool:
+    if not text:
+        return False
+    return bool(_PERIOD_BAND_RE.match(text.strip()))
 
 
 def _merge_dual_header_labels(raw_df: pd.DataFrame, header_row: int) -> list[str]:
-    """Fill blank/weak header cells from the prior row (Game WEEK dual-header).
+    """Fill blank/weak header cells from prior rows (Game WEEK dual-/triple-header).
 
-    Curr wins when it is a real label. Prior wins when curr is blank or a weak
-    currency stub (``ZAR``) sitting under a measure label (``Sales R TY``).
+    Curr wins when it is a real label. Immediate prior wins for blanks.
+    Any prior row may replace a weak currency/UOM stub (``ZAR``, ``EA``) with a
+    measure label (``Sales R TY`` / ``Sales U TY``) — never a period-band title.
+
+    Duplicate measure names are disambiguated from higher period-band rows
+    (e.g. Fiscal Week codes ``027.2026``); the rightmost duplicate keeps the
+    bare measure label so existing field_mapping aliases still resolve.
     """
     curr = [_normalize_text(c) for c in raw_df.iloc[header_row].tolist()]
-    if header_row <= 0:
-        return [c or f"col_{i}" for i, c in enumerate(curr)]
-    prior = [_normalize_text(c) for c in raw_df.iloc[header_row - 1].tolist()]
+    width = len(curr)
+    prior_rows: list[list[str | None]] = []
+    for r in range(header_row - 1, -1, -1):
+        prior_rows.append([_normalize_text(c) for c in raw_df.iloc[r].tolist()])
+    immediate = prior_rows[0] if prior_rows else []
     out: list[str] = []
-    for i, c in enumerate(curr):
-        p = prior[i] if i < len(prior) else None
-        if c and p and _WEAK_HEADER_RE.match(c) and not _WEAK_HEADER_RE.match(p):
-            out.append(p)
-        elif c:
-            out.append(c)
+    for i in range(width):
+        c = curr[i] if i < len(curr) else None
+        priors_at_i = [(row[i] if i < len(row) else None) for row in prior_rows]
+        imm = immediate[i] if i < len(immediate) else None
+        chosen: str | None = None
+        if c and not _WEAK_HEADER_RE.match(c):
+            chosen = c
+        elif c and _WEAK_HEADER_RE.match(c):
+            for p in priors_at_i:
+                if not p or _WEAK_HEADER_RE.match(p) or _is_period_band_label(p):
+                    continue
+                chosen = p
+                break
+            if chosen is None:
+                chosen = c
         else:
-            out.append(p or f"col_{i}")
+            # Blank: only the immediate prior (avoids pulling Fiscal Week into desc cols).
+            if imm and not _is_period_band_label(imm):
+                chosen = imm
+        out.append(chosen or f"col_{i}")
+
+    return _disambiguate_duplicate_headers(out, prior_rows)
+
+
+def _disambiguate_duplicate_headers(
+    headers: list[str],
+    prior_rows: list[list[str | None]],
+) -> list[str]:
+    """Make duplicate labels unique using period-band values; bare name stays on last hit."""
+    counts: dict[str, int] = {}
+    for h in headers:
+        counts[h] = counts.get(h, 0) + 1
+    dup_names = {h for h, n in counts.items() if n > 1 and not h.startswith("col_")}
+    if not dup_names:
+        return headers
+
+    last_index: dict[str, int] = {}
+    for i, h in enumerate(headers):
+        if h in dup_names:
+            last_index[h] = i
+
+    out = list(headers)
+    for i, h in enumerate(headers):
+        if h not in dup_names:
+            continue
+        if last_index.get(h) == i:
+            continue  # keep bare measure label on rightmost week column
+        band: str | None = None
+        for row in prior_rows:
+            if i >= len(row):
+                continue
+            cell = row[i]
+            if not cell or cell.lower() == h.lower():
+                continue
+            if _WEAK_HEADER_RE.match(cell):
+                continue
+            band = cell
+            break
+        if band:
+            out[i] = f"{h} {band}"
+        else:
+            out[i] = f"{h}__{i}"
     return out
 
 
@@ -381,7 +472,14 @@ def enrich_flat_rows_from_companion_soh(
     if not soh_names:
         return rows
 
-    join_names = [str(n) for n in (feed_profile.get("soh_join_columns") or ["barcode"]) if n]
+    join_names = [
+        str(n)
+        for n in (
+            feed_profile.get("soh_join_columns")
+            or ["barcode", "ean/upc", "ean", "article"]
+        )
+        if n
+    ]
     cost_names = [
         str(n)
         for n in (feed_profile.get("soh_cost_columns") or ["Cost Price", "Weighted Average Cost Price"])

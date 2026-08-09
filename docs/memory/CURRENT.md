@@ -1,8 +1,8 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-09 (Unit E CST steward VERIFY PASS)
+**Last updated:** 2026-08-09 (Game header surfacing fix)
 
-**Branch:** `feat/p4-cst-six-customer-shapes` @ `69f64fa` (pushed; tip may advance with this docs stamp)
+**Branch:** `feat/p4-cst-six-customer-shapes` (pushed)
 
 **Alembic on cip:** `20260808_0011` (head)
 
@@ -14,27 +14,20 @@ Unmappable CST product → **Ignore** (`ignore_no_catalogue`) → catalogue gaps
 
 Game 2026 is **NOT** a new layout/schema/`structure_type`. Steward column mapping is the product model. Fix header detection / `dual_header_merge` so real labels (or stable `col_N`) reach the steward map.
 
-## P4 + Unit E (proven)
+## Proven this branch
 
 | Item | Proof |
 |---|---|
-| Generic unit↔total | `customer_sell_through_measures.py` + Amazon/Game jobs |
-| HiFi/IC Chain split | jobs **912/913** |
-| CM `mtd_delta` | **916→917** |
-| Native `.xls` CST reader | xlrd + template `.xls` |
-| Listing seeds | Amazon **918** → **51** `cst_listing_seed` |
-| CST validate `on_progress` | job 918 progress events |
-| Evetech soak | **919/920** |
-| **Unit E CST steward** | **VERIFY PASS** Opus 2026-08-09 — S1–S14 all PASS (`.tmp/unit_e_cst_steward_verify_opus_response.md`); prior X-1 PR #12; browser walk job **911** |
-| Game Week 33 dual_header | works |
-| Game Asus Sales W27/W29/W30 | jobs **921–923** FAILED — headers → `col_0..` + Fiscal Week / Sales U TY → product unmapped |
+| P4 residuals | commit `69f64fa` — measures, .xls, listing seeds, validate progress |
+| Unit E CST steward | **VERIFY PASS** Opus S1–S14 (`9e94606`) |
+| Game header surfacing | distinct-canon header score + weak `EA` + period-band dedupe; jobs **921/922/923** → validated (75/60/121 rows); Week 33 still merges ZAR→Sales R TY |
+| Stale CST parse error clear | successful re-validate pops `customer_sellthrough_error` |
 
 **Local note:** `admin@local` / `changeme` for smoke.
 
 ## Next (in order)
 
-1. **Game header surfacing** + steward column-map path (no new layout family)
-2. P5 live fetch + auto-finder (`CIP_LISTING_LIVE_FETCH` + schedule)
-3. Optional later: 068 lens, 076 purge, 089/092, P6 after public deploy
+1. P5 live fetch + auto-finder (`CIP_LISTING_LIVE_FETCH` + schedule; do not gate on 2 weeks of observations)
+2. Optional later: wide-week unpivot (skipped earlier-week-only rows), 068 lens, 076 purge, 089/092, P6 after public deploy
 
 **Env:** local Windows. `cip` @ `20260808_0011`.

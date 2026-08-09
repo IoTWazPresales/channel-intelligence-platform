@@ -981,6 +981,7 @@ def _handle_flat(
         primary_period = max(dated)
 
     meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
+    meta.pop("customer_sellthrough_error", None)
     meta["customer_sellthrough_flat"] = to_jsonable(
         {
             "period_start_date": str(primary_period) if primary_period else None,
@@ -995,6 +996,9 @@ def _handle_flat(
     meta["cst_file_periods"] = to_jsonable(file_period_reports)
     meta["cst_multi_file"] = len(raws) > 1
     job.staged_metadata = to_jsonable(meta)
+    # Drop stale parse-failed banner from a prior attempt once rows staged.
+    if total_rows > 0:
+        job.error_summary = None
 
     _upsert_customer_report_config(
         db,
