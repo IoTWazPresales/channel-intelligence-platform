@@ -312,8 +312,10 @@ Game **911** (dual-header + SOH), IC **912** / HiFi **913**, CM **916→917** (`
 Native CST **`.xls`** via xlrd (DSI parity). CST validate **`on_progress`** heartbeats wired.
 Evetech soak **919/920**. Unit E Import Centre steward browser walk on job **911** (S1–S3/S8/S9 visible;
 Locations FLAG≠BLOCK).
-**Still open under P4:** Game 2026 SAP layout family (`Asus Sales W27+`); fuller multi-customer weekly
-soak; historical backfill after soak; listing registry promote UI from seeds; live listing fetch (P5).
+**Still open under P4:** fuller multi-customer weekly soak; optional wide-week unpivot for
+Game multi-week columns (focus-week column works; earlier-week-only rows skipped);
+historical backfill after soak; listing registry promote UI from seeds; live listing fetch (P5).
+Game header surfacing for `Asus Sales W27+` **done** (no new structure_type — dual_header fix).
 **Q-003 hosting:** closed — local-only.
 
 
