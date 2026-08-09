@@ -312,9 +312,9 @@ Game **911** (dual-header + SOH), IC **912** / HiFi **913**, CM **916→917** (`
 Native CST **`.xls`** via xlrd (DSI parity). CST validate **`on_progress`** heartbeats wired.
 Evetech soak **919/920**. Unit E Import Centre steward browser walk on job **911** (S1–S3/S8/S9 visible;
 Locations FLAG≠BLOCK).
-**Still open under P4:** fuller multi-customer weekly soak; optional wide-week unpivot for
-Game multi-week columns (focus-week column works; earlier-week-only rows skipped);
-historical backfill after soak; listing registry promote UI from seeds; live listing fetch (P5).
+**Still open under P4:** fuller multi-customer weekly soak; historical backfill after soak.
+Game wide-week unpivot **done** (flat dual-header → one row per product×week). Listing registry
+promote + live fetch moved to P5 (shipped on this branch).
 Game header surfacing for `Asus Sales W27+` **done** (no new structure_type — dual_header fix).
 **Q-003 hosting:** closed — local-only.
 
@@ -331,7 +331,10 @@ to **intelligence v1** (promo activated vs not, price compliance), not to starti
 confirm), live fetch + schedule, observation history, then intelligence v1.
 
 **Progress 2026-08-09:** env gates documented; auto-finder suggests Amazon/Takealot URLs
-from `cst_listing_seed`; poll task commits observations; smoke listing #1 → obs http 200.
+from `cst_listing_seed`; poll task commits observations; bulk confirm-suggested; Amazon soak
+51 listings / 52 obs (http 200). Layout-family defaults emit Takealot/Evetech seeds on next
+CST validate (source files not present in this workspace for re-soak). Intelligence v1 →
+BACKLOG-130 (≥14 day obs span).
 
 ---
 

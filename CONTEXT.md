@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-09 — **Outstanding sweep:** PR #26 opened; Game wide-week unpivot in flat dual-header; Takealot/Evetech `listing_seed` layout defaults (+ cip config patch); intelligence v1 → BACKLOG-130 (≥14d obs). Re-soak Takealot/Evetech blocked — upload files missing. Next: promote PR when Warren asks; re-ingest marketplace CST for confirm-suggested.
 - 2026-08-09 — **P5 soak:** confirm-suggested bulk (50 Amazon ASINs→listings); poll 51 active → 52 obs all 200/ok; rate-limit in poll; `/listing-capture` browser PASS. Next: worker+beat for recurring history; optional Lane X / P6 when Warren picks.
 - 2026-08-09 — **P5 live fetch + auto-finder** on `feat/p4-cst-six-customer-shapes`: URL suggest from seed IDs (Amazon/Takealot); proposals UI prefills; env gates in `.env.example`; poll task `session.commit`; smoke listing#1→obs 200. Next: confirm more proposals; accrue history; intelligence v1 after ≥2 weeks obs.
 - 2026-08-09 — **Game header surfacing** on `feat/p4-cst-six-customer-shapes`: header score by distinct canons (not 6× Sales U TY); dual_header weak EA + period-band dedupe; jobs 921–923 validated. No new structure_type. Next: P5 live fetch.

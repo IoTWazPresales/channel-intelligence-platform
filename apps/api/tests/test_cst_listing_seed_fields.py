@@ -32,3 +32,17 @@ def test_listing_seed_noop_without_marketplace_config():
     apply_listing_seed_fields(row, {"layout_family": "plain"})
     assert row["listing_external_id"] is None
     assert row["listing_marketplace"] is None
+
+
+def test_listing_seed_defaults_from_takealot_layout_family():
+    row = {"raw_product_token": "12345678", "listing_external_id": None, "listing_marketplace": None}
+    apply_listing_seed_fields(row, {"layout_family": "takealot_week"})
+    assert row["listing_external_id"] == "12345678"
+    assert row["listing_marketplace"] == "takealot"
+
+
+def test_listing_seed_defaults_from_evetech_layout_family():
+    row = {"raw_product_token": "EV-9", "listing_external_id": None, "listing_marketplace": None}
+    apply_listing_seed_fields(row, {"layout_family": "evetech_sales_report"})
+    assert row["listing_external_id"] == "EV-9"
+    assert row["listing_marketplace"] == "evetech"

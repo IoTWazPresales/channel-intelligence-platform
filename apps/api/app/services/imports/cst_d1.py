@@ -21,6 +21,13 @@ from app.utils.json_safe import to_jsonable
 DEFAULT_VAT_BASIS = "ex_vat"
 CONFIRMED_ALIAS_STATUSES = frozenset({"confirmed", "active"})
 
+# When feed_profile omits listing_seed, known layout families still emit marketplace seeds.
+_LAYOUT_LISTING_SEED_DEFAULTS: dict[str, dict[str, str]] = {
+    "amazon_asin_sourcing": {"marketplace": "amazon", "external_id_from": "raw_product_token"},
+    "takealot_week": {"marketplace": "takealot", "external_id_from": "raw_product_token"},
+    "evetech_sales_report": {"marketplace": "evetech", "external_id_from": "raw_product_token"},
+}
+
 
 def normalize_article_token(raw: str | None) -> str:
     if raw is None:
@@ -112,6 +119,9 @@ def apply_listing_seed_fields(
         return row
     profile = feed_profile if isinstance(feed_profile, dict) else {}
     seed_cfg = profile.get("listing_seed") if isinstance(profile.get("listing_seed"), dict) else {}
+    if not seed_cfg:
+        layout = str(profile.get("layout_family") or "").strip()
+        seed_cfg = dict(_LAYOUT_LISTING_SEED_DEFAULTS.get(layout) or {})
 
     ext = row.get("listing_external_id")
     if not (isinstance(ext, str) and ext.strip()):

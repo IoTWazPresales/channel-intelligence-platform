@@ -6,6 +6,23 @@
 
 ---
 
+## BACKLOG-130 — Listing intelligence v1 (promo / price compliance)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-09 |
+| **Effort** | Large |
+| **Source** | `docs/ROADMAP.md` P5; Warren (2026-08-09): live fetch may start immediately; ≥2 weeks of observations gate **intelligence v1** only. |
+| **Idea** | After observation history accrues, ship intelligence v1: promo activated vs not, price compliance vs plan/MAC bands, explainable flags on listing×product. |
+| **Why it matters / deferrable** | Without multi-week history, compliance/promo signals are noise. Fetch/registry already ship; defer analytics until span is real. |
+| **What the work is** | Read models + UI over `listing_observation` time series; join to plan/promo; FLAG≠BLOCK stewardship; no inventing prices. |
+| **Regression traps** | Never auto-register listings; steward confirm remains required; do not treat single-day soak as intelligence proof. |
+| **Behavior to retain** | Registry + proposals + poll/env gates; Amazon soak path. |
+| **Out of scope** | P6 multi-tenant; new marketplaces beyond takealot/evetech/amazon templates. |
+| **TRIGGER** | `listing_observation` span ≥14 days for ≥1 active marketplace **and** Warren asks for intelligence v1. |
+
+---
+
 ## BACKLOG-129 — CST unmappable products → catalogue-gap worklist (`ignore_no_catalogue`)
 
 | Field | Detail |

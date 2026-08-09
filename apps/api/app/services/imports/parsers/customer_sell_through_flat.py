@@ -19,6 +19,7 @@ import pandas as pd
 
 from app.services.imports.cst_d1 import apply_listing_seed_fields
 from app.services.imports.parsers.customer_sell_through_measures import (
+    apply_unit_total_derivation,
     apply_unit_total_derivation_many,
 )
 from app.utils.json_safe import to_jsonable
@@ -753,10 +754,6 @@ def parse_flat_report(
     col_map = _resolve_source_columns(list(df.columns), fm, expected_columns)
     available = [str(c) for c in df.columns]
 
-    if col_map["units_sold"] is None:
-        return ParseResult(
-            error=f"Required field units_sold could not be mapped. Available columns: {available}"
-        )
     if col_map["raw_product_token"] is None:
         return ParseResult(
             error=f"Required field product identifier could not be mapped. Available columns: {available}"
@@ -769,6 +766,39 @@ def parse_flat_report(
         df=df,
         warnings=warnings,
     )
+
+    units_aliases = list(_aliases_for_canonical("units_sold", fm, expected_columns))
+    # Include mapped source header so dual-header bare measure always matches.
+    if col_map.get("units_sold"):
+        units_aliases.append(str(col_map["units_sold"]))
+    # Lazy import: period ↔ flat share helpers; avoid circular import at module load.
+    from app.services.imports.parsers.customer_sell_through_period import (
+        detect_wide_week_unit_columns,
+    )
+
+    week_unit_cols = detect_wide_week_unit_columns(
+        available,
+        units_aliases=units_aliases,
+        focus_period=period_start,
+    )
+    if len(week_unit_cols) >= 2:
+        return _parse_flat_wide_week_unpivot(
+            df,
+            first_data_row=first_data_row,
+            col_map=col_map,
+            week_unit_cols=week_unit_cols,
+            job_id=job_id,
+            feed_profile=feed_profile,
+            warnings=warnings,
+            file_bytes=file_bytes,
+            filename=filename,
+        )
+
+    if col_map["units_sold"] is None:
+        return ParseResult(
+            error=f"Required field units_sold could not be mapped. Available columns: {available}",
+            warnings=warnings,
+        )
 
     rows: list[dict[str, Any]] = []
     skipped = 0
@@ -852,6 +882,134 @@ def parse_flat_report(
     return ParseResult(
         rows=rows,
         period_start_date=period_start,
+        period_type="weekly",
+        warnings=warnings,
+        error=None,
+    )
+
+
+def _parse_flat_wide_week_unpivot(
+    df: pd.DataFrame,
+    *,
+    first_data_row: int,
+    col_map: dict[str, str | None],
+    week_unit_cols: list[tuple[str, date, str]],
+    job_id: int,
+    feed_profile: dict[str, Any] | None,
+    warnings: list[str],
+    file_bytes: bytes,
+    filename: str,
+) -> ParseResult:
+    """Emit one staging row per product×week when dual-header exposes multiple unit weeks."""
+    latest_period = max((p for _, p, _ in week_unit_cols), default=None)
+    rows: list[dict[str, Any]] = []
+    skipped_products = 0
+
+    for pos in range(len(df)):
+        series = df.iloc[pos]
+        source_row_number = first_data_row + pos
+        product_tok = (
+            _normalize_text(series.get(col_map["raw_product_token"])) if col_map["raw_product_token"] else None
+        )
+        if not product_tok:
+            skipped_products += 1
+            continue
+
+        loc_tok = None
+        if col_map["raw_location_token"]:
+            loc_tok = _normalize_text(series.get(col_map["raw_location_token"]))
+
+        unit_cost = _parse_decimal(series.get(col_map["unit_cost"])) if col_map["unit_cost"] else None
+        unit_mac = _parse_decimal(series.get(col_map["unit_mac"])) if col_map.get("unit_mac") else None
+        unit_sell = (
+            _parse_decimal(series.get(col_map["unit_sell_price"])) if col_map["unit_sell_price"] else None
+        )
+        soh_val = _parse_decimal(series.get(col_map["reported_soh"])) if col_map["reported_soh"] else None
+        total_sell = (
+            _parse_decimal(series.get(col_map["total_sell_amount"]))
+            if col_map.get("total_sell_amount")
+            else None
+        )
+        total_cost = (
+            _parse_decimal(series.get(col_map["total_cost_amount"]))
+            if col_map.get("total_cost_amount")
+            else None
+        )
+        total_soh = (
+            _parse_decimal(series.get(col_map["total_soh_value"])) if col_map.get("total_soh_value") else None
+        )
+        article_tok = (
+            _normalize_text(series.get(col_map["raw_article_token"]))
+            if col_map.get("raw_article_token")
+            else None
+        )
+        listing_ext_id = (
+            _normalize_text(series.get(col_map["listing_external_id"]))
+            if col_map.get("listing_external_id")
+            else None
+        )
+        listing_mkt = (
+            _normalize_text(series.get(col_map["listing_marketplace"]))
+            if col_map.get("listing_marketplace")
+            else None
+        )
+
+        emitted = 0
+        for col_name, period_date, period_type in week_unit_cols:
+            units = _parse_decimal(series.get(col_name))
+            if units is None or units <= 0:
+                continue
+            reported_soh = soh_val if latest_period and period_date == latest_period else None
+            row = {
+                "import_job_id": int(job_id),
+                "source_row_number": int(source_row_number),
+                "raw_row_payload": _row_dict(series),
+                "raw_customer_token": None,
+                "raw_location_token": loc_tok,
+                "site_label": loc_tok,
+                "raw_product_token": product_tok,
+                "raw_period_ref": str(col_name),
+                "period_start_date": period_date,
+                "period_type": period_type,
+                "units_sold": units,
+                "raw_mtd_units": None,
+                "is_mtd_estimate": False,
+                "unit_sell_price": unit_sell,
+                "unit_cost": unit_cost,
+                "unit_mac": unit_mac,
+                "reported_soh": reported_soh,
+                "total_sell_amount": total_sell,
+                "total_cost_amount": total_cost,
+                "total_soh_value": total_soh if reported_soh is not None else None,
+                "raw_article_token": article_tok,
+                "listing_external_id": listing_ext_id,
+                "listing_marketplace": listing_mkt,
+                "resolution_status": "pending",
+            }
+            apply_listing_seed_fields(row, feed_profile)
+            rows.append(apply_unit_total_derivation(row))
+            emitted += 1
+        if emitted == 0:
+            skipped_products += 1
+
+    if skipped_products:
+        warnings.append(
+            f"Skipped {skipped_products} row(s) with missing product token or no positive week units"
+        )
+    warnings.append(f"Wide-week unpivot: {len(week_unit_cols)} unit week column(s)")
+
+    rows = enrich_flat_rows_from_companion_soh(
+        file_bytes,
+        filename,
+        rows,
+        feed_profile,
+        warnings,
+    )
+    rows = apply_unit_total_derivation_many(rows)
+
+    return ParseResult(
+        rows=rows,
+        period_start_date=latest_period,
         period_type="weekly",
         warnings=warnings,
         error=None,

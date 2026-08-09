@@ -84,10 +84,17 @@ def test_game_2026_style_triple_header_surfaces_article_and_sales() -> None:
         feed_profile={"dual_header_merge": True},
     )
     assert result.error is None, result.error
-    assert len(result.rows) >= 1
+    # Wide-week unpivot: product1 weeks 22+23+27; product2 week 27 only.
+    assert len(result.rows) == 4, [(r["raw_product_token"], r["units_sold"], r["period_start_date"]) for r in result.rows]
     tokens = {r["raw_product_token"] for r in result.rows}
-    assert "850039776" in tokens or "850016148" in tokens
-
+    assert "850039776" in tokens
+    assert "850016148" in tokens
+    assert any("Wide-week unpivot" in w for w in result.warnings)
+    by_prod = {}
+    for r in result.rows:
+        by_prod.setdefault(r["raw_product_token"], []).append(float(r["units_sold"]))
+    assert sorted(by_prod["850039776"]) == [1.0, 2.0, 4.0]
+    assert by_prod["850016148"] == [1.0]
 
 def test_game_week33_style_dual_header_still_merges_zar_to_sales_r() -> None:
     rows = [
