@@ -818,11 +818,13 @@ def listing_capture_poll_listings_task() -> dict:
     schedule gate (`CIP_LISTING_CAPTURE_SCHEDULE`) passes — otherwise this stays a
     no-op with a skip reason (P5).
     """
+    import time
+
     from sqlalchemy import select
 
     from app.db.session_sync import SessionLocal
     from app.models.listing_capture import CustomerListing
-    from app.services.listing_capture.observation import default_http_get
+    from app.services.listing_capture.observation import RATE_LIMIT_SECONDS, default_http_get
     from app.services.listing_capture.registry import record_observation, scheduler_should_run
     from app.worker.celery_queues import dev_beat_disabled
 
@@ -844,7 +846,13 @@ def listing_capture_poll_listings_task() -> dict:
         )
         polled = 0
         failed = 0
+        last_mkt: str | None = None
         for listing in listings:
+            mkt = (listing.marketplace or "").strip().lower()
+            delay = float(RATE_LIMIT_SECONDS.get(mkt, 1.0))
+            if last_mkt is not None and delay > 0:
+                time.sleep(delay)
+            last_mkt = mkt
             try:
                 record_observation(session, listing, http_get=default_http_get)
                 polled += 1

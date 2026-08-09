@@ -99,6 +99,18 @@ export default function ListingCapturePage() {
     },
   });
 
+  const confirmSuggestedMut = useMutation({
+    mutationFn: () =>
+      apiPost<{ confirmed: number; skipped: unknown[]; proposed_remaining?: number }>(
+        '/api/v1/listing-capture/proposals/confirm-suggested',
+        {},
+      ),
+    onSuccess: async () => {
+      await refetch();
+      await refetchProposals();
+    },
+  });
+
   const confirmMut = useMutation({
     mutationFn: () =>
       apiPost(`/api/v1/listing-capture/proposals/${confirmSeed!.id}/confirm`, { url: confirmUrl }),
@@ -199,10 +211,32 @@ export default function ListingCapturePage() {
           Listing tables unavailable (migration not applied yet). Read surfaces stay empty.
         </Alert>
       ) : null}
-      <Tabs value={tab} onChange={(_e, v) => setTab(v)} sx={{ mb: 1 }}>
+      <Tabs value={tab} onChange={(_e, v) => setTab(v)} sx={{ mb: 1 }} data-testid="listing-capture-tabs">
         <Tab label="Registry" />
         <Tab label="Feed proposals" />
       </Tabs>
+      {tab === 1 ? (
+        <Stack direction="row" spacing={1} sx={{ mb: 1 }} alignItems="center">
+          <Button
+            size="small"
+            variant="outlined"
+            disabled={confirmSuggestedMut.isPending}
+            onClick={() => confirmSuggestedMut.mutate()}
+            data-testid="listing-confirm-suggested"
+          >
+            Confirm all suggested URLs
+          </Button>
+          {confirmSuggestedMut.isSuccess ? (
+            <Typography variant="caption" color="text.secondary">
+              Confirmed {confirmSuggestedMut.data?.confirmed ?? 0}; skipped{' '}
+              {confirmSuggestedMut.data?.skipped?.length ?? 0}
+            </Typography>
+          ) : null}
+          {confirmSuggestedMut.isError ? (
+            <Alert severity="error">{String((confirmSuggestedMut.error as Error)?.message)}</Alert>
+          ) : null}
+        </Stack>
+      ) : null}
       {isError ? <Alert severity="error">{String((error as Error)?.message)}</Alert> : null}
       {importMut.isSuccess ? (
         <Alert severity="success" sx={{ mb: 1 }}>

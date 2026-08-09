@@ -185,6 +185,57 @@ def confirm_proposal(
     return listing
 
 
+def confirm_suggested_proposals(
+    session: Session,
+    *,
+    registered_by: str | None = None,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    """Confirm proposed seeds that have an auto-finder URL — skip seeds without a suggestion.
+
+    Still steward-initiated (explicit call / UI button). Never invents a URL when
+    ``suggest_listing_url`` returns None (e.g. Evetech).
+    """
+    from app.services.listing_capture.auto_finder import suggest_listing_url
+
+    rows = list(
+        session.scalars(
+            select(CstListingSeed)
+            .where(CstListingSeed.status == "proposed")
+            .order_by(CstListingSeed.id)
+        ).all()
+    )
+    confirmed = 0
+    skipped: list[dict[str, Any]] = []
+    for seed in rows:
+        if limit is not None and confirmed >= int(limit):
+            break
+        url = suggest_listing_url(str(seed.marketplace), str(seed.external_id))
+        if not url:
+            skipped.append(
+                {
+                    "id": int(seed.id),
+                    "marketplace": seed.marketplace,
+                    "external_id": seed.external_id,
+                    "reason": "no_suggested_url",
+                }
+            )
+            continue
+        confirm_proposal(
+            session,
+            seed_id=int(seed.id),
+            url=url,
+            registered_by=registered_by,
+        )
+        confirmed += 1
+    session.flush()
+    return {
+        "confirmed": confirmed,
+        "skipped": skipped,
+        "proposed_remaining": max(0, len(rows) - confirmed - len(skipped)),
+    }
+
+
 def reject_proposal(session: Session, *, seed_id: int) -> CstListingSeed:
     seed = session.get(CstListingSeed, seed_id)
     if seed is None:

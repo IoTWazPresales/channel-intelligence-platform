@@ -102,6 +102,7 @@ def test_poll_task_polls_active_listings_when_fully_enabled(monkeypatch) -> None
     monkeypatch.setattr("app.db.session_sync.SessionLocal", _fake_session_local(session))
     monkeypatch.setenv("CIP_LISTING_CAPTURE_SCHEDULE", "1")
     monkeypatch.setenv("CIP_LISTING_LIVE_FETCH", "1")
+    monkeypatch.setattr("time.sleep", lambda _s: None)
 
     def fake_record_observation(_session, _listing, *, http_get=None):
         assert http_get is not None

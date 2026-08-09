@@ -14,6 +14,7 @@ from app.services.listing_capture.marketplace_vocab import (
 )
 from app.services.listing_capture.registry import (
     confirm_proposal,
+    confirm_suggested_proposals,
     create_listing,
     import_listings_csv,
     list_proposals,
@@ -163,6 +164,26 @@ def get_proposals(status: str = Query(default="proposed")):
             return {"items": list_proposals(session, status=status), "data_unavailable": False}
         except Exception:
             return {"items": [], "data_unavailable": True}
+
+
+@router.post("/proposals/confirm-suggested")
+def post_confirm_suggested(
+    limit: int | None = Query(default=None, ge=1, le=500),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+):
+    """Steward bulk-confirm: only seeds with an auto-finder URL. Human-initiated."""
+    with SessionLocal() as session:
+        try:
+            result = confirm_suggested_proposals(
+                session, registered_by=_actor(x_user_id), limit=limit
+            )
+            session.commit()
+            return result
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail={"message": "confirm-suggested unavailable", "error": str(exc)},
+            ) from exc
 
 
 @router.post("/proposals/{seed_id}/confirm")

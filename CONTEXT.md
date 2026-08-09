@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-09 — **P5 soak:** confirm-suggested bulk (50 Amazon ASINs→listings); poll 51 active → 52 obs all 200/ok; rate-limit in poll; `/listing-capture` browser PASS. Next: worker+beat for recurring history; optional Lane X / P6 when Warren picks.
 - 2026-08-09 — **P5 live fetch + auto-finder** on `feat/p4-cst-six-customer-shapes`: URL suggest from seed IDs (Amazon/Takealot); proposals UI prefills; env gates in `.env.example`; poll task `session.commit`; smoke listing#1→obs 200. Next: confirm more proposals; accrue history; intelligence v1 after ≥2 weeks obs.
 - 2026-08-09 — **Game header surfacing** on `feat/p4-cst-six-customer-shapes`: header score by distinct canons (not 6× Sales U TY); dual_header weak EA + period-band dedupe; jobs 921–923 validated. No new structure_type. Next: P5 live fetch.
 - 2026-08-09 — **Unit E CST steward VERIFY PASS** (Opus) on `feat/p4-cst-six-customer-shapes` @ `69f64fa`: S1–S14 all PASS (`CstImportJobResolutionSection`). Next: Game header surfacing / steward column-map (no new structure_type); then P5 live fetch.
