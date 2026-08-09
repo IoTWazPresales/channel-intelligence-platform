@@ -342,8 +342,8 @@ tenant #2, per-tenant branding, billing/packaging mechanics, tenant provisioning
 
 Runs alongside all phases in GREEN autonomy. Never blocks a phase; never blocked by one.
 
-- **Unit E (CST steward) VERIFY** — browser walk 2026-08-09 on job 911 Import Centre CST section
-  (tabs/filters/plan toolbar/FLAG≠BLOCK locations). Formal S1–S14 contract sign-off still Warren.
+- **Unit E (CST steward) VERIFY** — **PASS** Opus 2026-08-09 (S1–S14); browser walk job 911; stamp on
+  `feat/p4-cst-six-customer-shapes` @ `69f64fa`.
 - **Distributor merge** — same engine as customer merge, extended to `dim_distributor`
 - **Existing surface retrofit** — PO management, PM gaps, channels/regions, product master,
   admin masters, commercial planner: audit each against the contract, retrofit or waive

@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-09 — **Unit E CST steward VERIFY PASS** (Opus) on `feat/p4-cst-six-customer-shapes` @ `69f64fa`: S1–S14 all PASS (`CstImportJobResolutionSection`). Next: Game header surfacing / steward column-map (no new structure_type); then P5 live fetch.
 - 2026-08-09 — **Handover pin** on `feat/p4-cst-six-customer-shapes`: commit+push residuals; Unit E formal VERIFY next; Game = header/steward map fix (not new structure_type); P5 live fetch OK (no 2-week gate for enabling fetch).
 - 2026-08-09 — **Agent-safe roadmap burn-down** on `feat/p4-cst-six-customer-shapes`: CST native `.xls` (xlrd); generic `listing_seed` feed_profile + Amazon 918→51 seeds + marketplace vocab amazon; CST validate on_progress; Evetech soak 919/920; Unit E browser walk job 911. Skipped parked 068/089/092/085. Note: reset `admin@local` → `changeme` for smoke. Next was commit → Unit E VERIFY → Game header surfacing → P5 live fetch.
 - 2026-08-09 — **P4 residuals implemented** on `feat/p4-cst-six-customer-shapes`: generic CST unit↔total (any customer, both ways); Amazon 910; Game 911 dual-header+SOH; HiFi/IC Chain split 912/913; CM mtd_delta 916→917 (prior lookup + period stamp fix). Next: commit when asked; incomplete roadmap = soak/P5/P6/Lane X/parked 068·089·092 + optional .xls.
