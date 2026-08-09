@@ -323,9 +323,15 @@ Game header surfacing for `Asus Sales W27+` **done** (no new structure_type — 
 
 ## P5 — Listings + channel execution
 
-**Entry:** P4 live; CPOR cases live; ≥2 weeks of observations accrued.
-**Scope:** listing registry population, live fetch + schedule, observation history, listing
-intelligence v1 (promo activated vs not, price compliance).
+**Entry:** P4 live; CPOR cases live. **Live fetch + schedule may start immediately**
+(Warren 2026-08-09) — do not wait for ≥2 weeks of observations to enable
+`CIP_LISTING_LIVE_FETCH` / `CIP_LISTING_CAPTURE_SCHEDULE`. The ≥2 weeks bar applies
+to **intelligence v1** (promo activated vs not, price compliance), not to starting history.
+**Scope:** listing registry population, auto-finder (report ID → suggested URL → human
+confirm), live fetch + schedule, observation history, then intelligence v1.
+
+**Progress 2026-08-09:** env gates documented; auto-finder suggests Amazon/Takealot URLs
+from `cst_listing_seed`; poll task commits observations; smoke listing #1 → obs http 200.
 
 ---
 

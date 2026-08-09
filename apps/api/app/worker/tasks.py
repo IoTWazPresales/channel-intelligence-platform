@@ -851,6 +851,7 @@ def listing_capture_poll_listings_task() -> dict:
             except Exception:  # noqa: BLE001 — per-listing FLAG≠BLOCK; keep polling the rest
                 failed += 1
                 logger.exception("listing_capture live fetch failed for listing_id=%s", listing.id)
+        session.commit()
         return {
             "skipped": False,
             "polled": polled,

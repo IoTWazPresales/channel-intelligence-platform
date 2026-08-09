@@ -133,21 +133,25 @@ def import_listings_csv(
 
 
 def list_proposals(session: Session, *, status: str = "proposed") -> list[dict[str, Any]]:
+    from app.services.listing_capture.auto_finder import enrich_proposal_with_suggested_url
+
     rows = list(
         session.scalars(
             select(CstListingSeed).where(CstListingSeed.status == status).order_by(CstListingSeed.id)
         ).all()
     )
     return [
-        {
-            "id": r.id,
-            "customer_id": r.customer_id,
-            "marketplace": r.marketplace,
-            "external_id": r.external_id,
-            "product_id": r.product_id,
-            "status": r.status,
-            "import_job_id": r.import_job_id,
-        }
+        enrich_proposal_with_suggested_url(
+            {
+                "id": r.id,
+                "customer_id": r.customer_id,
+                "marketplace": r.marketplace,
+                "external_id": r.external_id,
+                "product_id": r.product_id,
+                "status": r.status,
+                "import_job_id": r.import_job_id,
+            }
+        )
         for r in rows
     ]
 

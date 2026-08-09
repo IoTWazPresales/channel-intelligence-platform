@@ -113,3 +113,4 @@ def test_poll_task_polls_active_listings_when_fully_enabled(monkeypatch) -> None
     assert out["polled"] == 1
     assert out["failed"] == 0
     assert out["listing_count"] == 1
+    session.commit.assert_called()

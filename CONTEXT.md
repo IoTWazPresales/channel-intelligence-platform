@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-09 — **P5 live fetch + auto-finder** on `feat/p4-cst-six-customer-shapes`: URL suggest from seed IDs (Amazon/Takealot); proposals UI prefills; env gates in `.env.example`; poll task `session.commit`; smoke listing#1→obs 200. Next: confirm more proposals; accrue history; intelligence v1 after ≥2 weeks obs.
 - 2026-08-09 — **Game header surfacing** on `feat/p4-cst-six-customer-shapes`: header score by distinct canons (not 6× Sales U TY); dual_header weak EA + period-band dedupe; jobs 921–923 validated. No new structure_type. Next: P5 live fetch.
 - 2026-08-09 — **Unit E CST steward VERIFY PASS** (Opus) on `feat/p4-cst-six-customer-shapes` @ `69f64fa`: S1–S14 all PASS (`CstImportJobResolutionSection`). Next: Game header surfacing / steward column-map (no new structure_type); then P5 live fetch.
 - 2026-08-09 — **Handover pin** on `feat/p4-cst-six-customer-shapes`: commit+push residuals; Unit E formal VERIFY next; Game = header/steward map fix (not new structure_type); P5 live fetch OK (no 2-week gate for enabling fetch).

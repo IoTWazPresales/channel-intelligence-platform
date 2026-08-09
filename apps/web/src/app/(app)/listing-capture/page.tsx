@@ -39,6 +39,7 @@ type Proposal = {
   external_id: string;
   product_id: number | null;
   status: string;
+  suggested_url?: string | null;
 };
 
 export default function ListingCapturePage() {
@@ -130,10 +131,24 @@ export default function ListingCapturePage() {
       { field: 'external_id', headerName: 'External ID', flex: 1 },
       { field: 'product_id', width: 100 },
       {
+        headerName: 'Suggested URL',
+        field: 'suggested_url',
+        flex: 1,
+        minWidth: 220,
+        valueFormatter: (p) => (p.value ? String(p.value) : '— (paste URL)'),
+      },
+      {
         headerName: 'Action',
         width: 120,
         cellRenderer: (p: { data?: Proposal }) => (
-          <Button size="small" onClick={() => p.data && setConfirmSeed(p.data)}>
+          <Button
+            size="small"
+            onClick={() => {
+              if (!p.data) return;
+              setConfirmSeed(p.data);
+              setConfirmUrl(p.data.suggested_url?.trim() || '');
+            }}
+          >
             Confirm
           </Button>
         ),
@@ -172,9 +187,12 @@ export default function ListingCapturePage() {
           </Stack>
         }
       />
-      <Alert severity="info" sx={{ mb: 2 }}>
-        Capture-only registry. Poller is registered but gated off by default. No live HTTP in this unit.
-        Migration `20260709_0069` must be applied by Warren before writes succeed on cip.
+      <Alert severity="info" sx={{ mb: 2 }} data-testid="listing-capture-guide">
+        Registry + feed proposals. Auto-finder suggests retailer URLs from report IDs — human must
+        confirm before a listing is registered. Live poll runs when{' '}
+        <code>CIP_LISTING_CAPTURE_SCHEDULE</code> and <code>CIP_LISTING_LIVE_FETCH</code> are on (plus
+        beat on Windows via <code>CIP_ENABLE_DEV_BEAT=1</code>). Intelligence v1 still needs ≥2 weeks
+        of observations; enabling fetch starts that history now.
       </Alert>
       {data?.data_unavailable ? (
         <Alert severity="warning" sx={{ mb: 2 }}>
@@ -217,7 +235,7 @@ export default function ListingCapturePage() {
           <Stack spacing={1.5} sx={{ pt: 1 }}>
             <TextField size="small" label="Customer id" value={customerId} onChange={(e) => setCustomerId(e.target.value)} />
             <TextField size="small" label="URL" value={url} onChange={(e) => setUrl(e.target.value)} fullWidth />
-            <TextField size="small" label="Marketplace" value={marketplace} onChange={(e) => setMarketplace(e.target.value)} helperText="takealot | evetech" />
+            <TextField size="small" label="Marketplace" value={marketplace} onChange={(e) => setMarketplace(e.target.value)} helperText="takealot | amazon | evetech" />
             <TextField size="small" label="Product id (optional)" value={productId} onChange={(e) => setProductId(e.target.value)} />
             {createMut.isError ? <Alert severity="error">{String((createMut.error as Error)?.message)}</Alert> : null}
           </Stack>

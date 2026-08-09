@@ -1,6 +1,6 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-09 (Game header surfacing fix)
+**Last updated:** 2026-08-09 (P5 live fetch + auto-finder)
 
 **Branch:** `feat/p4-cst-six-customer-shapes` (pushed)
 
@@ -12,22 +12,23 @@ Unmappable CST product → **Ignore** (`ignore_no_catalogue`) → catalogue gaps
 
 ## Locked Game framing (Warren)
 
-Game 2026 is **NOT** a new layout/schema/`structure_type`. Steward column mapping is the product model. Fix header detection / `dual_header_merge` so real labels (or stable `col_N`) reach the steward map.
+Game 2026 is **NOT** a new layout/schema/`structure_type`. Steward column mapping is the product model.
 
 ## Proven this branch
 
 | Item | Proof |
 |---|---|
-| P4 residuals | commit `69f64fa` — measures, .xls, listing seeds, validate progress |
-| Unit E CST steward | **VERIFY PASS** Opus S1–S14 (`9e94606`) |
-| Game header surfacing | distinct-canon header score + weak `EA` + period-band dedupe; jobs **921/922/923** → validated (75/60/121 rows); Week 33 still merges ZAR→Sales R TY |
-| Stale CST parse error clear | successful re-validate pops `customer_sellthrough_error` |
+| P4 residuals | `69f64fa` |
+| Unit E CST steward | VERIFY PASS Opus S1–S14 |
+| Game header surfacing | jobs **921–923** validated |
+| **P5 live fetch + auto-finder** | `CIP_LISTING_*` + `CIP_ENABLE_DEV_BEAT` on local `.env`; suggest URL from seed IDs; poll **commits** observations; listing **#1** Amazon → obs http **200** / parse ok |
 
-**Local note:** `admin@local` / `changeme` for smoke.
+**Local note:** `admin@local` / `changeme`. Restart API/worker after `.env` listing flags.
 
-## Next (in order)
+## Next
 
-1. P5 live fetch + auto-finder (`CIP_LISTING_LIVE_FETCH` + schedule; do not gate on 2 weeks of observations)
-2. Optional later: wide-week unpivot (skipped earlier-week-only rows), 068 lens, 076 purge, 089/092, P6 after public deploy
+1. Confirm more feed proposals in `/listing-capture` (auto-finder prefills URL)
+2. Keep beat/worker running so observation history accrues
+3. Optional later: wide-week unpivot, 068/076/089/092, P6, intelligence v1 after ≥2 weeks obs
 
 **Env:** local Windows. `cip` @ `20260808_0011`.
