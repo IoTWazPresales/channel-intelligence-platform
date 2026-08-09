@@ -38,9 +38,14 @@ def suggest_listing_url(marketplace: str, external_id: str) -> str | None:
         return template.format(external_id=ext.upper())
 
     if mkt == "takealot":
-        m = _PLID_RE.match(ext)
+        # Accept bare digits or PLID-prefixed; strip spaces (sales sheet "222 547 542").
+        digits = re.sub(r"\D", "", ext)
+        m = _PLID_RE.match(digits) or _PLID_RE.match(ext)
         if not m:
-            return None
+            # Prefer pure digit product ids 5–12 long after stripping.
+            if not re.fullmatch(r"\d{5,12}", digits):
+                return None
+            return template.format(external_id=digits)
         return template.format(external_id=m.group(1))
 
     return template.format(external_id=ext)

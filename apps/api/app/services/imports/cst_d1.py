@@ -5,6 +5,7 @@ No money math. FLAG ≠ BLOCK. No auto-create of locations/products.
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -142,6 +143,14 @@ def apply_listing_seed_fields(
             row["listing_marketplace"] = cfg_mkt.strip().lower()
     elif isinstance(mkt, str):
         row["listing_marketplace"] = mkt.strip().lower()
+
+    # Takealot Product IDs often arrive with spaces ("222 547 542").
+    if (row.get("listing_marketplace") or "").strip().lower() == "takealot":
+        ext_raw = row.get("listing_external_id")
+        if isinstance(ext_raw, str) and ext_raw.strip():
+            compact = re.sub(r"\s+", "", ext_raw.strip())
+            if compact.isdigit() and len(compact) >= 5:
+                row["listing_external_id"] = compact
     return row
 
 
@@ -155,18 +164,29 @@ def upsert_cst_listing_seed(
     import_job_id: int | None,
     raw: dict[str, Any] | None = None,
 ) -> CstListingSeed | None:
-    """Durable LC-U1 handoff capture. No registry / no auto-confirm."""
+    """Durable LC-U1 handoff capture. No registry / no auto-confirm.
+
+    De-dupes within the current Session flush (Takealot week files repeat Product ID
+    across months) so batched INSERT does not hit uq_cst_listing_seed_*.
+    """
     mkt = (marketplace or "").strip().lower()
     ext = (external_id or "").strip()
     if not mkt or not ext:
         return None
-    existing = session.scalar(
-        select(CstListingSeed).where(
-            CstListingSeed.customer_id == customer_id,
-            CstListingSeed.marketplace == mkt,
-            CstListingSeed.external_id == ext,
-        )
+    cache: dict[tuple[int, str, str], CstListingSeed] = session.info.setdefault(
+        "_cst_listing_seed_cache",
+        {},
     )
+    key = (int(customer_id), mkt, ext)
+    existing = cache.get(key)
+    if existing is None:
+        existing = session.scalar(
+            select(CstListingSeed).where(
+                CstListingSeed.customer_id == customer_id,
+                CstListingSeed.marketplace == mkt,
+                CstListingSeed.external_id == ext,
+            )
+        )
     if existing is not None:
         if product_id is not None and existing.product_id is None:
             existing.product_id = int(product_id)
@@ -175,6 +195,7 @@ def upsert_cst_listing_seed(
         if raw:
             existing.raw_json = to_jsonable(raw)
         session.add(existing)
+        cache[key] = existing
         return existing
     row = CstListingSeed(
         customer_id=customer_id,
@@ -186,6 +207,7 @@ def upsert_cst_listing_seed(
         raw_json=to_jsonable(raw) if raw else None,
     )
     session.add(row)
+    cache[key] = row
     return row
 
 

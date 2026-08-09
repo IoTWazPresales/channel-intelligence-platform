@@ -638,12 +638,15 @@ def _ingest_parse_result(
     else:
         effective_period = result.period_start_date
 
-    # Stamp steward/corroborated period onto staging lines (parsers may have inferred a
-    # different year from sheet/filename — MTD delta prior lookup depends on this).
+    # Stamp steward/corroborated period onto staging lines that lack a period.
+    # Preserve pivoted / wide-week per-column dates already set by the parser.
     if effective_period is not None:
         db.execute(
             update(ImportCustomerSellthroughStagingLine)
-            .where(ImportCustomerSellthroughStagingLine.import_job_id == job.id)
+            .where(
+                ImportCustomerSellthroughStagingLine.import_job_id == job.id,
+                ImportCustomerSellthroughStagingLine.period_start_date.is_(None),
+            )
             .values(period_start_date=effective_period)
         )
         db.flush()
@@ -880,7 +883,8 @@ def _handle_flat(
             payload = dict(row.get("raw_row_payload") or {})
             payload["_cst_source_file"] = fname
             row["raw_row_payload"] = payload
-            if effective_period is not None:
+            if effective_period is not None and row.get("period_start_date") is None:
+                # Do not overwrite per-week periods from wide-week unpivot.
                 row["period_start_date"] = effective_period
             apply_listing_seed_fields(row, feed_profile)
 

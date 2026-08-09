@@ -20,6 +20,7 @@ from app.services.listing_capture.registry import confirm_suggested_proposals
         ("Amazon", "b0b21jlcZC", "https://www.amazon.co.za/dp/B0B21JLCZC"),
         ("takealot", "12345678", "https://www.takealot.com/PLID12345678"),
         ("takealot", "PLID987654", "https://www.takealot.com/PLID987654"),
+        ("takealot", "222 547 542", "https://www.takealot.com/PLID222547542"),
         ("evetech", "ABC123", None),
         ("amazon", "not-an-asin", None),
         ("takealot", "nope", None),

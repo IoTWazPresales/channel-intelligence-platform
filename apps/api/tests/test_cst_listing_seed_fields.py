@@ -46,3 +46,13 @@ def test_listing_seed_defaults_from_evetech_layout_family():
     apply_listing_seed_fields(row, {"layout_family": "evetech_sales_report"})
     assert row["listing_external_id"] == "EV-9"
     assert row["listing_marketplace"] == "evetech"
+
+
+def test_takealot_listing_external_id_strips_spaces():
+    row = {
+        "raw_product_token": "4711387767535",
+        "listing_external_id": "222 547 542",
+        "listing_marketplace": "takealot",
+    }
+    apply_listing_seed_fields(row, {"layout_family": "takealot_week"})
+    assert row["listing_external_id"] == "222547542"
