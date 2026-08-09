@@ -7,7 +7,7 @@ from datetime import date
 from typing import Any
 
 import pandas as pd
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.models.customer_report_config import CustomerReportConfig
@@ -21,12 +21,13 @@ from app.services.imports.distributor_sales_inventory import (
 )
 from app.services.imports.product_resolution_standard import resolve_product_id_single_match
 from app.services.imports.cst_d1 import (
+    apply_listing_seed_fields,
+    corroborate_period,
     feed_profile_vat_basis,
     mark_cst_report_slot_received,
     propose_customer_article_alias,
     resolve_customer_article_alias,
     upsert_cst_listing_seed,
-    corroborate_period,
 )
 from app.core.config import get_settings
 from app.services.imports.ai_import_resolver import detect_format_drift
@@ -471,6 +472,7 @@ def _ingest_parse_result(
     structure_type: str,
     summary_key: str,
     drift_warnings: list[str] | None = None,
+    on_progress: Any = None,
 ) -> int:
     if result.error:
         _write_parse_failed(job, result.error)
@@ -492,11 +494,17 @@ def _ingest_parse_result(
     prod_idx = _load_product_resolution_index(db)
     cfg = db.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer_id))
     vat_basis = feed_profile_vat_basis(cfg)
+    feed_profile = cfg.feed_profile_json if cfg and isinstance(cfg.feed_profile_json, dict) else None
     resolved_n = 0
     unresolved_n = 0
     ai_assist_used = [False]
+    total_rows = len(result.rows or [])
+    if on_progress is not None:
+        on_progress("resolving_tokens", "Resolving CST tokens", 0, total_rows or 1)
 
-    for row in result.rows:
+    for idx, row in enumerate(result.rows):
+        if isinstance(row, dict):
+            apply_listing_seed_fields(row, feed_profile)
         line = ImportCustomerSellthroughStagingLine(**row)
         line.resolved_customer_id = customer_id
         # D1: site_label first-class (verbatim); siteless reports stay NULL.
@@ -579,24 +587,29 @@ def _ingest_parse_result(
                         "import_job_id": job.id,
                     },
                 )
-            # Listing seed side-channel (LC-U1 handoff).
-            upsert_cst_listing_seed(
-                db,
-                customer_id=customer_id,
-                marketplace=getattr(line, "listing_marketplace", None),
-                external_id=getattr(line, "listing_external_id", None),
-                product_id=int(line.resolved_product_id) if line.resolved_product_id else None,
-                import_job_id=job.id,
-                raw=line.raw_row_payload if isinstance(line.raw_row_payload, dict) else None,
-            )
         else:
             if line.resolution_status == "pending":
                 line.resolution_status = "unresolved"
             unresolved_n += 1
 
+        # Listing seed side-channel (LC-U1) — emit whenever marketplace+external_id present.
+        upsert_cst_listing_seed(
+            db,
+            customer_id=customer_id,
+            marketplace=getattr(line, "listing_marketplace", None),
+            external_id=getattr(line, "listing_external_id", None),
+            product_id=int(line.resolved_product_id) if line.resolved_product_id else None,
+            import_job_id=job.id,
+            raw=line.raw_row_payload if isinstance(line.raw_row_payload, dict) else None,
+        )
+
         db.add(line)
+        if on_progress is not None and total_rows and ((idx + 1) % 50 == 0 or (idx + 1) == total_rows):
+            on_progress("resolving_tokens", "Resolving CST tokens", idx + 1, total_rows)
 
     db.flush()
+    if on_progress is not None:
+        on_progress("building_candidates", "Building CST mapping candidates", total_rows or 1, total_rows or 1)
     upsert_cst_mapping_candidates(db, job.id)
 
     warnings = list(result.warnings or [])
@@ -624,6 +637,16 @@ def _ingest_parse_result(
         effective_period = period_report["period_start_date"]
     else:
         effective_period = result.period_start_date
+
+    # Stamp steward/corroborated period onto staging lines (parsers may have inferred a
+    # different year from sheet/filename — MTD delta prior lookup depends on this).
+    if effective_period is not None:
+        db.execute(
+            update(ImportCustomerSellthroughStagingLine)
+            .where(ImportCustomerSellthroughStagingLine.import_job_id == job.id)
+            .values(period_start_date=effective_period)
+        )
+        db.flush()
 
     summary: dict[str, Any] = {
         "period_start_date": str(effective_period) if effective_period else None,
@@ -670,6 +693,7 @@ def _run_structure_handler(
     summary_key: str,
     parse_fn,
     needs_db: bool = False,
+    on_progress: Any = None,
 ) -> int:
     customer_id = resolve_customer_id_for_job(db, job)
     if customer_id is None:
@@ -678,6 +702,9 @@ def _run_structure_handler(
             "Could not resolve customer_id for this import job (set staged_metadata.customer_id or source customer).",
         )
         return 1
+
+    if on_progress is not None:
+        on_progress("parsing", f"Parsing CST ({structure_type})", 0, 1)
 
     file_bytes, err = _load_job_file_bytes(db, job)
     if err or file_bytes is None:
@@ -704,6 +731,7 @@ def _run_structure_handler(
         structure_type=structure_type,
         summary_key=summary_key,
         drift_warnings=drift_warnings,
+        on_progress=on_progress,
     )
 
 
@@ -713,6 +741,7 @@ def _handle_flat(
     df: pd.DataFrame,
     mapping: dict[str, str],
     template: ImportTemplate | None,
+    on_progress: Any = None,
 ) -> int:
     del df  # flat parser reads raw bytes (multi-sheet / header detection)
 
@@ -723,6 +752,9 @@ def _handle_flat(
             "Could not resolve customer_id for this import job (set staged_metadata.customer_id or source customer).",
         )
         return 1
+
+    if on_progress is not None:
+        on_progress("parsing", "Parsing CST flat report(s)", 0, 1)
 
     raws = _list_job_raw_files(db, job)
     if not raws:
@@ -850,6 +882,7 @@ def _handle_flat(
             row["raw_row_payload"] = payload
             if effective_period is not None:
                 row["period_start_date"] = effective_period
+            apply_listing_seed_fields(row, feed_profile)
 
             line = ImportCustomerSellthroughStagingLine(**row)
             line.resolved_customer_id = customer_id
@@ -905,21 +938,25 @@ def _handle_flat(
                         product_id=int(line.resolved_product_id),
                         evidence={"co_occurred_with": line.raw_product_token, "import_job_id": job.id},
                     )
-                upsert_cst_listing_seed(
-                    db,
-                    customer_id=customer_id,
-                    marketplace=getattr(line, "listing_marketplace", None),
-                    external_id=getattr(line, "listing_external_id", None),
-                    product_id=int(line.resolved_product_id) if line.resolved_product_id else None,
-                    import_job_id=job.id,
-                    raw=line.raw_row_payload if isinstance(line.raw_row_payload, dict) else None,
-                )
             else:
                 line.resolution_status = "unresolved"
                 unresolved_n += 1
 
+            # Listing seed side-channel even when product unresolved (proposed, product_id null).
+            upsert_cst_listing_seed(
+                db,
+                customer_id=customer_id,
+                marketplace=getattr(line, "listing_marketplace", None),
+                external_id=getattr(line, "listing_external_id", None),
+                product_id=int(line.resolved_product_id) if line.resolved_product_id else None,
+                import_job_id=job.id,
+                raw=line.raw_row_payload if isinstance(line.raw_row_payload, dict) else None,
+            )
+
             db.add(line)
             total_rows += 1
+            if on_progress is not None and total_rows % 50 == 0:
+                on_progress("resolving_tokens", "Resolving CST tokens", total_rows, max(total_rows, 1))
 
         if effective_period is not None and effective_period not in periods_marked:
             mark_cst_report_slot_received(
@@ -980,6 +1017,7 @@ def _handle_pivoted(
     df: pd.DataFrame,
     mapping: dict[str, str],
     template: ImportTemplate | None,
+    on_progress: Any = None,
 ) -> int:
     del df
     return _run_structure_handler(
@@ -990,6 +1028,7 @@ def _handle_pivoted(
         structure_type=STRUCTURE_PIVOTED,
         summary_key="customer_sellthrough_pivoted",
         parse_fn=parse_pivoted_report,
+        on_progress=on_progress,
     )
 
 
@@ -999,6 +1038,7 @@ def _handle_multi_sheet(
     df: pd.DataFrame,
     mapping: dict[str, str],
     template: ImportTemplate | None,
+    on_progress: Any = None,
 ) -> int:
     del df
     return _run_structure_handler(
@@ -1009,6 +1049,7 @@ def _handle_multi_sheet(
         structure_type=STRUCTURE_MULTI_SHEET,
         summary_key="customer_sellthrough_multi_sheet",
         parse_fn=parse_multi_sheet_report,
+        on_progress=on_progress,
     )
 
 
@@ -1018,6 +1059,7 @@ def _handle_mtd_delta(
     df: pd.DataFrame,
     mapping: dict[str, str],
     template: ImportTemplate | None,
+    on_progress: Any = None,
 ) -> int:
     del df
     return _run_structure_handler(
@@ -1029,6 +1071,7 @@ def _handle_mtd_delta(
         summary_key="customer_sellthrough_mtd_delta",
         parse_fn=parse_mtd_delta_report,
         needs_db=True,
+        on_progress=on_progress,
     )
 
 
@@ -1038,6 +1081,7 @@ def _handle_wide_extract(
     df: pd.DataFrame,
     mapping: dict[str, str],
     template: ImportTemplate | None,
+    on_progress: Any = None,
 ) -> int:
     del df
     return _run_structure_handler(
@@ -1048,6 +1092,7 @@ def _handle_wide_extract(
         structure_type=STRUCTURE_WIDE_EXTRACT,
         summary_key="customer_sellthrough_wide_extract",
         parse_fn=parse_wide_extract_report,
+        on_progress=on_progress,
     )
 
 
@@ -1070,6 +1115,7 @@ def process_customer_sell_through(
     df: pd.DataFrame,
     mapping: dict[str, str],
     template: ImportTemplate | None = None,
+    on_progress: Any = None,
 ) -> int:
     """Dispatch on report structure type; Phase 0 handlers are not implemented yet.
 
@@ -1100,7 +1146,7 @@ def process_customer_sell_through(
         return 1
 
     try:
-        return handler(db, job, df, mapping, template)
+        return handler(db, job, df, mapping, template, on_progress=on_progress)
     except NotImplementedError as exc:
         _write_parser_not_implemented(job, structure_type, str(exc))
         return 1

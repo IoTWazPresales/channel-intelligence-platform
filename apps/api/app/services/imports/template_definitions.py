@@ -450,7 +450,7 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
         "requires_provider": True,
         "pipeline_handler": "customer_sell_through",
         "destructive_apply_requires_confirm": False,
-        "accepted_file_types": [".csv", ".xlsx", ".xlsm"],
+        "accepted_file_types": [".csv", ".xlsx", ".xlsm", ".xls"],
         "expected_columns": {
             "units_sold": {
                 "aliases": [
@@ -462,6 +462,10 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
                     "sales",
                     "units",
                     "qty",
+                    "qty sold",
+                    "dispatched units",
+                    "sales u ty",
+                    "sales tw",
                 ],
                 "required": True,
             },
@@ -476,6 +480,9 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
                     "article",
                     "barcode",
                     "supplier_code",
+                    "asin",
+                    "ean/upc",
+                    "ean",
                 ],
                 "required": True,
             },
@@ -529,6 +536,59 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
                     "total_soh",
                     "total_sellable_soh",
                     "qty sellable",
+                    "soh u ty",
+                ],
+                "required": False,
+            },
+            "total_sell_amount": {
+                "aliases": [
+                    "total_sell_amount",
+                    "dispatched revenue",
+                    "sales r ty",
+                    "sales value",
+                    "line_amount",
+                    "extended_price",
+                    "nett sales",
+                ],
+                "required": False,
+            },
+            "total_cost_amount": {
+                "aliases": [
+                    "total_cost_amount",
+                    "dispatched cogs",
+                    "cogs",
+                    "cost of goods",
+                    "extended_cost",
+                ],
+                "required": False,
+            },
+            "total_soh_value": {
+                "aliases": [
+                    "total_soh_value",
+                    "soh r ty",
+                    "soh value",
+                    "stock value",
+                    "inventory value",
+                ],
+                "required": False,
+            },
+            # Listing Capture LC-U1 seed side-channel (optional; any marketplace customer).
+            "listing_external_id": {
+                "aliases": [
+                    "listing_external_id",
+                    "listing_id",
+                    "offer_id",
+                    "plid",
+                    "tsin",
+                    "marketplace_sku",
+                ],
+                "required": False,
+            },
+            "listing_marketplace": {
+                "aliases": [
+                    "listing_marketplace",
+                    "marketplace",
+                    "channel_marketplace",
                 ],
                 "required": False,
             },

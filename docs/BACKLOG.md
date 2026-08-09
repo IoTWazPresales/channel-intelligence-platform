@@ -742,20 +742,12 @@
 
 ---
 
-## BACKLOG-087 — GitHub required status check for CI (branch protection / rulesets)
+## BACKLOG-087 — ~~GitHub required status check~~ — REMOVED
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-29 · GitHub Free private repo |
-| **Effort** | Small (settings once Pro available) |
-| **Source** | ROADMAP P0 “CI becomes a required gate”; PR #7 merged with `--admin` while CI was broken; 2026-07-29 attempt returned HTTP 403 on branch protection + rulesets |
-| **Idea** | Make the `CI` / `test` check a **required** status on `main` so red builds cannot merge (including no `--admin` bypass in normal process). |
-| **Why it matters / deferrable** | Without a required check, green process depends on discipline only. Deferrable because the Free private-repo plan cannot enable protection/rulesets. |
-| **What the work is** | After Pro: enable branch protection or ruleset requiring the CI `test` job on `main` (and PR merges); confirm a red PR cannot merge without override. |
-| **Regression traps** | Do not re-break pnpm `packageManager` vs `pnpm/action-setup` version clash; keep `ALLOW_TESTS_ON_DEV_DB` unset in CI; keep migrate URL on `DATABASE_URL_SYNC_MIGRATE` for `cip_test`. |
-| **Behavior to retain** | Process-only gate until then: **no `--admin` merges**; treat CI + `scripts/verify-gate` as the gate. |
-| **Out of scope** | Making the private repo public solely to unlock free protection; fixing individual API test failures. |
-| **TRIGGER** | **GitHub Pro purchased** (or org plan that unlocks private-repo branch protection / rulesets). |
+| **Status** | **Removed** · 2026-08-09 · Warren: will not purchase GitHub Pro; do not track |
+| **Note** | Process gate stays discipline-only: CI + `scripts/verify-gate`; no required status check on `main`. |
 
 ---
 

@@ -29,6 +29,7 @@ from app.services.imports.parsers.customer_sell_through_flat import (
     _row_dict,
     _select_sheet_with_header,
 )
+from app.services.imports.parsers.customer_sell_through_measures import apply_unit_total_derivation
 from app.services.imports.parsers.customer_sell_through_period import (
     classify_period_header,
     detect_period_columns,
@@ -125,6 +126,15 @@ def _parse_pivoted_dataframe(
         unit_mac = _parse_decimal(series.get(col_map["unit_mac"])) if col_map.get("unit_mac") else None
         unit_sell = _parse_decimal(series.get(col_map["unit_sell_price"])) if col_map["unit_sell_price"] else None
         soh_val = _parse_decimal(series.get(col_map["reported_soh"])) if col_map["reported_soh"] else None
+        total_sell = (
+            _parse_decimal(series.get(col_map["total_sell_amount"])) if col_map.get("total_sell_amount") else None
+        )
+        total_cost = (
+            _parse_decimal(series.get(col_map["total_cost_amount"])) if col_map.get("total_cost_amount") else None
+        )
+        total_soh = (
+            _parse_decimal(series.get(col_map["total_soh_value"])) if col_map.get("total_soh_value") else None
+        )
         article_tok = (
             _normalize_text(series.get(col_map["raw_article_token"]))
             if col_map.get("raw_article_token")
@@ -151,31 +161,33 @@ def _parse_pivoted_dataframe(
 
             reported_soh = soh_val if latest_period_date and period_date == latest_period_date else None
 
-            rows.append(
-                {
-                    "import_job_id": int(job_id),
-                    "source_row_number": int(source_row_number),
-                    "raw_row_payload": _row_dict(series),
-                    "raw_customer_token": None,
-                    "raw_location_token": loc_tok,
-                    "site_label": loc_tok,
-                    "raw_product_token": product_tok,
-                    "raw_period_ref": str(col_name),
-                    "period_start_date": period_date,
-                    "period_type": period_type,
-                    "units_sold": units,
-                    "raw_mtd_units": None,
-                    "is_mtd_estimate": False,
-                    "unit_sell_price": unit_sell,
-                    "unit_cost": unit_cost,
-                    "unit_mac": unit_mac,
-                    "reported_soh": reported_soh,
-                    "raw_article_token": article_tok,
-                    "listing_external_id": listing_ext_id,
-                    "listing_marketplace": listing_mkt,
-                    "resolution_status": "pending",
-                }
-            )
+            row = {
+                "import_job_id": int(job_id),
+                "source_row_number": int(source_row_number),
+                "raw_row_payload": _row_dict(series),
+                "raw_customer_token": None,
+                "raw_location_token": loc_tok,
+                "site_label": loc_tok,
+                "raw_product_token": product_tok,
+                "raw_period_ref": str(col_name),
+                "period_start_date": period_date,
+                "period_type": period_type,
+                "units_sold": units,
+                "raw_mtd_units": None,
+                "is_mtd_estimate": False,
+                "unit_sell_price": unit_sell,
+                "unit_cost": unit_cost,
+                "unit_mac": unit_mac,
+                "reported_soh": reported_soh,
+                "total_sell_amount": total_sell,
+                "total_cost_amount": total_cost,
+                "total_soh_value": total_soh if reported_soh is not None else None,
+                "raw_article_token": article_tok,
+                "listing_external_id": listing_ext_id,
+                "listing_marketplace": listing_mkt,
+                "resolution_status": "pending",
+            }
+            rows.append(apply_unit_total_derivation(row))
 
     for col in sorted(set(skipped_periods)):
         warnings.append(f"Period column could not be parsed to a date: {col}")

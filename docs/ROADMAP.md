@@ -99,11 +99,10 @@ These are the "optimisation not speed" bar. Measured at P2 exit and held thereaf
 outside `main` · CI with real Postgres and `cip_test` · `scripts/verify-gate` proven (caught
 its own false PASS).
 
-**Remaining:** header-vocabulary → template config (D-022 / BACKLOG-082) — **moved into P1**,
-to be done with a real file in hand.
+**Remaining:** DSI header vocabulary (D-022 / BACKLOG-082) — **Done 2026-08-01** (P1-1).
 
-**Deferred:** required-check branch protection (BACKLOG-087, needs GitHub Pro). Until then,
-process-only: no `--admin` merges.
+**Deferred:** required GitHub status check on `main` — **dropped** (BACKLOG-087 removed;
+Warren will not buy Pro). Process gate = CI + `scripts/verify-gate` + no casual `--admin` merges.
 
 ---
 
@@ -306,12 +305,17 @@ layout profiles are the shape; header-vocabulary config (D-022) is a hard prereq
 **Scope:** live weekly ingest across customer formats, article-alias steward, SOH
 reconciliation (reported SOH is a check, never truth), listing seed emission.
 
-**Progress 2026-08-08:** **Takealot forward path Done** on `feat/cst-takealot-pilot-config`
-(`flat` + feed_profile + multi-file batch UI; live job 799 WEEK 28–31 → 4 periods / 96 rows;
-browser smoke PASS period strip + bulk CTA + steward section). **Remaining 7 customers** have
-placeholder `customer_report_config` rows (`reports_expected`, cadence weekly,
-`feed_profile_json.status=awaiting_sample_file`) — structure discovery still needs sample WEEK
-files (Q-004).
+**Progress 2026-08-09 (residuals + agent-safe follow-ons on `feat/p4-cst-six-customer-shapes`):**
+Takealot on main (PR #25). Residual jobs: Amazon **910/918** (totals→units + **51 listing seeds**),
+Game **911** (dual-header + SOH), IC **912** / HiFi **913**, CM **916→917** (`mtd_delta`).
+**Generic** unit↔total + **generic** `feed_profile.listing_seed` (any marketplace customer).
+Native CST **`.xls`** via xlrd (DSI parity). CST validate **`on_progress`** heartbeats wired.
+Evetech soak **919/920**. Unit E Import Centre steward browser walk on job **911** (S1–S3/S8/S9 visible;
+Locations FLAG≠BLOCK).
+**Still open under P4:** Game 2026 SAP layout family (`Asus Sales W27+`); fuller multi-customer weekly
+soak; historical backfill after soak; listing registry promote UI from seeds; live listing fetch (P5).
+**Q-003 hosting:** closed — local-only.
+
 
 ---
 
@@ -338,15 +342,16 @@ tenant #2, per-tenant branding, billing/packaging mechanics, tenant provisioning
 
 Runs alongside all phases in GREEN autonomy. Never blocks a phase; never blocked by one.
 
-- **Unit E (CST steward) VERIFY** — implemented, never verified. Close it
+- **Unit E (CST steward) VERIFY** — browser walk 2026-08-09 on job 911 Import Centre CST section
+  (tabs/filters/plan toolbar/FLAG≠BLOCK locations). Formal S1–S14 contract sign-off still Warren.
 - **Distributor merge** — same engine as customer merge, extended to `dim_distributor`
 - **Existing surface retrofit** — PO management, PM gaps, channels/regions, product master,
   admin masters, commercial planner: audit each against the contract, retrofit or waive
 - **Ops-list grid parity** (BACKLOG-085) — fold into whichever phase touches those pages
-- **Lifecycle defect trio** — `progress_at` heartbeat never fires during validate;
-  liveness-aware reaper (check Celery state, not just metadata); retry guard while task active
-- **BACKLOG-076** — corrupt unit amounts (~$36M). Fix before any external demo
-- **BACKLOG-066 → 087** — worked down at phase boundaries, prioritised by trigger
+- **Lifecycle defect trio** — CST validate `progress_at` **wired 2026-08-09**; reaper inspect +
+  retry/busy-guard already shipped for main pipeline. Remaining: non-CST importers if any gap.
+- **BACKLOG-076** — corrupt unit amounts (~$36M). KPI exclude shipped; fact cleanup needs Warren.
+- **BACKLOG-066 → 086** — worked down at phase boundaries, prioritised by trigger (087 removed)
 
 ---
 
@@ -514,7 +519,7 @@ Still open (authoritative detail: `docs/OPEN_QUESTIONS.md`; domain mirror:
 
 | # | Decision | Blocks | Owner | OPEN_QUESTIONS |
 |---|----------|--------|-------|----------------|
-| 3 | Hosting target, budget, data residency | Deployment / P2 residual | Warren — deferred by choice | Q-003 |
+| 3 | ~~Hosting target~~ | — | **Closed** — local-only (Warren 2026-08-09) | Q-003 |
 | 4 | Per-customer CST file formats (8 customers) | P4 forward multi-format | Discovered at first load | Q-004 |
 
 **Deferred by design (not an open question — see Out of scope):** branch/location modelling;

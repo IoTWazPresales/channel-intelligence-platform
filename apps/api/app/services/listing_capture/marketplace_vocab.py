@@ -5,7 +5,7 @@ Steward-extendable later; not a DB enum — stored as varchar.
 
 from __future__ import annotations
 
-LISTING_MARKETPLACES: tuple[str, ...] = ("takealot", "evetech")
+LISTING_MARKETPLACES: tuple[str, ...] = ("takealot", "evetech", "amazon")
 LISTING_MARKETPLACE_SET: frozenset[str] = frozenset(LISTING_MARKETPLACES)
 
 LISTING_STATUSES: tuple[str, ...] = (

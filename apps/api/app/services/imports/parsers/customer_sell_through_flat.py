@@ -17,6 +17,10 @@ from typing import Any
 
 import pandas as pd
 
+from app.services.imports.cst_d1 import apply_listing_seed_fields
+from app.services.imports.parsers.customer_sell_through_measures import (
+    apply_unit_total_derivation_many,
+)
 from app.utils.json_safe import to_jsonable
 
 # Internal key for template aliases passed from pipeline handler (not a file column).
@@ -34,6 +38,10 @@ CANONICAL_FIELDS = (
     "raw_article_token",
     "listing_external_id",
     "listing_marketplace",
+    # Optional line totals — derived to/from unit fields via units_sold / reported_soh.
+    "total_sell_amount",
+    "total_cost_amount",
+    "total_soh_value",
 )
 
 # Import-template / steward keys historically used synonyms; parsers resolve CANONICAL_FIELDS.
@@ -208,31 +216,112 @@ def _detect_header_row(df_raw: pd.DataFrame, alias_index: dict[str, set[str]]) -
     return best_row
 
 
+def _excel_engine_for_filename(filename: str) -> str | None:
+    """Pandas Excel engine for CST workbooks — same contract as DSI (openpyxl / xlrd)."""
+    lower = (filename or "").lower()
+    if lower.endswith((".xlsx", ".xlsm")):
+        return "openpyxl"
+    if lower.endswith(".xls"):
+        return "xlrd"
+    return None
+
+
 def _read_workbook_sheets(file_bytes: bytes, filename: str) -> list[tuple[str, pd.DataFrame]]:
     lower = (filename or "").lower()
     bio = io.BytesIO(file_bytes)
     if lower.endswith(".csv"):
         return [("Sheet1", pd.read_csv(bio, header=None, dtype=object))]
-    if lower.endswith((".xlsx", ".xlsm")):
-        book = pd.ExcelFile(bio, engine="openpyxl")
-        return [(name, pd.read_excel(book, sheet_name=name, header=None, dtype=object)) for name in book.sheet_names]
-    raise ValueError("Unsupported file type; use .csv or .xlsx")
+    engine = _excel_engine_for_filename(filename)
+    if engine is not None:
+        book = pd.ExcelFile(bio, engine=engine)
+        return [
+            (name, pd.read_excel(book, sheet_name=name, header=None, dtype=object))
+            for name in book.sheet_names
+        ]
+    raise ValueError("Unsupported file type; use .csv, .xlsx, .xlsm, or .xls")
+
+
+_WEAK_HEADER_RE = re.compile(r"^(zar|usd|eur|gbp|r|\$|%)$", re.IGNORECASE)
+
+
+def _merge_dual_header_labels(raw_df: pd.DataFrame, header_row: int) -> list[str]:
+    """Fill blank/weak header cells from the prior row (Game WEEK dual-header).
+
+    Curr wins when it is a real label. Prior wins when curr is blank or a weak
+    currency stub (``ZAR``) sitting under a measure label (``Sales R TY``).
+    """
+    curr = [_normalize_text(c) for c in raw_df.iloc[header_row].tolist()]
+    if header_row <= 0:
+        return [c or f"col_{i}" for i, c in enumerate(curr)]
+    prior = [_normalize_text(c) for c in raw_df.iloc[header_row - 1].tolist()]
+    out: list[str] = []
+    for i, c in enumerate(curr):
+        p = prior[i] if i < len(prior) else None
+        if c and p and _WEAK_HEADER_RE.match(c) and not _WEAK_HEADER_RE.match(p):
+            out.append(p)
+        elif c:
+            out.append(c)
+        else:
+            out.append(p or f"col_{i}")
+    return out
+
+
+def _apply_feed_row_filters(df: pd.DataFrame, feed_profile: dict[str, Any] | None) -> pd.DataFrame:
+    """Optional equality filters from feed_profile.row_filters: [{column, equals}, ...]."""
+    if df is None or df.empty or not isinstance(feed_profile, dict):
+        return df
+    filters = feed_profile.get("row_filters")
+    if not isinstance(filters, list) or not filters:
+        return df
+    out = df
+    col_lower = {str(c).strip().lower(): str(c) for c in out.columns}
+    for spec in filters:
+        if not isinstance(spec, dict):
+            continue
+        col_name = spec.get("column")
+        equals = spec.get("equals")
+        if not col_name or equals is None:
+            continue
+        src = col_lower.get(str(col_name).strip().lower())
+        if src is None:
+            continue
+        want = str(equals).strip().lower()
+        mask = out[src].map(lambda v: (_normalize_text(v) or "").lower() == want)
+        out = out.loc[mask].reset_index(drop=True)
+    return out
 
 
 def _select_sheet_with_header(
     file_bytes: bytes,
     filename: str,
     alias_index: dict[str, set[str]],
+    *,
+    feed_profile: dict[str, Any] | None = None,
+    preferred_sheet_names: list[str] | None = None,
 ) -> tuple[pd.DataFrame, int] | tuple[None, None]:
-    for _name, raw_df in _read_workbook_sheets(file_bytes, filename):
+    sheets = _read_workbook_sheets(file_bytes, filename)
+    prefer = {str(n).strip().lower() for n in (preferred_sheet_names or []) if n}
+    ordered = sheets
+    if prefer:
+        ordered = sorted(
+            sheets,
+            key=lambda pair: (0 if str(pair[0]).strip().lower() in prefer else 1, str(pair[0])),
+        )
+    dual = bool(isinstance(feed_profile, dict) and feed_profile.get("dual_header_merge"))
+    for _name, raw_df in ordered:
         if raw_df is None or raw_df.empty:
             continue
         header_row = _detect_header_row(raw_df, alias_index)
         if header_row is not None:
-            headers = [_normalize_text(c) or f"col_{i}" for i, c in enumerate(raw_df.iloc[header_row].tolist())]
+            if dual:
+                headers = _merge_dual_header_labels(raw_df, header_row)
+            else:
+                headers = [_normalize_text(c) or f"col_{i}" for i, c in enumerate(raw_df.iloc[header_row].tolist())]
             body = raw_df.iloc[header_row + 1 :].copy()
             body.columns = headers
-            return body.reset_index(drop=True), header_row + 2
+            body = body.reset_index(drop=True)
+            body = _apply_feed_row_filters(body, feed_profile)
+            return body, header_row + 2
     return None, None
 
 
@@ -308,6 +397,9 @@ def enrich_flat_rows_from_companion_soh(
         for n in (feed_profile.get("soh_qty_columns") or ["Qty Sellable", "total_sellable_soh", "soh"])
         if n
     ]
+    soh_cost_total_names = [str(n) for n in (feed_profile.get("soh_cost_total_columns") or []) if n]
+    soh_sell_total_names = [str(n) for n in (feed_profile.get("soh_sell_total_columns") or []) if n]
+    dual = bool(feed_profile.get("dual_header_merge"))
 
     soh_body: pd.DataFrame | None = None
     try:
@@ -329,7 +421,10 @@ def enrich_flat_rows_from_companion_soh(
             if any(fold in lowers for jn in join_names for fold in _alias_folds(jn)):
                 header_idx = i
                 break
-        headers = [_normalize_text(c) or f"col_{i}" for i, c in enumerate(raw_df.iloc[header_idx].tolist())]
+        if dual:
+            headers = _merge_dual_header_labels(raw_df, header_idx)
+        else:
+            headers = [_normalize_text(c) or f"col_{i}" for i, c in enumerate(raw_df.iloc[header_idx].tolist())]
         body = raw_df.iloc[header_idx + 1 :].copy()
         body.columns = headers
         soh_body = body.reset_index(drop=True)
@@ -347,6 +442,8 @@ def enrich_flat_rows_from_companion_soh(
     cost_col = _first_matching_column(col_lower, cost_names)
     sell_col = _first_matching_column(col_lower, sell_names)
     soh_col = _first_matching_column(col_lower, soh_qty_names)
+    cost_total_col = _first_matching_column(col_lower, soh_cost_total_names) if soh_cost_total_names else None
+    sell_total_col = _first_matching_column(col_lower, soh_sell_total_names) if soh_sell_total_names else None
 
     by_token: dict[str, dict[str, float | None]] = {}
     for pos in range(len(soh_body)):
@@ -357,11 +454,16 @@ def enrich_flat_rows_from_companion_soh(
         key = tok.strip().lower()
         if key in by_token:
             continue
-        by_token[key] = {
+        hit: dict[str, float | None] = {
             "unit_cost": _parse_decimal(series.get(cost_col)) if cost_col else None,
             "unit_sell_price": _parse_decimal(series.get(sell_col)) if sell_col else None,
             "reported_soh": _parse_decimal(series.get(soh_col)) if soh_col else None,
+            # Sales-line totals only — not SOH sheet value (that would divide by sell qty).
+            "total_cost_amount": None,
+            "total_sell_amount": _parse_decimal(series.get(sell_total_col)) if sell_total_col else None,
+            "total_soh_value": _parse_decimal(series.get(cost_total_col)) if cost_total_col else None,
         }
+        by_token[key] = hit
 
     if not by_token:
         warnings.append("Companion SOH enrichment found no join keys")
@@ -375,7 +477,7 @@ def enrich_flat_rows_from_companion_soh(
             candidates.append(tok.strip().lower())
         payload = row.get("raw_row_payload")
         if isinstance(payload, dict):
-            for key in ("Barcode", "barcode", "EAN", "ean"):
+            for key in ("Barcode", "barcode", "EAN", "ean", "EAN/UPC"):
                 alt = _normalize_text(payload.get(key))
                 if alt:
                     candidates.append(alt.strip().lower())
@@ -395,6 +497,15 @@ def enrich_flat_rows_from_companion_soh(
             changed = True
         if row.get("reported_soh") is None and hit.get("reported_soh") is not None:
             row["reported_soh"] = hit["reported_soh"]
+            changed = True
+        if row.get("total_cost_amount") is None and hit.get("total_cost_amount") is not None:
+            row["total_cost_amount"] = hit["total_cost_amount"]
+            changed = True
+        if row.get("total_sell_amount") is None and hit.get("total_sell_amount") is not None:
+            row["total_sell_amount"] = hit["total_sell_amount"]
+            changed = True
+        if row.get("total_soh_value") is None and hit.get("total_soh_value") is not None:
+            row["total_soh_value"] = hit["total_soh_value"]
             changed = True
         if changed:
             filled += 1
@@ -522,8 +633,19 @@ def parse_flat_report(
     expected_columns = normalize_cst_expected_columns(expected_columns)
 
     alias_index = _build_alias_index(fm, expected_columns)
+    prefer_sheets = None
+    if isinstance(feed_profile, dict):
+        raw_pref = feed_profile.get("sales_sheet_names") or feed_profile.get("preferred_sheet_names")
+        if isinstance(raw_pref, list):
+            prefer_sheets = [str(x) for x in raw_pref if x]
     try:
-        df, first_data_row = _select_sheet_with_header(file_bytes, filename, alias_index)
+        df, first_data_row = _select_sheet_with_header(
+            file_bytes,
+            filename,
+            alias_index,
+            feed_profile=feed_profile,
+            preferred_sheet_names=prefer_sheets,
+        )
     except ValueError as exc:
         return ParseResult(error=str(exc))
 
@@ -571,41 +693,50 @@ def parse_flat_report(
         if col_map["raw_location_token"]:
             loc_tok = _normalize_text(series.get(col_map["raw_location_token"]))
 
-        rows.append(
-            {
-                "import_job_id": int(job_id),
-                "source_row_number": int(source_row_number),
-                "raw_row_payload": _row_dict(series),
-                "raw_customer_token": None,
-                "raw_location_token": loc_tok,
-                "site_label": loc_tok,
-                "raw_product_token": product_tok,
-                "raw_period_ref": period_ref,
-                "period_start_date": eff_period,
-                "period_type": "weekly",
-                "units_sold": units,
-                "raw_mtd_units": None,
-                "is_mtd_estimate": False,
-                "unit_sell_price": _parse_decimal(series.get(col_map["unit_sell_price"]))
-                if col_map["unit_sell_price"]
-                else None,
-                "unit_cost": _parse_decimal(series.get(col_map["unit_cost"])) if col_map["unit_cost"] else None,
-                "unit_mac": _parse_decimal(series.get(col_map["unit_mac"])) if col_map.get("unit_mac") else None,
-                "reported_soh": _parse_decimal(series.get(col_map["reported_soh"]))
-                if col_map["reported_soh"]
-                else None,
-                "raw_article_token": _normalize_text(series.get(col_map["raw_article_token"]))
-                if col_map.get("raw_article_token")
-                else None,
-                "listing_external_id": _normalize_text(series.get(col_map["listing_external_id"]))
-                if col_map.get("listing_external_id")
-                else None,
-                "listing_marketplace": _normalize_text(series.get(col_map["listing_marketplace"]))
-                if col_map.get("listing_marketplace")
-                else None,
-                "resolution_status": "pending",
-            }
-        )
+        row = {
+            "import_job_id": int(job_id),
+            "source_row_number": int(source_row_number),
+            "raw_row_payload": _row_dict(series),
+            "raw_customer_token": None,
+            "raw_location_token": loc_tok,
+            "site_label": loc_tok,
+            "raw_product_token": product_tok,
+            "raw_period_ref": period_ref,
+            "period_start_date": eff_period,
+            "period_type": "weekly",
+            "units_sold": units,
+            "raw_mtd_units": None,
+            "is_mtd_estimate": False,
+            "unit_sell_price": _parse_decimal(series.get(col_map["unit_sell_price"]))
+            if col_map["unit_sell_price"]
+            else None,
+            "unit_cost": _parse_decimal(series.get(col_map["unit_cost"])) if col_map["unit_cost"] else None,
+            "unit_mac": _parse_decimal(series.get(col_map["unit_mac"])) if col_map.get("unit_mac") else None,
+            "reported_soh": _parse_decimal(series.get(col_map["reported_soh"]))
+            if col_map["reported_soh"]
+            else None,
+            "total_sell_amount": _parse_decimal(series.get(col_map["total_sell_amount"]))
+            if col_map.get("total_sell_amount")
+            else None,
+            "total_cost_amount": _parse_decimal(series.get(col_map["total_cost_amount"]))
+            if col_map.get("total_cost_amount")
+            else None,
+            "total_soh_value": _parse_decimal(series.get(col_map["total_soh_value"]))
+            if col_map.get("total_soh_value")
+            else None,
+            "raw_article_token": _normalize_text(series.get(col_map["raw_article_token"]))
+            if col_map.get("raw_article_token")
+            else None,
+            "listing_external_id": _normalize_text(series.get(col_map["listing_external_id"]))
+            if col_map.get("listing_external_id")
+            else None,
+            "listing_marketplace": _normalize_text(series.get(col_map["listing_marketplace"]))
+            if col_map.get("listing_marketplace")
+            else None,
+            "resolution_status": "pending",
+        }
+        apply_listing_seed_fields(row, feed_profile)
+        rows.append(row)
 
     if skipped:
         warnings.append(f"Skipped {skipped} row(s) with missing product token or units_sold")
@@ -617,6 +748,8 @@ def parse_flat_report(
         feed_profile,
         warnings,
     )
+    # After companion SOH may attach totals/MAC — derive unit↔total once.
+    rows = apply_unit_total_derivation_many(rows)
 
     return ParseResult(
         rows=rows,

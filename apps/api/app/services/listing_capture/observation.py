@@ -20,6 +20,7 @@ LISTING_CAPTURE_HTTP_TIMEOUT_SECONDS = 20
 RATE_LIMIT_SECONDS: dict[str, float] = {
     "takealot": 2.0,
     "evetech": 2.0,
+    "amazon": 2.0,
 }
 
 # Dead-link backoff: after N consecutive 404/410, wait this many hours before retry.

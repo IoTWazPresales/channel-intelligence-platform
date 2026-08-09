@@ -951,7 +951,10 @@ def process_import_job_sync(db: Session, job_id: int, on_progress: Any = None) -
                 )
             )
             errors = 1
-        elif handler in ("distributor_sales_inventory", "shipment_evidence_import") and on_progress is not None:
+        elif (
+            handler in ("distributor_sales_inventory", "shipment_evidence_import", "customer_sell_through")
+            and on_progress is not None
+        ):
             errors = processor(db, job, df, mapping, on_progress=on_progress)
         else:
             errors = processor(db, job, df, mapping)

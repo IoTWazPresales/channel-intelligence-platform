@@ -45,15 +45,13 @@ Each entry: what is unclear · why it matters · interim assumption · what woul
 
 | Field | Value |
 |-------|--------|
-| **What is unclear** | Hosting target, budget, and data residency for remote deployment |
-| **Why it matters** | Unlocks P2-1 deployment; without it the app stays local-only |
-| **Interim assumption** | Complete locally; multi-user readiness (auth, roles, shell) still in scope and buildable locally. P2-1 stays RED until Warren sets a target |
-| **What would change** | Infra, env topology, backup/DR hosting, and remote-access path |
-| **Blocking?** | **Yes for P2-1 only**; not for local multi-user work |
-| **Blocks** | Deployment |
-| **Owner** | Warren (deferred by choice) |
-| **Raise by** | When Warren sets a hosting target |
-| **Source** | Domain rules Still open #3 |
+| **Status** | **Closed for now** · 2026-08-09 — stay **local-only**; remove from open roadmap pressure |
+| **What was unclear** | Hosting target, budget, and data residency for remote deployment |
+| **Decision** | Do not pursue remote hosting. Local Windows + `cip` is the operating topology until Warren reopens. |
+| **Still in scope locally** | Multi-user readiness (auth, roles, shell) — already buildable without cloud |
+| **Blocking?** | No |
+| **Owner** | Warren (reopen only if remote deploy is explicitly requested) |
+| **Source** | Warren 2026-08-09 |
 
 ### Q-004 — Per-customer CST file formats
 
