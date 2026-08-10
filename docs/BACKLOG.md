@@ -171,19 +171,13 @@
 
 ## BACKLOG-117 — PO auto-link Review dialog omits case id / source file / competitors
 
-
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-03 |
+| **Status / parked** | **Shipped 2026-08-10** — confirm dialog shows case id, file/version chips, competing-case alert (`PoAutoLinkConfirmDialog`) |
 | **Effort** | Small |
 | **Source** | Browser queue unit: Review on `P2605495` / OPEN_CHANNEL showed customer, period, confidence, reason, PO units, matched products — **no case_id, no `file_name`, no competing-case list** (`PoAutoLinkConfirmDialog` ~L259–370) |
 | **Idea** | Show case id + source file + sibling competing proposals for the same PO before Confirm. |
-| **Why it matters / deferrable** | Operator cannot three-source-check from the dialog alone; must leave UI. Deferrable while Warren decides NB↔NR offline. |
-| **What the work is** | Extend confirm + row chips; optional link to lineup case page. |
-| **Regression traps** | Do not invent drawer chrome; keep confirm sync path until S10/S11 addressed. |
-| **Behavior to retain** | Optional notes; matched products table. |
-| **Out of scope** | Full import-steward drawer migration (BACKLOG-116). |
-| **TRIGGER** | Next browser accept session for residual competitions. |
+| **TRIGGER** | ~~Next browser accept session~~ — fired Unit 2 arc. |
 
 ---
 
@@ -191,16 +185,12 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-03 |
+| **Status / parked** | **Closed (VERIFY PASS + Unit 2 surface)** · 2026-08-10 — Unit 5b PASS via `ResolutionWorklist`; Unit 2 ships competition/file/case chips on list+confirm. S10 async remains Warren-waived (sync chunk-100). S11 bell not required. |
 | **Effort** | Large |
 | **Source** | Browser queue unit grading vs `docs/STEWARD_EXPERIENCE_CONTRACT.md`: panel is bespoke `PoAutoLinkProposalsSection` cards, not `import-steward` engine |
 | **Idea** | Level PO auto-link triage to steward engine slots (or explicitly Warren-waive rows with dated waiver lines). |
-| **Why it matters / deferrable** | Contract gaps block VERIFY PASS; operators feel friction vs DSI/shipment. Deferrable until residual queue policy is settled. |
-| **What the work is** | Gap analysis → shared workspace / drawer / bulk preview / async progress as required; or waive. |
-| **Regression traps** | Do not fork `Dsi*`/`Shipment*` into `import-steward/`; extract generics only. |
-| **Behavior to retain** | CRAD propose; dismiss/restore; over-plan copy; chunked apply. |
-| **Out of scope** | Changing match key / BU-in-key. |
-| **TRIGGER** | Warren prioritizes steward-engine parity for PO auto-link after residual policy decisions. |
+| **What shipped** | Stay on `ResolutionWorklist` + commercial-planner section; no new `Po*` under `import-steward/`. |
+| **TRIGGER** | ~~Warren prioritizes steward-engine parity~~ — fired Unit 2 arc (Q4=B). |
 
 ---
 
@@ -226,16 +216,11 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-03 |
+| **Status / parked** | **Done (code already)** · 2026-08-10 — initial period is `''` (residual-inclusive); “This quarter” chip optional; vitest covers empty default. |
 | **Effort** | Small |
 | **Source** | Browser unit: expand panel → Period=`26Q3` via `useState(() => currentQuarterLabel())` at `PoAutoLinkProposalsSection.tsx:797`; Select all high disabled until period cleared; residual 2025/Q1–Q2 proposals invisible |
 | **Idea** | Default period empty (or “all”) when opening triage; keep optional current-quarter quick chip. |
-| **Why it matters / deferrable** | Operators believe the queue is empty/small. Deferrable while documented workaround (clear Period + Refresh) exists. |
-| **What the work is** | Change initial state + empty-state copy; optional persist last filter in `cip.*` localStorage. |
-| **Regression traps** | Do not break coverage gap worklist period defaults elsewhere. |
-| **Behavior to retain** | Period/customer/confidence filters. |
-| **Out of scope** | Server-side default period. |
-| **TRIGGER** | Next PO auto-link UX polish unit. |
+| **TRIGGER** | ~~Next PO auto-link UX polish unit~~ — verified in Unit 2. |
 
 ---
 
@@ -243,16 +228,11 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-03 |
+| **Status / parked** | **Shipped 2026-08-10** — proposal payload adds `file_name` / `file_base` / `version_prefix`; list chips show case + file + competing case ids |
 | **Effort** | Medium |
 | **Source** | Browser residual: 33 competing PO norms all RULE-DOES-NOT-APPLY (NB↔NR / different base / survivor); UI shows per-customer cards with no “competes with case X” chip; D-030 winners already applied offline |
 | **Idea** | Surface `conflicts` / competing case ids + file base/prefix on rows and group headers so operators can apply D-030 / leave Warren conflicts. |
-| **Why it matters / deferrable** | Without signal, Select-all-high looks safe. Deferrable while residual is Warren-only. |
-| **What the work is** | API already has conflict hints in warren export; expose on propose payload + chips. |
-| **Regression traps** | Do not auto-apply version rule from UI without confirm. |
-| **Behavior to retain** | Soft-supersede via `superseded_by_case_id` (D-030). |
-| **Out of scope** | Deciding NB vs NR. |
-| **TRIGGER** | Warren wants browser-led residual triage after NB↔NR policy. |
+| **TRIGGER** | ~~Warren wants browser-led residual triage~~ — fired Unit 2 arc. |
 
 ---
 
@@ -419,16 +399,11 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-03 |
+| **Status / parked** | **Shipped 2026-08-10** — competition chip lists rival case ids; confirm dialog warns before link |
 | **Effort** | Small–Medium |
 | **Source** | 211 Warren-queued proposals; 87 competing PO norms (e.g. cases 119 vs 120 for same PO; 118 vs 125 NB vs NR) |
 | **Idea** | Show “also proposed for case X” on each row / confirm dialog so steward does not accept both sides blindly. |
-| **Why it matters / deferrable** | Engine correctly emits one proposal per case×PO; competition is domain-real (1H Q1 vs file-2 Q1; NB vs NR). UI hides the conflict. |
-| **What the work is** | Annotate proposals sharing `po_number_norm`; optional single-winner apply. |
-| **Regression traps** | Do not auto-pick winner; catalogue absence / over-ship remain FLAG≠BLOCK. |
-| **Behavior to retain** | Exact customer+product+CRAD-in-period match key. |
-| **Out of scope** | Changing confidence reason codes. |
-| **TRIGGER** | Warren starts clearing the 211-queue, or next auto-link UX pass. |
+| **TRIGGER** | ~~Warren starts clearing the 211-queue~~ — fired Unit 2 arc. |
 
 ---
 

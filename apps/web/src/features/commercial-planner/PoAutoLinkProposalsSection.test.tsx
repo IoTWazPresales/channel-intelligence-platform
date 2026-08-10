@@ -419,13 +419,16 @@ describe('PoAutoLinkProposalsSection', () => {
     const contestedProposal = {
       ...sampleProposal,
       proposal_key: 'contested:1',
+      file_name: '2. ACZA Q1 2026 NR Gaming Lineup.xlsx',
+      file_base: 'ACZA Q1 2026 NR Gaming Lineup',
+      version_prefix: '2',
       bulk_protection: {
         selection_protected: true,
         requires_allow_protected: false,
         reasons: [],
         contested: true,
       },
-      competition: { status: 'contested', competing_case_ids: [11, 12] },
+      competition: { status: 'contested', competing_case_ids: [11, 12], reason: 'po_competes_same_bu_same_period' },
     };
     apiGetMock.mockResolvedValue({
       proposals: [
@@ -439,12 +442,18 @@ describe('PoAutoLinkProposalsSection', () => {
     });
     renderSection();
     await expandSection();
+    expect(screen.getAllByTestId('po-auto-link-competition-chip')[0]).toHaveTextContent('also cases 11, 12');
+    expect(screen.getAllByTestId('po-auto-link-case-id-chip').length).toBeGreaterThan(0);
+    expect(screen.getAllByTestId('po-auto-link-file-chip')[0]).toHaveTextContent('v2');
     await user.click(screen.getByRole('button', { name: /select all high/i }));
     expect(screen.getByTestId('po-auto-link-select-clean-high')).toBeChecked();
     const contestedCheckbox = screen.getByTestId('po-auto-link-select-contested:1');
     expect(contestedCheckbox).not.toBeChecked();
     await user.click(screen.getByTestId('po-auto-link-review-contested:1'));
     expect(await screen.findByTestId('po-auto-link-drawer-link-contested:1')).toBeInTheDocument();
+    await user.click(screen.getByTestId('po-auto-link-drawer-link-contested:1'));
+    expect(await screen.findByTestId('po-auto-link-confirm-competitors')).toHaveTextContent('11, 12');
+    expect(screen.getByTestId('po-auto-link-confirm-case-meta')).toBeInTheDocument();
   });
 
   it('bucket contested tab filters visible proposals', async () => {
