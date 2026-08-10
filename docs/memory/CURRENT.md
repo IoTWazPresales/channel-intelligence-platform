@@ -1,8 +1,8 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-10 (arc complete — PR #26 merged)
+**Last updated:** 2026-08-10 (BACKLOG-010 PAV truncate on cip)
 
-**Branch:** `main` @ `86c0540` (merge PR #26)
+**Branch:** `ops/backlog-010-drop-pav` (from `main` @ `5e4a84c`)
 
 **Alembic on cip:** `20260808_0011` (head)
 
@@ -13,22 +13,14 @@
 - Listing↔CPOR activation = point-in-time vs `cpor_case_line.srp`; `no_case_detected` when none.
 - B2 export sheet titles = **tenant profile** (not OEM hardcoding).
 - A2-X incremental unit cost = baseline FLAG-first (not A2-06 rename).
+- Specs canonical on `dim_product.specs_json`; PAV legacy off (`PM_WRITE_LEGACY_EAV` default false).
 
-## Arc shipped (P4 → Lane B → 089 → 076)
+## Just done
 
-| Piece | Result |
-|---|---|
-| P4 forward soak | 7/8 customers with `fact_customer_sellthrough`; Amazon FLAG (0 facts / unresolved ASINs) |
-| Lane B | Tenant lineup export sheet names; B4 `create_blocked` when hard-budget / `over_budget_action=block` |
-| BACKLOG-089 | FLAG-first incremental unit cost on portfolio + UI tile (`cpor-incremental-unit-cost`) |
-| BACKLOG-076 | 17 suspect amounts quarantined; KPI FLAG exclusion remains |
-| PR #26 | **Merged** 2026-08-10 → `86c0540` |
+- **BACKLOG-010:** `cip.product_attribute_value` count was already **0**; snapshot + idempotent `TRUNCATE` via `scripts/ops/drop_legacy_product_attribute_value.py`. Schema kept for escape hatch.
 
-Browser smoke: `/promotions` B4 builder loads; `/commercial-planner/cpor-cases` shows Cost/incremental unit ($155 · 2 ok / 198 flagged).
+## Warren decisions still required
 
-## Warren decisions still required (not agent-auto)
-
-- **BACKLOG-010** — drop legacy `product_attribute_value` (~2M): only after backup + explicit approve.
 - **Q-013** — PURMIDR25005866: pick case 90 vs 127.
 - **Q-014** — PURMIDR26009979: pick among 121 / 122 / 128.
 
