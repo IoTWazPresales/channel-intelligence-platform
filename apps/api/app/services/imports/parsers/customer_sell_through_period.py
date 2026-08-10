@@ -18,7 +18,14 @@ _ISO_WEEK_HEADER = re.compile(r"^(\d{4})-?W(\d{1,2})$", re.IGNORECASE)
 _WEEK_YEAR_HEADER = re.compile(r"^W(\d{1,2})[-/](\d{4})$", re.IGNORECASE)
 _WEEK_ONLY_HEADER = re.compile(r"^W(\d{1,2})$", re.IGNORECASE)
 _FW_HEADER = re.compile(r"^FW[-\s]?(\d{1,2})$", re.IGNORECASE)
-_NN_YYYY_HEADER = re.compile(r"^(\d{1,2})[-/](\d{4})$")
+_NN_YYYY_HEADER = re.compile(r"^(\d{1,3})[-/](\d{4})$")
+# SAP / Game Fiscal Week band codes: ``027.2026`` (week.year).
+_NN_DOT_YYYY_HEADER = re.compile(r"^(\d{1,3})\.(\d{4})$")
+# Measure + band after dual-header disambiguation: ``Sales U TY 027.2026``.
+_MEASURE_WEEK_BAND = re.compile(
+    r"^(?P<measure>.+?)\s+(?P<band>\d{1,3}(?:[./-])\d{4})$",
+    re.IGNORECASE,
+)
 _DATE_HEADER = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _MONTH_YEAR_HEADER = re.compile(
     r"^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[-\s]?(\d{2,4})?$",
@@ -93,7 +100,7 @@ def classify_period_header(header: str) -> tuple[str, date | None, str]:
             return "fiscal_week", d, "weekly"
         return "unknown", None, "weekly"
 
-    m = _NN_YYYY_HEADER.match(h)
+    m = _NN_YYYY_HEADER.match(h) or _NN_DOT_YYYY_HEADER.match(h)
     if m:
         week_no = int(m.group(1))
         year = int(m.group(2))
@@ -149,6 +156,57 @@ def detect_period_columns(headers: list[str]) -> list[tuple[str, date | None, st
         if kind != "unknown" and pdate is not None:
             out.append((str(h), pdate, ptype))
     return out
+
+
+def _fold_alias(name: str) -> str:
+    return re.sub(r"[\s_\-]+", " ", (name or "").strip().lower())
+
+
+def detect_wide_week_unit_columns(
+    headers: list[str],
+    *,
+    units_aliases: list[str],
+    focus_period: date | None = None,
+) -> list[tuple[str, date, str]]:
+    """Detect dual-header week-band unit columns (Game multi-week wide files).
+
+    Matches ``Sales U TY 027.2026`` (disambiguated) and bare ``Sales U TY``
+    (rightmost week kept as focus — period from filename / caller).
+    Returns sorted ``(column_name, period_start_date, period_type)``.
+    """
+    alias_folds = {_fold_alias(a) for a in units_aliases if a}
+    if not alias_folds:
+        alias_folds = {"sales u ty", "units sold", "units", "qty", "sales"}
+
+    out: list[tuple[str, date, str]] = []
+    for h in headers:
+        if not h or str(h).startswith("col_"):
+            continue
+        text = str(h).strip()
+        folded = _fold_alias(text)
+        if folded in alias_folds:
+            if focus_period is None:
+                continue
+            out.append((text, focus_period, "weekly"))
+            continue
+        m = _MEASURE_WEEK_BAND.match(text)
+        if not m:
+            continue
+        measure = m.group("measure")
+        if _fold_alias(measure) not in alias_folds:
+            continue
+        kind, pdate, ptype = classify_period_header(m.group("band"))
+        if kind == "unknown" or pdate is None:
+            continue
+        out.append((text, pdate, ptype))
+
+    # Deduplicate by period date (prefer longer / banded header name).
+    by_date: dict[date, tuple[str, date, str]] = {}
+    for col, pdate, ptype in out:
+        prev = by_date.get(pdate)
+        if prev is None or len(col) > len(prev[0]):
+            by_date[pdate] = (col, pdate, ptype)
+    return sort_period_columns([(c, d, t) for c, d, t in by_date.values()])  # type: ignore[arg-type]
 
 
 def parse_sheet_name_period(sheet_name: str) -> tuple[date | None, str, str | None]:

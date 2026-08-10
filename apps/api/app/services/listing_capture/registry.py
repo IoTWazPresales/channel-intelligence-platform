@@ -133,21 +133,25 @@ def import_listings_csv(
 
 
 def list_proposals(session: Session, *, status: str = "proposed") -> list[dict[str, Any]]:
+    from app.services.listing_capture.auto_finder import enrich_proposal_with_suggested_url
+
     rows = list(
         session.scalars(
             select(CstListingSeed).where(CstListingSeed.status == status).order_by(CstListingSeed.id)
         ).all()
     )
     return [
-        {
-            "id": r.id,
-            "customer_id": r.customer_id,
-            "marketplace": r.marketplace,
-            "external_id": r.external_id,
-            "product_id": r.product_id,
-            "status": r.status,
-            "import_job_id": r.import_job_id,
-        }
+        enrich_proposal_with_suggested_url(
+            {
+                "id": r.id,
+                "customer_id": r.customer_id,
+                "marketplace": r.marketplace,
+                "external_id": r.external_id,
+                "product_id": r.product_id,
+                "status": r.status,
+                "import_job_id": r.import_job_id,
+            }
+        )
         for r in rows
     ]
 
@@ -179,6 +183,57 @@ def confirm_proposal(
     session.add(seed)
     session.flush()
     return listing
+
+
+def confirm_suggested_proposals(
+    session: Session,
+    *,
+    registered_by: str | None = None,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    """Confirm proposed seeds that have an auto-finder URL — skip seeds without a suggestion.
+
+    Still steward-initiated (explicit call / UI button). Never invents a URL when
+    ``suggest_listing_url`` returns None.
+    """
+    from app.services.listing_capture.auto_finder import suggest_listing_url
+
+    rows = list(
+        session.scalars(
+            select(CstListingSeed)
+            .where(CstListingSeed.status == "proposed")
+            .order_by(CstListingSeed.id)
+        ).all()
+    )
+    confirmed = 0
+    skipped: list[dict[str, Any]] = []
+    for seed in rows:
+        if limit is not None and confirmed >= int(limit):
+            break
+        url = suggest_listing_url(str(seed.marketplace), str(seed.external_id))
+        if not url:
+            skipped.append(
+                {
+                    "id": int(seed.id),
+                    "marketplace": seed.marketplace,
+                    "external_id": seed.external_id,
+                    "reason": "no_suggested_url",
+                }
+            )
+            continue
+        confirm_proposal(
+            session,
+            seed_id=int(seed.id),
+            url=url,
+            registered_by=registered_by,
+        )
+        confirmed += 1
+    session.flush()
+    return {
+        "confirmed": confirmed,
+        "skipped": skipped,
+        "proposed_remaining": max(0, len(rows) - confirmed - len(skipped)),
+    }
 
 
 def reject_proposal(session: Session, *, seed_id: int) -> CstListingSeed:
@@ -215,9 +270,24 @@ def record_observation(
     status, body = fetch_url_text(listing.url, http_get=http_get)
     blob = compress_snapshot(body)
     parsed = parse_snapshot_text(body, marketplace=listing.marketplace)
+    flags = dict(parsed.flags or {})
+    from app.services.listing_capture.cpor_activation import (
+        as_of_from_fetched_at,
+        evaluate_cpor_activation,
+    )
+
+    fetched_at = _now()
+    activation = evaluate_cpor_activation(
+        session,
+        listing,
+        listing_price=parsed.price,
+        as_of=as_of_from_fetched_at(fetched_at),
+    )
+    flags["cpor_activation"] = activation
+
     obs = ListingObservation(
         listing_id=listing.id,
-        fetched_at=_now(),
+        fetched_at=fetched_at,
         http_status=status,
         raw_snapshot=blob,
         parser_version=PARSER_VERSION,
@@ -225,7 +295,7 @@ def record_observation(
         extracted_availability=parsed.availability,
         extracted_promo_badge=parsed.promo_badge,
         parse_status=parsed.parse_status,
-        parse_flags=parsed.flags,
+        parse_flags=flags,
     )
     session.add(obs)
     if status in (404, 410):
@@ -237,15 +307,30 @@ def record_observation(
 
 
 def reparse_observation(session: Session, observation: ListingObservation, *, marketplace: str) -> ListingObservation:
-    """Re-run parser on stored snapshot — no re-fetch."""
+    """Re-run parser on stored snapshot — no re-fetch. Re-evaluate CPOR activation."""
     text = decompress_snapshot(observation.raw_snapshot)
     parsed = parse_snapshot_text(text, marketplace=marketplace)
+    listing_id = getattr(observation, "listing_id", None)
+    listing = session.get(CustomerListing, listing_id) if listing_id is not None else None
+    flags = {**(parsed.flags or {}), "reparsed": True}
+    if listing is not None:
+        from app.services.listing_capture.cpor_activation import (
+            as_of_from_fetched_at,
+            evaluate_cpor_activation,
+        )
+
+        flags["cpor_activation"] = evaluate_cpor_activation(
+            session,
+            listing,
+            listing_price=parsed.price,
+            as_of=as_of_from_fetched_at(getattr(observation, "fetched_at", None)),
+        )
     observation.parser_version = PARSER_VERSION
     observation.extracted_price = parsed.price
     observation.extracted_availability = parsed.availability
     observation.extracted_promo_badge = parsed.promo_badge
     observation.parse_status = parsed.parse_status
-    observation.parse_flags = {**(parsed.flags or {}), "reparsed": True}
+    observation.parse_flags = flags
     session.add(observation)
     return observation
 
@@ -273,3 +358,87 @@ def listing_to_dict(row: CustomerListing) -> dict[str, Any]:
         "external_id": row.external_id,
         "notes": row.notes,
     }
+
+
+def observation_to_dict(obs: ListingObservation, listing: CustomerListing | None = None) -> dict[str, Any]:
+    flags = obs.parse_flags if isinstance(obs.parse_flags, dict) else {}
+    activation = flags.get("cpor_activation") if isinstance(flags.get("cpor_activation"), dict) else {}
+    return {
+        "id": obs.id,
+        "listing_id": obs.listing_id,
+        "fetched_at": obs.fetched_at.isoformat() if obs.fetched_at else None,
+        "http_status": obs.http_status,
+        "parse_status": obs.parse_status,
+        "extracted_price": float(obs.extracted_price) if obs.extracted_price is not None else None,
+        "extracted_availability": obs.extracted_availability,
+        "extracted_promo_badge": obs.extracted_promo_badge,
+        "parser_version": obs.parser_version,
+        "cpor_activation_status": activation.get("status"),
+        "cpor_activation_message": activation.get("message"),
+        "cpor_case_id": activation.get("case_id"),
+        "cpor_case_price": activation.get("case_price"),
+        "marketplace": listing.marketplace if listing else None,
+        "listing_url": listing.url if listing else None,
+        "external_id": listing.external_id if listing else None,
+        "product_id": listing.product_id if listing else None,
+        "customer_id": listing.customer_id if listing else None,
+    }
+
+
+def list_recent_observations(
+    session: Session,
+    *,
+    marketplace: str | None = None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """Latest observations (newest first), optionally filtered by marketplace."""
+    stmt = (
+        select(ListingObservation, CustomerListing)
+        .join(CustomerListing, CustomerListing.id == ListingObservation.listing_id)
+        .order_by(ListingObservation.fetched_at.desc(), ListingObservation.id.desc())
+        .limit(int(limit))
+    )
+    if marketplace:
+        stmt = stmt.where(CustomerListing.marketplace == marketplace.strip().lower())
+    rows = list(session.execute(stmt).all())
+    return [observation_to_dict(obs, listing) for obs, listing in rows]
+
+
+def poll_active_listings(
+    session: Session,
+    *,
+    marketplaces: list[str] | None = None,
+    http_get=None,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    """Synchronous poll for active listings — used by API + Celery task."""
+    import time
+
+    from app.services.listing_capture.observation import RATE_LIMIT_SECONDS, default_http_get
+
+    getter = http_get or default_http_get
+    stmt = select(CustomerListing).where(CustomerListing.status == "active").order_by(CustomerListing.id)
+    if marketplaces:
+        want = {m.strip().lower() for m in marketplaces if m and m.strip()}
+        if want:
+            stmt = stmt.where(CustomerListing.marketplace.in_(want))
+    listings = list(session.scalars(stmt).all())
+    if limit is not None:
+        listings = listings[: int(limit)]
+
+    polled = 0
+    failed = 0
+    last_mkt: str | None = None
+    for listing in listings:
+        mkt = (listing.marketplace or "").strip().lower()
+        delay = float(RATE_LIMIT_SECONDS.get(mkt, 1.0))
+        if last_mkt is not None and delay > 0:
+            time.sleep(delay)
+        last_mkt = mkt
+        try:
+            record_observation(session, listing, http_get=getter)
+            polled += 1
+        except Exception:  # noqa: BLE001
+            failed += 1
+    session.flush()
+    return {"polled": polled, "failed": failed, "listing_count": len(listings)}

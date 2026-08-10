@@ -22,10 +22,14 @@ def read_tabular(filename: str, raw: bytes) -> pd.DataFrame:
 
 def infer_schema(df: pd.DataFrame) -> dict[str, Any]:
     columns = []
-    for col in df.columns.astype(str).tolist():
+    # Use original column keys for Series lookup — Excel/xlrd can yield int/float
+    # headers (e.g. Makro Dispo column ``0``). ``df.columns.astype(str)`` then
+    # ``df[str_name]`` raises KeyError when the frame still keys on the numeric label.
+    for col in df.columns:
+        name = str(col)
         series = df[col]
         dtype = str(series.dtype)
         raw_sample = series.dropna().head(5).tolist()
         sample = [to_jsonable(x) for x in raw_sample]
-        columns.append({"name": col, "dtype": dtype, "sample": sample})
+        columns.append({"name": name, "dtype": dtype, "sample": sample})
     return {"row_count": int(len(df)), "columns": columns}

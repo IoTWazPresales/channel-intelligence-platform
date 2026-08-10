@@ -166,7 +166,7 @@ def _count_dsi_staging(session: Session, tok: str) -> tuple[int, set[int]]:
     jobs: set[int] = set()
     n = 0
     for c in cands:
-        if _norm_token(c.normalized_key) == tok:
+        if _norm_token(getattr(c, "normalized_key", None)) == tok:
             n += 1
             if c.import_job_id is not None:
                 jobs.add(int(c.import_job_id))
@@ -199,7 +199,7 @@ def _count_cst_staging(session: Session, tok: str) -> tuple[int, set[int]]:
     jobs: set[int] = set()
     n = 0
     for c in cands:
-        if _norm_token(c.normalized_key) == tok:
+        if _norm_token(getattr(c, "normalized_key", None)) == tok:
             n += int(c.row_count or 1)
             if c.import_job_id is not None:
                 jobs.add(int(c.import_job_id))
@@ -328,7 +328,7 @@ def _repoint_dsi_staging(session: Session, tok: str, product_id: int) -> int:
     n = 0
     job_ids: set[int] = set()
     for c in cands:
-        if _norm_token(c.normalized_key) != tok:
+        if _norm_token(getattr(c, "normalized_key", None)) != tok:
             continue
         c.status = "resolved"
         c.suggested_entity_id = int(product_id)
@@ -382,7 +382,7 @@ def _repoint_cst_staging(session: Session, tok: str, product_id: int) -> int:
     n = 0
     job_ids: set[int] = set()
     for c in cands:
-        if _norm_token(c.normalized_key) != tok:
+        if _norm_token(getattr(c, "normalized_key", None)) != tok:
             continue
         c.status = "resolved"
         c.suggested_entity_id = int(product_id)
@@ -460,7 +460,7 @@ def scan_open_gaps_for_matches(session: Session, *, limit: int = 500) -> dict[st
             ImportEntityMappingCandidate.status == "needs_review",
         )
     ).all():
-        t = _norm_token(c.normalized_key)
+        t = _norm_token(getattr(c, "normalized_key", None))
         if t:
             tokens.add(t)
     from app.services.imports.cst_mapping_candidates import CST_PRODUCT_ENTITY
@@ -471,7 +471,7 @@ def scan_open_gaps_for_matches(session: Session, *, limit: int = 500) -> dict[st
             ImportEntityMappingCandidate.status.in_(("needs_review", "ignored")),
         )
     ).all():
-        t = _norm_token(c.normalized_key)
+        t = _norm_token(getattr(c, "normalized_key", None))
         if t:
             tokens.add(t)
     for r in session.scalars(

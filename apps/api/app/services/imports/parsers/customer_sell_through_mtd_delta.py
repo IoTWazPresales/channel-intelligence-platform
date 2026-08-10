@@ -82,7 +82,8 @@ def _lookup_prior_mtd(
         )
         .join(ImportJob, ImportJob.id == ImportCustomerSellthroughStagingLine.import_job_id)
         .where(ImportJob.template_slug == "customer_sell_through")
-        .where(ImportJob.stage == "loaded")
+        # Validate-mode weekly cadence leaves stage=validated; apply uses loaded.
+        .where(ImportJob.stage.in_(("validated", "loaded")))
         .where(ImportCustomerSellthroughStagingLine.resolved_customer_id == customer_id)
         .where(ImportCustomerSellthroughStagingLine.raw_product_token == raw_product_token)
         .where(ImportCustomerSellthroughStagingLine.period_start_date >= month_start_date)

@@ -34,7 +34,7 @@ NET_REQUIREMENT_CSV_HEADERS = [
     "bias_factor",
 ]
 
-# Tenant workbook on-ramp (ASUS full template later) — NetRequirement sheet
+# Tenant workbook on-ramp sheet headers (generic labels — tenant may remap via profile sheet names)
 TENANT_LINEUP_SHEET_HEADERS = [
     "Customer Code",
     "Customer Name",
@@ -85,11 +85,23 @@ def net_requirement_to_xlsx_bytes(
     payload: dict[str, Any],
     *,
     draft_rows: list[dict[str, Any]] | None = None,
+    net_requirement_sheet: str | None = None,
+    draft_lineup_sheet: str | None = None,
 ) -> bytes:
-    """Tenant workbook on-ramp: NetRequirement + optional DraftLineup sheets."""
+    """Tenant workbook on-ramp: NetRequirement + optional DraftLineup sheets.
+
+    Sheet titles come from tenant profile (defaults: NetRequirement / DraftLineup) —
+    never OEM-branded application law.
+    """
+    from app.services.commercial_tenant_profile import lineup_export_sheet_names
+
+    sheets = lineup_export_sheet_names()
+    nr_title = (net_requirement_sheet or sheets["net_requirement"])[:31] or "NetRequirement"
+    draft_title = (draft_lineup_sheet or sheets["draft_lineup"])[:31] or "DraftLineup"
+
     wb = Workbook()
     ws = wb.active
-    ws.title = "NetRequirement"
+    ws.title = nr_title
     ws.append(list(NET_REQUIREMENT_CSV_HEADERS))
     for cell in ws[1]:
         cell.font = Font(bold=True)
@@ -115,7 +127,7 @@ def net_requirement_to_xlsx_bytes(
 
     draft = list(draft_rows or [])
     if draft:
-        ws2 = wb.create_sheet("DraftLineup")
+        ws2 = wb.create_sheet(draft_title)
         ws2.append(list(TENANT_LINEUP_SHEET_HEADERS))
         for cell in ws2[1]:
             cell.font = Font(bold=True)

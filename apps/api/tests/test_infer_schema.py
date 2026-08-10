@@ -27,3 +27,13 @@ def test_infer_schema_handles_nan_float_sample() -> None:
     schema = infer_schema(df)
     json.dumps(schema)
     assert schema["columns"][0]["sample"] == []
+
+
+def test_infer_schema_numeric_column_headers() -> None:
+    """Excel/xlrd can emit int headers (Makro Dispo ``0`` next to Article)."""
+    df = pd.DataFrame([["850008372", "00", "desc"]], columns=["Article", 0, "Article Desc"])
+    schema = infer_schema(df)
+    json.dumps(schema)
+    names = [c["name"] for c in schema["columns"]]
+    assert names == ["Article", "0", "Article Desc"]
+    assert schema["columns"][1]["sample"] == ["00"]

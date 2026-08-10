@@ -1,39 +1,43 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-08 (roadmap completion Waves 0–4 + Lane X 076)
+**Last updated:** 2026-08-10 (P4 apply soak + Lane B export/hard-budget + 089 + 076)
 
-**Branch:** `feat/cst-takealot-pilot-config` · **PR:** [#25](https://github.com/IoTWazPresales/channel-intelligence-platform/pull/25) (await Warren promote)
+**Branch:** `feat/p4-cst-six-customer-shapes` → **PR #26** (promote when CI allows / Warren)
 
-**Alembic:** `20260807_0010` (authored not applied: `20260808_0011` listing tables IF NOT EXISTS — needs Warren approve)
+**Alembic on cip:** `20260808_0011` (head)
 
-## Locked CST product rule
+## Locked rules
 
-Unmappable CST product → **Ignore** (`ignore_no_catalogue`) → catalogue gaps (`source=cst`). Never auto-create PM. FLAG ≠ BLOCK.
+- CST unmappable → Ignore → catalogue gaps (`source=cst`). Never auto-create PM.
+- Game ≠ new structure_type — dual_header + wide-week unpivot.
+- Listing↔CPOR activation = point-in-time vs `cpor_case_line.srp`; `no_case_detected` when none.
+- B2 export sheet titles = **tenant profile** (not OEM hardcoding).
+- A2-X incremental unit cost = baseline FLAG-first (not A2-06 rename).
 
-## Demo gate checklist (2026-08-08)
+## P4 forward soak (2026-08-10)
 
-| # | Gate | Result |
-|---|------|--------|
-| 1 | Login → dashboard | PASS (`admin@local` → `/dashboard`; forgot-password copy + Admin reset) |
-| 2 | Weekly CST loads | Takealot path proven (job 799); operator = Import Centre CST batch |
-| 3 | Scheduled report → inbox | BACKLOG-098 closed (code + schedule id=1 last_run); `/inbox` loads with vintage copy |
-| 4 | Lineup / 5 Promo / 6 PvE | Surfaces on main; prior unit smokes stand (no rebuild) |
-| 076 | Amount-scale junk | Mitigated — KPI excludes unit_price > 100k (17 unship rows on cip) |
+| Customer | Job | Facts after apply | Notes |
+|---|---|---|---|
+| Takealot | 927 | 20 | already had facts; re-apply ok |
+| Evetech | 925 | 37 | |
+| CM | 917 | 78 | MTD week29 |
+| IC | 912 | 82 | |
+| HiFi | 913 | 51 | |
+| Makro | 903 | 47 | |
+| Game | 911 | 3 | W33; W27 wide-week 928 still unresolved |
+| Amazon | 918 | **0 FLAG** | 51/51 products unresolved — sample not forward-week PM match |
 
-## Shipped this completion pass
+## Also shipped this arc
 
-- Wave 0: CST batch browser smoke; PR #25; VERIFY waived
-- Wave 1: admin set-password; 076 KPI exclusion; 098 closed
-- Wave 2: P4 bootstrap 7 customer_report_config placeholders (Evetech…Game) awaiting sample files
-- Wave 3: `20260808_0011` authored; live fetch behind `CIP_LISTING_LIVE_FETCH` + schedule env
-- Wave 4: tenant profile Settings UI (BACKLOG-096); backup dump + restore smoke → `cip_alembic_smoke` PASS
-- Historical CST: **deferred** until after promote + one live weekly apply (roadmap forward-first)
+- Lane B: tenant export sheet names in profile; B4 `create_blocked` when hard enforce **or** `over_budget_action=block`
+- BACKLOG-089 FLAG-first incremental metric on portfolio + UI tile
+- BACKLOG-076: 17 suspect inbound amounts quarantined (amount→0 + stamp)
 
 ## Next
 
-1. Warren: **promote/merge PR #25**
-2. Warren: approve `alembic upgrade` for `20260808_0011` (safe IF NOT EXISTS on cip)
-3. Sample WEEK files for remaining P4 customers → structure discovery (Q-004)
-4. Optional CST historical backfill after weekly soak
+1. Promote PR #26 (CI has pre-existing unrelated failures — use admin merge or fix tip tests)
+2. P5: upload CPOR → re-poll activation; Takealot SPA fetch
+3. Q-013 / Q-014 Warren picks; BACKLOG-010 only with backup+approve
+4. CST historical backfill after forward soak trusted
 
-**Env:** local Windows. `cip` @ `20260807_0010`. Takealot=20. Q-003 hosting still deferred.
+**Env:** local Windows. `cip` @ `20260808_0011`.

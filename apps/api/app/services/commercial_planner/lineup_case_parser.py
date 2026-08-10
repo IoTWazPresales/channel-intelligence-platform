@@ -625,7 +625,7 @@ async def parse_current_lineup_file(
             row_dicts = [attach_month_split_json_to_row_dict(rd) for rd in row_dicts]
 
         # Idempotent re-parse for draft cases: replace lines only (never touches case_po).
-        if case.commercial_status == "draft_imported":
+        if getattr(case, "commercial_status", None) == "draft_imported":
             await db.execute(
                 delete(CommercialLineupLine).where(CommercialLineupLine.case_id == case_id)
             )

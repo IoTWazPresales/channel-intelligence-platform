@@ -5,6 +5,7 @@ No money math. FLAG ≠ BLOCK. No auto-create of locations/products.
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -20,6 +21,13 @@ from app.utils.json_safe import to_jsonable
 
 DEFAULT_VAT_BASIS = "ex_vat"
 CONFIRMED_ALIAS_STATUSES = frozenset({"confirmed", "active"})
+
+# When feed_profile omits listing_seed, known layout families still emit marketplace seeds.
+_LAYOUT_LISTING_SEED_DEFAULTS: dict[str, dict[str, str]] = {
+    "amazon_asin_sourcing": {"marketplace": "amazon", "external_id_from": "raw_product_token"},
+    "takealot_week": {"marketplace": "takealot", "external_id_from": "raw_product_token"},
+    "evetech_sales_report": {"marketplace": "evetech", "external_id_from": "raw_product_token"},
+}
 
 
 def normalize_article_token(raw: str | None) -> str:
@@ -57,7 +65,12 @@ def propose_customer_article_alias(
     product_id: int,
     evidence: dict[str, Any] | None = None,
 ) -> CustomerArticleAlias | None:
-    """Learn co-occurrence as status=proposed. Never silent-confirm."""
+    """Learn co-occurrence as status=proposed. Never silent-confirm.
+
+    Dedupes within the same Session before flush — one article can co-occur on
+    many sell-through lines (e.g. Game site fan-out); naive add() × N hits
+    ``uq_customer_article_alias_customer_article``.
+    """
     key = normalize_article_token(article_token)
     if not key:
         return None
@@ -69,6 +82,14 @@ def propose_customer_article_alias(
     )
     if existing is not None:
         return existing
+    # Pending inserts are invisible to the SELECT above until flush.
+    for obj in session.new:
+        if (
+            isinstance(obj, CustomerArticleAlias)
+            and int(obj.customer_id) == int(customer_id)
+            and obj.article_no_normalized == key
+        ):
+            return obj
     row = CustomerArticleAlias(
         customer_id=customer_id,
         article_no_normalized=key,
@@ -77,6 +98,59 @@ def propose_customer_article_alias(
         evidence_json=to_jsonable(evidence or {}),
     )
     session.add(row)
+    return row
+
+
+def apply_listing_seed_fields(
+    row: dict[str, Any],
+    feed_profile: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Fill listing_external_id / listing_marketplace for LC-U1 seed emission.
+
+    Customer-agnostic via ``feed_profile.listing_seed``::
+
+        {
+          "marketplace": "amazon",                 # required constant when column absent
+          "external_id_from": "raw_product_token"  # or "listing_external_id" (default)
+        }
+
+    Column-mapped values always win. Never invents a marketplace without config or column.
+    """
+    if not isinstance(row, dict):
+        return row
+    profile = feed_profile if isinstance(feed_profile, dict) else {}
+    seed_cfg = profile.get("listing_seed") if isinstance(profile.get("listing_seed"), dict) else {}
+    if not seed_cfg:
+        layout = str(profile.get("layout_family") or "").strip()
+        seed_cfg = dict(_LAYOUT_LISTING_SEED_DEFAULTS.get(layout) or {})
+
+    ext = row.get("listing_external_id")
+    if not (isinstance(ext, str) and ext.strip()):
+        source_key = str(seed_cfg.get("external_id_from") or "listing_external_id").strip()
+        if source_key == "raw_product_token":
+            tok = row.get("raw_product_token")
+            if isinstance(tok, str) and tok.strip():
+                row["listing_external_id"] = tok.strip()
+        elif source_key and source_key != "listing_external_id":
+            alt = row.get(source_key)
+            if isinstance(alt, str) and alt.strip():
+                row["listing_external_id"] = alt.strip()
+
+    mkt = row.get("listing_marketplace")
+    if not (isinstance(mkt, str) and mkt.strip()):
+        cfg_mkt = seed_cfg.get("marketplace") or profile.get("listing_marketplace")
+        if isinstance(cfg_mkt, str) and cfg_mkt.strip():
+            row["listing_marketplace"] = cfg_mkt.strip().lower()
+    elif isinstance(mkt, str):
+        row["listing_marketplace"] = mkt.strip().lower()
+
+    # Takealot Product IDs often arrive with spaces ("222 547 542").
+    if (row.get("listing_marketplace") or "").strip().lower() == "takealot":
+        ext_raw = row.get("listing_external_id")
+        if isinstance(ext_raw, str) and ext_raw.strip():
+            compact = re.sub(r"\s+", "", ext_raw.strip())
+            if compact.isdigit() and len(compact) >= 5:
+                row["listing_external_id"] = compact
     return row
 
 
@@ -90,18 +164,29 @@ def upsert_cst_listing_seed(
     import_job_id: int | None,
     raw: dict[str, Any] | None = None,
 ) -> CstListingSeed | None:
-    """Durable LC-U1 handoff capture. No registry / no auto-confirm."""
+    """Durable LC-U1 handoff capture. No registry / no auto-confirm.
+
+    De-dupes within the current Session flush (Takealot week files repeat Product ID
+    across months) so batched INSERT does not hit uq_cst_listing_seed_*.
+    """
     mkt = (marketplace or "").strip().lower()
     ext = (external_id or "").strip()
     if not mkt or not ext:
         return None
-    existing = session.scalar(
-        select(CstListingSeed).where(
-            CstListingSeed.customer_id == customer_id,
-            CstListingSeed.marketplace == mkt,
-            CstListingSeed.external_id == ext,
-        )
+    cache: dict[tuple[int, str, str], CstListingSeed] = session.info.setdefault(
+        "_cst_listing_seed_cache",
+        {},
     )
+    key = (int(customer_id), mkt, ext)
+    existing = cache.get(key)
+    if existing is None:
+        existing = session.scalar(
+            select(CstListingSeed).where(
+                CstListingSeed.customer_id == customer_id,
+                CstListingSeed.marketplace == mkt,
+                CstListingSeed.external_id == ext,
+            )
+        )
     if existing is not None:
         if product_id is not None and existing.product_id is None:
             existing.product_id = int(product_id)
@@ -110,6 +195,7 @@ def upsert_cst_listing_seed(
         if raw:
             existing.raw_json = to_jsonable(raw)
         session.add(existing)
+        cache[key] = existing
         return existing
     row = CstListingSeed(
         customer_id=customer_id,
@@ -121,6 +207,7 @@ def upsert_cst_listing_seed(
         raw_json=to_jsonable(raw) if raw else None,
     )
     session.add(row)
+    cache[key] = row
     return row
 
 

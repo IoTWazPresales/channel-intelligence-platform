@@ -20,6 +20,7 @@ LISTING_CAPTURE_HTTP_TIMEOUT_SECONDS = 20
 RATE_LIMIT_SECONDS: dict[str, float] = {
     "takealot": 2.0,
     "evetech": 2.0,
+    "amazon": 2.0,
 }
 
 # Dead-link backoff: after N consecutive 404/410, wait this many hours before retry.
@@ -69,13 +70,65 @@ def parse_snapshot_text(text: str, *, marketplace: str, parser_version: str = PA
     except (json.JSONDecodeError, TypeError, ValueError):
         pass
 
-    m = re.search(r"(?:R\s*)?(\d[\d\s]*[.,]\d{2}|\d+)", text)
-    if m:
-        raw_num = m.group(1).replace(" ", "").replace(",", "")
+    # JSON-LD / embedded schema.org Offer price (common on Evetech / many PDPs).
+    # Prefer currency-tagged Offer blocks; ignore tiny noise values (< 50).
+    offer_m = re.search(
+        r'"priceCurrency"\s*:\s*"ZAR"\s*,\s*"price"\s*:\s*(\d+(?:\.\d+)?)',
+        text,
+        flags=re.IGNORECASE,
+    )
+    if not offer_m:
+        offer_m = re.search(
+            r'"price"\s*:\s*(\d+(?:\.\d+)?)\s*,\s*"priceCurrency"\s*:\s*"ZAR"',
+            text,
+            flags=re.IGNORECASE,
+        )
+    if offer_m:
+        try:
+            price_val = float(offer_m.group(1))
+            if price_val >= 50:
+                avail = None
+                if re.search(r"OutOfStock|out of stock", text, flags=re.IGNORECASE):
+                    avail = "out_of_stock"
+                elif re.search(r"InStock|in stock", text, flags=re.IGNORECASE):
+                    avail = "in_stock"
+                return ParseResult(
+                    parse_status="ok",
+                    price=price_val,
+                    availability=avail or "unknown",
+                    flags={**flags, "method": "json_ld_price"},
+                )
+        except ValueError:
+            pass
+
+    # Prefer explicit ZAR "R 12,999" style amounts over first bare digit.
+    zar_m = re.search(r"R\s*(\d{1,3}(?:[\s,]\d{3})+(?:\.\d{2})?|\d{4,}(?:\.\d{2})?)", text)
+    if zar_m:
+        raw_num = zar_m.group(1).replace(" ", "").replace(",", "")
         try:
             return ParseResult(
                 parse_status="ok",
                 price=float(raw_num),
+                availability="unknown",
+                flags={**flags, "method": "html_zar"},
+            )
+        except ValueError:
+            pass
+
+    m = re.search(r"(?:R\s*)?(\d[\d\s]*[.,]\d{2}|\d+)", text)
+    if m:
+        raw_num = m.group(1).replace(" ", "").replace(",", "")
+        try:
+            price_val = float(raw_num)
+            # Bare first-digit matches on SPA shells (Takealot Next.js loader) are noise.
+            if price_val < 50:
+                return ParseResult(
+                    parse_status="parse_failed",
+                    flags={**flags, "reason": "price_noise_or_shell", "noise_price": price_val},
+                )
+            return ParseResult(
+                parse_status="ok",
+                price=price_val,
                 availability="unknown",
                 flags={**flags, "method": "html_regex"},
             )

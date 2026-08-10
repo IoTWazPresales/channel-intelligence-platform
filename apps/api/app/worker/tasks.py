@@ -818,12 +818,9 @@ def listing_capture_poll_listings_task() -> dict:
     schedule gate (`CIP_LISTING_CAPTURE_SCHEDULE`) passes — otherwise this stays a
     no-op with a skip reason (P5).
     """
-    from sqlalchemy import select
-
     from app.db.session_sync import SessionLocal
-    from app.models.listing_capture import CustomerListing
     from app.services.listing_capture.observation import default_http_get
-    from app.services.listing_capture.registry import record_observation, scheduler_should_run
+    from app.services.listing_capture.registry import poll_active_listings, scheduler_should_run
     from app.worker.celery_queues import dev_beat_disabled
 
     if dev_beat_disabled():
@@ -837,27 +834,9 @@ def listing_capture_poll_listings_task() -> dict:
         if not _listing_live_fetch_enabled():
             return {"skipped": True, "reason": "live_fetch_not_enabled", **gate}
 
-        listings = list(
-            session.scalars(
-                select(CustomerListing).where(CustomerListing.status == "active")
-            ).all()
-        )
-        polled = 0
-        failed = 0
-        for listing in listings:
-            try:
-                record_observation(session, listing, http_get=default_http_get)
-                polled += 1
-            except Exception:  # noqa: BLE001 — per-listing FLAG≠BLOCK; keep polling the rest
-                failed += 1
-                logger.exception("listing_capture live fetch failed for listing_id=%s", listing.id)
-        return {
-            "skipped": False,
-            "polled": polled,
-            "failed": failed,
-            "listing_count": len(listings),
-            **gate,
-        }
+        result = poll_active_listings(session, http_get=default_http_get)
+        session.commit()
+        return {"skipped": False, **result, **gate}
 
 
 @celery_app.task(name="imports.flush_deferred_dsi_post_validate_auto_apply")

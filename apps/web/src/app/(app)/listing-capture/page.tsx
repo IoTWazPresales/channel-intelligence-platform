@@ -39,6 +39,24 @@ type Proposal = {
   external_id: string;
   product_id: number | null;
   status: string;
+  suggested_url?: string | null;
+};
+
+type Observation = {
+  id: number;
+  listing_id: number;
+  fetched_at: string | null;
+  http_status: number | null;
+  parse_status: string | null;
+  extracted_price: number | null;
+  extracted_availability: string | null;
+  marketplace: string | null;
+  external_id: string | null;
+  product_id: number | null;
+  customer_id: number | null;
+  cpor_activation_status: string | null;
+  cpor_activation_message: string | null;
+  cpor_case_price: number | null;
 };
 
 export default function ListingCapturePage() {
@@ -67,6 +85,20 @@ export default function ListingCapturePage() {
     queryFn: ({ signal }) =>
       apiGet<{ items: Proposal[] }>('/api/v1/listing-capture/proposals', { signal }),
     enabled: tab === 1,
+  });
+
+  const {
+    data: observations,
+    isLoading: obsLoading,
+    refetch: refetchObs,
+  } = useQuery({
+    queryKey: ['listing-capture', 'observations'],
+    queryFn: ({ signal }) =>
+      apiGet<{ items: Observation[]; total: number; data_unavailable?: boolean }>(
+        '/api/v1/listing-capture/observations?limit=200',
+        { signal },
+      ),
+    enabled: tab === 2,
   });
 
   const createMut = useMutation({
@@ -98,6 +130,18 @@ export default function ListingCapturePage() {
     },
   });
 
+  const confirmSuggestedMut = useMutation({
+    mutationFn: () =>
+      apiPost<{ confirmed: number; skipped: unknown[]; proposed_remaining?: number }>(
+        '/api/v1/listing-capture/proposals/confirm-suggested',
+        {},
+      ),
+    onSuccess: async () => {
+      await refetch();
+      await refetchProposals();
+    },
+  });
+
   const confirmMut = useMutation({
     mutationFn: () =>
       apiPost(`/api/v1/listing-capture/proposals/${confirmSeed!.id}/confirm`, { url: confirmUrl }),
@@ -106,6 +150,18 @@ export default function ListingCapturePage() {
       setConfirmUrl('');
       await refetch();
       await refetchProposals();
+    },
+  });
+
+  const pollMut = useMutation({
+    mutationFn: () =>
+      apiPost<{ polled: number; failed: number; listing_count: number }>(
+        '/api/v1/listing-capture/poll',
+        { marketplaces: ['takealot', 'evetech'] },
+      ),
+    onSuccess: async () => {
+      await refetchObs();
+      await refetch();
     },
   });
 
@@ -130,13 +186,53 @@ export default function ListingCapturePage() {
       { field: 'external_id', headerName: 'External ID', flex: 1 },
       { field: 'product_id', width: 100 },
       {
+        headerName: 'Suggested URL',
+        field: 'suggested_url',
+        flex: 1,
+        minWidth: 220,
+        valueFormatter: (p) => (p.value ? String(p.value) : '— (paste URL)'),
+      },
+      {
         headerName: 'Action',
         width: 120,
         cellRenderer: (p: { data?: Proposal }) => (
-          <Button size="small" onClick={() => p.data && setConfirmSeed(p.data)}>
+          <Button
+            size="small"
+            onClick={() => {
+              if (!p.data) return;
+              setConfirmSeed(p.data);
+              setConfirmUrl(p.data.suggested_url?.trim() || '');
+            }}
+          >
             Confirm
           </Button>
         ),
+      },
+    ],
+    [],
+  );
+
+  const obsCols = useMemo<ColDef<Observation>[]>(
+    () => [
+      { field: 'id', width: 70 },
+      { field: 'fetched_at', headerName: 'Fetched', width: 170 },
+      { field: 'marketplace', width: 100 },
+      { field: 'external_id', headerName: 'External ID', width: 120 },
+      { field: 'http_status', headerName: 'HTTP', width: 80 },
+      { field: 'parse_status', headerName: 'Parse', width: 100 },
+      { field: 'extracted_price', headerName: 'Price', width: 100 },
+      { field: 'extracted_availability', headerName: 'Availability', width: 120 },
+      {
+        field: 'cpor_activation_status',
+        headerName: 'CPOR',
+        width: 140,
+        valueFormatter: (p) => (p.value ? String(p.value) : '—'),
+      },
+      {
+        field: 'cpor_activation_message',
+        headerName: 'CPOR detail',
+        flex: 1,
+        minWidth: 220,
       },
     ],
     [],
@@ -172,19 +268,76 @@ export default function ListingCapturePage() {
           </Stack>
         }
       />
-      <Alert severity="info" sx={{ mb: 2 }}>
-        Capture-only registry. Poller is registered but gated off by default. No live HTTP in this unit.
-        Migration `20260709_0069` must be applied by Warren before writes succeed on cip.
+      <Alert severity="info" sx={{ mb: 2 }} data-testid="listing-capture-guide">
+        Registry + feed proposals + poll observations. Auto-finder suggests retailer URLs (Amazon /
+        Takealot / Evetech) from report IDs — confirm before register. Each poll writes{' '}
+        <code>listing_observation</code> (price / availability / parse) and a CPOR activation flag (
+        <code>no_case_detected</code> when no covering case). Live schedule needs{' '}
+        <code>CIP_LISTING_CAPTURE_SCHEDULE</code> + <code>CIP_LISTING_LIVE_FETCH</code> (beat via{' '}
+        <code>CIP_ENABLE_DEV_BEAT=1</code>). Not intelligence v1.
       </Alert>
       {data?.data_unavailable ? (
         <Alert severity="warning" sx={{ mb: 2 }}>
           Listing tables unavailable (migration not applied yet). Read surfaces stay empty.
         </Alert>
       ) : null}
-      <Tabs value={tab} onChange={(_e, v) => setTab(v)} sx={{ mb: 1 }}>
+      <Tabs value={tab} onChange={(_e, v) => setTab(v)} sx={{ mb: 1 }} data-testid="listing-capture-tabs">
         <Tab label="Registry" />
         <Tab label="Feed proposals" />
+        <Tab label="Observations" data-testid="listing-capture-obs-tab" />
       </Tabs>
+      {tab === 1 ? (
+        <Stack direction="row" spacing={1} sx={{ mb: 1 }} alignItems="center">
+          <Button
+            size="small"
+            variant="outlined"
+            disabled={confirmSuggestedMut.isPending}
+            onClick={() => confirmSuggestedMut.mutate()}
+            data-testid="listing-confirm-suggested"
+          >
+            Confirm all suggested URLs
+          </Button>
+          {confirmSuggestedMut.isSuccess ? (
+            <Typography variant="caption" color="text.secondary">
+              Confirmed {confirmSuggestedMut.data?.confirmed ?? 0}; skipped{' '}
+              {confirmSuggestedMut.data?.skipped?.length ?? 0}
+            </Typography>
+          ) : null}
+          {confirmSuggestedMut.isError ? (
+            <Alert severity="error">{String((confirmSuggestedMut.error as Error)?.message)}</Alert>
+          ) : null}
+        </Stack>
+      ) : null}
+      {tab === 2 ? (
+        <Stack direction="row" spacing={1} sx={{ mb: 1 }} alignItems="center">
+          <Button
+            size="small"
+            variant="contained"
+            disabled={pollMut.isPending}
+            onClick={() => pollMut.mutate()}
+            data-testid="listing-poll-takealot-evetech"
+          >
+            Poll Takealot + Evetech
+          </Button>
+          <Button size="small" variant="outlined" onClick={() => refetchObs()}>
+            Refresh observations
+          </Button>
+          {pollMut.isPending ? (
+            <Typography variant="caption" color="text.secondary">
+              Polling (rate-limited)… may take a few minutes
+            </Typography>
+          ) : null}
+          {pollMut.isSuccess ? (
+            <Typography variant="caption" color="text.secondary">
+              Polled {pollMut.data?.polled ?? 0} / {pollMut.data?.listing_count ?? 0}; failed{' '}
+              {pollMut.data?.failed ?? 0}
+            </Typography>
+          ) : null}
+          {pollMut.isError ? (
+            <Alert severity="error">{String((pollMut.error as Error)?.message)}</Alert>
+          ) : null}
+        </Stack>
+      ) : null}
       {isError ? <Alert severity="error">{String((error as Error)?.message)}</Alert> : null}
       {importMut.isSuccess ? (
         <Alert severity="success" sx={{ mb: 1 }}>
@@ -202,14 +355,29 @@ export default function ListingCapturePage() {
             gridOptions={{ getRowId: (p) => String(p.data.id) }}
           />
         )
-      ) : (
+      ) : null}
+      {tab === 1 ? (
         <EnterpriseDataGrid
           rowData={proposals?.items ?? []}
           columnDefs={proposalCols}
           height={480}
           gridOptions={{ getRowId: (p) => String(p.data.id) }}
         />
-      )}
+      ) : null}
+      {tab === 2 ? (
+        obsLoading ? (
+          <Typography>Loading…</Typography>
+        ) : observations?.data_unavailable ? (
+          <Alert severity="warning">Observations unavailable.</Alert>
+        ) : (
+          <EnterpriseDataGrid
+            rowData={observations?.items ?? []}
+            columnDefs={obsCols}
+            height={480}
+            gridOptions={{ getRowId: (p) => String(p.data.id) }}
+          />
+        )
+      ) : null}
 
       <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Register listing</DialogTitle>
@@ -217,7 +385,7 @@ export default function ListingCapturePage() {
           <Stack spacing={1.5} sx={{ pt: 1 }}>
             <TextField size="small" label="Customer id" value={customerId} onChange={(e) => setCustomerId(e.target.value)} />
             <TextField size="small" label="URL" value={url} onChange={(e) => setUrl(e.target.value)} fullWidth />
-            <TextField size="small" label="Marketplace" value={marketplace} onChange={(e) => setMarketplace(e.target.value)} helperText="takealot | evetech" />
+            <TextField size="small" label="Marketplace" value={marketplace} onChange={(e) => setMarketplace(e.target.value)} helperText="takealot | amazon | evetech" />
             <TextField size="small" label="Product id (optional)" value={productId} onChange={(e) => setProductId(e.target.value)} />
             {createMut.isError ? <Alert severity="error">{String((createMut.error as Error)?.message)}</Alert> : null}
           </Stack>

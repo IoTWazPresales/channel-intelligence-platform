@@ -6,6 +6,23 @@
 
 ---
 
+## BACKLOG-130 — Listing ↔ CPOR activation check (live price vs case)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Shipped (code)** · 2026-08-10 — needs real CPOR cases for `not_activated` / `price_consistent` proof; until then polls surface `no_case_detected` |
+| **Effort** | Medium |
+| **Source** | Warren (2026-08-10): does **not** need multi-week observation history. Live listing price should reflect the CPOR case price for the period; if higher → case not activated by the customer. Latest CPOR not uploaded yet so check returns **`no_case_detected`** until cases exist. |
+| **Idea** | On poll: compare `listing_observation.extracted_price` to `cpor_case_line.srp` for customer×product with window covering observation date. Persist result on `parse_flags.cpor_activation` (`no_case_detected` / `not_activated` / `price_consistent` / …). Observations tab on `/listing-capture`. |
+| **Why it matters / deferrable** | Core channel-execution signal. Residual: upload latest CPOR then re-poll to prove activated/not-activated paths live. |
+| **What the work is** | Done in code: evaluator + poll wire + Observations UI. Residual: live fixture with covering cases. |
+| **Regression traps** | Do **not** gate on ≥14 days of observations. VAT ex/inc must match case basis. Steward still confirms listing URLs. No auto-create listings. No Google search. |
+| **Behavior to retain** | Registry + proposals + poll; Amazon/Takealot/Evetech auto-finder confirm path. |
+| **Out of scope** | Google search URL finder; multi-week promo-effectiveness analytics (separate later if needed). |
+| **TRIGGER** | Residual proof: Warren uploads latest CPOR cases covering poll dates, then re-poll Takealot/Evetech. |
+
+---
+
 ## BACKLOG-129 — CST unmappable products → catalogue-gap worklist (`ignore_no_catalogue`)
 
 | Field | Detail |
@@ -708,20 +725,20 @@
 
 ---
 
-## BACKLOG-089 — Cost per incremental unit (promo) — do not build without baseline
+## BACKLOG-089 — Cost per incremental unit (promo) vs baseline
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-01 · removed from ROADMAP A2 scope |
-| **Effort** | Large (requires validated counterfactual / baseline model) |
-| **Source** | Warren 2026-08-01 metric lock; `docs/COMMERCIAL_SEMANTICS.md` A2-X |
-| **Idea** | Cost per **incremental** unit sold under promo (support attributable to lift vs baseline). |
-| **Why it matters / deferrable** | Without a validated baseline, the number is fabricated. Deferrable until a baseline model exists; A2 ships **support cost per unit sold** (`support ÷ result_qty`) instead. |
-| **What the work is** | Define and validate a baseline/lift model; then add the metric to `COMMERCIAL_SEMANTICS` and build on CPOR. |
-| **Regression traps** | Do not ship a placeholder “incremental” that is just support÷qty under another name. |
-| **Behavior to retain** | Delivery rate / claim rate / support÷result_qty remain the A2 unit-economics set. |
-| **Out of scope** | Inventing a baseline in the A2 unit. |
-| **TRIGGER** | **Validated baseline model exists** (Warren + domain sign-off). |
+| **Status / parked** | **Shipped (FLAG-first)** · 2026-08-10 — baseline method `prior_window_same_sku_customer`; null when obs < min or lift ≤ 0 |
+| **Effort** | Medium |
+| **Source** | Warren 2026-08-10 arc: proceed with best-practice baseline; `docs/COMMERCIAL_SEMANTICS.md` A2-X |
+| **Idea** | `cost_per_incremental_unit = support / max(0, result − baseline)` with tenant-configurable lookback; never alias A2-06. |
+| **Why it matters / deferrable** | Core promo effectiveness beyond support÷qty. Residual: richer methods (`comparable_median`, `velocity_extrapolate`) when data denser. |
+| **What the work is** | Done: semantics + `incremental_unit_cost.py` + portfolio payload + UI tile + tests. |
+| **Regression traps** | Do not ship placeholder that is just support÷qty under another name. FLAG when baseline weak. |
+| **Behavior to retain** | A2-06 support÷result_qty remains separate. |
+| **Out of scope** | Inventing lift without sell-through history. |
+| **TRIGGER** | Residual: unlock alternate baseline methods when Warren asks / CST history dense enough. |
 
 ---
 
@@ -742,20 +759,12 @@
 
 ---
 
-## BACKLOG-087 — GitHub required status check for CI (branch protection / rulesets)
+## BACKLOG-087 — ~~GitHub required status check~~ — REMOVED
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-29 · GitHub Free private repo |
-| **Effort** | Small (settings once Pro available) |
-| **Source** | ROADMAP P0 “CI becomes a required gate”; PR #7 merged with `--admin` while CI was broken; 2026-07-29 attempt returned HTTP 403 on branch protection + rulesets |
-| **Idea** | Make the `CI` / `test` check a **required** status on `main` so red builds cannot merge (including no `--admin` bypass in normal process). |
-| **Why it matters / deferrable** | Without a required check, green process depends on discipline only. Deferrable because the Free private-repo plan cannot enable protection/rulesets. |
-| **What the work is** | After Pro: enable branch protection or ruleset requiring the CI `test` job on `main` (and PR merges); confirm a red PR cannot merge without override. |
-| **Regression traps** | Do not re-break pnpm `packageManager` vs `pnpm/action-setup` version clash; keep `ALLOW_TESTS_ON_DEV_DB` unset in CI; keep migrate URL on `DATABASE_URL_SYNC_MIGRATE` for `cip_test`. |
-| **Behavior to retain** | Process-only gate until then: **no `--admin` merges**; treat CI + `scripts/verify-gate` as the gate. |
-| **Out of scope** | Making the private repo public solely to unlock free protection; fixing individual API test failures. |
-| **TRIGGER** | **GitHub Pro purchased** (or org plan that unlocks private-repo branch protection / rulesets). |
+| **Status** | **Removed** · 2026-08-09 · Warren: will not purchase GitHub Pro; do not track |
+| **Note** | Process gate stays discipline-only: CI + `scripts/verify-gate`; no required status check on `main`. |
 
 ---
 
@@ -1647,16 +1656,16 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Mitigated 2026-08-08** — KPI-level exclusion shipped; root-cause mapping audit / corrective re-import still open (kept parked below the line). |
+| **Status / parked** | **Root-cause quarantine applied 2026-08-10** — suspect amounts zeroed + `raw_source_row.backlog_076_quarantine` stamp; KPI exclusion remains as safety net |
 | **Effort** | Medium (import mapping audit + optional purge of junk job facts) |
 | **Source** | Shipping KPI Phase 0 (`docs/SHIPPING_COMMERCIAL_KPI_CONTRACT.md` §Phase 0; `.tmp/shipping_kpi_phase0_diag.json`). Old “Pipeline value” = **$288M**; **$214M** of that is on **267** scheduled lines with **null ETA and null promise**. Top rows show qty **36** with amount **~$36M** each (`~1e6` unit price) from `acza_workbook_unship` source keys. |
 | **Idea** | Diagnose whether OEM amount/unit_price columns were mapped with wrong scale or currency; quarantine or re-import affected jobs. Do **not** silently rewrite amounts from the `/shipping` UI. |
-| **Mitigation shipped 2026-08-08** | `apps/api/app/services/shipping/amount_scale.py` — `is_unit_price_scale_suspect(amount, quantity)` / SQL clauses flag rows where `abs(amount)/quantity > 100_000`. Wired into `/shipping` pipeline-in-transit KPI (`apps/api/app/api/v1/endpoints/shipping.py`): current-incoming amount aggregation now excludes suspect rows (FLAG ≠ BLOCK — rows untouched, only excluded from this KPI's valuation) and reports `pipeline_in_transit.amount_scale_suspect_excluded`. **Verified against `cip`:** 17 suspect rows (all `acza_workbook_unship` source keys, qty 36–38 at ~$1M implied unit price, matching the Phase 0 sample exactly) out of 14,366 scheduled shipment facts; all-scheduled amount $464.2M → $68.2M excluding suspect rows (separate axis from the existing ETA-window current-incoming gate). |
-| **Why deferrable (remaining root-cause work)** | KPI exclusion removes the commercial distortion from the card. Root-cause mapping audit / corrective re-import / possible purge is still deferrable — no user-facing harm while the 17 rows are excluded from valuation. |
-| **What the work is (remaining)** | (1) Reproduce top-20 amount rows vs raw workbook. (2) Confirm mapping/unit semantics. (3) Job-scoped purge or corrective re-import (pairs with BACKLOG-073). |
-| **Regression traps** | Do not change DAP vs PM cost concepts; do not mass-UPDATE fact amounts without audit trail; preserve `source_key` upsert semantics. |
+| **Mitigation shipped 2026-08-08** | `apps/api/app/services/shipping/amount_scale.py` — KPI excludes suspect unit prices. |
+| **Quarantine 2026-08-10** | Zeroed `amount` on rows with `abs(amount)/qty > 100_000`; stamped JSON audit flag. Corrective re-import of Unship workbook still optional if operators want restored true amounts. |
+| **Why deferrable (remaining)** | Optional full Unship re-map + re-import if true commercial amounts are needed on those lines. |
+| **Regression traps** | Do not change DAP vs PM cost concepts; do not mass-UPDATE without audit trail; preserve `source_key` upsert semantics. |
 | **Out of scope** | Changing commercial KPI predicates again; MasterDataGridShell rewrite. |
-| **TRIGGER** | Warren prioritizes cleaning ACZA unship amount inflation at the source (mapping fix / re-import) — the KPI-level symptom is now mitigated. |
+| **TRIGGER** | Optional: Warren asks for Unship corrective re-import with verified column mapping. |
 
 ---
 

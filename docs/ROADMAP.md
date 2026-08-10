@@ -99,11 +99,10 @@ These are the "optimisation not speed" bar. Measured at P2 exit and held thereaf
 outside `main` · CI with real Postgres and `cip_test` · `scripts/verify-gate` proven (caught
 its own false PASS).
 
-**Remaining:** header-vocabulary → template config (D-022 / BACKLOG-082) — **moved into P1**,
-to be done with a real file in hand.
+**Remaining:** DSI header vocabulary (D-022 / BACKLOG-082) — **Done 2026-08-01** (P1-1).
 
-**Deferred:** required-check branch protection (BACKLOG-087, needs GitHub Pro). Until then,
-process-only: no `--admin` merges.
+**Deferred:** required GitHub status check on `main` — **dropped** (BACKLOG-087 removed;
+Warren will not buy Pro). Process gate = CI + `scripts/verify-gate` + no casual `--admin` merges.
 
 ---
 
@@ -280,8 +279,11 @@ format. **This is the dependency moment.**
 **Unit 1–3 (author loop) on `feat/b2-author-loop`:** net req → Apply → draft
 `fact_lineup_plan_item` (+ optional `commercial_lineup_case`) → builder-economics + budget position
 (`reservation_source=derived_from_profit`); half-year slots + A1 bias toggle; CSV + XLSX on-ramp.
-Remaining B2 polish: full ASUS column-parity workbook if tenant rejects on-ramp. **B4** next when
-author loop trusted.
+Remaining B2 polish: **tenant export template** — full column-map parity with the tenant’s
+existing lineup workbook **if** they reject the generic CSV/XLSX on-ramp. Shape lives in
+tenant/profile config (P6), never OEM-branded app law. First-tenant sample files are fixtures
+only (see governing rule: uploaded OEM files exemplify a shape, never define one). **B4** next
+when author loop trusted.
 
 ### B4 — Promotion plan builder
 **Entry:** A2 + B1 + B2.
@@ -306,20 +308,38 @@ layout profiles are the shape; header-vocabulary config (D-022) is a hard prereq
 **Scope:** live weekly ingest across customer formats, article-alias steward, SOH
 reconciliation (reported SOH is a check, never truth), listing seed emission.
 
-**Progress 2026-08-08:** **Takealot forward path Done** on `feat/cst-takealot-pilot-config`
-(`flat` + feed_profile + multi-file batch UI; live job 799 WEEK 28–31 → 4 periods / 96 rows;
-browser smoke PASS period strip + bulk CTA + steward section). **Remaining 7 customers** have
-placeholder `customer_report_config` rows (`reports_expected`, cadence weekly,
-`feed_profile_json.status=awaiting_sample_file`) — structure discovery still needs sample WEEK
-files (Q-004).
+**Progress 2026-08-09 (residuals + agent-safe follow-ons on `feat/p4-cst-six-customer-shapes`):**
+Takealot on main (PR #25). Residual jobs: Amazon **910/918** (totals→units + **51 listing seeds**),
+Game **911** (dual-header + SOH), IC **912** / HiFi **913**, CM **916→917** (`mtd_delta`).
+**Generic** unit↔total + **generic** `feed_profile.listing_seed` (any marketplace customer).
+Native CST **`.xls`** via xlrd (DSI parity). CST validate **`on_progress`** heartbeats wired.
+Evetech soak **919/920**. Unit E Import Centre steward browser walk on job **911** (S1–S3/S8/S9 visible;
+Locations FLAG≠BLOCK).
+**Still open under P4:** historical backfill after soak. Forward apply soak **done 2026-08-10**
+(7/8 customers with facts; Amazon FLAG — unresolved ASINs). Game W27 wide-week steward residual
+(job 928) optional. Listing registry promote + live fetch moved to P5 (shipped on this branch).
+Game header surfacing for `Asus Sales W27+` **done** (no new structure_type — dual_header fix).
+**Q-003 hosting:** closed — local-only.
+
 
 ---
 
 ## P5 — Listings + channel execution
 
-**Entry:** P4 live; CPOR cases live; ≥2 weeks of observations accrued.
-**Scope:** listing registry population, live fetch + schedule, observation history, listing
-intelligence v1 (promo activated vs not, price compliance).
+**Entry:** P4 live; CPOR cases live. **Live fetch + schedule may start immediately**
+(Warren 2026-08-09) — do not wait for ≥2 weeks of observations to enable
+`CIP_LISTING_LIVE_FETCH` / `CIP_LISTING_CAPTURE_SCHEDULE`. The ≥2 weeks bar applies
+to **intelligence v1** (promo activated vs not, price compliance), not to starting history.
+**Scope:** listing registry population, auto-finder (report ID → suggested URL → human
+confirm), live fetch + schedule, observation history, then intelligence v1.
+
+**Progress 2026-08-10:** env gates; auto-finder Amazon/Takealot/**Evetech** (no Google);
+confirm-suggested; Amazon soak 51; Evetech 44 confirmed + polled (JSON-LD prices);
+Takealot poll hits Next.js shell → parse_failed until better fetch. Observations tab +
+manual poll on `/listing-capture`. **Listing↔CPOR activation** (BACKLOG-130) = point-in-time
+obs price vs `cpor_case_line.srp`; persists `parse_flags.cpor_activation` including
+`no_case_detected` — **not** gated on ≥14d history. Residual: upload latest CPOR → prove
+`not_activated` / `price_consistent`; Takealot live HTML/API fetch.
 
 ---
 
@@ -338,15 +358,16 @@ tenant #2, per-tenant branding, billing/packaging mechanics, tenant provisioning
 
 Runs alongside all phases in GREEN autonomy. Never blocks a phase; never blocked by one.
 
-- **Unit E (CST steward) VERIFY** — implemented, never verified. Close it
+- **Unit E (CST steward) VERIFY** — **PASS** Opus 2026-08-09 (S1–S14); browser walk job 911; stamp on
+  `feat/p4-cst-six-customer-shapes` @ `69f64fa`.
 - **Distributor merge** — same engine as customer merge, extended to `dim_distributor`
 - **Existing surface retrofit** — PO management, PM gaps, channels/regions, product master,
   admin masters, commercial planner: audit each against the contract, retrofit or waive
 - **Ops-list grid parity** (BACKLOG-085) — fold into whichever phase touches those pages
-- **Lifecycle defect trio** — `progress_at` heartbeat never fires during validate;
-  liveness-aware reaper (check Celery state, not just metadata); retry guard while task active
-- **BACKLOG-076** — corrupt unit amounts (~$36M). Fix before any external demo
-- **BACKLOG-066 → 087** — worked down at phase boundaries, prioritised by trigger
+- **Lifecycle defect trio** — CST validate `progress_at` **wired 2026-08-09**; reaper inspect +
+  retry/busy-guard already shipped for main pipeline. Remaining: non-CST importers if any gap.
+- **BACKLOG-076** — corrupt unit amounts (~$36M). KPI exclude shipped; fact cleanup needs Warren.
+- **BACKLOG-066 → 086** — worked down at phase boundaries, prioritised by trigger (087 removed)
 
 ---
 
@@ -408,8 +429,9 @@ Anything whose blocker is satisfied. **P1 exited 2026-08-01** (census + defect l
 **A1 / A2 / A3** core + residuals closed 2026-08-08 (A1-09, A2-093, A3-V). Parked remain: 068 / 089 / 092 / 097.
 **B1 / B2 author loop / B4-01 / P2 auth / P3 report builder** already on `main` — do not rebuild;
 prove demo gate + close remaining holes (password reset, schedule soak, BACKLOG-076).
-**P4 Takealot** forward path smoke-proven (promote branch); next = second CST customer or demo gate.
-Lane X runs continuously in GREEN alongside anything.
+**P4/P5** on `feat/p4-cst-six-customer-shapes` (PR #26): multi-customer CST shapes + listing
+capture/activation flags — promote when Warren asks. Next: CPOR upload + re-poll, or demo-gate
+holes. Lane X runs continuously in GREEN alongside anything.
 
 ### What you cannot do
 
@@ -514,7 +536,7 @@ Still open (authoritative detail: `docs/OPEN_QUESTIONS.md`; domain mirror:
 
 | # | Decision | Blocks | Owner | OPEN_QUESTIONS |
 |---|----------|--------|-------|----------------|
-| 3 | Hosting target, budget, data residency | Deployment / P2 residual | Warren — deferred by choice | Q-003 |
+| 3 | ~~Hosting target~~ | — | **Closed** — local-only (Warren 2026-08-09) | Q-003 |
 | 4 | Per-customer CST file formats (8 customers) | P4 forward multi-format | Discovered at first load | Q-004 |
 
 **Deferred by design (not an open question — see Out of scope):** branch/location modelling;

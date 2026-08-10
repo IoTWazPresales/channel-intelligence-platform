@@ -218,5 +218,5 @@ def test_migration_0064_column_on_disposable_db() -> None:
             )
         ).first()
         rev = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
-        assert rev == "20260801_0008", f"expected tip 20260801_0008 on smoke DB, got {rev}"
+        assert rev == "20260808_0011", f"expected tip 20260808_0011 on smoke DB, got {rev}"
         assert row is not None, "business_unit column missing after tip migrate on smoke DB"

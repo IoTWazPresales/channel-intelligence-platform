@@ -254,14 +254,18 @@ def build_promo_plan_draft(
         money_status = "no_planned_reservation"
 
     over_budget_warn = money_status == "over"
-    hard = bool(tenant_profile.HARD_ENFORCE_BUDGET)
+    snap = tenant_profile.profile_snapshot()
+    over_action = str(snap.get("over_budget_action") or tenant_profile.OVER_BUDGET_ACTION)
+    hard = bool(snap.get("hard_enforce_budget", tenant_profile.HARD_ENFORCE_BUDGET)) or (
+        over_action == "block"
+    )
 
     budget = {
         "hard_enforce": hard,
-        "constraint_type": tenant_profile.CONSTRAINT_AXIS,
-        "binding_axis": tenant_profile.CONSTRAINT_AXIS,
-        "over_budget_action": tenant_profile.OVER_BUDGET_ACTION,
-        "tenant_profile": tenant_profile.profile_snapshot(),
+        "constraint_type": snap.get("constraint_axis", tenant_profile.CONSTRAINT_AXIS),
+        "binding_axis": snap.get("constraint_axis", tenant_profile.CONSTRAINT_AXIS),
+        "over_budget_action": over_action,
+        "tenant_profile": snap,
         "tracks": {
             "money": {
                 "planned_reservation_usd": round(reserved, 4),

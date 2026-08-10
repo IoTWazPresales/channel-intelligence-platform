@@ -121,11 +121,14 @@ def protected_lineup_case_ids() -> frozenset[int]:
 
 # BACKLOG-096 (P6) — onboarding-editable subset. Everything else on this module
 # (money ceiling, support-norms window, protected case ids) stays env-only.
+# Lineup export sheet/column maps are also tenant-editable (Lane B) — never OEM-hardcoded law.
 TENANT_PROFILE_OVERRIDE_KEYS: tuple[str, ...] = (
     "constraint_axis",
     "over_budget_action",
     "reservation_source",
     "pm_attribution_mode",
+    "lineup_export_net_requirement_sheet",
+    "lineup_export_draft_sheet",
 )
 
 _TENANT_PROFILE_VALID_VALUES: dict[str, frozenset[str]] = {
@@ -134,6 +137,56 @@ _TENANT_PROFILE_VALID_VALUES: dict[str, frozenset[str]] = {
     "reservation_source": frozenset({"derived_from_profit", "explicit_column", "hybrid"}),
     "pm_attribution_mode": frozenset({"business_line", "person_field", "none"}),
 }
+
+# Free-text export sheet names (validated as non-empty safe sheet titles).
+_TENANT_PROFILE_FREE_TEXT_KEYS: frozenset[str] = frozenset(
+    {
+        "lineup_export_net_requirement_sheet",
+        "lineup_export_draft_sheet",
+    }
+)
+
+# Default on-ramp sheet titles (generic — not OEM-branded).
+DEFAULT_LINEUP_EXPORT_NET_REQUIREMENT_SHEET = "NetRequirement"
+DEFAULT_LINEUP_EXPORT_DRAFT_SHEET = "DraftLineup"
+
+# Incremental promo cost baseline knobs (BACKLOG-089) — tenant-overridable via env/profile later.
+BaselineMethod = Literal[
+    "prior_window_same_sku_customer",
+    "comparable_median",
+    "velocity_extrapolate",
+]
+DEFAULT_BASELINE_METHOD: BaselineMethod = "prior_window_same_sku_customer"
+DEFAULT_BASELINE_LOOKBACK_DAYS = 84
+DEFAULT_MIN_BASELINE_OBS = 3
+
+
+def lineup_export_sheet_names(tenant_id: str = "default") -> dict[str, str]:
+    """Tenant-configurable workbook sheet titles for lineup export on-ramp."""
+    overrides = load_tenant_profile_overrides(tenant_id)
+    return {
+        "net_requirement": (
+            overrides.get("lineup_export_net_requirement_sheet")
+            or DEFAULT_LINEUP_EXPORT_NET_REQUIREMENT_SHEET
+        ).strip()
+        or DEFAULT_LINEUP_EXPORT_NET_REQUIREMENT_SHEET,
+        "draft_lineup": (
+            overrides.get("lineup_export_draft_sheet") or DEFAULT_LINEUP_EXPORT_DRAFT_SHEET
+        ).strip()
+        or DEFAULT_LINEUP_EXPORT_DRAFT_SHEET,
+    }
+
+
+def incremental_baseline_config(tenant_id: str = "default") -> dict[str, object]:
+    """BACKLOG-089 baseline knobs — env overrides for lookback/min obs; method fixed default for v1."""
+    lookback = _env_int("CIP_INCREMENTAL_BASELINE_LOOKBACK_DAYS", DEFAULT_BASELINE_LOOKBACK_DAYS, lo=7, hi=730)
+    min_obs = _env_int("CIP_INCREMENTAL_MIN_BASELINE_OBS", DEFAULT_MIN_BASELINE_OBS, lo=1, hi=100)
+    return {
+        "tenant_id": tenant_id,
+        "baseline_method": DEFAULT_BASELINE_METHOD,
+        "baseline_lookback_days": lookback,
+        "min_baseline_obs": min_obs,
+    }
 
 _TENANT_ID_SAFE_RE = re.compile(r"[^A-Za-z0-9_-]+")
 
@@ -184,6 +237,13 @@ def save_tenant_profile_overrides(tenant_id: str, overrides: dict[str, object]) 
         if raw is None or str(raw).strip() == "":
             continue
         val = str(raw).strip()
+        if key in _TENANT_PROFILE_FREE_TEXT_KEYS:
+            # Excel sheet title limit 31; keep alphanumeric + space/_/-
+            safe = re.sub(r"[^\w\s\-]", "", val)[:31].strip()
+            if not safe:
+                raise ValueError(f"{key}: sheet name required")
+            clean[key] = safe
+            continue
         if val not in _TENANT_PROFILE_VALID_VALUES[key]:
             raise ValueError(
                 f"{key}: invalid value {val!r}; expected one of "
@@ -202,12 +262,15 @@ def profile_snapshot(tenant_id: str = "default") -> dict[str, object]:
     (BACKLOG-096) over the module defaults for the four onboarding-editable keys.
     """
     overrides = load_tenant_profile_overrides(tenant_id)
+    sheets = lineup_export_sheet_names(tenant_id)
     return {
         "tenant_id": tenant_id,
         "constraint_axis": overrides.get("constraint_axis", CONSTRAINT_AXIS),
         "over_budget_action": overrides.get("over_budget_action", OVER_BUDGET_ACTION),
         "reservation_source": overrides.get("reservation_source", RESERVATION_SOURCE),
         "pm_attribution_mode": overrides.get("pm_attribution_mode", PM_ATTRIBUTION_MODE),
+        "lineup_export_sheets": sheets,
+        "incremental_baseline": incremental_baseline_config(tenant_id),
         "overrides_present": sorted(overrides.keys()),
         "hard_enforce_budget": _env_bool("HARD_ENFORCE_BUDGET", True),
         "money_ceiling_usd": _env_float("MONEY_CEILING_USD"),

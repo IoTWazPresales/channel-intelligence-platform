@@ -41,6 +41,13 @@ export type PortfolioIntelligence = {
     support_zar: number;
     delivery_rate: number | null;
   }>;
+  incremental_unit_cost?: {
+    cases_ok: number;
+    cases_flagged: number;
+    cases_evaluated: number;
+    avg_cost_per_incremental_unit_usd: number | null;
+    note?: string;
+  };
 };
 
 function fmtUsd(n: number | null | undefined): string {
@@ -112,6 +119,21 @@ export function CporPortfolioIntelligencePanel() {
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {isLoading ? '—' : fmtZar(t?.support_per_unit_sold_zar)}
+          </Typography>
+        </Paper>
+        <Paper variant="outlined" sx={{ p: 2, flex: '1 1 180px' }} data-testid="cpor-incremental-unit-cost">
+          <Typography variant="overline" color="text.secondary">
+            Cost / incremental unit
+          </Typography>
+          <Typography variant="h6">
+            {isLoading
+              ? '—'
+              : fmtUsd(data?.incremental_unit_cost?.avg_cost_per_incremental_unit_usd)}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {isLoading
+              ? '—'
+              : `${data?.incremental_unit_cost?.cases_ok ?? 0} ok / ${data?.incremental_unit_cost?.cases_flagged ?? 0} flagged (baseline)`}
           </Typography>
         </Paper>
       </Stack>
