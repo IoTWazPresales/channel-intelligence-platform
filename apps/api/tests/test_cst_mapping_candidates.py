@@ -488,7 +488,9 @@ def test_ignore_cst_candidate_idempotent():
     out = ignore_cst_candidate_sync(session, job_id=5, candidate_id=100)
 
     assert out["status"] == "ignored"
-    session.flush.assert_not_called()
+    # Re-ignore still stamps catalogue_gap / reason on context and flushes.
+    session.flush.assert_called()
+    assert cand.context.get("catalogue_gap") is True
 
 
 def test_resolve_wrong_job_raises():
