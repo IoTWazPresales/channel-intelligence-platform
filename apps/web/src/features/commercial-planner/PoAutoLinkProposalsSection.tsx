@@ -34,6 +34,7 @@ import {
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState, type InputHTMLAttributes } from 'react';
 
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
@@ -66,6 +67,9 @@ export type PoAutoLinkCompetition = {
   status: string;
   reason?: string | null;
   competing_case_ids?: number[];
+  case_bus?: string[] | null;
+  ship_bus?: string[] | null;
+  period_keys?: string[] | null;
   blocks_apply?: boolean;
 };
 
@@ -74,6 +78,9 @@ export type PoAutoLinkProposal = {
   case_id: number;
   case_period_label: string | null;
   inferred_period_start: string | null;
+  file_name?: string | null;
+  file_base?: string | null;
+  version_prefix?: string | null;
   customer_id: number | null;
   customer_label: string | null;
   distributor_id: number | null;
@@ -383,14 +390,25 @@ function PoAutoLinkConfirmDialog({
               {customerDisplayLabel(proposal)}
             </Typography>
           </Box>
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap data-testid="po-auto-link-confirm-case-meta">
+            <CaseFileChips proposal={proposal} />
             <Chip size="small" label={proposal.case_period_label ?? proposal.inferred_period_start ?? '—'} />
             <Chip size="small" color={confidenceColor(proposal.confidence)} label={proposal.confidence} />
             <Chip size="small" variant="outlined" label={reasonLabel(proposal.reason)} />
             {proposal.commercial_status ? (
               <Chip size="small" variant="outlined" label={proposal.commercial_status} />
             ) : null}
+            <CompetitionChip proposal={proposal} />
           </Stack>
+          {proposal.competition?.competing_case_ids?.filter((id) => id !== proposal.case_id).length ? (
+            <Alert severity="warning" data-testid="po-auto-link-confirm-competitors">
+              Also proposed for case(s){' '}
+              {proposal.competition.competing_case_ids
+                .filter((id) => id !== proposal.case_id)
+                .join(', ')}
+              . Do not link both sides blindly — confirm this winner only.
+            </Alert>
+          ) : null}
           <Table size="small">
             <TableHead>
               <TableRow>
@@ -626,16 +644,59 @@ function CoverageLine({
 function CompetitionChip({ proposal }: { proposal: PoAutoLinkProposal }) {
   const comp = proposal.competition;
   if (!comp?.status || comp.status === 'not_contested') return null;
-  const label =
+  const rivals = (comp.competing_case_ids ?? []).filter((id) => id !== proposal.case_id);
+  const statusBit =
     comp.status === 'contested'
-      ? 'Competition: contested'
+      ? 'Contested'
       : comp.status === 'indeterminate'
-        ? 'Competition: indeterminate'
-        : `Competition: ${comp.status}`;
+        ? 'Indeterminate'
+        : comp.status;
+  const label =
+    rivals.length > 0
+      ? `${statusBit}: also cases ${rivals.join(', ')}`
+      : `Competition: ${statusBit.toLowerCase()}`;
+  const tipParts = [
+    comp.reason,
+    rivals.length ? `Competing case ids: ${rivals.join(', ')}` : null,
+    comp.case_bus?.length ? `Case BUs: ${comp.case_bus.join(', ')}` : null,
+    comp.ship_bus?.length ? `Ship BUs: ${comp.ship_bus.join(', ')}` : null,
+    comp.period_keys?.length ? `Periods: ${comp.period_keys.join(', ')}` : null,
+  ].filter(Boolean);
   return (
-    <Tooltip title={comp.reason ?? label}>
-      <Chip size="small" variant="outlined" color="warning" label={label} />
+    <Tooltip title={tipParts.join(' · ') || label}>
+      <Chip
+        size="small"
+        variant="outlined"
+        color="warning"
+        label={label}
+        data-testid="po-auto-link-competition-chip"
+      />
     </Tooltip>
+  );
+}
+
+function CaseFileChips({ proposal }: { proposal: PoAutoLinkProposal }) {
+  const fileLabel =
+    proposal.version_prefix != null && proposal.file_base
+      ? `v${proposal.version_prefix} · ${proposal.file_base}`
+      : proposal.file_base || proposal.file_name || null;
+  return (
+    <>
+      <Chip
+        size="small"
+        variant="outlined"
+        component={Link}
+        href="/lineup"
+        clickable
+        label={`Case ${proposal.case_id}`}
+        data-testid="po-auto-link-case-id-chip"
+      />
+      {fileLabel ? (
+        <Tooltip title={proposal.file_name ?? fileLabel}>
+          <Chip size="small" variant="outlined" label={fileLabel} data-testid="po-auto-link-file-chip" />
+        </Tooltip>
+      ) : null}
+    </>
   );
 }
 
@@ -672,6 +733,7 @@ function PoAutoLinkProposalRowContent({
         <Tooltip title={reasonLabel(proposal.reason)}>
           <Chip size="small" color={confidenceColor(proposal.confidence)} label={proposal.confidence} />
         </Tooltip>
+        <CaseFileChips proposal={proposal} />
         <Typography variant="body2" fontWeight={500}>
           {proposal.po_number ?? `#${proposal.purchase_order_id}`}
         </Typography>
@@ -1537,6 +1599,10 @@ export function PoAutoLinkProposalsSection({
                           <Stack spacing={1}>
                             <Typography variant="body2">
                               <strong>Case id:</strong> {p.case_id}
+                            </Typography>
+                            <Typography variant="body2">
+                              <strong>Source file:</strong> {p.file_name ?? p.file_base ?? '—'}
+                              {p.version_prefix != null ? ` (prefix ${p.version_prefix})` : ''}
                             </Typography>
                             <Typography variant="body2">
                               <strong>Period:</strong> {p.case_period_label ?? p.inferred_period_start ?? '—'}

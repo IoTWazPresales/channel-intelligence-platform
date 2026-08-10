@@ -8,6 +8,7 @@ then ``ship_confirm_date`` when CRAD is absent.
 from __future__ import annotations
 
 import logging
+import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date
@@ -26,6 +27,33 @@ logger = logging.getLogger(__name__)
 ConfidenceTier = Literal["high", "medium"]
 DateSource = Literal["crad", "schedule_ship", "ship_confirm", "none"]
 CustomerAlign = Literal["exact", "unresolved", "mismatch"]
+
+_VERSION_PREFIX_RE = re.compile(r"^(\d+)\.\s*(.+)$")
+
+
+def lineup_file_version_meta(file_name: str | None) -> dict[str, str | None]:
+    """D-030-oriented display fields for steward competition triage.
+
+    ``version_prefix`` is the leading ``N.`` when present (e.g. ``2. ACZA…xlsx`` → ``2``).
+    ``file_base`` is the stem without extension and without that prefix.
+    """
+    raw = (file_name or "").strip() or None
+    if not raw:
+        return {"file_name": None, "file_base": None, "version_prefix": None}
+    base = raw.replace("\\", "/").rsplit("/", 1)[-1]
+    stem = base
+    for ext in (".xlsx", ".xls", ".xlsm", ".csv"):
+        if stem.lower().endswith(ext):
+            stem = stem[: -len(ext)]
+            break
+    m = _VERSION_PREFIX_RE.match(stem.strip())
+    if m:
+        return {
+            "file_name": raw,
+            "file_base": m.group(2).strip() or stem,
+            "version_prefix": m.group(1),
+        }
+    return {"file_name": raw, "file_base": stem.strip() or None, "version_prefix": None}
 
 
 from app.services.commercial_planner.lineup_open_channel import effective_lineup_customer_id
@@ -637,6 +665,7 @@ async def _po_auto_link_proposals_inner(
         case = case_by_id[acc.case_id]
         po = po_meta.get(acc.purchase_order_id)
         products = sorted(acc.products.values(), key=lambda x: x.product_id)
+        file_meta = lineup_file_version_meta(getattr(case, "file_name", None))
         out.append(
             {
                 "proposal_key": acc.proposal_key(),
@@ -645,6 +674,9 @@ async def _po_auto_link_proposals_inner(
                 "inferred_period_start": case.inferred_period_start.isoformat()
                 if case.inferred_period_start
                 else None,
+                "file_name": file_meta["file_name"],
+                "file_base": file_meta["file_base"],
+                "version_prefix": file_meta["version_prefix"],
                 "customer_id": acc.customer_id,
                 "customer_label": cust_names.get(int(acc.customer_id)) if acc.customer_id else None,
                 "distributor_id": acc.distributor_id,
