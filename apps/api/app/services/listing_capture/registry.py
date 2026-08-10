@@ -310,7 +310,8 @@ def reparse_observation(session: Session, observation: ListingObservation, *, ma
     """Re-run parser on stored snapshot — no re-fetch. Re-evaluate CPOR activation."""
     text = decompress_snapshot(observation.raw_snapshot)
     parsed = parse_snapshot_text(text, marketplace=marketplace)
-    listing = session.get(CustomerListing, observation.listing_id)
+    listing_id = getattr(observation, "listing_id", None)
+    listing = session.get(CustomerListing, listing_id) if listing_id is not None else None
     flags = {**(parsed.flags or {}), "reparsed": True}
     if listing is not None:
         from app.services.listing_capture.cpor_activation import (
@@ -322,7 +323,7 @@ def reparse_observation(session: Session, observation: ListingObservation, *, ma
             session,
             listing,
             listing_price=parsed.price,
-            as_of=as_of_from_fetched_at(observation.fetched_at),
+            as_of=as_of_from_fetched_at(getattr(observation, "fetched_at", None)),
         )
     observation.parser_version = PARSER_VERSION
     observation.extracted_price = parsed.price

@@ -48,7 +48,7 @@ def evaluate_cpor_activation(
         "case_price_field": "cpor_case_line.srp",
     }
 
-    if listing.product_id is None:
+    if getattr(listing, "product_id", None) is None:
         out["status"] = "no_product_link"
         out["message"] = "Listing has no product_id — cannot match a CPOR case line."
         return out

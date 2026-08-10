@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-10 — **P4→B→089→076 arc:** forward CST apply soak (7/8 customers facts; Amazon FLAG); tenant lineup export sheet profile + B4 hard-budget via profile; BACKLOG-089 FLAG-first incremental unit cost; BACKLOG-076 quarantine 17 suspect amounts. Next: promote PR #26; P5 CPOR upload/re-poll; Q-013/014 Warren.
 - 2026-08-10 — **Docs:** ROADMAP B2 polish reworded (tenant export template, not “ASUS column-parity”); P5 progress + activation semantics aligned with code; CURRENT lock note. Agents must update CURRENT/CONTEXT/ROADMAP claims as they go.
 - 2026-08-10 — **Evetech confirm + poll + CPOR activation:** auto-finder Evetech URL; confirm 44; poll Takealot+Evetech → SQL observations; JSON-LD price parse; `no_case_detected` on `parse_flags.cpor_activation`; Observations tab + manual poll. Takealot still SPA-shell (parse_failed). Next: upload CPOR cases; Takealot fetch improvement; promote PR #26 when asked.
 - 2026-08-09 — **Client RAW re-ingest:** Takealot W31 → 24 listings confirmed; Evetech → 44 proposed (human URL); Game W27 → 565 rows / 6 weeks (wide-week). Fixes: seed in-session dedupe; steward period no longer overwrites unpivoted weeks; Takealot spaced Product ID → PLID URL.

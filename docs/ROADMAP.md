@@ -315,9 +315,9 @@ Game **911** (dual-header + SOH), IC **912** / HiFi **913**, CM **916→917** (`
 Native CST **`.xls`** via xlrd (DSI parity). CST validate **`on_progress`** heartbeats wired.
 Evetech soak **919/920**. Unit E Import Centre steward browser walk on job **911** (S1–S3/S8/S9 visible;
 Locations FLAG≠BLOCK).
-**Still open under P4:** fuller multi-customer weekly soak; historical backfill after soak.
-Game wide-week unpivot **done** (flat dual-header → one row per product×week). Listing registry
-promote + live fetch moved to P5 (shipped on this branch).
+**Still open under P4:** historical backfill after soak. Forward apply soak **done 2026-08-10**
+(7/8 customers with facts; Amazon FLAG — unresolved ASINs). Game W27 wide-week steward residual
+(job 928) optional. Listing registry promote + live fetch moved to P5 (shipped on this branch).
 Game header surfacing for `Asus Sales W27+` **done** (no new structure_type — dual_header fix).
 **Q-003 hosting:** closed — local-only.
 

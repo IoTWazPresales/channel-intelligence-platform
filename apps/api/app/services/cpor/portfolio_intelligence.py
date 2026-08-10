@@ -198,6 +198,10 @@ def build_portfolio_intelligence(session: Session) -> dict[str, Any]:
             }
         )
 
+    from app.services.cpor.incremental_unit_cost import build_portfolio_incremental_summary
+
+    incremental = build_portfolio_incremental_summary(session)
+
     return {
         "currency_compute": "USD",
         "currency_display_secondary": "ZAR",
@@ -217,6 +221,7 @@ def build_portfolio_intelligence(session: Session) -> dict[str, Any]:
             "support_per_unit_sold_usd": support_per_unit_usd,
             "support_per_unit_sold_zar": support_per_unit_zar,
         },
+        "incremental_unit_cost": incremental,
         "by_customer": customers_out,
         "by_bu": bu_out,
         "by_promotion_type": promo_out,

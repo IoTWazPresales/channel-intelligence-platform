@@ -443,7 +443,7 @@ async def export_lineup_net_requirement_xlsx(
     limit: int = Query(default=500, ge=1, le=2000),
     db: AsyncSession = Depends(get_db),
 ):
-    """B2-3 — tenant workbook on-ramp (NetRequirement + DraftLineup sheets). Full ASUS template later."""
+    """B2-3 — tenant workbook on-ramp (NetRequirement + DraftLineup sheets; titles from tenant profile)."""
     data = await build_tenant_workbook_export(
         db,
         period_start=period_start,

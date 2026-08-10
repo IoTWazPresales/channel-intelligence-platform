@@ -1,8 +1,8 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-10 (Evetech confirm + poll + CPOR activation flags)
+**Last updated:** 2026-08-10 (P4 apply soak + Lane B export/hard-budget + 089 + 076)
 
-**Branch:** `feat/p4-cst-six-customer-shapes` → **PR #26**
+**Branch:** `feat/p4-cst-six-customer-shapes` → **PR #26** (promote when CI allows / Warren)
 
 **Alembic on cip:** `20260808_0011` (head)
 
@@ -10,31 +10,34 @@
 
 - CST unmappable → Ignore → catalogue gaps (`source=cst`). Never auto-create PM.
 - Game ≠ new structure_type — dual_header + wide-week unpivot.
-- P5: live fetch now. **Listing↔CPOR activation** = point-in-time (obs price vs `cpor_case_line.srp`); statuses include **`no_case_detected`**. Persisted on `listing_observation.parse_flags.cpor_activation` (no migration). Not gated on ≥14d history.
+- Listing↔CPOR activation = point-in-time vs `cpor_case_line.srp`; `no_case_detected` when none.
+- B2 export sheet titles = **tenant profile** (not OEM hardcoding).
+- A2-X incremental unit cost = baseline FLAG-first (not A2-06 rename).
 
-## Proven
+## P4 forward soak (2026-08-10)
 
-| Item | Proof |
-|---|---|
-| Takealot W31 | job **927** → **24** confirmed listings |
-| Evetech Sales | job **925** → **44** confirmed via auto-finder `…/laptops-for-sale/{web_id}` (no Google) |
-| Evetech poll | **44/44** HTTP 200 + JSON-LD prices (R6 999–R74 999) + activation flags |
-| Takealot poll | **24/24** HTTP 200 but **SPA shell** — parse_failed (`price_noise_or_shell`); needs better fetch later |
-| CPOR check | 58× `no_case_detected`, 10× `no_product_link` (no cases uploaded yet) |
-| Amazon soak | 51 listings (prior) |
-| Game W27 | job **928** → **565** staging / **6** periods |
+| Customer | Job | Facts after apply | Notes |
+|---|---|---|---|
+| Takealot | 927 | 20 | already had facts; re-apply ok |
+| Evetech | 925 | 37 | |
+| CM | 917 | 78 | MTD week29 |
+| IC | 912 | 82 | |
+| HiFi | 913 | 51 | |
+| Makro | 903 | 47 | |
+| Game | 911 | 3 | W33; W27 wide-week 928 still unresolved |
+| Amazon | 918 | **0 FLAG** | 51/51 products unresolved — sample not forward-week PM match |
 
-**Folder:** `…\Retail\Client RAW Report\`
+## Also shipped this arc
 
-## Doc locks (2026-08-10)
-
-- B2 “polish” = **tenant export template** if on-ramp rejected — **not** hardcoded OEM/ASUS
-  column law. Sample OEM files exemplify a shape only (`docs/ROADMAP.md`).
+- Lane B: tenant export sheet names in profile; B4 `create_blocked` when hard enforce **or** `over_budget_action=block`
+- BACKLOG-089 FLAG-first incremental metric on portfolio + UI tile
+- BACKLOG-076: 17 suspect inbound amounts quarantined (amount→0 + stamp)
 
 ## Next
 
-1. Upload latest CPOR → re-poll → prove `not_activated` / `price_consistent`
-2. Takealot live HTML/API fetch (urllib gets Next.js shell only)
-3. Promote PR #26 when Warren asks
+1. Promote PR #26 (CI has pre-existing unrelated failures — use admin merge or fix tip tests)
+2. P5: upload CPOR → re-poll activation; Takealot SPA fetch
+3. Q-013 / Q-014 Warren picks; BACKLOG-010 only with backup+approve
+4. CST historical backfill after forward soak trusted
 
-**Env:** local Windows. `cip` @ `20260808_0011`. Listing flags on.
+**Env:** local Windows. `cip` @ `20260808_0011`.

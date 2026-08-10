@@ -926,9 +926,21 @@ def tenant_profile_hard_enforce() -> bool:
 
 @router.get("/intelligence/portfolio")
 def cpor_portfolio_intelligence() -> dict[str, Any]:
-    """A2-U1: support spend, delivery rate, support per unit sold (USD + ZAR display)."""
+    """A2-U1: support spend, delivery rate, support per unit sold (USD + ZAR display).
+
+    Also includes BACKLOG-089 incremental unit cost summary (FLAG when baseline weak).
+    """
     with SessionLocal() as session:
         return build_portfolio_intelligence(session)
+
+
+@router.get("/intelligence/incremental-unit-cost")
+def cpor_incremental_unit_cost() -> dict[str, Any]:
+    """BACKLOG-089: cost per incremental unit vs sell-through baseline (null when weak)."""
+    from app.services.cpor.incremental_unit_cost import build_portfolio_incremental_summary
+
+    with SessionLocal() as session:
+        return build_portfolio_incremental_summary(session)
 
 
 @router.get("/intelligence/norms")

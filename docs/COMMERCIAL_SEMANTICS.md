@@ -144,7 +144,7 @@ domain §1.5). **Never** convert a USD portfolio total through one period FX rat
 | A2-05 | Comparable-case lookup | IMPLEMENTED (A2-U2) | **Ranked** (never filtered): customer → BU → promo type → quarter proximity → volume | CPOR |
 | A2-06 | **Support cost per unit sold under promo** | IMPLEMENTED (A2-U1) | Σ `ttl_support_usd` / Σ `result_qty` (result > 0); ZAR companion = Σ `ttl_support` / Σ `result_qty` | CPOR |
 | A2-07 | **Promo load recon** (BACKLOG-093) | IMPLEMENTED | Case-scoped CST (`fact_customer_sellthrough`) vs approved case terms: buckets `ok` / `missing_load` / `wrong_window` / `wrong_price` / `price_unknown` / `no_cst`. Strict window overlap; price tol 2%. Never DSI sell-out. Separate from Settlement claim-vs-CST. `GET /cpor/cases/{id}/promo-load-recon` · UI tab **Promo load**. | CPOR |
-| A2-X | Cost per **incremental** unit | **DO NOT BUILD** | No counterfactual/baseline → would fabricate. BACKLOG trigger: validated baseline model exists | — |
+| A2-X | Cost per **incremental** unit | **IMPLEMENTED (FLAG-first) 2026-08-10** | `support / max(0, result_qty − baseline_qty)` with tenant baseline `prior_window_same_sku_customer` (CST lookback). Weak baseline → **null + FLAG**. Distinct from A2-06. BACKLOG-089. | CPOR |
 
 #### Non-computable register
 
