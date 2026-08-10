@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-10 — **Unit 3 PR triage:** closed #17 (superseded — already on main), #16 (BACKLOG-099 parked; arc ignores CI), drafts #1–3. Next: Unit 5 CST historical 8×4Q + Game W27.
 - 2026-08-10 — **Unit 2 PO UX:** BACKLOG-107/113/117/114/116 — proposal `file_name`/`version_prefix`; list+confirm competition chips; period default already residual-inclusive. Branch `feat/po-ux-107-116`. Next: merge PR then Unit 3 (#17/#16).
 - 2026-08-10 — **Arc sign-off locked** (Q1–Q15). Unit 0: BACKLOG-010 merged (`10a4174`). Unit 1: Q-013→case 90 (PO 16355), Q-014→case 121 (PO 8933). Next: Unit 2 PO UX 107/113/117/114+116 (split PRs). P5 last. Await 094 formulas + 092 payment files.
 - 2026-08-10 — **BACKLOG-010:** local `cip` PAV already 0; restore snapshot + idempotent TRUNCATE via `scripts/ops/drop_legacy_product_attribute_value.py`; `.env.example` documents `PM_WRITE_LEGACY_EAV`. Table schema retained. Next: P5 residual / Q-013/014.
