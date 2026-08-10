@@ -26,6 +26,11 @@
 
 **Folder:** `…\Retail\Client RAW Report\`
 
+## Doc locks (2026-08-10)
+
+- B2 “polish” = **tenant export template** if on-ramp rejected — **not** hardcoded OEM/ASUS
+  column law. Sample OEM files exemplify a shape only (`docs/ROADMAP.md`).
+
 ## Next
 
 1. Upload latest CPOR → re-poll → prove `not_activated` / `price_consistent`

@@ -279,8 +279,11 @@ format. **This is the dependency moment.**
 **Unit 1–3 (author loop) on `feat/b2-author-loop`:** net req → Apply → draft
 `fact_lineup_plan_item` (+ optional `commercial_lineup_case`) → builder-economics + budget position
 (`reservation_source=derived_from_profit`); half-year slots + A1 bias toggle; CSV + XLSX on-ramp.
-Remaining B2 polish: full ASUS column-parity workbook if tenant rejects on-ramp. **B4** next when
-author loop trusted.
+Remaining B2 polish: **tenant export template** — full column-map parity with the tenant’s
+existing lineup workbook **if** they reject the generic CSV/XLSX on-ramp. Shape lives in
+tenant/profile config (P6), never OEM-branded app law. First-tenant sample files are fixtures
+only (see governing rule: uploaded OEM files exemplify a shape, never define one). **B4** next
+when author loop trusted.
 
 ### B4 — Promotion plan builder
 **Entry:** A2 + B1 + B2.
@@ -330,11 +333,13 @@ to **intelligence v1** (promo activated vs not, price compliance), not to starti
 **Scope:** listing registry population, auto-finder (report ID → suggested URL → human
 confirm), live fetch + schedule, observation history, then intelligence v1.
 
-**Progress 2026-08-09:** env gates documented; auto-finder suggests Amazon/Takealot URLs
-from `cst_listing_seed`; poll task commits observations; bulk confirm-suggested; Amazon soak
-51 listings / 52 obs (http 200). Layout-family defaults emit Takealot/Evetech seeds on next
-CST validate (source files not present in this workspace for re-soak). Intelligence v1 →
-BACKLOG-130 (≥14 day obs span).
+**Progress 2026-08-10:** env gates; auto-finder Amazon/Takealot/**Evetech** (no Google);
+confirm-suggested; Amazon soak 51; Evetech 44 confirmed + polled (JSON-LD prices);
+Takealot poll hits Next.js shell → parse_failed until better fetch. Observations tab +
+manual poll on `/listing-capture`. **Listing↔CPOR activation** (BACKLOG-130) = point-in-time
+obs price vs `cpor_case_line.srp`; persists `parse_flags.cpor_activation` including
+`no_case_detected` — **not** gated on ≥14d history. Residual: upload latest CPOR → prove
+`not_activated` / `price_consistent`; Takealot live HTML/API fetch.
 
 ---
 
@@ -424,8 +429,9 @@ Anything whose blocker is satisfied. **P1 exited 2026-08-01** (census + defect l
 **A1 / A2 / A3** core + residuals closed 2026-08-08 (A1-09, A2-093, A3-V). Parked remain: 068 / 089 / 092 / 097.
 **B1 / B2 author loop / B4-01 / P2 auth / P3 report builder** already on `main` — do not rebuild;
 prove demo gate + close remaining holes (password reset, schedule soak, BACKLOG-076).
-**P4 Takealot** forward path smoke-proven (promote branch); next = second CST customer or demo gate.
-Lane X runs continuously in GREEN alongside anything.
+**P4/P5** on `feat/p4-cst-six-customer-shapes` (PR #26): multi-customer CST shapes + listing
+capture/activation flags — promote when Warren asks. Next: CPOR upload + re-poll, or demo-gate
+holes. Lane X runs continuously in GREEN alongside anything.
 
 ### What you cannot do
 
