@@ -1,37 +1,41 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-10 (BACKLOG-010 PAV truncate on cip)
+**Last updated:** 2026-08-10 (arc sign-off locked; Unit 0+1 done)
 
-**Branch:** `ops/backlog-010-drop-pav` (from `main` @ `5e4a84c`)
+**Branch:** `feat/q013-q014-po-winners` (after Unit 1 PR → merge; next `feat/po-ux-107-116`)
 
 **Alembic on cip:** `20260808_0011` (head)
 
-## Locked rules
+## Arc sign-off (Warren 2026-08-10)
 
-- CST unmappable → Ignore → catalogue gaps (`source=cst`). Never auto-create PM.
-- Game ≠ new structure_type — dual_header + wide-week unpivot.
-- Listing↔CPOR activation = point-in-time vs `cpor_case_line.srp`; `no_case_detected` when none.
-- B2 export sheet titles = **tenant profile** (not OEM hardcoding).
-- A2-X incremental unit cost = baseline FLAG-first (not A2-06 rename).
-- Specs canonical on `dim_product.specs_json`; PAV legacy off (`PM_WRITE_LEGACY_EAV` default false).
+| Q | Answer |
+|---|---|
+| Q1 merge 010 | Approve → **merged** `main` @ `10a4174` |
+| Q2 Q-013 | Case **90** linked PO 16355 |
+| Q3 Q-014 | Case **121** linked PO 8933 |
+| Q4 PO UX | Full **107/113/117/114 + 116** |
+| Q5 PRs | Audit **#17** + **#16** |
+| Q6 CI | **Ignore** this arc |
+| Q7 CST hist | All **8** customers × **last 4 quarters** (default N=4) |
+| Q8 Game W27 | Steward+apply job 928 |
+| Q9 068 | This arc |
+| Q10 Demo/P2 | Second-user + backup restore soak |
+| Q11 094 | Formula lock **before** build — awaiting Warren confirm of proposed formulas |
+| Q12 092 | Build when Warren supplies payment files |
+| Q13 parity | **044/045 then 026/027** |
+| Q14 P6 | Config polish only |
+| Q15 | **Split PR per unit** |
+| P5 | **LAST** |
 
-## Just done
+## Done this session
 
-- **BACKLOG-010:** `cip.product_attribute_value` count was already **0**; snapshot + idempotent `TRUNCATE` via `scripts/ops/drop_legacy_product_attribute_value.py`. Schema kept for escape hatch.
+- Unit 0: BACKLOG-010 merged to main
+- Unit 1: Q-013/Q-014 applied on `cip` + OPEN_QUESTIONS resolved
 
-## Warren decisions still required
+## Next unit
 
-- **Q-013** — PURMIDR25005866: pick case 90 vs 127.
-- **Q-014** — PURMIDR26009979: pick among 121 / 122 / 128.
+**Unit 2** — PO UX cluster 107 → 113 → 117 → 114 + steward-contract **116** on new branch after Unit 1 PR merge.
 
-## Next (TRIGGER-ready)
-
-1. **P5 residual** — upload CPOR → re-poll activation; Takealot SPA/API fetch.
-2. CST historical backfill (after forward soak trusted).
-3. **BACKLOG-094** — MAC + price-delta once formulas locked.
-4. Demo gate / P2 second-user landing; backup restore soak.
-5. **BACKLOG-068** landed-quarter lens when Shipping prioritizes.
-6. PO residual triage after Q-013/Q-014 answers.
-7. P6 second-tenant config-only onboard.
+**Blocked waiting on Warren:** 094 formula confirm; 092 payment files.
 
 **Env:** local Windows. `cip` @ `20260808_0011`.

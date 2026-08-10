@@ -10,28 +10,6 @@ Each entry: what is unclear · why it matters · interim assumption · what woul
 
 ## Open
 
-### Q-013 — W3 tie PURMIDR25005866 (90↔127, 26Q1 NR) — Unit 4
-
-| Field | Value |
-|-------|--------|
-| **What is unclear** | Which case should hold the PO link after in-BU (NR) product-level shipment tiebreak |
-| **Evidence** | Contested BU=NR. Shipment NR products=8; case 90 overlap=8 (identical set); case 127 overlap=8 (identical set). Out-of-BU NB ship products excluded (C2). |
-| **Why it matters** | Auto-pick would invent a winner; Q-012 requires OPEN_QUESTIONS on tie |
-| **Interim** | Both proposals left live (contested-pending); no link mutation in Unit 4 W3 |
-| **Blocking?** | Yes for clearing this residual PO only |
-| **Source** | PROGRAM-A Unit 4 Phase W3 · 2026-08-05 |
-
-### Q-014 — W3 tie PURMIDR26009979 (121↔122↔128, 26Q2 NB) — Unit 4
-
-| Field | Value |
-|-------|--------|
-| **What is unclear** | Which case should hold the PO link after in-BU (NB) product-level shipment tiebreak |
-| **Evidence** | Contested BU=NB. Shipment NB products=4. Overlaps: case 121→1 (3266); case 122→3 (3266,3975,16653); case 128→1 (3980). No unique case explains the full in-BU set; multiple cases have positive overlap. Out-of-BU NR excluded (C2). |
-| **Why it matters** | Max-overlap alone is not a locked tiebreak (Q-012: no invented ordering); partial multi-case coverage = tie |
-| **Interim** | All three left contested-pending; no link mutation in Unit 4 W3 |
-| **Blocking?** | Yes for clearing this residual PO only |
-| **Source** | PROGRAM-A Unit 4 Phase W3 · 2026-08-05 |
-
 ### ASSUMPTION MADE — Unit 2 contested vs service refuse (2026-08-05)
 
 | Field | Value |
@@ -70,6 +48,20 @@ Each entry: what is unclear · why it matters · interim assumption · what woul
 ---
 
 ## Resolved
+
+### Q-013 — W3 tie PURMIDR25005866 (90↔127, 26Q1 NR) — **Resolved 2026-08-10**
+
+| Field | Value |
+|-------|--------|
+| **Answer** | Winner **case 90**. Linked `purchase_order` id **16355** → case 90 with note `Q-013 Warren 2026-08-10`. Loser 127 left without this PO link (not superseded). |
+| **Source** | Warren arc sign-off Q2=A · 2026-08-10 |
+
+### Q-014 — W3 tie PURMIDR26009979 (121↔122↔128, 26Q2 NB) — **Resolved 2026-08-10**
+
+| Field | Value |
+|-------|--------|
+| **Answer** | Winner **case 121**. Linked `purchase_order` id **8933** → case 121 with note `Q-014 Warren 2026-08-10`. Losers 122/128 left without this PO link. |
+| **Source** | Warren arc sign-off Q3=A · 2026-08-10 |
 
 ### Q-U3-S0 — Case 130/146 Computer Mania supersession check — **Resolved 2026-08-05**
 
