@@ -6,20 +6,20 @@
 
 ---
 
-## BACKLOG-130 — Listing intelligence v1 (promo / price compliance)
+## BACKLOG-130 — Listing ↔ CPOR activation check (live price vs case)
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-09 |
-| **Effort** | Large |
-| **Source** | `docs/ROADMAP.md` P5; Warren (2026-08-09): live fetch may start immediately; ≥2 weeks of observations gate **intelligence v1** only. |
-| **Idea** | After observation history accrues, ship intelligence v1: promo activated vs not, price compliance vs plan/MAC bands, explainable flags on listing×product. |
-| **Why it matters / deferrable** | Without multi-week history, compliance/promo signals are noise. Fetch/registry already ship; defer analytics until span is real. |
-| **What the work is** | Read models + UI over `listing_observation` time series; join to plan/promo; FLAG≠BLOCK stewardship; no inventing prices. |
-| **Regression traps** | Never auto-register listings; steward confirm remains required; do not treat single-day soak as intelligence proof. |
-| **Behavior to retain** | Registry + proposals + poll/env gates; Amazon soak path. |
-| **Out of scope** | P6 multi-tenant; new marketplaces beyond takealot/evetech/amazon templates. |
-| **TRIGGER** | `listing_observation` span ≥14 days for ≥1 active marketplace **and** Warren asks for intelligence v1. |
+| **Status / parked** | **Shipped (code)** · 2026-08-10 — needs real CPOR cases for `not_activated` / `price_consistent` proof; until then polls surface `no_case_detected` |
+| **Effort** | Medium |
+| **Source** | Warren (2026-08-10): does **not** need multi-week observation history. Live listing price should reflect the CPOR case price for the period; if higher → case not activated by the customer. Latest CPOR not uploaded yet so check returns **`no_case_detected`** until cases exist. |
+| **Idea** | On poll: compare `listing_observation.extracted_price` to `cpor_case_line.srp` for customer×product with window covering observation date. Persist result on `parse_flags.cpor_activation` (`no_case_detected` / `not_activated` / `price_consistent` / …). Observations tab on `/listing-capture`. |
+| **Why it matters / deferrable** | Core channel-execution signal. Residual: upload latest CPOR then re-poll to prove activated/not-activated paths live. |
+| **What the work is** | Done in code: evaluator + poll wire + Observations UI. Residual: live fixture with covering cases. |
+| **Regression traps** | Do **not** gate on ≥14 days of observations. VAT ex/inc must match case basis. Steward still confirms listing URLs. No auto-create listings. No Google search. |
+| **Behavior to retain** | Registry + proposals + poll; Amazon/Takealot/Evetech auto-finder confirm path. |
+| **Out of scope** | Google search URL finder; multi-week promo-effectiveness analytics (separate later if needed). |
+| **TRIGGER** | Residual proof: Warren uploads latest CPOR cases covering poll dates, then re-poll Takealot/Evetech. |
 
 ---
 

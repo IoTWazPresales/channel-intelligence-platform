@@ -18,7 +18,10 @@ from app.services.listing_capture.registry import (
     create_listing,
     import_listings_csv,
     list_proposals,
+    list_recent_observations,
     listing_to_dict,
+    observation_to_dict,
+    poll_active_listings,
     reject_proposal,
     reparse_observation,
     set_listing_status,
@@ -47,6 +50,11 @@ class StatusBody(BaseModel):
 
 class ConfirmProposalBody(BaseModel):
     url: str = Field(min_length=1)
+
+
+class PollBody(BaseModel):
+    marketplaces: list[str] | None = None
+    limit: int | None = Field(default=None, ge=1, le=500)
 
 
 @router.get("/meta")
@@ -215,6 +223,51 @@ def post_reject_proposal(seed_id: int):
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.get("/observations")
+def get_observations(
+    marketplace: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+):
+    """Latest poll extractions + CPOR activation flags (SQL-backed)."""
+    with SessionLocal() as session:
+        try:
+            items = list_recent_observations(session, marketplace=marketplace, limit=limit)
+            return {"items": items, "total": len(items), "data_unavailable": False}
+        except Exception:
+            return {"items": [], "total": 0, "data_unavailable": True}
+
+
+@router.post("/poll")
+def post_poll(body: PollBody | None = None):
+    """Manual one-shot poll of active listings (writes listing_observation rows)."""
+    import os
+
+    from app.services.listing_capture.observation import default_http_get
+
+    body = body or PollBody()
+    live = os.environ.get("CIP_LISTING_LIVE_FETCH", "").strip().lower() in ("1", "true", "on")
+    if not live:
+        raise HTTPException(
+            status_code=503,
+            detail="CIP_LISTING_LIVE_FETCH is not enabled — cannot poll live storefronts",
+        )
+    with SessionLocal() as session:
+        try:
+            result = poll_active_listings(
+                session,
+                marketplaces=body.marketplaces,
+                http_get=default_http_get,
+                limit=body.limit,
+            )
+            session.commit()
+            return result
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail={"message": "listing poll unavailable", "error": str(exc)},
+            ) from exc
+
+
 @router.post("/observations/{observation_id}/reparse")
 def post_reparse(observation_id: int):
     with SessionLocal() as session:
@@ -226,10 +279,4 @@ def post_reparse(observation_id: int):
         reparse_observation(session, obs, marketplace=mkt)
         session.commit()
         session.refresh(obs)
-        return {
-            "id": obs.id,
-            "parse_status": obs.parse_status,
-            "extracted_price": float(obs.extracted_price) if obs.extracted_price is not None else None,
-            "parser_version": obs.parser_version,
-            "parse_flags": obs.parse_flags,
-        }
+        return observation_to_dict(obs, listing)

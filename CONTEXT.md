@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-10 — **Evetech confirm + poll + CPOR activation:** auto-finder Evetech URL; confirm 44; poll Takealot+Evetech → SQL observations; JSON-LD price parse; `no_case_detected` on `parse_flags.cpor_activation`; Observations tab + manual poll. Takealot still SPA-shell (parse_failed). Next: upload CPOR cases; Takealot fetch improvement; promote PR #26 when asked.
 - 2026-08-09 — **Client RAW re-ingest:** Takealot W31 → 24 listings confirmed; Evetech → 44 proposed (human URL); Game W27 → 565 rows / 6 weeks (wide-week). Fixes: seed in-session dedupe; steward period no longer overwrites unpivoted weeks; Takealot spaced Product ID → PLID URL.
 - 2026-08-09 — **Outstanding sweep:** PR #26 opened; Game wide-week unpivot in flat dual-header; Takealot/Evetech `listing_seed` layout defaults (+ cip config patch); intelligence v1 → BACKLOG-130 (≥14d obs). Re-soak Takealot/Evetech blocked — upload files missing. Next: promote PR when Warren asks; re-ingest marketplace CST for confirm-suggested.
 - 2026-08-09 — **P5 soak:** confirm-suggested bulk (50 Amazon ASINs→listings); poll 51 active → 52 obs all 200/ok; rate-limit in poll; `/listing-capture` browser PASS. Next: worker+beat for recurring history; optional Lane X / P6 when Warren picks.

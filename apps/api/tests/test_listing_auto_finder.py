@@ -21,6 +21,11 @@ from app.services.listing_capture.registry import confirm_suggested_proposals
         ("takealot", "12345678", "https://www.takealot.com/PLID12345678"),
         ("takealot", "PLID987654", "https://www.takealot.com/PLID987654"),
         ("takealot", "222 547 542", "https://www.takealot.com/PLID222547542"),
+        (
+            "evetech",
+            "123456",
+            "https://www.evetech.co.za/asus-laptops/laptops-for-sale/123456",
+        ),
         ("evetech", "ABC123", None),
         ("amazon", "not-an-asin", None),
         ("takealot", "nope", None),
