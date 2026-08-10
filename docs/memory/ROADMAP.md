@@ -111,7 +111,7 @@ compute (task often succeeds after UI gives up). Structural fixes, not poll-only
 | ID | Item | Status | Evidence / notes |
 |----|------|--------|------------------|
 | **BACKLOG-031** | Admin **data health** dashboard | **Parked** | No `/admin/data-health` route in API/web grep. TRIGGER: operator visibility need or pre-soak. |
-| **BACKLOG-010** | Drop legacy PAV ~2M rows | **Ops** | Destructive; explicit Warren approval + PITR. |
+| **BACKLOG-010** | Drop legacy PAV ~2M rows | **Done (local cip)** | Count was 0; truncate script shipped; remote/other env: re-run script after backup. |
 | **BACKLOG-011** | `catalog_product` bulk upsert on PM commit | **Parked** | TRIGGER: profiling shows catalog flush dominant. |
 | **BACKLOG-009** | PIM typed attributes from `specs_json` | **Parked** | Design brief only. |
 | **BACKLOG-021** | Commercial Planner RBAC + durable recommendations | **Parked** | `COMMERCIAL_PLANNER_GAP_ANALYSIS.md`. |

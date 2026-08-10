@@ -1408,16 +1408,17 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status** | **N/A for this branch · 2026-06-06** — destructive ops require explicit Warren approval + local `pg_dump` backup (or PITR if remote ever returns); no code change. Remains a future ops task when PM `specs_json` path is production-proven. |
+| **Status** | **Done 2026-08-10** — local `cip` verified `COUNT(*)=0` (`PM_WRITE_LEGACY_EAV` unset/false); restore snapshot `.tmp/pav_backup_backlog010.jsonl` (0 rows); idempotent `TRUNCATE` via ops script. Table schema retained for escape hatch. |
 | **Effort** | Medium (ops) + approval |
 | **Source** | `CONTEXT.md` (May 31 PM EAV: “left in place (dropping … needs explicit approval)”; import audit “still pending: drop existing 2M PAV rows”) |
-| **Idea** | Remove dead write-only PAV data after `specs_json` commit path is proven in production. |
+| **Idea** | Remove dead write-only PAV data after `specs_json` commit path is proven. |
 | **Why / deferrable** | Destructive; reversible only via DB backup/PITR. |
-| **What the work is** | Approved migration or one-off script; verify zero readers; backup before run. |
+| **What shipped** | `apps/api/scripts/ops/drop_legacy_product_attribute_value.py` (`--backup-path`, `--confirm`, refuses non-`cip` and legacy-EAV-on). `.env.example` documents `PM_WRITE_LEGACY_EAV`. |
 | **Regression traps** | Any hidden reader; `PM_WRITE_LEGACY_EAV` escape hatch users. |
-| **Behavior to retain** | `specs_json` commit path. |
-| **Out of scope** | Re-enabling EAV writes by default. |
-| **TRIGGER** | Explicit Warren approval + database restore point taken. |
+| **Behavior retained** | `specs_json` commit path; table kept so flag can still write if ever needed. |
+| **Out of scope** | Re-enabling EAV writes by default; dropping `attribute_definition` / table DDL. |
+| **Remote note** | Original ~2M rows were on Supabase. If another env still has PAV data: take backup, run the same script with `--confirm`. |
+| **TRIGGER** | ~~Explicit Warren approval + restore point~~ — fired 2026-08-10. |
 
 ---
 
