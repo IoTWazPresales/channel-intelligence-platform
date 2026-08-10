@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-10 — **Arc sign-off locked** (Q1–Q15). Unit 0: BACKLOG-010 merged (`10a4174`). Unit 1: Q-013→case 90 (PO 16355), Q-014→case 121 (PO 8933). Next: Unit 2 PO UX 107/113/117/114+116 (split PRs). P5 last. Await 094 formulas + 092 payment files.
 - 2026-08-10 — **BACKLOG-010:** local `cip` PAV already 0; restore snapshot + idempotent TRUNCATE via `scripts/ops/drop_legacy_product_attribute_value.py`; `.env.example` documents `PM_WRITE_LEGACY_EAV`. Table schema retained. Next: P5 residual / Q-013/014.
 - 2026-08-10 — **PR #26 merged** (`86c0540`): P4 CST forward soak + Lane B tenant export/hard-budget + BACKLOG-089 FLAG-first incremental + BACKLOG-076 quarantine. Next TRIGGERs: P5 CPOR upload/re-poll; CST historical backfill; Q-013/014 Warren; BACKLOG-010 only with backup+approve.
 - 2026-08-10 — **P4→B→089→076 arc:** forward CST apply soak (7/8 customers facts; Amazon FLAG); tenant lineup export sheet profile + B4 hard-budget via profile; BACKLOG-089 FLAG-first incremental unit cost; BACKLOG-076 quarantine 17 suspect amounts. Next: promote PR #26; P5 CPOR upload/re-poll; Q-013/014 Warren.
