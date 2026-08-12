@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-12 — **Payment evidence smoke PASS + hotfixes:** Cases shell loads; Ken job 977 → 3375 staged/applied; Payments tab on C26649381. Fixes: admin `X-User-Role` on sources; `credit_note_id` VARCHAR(512) (`20260812_0014`); template ensure race; tip asserts. Next: Unit 8 Demo/P2.
 - 2026-08-12 — **CPOR payment evidence (generic) + Cases shell:** model/migration `20260812_0013`; profile-mapped import; ASUS Pending Report seed profile; Cases `MasterDataGridShell` + Payments tab. Branch `feat/cpor-payment-evidence`. Await alembic upgrade on cip. #30+#31 on main (`0cf0c6c`).
 - 2026-08-12 — **Unit 7 BACKLOG-068:** Shipping lineup-quarter summary adds `landed_this_quarter_units` (pod_date quarter) + `shipped_not_landed_units`; UI strip labels; PvE fill untouched. Branch `feat/backlog-068-landed-quarter`. Next: Unit 8 demo/P2; skip 094/092 until inputs; P5 last.
 - 2026-08-12 — **Unit 5 pushed** `feat/cst-hist-8x4q-game-w27` @ `7f66fc0` (`f82eba2` dated aliases; steward period stamp). Game Q4 Week 48 → 2025-11-24. Next: PR/merge; Unit 7 BACKLOG-068; skip 094/092 until files/formulas; P5 last.

@@ -1,33 +1,32 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-12 (CPOR payment evidence + Cases shell)
+**Last updated:** 2026-08-12 (payment evidence smoke + widen CN id)
 
-**Branch:** `feat/cpor-payment-evidence` (from main after #30/#31)
+**Branch:** `main` (post #32–#34; smoke hotfixes pending merge)
 
-**Alembic on cip:** `20260811_0012` — **code head `20260812_0013` (NOT applied — await Warren upgrade)**
+**Alembic on cip:** `20260812_0014` (matches code head)
 
 ## Arc progress
 
 | Unit | Status |
 |---|---|
 | 0–3 | Done on main |
-| 5 CST hist | **Merged** #30 → main |
-| 7 BACKLOG-068 | **Merged** onto main (PR #31 retarget miss; fixed via merge commit `0cf0c6c`) |
-| 8 Demo/P2 | Pending after payment evidence |
-| P5 payment/CN | **In progress** — generic evidence model + Cases shell |
+| 5 CST hist | Merged #30 |
+| 7 BACKLOG-068 | Merged (`0cf0c6c`) |
+| P5 payment/CN | **Smoke PASS** — Cases shell, Ken validate 3375 rows, apply 3375 evidence, Payments tab |
+| 8 Demo/P2 | **Next** |
 | 9–10 | Blocked (094 / 092 full recon) |
 
-## This unit (locks)
+## Smoke proven (browser)
 
-- Generic `cpor_payment_evidence` (not Ken-shaped schema); ASUS Pending Report = one profile
-- Canonical: case ID, CN ID, case_status_raw (evidence-only), payment status/date, amount+currency, customer, distributor, description
-- Steward may create shell cases; file case status never overwrites CIP workflow
-- CPOR Cases list → `MasterDataGridShell` (BACKLOG-079 fold-in)
+- Cases `MasterDataGridShell` loads (N+1 fix #34)
+- Import payment/CN: profile `asus_cpor_pending_report_v1`; job #977 → 3375 rows / 2544 cases / 283 linked
+- Apply upserted 3375 `cpor_payment_evidence` (shells 0 — none marked)
+- Case `C26649381` Payments tab shows CN rows (evidence-only case status)
 
 ## Next
 
-1. **Warren approve** `alembic upgrade` → `20260812_0013` on `cip`
-2. Browser smoke: Cases shell + payment import Ken file + case Payments tab
-3. Unit 8 Demo/P2 gate
+1. Merge smoke hotfixes (admin sources header, CN VARCHAR 512, ensure race)
+2. Unit 8 Demo/P2 gate
 
-**Env:** local Windows.
+**Env:** local Windows. API WatchFiles sometimes exits after reload — restart `pnpm dev:api` if :8001 dies.

@@ -60,7 +60,7 @@ class ImportCporPaymentStagingLine(Base, TimestampMixin):
     sheet_name: Mapped[str] = mapped_column(String(128), nullable=False)
 
     external_case_code: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    credit_note_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    credit_note_id: Mapped[str | None] = mapped_column(String(512), nullable=True, index=True)
     case_status_raw: Mapped[str | None] = mapped_column(String(64), nullable=True)
     payment_status_raw: Mapped[str | None] = mapped_column(String(64), nullable=True)
     payment_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -99,7 +99,7 @@ class CporPaymentEvidence(Base, TimestampMixin):
     )
 
     external_case_code: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    credit_note_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    credit_note_id: Mapped[str | None] = mapped_column(String(512), nullable=True, index=True)
     case_status_raw: Mapped[str | None] = mapped_column(String(64), nullable=True)
     payment_status_raw: Mapped[str | None] = mapped_column(String(64), nullable=True)
     payment_status: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
