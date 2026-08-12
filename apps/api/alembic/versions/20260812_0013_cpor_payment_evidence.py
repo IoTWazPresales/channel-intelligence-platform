@@ -141,6 +141,22 @@ def upgrade() -> None:
           ON cpor_payment_evidence (payment_status)
         """
     )
+    # App role is `cip`; migrations often run as postgres via database_url_sync_migrate.
+    op.execute(
+        """
+        DO $$
+        BEGIN
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cip') THEN
+            EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON cpor_payment_mapping_profile TO cip';
+            EXECUTE 'GRANT USAGE, SELECT ON SEQUENCE cpor_payment_mapping_profile_id_seq TO cip';
+            EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON import_cpor_payment_staging_line TO cip';
+            EXECUTE 'GRANT USAGE, SELECT ON SEQUENCE import_cpor_payment_staging_line_id_seq TO cip';
+            EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON cpor_payment_evidence TO cip';
+            EXECUTE 'GRANT USAGE, SELECT ON SEQUENCE cpor_payment_evidence_id_seq TO cip';
+          END IF;
+        END $$;
+        """
+    )
 
 
 def downgrade() -> None:
