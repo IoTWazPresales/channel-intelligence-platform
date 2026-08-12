@@ -13,6 +13,10 @@ export type LineupQuarterSummary = {
   planned_units?: number;
   shipped_units?: number;
   landed_units?: number;
+  /** BACKLOG-068: units with pod_date in this calendar quarter (landing axis). */
+  landed_this_quarter_units?: number;
+  /** BACKLOG-068: plan-quarter shipped ∧ pod_date IS NULL. */
+  shipped_not_landed_units?: number;
   pipeline_units?: number;
   slipped_in_units?: number;
   slipped_out_units?: number;
@@ -24,6 +28,29 @@ export type LineupQuarterSummary = {
 function fmtUnits(n: number | undefined): string {
   if (n == null) return '—';
   return new Intl.NumberFormat().format(Math.round(n));
+}
+
+function Metric({
+  label,
+  value,
+  title,
+  testId,
+}: {
+  label: string;
+  value: number | undefined;
+  title?: string;
+  testId?: string;
+}) {
+  return (
+    <Box title={title} data-testid={testId}>
+      <Typography variant="caption" color="text.secondary">
+        {label}
+      </Typography>
+      <Typography variant="body2" fontWeight={600}>
+        {fmtUnits(value)}
+      </Typography>
+    </Box>
+  );
 }
 
 type Props = {
@@ -58,6 +85,7 @@ export function ShippingLineupQuarterSummary({ planQuarter, customerId, planBusi
   if (data?.data_unavailable) return null;
 
   const label = data?.plan_quarter_label ?? planQuarter;
+  const shippedNotLanded = data?.shipped_not_landed_units ?? data?.shipped_units;
 
   return (
     <Paper sx={{ p: 2, mb: 2 }} data-testid="lineup-quarter-summary">
@@ -65,62 +93,29 @@ export function ShippingLineupQuarterSummary({ planQuarter, customerId, planBusi
         Lineup plan quarter — {label}
       </Typography>
       <Stack direction="row" flexWrap="wrap" useFlexGap spacing={3}>
-        <Box>
-          <Typography variant="caption" color="text.secondary">
-            Planned
-          </Typography>
-          <Typography variant="body2" fontWeight={600}>
-            {fmtUnits(data?.planned_units)}
-          </Typography>
-        </Box>
-        <Box>
-          <Typography variant="caption" color="text.secondary">
-            Shipped
-          </Typography>
-          <Typography variant="body2" fontWeight={600}>
-            {fmtUnits(data?.shipped_units)}
-          </Typography>
-        </Box>
-        <Box>
-          <Typography variant="caption" color="text.secondary">
-            Landed
-          </Typography>
-          <Typography variant="body2" fontWeight={600}>
-            {fmtUnits(data?.landed_units)}
-          </Typography>
-        </Box>
-        <Box>
-          <Typography variant="caption" color="text.secondary">
-            Pipeline
-          </Typography>
-          <Typography variant="body2" fontWeight={600}>
-            {fmtUnits(data?.pipeline_units)}
-          </Typography>
-        </Box>
-        <Box>
-          <Typography variant="caption" color="text.secondary">
-            Slipped in
-          </Typography>
-          <Typography variant="body2" fontWeight={600}>
-            {fmtUnits(data?.slipped_in_units)}
-          </Typography>
-        </Box>
-        <Box>
-          <Typography variant="caption" color="text.secondary">
-            Slipped out
-          </Typography>
-          <Typography variant="body2" fontWeight={600}>
-            {fmtUnits(data?.slipped_out_units)}
-          </Typography>
-        </Box>
-        <Box>
-          <Typography variant="caption" color="text.secondary">
-            Unattributed
-          </Typography>
-          <Typography variant="body2" fontWeight={600}>
-            {fmtUnits(data?.unattributed_units)}
-          </Typography>
-        </Box>
+        <Metric label="Planned" value={data?.planned_units} />
+        <Metric
+          label="Shipped (awaiting POD)"
+          value={shippedNotLanded}
+          title="Plan-quarter shipments with line_state=shipped and pod_date still null."
+          testId="lineup-q-shipped-not-landed"
+        />
+        <Metric
+          label="Landed (plan quarter)"
+          value={data?.landed_units}
+          title="Plan-quarter attributed rows that have a POD (pod_date set). Not the landing-quarter KPI."
+          testId="lineup-q-landed-plan"
+        />
+        <Metric
+          label="Landed this quarter"
+          value={data?.landed_this_quarter_units}
+          title="Units whose pod_date falls in this calendar quarter (landing axis). Includes slipped-in from other plan quarters."
+          testId="lineup-q-landed-this-quarter"
+        />
+        <Metric label="Pipeline" value={data?.pipeline_units} />
+        <Metric label="Slipped in" value={data?.slipped_in_units} />
+        <Metric label="Slipped out" value={data?.slipped_out_units} />
+        <Metric label="Unattributed" value={data?.unattributed_units} />
       </Stack>
       {(data?.ambiguous_po_count ?? 0) > 0 ? (
         <Typography variant="caption" color="warning.main" sx={{ mt: 1, display: 'block' }}>
