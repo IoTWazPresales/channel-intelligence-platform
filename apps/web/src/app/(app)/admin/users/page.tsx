@@ -44,7 +44,7 @@ const ROLES: UserRole[] = ['admin', 'steward', 'planner', 'viewer'];
 
 export default function AdminUsersPage() {
   const qc = useQueryClient();
-  const { data: me, isError: meError } = useCurrentUser();
+  const { data: me, isError: meError, isPending: mePending } = useCurrentUser();
   const isAdmin = String(me?.role || '').toLowerCase() === 'admin';
 
   const [email, setEmail] = useState('');
@@ -92,7 +92,19 @@ export default function AdminUsersPage() {
     createMutation.mutate();
   }
 
-  if (meError || (me && !isAdmin)) {
+  // Default-deny: never show create form until /auth/me confirms admin (Unit 8 P2 gate).
+  if (mePending && !me && !meError) {
+    return (
+      <>
+        <PageHeader crumbs={[{ label: 'Admin' }, { label: 'Users' }]} title="Users" />
+        <Typography color="text.secondary" data-testid="users-auth-loading">
+          Checking access…
+        </Typography>
+      </>
+    );
+  }
+
+  if (meError || !isAdmin) {
     return (
       <>
         <PageHeader crumbs={[{ label: 'Admin' }, { label: 'Users' }]} title="Users" />

@@ -35,7 +35,14 @@ export default function LoginPage() {
     try {
       const res = await apiPost<LoginResponse>('/api/v1/auth/login', { email, password });
       setAuthToken(res.token);
-      await qc.invalidateQueries({ queryKey: AUTH_ME_QUERY_KEY });
+      // Seed /auth/me from login payload so role gating cannot fail-open on stale cache.
+      qc.setQueryData(AUTH_ME_QUERY_KEY, {
+        id: res.user.id,
+        role: res.user.role,
+        email: res.user.email,
+        display_name: res.user.display_name,
+        auth_mode: 'session',
+      });
       router.replace('/dashboard');
     } catch (err) {
       setError(safeDisplayError(err));

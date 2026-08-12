@@ -67,6 +67,8 @@ Optional alternate (needs a role with `CREATEDB`, via env `CIP_PG_ADMIN_URL`): c
 |------|--------|--------|
 | 2026-08-08 | `backup_cip.ps1` → `.tmp/backups/cip_20260808_235826.dump` (~247 MB) | OK |
 | 2026-08-08 | `restore_cip_smoke.ps1` → `cip_alembic_smoke` | `RESTORE_SMOKE_OK` dim_product=18177 import_job=257 alembic=`20260807_0010` |
+| 2026-08-12 | `backup_cip.ps1` → `.tmp/backups/cip_20260812_124712.dump` (~259 MB) | OK |
+| 2026-08-12 | `restore_cip_smoke.ps1` → `cip_alembic_smoke` | `RESTORE_SMOKE_OK` dim_product=18177 import_job=340 alembic=`20260812_0014` (parity with live cip) |
 
 ## Out of scope (deferred with hosting)
 
