@@ -68,7 +68,10 @@ export default function CporPaymentEvidenceImportPage() {
     queryKey: ['imports', 'sources', 'cpor_payment_evidence'],
     enabled: !!profiles,
     queryFn: ({ signal }) =>
-      apiGet<Source[]>(`/api/v1/imports/sources?template_slug=cpor_payment_evidence`, { signal }),
+      apiGet<Source[]>(`/api/v1/imports/sources?template_slug=cpor_payment_evidence`, {
+        signal,
+        headers: { 'X-User-Role': 'admin' },
+      }),
   });
   const sourceId = sources?.[0]?.id ?? null;
 

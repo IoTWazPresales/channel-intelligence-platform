@@ -66,7 +66,10 @@ export default function CporHistoricalImportPage() {
   const { data: sources } = useQuery({
     queryKey: ['imports', 'sources', 'cpor_historical_cases'],
     queryFn: ({ signal }) =>
-      apiGet<Source[]>(`/api/v1/imports/sources?template_slug=cpor_historical_cases`, { signal }),
+      apiGet<Source[]>(`/api/v1/imports/sources?template_slug=cpor_historical_cases`, {
+        signal,
+        headers: { 'X-User-Role': 'admin' },
+      }),
   });
   const sourceId = sources?.[0]?.id ?? null;
 

@@ -26,41 +26,60 @@ TEMPLATE_SLUG = "cpor_payment_evidence"
 
 def _ensure_template_and_source(db: Session) -> None:
     """Idempotent template + source so own-surface import works before full seed."""
+    from sqlalchemy.exc import IntegrityError
+
     from app.models.ingestion import ImportTemplate, SourceDefinition
     from app.services.imports.template_definitions import IMPORT_TEMPLATE_ROWS
 
     row = next(r for r in IMPORT_TEMPLATE_ROWS if r["slug"] == TEMPLATE_SLUG)
     tpl = db.scalar(select(ImportTemplate).where(ImportTemplate.slug == TEMPLATE_SLUG))
     if tpl is None:
-        tpl = ImportTemplate(
-            slug=row["slug"],
-            display_name=row["display_name"],
-            description=row["description"],
-            enabled=row["enabled"],
-            hidden=row["hidden"],
-            admin_only=row["admin_only"],
-            requires_provider=row["requires_provider"],
-            pipeline_handler=row["pipeline_handler"],
-            destructive_apply_requires_confirm=row["destructive_apply_requires_confirm"],
-            accepted_file_types=row["accepted_file_types"],
-            expected_columns=row["expected_columns"],
-        )
-        db.add(tpl)
-        db.flush()
+        try:
+            with db.begin_nested():
+                db.add(
+                    ImportTemplate(
+                        slug=row["slug"],
+                        display_name=row["display_name"],
+                        description=row["description"],
+                        enabled=row["enabled"],
+                        hidden=row["hidden"],
+                        admin_only=row["admin_only"],
+                        requires_provider=row["requires_provider"],
+                        pipeline_handler=row["pipeline_handler"],
+                        destructive_apply_requires_confirm=row["destructive_apply_requires_confirm"],
+                        accepted_file_types=row["accepted_file_types"],
+                        expected_columns=row["expected_columns"],
+                    )
+                )
+                db.flush()
+        except IntegrityError:
+            pass
+        tpl = db.scalar(select(ImportTemplate).where(ImportTemplate.slug == TEMPLATE_SLUG))
+        if tpl is None:
+            raise RuntimeError("cpor_payment_evidence import_template missing after ensure")
     src = db.scalar(
         select(SourceDefinition).where(SourceDefinition.code == "cpor_payment_evidence_default")
     )
     if src is None:
-        db.add(
-            SourceDefinition(
-                code="cpor_payment_evidence_default",
-                name="Default CPOR payment / credit-note evidence feed",
-                import_template_id=tpl.id,
-                source_kind="payment_cn_extract",
-                is_active=True,
-            )
+        try:
+            with db.begin_nested():
+                db.add(
+                    SourceDefinition(
+                        code="cpor_payment_evidence_default",
+                        name="Default CPOR payment / credit-note evidence feed",
+                        import_template_id=tpl.id,
+                        source_kind="payment_cn_extract",
+                        is_active=True,
+                    )
+                )
+                db.flush()
+        except IntegrityError:
+            pass
+        src = db.scalar(
+            select(SourceDefinition).where(SourceDefinition.code == "cpor_payment_evidence_default")
         )
-        db.flush()
+        if src is None:
+            raise RuntimeError("cpor_payment_evidence_default source missing after ensure")
 
 
 def ensure_default_payment_profile(db: Session) -> CporPaymentMappingProfile:
@@ -158,7 +177,6 @@ def process_cpor_payment_evidence_import(db: Session, job: ImportJob, data: byte
         "summary": summary,
     }
     job.staged_metadata = meta
-    job.row_count = n
     db.flush()
     return meta["cpor_payment_evidence"]
 
