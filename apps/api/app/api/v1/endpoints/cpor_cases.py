@@ -437,10 +437,9 @@ def list_cases(
 
         out = []
         for case, cust in rows:
-            lines = session.scalars(select(CporCaseLine).where(CporCaseLine.case_id == case.id)).all()
-            pmap = _products_map(session, [int(l.product_id) for l in lines])
-            line_jsons = [_line_json(l, pmap.get(int(l.product_id))) for l in lines]
-            row = _case_json(case, customer=cust, lines=line_jsons, include_lines=False)
+            # List view: do not N+1 load every case line (shell pagination would hang).
+            # TTL aggregates remain available on case detail.
+            row = _case_json(case, customer=cust, lines=None, include_lines=False)
             pay = pay_by_case.get(case.id) or {}
             row["payment_evidence_count"] = int(pay.get("payment_evidence_count") or 0)
             row["paid_amount_sum"] = float(pay.get("paid_amount_sum") or 0) or None
