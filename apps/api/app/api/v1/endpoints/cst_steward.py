@@ -9,7 +9,7 @@ import json
 from datetime import date, datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -20,6 +20,11 @@ from app.models.customer_article_alias import CustomerArticleAlias
 from app.models.customer_cst_report_slot import CustomerCstReportSlot
 from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import DimCustomer, DimProduct
+from app.services.imports.cst_article_alias_import import (
+    confirm_scm_unique_proposed,
+    import_article_alias_rows,
+    parse_article_alias_workbook,
+)
 from app.services.imports.cst_d1 import (
     advance_cst_report_slots,
     confirm_customer_article_alias,
@@ -70,6 +75,8 @@ def _alias_json(row: CustomerArticleAlias, customer: DimCustomer | None, product
         "product_sku": product.sku if product else None,
         "product_name": product.name if product else None,
         "status": row.status,
+        "valid_from": row.valid_from.isoformat() if row.valid_from else None,
+        "valid_to": row.valid_to.isoformat() if row.valid_to else None,
         "evidence_json": row.evidence_json,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }
@@ -129,6 +136,29 @@ class KeyAccountPatch(BaseModel):
 
 class AliasRejectBody(BaseModel):
     reason: str | None = None
+
+
+class AliasPatchBody(BaseModel):
+    product_id: int | None = Field(default=None, ge=1)
+    status: str | None = Field(default=None, max_length=32)
+    valid_from: date | None = None
+    valid_to: date | None = None
+    clear_valid_from: bool = False
+    clear_valid_to: bool = False
+
+    @field_validator("status")
+    @classmethod
+    def status_ok(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        allowed = {"proposed", "confirmed", "rejected", "active"}
+        if v.strip().lower() not in allowed:
+            raise ValueError(f"status must be one of {sorted(allowed)}")
+        return v.strip().lower()
+
+
+class AliasImportConfirmBody(BaseModel):
+    alias_ids: list[int] = Field(default_factory=list)
 
 
 class SlotAdvanceBody(BaseModel):
@@ -320,7 +350,7 @@ def list_article_aliases(
         if q and q.strip():
             needle = f"%{q.strip().lower()}%"
             stmt = stmt.where(CustomerArticleAlias.article_no_normalized.ilike(needle))
-        rows = list(session.scalars(stmt.limit(500)).all())
+        rows = list(session.scalars(stmt.limit(2000)).all())
         cust_ids = {int(r.customer_id) for r in rows}
         prod_ids = {int(r.product_id) for r in rows}
         cmap = {
@@ -334,6 +364,273 @@ def list_article_aliases(
         return [
             _alias_json(r, cmap.get(int(r.customer_id)), pmap.get(int(r.product_id))) for r in rows
         ]
+
+
+@router.post("/article-aliases/import")
+async def import_article_aliases(
+    file: UploadFile = File(...),
+    confirm_unique: bool = Query(
+        default=False,
+        description="If true, confirm SCM unique-match rows after propose (steward-owned).",
+    ),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+):
+    """Upload Customer|Article code|Sales Model name workbook → proposed aliases.
+
+    Collisions / ambiguous / miss models are reported and not written. Confirmed
+    aliases are never overwritten. Optional confirm_unique confirms only the
+    unique-match ids from this upload.
+    """
+    actor = _actor(x_user_id)
+    name = (file.filename or "").lower()
+    if not name.endswith((".xlsx", ".xlsm")):
+        raise HTTPException(status_code=400, detail="Upload an .xlsx article map")
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Empty file")
+    try:
+        rows = parse_article_alias_workbook(raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"Could not parse workbook: {exc}") from exc
+
+    with SessionLocal() as session:
+        summary = import_article_alias_rows(
+            session,
+            rows,
+            source="scm_upload",
+            actor=actor,
+        )
+        confirm_result = None
+        if confirm_unique and summary.proposed_alias_ids:
+            confirm_result = confirm_scm_unique_proposed(
+                session,
+                summary.proposed_alias_ids,
+                actor=actor or "scm_import",
+            )
+        session.commit()
+        payload = summary.to_dict()
+        payload["confirm"] = confirm_result
+        return payload
+
+
+@router.post("/article-aliases/confirm-import")
+def confirm_imported_article_aliases(
+    body: AliasImportConfirmBody,
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+):
+    actor = _actor(x_user_id)
+    with SessionLocal() as session:
+        result = confirm_scm_unique_proposed(
+            session,
+            list(body.alias_ids or []),
+            actor=actor or "scm_import",
+        )
+        session.commit()
+        return result
+
+
+@router.patch("/article-aliases/{alias_id}")
+def patch_article_alias(
+    alias_id: int,
+    body: AliasPatchBody,
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+):
+    """Steward edit: retarget product_id, validity window, and optional status."""
+    actor = _actor(x_user_id)
+    with SessionLocal() as session:
+        row = session.get(CustomerArticleAlias, alias_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Alias not found")
+        prod = session.get(DimProduct, int(body.product_id)) if body.product_id else session.get(
+            DimProduct, int(row.product_id)
+        )
+        if body.product_id is not None:
+            if prod is None:
+                raise HTTPException(status_code=400, detail=f"product_id {body.product_id} not found")
+            row.product_id = int(body.product_id)
+        evidence = dict(row.evidence_json or {}) if isinstance(row.evidence_json, dict) else {}
+        trail = list(evidence.get("steward_events") or [])
+        trail.append(
+            {
+                "action": "patch",
+                "actor": actor,
+                "at": datetime.now(timezone.utc).isoformat(),
+                "from_product_id": int(row.product_id),
+                "to_product_id": int(body.product_id) if body.product_id else int(row.product_id),
+                "from_status": row.status,
+                "to_status": body.status or row.status,
+                "valid_from": body.valid_from.isoformat() if body.valid_from else None,
+                "valid_to": body.valid_to.isoformat() if body.valid_to else None,
+            }
+        )
+        evidence["steward_events"] = trail
+        if body.clear_valid_from:
+            row.valid_from = None
+        elif body.valid_from is not None:
+            row.valid_from = body.valid_from
+        if body.clear_valid_to:
+            row.valid_to = None
+        elif body.valid_to is not None:
+            row.valid_to = body.valid_to
+        if body.status:
+            row.status = body.status
+        row.evidence_json = to_jsonable(evidence)
+        session.add(row)
+        try:
+            session.commit()
+        except Exception as exc:  # noqa: BLE001
+            session.rollback()
+            raise HTTPException(status_code=400, detail=f"Alias patch failed (overlap?): {exc}") from exc
+        session.refresh(row)
+        cust = session.get(DimCustomer, row.customer_id)
+        prod = session.get(DimProduct, row.product_id)
+        return _alias_json(row, cust, prod)
+
+
+@router.post("/article-aliases/derive-eras-from-shipping")
+def derive_eras_from_shipping(
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+):
+    """Propose dated eras for SCM multi-model articles using inbound POD clock.
+
+    Re-reads Desktop Articles.xlsx when present; otherwise no-op with empty groups.
+    Never confirms. Never rewrites applied facts.
+    """
+    from pathlib import Path
+
+    from app.services.imports.cst_alias_era_derive import (
+        collect_scm_multi_model_groups_from_rows,
+        derive_alias_eras_from_shipping,
+    )
+    from app.services.imports.cst_article_alias_import import parse_article_alias_workbook
+
+    actor = _actor(x_user_id)
+    scm_path = Path(r"C:\Users\warren_eliason\OneDrive - ASUS\Desktop\Articles.xlsx")
+    if not scm_path.is_file():
+        raise HTTPException(status_code=400, detail=f"SCM file not found: {scm_path}")
+    rows = parse_article_alias_workbook(scm_path.read_bytes())
+    with SessionLocal() as session:
+        groups = collect_scm_multi_model_groups_from_rows(session, rows)
+        summary = derive_alias_eras_from_shipping(session, multi_model_groups=groups, actor=actor)
+        session.commit()
+        return summary.to_dict()
+
+
+@router.post("/article-aliases/confirm-shipping-derived")
+def confirm_shipping_derived_eras(
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+):
+    """Confirm proposed shipping_derive eras that have a non-steward clock_source.
+
+    Skips steward_manual / equal_pod_sibling. Confirms in valid_from order per article.
+    """
+    actor = _actor(x_user_id) or "shipping_derive"
+    with SessionLocal() as session:
+        rows = list(
+            session.scalars(
+                select(CustomerArticleAlias).where(CustomerArticleAlias.status == "proposed")
+            ).all()
+        )
+        confirmable = []
+        for r in rows:
+            ev = r.evidence_json if isinstance(r.evidence_json, dict) else {}
+            if ev.get("source") != "shipping_derive":
+                continue
+            clock = str(ev.get("clock_source") or "")
+            if clock in ("steward_manual",) or ev.get("flag") == "equal_pod_sibling":
+                continue
+            confirmable.append(r)
+        # Sort: open-start first, then by valid_from
+        confirmable.sort(
+            key=lambda r: (
+                r.customer_id,
+                r.article_no_normalized,
+                r.valid_from is not None,
+                r.valid_from or date.min,
+            )
+        )
+        confirmed = 0
+        failed = 0
+        for r in confirmable:
+            try:
+                with session.begin_nested():
+                    confirm_customer_article_alias(session, alias_id=int(r.id), actor=actor)
+                    session.flush()
+                confirmed += 1
+            except Exception:  # noqa: BLE001
+                failed += 1
+        session.commit()
+        return {"confirmed": confirmed, "failed": failed, "candidates": len(confirmable)}
+
+
+@router.post("/article-aliases/reresolve-job-residuals")
+def reresolve_job_residuals(
+    job_id: int = Query(...),
+    apply: bool = Query(default=False),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+):
+    """Re-resolve unresolved CST staging lines for a job using as-of aliases.
+
+    Does not mutate already-applied fact rows. When apply=true, runs
+    apply_customer_sellthrough_staging after re-resolve (new resolved lines only).
+    """
+    _ = _actor(x_user_id)
+    from app.models.import_customer_sellthrough_staging import ImportCustomerSellthroughStagingLine
+    from app.models.ingestion import ImportJob
+    from app.services.imports.customer_sell_through import resolve_product_id_for_sellthrough
+    from app.services.imports.customer_sell_through_apply import apply_customer_sellthrough_staging
+    from app.services.imports.distributor_sales_inventory import _load_product_resolution_index
+
+    with SessionLocal() as session:
+        job = session.get(ImportJob, int(job_id))
+        if job is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+        cid_raw = meta.get("customer_id")
+        if cid_raw is None:
+            raise HTTPException(status_code=400, detail="Job missing staged_metadata.customer_id")
+        customer_id = int(cid_raw)
+        idx = _load_product_resolution_index(session)
+        lines = list(
+            session.scalars(
+                select(ImportCustomerSellthroughStagingLine).where(
+                    ImportCustomerSellthroughStagingLine.import_job_id == int(job_id),
+                    ImportCustomerSellthroughStagingLine.resolved_product_id.is_(None),
+                )
+            ).all()
+        )
+        newly = 0
+        for line in lines:
+            payload = line.raw_row_payload if isinstance(line.raw_row_payload, dict) else None
+            pid = resolve_product_id_for_sellthrough(
+                idx,
+                line.raw_product_token,
+                session=session,
+                customer_id=customer_id,
+                article_token=getattr(line, "raw_article_token", None),
+                raw_row_payload=payload,
+                as_of=line.period_start_date,
+            )
+            if pid is not None:
+                line.resolved_product_id = int(pid)
+                line.resolution_status = "resolved"
+                session.add(line)
+                newly += 1
+        applied = None
+        if apply and newly:
+            session.flush()
+            summary = apply_customer_sellthrough_staging(session, int(job_id))
+            applied = {"applied": summary.applied, "skipped_unresolved": summary.skipped_unresolved}
+        session.commit()
+        return {
+            "job_id": int(job_id),
+            "unresolved_before": len(lines),
+            "newly_resolved": newly,
+            "apply": apply,
+            "applied_summary": applied,
+        }
 
 
 @router.post("/article-aliases/{alias_id}/confirm")

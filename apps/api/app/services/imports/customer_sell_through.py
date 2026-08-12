@@ -220,11 +220,13 @@ def resolve_product_id_for_sellthrough(
     customer_id: int | None = None,
     article_token: str | None = None,
     raw_row_payload: dict[str, Any] | None = None,
+    as_of: date | None = None,
 ) -> int | None:
     """PM single-match tiers on each candidate token, then customer_article_alias (confirmed only).
 
     Candidate tokens = mapped primary + article + common payload product columns
     (supplier code / sales model / sku / barcode / …). First single-match wins.
+    Article alias resolve is as-of ``period_start_date`` when provided.
     """
     tokens = collect_cst_product_lookup_tokens(
         primary=token,
@@ -238,7 +240,10 @@ def resolve_product_id_for_sellthrough(
     if session is not None and customer_id is not None:
         for candidate in tokens:
             alias_pid = resolve_customer_article_alias(
-                session, customer_id=customer_id, article_token=candidate
+                session,
+                customer_id=customer_id,
+                article_token=candidate,
+                as_of=as_of,
             )
             if alias_pid is not None:
                 return alias_pid
@@ -523,6 +528,7 @@ def _ingest_parse_result(
                 customer_id=customer_id,
                 article_token=article_tok,
                 raw_row_payload=payload,
+                as_of=getattr(line, "period_start_date", None),
             )
             if pid is not None:
                 line.resolved_product_id = pid
@@ -543,6 +549,7 @@ def _ingest_parse_result(
                 customer_id=customer_id,
                 article_token=article_tok,
                 raw_row_payload=payload,
+                as_of=getattr(line, "period_start_date", None),
             )
             if pid is not None:
                 line.resolved_product_id = pid
@@ -906,6 +913,7 @@ def _handle_flat(
                     customer_id=customer_id,
                     article_token=article_tok,
                     raw_row_payload=payload_dict,
+                    as_of=getattr(line, "period_start_date", None),
                 )
                 if pid is None:
                     pid = _steward_resolved_product_id(
