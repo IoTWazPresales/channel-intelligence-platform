@@ -17,6 +17,11 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-12 — **Unit 5 pushed** `feat/cst-hist-8x4q-game-w27` @ `7f66fc0` (`f82eba2` dated aliases; steward period stamp). Game Q4 Week 48 → 2025-11-24. Next: PR/merge; Unit 7 BACKLOG-068; skip 094/092 until files/formulas; P5 last.
+- 2026-08-12 — **Unit 5 stats re-verify on cip:** aliases 590 confirmed / 62 proposed; Game W27 426/565 unresolved 139; window 4/4 Takealot·CM·Makro; Evetech 3/4; Game 3/4 (Q4 year mis-stamp); Amazon+Pepkor 0/4 RAW gaps. Branch still 0 commits — commit/PR when asked.
+- 2026-08-11 — **Unit 5 Phase 2 hist soak:** 8×4Q sample via Client RAW + proven field maps. Facts: Takealot 96, CM 302, Evetech 130, Makro 362, Game 38. RAW gaps: Amazon truncated Sales_*; Pepkor Combined ends WK26/Q2. Next: commit/PR when asked; Units 7+; P5 last.
+- 2026-08-11 — **Unit 5 dated aliases U1–U3:** alembic `20260811_0012` eras+exclusion; shipping POD clock derive; Aliases UI derive/confirm; Game 928 → 426/565 resolved, 24 facts / 7 periods. Residual 139. Next: steward gaps or 8×4Q hist; commit when asked.
+- 2026-08-11 — **Unit 5 Phase 1:** SCM Articles.xlsx → customer_article_alias (533 confirmed; 33 collisions held); Aliases tab upload/edit; Game job 928 apply 317/565 across 6 weeks. Next: collision steward + 8×4Q hist.
 - 2026-08-10 — **Unit 3 PR triage:** closed #17 (superseded — already on main), #16 (BACKLOG-099 parked; arc ignores CI), drafts #1–3. Next: Unit 5 CST historical 8×4Q + Game W27.
 - 2026-08-10 — **Unit 2 PO UX:** BACKLOG-107/113/117/114/116 — proposal `file_name`/`version_prefix`; list+confirm competition chips; period default already residual-inclusive. Branch `feat/po-ux-107-116`. Next: merge PR then Unit 3 (#17/#16).
 - 2026-08-10 — **Arc sign-off locked** (Q1–Q15). Unit 0: BACKLOG-010 merged (`10a4174`). Unit 1: Q-013→case 90 (PO 16355), Q-014→case 121 (PO 8933). Next: Unit 2 PO UX 107/113/117/114+116 (split PRs). P5 last. Await 094 formulas + 092 payment files.

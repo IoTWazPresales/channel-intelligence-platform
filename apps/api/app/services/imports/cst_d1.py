@@ -42,19 +42,55 @@ def resolve_customer_article_alias(
     *,
     customer_id: int,
     article_token: str | None,
+    as_of: date | None = None,
 ) -> int | None:
-    """Exact-key lookup of steward-confirmed article aliases. Never fuzzy."""
+    """Exact-key lookup of steward-confirmed article aliases. Never fuzzy.
+
+    When ``as_of`` is set, return the confirmed/active era whose half-open
+    ``[valid_from, valid_to)`` contains that date (NULL bounds = ±infinity).
+    When ``as_of`` is None, prefer the latest open-ended era (valid_to IS NULL),
+    else any confirmed row (legacy single-row behaviour).
+    """
     key = normalize_article_token(article_token)
     if not key:
         return None
-    row = session.scalar(
-        select(CustomerArticleAlias).where(
-            CustomerArticleAlias.customer_id == customer_id,
-            CustomerArticleAlias.article_no_normalized == key,
-            CustomerArticleAlias.status.in_(CONFIRMED_ALIAS_STATUSES),
-        )
+    rows = list(
+        session.scalars(
+            select(CustomerArticleAlias).where(
+                CustomerArticleAlias.customer_id == customer_id,
+                CustomerArticleAlias.article_no_normalized == key,
+                CustomerArticleAlias.status.in_(CONFIRMED_ALIAS_STATUSES),
+            )
+        ).all()
     )
-    return int(row.product_id) if row is not None else None
+    if not rows:
+        return None
+
+    def _contains(row: CustomerArticleAlias, day: date) -> bool:
+        vf = row.valid_from
+        vt = row.valid_to
+        if vf is not None and day < vf:
+            return False
+        if vt is not None and day >= vt:
+            return False
+        return True
+
+    if as_of is not None:
+        hits = [r for r in rows if _contains(r, as_of)]
+        if len(hits) == 1:
+            return int(hits[0].product_id)
+        if len(hits) > 1:
+            # Exclusion constraint should prevent this for confirmed; FLAG by refusing.
+            return None
+        return None
+
+    open_ended = [r for r in rows if r.valid_to is None]
+    if len(open_ended) == 1:
+        return int(open_ended[0].product_id)
+    if len(rows) == 1:
+        return int(rows[0].product_id)
+    # Ambiguous without as_of — do not silent-pick among closed eras.
+    return None
 
 
 def propose_customer_article_alias(

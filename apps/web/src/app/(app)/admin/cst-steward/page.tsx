@@ -22,7 +22,7 @@ import { useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { PageHeader } from '@/components/PageHeader';
-import { apiGet, apiPatch, apiPost } from '@/lib/api';
+import { apiGet, apiPatch, apiPost, apiPostFormData } from '@/lib/api';
 
 type KeyAccountRow = {
   id: number | null;
@@ -49,12 +49,32 @@ type SlotItem = {
 
 type AliasRow = {
   id: number;
+  customer_id?: number;
   customer_code: string | null;
   customer_name: string | null;
   article_no_normalized: string;
+  product_id?: number;
   product_sku: string | null;
   product_name: string | null;
   status: string;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  evidence_json?: Record<string, unknown> | null;
+};
+
+type AliasImportSummary = {
+  rows_read: number;
+  rows_deduped: number;
+  proposed: number;
+  updated_proposed: number;
+  skipped_existing_confirmed: number;
+  collisions: number;
+  customer_unresolved: number;
+  model_ambiguous: number;
+  model_miss: number;
+  blank_skipped: number;
+  proposed_alias_ids: number[];
+  confirm?: { confirmed: number; skipped: number } | null;
 };
 
 export default function CstStewardPage() {
@@ -69,6 +89,11 @@ export default function CstStewardPage() {
   const [threshold, setThreshold] = useState('10');
   const [notes, setNotes] = useState('');
   const [feedRaw, setFeedRaw] = useState('');
+
+  const [aliasStatus, setAliasStatus] = useState('proposed,confirmed');
+  const [aliasImportMsg, setAliasImportMsg] = useState<string | null>(null);
+  const [editAlias, setEditAlias] = useState<AliasRow | null>(null);
+  const [editProductId, setEditProductId] = useState('');
 
   const { data: accounts, isLoading: loadingAccounts, isError: errAccounts, error: accountsError, refetch: refetchAccounts } =
     useQuery({
@@ -91,9 +116,12 @@ export default function CstStewardPage() {
   });
 
   const { data: aliases, isLoading: loadingAliases, refetch: refetchAliases } = useQuery({
-    queryKey: ['cst-steward', 'aliases'],
+    queryKey: ['cst-steward', 'aliases', aliasStatus],
     queryFn: ({ signal }) =>
-      apiGet<AliasRow[]>('/api/v1/cst-steward/article-aliases?status=proposed', { signal }),
+      apiGet<AliasRow[]>(
+        `/api/v1/cst-steward/article-aliases?status=${encodeURIComponent(aliasStatus)}`,
+        { signal },
+      ),
     enabled: tab === 2,
   });
 
@@ -134,6 +162,60 @@ export default function CstStewardPage() {
   const rejectAlias = useMutation({
     mutationFn: (id: number) => apiPost(`/api/v1/cst-steward/article-aliases/${id}/reject`, { reason: 'steward_reject' }),
     onSuccess: async () => {
+      await refetchAliases();
+    },
+  });
+
+  const importAliases = useMutation({
+    mutationFn: async (file: File) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      return apiPostFormData<AliasImportSummary>(
+        '/api/v1/cst-steward/article-aliases/import?confirm_unique=true',
+        fd,
+      );
+    },
+    onSuccess: async (summary) => {
+      const confirmed = summary.confirm?.confirmed ?? 0;
+      setAliasImportMsg(
+        `Read ${summary.rows_deduped} · proposed ${summary.proposed + summary.updated_proposed} · confirmed ${confirmed} · collisions ${summary.collisions} · model miss ${summary.model_miss} · ambiguous ${summary.model_ambiguous}`,
+      );
+      await refetchAliases();
+    },
+  });
+
+  const deriveEras = useMutation({
+    mutationFn: () => apiPost<Record<string, unknown>>('/api/v1/cst-steward/article-aliases/derive-eras-from-shipping', {}),
+    onSuccess: async (summary) => {
+      setAliasImportMsg(
+        `Derive eras: groups ${String(summary.groups)} · proposed ${String(summary.eras_proposed)} · steward_manual ${String(summary.steward_manual)} · equal_pod ${String(summary.equal_pod_blocked)}`,
+      );
+      await refetchAliases();
+    },
+  });
+
+  const confirmDerived = useMutation({
+    mutationFn: () => apiPost<Record<string, unknown>>('/api/v1/cst-steward/article-aliases/confirm-shipping-derived', {}),
+    onSuccess: async (summary) => {
+      setAliasImportMsg(
+        `Confirmed shipping eras: ${String(summary.confirmed)} (failed ${String(summary.failed)} / candidates ${String(summary.candidates)})`,
+      );
+      await refetchAliases();
+    },
+  });
+
+  const saveAliasEdit = useMutation({
+    mutationFn: async () => {
+      if (!editAlias) throw new Error('No alias');
+      const pid = Number(editProductId);
+      if (!Number.isFinite(pid) || pid < 1) throw new Error('Enter a valid product_id');
+      return apiPatch<AliasRow>(`/api/v1/cst-steward/article-aliases/${editAlias.id}`, {
+        product_id: pid,
+        status: 'proposed',
+      });
+    },
+    onSuccess: async () => {
+      setEditAlias(null);
       await refetchAliases();
     },
   });
@@ -200,19 +282,32 @@ export default function CstStewardPage() {
 
   const aliasCols = useMemo<ColDef<AliasRow>[]>(
     () => [
-      { field: 'article_no_normalized', headerName: 'Article', width: 140 },
-      { field: 'customer_name', headerName: 'Customer', flex: 1, minWidth: 140 },
-      { field: 'product_sku', headerName: 'SKU', width: 120 },
-      { field: 'product_name', headerName: 'Product', flex: 1, minWidth: 140 },
+      { field: 'article_no_normalized', headerName: 'Article', width: 130 },
+      { field: 'customer_name', headerName: 'Customer', flex: 1, minWidth: 120 },
+      { field: 'product_id', headerName: 'Product id', width: 90 },
+      { field: 'product_sku', headerName: 'SKU', width: 110 },
+      { field: 'product_name', headerName: 'Product', flex: 1, minWidth: 120 },
+      { field: 'valid_from', headerName: 'From', width: 110, valueFormatter: (p) => p.value || '−∞' },
+      { field: 'valid_to', headerName: 'To', width: 110, valueFormatter: (p) => p.value || '+∞' },
       { field: 'status', headerName: 'Status', width: 100 },
       {
         headerName: '',
-        width: 180,
+        width: 260,
         sortable: false,
         filter: false,
         cellRenderer: (p: ICellRendererParams<AliasRow>) =>
           p.data ? (
             <Stack direction="row" spacing={0.5}>
+              <Button
+                size="small"
+                onClick={() => {
+                  setEditAlias(p.data!);
+                  setEditProductId(String(p.data!.product_id ?? ''));
+                }}
+                data-testid={`cst-alias-edit-${p.data.id}`}
+              >
+                Edit
+              </Button>
               <Button
                 size="small"
                 variant="contained"
@@ -294,13 +389,107 @@ export default function CstStewardPage() {
       ) : null}
 
       {tab === 2 ? (
-        <EnterpriseDataGrid
-          rowData={aliases ?? []}
-          columnDefs={aliasCols}
-          height={560}
-          gridOptions={{ getRowId: (p) => String(p.data!.id), loading: loadingAliases }}
-        />
+        <>
+          <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} alignItems="center">
+            <TextField
+              select
+              SelectProps={{ native: true }}
+              size="small"
+              label="Status"
+              value={aliasStatus}
+              onChange={(e) => setAliasStatus(e.target.value)}
+              sx={{ minWidth: 220 }}
+              data-testid="cst-alias-status-filter"
+            >
+              <option value="proposed">proposed</option>
+              <option value="confirmed">confirmed</option>
+              <option value="proposed,confirmed">proposed + confirmed</option>
+              <option value="all">all</option>
+              <option value="rejected">rejected</option>
+            </TextField>
+            <Button component="label" variant="contained" disabled={importAliases.isPending} data-testid="cst-alias-upload">
+              {importAliases.isPending ? 'Importing…' : 'Upload SCM map'}
+              <input
+                type="file"
+                hidden
+                accept=".xlsx,.xlsm"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = '';
+                  if (f) importAliases.mutate(f);
+                }}
+              />
+            </Button>
+            <Button
+              variant="outlined"
+              disabled={deriveEras.isPending}
+              onClick={() => deriveEras.mutate()}
+              data-testid="cst-alias-derive-eras"
+            >
+              {deriveEras.isPending ? 'Deriving…' : 'Derive eras from shipping'}
+            </Button>
+            <Button
+              variant="outlined"
+              disabled={confirmDerived.isPending}
+              onClick={() => confirmDerived.mutate()}
+              data-testid="cst-alias-confirm-derived"
+            >
+              {confirmDerived.isPending ? 'Confirming…' : 'Confirm shipping eras'}
+            </Button>
+            <Typography variant="body2" color="text.secondary">
+              Eras: [from, to). Shipping POD dates the clock; steward adjusts gaps.
+            </Typography>
+          </Stack>
+          {aliasImportMsg ? (
+            <Alert severity="info" sx={{ mb: 1 }} data-testid="cst-alias-import-summary">
+              {aliasImportMsg}
+            </Alert>
+          ) : null}
+          {importAliases.isError ? (
+            <Alert severity="error" sx={{ mb: 1 }}>
+              {String((importAliases.error as Error)?.message)}
+            </Alert>
+          ) : null}
+          <EnterpriseDataGrid
+            rowData={aliases ?? []}
+            columnDefs={aliasCols}
+            height={560}
+            gridOptions={{ getRowId: (p) => String(p.data!.id), loading: loadingAliases }}
+          />
+        </>
       ) : null}
+
+      <Dialog open={editAlias != null} onClose={() => !saveAliasEdit.isPending && setEditAlias(null)} fullWidth maxWidth="xs">
+        <DialogTitle>
+          Edit alias — {editAlias?.customer_name} / {editAlias?.article_no_normalized}
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5} sx={{ pt: 1 }}>
+            <TextField
+              size="small"
+              label="product_id"
+              value={editProductId}
+              onChange={(e) => setEditProductId(e.target.value)}
+              fullWidth
+              data-testid="cst-alias-edit-product-id"
+            />
+            {saveAliasEdit.isError ? <Alert severity="error">{String((saveAliasEdit.error as Error)?.message)}</Alert> : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditAlias(null)} disabled={saveAliasEdit.isPending}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => saveAliasEdit.mutate()}
+            disabled={saveAliasEdit.isPending}
+            data-testid="cst-alias-edit-save"
+          >
+            {saveAliasEdit.isPending ? 'Saving…' : 'Save as proposed'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={dlg != null} onClose={() => !save.isPending && setDlg(null)} fullWidth maxWidth="sm">
         <DialogTitle>

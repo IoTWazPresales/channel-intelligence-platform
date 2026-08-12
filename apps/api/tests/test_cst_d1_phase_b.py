@@ -60,9 +60,10 @@ def test_normalize_article_token():
 
 def test_resolve_customer_article_alias_confirmed_only():
     session = MagicMock()
-    session.scalar = MagicMock(return_value=SimpleNamespace(product_id=99))
+    row = SimpleNamespace(product_id=99, valid_from=None, valid_to=None, status="confirmed")
+    session.scalars.return_value.all.return_value = [row]
     assert resolve_customer_article_alias(session, customer_id=1, article_token="ART-1") == 99
-    session.scalar = MagicMock(return_value=None)
+    session.scalars.return_value.all.return_value = []
     assert resolve_customer_article_alias(session, customer_id=1, article_token="ART-1") is None
 
 
