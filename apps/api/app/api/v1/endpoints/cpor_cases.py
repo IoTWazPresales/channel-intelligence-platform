@@ -188,6 +188,7 @@ def _case_json(
         "ttl_support_zar": ttl_zar,
         "ttl_support_usd": ttl_usd,
         "missing_roe": case.roe_snapshot is None,
+        "origin": getattr(case, "origin", None) or "native",
     }
     if include_lines and lines is not None:
         out["lines"] = lines
@@ -332,8 +333,17 @@ def list_cases(
     status: str | None = Query(default=None),
     customer_id: int | None = Query(default=None),
     q: str | None = Query(default=None),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=500),
     user: dict = Depends(get_current_user),
 ):
+    """List CPOR cases.
+
+    Legacy: no page → JSON array (existing clients/tests).
+    Paginated: page+page_size → {items, total, page, page_size} for MasterDataGridShell.
+    """
+    from app.models.cpor_payment import CporPaymentEvidence
+
     with SessionLocal() as session:
         stmt = (
             select(CporCase, DimCustomer)
@@ -355,13 +365,91 @@ def list_cases(
                 | (DimCustomer.code.ilike(needle))
                 | (DimCustomer.name.ilike(needle))
             )
+
+        paginate = page is not None and page_size is not None
+        if paginate:
+            count_stmt = select(func.count()).select_from(stmt.order_by(None).subquery())
+            total = int(session.scalar(count_stmt) or 0)
+            stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+        else:
+            total = None
+
         rows = session.execute(stmt).all()
+        case_ids = [case.id for case, _ in rows]
+        case_codes = [case.case_code for case, _ in rows]
+        pay_by_case: dict[int, dict[str, Any]] = {}
+        if case_ids:
+            pay_rows = session.execute(
+                select(
+                    CporPaymentEvidence.case_id,
+                    CporPaymentEvidence.external_case_code,
+                    func.count().label("n"),
+                    func.coalesce(func.sum(CporPaymentEvidence.amount), 0).label("amt"),
+                    func.max(CporPaymentEvidence.payment_date).label("last_paid"),
+                )
+                .where(
+                    (CporPaymentEvidence.case_id.in_(case_ids))
+                    | (CporPaymentEvidence.external_case_code.in_(case_codes))
+                )
+                .group_by(CporPaymentEvidence.case_id, CporPaymentEvidence.external_case_code)
+            ).all()
+            code_to_id = {case.case_code: case.id for case, _ in rows}
+            for case_id, ext_code, n, amt, last_paid in pay_rows:
+                cid = case_id or code_to_id.get(ext_code)
+                if cid is None:
+                    continue
+                cur = pay_by_case.setdefault(
+                    cid,
+                    {"payment_evidence_count": 0, "paid_amount_sum": 0.0, "last_payment_date": None},
+                )
+                cur["payment_evidence_count"] += int(n or 0)
+                cur["paid_amount_sum"] += float(amt or 0)
+                if last_paid and (
+                    cur["last_payment_date"] is None or str(last_paid) > str(cur["last_payment_date"])
+                ):
+                    cur["last_payment_date"] = last_paid.isoformat() if hasattr(last_paid, "isoformat") else str(last_paid)
+
+            # latest payment_status per case (simple second query)
+            status_rows = session.execute(
+                select(
+                    CporPaymentEvidence.case_id,
+                    CporPaymentEvidence.external_case_code,
+                    CporPaymentEvidence.payment_status,
+                    CporPaymentEvidence.payment_date,
+                    CporPaymentEvidence.id,
+                )
+                .where(
+                    (CporPaymentEvidence.case_id.in_(case_ids))
+                    | (CporPaymentEvidence.external_case_code.in_(case_codes))
+                )
+                .order_by(
+                    CporPaymentEvidence.payment_date.desc().nullslast(),
+                    CporPaymentEvidence.id.desc(),
+                )
+            ).all()
+            seen_status: set[int] = set()
+            for case_id, ext_code, pstatus, _pd, _id in status_rows:
+                cid = case_id or code_to_id.get(ext_code)
+                if cid is None or cid in seen_status:
+                    continue
+                seen_status.add(cid)
+                pay_by_case.setdefault(cid, {})["latest_payment_status"] = pstatus
+
         out = []
         for case, cust in rows:
             lines = session.scalars(select(CporCaseLine).where(CporCaseLine.case_id == case.id)).all()
             pmap = _products_map(session, [int(l.product_id) for l in lines])
             line_jsons = [_line_json(l, pmap.get(int(l.product_id))) for l in lines]
-            out.append(_case_json(case, customer=cust, lines=line_jsons, include_lines=False))
+            row = _case_json(case, customer=cust, lines=line_jsons, include_lines=False)
+            pay = pay_by_case.get(case.id) or {}
+            row["payment_evidence_count"] = int(pay.get("payment_evidence_count") or 0)
+            row["paid_amount_sum"] = float(pay.get("paid_amount_sum") or 0) or None
+            row["last_payment_date"] = pay.get("last_payment_date")
+            row["latest_payment_status"] = pay.get("latest_payment_status")
+            out.append(row)
+
+        if paginate:
+            return {"items": out, "total": total, "page": page, "page_size": page_size}
         return out
 
 

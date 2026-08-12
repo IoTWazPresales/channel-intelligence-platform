@@ -783,6 +783,34 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "slug": "cpor_payment_evidence",
+        "display_name": "CPOR payment / CN evidence",
+        "description": (
+            "Generic payment and credit-note evidence for CPOR cases. "
+            "Profile-mapped tenant extracts; steward resolve; upsert by source_key."
+        ),
+        "enabled": True,
+        "hidden": True,
+        "admin_only": True,
+        "requires_provider": False,
+        "pipeline_handler": "cpor_payment_evidence_import",
+        "destructive_apply_requires_confirm": True,
+        "accepted_file_types": [".xlsx", ".xlsm", ".csv"],
+        "expected_columns": {
+            "external_case_code": {"aliases": ["case id", "case_id", "case code"], "required": True},
+            "credit_note_id": {
+                "aliases": ["credit note id", "cn id", "deduction no", "application no"],
+                "required": False,
+            },
+            "amount": {"aliases": ["cn amount", "paid amount", "amount"], "required": False},
+            "payment_status": {"aliases": ["payment status", "cn status"], "required": False},
+            "customer_token": {
+                "aliases": ["customer", "target audience name", "dealer/retailer"],
+                "required": False,
+            },
+        },
+    },
 ]
 
 DEFAULT_SOURCES: list[tuple[str, str, str, str]] = [
@@ -817,6 +845,12 @@ DEFAULT_SOURCES: list[tuple[str, str, str, str]] = [
         "Default CPOR historical tracking workbook feed",
         "cpor_historical_cases",
         "historical_cpor_extract",
+    ),
+    (
+        "cpor_payment_evidence_default",
+        "Default CPOR payment / credit-note evidence feed",
+        "cpor_payment_evidence",
+        "payment_cn_extract",
     ),
     ("current_lineup_system", "Current working lineup (Commercial Planner upload)", "current_lineup", "planning_extract"),
     ("unified_lineup_system", "Unified lineup import (Import Centre, multi-file)", "unified_lineup", "planning_extract"),

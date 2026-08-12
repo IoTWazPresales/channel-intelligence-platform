@@ -868,7 +868,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-29 · extracted from `feat/ops-master-grid-shell-parity` per D-021 |
+| **Status / parked** | **Partial** · 2026-08-12 · CPOR Cases list on `MasterDataGridShell` (`feat/cpor-payment-evidence`). Residual: PM gaps / shipment evidence / PVE still parked until those pages are touched. |
 | **Effort** | Medium (mechanical per page) |
 | **Source** | D-021; commits `ddb712c`…`d789ad9` — shell on CPOR cases, PM gaps, shipment evidence, PVE |
 | **Idea** | Re-apply `MasterDataGridShell` / ops list chrome to CPOR cases, product-master gaps, shipment evidence, PVE exception lists when those pages are touched. |

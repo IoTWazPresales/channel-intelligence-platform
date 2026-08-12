@@ -872,6 +872,13 @@ def process_import_job_sync(db: Session, job_id: int, on_progress: Any = None) -
             db.commit()
             db.refresh(job)
             return job
+        if handler == "cpor_payment_evidence_import" or (job.template_slug or "") == "cpor_payment_evidence":
+            from app.services.cpor.payment_evidence.pipeline import process_cpor_payment_evidence_import
+
+            process_cpor_payment_evidence_import(db, job, data)
+            db.commit()
+            db.refresh(job)
+            return job
 
         # DSI multi-file / nested mapping: infer + mapping already done by infer_dsi_job_sync /
         # mapping-save. Do not re-read a single file, clobber inferred_schema, or sanitize nested
