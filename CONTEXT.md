@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-12 — **Unit 7 BACKLOG-068:** Shipping lineup-quarter summary adds `landed_this_quarter_units` (pod_date quarter) + `shipped_not_landed_units`; UI strip labels; PvE fill untouched. Branch `feat/backlog-068-landed-quarter`. Next: Unit 8 demo/P2; skip 094/092 until inputs; P5 last.
 - 2026-08-12 — **Unit 5 pushed** `feat/cst-hist-8x4q-game-w27` @ `7f66fc0` (`f82eba2` dated aliases; steward period stamp). Game Q4 Week 48 → 2025-11-24. Next: PR/merge; Unit 7 BACKLOG-068; skip 094/092 until files/formulas; P5 last.
 - 2026-08-12 — **Unit 5 stats re-verify on cip:** aliases 590 confirmed / 62 proposed; Game W27 426/565 unresolved 139; window 4/4 Takealot·CM·Makro; Evetech 3/4; Game 3/4 (Q4 year mis-stamp); Amazon+Pepkor 0/4 RAW gaps. Branch still 0 commits — commit/PR when asked.
 - 2026-08-11 — **Unit 5 Phase 2 hist soak:** 8×4Q sample via Client RAW + proven field maps. Facts: Takealot 96, CM 302, Evetech 130, Makro 362, Game 38. RAW gaps: Amazon truncated Sales_*; Pepkor Combined ends WK26/Q2. Next: commit/PR when asked; Units 7+; P5 last.

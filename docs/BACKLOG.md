@@ -996,7 +996,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-07 · **A1 gating settled 2026-07-30** (Open Decision #4) |
+| **Status / parked** | **Done** · 2026-08-12 · Unit 7 on `feat/backlog-068-landed-quarter` — Shipping lineup-quarter summary exposes `landed_this_quarter_units` (pod_date quarter) + `shipped_not_landed_units`; PvE fill unchanged. |
 | **Effort** | Medium (recon read model gains a landed sub-state + landing-quarter reattribution; new KPI surface; no schema — `pod_date` already on evidence + fact) |
 | **Source** | PvE shipped/pipeline taxonomy fix (2026-07-07). Fill rate now correctly counts `line_state='shipped'` only, but recon still has **no landed gate**: `reconcile_case` reads `resolved_customer_id, product_id, quantity, amount, unit_price` — never `pod_date`. Confirmed on cip: of shipped-state units on linked POs, ~3% (88 rows / 5,331 units) have `pod_date IS NULL` (shipped, in-transit, not yet delivered) yet are credited as executed in the plan quarter. `docs/PLAN_VS_EXECUTED_SHIPPED_TAXONOMY.md` §Landed. |
 | **Idea** | Add **Landed** as a sub-state of Shipped (`pod_date IS NOT NULL`) and, for a **landed-basis sales KPI**, attribute landed units to the **quarter they landed** (pod_date quarter), not the plan quarter. PvE v1 fill deliberately stays plan-quarter shipped-basis; landed is an additional lens, not a replacement. |
