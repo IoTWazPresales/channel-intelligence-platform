@@ -1,8 +1,8 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-12 (Unit 5 stats re-verified on cip)
+**Last updated:** 2026-08-12 (Unit 5 pushed; Game Q4 period fix)
 
-**Branch:** `feat/cst-hist-8x4q-game-w27` (dirty — **0 commits** ahead of `main` @ `debf1f8`)
+**Branch:** `feat/cst-hist-8x4q-game-w27` @ `7f66fc0` (pushed)
 
 **Alembic on cip:** `20260811_0012` (head)
 
@@ -11,42 +11,30 @@
 | Unit | Status |
 |---|---|
 | 0–3 | Done on main |
-| 5 CST hist + Game W27 | Code+data on cip; **uncommitted** on branch |
-| 7–12 | Pending |
+| 4 CI | Skipped (Q6=C) |
+| 5 CST hist + Game W27 | **Pushed** — dated aliases + hist soak + Game Q4 period fix |
+| 6 Game W27 residual | Largely via aliases (426/565); 139 unresolved optional |
+| 7 BACKLOG-068 | **Next** |
+| 8 Demo/P2 | Pending (Q10=A) |
+| 9 BACKLOG-094 | Blocked — formulas |
+| 10 BACKLOG-092 | Blocked — payment files |
+| 11 Import parity 044/045+026/027 | Pending (Q13=D) |
+| 12 P6 light | Pending (Q14=A) |
 | 13 P5 | Last |
 
-## Verified on cip (2026-08-12)
+## Unit 5 verified
 
-### Aliases
-| Metric | Count |
-|---|---:|
-| Confirmed | **590** (was ~533 unique SCM + shipping eras) |
-| Proposed | **62** |
-| Confirmed open-ended (no window) | 537 |
-| Confirmed with `valid_from`+`valid_to` | 27 |
-
-### Game W27 (jobs 928 / 971)
-Staging **565** · resolved **426** · unresolved **139** · **6** period grains. Fact rows for Game total **38** (upsert grain ≠ staging rows).
-
-### Fact totals (all periods) vs Unit 5 window (2025Q3–2026Q2)
-
-| Customer | All facts / periods | In-window Q coverage |
-|---|---:|---|
-| Takealot | 96 / 5 | **4/4** (76 facts in window) |
-| Computer Mania | 302 / 5 | **4/4** (246 in window) |
-| Makro | 362 / 30 | **4/4** (pivoted multi-week) |
-| Evetech | 130 / 4 | **3/4** — no Q3 EveX Sales in RAW |
-| Game | 38 / 10 | **3/4** — Q4 Week 48 landed as `2026-11-23` (year mis-stamp), **0 facts in 2025Q4** |
-| Hifi / IC | 51 / 1 · 82 / 1 | **0/4** — P4 WK24 only (`2025-06-09`); Pepkor Combined RAW ends WK26/Q2 |
-| Amazon | **0** | **0/4** — RAW Sales extracts truncated |
-
-**RAW gaps (not code bugs):** Amazon Sales_*; Pepkor Combined Chain after WK26; Evetech Q3 EveX Sales; Game Q4 needs re-ingest with year=2025.
+- Commits: `f82eba2` dated aliases; `7f66fc0` steward period stamp
+- Game Q4: Week 48 → `2025-11-24` (4 facts); mis-stamp `2026-11-23` deleted
+- Window: Takealot/CM/Makro 4/4; Evetech 3/4; Game **4/4**; Amazon+Pepkor RAW gaps
+- Aliases: 590 confirmed / 62 proposed
 
 ## Next
 
-1. **Commit/PR** dated-alias migration+code+tests (Warren ask) — branch has no commits yet
-2. Optional: fix Game Q4 period stamp + re-apply Week 48; steward 139 unresolved
-3. Arc **Units 7+**; **P5 last**
-4. Blocked: 094 formulas; 092 payment files
+1. Open/merge PR for Unit 5 (`feat/cst-hist-8x4q-game-w27`)
+2. Branch `feat/backlog-068-landed-quarter` for Unit 7
+3. Units 8→12 per arc; P5 last
+
+**Blocked:** 094 formulas; 092 payment files.
 
 **Env:** local Windows. `cip` @ `20260811_0012`.
