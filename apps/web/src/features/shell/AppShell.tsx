@@ -50,10 +50,11 @@ import {
   navHrefMatches,
   type NavGroup,
 } from '@/features/shell/navConfig';
-import { useCurrentUser, useInvalidateCurrentUser } from '@/features/shell/useCurrentUser';
+import { useCurrentUser, useInvalidateCurrentUser, AUTH_ME_QUERY_KEY } from '@/features/shell/useCurrentUser';
 import { apiPost } from '@/lib/api';
 import { clearAuthToken } from '@/lib/authSession';
 import { useUiStore } from '@/stores/uiStore';
+import { useQueryClient } from '@tanstack/react-query';
 
 const DRAWER_WIDTH_EXPANDED = 280;
 const DRAWER_WIDTH_COLLAPSED = 76;
@@ -115,6 +116,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
   const { density, setDensity, drawerOpen, drawerTitle, drawerContent, closeDrawer } = useUiStore((s) => s);
   const { data: me, isError: meError } = useCurrentUser();
   const invalidateMe = useInvalidateCurrentUser();
+  const qc = useQueryClient();
   const [logoutBusy, setLogoutBusy] = useState(false);
 
   const displayName =
@@ -139,11 +141,12 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
       }
       clearAuthToken();
       await invalidateMe();
+      await qc.resetQueries({ queryKey: AUTH_ME_QUERY_KEY });
       router.replace('/login');
     } finally {
       setLogoutBusy(false);
     }
-  }, [invalidateMe, logoutBusy, router]);
+  }, [invalidateMe, logoutBusy, qc, router]);
 
   const navGroupsForRole = useMemo(() => shellNavGroups(me?.role ? String(me.role) : null), [me?.role]);
 

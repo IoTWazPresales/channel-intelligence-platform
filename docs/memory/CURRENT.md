@@ -1,8 +1,8 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-12 (payment evidence smoke + widen CN id)
+**Last updated:** 2026-08-12 (Unit 8 Demo/P2 gate)
 
-**Branch:** `main` (post #32–#34; smoke hotfixes pending merge)
+**Branch:** `feat/unit8-demo-p2-gate` (from `main` @ `5f49b7f`)
 
 **Alembic on cip:** `20260812_0014` (matches code head)
 
@@ -12,21 +12,21 @@
 |---|---|
 | 0–3 | Done on main |
 | 5 CST hist | Merged #30 |
-| 7 BACKLOG-068 | Merged (`0cf0c6c`) |
-| P5 payment/CN | **Smoke PASS** — Cases shell, Ken validate 3375 rows, apply 3375 evidence, Payments tab |
-| 8 Demo/P2 | **Next** |
+| 7 BACKLOG-068 | Merged |
+| P5 payment/CN | Smoke PASS (#35 hotfixes on main) |
+| 8 Demo/P2 | **Done this branch** — second-user + backup/restore soak |
 | 9–10 | Blocked (094 / 092 full recon) |
 
-## Smoke proven (browser)
+## Unit 8 proven
 
-- Cases `MasterDataGridShell` loads (N+1 fix #34)
-- Import payment/CN: profile `asus_cpor_pending_report_v1`; job #977 → 3375 rows / 2544 cases / 283 linked
-- Apply upserted 3375 `cpor_payment_evidence` (shells 0 — none marked)
-- Case `C26649381` Payments tab shows CN rows (evidence-only case status)
+- Browser: `viewer@local` → Control tower → Shipping; `/admin/users` forbidden; admin Users form OK
+- Restore: `cip_20260812_124712.dump` → `cip_alembic_smoke` `RESTORE_SMOKE_OK` (alembic `20260812_0014`, dim_product parity)
+- Docs: `docs/DEMO_SCRIPT.md`, `docs/UNIT8_DEMO_P2_GATE.md`, `docs/BACKUP_AND_DR.md` proof row
+- Fix: Users page default-deny + login seeds `/auth/me` cache
 
 ## Next
 
-1. Merge smoke hotfixes (admin sources header, CN VARCHAR 512, ensure race)
-2. Unit 8 Demo/P2 gate
+1. Commit/PR Unit 8 when asked
+2. Arc: Unit 11 import parity **or** Unit 12 P6 light **or** P5 residual last (094/092 still blocked)
 
 **Env:** local Windows. API WatchFiles sometimes exits after reload — restart `pnpm dev:api` if :8001 dies.
