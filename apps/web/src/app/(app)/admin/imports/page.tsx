@@ -1,10 +1,7 @@
 'use client';
 
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import Autocomplete from '@mui/material/Autocomplete';
 import TextField from '@mui/material/TextField';
-import Tooltip from '@mui/material/Tooltip';
 import {
   Alert,
   Box,
@@ -16,7 +13,6 @@ import {
   Chip,
   FormControl,
   FormControlLabel,
-  InputAdornment,
   InputLabel,
   LinearProgress,
   ListItemText,
@@ -128,19 +124,17 @@ import {
 } from './dsiStepUtils';
 import {
   initPmColumnDrafts,
-  PM_GROUP_LABEL,
+  applyPmDispositionDraft,
+  applyPmTargetDraft,
+  pmColumnsToDispositionDraft,
+  pmColumnsToTargetDraft,
   pmDraftsToApiColumns,
   sortPmFieldDefinitions,
   type PmColumnDraft,
   type PmDisposition,
   type PmFieldDefinition,
 } from './pmMappingHelpers';
-import {
-  buildTargetUsageMap,
-  enrichPmMappingTargets,
-  filterAndSortPmTargets,
-  type EnrichedPmTargetOption,
-} from './pmMappingTargetOptions';
+import { hlFieldMapToHeaderDraft, hlHeaderDraftToOverride } from './hlMappingHelpers';
 
 type ImportTemplate = {
   id: number;
@@ -510,44 +504,6 @@ function formatPmSamples(samples: unknown[] | undefined): string {
   return parts.length ? parts.join(' · ') : '—';
 }
 
-const PM_SUGGEST_REASON_LABELS: Record<string, string> = {
-  deterministic_alias_header: 'Universal column match (industry terms)',
-  deterministic_value_evidence: 'Sample values match this field type',
-  exact_header_match: 'Exact field key match',
-  normalized_header_match: 'Normalized header matches field',
-  legacy_alias_header: 'Known legacy column alias',
-  alias_catalog_match: 'Alias catalog match',
-  import_template_mapping: 'Import template mapping',
-  template_mapping: 'Import template default',
-  header_keyword_signal: 'Header keyword signal',
-  sample_values_resemble_form_factor: 'Samples look like form factor',
-  sample_values_resemble_platform_cpu_family: 'Samples look like platform / CPU family',
-  sample_values_resemble_series_or_segment_name: 'Samples look like series / segment',
-  sample_values_resemble_barcode: 'Samples look like a barcode (legacy signal)',
-  sample_values_resemble_technical_id: 'Samples look like a technical id (legacy signal)',
-  sample_values_resemble_long_title: 'Samples look like a long title',
-  barcode_like_value: 'Values look like a strict GTIN/UPC',
-  technical_id_like_value: 'Values look like a technical / part code',
-  date_like_value: 'Date-like values and date role',
-  dtype_numeric_capacity_like: 'Numeric / capacity-like values',
-  semantic_group_aligned_with_header: 'Semantic group matches header',
-  semantic_group_mismatch_penalty: 'Semantic group mismatch (down-ranked)',
-  low_confidence: 'Low confidence',
-  ambiguous_close_runner_up: 'Ambiguous — close alternative',
-  target_already_used: 'Target already mapped by another column',
-  identity_target_already_mapped: 'Identity field already mapped',
-  alias_match: 'Generic industry alias',
-  source_memory: 'Learned from previous imports for this source',
-  no_suitable_canonical_target: 'No suitable core field in this model',
-  recommend_stage_metadata: 'Recommended: keep as staged metadata',
-  recommend_ignore: 'Recommended: ignore for Product Master',
-  identifier_resolution_available: 'Optional identifier resolution (if configured)',
-};
-
-function formatPmSuggestReason(code: string): string {
-  return PM_SUGGEST_REASON_LABELS[code] ?? code.replace(/_/g, ' ');
-}
-
 function AdminImportsPageContent() {
   const qc = useQueryClient();
   const router = useRouter();
@@ -566,13 +522,12 @@ function AdminImportsPageContent() {
   const [lastGenericFile, setLastGenericFile] = useState<File | null>(null);
   const [historicalValidatedJobId, setHistoricalValidatedJobId] = useState<number | null>(null);
   const [isJobRevisitMode, setIsJobRevisitMode] = useState(false);
-  const [hlMappingEdits, setHlMappingEdits] = useState<Record<string, Record<string, string>>>({});
+  /** header → canonical for active HL sheet (CanonicalColumnMappingPanel draft). */
+  const [hlMapDraft, setHlMapDraft] = useState<Record<string, string>>({});
   const [showMappingReview, setShowMappingReview] = useState(false);
   const [hlShowApplyConfirm, setHlShowApplyConfirm] = useState(false);
   const [lastApplyJobId, setLastApplyJobId] = useState<number | null>(null);
   const [pmColumns, setPmColumns] = useState<PmColumnDraft[]>([]);
-  const [pmRowFilter, setPmRowFilter] = useState<'all' | 'unmapped' | 'mapped' | 'core'>('all');
-  const [pmBulkSelected, setPmBulkSelected] = useState<Record<string, boolean>>({});
   const [dsiMapDraft, setDsiMapDraft] = useState<Record<string, string>>({});
   const [dsiNestedMapDraft, setDsiNestedMapDraft] = useState<Record<string, Record<string, string>>>({});
   const [dsiActiveSheetKey, setDsiActiveSheetKey] = useState<string | null>(null);
@@ -1669,7 +1624,7 @@ function AdminImportsPageContent() {
     setLastGenericFile(null);
     setHistoricalValidatedJobId(null);
     setIsJobRevisitMode(false);
-    setHlMappingEdits({});
+    setHlMapDraft({});
     setShowMappingReview(false);
     setHlShowApplyConfirm(false);
     setLastApplyJobId(null);
@@ -1858,13 +1813,44 @@ function AdminImportsPageContent() {
     return null;
   }, [dsiJobDisplay, handleDsiJobStateRecovery, isDsi]);
 
-  // Derived data for the HL mapping review panel.
+  // Derived data for the HL mapping review panel (header → canonical for shared panel).
   const hlSheetDetail: HlSheetDetail | null =
     hlJobDetail?.inferred_schema?.selected_sheet_details?.[0] ?? null;
-  const hlDetectedMapping: Record<string, string> =
-    hlSheetDetail ? (hlJobDetail?.field_mapping?.[hlSheetDetail.sheet_name] ?? {}) : {};
+  const hlSheetName = hlSheetDetail?.sheet_name ?? null;
+  const hlDetectedMapping = useMemo(() => {
+    if (!hlSheetName || !hlJobDetail?.field_mapping) return {} as Record<string, string>;
+    return hlJobDetail.field_mapping[hlSheetName] ?? {};
+  }, [hlJobDetail?.field_mapping, hlSheetName]);
   const hlSourceColumns: string[] = hlSheetDetail?.source_columns ?? [];
-  const hlHasEdits = Object.values(hlMappingEdits).some((m) => Object.keys(m).length > 0);
+  const hlSeedReady = Boolean(
+    historicalValidatedJobId != null &&
+      hlSheetName &&
+      hlJobDetail?.id === historicalValidatedJobId
+  );
+  useEffect(() => {
+    if (historicalValidatedJobId == null) {
+      setHlMapDraft({});
+      return;
+    }
+    if (!hlSeedReady || !hlSheetName) return;
+    setHlMapDraft(hlFieldMapToHeaderDraft(hlDetectedMapping));
+  }, [historicalValidatedJobId, hlSeedReady, hlSheetName, hlDetectedMapping]);
+
+  const hlMappingOverride = useMemo(() => {
+    if (!hlSheetName) return undefined;
+    const o = hlHeaderDraftToOverride(hlSheetName, hlMapDraft, hlDetectedMapping);
+    return Object.keys(o).length ? o : undefined;
+  }, [hlSheetName, hlMapDraft, hlDetectedMapping]);
+  const hlHasEdits = Boolean(hlMappingOverride);
+
+  const hlCanonicalTargetOptions = useMemo<CanonicalTargetOption[]>(
+    () =>
+      HL_MAPPING_DISPLAY_FIELDS.map((f) => ({
+        value: f.canonical,
+        label: `${f.label} (${f.canonical})`,
+      })),
+    []
+  );
 
   const upload = useMutation({
     mutationFn: async ({ file, modeOverride, mappingOverride }: GenericUploadArgs) => {
@@ -1903,13 +1889,13 @@ function AdminImportsPageContent() {
       }
       if (selectedSlug === 'historical_lineup' && data.import_mode === 'validate') {
         setHistoricalValidatedJobId(data.id);
-        setHlMappingEdits({});
+        setHlMapDraft({});
         setShowMappingReview(false);
       } else if (selectedSlug === 'historical_lineup' && data.import_mode === 'apply') {
         // Apply completed — clear button gate so Apply button disappears immediately.
         setHistoricalValidatedJobId(null);
         setLastGenericFile(null);
-        setHlMappingEdits({});
+        setHlMapDraft({});
         setShowMappingReview(false);
         setHlShowApplyConfirm(false);
         setLastApplyJobId(data.id);
@@ -2596,102 +2582,79 @@ function AdminImportsPageContent() {
     [pmJobState?.identity_targets]
   );
 
-  const coreTargetKeys = useMemo(
-    () =>
-      new Set([
-        'technical_product_id',
-        'display_name',
-        'market_sku',
-        'model_family',
-        'source_product_code',
-        'barcode_ean',
-        'barcode_upc',
-        'category',
-        'product_line',
-        'series',
-        'business_unit',
-        'form_factor',
-        'channel_code',
-        'price_band',
-        'country_code',
-        'lifecycle_status',
-        'launch_date',
-        'end_of_life_date',
-      ]),
-    []
-  );
-
-  const visiblePmColumns = useMemo(() => {
-    return pmColumns.filter((row) => {
-      const t = row.target.trim();
-      if (pmRowFilter === 'unmapped') return !t;
-      if (pmRowFilter === 'mapped') return Boolean(t);
-      if (pmRowFilter === 'core') return !t || coreTargetKeys.has(t);
-      return true;
-    });
-  }, [pmColumns, pmRowFilter, coreTargetKeys]);
-
-  const pmTargetOptions = useMemo((): PmFieldDefinition[] => {
+  const pmCanonicalTargetOptions = useMemo<CanonicalTargetOption[]>(() => {
     const raw = pmJobState?.field_definitions;
-    if (raw && raw.length > 0) {
-      return sortPmFieldDefinitions(raw);
-    }
-    const keys = pmJobState?.canonical_fields ?? [];
-    return sortPmFieldDefinitions(
-      keys.map((k) => ({
-        key: k,
-        group: 'optional',
-        label: k,
-        importance: 'medium',
-        dim_persistence: 'canonical',
-        description: '',
-      }))
-    );
+    const defs: PmFieldDefinition[] =
+      raw && raw.length > 0
+        ? sortPmFieldDefinitions(raw)
+        : sortPmFieldDefinitions(
+            (pmJobState?.canonical_fields ?? []).map((k) => ({
+              key: k,
+              group: 'optional',
+              label: k,
+              importance: 'medium',
+              dim_persistence: 'canonical',
+              description: '',
+            }))
+          );
+    return defs.map((d) => ({
+      value: d.key,
+      label: `${d.label} (${d.key})`,
+      description: d.description || undefined,
+    }));
   }, [pmJobState?.field_definitions, pmJobState?.canonical_fields]);
 
-  /** Per-row mapping picker options (ordering + duplicate awareness). */
-  const pmEnrichedTargetsByHeader = useMemo(() => {
+  const pmRequiredGroups = useMemo<CanonicalRequiredGroup[]>(() => {
     const req = pmJobState?.required_fields ?? ['display_name'];
-    const idt = pmJobState?.identity_targets ?? ['technical_product_id'];
-    const usage = buildTargetUsageMap(pmColumns);
-    const sentinel: EnrichedPmTargetOption = {
-      key: '',
-      label: '(Unmapped)',
-      group: 'optional',
-      importance: 'low',
-      dim_persistence: '',
-      description:
-        'Not mapped to a system field; choose a disposition below for extra columns.',
-      sortTier: 62,
-      sectionKey: 'unmapped',
-      sectionLabel: 'Leave unmapped',
-      badgeTexts: [],
-      duplicateFromHeaders: [],
-    };
-    const out: Record<string, EnrichedPmTargetOption[]> = {};
-    for (const col of pmColumns) {
-      const enriched = enrichPmMappingTargets({
-        defs: pmTargetOptions,
-        requiredFields: req,
-        identityTargets: idt,
-        usage,
-        currentHeader: col.header,
-      });
-      out[col.header] = [sentinel, ...enriched];
+    const groups: CanonicalRequiredGroup[] = req.map((f) => ({
+      id: f,
+      label: f,
+      anyOf: [f],
+    }));
+    const idTargets = pmJobState?.identity_targets ?? ['technical_product_id'];
+    groups.push({
+      id: 'technical_product_id',
+      label: 'technical_product_id',
+      anyOf: idTargets,
+    });
+    return groups;
+  }, [pmJobState?.required_fields, pmJobState?.identity_targets]);
+
+  const pmMapDraft = useMemo(() => pmColumnsToTargetDraft(pmColumns), [pmColumns]);
+  const pmDispositionDraft = useMemo(() => pmColumnsToDispositionDraft(pmColumns), [pmColumns]);
+
+  const pmColumnSamples = useMemo(() => {
+    const cols = pmJobState?.inferred_schema?.columns;
+    if (!cols?.length) return {} as Record<string, string[]>;
+    const out: Record<string, string[]> = {};
+    for (const c of cols) {
+      const samples = (c.sample ?? [])
+        .map((s) => (s === null || s === undefined ? '' : String(s)))
+        .filter((x) => x.length > 0);
+      if (samples.length) out[c.name] = samples;
     }
     return out;
-  }, [
-    pmColumns,
-    pmTargetOptions,
-    pmJobState?.required_fields,
-    pmJobState?.identity_targets,
-  ]);
-
-  const inferredByHeader = useMemo(() => {
-    const cols = pmJobState?.inferred_schema?.columns;
-    if (!cols?.length) return {} as Record<string, InferredColumn>;
-    return Object.fromEntries(cols.map((c) => [c.name, c]));
   }, [pmJobState?.inferred_schema?.columns]);
+
+  const pmColumnNotes = useMemo(() => {
+    const sug = pmJobState?.suggested_mapping;
+    if (!sug) return {} as Record<string, string>;
+    const out: Record<string, string> = {};
+    for (const [header, s] of Object.entries(sug)) {
+      const act = s?.mapper_action;
+      const parts: string[] = [];
+      if (s?.from_source_memory) parts.push('Source memory');
+      if (act === 'auto_map' && s.target) parts.push(`Auto-map: ${s.target}`);
+      else if (act === 'suggest' && (s.suggested_target || s.target))
+        parts.push(`Suggested: ${s.suggested_target ?? s.target}`);
+      else if (act === 'recommend_stage_metadata') parts.push('Recommended: Stage as metadata');
+      else if (act === 'recommend_ignore') parts.push('Recommended: Ignore');
+      else if (act === 'no_strong_suggestion') parts.push('No strong suggestion');
+      else if (s?.target) parts.push(`Map: ${s.target}`);
+      if (parts.length) out[header] = parts.join(' · ');
+    }
+    return out;
+  }, [pmJobState?.suggested_mapping]);
 
   const mappedTargets = useMemo(
     () =>
@@ -2709,49 +2672,34 @@ function AdminImportsPageContent() {
     return coreOk && identityOk;
   }, [pmJobState?.required_fields, mappedTargets, identityTargetSet]);
 
-  const pmMappingSummary = useMemo(() => {
-    const idHits = mappedTargets.filter((t) => identityTargetSet.has(t));
-    const commercial = new Set(['market_sku', 'model_family', 'source_product_code']);
-    const classification = new Set([
-      'category',
-      'form_factor',
-      'price_band',
-      'series',
-      'product_line',
-      'business_unit',
-      'country_code',
-    ]);
-    return {
-      requiredCoreOk: (pmJobState?.required_fields ?? ['display_name']).every(
-        (f) => mappedTargets.filter((t) => t === f).length === 1
-      ),
-      identityOk: idHits.length === 1,
-      identityTarget: idHits[0] ?? null,
-      commercialMapped: mappedTargets.filter((t) => commercial.has(t)).length,
-      classificationMapped: mappedTargets.filter((t) => classification.has(t)).length,
-      unmappedColumns: pmColumns.filter((c) => !c.target.trim()).length,
-      stagedDisposition: pmColumns.filter((c) => !c.target.trim() && c.disposition === 'stage_raw').length,
-    };
-  }, [mappedTargets, pmColumns, pmJobState?.required_fields, identityTargetSet]);
-
-  const selectedBulkCount = useMemo(
-    () => Object.values(pmBulkSelected).filter(Boolean).length,
-    [pmBulkSelected]
-  );
+  const pmMappingDirty = useMemo(() => {
+    const saved = pmJobState?.mapping_decisions;
+    if (!saved) return pmColumns.some((c) => Boolean(c.target.trim()) || c.disposition !== 'ignore');
+    for (const c of pmColumns) {
+      const s = saved[c.header];
+      const savedTarget = (s?.target ?? '').trim();
+      const savedDisp = (s?.disposition as string | undefined) || 'ignore';
+      if (c.target.trim()) {
+        if (c.target.trim() !== savedTarget) return true;
+      } else {
+        if (savedTarget) return true;
+        if (c.disposition !== savedDisp) return true;
+      }
+    }
+    return false;
+  }, [pmColumns, pmJobState?.mapping_decisions]);
 
   const applySuggestedMappingsOnly = useCallback(() => {
     if (!pmJobState?.file_headers?.length) return;
     setPmColumns(
       initPmColumnDrafts(pmJobState.file_headers, pmJobState.suggested_mapping, null)
     );
-    setPmBulkSelected({});
   }, [pmJobState?.file_headers, pmJobState?.suggested_mapping]);
 
   const clearAllMappings = useCallback(() => {
     setPmColumns((prev) =>
       prev.map((c) => ({ ...c, target: '', disposition: 'ignore' as PmDisposition }))
     );
-    setPmBulkSelected({});
   }, []);
 
   const bulkUnmappedSetIgnore = useCallback(() => {
@@ -2765,19 +2713,6 @@ function AdminImportsPageContent() {
       prev.map((c) => (!c.target.trim() ? { ...c, disposition: 'stage_raw' as PmDisposition } : c))
     );
   }, []);
-
-  const bulkDispositionForSelection = useCallback(
-    (d: PmDisposition) => {
-      setPmColumns((prev) =>
-        prev.map((c) => (pmBulkSelected[c.header] ? { ...c, disposition: d } : c))
-      );
-    },
-    [pmBulkSelected]
-  );
-
-  const visibleHeaderList = useMemo(() => visiblePmColumns.map((r) => r.header), [visiblePmColumns]);
-  const allVisibleSelected =
-    visibleHeaderList.length > 0 && visibleHeaderList.every((h) => pmBulkSelected[h]);
 
   return (
     <>
@@ -2926,7 +2861,7 @@ function AdminImportsPageContent() {
                       setLastGenericFile(null);
                       setHistoricalValidatedJobId(null);
                       setIsJobRevisitMode(false);
-                      setHlMappingEdits({});
+                      setHlMapDraft({});
                       setShowMappingReview(false);
                       setActiveStep(1);
                     }}
@@ -3188,400 +3123,49 @@ function AdminImportsPageContent() {
               <strong>Optional:</strong> market_sku, model_family, barcodes, classification, lifecycle, and
               source_product_code (feed-specific id) as needed.
             </Alert>
-            <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover' }}>
-              <Typography variant="caption" fontWeight={600} display="block" gutterBottom>
-                Mapping summary
-              </Typography>
-              <Stack direction="row" flexWrap="wrap" gap={1} useFlexGap>
-                <Chip
-                  size="small"
-                  color={pmMappingSummary.requiredCoreOk ? 'success' : 'warning'}
-                  label={`Required core: ${pmMappingSummary.requiredCoreOk ? 'OK' : 'incomplete'}`}
-                />
-                <Chip
-                  size="small"
-                  color={pmMappingSummary.identityOk ? 'success' : 'warning'}
-                  label={`Identity (${pmMappingSummary.identityTarget ?? 'missing'}): ${
-                    pmMappingSummary.identityOk ? 'OK' : 'need technical_product_id'
-                  }`}
-                />
-                <Chip size="small" variant="outlined" label={`Commercial fields: ${pmMappingSummary.commercialMapped}`} />
-                <Chip
-                  size="small"
-                  variant="outlined"
-                  label={`Classification fields: ${pmMappingSummary.classificationMapped}`}
-                />
-                <Chip size="small" variant="outlined" label={`Unmapped columns: ${pmMappingSummary.unmappedColumns}`} />
-                <Chip size="small" variant="outlined" label={`Staged metadata cols: ${pmMappingSummary.stagedDisposition}`} />
-              </Stack>
-            </Paper>
-            <Paper variant="outlined" sx={{ p: 1.5 }}>
-              <Stack spacing={1.5}>
-                <Stack direction="row" flexWrap="wrap" gap={1} alignItems="center" useFlexGap>
-                  <FormControl size="small" sx={{ minWidth: 220 }}>
-                    <InputLabel id="pm-filter-label">Row filter</InputLabel>
-                    <Select
-                      labelId="pm-filter-label"
-                      label="Row filter"
-                      value={pmRowFilter}
-                      onChange={(e) =>
-                        setPmRowFilter(e.target.value as 'all' | 'unmapped' | 'mapped' | 'core')
-                      }
-                    >
-                      <MenuItem value="all">All columns ({pmColumns.length})</MenuItem>
-                      <MenuItem value="unmapped">Unmapped only</MenuItem>
-                      <MenuItem value="mapped">Mapped only</MenuItem>
-                      <MenuItem value="core">Core / important targets</MenuItem>
-                    </Select>
-                  </FormControl>
-                  <Typography variant="caption" color="text.secondary">
-                    Showing {visiblePmColumns.length} of {pmColumns.length}
-                  </Typography>
-                </Stack>
-                <Stack direction="row" flexWrap="wrap" gap={1} useFlexGap alignItems="center">
-                  <Button size="small" variant="outlined" onClick={bulkUnmappedSetIgnore}>
-                    All unmapped → Ignore
-                  </Button>
-                  <Button size="small" variant="outlined" onClick={bulkUnmappedSetStage}>
-                    All unmapped → Stage metadata
-                  </Button>
-                  <Button size="small" variant="outlined" onClick={applySuggestedMappingsOnly}>
-                    Apply suggested mappings only
-                  </Button>
-                  <Button size="small" variant="outlined" color="warning" onClick={clearAllMappings}>
-                    Clear all mappings
-                  </Button>
-                </Stack>
-                <Stack direction="row" flexWrap="wrap" gap={1} alignItems="center" useFlexGap>
-                  <Typography variant="caption">
-                    Selected rows: {selectedBulkCount}
-                  </Typography>
-                  <Button
-                    size="small"
-                    disabled={!selectedBulkCount}
-                    onClick={() => bulkDispositionForSelection('ignore')}
-                  >
-                    Set disposition Ignore
-                  </Button>
-                  <Button
-                    size="small"
-                    disabled={!selectedBulkCount}
-                    onClick={() => bulkDispositionForSelection('stage_raw')}
-                  >
-                    Set disposition Stage
-                  </Button>
-                  <Button
-                    size="small"
-                    disabled={!selectedBulkCount}
-                    onClick={() => bulkDispositionForSelection('attribute_candidate')}
-                  >
-                    Set disposition Steward review
-                  </Button>
-                </Stack>
-              </Stack>
-            </Paper>
+            <Stack direction="row" flexWrap="wrap" gap={1} useFlexGap>
+              <Button size="small" variant="outlined" onClick={bulkUnmappedSetIgnore}>
+                All unmapped → Ignore
+              </Button>
+              <Button size="small" variant="outlined" onClick={bulkUnmappedSetStage}>
+                All unmapped → Stage metadata
+              </Button>
+              <Button size="small" variant="outlined" onClick={applySuggestedMappingsOnly}>
+                Apply suggested mappings only
+              </Button>
+              <Button size="small" variant="outlined" color="warning" onClick={clearAllMappings}>
+                Clear all mappings
+              </Button>
+            </Stack>
             <Typography variant="caption" color="text.secondary">
-              Unmapped columns need a disposition: ignore, retain as staged metadata, or flag for steward review (no new schema
-              columns are created here).
+              Unmapped columns need a disposition: ignore, retain as staged metadata, or flag for steward review (no new
+              schema columns are created here).
             </Typography>
             {pmJobState?.inferred_schema?.row_count != null ? (
               <Typography variant="caption" color="text.secondary" display="block">
-                Loaded <strong>{pmJobState.inferred_schema.row_count}</strong> data row(s); sample values are taken from the first
-                non-empty cells per column (up to three).
+                Loaded <strong>{pmJobState.inferred_schema.row_count}</strong> data row(s); sample values are taken from
+                the first non-empty cells per column (up to three).
               </Typography>
             ) : null}
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell padding="checkbox">
-                    <Checkbox
-                      size="small"
-                      checked={allVisibleSelected}
-                      indeterminate={
-                        visibleHeaderList.some((h) => pmBulkSelected[h]) && !allVisibleSelected
-                      }
-                      onChange={() => {
-                        setPmBulkSelected((prev) => {
-                          const next = { ...prev };
-                          const on = !allVisibleSelected;
-                          visibleHeaderList.forEach((h) => {
-                            if (on) next[h] = true;
-                            else delete next[h];
-                          });
-                          return next;
-                        });
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell>File header</TableCell>
-                  <TableCell sx={{ minWidth: 220 }}>Sample values</TableCell>
-                  <TableCell>Maps to</TableCell>
-                  <TableCell>Unmapped handling</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {visiblePmColumns.map((row) => (
-                  <TableRow key={row.header}>
-                    <TableCell padding="checkbox">
-                      <Checkbox
-                        size="small"
-                        checked={Boolean(pmBulkSelected[row.header])}
-                        onChange={() =>
-                          setPmBulkSelected((prev) => ({
-                            ...prev,
-                            [row.header]: !prev[row.header],
-                          }))
-                        }
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Typography fontWeight={600}>{row.header}</Typography>
-                      {inferredByHeader[row.header]?.dtype ? (
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          {inferredByHeader[row.header].dtype}
-                        </Typography>
-                      ) : null}
-                      {(() => {
-                        const sug = pmJobState?.suggested_mapping?.[row.header];
-                        if (!sug) return null;
-                        const act = sug.mapper_action;
-                        if (!sug?.reasons?.length && sug?.confidence == null && !sug?.runner_up && !act) return null;
-                        const parts: string[] = [];
-                        if (sug.from_source_memory) parts.push('Source memory');
-                        if (act === 'auto_map' && sug.target) {
-                          parts.push(`Auto-map: ${sug.target}`);
-                          if (sug.confidence != null) parts.push(`${Math.round(sug.confidence * 100)}%`);
-                        } else if (act === 'suggest' && (sug.suggested_target || sug.target)) {
-                          parts.push(`Suggested: ${sug.suggested_target ?? sug.target}`);
-                          if (sug.confidence != null) parts.push(`${Math.round(sug.confidence * 100)}%`);
-                        } else if (act === 'recommend_stage_metadata') {
-                          parts.push('Recommended: Stage as metadata');
-                        } else if (act === 'recommend_ignore') {
-                          parts.push('Recommended: Ignore');
-                        } else if (act === 'no_strong_suggestion') {
-                          parts.push('No strong suggestion');
-                          if (sug.hint_target) parts.push(`Optional hint: ${sug.hint_target}`);
-                          else if (sug.runner_up?.target) parts.push(`Alternative: ${sug.runner_up.target}`);
-                        } else if (sug.target) {
-                          parts.push(`Map: ${sug.target}`);
-                          if (sug.confidence != null) parts.push(`${Math.round(sug.confidence * 100)}%`);
-                        }
-                        const detail =
-                          (sug.reasons?.length ? sug.reasons.map(formatPmSuggestReason).join(' · ') : '') +
-                          (sug.runner_up?.target && sug.target && act !== 'no_strong_suggestion'
-                            ? ` · Alternative: ${sug.runner_up.target}`
-                            : '');
-                        const tip = [parts.join(' — '), detail].filter(Boolean).join('\n');
-                        const chipLabel =
-                          act === 'auto_map' && sug.target
-                            ? `Auto-map · ${sug.target}`
-                            : act === 'suggest' && (sug.suggested_target || sug.target)
-                              ? `Suggested · ${sug.suggested_target ?? sug.target}`
-                              : act === 'recommend_stage_metadata'
-                                ? 'Stage metadata'
-                                : act === 'recommend_ignore'
-                                  ? 'Ignore'
-                                  : act === 'no_strong_suggestion'
-                                    ? 'No strong mapping'
-                                    : parts[0] ?? '';
-                        const chipColor =
-                          act === 'auto_map'
-                            ? 'success'
-                            : act === 'suggest'
-                              ? 'info'
-                              : act === 'recommend_stage_metadata'
-                                ? 'warning'
-                                : act === 'recommend_ignore'
-                                  ? 'default'
-                                  : 'default';
-                        return (
-                          <Tooltip title={tip || 'Mapper guidance'}>
-                            <Stack spacing={0.5} sx={{ mt: 0.25 }}>
-                              {chipLabel ? (
-                                <Chip size="small" variant="outlined" color={chipColor} label={chipLabel} sx={{ width: 'fit-content' }} />
-                              ) : null}
-                              <Typography variant="caption" color="text.secondary" display="block">
-                                {parts.join(' · ') || '—'}
-                              </Typography>
-                            </Stack>
-                          </Tooltip>
-                        );
-                      })()}
-                    </TableCell>
-                    <TableCell sx={{ maxWidth: 280, wordBreak: 'break-word' }}>
-                      <Typography variant="body2" color="text.secondary">
-                        {formatPmSamples(inferredByHeader[row.header]?.sample)}
-                      </Typography>
-                    </TableCell>
-                    <TableCell sx={{ minWidth: 280 }}>
-                      <Autocomplete
-                        size="small"
-                        options={pmEnrichedTargetsByHeader[row.header] ?? []}
-                        filterOptions={(opts, state) =>
-                          filterAndSortPmTargets(opts as EnrichedPmTargetOption[], state)
-                        }
-                        groupBy={(opt) =>
-                          'sectionLabel' in opt && opt.sectionLabel
-                            ? opt.sectionLabel
-                            : PM_GROUP_LABEL[opt.group] ?? opt.group
-                        }
-                        getOptionLabel={(opt) => (opt.key ? `${opt.label} (${opt.key})` : opt.label)}
-                        isOptionEqualToValue={(a, b) => a.key === b.key}
-                        value={(() => {
-                          const t = row.target.trim();
-                          const base = pmEnrichedTargetsByHeader[row.header] ?? [];
-                          const f = base.find((o) => o.key === t);
-                          if (f) return f;
-                          if (t) {
-                            return {
-                              key: t,
-                              label: t,
-                              group: 'optional',
-                              importance: 'low',
-                              dim_persistence: '',
-                              description: '',
-                              sortTier: 99,
-                              sectionKey: 'legacy',
-                              sectionLabel: 'Saved / unknown key',
-                              badgeTexts: [],
-                              duplicateFromHeaders: [],
-                            } as EnrichedPmTargetOption;
-                          }
-                          return (
-                            base[0] ?? {
-                              key: '',
-                              label: '(Unmapped)',
-                              group: 'optional',
-                              importance: 'low',
-                              dim_persistence: '',
-                              description: '',
-                              sortTier: 62,
-                              sectionKey: 'unmapped',
-                              sectionLabel: 'Leave unmapped',
-                              badgeTexts: [],
-                              duplicateFromHeaders: [],
-                            }
-                          );
-                        })()}
-                        onChange={(_, opt) => {
-                          const v = opt?.key ?? '';
-                          setPmColumns((prev) =>
-                            prev.map((p) => (p.header === row.header ? { ...p, target: v } : p))
-                          );
-                        }}
-                        renderOption={(props, opt) => (
-                          <li {...props} key={opt.key || 'blank'}>
-                            <Stack direction="row" alignItems="flex-start" spacing={0.5} sx={{ width: '100%', py: 0.25 }}>
-                              <Box sx={{ flex: 1, minWidth: 0 }}>
-                                <Stack direction="row" alignItems="center" spacing={0.5} flexWrap="wrap" useFlexGap>
-                                  <Typography variant="body2">{opt.label}</Typography>
-                                  {(opt as EnrichedPmTargetOption).badgeTexts?.map((b) => (
-                                    <Chip key={b} size="small" variant="outlined" label={b} sx={{ height: 20 }} />
-                                  ))}
-                                </Stack>
-                                <Typography variant="caption" color="text.secondary">
-                                  {opt.key
-                                    ? `${opt.key} · ${opt.role ?? opt.dim_persistence}`
-                                    : opt.description}
-                                </Typography>
-                                {(opt as EnrichedPmTargetOption).duplicateFromHeaders?.length ? (
-                                  <Typography variant="caption" color="warning.main" display="block">
-                                    Also mapped from:{' '}
-                                    {(opt as EnrichedPmTargetOption).duplicateFromHeaders!.join(', ')}
-                                  </Typography>
-                                ) : null}
-                              </Box>
-                              {opt.description ? (
-                                <Tooltip title={opt.description}>
-                                  <InfoOutlinedIcon sx={{ fontSize: 18, color: 'text.secondary', mt: 0.25 }} />
-                                </Tooltip>
-                              ) : null}
-                            </Stack>
-                          </li>
-                        )}
-                        renderInput={(params) => (
-                          <TextField
-                            {...params}
-                            label="Maps to"
-                            placeholder="Search targets…"
-                            InputProps={{
-                              ...params.InputProps,
-                              endAdornment: (
-                                <>
-                                  {(() => {
-                                    const sel = pmTargetOptions.find((o) => o.key === row.target.trim());
-                                    const dup =
-                                      pmEnrichedTargetsByHeader[row.header]?.find(
-                                        (o) => o.key === row.target.trim()
-                                      )?.duplicateFromHeaders ?? [];
-                                    return sel?.description || dup.length ? (
-                                      <InputAdornment position="end">
-                                        <Tooltip
-                                          title={
-                                            [
-                                              dup.length
-                                                ? `Duplicate: also used by ${dup.join(', ')}`
-                                                : '',
-                                              sel?.description ?? '',
-                                            ]
-                                              .filter(Boolean)
-                                              .join(' — ') || ''
-                                          }
-                                        >
-                                          <InfoOutlinedIcon
-                                            sx={{
-                                              fontSize: 18,
-                                              cursor: 'help',
-                                              color: dup.length ? 'warning.main' : 'text.secondary',
-                                            }}
-                                          />
-                                        </Tooltip>
-                                      </InputAdornment>
-                                    ) : null;
-                                  })()}
-                                  {params.InputProps.endAdornment}
-                                </>
-                              ),
-                            }}
-                          />
-                        )}
-                      />
-                    </TableCell>
-                    <TableCell sx={{ minWidth: 220 }}>
-                      {row.target.trim() ? (
-                        <TextField
-                          label="Disposition"
-                          size="small"
-                          fullWidth
-                          disabled
-                          value="Mapped"
-                          helperText="Column is mapped to a canonical system field"
-                        />
-                      ) : (
-                        <FormControl size="small" fullWidth>
-                          <InputLabel id={`disp-${row.header}`}>Disposition</InputLabel>
-                          <Select
-                            labelId={`disp-${row.header}`}
-                            label="Disposition"
-                            value={row.disposition}
-                            onChange={(e) => {
-                              const v = e.target.value as PmDisposition;
-                              setPmColumns((prev) =>
-                                prev.map((p) => (p.header === row.header ? { ...p, disposition: v } : p))
-                              );
-                            }}
-                          >
-                            <MenuItem value="ignore">Ignore</MenuItem>
-                            <MenuItem value="stage_raw">Retain as staged metadata</MenuItem>
-                            <MenuItem value="attribute_candidate">Request new field (steward review)</MenuItem>
-                          </Select>
-                        </FormControl>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <CanonicalColumnMappingPanel
+              testIdPrefix="pm"
+              fileHeaders={pmJobState.file_headers}
+              draft={pmMapDraft}
+              onChange={(next) => setPmColumns((prev) => applyPmTargetDraft(prev, next))}
+              targetOptions={pmCanonicalTargetOptions}
+              columnSamples={pmColumnSamples}
+              columnNotes={pmColumnNotes}
+              requiredGroups={pmRequiredGroups}
+              dispositionOptions={[
+                { value: 'ignore', label: 'Ignore' },
+                { value: 'stage_raw', label: 'Retain as staged metadata' },
+                { value: 'attribute_candidate', label: 'Request new field (steward review)' },
+              ]}
+              dispositionDraft={pmDispositionDraft}
+              onDispositionChange={(next) => setPmColumns((prev) => applyPmDispositionDraft(prev, next))}
+              formatSamples={(samples) => formatPmSamples(samples)}
+              dirty={pmMappingDirty}
+            />
             {savePmMapping.isError ? (
               <Alert severity="error">{safeDisplayError(savePmMapping.error)}</Alert>
             ) : null}
@@ -4862,58 +4446,18 @@ function AdminImportsPageContent() {
                 </Stack>
                 {showMappingReview ? (
                   <Stack spacing={1}>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 600 }}>Field</TableCell>
-                          <TableCell sx={{ fontWeight: 600 }}>Detected column</TableCell>
-                          <TableCell sx={{ fontWeight: 600 }}>Override</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {HL_MAPPING_DISPLAY_FIELDS.map(({ canonical, label }) => (
-                          <TableRow key={canonical}>
-                            <TableCell>{label}</TableCell>
-                            <TableCell>
-                              <Typography variant="caption" color={hlDetectedMapping[canonical] ? 'text.primary' : 'text.disabled'}>
-                                {hlDetectedMapping[canonical] ?? '— not detected'}
-                              </Typography>
-                            </TableCell>
-                            <TableCell>
-                              <FormControl size="small" sx={{ minWidth: 160 }}>
-                                <Select
-                                  displayEmpty
-                                  value={hlMappingEdits[hlSheetDetail.sheet_name]?.[canonical] ?? ''}
-                                  onChange={(e) => {
-                                    const val = e.target.value as string;
-                                    setHlMappingEdits((prev) => {
-                                      const sheetEdits = { ...prev[hlSheetDetail.sheet_name] };
-                                      if (val === '') {
-                                        delete sheetEdits[canonical];
-                                      } else {
-                                        sheetEdits[canonical] = val;
-                                      }
-                                      const next = { ...prev, [hlSheetDetail.sheet_name]: sheetEdits };
-                                      if (Object.keys(next[hlSheetDetail.sheet_name]).length === 0) {
-                                        const { [hlSheetDetail.sheet_name]: _removed, ...rest } = next;
-                                        return rest;
-                                      }
-                                      return next;
-                                    });
-                                  }}
-                                  renderValue={(v) => (v === '' ? <em style={{ color: '#999' }}>use detected</em> : v)}
-                                >
-                                  <MenuItem value=""><em>— use detected —</em></MenuItem>
-                                  {hlSourceColumns.map((col) => (
-                                    <MenuItem key={col} value={col}>{col}</MenuItem>
-                                  ))}
-                                </Select>
-                              </FormControl>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                    <Typography variant="caption" color="text.secondary">
+                      Map each source column to a lineup field. Auto-detected mappings are prefilled; changes are sent as
+                      mapping_override on re-validate / apply.
+                    </Typography>
+                    <CanonicalColumnMappingPanel
+                      testIdPrefix="hl"
+                      fileHeaders={hlSourceColumns}
+                      draft={hlMapDraft}
+                      onChange={setHlMapDraft}
+                      targetOptions={hlCanonicalTargetOptions}
+                      dirty={hlHasEdits}
+                    />
                     {hlHasEdits && lastGenericFile ? (
                       <Box>
                         <Button
@@ -4924,7 +4468,7 @@ function AdminImportsPageContent() {
                             upload.mutate({
                               file: lastGenericFile,
                               modeOverride: 'validate',
-                              mappingOverride: hlMappingEdits,
+                              mappingOverride: hlMappingOverride,
                             })
                           }
                         >
@@ -5031,7 +4575,7 @@ function AdminImportsPageContent() {
                           upload.mutate({
                             file: lastGenericFile,
                             modeOverride: 'apply',
-                            mappingOverride: hlHasEdits ? hlMappingEdits : undefined,
+                            mappingOverride: hlMappingOverride,
                           });
                         }}
                       >
@@ -5059,7 +4603,7 @@ function AdminImportsPageContent() {
                         upload.mutate({
                           file: lastGenericFile,
                           modeOverride: 'apply',
-                          mappingOverride: hlHasEdits ? hlMappingEdits : undefined,
+                          mappingOverride: hlMappingOverride,
                         });
                       }
                     }}
@@ -5210,7 +4754,7 @@ function AdminImportsPageContent() {
                   setLastGenericFile(null);
                   setHistoricalValidatedJobId(null);
                   setIsJobRevisitMode(false);
-                  setHlMappingEdits({});
+                  setHlMapDraft({});
                   setShowMappingReview(false);
                   setHlShowApplyConfirm(false);
                   setLastApplyJobId(null);

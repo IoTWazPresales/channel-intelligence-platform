@@ -73,6 +73,51 @@ export function pmDraftsToApiColumns(drafts: PmColumnDraft[]): { header: string;
   });
 }
 
+/** header → canonical target (mapped columns only) for CanonicalColumnMappingPanel. */
+export function pmColumnsToTargetDraft(columns: PmColumnDraft[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const c of columns) {
+    const t = c.target.trim();
+    if (t) out[c.header] = t;
+  }
+  return out;
+}
+
+/** header → disposition for unmapped columns (panel dispositionDraft). */
+export function pmColumnsToDispositionDraft(columns: PmColumnDraft[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const c of columns) {
+    if (!c.target.trim()) out[c.header] = c.disposition;
+  }
+  return out;
+}
+
+/** Merge panel target draft back into PmColumnDraft[] (clears disposition when mapped). */
+export function applyPmTargetDraft(prev: PmColumnDraft[], draft: Record<string, string>): PmColumnDraft[] {
+  return prev.map((c) => {
+    const nextTarget = (draft[c.header] ?? '').trim();
+    if (nextTarget) {
+      return { ...c, target: nextTarget, disposition: 'stage_raw' as PmDisposition };
+    }
+    return { ...c, target: '', disposition: c.disposition || 'ignore' };
+  });
+}
+
+/** Merge panel disposition draft into unmapped rows only. */
+export function applyPmDispositionDraft(
+  prev: PmColumnDraft[],
+  draft: Record<string, string>
+): PmColumnDraft[] {
+  return prev.map((c) => {
+    if (c.target.trim()) return c;
+    const raw = draft[c.header];
+    if (!raw) return c;
+    const disposition: PmDisposition =
+      raw === 'stage_raw' || raw === 'attribute_candidate' || raw === 'ignore' ? raw : c.disposition;
+    return { ...c, disposition };
+  });
+}
+
 /** Groups for ordering mapping-target dropdown sections (matches API `field_definitions.group`). */
 export const PM_GROUP_ORDER = [
   'required_core',

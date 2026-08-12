@@ -25,11 +25,12 @@ import { useMemo, useState } from 'react';
 
 /**
  * Shared, importer-agnostic column-mapping table for the "one file header -> one
- * canonical target" family (DSI / shipment). Provides the parity features that were
- * previously only on Product Master: a mapping summary, a mapped/unmapped filter,
- * in-row "what is this mapped to" status, and a searchable target dropdown with
- * descriptions and a duplicate ("also mapped from") warning — without PM's disposition
- * model.
+ * canonical target" family (DSI / shipment / PM / historical-lineup). Provides a
+ * mapping summary, mapped/unmapped filter, searchable target dropdown with
+ * descriptions and duplicate ("also mapped from") warnings.
+ *
+ * Disposition (ignore / stage_raw / …) is optional — only Product Master passes
+ * `dispositionOptions`. DSI/shipment omit it and keep the two-column layout.
  *
  * Presentational + local filter state only. The parent owns data fetching and the
  * save/validate mutations; this component reports draft changes via `onChange`.
@@ -44,6 +45,11 @@ export type CanonicalTargetOption = {
 export type MappingBlockingError = { code: string; message: string };
 
 export type MappingAdjustmentNotice = { code?: string; message?: string };
+
+export type DispositionOption = {
+  value: string;
+  label: string;
+};
 
 /**
  * A "must map at least one of" requirement, mirroring server-side mapping gates.
@@ -67,9 +73,18 @@ export type CanonicalColumnMappingPanelProps = {
   onChange: (next: Record<string, string>) => void;
   targetOptions: CanonicalTargetOption[];
   columnSamples?: Record<string, string[]>;
+  /** Optional caption under each file header (e.g. PM mapper suggestion chip text). */
+  columnNotes?: Record<string, string>;
   blockingErrors?: MappingBlockingError[];
   adjustmentNotices?: MappingAdjustmentNotice[];
   requiredGroups?: CanonicalRequiredGroup[];
+  /**
+   * When set, shows an "Unmapped handling" column. Parent supplies current
+   * disposition per header; only unmapped rows are editable.
+   */
+  dispositionOptions?: DispositionOption[];
+  dispositionDraft?: Record<string, string>;
+  onDispositionChange?: (next: Record<string, string>) => void;
   /** Render samples for a column; defaults to a comma join. */
   formatSamples?: (samples: string[] | undefined) => string;
   /** True when the draft differs from the last-saved server mapping. */
@@ -110,15 +125,20 @@ export function CanonicalColumnMappingPanel({
   onChange,
   targetOptions,
   columnSamples,
+  columnNotes,
   blockingErrors,
   adjustmentNotices,
   requiredGroups,
+  dispositionOptions,
+  dispositionDraft,
+  onDispositionChange,
   formatSamples = defaultFormatSamples,
   dirty = false,
   disabled = false,
   testIdPrefix,
 }: CanonicalColumnMappingPanelProps) {
   const [rowFilter, setRowFilter] = useState<RowFilter>('all');
+  const showDisposition = Boolean(dispositionOptions?.length);
 
   const targetSet = useMemo(() => new Set(targetOptions.map((t) => t.value)), [targetOptions]);
   const labelByValue = useMemo(() => {
@@ -202,6 +222,14 @@ export function CanonicalColumnMappingPanel({
     onChange(next);
   };
 
+  const setDisposition = (header: string, value: string) => {
+    if (!onDispositionChange) return;
+    const next = { ...(dispositionDraft ?? {}) };
+    if (!value) delete next[header];
+    else next[header] = value;
+    onDispositionChange(next);
+  };
+
   return (
     <Stack spacing={1.5}>
       {blockingErrors?.length ? (
@@ -282,6 +310,9 @@ export function CanonicalColumnMappingPanel({
           <TableRow>
             <TableCell sx={{ fontWeight: 600 }}>File column</TableCell>
             <TableCell sx={{ fontWeight: 600, minWidth: 280 }}>Maps to</TableCell>
+            {showDisposition ? (
+              <TableCell sx={{ fontWeight: 600, minWidth: 220 }}>Unmapped handling</TableCell>
+            ) : null}
           </TableRow>
         </TableHead>
         <TableBody>
@@ -290,6 +321,8 @@ export function CanonicalColumnMappingPanel({
             const rowOptions = buildRowOptions(h);
             const currentOption = rowOptions.find((o) => o.value === current) ?? rowOptions[0];
             const currentDuplicates = current ? (headersByTarget[current] ?? []).filter((x) => x !== h) : [];
+            const note = columnNotes?.[h];
+            const dispValue = dispositionDraft?.[h] ?? dispositionOptions?.[0]?.value ?? '';
             return (
               <TableRow key={h}>
                 <TableCell>
@@ -314,6 +347,11 @@ export function CanonicalColumnMappingPanel({
                   >
                     Examples: {formatSamples(columnSamples?.[h])}
                   </Typography>
+                  {note ? (
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.25 }}>
+                      {note}
+                    </Typography>
+                  ) : null}
                 </TableCell>
                 <TableCell>
                   <Autocomplete<SectionedOption>
@@ -379,6 +417,40 @@ export function CanonicalColumnMappingPanel({
                     )}
                   />
                 </TableCell>
+                {showDisposition ? (
+                  <TableCell>
+                    {current ? (
+                      <TextField
+                        label="Disposition"
+                        size="small"
+                        fullWidth
+                        disabled
+                        value="Mapped"
+                        helperText="Column is mapped to a canonical system field"
+                      />
+                    ) : (
+                      <FormControl size="small" fullWidth>
+                        <InputLabel id={`${testIdPrefix ?? 'canon'}-disp-${h}`}>Disposition</InputLabel>
+                        <Select
+                          labelId={`${testIdPrefix ?? 'canon'}-disp-${h}`}
+                          label="Disposition"
+                          value={dispValue}
+                          disabled={disabled || !onDispositionChange}
+                          onChange={(e) => setDisposition(h, String(e.target.value))}
+                          inputProps={{
+                            'data-testid': testIdPrefix ? `${testIdPrefix}-disp-${h}` : undefined,
+                          }}
+                        >
+                          {(dispositionOptions ?? []).map((opt) => (
+                            <MenuItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    )}
+                  </TableCell>
+                ) : null}
               </TableRow>
             );
           })}

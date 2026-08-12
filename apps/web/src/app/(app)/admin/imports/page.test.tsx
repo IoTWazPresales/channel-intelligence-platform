@@ -144,16 +144,13 @@ vi.mock('./PmImportProgressPanel', () => ({
 }));
 
 vi.mock('./pmMappingHelpers', () => ({
-  PM_GROUP_LABEL: {},
   initPmColumnDrafts: () => [],
   pmDraftsToApiColumns: () => [],
   sortPmFieldDefinitions: (defs: any[]) => defs,
-}));
-
-vi.mock('./pmMappingTargetOptions', () => ({
-  buildTargetUsageMap: () => ({}),
-  enrichPmMappingTargets: () => [],
-  filterAndSortPmTargets: (opts: any[]) => opts,
+  pmColumnsToTargetDraft: () => ({}),
+  pmColumnsToDispositionDraft: () => ({}),
+  applyPmTargetDraft: (prev: any) => prev,
+  applyPmDispositionDraft: (prev: any) => prev,
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -454,15 +451,11 @@ describe('AdminImportsPage historical_lineup mapping review panel', () => {
     await navigateToUploadStep(user);
     await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, xlsxFile());
 
-    // Panel header should appear (job 50 has hlValidateJobDetail with source_columns)
     expect(await screen.findByText(/Column mapping review/i)).toBeInTheDocument();
-    // Expand the panel
     await user.click(screen.getByRole('button', { name: /Show \/ edit/i }));
 
-    // Dropdown options should include source_columns from hlValidateJobDetail
-    // Opening one Select to see its options
-    const selects = screen.getAllByRole('combobox');
-    expect(selects.length).toBeGreaterThan(0);
+    expect(await screen.findByTestId('hl-map-Customer')).toBeInTheDocument();
+    expect(screen.getByTestId('hl-map-Model Name')).toBeInTheDocument();
   });
 
   it('re-validate with corrections sends mapping_override in FormData', async () => {
@@ -476,31 +469,27 @@ describe('AdminImportsPage historical_lineup mapping review panel', () => {
     await navigateToUploadStep(user);
     await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, xlsxFile());
 
-    // Expand the panel
     await screen.findByText(/Column mapping review/i);
     await user.click(screen.getByRole('button', { name: /Show \/ edit/i }));
 
-    // Select a column override for "Customer" (customer_token) — pick "Customer" from dropdowns
-    // The combobox for customer_token is the first one (HL_MAPPING_DISPLAY_FIELDS order)
-    const selects = await screen.findAllByRole('combobox');
-    await user.click(selects[0]); // open first Select (Customer field)
-    // Pick the first non-empty option in the listbox
-    const options = await screen.findAllByRole('option');
-    const realOption = options.find((o) => o.textContent && o.textContent !== '— use detected —');
-    if (realOption) await user.click(realOption);
+    // Map previously-unmapped Customer column → customer_token (creates override delta).
+    await user.click(await screen.findByTestId('hl-map-Customer'));
+    const option = await screen.findByRole('option', { name: /Customer \(customer_token\)/i });
+    await user.click(option);
 
-    // Re-validate button should appear (edit was made)
     const revalidateBtn = await screen.findByRole('button', { name: /Re-validate with corrections/i });
     await user.click(revalidateBtn);
 
-    // The second fetch call (re-validate) should include mapping_override
     await waitFor(() => {
       expect(capturedBodies.length).toBeGreaterThanOrEqual(2);
     });
     const revalidateBody = capturedBodies[capturedBodies.length - 1];
     expect(revalidateBody.get('mapping_override')).toBeTruthy();
-    const override = JSON.parse(revalidateBody.get('mapping_override') as string) as Record<string, unknown>;
-    expect(typeof override).toBe('object');
+    const override = JSON.parse(revalidateBody.get('mapping_override') as string) as Record<
+      string,
+      Record<string, string>
+    >;
+    expect(override.NB?.customer_token).toBe('Customer');
   });
 
   it('apply with edits sends mapping_override in FormData', async () => {
@@ -516,17 +505,13 @@ describe('AdminImportsPage historical_lineup mapping review panel', () => {
     await navigateToUploadStep(user);
     await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, xlsxFile());
 
-    // Expand panel and make an edit
     await screen.findByText(/Column mapping review/i);
     await user.click(screen.getByRole('button', { name: /Show \/ edit/i }));
 
-    const selects = await screen.findAllByRole('combobox');
-    await user.click(selects[0]);
-    const options = await screen.findAllByRole('option');
-    const realOption = options.find((o) => o.textContent && o.textContent !== '— use detected —');
-    if (realOption) await user.click(realOption);
+    await user.click(await screen.findByTestId('hl-map-Customer'));
+    const option = await screen.findByRole('option', { name: /Customer \(customer_token\)/i });
+    await user.click(option);
 
-    // Click Apply — should include mapping_override
     const applyBtn = await screen.findByRole('button', { name: /Apply validated file/i });
     await user.click(applyBtn);
 
@@ -618,18 +603,15 @@ describe('AdminImportsPage Phase 3B — mapping review label clarity', () => {
     await navigateToUploadStep(user);
     await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, xlsxFile());
 
-    // Open the mapping review panel
     await screen.findByText(/Column mapping review/i);
     await user.click(screen.getByRole('button', { name: /Show \/ edit/i }));
 
-    // New label must be present
-    expect(await screen.findByText('Product identity (SKU)')).toBeInTheDocument();
-    // Old bare label must NOT exist as a table cell (it was renamed)
-    const cells = screen.queryAllByText(/^SKU$/);
-    expect(cells).toHaveLength(0);
+    // Header-centric panel: sku_raw target label appears on the mapped Part Number chip.
+    expect(await screen.findByText(/Product identity \(SKU\) \(sku_raw\)/)).toBeInTheDocument();
+    expect(screen.queryAllByText(/^SKU$/)).toHaveLength(0);
   });
 
-  it('mapping review shows "Base unit (descriptor)" row', async () => {
+  it('mapping review shows "Base unit (descriptor)" as a target option', async () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => VALIDATE_JOB } as any);
 
     const { user } = renderPage();
@@ -639,14 +621,14 @@ describe('AdminImportsPage Phase 3B — mapping review label clarity', () => {
     await screen.findByText(/Column mapping review/i);
     await user.click(screen.getByRole('button', { name: /Show \/ edit/i }));
 
-    expect(await screen.findByText('Base unit (descriptor)')).toBeInTheDocument();
+    await user.click(await screen.findByTestId('hl-map-Customer'));
+    expect(
+      await screen.findByRole('option', { name: /Base unit \(descriptor\) \(base_unit_raw\)/i })
+    ).toBeInTheDocument();
   });
 
-  it('regression: Product identity (SKU) shows not-detected when field_mapping has no sku_raw', async () => {
-    // This test would have FAILED before the claimed_sources fix: both sku_raw and
-    // base_unit_raw would have shown 'Base Unit', replicating the manual test failure.
-    // Temporarily override hlValidateJobDetail to use a correct backend mapping
-    // (no sku_raw key — only base_unit_raw, part_number_raw, model_raw).
+  it('regression: sku_raw stays unmapped when field_mapping has no sku_raw', async () => {
+    // Header-centric: base_unit_raw claims Base Unit; sku_raw must not appear as a mapped chip.
     const savedMapping = mockState.hlValidateJobDetail.field_mapping;
     mockState.hlValidateJobDetail = {
       ...mockState.hlValidateJobDetail,
@@ -660,6 +642,26 @@ describe('AdminImportsPage Phase 3B — mapping review label clarity', () => {
           // sku_raw intentionally absent — no SKU column in this workbook
         },
       },
+      inferred_schema: {
+        selected_sheet_details: [
+          {
+            sheet_name: 'NB',
+            header_row_number: 4,
+            mapped_fields: ['model_raw', 'quantity_units', 'part_number_raw', 'base_unit_raw', 'customer_token'],
+            source_columns: [
+              'Product Line',
+              'Country',
+              'Customer',
+              'Model name',
+              'Part Number',
+              'Base Unit',
+              'Qty',
+            ],
+            row_count: 10,
+            mapping_confidence: 0.35,
+          },
+        ],
+      },
     };
 
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => VALIDATE_JOB } as any);
@@ -671,25 +673,9 @@ describe('AdminImportsPage Phase 3B — mapping review label clarity', () => {
     await screen.findByText(/Column mapping review/i);
     await user.click(screen.getByRole('button', { name: /Show \/ edit/i }));
 
-    // "Base unit (descriptor)" row must show "Base Unit"
-    expect(await screen.findByText('Base unit (descriptor)')).toBeInTheDocument();
+    expect(await screen.findByText(/Base unit \(descriptor\) \(base_unit_raw\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/Product identity \(SKU\) \(sku_raw\)/)).not.toBeInTheDocument();
 
-    // "Product identity (SKU)" row must show "— not detected", NOT "Base Unit"
-    // The detected-column cell for sku_raw should be the disabled placeholder text.
-    const allCells = screen.getAllByText(/— not detected/i);
-    expect(allCells.length).toBeGreaterThan(0);
-
-    // Regression guard: no cell in the mapping table should contain both
-    // "Product identity" row label AND "Base Unit" as its detected value.
-    // We check by finding the label then looking at its sibling detected-column cell.
-    const skuLabelCell = screen.getByText('Product identity (SKU)');
-    const skuRow = skuLabelCell.closest('tr');
-    expect(skuRow).not.toBeNull();
-    // The detected-column cell is the second td in the row.
-    const detectedCell = skuRow!.querySelectorAll('td')[1];
-    expect(detectedCell?.textContent).not.toBe('Base Unit');
-
-    // Restore mock for other tests
     mockState.hlValidateJobDetail.field_mapping = savedMapping;
   });
 });

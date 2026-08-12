@@ -1528,14 +1528,14 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-06-04 (out-of-scope this pass) |
+| **Status / parked** | **Done** · 2026-08-12 — PM + HL mount `CanonicalColumnMappingPanel`; optional disposition on panel for PM; HL inverted to header→canonical with `hlMappingHelpers`; `pmMappingTargetOptions` deleted |
 | **Effort** | Medium (web) |
 | **Source** | This branch's audit; PM bespoke `pmMappingHelpers`/`pmMappingTargetOptions`; historical override mapping; vs shared panel used by DSI/shipment |
 | **Idea** | Replace the PM and historical-lineup bespoke mapping tables with the shared `CanonicalColumnMappingPanel` (parity rule §4). |
 | **Why / deferrable** | Removes a third/fourth mapping-UI shape; deferrable, cosmetic-ish, no correctness gap. |
 | **What the work is** | Mount the panel with PM/historical target options + samples; keep server validation; delete bespoke helpers once parity verified in-browser. |
 | **Regression traps** | PM `pm_mapping_saved` stage flow; historical override semantics. |
-| **TRIGGER** | A mapping-UI unification task is approved (pairs with BACKLOG-026). |
+| **TRIGGER** | ~~A mapping-UI unification task is approved (pairs with BACKLOG-026).~~ — fired Unit 11. |
 
 ---
 
