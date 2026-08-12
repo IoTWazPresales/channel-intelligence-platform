@@ -2,7 +2,6 @@
 
 import {
   Alert,
-  Box,
   Button,
   Chip,
   Dialog,
@@ -16,12 +15,13 @@ import {
 } from '@mui/material';
 import type { ColDef } from 'ag-grid-community';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useMemo, useState } from 'react';
 
-import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { PageHeader } from '@/components/PageHeader';
+import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
+import type { MasterColumnPickerGroup } from '@/components/masterGrid/MasterColumnPickerDialog';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { apiGet, apiPost } from '@/lib/api';
 
@@ -38,19 +38,71 @@ type CporCaseRow = {
   status: string;
   workflow_status: string;
   export_version: number;
+  origin?: string | null;
   ttl_support_zar: number | null;
   ttl_support_usd: number | null;
-  missing_roe: boolean;
+  payment_evidence_count?: number;
+  paid_amount_sum?: number | null;
+  last_payment_date?: string | null;
+  latest_payment_status?: string | null;
 };
 
+type CasesPage = { items: CporCaseRow[]; total: number; page: number; page_size: number };
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
-
 type PromoTypes = { promotion_types: string[] };
+
+const GRID_STATE_KEY = 'cip.cpor.cases.grid.v1';
+const DEFAULT_PAGE_SIZE = 50;
+const DEFAULT_SORT_BY = 'id';
+const DEFAULT_SORT_DIR = 'desc' as const;
+
+const COLUMN_GROUPS: MasterColumnPickerGroup[] = [
+  {
+    id: 'core',
+    label: 'Core',
+    fields: ['case_code', 'customer', 'promotion_type', 'window', 'status', 'workflow_status', 'origin'],
+  },
+  {
+    id: 'money',
+    label: 'Support',
+    fields: ['ttl_support_zar', 'ttl_support_usd', 'export_version'],
+  },
+  {
+    id: 'payment',
+    label: 'Payment / CN',
+    fields: ['latest_payment_status', 'paid_amount_sum', 'last_payment_date', 'payment_evidence_count'],
+  },
+];
+
+const DEFAULT_HIDDEN = ['export_version', 'workflow_status'] as const;
 
 export default function CporCasesListPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const qc = useQueryClient();
-  const [status, setStatus] = useState('');
+
+  const page = Math.max(1, Number(searchParams.get('page') || '1') || 1);
+  const pageSize = Math.max(1, Number(searchParams.get('page_size') || String(DEFAULT_PAGE_SIZE)) || DEFAULT_PAGE_SIZE);
+  const q = searchParams.get('q') || '';
+  const status = searchParams.get('status') || '';
+  const sortBy = searchParams.get('sort_by') || DEFAULT_SORT_BY;
+  const sortDir = (searchParams.get('sort_dir') === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc';
+
+  const setParamState = useCallback(
+    (patch: Record<string, string | null>, resetPage?: boolean) => {
+      const next = new URLSearchParams(searchParams.toString());
+      for (const [k, v] of Object.entries(patch)) {
+        if (v == null || v === '') next.delete(k);
+        else next.set(k, v);
+      }
+      if (resetPage) next.set('page', '1');
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname);
+    },
+    [pathname, router, searchParams],
+  );
+
   const [dlg, setDlg] = useState(false);
   const [cust, setCust] = useState<CustomerPick | null>(null);
   const [promoType, setPromoType] = useState('Sell out PP');
@@ -66,10 +118,14 @@ export default function CporCasesListPage() {
   });
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['cpor', 'cases', status],
+    queryKey: ['cpor', 'cases', page, pageSize, q, status, sortBy, sortDir],
     queryFn: ({ signal }) => {
-      const q = status ? `?status=${encodeURIComponent(status)}` : '';
-      return apiGet<CporCaseRow[]>(`/api/v1/cpor/cases${q}`, { signal });
+      const sp = new URLSearchParams();
+      sp.set('page', String(page));
+      sp.set('page_size', String(pageSize));
+      if (q.trim()) sp.set('q', q.trim());
+      if (status) sp.set('status', status);
+      return apiGet<CasesPage>(`/api/v1/cpor/cases?${sp.toString()}`, { signal });
     },
   });
 
@@ -90,10 +146,13 @@ export default function CporCasesListPage() {
     },
   });
 
+  const [bulkSelectionMode, setBulkSelectionMode] = useState<'normal' | 'selecting'>('normal');
+
   const columnDefs = useMemo<ColDef<CporCaseRow>[]>(
     () => [
       { field: 'case_code', headerName: 'Case', width: 130 },
       {
+        colId: 'customer',
         headerName: 'Customer',
         flex: 1,
         minWidth: 160,
@@ -102,6 +161,7 @@ export default function CporCasesListPage() {
       },
       { field: 'promotion_type', headerName: 'Type', width: 140 },
       {
+        colId: 'window',
         headerName: 'Window',
         width: 180,
         valueGetter: (p) =>
@@ -115,6 +175,13 @@ export default function CporCasesListPage() {
           p.value ? <Chip size="small" label={p.value} /> : null,
       },
       { field: 'workflow_status', headerName: 'Workflow', width: 130 },
+      {
+        field: 'origin',
+        headerName: 'Origin',
+        width: 120,
+        cellRenderer: (p: { value?: string }) =>
+          p.value ? <Chip size="small" variant="outlined" label={p.value} /> : null,
+      },
       { field: 'export_version', headerName: 'Ver', width: 70 },
       {
         field: 'ttl_support_zar',
@@ -128,9 +195,33 @@ export default function CporCasesListPage() {
         width: 110,
         valueFormatter: (p) => (p.value == null ? '' : Number(p.value).toFixed(2)),
       },
+      {
+        field: 'latest_payment_status',
+        headerName: 'Payment',
+        width: 120,
+        cellRenderer: (p: { value?: string }) =>
+          p.value ? <Chip size="small" color="info" label={p.value} /> : null,
+      },
+      {
+        field: 'paid_amount_sum',
+        headerName: 'Paid amt',
+        width: 110,
+        valueFormatter: (p) => (p.value == null ? '' : Number(p.value).toFixed(2)),
+      },
+      { field: 'last_payment_date', headerName: 'Last paid', width: 120 },
+      { field: 'payment_evidence_count', headerName: 'CN rows', width: 90 },
     ],
     [],
   );
+
+  const columnLabelByField = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const c of columnDefs) {
+      const key = String(c.colId || c.field || '');
+      if (key && c.headerName) m[key] = String(c.headerName);
+    }
+    return m;
+  }, [columnDefs]);
 
   return (
     <>
@@ -139,16 +230,17 @@ export default function CporCasesListPage() {
         title="CPOR Cases"
       />
       <Alert severity="info" sx={{ mb: 2 }}>
-        Reseller-channel promotion funding cases. Money is computed server-side (U2). Flags never block saves.
+        Reseller-channel promotion funding cases. Payment / CN evidence is separate from line economics
+        (case status from payment files stays evidence-only).
       </Alert>
       <CporPortfolioIntelligencePanel />
-      <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} alignItems="center">
+      <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} alignItems="center" flexWrap="wrap">
         <TextField
           select
           size="small"
           label="Status"
           value={status}
-          onChange={(e) => setStatus(e.target.value)}
+          onChange={(e) => setParamState({ status: e.target.value || null }, true)}
           sx={{ minWidth: 160 }}
         >
           <MenuItem value="">All</MenuItem>
@@ -160,7 +252,6 @@ export default function CporCasesListPage() {
             ),
           )}
         </TextField>
-        <Box sx={{ flex: 1 }} />
         <Button
           component={Link}
           variant="outlined"
@@ -169,18 +260,54 @@ export default function CporCasesListPage() {
         >
           Import historical
         </Button>
+        <Button
+          component={Link}
+          variant="outlined"
+          href="/commercial-planner/cpor-cases/payment-evidence-import"
+          data-testid="cpor-payment-evidence-import"
+        >
+          Import payment / CN
+        </Button>
         <Button variant="contained" onClick={() => setDlg(true)} data-testid="cpor-new-case">
           New case
         </Button>
       </Stack>
-      {isError ? <Alert severity="error">{String((error as Error)?.message)}</Alert> : null}
-      <EnterpriseDataGrid
-        rowData={data ?? []}
+
+      <MasterDataGridShell
+        entityKey="cpor-cases"
+        rows={data?.items ?? []}
         columnDefs={columnDefs}
-        height={560}
+        total={data?.total ?? 0}
+        isLoading={isLoading}
+        isError={isError}
+        error={error as Error | null}
+        onRetry={() => void refetch()}
+        empty={{
+          title: 'No CPOR cases yet',
+          description: 'Create a case, import a historical tracking workbook, or import payment / CN evidence.',
+          primary: { label: 'New case', href: '/commercial-planner/cpor-cases?create=1' },
+          secondary: {
+            label: 'Import payment / CN',
+            href: '/commercial-planner/cpor-cases/payment-evidence-import',
+          },
+        }}
+        url={{ page, pageSize, q, sortBy, sortDir }}
+        onUrlChange={setParamState}
+        defaultPageSize={DEFAULT_PAGE_SIZE}
+        defaultSortBy={DEFAULT_SORT_BY}
+        defaultSortDir={DEFAULT_SORT_DIR}
+        gridStateStorageKey={GRID_STATE_KEY}
+        defaultInitiallyHiddenFields={DEFAULT_HIDDEN}
+        columnPickerTitle="Manage CPOR case columns"
+        columnPickerGroups={COLUMN_GROUPS}
+        columnLabelByField={columnLabelByField}
+        bulkSelectionEnabled={false}
+        bulkSelectionMode={bulkSelectionMode}
+        onBulkSelectionModeChange={setBulkSelectionMode}
+        onPreviewBulkDelete={() => undefined}
+        onRefresh={() => void refetch()}
         gridOptions={{
           getRowId: (p) => String(p.data.id),
-          loading: isLoading,
           onRowClicked: (e) => {
             if (e.data?.id) router.push(`/commercial-planner/cpor-cases/${e.data.id}`);
           },
@@ -196,10 +323,8 @@ export default function CporCasesListPage() {
               value={cust}
               onChange={setCust}
               getOptionLabel={(o) => `${o.customer_code} — ${o.customer_name}`}
-              fetchOptions={async (q, signal) => {
-                const needle = q.trim();
-                // Typing searches all customers. Empty query defaults to key accounts
-                // with graceful fallback when none are flagged.
+              fetchOptions={async (query, signal) => {
+                const needle = query.trim();
                 if (needle) {
                   setCustomerPickerHint(null);
                   const res = await apiGet<{ items: CustomerPick[]; total: number }>(
@@ -275,7 +400,9 @@ export default function CporCasesListPage() {
               onChange={(e) => setCaseCode(e.target.value)}
               fullWidth
             />
-            {create.isError ? <Alert severity="error">{String((create.error as Error)?.message)}</Alert> : null}
+            {create.isError ? (
+              <Alert severity="error">{String((create.error as Error).message)}</Alert>
+            ) : null}
           </Stack>
         </DialogContent>
         <DialogActions>

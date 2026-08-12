@@ -28,6 +28,7 @@ import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySe
 import { apiGet, apiPost, apiPostFormData } from '@/lib/api';
 
 import { CporComparableCasesPanel } from './CporComparableCasesPanel';
+import { CporPaymentEvidencePanel } from './CporPaymentEvidencePanel';
 import { CporPromoLoadPanel } from './CporPromoLoadPanel';
 
 type LineRow = {
@@ -421,6 +422,7 @@ export default function CporCaseDetailPage() {
         <Tab label="Exports" />
         <Tab label="Settlement" data-testid="cpor-tab-settlement" />
         <Tab label="Promo load" data-testid="cpor-tab-promo-load" />
+        <Tab label="Payments / CN" data-testid="cpor-tab-payments" />
       </Tabs>
 
       {tab === 0 ? (
@@ -606,6 +608,7 @@ export default function CporCaseDetailPage() {
       ) : null}
 
       {tab === 5 ? <CporPromoLoadPanel caseId={caseId} /> : null}
+      {tab === 6 ? <CporPaymentEvidencePanel caseId={caseId} /> : null}
 
       <Dialog open={rejectOpen} onClose={() => setRejectOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle>Reject case</DialogTitle>

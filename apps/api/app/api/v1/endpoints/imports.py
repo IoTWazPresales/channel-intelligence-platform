@@ -513,6 +513,7 @@ async def create_job(
             "distributor_inventory",
             "inbound_shipments",
             "cpor_historical_cases",
+            "cpor_payment_evidence",
         ) else "apply"
     if mode not in ("validate", "apply"):
         raise HTTPException(status_code=400, detail="import_mode must be validate or apply")

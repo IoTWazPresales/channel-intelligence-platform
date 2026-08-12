@@ -114,6 +114,11 @@ from app.models.cpor_historical import (
     ImportCporHistoricalStagingLine,
     ImportCporHistoricalTokenSurrogate,
 )
+from app.models.cpor_payment import (
+    CporPaymentEvidence,
+    CporPaymentMappingProfile,
+    ImportCporPaymentStagingLine,
+)
 from app.models.commercial_lineup import (
     CommercialLineupCase,
     CommercialLineupCasePo,
@@ -217,6 +222,9 @@ __all__ = [
     "CporHistoricalMappingProfile",
     "ImportCporHistoricalStagingLine",
     "ImportCporHistoricalTokenSurrogate",
+    "CporPaymentEvidence",
+    "CporPaymentMappingProfile",
+    "ImportCporPaymentStagingLine",
     "HistoricalLineupImportHeader",
     "HistoricalLineupImportLine",
     "ImportDistributorSiStagingLine",

@@ -11,6 +11,7 @@ from app.api.v1.endpoints import (
     cpor_cases,
     cpor_exports,
     cpor_historical_import,
+    cpor_payment_evidence,
     cst_steward,
     dashboards,
     dev_wipe,
@@ -82,6 +83,7 @@ if commercial_planner_enabled():
     api_router.include_router(cpor_cases.router, prefix="/cpor", tags=["cpor"])
     api_router.include_router(cpor_exports.router, prefix="/cpor", tags=["cpor"])
     api_router.include_router(cpor_historical_import.router, prefix="/cpor", tags=["cpor"])
+    api_router.include_router(cpor_payment_evidence.router, prefix="/cpor", tags=["cpor"])
     api_router.include_router(cst_steward.router, prefix="/cst-steward", tags=["cst-steward"])
 api_router.include_router(pricing.router, prefix="/pricing", tags=["pricing"])
 api_router.include_router(promotions.router, prefix="/promotions", tags=["promotions"])
