@@ -7,7 +7,7 @@ from datetime import date
 from typing import Any
 
 import pandas as pd
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from app.models.customer_report_config import CustomerReportConfig
@@ -645,17 +645,31 @@ def _ingest_parse_result(
     else:
         effective_period = result.period_start_date
 
-    # Stamp steward/corroborated period onto staging lines that lack a period.
-    # Preserve pivoted / wide-week per-column dates already set by the parser.
+    # Stamp steward/corroborated period onto staging lines.
+    # Preserve pivoted / wide-week multi-period dates; overwrite single-period
+    # file_inferred (week-only filenames use date.today().year) when steward wins.
     if effective_period is not None:
-        db.execute(
-            update(ImportCustomerSellthroughStagingLine)
-            .where(
+        distinct_periods = db.scalar(
+            select(func.count(func.distinct(ImportCustomerSellthroughStagingLine.period_start_date))).where(
                 ImportCustomerSellthroughStagingLine.import_job_id == job.id,
-                ImportCustomerSellthroughStagingLine.period_start_date.is_(None),
+                ImportCustomerSellthroughStagingLine.period_start_date.is_not(None),
             )
-            .values(period_start_date=effective_period)
         )
+        if distinct_periods is None or int(distinct_periods) <= 1:
+            db.execute(
+                update(ImportCustomerSellthroughStagingLine)
+                .where(ImportCustomerSellthroughStagingLine.import_job_id == job.id)
+                .values(period_start_date=effective_period)
+            )
+        else:
+            db.execute(
+                update(ImportCustomerSellthroughStagingLine)
+                .where(
+                    ImportCustomerSellthroughStagingLine.import_job_id == job.id,
+                    ImportCustomerSellthroughStagingLine.period_start_date.is_(None),
+                )
+                .values(period_start_date=effective_period)
+            )
         db.flush()
 
     summary: dict[str, Any] = {
@@ -884,15 +898,27 @@ def _handle_flat(
             }
         )
 
+        # Wide-week unpivot emits multiple period dates — keep them. Single-period
+        # files often guess week year via date.today(); steward/corroborated wins.
+        row_periods = {
+            r.get("period_start_date")
+            for r in result.rows
+            if r.get("period_start_date") is not None
+        }
+        is_wide_week = len(row_periods) >= 2
+
         for row in result.rows:
             # Keep source_row_number unique across files in one job.
             row["source_row_number"] = int(file_idx) * 1_000_000 + int(row["source_row_number"])
             payload = dict(row.get("raw_row_payload") or {})
             payload["_cst_source_file"] = fname
             row["raw_row_payload"] = payload
-            if effective_period is not None and row.get("period_start_date") is None:
-                # Do not overwrite per-week periods from wide-week unpivot.
-                row["period_start_date"] = effective_period
+            if effective_period is not None:
+                if is_wide_week:
+                    if row.get("period_start_date") is None:
+                        row["period_start_date"] = effective_period
+                else:
+                    row["period_start_date"] = effective_period
             apply_listing_seed_fields(row, feed_profile)
 
             line = ImportCustomerSellthroughStagingLine(**row)
