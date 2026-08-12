@@ -420,6 +420,53 @@ async def planned_units_for_quarter(
     return float((await db.scalar(stmt)) or 0)
 
 
+def accumulate_lineup_quarter_row(
+    totals: dict[str, float],
+    *,
+    filter_key: str,
+    qty: float,
+    plan_quarter: str | None,
+    landing_quarter: str | None,
+    bucket: str | None,
+    ship_quarter: str | None,
+) -> None:
+    """Mutate ``totals`` for one fact row (BACKLOG-068 landing axis + plan axis)."""
+    if landing_quarter == filter_key and bucket == "landed":
+        totals["landed_this_quarter_units"] += qty
+
+    if plan_quarter is None:
+        totals["unattributed_units"] += qty
+        return
+    if plan_quarter != filter_key:
+        if is_slipped_in(plan_quarter, landing_quarter, filter_key):
+            totals["slipped_in_units"] += qty
+        return
+
+    if bucket == "shipped":
+        totals["shipped_units"] += qty
+        totals["shipped_not_landed_units"] += qty
+    elif bucket == "landed":
+        totals["landed_units"] += qty
+    elif bucket == "pipeline":
+        totals["pipeline_units"] += qty
+
+    if is_slipped_out(plan_quarter, ship_quarter, landing_quarter, filter_key):
+        totals["slipped_out_units"] += qty
+
+
+def empty_lineup_quarter_totals() -> dict[str, float]:
+    return {
+        "shipped_units": 0.0,
+        "landed_units": 0.0,
+        "pipeline_units": 0.0,
+        "slipped_in_units": 0.0,
+        "slipped_out_units": 0.0,
+        "unattributed_units": 0.0,
+        "landed_this_quarter_units": 0.0,
+        "shipped_not_landed_units": 0.0,
+    }
+
+
 async def lineup_quarter_summary(
     db: AsyncSession,
     *,
@@ -453,14 +500,7 @@ async def lineup_quarter_summary(
         ).all():
             product_meta[int(pid)] = (pl, bu)
 
-    totals = {
-        "shipped_units": 0.0,
-        "landed_units": 0.0,
-        "pipeline_units": 0.0,
-        "slipped_in_units": 0.0,
-        "slipped_out_units": 0.0,
-        "unattributed_units": 0.0,
-    }
+    totals = empty_lineup_quarter_totals()
     filter_key = quarter_key_from_period_start(date(year, 3 * (quarter - 1) + 1, 1))
 
     for row in rows:
@@ -473,27 +513,15 @@ async def lineup_quarter_summary(
                 continue
 
         enriched = enrich_fact_lineup_fields(row, ctx=ctx, product_line=pl, business_unit=bu)
-        qty = float(row.quantity or 0)
-        pq = enriched.get("plan_quarter")
-        bucket = enriched.get("lifecycle_bucket")
-
-        if pq is None:
-            totals["unattributed_units"] += qty
-            continue
-        if pq != filter_key:
-            if is_slipped_in(pq, enriched.get("landing_quarter"), filter_key):
-                totals["slipped_in_units"] += qty
-            continue
-
-        if bucket == "shipped":
-            totals["shipped_units"] += qty
-        elif bucket == "landed":
-            totals["landed_units"] += qty
-        elif bucket == "pipeline":
-            totals["pipeline_units"] += qty
-
-        if is_slipped_out(pq, enriched.get("ship_quarter"), enriched.get("landing_quarter"), filter_key):
-            totals["slipped_out_units"] += qty
+        accumulate_lineup_quarter_row(
+            totals,
+            filter_key=filter_key,
+            qty=float(row.quantity or 0),
+            plan_quarter=enriched.get("plan_quarter"),
+            landing_quarter=enriched.get("landing_quarter"),
+            bucket=enriched.get("lifecycle_bucket"),
+            ship_quarter=enriched.get("ship_quarter"),
+        )
 
     return {
         "plan_quarter": filter_key,
@@ -504,7 +532,9 @@ async def lineup_quarter_summary(
         "attribution_rule": (
             "plan_quarter = lineup case period via PO link; disambiguate multi-case PO by "
             "(customer×product) lineup line match, else single-case fallback, else BU match; "
-            "no-case PO = unattributed"
+            "no-case PO = unattributed. "
+            "landed_this_quarter_units = qty where quarter(pod_date)=filter (landing axis); "
+            "shipped_not_landed_units = plan-quarter shipped ∧ pod_date IS NULL."
         ),
     }
 

@@ -1,8 +1,8 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-12 (Unit 5 pushed; Game Q4 period fix)
+**Last updated:** 2026-08-12 (Unit 7 BACKLOG-068 landing KPI)
 
-**Branch:** `feat/cst-hist-8x4q-game-w27` @ `7f66fc0` (pushed)
+**Branch:** `feat/backlog-068-landed-quarter` (stacked on Unit 5)
 
 **Alembic on cip:** `20260811_0012` (head)
 
@@ -12,29 +12,27 @@
 |---|---|
 | 0–3 | Done on main |
 | 4 CI | Skipped (Q6=C) |
-| 5 CST hist + Game W27 | **Pushed** — dated aliases + hist soak + Game Q4 period fix |
-| 6 Game W27 residual | Largely via aliases (426/565); 139 unresolved optional |
-| 7 BACKLOG-068 | **Next** |
-| 8 Demo/P2 | Pending (Q10=A) |
-| 9 BACKLOG-094 | Blocked — formulas |
-| 10 BACKLOG-092 | Blocked — payment files |
-| 11 Import parity 044/045+026/027 | Pending (Q13=D) |
+| 5 CST hist | Pushed `feat/cst-hist-8x4q-game-w27` @ `a562084` — open PR |
+| 6 Game W27 | Aliases path; 139 unresolved optional |
+| 7 BACKLOG-068 | **Implemented** — Shipping `landed_this_quarter` + shipped-not-landed |
+| 8 Demo/P2 | **Next** (Q10=A) |
+| 9–10 | Blocked (094 formulas / 092 files) |
+| 11 Import parity | Pending (Q13=D) |
 | 12 P6 light | Pending (Q14=A) |
 | 13 P5 | Last |
 
-## Unit 5 verified
+## Unit 7
 
-- Commits: `f82eba2` dated aliases; `7f66fc0` steward period stamp
-- Game Q4: Week 48 → `2025-11-24` (4 facts); mis-stamp `2026-11-23` deleted
-- Window: Takealot/CM/Makro 4/4; Evetech 3/4; Game **4/4**; Amazon+Pepkor RAW gaps
-- Aliases: 590 confirmed / 62 proposed
+- API: `lineup_quarter_summary` → `landed_this_quarter_units`, `shipped_not_landed_units`
+- UI: Shipping lineup quarter strip labels + testids
+- Tests: `test_accumulate_landed_this_quarter_vs_plan_landed` (12 passed)
+- PvE `fill_rate` untouched
 
 ## Next
 
-1. Open/merge PR for Unit 5 (`feat/cst-hist-8x4q-game-w27`)
-2. Branch `feat/backlog-068-landed-quarter` for Unit 7
-3. Units 8→12 per arc; P5 last
-
-**Blocked:** 094 formulas; 092 payment files.
+1. PR Unit 5 then Unit 7 (or stacked PR)
+2. Unit 8 demo/P2 gate checklist + backup/restore soak
+3. Skip 9–10 until Warren supplies formulas/files
+4. Units 11–12; P5 last
 
 **Env:** local Windows. `cip` @ `20260811_0012`.

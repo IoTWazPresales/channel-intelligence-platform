@@ -9,8 +9,10 @@ import pytest
 from app.services.commercial_planner.inbound_lineup_quarter import (
     AttributionContext,
     _CaseAttribution,
+    accumulate_lineup_quarter_row,
     awaiting_pod_days,
     compute_slipped,
+    empty_lineup_quarter_totals,
     enrich_fact_lineup_fields,
     is_slipped_in,
     is_slipped_out,
@@ -182,3 +184,47 @@ def test_enrich_fact_lineup_fields():
     assert out["lifecycle_bucket"] == "shipped"
     assert out["slipped"] is False
     assert out["awaiting_pod_days"] is not None
+
+
+def test_accumulate_landed_this_quarter_vs_plan_landed():
+    """BACKLOG-068: landing-quarter KPI includes slipped-in; plan landed stays plan-axis."""
+    totals = empty_lineup_quarter_totals()
+    # Plan Q1, POD in Q2 → counts landed_this_quarter + slipped_in, not plan Q2 landed
+    accumulate_lineup_quarter_row(
+        totals,
+        filter_key="26Q2",
+        qty=10,
+        plan_quarter="26Q1",
+        landing_quarter="26Q2",
+        bucket="landed",
+        ship_quarter="26Q1",
+    )
+    assert totals["landed_this_quarter_units"] == 10
+    assert totals["slipped_in_units"] == 10
+    assert totals["landed_units"] == 0
+
+    # Plan Q2 shipped awaiting POD
+    accumulate_lineup_quarter_row(
+        totals,
+        filter_key="26Q2",
+        qty=3,
+        plan_quarter="26Q2",
+        landing_quarter=None,
+        bucket="shipped",
+        ship_quarter="26Q2",
+    )
+    assert totals["shipped_not_landed_units"] == 3
+    assert totals["shipped_units"] == 3
+
+    # Plan Q2 landed in Q2
+    accumulate_lineup_quarter_row(
+        totals,
+        filter_key="26Q2",
+        qty=5,
+        plan_quarter="26Q2",
+        landing_quarter="26Q2",
+        bucket="landed",
+        ship_quarter="26Q2",
+    )
+    assert totals["landed_units"] == 5
+    assert totals["landed_this_quarter_units"] == 15
