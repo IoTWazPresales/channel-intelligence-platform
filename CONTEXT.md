@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-12 — **BACKLOG-044/045:** shipment drawer Same/Different via `shipment-evidence` duplicate-review APIs; row-action pending + plan eviction wired; `ShipmentEntityStewardPanelLegacy` removed. Next: commit; then P5 (new chat).
 - 2026-08-12 — **BACKLOG-027:** PM + historical_lineup mount shared `CanonicalColumnMappingPanel` (PM disposition optional props; HL invert via `hlMappingHelpers`; deleted `pmMappingTargetOptions`). Vitest 34/34 focused. Next: 045 drawer residual; then P5.
 - 2026-08-12 — **Unit 11/12 start:** BACKLOG-026 PM pipeline retired; Settings lineup export sheet titles (P6 polish). Branch `feat/unit11-import-parity-044-027`. Residual: 027 + 045; then P5.
 - 2026-08-12 — **Unit 8 Demo/P2 gate:** second-user Control tower + Shipping; Users RBAC default-deny; backup→`cip_alembic_smoke` RESTORE_SMOKE_OK (`20260812_0014`). Docs: DEMO_SCRIPT + UNIT8 gate. Branch `feat/unit8-demo-p2-gate`. Next: commit/PR; 094/092 still blocked.

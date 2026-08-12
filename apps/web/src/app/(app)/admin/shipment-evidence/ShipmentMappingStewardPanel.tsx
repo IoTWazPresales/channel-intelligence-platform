@@ -1,7 +1,8 @@
 'use client';
 
 import { Alert, Box, Chip, Stack, Typography } from '@mui/material';
-import { useMemo } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
 
 import {
   confidenceBand,
@@ -15,6 +16,7 @@ import {
   type StewardSuggestionCardItem,
 } from '@/features/import-steward/StewardSuggestionCards';
 import { StewardPendingButton } from '@/features/import-steward/StewardPendingButton';
+import { apiPost, safeDisplayError } from '@/lib/api';
 import {
   isShipmentCustomerEntity,
   isShipmentDistributorEntity,
@@ -22,7 +24,9 @@ import {
   shipmentContextParty,
   shipmentContextPossibleDuplicateOf,
   shipmentContextSpecialCategory,
+  shipmentDuplicateReviewDecision,
   shipmentEntityChipLabel,
+  shipmentHasUnresolvedDuplicateReview,
   shipmentSampleToken,
   shipmentSuggestedNameFromContext,
   type ShipmentMappingCandidateRow,
@@ -40,12 +44,26 @@ export function ShipmentMappingStewardPanel({
   applyPlanPending,
   onApplyPlanRow,
   rowActionPending,
+  onRowActionStart,
+  onRowActionEnd,
+  onInvalidate,
+  onStewardFastComplete,
+  lookupPeerCandidate,
+  onOpenPeerByNormalizedKey,
 }: {
   candidate: ShipmentMappingCandidateRow;
   planRow?: Record<string, unknown> | null;
   applyPlanPending?: boolean;
   onApplyPlanRow?: (candidateId: number) => void;
   rowActionPending?: boolean;
+  onRowActionStart?: (candidateId: number) => void;
+  onRowActionEnd?: () => void;
+  /** Refresh candidate list after duplicate same-entity stamp (row stays actionable). */
+  onInvalidate?: () => void;
+  /** Evict after different-entity ack (status acknowledged_unique). */
+  onStewardFastComplete?: (candidateIds: number[]) => void;
+  lookupPeerCandidate?: (normalizedKey: string) => ShipmentMappingCandidateRow | null;
+  onOpenPeerByNormalizedKey?: (normalizedKey: string) => void;
 }) {
   const ready = planRow?.ready === true;
   const suggestedAction =
@@ -67,6 +85,67 @@ export function ShipmentMappingStewardPanel({
   const blockers = Array.isArray(planRow?.resolution_blockers)
     ? (planRow.resolution_blockers as string[])
     : [];
+
+  const dupHints = shipmentContextPossibleDuplicateOf(candidate.context);
+  const dupDecision = shipmentDuplicateReviewDecision(candidate.context);
+  const dupUnresolved =
+    isShipmentCustomerEntity(candidate.entity_type) && shipmentHasUnresolvedDuplicateReview(candidate.context);
+  const ownKey = (candidate.normalized_key || '').trim();
+  const dupPeerHintsExcludingSelf = useMemo(
+    () => dupHints.filter((k) => k.trim() !== ownKey),
+    [dupHints, ownKey]
+  );
+  const [dupPeerKey, setDupPeerKey] = useState(dupPeerHintsExcludingSelf[0] ?? '');
+  const [dupMsg, setDupMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDupPeerKey(dupPeerHintsExcludingSelf[0] ?? '');
+    setDupMsg(null);
+  }, [candidate.id, dupPeerHintsExcludingSelf]);
+
+  const duplicateLifecycle = {
+    onMutate: async () => {
+      onRowActionStart?.(candidate.id);
+    },
+    onSettled: () => {
+      onRowActionEnd?.();
+    },
+  };
+
+  const duplicateDifferentEntity = useMutation({
+    mutationFn: (body: { peer_normalized_key: string; audit_note?: string }) =>
+      apiPost<{ ok: boolean; candidate_id?: number }>(
+        `/api/v1/shipment-evidence/import-candidates/${candidate.id}/duplicate-review/different-entity`,
+        body
+      ),
+    ...duplicateLifecycle,
+    onSuccess: (data) => {
+      setDupMsg('Confirmed different entity — duplicate review recorded.');
+      const id = data.candidate_id ?? candidate.id;
+      onStewardFastComplete?.([id]);
+      onInvalidate?.();
+    },
+  });
+
+  const duplicateSameEntity = useMutation({
+    mutationFn: (body: { peer_normalized_key: string; audit_note?: string }) =>
+      apiPost<{ ok: boolean; message?: string }>(
+        `/api/v1/shipment-evidence/import-candidates/${candidate.id}/duplicate-review/same-entity`,
+        body
+      ),
+    ...duplicateLifecycle,
+    onSuccess: (data) => {
+      setDupMsg(
+        typeof data.message === 'string' && data.message.trim()
+          ? data.message
+          : 'Marked same entity — map both tokens to the same master customer when ready.'
+      );
+      // Same-entity only stamps review — keep Map/plan actionable; refresh context only.
+      onInvalidate?.();
+    },
+  });
+
+  const dupBusy = duplicateDifferentEntity.isPending || duplicateSameEntity.isPending;
 
   const suggestionCards: StewardSuggestionCardItem[] = useMemo(() => {
     if (!isExistingMasterMapAction(suggestedAction) || suggestedTargetId == null) return [];
@@ -169,7 +248,7 @@ export function ShipmentMappingStewardPanel({
       <Typography variant="body2">
         <strong>Selected:</strong> {shipmentEntityChipLabel(candidate.entity_type)} · normalized:{' '}
         {candidate.normalized_key} · status {candidate.status}
-        {rowActionPending ? (
+        {rowActionPending || dupBusy ? (
           <>
             {' '}
             <Chip size="small" color="info" label="Saving…" data-testid="shipment-steward-row-saving" />
@@ -208,12 +287,90 @@ export function ShipmentMappingStewardPanel({
           label={`Special: ${shipmentContextSpecialCategory(candidate.context)}`}
         />
       ) : null}
-      {isShipmentCustomerEntity(candidate.entity_type) &&
-      shipmentContextPossibleDuplicateOf(candidate.context).length > 0 ? (
-        <Alert severity="info" variant="outlined" data-testid="shipment-possible-duplicates">
-          <Typography variant="body2">
-            <strong>Similar tokens on this job:</strong>{' '}
-            {shipmentContextPossibleDuplicateOf(candidate.context).join(', ')}
+      {isShipmentCustomerEntity(candidate.entity_type) && dupHints.length > 0 ? (
+        <Alert
+          severity={dupUnresolved ? 'warning' : 'info'}
+          variant="outlined"
+          data-testid="shipment-possible-duplicates"
+        >
+          <Typography variant="body2" component="div">
+            <strong>Possible duplicates</strong> (same import job, name similarity after normalisation):
+            <ul style={{ margin: '4px 0 0', paddingLeft: 20 }}>
+              {dupHints.map((nk) => (
+                <li key={nk}>
+                  <code>{nk}</code>
+                  {lookupPeerCandidate?.(nk) ? (
+                    <>
+                      {' '}
+                      <Typography
+                        component="button"
+                        type="button"
+                        variant="caption"
+                        sx={{
+                          border: 0,
+                          bgcolor: 'transparent',
+                          color: 'primary.main',
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                          p: 0,
+                        }}
+                        onClick={() => onOpenPeerByNormalizedKey?.(nk)}
+                        data-testid="shipment-duplicate-peer-open"
+                      >
+                        Open peer
+                      </Typography>
+                    </>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+            {dupDecision ? (
+              <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                Steward decision: <strong>{dupDecision.replace(/_/g, ' ')}</strong>
+              </Typography>
+            ) : null}
+            {dupUnresolved ? (
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }}>
+                <StewardPendingButton
+                  size="small"
+                  variant="contained"
+                  pending={duplicateSameEntity.isPending}
+                  pendingLabel="Saving…"
+                  disabled={dupBusy || rowActionPending || !dupPeerKey.trim()}
+                  onClick={() =>
+                    void duplicateSameEntity.mutateAsync({ peer_normalized_key: dupPeerKey.trim() })
+                  }
+                  data-testid="shipment-duplicate-same-entity"
+                >
+                  Same entity
+                </StewardPendingButton>
+                <StewardPendingButton
+                  size="small"
+                  variant="outlined"
+                  pending={duplicateDifferentEntity.isPending}
+                  pendingLabel="Saving…"
+                  disabled={dupBusy || rowActionPending || !dupPeerKey.trim()}
+                  onClick={() =>
+                    void duplicateDifferentEntity.mutateAsync({
+                      peer_normalized_key: dupPeerKey.trim(),
+                    })
+                  }
+                  data-testid="shipment-duplicate-different-entity"
+                >
+                  Different entity
+                </StewardPendingButton>
+              </Stack>
+            ) : null}
+            {dupMsg ? (
+              <Typography variant="caption" display="block" sx={{ mt: 1 }} data-testid="shipment-duplicate-success">
+                {dupMsg}
+              </Typography>
+            ) : null}
+            {(duplicateSameEntity.isError || duplicateDifferentEntity.isError) && (
+              <Typography variant="caption" color="error" display="block" sx={{ mt: 1 }}>
+                {safeDisplayError(duplicateSameEntity.error || duplicateDifferentEntity.error)}
+              </Typography>
+            )}
           </Typography>
         </Alert>
       ) : null}

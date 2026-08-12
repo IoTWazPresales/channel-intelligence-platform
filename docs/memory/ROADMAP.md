@@ -72,7 +72,7 @@ compute (task often succeeds after UI gives up). Structural fixes, not poll-only
 |----|------|--------|------------------|
 | **BACKLOG-004** | Import Flow **Phase 3**: capability-driven wizard; split `admin/imports/page.tsx` | **Parked** | Page still **~4,015 lines**; no `ImportFlowCapability` in `packages/types/`. TRIGGER: PM core-loop re-run + approval. |
 | **BACKLOG-001** | Shipment steward → shared `ImportStewardCandidateWorkspace` | **Done** | Mounted in `ShipmentImportJobResolutionSection` (2026-07). Full intelligence parity remains **044/045**. |
-| **BACKLOG-044** | Shipment steward UX + resolution intelligence parity (plan/ready/bulk vs DSI) | **Parked** | Workspace + plan toolbar exist; drawer peers/clusters/verify-name still open. Viewport shell shared via **069** (Done 2026-07-20). |
+| **BACKLOG-044** | Shipment steward UX + resolution intelligence parity (plan/ready/bulk vs DSI) | **Done** | Workspace + plan + drawer duplicate Same/Different (045). |
 | **BACKLOG-005** | DSI → `CanonicalColumnMappingPanel` | **Done** | |
 | **BACKLOG-006** | Slim shipment `mapping-candidates` API (paginate / omit `line_ids`) | **Parked** | Paginated list; `line_ids` still in context payload. |
 | **BACKLOG-007** | Shipment post-validation re-map + `source_key` stability | **Done** | UI + orphan purge shipped; soak is ops watch only. |

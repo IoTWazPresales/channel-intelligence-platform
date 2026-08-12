@@ -9,10 +9,18 @@ export const SHIPMENT_STEWARD_TERMINAL_STATUSES = [
   'steward_rejected',
 ] as const;
 
+/** Duplicate different-entity ack — block further single-row Map/Prov/Reject (parity with DSI). */
+export const SHIPMENT_STEWARD_ACKNOWLEDGED_UNIQUE_STATUS = 'acknowledged_unique' as const;
+
 const terminalSet = new Set<string>(SHIPMENT_STEWARD_TERMINAL_STATUSES);
 
+const rowActionBlockedSet = new Set<string>([
+  ...SHIPMENT_STEWARD_TERMINAL_STATUSES,
+  SHIPMENT_STEWARD_ACKNOWLEDGED_UNIQUE_STATUS,
+]);
+
 export function isShipmentStewardRowActionBlocked(status: string | null | undefined): boolean {
-  return terminalSet.has((status || '').trim());
+  return rowActionBlockedSet.has((status || '').trim());
 }
 
 const listShellCopy = {

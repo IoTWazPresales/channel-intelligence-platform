@@ -1264,16 +1264,17 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-06-24 |
+| **Status / parked** | **Done** · 2026-08-12 — shipment drawer-body residual closed (duplicate Same/Different + row-action lifecycle + legacy panel retire). Open Channel waived pending OC consolidation. Full shared extract of DSI duplicate dialogs into `import-steward/` deferred. |
 | **Effort** | Medium–large (web); audit-first then phased fixes |
 | **Source** | Warren session (2026-06-24): shipment apply step UX; steward side panel vs DSI; `ShipmentCandidateStewardDrawer` + `ShipmentMappingStewardPanel` vs `DsiCandidateStewardDrawer` + `DsiMappingStewardPanel`; `ShipmentImportJobResolutionSection` vs `DsiImportJobResolutionSection`; `.cursor/rules/import-parity.mdc` steward surface rule; partial parity shipped on `feat/dsi-async-topology` (tabs, toolbar, plan apply, drawer apply banner) — **gaps remain** |
 | **Idea** | Several import steward surfaces are **not fully component-paritied** with DSI. Operators see slight layout/behaviour differences: side steward drawer (duplicate review, open channel, peer compare, row-action lifecycle), workspace chrome (pagination placement, bulk slot, plan toolbar), entity-type API wiring (`/mappings/` vs `/shipment-evidence/`), and apply-step completion UX (shipment now has `ImportJobLoadedSuccessCallout`; DSI/historical lineup not unified). |
 | **Why it matters / deferrable** | Shipment backfill (#147) is unblocked enough to apply; full UI parity is polish + regression-risk reduction before scaling steward work across importers. Deferrable until a dedicated UX parity sprint — but **audit should be explicit** so drift does not accumulate. |
 | **What the work is** | (1) **Audit matrix:** per importer row in `docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md` — side drawer component, workspace layout, plan toolbar, bulk section, apply-loaded callout, row actions (Review vs inline), API family. (2) **Extract shared primitives** where duplication is stable: steward drawer shell, plan-ready banner, apply-complete callout (extend `ImportJobLoadedSuccessCallout`), duplicate-review blocks (shipment may need shipment API adapters). (3) **Close shipment gaps:** wire `DsiMappingStewardPanel`-equivalent behaviours still missing on shipment (duplicate cluster dialogs, open channel if applicable, `onStewardFastComplete` cache eviction, peer lookup). (4) **DSI apply step:** adopt same loaded success callout pattern. |
+| **Code evidence 2026-08-12** | Shipment: `POST …/shipment-evidence/…/duplicate-review/{same,different}-entity`; drawer Same/Different; `setRowActionPendingId` + `onStewardFastComplete` wired; `ShipmentEntityStewardPanelLegacy` removed. Waived: Mark Open Channel. Not done: full DSI cluster/same-entity dialog extract to shared engine. |
 | **Regression traps** | Wrong steward API paths; breaking shipment entity types (`shipment_customer_token` vs `customer_dealer_token`); removing shipment-only special-category / reject flows; forked bespoke panels instead of shared layout. |
-| **Behavior to retain** | Shipment-evidence steward API family; governance (no auto-create); evidence vs fact semantics; import-parity locked async DB config. |
+| **Behavior to retain** | Shipment-evidence steward API family; governance (no auto-create); evidence vs fact semantics; import-parity locked async DB config; shipment plan does **not** gate on `duplicate_review_required` (locked variance). |
 | **Out of scope** | Full `DsiMappingStewardPanel` → single mega-component for all importers without adapter layer; product steward on shipment. |
-| **TRIGGER** | Warren requests steward UI parity audit; **or** second importer steward surface added without shared drawer/workspace; **or** shipment parity PR merged and next sprint is import UX hardening. |
+| **TRIGGER** | — Done. Re-open only if Warren asks shared duplicate-dialog extract or Open Channel on shipment. |
 
 ---
 
@@ -1281,12 +1282,12 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Mostly shipped** · 2026-08-12 audit — workspace + resolution-plan API/UI live; residual drawer-body polish → BACKLOG-045 |
+| **Status / parked** | **Done** · 2026-08-12 — workspace + plan (prior) + drawer-body residual via BACKLOG-045 |
 | **Effort** | Large (web + API services); likely phased after BACKLOG-001 workspace swap |
 | **Source** | Warren session audit (2023 vs 2026 ACZA backfill — evidence vs fact confusion, manual per-row steward); `docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md` (`steward_surface`: `shipment_evidence_admin` vs `dsi_resolution_section`); `apps/web/src/app/(app)/admin/shipment-evidence/ShipmentEntityStewardPanel.tsx` (bespoke panel); `apps/web/src/app/(app)/admin/imports/DsiImportJobResolutionSection.tsx` + `ImportStewardCandidateWorkspace` (DSI reference); `apps/api/app/services/imports/dsi_resolution_plan.py` (no shipment equivalent); `apps/web/src/features/import-steward/dsi-mapping-steward-panel.tsx` (comment: shipment remains separate); **BACKLOG-001** (workspace adapter only — does not cover plan intelligence) |
 | **Idea** | Shipment evidence import still uses a **different steward surface** and **weaker resolution intelligence** than DSI / other import-parity importers. Operators lack entity tabs, resolution-plan suggestions, ready vs needs-work queues, bulk “apply all ready”, historical/previously-resolved hints at the same bar, and the shared steward workspace patterns documented in `.cursor/rules/import-parity.mdc`. |
-| **Code evidence 2026-08-12** | `ShipmentImportJobResolutionSection` mounts shared workspace; shipment resolution-plan + apply-async exist; drawer chrome shared. Do **not** rebuild workspace/plan. Remaining: drawer-body parity + legacy dialog retire (045). |
-| **TRIGGER** | Drawer-body residual → continue under BACKLOG-045; or Warren asks to re-audit shipment vs DSI slots. |
+| **Code evidence 2026-08-12** | Shared workspace + resolution-plan + drawer chrome (prior); drawer duplicate Same/Different + lifecycle + legacy retire (045). Do **not** rebuild workspace/plan. |
+| **TRIGGER** | — Done. Re-audit only if Warren reports shipment steward slot drift vs DSI. |
 
 ---
 
