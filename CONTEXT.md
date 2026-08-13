@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-13 — **Unit 13 VERIFY PASS (Opus):** D-01 fixed — owed_unknown when `superseded_by_case_id` set (status stays approved). Prior STOP was dead `status==superseded`. Next: Unit 14 widgets in a new chat.
 - 2026-08-13 — **Unit 13 BACKLOG-092:** paid vs owed recon on `feat/unit13-cpor-payment-recon`. `GET /cpor/cases/{id}/payment-recon`; list Owed/Paid/Outstanding. Smoke case 293 C26649381: owed 68421.48 ZAR, USD CNs 116.96 FLAG not converted. Pytest 11 focused.
 - 2026-08-13 — **Skip-item code check:** Unit 8 / 026 / 027 / 044 / 045 / P6 Settings light are in the tree on `main` (PR #36/#37). Takealot REST + activation join on `feat/p5-residual` @ `edf29f3` (not `main`). `docs/memory/ROADMAP.md` 026/027 Parked → Done. Job 978 not re-queried this session.
 - 2026-08-13 — **Activation join fix:** Sell-Through line window first; Sell out PP only when no covering promo. FNB Day SRP no longer leaks via case-header window. Listing 64 `price_consistent` vs sell-out 14999; listing 65 still `not_activated` vs promo 7999.

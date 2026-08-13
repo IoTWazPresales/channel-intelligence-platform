@@ -41,6 +41,14 @@ def _line_ttl_in_case_currency(line: Any, case_ccy: str) -> float | None:
     return _f(getattr(line, "ttl_support", None))
 
 
+def _case_ineligible_for_owed(case: Any) -> bool:
+    """Cancelled/rejected status, or soft-superseded via FK (status stays approved)."""
+    status = str(getattr(case, "status", None) or "").lower()
+    if status in INELIGIBLE_CASE_STATUSES:
+        return True
+    return getattr(case, "superseded_by_case_id", None) is not None
+
+
 def _file_owed_from_evidence(ev: Any) -> float | None:
     blob = getattr(ev, "evidence_json", None) or {}
     if not isinstance(blob, dict):
@@ -63,10 +71,9 @@ def compute_case_payment_recon(
     """Pure recon math. ``case`` / ``lines`` / ``evidence`` are duck-typed."""
     flags: list[str] = []
     case_ccy = str(getattr(case, "currency_code", None) or "ZAR").upper()
-    status = str(getattr(case, "status", None) or "").lower()
 
     owed: float | None = None
-    if status in INELIGIBLE_CASE_STATUSES:
+    if _case_ineligible_for_owed(case):
         flags.append("owed_unknown")
         flags.append("case_ineligible")
     else:

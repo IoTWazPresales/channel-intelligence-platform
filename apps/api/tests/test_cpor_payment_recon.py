@@ -9,7 +9,14 @@ from app.services.cpor.payment_recon import compute_case_payment_recon
 
 
 def _case(**kwargs):
-    base = dict(id=1, case_code="C1", customer_id=9, status="approved", currency_code="ZAR")
+    base = dict(
+        id=1,
+        case_code="C1",
+        customer_id=9,
+        status="approved",
+        currency_code="ZAR",
+        superseded_by_case_id=None,
+    )
     base.update(kwargs)
     return SimpleNamespace(**base)
 
@@ -59,6 +66,16 @@ def test_no_ttl_flags_owed_unknown_does_not_invent():
 
 def test_cancelled_case_owed_unknown():
     case = _case(status="cancelled")
+    lines = [_line(ttl_support=999.0)]
+    out = compute_case_payment_recon(case=case, lines=lines, evidence=[])
+    assert out["owed_amount"] is None
+    assert "owed_unknown" in out["flags"]
+    assert "case_ineligible" in out["flags"]
+
+
+def test_superseded_by_case_id_owed_unknown_even_if_status_approved():
+    """CPOR supersession is the FK, not status='superseded' (that status is not in the vocab)."""
+    case = _case(status="approved", superseded_by_case_id=88)
     lines = [_line(ttl_support=999.0)]
     out = compute_case_payment_recon(case=case, lines=lines, evidence=[])
     assert out["owed_amount"] is None

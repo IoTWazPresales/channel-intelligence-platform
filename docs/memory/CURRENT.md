@@ -1,6 +1,6 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-13 (Unit 13 BACKLOG-092 recon — unit tests + browser smoke)
+**Last updated:** 2026-08-13 (Unit 13 BACKLOG-092 — Opus VERIFY PASS after D-01)
 
 **Branch:** `feat/unit13-cpor-payment-recon` (from `feat/p5-residual` @ `53361c3`) 
 
@@ -14,7 +14,7 @@
 | 11 Import parity | **Merged** PR #37 → `main` (`4aa538a`) |
 | 12 P6 light | Export sheet Settings shipped in PR #37 |
 | P5 residual | **Pushed** `feat/p5-residual` @ `53361c3` — not yet merged to `main` |
-| **13** | **Wired + browser-soaked** — BACKLOG-092 paid vs owed recon (case 293 C26649381) |
+| **13** | **VERIFY PASS** (Opus) — BACKLOG-092 paid vs owed recon; D-01 superseded_by_case_id |
 | **14** | Queued — BACKLOG-131 P3 widget canvas |
 | **15** | Queued — B1 history forecast + BACKLOG-094 intake-weighted MAC + editable planner |
 | P2 hosting | Stay local |
@@ -41,8 +41,8 @@ Plan: `.tmp/ARC_UNITS_13_15_PLAN.md`
 
 ## Next
 
-1. Dual-agent VERIFY for Unit 13 when Warren asks; then Unit 14 widgets
-2. Warren: merge/promote `feat/p5-residual` (Unit 13 is stacked on it)
+1. Unit 14 BACKLOG-131 P3 widget canvas — **new chat / new branch** (do not start here)
+2. Warren: merge/promote `feat/p5-residual` or this stacked Unit 13 branch
 3. Do not re-ingest job 978 / do not re-audit Takealot REST fetch
 
 **Env:** local Windows. Web `:3000` + API `:8001`.
