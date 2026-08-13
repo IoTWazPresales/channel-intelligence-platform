@@ -14,7 +14,7 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
         "hidden": False,
         "admin_only": False,
         "requires_provider": True,
-        "pipeline_handler": "product_master_upsert",
+        "pipeline_handler": "product_master_upsert",  # refused at runtime — sole path is product_master_workflow (BACKLOG-026)
         "destructive_apply_requires_confirm": True,
         "accepted_file_types": [".csv", ".xlsx"],
         "expected_columns": {

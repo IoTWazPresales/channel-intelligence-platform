@@ -83,9 +83,29 @@ export function shipmentCanClearSpecialCategory(r: ShipmentMappingCandidateRow):
 
 export function shipmentContextPossibleDuplicateOf(ctx: Record<string, unknown> | null): string[] {
   if (!ctx || !Array.isArray(ctx.possible_duplicate_of)) return [];
-  return ctx.possible_duplicate_of
-    .filter((x): x is string => typeof x === 'string' && Boolean(x.trim()))
-    .slice(0, 8);
+  const out: string[] = [];
+  for (const x of ctx.possible_duplicate_of) {
+    if (typeof x === 'string' && x.trim()) {
+      out.push(x.trim());
+      continue;
+    }
+    if (x && typeof x === 'object' && 'normalized_key' in (x as object)) {
+      const nk = String((x as { normalized_key?: unknown }).normalized_key ?? '').trim();
+      if (nk) out.push(nk);
+    }
+  }
+  return out.slice(0, 8);
+}
+
+export function shipmentDuplicateReviewDecision(ctx: Record<string, unknown> | null): string | null {
+  if (!ctx || typeof ctx.duplicate_review !== 'object' || ctx.duplicate_review === null) return null;
+  const d = (ctx.duplicate_review as Record<string, unknown>).decision;
+  return typeof d === 'string' && d.trim() ? d.trim() : null;
+}
+
+/** True when hints exist and steward has not recorded Same/Different yet. */
+export function shipmentHasUnresolvedDuplicateReview(ctx: Record<string, unknown> | null): boolean {
+  return shipmentContextPossibleDuplicateOf(ctx).length > 0 && shipmentDuplicateReviewDecision(ctx) == null;
 }
 
 export function shipmentEntityChipLabel(entityType: string): string {

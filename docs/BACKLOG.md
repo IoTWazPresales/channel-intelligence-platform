@@ -1264,16 +1264,17 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-06-24 |
+| **Status / parked** | **Done** · 2026-08-12 — shipment drawer-body residual closed (duplicate Same/Different + row-action lifecycle + legacy panel retire). Open Channel waived pending OC consolidation. Full shared extract of DSI duplicate dialogs into `import-steward/` deferred. |
 | **Effort** | Medium–large (web); audit-first then phased fixes |
 | **Source** | Warren session (2026-06-24): shipment apply step UX; steward side panel vs DSI; `ShipmentCandidateStewardDrawer` + `ShipmentMappingStewardPanel` vs `DsiCandidateStewardDrawer` + `DsiMappingStewardPanel`; `ShipmentImportJobResolutionSection` vs `DsiImportJobResolutionSection`; `.cursor/rules/import-parity.mdc` steward surface rule; partial parity shipped on `feat/dsi-async-topology` (tabs, toolbar, plan apply, drawer apply banner) — **gaps remain** |
 | **Idea** | Several import steward surfaces are **not fully component-paritied** with DSI. Operators see slight layout/behaviour differences: side steward drawer (duplicate review, open channel, peer compare, row-action lifecycle), workspace chrome (pagination placement, bulk slot, plan toolbar), entity-type API wiring (`/mappings/` vs `/shipment-evidence/`), and apply-step completion UX (shipment now has `ImportJobLoadedSuccessCallout`; DSI/historical lineup not unified). |
 | **Why it matters / deferrable** | Shipment backfill (#147) is unblocked enough to apply; full UI parity is polish + regression-risk reduction before scaling steward work across importers. Deferrable until a dedicated UX parity sprint — but **audit should be explicit** so drift does not accumulate. |
 | **What the work is** | (1) **Audit matrix:** per importer row in `docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md` — side drawer component, workspace layout, plan toolbar, bulk section, apply-loaded callout, row actions (Review vs inline), API family. (2) **Extract shared primitives** where duplication is stable: steward drawer shell, plan-ready banner, apply-complete callout (extend `ImportJobLoadedSuccessCallout`), duplicate-review blocks (shipment may need shipment API adapters). (3) **Close shipment gaps:** wire `DsiMappingStewardPanel`-equivalent behaviours still missing on shipment (duplicate cluster dialogs, open channel if applicable, `onStewardFastComplete` cache eviction, peer lookup). (4) **DSI apply step:** adopt same loaded success callout pattern. |
+| **Code evidence 2026-08-12** | Shipment: `POST …/shipment-evidence/…/duplicate-review/{same,different}-entity`; drawer Same/Different; `setRowActionPendingId` + `onStewardFastComplete` wired; `ShipmentEntityStewardPanelLegacy` removed. Waived: Mark Open Channel. Not done: full DSI cluster/same-entity dialog extract to shared engine. |
 | **Regression traps** | Wrong steward API paths; breaking shipment entity types (`shipment_customer_token` vs `customer_dealer_token`); removing shipment-only special-category / reject flows; forked bespoke panels instead of shared layout. |
-| **Behavior to retain** | Shipment-evidence steward API family; governance (no auto-create); evidence vs fact semantics; import-parity locked async DB config. |
+| **Behavior to retain** | Shipment-evidence steward API family; governance (no auto-create); evidence vs fact semantics; import-parity locked async DB config; shipment plan does **not** gate on `duplicate_review_required` (locked variance). |
 | **Out of scope** | Full `DsiMappingStewardPanel` → single mega-component for all importers without adapter layer; product steward on shipment. |
-| **TRIGGER** | Warren requests steward UI parity audit; **or** second importer steward surface added without shared drawer/workspace; **or** shipment parity PR merged and next sprint is import UX hardening. |
+| **TRIGGER** | — Done. Re-open only if Warren asks shared duplicate-dialog extract or Open Channel on shipment. |
 
 ---
 
@@ -1281,16 +1282,12 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-06-23 |
+| **Status / parked** | **Done** · 2026-08-12 — workspace + plan (prior) + drawer-body residual via BACKLOG-045 |
 | **Effort** | Large (web + API services); likely phased after BACKLOG-001 workspace swap |
 | **Source** | Warren session audit (2023 vs 2026 ACZA backfill — evidence vs fact confusion, manual per-row steward); `docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md` (`steward_surface`: `shipment_evidence_admin` vs `dsi_resolution_section`); `apps/web/src/app/(app)/admin/shipment-evidence/ShipmentEntityStewardPanel.tsx` (bespoke panel); `apps/web/src/app/(app)/admin/imports/DsiImportJobResolutionSection.tsx` + `ImportStewardCandidateWorkspace` (DSI reference); `apps/api/app/services/imports/dsi_resolution_plan.py` (no shipment equivalent); `apps/web/src/features/import-steward/dsi-mapping-steward-panel.tsx` (comment: shipment remains separate); **BACKLOG-001** (workspace adapter only — does not cover plan intelligence) |
 | **Idea** | Shipment evidence import still uses a **different steward surface** and **weaker resolution intelligence** than DSI / other import-parity importers. Operators lack entity tabs, resolution-plan suggestions, ready vs needs-work queues, bulk “apply all ready”, historical/previously-resolved hints at the same bar, and the shared steward workspace patterns documented in `.cursor/rules/import-parity.mdc`. |
-| **Why it matters / deferrable** | Blocks efficient backfill + current-report workflows (historical landed lines, product corroboration gaps, per-row confirm loops). Deferrable while DSI steward and alias-scope work completes and until shipment bitemporal/backfill model (BACKLOG-033) is scoped — but **steward/intelligence gap is independent of schema** and should be audited before scaling shipment uploads. |
-| **What the work is** | (1) **Steward surface:** complete BACKLOG-001 (`ImportStewardCandidateWorkspace` adapter for shipment) — entity-grouped tabs, confidence bands, bulk progress, shared invalidate/refetch. (2) **Resolution intelligence:** shipment-specific plan builder (or shared abstraction): suggested map/provisional/ignore, ready vs needs_review, blockers, target labels — aligned with `dsi_resolution_plan` patterns where domain fits; wire `try_ai_token_resolution` / shared candidates helpers per import-parity rule. (3) **Apply orchestration:** bulk grouped writers + async apply + tab-count coherence (shipment bulk paths exist but UX/plan layer lags DSI). (4) **Operator docs:** evidence (all snapshots per job) vs `fact_inbound_shipment` (current keyed row) — when to apply, backfill vs current. (5) **Audit session findings:** corroboration reads evidence not fact; upload alone insufficient; product `resolved_unique` still required. |
-| **Regression traps** | Wrong API family (`/mappings/` vs `/shipment-evidence/`); entity type mismatch (`shipment_*` tokens); breaking Phase 2 shipment batching; conflating evidence append with fact latest-job-wins (BACKLOG-033); auto-create masters from evidence. |
-| **Behavior to retain** | Evidence preserved per import job; fact upsert on global `source_key`; steward governance (no silent master creation); existing shipment-evidence endpoints until deliberately migrated. |
-| **Out of scope** | Full bitemporal observation store (BACKLOG-033); ETA prediction ML; changing corroboration tier order or DSI eligibility. |
-| **TRIGGER** | Warren requests shipment import parity audit; **or** second production backfill/current shipment workflow (e.g. ACZA historical + rolling current) before BACKLOG-033 ships; **or** BACKLOG-001 workspace swap signed off and next import-parity sprint starts. |
+| **Code evidence 2026-08-12** | Shared workspace + resolution-plan + drawer chrome (prior); drawer duplicate Same/Different + lifecycle + legacy retire (045). Do **not** rebuild workspace/plan. |
+| **TRIGGER** | — Done. Re-audit only if Warren reports shipment steward slot drift vs DSI. |
 
 ---
 
@@ -1519,14 +1516,12 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-06-04 (out-of-scope this pass) |
+| **Status / parked** | **Done 2026-08-12** · Unit 11 — legacy `product_master_upsert` refuses; sole path is `product_master_workflow` |
 | **Effort** | Medium–large |
 | **Source** | This branch's audit; dedicated `product_master_workflow.py` (`pm_validate`/`pm_commit`, bespoke mapping, AI desc-remap) vs generic `pipeline.py::_process_product_master` (inline, channel-only AI) |
 | **Idea** | One product_master apply path. Today two code paths exist for one slug with divergent AI + mapping behavior and double maintenance. |
-| **Why / deferrable** | Drift risk + duplicate maintenance; deferrable because both currently work and PM is not on this pass's critical path. |
-| **What the work is** | Pick the workflow path as canonical; route the generic handler to it (or delete the generic branch); reconcile AI (description remap vs channel-only) and mapping (bespoke `pmMappingHelpers` vs panel). |
-| **Regression traps** | `specs_json` canonical; two-phase validate→commit semantics; existing PM tests. |
-| **TRIGGER** | A PM consolidation task is approved (pairs naturally with BACKLOG-027). |
+| **What shipped** | `process_import_job_sync` raises for `template_slug=product_master`; `_process_product_master` raises BACKLOG-026; tests `test_product_master_pipeline_retired.py`. Import Centre continues to use `/imports/product-master` workflow. |
+| **TRIGGER** | ~~A PM consolidation task is approved~~ — fired Unit 11 Q13=D. |
 
 ---
 
@@ -1534,14 +1529,14 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-06-04 (out-of-scope this pass) |
+| **Status / parked** | **Done** · 2026-08-12 — PM + HL mount `CanonicalColumnMappingPanel`; optional disposition on panel for PM; HL inverted to header→canonical with `hlMappingHelpers`; `pmMappingTargetOptions` deleted |
 | **Effort** | Medium (web) |
 | **Source** | This branch's audit; PM bespoke `pmMappingHelpers`/`pmMappingTargetOptions`; historical override mapping; vs shared panel used by DSI/shipment |
 | **Idea** | Replace the PM and historical-lineup bespoke mapping tables with the shared `CanonicalColumnMappingPanel` (parity rule §4). |
 | **Why / deferrable** | Removes a third/fourth mapping-UI shape; deferrable, cosmetic-ish, no correctness gap. |
 | **What the work is** | Mount the panel with PM/historical target options + samples; keep server validation; delete bespoke helpers once parity verified in-browser. |
 | **Regression traps** | PM `pm_mapping_saved` stage flow; historical override semantics. |
-| **TRIGGER** | A mapping-UI unification task is approved (pairs with BACKLOG-026). |
+| **TRIGGER** | ~~A mapping-UI unification task is approved (pairs with BACKLOG-026).~~ — fired Unit 11. |
 
 ---
 

@@ -201,12 +201,12 @@ The exact current step arrays map cleanly:
 
 | slug | steps | needs_mapping | mapping_ui | needs_steward | steward_surface | apply_mode | confirm | archives_on_complete | mode_choice | hidden_from_generic_ui | tracking_kinds |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| **product_master** | type,provider,details,upload,mapping,validate,commit | yes | `pm_columns` | no | — | `pm_commit` | yes | **no** | no | no | `product_master_validate`, `product_master_commit` |
+| **product_master** | type,provider,details,upload,mapping,validate,commit | yes | `canonical` (PM targets + disposition) | no | — | `pm_commit` | yes | **no** | no | no | `product_master_validate`, `product_master_commit` |
 | **distributor_inventory** (DSI) | type,provider,details,mode,upload,mapping,validate,apply | yes | `dsi_canonical` | **yes** | `dsi_resolution_section` | `fact_upsert_after_steward` | yes | **no** | yes (auto/historical/weekly) | no | `dsi_pipeline`, `dsi_bulk_provisional`, `dsi_resolution_plan_apply`, `dsi_soh_reconciliation`, `dsi_velocity_compute`, `dsi_forecasting` |
 | **inbound_shipments** | type,provider,details,upload,mapping,validate,apply | yes | `shipment_canonical` | **yes** | `dsi_resolution_section` † | `fact_upsert_after_steward` | no | no | no | no | `shipment_import` |
 | **distributor_master** | type,provider,details,mode,upload | no | `none` | no | — | `master_upsert` | no | no | yes (validate/apply) | no | *(none — inline sync)* |
 | **customer_master** | type,provider,details,mode,upload | no | `none` | no | — | `master_upsert` | no | no | yes (validate/apply) | no | *(none — inline sync)* |
-| **historical_lineup** (admin) | type,provider,details,mode,upload | yes (override) | `historical_lineup` | no | — | `parse_to_history` | no | no | yes | no | *(none — inline sync)* |
+| **historical_lineup** (admin) | type,provider,details,mode,upload | yes (override) | `canonical` (header→field; override bridge) | no | — | `parse_to_history` | no | no | yes | no | *(none — inline sync)* |
 | **customer_sell_through** | *(own surface)* | yes | own surface (deferred) | **yes** | own surface (deferred) | `fact_upsert_after_steward` | no | no | own surface (deferred) | **yes** | *(own surface — parsers, see §1d / §10 D1)* |
 | **cpor_historical_cases** | *(own surface — H2 wizard)* | yes | `cpor_canonical` | **yes** | `dsi_resolution_section` (shared workspace) | `fact_upsert_after_steward` | yes | no | no | **yes** | `cpor_historical_import` |
 | **cpor_payment_evidence** | *(own surface — payment/CN wizard)* | yes | `cpor_payment_profile` | **yes** | own steward (customer/distributor/shell-case) | `fact_upsert_after_steward` | yes | no | no | **yes** | *(sync apply v1)* |

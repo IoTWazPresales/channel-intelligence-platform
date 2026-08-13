@@ -69,10 +69,16 @@ function parseOptInt(s: string): number | null {
 export function ShipmentStewardActionsProvider({
   importJobId,
   onInvalidate,
+  onRowActionStart,
+  onRowActionEnd,
+  onStewardFastComplete,
   children,
 }: {
   importJobId: number;
   onInvalidate: () => void;
+  onRowActionStart?: (candidateId: number) => void;
+  onRowActionEnd?: () => void;
+  onStewardFastComplete?: (candidateIds: number[]) => void;
   children: ReactNode;
 }) {
   const qc = useQueryClient();
@@ -113,6 +119,26 @@ export function ShipmentStewardActionsProvider({
     invalidateShipmentImportJobStewardQueries(qc, importJobId);
     onInvalidate();
   }, [importJobId, onInvalidate, qc]);
+
+  const beginRowAction = useCallback(
+    (candidateId: number | null | undefined) => {
+      if (candidateId != null) onRowActionStart?.(candidateId);
+    },
+    [onRowActionStart]
+  );
+
+  const finishRowActionResolved = useCallback(
+    (candidateId: number | null | undefined) => {
+      onRowActionEnd?.();
+      if (candidateId != null) onStewardFastComplete?.([candidateId]);
+      invalidate();
+    },
+    [invalidate, onRowActionEnd, onStewardFastComplete]
+  );
+
+  const finishRowActionSettled = useCallback(() => {
+    onRowActionEnd?.();
+  }, [onRowActionEnd]);
 
   const { data: distHits = [] } = useQuery({
     queryKey: ['distributors-search-shipment-steward', distQDebounced],
@@ -155,13 +181,17 @@ export function ShipmentStewardActionsProvider({
         { customer_id: body.customer_id, raw_token: body.raw_token }
       );
     },
-    onSuccess: () => {
+    onMutate: (body) => beginRowAction(body.candidate_id),
+    onSuccess: (_data, body) => {
       setActionError(null);
       setMapOpen(false);
       setActive(null);
-      invalidate();
+      finishRowActionResolved(body.candidate_id);
     },
-    onError: (e: Error) => setActionError(e.message),
+    onError: (e: Error) => {
+      setActionError(e.message);
+      finishRowActionSettled();
+    },
   });
 
   const provDistMut = useMutation({
@@ -175,13 +205,17 @@ export function ShipmentStewardActionsProvider({
         `/api/v1/shipment-evidence/import-candidates/${body.candidate_id}/create-provisional-distributor`,
         body
       ),
-    onSuccess: () => {
+    onMutate: (body) => beginRowAction(body.candidate_id),
+    onSuccess: (_data, body) => {
       setActionError(null);
       setProvOpen(false);
       setActive(null);
-      invalidate();
+      finishRowActionResolved(body.candidate_id);
     },
-    onError: (e: Error) => setActionError(e.message),
+    onError: (e: Error) => {
+      setActionError(e.message);
+      finishRowActionSettled();
+    },
   });
 
   const provCustMut = useMutation({
@@ -198,13 +232,17 @@ export function ShipmentStewardActionsProvider({
         `/api/v1/shipment-evidence/import-candidates/${body.candidate_id}/create-provisional-customer`,
         body
       ),
-    onSuccess: () => {
+    onMutate: (body) => beginRowAction(body.candidate_id),
+    onSuccess: (_data, body) => {
       setActionError(null);
       setProvOpen(false);
       setActive(null);
-      invalidate();
+      finishRowActionResolved(body.candidate_id);
     },
-    onError: (e: Error) => setActionError(e.message),
+    onError: (e: Error) => {
+      setActionError(e.message);
+      finishRowActionSettled();
+    },
   });
 
   const manualSpecialMut = useMutation({
@@ -213,25 +251,33 @@ export function ShipmentStewardActionsProvider({
         `/api/v1/shipment-evidence/import-candidates/${body.candidate_id}/manual-special-category`,
         { special_category: body.special_category }
       ),
-    onSuccess: () => {
+    onMutate: (body) => beginRowAction(body.candidate_id),
+    onSuccess: (_data, body) => {
       setActionError(null);
       setSpecialCatOpen(false);
       setActive(null);
-      invalidate();
+      finishRowActionResolved(body.candidate_id);
     },
-    onError: (e: Error) => setActionError(e.message),
+    onError: (e: Error) => {
+      setActionError(e.message);
+      finishRowActionSettled();
+    },
   });
 
   const rejectMut = useMutation({
     mutationFn: (candidate_id: number) =>
       apiPost<Record<string, unknown>>(`/api/v1/shipment-evidence/import-candidates/${candidate_id}/reject`),
-    onSuccess: () => {
+    onMutate: (candidate_id) => beginRowAction(candidate_id),
+    onSuccess: (_data, candidate_id) => {
       setActionError(null);
       setRejectOpen(false);
       setActive(null);
-      invalidate();
+      finishRowActionResolved(candidate_id);
     },
-    onError: (e: Error) => setActionError(e.message),
+    onError: (e: Error) => {
+      setActionError(e.message);
+      finishRowActionSettled();
+    },
   });
 
   const clearSpecialMut = useMutation({
@@ -240,12 +286,16 @@ export function ShipmentStewardActionsProvider({
         `/api/v1/shipment-evidence/import-candidates/${candidate_id}/clear-special-category`,
         {}
       ),
-    onSuccess: () => {
+    onMutate: (candidate_id) => beginRowAction(candidate_id),
+    onSuccess: (_data, candidate_id) => {
       setActionError(null);
       setActive(null);
-      invalidate();
+      finishRowActionResolved(candidate_id);
     },
-    onError: (e: Error) => setActionError(e.message),
+    onError: (e: Error) => {
+      setActionError(e.message);
+      finishRowActionSettled();
+    },
   });
 
   const actionBusy =

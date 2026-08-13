@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { initPmColumnDrafts, pmDraftsToApiColumns } from './pmMappingHelpers';
+import {
+  initPmColumnDrafts,
+  applyPmDispositionDraft,
+  applyPmTargetDraft,
+  pmColumnsToDispositionDraft,
+  pmColumnsToTargetDraft,
+  pmDraftsToApiColumns,
+} from './pmMappingHelpers';
 
 describe('initPmColumnDrafts', () => {
   it('prefers saved mapping_decisions over suggestions', () => {
@@ -43,5 +50,26 @@ describe('pmDraftsToApiColumns', () => {
       { header: 'sku', target: 'sku', disposition: null },
       { header: 'extra', target: null, disposition: 'attribute_candidate' },
     ]);
+  });
+});
+
+describe('pmColumns panel draft bridges', () => {
+  it('round-trips target and disposition drafts', () => {
+    const cols = [
+      { header: 'A', target: 'display_name', disposition: 'ignore' as const },
+      { header: 'B', target: '', disposition: 'stage_raw' as const },
+    ];
+    expect(pmColumnsToTargetDraft(cols)).toEqual({ A: 'display_name' });
+    expect(pmColumnsToDispositionDraft(cols)).toEqual({ B: 'stage_raw' });
+
+    const afterTarget = applyPmTargetDraft(cols, { B: 'technical_product_id' });
+    expect(afterTarget.find((c) => c.header === 'B')?.target).toBe('technical_product_id');
+    expect(afterTarget.find((c) => c.header === 'A')?.target).toBe('');
+
+    const afterDisp = applyPmDispositionDraft(
+      [{ header: 'B', target: '', disposition: 'ignore' as const }],
+      { B: 'attribute_candidate' }
+    );
+    expect(afterDisp[0].disposition).toBe('attribute_candidate');
   });
 });

@@ -40,6 +40,7 @@ type TenantCommercialProfile = {
   over_budget_action: OverBudgetAction;
   reservation_source: ReservationSource;
   pm_attribution_mode: PmAttributionMode;
+  lineup_export_sheets?: { net_requirement: string; draft_lineup: string };
   overrides_present: string[];
   hard_enforce_budget: boolean;
   money_ceiling_usd: number | null;
@@ -73,6 +74,8 @@ export default function SettingsPage() {
   const [overBudgetAction, setOverBudgetAction] = useState<OverBudgetAction>('require_reapproval');
   const [reservationSource, setReservationSource] = useState<ReservationSource>('derived_from_profit');
   const [pmAttributionMode, setPmAttributionMode] = useState<PmAttributionMode>('business_line');
+  const [exportNetReqSheet, setExportNetReqSheet] = useState('NetRequirement');
+  const [exportDraftSheet, setExportDraftSheet] = useState('DraftLineup');
   const [profileSaveOk, setProfileSaveOk] = useState<string | null>(null);
   const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
 
@@ -82,6 +85,9 @@ export default function SettingsPage() {
     setOverBudgetAction(tenantProfileQuery.data.over_budget_action);
     setReservationSource(tenantProfileQuery.data.reservation_source);
     setPmAttributionMode(tenantProfileQuery.data.pm_attribution_mode);
+    const sheets = tenantProfileQuery.data.lineup_export_sheets;
+    if (sheets?.net_requirement) setExportNetReqSheet(sheets.net_requirement);
+    if (sheets?.draft_lineup) setExportDraftSheet(sheets.draft_lineup);
   }, [tenantProfileQuery.data]);
 
   const tenantProfileMutation = useMutation({
@@ -91,6 +97,8 @@ export default function SettingsPage() {
         over_budget_action: overBudgetAction,
         reservation_source: reservationSource,
         pm_attribution_mode: pmAttributionMode,
+        lineup_export_net_requirement_sheet: exportNetReqSheet.trim() || undefined,
+        lineup_export_draft_sheet: exportDraftSheet.trim() || undefined,
       }),
     onSuccess: async (data) => {
       setProfileSaveError(null);
@@ -243,6 +251,24 @@ export default function SettingsPage() {
                 ))}
               </Select>
             </FormControl>
+            <TextField
+              label="Lineup export — Net requirement sheet"
+              value={exportNetReqSheet}
+              onChange={(ev) => setExportNetReqSheet(ev.target.value)}
+              disabled={!isAdmin}
+              fullWidth
+              helperText="Workbook sheet title for net-requirement export (Lane B)."
+              inputProps={{ 'data-testid': 'tenant-profile-export-net-req-sheet' }}
+            />
+            <TextField
+              label="Lineup export — Draft lineup sheet"
+              value={exportDraftSheet}
+              onChange={(ev) => setExportDraftSheet(ev.target.value)}
+              disabled={!isAdmin}
+              fullWidth
+              helperText="Workbook sheet title for draft lineup export."
+              inputProps={{ 'data-testid': 'tenant-profile-export-draft-sheet' }}
+            />
             {isAdmin ? (
               <Box>
                 <Button

@@ -1,32 +1,31 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-12 (Unit 8 Demo/P2 gate)
+**Last updated:** 2026-08-12 (BACKLOG-045 drawer-body residual)
 
-**Branch:** `feat/unit8-demo-p2-gate` (from `main` @ `5f49b7f`)
+**Branch:** `feat/unit11-import-parity-044-027` (from `main` @ `487bfd2` / PR #36)
 
-**Alembic on cip:** `20260812_0014` (matches code head)
+**Alembic on cip:** `20260812_0014`
 
 ## Arc progress
 
 | Unit | Status |
 |---|---|
-| 0–3 | Done on main |
-| 5 CST hist | Merged #30 |
-| 7 BACKLOG-068 | Merged |
-| P5 payment/CN | Smoke PASS (#35 hotfixes on main) |
-| 8 Demo/P2 | **Done this branch** — second-user + backup/restore soak |
-| 9–10 | Blocked (094 / 092 full recon) |
+| 8 Demo/P2 | **Merged** PR #36 → `main` |
+| 11 Import parity | **Done this branch** — 026+027+044/045; next P5 residual |
+| 12 P6 light | **In progress** — export sheet names on Settings (096 already shipped) |
+| 9–10 | Blocked (094 / 092) |
+| P5 residual | **Next** (new chat recommended) |
 
-## Unit 8 proven
+## This branch
 
-- Browser: `viewer@local` → Control tower → Shipping; `/admin/users` forbidden; admin Users form OK
-- Restore: `cip_20260812_124712.dump` → `cip_alembic_smoke` `RESTORE_SMOKE_OK` (alembic `20260812_0014`, dim_product parity)
-- Docs: `docs/DEMO_SCRIPT.md`, `docs/UNIT8_DEMO_P2_GATE.md`, `docs/BACKUP_AND_DR.md` proof row
-- Fix: Users page default-deny + login seeds `/auth/me` cache
+- BACKLOG-026: legacy PM pipeline retired (raise + tests)
+- BACKLOG-027: PM + HL → shared `CanonicalColumnMappingPanel`
+- BACKLOG-044/045: shipment drawer Same/Different duplicate review + row-action lifecycle; legacy steward panel retired
+- Unit 12: Settings exposes lineup export sheet titles via tenant profile PUT
 
 ## Next
 
-1. Commit/PR Unit 8 when asked
-2. Arc: Unit 11 import parity **or** Unit 12 P6 light **or** P5 residual last (094/092 still blocked)
+1. Commit/push 045 slice when asked
+2. **P5 residual** — start a new chat
 
-**Env:** local Windows. API WatchFiles sometimes exits after reload — restart `pnpm dev:api` if :8001 dies.
+**Env:** local Windows.

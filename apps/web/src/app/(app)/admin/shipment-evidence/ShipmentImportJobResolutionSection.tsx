@@ -37,6 +37,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   shipmentContextNeedsNameReview,
   shipmentEntityChipLabel,
+  isShipmentCustomerEntity,
   type ShipmentMappingCandidateRow,
 } from './shipmentMappingCandidateDisplay';
 import {
@@ -59,7 +60,6 @@ import { useShipmentEntityTabCounts } from './useShipmentEntityTabCounts';
 import { SHIPMENT_ENGINE_CONFIG } from './shipmentSteward.engineConfig';
 import { ShipmentMappingStewardPanel } from './ShipmentMappingStewardPanel';
 import { buildShipmentResolutionWorkspaceColumns } from './shipmentResolutionWorkspaceTableProps';
-import { ShipmentEntityStewardPanelLegacy } from './ShipmentEntityStewardPanelLegacy';
 import { useShipmentPlanEffectiveRefresh } from './useShipmentPlanEffectiveRefresh';
 
 function formatShipmentPlanApplySummary(data: Record<string, unknown>): StewardPlanApplyFeedback {
@@ -124,7 +124,6 @@ export function ShipmentImportJobResolutionSection({
   const [bulkMode, setBulkMode] = useState<BulkTableSelectionMode>('normal');
   const [bulkProvNamesById, setBulkProvNamesById] = useState<Record<number, string>>({});
   const [planApplySummary, setPlanApplySummary] = useState<StewardPlanApplyFeedback | null>(null);
-  const [legacyOpen, setLegacyOpen] = useState(false);
   const [detailCandidate, setDetailCandidate] = useState<ShipmentMappingCandidateRow | null>(null);
   const [rowActionPendingId, setRowActionPendingId] = useState<number | null>(null);
   const workspaceToolbarRef = useRef<HTMLDivElement | null>(null);
@@ -178,6 +177,27 @@ export function ShipmentImportJobResolutionSection({
   const focusWorkspaceToolbar = useCallback(() => {
     workspaceToolbarRef.current?.querySelector<HTMLElement>('button')?.focus();
   }, []);
+
+  const lookupPeerCandidateByNormalizedKey = useCallback(
+    (normalizedKey: string) => {
+      const nk = (normalizedKey || '').trim();
+      if (!nk) return null;
+      return (
+        candidates.find(
+          (c) => isShipmentCustomerEntity(c.entity_type) && (c.normalized_key || '').trim() === nk
+        ) ?? null
+      );
+    },
+    [candidates]
+  );
+
+  const openPeerCandidateByNormalizedKey = useCallback(
+    (normalizedKey: string) => {
+      const peer = lookupPeerCandidateByNormalizedKey(normalizedKey);
+      if (peer) setDetailCandidate(peer);
+    },
+    [lookupPeerCandidateByNormalizedKey]
+  );
 
   const getBulkBodyExtras = useCallback(
     (action: string) => {
@@ -377,7 +397,13 @@ export function ShipmentImportJobResolutionSection({
   }
 
   return (
-    <ShipmentStewardActionsProvider importJobId={importJobId} onInvalidate={onInvalidate}>
+    <ShipmentStewardActionsProvider
+      importJobId={importJobId}
+      onInvalidate={onInvalidate}
+      onRowActionStart={setRowActionPendingId}
+      onRowActionEnd={() => setRowActionPendingId(null)}
+      onStewardFastComplete={plan.evictResolvedCandidates}
+    >
       <Stack spacing={2} data-testid="shipment-import-job-resolution-section">
         {planApplySummary ? (
           <Alert severity={planApplySummary.severity} onClose={() => setPlanApplySummary(null)}>
@@ -541,9 +567,6 @@ export function ShipmentImportJobResolutionSection({
                         >
                           Apply selected ({selectedIds.length})
                         </Button>
-                        <Button size="small" variant="text" onClick={() => setLegacyOpen(true)}>
-                          Advanced panel…
-                        </Button>
                         <Typography variant="caption" color="text.secondary">
                           {selectedIds.length} selected · Ready {plan.readyPlanCandidateIds.length}
                         </Typography>
@@ -594,6 +617,12 @@ export function ShipmentImportJobResolutionSection({
                   applyPlanPending={plan.applyResolutionPlan.isPending}
                   onApplyPlanRow={(candidateId) => plan.applyResolutionPlan.mutate([candidateId])}
                   rowActionPending={rowActionPendingId === effectiveDetailCandidate.id}
+                  onRowActionStart={setRowActionPendingId}
+                  onRowActionEnd={() => setRowActionPendingId(null)}
+                  onInvalidate={onInvalidate}
+                  onStewardFastComplete={plan.evictResolvedCandidates}
+                  lookupPeerCandidate={lookupPeerCandidateByNormalizedKey}
+                  onOpenPeerByNormalizedKey={openPeerCandidateByNormalizedKey}
                 />
               </StewardCandidateDrawer>
             ) : null
@@ -648,18 +677,6 @@ export function ShipmentImportJobResolutionSection({
             >
               Apply {plan.readyPlanCandidateIds.length}
             </Button>
-          </DialogActions>
-        </Dialog>
-
-        <Dialog open={legacyOpen} onClose={() => setLegacyOpen(false)} maxWidth="xl" fullWidth>
-          <DialogTitle>Shipment steward (advanced)</DialogTitle>
-          <DialogContent>
-            <Box sx={{ pt: 1 }}>
-              <ShipmentEntityStewardPanelLegacy importJobId={importJobId} />
-            </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setLegacyOpen(false)}>Close</Button>
           </DialogActions>
         </Dialog>
       </Stack>

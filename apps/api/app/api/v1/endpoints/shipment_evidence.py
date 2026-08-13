@@ -67,6 +67,10 @@ from app.services.imports.shipment_evidence_steward_ops import (
     execute_map_shipment_distributor,
     execute_reject_shipment_mapping_candidate,
 )
+from app.services.imports.shipment_steward_duplicate_ops import (
+    execute_acknowledge_shipment_duplicate_different_entity,
+    execute_acknowledge_shipment_duplicate_same_entity,
+)
 from app.worker.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -509,6 +513,11 @@ class ShipmentMapCustomerBody(BaseModel):
     raw_token: str | None = Field(default=None, max_length=512)
 
 
+class ShipmentDuplicateReviewPeerBody(BaseModel):
+    peer_normalized_key: str = Field(..., min_length=1, max_length=512)
+    audit_note: str | None = Field(default=None, max_length=2000)
+
+
 class ShipmentCreateProvisionalCustomerBody(BaseModel):
     display_name: str | None = Field(default=None, max_length=256)
     region_id: int | None = Field(default=None, ge=1)
@@ -871,6 +880,78 @@ async def shipment_import_candidate_reject(
         entity_token=token,
         import_job_id=job_id,
         candidate_id=candidate_id,
+    )
+    return out
+
+
+@router.post("/import-candidates/{candidate_id}/duplicate-review/different-entity", status_code=200)
+async def shipment_import_candidate_duplicate_different_entity(
+    candidate_id: int,
+    body: ShipmentDuplicateReviewPeerBody,
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    _require_admin(x_user_role)
+    with SessionLocal() as s:
+        cand = s.get(ImportEntityMappingCandidate, candidate_id)
+        if not cand or cand.entity_type != SHIPMENT_CUSTOMER_ENTITY:
+            raise HTTPException(status_code=404, detail="Shipment customer candidate not found")
+        try:
+            out = execute_acknowledge_shipment_duplicate_different_entity(
+                s,
+                cand,
+                peer_normalized_key=body.peer_normalized_key,
+                audit_note=body.audit_note,
+            )
+        except ShipmentStewardOpError as exc:
+            raise HTTPException(status_code=exc.status_code, detail={"message": exc.detail}) from exc
+        job_id = cand.import_job_id
+        token = cand.normalized_key
+    record_steward_audit_sync(
+        user,
+        action="duplicate_review_different",
+        importer="shipment",
+        entity_type="customer",
+        entity_token=token,
+        import_job_id=job_id,
+        candidate_id=candidate_id,
+        payload={"peer_normalized_key": body.peer_normalized_key},
+    )
+    return out
+
+
+@router.post("/import-candidates/{candidate_id}/duplicate-review/same-entity", status_code=200)
+async def shipment_import_candidate_duplicate_same_entity(
+    candidate_id: int,
+    body: ShipmentDuplicateReviewPeerBody,
+    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    _require_admin(x_user_role)
+    with SessionLocal() as s:
+        cand = s.get(ImportEntityMappingCandidate, candidate_id)
+        if not cand or cand.entity_type != SHIPMENT_CUSTOMER_ENTITY:
+            raise HTTPException(status_code=404, detail="Shipment customer candidate not found")
+        try:
+            out = execute_acknowledge_shipment_duplicate_same_entity(
+                s,
+                cand,
+                peer_normalized_key=body.peer_normalized_key,
+                audit_note=body.audit_note,
+            )
+        except ShipmentStewardOpError as exc:
+            raise HTTPException(status_code=exc.status_code, detail={"message": exc.detail}) from exc
+        job_id = cand.import_job_id
+        token = cand.normalized_key
+    record_steward_audit_sync(
+        user,
+        action="duplicate_review_same",
+        importer="shipment",
+        entity_type="customer",
+        entity_token=token,
+        import_job_id=job_id,
+        candidate_id=candidate_id,
+        payload={"peer_normalized_key": body.peer_normalized_key},
     )
     return out
 

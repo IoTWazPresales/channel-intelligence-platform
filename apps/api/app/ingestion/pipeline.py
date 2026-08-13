@@ -11,10 +11,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.ingestion.infer import infer_schema, read_tabular
-from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimProduct, DimRegion
+from app.models.dimensions import DimChannel, DimCustomer, DimDistributor, DimRegion
 from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata, SourceDefinition
 from app.models.mapping import EntityMappingQueue
-from app.services.catalog.product_import_sync import sync_bulk_upsert_products_from_rows
 from app.ingestion.pipeline_registry import extend_import_pipeline_handlers
 from app.services.imports.distributor_sales_inventory import process_distributor_sales_inventory
 from app.services.imports.import_job_background_metadata import persist_clear_background_task_metadata
@@ -213,137 +212,11 @@ def _process_stub(db: Session, job: ImportJob, df: pd.DataFrame, mapping: dict[s
 
 
 def _process_product_master(db: Session, job: ImportJob, df: pd.DataFrame, mapping: dict[str, str]) -> int:
-    errors = 0
-    if "sku" not in mapping.values():
-        db.add(
-            ImportRowResult(
-                job_id=job.id,
-                row_number=0,
-                severity="error",
-                code="missing_sku_mapping",
-                message="Could not infer SKU column; check headers against the template.",
-            )
-        )
-        return 1
-    if "name" not in mapping.values():
-        db.add(
-            ImportRowResult(
-                job_id=job.id,
-                row_number=0,
-                severity="error",
-                code="missing_name_mapping",
-                message="Could not infer product name column; expected name / product_name / title.",
-            )
-        )
-        return 1
-
-    sku_col = next(k for k, v in mapping.items() if v == "sku")
-    name_col = next(k for k, v in mapping.items() if v == "name")
-    cat_col = next((k for k, v in mapping.items() if v == "category"), None)
-    ch_col = next((k for k, v in mapping.items() if v == "channel_code"), None)
-
-    channels = {c.code.strip().lower(): c.id for c in db.scalars(select(DimChannel)).all()}
-    payloads: list[dict[str, Any]] = []
-    for idx, row in df.iterrows():
-        sku = str(row.get(sku_col, "")).strip()
-        name = str(row.get(name_col, "")).strip()
-        if not sku:
-            db.add(
-                ImportRowResult(
-                    job_id=job.id,
-                    row_number=int(idx) + 1,
-                    severity="warning",
-                    code="blank_sku",
-                    message="Blank SKU in row",
-                    raw_payload=row.where(pd.notnull(row), None).to_dict(),
-                )
-            )
-            continue
-        if not name:
-            db.add(
-                ImportRowResult(
-                    job_id=job.id,
-                    row_number=int(idx) + 1,
-                    severity="error",
-                    code="blank_name",
-                    message="Blank product name in row",
-                    raw_payload=row.where(pd.notnull(row), None).to_dict(),
-                )
-            )
-            errors += 1
-            continue
-        cat = None
-        if cat_col:
-            v = row.get(cat_col)
-            if v is not None and str(v).strip():
-                cat = str(v).strip()
-        ch_raw = None
-        if ch_col:
-            v = row.get(ch_col)
-            if v is not None and str(v).strip():
-                ch_raw = str(v).strip()
-        if ch_raw and ch_raw.lower() not in channels:
-            from app.services.imports.ai_resolver_wiring import try_ai_token_resolution
-
-            ch_candidates = [
-                {"id": int(cid), "code": code, "name": code}
-                for code, cid in list(channels.items())[:20]
-            ]
-            ai_ch_id, _, _ = try_ai_token_resolution(
-                raw_token=ch_raw,
-                token_type="customer",
-                candidates=ch_candidates,
-                import_type="product_master",
-                job_id=int(job.id),
-                extra_context={"match_field": "channel_code"},
-            )
-            if ai_ch_id is not None:
-                for code, cid in channels.items():
-                    if int(cid) == int(ai_ch_id):
-                        ch_raw = code
-                        break
-            else:
-                db.add(
-                    ImportRowResult(
-                        job_id=job.id,
-                        row_number=int(idx) + 1,
-                        severity="error",
-                        code="unknown_channel",
-                        message=f"Unknown channel_code {ch_raw!r}",
-                        raw_payload=row.where(pd.notnull(row), None).to_dict(),
-                    )
-                )
-                errors += 1
-                continue
-        payloads.append({"sku": sku, "name": name, "category": cat, "channel_code": ch_raw})
-
-    if errors:
-        return errors
-
-    if job.import_mode == "apply":
-        stats = sync_bulk_upsert_products_from_rows(db, payloads)
-        db.add(
-            ImportRowResult(
-                job_id=job.id,
-                row_number=0,
-                severity="info",
-                code="product_master_applied",
-                message=f"Applied product upsert: created={stats['created']}, updated={stats['updated']}, rows={stats['total']}.",
-            )
-        )
-        job.stage = STAGE_LOADED
-    else:
-        db.add(
-            ImportRowResult(
-                job_id=job.id,
-                row_number=0,
-                severity="info",
-                code="product_master_validated",
-                message=f"Validated {len(payloads)} product row(s); import_mode=validate — no catalog writes performed.",
-            )
-        )
-
-    return 0
+    """Retired (BACKLOG-026). Sole PM path is ``product_master_workflow`` validate → commit."""
+    raise ValueError(
+        "product_master_upsert pipeline handler is retired (BACKLOG-026); "
+        "use Import Centre Product Master validate → commit workflow"
+    )
 
 
 def _process_customer_master(db: Session, job: ImportJob, df: pd.DataFrame, mapping: dict[str, str]) -> int:
@@ -805,10 +678,13 @@ def process_import_job_sync(db: Session, job_id: int, on_progress: Any = None) -
     if not job:
         raise ValueError("job not found")
 
-    # Product Master jobs using the mapping workflow store file_headers; do not run legacy one-shot pipeline.
-    if job.template_slug == "product_master" and job.file_headers is not None:
-        db.refresh(job)
-        return job
+    # BACKLOG-026: Product Master has a single apply path — product_master_workflow
+    # (validate → commit via /imports/product-master). Never run the legacy one-shot upsert.
+    if job.template_slug == "product_master":
+        raise ValueError(
+            "product_master must use the Import Centre Product Master workflow "
+            "(validate → commit); legacy product_master_upsert pipeline is retired (BACKLOG-026)"
+        )
 
     try:
         storage = get_storage_backend()
