@@ -214,13 +214,12 @@ Composes metric + dimensions + filters into SQL. Users never write SQL. Domain i
 applied automatically (latest-per-snapshot for SOH; shipped-only for fill). Materialised
 aggregates + result cache to meet the NFR targets.
 
-### P3-3 Report builder
-Pick metric → slice by dimensions → filter → choose visual. "Easy" comes from the semantic
-layer doing the thinking, not from a dumbed-down UI. Serves **both** audiences: authors build,
-viewers consume, same governed numbers.
-
-### P3-4 Dashboards, save and share
-Saved reports, dashboards, sharing with role awareness, personal vs published.
+### P3-3 Report builder / P3-4 Dashboards
+**Lock 2026-08-13 (BACKLOG-131):** not the current query form. Widget canvas: pick visual
+(column, sparkline, table, …) → pick governed metric(s) → pick grain (week / month /
+quarter / customer, …). Invalid combinations refused with an explanation. Libraries:
+`react-grid-layout` + `@dnd-kit` + Apache ECharts (tables stay AG Grid). Do not embed
+Power BI. Queued as **Unit 14** after payment recon (Unit 13 / BACKLOG-092).
 
 ### P3-5 Export and delivery
 Excel and PDF export. **Scheduled delivery** — event-triggered (load completes → dependent
@@ -248,6 +247,10 @@ soon as confidence supports it. New products forecast by analogue (spec, segment
 GPU, predecessor) with the analogue recorded as provenance. Confidence banding explicit.
 Forecast is never merged into actuals.
 
+**Lock 2026-08-13:** no external forecast file to ingest. CIP computes from **history as
+benchmark** (sell-out / sell-through by customer×product×period). Suggested values are
+editable. Queued as Lane B Unit 15 with BACKLOG-094 (intake-weighted MAC + editable promo planner).
+
 ### B2 — Lineup + budget builder *(B2 and B3 merged)*
 **Entry:** A1 (bias) + A3 (stock/cover) + B1 (forecast).
 **Why merged:** the reservation is embedded in the lineup's profit line — PM bottom sets the
@@ -256,7 +259,7 @@ profit-with-reservation is not usable by a PM. See `docs/COMMERCIAL_DOMAIN_RULES
 
 **Scope**
 - **Net requirement planning:** `lineup qty = forecast − channel stock on hand − in-transit
-  + target cover`. Target cover in weeks, per product (grain and unit tenant-configurable).
+  + target cover`. Target cover = **weeks of stock per customer** (Warren 2026-08-13).
   In-transit = shipped-not-landed **plus** open POs where a PO exists.
 - **Bias correction** from A1 — the thing Excel cannot do.
 - **Profit line with embedded reservation** — PM bottom (fixed per quarter), planned price,
@@ -279,11 +282,9 @@ format. **This is the dependency moment.**
 **Unit 1–3 (author loop) on `feat/b2-author-loop`:** net req → Apply → draft
 `fact_lineup_plan_item` (+ optional `commercial_lineup_case`) → builder-economics + budget position
 (`reservation_source=derived_from_profit`); half-year slots + A1 bias toggle; CSV + XLSX on-ramp.
-Remaining B2 polish: **tenant export template** — full column-map parity with the tenant’s
-existing lineup workbook **if** they reject the generic CSV/XLSX on-ramp. Shape lives in
-tenant/profile config (P6), never OEM-branded app law. First-tenant sample files are fixtures
-only (see governing rule: uploaded OEM files exemplify a shape, never define one). **B4** next
-when author loop trusted.
+Remaining B2 polish: **generic CSV/XLSX export** is accepted (Warren 2026-08-13) **if**
+column order/headers follow the required tenant output layout via Settings/profile
+column-map (not OEM-branded app law). **B4** next with Unit 15 (history forecast + 094).
 
 ### B4 — Promotion plan builder
 **Entry:** A2 + B1 + B2.
@@ -340,7 +341,11 @@ manual poll on `/listing-capture`. **Listing↔CPOR activation** (BACKLOG-130) =
 obs price vs `cpor_case_line.srp`; persists `parse_flags.cpor_activation` including
 `no_case_detected` — **not** gated on ≥14d history. Takealot REST fetch shipped 2026-08-13
 (`feat/p5-residual`). Activation `not_activated` / `price_consistent` proven on historical
-windows with live prices. Residual: upload latest CPOR covering **today**, then re-poll.
+windows and on **2026-08-13** vs C26759823 (job 978). Activation uses Sell-Through **line**
+windows first; Sell out PP only when no covering promo (Warren 2026-08-13). BACKLOG-130 current-window residual closed.
+Three Takealot accessories with no `dim_product` (listings 55–57: Sheath II / Raikiri II /
+Keris II Origin) stamped `ignore_no_catalogue` → Product catalogue gaps 2026-08-13 — do not
+auto-create PM.
 
 ---
 
@@ -538,7 +543,7 @@ Still open (authoritative detail: `docs/OPEN_QUESTIONS.md`; domain mirror:
 | # | Decision | Blocks | Owner | OPEN_QUESTIONS |
 |---|----------|--------|-------|----------------|
 | 3 | ~~Hosting target~~ | — | **Closed** — local-only (Warren 2026-08-09) | Q-003 |
-| 4 | Per-customer CST file formats (8 customers) | P4 forward multi-format | Discovered at first load | Q-004 |
+| 4 | Per-customer CST file formats (8 customers) | P4 forward multi-format | **Discovered at load** — nothing further from Warren. Amazon ASIN FLAG + optional Game W27 are soak residuals, not an open architecture question. | Q-004 |
 
 **Deferred by design (not an open question — see Out of scope):** branch/location modelling;
 never alias branches to parent customers. Blocks tagged-customer sell-through until a

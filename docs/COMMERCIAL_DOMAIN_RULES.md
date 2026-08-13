@@ -93,9 +93,9 @@ Lineup qty = forecast demand
            + target cover
 ```
 
-**3.2 Target cover is expressed in weeks of stock, set per product.**
-**TENANT-VARIABLE** — grain (per product / BU / customer) and unit (weeks vs units) must be
-configurable.
+**3.2 Target cover is expressed in weeks of stock, set per customer.**
+Locked 2026-08-13 (Warren): grain = **customer**; unit = **weeks**. TENANT-VARIABLE for
+a second company — do not hard-code ASUS customer ids; store as tenant cover policy.
 
 **3.3 In-transit means:** shipped-not-landed **plus** open POs where a PO exists. No PO, no
 in-transit contribution — consistent with the existing hard rule that PO is required for

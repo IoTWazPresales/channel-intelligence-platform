@@ -10,16 +10,33 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Shipped (code) + historical-window proof** · 2026-08-13 — live Takealot prices vs C26113297 → `price_consistent`; vs C25B00340 → `not_activated`. Today's poll still `no_case_detected` (Takealot cases end 2026-07-31). |
+| **Status / parked** | **Proven live (current window)** · 2026-08-13 — CPOR job 978 + Takealot poll 24/24. Today vs C26759823: 6 `price_consistent`, 4 `not_activated`; 11 still `no_case_detected` (SKU not on those cases); 3 `no_product_link` (listings 55–57). |
 | **Effort** | Medium |
-| **Source** | Warren (2026-08-10): does **not** need multi-week observation history. Live listing price should reflect the CPOR case price for the period; if higher → case not activated by the customer. Latest CPOR not uploaded yet so check returns **`no_case_detected`** until cases exist. |
+| **Source** | Warren (2026-08-10): does **not** need multi-week observation history. Live listing price should reflect the CPOR case price for the period; if higher → case not activated by the customer. |
 | **Idea** | On poll: compare `listing_observation.extracted_price` to `cpor_case_line.srp` for customer×product with window covering observation date. Persist result on `parse_flags.cpor_activation` (`no_case_detected` / `not_activated` / `price_consistent` / …). Observations tab on `/listing-capture`. |
-| **Why it matters / deferrable** | Core channel-execution signal. Residual: upload latest CPOR then re-poll to prove activated/not-activated paths live. |
-| **What the work is** | Done in code: evaluator + poll wire + Observations UI + Takealot REST prices. Residual: live fixture with **current** covering cases (upload latest CPOR). Historical-window proof 2026-08-13: C26113297 `price_consistent`; C25B00340 `not_activated`. |
-| **Regression traps** | Do **not** gate on ≥14 days of observations. VAT ex/inc must match case basis. Steward still confirms listing URLs. No auto-create listings. No Google search. |
+| **Why it matters / deferrable** | Core channel-execution signal. Current-window residual closed 2026-08-13 (job 978 + re-poll). |
+| **What the work is** | Evaluator + poll + Observations UI + Takealot REST. Historical-window proof: C26113297 / C25B00340. Current-window proof: C26759823 covering 2026-08-13. |
+| **Regression traps** | Do **not** gate on ≥14 days of observations. VAT ex/inc must match case basis. Steward still confirms listing URLs. No auto-create listings. No Google search. **Sell out PP** is Disti sell-in — only the bar when no Sell-Through **line** covers the SKU/day. Do not apply dated SRPs (e.g. FNB Day) via the case-header window. |
 | **Behavior to retain** | Registry + proposals + poll; Amazon/Takealot/Evetech auto-finder confirm path. |
 | **Out of scope** | Google search URL finder; multi-week promo-effectiveness analytics (separate later if needed). |
-| **TRIGGER** | Residual proof: Warren uploads latest CPOR cases covering poll dates, then re-poll Takealot/Evetech. |
+| **TRIGGER** | Fired and closed 2026-08-13 (job 978 + Takealot re-poll). Reopen only if activation join/VAT rule changes. |
+
+---
+
+## BACKLOG-131 — P3 widget canvas (governed metrics, Power-BI-like, not a query form)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Queued — next arc Unit 14** · 2026-08-13 · Warren: rebuild reports/dashboards as widgets; pick visual + metric + grain (week/month/quarter/customer). Current builder is a thin form; dashboards only replay saved reports. |
+| **Effort** | Large (canvas + query engine grains + chart library) |
+| **Source** | Warren 2026-08-13 (P3 product direction after P5 residual) |
+| **Idea** | Dashboard canvas of widgets. Each widget: visual type → one or more **governed** metrics from the semantic catalog → legal grain/filters. Invalid grains refused with an explanation. Not raw-column BI. |
+| **Why it matters / deferrable** | Current `/reports` + `/dashboards` cannot express sales-by-week vs by-customer as first-class widgets. Deferrable until Unit 13 (092 recon) ships — different surface; do not merge into one mega-unit. |
+| **What the work is** | (1) Canvas: `react-grid-layout` + `@dnd-kit`. (2) Charts: Apache ECharts (or Plotly) — replace Recharts as the chart engine; keep AG Grid for tables. (3) Extend `/query/execute` grains: week / month / quarter / customer where the metric allows. (4) Widget persist on dashboard (not “saved report tile only”). (5) Every widget shows formula + data vintage. |
+| **Regression traps** | Do not embed Power BI. Do not let widgets query arbitrary columns. Metrics not in `COMMERCIAL_SEMANTICS.md` are not built. SOH latest-per-snapshot invariant; fill shipped-only. |
+| **Behavior to retain** | Semantic catalog; refuse-all grains; scheduled delivery (P3-5) still works. |
+| **Out of scope** | SQL viewer for non-admins (P3-6); inventing elasticity; 092 recon grid. |
+| **TRIGGER** | Unit 13 (BACKLOG-092 recon) complete **or** Warren starts P3 ahead of recon. |
 
 ---
 
@@ -617,16 +634,18 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-01 |
+| **Status / parked** | **Formulas locked 2026-08-13** · queued as Lane B Unit 15 (after 092 + P3 widgets unless Warren reorders) |
 | **Effort** | Large (planning write-path + cost/forecast contracts) |
-| **Source** | Warren 2026-08-01 A-lane wrap — automated promo planning economics |
-| **Idea** | When **promotion planning** runs: (1) **MAC auto-computed** from **current MAC** and **buy plan** (not free-typed); (2) if planned **new dealer / sell-out price** differs from current MAC, surface **forecasted sales** under that price delta (elasticity/volume lift path — define formula in semantics before build). |
-| **Why it matters / deferrable** | Funding + volume truth for promo cases; wrong MAC or silent price-delta = bad support math. Deferrable until promotion-planning authoring surface / B-lane promo planning is active. |
-| **What the work is** | Lock MAC formula (current MAC × buy-plan mix — exact weights TBD); wire into planning UI/API; price≠MAC → forecasted units with explainable factors; AMBER design gate on formulas in `COMMERCIAL_SEMANTICS`. |
-| **Regression traps** | Do not auto-rewrite **approved** cost basis (existing MAC staleness rule — flag drift, KAM/PM decides). Do not invent elasticity without a locked formula. DAP ≠ MAC ≠ controlled_cost. |
-| **Behavior to retain** | Cost-basis as-of dates; `cost_basis_drift` flag on recompute; steward approval for master creates. |
+| **Source** | Warren 2026-08-01 A-lane wrap; locks 2026-08-13 |
+| **Idea** | Promo planner computes **suggested** MAC and units; **every field is editable** in the UI. Suggestions never silently overwrite operator edits (dirty-flag / explicit Reset). |
+| **Locked — weighted MAC (intake-aware average)** | Suggested MAC = weighted average of (a) current channel SOH at latest reported CST MAC and (b) units **that will be taken in** during the promo window (buy-plan / in-transit that lands in window) at their intake cost. Units **not** taken in during the window are **excluded** from the average. Show qty and cost of each bucket + as-of dates. Approved case cost is never auto-rewritten — recompute flags `cost_basis_drift`. |
+| **Locked — units** | CIP suggests units from **history as benchmark** (same customer × product velocity / comparable promo windows — A2 comps). No elasticity curve. No forecast-file ingest. Operator may override any suggested qty. |
+| **Why it matters / deferrable** | Funding + volume truth for promo cases. Deferrable until Unit 15 (B1 history forecast + B4 planner) starts. |
+| **What the work is** | Semantics rows + planner UI/API; explainable MAC buckets; history-benchmark units; edit + reset; DAP ≠ MAC ≠ controlled_cost. |
+| **Regression traps** | Do not auto-rewrite **approved** cost basis. Do not invent elasticity. Do not merge suggestions into actuals. |
+| **Behavior to retain** | Cost-basis as-of dates; `cost_basis_drift` flag; steward approval for master creates. |
 | **Out of scope** | Distributor **paid** recon (BACKLOG-092); customer promo-load recon (BACKLOG-093). |
-| **TRIGGER** | Promotion planning authoring unit starts **or** Warren locks MAC + price-delta forecast formulas in semantics. |
+| **TRIGGER** | Lane B Unit 15 starts (history forecast + editable promo planner). |
 
 ---
 
@@ -652,16 +671,17 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked · Warren-owned** · 2026-08-01 — leave payment **file supply** to Warren; agents do not chase Ken extracts |
-| **Effort** | Large (new evidence type + recon surface) |
-| **Source** | Warren 2026-08-01 (owed vs paid wording on Q-008 / D-027); wrap 2026-08-01 leave files to Warren |
-| **Idea** | Capture what distributors **paid** (processed payments), separate from **owed** (settlement support due). Source: Ken / admin payment extracts. |
-| **Why it matters / deferrable** | Paid ≠ owed; without payments, any “paid rate” fabricates. Deferrable until payment files + Ken process exist. **Warren owns bringing the files.** |
-| **What the work is** | Import/recon path for payment evidence; join to cases/lines; metrics that compare paid vs owed. Later: more automated approach (not this A-lane). |
+| **Status / parked** | **TRIGGER fired 2026-08-13** — Ken extract ingested (job 977); Warren asked for recon surface. **Next implement: Unit 13.** Import path already shipped (`cpor_payment_evidence` + mapping profiles). |
+| **Effort** | Large (recon read model + Cases Payments/Recon grid; import already generic) |
+| **Source** | Warren 2026-08-01 (owed vs paid); 2026-08-12 payment evidence import; 2026-08-13 recon ask |
+| **Idea** | Tenant workbooks map onto **canonical CIP columns** (already: `PAYMENT_COLUMN_MAP` / `cpor_payment_mapping_profile`). Recon grid is those canonical fields, not Ken headers. Compare **paid** (evidence) vs **owed** (approved case support outstanding). |
+| **Locked — owed (interim)** | Owed = approved case `ttl_support` (case currency) for non-cancelled cases. Paid = sum of `cpor_payment_evidence.amount` linked to the case with status in paid/processed/closed (tenant value-map). Outstanding = owed − paid. Declare FX when evidence currency ≠ case currency — never silent convert. FLAG rows with no approved support (owed unknown) rather than inventing `result_qty × support_unit` as owed. |
+| **Why it matters / deferrable** | Paid ≠ owed. File supply is done; recon is the remaining product. |
+| **What the work is** | Unit 13: recon API + Cases recon grid (canonical columns); profile mapper already exists — extend if a new owed column appears in tenant files; partial-success; no auto-create masters. |
 | **Regression traps** | Do not rename “owed” to “paid”; do not use claim-evidence units as paid. |
-| **Behavior to retain** | Delivery rate; computed `ttl_result`; claim-rate stays non-computable until distinct **owed** exists. |
-| **Out of scope** | Inventing paid from result_qty × support_unit; agent-chasing Ken without Warren files. |
-| **TRIGGER** | Warren provides distributor payment extracts **and** asks for a paid-vs-owed surface. |
+| **Behavior to retain** | Delivery rate; computed `ttl_result`; Payments tab; profile-mapped import. |
+| **Out of scope** | Inventing paid from result_qty × support_unit; P3 widget canvas (Unit 14). |
+| **TRIGGER** | — fired. Resume as Unit 13 on a new branch off current `main` (or after P5 residual merge). |
 
 ---
 

@@ -17,6 +17,9 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-13 — **Activation join fix:** Sell-Through line window first; Sell out PP only when no covering promo. FNB Day SRP no longer leaks via case-header window. Listing 64 `price_consistent` vs sell-out 14999; listing 65 still `not_activated` vs promo 7999.
+- 2026-08-13 — **P5 residual done:** CPOR job 978 (20260813.xlsx) no duplicate cases; Takealot C26759823/C26760971 applied covering today; poll 24/24 → 6 price_consistent / 4 not_activated (C26759823). BACKLOG-130 current-window proof. Next: Unit 13 (092 recon) in a **new chat**.
+- 2026-08-13 — **Locks + Unit 13–15 plan:** 092 recon = Unit 13 (TRIGGER fired). P3 widgets = Unit 14 (BACKLOG-131). B1 history forecast + 094 intake-weighted MAC + editable planner = Unit 15. Target cover = weeks per customer. 3 Takealot accessories → catalogue gaps. P4/Q-004: nothing from Warren. P2 stay local. Plan: `.tmp/ARC_UNITS_13_15_PLAN.md`.
 - 2026-08-13 — **P5 residual:** PR #37 merged (`4aa538a`). Takealot REST buybox fetch (`v-1-16-0`); SKU≠PLID; EAN resolve. cip poll 21/24 ok. BACKLOG-130 `price_consistent`/`not_activated` proven on historical windows; today still `no_case_detected` until current CPOR upload. Branch `feat/p5-residual`.
 - 2026-08-12 — **BACKLOG-044/045:** shipment drawer Same/Different via `shipment-evidence` duplicate-review APIs; row-action pending + plan eviction wired; `ShipmentEntityStewardPanelLegacy` removed. Next: commit; then P5 (new chat).
 - 2026-08-12 — **BACKLOG-027:** PM + historical_lineup mount shared `CanonicalColumnMappingPanel` (PM disposition optional props; HL invert via `hlMappingHelpers`; deleted `pmMappingTargetOptions`). Vitest 34/34 focused. Next: 045 drawer residual; then P5.
