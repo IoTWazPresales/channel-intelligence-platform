@@ -43,15 +43,20 @@ type CporCaseRow = {
   ttl_support_usd: number | null;
   payment_evidence_count?: number;
   paid_amount_sum?: number | null;
+  owed_amount?: number | null;
+  outstanding_amount?: number | null;
+  recon_status?: string | null;
+  recon_flags?: string[];
   last_payment_date?: string | null;
   latest_payment_status?: string | null;
+  credit_note_ids?: string[];
 };
 
 type CasesPage = { items: CporCaseRow[]; total: number; page: number; page_size: number };
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
 type PromoTypes = { promotion_types: string[] };
 
-const GRID_STATE_KEY = 'cip.cpor.cases.grid.v1';
+const GRID_STATE_KEY = 'cip.cpor.cases.grid.v2';
 const DEFAULT_PAGE_SIZE = 50;
 const DEFAULT_SORT_BY = 'id';
 const DEFAULT_SORT_DIR = 'desc' as const;
@@ -69,8 +74,16 @@ const COLUMN_GROUPS: MasterColumnPickerGroup[] = [
   },
   {
     id: 'payment',
-    label: 'Payment / CN',
-    fields: ['latest_payment_status', 'paid_amount_sum', 'last_payment_date', 'payment_evidence_count'],
+    label: 'Payment recon',
+    fields: [
+      'owed_amount',
+      'paid_amount_sum',
+      'outstanding_amount',
+      'recon_status',
+      'latest_payment_status',
+      'last_payment_date',
+      'payment_evidence_count',
+    ],
   },
 ];
 
@@ -196,17 +209,36 @@ export default function CporCasesListPage() {
         valueFormatter: (p) => (p.value == null ? '' : Number(p.value).toFixed(2)),
       },
       {
+        field: 'owed_amount',
+        headerName: 'Owed',
+        width: 110,
+        valueFormatter: (p) => (p.value == null ? '' : Number(p.value).toFixed(2)),
+      },
+      {
+        field: 'paid_amount_sum',
+        headerName: 'Paid',
+        width: 110,
+        valueFormatter: (p) => (p.value == null ? '' : Number(p.value).toFixed(2)),
+      },
+      {
+        field: 'outstanding_amount',
+        headerName: 'Outstanding',
+        width: 120,
+        valueFormatter: (p) => (p.value == null ? '' : Number(p.value).toFixed(2)),
+      },
+      {
+        field: 'recon_status',
+        headerName: 'Recon',
+        width: 130,
+        cellRenderer: (p: { value?: string }) =>
+          p.value ? <Chip size="small" variant="outlined" label={p.value} /> : null,
+      },
+      {
         field: 'latest_payment_status',
         headerName: 'Payment',
         width: 120,
         cellRenderer: (p: { value?: string }) =>
           p.value ? <Chip size="small" color="info" label={p.value} /> : null,
-      },
-      {
-        field: 'paid_amount_sum',
-        headerName: 'Paid amt',
-        width: 110,
-        valueFormatter: (p) => (p.value == null ? '' : Number(p.value).toFixed(2)),
       },
       { field: 'last_payment_date', headerName: 'Last paid', width: 120 },
       { field: 'payment_evidence_count', headerName: 'CN rows', width: 90 },
@@ -230,8 +262,9 @@ export default function CporCasesListPage() {
         title="CPOR Cases"
       />
       <Alert severity="info" sx={{ mb: 2 }}>
-        Reseller-channel promotion funding cases. Payment / CN evidence is separate from line economics
-        (case status from payment files stays evidence-only).
+        Reseller-channel promotion funding cases. Recon: <strong>owed</strong> = approved
+        ttl_support; <strong>paid</strong> = payment/CN evidence in paid/processed/closed.
+        File case status stays evidence-only.
       </Alert>
       <CporPortfolioIntelligencePanel />
       <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} alignItems="center" flexWrap="wrap">

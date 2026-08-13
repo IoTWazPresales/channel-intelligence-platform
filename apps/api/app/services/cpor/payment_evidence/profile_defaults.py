@@ -64,6 +64,17 @@ PAYMENT_COLUMN_MAP: dict[str, list[str]] = {
         "Rebate Type",
         "Purpose",
     ],
+    # Optional — tenant files that already carry an owed/outstanding column.
+    # Shown vs CIP owed; never replaces ttl_support.
+    "owed_amount_file": [
+        "Owed",
+        "Owed Amount",
+        "Outstanding",
+        "Outstanding Amount",
+        "Balance",
+        "Amount Owed",
+        "Claim Amount",
+    ],
 }
 
 # Normalized payment_status vocabulary (tenant value-maps land here).

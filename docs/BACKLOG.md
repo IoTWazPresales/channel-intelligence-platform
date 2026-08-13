@@ -671,7 +671,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **TRIGGER fired 2026-08-13** — Ken extract ingested (job 977); Warren asked for recon surface. **Next implement: Unit 13.** Import path already shipped (`cpor_payment_evidence` + mapping profiles). |
+| **Status / parked** | **Implemented Unit 13** · 2026-08-13 — recon read model + Cases list/detail. Import path already shipped (`cpor_payment_evidence` + mapping profiles). |
 | **Effort** | Large (recon read model + Cases Payments/Recon grid; import already generic) |
 | **Source** | Warren 2026-08-01 (owed vs paid); 2026-08-12 payment evidence import; 2026-08-13 recon ask |
 | **Idea** | Tenant workbooks map onto **canonical CIP columns** (already: `PAYMENT_COLUMN_MAP` / `cpor_payment_mapping_profile`). Recon grid is those canonical fields, not Ken headers. Compare **paid** (evidence) vs **owed** (approved case support outstanding). |
@@ -681,7 +681,7 @@
 | **Regression traps** | Do not rename “owed” to “paid”; do not use claim-evidence units as paid. |
 | **Behavior to retain** | Delivery rate; computed `ttl_result`; Payments tab; profile-mapped import. |
 | **Out of scope** | Inventing paid from result_qty × support_unit; P3 widget canvas (Unit 14). |
-| **TRIGGER** | — fired. Resume as Unit 13 on a new branch off current `main` (or after P5 residual merge). |
+| **TRIGGER** | — fired and implemented Unit 13 (`GET /cpor/cases/{id}/payment-recon`). Reopen if owed formula changes (e.g. settlement-distinct owed) or line-grain paid recon is required. |
 
 ---
 

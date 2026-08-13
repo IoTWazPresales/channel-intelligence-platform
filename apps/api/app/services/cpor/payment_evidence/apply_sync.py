@@ -136,6 +136,7 @@ def run_cpor_payment_apply_sync(
                     "window_end": ln.window_end.isoformat() if ln.window_end else None,
                     "promotion_type_raw": ln.promotion_type_raw,
                     "flags": ln.flags_json or {},
+                    "owed_amount_file": (ln.flags_json or {}).get("owed_amount_file"),
                 },
                 "raw_source_row": ln.raw_source_row or {},
                 "applied_at": datetime.now(timezone.utc),

@@ -151,8 +151,8 @@ on Q-002 (reservation = derived_from_profit). Do not put on Plan vs Executed.
 (customer → BU → promo type → quarter proximity → volume).
 **Currency:** USD compute/aggregate; display ZAR alongside; ZAR sums at each case’s FX.
 **Out of scope:** cost per **incremental** unit (BACKLOG-089); **claim rate** (non-computable
-until settlement stores an **owed** amount ≠ computed support — see `COMMERCIAL_SEMANTICS`.
-**Paid** = distributor payment reconciliation via Ken — separate future input; **Warren owns files** — BACKLOG-092).
+until settlement stores an **owed** amount ≠ computed support — see `COMMERCIAL_SEMANTICS`).
+**Paid** = distributor payment reconciliation via Ken — **A2-08 / BACKLOG-092** (`GET /cpor/cases/{id}/payment-recon`).
 **Exit:** promo effectiveness surface. *(A-lane wrap 2026-08-01: A2-01/02/04/05/06 shipped. **BACKLOG-093 Promo load IMPLEMENTED 2026-08-08** — case tab + `…/promo-load-recon`.)*
 
 ### A3 — Channel stock + velocity

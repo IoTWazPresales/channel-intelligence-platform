@@ -43,3 +43,21 @@ def test_parse_requires_case_code_column():
     result = parse_payment_workbook(buf.getvalue(), profile=asus_pending_report_profile_dict())
     assert result["ok"] is False
     assert any(e.get("code") == "missing_case_code_column" for e in result["blocking_errors"])
+
+
+def test_parse_optional_owed_amount_file_into_flags():
+    from io import BytesIO
+
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Detail"
+    ws.append(["Case ID", "Amount", "Payment Status", "Owed"])
+    ws.append(["C99", 10, "Closed", 250])
+    buf = BytesIO()
+    wb.save(buf)
+    result = parse_payment_workbook(buf.getvalue(), profile=asus_pending_report_profile_dict())
+    assert result["ok"] is True
+    assert result["rows"][0]["flags_json"]["owed_amount_file"] == 250.0
+    assert result["rows"][0]["amount"] == 10.0

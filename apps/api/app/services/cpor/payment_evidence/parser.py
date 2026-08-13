@@ -184,6 +184,10 @@ def parse_payment_workbook(data: bytes, profile: dict[str, Any] | None = None) -
             window_start = _as_date(get("window_start"))
             window_end = _as_date(get("window_end"))
             promotion_type_raw = _cell_str(get("promotion_type_raw"))
+            owed_file = _as_decimal(get("owed_amount_file"))
+            flags_json: dict[str, Any] = {}
+            if owed_file is not None:
+                flags_json["owed_amount_file"] = float(owed_file)
 
             raw_obj = {
                 str(headers[j]): (None if raw[j] is None else str(raw[j]) if not isinstance(raw[j], (int, float, date, datetime, Decimal)) else raw[j])
@@ -224,7 +228,7 @@ def parse_payment_workbook(data: bytes, profile: dict[str, Any] | None = None) -
                     "window_end": window_end,
                     "promotion_type_raw": promotion_type_raw,
                     "raw_source_row": raw_obj,
-                    "flags_json": {},
+                    "flags_json": flags_json,
                 }
             )
 

@@ -422,7 +422,7 @@ export default function CporCaseDetailPage() {
         <Tab label="Exports" />
         <Tab label="Settlement" data-testid="cpor-tab-settlement" />
         <Tab label="Promo load" data-testid="cpor-tab-promo-load" />
-        <Tab label="Payments / CN" data-testid="cpor-tab-payments" />
+        <Tab label="Payments / recon" data-testid="cpor-tab-payments" />
       </Tabs>
 
       {tab === 0 ? (

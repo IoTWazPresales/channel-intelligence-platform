@@ -1,8 +1,8 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-13 (skip items verified in code; CURRENT pin → `edf29f3`)
+**Last updated:** 2026-08-13 (Unit 13 BACKLOG-092 recon — unit tests + browser smoke)
 
-**Branch:** `feat/p5-residual` (from `main` @ `4aa538a` / PR #37) @ `edf29f3` pushed (in sync with origin)
+**Branch:** `feat/unit13-cpor-payment-recon` (from `feat/p5-residual` @ `53361c3`) 
 
 **Alembic on cip:** `20260812_0014`
 
@@ -13,8 +13,8 @@
 | 8 Demo/P2 | **Merged** PR #36 → `main` |
 | 11 Import parity | **Merged** PR #37 → `main` (`4aa538a`) |
 | 12 P6 light | Export sheet Settings shipped in PR #37 |
-| P5 residual | **Proven live** — Takealot REST + CPOR job 978 + today's activation flags |
-| **13** | **Next** — BACKLOG-092 paid vs owed recon (TRIGGER fired) |
+| P5 residual | **Pushed** `feat/p5-residual` @ `53361c3` — not yet merged to `main` |
+| **13** | **Wired + browser-soaked** — BACKLOG-092 paid vs owed recon (case 293 C26649381) |
 | **14** | Queued — BACKLOG-131 P3 widget canvas |
 | **15** | Queued — B1 history forecast + BACKLOG-094 intake-weighted MAC + editable planner |
 | P2 hosting | Stay local |
@@ -24,11 +24,12 @@ Plan: `.tmp/ARC_UNITS_13_15_PLAN.md`
 
 ## This branch
 
-- Takealot poll uses REST product-details; SKU≠PLID; buybox sell price
-- Listings **55–57** (Sheath II / Raikiri II / Keris II Origin) — no `dim_product`; CST barcodes ignored `ignore_no_catalogue`. `/admin/product-master-gaps` source=cst
-- CPOR **job 978** (`Consumer CPOR Tracking Table 20260813.xlsx`): 1191 cases staged; **305 applied / 879 blocked**; **0 duplicate `case_code`s**. Native cases untouched
-- Takealot covering **2026-08-13:** `C26759823` (id 310, 23 lines) and `C26760971` (id 311, 18 lines). Steward: FA608PM → product **4959** (listing 71); FA608UH/G615LM skipped (ambiguous sales-model twins); duplicate grains last-wins after skip extras
-- BACKLOG-130 **proven today:** Takealot poll 24/24. Activation prefers **Sell-Through line window**; **Sell out PP** only when no covering promo. FNB Day 9999 no longer applies on 13 Aug (listing 64 → sell-out 14999 `price_consistent`). Listing 65 still `not_activated` vs promo 7999 (10–16 Aug).
+- Recon service `payment_recon.py`: owed = Σ line `ttl_support` (never qty×support); paid = evidence status paid/processed/closed; FX FLAG not converted
+- `GET /cpor/cases/{id}/payment-recon`; Cases list owed/paid/outstanding/recon columns
+- Case tab **Payments / recon** summary chips + evidence grid
+- Optional mapped `owed_amount_file` in profile (shown vs CIP owed)
+
+- Case 293 `C26649381`: owed 68421.48 ZAR; paid 0 ZAR; USD CNs 116.96 FLAG `currency_mismatch` / `fx_undeclared` (not converted)
 
 ## Locks 2026-08-13
 
@@ -40,9 +41,8 @@ Plan: `.tmp/ARC_UNITS_13_15_PLAN.md`
 
 ## Next
 
-1. **New chat:** Unit 13 — `feat/unit13-cpor-payment-recon` off `main` after P5 merge (or off this branch if P5 waits)
-2. Warren: merge/promote `feat/p5-residual` when ready
+1. Dual-agent VERIFY for Unit 13 when Warren asks; then Unit 14 widgets
+2. Warren: merge/promote `feat/p5-residual` (Unit 13 is stacked on it)
 3. Do not re-ingest job 978 / do not re-audit Takealot REST fetch
-4. Skip (already in tree): Unit 8; BACKLOG-026/027/044/045; P6 Settings light (096 + export sheet titles). Full P6 still waits for a second company. REST + activation live on this branch, not yet `main`.
 
-**Env:** local Windows. Web `:3000` + API `:8001` restarted 2026-08-13 for smoke.
+**Env:** local Windows. Web `:3000` + API `:8001`.

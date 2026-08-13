@@ -35,6 +35,7 @@ from app.services.cpor.norms_and_comparable import build_comparable_cases, build
 from app.services.cpor.promo_plan_builder import build_promo_plan_draft, create_case_from_promo_draft
 from app.services.cpor.portfolio_intelligence import build_portfolio_intelligence
 from app.services.cpor.support_bias import build_support_bias
+from app.services.cpor.payment_recon import load_payment_recon_by_case_id
 from app.services.cpor.promo_load_recon import build_promo_load_recon
 from app.services.cpor.promotion_type_vocab import CPOR_CASE_STATUS_SET, CPOR_PROMOTION_TYPE_SET
 from app.services.cpor.recompute import recompute_case, recompute_case_line
@@ -342,8 +343,6 @@ def list_cases(
     Legacy: no page → JSON array (existing clients/tests).
     Paginated: page+page_size → {items, total, page, page_size} for MasterDataGridShell.
     """
-    from app.models.cpor_payment import CporPaymentEvidence
-
     with SessionLocal() as session:
         stmt = (
             select(CporCase, DimCustomer)
@@ -375,76 +374,29 @@ def list_cases(
             total = None
 
         rows = session.execute(stmt).all()
-        case_ids = [case.id for case, _ in rows]
-        case_codes = [case.case_code for case, _ in rows]
-        pay_by_case: dict[int, dict[str, Any]] = {}
-        if case_ids:
-            pay_rows = session.execute(
-                select(
-                    CporPaymentEvidence.case_id,
-                    CporPaymentEvidence.external_case_code,
-                    func.count().label("n"),
-                    func.coalesce(func.sum(CporPaymentEvidence.amount), 0).label("amt"),
-                    func.max(CporPaymentEvidence.payment_date).label("last_paid"),
-                )
-                .where(
-                    (CporPaymentEvidence.case_id.in_(case_ids))
-                    | (CporPaymentEvidence.external_case_code.in_(case_codes))
-                )
-                .group_by(CporPaymentEvidence.case_id, CporPaymentEvidence.external_case_code)
-            ).all()
-            code_to_id = {case.case_code: case.id for case, _ in rows}
-            for case_id, ext_code, n, amt, last_paid in pay_rows:
-                cid = case_id or code_to_id.get(ext_code)
-                if cid is None:
-                    continue
-                cur = pay_by_case.setdefault(
-                    cid,
-                    {"payment_evidence_count": 0, "paid_amount_sum": 0.0, "last_payment_date": None},
-                )
-                cur["payment_evidence_count"] += int(n or 0)
-                cur["paid_amount_sum"] += float(amt or 0)
-                if last_paid and (
-                    cur["last_payment_date"] is None or str(last_paid) > str(cur["last_payment_date"])
-                ):
-                    cur["last_payment_date"] = last_paid.isoformat() if hasattr(last_paid, "isoformat") else str(last_paid)
-
-            # latest payment_status per case (simple second query)
-            status_rows = session.execute(
-                select(
-                    CporPaymentEvidence.case_id,
-                    CporPaymentEvidence.external_case_code,
-                    CporPaymentEvidence.payment_status,
-                    CporPaymentEvidence.payment_date,
-                    CporPaymentEvidence.id,
-                )
-                .where(
-                    (CporPaymentEvidence.case_id.in_(case_ids))
-                    | (CporPaymentEvidence.external_case_code.in_(case_codes))
-                )
-                .order_by(
-                    CporPaymentEvidence.payment_date.desc().nullslast(),
-                    CporPaymentEvidence.id.desc(),
-                )
-            ).all()
-            seen_status: set[int] = set()
-            for case_id, ext_code, pstatus, _pd, _id in status_rows:
-                cid = case_id or code_to_id.get(ext_code)
-                if cid is None or cid in seen_status:
-                    continue
-                seen_status.add(cid)
-                pay_by_case.setdefault(cid, {})["latest_payment_status"] = pstatus
+        cases = [case for case, _ in rows]
+        cust_map = {cust.id: cust for _, cust in rows}
+        recon_by = load_payment_recon_by_case_id(session, cases, customers=cust_map)
 
         out = []
         for case, cust in rows:
-            # List view: do not N+1 load every case line (shell pagination would hang).
-            # TTL aggregates remain available on case detail.
+            # List view: do not N+1 load every case line into JSON.
+            # Owed/paid/outstanding come from the batch recon read model.
             row = _case_json(case, customer=cust, lines=None, include_lines=False)
-            pay = pay_by_case.get(case.id) or {}
-            row["payment_evidence_count"] = int(pay.get("payment_evidence_count") or 0)
-            row["paid_amount_sum"] = float(pay.get("paid_amount_sum") or 0) or None
-            row["last_payment_date"] = pay.get("last_payment_date")
-            row["latest_payment_status"] = pay.get("latest_payment_status")
+            recon = recon_by.get(case.id) or {}
+            row["payment_evidence_count"] = int(recon.get("payment_evidence_count") or 0)
+            row["paid_amount_sum"] = recon.get("paid_amount")
+            row["owed_amount"] = recon.get("owed_amount")
+            row["outstanding_amount"] = recon.get("outstanding_amount")
+            row["recon_status"] = recon.get("recon_status")
+            row["recon_flags"] = recon.get("flags") or []
+            row["last_payment_date"] = recon.get("last_payment_date")
+            row["latest_payment_status"] = recon.get("latest_payment_status")
+            row["credit_note_ids"] = recon.get("credit_note_ids") or []
+            if row.get("ttl_support_zar") is None and (case.currency_code or "ZAR").upper() != "USD":
+                row["ttl_support_zar"] = recon.get("owed_amount")
+            if row.get("ttl_support_usd") is None and (case.currency_code or "ZAR").upper() == "USD":
+                row["ttl_support_usd"] = recon.get("owed_amount")
             out.append(row)
 
         if paginate:
@@ -1077,6 +1029,21 @@ def cpor_promo_load_recon(case_id: int) -> dict[str, Any]:
             return build_promo_load_recon(session, case_id)
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/cases/{case_id}/payment-recon")
+def cpor_payment_recon(
+    case_id: int,
+    user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    """BACKLOG-092: paid vs owed. Owed = line ttl_support; paid = mapped evidence."""
+    with SessionLocal() as session:
+        case = _load_case(session, case_id, user)
+        cust = session.get(DimCustomer, case.customer_id)
+        recon = load_payment_recon_by_case_id(
+            session, [case], customers={case.customer_id: cust} if cust else None
+        )
+        return recon[case.id]
 
 
 @router.get("/intelligence/promo-plan-draft")
