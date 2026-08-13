@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-13 — **Skip-item code check:** Unit 8 / 026 / 027 / 044 / 045 / P6 Settings light are in the tree on `main` (PR #36/#37). Takealot REST + activation join on `feat/p5-residual` @ `edf29f3` (not `main`). `docs/memory/ROADMAP.md` 026/027 Parked → Done. Job 978 not re-queried this session.
 - 2026-08-13 — **Activation join fix:** Sell-Through line window first; Sell out PP only when no covering promo. FNB Day SRP no longer leaks via case-header window. Listing 64 `price_consistent` vs sell-out 14999; listing 65 still `not_activated` vs promo 7999.
 - 2026-08-13 — **P5 residual done:** CPOR job 978 (20260813.xlsx) no duplicate cases; Takealot C26759823/C26760971 applied covering today; poll 24/24 → 6 price_consistent / 4 not_activated (C26759823). BACKLOG-130 current-window proof. Next: Unit 13 (092 recon) in a **new chat**.
 - 2026-08-13 — **Locks + Unit 13–15 plan:** 092 recon = Unit 13 (TRIGGER fired). P3 widgets = Unit 14 (BACKLOG-131). B1 history forecast + 094 intake-weighted MAC + editable planner = Unit 15. Target cover = weeks per customer. 3 Takealot accessories → catalogue gaps. P4/Q-004: nothing from Warren. P2 stay local. Plan: `.tmp/ARC_UNITS_13_15_PLAN.md`.

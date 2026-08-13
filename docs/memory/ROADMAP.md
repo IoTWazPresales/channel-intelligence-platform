@@ -4,7 +4,7 @@
 and backlog items. **`docs/BACKLOG.md`** holds full entry detail + TRIGGERs; this file
 holds **priority order** and **done vs open** (verified against `main` @ PR #5 merge).
 
-**Last verified:** 2026-07-20 · **Active branch:** `feat/cpor-listing-status-audit`  
+**Last verified:** 2026-08-13 · **Active branch:** `feat/p5-residual` @ `edf29f3` (prefer `docs/ROADMAP.md` + `docs/BACKLOG.md`)  
 **How to use:** Pick the lowest open phase item whose TRIGGER is met (or waived by Warren).
 Update status here + `CURRENT.md` when items complete; add deferrals to `BACKLOG.md`.
 
@@ -71,15 +71,15 @@ compute (task often succeeds after UI gives up). Structural fixes, not poll-only
 | ID | Item | Status | Evidence / notes |
 |----|------|--------|------------------|
 | **BACKLOG-004** | Import Flow **Phase 3**: capability-driven wizard; split `admin/imports/page.tsx` | **Parked** | Page still **~4,015 lines**; no `ImportFlowCapability` in `packages/types/`. TRIGGER: PM core-loop re-run + approval. |
-| **BACKLOG-001** | Shipment steward → shared `ImportStewardCandidateWorkspace` | **Done** | Mounted in `ShipmentImportJobResolutionSection` (2026-07). Full intelligence parity remains **044/045**. |
+| **BACKLOG-001** | Shipment steward → shared `ImportStewardCandidateWorkspace` | **Done** | Mounted in `ShipmentImportJobResolutionSection`. 044/045 drawer residual also **Done** (2026-08-12, PR #37). |
 | **BACKLOG-044** | Shipment steward UX + resolution intelligence parity (plan/ready/bulk vs DSI) | **Done** | Workspace + plan + drawer duplicate Same/Different (045). |
 | **BACKLOG-005** | DSI → `CanonicalColumnMappingPanel` | **Done** | |
 | **BACKLOG-006** | Slim shipment `mapping-candidates` API (paginate / omit `line_ids`) | **Parked** | Paginated list; `line_ids` still in context payload. |
 | **BACKLOG-007** | Shipment post-validation re-map + `source_key` stability | **Done** | UI + orphan purge shipped; soak is ops watch only. |
 | **BACKLOG-022** | Unified `import_dispatch.enqueue_import_worker_task` | **Done** | `import_dispatch.py` exists; imports + shipment delegate. |
 | **BACKLOG-025** | Generic pipeline apply → async | **Partial** | `/process` async (2026-06-05). **Remaining:** frontend progress for CST/masters (`BACKLOG-029` part b). |
-| **BACKLOG-026** | PM: consolidate dual apply pipelines | **Parked** | `product_master_workflow.py` vs `pipeline.py::_process_product_master`. |
-| **BACKLOG-027** | PM + historical → `CanonicalColumnMappingPanel` | **Parked** | Pairs with BACKLOG-026. |
+| **BACKLOG-026** | PM: consolidate dual apply pipelines | **Done** | PR #37. `process_import_job_sync` + `_process_product_master` raise BACKLOG-026; sole path `product_master_workflow`. |
+| **BACKLOG-027** | PM + historical → `CanonicalColumnMappingPanel` | **Done** | PR #37. Import Centre mounts shared panel `testIdPrefix` pm + hl; `pmMappingTargetOptions` gone. |
 | **BACKLOG-029** | CST surface + upload zone | **Partial** | (a) dsiApplyAsync poll **Done**; (c) `ImportFileUploadZone` **Done**; (b) CST web surface **Parked**. |
 | **BACKLOG-020** | PM full job revisit in wizard | **Parked** | `page.tsx` still says full PM revisit not supported. |
 | — | Import Flow contract Phase 1 (design) | **Done** | `IMPORT_FLOW_CAPABILITY_CONTRACT.md` |

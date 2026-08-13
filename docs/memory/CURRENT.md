@@ -1,8 +1,8 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-13 (P5 residual complete — CPOR 20260813 + activation poll)
+**Last updated:** 2026-08-13 (skip items verified in code; CURRENT pin → `edf29f3`)
 
-**Branch:** `feat/p5-residual` (from `main` @ `4aa538a` / PR #37) @ `8db6739` pushed
+**Branch:** `feat/p5-residual` (from `main` @ `4aa538a` / PR #37) @ `edf29f3` pushed (in sync with origin)
 
 **Alembic on cip:** `20260812_0014`
 
@@ -43,5 +43,6 @@ Plan: `.tmp/ARC_UNITS_13_15_PLAN.md`
 1. **New chat:** Unit 13 — `feat/unit13-cpor-payment-recon` off `main` after P5 merge (or off this branch if P5 waits)
 2. Warren: merge/promote `feat/p5-residual` when ready
 3. Do not re-ingest job 978 / do not re-audit Takealot REST fetch
+4. Skip (already in tree): Unit 8; BACKLOG-026/027/044/045; P6 Settings light (096 + export sheet titles). Full P6 still waits for a second company. REST + activation live on this branch, not yet `main`.
 
 **Env:** local Windows. Web `:3000` + API `:8001` restarted 2026-08-13 for smoke.
