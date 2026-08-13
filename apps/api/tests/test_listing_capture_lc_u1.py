@@ -93,7 +93,7 @@ def test_record_observation_mocked_http() -> None:
     listing = SimpleNamespace(
         id=1,
         url="https://example.com/p",
-        marketplace="takealot",
+        marketplace="amazon",
         status="active",
         status_observed_at=None,
     )

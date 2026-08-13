@@ -10,12 +10,12 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Shipped (code)** · 2026-08-10 — needs real CPOR cases for `not_activated` / `price_consistent` proof; until then polls surface `no_case_detected` |
+| **Status / parked** | **Shipped (code) + historical-window proof** · 2026-08-13 — live Takealot prices vs C26113297 → `price_consistent`; vs C25B00340 → `not_activated`. Today's poll still `no_case_detected` (Takealot cases end 2026-07-31). |
 | **Effort** | Medium |
 | **Source** | Warren (2026-08-10): does **not** need multi-week observation history. Live listing price should reflect the CPOR case price for the period; if higher → case not activated by the customer. Latest CPOR not uploaded yet so check returns **`no_case_detected`** until cases exist. |
 | **Idea** | On poll: compare `listing_observation.extracted_price` to `cpor_case_line.srp` for customer×product with window covering observation date. Persist result on `parse_flags.cpor_activation` (`no_case_detected` / `not_activated` / `price_consistent` / …). Observations tab on `/listing-capture`. |
 | **Why it matters / deferrable** | Core channel-execution signal. Residual: upload latest CPOR then re-poll to prove activated/not-activated paths live. |
-| **What the work is** | Done in code: evaluator + poll wire + Observations UI. Residual: live fixture with covering cases. |
+| **What the work is** | Done in code: evaluator + poll wire + Observations UI + Takealot REST prices. Residual: live fixture with **current** covering cases (upload latest CPOR). Historical-window proof 2026-08-13: C26113297 `price_consistent`; C25B00340 `not_activated`. |
 | **Regression traps** | Do **not** gate on ≥14 days of observations. VAT ex/inc must match case basis. Steward still confirms listing URLs. No auto-create listings. No Google search. |
 | **Behavior to retain** | Registry + proposals + poll; Amazon/Takealot/Evetech auto-finder confirm path. |
 | **Out of scope** | Google search URL finder; multi-week promo-effectiveness analytics (separate later if needed). |

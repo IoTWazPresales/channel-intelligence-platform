@@ -12,7 +12,9 @@ from typing import Any
 # Keep templates generic; steward may edit before confirm.
 _LISTING_URL_TEMPLATES: dict[str, str] = {
     "amazon": "https://www.amazon.co.za/dp/{external_id}",
-    # Takealot PLID pages resolve without a slug; steward can refine after check.
+    # Takealot WEEK "Product ID" is a SKU; poll resolves PLID via REST + EAN.
+    # Template still prefixes PLID so a real PLID paste keeps working; SKU URLs 404
+    # and are recovered at fetch time (not here — no live HTTP in suggest).
     "takealot": "https://www.takealot.com/PLID{external_id}",
     # Evetech Web IDs resolve via a category mid-path; site rewrites to canonical slug.
     # Verified for ASUS laptop Web IDs (trailing numeric id). Steward may still edit.

@@ -49,8 +49,14 @@ class ParseResult:
     flags: dict[str, Any] | None = None
 
 
-def parse_snapshot_text(text: str, *, marketplace: str, parser_version: str = PARSER_VERSION) -> ParseResult:
-    """Minimal v0 parsers — JSON preferred; HTML price regex fallback. FLAG on failure."""
+def parse_snapshot_text(
+    text: str,
+    *,
+    marketplace: str,
+    parser_version: str = PARSER_VERSION,
+    preferred_sku: str | None = None,
+) -> ParseResult:
+    """JSON envelope, Takealot REST buybox, JSON-LD, then HTML price regex. FLAG on failure."""
     flags: dict[str, Any] = {"parser_version": parser_version, "marketplace": marketplace}
     if not text.strip():
         return ParseResult(parse_status="parse_failed", flags={**flags, "reason": "empty_snapshot"})
@@ -58,7 +64,16 @@ def parse_snapshot_text(text: str, *, marketplace: str, parser_version: str = PA
     # Try JSON envelope first
     try:
         data = json.loads(text)
-        if isinstance(data, dict):
+        if isinstance(data, dict) and isinstance(data.get("buybox"), dict):
+            from app.services.listing_capture.takealot_fetch import parse_takealot_product_json
+
+            return parse_takealot_product_json(
+                data,
+                preferred_sku=preferred_sku,
+                parser_version=parser_version,
+                marketplace=marketplace,
+            )
+        if isinstance(data, dict) and "price" in data:
             price = data.get("price")
             return ParseResult(
                 parse_status="ok",
@@ -66,6 +81,11 @@ def parse_snapshot_text(text: str, *, marketplace: str, parser_version: str = PA
                 availability=str(data.get("availability") or "") or None,
                 promo_badge=str(data.get("promo_badge") or "") or None,
                 flags=flags,
+            )
+        if isinstance(data, dict):
+            return ParseResult(
+                parse_status="parse_failed",
+                flags={**flags, "reason": "json_no_price"},
             )
     except (json.JSONDecodeError, TypeError, ValueError):
         pass
@@ -158,7 +178,11 @@ def default_http_get(url: str) -> tuple[int, str]:
     Uses urllib (stdlib, no new dependency) with a declared User-Agent and a bounded
     timeout so a slow/unreachable marketplace host cannot hang the beat task.
     """
-    request = urllib.request.Request(url, headers={"User-Agent": LISTING_CAPTURE_USER_AGENT})
+    headers = {"User-Agent": LISTING_CAPTURE_USER_AGENT}
+    if "api.takealot.com" in url:
+        headers["Accept"] = "application/json"
+        headers["Referer"] = "https://www.takealot.com/"
+    request = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=LISTING_CAPTURE_HTTP_TIMEOUT_SECONDS) as response:
             status = int(getattr(response, "status", None) or response.getcode())

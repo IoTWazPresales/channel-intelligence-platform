@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-13 — **P5 residual:** PR #37 merged (`4aa538a`). Takealot REST buybox fetch (`v-1-16-0`); SKU≠PLID; EAN resolve. cip poll 21/24 ok. BACKLOG-130 `price_consistent`/`not_activated` proven on historical windows; today still `no_case_detected` until current CPOR upload. Branch `feat/p5-residual`.
 - 2026-08-12 — **BACKLOG-044/045:** shipment drawer Same/Different via `shipment-evidence` duplicate-review APIs; row-action pending + plan eviction wired; `ShipmentEntityStewardPanelLegacy` removed. Next: commit; then P5 (new chat).
 - 2026-08-12 — **BACKLOG-027:** PM + historical_lineup mount shared `CanonicalColumnMappingPanel` (PM disposition optional props; HL invert via `hlMappingHelpers`; deleted `pmMappingTargetOptions`). Vitest 34/34 focused. Next: 045 drawer residual; then P5.
 - 2026-08-12 — **Unit 11/12 start:** BACKLOG-026 PM pipeline retired; Settings lineup export sheet titles (P6 polish). Branch `feat/unit11-import-parity-044-027`. Residual: 027 + 045; then P5.

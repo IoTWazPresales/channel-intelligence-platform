@@ -22,4 +22,4 @@ LISTING_SOURCE_SET: frozenset[str] = frozenset(LISTING_SOURCES)
 LISTING_PARSE_STATUSES: tuple[str, ...] = ("ok", "parse_failed", "skipped")
 LISTING_PARSE_STATUS_SET: frozenset[str] = frozenset(LISTING_PARSE_STATUSES)
 
-PARSER_VERSION = "lc-v0.1"
+PARSER_VERSION = "lc-v0.2"

@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.cst_listing_seed import CstListingSeed
+from app.models.dimensions import DimProduct
 from app.models.listing_capture import CustomerListing, ListingObservation
 from app.services.listing_capture.marketplace_vocab import (
     LISTING_MARKETPLACE_SET,
@@ -267,10 +268,41 @@ def record_observation(
         session.flush()
         return obs
 
-    status, body = fetch_url_text(listing.url, http_get=http_get)
+    fetch_flags: dict[str, Any] = {}
+    preferred_sku = getattr(listing, "external_id", None)
+    marketplace = (listing.marketplace or "").strip().lower()
+    if marketplace == "takealot":
+        from app.services.listing_capture.takealot_fetch import fetch_takealot_listing
+
+        if http_get is None:
+            raise RuntimeError("Live HTTP disabled in LC-U1 — inject http_get mock")
+
+        ean = None
+        known_plid = None
+        meta = listing.meta_json if isinstance(listing.meta_json, dict) else {}
+        known_plid = str(meta.get("takealot_plid") or "") or None
+        if listing.product_id is not None:
+            product = session.get(DimProduct, listing.product_id)
+            if product is not None:
+                ean = getattr(product, "ean", None) or getattr(product, "upc", None)
+        status, body, fetch_flags = fetch_takealot_listing(
+            url=listing.url,
+            http_get=http_get,
+            external_id=preferred_sku,
+            ean=ean,
+            known_plid=known_plid,
+        )
+        resolved = fetch_flags.get("resolved_plid")
+        if resolved:
+            listing.meta_json = {**meta, "takealot_plid": resolved}
+            session.add(listing)
+    else:
+        status, body = fetch_url_text(listing.url, http_get=http_get)
     blob = compress_snapshot(body)
-    parsed = parse_snapshot_text(body, marketplace=listing.marketplace)
-    flags = dict(parsed.flags or {})
+    parsed = parse_snapshot_text(
+        body, marketplace=listing.marketplace, preferred_sku=preferred_sku
+    )
+    flags = {**fetch_flags, **dict(parsed.flags or {})}
     from app.services.listing_capture.cpor_activation import (
         as_of_from_fetched_at,
         evaluate_cpor_activation,
@@ -298,7 +330,8 @@ def record_observation(
         parse_flags=flags,
     )
     session.add(obs)
-    if status in (404, 410):
+    canonical_dead = marketplace != "takealot" or bool(fetch_flags.get("plid_source"))
+    if status in (404, 410) and canonical_dead and parsed.parse_status != "ok":
         set_listing_status(session, listing, status="dead_link")
     elif parsed.availability and "out" in parsed.availability.lower():
         set_listing_status(session, listing, status="out_of_stock")
@@ -309,9 +342,14 @@ def record_observation(
 def reparse_observation(session: Session, observation: ListingObservation, *, marketplace: str) -> ListingObservation:
     """Re-run parser on stored snapshot — no re-fetch. Re-evaluate CPOR activation."""
     text = decompress_snapshot(observation.raw_snapshot)
-    parsed = parse_snapshot_text(text, marketplace=marketplace)
     listing_id = getattr(observation, "listing_id", None)
-    listing = session.get(CustomerListing, listing_id) if listing_id is not None else None
+    listing_for_sku = session.get(CustomerListing, listing_id) if listing_id is not None else None
+    parsed = parse_snapshot_text(
+        text,
+        marketplace=marketplace,
+        preferred_sku=getattr(listing_for_sku, "external_id", None),
+    )
+    listing = listing_for_sku
     flags = {**(parsed.flags or {}), "reparsed": True}
     if listing is not None:
         from app.services.listing_capture.cpor_activation import (

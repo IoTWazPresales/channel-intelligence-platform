@@ -338,8 +338,9 @@ confirm-suggested; Amazon soak 51; Evetech 44 confirmed + polled (JSON-LD prices
 Takealot poll hits Next.js shell → parse_failed until better fetch. Observations tab +
 manual poll on `/listing-capture`. **Listing↔CPOR activation** (BACKLOG-130) = point-in-time
 obs price vs `cpor_case_line.srp`; persists `parse_flags.cpor_activation` including
-`no_case_detected` — **not** gated on ≥14d history. Residual: upload latest CPOR → prove
-`not_activated` / `price_consistent`; Takealot live HTML/API fetch.
+`no_case_detected` — **not** gated on ≥14d history. Takealot REST fetch shipped 2026-08-13
+(`feat/p5-residual`). Activation `not_activated` / `price_consistent` proven on historical
+windows with live prices. Residual: upload latest CPOR covering **today**, then re-poll.
 
 ---
 
