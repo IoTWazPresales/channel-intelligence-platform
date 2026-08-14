@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-14 — **Unit 14C:** `/dashboards` ECharts governed canvas (`react-grid-layout` v2 + `@dnd-kit` + echarts core). Live id 4: sell-out week line + CST customer bar; formula/vintage on face; promote 200; reload persists. Daily/A1 week chips not offered. Next: Opus VERIFY 14C then Unit 15 in a new chat.
 - 2026-08-14 — **Unit 14B:** Alembic `20260814_0015` on cip — `dashboard_widget` (metric/grains/visual/period_grain/layout); `dashboard_tile` backfilled then dropped. Widget CRUD + promote to `saved_report`. Pytest 13. Next: 14C ECharts canvas.
 - 2026-08-14 — **Unit 14A VERIFY PASS (Opus):** series contract + period_grain week/month/quarter; CST refuses finer-than-stored. Next: 14B `dashboard_widget` Alembic (Warren approve) on this branch. Hold 14C.
 - 2026-08-14 — **Unit 14A:** `sellout_units` + `cst_sellthrough_units` on `/query/execute` with ordered `series` and `period_grain` week/month/quarter (daily refused). Live cip: week/month/quarter totals match (178261.85). No UI. Next: 14B Alembic (Warren approve) on this branch.
