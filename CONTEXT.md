@@ -17,6 +17,8 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-14 — **Promoted to `main`** (FF `4aa538a` → `1bde00a`): P5 residual + Units 13–15 (B1/B4 planner, P3 canvas). ROADMAP v3.2.
+
 - 2026-08-14 — **docs:** ROADMAP v3.2 + BACKLOG-131/092 closed (Units 13–15 + P5 promote path).
 
 - 2026-08-14 — **Unit 15C Opus VERIFY PASS.** BACKLOG-094 closed. Next: commit/push 15C when asked. Uncommitted.
