@@ -1,28 +1,35 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-14 (merged leftover-close docs → `main`)
+**Last updated:** 2026-08-14 (merged leftover-close; full audit + test pass)
 
-**Branch:** `main` @ `a208993`
+**Branch:** `main` @ `8d4c8da` (in sync with `origin/main`)
 
-**Alembic on cip:** `20260814_0016` (applied — do not upgrade further unless approved)
+**Alembic on cip:** `20260814_0016` (head — do not upgrade unless approved)
 
 ## On main
 
-| Unit | Status |
+Units 8 / 11 / 12, P2 local, P5 residual, 13–15 are on `main`. Hosting stays local (Q-003). P6 waits for a second company.
+
+## Full test (2026-08-14, this machine)
+
+| Gate | Result |
 |---|---|
-| 8 / 11 / 12 | Merged PRs #36 / #37 |
-| **P2 local** | **Proven live 2026-08-14** — `viewer@local` Control tower → Shipping / PvE; Users forbidden; restore `cip_alembic_smoke` alembic `20260814_0016` |
-| **P5 residual** | Takealot REST + activation. Browser: Observations `price_consistent` vs C26759823 |
-| **13–15** | VERIFY PASS. BACKLOG-092 / 131 / 094 closed |
-| P2 hosting | Stay local (Q-003) |
-| P6 | Wait for a second company |
+| Lint (`ESLINT_USE_FLAT_CONFIG=false`) | **0 errors**, 51 hook warnings |
+| Web Vitest | **510 passed**; 1 timeout flake (`distributors/page.test.tsx` drawer) — **6/6 on re-run** |
+| API pytest (`ALLOW_TESTS_ON_DEV_DB=1`) | **2005 passed**, 4 skipped, **16 failed**, **2 errors** (~18 min) |
+| `alembic current` | `20260814_0016 (head)` on `cip` |
+| API `/health/ready` | `cip` ok (after pytest) |
+| Browser | Control tower, Forecasts, Promotions, Dashboards, Listing Capture, CPOR Cases, Channel Ops, Settings — headings loaded as Local Admin |
 
-## Next (new units — not housekeeping)
+Pytest failures are **not** from the leftover-close docs merge. Two are the ALLOW-flag guards (they assert the flag is unset). Two errors: `cip_bulk_smoke` alembic still `20260702_0066` (test expected `20260812_0014`). Rest: DSI/live-schema/integrity/auth 401 on mocked CPOR create. Do not treat as a green suite.
 
-- **P3-1** tenant-defined metrics without a deploy (CONSULT first)
-- **P5 intelligence v1** after ≥2 weeks promo-activated vs not
+`verify-gate --skip-tests`: tsc compare vs empty worktree is noisy. Live `tsc --noEmit` has pre-existing errors (mostly tests; prod: shipment steward types, CPOR column-picker `id`, lineup `data-testid` on file input).
+
+## Next (new units)
+
+- **P3-1** tenant-defined metrics (CONSULT first)
+- **P5 intelligence v1** after ≥2 weeks observations
 - **P6** second tenant
-- Lane X: BACKLOG-076 / 089 / 079 residual fold-in when those pages are next edited
-- P4 soak residuals: Amazon ASIN FLAG, optional Game W27, historical CST backfill
+- Optional hygiene: pytest/tsc debt above — new chat, not this pin
 
 **Env:** local Windows. Web `:3000` + API `:8001`. No Docker.

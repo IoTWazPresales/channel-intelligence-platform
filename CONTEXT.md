@@ -17,7 +17,9 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
-- 2026-08-14 — **Merged leftover-close → `main`** (`a208993`): P2 local exit pin (viewer + restore `20260814_0016`). Hosting / P3-1 / P5 intel v1 / P6 still open.
+- 2026-08-14 — **Full audit + test on `main` @ `8d4c8da`:** lint 0 errors; web 510 pass + 1 flake (re-run 6/6); API 2005 pass / 16 fail / 2 err (`ALLOW_TESTS_ON_DEV_DB=1`); alembic `20260814_0016`; browser key routes as Local Admin. Failures classified pre-existing/env — not leftover-close docs.
+
+- 2026-08-14 — **Merged leftover-close → `main`** (`a208993` then pin `8d4c8da`): P2 local exit pin (viewer + restore `20260814_0016`). Hosting / P3-1 / P5 intel v1 / P6 still open.
 
 - 2026-08-14 — **P2 local exit re-proven** (`feat/close-remaining-holes`): viewer Control tower + Shipping + PvE 13.2%; Users forbidden; restore `cip_alembic_smoke` alembic `20260814_0016`; lineup XLSX CTA; inbox #4 vintage. Hosting / P3-1 / P5 intel v1 / P6 still open.
 
