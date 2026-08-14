@@ -1,6 +1,6 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-14 (Unit 14A volume series shipped on this branch — await 14B Alembic)
+**Last updated:** 2026-08-14 (Unit 14A Opus VERIFY PASS — next 14B Alembic)
 
 **Branch:** `feat/unit13-cpor-payment-recon` (from `feat/p5-residual` @ `53361c3`) 
 
@@ -15,7 +15,7 @@
 | 12 P6 light | Export sheet Settings shipped in PR #37 |
 | P5 residual | **Pushed** `feat/p5-residual` @ `53361c3` — not yet merged to `main` |
 | **13** | **VERIFY PASS** (Opus) — BACKLOG-092 paid vs owed recon; D-01 superseded_by_case_id |
-| **14** | **14A shipped** (query series) · 14B widget persist (Alembic — Warren approve) · 14C ECharts canvas |
+| **14** | **14A VERIFY PASS** (Opus) · 14B widget persist (Alembic — Warren approve) · 14C ECharts canvas |
 | **15** | Queued — B1 history forecast + BACKLOG-094 intake-weighted MAC + editable planner |
 | P2 hosting | Stay local |
 | P6 | Wait for a second company |

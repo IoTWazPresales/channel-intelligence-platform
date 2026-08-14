@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-14 — **Unit 14A VERIFY PASS (Opus):** series contract + period_grain week/month/quarter; CST refuses finer-than-stored. Next: 14B `dashboard_widget` Alembic (Warren approve) on this branch. Hold 14C.
 - 2026-08-14 — **Unit 14A:** `sellout_units` + `cst_sellthrough_units` on `/query/execute` with ordered `series` and `period_grain` week/month/quarter (daily refused). Live cip: week/month/quarter totals match (178261.85). No UI. Next: 14B Alembic (Warren approve) on this branch.
 - 2026-08-14 — **Unit 14 CONSULT READY (Opus):** two metrics (`sellout_units` + `cst_sellthrough_units`); `period_grain` week/month/quarter (no daily); query `series`; 14A backend → 14B `dashboard_widget` Alembic (Warren approve) → 14C ECharts canvas. Prompt: `.tmp/unit14_cursor_prompt.md`. Next: Warren skim then IMPLEMENT 14A.
 - 2026-08-13 — **Unit 13 VERIFY PASS (Opus):** D-01 fixed — owed_unknown when `superseded_by_case_id` set (status stays approved). Prior STOP was dead `status==superseded`. Next: Unit 14 widgets in a new chat.
