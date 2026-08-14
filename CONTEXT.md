@@ -17,7 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
-- 2026-08-14 — **Unit 15B VERIFY PASS (Opus).** Next: 15C editable promo planner in a **new chat**. Do not start 15C here.
+- 2026-08-14 — **15A+15B pushed** `62607c2`. Live `/forecasts` Compute from history: 26987 velocity + 11466 analogue (tenant default), 1 override kept. Next: 15C in a **new chat**.
 
 - 2026-08-14 — **Unit 15A VERIFY PASS (Opus)** + Alembic `20260814_0016` on cip (`target_cover_weeks`). Next was 15B.
 - 2026-08-14 — **Unit 15A:** intake-weighted MAC composer + per-customer cover. Alembic `20260814_0016` later applied on cip.

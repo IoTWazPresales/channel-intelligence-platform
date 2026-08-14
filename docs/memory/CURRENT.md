@@ -1,8 +1,8 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-14 (Unit 15B VERIFY PASS)
+**Last updated:** 2026-08-14 (Unit 15B live Compute-from-history)
 
-**Branch:** `feat/unit13-cpor-payment-recon` (from `feat/p5-residual` @ `53361c3`)
+**Branch:** `feat/unit13-cpor-payment-recon` @ `62607c2` (pushed)
 
 **Alembic on cip:** `20260814_0016` (applied — `commercial_customer_term.target_cover_weeks`)
 
@@ -17,22 +17,21 @@
 | **13** | **VERIFY PASS** — BACKLOG-092 recon |
 | **14** | **VERIFY PASS** — 14A series · 14B widget · 14C ECharts |
 | **15A** | **VERIFY PASS** — intake-weighted MAC + per-customer cover |
-| **15B** | **VERIFY PASS** — Compute from history + tenant_id fix |
+| **15B** | **VERIFY PASS** + **live Compute** — 26987 velocity + 11466 analogue; 1 override kept |
 | **15C** | Next — editable promo planner grid (BACKLOG-094 stays open until 15C) |
 | P2 hosting | Stay local |
 | P6 | Wait for a second company |
 
 Plan: `.tmp/ARC_UNITS_13_15_PLAN.md` · Prompt: `.tmp/unit15_cursor_prompt.md`
 
-## This branch (15A+15B committed)
+## This branch (pushed)
 
-- 15A: `suggest_intake_weighted_mac`; cover on `commercial_customer_term`; cost-suggest `intake_weighted`; Alembic `20260814_0016` on cip
-- 15B: `POST /forecasts/compute-from-history`; `/forecasts` primary CTA; paste/add = override; `tenant_id` never NULL; B1-07 IMPLEMENTED
+- HEAD `62607c2` — Units 15A–15B
+- Live `/forecasts`: Compute from history upserted tenant `default`; grid shows analogue provenance (`matched` product_line/series/form_factor). GET still pages `limit=500`.
 
 ## Next
 
-1. Live Compute-from-history click on `/forecasts` (this session)
-2. **New chat** for Unit 15C — editable promo planner
-3. Merge/promote P5+13+14+15 when wanted
+1. **New chat** for Unit 15C — editable promo planner
+2. Merge/promote P5+13+14+15 when wanted
 
-**Env:** local Windows. Web `:3000` + API `:8001` (API restarted this session).
+**Env:** local Windows. Web `:3000` + API `:8001`.
