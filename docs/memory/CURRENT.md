@@ -1,6 +1,6 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-14 (Unit 14C canvas shipped — await Opus VERIFY)
+**Last updated:** 2026-08-14 (Unit 14C VERIFY PASS — Unit 14 complete)
 
 **Branch:** `feat/unit13-cpor-payment-recon` (from `feat/p5-residual` @ `53361c3`)
 
@@ -15,7 +15,7 @@
 | 12 P6 light | Export sheet Settings shipped in PR #37 |
 | P5 residual | **Pushed** `feat/p5-residual` @ `53361c3` — not yet merged to `main` |
 | **13** | **VERIFY PASS** (Opus) — BACKLOG-092 paid vs owed recon; D-01 superseded_by_case_id |
-| **14** | **14A VERIFY PASS** · **14B persist applied** · **14C canvas shipped** (browser smoke; Opus VERIFY next) |
+| **14** | **VERIFY PASS** (Opus) — 14A series · 14B `dashboard_widget` · 14C ECharts canvas |
 | **15** | Queued — B1 history forecast + BACKLOG-094 intake-weighted MAC + editable planner |
 | P2 hosting | Stay local |
 | P6 | Wait for a second company |
@@ -52,8 +52,8 @@ Plan: `.tmp/ARC_UNITS_13_15_PLAN.md`
 
 ## Next
 
-1. Opus VERIFY Unit 14C (arc exit) — do not start Unit 15 until PASS
-2. Merge/promote P5+13 when wanted — not a Unit 14 gate
+1. Unit 15 in a **new chat** — B1 history forecast + BACKLOG-094 intake-weighted MAC + editable planner
+2. Merge/promote P5+13+14 when wanted — not a Unit 15 gate
 3. Do not re-ingest job 978 / do not re-audit Takealot REST fetch
 
 **Env:** local Windows. Web `:3000` + API `:8001`.

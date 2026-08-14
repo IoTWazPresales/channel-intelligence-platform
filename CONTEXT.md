@@ -17,6 +17,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-14 — **Unit 14C VERIFY PASS (Opus)** @ `e9a32f5`. Next: Unit 15 in a new chat (B1 forecast + 094 MAC). Do not start 15 in this thread.
 - 2026-08-14 — **Unit 14C:** `/dashboards` ECharts governed canvas (`react-grid-layout` v2 + `@dnd-kit` + echarts core). Live id 4: sell-out week line + CST customer bar; formula/vintage on face; promote 200; reload persists. Daily/A1 week chips not offered. Next: Opus VERIFY 14C then Unit 15 in a new chat.
 - 2026-08-14 — **Unit 14B:** Alembic `20260814_0015` on cip — `dashboard_widget` (metric/grains/visual/period_grain/layout); `dashboard_tile` backfilled then dropped. Widget CRUD + promote to `saved_report`. Pytest 13. Next: 14C ECharts canvas.
 - 2026-08-14 — **Unit 14A VERIFY PASS (Opus):** series contract + period_grain week/month/quarter; CST refuses finer-than-stored. Next: 14B `dashboard_widget` Alembic (Warren approve) on this branch. Hold 14C.
