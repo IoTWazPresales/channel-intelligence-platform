@@ -26,7 +26,10 @@ def test_csv_header():
     assert "1,2" in csv.replace(" ", "")
 
 
-def test_xlsx_workbook_sheets():
+def test_xlsx_workbook_sheets(tmp_path, monkeypatch):
+    from app.services import commercial_tenant_profile as profile
+
+    monkeypatch.setattr(profile, "_tenant_profiles_dir", lambda: tmp_path)
     payload = {
         "rows": [
             {
@@ -71,3 +74,29 @@ def test_xlsx_workbook_sheets():
     assert wb["NetRequirement"]["A1"].value == "distributor_id"
     assert wb["DraftLineup"]["A1"].value == "Customer Code"
     assert wb["DraftLineup"]["A2"].value == "ACME"
+
+
+def test_xlsx_draft_sheet_uses_tenant_column_map(tmp_path, monkeypatch):
+    from app.services import commercial_tenant_profile as profile
+
+    monkeypatch.setattr(profile, "_tenant_profiles_dir", lambda: tmp_path)
+    profile.save_tenant_profile_overrides(
+        "default",
+        {
+            "lineup_export_columns": [
+                {"field": "sku", "header": "Item"},
+                {"field": "planned_qty", "header": "Qty"},
+                {"field": "customer_code", "header": "Cust"},
+            ]
+        },
+    )
+    payload = {"rows": []}
+    draft = [{"sku": "SKU-1", "planned_qty": 9, "customer_code": "ACME"}]
+    raw = net_requirement_to_xlsx_bytes(payload, draft_rows=draft)
+    wb = load_workbook(BytesIO(raw))
+    assert wb["DraftLineup"]["A1"].value == "Item"
+    assert wb["DraftLineup"]["B1"].value == "Qty"
+    assert wb["DraftLineup"]["C1"].value == "Cust"
+    assert wb["DraftLineup"]["A2"].value == "SKU-1"
+    assert wb["DraftLineup"]["B2"].value == 9
+    assert wb["DraftLineup"]["C2"].value == "ACME"

@@ -34,7 +34,28 @@ NET_REQUIREMENT_CSV_HEADERS = [
     "bias_factor",
 ]
 
-# Tenant workbook on-ramp sheet headers (generic labels — tenant may remap via profile sheet names)
+# Canonical draft-lineup fields (headers come from tenant profile — D-056).
+DEFAULT_LINEUP_EXPORT_FIELDS: tuple[str, ...] = (
+    "customer_code",
+    "customer_name",
+    "sku",
+    "product_name",
+    "period_label",
+    "period_start",
+    "planned_qty",
+    "distributor_id",
+    "product_id",
+    "business_unit",
+    "forecast_demand",
+    "bias_adjusted_forecast",
+    "channel_stock",
+    "in_transit",
+    "target_cover",
+    "net_requirement",
+    "notes",
+)
+
+# Legacy default headers (also accepted as row keys for older callers).
 TENANT_LINEUP_SHEET_HEADERS = [
     "Customer Code",
     "Customer Name",
@@ -79,6 +100,18 @@ def net_requirement_to_csv(payload: dict[str, Any]) -> str:
             ]
         )
     return buf.getvalue()
+
+
+def _draft_export_columns(tenant_id: str | None = None) -> list[dict[str, str]]:
+    from app.services.commercial_tenant_profile import lineup_export_columns
+
+    return lineup_export_columns(tenant_id or "default")
+
+
+def _draft_cell(row: dict[str, Any], field: str, default_header: str) -> Any:
+    if field in row:
+        return row.get(field)
+    return row.get(default_header)
 
 
 def net_requirement_to_xlsx_bytes(
@@ -127,13 +160,25 @@ def net_requirement_to_xlsx_bytes(
 
     draft = list(draft_rows or [])
     if draft:
+        from app.services.commercial_tenant_profile import DEFAULT_LINEUP_EXPORT_HEADER_BY_FIELD
+
+        columns = _draft_export_columns()
         ws2 = wb.create_sheet(draft_title)
-        ws2.append(list(TENANT_LINEUP_SHEET_HEADERS))
+        ws2.append([c["header"] for c in columns])
         for cell in ws2[1]:
             cell.font = Font(bold=True)
         ws2.freeze_panes = "A2"
         for row in draft:
-            ws2.append([row.get(h) for h in TENANT_LINEUP_SHEET_HEADERS])
+            ws2.append(
+                [
+                    _draft_cell(
+                        row,
+                        c["field"],
+                        DEFAULT_LINEUP_EXPORT_HEADER_BY_FIELD.get(c["field"], c["header"]),
+                    )
+                    for c in columns
+                ]
+            )
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -376,23 +421,23 @@ async def build_tenant_workbook_export(
             cust = cust_by_id.get(int(a["customer_id"]))
             draft_rows.append(
                 {
-                    "Customer Code": cust.code if cust else "",
-                    "Customer Name": cust.name if cust else "",
-                    "SKU": prod.sku if prod else "",
-                    "Product Name": prod.name if prod else "",
-                    "Period Label": label,
-                    "Period Start": start.isoformat(),
-                    "Planned Qty": units,
-                    "Distributor ID": nr.get("distributor_id"),
-                    "Product ID": pid,
-                    "Business Unit": nr.get("business_unit") or "",
-                    "Forecast Demand": nr.get("forecast_demand"),
-                    "Bias Adjusted Forecast": nr.get("bias_adjusted_forecast"),
-                    "Channel Stock": nr.get("channel_stock"),
-                    "In Transit": nr.get("in_transit"),
-                    "Target Cover": nr.get("target_cover_units"),
-                    "Net Requirement": nr.get("net_requirement"),
-                    "Notes": "b2_tenant_workbook_onramp",
+                    "customer_code": cust.code if cust else "",
+                    "customer_name": cust.name if cust else "",
+                    "sku": prod.sku if prod else "",
+                    "product_name": prod.name if prod else "",
+                    "period_label": label,
+                    "period_start": start.isoformat(),
+                    "planned_qty": units,
+                    "distributor_id": nr.get("distributor_id"),
+                    "product_id": pid,
+                    "business_unit": nr.get("business_unit") or "",
+                    "forecast_demand": nr.get("forecast_demand"),
+                    "bias_adjusted_forecast": nr.get("bias_adjusted_forecast"),
+                    "channel_stock": nr.get("channel_stock"),
+                    "in_transit": nr.get("in_transit"),
+                    "target_cover": nr.get("target_cover_units"),
+                    "net_requirement": nr.get("net_requirement"),
+                    "notes": "b2_tenant_workbook_onramp",
                 }
             )
 

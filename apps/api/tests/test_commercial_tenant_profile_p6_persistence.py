@@ -63,3 +63,27 @@ def test_default_tenant_profile_snapshot_backward_compatible() -> None:
     snap = profile.profile_snapshot()
     assert snap["tenant_id"] == "default"
     assert snap["constraint_axis"] == profile.CONSTRAINT_AXIS
+    assert snap["lineup_export_columns"][0]["field"] == "customer_code"
+    assert snap["lineup_export_columns"][0]["header"] == "Customer Code"
+
+
+def test_lineup_export_columns_roundtrip_and_reject_unknown_field() -> None:
+    saved = profile.save_tenant_profile_overrides(
+        "acme",
+        {
+            "lineup_export_columns": [
+                {"field": "sku", "header": "Part"},
+                {"field": "planned_qty", "header": "Volume"},
+            ]
+        },
+    )
+    assert saved["lineup_export_columns"][0] == {"field": "sku", "header": "Part"}
+    loaded = profile.load_tenant_profile_overrides("acme")
+    assert loaded["lineup_export_columns"][1]["header"] == "Volume"
+    snap = profile.profile_snapshot("acme")
+    assert snap["lineup_export_columns"][0]["header"] == "Part"
+    with pytest.raises(ValueError, match="unknown"):
+        profile.save_tenant_profile_overrides(
+            "acme",
+            {"lineup_export_columns": [{"field": "not_a_field", "header": "X"}]},
+        )

@@ -1,7 +1,8 @@
-"""B4 — promotion plan builder draft (compose A2 + B1 + B2).
+"""B4 — promotion plan builder draft (compose A2 + B1 + B2 + 15C per-line grid).
 
 Compose is the primary surface. Optional create-from-draft writes a **draft** CPOR case
-via the existing case/line path (no parallel economics ledger).
+via the existing case/line path (no parallel economics ledger). Unit 15C emits per-line
+intake-weighted MAC + history units; create carries operator edits (D-051–D-053).
 """
 
 from __future__ import annotations
@@ -24,8 +25,21 @@ from app.services.commercial_planner.lineup_period_canonical import (
     period_label_sql_variants,
     period_labels_equivalent,
 )
+from app.services.cpor.intake_weighted_mac import suggest_intake_weighted_mac
 from app.services.cpor.norms_and_comparable import build_comparable_cases
+from app.services.lineup.cover_policy import resolve_target_cover_weeks_sync
 from app.services.lineup.profit_reservation import compute_profit_with_reservation
+
+EDITABLE_PLANNER_FIELDS = (
+    "estimate_qty",
+    "cost_basis",
+    "srp",
+    "cover_weeks",
+    "distributor_id",
+    "pod_quarter",
+)
+COST_SOURCE_MANUAL = "manual"
+COST_SOURCE_INTAKE_WEIGHTED = "intake_weighted"
 
 
 def _positive_srp(*candidates: float | None) -> float | None:
@@ -192,6 +206,205 @@ def derive_planned_reservation_sync(
     }
 
 
+def _intake_payload(sug: Any) -> dict[str, Any]:
+    evidence = dict(sug.evidence or {})
+    return {
+        "cost_basis": float(sug.cost_basis) if sug.cost_basis is not None else None,
+        "cost_source": sug.cost_source,
+        "evidence": evidence,
+        "flags": list(sug.flags or []),
+        "bucket_a_on_hand": evidence.get("bucket_a_on_hand"),
+        "bucket_b_intake": evidence.get("bucket_b_intake"),
+        "planned_supply": evidence.get("planned_supply"),
+        "sellout_value": evidence.get("sellout_value"),
+        "disti_cost": evidence.get("disti_cost"),
+        "blend": evidence.get("blend"),
+        "not_in_blend": evidence.get("not_in_blend")
+        or [
+            "sellout_value_display_only",
+            "planned_supply_no_native_cost",
+            "dsi_wac_not_ingested",
+            "dap",
+        ],
+    }
+
+
+def _row_key(
+    *,
+    product_id: int,
+    distributor_id: int | None,
+    pod_quarter: str | None,
+    seed_line_id: int | None,
+) -> str:
+    dist = "" if distributor_id is None else str(int(distributor_id))
+    qtr = pod_quarter or ""
+    seed = "new" if seed_line_id is None else str(int(seed_line_id))
+    return f"{int(product_id)}:{dist}:{qtr}:{seed}"
+
+
+def _spec_from_seed_line(line: CporCaseLine) -> dict[str, Any]:
+    return {
+        "seed_line_id": int(line.id),
+        "product_id": int(line.product_id),
+        "distributor_id": int(line.distributor_id) if line.distributor_id is not None else None,
+        "srp": float(line.srp) if line.srp is not None else None,
+        "estimate_qty": float(line.estimate_qty or 0),
+        "pod_quarter": line.pod_quarter,
+        "cover_override": None,
+    }
+
+
+def _normalize_line_spec(raw: dict[str, Any]) -> dict[str, Any]:
+    pid = int(raw["product_id"])
+    did = raw.get("distributor_id")
+    cover = raw.get("cover_override")
+    return {
+        "seed_line_id": int(raw["seed_line_id"]) if raw.get("seed_line_id") is not None else None,
+        "product_id": pid,
+        "distributor_id": int(did) if did is not None else None,
+        "srp": float(raw["srp"]) if raw.get("srp") is not None else None,
+        "estimate_qty": float(raw["estimate_qty"] or 0) if raw.get("estimate_qty") is not None else 0.0,
+        "pod_quarter": raw.get("pod_quarter"),
+        "cover_override": float(cover) if cover is not None else None,
+    }
+
+
+def _collect_line_specs(
+    session: Session,
+    *,
+    seed: CporCase | None,
+    product_id: int | None,
+    extra_lines: list[dict[str, Any]] | None,
+    line_specs: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    if line_specs is not None:
+        return [_normalize_line_spec(s) for s in line_specs]
+    specs: list[dict[str, Any]] = []
+    if seed is not None:
+        stmt = select(CporCaseLine).where(CporCaseLine.case_id == seed.id)
+        if product_id is not None:
+            stmt = stmt.where(CporCaseLine.product_id == int(product_id))
+        stmt = stmt.order_by(CporCaseLine.id.asc())
+        for line in session.scalars(stmt).all():
+            specs.append(_spec_from_seed_line(line))
+    for extra in extra_lines or []:
+        specs.append(_normalize_line_spec(extra))
+    return specs
+
+
+def _compose_suggestion_row(
+    session: Session,
+    *,
+    seed: CporCase | None,
+    spec: dict[str, Any],
+    customer_id: int | None,
+    horizon_weeks: int,
+    period_label: str | None,
+    top_comparables: list[dict[str, Any]],
+) -> dict[str, Any]:
+    pid = int(spec["product_id"])
+    did = spec.get("distributor_id")
+    cover_override = spec.get("cover_override")
+    prod = session.get(DimProduct, pid)
+    if customer_id is not None:
+        weeks, cover_source = resolve_target_cover_weeks_sync(
+            session, int(customer_id), override_weeks=cover_override
+        )
+    else:
+        weeks, cover_source = (None, "unknown")
+
+    window_start = seed.window_start if seed is not None else date.today()
+    window_end = seed.window_end if seed is not None else date.today()
+    as_of = date.today()
+    intake = None
+    if customer_id is not None:
+        intake = suggest_intake_weighted_mac(
+            session,
+            customer_id=int(customer_id),
+            product_id=pid,
+            distributor_id=int(did) if did is not None else None,
+            window_start=window_start,
+            window_end=window_end,
+            as_of=as_of,
+            exclude_case_id=int(seed.id) if seed is not None else None,
+        )
+    intake_json = _intake_payload(intake) if intake is not None else {
+        "cost_basis": None,
+        "cost_source": None,
+        "evidence": {},
+        "flags": ["no_customer_for_mac"],
+        "bucket_a_on_hand": None,
+        "bucket_b_intake": None,
+        "planned_supply": None,
+        "sellout_value": None,
+        "disti_cost": None,
+        "blend": None,
+        "not_in_blend": [],
+    }
+
+    volume = _forecast_volume_sync(
+        session,
+        product_id=pid,
+        customer_id=customer_id,
+        horizon_weeks=horizon_weeks,
+    )
+    suggested_qty = float(volume.get("forecast_units") or 0)
+    if suggested_qty <= 0 and top_comparables:
+        ests = [float(t.get("estimate_qty") or 0) for t in top_comparables]
+        ests = [e for e in ests if e > 0]
+        if ests:
+            suggested_qty = sum(ests) / len(ests)
+    if suggested_qty <= 0:
+        suggested_qty = float(spec.get("estimate_qty") or 0)
+
+    srp = spec.get("srp")
+    pod_quarter = spec.get("pod_quarter") or (
+        period_label
+        or (
+            f"{str(seed.window_start.year)[2:]}Q{(seed.window_start.month - 1) // 3 + 1}"
+            if seed is not None
+            else None
+        )
+    )
+    seed_line_id = spec.get("seed_line_id")
+    return {
+        "row_key": _row_key(
+            product_id=pid,
+            distributor_id=int(did) if did is not None else None,
+            pod_quarter=pod_quarter,
+            seed_line_id=int(seed_line_id) if seed_line_id is not None else None,
+        ),
+        "seed_line_id": int(seed_line_id) if seed_line_id is not None else None,
+        "product_id": pid,
+        "product_sku": prod.sku if prod is not None else None,
+        "product_name": prod.name if prod is not None else None,
+        "distributor_id": int(did) if did is not None else None,
+        "customer_id": int(customer_id) if customer_id is not None else None,
+        "pod_quarter": pod_quarter,
+        "srp": float(srp) if srp is not None else None,
+        "suggested_estimate_qty": round(float(suggested_qty), 4),
+        "suggested_cost_basis": intake_json.get("cost_basis"),
+        "suggested_cost_source": intake_json.get("cost_source"),
+        "cover": {
+            "weeks": round(float(weeks), 4) if weeks is not None else None,
+            "source": cover_source,
+            "override_weeks": float(cover_override) if cover_override is not None else None,
+        },
+        "volume": volume,
+        "intake_weighted": intake_json,
+        "flags": list(intake_json.get("flags") or []),
+        "editable_fields": list(EDITABLE_PLANNER_FIELDS),
+        "display_only_fields": [
+            "bucket_a_on_hand",
+            "bucket_b_intake",
+            "planned_supply",
+            "sellout_value",
+            "disti_cost",
+            "blend",
+        ],
+    }
+
+
 def build_promo_plan_draft(
     session: Session,
     *,
@@ -203,8 +416,13 @@ def build_promo_plan_draft(
     period_label: str | None = None,
     horizon_weeks: int = 13,
     comparable_limit: int = 10,
+    extra_lines: list[dict[str, Any]] | None = None,
+    line_specs: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Compose a promotion-plan draft for operator review / case authoring."""
+    """Compose a promotion-plan draft for operator review / case authoring.
+
+    Returns per-line suggestion rows (D-051). Server is stateless on dirty flags (D-052).
+    """
     seed = session.get(CporCase, seed_case_id)
     seed_customer_id = int(seed.customer_id) if seed is not None else customer_id
     effective_customer = customer_id if customer_id is not None else seed_customer_id
@@ -297,17 +515,38 @@ def build_promo_plan_draft(
     }
 
     top = (comparables.get("items") or [])[:3]
-    suggested_estimate = float(volume["forecast_units"])
-    if suggested_estimate <= 0 and top:
-        ests = [float(t.get("estimate_qty") or 0) for t in top]
-        ests = [e for e in ests if e > 0]
-        if ests:
-            suggested_estimate = sum(ests) / len(ests)
+    specs = _collect_line_specs(
+        session,
+        seed=seed,
+        product_id=product_id,
+        extra_lines=extra_lines,
+        line_specs=line_specs,
+    )
+    suggestion_rows = [
+        _compose_suggestion_row(
+            session,
+            seed=seed,
+            spec=spec,
+            customer_id=effective_customer,
+            horizon_weeks=horizon_weeks,
+            period_label=period_label,
+            top_comparables=top,
+        )
+        for spec in specs
+    ]
+    suggested_estimate = sum(float(r.get("suggested_estimate_qty") or 0) for r in suggestion_rows)
+    if suggested_estimate <= 0:
+        suggested_estimate = float(volume["forecast_units"] or 0)
+        if suggested_estimate <= 0 and top:
+            ests = [float(t.get("estimate_qty") or 0) for t in top]
+            ests = [e for e in ests if e > 0]
+            if ests:
+                suggested_estimate = sum(ests) / len(ests)
 
     seed_lines: list[dict[str, Any]] = []
     if seed is not None:
         for line in session.scalars(
-            select(CporCaseLine).where(CporCaseLine.case_id == seed.id).limit(20)
+            select(CporCaseLine).where(CporCaseLine.case_id == seed.id).order_by(CporCaseLine.id.asc())
         ).all():
             seed_lines.append(
                 {
@@ -329,6 +568,7 @@ def build_promo_plan_draft(
         "seed_window_start": seed.window_start.isoformat() if seed is not None else None,
         "seed_window_end": seed.window_end.isoformat() if seed is not None else None,
         "seed_lines": seed_lines,
+        "lines": suggestion_rows,
         "comparables": {
             "count": len(comparables.get("items") or []),
             "top": top,
@@ -338,18 +578,53 @@ def build_promo_plan_draft(
         "suggested_estimate_qty": round(float(suggested_estimate), 4),
         "budget_check": budget,
         "next_step": (
-            "POST /cpor/intelligence/promo-plan-draft/create-case to write a draft CPOR case, "
-            "or create manually via /cpor/cases"
+            "POST /cpor/intelligence/promo-plan-draft/create-case with lines[] to write a draft CPOR case"
         ),
         "notes": [
             f"Reservation source={tenant_profile.RESERVATION_SOURCE}; "
             f"binding_axis={tenant_profile.CONSTRAINT_AXIS}; "
             f"over_action={tenant_profile.OVER_BUDGET_ACTION} (hard_enforce="
             f"{tenant_profile.HARD_ENFORCE_BUDGET})",
-            "Volume from fact_demand_forecast (B1); comparable volume is fallback only",
+            "Per-line volume from fact_demand_forecast (B1); comparable volume is fallback only",
+            "Per-line MAC from suggest_intake_weighted_mac (no second engine)",
+            "Cover is session cover_override only — never writes commercial_customer_term",
             "Budget uses B2 lineup-derived reservation when planned_support_usd omitted",
+            "Dirty-flag is client-owned; Refresh must not clobber dirty cells",
         ],
     }
+
+
+def _grain_key(product_id: int, distributor_id: int | None, pod_quarter: str | None) -> tuple[int, int | None, str]:
+    return (int(product_id), int(distributor_id) if distributor_id is not None else None, str(pod_quarter or ""))
+
+
+def _write_specs_from_draft_or_payload(
+    *,
+    draft: dict[str, Any],
+    lines: list[dict[str, Any]] | None,
+    product_id: int | None,
+) -> list[dict[str, Any]]:
+    if lines is not None:
+        return list(lines)
+    rows = list(draft.get("lines") or [])
+    if product_id is not None:
+        rows = [r for r in rows if int(r["product_id"]) == int(product_id)]
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        out.append(
+            {
+                "product_id": int(row["product_id"]),
+                "distributor_id": row.get("distributor_id"),
+                "srp": row.get("srp"),
+                "estimate_qty": row.get("suggested_estimate_qty") or 0,
+                "cost_basis": row.get("suggested_cost_basis"),
+                "pod_quarter": row.get("pod_quarter"),
+                "cover_override": (row.get("cover") or {}).get("override_weeks"),
+                "dirty_fields": [],
+                "seed_line_id": row.get("seed_line_id"),
+            }
+        )
+    return out
 
 
 def create_case_from_promo_draft(
@@ -363,17 +638,23 @@ def create_case_from_promo_draft(
     horizon_weeks: int = 13,
     confirm_over_budget: bool = False,
     actor: str | None = None,
+    lines: list[dict[str, Any]] | None = None,
     generate_case_code,
     record_event,
     recompute_case_line,
     resolve_default_margin,
     suggest_cost_basis,
 ) -> dict[str, Any]:
-    """Create a draft CPOR case from B4 compose output (uses existing line recompute)."""
+    """Create a draft CPOR case from B4 compose / planner grid (existing case/line path).
+
+    Payload ``lines[]`` is authoritative (D-053). ``suggest_cost_basis`` is unused for draft
+    cost — Approve still snapshots it. Cover overrides are not persisted to customer terms (D-054).
+    """
+    del suggest_cost_basis  # draft cost comes from intake composer or manual dirty MAC
     draft = build_promo_plan_draft(
         session,
         seed_case_id=seed_case_id,
-        product_id=product_id,
+        product_id=product_id if lines is None else None,
         period_label=period_label,
         planned_support_usd=planned_support_usd,
         planned_revenue_usd=planned_revenue_usd,
@@ -390,29 +671,16 @@ def create_case_from_promo_draft(
             f"(action={budget.get('over_budget_action')})"
         )
 
-    lines = draft.get("seed_lines") or []
-    chosen = None
-    if product_id is not None:
-        chosen = next((l for l in lines if int(l["product_id"]) == int(product_id)), None)
-    if chosen is None and lines:
-        chosen = lines[0]
-    if chosen is None:
-        raise ValueError("seed_case_has_no_lines — pick a seed with lines or pass product_id after adding lines")
+    write_specs = _write_specs_from_draft_or_payload(draft=draft, lines=lines, product_id=product_id)
+    if not write_specs:
+        raise ValueError("seed_case_has_no_lines — pick a seed with lines or pass lines[]")
 
-    pid = int(chosen["product_id"])
-    prod = session.get(DimProduct, pid)
-    if prod is None:
-        raise ValueError(f"unknown_product_id={pid}")
-
-    srp = chosen.get("srp")
-    if srp is None or float(srp) <= 0:
-        raise ValueError("seed_line_missing_srp")
-
-    estimate = float(draft.get("suggested_estimate_qty") or 0)
-    if estimate <= 0:
-        estimate = float(chosen.get("estimate_qty") or 0)
-    if estimate <= 0:
-        raise ValueError("no_positive_estimate_qty")
+    seen_grains: set[tuple[int, int | None, str]] = set()
+    for spec in write_specs:
+        grain = _grain_key(int(spec["product_id"]), spec.get("distributor_id"), spec.get("pod_quarter") or period_label)
+        if grain in seen_grains:
+            raise ValueError(f"duplicate_line_grain product_id={grain[0]} distributor_id={grain[1]} pod_quarter={grain[2]}")
+        seen_grains.add(grain)
 
     from app.services.cpor.promotion_type_vocab import CPOR_CHANNEL_SET
 
@@ -438,7 +706,7 @@ def create_case_from_promo_draft(
             f"Created from B4 promo-plan-draft seed={seed_case_id}; "
             f"budget_status={budget.get('tracks', {}).get('money', {}).get('status')}; "
             f"over_warn={budget.get('over_budget_warn')}; "
-            f"seed_channel={seed.channel}"
+            f"seed_channel={seed.channel}; line_count={len(write_specs)}"
         ),
         created_by=actor_s,
         export_version=1,
@@ -452,65 +720,124 @@ def create_case_from_promo_draft(
         margin = 0.12
         margin_source = "b4_default"
 
+    created_lines: list[CporCaseLine] = []
+    line_reports: list[dict[str, Any]] = []
     as_of = date.today()
-    sug = suggest_cost_basis(
-        session,
-        customer_id=case.customer_id,
-        product_id=pid,
-        as_of=as_of,
-        exclude_case_id=case.id,
-        manual_cost=None,
-    )
-    cost_basis = float(sug.cost_basis) if sug.cost_basis is not None else None
-    cost_source = sug.cost_source
-    cost_evidence = {**sug.evidence, "flags": sug.flags}
+    default_pod = period_label or f"{str(seed.window_start.year)[2:]}Q{(seed.window_start.month - 1) // 3 + 1}"
 
-    line = CporCaseLine(
-        case_id=case.id,
-        product_id=pid,
-        distributor_id=chosen.get("distributor_id"),
-        pod_quarter=(
-            period_label
-            or chosen.get("pod_quarter")
-            or f"{str(seed.window_start.year)[2:]}Q{(seed.window_start.month - 1) // 3 + 1}"
-        ),
-        srp=float(srp),
-        vat_rate=0.15,
-        dealer_margin_pct=float(margin),
-        margin_source=margin_source or "customer_default",
-        cost_basis=cost_basis,
-        cost_source=cost_source,
-        cost_evidence_json=cost_evidence,
-        estimate_qty=estimate,
-        remark="b4_promo_plan_draft",
-    )
-    session.add(line)
-    session.flush()
-    rep = recompute_case_line(session, line, case=case, actor=actor_s, write_event=False)
+    for spec in write_specs:
+        pid = int(spec["product_id"])
+        prod = session.get(DimProduct, pid)
+        if prod is None:
+            raise ValueError(f"unknown_product_id={pid}")
+        srp = spec.get("srp")
+        if srp is None or float(srp) <= 0:
+            raise ValueError(f"seed_line_missing_srp product_id={pid}")
+        estimate = float(spec.get("estimate_qty") or 0)
+        if estimate <= 0:
+            raise ValueError(f"no_positive_estimate_qty product_id={pid}")
+
+        dirty = {str(f) for f in (spec.get("dirty_fields") or [])}
+        did = spec.get("distributor_id")
+        pod = spec.get("pod_quarter") or default_pod
+        intake = suggest_intake_weighted_mac(
+            session,
+            customer_id=case.customer_id,
+            product_id=pid,
+            distributor_id=int(did) if did is not None else None,
+            window_start=seed.window_start,
+            window_end=seed.window_end,
+            as_of=as_of,
+            exclude_case_id=case.id,
+        )
+        intake_json = _intake_payload(intake)
+        supplied_cost = spec.get("cost_basis")
+        if "cost_basis" in dirty and supplied_cost is not None:
+            cost_basis = float(supplied_cost)
+            cost_source = COST_SOURCE_MANUAL
+        else:
+            cost_basis = float(intake.cost_basis) if intake.cost_basis is not None else None
+            cost_source = COST_SOURCE_INTAKE_WEIGHTED
+        cover_override = spec.get("cover_override")
+        cost_evidence = {
+            **intake_json["evidence"],
+            "flags": list(intake_json.get("flags") or []),
+            "planner": {
+                "dirty_fields": sorted(dirty),
+                "cost_source": cost_source,
+                "cover_override": float(cover_override) if cover_override is not None else None,
+                "cover_not_persisted_to_customer_term": True,
+            },
+        }
+
+        line = CporCaseLine(
+            case_id=case.id,
+            product_id=pid,
+            distributor_id=int(did) if did is not None else None,
+            pod_quarter=pod,
+            srp=float(srp),
+            vat_rate=0.15,
+            dealer_margin_pct=float(margin),
+            margin_source=margin_source or "customer_default",
+            cost_basis=cost_basis,
+            cost_source=cost_source,
+            cost_evidence_json=cost_evidence,
+            estimate_qty=estimate,
+            remark="b4_promo_plan_draft",
+        )
+        session.add(line)
+        session.flush()
+        rep = recompute_case_line(session, line, case=case, actor=actor_s, write_event=False)
+        record_event(
+            session,
+            case_id=case.id,
+            event_type="line_created",
+            actor=actor_s,
+            payload={
+                "line_id": line.id,
+                "recompute_flags": rep.get("flags"),
+                "source": "b4",
+                "cost_source": cost_source,
+                "dirty_fields": sorted(dirty),
+            },
+        )
+        created_lines.append(line)
+        line_reports.append(
+            {
+                "line_id": int(line.id),
+                "product_id": pid,
+                "estimate_qty": float(line.estimate_qty or 0),
+                "cost_basis": float(line.cost_basis) if line.cost_basis is not None else None,
+                "cost_source": line.cost_source,
+                "dirty_fields": sorted(dirty),
+            }
+        )
+
     record_event(
         session,
         case_id=case.id,
         event_type="created",
         actor=actor_s,
-        payload={"case_code": code, "from": "b4_promo_plan_draft", "seed_case_id": seed_case_id},
-    )
-    record_event(
-        session,
-        case_id=case.id,
-        event_type="line_created",
-        actor=actor_s,
-        payload={"line_id": line.id, "recompute_flags": rep.get("flags"), "source": "b4"},
+        payload={
+            "case_code": code,
+            "from": "b4_promo_plan_draft",
+            "seed_case_id": seed_case_id,
+            "line_count": len(created_lines),
+        },
     )
     session.commit()
     session.refresh(case)
-    session.refresh(line)
+    first = created_lines[0]
+    session.refresh(first)
 
     return {
         "created": True,
         "case_id": int(case.id),
         "case_code": case.case_code,
-        "line_id": int(line.id),
-        "estimate_qty": float(line.estimate_qty or 0),
+        "line_id": int(first.id),
+        "line_ids": [int(l.id) for l in created_lines],
+        "lines": line_reports,
+        "estimate_qty": float(first.estimate_qty or 0),
         "over_budget_warn": bool(budget.get("over_budget_warn")),
         "budget_status": budget.get("tracks", {}).get("money", {}).get("status"),
         "draft": draft,

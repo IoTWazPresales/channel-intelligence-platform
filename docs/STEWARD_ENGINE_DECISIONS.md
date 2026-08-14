@@ -642,4 +642,60 @@ disti-cost proxy may be shown; never cost.
 **Origin:** Unit 15 CONSULT D-050.
 **Rejected:** Amount as MAC; System Price as cost.
 
+## D-051 · 2026-08-14 · 15C per-line suggestion rows (transient JSON)
+**Locked.** `build_promo_plan_draft` returns one suggestion row per seed (or added) line:
+history-benchmark units, `suggest_intake_weighted_mac` (cost_basis + five legs + flags),
+resolved cover `{weeks, source}`, SRP, distributor, pod_quarter. 20-line cap lifted.
+Rows are **transient JSON** — no draft-session table.
+
+**Origin:** Unit 15C CONSULT (Opus READY 2026-08-14).
+**Rejected:** Case-grain single scalar as the planner; new `promo_plan_draft` table.
+
+## D-052 · 2026-08-14 · Dirty-flag is client-owned; server stateless between Build and Create
+**Locked.** Edited cells are marked dirty in the planner client. Refresh/Recompute merges
+suggestions **only into non-dirty cells**. Explicit Reset-to-suggested clears one cell's
+dirty flag and restores the composer value. No server-persisted dirty state.
+
+**Origin:** Unit 15C CONSULT (Opus READY 2026-08-14).
+**Rejected:** Server-authoritative recompute that clobbers edits.
+
+## D-053 · 2026-08-14 · Create carries the full edited line set
+**Locked.** `create_case_from_promo_draft` accepts `lines[]` and writes every line.
+Draft `cost_basis` = operator MAC if `cost_basis` dirty, else `suggest_intake_weighted_mac`;
+`cost_source` ∈ `{manual, intake_weighted}`. Composer evidence in `cost_evidence_json`.
+Do **not** re-derive over the payload. **Approve/activate unchanged** — still snapshot
+`suggest_cost_basis` + `detect_cost_basis_drift` FLAG-only (D-044 intact).
+
+**Origin:** Unit 15C CONSULT (Opus READY 2026-08-14). Refines B4-01 (was snapshot-on-create).
+**Rejected:** One-line create; re-deriving draft cost from `suggest_cost_basis`.
+
+## D-054 · 2026-08-14 · Planner cover is session `cover_override` only
+**Locked.** The grid displays weeks + source via `resolve_target_cover_weeks_sync`. A cover
+edit sets per-line `override_weeks` for that compose only. The promo grid **never writes**
+`commercial_customer_term`. Policy persist stays on `/commercial-planner` customer-term CRUD.
+
+**Origin:** Unit 15C CONSULT (Opus READY 2026-08-14). Honors D-045.
+**Rejected:** Persisting cover policy from the promo planner.
+
+## D-055 · 2026-08-14 · Editable vs display/explain split
+**Locked.** Editable: units (`estimate_qty`), MAC (`cost_basis`), SRP, cover-weeks override,
+distributor, pod_quarter. Display-only / popover: Bucket A, Bucket B, planned_supply,
+sellout_value, disti_cost proxy, blend formula, flags. Display legs stay display
+(D-042/D-043/D-049/D-050).
+
+**Origin:** Unit 15C CONSULT (Opus READY 2026-08-14).
+**Rejected:** Editable bucket/sell-out/WAC cells.
+
+## D-056 · 2026-08-14 · Generic column-mapped lineup export
+**Locked.** Draft-lineup export columns are an ordered `[{field, header}]` list in the
+**file-based** tenant profile JSON (loader generalized to nested — no table). Mirrors
+`column_map_json` config principle. No OEM branding, no second export engine, parked
+`promo_export/cpor_xlsx.py` is **not** the planner export. Route `/promotions` remains
+the B4 owner; the grid replaces the B4 TextField panel in place.
+
+**Origin:** Unit 15C CONSULT (Opus READY 2026-08-14).
+**Rejected:** Hardcoded `TENANT_LINEUP_SHEET_HEADERS` as write order; OEM-branded columns;
+new export-profile table.
+
+
 

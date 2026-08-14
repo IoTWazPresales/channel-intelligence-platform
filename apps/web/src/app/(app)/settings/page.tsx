@@ -34,6 +34,8 @@ type OverBudgetAction = 'require_reapproval' | 'warn' | 'block';
 type ReservationSource = 'derived_from_profit' | 'explicit_column' | 'hybrid';
 type PmAttributionMode = 'business_line' | 'person_field' | 'none';
 
+type LineupExportColumn = { field: string; header: string };
+
 type TenantCommercialProfile = {
   tenant_id: string;
   constraint_axis: ConstraintAxis;
@@ -41,6 +43,7 @@ type TenantCommercialProfile = {
   reservation_source: ReservationSource;
   pm_attribution_mode: PmAttributionMode;
   lineup_export_sheets?: { net_requirement: string; draft_lineup: string };
+  lineup_export_columns?: LineupExportColumn[];
   overrides_present: string[];
   hard_enforce_budget: boolean;
   money_ceiling_usd: number | null;
@@ -76,6 +79,7 @@ export default function SettingsPage() {
   const [pmAttributionMode, setPmAttributionMode] = useState<PmAttributionMode>('business_line');
   const [exportNetReqSheet, setExportNetReqSheet] = useState('NetRequirement');
   const [exportDraftSheet, setExportDraftSheet] = useState('DraftLineup');
+  const [exportColumns, setExportColumns] = useState<LineupExportColumn[]>([]);
   const [profileSaveOk, setProfileSaveOk] = useState<string | null>(null);
   const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
 
@@ -88,6 +92,9 @@ export default function SettingsPage() {
     const sheets = tenantProfileQuery.data.lineup_export_sheets;
     if (sheets?.net_requirement) setExportNetReqSheet(sheets.net_requirement);
     if (sheets?.draft_lineup) setExportDraftSheet(sheets.draft_lineup);
+    if (tenantProfileQuery.data.lineup_export_columns?.length) {
+      setExportColumns(tenantProfileQuery.data.lineup_export_columns);
+    }
   }, [tenantProfileQuery.data]);
 
   const tenantProfileMutation = useMutation({
@@ -99,6 +106,7 @@ export default function SettingsPage() {
         pm_attribution_mode: pmAttributionMode,
         lineup_export_net_requirement_sheet: exportNetReqSheet.trim() || undefined,
         lineup_export_draft_sheet: exportDraftSheet.trim() || undefined,
+        lineup_export_columns: exportColumns.length ? exportColumns : undefined,
       }),
     onSuccess: async (data) => {
       setProfileSaveError(null);
@@ -269,6 +277,57 @@ export default function SettingsPage() {
               helperText="Workbook sheet title for draft lineup export."
               inputProps={{ 'data-testid': 'tenant-profile-export-draft-sheet' }}
             />
+            <Typography variant="body2" color="text.secondary">
+              Draft lineup export columns (canonical field → tenant header). Reorder or rename; field ids stay CIP.
+            </Typography>
+            {exportColumns.map((col, idx) => (
+              <Stack key={col.field} direction="row" spacing={1} alignItems="center">
+                <TextField
+                  size="small"
+                  label="Field"
+                  value={col.field}
+                  disabled
+                  sx={{ width: 200 }}
+                />
+                <TextField
+                  size="small"
+                  label="Header"
+                  value={col.header}
+                  disabled={!isAdmin}
+                  onChange={(ev) => {
+                    const next = [...exportColumns];
+                    next[idx] = { ...next[idx], header: ev.target.value };
+                    setExportColumns(next);
+                  }}
+                  fullWidth
+                  inputProps={{ 'data-testid': `tenant-profile-export-col-header-${col.field}` }}
+                />
+                <Button
+                  size="small"
+                  disabled={!isAdmin || idx === 0}
+                  onClick={() => {
+                    if (idx === 0) return;
+                    const next = [...exportColumns];
+                    [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                    setExportColumns(next);
+                  }}
+                >
+                  Up
+                </Button>
+                <Button
+                  size="small"
+                  disabled={!isAdmin || idx === exportColumns.length - 1}
+                  onClick={() => {
+                    if (idx >= exportColumns.length - 1) return;
+                    const next = [...exportColumns];
+                    [next[idx + 1], next[idx]] = [next[idx], next[idx + 1]];
+                    setExportColumns(next);
+                  }}
+                >
+                  Down
+                </Button>
+              </Stack>
+            ))}
             {isAdmin ? (
               <Box>
                 <Button

@@ -228,7 +228,7 @@ async def admin_set_password(
 
 
 class TenantCommercialProfileUpdate(BaseModel):
-    """BACKLOG-096 (P6) — onboarding-editable subset; lineup export sheets are Lane B tenant law."""
+    """BACKLOG-096 (P6) — onboarding-editable subset; lineup export sheets/columns are Lane B tenant law."""
 
     constraint_axis: str | None = None
     over_budget_action: str | None = None
@@ -236,6 +236,7 @@ class TenantCommercialProfileUpdate(BaseModel):
     pm_attribution_mode: str | None = None
     lineup_export_net_requirement_sheet: str | None = None
     lineup_export_draft_sheet: str | None = None
+    lineup_export_columns: list[dict[str, str]] | None = None
 
 
 @router.get("/tenant-commercial-profile")

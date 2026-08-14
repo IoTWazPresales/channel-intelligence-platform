@@ -1,8 +1,8 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-14 (Unit 15B live Compute-from-history)
+**Last updated:** 2026-08-14 (Unit 15C committed — promote P5+13+14+15 to main)
 
-**Branch:** `feat/unit13-cpor-payment-recon` @ `62607c2` (pushed)
+**Branch:** `feat/unit13-cpor-payment-recon` (15C commit in progress)
 
 **Alembic on cip:** `20260814_0016` (applied — `commercial_customer_term.target_cover_weeks`)
 
@@ -18,20 +18,21 @@
 | **14** | **VERIFY PASS** — 14A series · 14B widget · 14C ECharts |
 | **15A** | **VERIFY PASS** — intake-weighted MAC + per-customer cover |
 | **15B** | **VERIFY PASS** + **live Compute** — 26987 velocity + 11466 analogue; 1 override kept |
-| **15C** | Next — editable promo planner grid (BACKLOG-094 stays open until 15C) |
+| **15C** | **VERIFY PASS** — editable promo planner (D-051–D-056). BACKLOG-094 closed |
 | P2 hosting | Stay local |
 | P6 | Wait for a second company |
 
-Plan: `.tmp/ARC_UNITS_13_15_PLAN.md` · Prompt: `.tmp/unit15_cursor_prompt.md`
+Plan: `.tmp/ARC_UNITS_13_15_PLAN.md` · Prompt: `.tmp/unit15c_cursor_prompt.md`
 
-## This branch (pushed)
+## This branch
 
-- HEAD `62607c2` — Units 15A–15B
-- Live `/forecasts`: Compute from history upserted tenant `default`; grid shows analogue provenance (`matched` product_line/series/form_factor). GET still pages `limit=500`.
+- Units 13–15 + P5 residual are on this branch (`origin/main` and `feat/p5-residual` are ancestors)
+- 15C: per-line draft + dirty grid + create carries edits + tenant column-mapped export
 
 ## Next
 
-1. **New chat** for Unit 15C — editable promo planner
-2. Merge/promote P5+13+14+15 when wanted
+1. Push 15C, then merge this branch → `main` (P5 + B1/B4 + Units 13–15)
+2. Refresh ROADMAP + close BACKLOG-131/092
+3. Browser-smoke B1 / B4 / P5 / dashboards after promote
 
 **Env:** local Windows. Web `:3000` + API `:8001`.

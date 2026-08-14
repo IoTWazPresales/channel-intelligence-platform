@@ -13,7 +13,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 # Q-001 — binding budget axis
 ConstraintAxis = Literal["money", "support_pct", "dual", "none"]
@@ -129,6 +129,7 @@ TENANT_PROFILE_OVERRIDE_KEYS: tuple[str, ...] = (
     "pm_attribution_mode",
     "lineup_export_net_requirement_sheet",
     "lineup_export_draft_sheet",
+    "lineup_export_columns",
 )
 
 _TENANT_PROFILE_VALID_VALUES: dict[str, frozenset[str]] = {
@@ -149,6 +150,29 @@ _TENANT_PROFILE_FREE_TEXT_KEYS: frozenset[str] = frozenset(
 # Default on-ramp sheet titles (generic — not OEM-branded).
 DEFAULT_LINEUP_EXPORT_NET_REQUIREMENT_SHEET = "NetRequirement"
 DEFAULT_LINEUP_EXPORT_DRAFT_SHEET = "DraftLineup"
+
+# Canonical draft-lineup export fields (D-056). Headers are tenant-remapable; field ids are CIP.
+DEFAULT_LINEUP_EXPORT_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("customer_code", "Customer Code"),
+    ("customer_name", "Customer Name"),
+    ("sku", "SKU"),
+    ("product_name", "Product Name"),
+    ("period_label", "Period Label"),
+    ("period_start", "Period Start"),
+    ("planned_qty", "Planned Qty"),
+    ("distributor_id", "Distributor ID"),
+    ("product_id", "Product ID"),
+    ("business_unit", "Business Unit"),
+    ("forecast_demand", "Forecast Demand"),
+    ("bias_adjusted_forecast", "Bias Adjusted Forecast"),
+    ("channel_stock", "Channel Stock"),
+    ("in_transit", "In Transit"),
+    ("target_cover", "Target Cover"),
+    ("net_requirement", "Net Requirement"),
+    ("notes", "Notes"),
+)
+LINEUP_EXPORT_CANONICAL_FIELDS: frozenset[str] = frozenset(f for f, _ in DEFAULT_LINEUP_EXPORT_COLUMNS)
+DEFAULT_LINEUP_EXPORT_HEADER_BY_FIELD: dict[str, str] = {f: h for f, h in DEFAULT_LINEUP_EXPORT_COLUMNS}
 
 # Incremental promo cost baseline knobs (BACKLOG-089) — tenant-overridable via env/profile later.
 BaselineMethod = Literal[
@@ -175,6 +199,50 @@ def lineup_export_sheet_names(tenant_id: str = "default") -> dict[str, str]:
         ).strip()
         or DEFAULT_LINEUP_EXPORT_DRAFT_SHEET,
     }
+
+
+def default_lineup_export_columns() -> list[dict[str, str]]:
+    return [{"field": field, "header": header} for field, header in DEFAULT_LINEUP_EXPORT_COLUMNS]
+
+
+def _normalize_lineup_export_columns(raw: object) -> list[dict[str, str]]:
+    parsed: object = raw
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError("lineup_export_columns: invalid JSON") from exc
+    if not isinstance(parsed, list) or not parsed:
+        raise ValueError("lineup_export_columns: non-empty list required")
+    seen: set[str] = set()
+    out: list[dict[str, str]] = []
+    for i, item in enumerate(parsed):
+        if not isinstance(item, dict):
+            raise ValueError(f"lineup_export_columns[{i}]: expected object {{field, header}}")
+        field = str(item.get("field") or "").strip()
+        header = str(item.get("header") or "").strip()
+        if field not in LINEUP_EXPORT_CANONICAL_FIELDS:
+            raise ValueError(f"lineup_export_columns[{i}].field: unknown {field!r}")
+        if not header:
+            raise ValueError(f"lineup_export_columns[{i}].header: required")
+        if field in seen:
+            raise ValueError(f"lineup_export_columns: duplicate field {field}")
+        seen.add(field)
+        safe_header = re.sub(r"[\r\n\t]", " ", header)[:128].strip()
+        out.append({"field": field, "header": safe_header})
+    return out
+
+
+def lineup_export_columns(tenant_id: str = "default") -> list[dict[str, str]]:
+    """Resolved draft-lineup column map (override or CIP default). Never OEM-branded."""
+    overrides = load_tenant_profile_overrides(tenant_id)
+    raw = overrides.get("lineup_export_columns")
+    if raw:
+        try:
+            return _normalize_lineup_export_columns(raw)
+        except ValueError:
+            return default_lineup_export_columns()
+    return default_lineup_export_columns()
 
 
 def incremental_baseline_config(tenant_id: str = "default") -> dict[str, object]:
@@ -205,7 +273,7 @@ def _tenant_profile_override_path(tenant_id: str) -> Path:
     return _tenant_profiles_dir() / f"{safe}.json"
 
 
-def load_tenant_profile_overrides(tenant_id: str = "default") -> dict[str, str]:
+def load_tenant_profile_overrides(tenant_id: str = "default") -> dict[str, Any]:
     """Read persisted overrides for ``tenant_id``. Missing/unreadable file → ``{}`` (FLAG != BLOCK)."""
     path = _tenant_profile_override_path(tenant_id)
     if not path.exists():
@@ -216,24 +284,38 @@ def load_tenant_profile_overrides(tenant_id: str = "default") -> dict[str, str]:
         return {}
     if not isinstance(data, dict):
         return {}
-    return {
-        k: str(v)
-        for k, v in data.items()
-        if k in TENANT_PROFILE_OVERRIDE_KEYS and v is not None and str(v).strip()
-    }
+    out: dict[str, Any] = {}
+    for key, value in data.items():
+        if key not in TENANT_PROFILE_OVERRIDE_KEYS or value is None:
+            continue
+        if key == "lineup_export_columns":
+            try:
+                out[key] = _normalize_lineup_export_columns(value)
+            except ValueError:
+                continue
+            continue
+        text = str(value).strip()
+        if text:
+            out[key] = text
+    return out
 
 
-def save_tenant_profile_overrides(tenant_id: str, overrides: dict[str, object]) -> dict[str, str]:
+def save_tenant_profile_overrides(tenant_id: str, overrides: dict[str, object]) -> dict[str, Any]:
     """Validate + persist overrides to ``{local_storage_path}/tenant_profiles/{tenant_id}.json``.
 
     Unknown keys are dropped silently; empty/None values clear that key. Invalid
     values raise ``ValueError`` — the API layer turns this into a 400.
     """
-    clean: dict[str, str] = {}
+    clean: dict[str, Any] = {}
     for key in TENANT_PROFILE_OVERRIDE_KEYS:
         if key not in overrides:
             continue
         raw = overrides[key]
+        if key == "lineup_export_columns":
+            if raw is None or raw == "" or raw == []:
+                continue
+            clean[key] = _normalize_lineup_export_columns(raw)
+            continue
         if raw is None or str(raw).strip() == "":
             continue
         val = str(raw).strip()
@@ -270,6 +352,7 @@ def profile_snapshot(tenant_id: str = "default") -> dict[str, object]:
         "reservation_source": overrides.get("reservation_source", RESERVATION_SOURCE),
         "pm_attribution_mode": overrides.get("pm_attribution_mode", PM_ATTRIBUTION_MODE),
         "lineup_export_sheets": sheets,
+        "lineup_export_columns": lineup_export_columns(tenant_id),
         "incremental_baseline": incremental_baseline_config(tenant_id),
         "overrides_present": sorted(overrides.keys()),
         "hard_enforce_budget": _env_bool("HARD_ENFORCE_BUDGET", True),

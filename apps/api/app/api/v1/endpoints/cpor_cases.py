@@ -1080,7 +1080,7 @@ def cpor_promo_plan_draft(
     horizon_weeks: int = Query(default=13, ge=1, le=52),
     comparable_limit: int = Query(default=10, ge=1, le=50),
 ) -> dict[str, Any]:
-    """B4 — draft promo plan: A2 comparables + B1 forecast volume + B2 budget check."""
+    """B4 — draft promo plan: per-line A2 + B1 + intake-weighted MAC + B2 budget check."""
     with SessionLocal() as session:
         return build_promo_plan_draft(
             session,
@@ -1095,6 +1095,59 @@ def cpor_promo_plan_draft(
         )
 
 
+class PromoPlanDraftLineSpec(BaseModel):
+    product_id: int = Field(ge=1)
+    distributor_id: int | None = None
+    pod_quarter: str | None = None
+    srp: float | None = None
+    estimate_qty: float | None = None
+    cover_override: float | None = Field(default=None, ge=0, le=52)
+    seed_line_id: int | None = None
+
+
+class PromoPlanRecomputeBody(BaseModel):
+    seed_case_id: int = Field(ge=1)
+    product_id: int | None = None
+    customer_id: int | None = None
+    planned_support_usd: float | None = Field(default=None, ge=0)
+    planned_revenue_usd: float | None = Field(default=None, ge=0)
+    period_label: str | None = None
+    horizon_weeks: int = Field(default=13, ge=1, le=52)
+    comparable_limit: int = Field(default=10, ge=1, le=50)
+    lines: list[PromoPlanDraftLineSpec] = Field(default_factory=list)
+
+
+@router.post("/intelligence/promo-plan-draft/recompute")
+def cpor_promo_plan_recompute(body: PromoPlanRecomputeBody) -> dict[str, Any]:
+    """Recompute per-line suggestions for the given identities. Dirty merge is client-owned (D-052)."""
+    with SessionLocal() as session:
+        return build_promo_plan_draft(
+            session,
+            seed_case_id=body.seed_case_id,
+            product_id=body.product_id,
+            customer_id=body.customer_id,
+            planned_support_usd=body.planned_support_usd,
+            planned_revenue_usd=body.planned_revenue_usd,
+            period_label=body.period_label,
+            horizon_weeks=body.horizon_weeks,
+            comparable_limit=body.comparable_limit,
+            line_specs=[row.model_dump() for row in body.lines] if body.lines else None,
+        )
+
+
+class PromoPlanCreateLineBody(BaseModel):
+    product_id: int = Field(ge=1)
+    distributor_id: int | None = None
+    srp: float = Field(gt=0)
+    estimate_qty: float = Field(gt=0)
+    cost_basis: float | None = None
+    cost_source: str | None = None
+    pod_quarter: str | None = None
+    cover_override: float | None = Field(default=None, ge=0, le=52)
+    dirty_fields: list[str] = Field(default_factory=list)
+    seed_line_id: int | None = None
+
+
 class PromoPlanCreateFromDraftBody(BaseModel):
     seed_case_id: int = Field(ge=1)
     product_id: int | None = None
@@ -1103,6 +1156,7 @@ class PromoPlanCreateFromDraftBody(BaseModel):
     planned_revenue_usd: float | None = Field(default=None, ge=0)
     horizon_weeks: int = Field(default=13, ge=1, le=52)
     confirm_over_budget: bool = False
+    lines: list[PromoPlanCreateLineBody] | None = None
 
 
 @router.post("/intelligence/promo-plan-draft/create-case", status_code=201)
@@ -1125,6 +1179,7 @@ def cpor_promo_plan_create_case(
                 horizon_weeks=body.horizon_weeks,
                 confirm_over_budget=body.confirm_over_budget,
                 actor=actor,
+                lines=[row.model_dump() for row in body.lines] if body.lines is not None else None,
                 generate_case_code=_generate_case_code,
                 record_event=_record_event,
                 recompute_case_line=recompute_case_line,

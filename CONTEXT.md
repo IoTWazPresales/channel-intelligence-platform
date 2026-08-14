@@ -17,6 +17,12 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-14 — **Unit 15C Opus VERIFY PASS.** BACKLOG-094 closed. Next: commit/push 15C when asked. Uncommitted.
+
+- 2026-08-14 — **Unit 15C browser smoke** `/promotions` seed 27: dirty MAC/units survive Refresh; Reset restores; MAC popover 15A legs; Create draft **#312** (`manual` 18 vs `intake_weighted` null); cover 9 did not write `commercial_customer_term` (customer 408). Awaiting Opus VERIFY. Uncommitted.
+
+- 2026-08-14 — **Unit 15C implemented** (uncommitted): per-line `build_promo_plan_draft` + `/promotions` editable grid (dirty/Reset/MAC popover); create-case carries `lines[]` (`manual` vs `intake_weighted`); tenant-profile column-mapped lineup export (D-051–D-056). No Alembic. BACKLOG-094 stays open until VERIFY PASS.
+
 - 2026-08-14 — **15A+15B pushed** `62607c2`. Live `/forecasts` Compute from history: 26987 velocity + 11466 analogue (tenant default), 1 override kept. Next: 15C in a **new chat**.
 
 - 2026-08-14 — **Unit 15A VERIFY PASS (Opus)** + Alembic `20260814_0016` on cip (`target_cover_weeks`). Next was 15B.
