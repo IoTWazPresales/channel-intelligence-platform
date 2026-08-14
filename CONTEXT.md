@@ -17,7 +17,9 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
-- 2026-08-14 — **Promoted to `main`** (FF `4aa538a` → `1bde00a`): P5 residual + Units 13–15 (B1/B4 planner, P3 canvas). ROADMAP v3.2.
+- 2026-08-14 — **Post-promote browser smoke** on `main`: B1 Compute CTA + 21 forecast rows; B4 seed 27 two-line grid + MAC popover; dashboards canvas 3 widgets formula/vintage; listing Observations `price_consistent` vs C26759823; case 312 Payments/Recon; admin Reset password (local bar). No self-serve email reset.
+
+- 2026-08-14 — **Promoted to `main`** (FF `4aa538a` → `1bde00a`, pin `e4cc143`): P5 residual + Units 13–15 (B1/B4 planner, P3 canvas). ROADMAP v3.2.
 
 - 2026-08-14 — **docs:** ROADMAP v3.2 + BACKLOG-131/092 closed (Units 13–15 + P5 promote path).
 

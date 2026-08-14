@@ -450,8 +450,10 @@ Anything whose blocker is satisfied. **P1 exited 2026-08-01** (census + defect l
 **A1 / A2 / A3** core + residuals closed 2026-08-08 (A1-09, A2-093, A3-V). **068 landed lens Done.**
 **Units 13–15 VERIFY PASS 2026-08-14:** 092 payment recon · 131 widget canvas · 094 B1+B4 planner.
 **P5 residual** (Takealot REST + activation) is on the same promote path as 13–15.
-**Still open:** P2 local holes (password reset, second-user unaided login, restore proof);
-P3-1 tenant-defined metrics; P3-5 unattended beat soak; P4 Amazon ASIN FLAG + optional Game W27
+**Still open:** P2 hosting deferred; self-serve email reset not built (admin **Reset password**
+on Users is the local bar — browser-proven 2026-08-14); second-user unaided landing not
+walked (`viewer@local` exists); restore-into-disposable-DB proof. P3-1 tenant-defined
+metrics; P3-5 unattended beat soak; P4 Amazon ASIN FLAG + optional Game W27
 + historical backfill; P5 intelligence v1; P6 second tenant; Lane X TRIGGER items (076 Unship
 re-import, 089 richer baselines, 079/085 ops-list fold-in). Lane X runs continuously in GREEN
 alongside anything.
