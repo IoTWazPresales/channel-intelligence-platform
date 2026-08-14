@@ -2,7 +2,7 @@
 
 **Purpose:** First-class demo artifact (charter). Walk a second user through CIP without the builder in the loop.
 
-**Last proven:** Unit 8 Demo/P2 gate (2026-08-12) — see `docs/UNIT8_DEMO_P2_GATE.md`.
+**Last proven:** Unit 8 Demo/P2 gate re-walked 2026-08-14 — see `docs/UNIT8_DEMO_P2_GATE.md`.
 
 **Hosting:** deferred (P2-1). This script assumes local topology: web `:3000`, API `:8001`, DB `cip`.
 

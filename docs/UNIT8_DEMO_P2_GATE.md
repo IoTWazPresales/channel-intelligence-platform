@@ -16,10 +16,10 @@ Hosting (P2-1) remains deferred.
 | A2 | Non-admin account exists | Create or reuse `viewer@local` (role `viewer`) | **PASS** — reused `viewer@local` / Smoke Viewer |
 | A3 | Admin can reset password | Users row → Reset password (≥8 chars) | **PASS** — admin API `set-password` → `changeme1` |
 | A4 | Logout clears session | Shell logout → `/login` | **PASS** — login form after session switch |
-| A5 | Second user lands on Control tower | Login as viewer → `/dashboard` welcome + freshness | **PASS** — Welcome Smoke Viewer; freshness strip |
-| A6 | Navigate unaided | Viewer opens one non-admin surface (e.g. Plan vs executed or Shipping) | **PASS** — `/shipping` Inbound shipments loaded |
-| A7 | RBAC refuse | Viewer opens `/admin/users` → forbidden / no create form | **PASS** — `users-forbidden` after default-deny fix; API create still 403 |
-| A8 | Forgot-password copy | `/login` points to admin Reset password (no SMTP required) | **PASS** — copy visible on login |
+| A5 | Second user lands on Control tower | Login as viewer → `/dashboard` welcome + freshness | **PASS** 2026-08-12; **re-PASS 2026-08-14** — Welcome Smoke Viewer; freshness (newest import 30h) |
+| A6 | Navigate unaided | Viewer opens one non-admin surface (e.g. Plan vs executed or Shipping) | **PASS** 2026-08-12 `/shipping`; **re-PASS 2026-08-14** — Inbound shipments 1–50 of 14367; `/plan-vs-executed` fill 13.2% (26Q3) |
+| A7 | RBAC refuse | Viewer opens `/admin/users` → forbidden / no create form | **PASS** 2026-08-12; **re-PASS 2026-08-14** — `users-forbidden` “Admin role required to manage users.”; no create form |
+| A8 | Forgot-password copy | `/login` points to admin Reset password (no SMTP required) | **PASS** 2026-08-12; **re-PASS 2026-08-14** — copy visible on login |
 
 **Demo narrative:** `docs/DEMO_SCRIPT.md`
 
@@ -44,10 +44,10 @@ Also append a row to `docs/BACKUP_AND_DR.md` proof log.
 
 | # | Check | Result |
 |---|--------|--------|
-| B1 | `backup_cip.ps1` writes `.tmp/backups/cip_*.dump` | **PASS** — `cip_20260812_124712.dump` (~259 MB) |
-| B2 | `restore_cip_smoke.ps1` → `cip_alembic_smoke` prints `RESTORE_SMOKE_OK` | **PASS** |
-| B3 | Restored `alembic_version` matches expected head (or note dump lag) | **PASS** — `20260812_0014` |
-| B4 | Live `cip` untouched (`current_database` / counts still healthy) | **PASS** — live `dim_product=18177` unchanged |
+| B1 | `backup_cip.ps1` writes `.tmp/backups/cip_*.dump` | **PASS** 2026-08-12 (~259 MB); **re-PASS 2026-08-14** — `cip_20260814_171118.dump` (~261 MB) |
+| B2 | `restore_cip_smoke.ps1` → `cip_alembic_smoke` prints `RESTORE_SMOKE_OK` | **PASS** 2026-08-12; **re-PASS 2026-08-14** |
+| B3 | Restored `alembic_version` matches expected head (or note dump lag) | **PASS** 2026-08-12 `20260812_0014`; **re-PASS 2026-08-14** — `20260814_0016` |
+| B4 | Live `cip` untouched (`current_database` / counts still healthy) | **PASS** — live `dim_product=18177` unchanged both proofs |
 
 ---
 
@@ -57,6 +57,7 @@ Also append a row to `docs/BACKUP_AND_DR.md` proof log.
 |------|-------|----------|
 | 2026-08-12 | A1–A8 browser | Control tower as Smoke Viewer; Shipping; Users forbidden; login forgot-password copy; admin Users form |
 | 2026-08-12 | B1–B4 restore | `RESTORE_SMOKE_OK` → `cip_alembic_smoke`; logged in `docs/BACKUP_AND_DR.md` |
+| 2026-08-14 | A4–A8 + B1–B4 re-walk | `viewer@local` / `changeme1` → Control tower; Shipping 14367 rows; PvE 13.2%; Users forbidden; restore `20260814_0016` into `cip_alembic_smoke` |
 
 ---
 
@@ -64,5 +65,5 @@ Also append a row to `docs/BACKUP_AND_DR.md` proof log.
 
 - P2-1 hosting / public URL
 - SMTP self-serve reset
-- Units 9–10 (094 / 092) — still blocked on inputs
+- Units 9–10 (094 / 092) — shipped later (Units 13–15); not this gate
 - Re-auditing P5 payment/CN (already smoke PASS on main)

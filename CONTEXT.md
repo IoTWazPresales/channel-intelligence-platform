@@ -17,6 +17,8 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-14 — **P2 local exit re-proven** (`feat/close-remaining-holes`): viewer Control tower + Shipping + PvE 13.2%; Users forbidden; restore `cip_alembic_smoke` alembic `20260814_0016`; lineup XLSX CTA; inbox #4 vintage. Hosting / P3-1 / P5 intel v1 / P6 still open.
+
 - 2026-08-14 — **Post-promote browser smoke** on `main`: B1 Compute CTA + 21 forecast rows; B4 seed 27 two-line grid + MAC popover; dashboards canvas 3 widgets formula/vintage; listing Observations `price_consistent` vs C26759823; case 312 Payments/Recon; admin Reset password (local bar). No self-serve email reset.
 
 - 2026-08-14 — **Promoted to `main`** (FF `4aa538a` → `1bde00a`, pin `e4cc143`): P5 residual + Units 13–15 (B1/B4 planner, P3 canvas). ROADMAP v3.2.

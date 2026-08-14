@@ -1,8 +1,8 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-14 (promoted P5 + Units 13–15 → `main`; post-promote browser smoke)
+**Last updated:** 2026-08-14 (P2 local exit re-proven; leftover holes that cannot close named)
 
-**Branch:** `main` @ `e4cc143` (plus this pin)
+**Branch:** `feat/close-remaining-holes` (docs) off `main` @ `f251bcc`
 
 **Alembic on cip:** `20260814_0016` (applied — do not upgrade further unless approved)
 
@@ -11,6 +11,7 @@
 | Unit | Status |
 |---|---|
 | 8 / 11 / 12 | Merged PRs #36 / #37 |
+| **P2 local** | **Proven live 2026-08-14** — `viewer@local` Control tower → Shipping / PvE; Users forbidden; restore `cip_alembic_smoke` alembic `20260814_0016` |
 | **P5 residual** | On `main` — Takealot REST + activation. Browser: Observations `price_consistent` vs C26759823 |
 | **13** | VERIFY PASS + browser Payments/Recon on case 312. BACKLOG-092 closed |
 | **14** | VERIFY PASS + browser canvas (3 widgets, formula + vintage). BACKLOG-131 closed |
@@ -18,17 +19,20 @@
 | P2 hosting | Stay local (Q-003) |
 | P6 | Wait for a second company |
 
-## Post-promote browser (local `:3000` / `:8001`)
+## Proven this session (local `:3000` / `:8001`)
 
-- `/forecasts`: Compute from history, Add/Paste override, 21 rows. Did **not** click Compute.
-- `/promotions`: seed 27 → 2 lines; MAC popover display legs + `dsi_wac_not_ingested`.
-- `/dashboards`: Unit 14 canvas, 3 charts, formula + vintage on face.
-- `/listing-capture` Observations: Takealot 200/ok; `price_consistent` and `no_case_detected`. Guide: not intelligence v1. Did **not** poll.
-- CPOR Cases list recon copy + case 312 Payments/Recon panel.
-- Admin Users: Reset password (local bar). Login: no self-serve email reset.
+- Viewer `viewer@local` / `changeme1`: Control tower (Smoke Viewer, freshness 30h); Shipping 1–50 of 14367; PvE fill **13.2%** (26Q3); `/admin/users` `users-forbidden`.
+- Restore: dump `cip_20260814_171118.dump` (~261 MB) → `cip_alembic_smoke` `RESTORE_SMOKE_OK` dim_product=18177 import_job=341 alembic=`20260814_0016` (live cip count unchanged).
+- `/lineup` Export XLSX (`lineup-net-requirement-export-xlsx`) visible; did **not** click Apply / Clear.
+- `/reports` Run + **Send to inbox** → delivery **#4** `sellout_units` 178261.85; `/inbox` 4 items with vintage on face.
+- P3-5 **unattended Monday 07:00** not proven (needs `CIP_ENABLE_DEV_BEAT=1` overnight).
 
-## Next
+## Next (new units — not closable as housekeeping)
 
-Remaining: P2 unaided second-user landing + restore proof; P3-1 / beat soak; P4 residuals; P5 intelligence v1; P6 second tenant; Lane X TRIGGER items.
+- **P3-1** tenant-defined metrics without a deploy (CONSULT first).
+- **P5 intelligence v1** after ≥2 weeks promo-activated vs not observations.
+- **P6** second tenant (needs a real second company).
+- Lane X: BACKLOG-076 / 089 / 079 residual fold-in when those pages are next edited.
+- P4 soak residuals: Amazon ASIN FLAG, optional Game W27, historical CST backfill (explicit ask).
 
-**Env:** local Windows. Web `:3000` + API `:8001`.
+**Env:** local Windows. Web `:3000` + API `:8001`. No Docker.

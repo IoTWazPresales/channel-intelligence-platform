@@ -569,7 +569,7 @@
 | **Effort** | Medium (beat task + import hook; small) |
 | **Source** | P3-5 authored 2026-08-01 — `report_schedule` + `run-now` inbox path; ROADMAP P3-5 calendar + event delivery |
 | **Idea** | Wire Celery beat for `weekly_monday_0700` / `daily_0700` and fan-out `on_import_complete` schedules after DSI/shipment apply completes. |
-| **Caveat** | Confirmed proof so far is the **run-now path** (`POST /reports/schedules/{id}/run-now`) and the fan-out task existing and being callable — not an unattended overnight Monday-07:00 beat firing in production. Unattended beat requires `CIP_ENABLE_DEV_BEAT=1` locally (Windows dev defaults beat **off** — see `dev_beat_disabled()` in `apps/api/app/worker/celery_queues.py`); production beat scheduling posture is untouched by this note. |
+| **Caveat** | Confirmed proof so far is the **run-now path** (`POST /reports/schedules/{id}/run-now`) and the fan-out task existing and being callable — not an unattended overnight Monday-07:00 beat firing in production. Unattended beat requires `CIP_ENABLE_DEV_BEAT=1` locally (Windows dev defaults beat **off** — see `dev_beat_disabled()` in `apps/api/app/worker/celery_queues.py`); production beat scheduling posture is untouched by this note. **2026-08-14:** Report builder **Send to inbox** delivered `#4` (`sellout_units` 178261.85, vintage on `/inbox` face). That is the P3-5 local delivery bar — not the overnight soak. |
 | **What the work is** | Done — beat entry + task iterating enabled schedules due; import apply progress-complete hook for `on_import_complete`; optional email_stub channel later remains a separate idea, not required for "shipped". |
 | **Regression traps** | Never skip delivery when metric returns empty — missing data is the alert; always stamp `data_vintage`. |
 | **Behavior to retain** | Inbox channel + missing_data_alert + tenant scope. |
@@ -888,7 +888,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Partial** · 2026-08-12 · CPOR Cases list on `MasterDataGridShell` (`feat/cpor-payment-evidence`). Residual: PM gaps / shipment evidence / PVE still parked until those pages are touched. |
+| **Status / parked** | **Partial** · 2026-08-14 · CPOR Cases list on `MasterDataGridShell`. Warren asked for leftover close 2026-08-14 — **not closed**: PM gaps is a worklist (`ProductMasterGapWorklistView`), PVE exception lists are scorecard grids (D-021: do not resurrect ops-master KPI chrome), shipment evidence already has `ModuleGridToolbar` + Enterprise AG Grid. Fold only when those pages are next edited; do not standalone. |
 | **Effort** | Medium (mechanical per page) |
 | **Source** | D-021; commits `ddb712c`…`d789ad9` — shell on CPOR cases, PM gaps, shipment evidence, PVE |
 | **Idea** | Re-apply `MasterDataGridShell` / ops list chrome to CPOR cases, product-master gaps, shipment evidence, PVE exception lists when those pages are touched. |

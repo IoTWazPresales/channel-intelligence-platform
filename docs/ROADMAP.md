@@ -2,7 +2,7 @@
 
 **Owner:** Warren · **Version:** 3.2 · 2026-08-14
 **Status:** living — if this file disagrees with `docs/memory/CURRENT.md` about what's next, CURRENT wins and this file gets corrected.
-**v3.2 changes:** Pin Units 13–15 VERIFY PASS (P3 widget canvas, B1 history forecast, B4 editable promo planner) and P5 residual (Takealot REST + activation) on the promote-to-main path. Close stale “queued Unit 14 / B4 next / P4-P5 still on p4 branch” claims.
+**v3.2 changes:** Pin Units 13–15 VERIFY PASS (P3 widget canvas, B1 history forecast, B4 editable promo planner) and P5 residual (Takealot REST + activation) on the promote-to-main path. Close stale “queued Unit 14 / B4 next / P4-P5 still on p4 branch” claims. **2026-08-14 addendum:** P2 local unaided-landing + restore re-proven; hosting still deferred.
 **v3.1 changes:** Open decisions #1/#2 marked resolved (align with OPEN_QUESTIONS Q-001/Q-002);
 register lists only still-open items.
 **v3.0 changes:** B2+B3 merged into one lineup+budget builder (reservation is embedded in the
@@ -450,13 +450,14 @@ Anything whose blocker is satisfied. **P1 exited 2026-08-01** (census + defect l
 **A1 / A2 / A3** core + residuals closed 2026-08-08 (A1-09, A2-093, A3-V). **068 landed lens Done.**
 **Units 13–15 VERIFY PASS 2026-08-14:** 092 payment recon · 131 widget canvas · 094 B1+B4 planner.
 **P5 residual** (Takealot REST + activation) is on the same promote path as 13–15.
-**Still open:** P2 hosting deferred; self-serve email reset not built (admin **Reset password**
-on Users is the local bar — browser-proven 2026-08-14); second-user unaided landing not
-walked (`viewer@local` exists); restore-into-disposable-DB proof. P3-1 tenant-defined
-metrics; P3-5 unattended beat soak; P4 Amazon ASIN FLAG + optional Game W27
-+ historical backfill; P5 intelligence v1; P6 second tenant; Lane X TRIGGER items (076 Unship
-re-import, 089 richer baselines, 079/085 ops-list fold-in). Lane X runs continuously in GREEN
-alongside anything.
+**Still open:** P2 hosting deferred (Q-003 local-only); self-serve email reset not built
+(admin **Reset password** is the local bar). **P2 local exit re-proven 2026-08-14:** second-user
+unaided landing (`viewer@local` Control tower → Shipping / PvE; Users forbidden) + restore
+into `cip_alembic_smoke` (`RESTORE_SMOKE_OK`, alembic `20260814_0016`). P3-1 tenant-defined
+metrics without a deploy; P3-5 unattended Monday 07:00 beat soak (run-now / Send to inbox
+proven; overnight beat not). P4 Amazon ASIN FLAG + optional Game W27 + historical backfill;
+P5 intelligence v1; P6 second tenant; Lane X TRIGGER items (076 Unship re-import, 089 richer
+baselines, 079/085 ops-list fold-in). Lane X runs continuously in GREEN alongside anything.
 
 ### What you cannot do
 
