@@ -27,7 +27,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Queued — next arc Unit 14** · 2026-08-13 · Warren: rebuild reports/dashboards as widgets; pick visual + metric + grain (week/month/quarter/customer). Current builder is a thin form; dashboards only replay saved reports. |
+| **Status / parked** | **Done** · 2026-08-14 · Unit 14 VERIFY PASS (14A series · 14B `dashboard_widget` · 14C ECharts canvas). |
 | **Effort** | Large (canvas + query engine grains + chart library) |
 | **Source** | Warren 2026-08-13 (P3 product direction after P5 residual) |
 | **Idea** | Dashboard canvas of widgets. Each widget: visual type → one or more **governed** metrics from the semantic catalog → legal grain/filters. Invalid grains refused with an explanation. Not raw-column BI. |
@@ -36,7 +36,7 @@
 | **Regression traps** | Do not embed Power BI. Do not let widgets query arbitrary columns. Metrics not in `COMMERCIAL_SEMANTICS.md` are not built. SOH latest-per-snapshot invariant; fill shipped-only. |
 | **Behavior to retain** | Semantic catalog; refuse-all grains; scheduled delivery (P3-5) still works. |
 | **Out of scope** | SQL viewer for non-admins (P3-6); inventing elasticity; 092 recon grid. |
-| **TRIGGER** | Unit 13 (BACKLOG-092 recon) complete **or** Warren starts P3 ahead of recon. |
+| **TRIGGER** | Fired — Unit 13 complete; Unit 14 VERIFY PASS 2026-08-14. Reopen only if canvas regresses to a query form. |
 
 ---
 
@@ -671,7 +671,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Implemented Unit 13** · 2026-08-13 — recon read model + Cases list/detail. Import path already shipped (`cpor_payment_evidence` + mapping profiles). |
+| **Status / parked** | **Done** · 2026-08-14 · Unit 13 VERIFY PASS — recon read model + Cases list/detail. Import path already shipped (`cpor_payment_evidence` + mapping profiles). |
 | **Effort** | Large (recon read model + Cases Payments/Recon grid; import already generic) |
 | **Source** | Warren 2026-08-01 (owed vs paid); 2026-08-12 payment evidence import; 2026-08-13 recon ask |
 | **Idea** | Tenant workbooks map onto **canonical CIP columns** (already: `PAYMENT_COLUMN_MAP` / `cpor_payment_mapping_profile`). Recon grid is those canonical fields, not Ken headers. Compare **paid** (evidence) vs **owed** (approved case support outstanding). |
@@ -681,7 +681,7 @@
 | **Regression traps** | Do not rename “owed” to “paid”; do not use claim-evidence units as paid. |
 | **Behavior to retain** | Delivery rate; computed `ttl_result`; Payments tab; profile-mapped import. |
 | **Out of scope** | Inventing paid from result_qty × support_unit; P3 widget canvas (Unit 14). |
-| **TRIGGER** | — fired and implemented Unit 13 (`GET /cpor/cases/{id}/payment-recon`). Reopen if owed formula changes (e.g. settlement-distinct owed) or line-grain paid recon is required. |
+| **TRIGGER** | Fired — Unit 13 VERIFY PASS. Reopen if owed formula changes (e.g. settlement-distinct owed) or line-grain paid recon is required. |
 
 ---
 

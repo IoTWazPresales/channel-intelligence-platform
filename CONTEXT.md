@@ -17,6 +17,8 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-14 — **docs:** ROADMAP v3.2 + BACKLOG-131/092 closed (Units 13–15 + P5 promote path).
+
 - 2026-08-14 — **Unit 15C Opus VERIFY PASS.** BACKLOG-094 closed. Next: commit/push 15C when asked. Uncommitted.
 
 - 2026-08-14 — **Unit 15C browser smoke** `/promotions` seed 27: dirty MAC/units survive Refresh; Reset restores; MAC popover 15A legs; Create draft **#312** (`manual` 18 vs `intake_weighted` null); cover 9 did not write `commercial_customer_term` (customer 408). Awaiting Opus VERIFY. Uncommitted.

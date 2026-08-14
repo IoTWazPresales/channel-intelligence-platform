@@ -1,7 +1,8 @@
 # CIP Roadmap — to end state
 
-**Owner:** Warren · **Version:** 3.1 · 2026-08-02
-**Status:** proposed — commit to `docs/ROADMAP.md` after review
+**Owner:** Warren · **Version:** 3.2 · 2026-08-14
+**Status:** living — if this file disagrees with `docs/memory/CURRENT.md` about what's next, CURRENT wins and this file gets corrected.
+**v3.2 changes:** Pin Units 13–15 VERIFY PASS (P3 widget canvas, B1 history forecast, B4 editable promo planner) and P5 residual (Takealot REST + activation) on the promote-to-main path. Close stale “queued Unit 14 / B4 next / P4-P5 still on p4 branch” claims.
 **v3.1 changes:** Open decisions #1/#2 marked resolved (align with OPEN_QUESTIONS Q-001/Q-002);
 register lists only still-open items.
 **v3.0 changes:** B2+B3 merged into one lineup+budget builder (reservation is embedded in the
@@ -219,7 +220,11 @@ aggregates + result cache to meet the NFR targets.
 (column, sparkline, table, …) → pick governed metric(s) → pick grain (week / month /
 quarter / customer, …). Invalid combinations refused with an explanation. Libraries:
 `react-grid-layout` + `@dnd-kit` + Apache ECharts (tables stay AG Grid). Do not embed
-Power BI. Queued as **Unit 14** after payment recon (Unit 13 / BACKLOG-092).
+Power BI.
+**Shipped Unit 14 (VERIFY PASS 2026-08-14):** 14A series + period_grain week/month/quarter;
+14B `dashboard_widget` persist; 14C ECharts canvas on `/dashboards`. BACKLOG-131 closed.
+Remaining P3: tenant-defined metrics without a deploy (P3-1), unattended Monday 07:00 beat
+soak (BACKLOG-098 caveat), reopen MV only if cold `/query/execute` regularly exceeds 5s (097).
 
 ### P3-5 Export and delivery
 Excel and PDF export. **Scheduled delivery** — event-triggered (load completes → dependent
@@ -249,7 +254,11 @@ Forecast is never merged into actuals.
 
 **Lock 2026-08-13:** no external forecast file to ingest. CIP computes from **history as
 benchmark** (sell-out / sell-through by customer×product×period). Suggested values are
-editable. Queued as Lane B Unit 15 with BACKLOG-094 (intake-weighted MAC + editable promo planner).
+editable.
+**Shipped Unit 15B (VERIFY PASS 2026-08-14):** `/forecasts` primary CTA is Compute from history
+(`POST /forecasts/compute-from-history`); paste/add are overrides; `tenant_id` never NULL;
+B1-07 IMPLEMENTED. Live cip: 26987 velocity + 11466 analogue; 1 override kept. BACKLOG-094
+closed with 15C.
 
 ### B2 — Lineup + budget builder *(B2 and B3 merged)*
 **Entry:** A1 (bias) + A3 (stock/cover) + B1 (forecast).
@@ -279,12 +288,12 @@ profit-with-reservation is not usable by a PM. See `docs/COMMERCIAL_DOMAIN_RULES
 **Exit:** a next-quarter lineup authored in CIP with profit and reservation, exported in tenant
 format. **This is the dependency moment.**
 
-**Unit 1–3 (author loop) on `feat/b2-author-loop`:** net req → Apply → draft
+**Unit 1–3 (author loop):** net req → Apply → draft
 `fact_lineup_plan_item` (+ optional `commercial_lineup_case`) → builder-economics + budget position
 (`reservation_source=derived_from_profit`); half-year slots + A1 bias toggle; CSV + XLSX on-ramp.
-Remaining B2 polish: **generic CSV/XLSX export** is accepted (Warren 2026-08-13) **if**
-column order/headers follow the required tenant output layout via Settings/profile
-column-map (not OEM-branded app law). **B4** next with Unit 15 (history forecast + 094).
+**Column-mapped export (Unit 15C / D-056):** draft-lineup XLSX headers are an ordered
+`[{field, header}]` list in the file-based tenant profile (Settings). Not OEM-branded app law.
+Remaining B2: a PM authors next-quarter lineup in CIP and exports tenant format (demo gate #4).
 
 ### B4 — Promotion plan builder
 **Entry:** A2 + B1 + B2.
@@ -292,8 +301,12 @@ column-map (not OEM-branded app law). **B4** next with Unit 15 (history forecast
 check against B2 reservations, waterfall math from CPOR v1, export in tenant format. Upload
 path preserved.
 
-**Unit B4-01 on `feat/b4-promo-draft`:** `/promotions` compose uses B2 lineup-derived budget;
-`POST …/promo-plan-draft/create-case` writes a draft CPOR case (browser smoke: case #300 from seed 298).
+**Unit 15C (VERIFY PASS 2026-08-14, D-051–D-056):** `/promotions` B4 is a per-line editable
+grid (history units + intake-weighted MAC + cover + SRP). Dirty cells survive Refresh;
+Reset-to-suggested; Create writes every `lines[]` row (`cost_source` ∈ `{manual, intake_weighted}`).
+Cover is session `cover_override` only — never writes `commercial_customer_term`. Approve still
+snapshots `suggest_cost_basis` (FLAG drift, never rewrite stored cost). Live smoke: draft case
+#312 from seed 27. BACKLOG-094 closed.
 
 ## P4 — CST (forward-only)
 
@@ -339,13 +352,15 @@ confirm-suggested; Amazon soak 51; Evetech 44 confirmed + polled (JSON-LD prices
 Takealot poll hits Next.js shell → parse_failed until better fetch. Observations tab +
 manual poll on `/listing-capture`. **Listing↔CPOR activation** (BACKLOG-130) = point-in-time
 obs price vs `cpor_case_line.srp`; persists `parse_flags.cpor_activation` including
-`no_case_detected` — **not** gated on ≥14d history. Takealot REST fetch shipped 2026-08-13
-(`feat/p5-residual`). Activation `not_activated` / `price_consistent` proven on historical
+`no_case_detected` — **not** gated on ≥14d history. Takealot REST fetch shipped 2026-08-13 (`feat/p5-residual`, promoting with Units 13–15).
+Activation `not_activated` / `price_consistent` proven on historical
 windows and on **2026-08-13** vs C26759823 (job 978). Activation uses Sell-Through **line**
 windows first; Sell out PP only when no covering promo (Warren 2026-08-13). BACKLOG-130 current-window residual closed.
 Three Takealot accessories with no `dim_product` (listings 55–57: Sheath II / Raikiri II /
 Keris II Origin) stamped `ignore_no_catalogue` → Product catalogue gaps 2026-08-13 — do not
 auto-create PM.
+**Still open under P5:** intelligence v1 (≥2 weeks promo activated vs not); Takealot parse
+residuals if REST miss; promote is the housekeeping close for the residual branch.
 
 ---
 
@@ -432,12 +447,14 @@ rewrite.)*
 ### What you can start right now
 
 Anything whose blocker is satisfied. **P1 exited 2026-08-01** (census + defect log sealed).
-**A1 / A2 / A3** core + residuals closed 2026-08-08 (A1-09, A2-093, A3-V). Parked remain: 068 / 089 / 092 / 097.
-**B1 / B2 author loop / B4-01 / P2 auth / P3 report builder** already on `main` — do not rebuild;
-prove demo gate + close remaining holes (password reset, schedule soak, BACKLOG-076).
-**P4/P5** on `feat/p4-cst-six-customer-shapes` (PR #26): multi-customer CST shapes + listing
-capture/activation flags — promote when Warren asks. Next: CPOR upload + re-poll, or demo-gate
-holes. Lane X runs continuously in GREEN alongside anything.
+**A1 / A2 / A3** core + residuals closed 2026-08-08 (A1-09, A2-093, A3-V). **068 landed lens Done.**
+**Units 13–15 VERIFY PASS 2026-08-14:** 092 payment recon · 131 widget canvas · 094 B1+B4 planner.
+**P5 residual** (Takealot REST + activation) is on the same promote path as 13–15.
+**Still open:** P2 local holes (password reset, second-user unaided login, restore proof);
+P3-1 tenant-defined metrics; P3-5 unattended beat soak; P4 Amazon ASIN FLAG + optional Game W27
++ historical backfill; P5 intelligence v1; P6 second tenant; Lane X TRIGGER items (076 Unship
+re-import, 089 richer baselines, 079/085 ops-list fold-in). Lane X runs continuously in GREEN
+alongside anything.
 
 ### What you cannot do
 
