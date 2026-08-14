@@ -45,6 +45,7 @@ _WRITE_CAPABLE_TEST_MODULES: frozenset[str] = frozenset(
         "test_customer_alias_scope_merge.py",
         "test_customer_full_merge.py",
         "test_customers_delete.py",
+        "test_dashboard_widget_persist.py",
         "test_data_integrity_audit.py",
         "test_distributor_full_merge.py",
         "test_distributor_sales_inventory_import.py",

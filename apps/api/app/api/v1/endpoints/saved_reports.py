@@ -25,8 +25,9 @@ from app.semantics.registry import validate_metric_grain
 
 router = APIRouter()
 
-Visual = Literal["kpi", "table", "bar"]
+Visual = Literal["kpi", "table", "bar", "line", "area"]
 Visibility = Literal["personal", "published"]
+PeriodGrain = Literal["week", "month", "quarter"]
 
 
 class SavedReportCreate(BaseModel):
@@ -36,6 +37,7 @@ class SavedReportCreate(BaseModel):
     grains: list[str] = Field(default_factory=list)
     filters: dict[str, Any] = Field(default_factory=dict)
     visual: Visual = "kpi"
+    period_grain: PeriodGrain | None = None
     visibility: Visibility = "personal"
     shared_roles: list[str] = Field(default_factory=list)
 
@@ -47,6 +49,7 @@ class SavedReportUpdate(BaseModel):
     grains: list[str] | None = None
     filters: dict[str, Any] | None = None
     visual: Visual | None = None
+    period_grain: PeriodGrain | None = None
     visibility: Visibility | None = None
     shared_roles: list[str] | None = None
 
@@ -108,7 +111,9 @@ async def create_saved_report(
     user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
     tid = tenant_id_from_user(user)
-    validation = validate_metric_grain(body.metric, body.grains, tenant_id=tid)
+    validation = validate_metric_grain(
+        body.metric, body.grains, tenant_id=tid, period_grain=body.period_grain
+    )
     if not validation.ok:
         raise HTTPException(status_code=400, detail=validation.as_dict())
 
@@ -123,6 +128,7 @@ async def create_saved_report(
         grains=list(validation.requested_grains),
         filters=dict(body.filters or {}),
         visual=body.visual,
+        period_grain=validation.period_grain,
     )
     db.add(row)
     await db.commit()
@@ -176,14 +182,20 @@ async def update_saved_report(
         row.shared_roles = normalize_shared_roles(body.shared_roles)
     if body.filters is not None:
         row.filters = dict(body.filters)
-    if body.metric is not None or body.grains is not None:
+    if body.metric is not None or body.grains is not None or body.period_grain is not None:
         metric = body.metric or row.metric_key
         grains = body.grains if body.grains is not None else list(row.grains or [])
-        validation = validate_metric_grain(metric, grains, tenant_id=tid)
+        period_grain = body.period_grain if body.period_grain is not None else row.period_grain
+        if body.grains is not None and "period" not in grains:
+            period_grain = None
+        validation = validate_metric_grain(
+            metric, grains, tenant_id=tid, period_grain=period_grain
+        )
         if not validation.ok:
             raise HTTPException(status_code=400, detail=validation.as_dict())
         row.metric_key = validation.metric_key or metric
         row.grains = list(validation.requested_grains)
+        row.period_grain = validation.period_grain
 
     row.updated_at = datetime.now(timezone.utc)
     await db.commit()

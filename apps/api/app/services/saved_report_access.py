@@ -102,6 +102,7 @@ def item_to_dict(row: Any, *, kind: str = "report") -> dict[str, Any]:
                 "grains": list(row.grains or []),
                 "filters": dict(row.filters or {}),
                 "visual": row.visual,
+                "period_grain": row.period_grain,
             }
         )
     return base

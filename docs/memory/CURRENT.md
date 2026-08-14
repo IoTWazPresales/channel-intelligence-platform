@@ -1,10 +1,10 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-14 (Unit 14A Opus VERIFY PASS — next 14B Alembic)
+**Last updated:** 2026-08-14 (Unit 14B widget persist applied — next 14C canvas)
 
 **Branch:** `feat/unit13-cpor-payment-recon` (from `feat/p5-residual` @ `53361c3`) 
 
-**Alembic on cip:** `20260812_0014`
+**Alembic on cip:** `20260814_0015`
 
 ## Arc progress
 
@@ -15,7 +15,7 @@
 | 12 P6 light | Export sheet Settings shipped in PR #37 |
 | P5 residual | **Pushed** `feat/p5-residual` @ `53361c3` — not yet merged to `main` |
 | **13** | **VERIFY PASS** (Opus) — BACKLOG-092 paid vs owed recon; D-01 superseded_by_case_id |
-| **14** | **14A VERIFY PASS** (Opus) · 14B widget persist (Alembic — Warren approve) · 14C ECharts canvas |
+| **14** | **14A VERIFY PASS** · **14B persist applied** (`dashboard_widget`, tiles dropped) · 14C ECharts canvas next |
 | **15** | Queued — B1 history forecast + BACKLOG-094 intake-weighted MAC + editable planner |
 | P2 hosting | Stay local |
 | P6 | Wait for a second company |
@@ -32,6 +32,7 @@ Plan: `.tmp/ARC_UNITS_13_15_PLAN.md`
 - Case 293 `C26649381`: owed 68421.48 ZAR; paid 0 ZAR; USD CNs 116.96 FLAG `currency_mismatch` / `fx_undeclared` (not converted)
 
 - Unit 14A: `POST /query/execute` `sellout_units` / `cst_sellthrough_units` + `series` + `period_grain`
+- Unit 14B: `dashboard_widget` first-class spec + layout; `PUT/POST/PATCH/DELETE /dashboards/{id}/widgets`; promote → `saved_report` (P3-5). `dashboard_tile` dropped after backfill. Live INSERT two widgets on cip (pytest).
 
 ## Locks 2026-08-13
 
@@ -50,7 +51,7 @@ Plan: `.tmp/ARC_UNITS_13_15_PLAN.md`
 
 ## Next
 
-1. Unit 14B — Warren approve Alembic schema (`dashboard_widget`) then IMPLEMENT on this branch
+1. Unit 14C — ECharts canvas on `/dashboards` (sell-out by week line + CST by customer bar)
 2. Merge/promote P5+13 when wanted — not a Unit 14 gate
 3. Do not re-ingest job 978 / do not re-audit Takealot REST fetch
 
