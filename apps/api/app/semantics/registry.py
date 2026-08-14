@@ -45,6 +45,7 @@ class MetricDef:
     refuse_reason: str | None = None
     refuse_examples: tuple[RefuseExample, ...] = ()
     notes: str | None = None
+    calendar_period: bool = False
 
 
 @dataclass
@@ -55,6 +56,7 @@ class ValidationResult:
     requested_grains: list[str]
     message: str
     allowed_grains: list[list[str]] = field(default_factory=list)
+    period_grain: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -64,6 +66,7 @@ class ValidationResult:
             "requested_grains": self.requested_grains,
             "message": self.message,
             "allowed_grains": self.allowed_grains,
+            "period_grain": self.period_grain,
         }
 
 
@@ -108,6 +111,7 @@ class SemanticCatalog:
                     "refuse_all": m.refuse_all,
                     "refuse_reason": m.refuse_reason,
                     "notes": m.notes,
+                    "calendar_period": m.calendar_period,
                 }
                 for m in self.metrics
             ],
@@ -139,6 +143,7 @@ def _parse_metric(raw: dict[str, Any]) -> MetricDef:
         refuse_reason=(str(raw["refuse_reason"]) if raw.get("refuse_reason") else None),
         refuse_examples=tuple(examples),
         notes=(str(raw["notes"]) if raw.get("notes") else None),
+        calendar_period=bool(raw.get("calendar_period")),
     )
 
 
@@ -277,11 +282,25 @@ def validate_metric_grain(
     *,
     catalog: SemanticCatalog | None = None,
     tenant_id: str | None = None,
+    period_grain: str | None = None,
 ) -> ValidationResult:
     """Refuse invalid metric×grain combinations with an explanation (P3-1 exit bar)."""
     cat = catalog or (catalog_for_tenant_cached(tenant_id or "default") if tenant_id else default_catalog())
     requested = sorted(normalize_grains(grains))
     req_set = frozenset(requested)
+    raw_key = (metric_key or "").strip()
+    if any(sep in raw_key for sep in (",", "+", "|", ";")):
+        return ValidationResult(
+            ok=False,
+            metric_id=None,
+            metric_key=metric_key,
+            requested_grains=requested,
+            message=(
+                "One query is one governed metric; sellout_units (DSI) and "
+                "cst_sellthrough_units (CST) cannot share a widget."
+            ),
+        )
+
     metric = cat.metric_by_key(metric_key)
     if metric is None:
         return ValidationResult(
@@ -296,6 +315,18 @@ def validate_metric_grain(
         )
 
     allowed_sorted = [sorted(g) for g in metric.allowed_grains]
+    pg_result = _validate_period_grain(metric, req_set, period_grain)
+    if pg_result is not None:
+        return ValidationResult(
+            ok=False,
+            metric_id=metric.id,
+            metric_key=metric.key,
+            requested_grains=requested,
+            message=pg_result,
+            allowed_grains=allowed_sorted,
+            period_grain=period_grain,
+        )
+    effective_pg = _effective_period_grain_for_metric(metric, req_set, period_grain)
 
     if metric.refuse_all:
         return ValidationResult(
@@ -306,6 +337,7 @@ def validate_metric_grain(
             message=metric.refuse_reason
             or f"Metric {metric.key} is not queryable (status={metric.status}).",
             allowed_grains=allowed_sorted,
+            period_grain=effective_pg,
         )
 
     known_dims = cat.dimension_ids() | {"lineup_quarter"}
@@ -318,6 +350,7 @@ def validate_metric_grain(
             requested_grains=requested,
             message=f"Unknown dimension(s): {', '.join(unknown)}. Use the dimension registry.",
             allowed_grains=allowed_sorted,
+            period_grain=effective_pg,
         )
 
     for ex in metric.refuse_examples:
@@ -329,6 +362,7 @@ def validate_metric_grain(
                 requested_grains=requested,
                 message=ex.reason,
                 allowed_grains=allowed_sorted,
+                period_grain=effective_pg,
             )
 
     if req_set in metric.allowed_grains:
@@ -339,6 +373,7 @@ def validate_metric_grain(
             requested_grains=requested,
             message=f"Valid: {metric.label} at grain {{{', '.join(requested) or '∅'}}}.",
             allowed_grains=allowed_sorted,
+            period_grain=effective_pg,
         )
 
     for ex in metric.refuse_examples:
@@ -350,6 +385,7 @@ def validate_metric_grain(
                 requested_grains=requested,
                 message=ex.reason,
                 allowed_grains=allowed_sorted,
+                period_grain=effective_pg,
             )
 
     allowed_fmt = "; ".join("{" + ", ".join(g) + "}" for g in allowed_sorted) or "(none)"
@@ -364,4 +400,52 @@ def validate_metric_grain(
             f"Allowed grains: {allowed_fmt}."
         ),
         allowed_grains=allowed_sorted,
+        period_grain=effective_pg,
     )
+
+
+def _effective_period_grain_for_metric(
+    metric: MetricDef, req_set: frozenset[str], period_grain: str | None
+) -> str | None:
+    from app.query.calendar_grain import effective_period_grain, normalize_period_grain
+
+    if not metric.calendar_period:
+        return None
+    return effective_period_grain(period_grain, period_in_grains="period" in req_set) or (
+        normalize_period_grain(period_grain)
+    )
+
+
+def _validate_period_grain(
+    metric: MetricDef, req_set: frozenset[str], period_grain: str | None
+) -> str | None:
+    from app.query.calendar_grain import (
+        PERIOD_GRAINS,
+        is_daily_grain,
+        normalize_period_grain,
+    )
+
+    n = normalize_period_grain(period_grain)
+    period_in = "period" in req_set
+    if n is None and not period_in:
+        return None
+    if not metric.calendar_period:
+        if n is None:
+            return None
+        return (
+            f"period_grain is only valid for calendar-period metrics (sellout_units, "
+            f"cst_sellthrough_units). {metric.key} uses a different period concept "
+            f"(A1 lineup quarter stays untouched)."
+        )
+    if n is not None and not period_in:
+        return "period_grain requires period in the grain set."
+    if n is None:
+        n = "quarter"
+    if is_daily_grain(n):
+        return "Lowest calendar grain is week; daily is not this unit (transaction_date stays storage-only)."
+    if n not in PERIOD_GRAINS:
+        return (
+            f"Invalid period_grain {n!r}. Allowed: week, month, quarter "
+            f"(default quarter when period is in the grain set)."
+        )
+    return None

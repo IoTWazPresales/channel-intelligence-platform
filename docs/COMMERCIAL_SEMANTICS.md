@@ -163,8 +163,15 @@ domain §1.5). **Never** convert a USD portfolio total through one period FX rat
 | A3-02 | **Weeks of cover** | IMPLEMENTED | `derived_stock / velocity` at **distributor × product only**. Velocity = sell-out units over 364d ÷ 52 from `fact_sales_sellout` (same grain). Portfolio = Σstock / Σvelocity. Zero / near-zero velocity → **undefined**. | distributor × product | Channel Operations |
 | A3-03 | **Replenishment flag (v1)** | IMPLEMENTED | Threshold flag when `0 < weeks_of_cover < REPLENISHMENT_WOC_THRESHOLD_WEEKS` (tenant config default **4**). Not a recommendation engine. Portfolio summary reports pair count below threshold + portfolio flag. Row field `replenishment_flag` (`reorder_signal` alias). | distributor × product | Channel Operations |
 | A3-04 | **Sell-out YoY / coverage** | IMPLEMENTED | YoY = (current − prior) / prior only when **current calendar quarter has ≥1 sell-out row**. Empty current quarter → `has_data=false`, `sell_out_yoy_pct=null` (never −100%), declare `sell_out_data_vintage.max_transaction_date`. True zero with rows is distinct from no coverage. | portfolio (optional distributor filter) | Channel Operations |
+| A3-05 | **Sell-out units** | IMPLEMENTED | `Σ units` from `fact_sales_sellout`, bucketed by `period_grain` of `transaction_date` (`week` / `month` / `quarter`, default quarter). Raw units only — never velocity/WoC. Daily widget grain refused (storage may be day-dated). DSI `customer_id` = dealer/end-customer, not CST retailer. `POST /query/execute` metric `sellout_units` emits ordered `series`. | distributor×product; +period; +customer; +product | Channel Operations |
 
-CST `/channel-intelligence` remains a **separate** customer×product×site velocity surface — do not conflate with Channel Ops WoC grain.
+CST `/channel-intelligence` remains a **separate** customer×product×site velocity surface — do not conflate with Channel Ops WoC grain. A3-05 and CST-01 are **raw-volume** metrics and do not compute velocity, so this wall is retained. The two metrics may never share one widget.
+
+### 4.4a CST volume — `/channel-intelligence`
+
+| ID | Metric | Status | Formula / rule | Grain | Owner |
+|---|---|---|---|---|---|
+| CST-01 | **CST sell-through units** | IMPLEMENTED | `Σ units_sold` from `fact_customer_sellthrough`, bucketed by `period_start_date`. Never finer than stored `period_type` (week request against monthly rows is refused). `POST /query/execute` metric `cst_sellthrough_units`. | customer; product; customer×product×site_label; +period (≤ stored grain) | CST `/channel-intelligence` |
 
 ### 4.5 Demand forecast — `/forecasts`
 

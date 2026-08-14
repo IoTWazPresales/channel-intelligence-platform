@@ -3,7 +3,7 @@
 # Metrics not listed here are not queryable via the governed layer.
 # Tenant overlays: catalog/tenants/{tenant_id}.yaml (merge metrics by id/key).
 
-version: 1
+version: 2
 source_doc: docs/COMMERCIAL_SEMANTICS.md
 
 dimensions:
@@ -343,6 +343,51 @@ metrics:
     source_facts: [derived_channel_stock, velocity]
     allowed_grains:
       - [distributor, product]
+
+  - id: A3-05
+    key: sellout_units
+    label: Sell-out units
+    status: implemented
+    owner_surface: channel-ops
+    calendar_period: true
+    formula: "Σ units from fact_sales_sellout, bucketed by period_grain of transaction_date; raw units only — never velocity/WoC"
+    source_facts: [fact_sales_sellout]
+    allowed_grains:
+      - [distributor, product]
+      - [period]
+      - [period, product]
+      - [period, distributor]
+      - [period, distributor, product]
+      - [customer]
+      - [period, customer]
+      - [product]
+    refuse_examples:
+      - grains: [site_label]
+        reason: "site_label is CST-only. DSI sell-out does not have a site grain."
+      - grains: [customer, product, site_label]
+        reason: "Do not conflate DSI sell-out with CST customer×product×site. Use cst_sellthrough_units."
+    notes: "DSI customer_id is dealer/end-customer identity — not CST retailer. period_grain ∈ {week, month, quarter}; daily refused. Generalises Channel Ops weekly-series date_trunc."
+
+  - id: CST-01
+    key: cst_sellthrough_units
+    label: CST sell-through units
+    status: implemented
+    owner_surface: channel-intelligence
+    calendar_period: true
+    formula: "Σ units_sold from fact_customer_sellthrough, bucketed by period_start_date, never finer than stored period_type"
+    source_facts: [fact_customer_sellthrough]
+    allowed_grains:
+      - [customer]
+      - [product]
+      - [customer, product]
+      - [customer, product, site_label]
+      - [period]
+      - [period, customer]
+      - [period, product]
+    refuse_examples:
+      - grains: [distributor, product]
+        reason: "CST is customer sell-through, not Channel Ops distributor×product (WoC wall retained)."
+    notes: "CST customer ≠ DSI customer. Week request against monthly stored period_type is refused, never fabricated."
 
   # --- Demand forecast (B1) ---
   - id: B1-01

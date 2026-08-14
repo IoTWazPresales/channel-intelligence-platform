@@ -17,6 +17,8 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-14 — **Unit 14A:** `sellout_units` + `cst_sellthrough_units` on `/query/execute` with ordered `series` and `period_grain` week/month/quarter (daily refused). Live cip: week/month/quarter totals match (178261.85). No UI. Next: 14B Alembic (Warren approve) on this branch.
+- 2026-08-14 — **Unit 14 CONSULT READY (Opus):** two metrics (`sellout_units` + `cst_sellthrough_units`); `period_grain` week/month/quarter (no daily); query `series`; 14A backend → 14B `dashboard_widget` Alembic (Warren approve) → 14C ECharts canvas. Prompt: `.tmp/unit14_cursor_prompt.md`. Next: Warren skim then IMPLEMENT 14A.
 - 2026-08-13 — **Unit 13 VERIFY PASS (Opus):** D-01 fixed — owed_unknown when `superseded_by_case_id` set (status stays approved). Prior STOP was dead `status==superseded`. Next: Unit 14 widgets in a new chat.
 - 2026-08-13 — **Unit 13 BACKLOG-092:** paid vs owed recon on `feat/unit13-cpor-payment-recon`. `GET /cpor/cases/{id}/payment-recon`; list Owed/Paid/Outstanding. Smoke case 293 C26649381: owed 68421.48 ZAR, USD CNs 116.96 FLAG not converted. Pytest 11 focused.
 - 2026-08-13 — **Skip-item code check:** Unit 8 / 026 / 027 / 044 / 045 / P6 Settings light are in the tree on `main` (PR #36/#37). Takealot REST + activation join on `feat/p5-residual` @ `edf29f3` (not `main`). `docs/memory/ROADMAP.md` 026/027 Parked → Done. Job 978 not re-queried this session.

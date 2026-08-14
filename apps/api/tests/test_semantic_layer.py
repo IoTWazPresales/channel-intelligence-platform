@@ -40,6 +40,8 @@ def test_catalog_covers_implemented_core_metrics():
         "analogue_provenance",
         "lifecycle_buckets",
         "commercial_cohorts",
+        "sellout_units",
+        "cst_sellthrough_units",
     }
     missing = required - keys
     assert not missing, f"Catalog missing metrics: {sorted(missing)}"

@@ -26,13 +26,18 @@ async def execute_query(
     tenant_id: str = "default",
     explain_only: bool = False,
     skip_cache: bool = False,
+    period_grain: str | None = None,
 ) -> QueryResult:
     grains_list = list(grains or [])
     filters_dict = dict(filters or {})
     tid = (tenant_id or "default").strip() or "default"
+    pg_raw = period_grain if period_grain not in (None, "") else filters_dict.get("period_grain")
 
-    validation = validate_metric_grain(metric, grains_list, tenant_id=tid)
+    validation = validate_metric_grain(
+        metric, grains_list, tenant_id=tid, period_grain=pg_raw
+    )
     val_dict = validation.as_dict()
+    effective_pg = validation.period_grain
 
     if not validation.ok:
         return QueryResult(
@@ -45,6 +50,7 @@ async def execute_query(
             validation=val_dict,
             message=validation.message,
             handler=handler_name_for(validation.metric_key or metric),
+            period_grain=effective_pg,
         )
 
     metric_key = validation.metric_key or metric
@@ -54,6 +60,7 @@ async def execute_query(
         grains=validation.requested_grains,
         filters=filters_dict,
         tenant_id=tid,
+        period_grain=effective_pg,
     )
 
     if explain_only:
@@ -72,11 +79,13 @@ async def execute_query(
             data_vintage=hr.data_vintage,
             value=hr.value,
             rows=hr.rows,
+            series=hr.series,
             scorecard=hr.scorecard,
             message=hr.message or validation.message,
             handler=handler_name,
             explain=hr.explain,
             cache=None,
+            period_grain=effective_pg,
         )
 
     key = cache_key(
@@ -85,6 +94,7 @@ async def execute_query(
         grains=validation.requested_grains,
         filters=filters_dict,
         catalog_version=cat.version,
+        period_grain=effective_pg,
     )
 
     if not skip_cache:
@@ -105,11 +115,13 @@ async def execute_query(
                 data_vintage=cached.get("data_vintage"),
                 value=cached.get("value"),
                 rows=cached.get("rows"),
+                series=cached.get("series"),
                 scorecard=cached.get("scorecard"),
                 cache=CacheMeta(hit=True, ttl_seconds=DEFAULT_TTL_SECONDS, key=key),
                 message=cached.get("message"),
                 handler=cached.get("handler"),
                 explain=cached.get("explain"),
+                period_grain=cached.get("period_grain") or effective_pg,
             )
 
     handler_name, hr = await dispatch_handler(
@@ -128,11 +140,13 @@ async def execute_query(
         data_vintage=hr.data_vintage,
         value=hr.value,
         rows=hr.rows,
+        series=hr.series,
         scorecard=hr.scorecard,
         cache=CacheMeta(hit=False, ttl_seconds=DEFAULT_TTL_SECONDS, key=key),
         message=hr.message or validation.message,
         handler=handler_name,
         explain=hr.explain,
+        period_grain=effective_pg,
     )
 
     if hr.status == "ok":

@@ -46,6 +46,7 @@ def cache_key(
     grains: list[str],
     filters: dict[str, Any],
     catalog_version: int,
+    period_grain: str | None = None,
 ) -> str:
     canonical = {
         "tenant_id": tenant_id,
@@ -53,6 +54,7 @@ def cache_key(
         "grains": sorted(str(g).strip().lower() for g in grains if str(g).strip()),
         "filters": _canonicalize_filters(filters),
         "catalog_version": int(catalog_version),
+        "period_grain": (str(period_grain).strip().lower() if period_grain else None),
     }
     raw = json.dumps(canonical, sort_keys=True, separators=(",", ":"), default=str)
     digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()

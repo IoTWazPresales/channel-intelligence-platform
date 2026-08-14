@@ -24,6 +24,8 @@ def test_handler_registry_covers_v1_set():
     assert handler_name_for("channel_stock") == "a3_stock"
     assert handler_name_for("fill_rate") == "a1_pve"
     assert handler_name_for("support_spend") == "a2_cpor"
+    assert handler_name_for("sellout_units") == "volume_series"
+    assert handler_name_for("cst_sellthrough_units") == "volume_series"
     assert handler_name_for("forecast_units") is None
     assert "weeks_of_cover" in A3_KEYS
     assert "volume_bias" in A1_KEYS

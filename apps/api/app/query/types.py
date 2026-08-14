@@ -24,6 +24,7 @@ class QueryRequest:
     grains: list[str] = field(default_factory=list)
     filters: dict[str, Any] = field(default_factory=dict)
     tenant_id: str = "default"
+    period_grain: str | None = None
 
 
 @dataclass
@@ -35,6 +36,7 @@ class HandlerResult:
     data_vintage: dict[str, Any] | None = None
     value: Any = None
     rows: list[dict[str, Any]] | None = None
+    series: list[dict[str, Any]] | None = None
     scorecard: dict[str, Any] | None = None
     explain: dict[str, Any] | None = None
     message: str | None = None
@@ -46,6 +48,7 @@ class HandlerResult:
             "data_vintage": self.data_vintage,
             "value": self.value,
             "rows": self.rows,
+            "series": self.series,
             "scorecard": self.scorecard,
             "message": self.message,
         }
@@ -67,11 +70,13 @@ class QueryResult:
     data_vintage: dict[str, Any] | None = None
     value: Any = None
     rows: list[dict[str, Any]] | None = None
+    series: list[dict[str, Any]] | None = None
     scorecard: dict[str, Any] | None = None
     cache: CacheMeta | None = None
     message: str | None = None
     handler: str | None = None
     explain: dict[str, Any] | None = None
+    period_grain: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -81,11 +86,13 @@ class QueryResult:
             "metric_key": self.metric_key,
             "grains": list(self.grains),
             "filters": dict(self.filters),
+            "period_grain": self.period_grain,
             "validation": self.validation,
             "invariants_applied": list(self.invariants_applied),
             "data_vintage": self.data_vintage,
             "value": self.value,
             "rows": self.rows,
+            "series": self.series,
             "scorecard": self.scorecard,
             "cache": self.cache.as_dict() if self.cache else None,
             "message": self.message,

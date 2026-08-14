@@ -23,6 +23,10 @@ class QueryBody(BaseModel):
         default_factory=dict,
         description="Optional filters: period_from/to, distributor_id, product_id, bu, customer_id",
     )
+    period_grain: str | None = Field(
+        default=None,
+        description="Calendar bucket for calendar-period metrics: week | month | quarter (not daily)",
+    )
 
 
 @router.post("/execute")
@@ -40,6 +44,7 @@ async def query_execute(
         filters=body.filters,
         tenant_id=tid,
         explain_only=False,
+        period_grain=body.period_grain,
     )
     return result.as_dict()
 
@@ -59,5 +64,6 @@ async def query_explain(
         filters=body.filters,
         tenant_id=tid,
         explain_only=True,
+        period_grain=body.period_grain,
     )
     return result.as_dict()

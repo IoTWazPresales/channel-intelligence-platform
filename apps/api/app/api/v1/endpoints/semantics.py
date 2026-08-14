@@ -15,6 +15,7 @@ router = APIRouter()
 class ValidateGrainBody(BaseModel):
     metric: str = Field(..., min_length=1, description="Metric key or id (e.g. weeks_of_cover, A3-02)")
     grains: list[str] = Field(default_factory=list, description="Dimension ids to slice by")
+    period_grain: str | None = Field(default=None, description="week | month | quarter for calendar-period metrics")
 
 
 def _catalog_for_request(user: dict | None):
@@ -64,7 +65,9 @@ def validate_semantic_grain(
 ) -> dict:
     """Refuse invalid metric×grain combinations with an explanation (P3-1 exit)."""
     tid = tenant_id_from_user(user)
-    result = validate_metric_grain(body.metric, body.grains, tenant_id=tid)
+    result = validate_metric_grain(
+        body.metric, body.grains, tenant_id=tid, period_grain=body.period_grain
+    )
     payload = result.as_dict()
     if not result.ok and result.metric_id is None:
         raise HTTPException(status_code=404, detail=payload)
