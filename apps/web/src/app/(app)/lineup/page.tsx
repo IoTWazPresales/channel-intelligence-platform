@@ -258,7 +258,6 @@ export default function LineupPage() {
         replace_matching: true,
         limit: 200,
         horizon_weeks: 13,
-        target_cover_weeks: 4,
         apply_bias: applyBias,
         write_commercial_case: writeCommercialCase,
       }),

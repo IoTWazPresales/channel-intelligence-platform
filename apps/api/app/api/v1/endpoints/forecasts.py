@@ -15,6 +15,7 @@ from app.models.fact_demand_forecast import FactDemandForecast
 from app.services.commercial_planner.open_channel_customer import OPEN_CHANNEL_CUSTOMER_CODE
 from app.services.commercial_planner.unassigned_distributor import UNASSIGNED_DISTRIBUTOR_CODE
 from app.services.demand_forecast.analogue_compute import generate_analogue_demand_forecasts
+from app.services.demand_forecast.compute_from_history import compute_from_history
 from app.services.demand_forecast.velocity_compute import (
     generate_velocity_demand_forecasts,
     sum_rollup,
@@ -129,6 +130,8 @@ def _serialize(f: FactDemandForecast, prod: DimProduct | None) -> dict:
         "upper_band": float(f.upper_band) if f.upper_band is not None else None,
         "analogue_product_id": f.analogue_product_id,
         "analogue_basis": f.analogue_basis,
+        "velocity_basis": f.velocity_basis,
+        "seasonal_index": float(f.seasonal_index) if f.seasonal_index is not None else None,
     }
 
 
@@ -169,17 +172,54 @@ class AnalogueComputeBody(BaseModel):
     confirm: bool = False
 
 
+class ComputeFromHistoryBody(BaseModel):
+    distributor_id: int | None = None
+    weeks_ahead: int = Field(default=13, ge=1, le=52)
+    max_analogue_products: int = Field(default=50, ge=1, le=500)
+    confirm: bool = False
+
+
+@router.post("/compute-from-history", status_code=200)
+async def compute_from_history_forecasts(
+    body: ComputeFromHistoryBody,
+    user: dict | None = Depends(get_optional_current_user),
+):
+    """Primary B1 CTA: velocity then analogue into fact_demand_forecast. Overrides kept."""
+    if not body.confirm:
+        raise HTTPException(status_code=400, detail="Set confirm=true to compute from history")
+    tid = tenant_id_from_user(user)
+    with SessionLocal() as db:
+        try:
+            result = compute_from_history(
+                db,
+                tenant_id=tid,
+                distributor_id=body.distributor_id,
+                weeks_ahead=body.weeks_ahead,
+                max_analogue_products=body.max_analogue_products,
+            )
+            db.commit()
+            return result
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 @router.post("/compute-velocity", status_code=200)
-async def compute_velocity_forecasts(body: VelocityComputeBody):
+async def compute_velocity_forecasts(
+    body: VelocityComputeBody,
+    user: dict | None = Depends(get_optional_current_user),
+):
     """Project fact_customer_velocity → fact_demand_forecast at full grain (sync)."""
     if not body.confirm:
         raise HTTPException(status_code=400, detail="Set confirm=true to run velocity compute")
+    tid = tenant_id_from_user(user)
     with SessionLocal() as db:
         try:
             result = generate_velocity_demand_forecasts(
                 db,
                 distributor_id=body.distributor_id,
                 weeks_ahead=body.weeks_ahead,
+                tenant_id=tid,
             )
             db.commit()
             return result
@@ -189,10 +229,14 @@ async def compute_velocity_forecasts(body: VelocityComputeBody):
 
 
 @router.post("/compute-analogue", status_code=200)
-async def compute_analogue_forecasts(body: AnalogueComputeBody):
+async def compute_analogue_forecasts(
+    body: AnalogueComputeBody,
+    user: dict | None = Depends(get_optional_current_user),
+):
     """Forecast no-history products from analogue SKUs (confidence capped low)."""
     if not body.confirm:
         raise HTTPException(status_code=400, detail="Set confirm=true to run analogue compute")
+    tid = tenant_id_from_user(user)
     with SessionLocal() as db:
         try:
             result = generate_analogue_demand_forecasts(
@@ -200,6 +244,7 @@ async def compute_analogue_forecasts(body: AnalogueComputeBody):
                 product_ids=body.product_ids,
                 weeks_ahead=body.weeks_ahead,
                 max_products=body.max_products,
+                tenant_id=tid,
             )
             db.commit()
             return result

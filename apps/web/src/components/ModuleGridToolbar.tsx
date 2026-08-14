@@ -7,10 +7,13 @@ import UploadIcon from '@mui/icons-material/Upload';
 import { Button, Stack } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import NextLink from 'next/link';
+import type { ReactNode } from 'react';
 
 export function ModuleGridToolbar({
   onRefresh,
   onAdd,
+  addLabel = 'Add row',
+  addVariant = 'contained',
   onUpload,
   uploadLabel = 'Paste upload',
   onClearAll,
@@ -18,10 +21,13 @@ export function ModuleGridToolbar({
   importsHref,
   refreshDisabled,
   busy,
+  leading,
   sx,
 }: {
   onRefresh?: () => void;
   onAdd?: () => void;
+  addLabel?: string;
+  addVariant?: 'contained' | 'outlined';
   onUpload?: () => void;
   uploadLabel?: string;
   /** Remove every row for this module (server); parent should confirm in a dialog first. */
@@ -31,10 +37,12 @@ export function ModuleGridToolbar({
   importsHref?: string;
   refreshDisabled?: boolean;
   busy?: boolean;
+  leading?: ReactNode;
   sx?: SxProps<Theme>;
 }) {
   return (
     <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', ...sx }} useFlexGap>
+      {leading}
       {onRefresh ? (
         <Button
           startIcon={<RefreshIcon />}
@@ -59,8 +67,8 @@ export function ModuleGridToolbar({
         </Button>
       ) : null}
       {onAdd ? (
-        <Button startIcon={<AddIcon />} variant="contained" size="small" disabled={busy} onClick={onAdd}>
-          Add row
+        <Button startIcon={<AddIcon />} variant={addVariant} size="small" disabled={busy} onClick={onAdd}>
+          {addLabel}
         </Button>
       ) : null}
       {onUpload ? (

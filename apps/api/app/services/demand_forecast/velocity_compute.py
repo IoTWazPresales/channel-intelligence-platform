@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
+from app.core.tenant_scope import DEFAULT_TENANT_ID
 from app.models.fact_customer_velocity import FactCustomerVelocity
 from app.models.fact_demand_forecast import FactDemandForecast
 
@@ -60,12 +61,18 @@ def _bands(
     return forecast_units, lower, upper
 
 
+def resolve_forecast_tenant_id(tenant_id: str | None) -> str:
+    """Never persist NULL — explicit None would override the server default."""
+    return (tenant_id or DEFAULT_TENANT_ID).strip() or DEFAULT_TENANT_ID
+
+
 def generate_velocity_demand_forecasts(
     db: Session,
     *,
     distributor_id: int | None = None,
     weeks_ahead: int = 13,
     skip_overrides: bool = True,
+    tenant_id: str | None = None,
 ) -> dict[str, int]:
     """Upsert velocity-method rows into ``fact_demand_forecast``.
 
@@ -86,6 +93,8 @@ def generate_velocity_demand_forecasts(
     skipped_override = 0
     skipped_no_velocity = 0
 
+    tid = resolve_forecast_tenant_id(tenant_id)
+
     override_keys: set[tuple[int, int, int, date]] = set()
     if skip_overrides:
         ov_q = select(
@@ -93,7 +102,10 @@ def generate_velocity_demand_forecasts(
             FactDemandForecast.product_id,
             FactDemandForecast.customer_id,
             FactDemandForecast.period_start,
-        ).where(FactDemandForecast.is_override.is_(True))
+        ).where(
+            FactDemandForecast.is_override.is_(True),
+            FactDemandForecast.tenant_id == tid,
+        )
         if distributor_id is not None:
             ov_q = ov_q.where(FactDemandForecast.distributor_id == int(distributor_id))
         for d, p, c, per in db.execute(ov_q).all():
@@ -138,7 +150,7 @@ def generate_velocity_demand_forecasts(
                 period_start=period_start,
             )
             values = {
-                "tenant_id": None,
+                "tenant_id": tid,
                 "distributor_id": dist_id,
                 "product_id": prod_id,
                 "customer_id": cust_id,
@@ -215,7 +227,7 @@ def sum_rollup(
         func.sum(FactDemandForecast.forecast_units).label("forecast_units"),
         func.count().label("row_count"),
     ).group_by(key_col)
-    tid = (tenant_id or "default").strip() or "default"
+    tid = resolve_forecast_tenant_id(tenant_id)
     q = q.where(FactDemandForecast.tenant_id == tid)
     if period_start is not None:
         q = q.where(FactDemandForecast.period_start == period_start)

@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Paper, Stack, Switch, TextField } from '@mui/material';
+import HistoryIcon from '@mui/icons-material/History';
+import { Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Paper, Stack, Switch, TextField } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColDef } from 'ag-grid-community';
 import { useMemo, useState } from 'react';
@@ -24,6 +25,20 @@ type Row = {
   method?: string | null;
   is_override: boolean;
   analogue_product_id?: number | null;
+  analogue_basis?: Record<string, unknown> | null;
+  velocity_basis?: string | null;
+  seasonal_index?: number | null;
+  lower_band?: number | null;
+  upper_band?: number | null;
+};
+
+type ComputeFromHistoryResponse = {
+  tenant_id: string;
+  weeks_ahead: number;
+  skip_overrides: boolean;
+  never_merges_actuals: boolean;
+  velocity: { upserted?: number; skipped_override?: number; considered?: number };
+  analogue: { upserted?: number; skipped_override?: number; considered?: number };
 };
 
 type ForecastPasteRow = {
@@ -74,6 +89,7 @@ export default function ForecastsPage() {
   const [override, setOverride] = useState(false);
 
   const [methodFilter, setMethodFilter] = useState<string | null>(null);
+  const [computeMsg, setComputeMsg] = useState<string | null>(null);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['forecasts', methodFilter],
@@ -124,6 +140,39 @@ export default function ForecastsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['forecasts'] }),
   });
 
+  const computeHistory = useMutation({
+    mutationFn: () =>
+      apiPost<ComputeFromHistoryResponse>('/api/v1/forecasts/compute-from-history', {
+        confirm: true,
+        weeks_ahead: 13,
+      }),
+    onSuccess: (res) => {
+      const v = res.velocity?.upserted ?? 0;
+      const a = res.analogue?.upserted ?? 0;
+      const skipped = (res.velocity?.skipped_override ?? 0) + (res.analogue?.skipped_override ?? 0);
+      setComputeMsg(
+        `Computed from history: ${v} velocity + ${a} analogue rows (tenant ${res.tenant_id}). ` +
+          `Overrides kept: ${skipped}. Forecast never writes sell-out actuals.`,
+      );
+      void qc.invalidateQueries({ queryKey: ['forecasts'] });
+    },
+    onError: (err) => {
+      setComputeMsg(err instanceof Error ? err.message : 'Compute from history failed');
+    },
+  });
+
+  const runComputeFromHistory = () => {
+    if (
+      !window.confirm(
+        'Compute demand forecast from sell-out history (velocity) and analogues for SKUs with no history? Manual override rows are kept. This does not change sell-out actuals.',
+      )
+    ) {
+      return;
+    }
+    setComputeMsg(null);
+    void computeHistory.mutate();
+  };
+
   const colDefs: ColDef<Row>[] = useMemo(() => {
     const busyDel = delRow.isPending || clearAll.isPending;
     return [
@@ -131,20 +180,43 @@ export default function ForecastsPage() {
       { field: 'period_start', headerName: 'Period' },
       { field: 'forecast_units', headerName: 'Units', type: 'numericColumn' },
       { field: 'method', headerName: 'Method' },
-      { field: 'analogue_product_id', headerName: 'Analogue product id', hide: true },
-      { field: 'confidence_placeholder', headerName: 'Confidence' },
+      { field: 'velocity_basis', headerName: 'Velocity basis' },
+      { field: 'seasonal_index', headerName: 'Seasonal index', type: 'numericColumn' },
+      {
+        field: 'analogue_product_id',
+        headerName: 'Analogue product id',
+      },
+      {
+        field: 'analogue_basis',
+        headerName: 'Analogue provenance',
+        valueFormatter: (p) => (p.value ? JSON.stringify(p.value) : ''),
+      },
+      { field: 'lower_band', headerName: 'Lower band', type: 'numericColumn' },
+      { field: 'upper_band', headerName: 'Upper band', type: 'numericColumn' },
+      { field: 'confidence_level', headerName: 'Confidence' },
+      { field: 'confidence_placeholder', headerName: 'Confidence (legacy)', hide: true },
       { field: 'is_override', headerName: 'Override' },
       gridDeleteColumn<Row>((id) => void delRow.mutate(id), { busy: busyDel }),
     ];
   }, [delRow, delRow.isPending, clearAll.isPending]);
 
   const rows = data ?? [];
-  const busy = bulk.isPending || addOne.isPending || delRow.isPending || clearAll.isPending;
+  const busy = bulk.isPending || addOne.isPending || delRow.isPending || clearAll.isPending || computeHistory.isPending;
 
   return (
     <>
       <PageHeader crumbs={[{ label: 'Forecast' }]} title="Demand Forecast" />
       <Paper sx={{ p: 2 }}>
+        {computeMsg ? (
+          <Alert
+            severity={computeHistory.isError ? 'error' : 'success'}
+            sx={{ mb: 2 }}
+            onClose={() => setComputeMsg(null)}
+            data-testid="forecast-compute-msg"
+          >
+            {computeMsg}
+          </Alert>
+        ) : null}
         <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} flexWrap="wrap" useFlexGap>
           {[
             { id: null, label: 'All methods' },
@@ -164,7 +236,8 @@ export default function ForecastsPage() {
           ))}
         </Stack>
         <ModuleDataSection
-          intro="Demand forecast contract (fact_demand_forecast). Atomic grain: distributor × product × customer × period. Rollups are plain sums. Method chips filter velocity / analogue / manual overrides."
+          introWhen="always"
+          intro="History is the source of the forecast: Compute from history writes velocity (52wk × seasonal) and analogue rows into fact_demand_forecast. Paste and Add row are overrides — they never merge into sell-out actuals. Rollups are plain sums."
           isLoading={isLoading}
           isError={isError}
           error={toQueryError(error)}
@@ -172,19 +245,34 @@ export default function ForecastsPage() {
           isEmpty={rows.length === 0}
           empty={{
             title: 'No forecast rows yet',
-            description: 'Use Add row or Paste upload, or use Data & imports for file-based loads.',
-            primary: { label: 'Data & imports', href: '/admin/imports' },
-            secondary: { label: 'Getting started', href: '/getting-started' },
+            description: 'Compute from sell-out history first. Paste or add a row only to override a generated value.',
+            primary: { label: 'Compute from history', onClick: runComputeFromHistory },
+            secondary: { label: 'Paste override', onClick: () => setPasteOpen(true) },
           }}
           toolbar={
             <ModuleGridToolbar
+              leading={
+                <Button
+                  startIcon={<HistoryIcon />}
+                  variant="contained"
+                  size="small"
+                  disabled={busy}
+                  onClick={runComputeFromHistory}
+                  data-testid="forecast-compute-from-history"
+                >
+                  Compute from history
+                </Button>
+              }
               onRefresh={() => qc.invalidateQueries({ queryKey: ['forecasts'] })}
               onClearAll={() => {
                 if (!window.confirm('Delete every forecast row? This cannot be undone.')) return;
                 void clearAll.mutate();
               }}
               onAdd={() => setAddOpen(true)}
+              addLabel="Add override"
+              addVariant="outlined"
               onUpload={() => setPasteOpen(true)}
+              uploadLabel="Paste override"
               importsHref="/admin/imports"
               busy={busy}
             />
@@ -196,7 +284,7 @@ export default function ForecastsPage() {
 
       <BulkPasteDialog
         open={pasteOpen}
-        title="Paste forecasts"
+        title="Paste override"
         hint={
           <>
             Columns: <code>sku, period_start, forecast_units</code> plus optional <code>confidence, customer_code, is_override</code>{' '}
@@ -213,7 +301,7 @@ export default function ForecastsPage() {
       />
 
       <Dialog open={addOpen} onClose={() => !addOne.isPending && setAddOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Add forecast row</DialogTitle>
+        <DialogTitle>Add override row</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField label="SKU" required value={sku} onChange={(e) => setSku(e.target.value)} fullWidth />

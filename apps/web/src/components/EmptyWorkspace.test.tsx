@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
@@ -18,5 +19,19 @@ describe('EmptyWorkspace', () => {
     expect(getByText('Import something')).toBeInTheDocument();
     expect(getByRole('link', { name: 'Start' })).toHaveAttribute('href', '/getting-started');
     expect(getByRole('link', { name: 'Admin' })).toHaveAttribute('href', '/admin');
+  });
+
+  it('fires onClick for a compute-style primary action', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const { getByRole } = renderWithProviders(
+      <EmptyWorkspace
+        title="No rows"
+        description="Compute first"
+        primary={{ label: 'Compute from history', onClick }}
+      />
+    );
+    await user.click(getByRole('button', { name: 'Compute from history' }));
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 });

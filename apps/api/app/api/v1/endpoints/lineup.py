@@ -24,7 +24,6 @@ from app.services.lineup.export_apply import (
     net_requirement_to_csv,
 )
 from app.services.lineup.net_requirement import (
-    DEFAULT_TARGET_COVER_WEEKS,
     build_net_requirement_rows,
 )
 from app.services.lineup.profit_reservation import compute_profit_with_reservation
@@ -50,7 +49,12 @@ class ApplyNetRequirementBody(BaseModel):
     period_label: str | None = None
     distributor_id: int | None = None
     horizon_weeks: int = Field(default=13, ge=1, le=52)
-    target_cover_weeks: float = Field(default=DEFAULT_TARGET_COVER_WEEKS, ge=0, le=52)
+    target_cover_weeks: float | None = Field(
+        default=None,
+        ge=0,
+        le=52,
+        description="Omit to use per-customer cover policy; set to override all customers.",
+    )
     replace_matching: bool = True
     limit: int = Field(default=200, ge=1, le=2000)
     apply_bias: bool = False
@@ -282,7 +286,12 @@ async def get_lineup_net_requirement(
     distributor_id: int | None = Query(default=None),
     product_id: int | None = Query(default=None),
     horizon_weeks: int = Query(default=13, ge=1, le=52),
-    target_cover_weeks: float = Query(default=DEFAULT_TARGET_COVER_WEEKS, ge=0, le=52),
+    target_cover_weeks: float | None = Query(
+        default=None,
+        ge=0,
+        le=52,
+        description="Omit to use per-customer cover policy; set to override all customers.",
+    ),
     include_customer_shares: bool = Query(default=True),
     apply_bias: bool = Query(
         default=False,
@@ -397,7 +406,7 @@ async def post_lineup_budget_position(
 async def export_lineup_net_requirement_csv(
     distributor_id: int | None = Query(default=None),
     horizon_weeks: int = Query(default=13, ge=1, le=52),
-    target_cover_weeks: float = Query(default=DEFAULT_TARGET_COVER_WEEKS, ge=0, le=52),
+    target_cover_weeks: float | None = Query(default=None, ge=0, le=52),
     apply_bias: bool = Query(default=False),
     limit: int = Query(default=500, ge=1, le=2000),
     db: AsyncSession = Depends(get_db),
@@ -436,7 +445,7 @@ async def export_lineup_net_requirement_csv(
 async def export_lineup_net_requirement_xlsx(
     distributor_id: int | None = Query(default=None),
     horizon_weeks: int = Query(default=13, ge=1, le=52),
-    target_cover_weeks: float = Query(default=DEFAULT_TARGET_COVER_WEEKS, ge=0, le=52),
+    target_cover_weeks: float | None = Query(default=None, ge=0, le=52),
     apply_bias: bool = Query(default=False),
     period_start: date | None = Query(default=None),
     period_label: str | None = Query(default=None),

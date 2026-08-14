@@ -18,10 +18,12 @@ from app.models.cpor import CporCase, CporCaseEvent, CporCaseLine
 from app.models.dimensions import DimCustomer, DimProduct
 from app.services.cpor.claim_evidence_apply import apply_claim_evidence_to_case
 from app.services.cpor.cost_suggestion import (
+    CostSuggestion,
     detect_cost_basis_drift,
     resolve_default_margin,
     suggest_cost_basis,
 )
+from app.services.cpor.intake_weighted_mac import suggest_intake_weighted_mac
 from app.services.cpor.lifecycle import (
     EDITABLE_STATUSES,
     LIFECYCLE_ACTIONS,
@@ -198,6 +200,15 @@ def _case_json(
             all_flags.extend(l.get("flags") or [])
         out["flags"] = sorted(set(all_flags))
     return out
+
+
+def _cost_suggestion_json(sug: CostSuggestion) -> dict[str, Any]:
+    return {
+        "cost_basis": float(sug.cost_basis) if sug.cost_basis is not None else None,
+        "cost_source": sug.cost_source,
+        "evidence": sug.evidence,
+        "flags": sug.flags,
+    }
 
 
 def _load_case(session: Session, case_id: int, user: dict | None = None) -> CporCase:
@@ -787,6 +798,16 @@ def cost_suggest(case_id: int, line_id: int):
             as_of=as_of,
             exclude_case_id=case.id,
         )
+        intake = suggest_intake_weighted_mac(
+            session,
+            customer_id=case.customer_id,
+            product_id=line.product_id,
+            distributor_id=line.distributor_id,
+            window_start=case.window_start,
+            window_end=case.window_end,
+            as_of=as_of,
+            exclude_case_id=case.id,
+        )
         return {
             "line_id": line.id,
             "cost_basis": float(sug.cost_basis) if sug.cost_basis is not None else None,
@@ -795,6 +816,8 @@ def cost_suggest(case_id: int, line_id: int):
             "flags": sug.flags,
             "stored_cost_basis": float(line.cost_basis) if line.cost_basis is not None else None,
             "drift": detect_cost_basis_drift(line.cost_basis, sug),
+            "intake_weighted": _cost_suggestion_json(intake),
+            "intake_weighted_drift": detect_cost_basis_drift(line.cost_basis, intake),
         }
 
 

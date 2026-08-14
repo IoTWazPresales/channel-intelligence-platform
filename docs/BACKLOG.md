@@ -634,7 +634,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Formulas locked 2026-08-13** · queued as Lane B Unit 15 (after 092 + P3 widgets unless Warren reorders) |
+| **Status / parked** | **15A composer in tree 2026-08-14** · 15B (history CTA) + 15C (editable planner grid) remain. Stay open until 15C VERIFY PASS. |
 | **Effort** | Large (planning write-path + cost/forecast contracts) |
 | **Source** | Warren 2026-08-01 A-lane wrap; locks 2026-08-13 |
 | **Idea** | Promo planner computes **suggested** MAC and units; **every field is editable** in the UI. Suggestions never silently overwrite operator edits (dirty-flag / explicit Reset). |

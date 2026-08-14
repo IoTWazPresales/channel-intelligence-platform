@@ -16,7 +16,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta
-from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import and_, func, or_, select
@@ -28,6 +27,13 @@ from app.services.channel_ops_config import REPLENISHMENT_WOC_THRESHOLD_WEEKS
 from app.services.channel_ops_derived_stock import (
     derived_stock_by_dist_product,
     sellout_velocity_52wk_by_dist_product,
+)
+from app.services.lineup.cover_policy import (
+    COVER_SOURCE_OVERRIDE,
+    COVER_SOURCE_TENANT_DEFAULT,
+    TENANT_DEFAULT_COVER_WEEKS,
+    load_cover_weeks_by_customer,
+    share_weighted_cover_weeks,
 )
 
 # Default target cover weeks — TENANT-VARIABLE (domain §3.2); query override allowed.
@@ -215,7 +221,7 @@ async def build_net_requirement_rows(
     db: AsyncSession,
     *,
     horizon_weeks: int = 13,
-    target_cover_weeks: float = DEFAULT_TARGET_COVER_WEEKS,
+    target_cover_weeks: float | None = None,
     as_of: date | None = None,
     distributor_id: int | None = None,
     product_id: int | None = None,
@@ -224,9 +230,19 @@ async def build_net_requirement_rows(
     include_customer_shares: bool = True,
     limit: int = 500,
 ) -> dict[str, Any]:
-    """Read model: net requirement at distributor × product for the horizon."""
+    """Read model: net requirement at distributor × product for the horizon.
+
+    ``target_cover_weeks`` None = per-customer cover policy (D-045).
+    An explicit number is an override for every customer (``cover_override``).
+    Dist×product cover units = share-weighted weeks × weekly velocity.
+    """
     as_of = as_of or date.today()
     period_to = _period_end(horizon_weeks, as_of=as_of)
+    cover_override = target_cover_weeks is not None
+    fallback_weeks = (
+        float(target_cover_weeks) if cover_override else TENANT_DEFAULT_COVER_WEEKS
+    )
+    fallback_source = COVER_SOURCE_OVERRIDE if cover_override else COVER_SOURCE_TENANT_DEFAULT
 
     forecast_map = await _forecast_rollup_dist_product(
         db,
@@ -254,11 +270,16 @@ async def build_net_requirement_rows(
     if distributor_id is not None:
         keys = {k for k in keys if k[0] == int(distributor_id)}
 
+    # Always load shares for cover weighting (D-045), even when the payload omits allocation.
     shares_map: dict[tuple[int, int], list[dict[str, Any]]] = {}
-    if include_customer_shares and keys:
+    if keys:
         shares_map = await _customer_forecast_shares(
             db, period_from=as_of, period_to=period_to, pairs=keys
         )
+    customer_ids = {int(s["customer_id"]) for parts in shares_map.values() for s in parts}
+    cover_by_customer = await load_cover_weeks_by_customer(
+        db, customer_ids, override_weeks=target_cover_weeks
+    )
 
     bias_by_bu = bias_by_bu or {}
     product_bu = product_bu or {}
@@ -270,7 +291,14 @@ async def build_net_requirement_rows(
         stock = stock_f.get(key, 0.0)
         transit = transit_map.get(key, 0.0)
         weekly = vel_f.get(key, 0.0)
-        target_units = float(target_cover_weeks) * weekly
+        shares = shares_map.get(key, [])
+        row_weeks, cover_source = share_weighted_cover_weeks(
+            shares,
+            cover_by_customer,
+            fallback_weeks=fallback_weeks,
+            fallback_source=fallback_source,
+        )
+        target_units = float(row_weeks) * weekly
         bu = product_bu.get(pid)
         bias = float(bias_by_bu.get(bu, 0.0)) if bu else 0.0
         result = compute_net_requirement(
@@ -289,7 +317,9 @@ async def build_net_requirement_rows(
             "horizon_weeks": int(horizon_weeks),
             "period_from": as_of.isoformat(),
             "period_to": period_to.isoformat(),
-            "target_cover_weeks": float(target_cover_weeks),
+            "target_cover_weeks": round(float(row_weeks), 4),
+            "cover_source": cover_source,
+            "cover_override": cover_override,
             "weekly_velocity": weekly,
             "bias_factor": bias,
             "forecast_demand": result.forecast_demand,
@@ -301,12 +331,17 @@ async def build_net_requirement_rows(
             "grain": "distributor_product",
         }
         if include_customer_shares:
-            shares = shares_map.get(key, [])
             allocated: list[dict[str, Any]] = []
             for s in shares:
+                cid = int(s["customer_id"])
+                c_weeks, c_src = cover_by_customer.get(
+                    cid, (fallback_weeks, fallback_source)
+                )
                 allocated.append(
                     {
                         **s,
+                        "target_cover_weeks": float(c_weeks),
+                        "cover_source": c_src,
                         "suggested_lineup_units": round(
                             result.net_requirement * float(s["share"]), 4
                         ),
@@ -320,12 +355,20 @@ async def build_net_requirement_rows(
     return {
         "as_of": as_of.isoformat(),
         "horizon_weeks": int(horizon_weeks),
-        "target_cover_weeks": float(target_cover_weeks),
+        "target_cover_weeks": (
+            float(target_cover_weeks) if cover_override else TENANT_DEFAULT_COVER_WEEKS
+        ),
+        "cover_override": cover_override,
+        "cover_policy": {
+            "tenant_default_weeks": TENANT_DEFAULT_COVER_WEEKS,
+            "override": cover_override,
+            "override_weeks": float(target_cover_weeks) if cover_override else None,
+        },
         "grain": "distributor_product",
         "row_count": len(rows),
         "formula": (
             "net = max(0, forecast×(1+bias) − derived_stock − in_transit(PO-linked) "
-            "+ target_cover_weeks×weekly_velocity); stock subtract at dist×product only"
+            "+ share_weighted_cover_weeks×weekly_velocity); stock subtract at dist×product only"
         ),
         "in_transit_rule": (
             "shipped∧pod_date IS NULL OR line_state∈{open_order,pipeline}; "

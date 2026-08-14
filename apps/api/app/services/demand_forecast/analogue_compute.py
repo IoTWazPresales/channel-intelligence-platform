@@ -24,6 +24,7 @@ from app.models.facts import FactProductRoadmap
 from app.services.demand_forecast.velocity_compute import (
     _bands,
     demand_forecast_velocity_source_key,
+    resolve_forecast_tenant_id,
 )
 
 logger = logging.getLogger(__name__)
@@ -172,6 +173,7 @@ def generate_analogue_demand_forecasts(
     weeks_ahead: int = 13,
     skip_overrides: bool = True,
     max_products: int = 200,
+    tenant_id: str | None = None,
 ) -> dict[str, Any]:
     """Create analogue-method rows for no-history products.
 
@@ -201,6 +203,8 @@ def generate_analogue_demand_forecasts(
             ).all()
         )
 
+    tid = resolve_forecast_tenant_id(tenant_id)
+
     considered = 0
     upserted = 0
     skipped_has_velocity = 0
@@ -216,7 +220,10 @@ def generate_analogue_demand_forecasts(
                 FactDemandForecast.product_id,
                 FactDemandForecast.customer_id,
                 FactDemandForecast.period_start,
-            ).where(FactDemandForecast.is_override.is_(True))
+            ).where(
+                FactDemandForecast.is_override.is_(True),
+                FactDemandForecast.tenant_id == tid,
+            )
         ).all():
             override_keys.add((int(d), int(p), int(c), per))
 
@@ -278,7 +285,7 @@ def generate_analogue_demand_forecasts(
                     period_start=period_start,
                 )
                 values = {
-                    "tenant_id": None,
+                    "tenant_id": tid,
                     "distributor_id": dist_id,
                     "product_id": int(pid),
                     "customer_id": cust_id,

@@ -1392,6 +1392,7 @@ class CustomerTermCreate(BaseModel):
     customer_id: int
     customer_margin_pct: float = Field(ge=0.0, le=0.95)
     customer_rebate_pct: float = Field(ge=0.0, le=0.95)
+    target_cover_weeks: float | None = Field(default=None, ge=0.0, le=52.0)
 
     @model_validator(mode="after")
     def margin_stack(self):
@@ -1403,6 +1404,7 @@ class CustomerTermCreate(BaseModel):
 class CustomerTermPatch(BaseModel):
     customer_margin_pct: float | None = Field(default=None, ge=0.0, le=0.95)
     customer_rebate_pct: float | None = Field(default=None, ge=0.0, le=0.95)
+    target_cover_weeks: float | None = Field(default=None, ge=0.0, le=52.0)
 
 
 class DistributorTermCreate(BaseModel):
@@ -1434,6 +1436,7 @@ class SkuAssumptionPatch(BaseModel):
 
 
 def _customer_term_json(row: CommercialCustomerTerm, customer_code: str, customer_name: str) -> dict:
+    cover = getattr(row, "target_cover_weeks", None)
     return {
         "id": row.id,
         "customer_id": row.customer_id,
@@ -1441,6 +1444,7 @@ def _customer_term_json(row: CommercialCustomerTerm, customer_code: str, custome
         "customer_name": customer_name,
         "customer_margin_pct": float(row.customer_margin_pct),
         "customer_rebate_pct": float(row.customer_rebate_pct),
+        "target_cover_weeks": float(cover) if cover is not None else None,
     }
 
 
@@ -1502,6 +1506,7 @@ async def create_customer_term(body: CustomerTermCreate, db: AsyncSession = Depe
         customer_id=body.customer_id,
         customer_margin_pct=body.customer_margin_pct,
         customer_rebate_pct=body.customer_rebate_pct,
+        target_cover_weeks=body.target_cover_weeks,
     )
     db.add(row)
     try:

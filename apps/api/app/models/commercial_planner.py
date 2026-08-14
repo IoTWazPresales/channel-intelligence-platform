@@ -29,6 +29,7 @@ class CommercialCustomerTerm(Base, TimestampMixin):
     customer_id: Mapped[int] = mapped_column(ForeignKey("dim_customer.id"), nullable=False, unique=True)
     customer_margin_pct: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False, default=0.12)
     customer_rebate_pct: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False, default=0.03)
+    target_cover_weeks: Mapped[float | None] = mapped_column(Numeric(8, 4), nullable=True)
 
 
 class CommercialDistributorTerm(Base, TimestampMixin):

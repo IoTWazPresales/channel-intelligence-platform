@@ -1,10 +1,10 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-14 (Unit 14C VERIFY PASS — Unit 14 complete)
+**Last updated:** 2026-08-14 (Unit 15B VERIFY PASS)
 
 **Branch:** `feat/unit13-cpor-payment-recon` (from `feat/p5-residual` @ `53361c3`)
 
-**Alembic on cip:** `20260814_0015`
+**Alembic on cip:** `20260814_0016` (applied — `commercial_customer_term.target_cover_weeks`)
 
 ## Arc progress
 
@@ -14,46 +14,25 @@
 | 11 Import parity | **Merged** PR #37 → `main` (`4aa538a`) |
 | 12 P6 light | Export sheet Settings shipped in PR #37 |
 | P5 residual | **Pushed** `feat/p5-residual` @ `53361c3` — not yet merged to `main` |
-| **13** | **VERIFY PASS** (Opus) — BACKLOG-092 paid vs owed recon; D-01 superseded_by_case_id |
-| **14** | **VERIFY PASS** (Opus) — 14A series · 14B `dashboard_widget` · 14C ECharts canvas |
-| **15** | Queued — B1 history forecast + BACKLOG-094 intake-weighted MAC + editable planner |
+| **13** | **VERIFY PASS** — BACKLOG-092 recon |
+| **14** | **VERIFY PASS** — 14A series · 14B widget · 14C ECharts |
+| **15A** | **VERIFY PASS** — intake-weighted MAC + per-customer cover |
+| **15B** | **VERIFY PASS** — Compute from history + tenant_id fix |
+| **15C** | Next — editable promo planner grid (BACKLOG-094 stays open until 15C) |
 | P2 hosting | Stay local |
 | P6 | Wait for a second company |
 
-Plan: `.tmp/ARC_UNITS_13_15_PLAN.md`
+Plan: `.tmp/ARC_UNITS_13_15_PLAN.md` · Prompt: `.tmp/unit15_cursor_prompt.md`
 
-## This branch
+## This branch (15A+15B committed)
 
-- Recon service `payment_recon.py`: owed = Σ line `ttl_support` (never qty×support); paid = evidence status paid/processed/closed; FX FLAG not converted
-- `GET /cpor/cases/{id}/payment-recon`; Cases list owed/paid/outstanding/recon columns
-- Case tab **Payments / recon** summary chips + evidence grid
-- Optional mapped `owed_amount_file` in profile (shown vs CIP owed)
-
-- Case 293 `C26649381`: owed 68421.48 ZAR; paid 0 ZAR; USD CNs 116.96 FLAG `currency_mismatch` / `fx_undeclared` (not converted)
-
-- Unit 14A: `POST /query/execute` `sellout_units` / `cst_sellthrough_units` + `series` + `period_grain`
-- Unit 14B: `dashboard_widget` first-class spec + layout; `PUT/POST/PATCH/DELETE /dashboards/{id}/widgets`; promote → `saved_report` (P3-5). `dashboard_tile` dropped after backfill.
-- Unit 14C: `/dashboards` ECharts canvas (`features/dashboards/`). Live dashboard **Unit 14 canvas** (id 4): sell-out week line + CST customer bar; formula + vintage on face; promote 200; reload persists. Recharts on PvE / Channel Ops / Shipping untouched.
-
-## Locks 2026-08-13
-
-- 094 MAC = SOH + in-window intake, weighted; units = history benchmark; all planner fields editable
-- Target cover = **weeks per customer**
-- No forecast file — CIP computes from history
-- Generic lineup export OK if required column layout via profile
-- 092 owed (interim) = approved `ttl_support`; paid = mapped evidence; never invent owed from qty×support
-
-## Locks 2026-08-14 (Unit 14)
-
-- Two metrics: `sellout_units` (DSI) and `cst_sellthrough_units` (CST) — never one “sales”
-- `period_grain` ∈ week/month/quarter on existing `period`; lowest = week; daily refused
-- Query `series` contract (ordered buckets); ECharts canvas-only; P3-5 stays on `saved_report`
-- Prompt: `.tmp/unit14_cursor_prompt.md`
+- 15A: `suggest_intake_weighted_mac`; cover on `commercial_customer_term`; cost-suggest `intake_weighted`; Alembic `20260814_0016` on cip
+- 15B: `POST /forecasts/compute-from-history`; `/forecasts` primary CTA; paste/add = override; `tenant_id` never NULL; B1-07 IMPLEMENTED
 
 ## Next
 
-1. Unit 15 in a **new chat** — B1 history forecast + BACKLOG-094 intake-weighted MAC + editable planner
-2. Merge/promote P5+13+14 when wanted — not a Unit 15 gate
-3. Do not re-ingest job 978 / do not re-audit Takealot REST fetch
+1. Live Compute-from-history click on `/forecasts` (this session)
+2. **New chat** for Unit 15C — editable promo planner
+3. Merge/promote P5+13+14+15 when wanted
 
-**Env:** local Windows. Web `:3000` + API `:8001`.
+**Env:** local Windows. Web `:3000` + API `:8001` (API restarted this session).

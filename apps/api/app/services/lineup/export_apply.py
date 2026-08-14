@@ -180,7 +180,7 @@ async def apply_net_requirement_to_lineup(
     period_label: str | None = None,
     distributor_id: int | None = None,
     horizon_weeks: int = 13,
-    target_cover_weeks: float = 4.0,
+    target_cover_weeks: float | None = None,
     replace_matching: bool = True,
     limit: int = 200,
     apply_bias: bool = False,
@@ -335,7 +335,7 @@ async def build_tenant_workbook_export(
     period_label: str | None = None,
     distributor_id: int | None = None,
     horizon_weeks: int = 13,
-    target_cover_weeks: float = 4.0,
+    target_cover_weeks: float | None = None,
     apply_bias: bool = False,
     limit: int = 500,
 ) -> bytes:

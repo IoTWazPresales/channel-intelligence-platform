@@ -3,6 +3,12 @@
 import { Box, Button, Stack, Typography } from '@mui/material';
 import NextLink from 'next/link';
 
+export type EmptyWorkspaceAction = {
+  label: string;
+  href?: string;
+  onClick?: () => void;
+};
+
 export function EmptyWorkspace({
   title,
   description,
@@ -11,8 +17,8 @@ export function EmptyWorkspace({
 }: {
   title: string;
   description: string;
-  primary?: { label: string; href: string };
-  secondary?: { label: string; href: string };
+  primary?: EmptyWorkspaceAction;
+  secondary?: EmptyWorkspaceAction;
 }) {
   return (
     <Box
@@ -35,17 +41,33 @@ export function EmptyWorkspace({
         {description}
       </Typography>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center" alignItems="center">
-        {primary ? (
-          <Button variant="contained" component={NextLink} href={primary.href}>
-            {primary.label}
-          </Button>
-        ) : null}
-        {secondary ? (
-          <Button variant="outlined" component={NextLink} href={secondary.href}>
-            {secondary.label}
-          </Button>
-        ) : null}
+        {primary ? <EmptyActionButton action={primary} variant="contained" /> : null}
+        {secondary ? <EmptyActionButton action={secondary} variant="outlined" /> : null}
       </Stack>
     </Box>
   );
+}
+
+function EmptyActionButton({
+  action,
+  variant,
+}: {
+  action: EmptyWorkspaceAction;
+  variant: 'contained' | 'outlined';
+}) {
+  if (action.onClick) {
+    return (
+      <Button variant={variant} onClick={action.onClick}>
+        {action.label}
+      </Button>
+    );
+  }
+  if (action.href) {
+    return (
+      <Button variant={variant} component={NextLink} href={action.href}>
+        {action.label}
+      </Button>
+    );
+  }
+  return null;
 }

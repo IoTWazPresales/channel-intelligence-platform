@@ -557,4 +557,89 @@ Rules:
 **Rejected:** inventing a new DAP column for v1; margin→distributor; treating case_po
 absence as attribution revoke (see BACKLOG-128).
 
+## D-042 · 2026-08-14 · Bucket A qty = A3 disti SOH; cost = current CST MAC (BACKLOG-094 / 15A)
+**Locked.** On-hand qty for suggested MAC is A3 derived distributor SOH
+(`derived_stock_by_dist_product` / `compute_derived_for_pair_sync`), not retailer CST
+`reported_soh`. Cost is current CST `unit_mac` else `unit_cost` (`_tier1_cst`). Never
+value on-hand at disti WAC / `Total Average Cost` or at sell-out `Amount`. Flag
+`cross_grain_valuation` when disti qty is valued at customer CST MAC. Flag `no_soh_evidence`
+/ `no_cst_mac` when empty. Retailer SOH remains a promo-window diagnostic — out of 15A.
+
+**Origin:** Unit 15 CONSULT (Opus READY 2026-08-14); Warren Amount vs MAC relock.
+**Rejected:** Disti WAC as default on-hand cost; mapping sell-out Amount onto cost;
+retailer `reported_soh` as Bucket A qty.
+
+## D-043 · 2026-08-14 · Bucket B = committed in-window PO-linked inbound unit_price
+**Locked.** Cost blend Bucket B is PO-linked `fact_inbound_shipment.unit_price` whose
+landing date `coalesce(pod_date, est_pod_date, erd_date)` falls in the promo window.
+Flag `intake_is_oem_sell_in_evidence`. Buy-plan / lineup qty is a **display supply leg**
+(`planned_supply_no_native_cost`), not a cost weight. Empty B → collapse to
+`suggest_cost_basis` + `no_intake_evidence`. Reject DAP as intake cost. Never use inbound
+`amount` as MAC.
+
+**Origin:** Unit 15 CONSULT; BACKLOG-094 intake-aware average.
+**Rejected:** Uncommitted buy-plan as a cost weight; DAP as MAC.
+
+## D-044 · 2026-08-14 · Intake-weighted MAC lives in the existing CPOR cost engine
+**Locked.** `suggest_intake_weighted_mac()` in `apps/api/app/services/cpor/intake_weighted_mac.py`
+reuses `_tier1_cst` / `suggest_cost_basis` fallback and `detect_cost_basis_drift`. No second
+MAC engine. Buckets return qty/cost/as-of + flags. Approved `cost_basis` is never rewritten
+(approve/activate still compare snapshot `suggest_cost_basis`). `GET …/cost-suggest` keeps
+snapshot fields and adds `intake_weighted` + `intake_weighted_drift` (FLAG only).
+
+**Origin:** Unit 15 CONSULT D-044.
+**Rejected:** Parallel MAC service; auto-rewrite on recompute.
+
+## D-045 · 2026-08-14 · Cover policy = nullable weeks on commercial_customer_term
+**Locked.** `target_cover_weeks Numeric(8,4) NULL` on `commercial_customer_term`. Tenant
+default = `REPLENISHMENT_WOC_THRESHOLD_WEEKS` (4.0) in `channel_ops_config.py`. Resolver
+customer term → tenant default (`cover_source` ∈ `customer_term|tenant_default`).
+`build_net_requirement_rows` uses share-weighted weeks × weekly velocity at dist×product.
+Query/body `target_cover_weeks` omitted = policy; explicit number = override +
+`cover_override`. No new table; no hard-coded customer ids.
+
+**Origin:** Unit 15 CONSULT D-045; Warren “weeks per customer”.
+**Rejected:** New cover table; hard-coded customer ids; always sending 4.0 from the API default
+(that would mask policy).
+
+## D-046 · 2026-08-14 · B1 stays one engine (15B — in tree)
+**Locked.** `/forecasts` primary “Compute from history” CTA + provenance; paste/manual
+demoted to override; B1-07 never-merge marked IMPLEMENTED. `velocity_compute.py` /
+`analogue_compute.py` persist `tenant_id` via `resolve_forecast_tenant_id` (never NULL).
+`POST /forecasts/compute-from-history` runs velocity then analogue; skip-overrides holds.
+
+**Origin:** Unit 15 CONSULT D-046.
+
+## D-047 · 2026-08-14 · Planner is a new editable grid (15C — not in 15A tree)
+**Locked for 15C.** Backend extends `build_promo_plan_draft`. Per-cell dirty-flag;
+suggestions never clobber dirty; explicit Reset-to-suggested; bucket + provenance popovers;
+reuse `create_case_from_promo_draft`. Do not implement in 15A.
+
+**Origin:** Unit 15 CONSULT D-047.
+
+## D-048 · 2026-08-14 · Unit split 15A → 15B → 15C
+**Locked.** 15C depends on 15A composer; 15B/15C are contract-decoupled from each other.
+Do not start 15B/15C until 15A VERIFY PASS.
+
+**Origin:** Unit 15 CONSULT D-048.
+
+## D-049 · 2026-08-14 · Disti MAC/WAC is deals-only (SPEC_CPOR §9.1)
+**Locked.** Disti WAC / `Total Average Cost` is not a 15A default cost. Keep `Amount` /
+`Unit Price` on `unit_sellout_price_ex_tax_amount`. AGP `System Price` → sell-out is a named
+one-bucket auto-map defect; 15A must not read it as cost. 15A surfaces a **display** inbound
+`unit_price` WAVG proxy (`dsi_wac_not_ingested`, `disti_cost_is_intake_proxy`) for the
+lineup dealer-price support promise — not blended into suggested MAC. WAC ingest remains a
+deals unit.
+
+**Origin:** Unit 15 Amount/deals CONSULT; Warren “find out / continue” 2026-08-14.
+**Rejected:** Stuffing WAC into sell-out; blending the proxy into MAC.
+
+## D-050 · 2026-08-14 · Sell-out value is a display leg only
+**Locked.** On-hand qty × latest sell-out `Amount` (`unit_sellout_price_ex_tax_amount`) is
+labelled `sellout_value_display_only` and is **not** in the MAC blend. Indicative gap vs
+disti-cost proxy may be shown; never cost.
+
+**Origin:** Unit 15 CONSULT D-050.
+**Rejected:** Amount as MAC; System Price as cost.
+
 
