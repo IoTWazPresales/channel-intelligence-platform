@@ -58,7 +58,7 @@ Until (4), the maximum bucket is `UNVERIFIED` even if counts match.
 | Domain | Unit | Status | Sign-off |
 |--------|------|--------|----------|
 | Scaffold | P1-0 | Done | n/a |
-| Header vocabulary (082) | P1-1 | **Done** — `20260730_0075` on cip; D-022 `_policy` live | code unit verified (pytest 20/20) |
+| Header vocabulary (082) | P1-1 | **Done** — `20260730_0075` on cip; D-022 `_policy` live; **re-verified 2026-08-15** | code unit verified (pytest 20/20); 2026-08-15 tree check |
 | DSI weekly | P1-2 | Leave alone (pre-loaded) — sellout 35 592 / SOH 47 411 | Leave-alone (Warren) |
 | Shipment inbound | P1-3 | Job `#605`; P1-D002 fixed; **14 366** facts / file evidence **7 328** | **Warren OK 2026-07-31** |
 | CPOR historical | P1-4 | Job `#560`; P1-D003 fixed; **297** cases / **583** lines | **Warren OK 2026-07-31** |

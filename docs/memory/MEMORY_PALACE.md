@@ -48,7 +48,7 @@
 If two sources disagree (e.g. `CURRENT.md` vs code vs `CONTEXT` archive vs a skill):
 
 1. **Stop** — do not implement from the stale source.
-2. **Prefer:** running code + git + `CURRENT.md` (newest date wins among docs).
+2. **Prefer:** running code + git + `CURRENT.md` (newest date wins among docs). `CURRENT.md` **Branch @ hash** must match `git rev-parse --short HEAD` after a pin commit; if it does not, CURRENT is stale — fix it before using it as truth.
 3. **Ask Warren** which source is correct before proceeding.
 4. After resolution, update **`CURRENT.md`** and note the fix in **`CONTEXT.md`** changelog.
 
@@ -60,10 +60,11 @@ Never silently pick the older block in an archive or a session handover.
 
 ### After significant work
 
-1. Update **`docs/memory/CURRENT.md`** (replace sections; keep file short).
+1. Update **`docs/memory/CURRENT.md`** (replace sections; keep file short). Pin only what git + code show **now**.
 2. Append **one line** to **`CONTEXT.md` → Changelog** (date + summary + optional commit).
 3. New **deferrals** → **`docs/BACKLOG.md`** entry with TRIGGER (not chat-only).
 4. Architecture change → update relevant **`docs/memory/derived/*.md`** + `last_verified` date.
+5. **After the git commit that includes CURRENT:** if **Branch @ hash** ≠ `git rev-parse --short HEAD`, update CURRENT in the same session **before push** (second commit is OK). Never push CURRENT that points at a parent of HEAD.
 
 ### Skills
 

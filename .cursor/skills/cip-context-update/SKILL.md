@@ -14,12 +14,13 @@ authoritative short state; **`CONTEXT.md`** is router + changelog only.
 
 ## Hard rules
 
-1. **Update `docs/memory/CURRENT.md`** — keep under ~120 lines; replace stale sections.
-2. **Append one changelog row** to `CONTEXT.md` (table under `## Changelog`).
+1. **Update `docs/memory/CURRENT.md`** — keep under ~120 lines; replace stale sections. Pin only what `git rev-parse` + running code show now. Docs and BACKLOG/ROADMAP “Done” are claims until checked in the tree.
+2. **Append one changelog line** to `CONTEXT.md` (newest-first bullets under the router — this repo does not use a changelog table).
 3. **NEVER** restore duplicate `## CURRENT STATE — supersedes every block below` blocks in `CONTEXT.md`.
 4. **NEVER** edit `docs/memory/CONTEXT-archive-*.md`.
 5. If docs conflict with code or each other → **ask Warren** before updating; then fix `CURRENT.md`.
 6. Do not update for trivial changes unless user asked.
+7. **HEAD catch-up (mandatory before push):** after the git commit that includes CURRENT.md, run `git rev-parse --short HEAD`. If CURRENT **Branch @ hash** still names a different commit, update CURRENT (and the changelog hash if present) and commit that catch-up before `git push`. Never push CURRENT that points at a parent of HEAD. Do not `git commit --amend` unless the user asked and amend rules are met.
 
 ## When to run
 
@@ -68,9 +69,10 @@ Keep these sections (edit in place):
 
 1. Read `docs/memory/CURRENT.md` and `docs/memory/MEMORY_PALACE.md`.
 2. Draft updated `CURRENT.md`.
-3. Add changelog row to `CONTEXT.md`: `| YYYY-MM-DD | summary |`.
+3. Add a newest-first changelog **bullet** to `CONTEXT.md` (`- YYYY-MM-DD — summary`).
 4. If architecture changed, bump `last_verified` in relevant `docs/memory/derived/*.md`.
 5. Tell user: one-line summary of what changed in CURRENT.md.
+6. After commit: catch up **Branch @ hash** to `git rev-parse --short HEAD` before push (see Hard rule 7).
 
 ## Related skills
 

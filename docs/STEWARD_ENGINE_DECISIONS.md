@@ -209,6 +209,13 @@ rebuild, and steward A–F — conflict cost exceeds recoverable value.
 **Locked.** Accepted spellings for a canonical import field, and the never-auto-map
 denylist, are **per-template configuration**. No tenant or vendor header string is a
 literal in Python.
+**Verified in tree 2026-08-15:** `distributor_inventory` `expected_columns._policy` in
+`template_definitions.py`; `build_initial_dsi_field_mapping` overlays confirmed memory
+last; `apply_exact_raw_customer_header_overrides` delegates to template exact targets and
+skips `protected_headers`. No ASUS / `Dealer Name` string literals in
+`dsi_mapping_workflow.py`. Residual generic substring heuristics (`dealer`+`group`,
+`customer`+`name`) remain as fallback after policy — that is not a re-open of BACKLOG-082.
+The paragraphs below describe the debt **at decision time**; they are not current work.
 **Debt being retired:** `dsi_mapping_workflow.py` hardcodes `"dealer name group"`,
 `"customer name"`, `"dealer_name_group"` in `_looks_like_dealer_name_group_column`,
 `_looks_like_raw_source_customer_name_column`, and

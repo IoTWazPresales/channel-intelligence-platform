@@ -836,7 +836,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Done** · 2026-08-01 · P1-1 — `20260730_0075` applied on cip; `_policy` on `distributor_inventory`; precedence memory>alias>heuristic; pytest header suite 20/20 |
+| **Status / parked** | **Done** · 2026-08-01 · P1-1 — `20260730_0075` applied on cip; `_policy` on `distributor_inventory`; precedence memory>alias>heuristic; pytest header suite 20/20. **Re-verified in tree 2026-08-15** (`template_definitions.py` `_policy`; `build_initial_dsi_field_mapping` memory last; no tenant header literals in `dsi_mapping_workflow.py`). Do not re-implement. |
 | **Effort** | Medium |
 | **Source** | D-022; ROADMAP P0 item 1 → pulled into P1 as DSI load-blocker; stash `park-dsi-asus-dealer-name-automap` (knowledge only — implementation dropped) |
 | **Idea** | Retire hardcoded header strings in `dsi_mapping_workflow.py`. Per-template header-alias map + never-auto-map denylist. Precedence: **confirmed memory > template alias > heuristic** (today `apply_exact_raw_customer_header_overrides` beats memory — backwards). |

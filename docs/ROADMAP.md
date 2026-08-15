@@ -3,6 +3,7 @@
 **Owner:** Warren · **Version:** 3.2 · 2026-08-14
 **Status:** living — if this file disagrees with `docs/memory/CURRENT.md` about what's next, CURRENT wins and this file gets corrected.
 **v3.2 changes:** Pin Units 13–15 VERIFY PASS (P3 widget canvas, B1 history forecast, B4 editable promo planner) and P5 residual (Takealot REST + activation) on the promote-to-main path. Close stale “queued Unit 14 / B4 next / P4-P5 still on p4 branch” claims. **2026-08-14 addendum:** P2 local unaided-landing + restore re-proven; hosting still deferred.
+**2026-08-15 addendum:** D-022 / BACKLOG-082 re-verified in code (template `_policy`, memory last). Next unit is platform-close hygiene, then module deepening — not P3-1 / P5 intelligence v1 / P6. `CURRENT.md` wins if this file disagrees.
 **v3.1 changes:** Open decisions #1/#2 marked resolved (align with OPEN_QUESTIONS Q-001/Q-002);
 register lists only still-open items.
 **v3.0 changes:** B2+B3 merged into one lineup+budget builder (reservation is embedded in the
@@ -100,7 +101,7 @@ These are the "optimisation not speed" bar. Measured at P2 exit and held thereaf
 outside `main` · CI with real Postgres and `cip_test` · `scripts/verify-gate` proven (caught
 its own false PASS).
 
-**Remaining:** DSI header vocabulary (D-022 / BACKLOG-082) — **Done 2026-08-01** (P1-1).
+**Remaining:** none. Header vocabulary (D-022 / BACKLOG-082) **Done 2026-08-01**; **re-verified in code 2026-08-15** (`distributor_inventory._policy`; memory overlays last). Generic substring heuristics remain as fallback — do not re-open 082 from this line.
 
 **Deferred:** required GitHub status check on `main` — **dropped** (BACKLOG-087 removed;
 Warren will not buy Pro). Process gate = CI + `scripts/verify-gate` + no casual `--admin` merges.
@@ -450,7 +451,8 @@ Anything whose blocker is satisfied. **P1 exited 2026-08-01** (census + defect l
 **A1 / A2 / A3** core + residuals closed 2026-08-08 (A1-09, A2-093, A3-V). **068 landed lens Done.**
 **Units 13–15 VERIFY PASS 2026-08-14:** 092 payment recon · 131 widget canvas · 094 B1+B4 planner.
 **P5 residual** (Takealot REST + activation) is on the same promote path as 13–15.
-**Still open:** P2 hosting deferred (Q-003 local-only); self-serve email reset not built
+**2026-08-15 next (Warren):** platform-close hygiene (live lint/tsc/pytest on this machine, then UI page headers). DSI header vocabulary is already in the tree. After that, one-module deepening — not P3-1 / P5 intel / P6 in the same chat.
+**Still open (later phases):** P2 hosting deferred (Q-003 local-only); self-serve email reset not built
 (admin **Reset password** is the local bar). **P2 local exit re-proven 2026-08-14:** second-user
 unaided landing (`viewer@local` Control tower → Shipping / PvE; Users forbidden) + restore
 into `cip_alembic_smoke` (`RESTORE_SMOKE_OK`, alembic `20260814_0016`). P3-1 tenant-defined
