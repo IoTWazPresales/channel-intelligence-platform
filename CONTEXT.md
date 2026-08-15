@@ -18,7 +18,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
-- 2026-08-15 — **Next lock:** finish ROADMAP + outstanding leftover-close + fired BACKLOG TRIGGERs (hygiene first). Module deepening only when Warren asks. No deepening menu at end of close-out.
+- 2026-08-15 — **Next lock** (`c3a056e`): finish ROADMAP + outstanding leftover-close + fired BACKLOG TRIGGERs (hygiene first). Module deepening only when Warren asks. No deepening menu at end of close-out.
 
 - 2026-08-15 — **Docs pin from git + code** (`602d926` / `832c939`). Alembic `20260814_0016` on cip. D-022/082 verified in tree (`distributor_inventory._policy`; memory last; no tenant header literals in `dsi_mapping_workflow.py`). Test table in CURRENT is the 2026-08-14 snapshot, not re-run that day.
 
