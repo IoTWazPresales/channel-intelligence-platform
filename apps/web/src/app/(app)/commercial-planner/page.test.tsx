@@ -27,7 +27,7 @@ const mockState = vi.hoisted(() => {
     lineupJobs: [] as any[],
     coverageLines: [] as any[],
     productGaps: [] as any[],
-    apiPostMock: vi.fn(async () => ({})),
+    apiPostMock: vi.fn<(url: string, body?: unknown) => Promise<unknown>>(async () => ({})),
     apiPatchMock: vi.fn(async () => ({})),
     apiDeleteMock: vi.fn(async () => ({})),
   };
@@ -2019,7 +2019,6 @@ describe('CurrentLineupSection — sync to plan', () => {
       user: userEvent.setup(),
       ...renderWithProviders(
         <QueryClientProvider client={qc}>
-          {/* @ts-expect-error: importActual may return mismatched types in test context */}
           <RealCLS activePlanId={activePlanId} />
         </QueryClientProvider>
       ),

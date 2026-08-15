@@ -576,7 +576,7 @@ export default function LineupPage() {
               <Checkbox
                 checked={applyBias}
                 onChange={(_, c) => setApplyBias(c)}
-                inputProps={{ 'data-testid': 'lineup-apply-bias' }}
+                data-testid="lineup-apply-bias"
               />
             }
             label="A1 bias on forecast"
@@ -587,7 +587,7 @@ export default function LineupPage() {
               <Checkbox
                 checked={writeCommercialCase}
                 onChange={(_, c) => setWriteCommercialCase(c)}
-                inputProps={{ 'data-testid': 'lineup-write-commercial-case' }}
+                data-testid="lineup-write-commercial-case"
               />
             }
             label="Write commercial lineup case"

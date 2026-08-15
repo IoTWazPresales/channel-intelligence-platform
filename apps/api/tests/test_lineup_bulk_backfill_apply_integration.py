@@ -20,6 +20,15 @@ def _assert_not_cip(url: str) -> None:
     assert db_name != "cip", f"Refusing writes against cip (url={url})"
 
 
+def _alembic_script_head() -> str:
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    heads = set(ScriptDirectory.from_config(Config("alembic.ini")).get_heads())
+    assert len(heads) == 1, f"expected single alembic head, got {sorted(heads)}"
+    return next(iter(heads))
+
+
 def _minimal_xlsx(*, sheets: dict[str, list[list]]) -> bytes:
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
@@ -132,7 +141,12 @@ def bulk_smoke_env():
         db = conn.execute(text("SELECT current_database()")).scalar_one()
         assert db == BULK_SMOKE_DB, db
         rev = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
-        assert rev == "20260812_0014", f"expected tip 20260812_0014 on {BULK_SMOKE_DB}, got {rev}"
+        expected_tip = _alembic_script_head()
+        if rev != expected_tip:
+            pytest.skip(
+                f"{BULK_SMOKE_DB} alembic {rev} != script head {expected_tip}; "
+                "migrate the disposable smoke DB (never cip) before this integration test"
+            )
         col = conn.execute(
             text(
                 """

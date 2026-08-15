@@ -8,6 +8,8 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
 from app.services.cpor.cost_suggestion import suggest_cost_basis
 from app.services.cpor.waterfall import quantize_money
 from app.services.imports import customer_sell_through_apply as apply_mod
@@ -21,6 +23,8 @@ from app.services.imports.cst_d1 import (
 
 
 def test_allow_tests_on_dev_db_unset():
+    if os.environ.get("ALLOW_TESTS_ON_DEV_DB", "").strip() == "1":
+        pytest.skip("This assertion only applies when ALLOW_TESTS_ON_DEV_DB is unset (CI / cip_test).")
     assert os.environ.get("ALLOW_TESTS_ON_DEV_DB", "").strip() != "1"
 
 

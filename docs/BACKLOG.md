@@ -982,16 +982,16 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-08 |
+| **Status / parked** | **Shipped 2026-08-15** — CI + local lint gate via `ESLINT_USE_FLAT_CONFIG=false` (legacy eslintrc shim). `pnpm lint` is 0 errors; 51 `react-hooks/exhaustive-deps` warnings remain and are **not** a mass-fix. Full ESLint 9 `eslint.config.js` migration is still out of scope. |
 | **Effort** | Small–medium (web + root lint wiring) |
 | **Source** | Agent session (2026-07-08): shipment apply hardening gate; `eslint` v9 installed; no `eslint.config.js` / flat config; `eslint .` fails repo-wide; `ESLINT_USE_FLAT_CONFIG=false` required for Next.js only; zero enforced frontend lint in default dev path. |
 | **Idea** | Restore a single working lint entrypoint for `apps/web` and shared packages — either adopt ESLint 9 flat config (Next.js-compatible) or pin/document the legacy config path in CI and `pnpm lint`. |
 | **Why it matters / deferrable** | Drift accumulates without lint gate; deferrable while Vitest + typecheck cover critical paths. |
-| **What the work is** | (1) Audit `pnpm lint` / `apps/web` ESLint integration. (2) Add flat config or explicit legacy shim. (3) Wire CI to fail on lint. |
+| **What the work is** | Done as the legacy-shim path: job env `ESLINT_USE_FLAT_CONFIG=false`; CI `pnpm lint` + `pnpm typecheck`; root `typecheck` script. Do not mass-fix hook warnings. |
 | **Regression traps** | Breaking Next.js 15 ESLint plugin; duplicate configs; CI false greens. |
 | **Behavior to retain** | `pnpm test:web` unchanged; no rule thrash without cause. |
-| **Out of scope** | Full design-system lint overhaul. |
-| **TRIGGER** | Next frontend-heavy unit or CI hardening pass. |
+| **Out of scope** | Full design-system lint overhaul; ESLint 9 flat-config rewrite. |
+| **TRIGGER** | — shipped — reopen only for a dedicated `eslint.config.js` migration or if CI lint runs without the legacy env and fails. |
 
 ---
 

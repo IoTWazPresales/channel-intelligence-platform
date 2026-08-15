@@ -1,47 +1,37 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-15 (docs pin from git + code; D-022 verified in tree)
+**Last updated:** 2026-08-15 (P0 hygiene on `feat/finish-roadmap`; confirm HEAD with `git rev-parse`)
 
-**Branch:** `main`
+**Branch:** `feat/finish-roadmap`
 
-**Last content pin:** `602d926` — docs from git + D-022 code check (confirm HEAD with `git rev-parse`; do not treat a hash in this file as HEAD)
+**Last content pin:** `5deadb8` — branched from `origin/main` for finish-roadmap (do not treat a hash in this file as HEAD)
 
 **Alembic (code):** `20260814_0016` (`20260814_0016_customer_term_cover_weeks.py`)
 
-**Alembic on cip:** `20260814_0016` (head) — re-read 2026-08-15; do not upgrade unless approved
+**Alembic on cip:** `20260814_0016` (head) — do not upgrade unless approved
 
-## On main (git)
+## On this branch
 
-Through `d80d13c`: Units 8 / 11 / 12, leftover-close / P2 local, P5 residual, Units 13–15. Hosting stays local (Q-003). P6 waits for a second company.
+P0 hygiene: `tsc --noEmit` 0 errors; CI now runs `pnpm lint` (`ESLINT_USE_FLAT_CONFIG=false`) + `pnpm typecheck` before API tests. BACKLOG-070 closed as the legacy-shim path (51 hook warnings not mass-fixed).
 
-## D-022 / BACKLOG-082 (read in tree 2026-08-15)
-
-**Done in code — not a next unit.** Do not re-implement from ROADMAP/BACKLOG “Done” text.
-
-- Aliases + denylist live in `template_definitions.py` `distributor_inventory` `expected_columns._policy`
-- `build_initial_dsi_field_mapping` overlays confirmed steward memory **last** (memory > alias > heuristic)
-- `dsi_mapping_workflow.py` has no tenant/vendor header string literals (`Dealer Name`, `ASUS Part No.`, etc.)
-- Residual: generic substring heuristics (`dealer`+`group`, `customer`+`name`) as fallback after policy
-
-## Last recorded test snapshot (2026-08-14 — not re-run 2026-08-15)
+## Last recorded test snapshot (2026-08-15 live re-run)
 
 | Gate | Result |
 |---|---|
-| Lint (`ESLINT_USE_FLAT_CONFIG=false`) | **0 errors**, 51 hook warnings |
-| Web Vitest | **510 passed**; 1 timeout flake (`distributors/page.test.tsx` drawer) — **6/6 on re-run** |
-| API pytest (`ALLOW_TESTS_ON_DEV_DB=1`) | **2005 passed**, 4 skipped, **16 failed**, **2 errors** (~18 min) |
-| API `/health/ready` | `cip` ok (after pytest) |
-| Browser | Control tower, Forecasts, Promotions, Dashboards, Listing Capture, CPOR Cases, Channel Ops, Settings — headings loaded as Local Admin |
+| Lint (`ESLINT_USE_FLAT_CONFIG=false`) | **0 errors**, 51 hook warnings (unchanged; not a mass-fix) |
+| Web `tsc --noEmit` | **0 errors** (was 27) |
+| Web Vitest | focused 125/125 on touchpaths; full suite was 510 pass + 1 drawer timeout flake — timeout raised to 15s on that test |
+| API pytest (`ALLOW_TESTS_ON_DEV_DB=1` vs live `cip`) | **2005 passed**, 4 skipped, **16 failed**, **2 errors** then contract fixes on a subset (see classification) |
 
-Do not treat the API suite as green. Next chat must **re-run** gates and classify from that output — do not copy this paragraph as a work order.
+**API classification (this run, not the 2026-08-14 copy):**
+- **Fixed (CI-gate contract):** hardcoded alembic tip `20260812_0014` → ScriptDirectory head; gap-resolve mock batches after CST count/repoint; `ImportJob.file_name` NOT NULL in orphan-purge test; skip (don’t fail) ALLOW-unset guards and cip-targeted discovery when the local runner uses `ALLOW_TESTS_ON_DEV_DB=1` / live `cip`.
+- **Env / live cip — not this unit:** DSI UniqueViolation + empty-candidate asserts against populated `cip`; `CIP_AUTH_MODE=session` 401s (CI defaults stub); `cip_bulk_smoke` still at `20260702_0066` (skipped until disposable migrate — never cip); data-integrity audit samples on live data.
+- Do not treat the full local-vs-cip API suite as green.
 
 ## Next
 
-Finish remaining ROADMAP + outstanding leftover-close items + BACKLOG entries whose TRIGGER has fired. Do **not** start module deepening until Warren asks.
-
-1. P0 hygiene — live lint / `tsc` / web tests / API tests; fix real contract/type bugs so “CI is a gate” is true. Do not mass-fix hook warnings. Do not alembic-upgrade without approval.
-2. BACKLOG-079 chrome — PageHeader / crumbs on owning routes (`COMMERCIAL_SEMANTICS`). Fold-only; D-021 holds.
-3. Continue ROADMAP still-open in phase order (P3-1 CONSULT, P3-5 beat soak, P4 Amazon FLAG / Game W27, Lane X 076/089/085). Report and skip only what is blocked on Warren (Q-003 hosting, P6 second company, P5 intel v1 ≥2 weeks obs, BACKLOG-098 real Monday 07:00).
-4. Burn BACKLOG with fired TRIGGER as you pass that phase. Import header vocabulary (082) is already in the tree.
+1. Opus VERIFY this P0 unit, then BACKLOG-079 chrome (PageHeader / crumbs on owning routes). Fold-only; D-021 holds. Do not wrap PvE scorecard or PM-gaps worklist in `MasterDataGridShell`.
+2. P3-1 CONSULT (Opus) — tenant-defined metrics without a deploy.
+3. P4 Amazon ASIN FLAG / optional Game W27. Skip blocked: Q-003, P6 second company, P5 intel v1, BACKLOG-098 Monday beat, 076/089 unless Warren asks.
 
 **Env:** local Windows. Web `:3000` + API `:8001`. No Docker.

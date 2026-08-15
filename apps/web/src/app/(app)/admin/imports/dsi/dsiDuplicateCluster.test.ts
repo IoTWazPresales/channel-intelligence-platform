@@ -35,7 +35,7 @@ describe('buildDuplicateClusterIndex', () => {
         context: { possible_duplicate_of: [] },
       },
     ]);
-    expect(duplicateClusterMembersForKey(index, 'acme').sort()).toEqual(['acme', 'acme2', 'acme3']);
+    expect([...duplicateClusterMembersForKey(index, 'acme')].sort()).toEqual(['acme', 'acme2', 'acme3']);
   });
 });
 

@@ -7,8 +7,8 @@ import { ShipmentMappingStewardPanel } from './ShipmentMappingStewardPanel';
 import type { ShipmentMappingCandidateRow } from './shipmentMappingCandidateDisplay';
 import { ShipmentStewardActionsProvider } from './shipmentStewardRowActions';
 
-const apiPost = vi.fn();
-const apiGet = vi.fn(async () => ({ items: [] }));
+const apiPost = vi.fn<(...args: unknown[]) => Promise<unknown>>();
+const apiGet = vi.fn<(...args: unknown[]) => Promise<{ items: unknown[] }>>(async () => ({ items: [] }));
 
 vi.mock('@/lib/api', () => ({
   apiPost: (...args: unknown[]) => apiPost(...args),

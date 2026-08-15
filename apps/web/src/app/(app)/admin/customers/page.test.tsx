@@ -11,7 +11,7 @@ const pushSpy = vi.fn();
 let searchString = 'page=1&page_size=50&sort_by=customer_code&sort_dir=asc';
 const setColumnsVisibleSpy = vi.fn();
 const mockState = vi.hoisted(() => ({
-  apiPostMock: vi.fn(async () => ({})),
+  apiPostMock: vi.fn<(url: string, body?: Record<string, unknown>) => Promise<unknown>>(async () => ({})),
   apiPatchMock: vi.fn(async () => ({})),
   apiDeleteMock: vi.fn(async () => ({})),
   customerItems: [
@@ -284,11 +284,13 @@ describe('AdminCustomersPage phase1 behaviors', () => {
     fireEvent.click(await screen.findByRole('option', { name: 'RET - Retail' }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create customer' }));
     await waitFor(() => expect(mockState.apiPostMock).toHaveBeenCalled());
-    const [, payload] = mockState.apiPostMock.mock.calls[0];
-    expect(payload.customer_code).toBe('');
-    expect(payload.customer_name).toBe('Northwind Retail');
-    expect(payload.region_id).toBe(10);
-    expect(payload.channel_id).toBe(20);
+    const payload = mockState.apiPostMock.mock.calls[0]?.[1];
+    expect(payload).toMatchObject({
+      customer_code: '',
+      customer_name: 'Northwind Retail',
+      region_id: 10,
+      channel_id: 20,
+    });
   });
 
   it('renders drawer locations and contacts sections', async () => {

@@ -31,6 +31,7 @@ def test_purge_orphan_shipment_evidence_lines() -> None:
             source_id=int(src.id),
             template_slug="inbound_shipments",
             status="completed",
+            file_name="orphan-purge-test.csv",
             created_at=datetime.now(timezone.utc),
         )
         db.add(job)

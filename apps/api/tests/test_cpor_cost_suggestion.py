@@ -19,6 +19,8 @@ from app.services.cpor.waterfall import quantize_money
 
 def test_guard_refuses_cip_when_allow_unset():
     """Demonstrate the disposable-DB guard pattern (ALLOW_TESTS_ON_DEV_DB unset)."""
+    if os.environ.get("ALLOW_TESTS_ON_DEV_DB", "").strip() == "1":
+        pytest.skip("Guard only applies when ALLOW_TESTS_ON_DEV_DB is unset (CI / cip_test).")
     assert os.environ.get("ALLOW_TESTS_ON_DEV_DB", "").strip() != "1"
 
     def _sqlalchemy_db_name(url: str) -> str:

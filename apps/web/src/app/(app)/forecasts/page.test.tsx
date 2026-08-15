@@ -15,8 +15,8 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
 }));
 vi.mock('@/lib/queryError', () => ({ toQueryError: () => null }));
 
-const apiGetMock = vi.fn(async () => []);
-const apiPostMock = vi.fn(async () => ({
+const apiGetMock = vi.fn(async (_url?: string) => []);
+const apiPostMock = vi.fn(async (..._args: unknown[]) => ({
   tenant_id: 'default',
   weeks_ahead: 13,
   skip_overrides: true,

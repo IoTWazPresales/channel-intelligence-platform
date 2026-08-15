@@ -41,6 +41,7 @@ describe('dsiStewardCacheUpdates', () => {
       verifyNameOnly: false,
       specialCategoryOnly: false,
       duplicateUnresolvedOnly: false,
+      queue: 'all',
     });
     qc.setQueryData(queryKey, {
       items: [sampleRow(1), sampleRow(2), sampleRow(3)],
@@ -63,6 +64,7 @@ describe('dsiStewardCacheUpdates', () => {
       verifyNameOnly: false,
       specialCategoryOnly: false,
       duplicateUnresolvedOnly: false,
+      queue: 'all',
     });
     const before = { items: [sampleRow(1), sampleRow(2)], total: 5 };
     qc.setQueryData(queryKey, before);
@@ -82,6 +84,7 @@ describe('dsiStewardCacheUpdates', () => {
       verifyNameOnly: false,
       specialCategoryOnly: false,
       duplicateUnresolvedOnly: false,
+      queue: 'all',
     });
     qc.setQueryData(queryKey, { items: [sampleRow(7)], total: 1 });
 
@@ -124,6 +127,7 @@ describe('dsiStewardCacheUpdates', () => {
       verifyNameOnly: false,
       specialCategoryOnly: false,
       duplicateUnresolvedOnly: false,
+      queue: 'all',
     });
     qc.setQueryData(queryKey, { items: [sampleRow(4)], total: 1 });
 
