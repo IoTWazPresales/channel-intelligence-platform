@@ -37,8 +37,11 @@ Do not treat the API suite as green. Next chat must **re-run** gates and classif
 
 ## Next
 
-1. Platform-close hygiene — live lint / `tsc` / web tests / API tests on this machine; fix real contract/type bugs. Do not mass-fix hook warnings. Do not alembic-upgrade without approval.
-2. UI page headers/crumbs on owning routes (browser). Import header vocabulary is already in the tree.
-3. Stop. One-module deepening menu. Do **not** start P3-1, P5 intelligence v1, or P6 in that chat.
+Finish remaining ROADMAP + outstanding leftover-close items + BACKLOG entries whose TRIGGER has fired. Do **not** start module deepening until Warren asks.
+
+1. P0 hygiene — live lint / `tsc` / web tests / API tests; fix real contract/type bugs so “CI is a gate” is true. Do not mass-fix hook warnings. Do not alembic-upgrade without approval.
+2. BACKLOG-079 chrome — PageHeader / crumbs on owning routes (`COMMERCIAL_SEMANTICS`). Fold-only; D-021 holds.
+3. Continue ROADMAP still-open in phase order (P3-1 CONSULT, P3-5 beat soak, P4 Amazon FLAG / Game W27, Lane X 076/089/085). Report and skip only what is blocked on Warren (Q-003 hosting, P6 second company, P5 intel v1 ≥2 weeks obs, BACKLOG-098 real Monday 07:00).
+4. Burn BACKLOG with fired TRIGGER as you pass that phase. Import header vocabulary (082) is already in the tree.
 
 **Env:** local Windows. Web `:3000` + API `:8001`. No Docker.

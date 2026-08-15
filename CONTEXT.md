@@ -18,7 +18,9 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
-- 2026-08-15 — **Docs pin from git + code** (`602d926`). Alembic `20260814_0016` on cip. D-022/082 verified in tree (`distributor_inventory._policy`; memory last; no tenant header literals in `dsi_mapping_workflow.py`). Next: platform-close hygiene discovered from live tests — not P3-1 / P5 intel / P6. Test table in CURRENT is the 2026-08-14 snapshot, not re-run today.
+- 2026-08-15 — **Next lock:** finish ROADMAP + outstanding leftover-close + fired BACKLOG TRIGGERs (hygiene first). Module deepening only when Warren asks. No deepening menu at end of close-out.
+
+- 2026-08-15 — **Docs pin from git + code** (`602d926` / `832c939`). Alembic `20260814_0016` on cip. D-022/082 verified in tree (`distributor_inventory._policy`; memory last; no tenant header literals in `dsi_mapping_workflow.py`). Test table in CURRENT is the 2026-08-14 snapshot, not re-run that day.
 
 - 2026-08-14 — **Full audit + test on `main` @ `d80d13c`:** lint 0 errors; web 510 pass + 1 flake (re-run 6/6); API 2005 pass / 16 fail / 2 err (`ALLOW_TESTS_ON_DEV_DB=1`); alembic `20260814_0016`; browser key routes as Local Admin. Failures classified pre-existing/env — not leftover-close docs. Do not treat the API suite as green.
 
