@@ -20,6 +20,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { OPS_LIST_GRID_PAGINATION } from '@/features/shell/opsListGridPagination';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 
 import { PoAutoLinkProposalsSection, PO_AUTO_LINK_SECTION_ID } from './PoAutoLinkProposalsSection';
@@ -299,6 +300,7 @@ export function PoManagementView() {
   const gapGridOptions = useMemo<GridOptions<GapRow>>(
     () => ({
       getRowId: (p) => p.data.row_key ?? `${p.data.purchase_order_id}-${p.data.product_id}`,
+      ...OPS_LIST_GRID_PAGINATION,
     }),
     []
   );
@@ -562,7 +564,7 @@ export function PoManagementView() {
                 rowData={gapRows}
                 columnDefs={gapColumnDefs}
                 gridOptions={gapGridOptions}
-                height={Math.min(480, 120 + gapRows.length * 42)}
+                height={480}
               />
             </Box>
           </Stack>

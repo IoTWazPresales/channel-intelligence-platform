@@ -16,6 +16,7 @@ import { useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { apiGet } from '@/lib/api';
 
 type IntelRow = {
@@ -105,8 +106,7 @@ export default function ChannelIntelligencePage() {
   return (
     <>
       <PageHeader
-        crumbs={[{ label: 'Channel Intelligence' }, { label: 'CST velocity' }]}
-        title="Channel intelligence (CST)"
+        {...navPageChrome('/channel-intelligence')}
         actions={
           <Button size="small" variant="outlined" onClick={() => refetch()}>
             Refresh

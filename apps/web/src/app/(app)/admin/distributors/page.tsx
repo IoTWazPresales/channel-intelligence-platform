@@ -44,6 +44,7 @@ import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { DistributorCommercialTermsPanel } from '@/features/admin/DistributorCommercialTermsPanel';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { apiDelete, apiGet, apiPatch, apiPost, HttpConflictError, safeDisplayError } from '@/lib/api';
@@ -782,10 +783,7 @@ function AdminDistributorsPageContent() {
 
   return (
     <>
-      <PageHeader
-        crumbs={[{ label: 'Admin' }, { label: 'Distributors' }]}
-        title="Distributors"
-      />
+      <PageHeader {...navPageChrome('/admin/distributors')} />
       <Alert severity="info" sx={{ mb: 2 }}>
         Maintain distributor master records first, then monitor linkage health across sell-out and inbound feeds.
         Transitional fact-mapping tabs remain available below while import and routing maturity catches up.{' '}

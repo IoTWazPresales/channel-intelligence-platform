@@ -20,6 +20,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
 import type { MasterColumnPickerGroup } from '@/components/masterGrid/MasterColumnPickerDialog';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
@@ -254,10 +255,7 @@ export default function CporCasesListPage() {
 
   return (
     <>
-      <PageHeader
-        crumbs={[{ label: 'Commercial Planning' }, { label: 'CPOR Cases' }]}
-        title="CPOR Cases"
-      />
+      <PageHeader {...navPageChrome('/commercial-planner/cpor-cases')} />
       <Alert severity="info" sx={{ mb: 2 }}>
         Reseller-channel promotion funding cases. Recon: <strong>owed</strong> = approved
         ttl_support; <strong>paid</strong> = payment/CN evidence in paid/processed/closed.

@@ -18,6 +18,8 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-15 — **BACKLOG-079 chrome + 085 fold** on `feat/finish-roadmap`: `navPageChrome` crumbs/titles on owning routes; CST/PO-gap/PM-gaps AG Grid paging. Did not wrap PvE/PM-gaps in `MasterDataGridShell`. Next: Opus VERIFY then P3-1 CONSULT.
+
 - 2026-08-15 — **P0 hygiene** (`4effbb5`) on `feat/finish-roadmap`: `tsc --noEmit` 0; CI lint+typecheck; BACKLOG-070 legacy shim. API vs live cip still not green (env/data). Next: Opus VERIFY then BACKLOG-079.
 
 - 2026-08-15 — **Next lock** (`c3a056e`): finish ROADMAP + outstanding leftover-close + fired BACKLOG TRIGGERs (hygiene first). Module deepening only when Warren asks. No deepening menu at end of close-out.

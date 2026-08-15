@@ -1,6 +1,6 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-15 (P0 hygiene on `feat/finish-roadmap`; confirm HEAD with `git rev-parse`)
+**Last updated:** 2026-08-15 (BACKLOG-079 chrome on `feat/finish-roadmap`; confirm HEAD with `git rev-parse`)
 
 **Branch:** `feat/finish-roadmap`
 
@@ -12,25 +12,18 @@
 
 ## On this branch
 
-P0 hygiene: `tsc --noEmit` 0 errors; CI now runs `pnpm lint` (`ESLINT_USE_FLAT_CONFIG=false`) + `pnpm typecheck` before API tests. BACKLOG-070 closed as the legacy-shim path (51 hook warnings not mass-fixed).
+- P0 hygiene (`4effbb5`): `tsc --noEmit` 0; CI lint+typecheck; BACKLOG-070 legacy shim.
+- BACKLOG-079 chrome: owning-route PageHeader crumbs/titles from `navPageChrome` (`navConfig`). Did not wrap PvE scorecard or PM-gaps worklist in `MasterDataGridShell`.
+- BACKLOG-085 fold: client AG Grid pagination on CST steward / PO gap / PM-gaps worklist.
 
-## Last recorded test snapshot (2026-08-15 live re-run)
+## Last recorded test snapshot
 
-| Gate | Result |
-|---|---|
-| Lint (`ESLINT_USE_FLAT_CONFIG=false`) | **0 errors**, 51 hook warnings (unchanged; not a mass-fix) |
-| Web `tsc --noEmit` | **0 errors** (was 27) |
-| Web Vitest | focused 125/125 on touchpaths; full suite was 510 pass + 1 drawer timeout flake — timeout raised to 15s on that test |
-| API pytest (`ALLOW_TESTS_ON_DEV_DB=1` vs live `cip`) | **2005 passed**, 4 skipped, **16 failed**, **2 errors** then contract fixes on a subset (see classification) |
-
-**API classification (this run, not the 2026-08-14 copy):**
-- **Fixed (CI-gate contract):** hardcoded alembic tip `20260812_0014` → ScriptDirectory head; gap-resolve mock batches after CST count/repoint; `ImportJob.file_name` NOT NULL in orphan-purge test; skip (don’t fail) ALLOW-unset guards and cip-targeted discovery when the local runner uses `ALLOW_TESTS_ON_DEV_DB=1` / live `cip`.
-- **Env / live cip — not this unit:** DSI UniqueViolation + empty-candidate asserts against populated `cip`; `CIP_AUTH_MODE=session` 401s (CI defaults stub); `cip_bulk_smoke` still at `20260702_0066` (skipped until disposable migrate — never cip); data-integrity audit samples on live data.
-- Do not treat the full local-vs-cip API suite as green.
+P0 live gates 2026-08-15: lint 0 errors (51 hook warnings); tsc 0; API vs live cip not green (env/data).  
+079 focused web vitest 2026-08-15: **151 passed** (navPageChrome + PageHeader + imports/planner/lineup/forecasts/customers/distributors/PO). Browser smoke on `:3000`: Import Center, Inbound shipments, Shipment Evidence crumb→imports, CPOR Cases, Listing Capture (no v0), Demand Forecast, Customers, PO Management, CST steward pager (25 of 500).
 
 ## Next
 
-1. Opus VERIFY this P0 unit, then BACKLOG-079 chrome (PageHeader / crumbs on owning routes). Fold-only; D-021 holds. Do not wrap PvE scorecard or PM-gaps worklist in `MasterDataGridShell`.
+1. Opus VERIFY this 079/085 unit.
 2. P3-1 CONSULT (Opus) — tenant-defined metrics without a deploy.
 3. P4 Amazon ASIN FLAG / optional Game W27. Skip blocked: Q-003, P6 second company, P5 intel v1, BACKLOG-098 Monday beat, 076/089 unless Warren asks.
 

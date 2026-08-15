@@ -255,7 +255,7 @@ describe('AdminImportsPage job revisit via ?job= URL param', () => {
     searchString = 'job=42&template=customer_master';
     renderPage();
     // Page header is always rendered immediately — use it as a stable anchor
-    expect(await screen.findByText('Data & imports')).toBeInTheDocument();
+    expect(await screen.findByText('Import Center')).toBeInTheDocument();
     // Template param takes priority over job param; revisit banner must NOT appear
     expect(screen.queryByTestId('revisit-banner')).not.toBeInTheDocument();
   });

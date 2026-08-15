@@ -25,6 +25,7 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { apiGet } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
@@ -560,7 +561,7 @@ export default function InboundShipmentsPage() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Inbound shipments' }]} title="Inbound shipments" />
+      <PageHeader {...navPageChrome('/shipping')} />
       <Alert severity="info" sx={{ mb: 2 }}>
         Truth layer from <strong>fact_inbound_shipment</strong> (populated when an inbound import job is applied).
         Steward raw imports under <strong>Admin → Shipment evidence</strong>.

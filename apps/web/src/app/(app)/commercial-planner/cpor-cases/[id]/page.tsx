@@ -24,6 +24,7 @@ import { useParams } from 'next/navigation';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { apiGet, apiPost, apiPostFormData } from '@/lib/api';
 
@@ -353,12 +354,10 @@ export default function CporCaseDetailPage() {
   return (
     <>
       <PageHeader
-        crumbs={[
-          { label: 'Commercial Planning' },
-          { label: 'CPOR Cases', href: '/commercial-planner/cpor-cases' },
-          { label: data.case_code },
-        ]}
-        title={data.case_code}
+        {...navPageChrome(`/commercial-planner/cpor-cases/${data.id}`, {
+          extraCrumbs: [{ label: data.case_code }],
+          title: data.case_code,
+        })}
       />
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }} flexWrap="wrap">
         <Chip label={data.status} color="primary" size="small" />

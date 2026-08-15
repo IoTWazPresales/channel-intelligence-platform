@@ -785,7 +785,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-29 · extracted from `feat/ops-master-grid-shell-parity` per D-021 |
+| **Status / parked** | **Done** · 2026-08-15 fold on `feat/finish-roadmap` — client AG Grid pagination (`OPS_LIST_GRID_PAGINATION`, page size 25) on CST steward, PO gap grid, and PM-gaps worklist. CPOR Cases already had URL `page`/`page_size` via `MasterDataGridShell`. PVE exception lists already had AG Grid pagination. Did not pull BACKLOG-084 URL helpers. |
 | **Effort** | Small (mechanical per page) |
 | **Source** | D-021 fuller diff; CST steward / CPOR / PM gaps / PO gap / PVE list paging chrome on ops-master |
 | **Idea** | When touching those ops list pages, bring skip/limit (or equivalent) pagination UX to the current route layout — same fold-in rule as BACKLOG-079. |
@@ -888,7 +888,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Partial** · 2026-08-14 · CPOR Cases list on `MasterDataGridShell`. Warren asked for leftover close 2026-08-14 — **not closed**: PM gaps is a worklist (`ProductMasterGapWorklistView`), PVE exception lists are scorecard grids (D-021: do not resurrect ops-master KPI chrome), shipment evidence already has `ModuleGridToolbar` + Enterprise AG Grid. Fold only when those pages are next edited; do not standalone. |
+| **Status / parked** | **Partial** · 2026-08-15 — PageHeader crumbs/titles on COMMERCIAL_SEMANTICS owning routes shipped (`navPageChrome` from `navConfig`; group hub hrefs). CPOR Cases list remains on `MasterDataGridShell`. **Do not** wrap PvE scorecard or PM-gaps worklist in that shell (D-021 / Warren 2026-08-15). Shipment evidence already has `ModuleGridToolbar` + Enterprise AG Grid. Remaining shell wrap is not a standalone project. |
 | **Effort** | Medium (mechanical per page) |
 | **Source** | D-021; commits `ddb712c`…`d789ad9` — shell on CPOR cases, PM gaps, shipment evidence, PVE |
 | **Idea** | Re-apply `MasterDataGridShell` / ops list chrome to CPOR cases, product-master gaps, shipment evidence, PVE exception lists when those pages are touched. |

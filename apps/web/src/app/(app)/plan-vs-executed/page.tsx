@@ -1,15 +1,13 @@
 'use client';
 
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { PlanVsExecutedView } from '@/features/plan-vs-executed/PlanVsExecutedView';
 
 export default function PlanVsExecutedPage() {
   return (
     <>
-      <PageHeader
-        crumbs={[{ label: 'Intelligence' }, { label: 'Plan vs Executed' }]}
-        title="Plan vs Executed"
-      />
+      <PageHeader {...navPageChrome('/plan-vs-executed')} />
       <PlanVsExecutedView />
     </>
   );

@@ -19,6 +19,7 @@ import { useMemo, useRef, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { apiGet, apiPost, apiPostFormData } from '@/lib/api';
 
 type Listing = {
@@ -241,8 +242,7 @@ export default function ListingCapturePage() {
   return (
     <>
       <PageHeader
-        crumbs={[{ label: 'Channel Intelligence' }, { label: 'Listing Capture' }]}
-        title="Listing Capture v0"
+        {...navPageChrome('/listing-capture')}
         actions={
           <Stack direction="row" spacing={1}>
             <Button size="small" variant="outlined" onClick={() => refetch()}>

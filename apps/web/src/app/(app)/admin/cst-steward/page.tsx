@@ -22,6 +22,8 @@ import { useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
+import { OPS_LIST_GRID_PAGINATION } from '@/features/shell/opsListGridPagination';
 import { apiGet, apiPatch, apiPost, apiPostFormData } from '@/lib/api';
 
 type KeyAccountRow = {
@@ -328,7 +330,7 @@ export default function CstStewardPage() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Master Data' }, { label: 'CST steward' }]} title="CST steward" />
+      <PageHeader {...navPageChrome('/admin/cst-steward')} />
       <Alert severity="info" sx={{ mb: 2 }} data-testid="cst-steward-guide">
         Key-account flag, report cadence / feed profile, expected-report worklist, and article-alias confirm. FLAG ≠
         BLOCK — unconfirmed aliases never auto-resolve. Slot advance is steward/dev triggered here; beat job is
@@ -357,7 +359,11 @@ export default function CstStewardPage() {
             rowData={accounts ?? []}
             columnDefs={accountCols}
             height={520}
-            gridOptions={{ getRowId: (p) => String(p.data!.customer_id), loading: loadingAccounts }}
+            gridOptions={{
+              getRowId: (p) => String(p.data!.customer_id),
+              loading: loadingAccounts,
+              ...OPS_LIST_GRID_PAGINATION,
+            }}
           />
         </>
       ) : null}
@@ -383,7 +389,11 @@ export default function CstStewardPage() {
             rowData={worklist?.items ?? []}
             columnDefs={slotCols}
             height={520}
-            gridOptions={{ getRowId: (p) => String(p.data!.id), loading: loadingSlots }}
+            gridOptions={{
+              getRowId: (p) => String(p.data!.id),
+              loading: loadingSlots,
+              ...OPS_LIST_GRID_PAGINATION,
+            }}
           />
         </>
       ) : null}
@@ -454,7 +464,11 @@ export default function CstStewardPage() {
             rowData={aliases ?? []}
             columnDefs={aliasCols}
             height={560}
-            gridOptions={{ getRowId: (p) => String(p.data!.id), loading: loadingAliases }}
+            gridOptions={{
+              getRowId: (p) => String(p.data!.id),
+              loading: loadingAliases,
+              ...OPS_LIST_GRID_PAGINATION,
+            }}
           />
         </>
       ) : null}

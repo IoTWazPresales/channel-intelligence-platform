@@ -314,7 +314,7 @@ describe('CommercialPlannerPage', () => {
 
   it('loads planner workspace and summary', async () => {
     renderPage();
-    expect(await screen.findByText('Commercial planner')).toBeInTheDocument();
+    expect(await screen.findByText('Commercial Planner')).toBeInTheDocument();
     const summaryPanel = await screen.findByTestId('plan-summary-panel');
     await waitFor(() => {
       expect(summaryPanel).not.toHaveTextContent('Loading plan…');

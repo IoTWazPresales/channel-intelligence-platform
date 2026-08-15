@@ -32,6 +32,7 @@ import {
 } from '@/components/bulkTable/MasterBulkDeleteImpactDialog';
 import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { ProductSkuEconomicsPanel } from '@/features/admin/ProductSkuEconomicsPanel';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { apiDelete, apiDeleteJson, apiGet, apiPatch, apiPost, HttpConflictError, safeDisplayError } from '@/lib/api';
@@ -604,7 +605,7 @@ function AdminProductsPageContent() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Admin' }, { label: 'Products' }]} title="Products" />
+      <PageHeader {...navPageChrome('/admin/products')} />
       <Alert severity="info" sx={{ mb: 2 }}>
         Edit product attributes inline in the grid, or paste CSV: <code>sku,name,category</code>. Channel is not a
         product attribute — it lives on sell-out, pricing, lineup, and customer records.

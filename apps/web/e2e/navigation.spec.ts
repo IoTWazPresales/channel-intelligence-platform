@@ -36,12 +36,12 @@ test.describe('In-app navigation', () => {
     });
   });
 
-  test('navigates from getting started to Data & imports', async ({ page }) => {
+  test('navigates from getting started to Import Center', async ({ page }) => {
     await page.goto('/getting-started');
     await Promise.all([
       page.waitForURL('**/admin/imports'),
       page.getByRole('link', { name: 'Admin → Import Center' }).click(),
     ]);
-    await expect(page.getByRole('heading', { name: 'Data & imports' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Import Center' })).toBeVisible();
   });
 });

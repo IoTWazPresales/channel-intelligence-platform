@@ -49,6 +49,7 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { ShipmentEntityStewardPanel } from '@/app/(app)/admin/shipment-evidence/ShipmentEntityStewardPanel';
 import {
   CanonicalColumnMappingPanel,
@@ -2716,7 +2717,11 @@ function AdminImportsPageContent() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Admin' }, { label: 'Imports' }]} title="Data & imports" />
+      <PageHeader
+        {...navPageChrome('/admin/imports', {
+          search: searchParams.toString() ? `?${searchParams.toString()}` : '',
+        })}
+      />
       <UnifiedLineupImportDialog
         open={unifiedLineupOpen}
         onClose={() => setUnifiedLineupOpen(false)}

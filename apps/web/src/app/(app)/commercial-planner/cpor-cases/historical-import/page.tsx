@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { registerClientBackgroundTask } from '@/features/background-tasks/backgroundTaskRegistry';
 import { useImportJobProgressQuery } from '@/features/background-tasks/useImportJobProgressQuery';
 import { apiGet, apiPostFormData, safeDisplayError } from '@/lib/api';
@@ -197,12 +198,10 @@ export default function CporHistoricalImportPage() {
   return (
     <>
       <PageHeader
-        crumbs={[
-          { label: 'Commercial Planning' },
-          { label: 'CPOR Cases', href: '/commercial-planner/cpor-cases' },
-          { label: 'Historical import' },
-        ]}
-        title="CPOR historical import"
+        {...navPageChrome('/commercial-planner/cpor-cases/historical-import', {
+          extraCrumbs: [{ label: 'Historical import' }],
+          title: 'CPOR historical import',
+        })}
       />
       <Alert severity="info" sx={{ mb: 2 }}>
         Upload an ASUS-style tracking workbook. Settled Results are stored as a frozen snapshot (parity

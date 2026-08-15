@@ -5,6 +5,7 @@ import { Alert, Tab, Tabs, Typography } from '@mui/material';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 
 import { AliasScopeConflictsSection } from './AliasScopeConflictsSection';
 import { NameSimilarityMergeSection } from './NameSimilarityMergeSection';
@@ -73,8 +74,9 @@ function AdminCustomerDuplicatesPageContent() {
   return (
     <>
       <PageHeader
-        crumbs={[{ label: 'Admin' }, { label: 'Customers', href: '/admin/customers' }, { label: 'Duplicates' }]}
-        title="Customer duplicates & alias conflicts"
+        {...navPageChrome('/admin/customers/duplicates', {
+          search: searchParams.toString() ? `?${searchParams.toString()}` : '',
+        })}
       />
       <Tabs value={activeTab} onChange={(_e, v) => setTab(v)} sx={{ mb: 2 }} aria-label="Customer duplicate views">
         <Tab value="alias_scope" label="Alias-scope conflicts (merge)" />

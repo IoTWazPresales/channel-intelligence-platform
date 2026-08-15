@@ -1,15 +1,13 @@
 'use client';
 
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { ProductMasterGapWorklistView } from '@/features/imports/ProductMasterGapWorklistView';
 
 export default function ProductMasterGapsPage() {
   return (
     <>
-      <PageHeader
-        crumbs={[{ label: 'Master Data' }, { label: 'Product catalogue gaps' }]}
-        title="Product catalogue gaps"
-      />
+      <PageHeader {...navPageChrome('/admin/product-master-gaps')} />
       <ProductMasterGapWorklistView />
     </>
   );

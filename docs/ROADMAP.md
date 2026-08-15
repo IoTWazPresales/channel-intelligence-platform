@@ -3,7 +3,7 @@
 **Owner:** Warren · **Version:** 3.2 · 2026-08-14
 **Status:** living — if this file disagrees with `docs/memory/CURRENT.md` about what's next, CURRENT wins and this file gets corrected.
 **v3.2 changes:** Pin Units 13–15 VERIFY PASS (P3 widget canvas, B1 history forecast, B4 editable promo planner) and P5 residual (Takealot REST + activation) on the promote-to-main path. Close stale “queued Unit 14 / B4 next / P4-P5 still on p4 branch” claims. **2026-08-14 addendum:** P2 local unaided-landing + restore re-proven; hosting still deferred.
-**2026-08-15 addendum:** D-022 / BACKLOG-082 re-verified in code (template `_policy`, memory last). P0 hygiene: CI lint (`ESLINT_USE_FLAT_CONFIG=false`) + `pnpm typecheck`; BACKLOG-070 closed as legacy shim. Next after VERIFY: BACKLOG-079 chrome, then P3-1 CONSULT. Module deepening only when Warren asks. `CURRENT.md` wins if this file disagrees.
+**2026-08-15 addendum:** D-022 / BACKLOG-082 re-verified in code. P0 hygiene shipped. BACKLOG-079 chrome (PageHeader/crumbs/titles via `navPageChrome`) + BACKLOG-085 fold on named ops lists shipped on `feat/finish-roadmap`. Next: P3-1 CONSULT. Module deepening only when Warren asks. `CURRENT.md` wins if this file disagrees.
 **v3.1 changes:** Open decisions #1/#2 marked resolved (align with OPEN_QUESTIONS Q-001/Q-002);
 register lists only still-open items.
 **v3.0 changes:** B2+B3 merged into one lineup+budget builder (reservation is embedded in the
@@ -385,7 +385,7 @@ Runs alongside all phases in GREEN autonomy. Never blocks a phase; never blocked
 - **Distributor merge** — same engine as customer merge, extended to `dim_distributor`
 - **Existing surface retrofit** — PO management, PM gaps, channels/regions, product master,
   admin masters, commercial planner: audit each against the contract, retrofit or waive
-- **Ops-list grid parity** (BACKLOG-085) — fold into whichever phase touches those pages
+- **Ops-list grid parity** (BACKLOG-085) — **Done** 2026-08-15 fold (CST steward / PO gap / PM-gaps client paging; CPOR + PVE already paged)
 - **Lifecycle defect trio** — CST validate `progress_at` **wired 2026-08-09**; reaper inspect +
   retry/busy-guard already shipped for main pipeline. Remaining: non-CST importers if any gap.
 - **BACKLOG-076** — corrupt unit amounts (~$36M). KPI exclude shipped; fact cleanup needs Warren.
@@ -451,7 +451,7 @@ Anything whose blocker is satisfied. **P1 exited 2026-08-01** (census + defect l
 **A1 / A2 / A3** core + residuals closed 2026-08-08 (A1-09, A2-093, A3-V). **068 landed lens Done.**
 **Units 13–15 VERIFY PASS 2026-08-14:** 092 payment recon · 131 widget canvas · 094 B1+B4 planner.
 **P5 residual** (Takealot REST + activation) is on the same promote path as 13–15.
-**2026-08-15 next (Warren):** P0 hygiene shipped on `feat/finish-roadmap` (tsc clean, CI lint+typecheck, BACKLOG-070 shim). Next: BACKLOG-079 chrome, then P3-1 CONSULT. Do not start module deepening until Warren asks. DSI header vocabulary is already in the tree.
+**2026-08-15 next (Warren):** P0 hygiene + BACKLOG-079 chrome + BACKLOG-085 fold shipped on `feat/finish-roadmap`. Next: P3-1 CONSULT. Do not start module deepening until Warren asks. DSI header vocabulary is already in the tree.
 **Still open (later phases):** P2 hosting deferred (Q-003 local-only); self-serve email reset not built
 (admin **Reset password** is the local bar). **P2 local exit re-proven 2026-08-14:** second-user
 unaided landing (`viewer@local` Control tower → Shipping / PvE; Users forbidden) + restore
