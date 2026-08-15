@@ -20,7 +20,7 @@ authoritative short state; **`CONTEXT.md`** is router + changelog only.
 4. **NEVER** edit `docs/memory/CONTEXT-archive-*.md`.
 5. If docs conflict with code or each other → **ask Warren** before updating; then fix `CURRENT.md`.
 6. Do not update for trivial changes unless user asked.
-7. **HEAD catch-up (mandatory before push):** after the git commit that includes CURRENT.md, run `git rev-parse --short HEAD`. If CURRENT **Branch @ hash** still names a different commit, update CURRENT (and the changelog hash if present) and commit that catch-up before `git push`. Never push CURRENT that points at a parent of HEAD. Do not `git commit --amend` unless the user asked and amend rules are met.
+7. **Hash on the changelog, not as HEAD in CURRENT:** a commit cannot contain its own hash. CURRENT **Branch** is the branch name. After the commit that includes CURRENT, if the CONTEXT changelog line still has no hash, add `git rev-parse --short HEAD` of that pin in a follow-up commit before push. Confirm HEAD with git — never treat a pin hash in CURRENT as HEAD. Do not `git commit --amend` unless the user asked and amend rules are met.
 
 ## When to run
 
@@ -72,7 +72,7 @@ Keep these sections (edit in place):
 3. Add a newest-first changelog **bullet** to `CONTEXT.md` (`- YYYY-MM-DD — summary`).
 4. If architecture changed, bump `last_verified` in relevant `docs/memory/derived/*.md`.
 5. Tell user: one-line summary of what changed in CURRENT.md.
-6. After commit: catch up **Branch @ hash** to `git rev-parse --short HEAD` before push (see Hard rule 7).
+6. After commit: if the CONTEXT changelog line has no hash, add `git rev-parse --short HEAD` of that pin before push (see Hard rule 7).
 
 ## Related skills
 

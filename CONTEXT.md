@@ -12,13 +12,13 @@
 1. Edit **`docs/memory/CURRENT.md`** after significant work (keep it short). Git + running code win; docs are claims.
 2. Append **one changelog line** below (newest first).
 3. Do **not** add `## CURRENT STATE — supersedes every block below` sections here anymore.
-4. After the git commit that includes CURRENT, if **Branch @ hash** ≠ `git rev-parse --short HEAD`, update CURRENT in the same session **before push** (second commit is OK). Never push CURRENT that points at a parent of HEAD.
+4. After the git commit that includes CURRENT, append that commit’s hash to the **CONTEXT changelog** line if it is still missing (second commit is OK). CURRENT **Branch** is the branch name — do not write `HEAD` into CURRENT; a commit cannot contain its own hash. Confirm HEAD with `git rev-parse`.
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
 ---
 
-- 2026-08-15 — **Docs pin from git + code** (HEAD catch-up after commit). Alembic `20260814_0016` on cip. D-022/082 verified in tree (`distributor_inventory._policy`; memory last; no tenant header literals in `dsi_mapping_workflow.py`). Next: platform-close hygiene discovered from live tests — not P3-1 / P5 intel / P6. Test table in CURRENT is the 2026-08-14 snapshot, not re-run today.
+- 2026-08-15 — **Docs pin from git + code** (`602d926`). Alembic `20260814_0016` on cip. D-022/082 verified in tree (`distributor_inventory._policy`; memory last; no tenant header literals in `dsi_mapping_workflow.py`). Next: platform-close hygiene discovered from live tests — not P3-1 / P5 intel / P6. Test table in CURRENT is the 2026-08-14 snapshot, not re-run today.
 
 - 2026-08-14 — **Full audit + test on `main` @ `d80d13c`:** lint 0 errors; web 510 pass + 1 flake (re-run 6/6); API 2005 pass / 16 fail / 2 err (`ALLOW_TESTS_ON_DEV_DB=1`); alembic `20260814_0016`; browser key routes as Local Admin. Failures classified pre-existing/env — not leftover-close docs. Do not treat the API suite as green.
 

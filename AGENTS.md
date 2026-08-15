@@ -28,8 +28,8 @@ and `docs/WORKFLOW_DUAL_AGENT.md` confirmation checklist.
 
 **After completing any significant task:** update `docs/memory/CURRENT.md` and
 append one line to `CONTEXT.md` changelog. Use `Run cip-context-update` skill.
-After the commit that includes CURRENT, rewrite **Branch @ hash** to
-`git rev-parse --short HEAD` before push if it still names the parent.
+CURRENT **Branch** is the branch name; confirm HEAD with `git rev-parse`. After
+commit, put the new hash on the CONTEXT changelog line if it is still missing.
 Deferrals go to `docs/BACKLOG.md` — not chat-only.
 
 **Worker / queue / timeout bugs:** read `docs/DEV_TOPOLOGY.md` before patch

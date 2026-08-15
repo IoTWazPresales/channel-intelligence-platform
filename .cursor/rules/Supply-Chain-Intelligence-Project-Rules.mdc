@@ -59,9 +59,10 @@ If docs conflict with code or each other — **stop and ask Warren** before impl
 **After significant work:** update `docs/memory/CURRENT.md` and append one line to
 `CONTEXT.md` changelog. Use skill `Run cip-context-update`. Deferrals go to
 `docs/BACKLOG.md` with TRIGGER — not chat-only. Pin only what git + running code
-show now. After the commit that includes CURRENT, if **Branch @ hash** ≠
-`git rev-parse --short HEAD`, catch up CURRENT in the same session before push
-(second commit is OK). Never push CURRENT that points at a parent of HEAD.
+show now. CURRENT **Branch** is the branch name — do not write `HEAD` into
+CURRENT (a commit cannot contain its own hash). After commit, put the new hash
+on the CONTEXT changelog line if it is still missing. Confirm HEAD with
+`git rev-parse`.
 
 `CURRENT.md` holds: branch, Alembic head, active DB, dev topology, what works,
 in progress, next. History lives in `docs/memory/CONTEXT-archive-*.md`.

@@ -2,7 +2,9 @@
 
 **Last updated:** 2026-08-15 (docs pin from git + code; D-022 verified in tree)
 
-**Branch:** `main` @ `d80d13c` (catch-up after this commit — must match `git rev-parse --short HEAD` before push)
+**Branch:** `main`
+
+**Last content pin:** `602d926` — docs from git + D-022 code check (confirm HEAD with `git rev-parse`; do not treat a hash in this file as HEAD)
 
 **Alembic (code):** `20260814_0016` (`20260814_0016_customer_term_cover_weeks.py`)
 
