@@ -224,7 +224,7 @@ quarter / customer, …). Invalid combinations refused with an explanation. Libr
 Power BI.
 **Shipped Unit 14 (VERIFY PASS 2026-08-14):** 14A series + period_grain week/month/quarter;
 14B `dashboard_widget` persist; 14C ECharts canvas on `/dashboards`. BACKLOG-131 closed.
-Remaining P3: P3-1 U1 overlay source shipped (U2 composition evaluator + U3 admin Settings remain);
+Remaining P3: P3-1 U1 overlay + U2 composition evaluator shipped (U3 admin Settings remains);
 unattended Monday 07:00 beat soak (BACKLOG-098 caveat); reopen MV only if cold `/query/execute`
 regularly exceeds 5s (097).
 
@@ -452,12 +452,12 @@ Anything whose blocker is satisfied. **P1 exited 2026-08-01** (census + defect l
 **A1 / A2 / A3** core + residuals closed 2026-08-08 (A1-09, A2-093, A3-V). **068 landed lens Done.**
 **Units 13–15 VERIFY PASS 2026-08-14:** 092 payment recon · 131 widget canvas · 094 B1+B4 planner.
 **P5 residual** (Takealot REST + activation) is on the same promote path as 13–15.
-**2026-08-16 next (Warren):** P3-1 U1 (governed overlay from tenant profile) shipped on `feat/finish-roadmap`. Next after VERIFY: U2 composition evaluator (intra-family ratio + alias). Do not start module deepening until Warren asks.
+**2026-08-16 next (Warren):** P3-1 U1 overlay + U2 composition evaluator shipped on `feat/finish-roadmap`. Next after VERIFY: U3 admin Settings editor. Do not start module deepening until Warren asks.
 **Still open (later phases):** P2 hosting deferred (Q-003 local-only); self-serve email reset not built
 (admin **Reset password** is the local bar). **P2 local exit re-proven 2026-08-14:** second-user
 unaided landing (`viewer@local` Control tower → Shipping / PvE; Users forbidden) + restore
-into `cip_alembic_smoke` (`RESTORE_SMOKE_OK`, alembic `20260814_0016`). P3-1 U1 overlay source
-shipped (U2/U3 remain); P3-5 unattended Monday 07:00 beat soak (run-now / Send to inbox
+into `cip_alembic_smoke` (`RESTORE_SMOKE_OK`, alembic `20260814_0016`). P3-1 U1 overlay + U2
+composition evaluator shipped (U3 Settings remains); P3-5 unattended Monday 07:00 beat soak (run-now / Send to inbox
 proven; overnight beat not). P4 Amazon ASIN FLAG + optional Game W27 + historical backfill;
 P5 intelligence v1; P6 second tenant; Lane X TRIGGER items (076 Unship re-import, 089 richer
 baselines, 079/085 ops-list fold-in). Lane X runs continuously in GREEN alongside anything.

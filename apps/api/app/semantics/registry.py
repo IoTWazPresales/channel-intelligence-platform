@@ -37,6 +37,15 @@ class RefuseExample:
 
 
 @dataclass(frozen=True)
+class ComposeDef:
+    """Tenant-composed metric: ratio or alias over handler-backed inputs."""
+
+    op: str
+    inputs: tuple[str, ...]
+    grain: frozenset[str]
+
+
+@dataclass(frozen=True)
 class MetricDef:
     id: str
     key: str
@@ -52,6 +61,7 @@ class MetricDef:
     notes: str | None = None
     calendar_period: bool = False
     hidden: bool = False
+    compose: ComposeDef | None = None
 
 
 @dataclass
@@ -119,6 +129,17 @@ class SemanticCatalog:
                     "notes": m.notes,
                     "calendar_period": m.calendar_period,
                     "hidden": m.hidden,
+                    **(
+                        {
+                            "compose": {
+                                "op": m.compose.op,
+                                "inputs": list(m.compose.inputs),
+                                "grain": sorted(m.compose.grain),
+                            }
+                        }
+                        if m.compose is not None
+                        else {}
+                    ),
                 }
                 for m in self.metrics
             ],
@@ -137,6 +158,14 @@ def _parse_metric(raw: dict[str, Any]) -> MetricDef:
     grains = tuple(
         frozenset(str(x) for x in grain_list) for grain_list in (raw.get("allowed_grains") or [])
     )
+    compose_def: ComposeDef | None = None
+    raw_compose = raw.get("compose")
+    if isinstance(raw_compose, dict) and raw_compose.get("op") and raw_compose.get("inputs"):
+        compose_def = ComposeDef(
+            op=str(raw_compose["op"]).strip().lower(),
+            inputs=tuple(str(x).strip().lower() for x in (raw_compose.get("inputs") or []) if str(x).strip()),
+            grain=_grain_frozenset(raw_compose.get("grain")),
+        )
     return MetricDef(
         id=str(raw["id"]),
         key=str(raw["key"]),
@@ -152,6 +181,7 @@ def _parse_metric(raw: dict[str, Any]) -> MetricDef:
         notes=(str(raw["notes"]) if raw.get("notes") else None),
         calendar_period=bool(raw.get("calendar_period")),
         hidden=bool(raw.get("hidden")),
+        compose=compose_def,
     )
 
 
@@ -217,6 +247,8 @@ def _patches_from_overlay_doc(overlay: dict[str, Any] | None) -> dict[str, dict[
     patches: dict[str, dict[str, Any]] = {}
 
     def _take(ident: str, body: dict[str, Any]) -> None:
+        if body.get("compose"):
+            return
         patch: dict[str, Any] = {}
         if "label" in body and str(body.get("label") or "").strip():
             patch["label"] = str(body["label"]).strip()
@@ -240,11 +272,11 @@ def _patches_from_overlay_doc(overlay: dict[str, Any] | None) -> dict[str, dict[
     return patches
 
 
-def _fold_overlay_version(base_version: int, patches: dict[str, Any]) -> int:
+def _fold_overlay_version(base_version: int, overlay_state: dict[str, Any]) -> int:
     """Fold overlay revision into catalog.version so query cache cannot serve stale labels."""
-    if not patches:
+    if not overlay_state:
         return int(base_version)
-    payload = json.dumps(patches, sort_keys=True, default=str, separators=(",", ":"))
+    payload = json.dumps(overlay_state, sort_keys=True, default=str, separators=(",", ":"))
     digest = hashlib.sha256(payload.encode("utf-8")).digest()
     fold = int.from_bytes(digest[:8], "big") % 100_000_000
     return int(base_version) * 100_000_000 + fold
@@ -304,11 +336,74 @@ def _merge_overlay(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, A
     return merged
 
 
+def _composed_metric_dicts(overlay: dict[str, Any], platform_metrics: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Turn validated overlay.composed entries into catalog metric dicts (FLAG != BLOCK)."""
+    by_ident: dict[str, dict[str, Any]] = {}
+    for metric in platform_metrics:
+        if not isinstance(metric, dict):
+            continue
+        mid = str(metric.get("id") or "").strip().lower()
+        key = str(metric.get("key") or "").strip().lower()
+        if mid:
+            by_ident[mid] = metric
+        if key:
+            by_ident[key] = metric
+    raw = overlay.get("composed")
+    if not isinstance(raw, dict):
+        return []
+    out: list[dict[str, Any]] = []
+    seen_keys: set[str] = set()
+    for ident, body in raw.items():
+        if not isinstance(body, dict):
+            continue
+        compose = body.get("compose")
+        if not isinstance(compose, dict):
+            continue
+        op = str(compose.get("op") or "").strip().lower()
+        inputs = [str(x).strip().lower() for x in (compose.get("inputs") or []) if str(x).strip()]
+        grain_list = compose.get("grain")
+        if op not in {"ratio", "alias"} or not inputs or not isinstance(grain_list, list):
+            continue
+        sources = [by_ident.get(k) for k in inputs]
+        if any(src is None for src in sources):
+            continue
+        key = str(body.get("key") or ident).strip().lower()
+        if not key or key in by_ident or key in seen_keys:
+            continue
+        facts: list[str] = []
+        for src in sources:
+            for fact in src.get("source_facts") or []:
+                token = str(fact)
+                if token not in facts:
+                    facts.append(token)
+        formula = f"{inputs[0]} / {inputs[1]}" if op == "ratio" else f"alias of {inputs[0]}"
+        mid = str(body.get("id") or f"T-{key.upper()}").strip()
+        grain_sorted = [str(x).strip().lower() for x in grain_list if str(x).strip()]
+        out.append(
+            {
+                "id": mid,
+                "key": key,
+                "label": str(body.get("label") or key).strip(),
+                "status": "implemented",
+                "owner_surface": str(sources[0].get("owner_surface") or "composed"),
+                "formula": formula,
+                "source_facts": facts,
+                "allowed_grains": [grain_sorted],
+                "calendar_period": any(bool(src.get("calendar_period")) for src in sources),
+                "hidden": bool(body.get("hidden")),
+                "compose": {"op": op, "inputs": inputs, "grain": grain_sorted},
+            }
+        )
+        seen_keys.add(key)
+    return out
+
+
 def catalog_for_tenant(tenant_id: str | None = None) -> SemanticCatalog:
     """Load default catalog merged with tenant-profile overlay (YAML overlay is back-compat only)."""
     tid = (tenant_id or "default").strip() or "default"
     base = _load_yaml(_CATALOG_PATH)
     patches: dict[str, dict[str, Any]] = {}
+    profile_overlay: dict[str, Any] = {}
 
     overlay_path = _tenant_overlay_path(tid)
     if overlay_path.is_file() and overlay_path.name != "_example.yaml":
@@ -321,13 +416,18 @@ def catalog_for_tenant(tenant_id: str | None = None) -> SemanticCatalog:
     try:
         from app.services.commercial_tenant_profile import semantic_overlay_for_tenant
 
-        patches.update(_patches_from_overlay_doc(semantic_overlay_for_tenant(tid)))
+        profile_overlay = semantic_overlay_for_tenant(tid)
+        patches.update(_patches_from_overlay_doc(profile_overlay))
     except Exception:
-        pass
+        profile_overlay = {}
 
     merged, applied = _governed_merge(base, patches)
-    overlay_applied = bool(applied)
-    merged["version"] = _fold_overlay_version(int(base.get("version") or 1), applied)
+    composed_dicts = _composed_metric_dicts(profile_overlay, list(merged.get("metrics") or []))
+    if composed_dicts:
+        merged["metrics"] = list(merged.get("metrics") or []) + composed_dicts
+    overlay_state = {"patches": applied, "composed": composed_dicts}
+    overlay_applied = bool(applied or composed_dicts)
+    merged["version"] = _fold_overlay_version(int(base.get("version") or 1), overlay_state if overlay_applied else {})
     return _catalog_from_data(merged, tenant_id=tid, overlay_applied=overlay_applied)
 
 

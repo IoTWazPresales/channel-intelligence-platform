@@ -12,6 +12,7 @@ from app.query.cache import (
     get_cached,
     set_cached,
 )
+from app.query.compose import evaluate_composed, resolve_composed
 from app.query.handlers import dispatch_handler, handler_name_for
 from app.query.types import CacheMeta, QueryRequest, QueryResult
 from app.semantics.registry import catalog_for_tenant_cached, validate_metric_grain
@@ -32,9 +33,10 @@ async def execute_query(
     filters_dict = dict(filters or {})
     tid = (tenant_id or "default").strip() or "default"
     pg_raw = period_grain if period_grain not in (None, "") else filters_dict.get("period_grain")
+    cat = catalog_for_tenant_cached(tid)
 
     validation = validate_metric_grain(
-        metric, grains_list, tenant_id=tid, period_grain=pg_raw
+        metric, grains_list, catalog=cat, tenant_id=tid, period_grain=pg_raw
     )
     val_dict = validation.as_dict()
     effective_pg = validation.period_grain
@@ -49,12 +51,11 @@ async def execute_query(
             filters=filters_dict,
             validation=val_dict,
             message=validation.message,
-            handler=handler_name_for(validation.metric_key or metric),
+            handler=handler_name_for(validation.metric_key or metric, catalog=cat),
             period_grain=effective_pg,
         )
 
     metric_key = validation.metric_key or metric
-    cat = catalog_for_tenant_cached(tid)
     req = QueryRequest(
         metric=metric_key,
         grains=validation.requested_grains,
@@ -62,11 +63,16 @@ async def execute_query(
         tenant_id=tid,
         period_grain=effective_pg,
     )
+    composed = resolve_composed(metric_key, cat)
+
+    async def _run(*, explain: bool):
+        if composed is not None:
+            hr = await evaluate_composed(db, req, composed, cat, explain_only=explain)
+            return "composed", hr
+        return await dispatch_handler(db, req, metric_key=metric_key, explain_only=explain)
 
     if explain_only:
-        handler_name, hr = await dispatch_handler(
-            db, req, metric_key=metric_key, explain_only=True
-        )
+        handler_name, hr = await _run(explain=True)
         return QueryResult(
             ok=hr.status == "ok",
             status=hr.status,
@@ -124,9 +130,7 @@ async def execute_query(
                 period_grain=cached.get("period_grain") or effective_pg,
             )
 
-    handler_name, hr = await dispatch_handler(
-        db, req, metric_key=metric_key, explain_only=False
-    )
+    handler_name, hr = await _run(explain=False)
 
     result = QueryResult(
         ok=hr.status == "ok",
