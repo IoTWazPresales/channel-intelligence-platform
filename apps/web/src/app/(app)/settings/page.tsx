@@ -22,6 +22,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
+import { SemanticCatalogOverlayPanel } from '@/features/settings/SemanticCatalogOverlayPanel';
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
 import { apiGet, apiPost, apiPut, getApiBase, safeDisplayError } from '@/lib/api';
 import { loadWipeAvailability } from '@/lib/wipeAvailability';
@@ -353,6 +354,13 @@ export default function SettingsPage() {
             ) : null}
           </Stack>
         )}
+
+        {isAdmin ? (
+          <>
+            <Divider sx={{ my: 3 }} />
+            <SemanticCatalogOverlayPanel />
+          </>
+        ) : null}
 
         <Divider sx={{ my: 3 }} />
         <Typography variant="subtitle1" fontWeight={600} gutterBottom>
