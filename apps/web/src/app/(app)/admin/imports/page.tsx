@@ -60,6 +60,7 @@ import { apiGet, apiPost, apiUrl, readFetchError, safeDisplayError } from '@/lib
 import { toQueryError } from '@/lib/queryError';
 
 import { ImportFileUploadZone } from './ImportFileUploadZone';
+import { mappingStateMatchesJob } from './importWizardMappingReset';
 import { BulkLineupBackfillDialog } from './BulkLineupBackfillDialog';
 import { DsiBulkUploadDialog } from './DsiBulkUploadDialog';
 import { CstBulkUploadDialog } from './CstBulkUploadDialog';
@@ -549,6 +550,8 @@ function AdminImportsPageContent() {
   const [importJobBulkDeleteAck, setImportJobBulkDeleteAck] = useState(false);
   const [shipmentApplyWarning, setShipmentApplyWarning] = useState<string | null>(null);
   const [shipmentMapDraft, setShipmentMapDraft] = useState<Record<string, string>>({});
+  const [shipmentMappingResetBanner, setShipmentMappingResetBanner] = useState(false);
+  const prevShipmentMappingJobIdRef = useRef<number | null>(null);
   const [shipmentValidateAsync, setShipmentValidateAsync] = useState(false);
   const [dsiValidateAsync, setDsiValidateAsync] = useState(false);
   // DSI apply runs async on the worker too. Tracked separately from validate because apply transits
@@ -2021,13 +2024,18 @@ function AdminImportsPageContent() {
   );
 
   useEffect(() => {
-    if (!isShipmentEvidence) {
-      setShipmentMapDraft({});
+    const prev = prevShipmentMappingJobIdRef.current;
+    const next = shipmentMappingJobId;
+    if (isShipmentEvidence && prev != null && next != null && prev !== next) {
+      setShipmentMappingResetBanner(true);
     }
+    prevShipmentMappingJobIdRef.current = next;
+    setShipmentMapDraft({});
   }, [isShipmentEvidence, shipmentMappingJobId]);
 
   useEffect(() => {
     if (!isShipmentEvidence || !shipmentMappingState?.file_headers?.length) return;
+    if (!mappingStateMatchesJob(shipmentMappingState.id, shipmentMappingJobId)) return;
     const server = shipmentMappingState.field_mapping ?? {};
     const next: Record<string, string> = {};
     for (const h of shipmentMappingState.file_headers) {
@@ -2037,6 +2045,7 @@ function AdminImportsPageContent() {
     setShipmentMapDraft(next);
   }, [
     isShipmentEvidence,
+    shipmentMappingJobId,
     shipmentMappingState?.id,
     shipmentMappingState?.file_headers,
     shipmentCanonSet,
@@ -3481,8 +3490,21 @@ function AdminImportsPageContent() {
                 ))}
               </Alert>
             ) : null}
-            {shipmentMappingPanelEnabled && shipmentMappingState?.file_headers?.length ? (
+            {shipmentMappingResetBanner ? (
+              <Alert severity="info" data-testid="shipment-mapping-cleared">
+                New file — previous mapping cleared
+              </Alert>
+            ) : null}
+            {shipmentMappingPanelEnabled &&
+            shipmentMappingJobId != null &&
+            !mappingStateMatchesJob(shipmentMappingState?.id, shipmentMappingJobId) ? (
+              <LinearProgress data-testid="shipment-mapping-loading" />
+            ) : null}
+            {shipmentMappingPanelEnabled &&
+            mappingStateMatchesJob(shipmentMappingState?.id, shipmentMappingJobId) &&
+            shipmentMappingState?.file_headers?.length ? (
               <CanonicalColumnMappingPanel
+                key={shipmentMappingJobId ?? 'shipment-map'}
                 testIdPrefix="shipment"
                 fileHeaders={shipmentMappingState.file_headers}
                 draft={shipmentMapDraft}
@@ -3962,6 +3984,7 @@ function AdminImportsPageContent() {
                         </Stack>
                       ) : null}
                       <CanonicalColumnMappingPanel
+                        key={`${lastJobId ?? 'dsi'}-${activeKey}`}
                         testIdPrefix={`dsi-sheet-${activeKey}`}
                         fileHeaders={headers}
                         draft={dsiNestedMapDraft[activeKey] ?? {}}
@@ -3984,6 +4007,7 @@ function AdminImportsPageContent() {
               </Stack>
             ) : !dsiMappingState?.file_headers?.length ? null : (
               <CanonicalColumnMappingPanel
+                key={lastJobId ?? 'dsi-map'}
                 testIdPrefix="dsi"
                 fileHeaders={dsiMappingState.file_headers}
                 draft={dsiMapDraft}
