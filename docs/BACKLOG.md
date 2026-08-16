@@ -1141,7 +1141,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-01 |
+| **Status / parked** | **Closed — documented, persist kept** · 2026-08-16 — apply/poll/`session_import_job_id` consumers depend on the coordinator `ImportJob`. Stopping persist would break dispatch. Loud docstring on `persist_preview_session`. |
 | **Effort** | Small (in-memory preview session **or** loud docs + size guard) |
 | **Source** | Step B `persist_preview_session` — writes `ImportJob.staged_metadata` + base64 file manifest; ~60 files may be heavy. |
 | **Idea** | "Preview is read-only" is false against lineup tables but still writes coordinator `ImportJob` rows on live API. Fix: non-persisting preview **or** document loudly + optional manifest externalization. |

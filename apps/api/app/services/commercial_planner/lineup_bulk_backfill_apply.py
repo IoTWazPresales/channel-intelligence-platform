@@ -49,7 +49,14 @@ async def persist_preview_session(
     db: AsyncSession,
     preview_payload: dict[str, Any],
 ) -> ImportJob:
-    """Store preview on an ImportJob (no lineup writes)."""
+    """Store preview on an ImportJob (no lineup writes).
+
+    BACKLOG-057: this **is** a live-API write of a coordinator ``ImportJob`` row
+    (``staged_metadata`` holds the preview + base64 file manifest). Consumers that
+    depend on it: ``execute_bulk_lineup_apply``, ``GET .../bulk-backfill/preview/{id}``,
+    ``BulkLineupBackfillDialog``, and 1H rederivation preview/apply. Stopping persist
+    would break apply/dispatch. Lineup tables are not written here.
+    """
     from app.models.ingestion import ImportTemplate, SourceDefinition
 
     await ensure_lineup_import_seed(db, template_slug=BULK_TEMPLATE_SLUG, source_code=BULK_SOURCE_CODE)

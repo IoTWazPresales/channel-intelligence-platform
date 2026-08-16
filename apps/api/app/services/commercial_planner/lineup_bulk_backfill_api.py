@@ -39,7 +39,10 @@ async def execute_bulk_lineup_preview(
     persist_session: bool = True,
     tenant_bu_codes: frozenset[str] | None = None,
 ) -> dict[str, Any]:
-    """Parse files in-memory; optionally persist preview session on ImportJob (no lineup writes)."""
+    """Parse files in-memory; optionally persist preview session on ImportJob (no lineup writes).
+
+    Default ``persist_session=True`` is required for apply. See persist_preview_session (BACKLOG-057).
+    """
     inputs = [
         BulkFileInput(filename=name, file_bytes=data, folder_path=folder)
         for name, data, folder in files
