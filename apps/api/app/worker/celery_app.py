@@ -1,10 +1,15 @@
 from celery import Celery
 from celery.schedules import crontab, schedule
+from celery.signals import worker_ready
+import logging
 import os
 
 from app.core.config import get_settings
 from app.worker.celery_queues import build_task_routes, dev_beat_disabled
+from app.worker.code_pin import describe_worker_code_pin
 from app.worker.ledger_task import LedgerTask
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -55,3 +60,9 @@ else:
 celery_app.conf.task_routes = build_task_routes()
 
 import app.worker.tasks  # noqa: E402, F401 — register tasks
+
+
+@worker_ready.connect
+def _log_worker_code_pin(**_kwargs) -> None:
+    # BACKLOG-111: restart this process after lineup parser commits; pin is in worker logs.
+    logger.info("%s", describe_worker_code_pin())

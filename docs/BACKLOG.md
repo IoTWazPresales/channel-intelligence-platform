@@ -345,7 +345,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-03 |
+| **Status / parked** | **Done** · 2026-08-16 — worker boot logs git SHA + `lineup_case_parser` mtime; `DEV_TOPOLOGY.md` restart checklist. Parse path still refuses `uniform_half` (D-028). |
 | **Effort** | Small |
 | **Source** | f4 apply created case 144 via job 790 with `allocation=uniform_half` / null `month_split_json`; re-parse in-process with current tree → month_derived 289/289 |
 | **Idea** | Ensure worker restart / version pin after parse-path commits so enqueued jobs cannot invent retired allocations. |
