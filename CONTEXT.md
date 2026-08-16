@@ -18,6 +18,8 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-16 — **Hygiene batch** (`e8df502`) on `feat/finish-roadmap`: 054 migrate-url guard; fixture predicate + catch-up [6] junit; 104/111/101/047/071/057/058; 086+084 closed not-needed. No migration. No CPOR/alias. Next: P4 Amazon ASIN FLAG.
+
 - 2026-08-16 — **Housekeeping close-out** (`f3f97a7`) on `feat/finish-roadmap`: purged 217 fixture `import_job` rows from cip (kept ACZA `#276`/`#763` — `latest` matches predicate `test`); catch-up v1.1.0 already at `63d05de`; bare no-`--since` JSONL marker appended. API 1563 pass / 487 cip-guard errors / 3 skip; web 532 pass. Next: P4 Amazon ASIN FLAG (CST aliases surface — do not touch until restructure).
 
 - 2026-08-16 — **Claude-in-browser catch-up v1.1.0** (`63d05de`) on `feat/finish-roadmap`: pointer-not-paste; [6] junit-or-NO; [9] OK/FLAG every check; import_job fixture split. Manual SELECT-only. Next: P4 Amazon ASIN FLAG.

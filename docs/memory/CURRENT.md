@@ -1,6 +1,6 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-16 (housekeeping: fixture import_job purge + catch-up JSONL marker; confirm HEAD with `git rev-parse`)
+**Last updated:** 2026-08-16 (hygiene batch: 054/predicate/junit/[6]/104/111/101/047/071/057/058; 086+084 closed not-needed)
 
 **Branch:** `feat/finish-roadmap`
 
@@ -17,7 +17,8 @@
 - BACKLOG-085 fold: client AG Grid pagination on CST steward / PO gap / PM-gaps worklist.
 - **P3-1 U1–U3 VERIFY PASS:** tenant metric overlay + compose evaluator + Settings editor. No migration.
 - **CST Article aliases tab:** Opus VERIFY PASS. Compose chrome (`ModuleGridToolbar` + `MasterColumnPickerDialog` + `ModuleDataSection`). Face columns Customer / Article / Sales model / Status. Sales model from `dim_product` join (not stored on alias). Edit is product search-and-pick (`GET /products?q=`). No `MasterDataGridShell`. No Alembic.
-- Claude-in-browser catch-up: `scripts/claude_catchup.py` v1.1.0 (`63d05de`). Gitignored `docs/memory/CLAUDE_CATCHUP.md`; marker `docs/memory/claude_catchup_log.jsonl`. Pointer-not-paste for docs/review. Manual only. Not Cursor session tooling. Bare (no `--since`) run 2026-08-16 used last JSONL line as delta floor; deltas populated.
+- Claude-in-browser catch-up: `scripts/claude_catchup.py` reads `.tmp/*junit*` for [6] (`93fee09`). Fixture filename regex no longer matches `dsi_week32.xlsx` (`0f2fc10`).
+- **Hygiene batch 2026-08-16:** BACKLOG-054 migrate URL guard; 104 notes-null collision wildcard; 111 worker code pin; 101 delete actor + bulk-apply terminal status; 047 wizard mapping reset; 071 `clone_cip_db.py`; 057 persist documented (kept); 058 dedicated `SLOT_BULK_LINEUP_APPLY`. 086/084 closed not-needed. No migration. No CPOR/alias-surface edits.
 - **cip fixture import_job purge (2026-08-16):** 217 test-fixture jobs deleted in one transaction. Predicate false-positive kept jobs `#276` and `#763` (ACZA Q2 2025 Gaming Lineup **latest** — substring `test` in `latest`). `import_job` remaining 259. Did not delete CST article-alias rows. No migration.
 
 ## Last recorded test snapshot
