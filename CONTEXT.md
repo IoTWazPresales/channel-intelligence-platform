@@ -18,7 +18,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
-- 2026-08-16 — **P3-1 U3 admin Settings overlay editor** on `feat/finish-roadmap`: GET/PUT `/semantics/overlay` (admin PUT); Settings panel relabel/hide/ratio-alias; default-tenant browser E2E then overlay reverted. Next: Opus VERIFY then P4 Amazon ASIN FLAG.
+- 2026-08-16 — **P3-1 U3 admin Settings overlay editor** (`24d2cf3`) on `feat/finish-roadmap`: GET/PUT `/semantics/overlay` (admin PUT); Settings panel relabel/hide/ratio-alias; default-tenant browser E2E then overlay reverted. Next: Opus VERIFY then P4 Amazon ASIN FLAG.
 
 - 2026-08-16 — **P3-1 U2 composition evaluator** (`fbac384`) on `feat/finish-roadmap`: intra-family ratio + grain-restricted alias over handler-backed metrics; den==0 is governed null. No new SQL. Next: Opus VERIFY then U3 Settings editor.
 
