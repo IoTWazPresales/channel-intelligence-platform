@@ -802,7 +802,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-29 · extracted from `feat/ops-master-grid-shell-parity` per D-021 |
+| **Status / parked** | **Closed — not needed** · 2026-08-16 — TRIGGER (fold with BACKLOG-079/085) already fired; 085 shipped client AG Grid paging without these helpers. No consumer needs a new shared URL skip/limit module; ops lists already use per-page `searchParams` or AG Grid paging. |
 | **Effort** | Small (mechanical) |
 | **Source** | D-021; ops-master shared helper modules used by ops list paging |
 | **Idea** | Debounced URL query sync + skip/limit search-param helpers for list pages. |
