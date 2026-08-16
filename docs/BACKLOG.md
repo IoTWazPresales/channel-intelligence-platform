@@ -767,7 +767,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-29 · cherry-pick skipped |
+| **Status / parked** | **Closed — not needed** · 2026-08-16 — `product_import_sync.py` VALUES/CASE has no `channel_id` (that column is on `dim_customer`, not the PM upsert). Date staging columns already use `cast(..., Date)`. The psycopg3 typeless-NULL `channel_id` CASE hazard cannot fire on this path. |
 | **Effort** | Small–Medium |
 | **Source** | `fix/pm-bulk-upsert-coercion-and-sql-types` @ `558d088`; ROADMAP P0 item 3; hygiene session conflict abort |
 | **Idea** | Re-apply the psycopg3 typeless-NULL fix: typed casts on VALUES staging columns mixed with ORM columns in CASE (notably `channel_id`), plus any still-needed tabular coercion from that commit. |
