@@ -64,6 +64,22 @@ def _config_json(
     }
 
 
+def article_alias_q_match(q: str):
+    """ILIKE over retailer article + Product Master identity + customer name/code.
+
+    Sales model is not stored on customer_article_alias — join DimProduct.
+    """
+    needle = f"%{q.strip()}%"
+    return or_(
+        CustomerArticleAlias.article_no_normalized.ilike(needle),
+        DimProduct.sku.ilike(needle),
+        DimProduct.sales_model_name.ilike(needle),
+        DimProduct.name.ilike(needle),
+        DimCustomer.name.ilike(needle),
+        DimCustomer.code.ilike(needle),
+    )
+
+
 def _alias_json(row: CustomerArticleAlias, customer: DimCustomer | None, product: DimProduct | None) -> dict:
     return {
         "id": row.id,
@@ -74,6 +90,7 @@ def _alias_json(row: CustomerArticleAlias, customer: DimCustomer | None, product
         "product_id": row.product_id,
         "product_sku": product.sku if product else None,
         "product_name": product.name if product else None,
+        "sales_model_name": product.sales_model_name if product else None,
         "status": row.status,
         "valid_from": row.valid_from.isoformat() if row.valid_from else None,
         "valid_to": row.valid_to.isoformat() if row.valid_to else None,
@@ -341,16 +358,20 @@ def list_article_aliases(
     q: str | None = Query(default=None),
 ):
     with SessionLocal() as session:
-        stmt = select(CustomerArticleAlias).order_by(CustomerArticleAlias.id.desc())
+        stmt = (
+            select(CustomerArticleAlias)
+            .outerjoin(DimProduct, DimProduct.id == CustomerArticleAlias.product_id)
+            .outerjoin(DimCustomer, DimCustomer.id == CustomerArticleAlias.customer_id)
+            .order_by(CustomerArticleAlias.id.desc())
+        )
         if status and status.strip() and status.strip().lower() != "all":
             statuses = tuple(s.strip() for s in status.split(",") if s.strip())
             stmt = stmt.where(CustomerArticleAlias.status.in_(statuses))
         if customer_id is not None:
             stmt = stmt.where(CustomerArticleAlias.customer_id == customer_id)
         if q and q.strip():
-            needle = f"%{q.strip().lower()}%"
-            stmt = stmt.where(CustomerArticleAlias.article_no_normalized.ilike(needle))
-        rows = list(session.scalars(stmt.limit(2000)).all())
+            stmt = stmt.where(article_alias_q_match(q))
+        rows = list(session.scalars(stmt.limit(2000)).unique().all())
         cust_ids = {int(r.customer_id) for r in rows}
         prod_ids = {int(r.product_id) for r in rows}
         cmap = {
