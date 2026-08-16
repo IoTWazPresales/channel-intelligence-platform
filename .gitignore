@@ -64,3 +64,6 @@ apps/api/_*.json
 
 # Dev process PID files (generated at runtime by dev-*.js scripts)
 .cip-dev-pids/
+
+# Claude-in-browser catch-up snapshot (regenerated each run; not Cursor context)
+docs/memory/CLAUDE_CATCHUP.md
