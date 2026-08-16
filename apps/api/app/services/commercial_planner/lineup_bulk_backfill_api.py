@@ -19,7 +19,7 @@ from app.services.commercial_planner.lineup_bulk_backfill_preview import (
     BulkFileInput,
     build_bulk_lineup_preview,
 )
-from app.services.imports.import_background_slots import SLOT_MAIN, set_task_slot_on_job
+from app.services.imports.import_background_slots import SLOT_BULK_LINEUP_APPLY, set_task_slot_on_job
 from app.services.task_run_ledger import (
     ENTITY_IMPORT_JOB,
     TRANSPORT_BROKER,
@@ -126,7 +126,7 @@ async def execute_bulk_lineup_apply(
     if job is not None and celery_task_id:
         set_task_slot_on_job(
             job,
-            SLOT_MAIN,
+            SLOT_BULK_LINEUP_APPLY,
             task_id=celery_task_id,
             label="Bulk lineup backfill apply…",
         )

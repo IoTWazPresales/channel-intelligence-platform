@@ -5,11 +5,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from app.services.imports.import_background_slots import (
+    KIND_COMMERCIAL_PLANNER_BULK_LINEUP_APPLY,
     KIND_DSI_BULK_PROVISIONAL,
     KIND_DSI_PIPELINE,
     KIND_DSI_RESOLUTION_PLAN_APPLY,
     KIND_PRODUCT_MASTER_COMMIT,
     KIND_SHIPMENT_IMPORT,
+    SLOT_BULK_LINEUP_APPLY,
     SLOT_DSI_BULK,
     SLOT_DSI_SOH,
     SLOT_MAIN,
@@ -111,6 +113,7 @@ def test_clear_all_task_slots_strips_every_slot_and_timing() -> None:
         "pm_validate_task": {"task_id": "pv"},
         "pm_commit_task": {"task_id": "pc"},
         "lineup_parse_task": {"task_id": "lp"},
+        "bulk_lineup_apply_task": {"task_id": "ba"},
         "pipeline_queued_at": "2026-01-01T00:00:00+00:00",
         "pipeline_started_at": "2026-01-01T00:00:01+00:00",
         "dsi_validate_total_rows": 10,
@@ -146,6 +149,17 @@ def test_set_task_slot_by_job_id_uses_session(monkeypatch) -> None:
     assert captured["job"].staged_metadata["pm_commit_task"]["task_id"] == "c-1"
 
 
+def test_bulk_lineup_apply_slot_is_dedicated() -> None:
+    job = _job(template_slug="bulk_lineup_backfill", import_mode="apply")
+    set_task_slot_on_job(job, SLOT_BULK_LINEUP_APPLY, task_id="bulk-1")
+    (slot,) = list(iter_active_slots(job))
+    assert slot.slot_key == SLOT_BULK_LINEUP_APPLY
+    assert slot.kind == KIND_COMMERCIAL_PLANNER_BULK_LINEUP_APPLY
+    assert "celery_task_id" not in job.staged_metadata
+    cleared = clear_all_task_slots(job.staged_metadata)
+    assert not cleared or "bulk_lineup_apply_task" not in cleared
+
+
 def test_slot_meta_keys_cover_all_known_slots() -> None:
     keys = set(slot_meta_keys())
     assert keys == {
@@ -157,6 +171,7 @@ def test_slot_meta_keys_cover_all_known_slots() -> None:
         "pm_validate_task",
         "pm_commit_task",
         "lineup_parse_task",
+        "bulk_lineup_apply_task",
         "shipment_bulk_task",
         "cpor_resolution_plan_task",
         "cst_resolution_plan_task",

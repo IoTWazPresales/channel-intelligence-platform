@@ -1153,7 +1153,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-01 |
+| **Status / parked** | **Done** · 2026-08-16 — `SLOT_BULK_LINEUP_APPLY` / `bulk_lineup_apply_task` registered; cancel/retry clears it via `TASK_SLOTS`. No longer uses `SLOT_MAIN`. |
 | **Effort** | Small |
 | **Source** | `lineup_bulk_backfill_api.py` uses `SLOT_MAIN`; DSI apply uses dedicated slot + registry. |
 | **Idea** | Dedicated slot/registry entry for bulk lineup apply to match DSI parity and avoid orphan-slot clears. |

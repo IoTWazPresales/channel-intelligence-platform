@@ -3998,7 +3998,7 @@ async def bulk_lineup_1h_rederivation_apply(
 
     from app.core.config import get_settings
     from app.services.commercial_planner.lineup_bulk_rederivation import apply_1h_rederivation_sync
-    from app.services.imports.import_background_slots import SLOT_MAIN, set_task_slot_on_job
+    from app.services.imports.import_background_slots import SLOT_BULK_LINEUP_APPLY, set_task_slot_on_job
     from app.services.task_run_ledger import (
         ENTITY_IMPORT_JOB,
         TRANSPORT_IN_PROCESS_THREAD,
@@ -4057,7 +4057,7 @@ async def bulk_lineup_1h_rederivation_apply(
     if job is not None:
         set_task_slot_on_job(
             job,
-            SLOT_MAIN,
+            SLOT_BULK_LINEUP_APPLY,
             task_id=celery_task_id,
             label="1H re-derivation apply…",
         )

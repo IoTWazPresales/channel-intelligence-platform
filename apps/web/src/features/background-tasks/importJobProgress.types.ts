@@ -42,6 +42,7 @@ export type BackgroundTaskKind =
   | 'product_master_commit'
   | 'product_master_validate'
   | 'commercial_planner_lineup_parse'
+  | 'commercial_planner_bulk_lineup_apply'
   | 'cpor_historical_import'
   | 'cpor_resolution_plan'
   | 'cst_resolution_plan'

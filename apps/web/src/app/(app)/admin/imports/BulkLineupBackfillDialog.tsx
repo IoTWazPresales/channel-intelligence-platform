@@ -261,7 +261,7 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
         registerClientBackgroundTask({
           taskId: data.task_id,
           importJobId: data.session_import_job_id,
-          kind: 'commercial_planner_lineup_parse',
+          kind: 'commercial_planner_bulk_lineup_apply',
           label: `Bulk lineup backfill (session ${data.session_import_job_id})`,
         });
       }
@@ -320,7 +320,7 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
         registerClientBackgroundTask({
           taskId: data.task_id,
           importJobId: data.session_import_job_id,
-          kind: 'commercial_planner_lineup_parse',
+          kind: 'commercial_planner_bulk_lineup_apply',
           label: `1H re-derivation (session ${data.session_import_job_id})`,
         });
       }
