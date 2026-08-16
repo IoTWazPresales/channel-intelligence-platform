@@ -1,6 +1,6 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-16 (CST Article aliases steward surface on `feat/finish-roadmap`; confirm HEAD with `git rev-parse`)
+**Last updated:** 2026-08-16 (CST Article aliases VERIFY PASS on `feat/finish-roadmap`; confirm HEAD with `git rev-parse`)
 
 **Branch:** `feat/finish-roadmap`
 
@@ -16,7 +16,7 @@
 - BACKLOG-079 chrome: owning-route PageHeader crumbs/titles from `navPageChrome` (`navConfig`). Did not wrap PvE scorecard or PM-gaps worklist in `MasterDataGridShell`.
 - BACKLOG-085 fold: client AG Grid pagination on CST steward / PO gap / PM-gaps worklist.
 - **P3-1 U1–U3 VERIFY PASS:** tenant metric overlay + compose evaluator + Settings editor. No migration.
-- **CST Article aliases tab (this unit):** compose chrome (`ModuleGridToolbar` + `MasterColumnPickerDialog` + `ModuleDataSection`). Face columns Customer / Article / Sales model / Status. Sales model from `dim_product` join (not stored on alias). Edit is product search-and-pick (`GET /products?q=`). No `MasterDataGridShell`. No Alembic.
+- **CST Article aliases tab:** Opus VERIFY PASS. Compose chrome (`ModuleGridToolbar` + `MasterColumnPickerDialog` + `ModuleDataSection`). Face columns Customer / Article / Sales model / Status. Sales model from `dim_product` join (not stored on alias). Edit is product search-and-pick (`GET /products?q=`). No `MasterDataGridShell`. No Alembic.
 
 ## Last recorded test snapshot
 
@@ -26,7 +26,6 @@ CST aliases 2026-08-16: API `test_cst_article_alias_json.py` **3 passed**; web a
 
 ## Next
 
-1. Opus VERIFY this aliases unit (not S1–S14 import-steward — this is the CST ops aliases tab).
-2. P4 Amazon ASIN FLAG on that surface. Optional Game W27 after. Skip blocked: Q-003, P6 second company, P5 intel v1, BACKLOG-098 Monday beat, 076/089 unless Warren asks.
+1. P4 Amazon ASIN FLAG on the Article aliases surface. Optional Game W27 after. Skip blocked: Q-003, P6 second company, P5 intel v1, BACKLOG-098 Monday beat, 076/089 unless Warren asks.
 
 **Env:** local Windows. Web `:3000` + API `:8001`. No Docker.
