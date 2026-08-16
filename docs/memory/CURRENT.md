@@ -1,6 +1,6 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-16 (CST Article aliases VERIFY PASS on `feat/finish-roadmap`; confirm HEAD with `git rev-parse`)
+**Last updated:** 2026-08-16 (housekeeping: fixture import_job purge + catch-up JSONL marker; confirm HEAD with `git rev-parse`)
 
 **Branch:** `feat/finish-roadmap`
 
@@ -17,13 +17,12 @@
 - BACKLOG-085 fold: client AG Grid pagination on CST steward / PO gap / PM-gaps worklist.
 - **P3-1 U1–U3 VERIFY PASS:** tenant metric overlay + compose evaluator + Settings editor. No migration.
 - **CST Article aliases tab:** Opus VERIFY PASS. Compose chrome (`ModuleGridToolbar` + `MasterColumnPickerDialog` + `ModuleDataSection`). Face columns Customer / Article / Sales model / Status. Sales model from `dim_product` join (not stored on alias). Edit is product search-and-pick (`GET /products?q=`). No `MasterDataGridShell`. No Alembic.
-- Claude-in-browser catch-up: `scripts/claude_catchup.py` v1.1.0. Gitignored `docs/memory/CLAUDE_CATCHUP.md`; marker `docs/memory/claude_catchup_log.jsonl`. Pointer-not-paste for docs/review. Manual only. Not Cursor session tooling.
+- Claude-in-browser catch-up: `scripts/claude_catchup.py` v1.1.0 (`63d05de`). Gitignored `docs/memory/CLAUDE_CATCHUP.md`; marker `docs/memory/claude_catchup_log.jsonl`. Pointer-not-paste for docs/review. Manual only. Not Cursor session tooling. Bare (no `--since`) run 2026-08-16 used last JSONL line as delta floor; deltas populated.
+- **cip fixture import_job purge (2026-08-16):** 217 test-fixture jobs deleted in one transaction. Predicate false-positive kept jobs `#276` and `#763` (ACZA Q2 2025 Gaming Lineup **latest** — substring `test` in `latest`). `import_job` remaining 259. Did not delete CST article-alias rows. No migration.
 
 ## Last recorded test snapshot
 
-P0 live gates 2026-08-15: lint 0 errors (51 hook warnings); tsc 0; API vs live cip not green (env/data).
-P3-1 U3 2026-08-16: overlay API + Settings vitest + default-tenant browser E2E then overlay reverted.
-CST aliases 2026-08-16: API `test_cst_article_alias_json.py` **3 passed**; web aliases + page vitest **5 passed**. Browser: `/admin/cst-steward` Article aliases — headers Article/Customer/Sales model/Status; picker Additional columns; Edit dialog Product (sales model / SKU) not product_id. Grid `1 to 25 of 652`.
+2026-08-16 housekeeping (no `ALLOW_TESTS_ON_DEV_DB`): API **1563 passed / 0 failed / 487 errors / 3 skipped** (all 487 errors = cip write-guard in `pytest_runtest_setup`; 0 non-guard errors). Web vitest **532 passed / 0 failed / 0 skipped**. Do not treat the API suite as green against live `cip`.
 
 ## Next
 
