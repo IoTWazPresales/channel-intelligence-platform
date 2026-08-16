@@ -1067,7 +1067,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-01 |
+| **Status / parked** | **Done** · 2026-08-16 — alembic `resolve_alembic_migrate_url` hard-fails when migrate URL is `cip` while sync URL is not; `CIP_SMOKE_MIGRATE=1` requires both URLs set to the same non-`cip` DB. Ordinary `cip` upgrades unchanged. |
 | **Effort** | Small (env override checklist + optional guard in alembic preflight or smoke helper script) |
 | **Source** | Spec C Step A session (2026-07-01): disposable `cip_alembic_smoke` migration smoke briefly applied `20260701_0064` to `cip` because `DATABASE_URL_SYNC` alone was overridden while `DATABASE_URL_SYNC_MIGRATE` in `.env` still pointed at `cip`. Caught and downgraded before review; approved apply to `cip` followed in a separate step. |
 | **Idea** | Disposable-smoke migrate runs must **never** fall through to `.env`'s `DATABASE_URL_SYNC_MIGRATE` (which points at `cip` for local dev). Require **both** `DATABASE_URL_SYNC` and `DATABASE_URL_SYNC_MIGRATE` in the smoke override set; optionally refuse `alembic upgrade` when a smoke-run marker is set and the resolved migrate DB is `cip`. |

@@ -208,6 +208,11 @@ run `pnpm docker:up:detached` from repo root.
 6. **Tests require opt-in:** `ALLOW_TESTS_ON_DEV_DB=1` must be set before
    running API tests against `cip`.
 7. **Migration commands from repo root:** `pnpm local:db:migrate`
+8. **Disposable-smoke migrate (BACKLOG-054):** override **both** `DATABASE_URL_SYNC` and
+   `DATABASE_URL_SYNC_MIGRATE` to the same non-`cip` database. Alembic hard-fails if the
+   migrate URL still points at `cip` while the sync URL points elsewhere, or when
+   `CIP_SMOKE_MIGRATE=1` and either URL is unset / still `cip`. Do not block ordinary
+   `cip` upgrades when both URLs target `cip`.
 
 ---
 
