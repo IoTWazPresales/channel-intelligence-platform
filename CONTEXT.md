@@ -18,7 +18,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
-- 2026-08-16 — **Claude-in-browser catch-up generator** (`scripts/claude_catchup.py`) on `feat/finish-roadmap`: gitignored snapshot + committed JSONL marker; `--since` delta floor; SELECT-only. Manual only. Next: P4 Amazon ASIN FLAG.
+- 2026-08-16 — **Claude-in-browser catch-up generator** (`3d5c01a`) on `feat/finish-roadmap`: gitignored snapshot + committed JSONL marker; `--since` delta floor; SELECT-only. Manual only. Next: P4 Amazon ASIN FLAG.
 
 - 2026-08-16 — **CST Article aliases VERIFY PASS (Opus)** (`49ccec4` / stamp `cd5d3d5`) on `feat/finish-roadmap`. Next: P4 Amazon ASIN FLAG / optional Game W27.
 
