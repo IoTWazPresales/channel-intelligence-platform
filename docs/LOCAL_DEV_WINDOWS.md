@@ -23,7 +23,7 @@ Company policy may forbid **Docker Desktop** while still allowing **native** ins
 
 1. **Node.js 20+** and **pnpm 9** (see root `README.md`).
 2. **Python 3.12.x** — create `apps/api/.venv` and `pip install -r requirements.txt`.
-3. **PostgreSQL 16** (or compatible) listening on **localhost:5432** with a database and role matching your URLs (defaults below assume user/password/db **`cip`**).
+3. **PostgreSQL 16** (or compatible) listening on **localhost:5432** with a database and role matching your URLs (defaults below assume user/password/db **`cip`**). `pg_dump`/`pg_restore` are often **not** on PowerShell PATH — set `PG_BIN` (typical Windows: `C:\Program Files\PostgreSQL\18\bin`) and `SMOKE_ADMIN_PASSWORD` for clone gates (`scripts/ops/clone_cip_db.py`).
 
 ---
 
@@ -237,6 +237,7 @@ From repo root (uses `apps/api/.venv`):
 | Script | Command |
 |--------|---------|
 | Migrations | `pnpm local:db:migrate` (Alembic uses `DATABASE_URL_SYNC_MIGRATE` when set, else `DATABASE_URL_SYNC`) |
+| Clone gate | `python scripts/ops/clone_cip_db.py --clone-db <name> --dry-run` — `PG_BIN` / `SMOKE_ADMIN_PASSWORD`; never restores into `cip` |
 | Wipe app tables | `pnpm local:db:wipe` |
 | Seed | `pnpm local:db:seed` |
 

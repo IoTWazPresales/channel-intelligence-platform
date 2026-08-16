@@ -7,6 +7,7 @@ Runs **Postgres**, **Redis**, **FastAPI** (with migrations on startup), **Celery
 ## Prerequisites
 
 - **Docker Engine + Compose** (Linux, or any approved runtime on Windows/Mac) *if* you use the commands in this file. Docker Desktop specifically is **not** required if you do not use Docker at all for local dev.
+- Native clone gates: `PG_BIN` (PostgreSQL `bin` directory) and `SMOKE_ADMIN_PASSWORD`. Helper: `python scripts/ops/clone_cip_db.py --clone-db <disposable> --dry-run` — never restores into `cip`.
 
 ---
 

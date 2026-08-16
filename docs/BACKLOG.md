@@ -999,7 +999,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-08 |
+| **Status / parked** | **Done** · 2026-08-16 — `scripts/ops/clone_cip_db.py` resolves `PG_BIN`, refuses clone target `cip`; documented in LOCAL_DEV_WINDOWS + docker README. |
 | **Effort** | Small (docs + helper script) |
 | **Source** | Agent session (2026-07-08): shipment apply clone gate; `pg_dump` not on PATH in PowerShell; binaries at `C:\Program Files\PostgreSQL\18\bin\`; gate used explicit full paths; prior session used `CREATE DATABASE … TEMPLATE cip` (not pg_dump proof). |
 | **Idea** | Standardize disposable clone creation for destructive-class gates: `scripts/ops/clone_cip_db.py` wrapping explicit `pg_dump`/`pg_restore` paths (Windows + Linux), env override for bin dir, refuse `current_database()='cip'` writes. |
