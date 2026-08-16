@@ -462,7 +462,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-02 |
+| **Status / parked** | **Done** · 2026-08-16 — null/missing sheet in notes is a wildcard match; `winner_member_key` stays `existing:{id}`. |
 | **Effort** | Small |
 | **Source** | Corpus restore preview session_import_job_id=752; surviving cases 7/9/90 have `notes=NULL` so `_sheet_from_case_notes` → None while proposals use sheet `Sheet1`/`NB` → `existing_case_collisions=0` despite same `file_name` |
 | **Idea** | When existing case has no sheet in notes, treat sheet match as wildcard (or compare file_name+BU+period only) so po_issued / unified survivors are surfaced as collisions instead of silent duplicate-ready proposals. |

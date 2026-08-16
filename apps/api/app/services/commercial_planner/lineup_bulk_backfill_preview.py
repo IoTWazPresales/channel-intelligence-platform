@@ -633,6 +633,18 @@ def _sheet_from_case_notes(notes: str | None) -> str | None:
     return m.group(1).strip() if m else None
 
 
+def existing_case_sheet_matches_proposal(notes: str | None, proposal_sheet: str | None) -> bool:
+    """True when notes encode the same sheet, or notes have no sheet (wildcard).
+
+    BACKLOG-104: ``notes`` NULL / missing ``sheet=`` must still collide with
+    ready proposals that use ``Sheet1`` / ``NB`` so po_issued survivors surface.
+    """
+    sheet = _sheet_from_case_notes(notes)
+    if sheet is None:
+        return True
+    return sheet == proposal_sheet
+
+
 async def detect_existing_case_collisions(
     db: AsyncSession,
     proposals: list[CaseProposal],
@@ -666,14 +678,14 @@ async def detect_existing_case_collisions(
         )
         existing_cases = (await db.execute(stmt)).scalars().all()
         for existing in existing_cases:
-            sheet = _sheet_from_case_notes(existing.notes)
-            if sheet != prop.sheet_name:
+            if not existing_case_sheet_matches_proposal(existing.notes, prop.sheet_name):
                 continue
             gkey = f"existing_case:{existing.id}:{prop.proposal_key}"
             if gkey in seen_group_keys:
                 continue
             seen_group_keys.add(gkey)
             winner_key = f"existing:{existing.id}"
+            existing_sheet = _sheet_from_case_notes(existing.notes)
             collisions.append(
                 {
                     "collision_group_key": gkey,
@@ -689,7 +701,7 @@ async def detect_existing_case_collisions(
                             "member_key": winner_key,
                             "case_id": int(existing.id),
                             "file_name": existing.file_name,
-                            "sheet_name": sheet,
+                            "sheet_name": existing_sheet,
                             "business_unit": existing.business_unit,
                             "period_label": existing.period_label,
                             "is_winner": True,
