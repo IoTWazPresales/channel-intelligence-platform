@@ -537,6 +537,46 @@ def _skip_artifact_dir(path: Path) -> bool:
     return any(part in skip for part in path.parts)
 
 
+def _is_catchup_junit_artifact(path: Path, *, root: Path) -> bool:
+    """Dedicated suite dumps under ``.tmp/`` — [6] must read these despite ``_skip_artifact_dir``."""
+    try:
+        rel = path.resolve().relative_to(root.resolve())
+    except ValueError:
+        return False
+    if rel.parts[:1] != (".tmp",):
+        return False
+    name = path.name.lower()
+    return "junit" in name or "pytest" in name
+
+
+def collect_junit_artifacts(root: Path, floor_ts: int | None) -> list[Path]:
+    """Find junit XML. ``.tmp/*junit*`` is always eligible (skip + floor do not apply)."""
+    candidates: list[Path] = []
+    for pat in ("**/junit*.xml", "**/*junit*.xml", "**/*pytest*.xml", "**/test-results/**/*.xml"):
+        candidates.extend(root.glob(pat))
+    for extra_name in ("api-junit.xml", "web-junit.xml"):
+        extra = root / ".tmp" / extra_name
+        if extra.is_file():
+            candidates.append(extra)
+    seen: set[Path] = set()
+    artifacts: list[Path] = []
+    for path in candidates:
+        try:
+            resolved = path.resolve()
+        except OSError:
+            continue
+        if resolved in seen or not path.is_file():
+            continue
+        seen.add(resolved)
+        allow = _is_catchup_junit_artifact(path, root=root)
+        if not allow and _skip_artifact_dir(path):
+            continue
+        if not allow and floor_ts is not None and path.stat().st_mtime < floor_ts:
+            continue
+        artifacts.append(path)
+    return artifacts
+
+
 def _parse_junit(path: Path) -> dict[str, Any] | None:
     try:
         root = ElementTree.parse(path).getroot()
@@ -576,17 +616,8 @@ def _parse_junit(path: Path) -> dict[str, Any] | None:
 
 
 def last_test_section(floor_ts: int | None) -> list[str]:
-    """JUnit/xml newer than floor only. Does not consult pytest cache."""
-    candidates: list[Path] = []
-    for pat in ("**/junit*.xml", "**/*pytest*.xml", "**/test-results/**/*.xml"):
-        candidates.extend(REPO_ROOT.glob(pat))
-    artifacts: list[Path] = []
-    for path in candidates:
-        if _skip_artifact_dir(path) or not path.is_file():
-            continue
-        if floor_ts is not None and path.stat().st_mtime < floor_ts:
-            continue
-        artifacts.append(path)
+    """JUnit/xml newer than floor, plus dedicated ``.tmp/*junit*`` regardless of skip/floor."""
+    artifacts = collect_junit_artifacts(REPO_ROOT, floor_ts)
     if not artifacts:
         return [
             "NO TEST EVIDENCE — suites not executed by this script; no artifact newer than floor"
