@@ -485,21 +485,21 @@ CLOSED_STATUS_RE = re.compile(
 )
 
 # Derived from SELECT file_name, count(*) FROM import_job GROUP BY 1 on cip (2026-08-16):
-# test.xlsx=39; bulk_*_test.csv; orphan-purge-test; ilike_test; plus pytest stubs
-# dsi_*.csv, run1/run2.xlsx, validate.xlsx, multi.xlsx, stamp_gate.csv, weekN,
-# lineup_api_*, ambig_*, historical_lineup.xlsx, bulk_lineup_preview_*.
+# pytest stubs only. The previous `dsi([._].*)?` branch matched production names such as
+# dsi_week32.xlsx. Tightened 2026-08-16: dsi / dsi.csv / dsi.xlsx / dsi_<one-char>.csv|xlsx.
+# `position('test' in lower(file_name))` still false-positives on "latest" (jobs 276/763).
+IMPORT_JOB_FIXTURE_FILENAME_RE = (
+    r"^(dsi(\.(csv|xlsx))?|dsi_[a-z0-9]\.(csv|xlsx)|run[0-9]+\.xlsx|"
+    r"validate\.xlsx|multi\.xlsx|stamp_gate\.csv|week[0-9].*|lineup_api_.*|"
+    r"ambig_.*|historical_lineup\.xlsx|bulk_lineup_preview_.*)$"
+)
 IMPORT_JOB_FIXTURE_SQL = (
     "(position('test' in lower(coalesce(file_name, ''))) > 0 "
-    "OR coalesce(file_name, '') ~* "
-    "'^(dsi([._].*)?|run[0-9]+\\.xlsx|validate\\.xlsx|multi\\.xlsx|"
-    "stamp_gate\\.csv|week[0-9].*|lineup_api_.*|ambig_.*|"
-    "historical_lineup\\.xlsx|bulk_lineup_preview_.*)$')"
+    f"OR coalesce(file_name, '') ~* '{IMPORT_JOB_FIXTURE_FILENAME_RE}')"
 )
 IMPORT_JOB_FIXTURE_PREDICATE = (
     "position('test' in lower(file_name)) > 0 OR file_name ~* "
-    "'^(dsi([._].*)?|run[0-9]+\\.xlsx|validate\\.xlsx|multi\\.xlsx|"
-    "stamp_gate\\.csv|week[0-9].*|lineup_api_.*|ambig_.*|"
-    "historical_lineup\\.xlsx|bulk_lineup_preview_.*)$'"
+    f"'{IMPORT_JOB_FIXTURE_FILENAME_RE}'"
 )
 
 
