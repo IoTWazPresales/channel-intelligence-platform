@@ -18,7 +18,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
-- 2026-08-16 — **P3-1 U1 governed overlay** on `feat/finish-roadmap`: `semantic_overlay` on tenant-profile JSON; field-whitelist merge (no formula rewrite); hidden metrics omitted for non-admins. No migration. Next: Opus VERIFY then U2 composition evaluator.
+- 2026-08-16 — **P3-1 U1 governed overlay** (`02854cd`) on `feat/finish-roadmap`: `semantic_overlay` on tenant-profile JSON; field-whitelist merge (no formula rewrite); hidden metrics omitted for non-admins. No migration. Next: Opus VERIFY then U2 composition evaluator.
 
 - 2026-08-15 — **BACKLOG-079 chrome + 085 fold** (`a90f191`) on `feat/finish-roadmap`: `navPageChrome` crumbs/titles on owning routes; CST/PO-gap/PM-gaps AG Grid paging. Did not wrap PvE/PM-gaps in `MasterDataGridShell`. Next: Opus VERIFY then P3-1 CONSULT.
 
