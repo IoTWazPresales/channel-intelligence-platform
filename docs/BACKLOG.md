@@ -514,7 +514,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-02 |
+| **Status / parked** | **Done** · 2026-08-16 — DELETE uses `get_optional_current_user`; bulk apply sets `completed` / `completed_with_errors` instead of leaving `running`. |
 | **Effort** | Small |
 | **Source** | Corpus-safety unit 2A–2D (2026-08-02); `delete_lineup_case` still has no auth dependency; `apply_bulk_lineup_batch_sync` leaves `import_job.status='running'` after apply |
 | **Idea** | (1) Wire `get_current_user` (or optional user) on `DELETE /lineup-cases/{id}` so steward_audit actor is not always `anonymous`. (2) Set bulk lineup session job to an existing terminal status (`completed` / `completed_with_errors`) when apply finishes so reaper/UI do not treat finished applies as live work. |

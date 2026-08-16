@@ -29,6 +29,13 @@ from app.utils.json_safe import to_jsonable
 logger = logging.getLogger(__name__)
 
 
+def bulk_apply_terminal_status(results: list[dict[str, Any]]) -> str:
+    """Existing ImportJob vocabulary — do not invent new statuses (BACKLOG-101)."""
+    if any(str(r.get("outcome") or "") == "error" for r in results):
+        return "completed_with_errors"
+    return "completed"
+
+
 def _parse_iso_date(value: str | None) -> date | None:
     if not value:
         return None
@@ -431,10 +438,10 @@ def apply_bulk_lineup_batch_sync(
                 supersession_group_key=sgk,
             )
 
-        job.status = "running"
+        job.status = bulk_apply_terminal_status(results)
         job.import_mode = "apply"
-        job.stage = "pipeline_queued"
-        job.pipeline_queued_at = datetime.now(timezone.utc)
+        job.stage = "loaded"
+        job.completed_at = datetime.now(timezone.utc)
         meta = dict(meta)
         meta["bulk_lineup_backfill_apply"] = {
             "applied": applied,
