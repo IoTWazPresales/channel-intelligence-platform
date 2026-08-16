@@ -1,7 +1,9 @@
-# Example tenant overlay — copy/rename to {tenant_id}.yaml to enable.
-# Merges into default catalog by metric id (or key). Dimensions append by id.
+# Legacy package-YAML overlay (back-compat). Prefer tenant_profiles/{id}.json
+# semantic_overlay — that path needs no deploy. This file is still merged through
+# the governed field whitelist: label / hidden / allowed_grains only. It cannot
+# rewrite formula / source_facts / owner_surface, add dimensions, or invent metrics.
 #
-# Example: add a tenant-specific metric without redeploying default.yaml.
+# Copy/rename to {tenant_id}.yaml only if you must ship a YAML overlay with the image.
 version: 1
 metrics: []
 dimensions: []

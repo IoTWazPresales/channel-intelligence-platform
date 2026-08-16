@@ -5,9 +5,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.core.security import get_optional_current_user
+from app.core.security import Role, get_optional_current_user, normalize_role
 from app.core.tenant_scope import tenant_id_from_user
-from app.semantics.registry import catalog_for_tenant_cached, validate_metric_grain
+from app.semantics.registry import SemanticCatalog, catalog_for_tenant_cached, validate_metric_grain
 
 router = APIRouter()
 
@@ -18,6 +18,26 @@ class ValidateGrainBody(BaseModel):
     period_grain: str | None = Field(default=None, description="week | month | quarter for calendar-period metrics")
 
 
+def _user_is_admin(user: dict | None) -> bool:
+    if not user:
+        return False
+    role = user.get("role")
+    if role == Role.ADMIN or role == Role.ADMIN.value:
+        return True
+    if isinstance(role, str):
+        return normalize_role(role) == Role.ADMIN
+    return False
+
+
+def _catalog_payload(catalog: SemanticCatalog, user: dict | None) -> dict:
+    """Non-admins omit hidden metrics; admins see them flagged so they can un-hide."""
+    payload = catalog.as_dict()
+    if _user_is_admin(user):
+        return payload
+    payload["metrics"] = [m for m in payload["metrics"] if not m.get("hidden")]
+    return payload
+
+
 def _catalog_for_request(user: dict | None):
     return catalog_for_tenant_cached(tenant_id_from_user(user))
 
@@ -25,7 +45,7 @@ def _catalog_for_request(user: dict | None):
 @router.get("/catalog")
 def get_semantic_catalog(user: dict | None = Depends(get_optional_current_user)) -> dict:
     """Full governed metric + dimension registry (config-driven; tenant overlay merged)."""
-    return _catalog_for_request(user).as_dict()
+    return _catalog_payload(_catalog_for_request(user), user)
 
 
 @router.get("/metrics")
@@ -33,7 +53,7 @@ def list_semantic_metrics(
     status: str | None = Query(default=None, description="Filter: implemented|do_not_build|spec_only|partial"),
     user: dict | None = Depends(get_optional_current_user),
 ) -> dict:
-    cat = _catalog_for_request(user).as_dict()
+    cat = _catalog_payload(_catalog_for_request(user), user)
     metrics = cat["metrics"]
     if status and status.strip():
         needle = status.strip().lower()

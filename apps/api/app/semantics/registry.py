@@ -1,11 +1,16 @@
 """P3-1 governed semantic layer — metric/dimension registry + grain validity.
 
 Config-driven (YAML). Does not compose SQL — that is P3-2.
-Tenant overlays: ``catalog/tenants/{tenant_id}.yaml`` merge metrics by id/key.
+Tenant overlays: ``tenant_profiles/{tenant_id}.json`` key ``semantic_overlay``
+(no-deploy). Package YAML ``catalog/tenants/{tenant_id}.yaml`` is back-compat
+only and runs through the same field-whitelist merge — it cannot rewrite
+``formula`` / ``source_facts`` / ``owner_surface`` or invent metrics.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -46,6 +51,7 @@ class MetricDef:
     refuse_examples: tuple[RefuseExample, ...] = ()
     notes: str | None = None
     calendar_period: bool = False
+    hidden: bool = False
 
 
 @dataclass
@@ -112,6 +118,7 @@ class SemanticCatalog:
                     "refuse_reason": m.refuse_reason,
                     "notes": m.notes,
                     "calendar_period": m.calendar_period,
+                    "hidden": m.hidden,
                 }
                 for m in self.metrics
             ],
@@ -144,6 +151,7 @@ def _parse_metric(raw: dict[str, Any]) -> MetricDef:
         refuse_examples=tuple(examples),
         notes=(str(raw["notes"]) if raw.get("notes") else None),
         calendar_period=bool(raw.get("calendar_period")),
+        hidden=bool(raw.get("hidden")),
     )
 
 
@@ -190,64 +198,137 @@ def _tenant_overlay_path(tenant_id: str) -> Path:
     return _TENANT_DIR / f"{safe}.yaml"
 
 
-def _merge_overlay(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
-    """Merge tenant overlay into base: metrics replace by id then key; dimensions append/replace by id."""
+def _grain_frozenset(items: object) -> frozenset[str]:
+    if not isinstance(items, (list, tuple, set, frozenset)):
+        return frozenset()
+    out: set[str] = set()
+    for item in items:
+        token = str(item).strip().lower().replace(" ", "_")
+        if token:
+            out.add(token)
+    return frozenset(out)
+
+
+def _patches_from_overlay_doc(overlay: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+    """Extract governed patches from YAML-list or profile-dict overlay documents."""
+    if not isinstance(overlay, dict):
+        return {}
+    raw = overlay.get("metrics")
+    patches: dict[str, dict[str, Any]] = {}
+
+    def _take(ident: str, body: dict[str, Any]) -> None:
+        patch: dict[str, Any] = {}
+        if "label" in body and str(body.get("label") or "").strip():
+            patch["label"] = str(body["label"]).strip()
+        if "hidden" in body:
+            patch["hidden"] = bool(body.get("hidden"))
+        if "allowed_grains" in body and isinstance(body.get("allowed_grains"), list):
+            patch["allowed_grains"] = body["allowed_grains"]
+        if ident and patch:
+            patches[ident] = patch
+
+    if isinstance(raw, dict):
+        for ident, body in raw.items():
+            if isinstance(body, dict):
+                _take(str(ident).strip(), body)
+    elif isinstance(raw, list):
+        for body in raw:
+            if not isinstance(body, dict):
+                continue
+            ident = str(body.get("id") or body.get("key") or "").strip()
+            _take(ident, body)
+    return patches
+
+
+def _fold_overlay_version(base_version: int, patches: dict[str, Any]) -> int:
+    """Fold overlay revision into catalog.version so query cache cannot serve stale labels."""
+    if not patches:
+        return int(base_version)
+    payload = json.dumps(patches, sort_keys=True, default=str, separators=(",", ":"))
+    digest = hashlib.sha256(payload.encode("utf-8")).digest()
+    fold = int.from_bytes(digest[:8], "big") % 100_000_000
+    return int(base_version) * 100_000_000 + fold
+
+
+def _governed_merge(
+    base: dict[str, Any], patches: dict[str, dict[str, Any]]
+) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    """Apply field-whitelist patches. Never invents metrics or rewrites formula/source_facts/owner_surface.
+
+    Invalid grain restricts drop that patch (FLAG != BLOCK). Returns (merged, applied_patches).
+    Overlay dimensions are ignored — tenants cannot add unbacked dimensions.
+    """
     out = dict(base)
-    out["version"] = int(overlay.get("version") or base.get("version") or 1)
-    if overlay.get("source_doc"):
-        out["source_doc"] = overlay["source_doc"]
-
-    dim_by_id: dict[str, dict[str, Any]] = {
-        str(d["id"]): dict(d) for d in (base.get("dimensions") or []) if d.get("id")
-    }
-    for d in overlay.get("dimensions") or []:
-        if d.get("id"):
-            dim_by_id[str(d["id"])] = dict(d)
-    out["dimensions"] = list(dim_by_id.values())
-
     met_by_id: dict[str, dict[str, Any]] = {}
-    met_by_key: dict[str, str] = {}
-    for m in base.get("metrics") or []:
-        mid = str(m["id"])
-        met_by_id[mid] = dict(m)
-        met_by_key[str(m.get("key") or "").lower()] = mid
-    for m in overlay.get("metrics") or []:
-        mid = str(m.get("id") or "")
-        key = str(m.get("key") or "").lower()
-        if mid and mid in met_by_id:
-            met_by_id[mid] = {**met_by_id[mid], **dict(m)}
-        elif key and key in met_by_key:
-            existing_id = met_by_key[key]
-            met_by_id[existing_id] = {**met_by_id[existing_id], **dict(m), "id": existing_id}
-        elif mid:
-            met_by_id[mid] = dict(m)
-            if key:
-                met_by_key[key] = mid
-        elif key:
-            # new metric without id — invent id from key
-            mid = key.upper().replace(" ", "_")
-            met_by_id[mid] = {**dict(m), "id": mid, "key": m.get("key") or key}
-            met_by_key[key] = mid
+    lookup: dict[str, str] = {}
+    for metric in base.get("metrics") or []:
+        if not isinstance(metric, dict) or not metric.get("id"):
+            continue
+        mid = str(metric["id"])
+        met_by_id[mid] = dict(metric)
+        lookup[mid.lower()] = mid
+        key = str(metric.get("key") or "").strip().lower()
+        if key:
+            lookup[key] = mid
+
+    applied: dict[str, dict[str, Any]] = {}
+    for ident, patch in patches.items():
+        mid = lookup.get(str(ident).strip().lower())
+        if not mid:
+            continue
+        base_metric = met_by_id[mid]
+        merged = dict(base_metric)
+        if "allowed_grains" in patch:
+            base_sets = {
+                _grain_frozenset(grain_list) for grain_list in (base_metric.get("allowed_grains") or [])
+            }
+            requested = [_grain_frozenset(grain_list) for grain_list in (patch.get("allowed_grains") or [])]
+            requested = [g for g in requested if g]
+            if not requested or any(g not in base_sets for g in requested):
+                continue
+            merged["allowed_grains"] = [sorted(g) for g in requested]
+        if "label" in patch and str(patch.get("label") or "").strip():
+            merged["label"] = str(patch["label"]).strip()
+        if "hidden" in patch:
+            merged["hidden"] = bool(patch.get("hidden"))
+        # Explicitly never copy formula / source_facts / owner_surface / id / key / dimensions.
+        met_by_id[mid] = merged
+        applied[ident] = patch
     out["metrics"] = list(met_by_id.values())
-    return out
+    return out, applied
+
+
+def _merge_overlay(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    """Governed merge (field whitelist). Overlay version/source_doc/dimensions are ignored."""
+    merged, _applied = _governed_merge(base, _patches_from_overlay_doc(overlay))
+    return merged
 
 
 def catalog_for_tenant(tenant_id: str | None = None) -> SemanticCatalog:
-    """Load default catalog merged with optional ``tenants/{tenant_id}.yaml`` overlay."""
+    """Load default catalog merged with tenant-profile overlay (YAML overlay is back-compat only)."""
     tid = (tenant_id or "default").strip() or "default"
     base = _load_yaml(_CATALOG_PATH)
+    patches: dict[str, dict[str, Any]] = {}
+
     overlay_path = _tenant_overlay_path(tid)
-    if tid != "default" and overlay_path.is_file():
-        overlay = _load_yaml(overlay_path)
-        merged = _merge_overlay(base, overlay)
-        return _catalog_from_data(merged, tenant_id=tid, overlay_applied=True)
-    # Also allow default tenant overlay file named default.yaml
     if overlay_path.is_file() and overlay_path.name != "_example.yaml":
-        overlay = _load_yaml(overlay_path)
-        if overlay.get("metrics") or overlay.get("dimensions"):
-            merged = _merge_overlay(base, overlay)
-            return _catalog_from_data(merged, tenant_id=tid, overlay_applied=True)
-    return _catalog_from_data(base, tenant_id=tid, overlay_applied=False)
+        try:
+            yaml_overlay = _load_yaml(overlay_path)
+            patches.update(_patches_from_overlay_doc(yaml_overlay))
+        except (OSError, ValueError, yaml.YAMLError):
+            pass
+
+    try:
+        from app.services.commercial_tenant_profile import semantic_overlay_for_tenant
+
+        patches.update(_patches_from_overlay_doc(semantic_overlay_for_tenant(tid)))
+    except Exception:
+        pass
+
+    merged, applied = _governed_merge(base, patches)
+    overlay_applied = bool(applied)
+    merged["version"] = _fold_overlay_version(int(base.get("version") or 1), applied)
+    return _catalog_from_data(merged, tenant_id=tid, overlay_applied=overlay_applied)
 
 
 @lru_cache(maxsize=1)
@@ -312,6 +393,19 @@ def validate_metric_grain(
                 f"Unknown metric {metric_key!r}. Only metrics in the governed catalog "
                 f"({cat.source_doc}) are available — this is not an ad-hoc BI column picker."
             ),
+        )
+
+    if metric.hidden:
+        return ValidationResult(
+            ok=False,
+            metric_id=metric.id,
+            metric_key=metric.key,
+            requested_grains=requested,
+            message=(
+                f"Metric {metric.label} ({metric.key}) is hidden for this tenant "
+                "and cannot be queried."
+            ),
+            allowed_grains=[sorted(g) for g in metric.allowed_grains],
         )
 
     allowed_sorted = [sorted(g) for g in metric.allowed_grains]

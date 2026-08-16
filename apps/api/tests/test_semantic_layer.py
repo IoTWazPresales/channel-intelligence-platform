@@ -95,11 +95,23 @@ def test_incremental_cost_refused():
     assert r.ok is False
 
 
-def test_tenant_overlay_merges_metric(tmp_path=None):
+def test_tenant_yaml_overlay_is_governed_and_cannot_invent_metrics():
+    """Package YAML overlay is back-compat only: relabel allowed; invent/rewrite refused."""
     clear_catalog_cache()
+    platform = default_catalog().metric_by_key("fill_rate")
+    assert platform is not None
     overlay = {
-        "version": 1,
+        "version": 99,
+        "source_doc": "forged.md",
         "metrics": [
+            {
+                "id": "A1-01",
+                "key": "fill_rate",
+                "label": "YAML relabel",
+                "formula": "forged fill-rate formula",
+                "source_facts": ["forged_fact"],
+                "owner_surface": "forged-surface",
+            },
             {
                 "id": "T-DEMO",
                 "key": "tenant_demo_metric",
@@ -109,9 +121,9 @@ def test_tenant_overlay_merges_metric(tmp_path=None):
                 "formula": "1",
                 "source_facts": [],
                 "allowed_grains": [["period"]],
-            }
+            },
         ],
-        "dimensions": [],
+        "dimensions": [{"id": "forged_dim", "label": "Forged"}],
     }
     _TENANT_DIR.mkdir(parents=True, exist_ok=True)
     path = _TENANT_DIR / "acme.yaml"
@@ -120,11 +132,16 @@ def test_tenant_overlay_merges_metric(tmp_path=None):
         clear_catalog_cache()
         cat = catalog_for_tenant("acme")
         assert cat.overlay_applied is True
-        assert cat.metric_by_key("tenant_demo_metric") is not None
-        r = validate_metric_grain("tenant_demo_metric", ["period"], tenant_id="acme")
-        assert r.ok is True
-        # default tenant must not see overlay metric
-        r2 = validate_metric_grain("tenant_demo_metric", ["period"], tenant_id="default")
+        fill = cat.metric_by_key("fill_rate")
+        assert fill is not None
+        assert fill.label == "YAML relabel"
+        assert fill.formula == platform.formula
+        assert list(fill.source_facts) == list(platform.source_facts)
+        assert fill.owner_surface == platform.owner_surface
+        assert cat.metric_by_key("tenant_demo_metric") is None
+        assert "forged_dim" not in cat.dimension_ids()
+        assert cat.source_doc == default_catalog().source_doc
+        r2 = validate_metric_grain("tenant_demo_metric", ["period"], tenant_id="acme")
         assert r2.ok is False
     finally:
         if path.exists():

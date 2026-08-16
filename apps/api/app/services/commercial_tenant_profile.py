@@ -130,7 +130,13 @@ TENANT_PROFILE_OVERRIDE_KEYS: tuple[str, ...] = (
     "lineup_export_net_requirement_sheet",
     "lineup_export_draft_sheet",
     "lineup_export_columns",
+    "semantic_overlay",
 )
+
+# Governed metric overlay (P3-1). Only label / hidden / allowed_grains persist;
+# formula / source_facts / owner_surface / new metric ids are never stored.
+# Composition (`compose`) is U2.
+_SEMANTIC_OVERLAY_LABEL_MAX = 128
 
 _TENANT_PROFILE_VALID_VALUES: dict[str, frozenset[str]] = {
     "constraint_axis": frozenset({"money", "support_pct", "dual", "none"}),
@@ -233,6 +239,169 @@ def _normalize_lineup_export_columns(raw: object) -> list[dict[str, str]]:
     return out
 
 
+def _grain_frozenset(items: object) -> frozenset[str]:
+    if not isinstance(items, (list, tuple, set, frozenset)):
+        return frozenset()
+    out: set[str] = set()
+    for item in items:
+        token = str(item).strip().lower().replace(" ", "_")
+        if token:
+            out.add(token)
+    return frozenset(out)
+
+
+def _platform_metric_grain_index() -> dict[str, tuple[frozenset[str], ...]]:
+    """Platform catalog grains (YAML default, no tenant overlay) — avoids catalog recursion."""
+    from app.semantics.registry import load_catalog
+
+    cat = load_catalog()
+    index: dict[str, tuple[frozenset[str], ...]] = {}
+    for metric in cat.metrics:
+        grains = metric.allowed_grains
+        index[metric.id.lower()] = grains
+        index[metric.key.lower()] = grains
+    return index
+
+
+def _normalize_metric_overlay_patch(
+    ident: str,
+    patch: dict[str, Any],
+    *,
+    grain_index: dict[str, tuple[frozenset[str], ...]] | None,
+    strict: bool,
+) -> dict[str, Any] | None:
+    """Keep label / hidden / allowed_grains only. Unknown metrics and widened grains fail closed."""
+    cleaned: dict[str, Any] = {}
+    if "label" in patch:
+        label = re.sub(r"[\r\n\t]", " ", str(patch.get("label") or "")).strip()[:_SEMANTIC_OVERLAY_LABEL_MAX]
+        if label:
+            cleaned["label"] = label
+        elif strict:
+            raise ValueError(f"semantic_overlay.metrics[{ident!r}].label: non-empty string required")
+    if "hidden" in patch:
+        hidden = patch.get("hidden")
+        if isinstance(hidden, bool):
+            cleaned["hidden"] = hidden
+        elif isinstance(hidden, str) and hidden.strip().lower() in {"true", "false", "1", "0", "yes", "no"}:
+            cleaned["hidden"] = hidden.strip().lower() in {"true", "1", "yes"}
+        elif strict:
+            raise ValueError(f"semantic_overlay.metrics[{ident!r}].hidden: boolean required")
+        else:
+            cleaned["hidden"] = bool(hidden)
+    if "allowed_grains" in patch:
+        raw_grains = patch.get("allowed_grains")
+        if not isinstance(raw_grains, list) or not raw_grains:
+            if strict:
+                raise ValueError(
+                    f"semantic_overlay.metrics[{ident!r}].allowed_grains: non-empty list of grain sets required"
+                )
+            return None
+        requested: list[frozenset[str]] = []
+        for i, grain_list in enumerate(raw_grains):
+            grain_set = _grain_frozenset(grain_list)
+            if not grain_set:
+                if strict:
+                    raise ValueError(
+                        f"semantic_overlay.metrics[{ident!r}].allowed_grains[{i}]: non-empty grain set required"
+                    )
+                continue
+            requested.append(grain_set)
+        if not requested:
+            if strict:
+                raise ValueError(f"semantic_overlay.metrics[{ident!r}].allowed_grains: no valid grain sets")
+            return None
+        if grain_index is None:
+            if strict:
+                raise ValueError(f"semantic_overlay.metrics[{ident!r}].allowed_grains: catalog unavailable")
+            return None
+        base_grains = grain_index.get(ident.strip().lower())
+        if base_grains is None:
+            if strict:
+                raise ValueError(
+                    f"semantic_overlay.metrics[{ident!r}]: unknown metric (overlay cannot invent ids)"
+                )
+            return None
+        base_set = set(base_grains)
+        for grain_set in requested:
+            if grain_set not in base_set:
+                if strict:
+                    pretty = "{" + ", ".join(sorted(grain_set)) + "}"
+                    raise ValueError(
+                        f"semantic_overlay.metrics[{ident!r}].allowed_grains: {pretty} is not an "
+                        f"existing grain set for this metric (restrict only; never widen)"
+                    )
+                return None
+        cleaned["allowed_grains"] = [sorted(g) for g in requested]
+    if not cleaned:
+        return None
+    if grain_index is not None and ident.strip().lower() not in grain_index:
+        if strict:
+            raise ValueError(f"semantic_overlay.metrics[{ident!r}]: unknown metric (overlay cannot invent ids)")
+        return None
+    return cleaned
+
+
+def _normalize_semantic_overlay(raw: object, *, strict: bool = False) -> dict[str, Any]:
+    """Shape: ``{ "metrics": { "<id-or-key>": { label?, hidden?, allowed_grains? } } }``."""
+    parsed: object = raw
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            if strict:
+                raise ValueError("semantic_overlay: invalid JSON") from exc
+            return {"metrics": {}}
+    if not isinstance(parsed, dict):
+        if strict:
+            raise ValueError("semantic_overlay: object required")
+        return {"metrics": {}}
+    metrics_raw = parsed.get("metrics")
+    if metrics_raw is None:
+        return {"metrics": {}}
+    if not isinstance(metrics_raw, dict):
+        if strict:
+            raise ValueError("semantic_overlay.metrics: object required")
+        return {"metrics": {}}
+
+    try:
+        grain_index: dict[str, tuple[frozenset[str], ...]] | None = _platform_metric_grain_index()
+    except Exception:
+        if strict:
+            raise
+        grain_index = None
+
+    out_metrics: dict[str, Any] = {}
+    for ident_raw, patch in metrics_raw.items():
+        ident = str(ident_raw).strip()
+        if not ident:
+            if strict:
+                raise ValueError("semantic_overlay.metrics: empty metric key")
+            continue
+        if not isinstance(patch, dict):
+            if strict:
+                raise ValueError(f"semantic_overlay.metrics[{ident!r}]: object required")
+            continue
+        try:
+            cleaned = _normalize_metric_overlay_patch(
+                ident, patch, grain_index=grain_index, strict=strict
+            )
+        except ValueError:
+            if strict:
+                raise
+            continue
+        if cleaned:
+            out_metrics[ident] = cleaned
+    return {"metrics": out_metrics}
+
+
+def semantic_overlay_for_tenant(tenant_id: str = "default") -> dict[str, Any]:
+    """Governed overlay document for ``tenant_id``. Missing/invalid → empty metrics (FLAG != BLOCK)."""
+    raw = load_tenant_profile_overrides(tenant_id).get("semantic_overlay")
+    if isinstance(raw, dict) and isinstance(raw.get("metrics"), dict):
+        return raw
+    return {"metrics": {}}
+
+
 def lineup_export_columns(tenant_id: str = "default") -> list[dict[str, str]]:
     """Resolved draft-lineup column map (override or CIP default). Never OEM-branded."""
     overrides = load_tenant_profile_overrides(tenant_id)
@@ -294,6 +463,14 @@ def load_tenant_profile_overrides(tenant_id: str = "default") -> dict[str, Any]:
             except ValueError:
                 continue
             continue
+        if key == "semantic_overlay":
+            try:
+                normalized = _normalize_semantic_overlay(value, strict=False)
+            except (TypeError, ValueError):
+                continue
+            if normalized.get("metrics"):
+                out[key] = normalized
+            continue
         text = str(value).strip()
         if text:
             out[key] = text
@@ -303,14 +480,26 @@ def load_tenant_profile_overrides(tenant_id: str = "default") -> dict[str, Any]:
 def save_tenant_profile_overrides(tenant_id: str, overrides: dict[str, object]) -> dict[str, Any]:
     """Validate + persist overrides to ``{local_storage_path}/tenant_profiles/{tenant_id}.json``.
 
-    Unknown keys are dropped silently; empty/None values clear that key. Invalid
-    values raise ``ValueError`` — the API layer turns this into a 400.
+    Keys omitted from ``overrides`` are kept from the existing file (merge) so a
+    semantic-overlay save cannot wipe commercial policy. Empty/None values clear
+    that key. Unknown keys are dropped. Invalid values raise ``ValueError`` (400).
     """
+    existing = load_tenant_profile_overrides(tenant_id)
     clean: dict[str, Any] = {}
     for key in TENANT_PROFILE_OVERRIDE_KEYS:
-        if key not in overrides:
+        incoming = key in overrides
+        if not incoming:
+            if key in existing:
+                clean[key] = existing[key]
             continue
         raw = overrides[key]
+        if key == "semantic_overlay":
+            if raw is None or raw == "" or raw == {}:
+                continue
+            normalized = _normalize_semantic_overlay(raw, strict=True)
+            if normalized.get("metrics"):
+                clean[key] = normalized
+            continue
         if key == "lineup_export_columns":
             if raw is None or raw == "" or raw == []:
                 continue
@@ -334,6 +523,9 @@ def save_tenant_profile_overrides(tenant_id: str, overrides: dict[str, object]) 
         clean[key] = val
     path = _tenant_profile_override_path(tenant_id)
     path.write_text(json.dumps(clean, indent=2, sort_keys=True), encoding="utf-8")
+    from app.semantics.registry import clear_catalog_cache
+
+    clear_catalog_cache()
     return clean
 
 
