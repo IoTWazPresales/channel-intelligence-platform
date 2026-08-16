@@ -1,6 +1,6 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-16 (P3-1 U3 Settings overlay editor on `feat/finish-roadmap`; confirm HEAD with `git rev-parse`)
+**Last updated:** 2026-08-16 (P3-1 U3 VERIFY PASS on `feat/finish-roadmap`; confirm HEAD with `git rev-parse`)
 
 **Branch:** `feat/finish-roadmap`
 
@@ -29,7 +29,6 @@ P3-1 U3 2026-08-16: `test_semantic_overlay_api` + compose + governed overlay **2
 
 ## Next
 
-1. Opus VERIFY this P3-1 U3 unit.
-2. Then P4 Amazon ASIN FLAG / optional Game W27. Skip blocked: Q-003, P6 second company, P5 intel v1, BACKLOG-098 Monday beat, 076/089 unless Warren asks.
+1. P4 Amazon ASIN FLAG / optional Game W27. Skip blocked: Q-003, P6 second company, P5 intel v1, BACKLOG-098 Monday beat, 076/089 unless Warren asks.
 
 **Env:** local Windows. Web `:3000` + API `:8001`. No Docker.
