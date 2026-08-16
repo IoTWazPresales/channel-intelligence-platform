@@ -17,7 +17,7 @@
 - BACKLOG-085 fold: client AG Grid pagination on CST steward / PO gap / PM-gaps worklist.
 - **P3-1 U1–U3 VERIFY PASS:** tenant metric overlay + compose evaluator + Settings editor. No migration.
 - **CST Article aliases tab:** Opus VERIFY PASS. Compose chrome (`ModuleGridToolbar` + `MasterColumnPickerDialog` + `ModuleDataSection`). Face columns Customer / Article / Sales model / Status. Sales model from `dim_product` join (not stored on alias). Edit is product search-and-pick (`GET /products?q=`). No `MasterDataGridShell`. No Alembic.
-- Claude-in-browser catch-up: `scripts/claude_catchup.py` writes gitignored `docs/memory/CLAUDE_CATCHUP.md`; append-only marker `docs/memory/claude_catchup_log.jsonl`. Manual invocation only. Not Cursor session tooling.
+- Claude-in-browser catch-up: `scripts/claude_catchup.py` v1.1.0. Gitignored `docs/memory/CLAUDE_CATCHUP.md`; marker `docs/memory/claude_catchup_log.jsonl`. Pointer-not-paste for docs/review. Manual only. Not Cursor session tooling.
 
 ## Last recorded test snapshot
 

@@ -22,8 +22,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse, urlunparse
+from xml.etree import ElementTree
 
-SCRIPT_VERSION = "1.0.0"
+SCRIPT_VERSION = "1.1.0"
 AUDIENCE = (
     "AUDIENCE: Claude-in-browser. Not a Cursor context file. "
     "Do not consume or overwrite."
@@ -478,55 +479,384 @@ def delta_sets(now: set[str], then: set[str] | None) -> str:
     return "; ".join(bits) if bits else "(none)"
 
 
-def open_backlog_items() -> list[str]:
-    text = (REPO_ROOT / "docs" / "BACKLOG.md").read_text(encoding="utf-8-sig")
-    items: list[str] = []
+CLOSED_STATUS_RE = re.compile(
+    r"\b(Done|Closed|Shipped|Resolved|Proven live)\b",
+    re.I,
+)
+
+# Derived from SELECT file_name, count(*) FROM import_job GROUP BY 1 on cip (2026-08-16):
+# test.xlsx=39; bulk_*_test.csv; orphan-purge-test; ilike_test; plus pytest stubs
+# dsi_*.csv, run1/run2.xlsx, validate.xlsx, multi.xlsx, stamp_gate.csv, weekN,
+# lineup_api_*, ambig_*, historical_lineup.xlsx, bulk_lineup_preview_*.
+IMPORT_JOB_FIXTURE_SQL = (
+    "(position('test' in lower(coalesce(file_name, ''))) > 0 "
+    "OR coalesce(file_name, '') ~* "
+    "'^(dsi([._].*)?|run[0-9]+\\.xlsx|validate\\.xlsx|multi\\.xlsx|"
+    "stamp_gate\\.csv|week[0-9].*|lineup_api_.*|ambig_.*|"
+    "historical_lineup\\.xlsx|bulk_lineup_preview_.*)$')"
+)
+IMPORT_JOB_FIXTURE_PREDICATE = (
+    "position('test' in lower(file_name)) > 0 OR file_name ~* "
+    "'^(dsi([._].*)?|run[0-9]+\\.xlsx|validate\\.xlsx|multi\\.xlsx|"
+    "stamp_gate\\.csv|week[0-9].*|lineup_api_.*|ambig_.*|"
+    "historical_lineup\\.xlsx|bulk_lineup_preview_.*)$'"
+)
+
+
+def parse_backlog_entries(text: str) -> list[dict[str, str]]:
+    items: list[dict[str, str]] = []
     blocks = re.split(r"\n(?=## BACKLOG-)", text)
-    closed = re.compile(
-        r"\b(Done|Closed|Shipped|Resolved|Proven live)\b",
-        re.I,
-    )
     for block in blocks:
         hm = re.match(r"## (BACKLOG-\S+)\s+—\s+(.+)", block)
         if not hm:
             continue
-        bid, title = hm.group(1), hm.group(2).strip()
         sm = re.search(r"\| \*\*Status / parked\*\* \| ([^\n]+)", block)
-        status = sm.group(1).strip() if sm else ""
-        if closed.search(status):
-            continue
-        items.append(f"{bid} — {title}")
+        items.append(
+            {
+                "id": hm.group(1),
+                "title": hm.group(2).strip(),
+                "status": sm.group(1).strip() if sm else "",
+            }
+        )
     return items
 
 
-def last_test_section() -> tuple[list[str], list[str]]:
-    """Return (lines, skipped_names). Does not run tests."""
+def open_backlog_items(text: str | None = None) -> list[str]:
+    if text is None:
+        text = (REPO_ROOT / "docs" / "BACKLOG.md").read_text(encoding="utf-8-sig")
+    items: list[str] = []
+    for ent in parse_backlog_entries(text):
+        if CLOSED_STATUS_RE.search(ent["status"]):
+            continue
+        items.append(f"{ent['id']} — {ent['title']}")
+    return items
+
+
+def _skip_artifact_dir(path: Path) -> bool:
+    skip = {"node_modules", ".venv", "venv", ".git", ".tmp", ".next"}
+    return any(part in skip for part in path.parts)
+
+
+def _parse_junit(path: Path) -> dict[str, Any] | None:
+    try:
+        root = ElementTree.parse(path).getroot()
+    except (ElementTree.ParseError, OSError):
+        return None
+    suites = [root] if root.tag.endswith("testsuite") else list(root.iter())
+    tests = failures = skipped = errors = 0
+    failed_names: list[str] = []
+    skipped_names: list[str] = []
+    for el in suites:
+        tag = el.tag.split("}")[-1] if "}" in el.tag else el.tag
+        if tag != "testsuite":
+            continue
+        tests += int(el.attrib.get("tests") or 0)
+        failures += int(el.attrib.get("failures") or 0)
+        skipped += int(el.attrib.get("skipped") or 0)
+        errors += int(el.attrib.get("errors") or 0)
+        for case in el.iter():
+            ctag = case.tag.split("}")[-1] if "}" in case.tag else case.tag
+            if ctag != "testcase":
+                continue
+            name = f"{case.attrib.get('classname', '')}::{case.attrib.get('name', '')}".strip(":")
+            for child in list(case):
+                cht = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+                if cht in {"failure", "error"}:
+                    failed_names.append(name)
+                elif cht == "skipped":
+                    skipped_names.append(name)
+    return {
+        "tests": tests,
+        "failures": failures,
+        "skipped": skipped,
+        "errors": errors,
+        "failed_names": failed_names,
+        "skipped_names": skipped_names,
+    }
+
+
+def last_test_section(floor_ts: int | None) -> list[str]:
+    """JUnit/xml newer than floor only. Does not consult pytest cache."""
+    candidates: list[Path] = []
+    for pat in ("**/junit*.xml", "**/*pytest*.xml", "**/test-results/**/*.xml"):
+        candidates.extend(REPO_ROOT.glob(pat))
+    artifacts: list[Path] = []
+    for path in candidates:
+        if _skip_artifact_dir(path) or not path.is_file():
+            continue
+        if floor_ts is not None and path.stat().st_mtime < floor_ts:
+            continue
+        artifacts.append(path)
+    if not artifacts:
+        return [
+            "NO TEST EVIDENCE — suites not executed by this script; no artifact newer than floor"
+        ]
     lines: list[str] = []
-    skipped: list[str] = []
-    lastfailed = API_ROOT / ".pytest_cache" / "v" / "cache" / "lastfailed"
-    if lastfailed.is_file():
-        try:
-            data = json.loads(lastfailed.read_text(encoding="utf-8"))
-            names = sorted(data) if isinstance(data, dict) else []
-            lines.append(f"pytest lastfailed cache: {len(names)} nodeid(s)")
-            for n in names[:20]:
-                lines.append(f"  fail-cache: {n}")
-        except json.JSONDecodeError:
-            lines.append("pytest lastfailed cache: unreadable JSON")
-    else:
-        lines.append("pytest lastfailed cache: absent")
-    junit = list(REPO_ROOT.glob("**/junit*.xml")) + list(REPO_ROOT.glob("**/*pytest*.xml"))
-    junit = [p for p in junit if "node_modules" not in p.parts]
-    if junit:
-        lines.append("junit artifacts: " + ", ".join(str(p.relative_to(REPO_ROOT)) for p in junit[:5]))
-    else:
-        lines.append("junit artifacts: none in tree")
-    lines.append(
-        "pass/fail/skip counts: not recorded in a committed artifact this run "
-        "(this script does not execute the suites)"
+    for path in sorted(artifacts)[:8]:
+        parsed = _parse_junit(path)
+        rel = path.relative_to(REPO_ROOT).as_posix()
+        if not parsed:
+            lines.append(f"artifact {rel}: unreadable xml")
+            continue
+        lines.append(
+            f"artifact {rel}: pass={parsed['tests'] - parsed['failures'] - parsed['errors'] - parsed['skipped']} "
+            f"fail={parsed['failures']} error={parsed['errors']} skip={parsed['skipped']} tests={parsed['tests']}"
+        )
+        for n in parsed["failed_names"][:40]:
+            lines.append(f"  FAILED: {n}")
+        if parsed["skipped_names"]:
+            lines.append("SKIPPED test names:")
+            for n in parsed["skipped_names"][:80]:
+                lines.append(f"  {n}")
+        else:
+            lines.append("SKIPPED test names: (none in artifact)")
+    return lines
+
+
+def git_show_ok(spec: str) -> str | None:
+    r = subprocess.run(
+        ["git", "show", spec],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
     )
-    lines.append("SKIPPED test names: none recorded")
-    return lines, skipped
+    if r.returncode != 0:
+        return None
+    return r.stdout
+
+
+def normalize_doc(text: str) -> str:
+    return text.replace("\r\n", "\n").replace("\r", "\n").lstrip("\ufeff")
+
+
+def file_identical_to_remote(rel: str, branch: str, working: str) -> bool:
+    remote = git_show_ok(f"origin/{branch}:{rel}")
+    if remote is None:
+        return False
+    return normalize_doc(remote) == normalize_doc(working)
+
+
+def is_ancestor(maybe_anc: str, desc: str) -> bool:
+    r = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", maybe_anc, desc],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    return r.returncode == 0
+
+
+def change_area(path: str) -> str:
+    p = path.replace("\\", "/")
+    if p.startswith("apps/api/alembic/versions/"):
+        return "alembic versions"
+    if p.startswith("apps/api/"):
+        return "apps/api"
+    if p.startswith("apps/web/"):
+        return "apps/web"
+    if p.startswith("docs/"):
+        return "docs"
+    return "other"
+
+
+def format_jobs(rows: list[tuple[Any, ...]]) -> list[str]:
+    if not rows:
+        return ["  (none)"]
+    lines = []
+    for jid, st, stage, slug, fname, created in rows:
+        lines.append(f"  #{jid} {st}/{stage} {slug} {fname} {created}")
+    return lines
+
+
+def build_narrative(
+    *,
+    context_md: str,
+    current_md: str,
+    floor_sha: str | None,
+    head_sha: str,
+    beyond: list[str],
+    commits_since: str,
+) -> list[str]:
+    """Assessment, not a restatement of [1] or [7]. Every item line ends in a sha."""
+    in_window: set[str] = set()
+    for ln in (commits_since or "").splitlines():
+        if ln.strip():
+            in_window.add(ln.strip().split()[0])
+
+    def in_floor_window(sha: str) -> bool:
+        if not sha:
+            return False
+        if any(sha.startswith(h) or h.startswith(sha[:7]) for h in in_window):
+            return True
+        if floor_sha and is_ancestor(floor_sha, sha) and is_ancestor(sha, head_sha) and sha != floor_sha:
+            return True
+        return False
+
+    complete: list[str] = []
+    for ln in context_md.splitlines():
+        if "VERIFY PASS" not in ln:
+            continue
+        shas = re.findall(r"`([0-9a-f]{7,40})`", ln)
+        title_m = re.search(r"\*\*(.+?)\*\*", ln)
+        title = title_m.group(1) if title_m else ln.strip()[:80]
+        impl = shas[0] if shas else ""
+        if not impl or not in_floor_window(impl):
+            continue
+        complete.append(f"  {title} {impl}")
+        if len(complete) >= 6:
+            break
+
+    partial: list[str] = []
+    for ln in current_md.splitlines():
+        if not ln.startswith("- "):
+            continue
+        if "VERIFY PASS" in ln:
+            continue
+        sm = re.search(r"`([0-9a-f]{7,40})`", ln)
+        if not sm:
+            continue
+        sha = sm.group(1)
+        if not in_floor_window(sha):
+            continue
+        text = re.sub(r"^-\s+", "", ln).strip()
+        missing = "no VERIFY stamp in CONTEXT"
+        if "catch-up" in ln.lower():
+            missing = "no focused test; generator only"
+        partial.append(f"  {text[:90]} — missing: {missing} {sha}")
+        if len(partial) >= 5:
+            break
+
+    unproven: list[str] = []
+    for ln in (commits_since or "").splitlines():
+        low = ln.lower()
+        if not ln.strip():
+            continue
+        sha = ln.strip().split()[0]
+        subj = ln.strip()[len(sha) :].strip()
+        if re.search(r"\b(truncate|wipe|drop legacy|destructive)\b", low):
+            unproven.append(f"  destructive path committed; no e2e artifact in [6] — {subj} {sha}")
+        if len(unproven) >= 4:
+            break
+    for rev in beyond[:3]:
+        unproven.append(f"  alembic {rev} on disk beyond cip current; not applied this run {head_sha[:12]}")
+
+    review: list[str] = [
+        f"  apps/web/src/app/(app)/admin/cst-steward/CstArticleAliasesSection.tsx — CST aliases face 49ccec4",
+        f"  apps/api/app/api/v1/endpoints/cst_steward.py — alias JSON / sales_model join 49ccec4",
+        f"  apps/web/src/features/settings/SemanticCatalogOverlayPanel.tsx — overlay editor 24d2cf3",
+        f"  apps/api/alembic/versions/20260814_0016_customer_term_cover_weeks.py — disk alembic head 62607c2",
+        f"  scripts/claude_catchup.py — Claude-in-browser snapshot generator 3d5c01a",
+    ]
+    # Drop review lines whose sha is not in the window if floor is after that sha.
+    kept_review = []
+    for ln in review:
+        sm = re.search(r"([0-9a-f]{7,40})$", ln.strip())
+        if sm and in_floor_window(sm.group(1)):
+            kept_review.append(ln)
+        elif sm:
+            kept_review.append(ln)  # still the files a reviewer should open; sha is the landing commit
+    review = kept_review[:5]
+
+    out = ["SHIPPED-COMPLETE:"]
+    out.extend(complete or [])
+    out.append("SHIPPED-PARTIAL:")
+    out.extend(partial or [])
+    out.append("UNPROVEN:")
+    out.extend(unproven or [])
+    out.append("REVIEW-FIRST:")
+    out.extend(review)
+    return out[:25]
+
+
+def build_divergence(
+    *,
+    current_md: str,
+    branch: str,
+    head_sha: str,
+    head_list: list[str],
+    alembic_current: str | None,
+    beyond: list[str],
+    unpushed: bool,
+    dirty: list[str],
+) -> list[str]:
+    lines: list[str] = []
+    m_code = re.search(r"\*\*Alembic \(code\):\*\* `([^`]+)`", current_md)
+    m_cip = re.search(r"\*\*Alembic on cip:\*\* `([^`]+)`", current_md)
+    claim_code = m_code.group(1) if m_code else None
+    claim_cip = m_cip.group(1) if m_cip else None
+    disk_head = head_list[0] if len(head_list) == 1 else None
+    if disk_head and alembic_current and claim_code and claim_cip and len({disk_head, str(alembic_current), claim_code, claim_cip}) == 1:
+        lines.append(
+            f"OK  alembic 3-way: disk_head={disk_head} cip={alembic_current} "
+            f"CURRENT_code={claim_code} CURRENT_cip={claim_cip}"
+        )
+    else:
+        lines.append(
+            f"FLAG alembic 3-way: disk_heads={head_list} cip={alembic_current} "
+            f"CURRENT_code={claim_code} CURRENT_cip={claim_cip}"
+        )
+
+    m_branch = re.search(r"\*\*Branch:\*\* `([^`]+)`", current_md)
+    claim_branch = m_branch.group(1) if m_branch else None
+    if claim_branch == branch:
+        lines.append(f"OK  branch: CURRENT.md={claim_branch} git={branch}")
+    else:
+        lines.append(f"FLAG branch: CURRENT.md={claim_branch!r} git={branch!r}")
+
+    m_upd = re.search(r"\*\*Last updated:\*\* (\d{4}-\d{2}-\d{2})", current_md)
+    last_upd = m_upd.group(1) if m_upd else None
+    head_date = git(["log", "-1", "--format=%cs"], check=False).strip()
+    if last_upd and head_date and last_upd >= head_date:
+        lines.append(f"OK  CURRENT.md Last updated {last_upd} vs newest commit date {head_date}")
+    else:
+        lines.append(
+            f"FLAG CURRENT.md Last updated {last_upd} vs newest commit date {head_date}"
+        )
+
+    if beyond:
+        lines.append(f"FLAG migration files on disk beyond alembic current: {', '.join(beyond)}")
+    else:
+        lines.append("OK  migration files on disk beyond alembic current: none")
+
+    if unpushed:
+        lines.append("FLAG HEAD not present on remote for this branch")
+    else:
+        lines.append("OK  HEAD present on remote")
+
+    if dirty:
+        lines.append(f"FLAG working tree dirty/untracked: {len(dirty)} line(s)")
+    else:
+        lines.append("OK  working tree dirty/untracked: clean")
+
+    pins = []
+    m_pin = re.search(r"\*\*Last content pin:\*\* `([0-9a-f]{7,40})`", current_md)
+    if m_pin:
+        pins.append(("Last content pin", m_pin.group(1)))
+    seen = {p[1] for p in pins}
+    for sha in re.findall(r"`([0-9a-f]{7,40})`", current_md):
+        if sha in seen:
+            continue
+        if git(["cat-file", "-t", sha], check=False).strip() != "commit":
+            continue
+        pins.append(("CURRENT.md sha", sha))
+        seen.add(sha)
+    bad = []
+    ok_pins = []
+    for label, sha in pins:
+        if is_ancestor(sha, head_sha):
+            ok_pins.append(sha)
+        else:
+            bad.append(f"{label} {sha}")
+    if bad:
+        for b in bad:
+            lines.append(f"FLAG pin hash is not an ancestor of HEAD: {b}")
+    elif ok_pins:
+        lines.append("OK  pin hashes in CURRENT.md are ancestors of HEAD: " + ", ".join(ok_pins[:12]))
+    else:
+        lines.append("OK  pin hashes in CURRENT.md: none found")
+    return lines
 
 
 def redact(text: str) -> str:
@@ -566,6 +896,14 @@ def main() -> int:
             "alembic_current": rec.get("alembic_current"),
             "schema_sets": rec.get("schema_sets"),
         }
+
+    floor_commit_iso: str | None = None
+    floor_ts: int | None = None
+    if floor.get("sha"):
+        floor_commit_iso = git(["log", "-1", "--format=%cI", str(floor["sha"])], check=False).strip() or None
+        raw_ct = git(["log", "-1", "--format=%ct", str(floor["sha"])], check=False).strip()
+        if raw_ct.isdigit():
+            floor_ts = int(raw_ct)
 
     try:
         import psycopg
@@ -608,12 +946,30 @@ def main() -> int:
             continue
         row_counts[tname] = int(fetch_one(cur, f'SELECT count(*)::bigint FROM "{tname}"'))
 
-    jobs = fetch_all(
+    jobs_all = fetch_all(
         cur,
         "SELECT id, status, stage, template_slug, file_name, "
         "to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') "
         "FROM import_job ORDER BY id DESC LIMIT 10",
     )
+    jobs_real = fetch_all(
+        cur,
+        "SELECT id, status, stage, template_slug, file_name, "
+        "to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') "
+        "FROM import_job WHERE NOT " + IMPORT_JOB_FIXTURE_SQL + " "
+        "ORDER BY id DESC LIMIT 10",
+    )
+    fixture_in_window: int | None = None
+    if floor_commit_iso:
+        fixture_in_window = int(
+            fetch_one(
+                cur,
+                "SELECT count(*)::bigint FROM import_job "
+                "WHERE created_at >= %s::timestamptz AND " + IMPORT_JOB_FIXTURE_SQL,
+                (floor_commit_iso,),
+            )
+            or 0
+        )
 
     worklist_counts: dict[str, int] = {}
     worklist_errors: dict[str, str] = {}
@@ -669,14 +1025,15 @@ def main() -> int:
 
     current_md = (REPO_ROOT / "docs" / "memory" / "CURRENT.md").read_text(encoding="utf-8-sig")
     context_md = (REPO_ROOT / "CONTEXT.md").read_text(encoding="utf-8-sig")
+    backlog_text = (REPO_ROOT / "docs" / "BACKLOG.md").read_text(encoding="utf-8-sig")
     changelog = []
     for ln in context_md.splitlines():
         if ln.startswith("- 20"):
             changelog.append(ln)
         if len(changelog) >= 3:
             break
-    backlog_open = open_backlog_items()
-    test_lines, _skipped = last_test_section()
+    backlog_open = open_backlog_items(backlog_text)
+    test_lines = last_test_section(floor_ts)
 
     prior_fp = floor.get("fingerprint")
     prior_schema_sets = floor.get("schema_sets") or None
@@ -721,59 +1078,60 @@ def main() -> int:
             return "delta n/a"
         return f"delta {now - p:+d}"
 
-    # Narrative from evidence only. SHIPPED lines end with a sha.
-    narrative: list[str] = ["SHIPPED:"]
-    shipped_n = 0
-    for ln in (commits_since or "").splitlines():
-        if not ln.strip():
-            continue
-        parts = ln.strip().split(" ", 1)
-        sha = parts[0]
-        subj = parts[1] if len(parts) > 1 else ""
-        narrative.append(f"  {subj} {sha}")
-        shipped_n += 1
-        if shipped_n >= 8:
-            remaining = sum(1 for x in (commits_since or "").splitlines() if x.strip()) - shipped_n
-            if remaining > 0:
-                narrative.append(f"  … {remaining} more commits in floor window (see [1])")
-            break
-    if shipped_n == 0:
-        narrative.append("  (no commits in floor window)")
-    narrative.append("IN FLIGHT:")
-    nxt = ""
-    for ln in current_md.splitlines():
-        if ln.startswith("1. "):
-            nxt = ln[3:].strip()
-            break
-    narrative.append(f"  CURRENT.md next: {nxt or '(none)'}")
-    narrative.append("BLOCKED-NEEDS-WARREN:")
-    narrative.append("  CURRENT.md: do not alembic upgrade unless approved")
-    narrative.append("  CURRENT.md skip unless asked: Q-003, P6, P5 intel, BACKLOG-098, 076/089")
-    narrative.append("UNVERIFIED:")
-    narrative.append("  Full API/web suite not executed by this script")
-    if not prior_fp:
-        narrative.append("  Schema add/drop names unavailable — no prior fingerprint in log")
-    narrative = narrative[:25]
+    narrative = build_narrative(
+        context_md=context_md,
+        current_md=current_md,
+        floor_sha=str(floor_sha) if floor_sha else None,
+        head_sha=head_sha,
+        beyond=beyond,
+        commits_since=commits_since,
+    )
+    flags = build_divergence(
+        current_md=current_md,
+        branch=branch,
+        head_sha=head_sha,
+        head_list=head_list,
+        alembic_current=alembic_current,
+        beyond=beyond,
+        unpushed=unpushed,
+        dirty=dirty,
+    )
 
-    flags: list[str] = []
-    m_alembic = re.search(r"\*\*Alembic on cip:\*\* `([^`]+)`", current_md)
-    claim_alembic = m_alembic.group(1) if m_alembic else None
-    if claim_alembic and alembic_current and claim_alembic != alembic_current:
-        flags.append(f"CURRENT.md alembic on cip {claim_alembic!r} != live {alembic_current!r}")
-    m_branch = re.search(r"\*\*Branch:\*\* `([^`]+)`", current_md)
-    claim_branch = m_branch.group(1) if m_branch else None
-    if claim_branch and claim_branch != branch:
-        flags.append(f"CURRENT.md branch {claim_branch!r} != git {branch!r}")
-    if len(head_list) > 1:
-        flags.append(f"multiple alembic heads on disk: {head_list}")
-    if alembic_current and alembic_current not in head_list:
-        flags.append(f"alembic current {alembic_current} is not a disk head {head_list}")
-    if unpushed:
-        flags.append("HEAD not fully on origin for this branch")
-    if dirty:
-        flags.append(f"working tree dirty/untracked: {len(dirty)} line(s)")
-    if not flags:
-        flags.append("(none)")
+    now_backlog = {e["id"]: e for e in parse_backlog_entries(backlog_text)}
+    floor_backlog: dict[str, dict[str, str]] = {}
+    if floor_sha:
+        old_bl = git_show_ok(f"{floor_sha}:docs/BACKLOG.md")
+        if old_bl:
+            floor_backlog = {e["id"]: e for e in parse_backlog_entries(old_bl)}
+    status_changed: list[str] = []
+    for bid in sorted(set(now_backlog) | set(floor_backlog)):
+        old_st = (floor_backlog.get(bid) or {}).get("status", "(absent)")
+        new_st = (now_backlog.get(bid) or {}).get("status", "(absent)")
+        if old_st != new_st:
+            title = (now_backlog.get(bid) or floor_backlog.get(bid) or {}).get("title", "")
+            status_changed.append(f"  {bid} — {title} | {old_st} → {new_st}")
+
+    cf = [ln for ln in (changed_files or "").splitlines() if ln.strip()]
+    area_counts: dict[str, int] = {}
+    for p in cf:
+        area_counts[change_area(p)] = area_counts.get(change_area(p), 0) + 1
+    alembic_added: list[str] = []
+    if floor_sha:
+        alembic_added = [
+            ln
+            for ln in git(
+                ["diff", "--name-only", "--diff-filter=A", f"{floor_sha}..HEAD", "--", "apps/api/alembic/versions"],
+                check=False,
+            ).splitlines()
+            if ln.strip()
+        ]
+
+    dirty_names: list[str] = []
+    for ln in dirty:
+        path = ln[3:].strip() if len(ln) > 3 else ln
+        if " -> " in path:
+            path = path.split(" -> ")[-1]
+        dirty_names.append(path)
 
     out: list[str] = []
     out.append(AUDIENCE)
@@ -821,11 +1179,15 @@ def main() -> int:
     for tname in sorted(row_counts):
         extra = dlt(row_counts[tname], tname, prior_rows)
         out.append(f"  {tname}: {row_counts[tname]} ({extra})")
-    out.append("last 10 import_job:")
-    for jid, st, stage, slug, fname, created in jobs:
-        out.append(f"  #{jid} {st}/{stage} {slug} {fname} {created}")
-    if not jobs:
-        out.append("  (none)")
+    out.append(f"import_job fixture predicate: {IMPORT_JOB_FIXTURE_PREDICATE}")
+    if fixture_in_window is None:
+        out.append("fixture-looking import_job in floor window: n/a (no floor commit timestamp)")
+    else:
+        out.append(f"fixture-looking import_job in floor window: {fixture_in_window}")
+    out.append("last 10 import_job (all):")
+    out.extend(format_jobs(jobs_all))
+    out.append("last 10 import_job (excluding test fixtures):")
+    out.extend(format_jobs(jobs_real))
     out.append("")
     out.append("[5] WORKLISTS")
     out.append("Queues enumerated from code (not assumed). Each count is SELECT-only.")
@@ -841,16 +1203,40 @@ def main() -> int:
         out.append(f"    found: {spec['found']}")
     out.append("")
     out.append("[6] TESTS")
-    out.extend(f"  {ln}" for ln in test_lines)
+    if len(test_lines) == 1 and test_lines[0].startswith("NO TEST EVIDENCE"):
+        out.append(test_lines[0])
+    else:
+        out.extend(test_lines)
     out.append("")
     out.append("[7] DOCS")
-    out.append("--- CURRENT.md ---")
-    out.extend(current_md.splitlines())
-    out.append("--- newest 3 CONTEXT.md changelog headers ---")
-    out.extend(changelog or ["(none)"])
-    out.append("--- open BACKLOG.md (id + title; Status not Done/Closed/Shipped/Resolved/Proven live) ---")
-    if backlog_open:
-        out.extend(f"  {ln}" for ln in backlog_open)
+    current_rel = "docs/memory/CURRENT.md"
+    context_rel = "CONTEXT.md"
+    backlog_rel = "docs/BACKLOG.md"
+    if file_identical_to_remote(current_rel, branch, current_md):
+        out.append(f"{current_rel}: clean vs remote — fetch from repo")
+    else:
+        out.append(f"{current_rel}: DIRTY vs remote — working copy follows")
+        out.append("--- CURRENT.md ---")
+        out.extend(current_md.splitlines())
+    if file_identical_to_remote(context_rel, branch, context_md):
+        out.append(f"{context_rel}: clean vs remote — fetch from repo")
+    else:
+        out.append(f"{context_rel}: DIRTY vs remote — newest 3 changelog headers follow")
+        out.append("--- newest 3 CONTEXT.md changelog headers ---")
+        out.extend(changelog or ["(none)"])
+    out.append(f"BACKLOG.md open-item count: {len(backlog_open)}")
+    if file_identical_to_remote(backlog_rel, branch, backlog_text):
+        out.append(f"{backlog_rel}: clean vs remote — fetch from repo")
+    else:
+        out.append(f"{backlog_rel}: DIRTY vs remote — open items follow")
+        out.append("--- open BACKLOG.md (id + title; Status not Done/Closed/Shipped/Resolved/Proven live) ---")
+        if backlog_open:
+            out.extend(f"  {ln}" for ln in backlog_open)
+        else:
+            out.append("  (none)")
+    out.append("BACKLOG status changed since floor:")
+    if status_changed:
+        out.extend(status_changed)
     else:
         out.append("  (none)")
     out.append("")
@@ -858,19 +1244,27 @@ def main() -> int:
     out.extend(narrative)
     out.append("")
     out.append("[9] DIVERGENCE FLAGS")
-    out.extend(f"  {ln}" for ln in flags)
+    out.extend(flags)
     out.append("")
     out.append("[10] REVIEW POINTER")
     out.append(f"repo: {origin_url}")
     out.append(f"branch: {branch}")
     out.append(f"HEAD: {head_sha}")
     out.append(f"floor sha: {floor_sha or '(none)'}")
-    out.append("changed files since floor:")
-    cf = [ln for ln in (changed_files or "").splitlines() if ln.strip()]
-    if cf:
-        out.extend(f"  {ln}" for ln in cf)
+    out.append(f"changed-file count since floor: {len(cf)}")
+    out.append("changed-file breakdown:")
+    for area in ("apps/api", "apps/web", "docs", "alembic versions", "other"):
+        out.append(f"  {area}: {area_counts.get(area, 0)}")
+    out.append("alembic version files added since floor:")
+    if alembic_added:
+        out.extend(f"  {ln}" for ln in alembic_added)
     else:
-        out.append("  (none or floor sha unavailable)")
+        out.append("  (none)")
+    out.append("dirty/untracked working tree files:")
+    if dirty_names:
+        out.extend(f"  {ln}" for ln in dirty_names)
+    else:
+        out.append("  (none)")
     out.append("")
 
     body = redact("\n".join(out) + "\n")
