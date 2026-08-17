@@ -565,7 +565,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Shipped 2026-08-08** — code on `main` (`reports.run_due_schedules` beat task + `reports.fanout_import_complete` fan-out, `apps/api/app/worker/tasks.py`); `report_schedule` id=1 (`weekly_monday_0700`, `tenant_id=default`, `enabled=true`) exists on `cip` with a real `last_run_at` (2026-08-01), confirming the run-now path has executed against it. |
+| **Status / parked** | **Shipped 2026-08-08** — runner on `main`. **2026-08-17 Monday:** schedule 1 was due (`next_run_at` 2026-08-03 09:00 SAST; `last_run_at` still 2026-08-01). Unattended Celery beat did not fire (`CIP_ENABLE_DEV_BEAT` off). Due-fire of WoC smoke hung >5 min and was cancelled — that is BACKLOG-097 cold `weeks_of_cover`, not a missing beat task. Last working inbox delivery remains `#4` sellout_units (2026-08-14). |
 | **Effort** | Medium (beat task + import hook; small) |
 | **Source** | P3-5 authored 2026-08-01 — `report_schedule` + `run-now` inbox path; ROADMAP P3-5 calendar + event delivery |
 | **Idea** | Wire Celery beat for `weekly_monday_0700` / `daily_0700` and fan-out `on_import_complete` schedules after DSI/shipment apply completes. |
@@ -574,7 +574,7 @@
 | **Regression traps** | Never skip delivery when metric returns empty — missing data is the alert; always stamp `data_vintage`. |
 | **Behavior to retain** | Inbox channel + missing_data_alert + tenant scope. |
 | **Out of scope** | External SMTP productization; P3-6 SQL viewer. |
-| **TRIGGER** | — shipped — reopen only if Warren wants true unattended overnight delivery proven end-to-end with `CIP_ENABLE_DEV_BEAT=1` left running across a real Monday 07:00. |
+| **TRIGGER** | Reopen only if Warren wants true unattended overnight delivery with `CIP_ENABLE_DEV_BEAT=1` left running across a Monday 07:00 **and** the scheduled metric finishes inside the proxy window (WoC at distributor×product currently does not — BACKLOG-097). |
 
 ---
 
@@ -724,16 +724,16 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Shipped (FLAG-first)** · 2026-08-10 — baseline method `prior_window_same_sku_customer`; null when obs < min or lift ≤ 0 |
+| **Status / parked** | **Closed 2026-08-17** — default `prior_window_same_sku_customer`; residual methods `comparable_median` and `velocity_extrapolate` implemented (tenant profile / `CIP_INCREMENTAL_BASELINE_METHOD`). Weak baseline still null + FLAG. |
 | **Effort** | Medium |
 | **Source** | Warren 2026-08-10 arc: proceed with best-practice baseline; `docs/COMMERCIAL_SEMANTICS.md` A2-X |
 | **Idea** | `cost_per_incremental_unit = support / max(0, result − baseline)` with tenant-configurable lookback; never alias A2-06. |
-| **Why it matters / deferrable** | Core promo effectiveness beyond support÷qty. Residual: richer methods (`comparable_median`, `velocity_extrapolate`) when data denser. |
+| **Why it matters / deferrable** | Core promo effectiveness beyond support÷qty. Richer methods now exist; default stays prior-window so sparse CST does not invent lift. |
 | **What the work is** | Done: semantics + `incremental_unit_cost.py` + portfolio payload + UI tile + tests. |
 | **Regression traps** | Do not ship placeholder that is just support÷qty under another name. FLAG when baseline weak. |
 | **Behavior to retain** | A2-06 support÷result_qty remains separate. |
 | **Out of scope** | Inventing lift without sell-through history. |
-| **TRIGGER** | Residual: unlock alternate baseline methods when Warren asks / CST history dense enough. |
+| **TRIGGER** | — closed 2026-08-17 — reopen only if a new baseline identity is required (do not alias A2-06). |
 
 ---
 
@@ -1647,16 +1647,16 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Root-cause quarantine applied 2026-08-10** — suspect amounts zeroed + `raw_source_row.backlog_076_quarantine` stamp; KPI exclusion remains as safety net |
+| **Status / parked** | **Closed 2026-08-17** — quarantine is the complete fix. Live sample: Qty 36, Unit Price **999999**, Amount 35999964 (= Qty×Unit Price). Mapping is not swapped. Re-import would restore the same junk. 17 quarantined, 0 still-suspect (`abs(amount)/qty > 100_000`). KPI exclude remains. Source workbook not on disk at the documented Desktop path. |
 | **Effort** | Medium (import mapping audit + optional purge of junk job facts) |
 | **Source** | Shipping KPI Phase 0 (`docs/SHIPPING_COMMERCIAL_KPI_CONTRACT.md` §Phase 0; `.tmp/shipping_kpi_phase0_diag.json`). Old “Pipeline value” = **$288M**; **$214M** of that is on **267** scheduled lines with **null ETA and null promise**. Top rows show qty **36** with amount **~$36M** each (`~1e6` unit price) from `acza_workbook_unship` source keys. |
 | **Idea** | Diagnose whether OEM amount/unit_price columns were mapped with wrong scale or currency; quarantine or re-import affected jobs. Do **not** silently rewrite amounts from the `/shipping` UI. |
 | **Mitigation shipped 2026-08-08** | `apps/api/app/services/shipping/amount_scale.py` — KPI excludes suspect unit prices. |
 | **Quarantine 2026-08-10** | Zeroed `amount` on rows with `abs(amount)/qty > 100_000`; stamped JSON audit flag. Corrective re-import of Unship workbook still optional if operators want restored true amounts. |
-| **Why deferrable (remaining)** | Optional full Unship re-map + re-import if true commercial amounts are needed on those lines. |
+| **Why deferrable (remaining)** | Closed — there are no true commercial amounts in the Unship Amount/Unit Price cells (sentinel 999999). |
 | **Regression traps** | Do not change DAP vs PM cost concepts; do not mass-UPDATE without audit trail; preserve `source_key` upsert semantics. |
 | **Out of scope** | Changing commercial KPI predicates again; MasterDataGridShell rewrite. |
-| **TRIGGER** | Optional: Warren asks for Unship corrective re-import with verified column mapping. |
+| **TRIGGER** | — closed 2026-08-17 — reopen only if a new Unship file has real unit prices (not 999999) and Warren asks to re-import. |
 
 ---
 

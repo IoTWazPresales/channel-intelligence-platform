@@ -55,7 +55,7 @@ def _patch_source_key(monkeypatch):
     monkeypatch.setattr(
         cst,
         "customer_sellthrough_source_key",
-        lambda customer_id, customer_location_id, product_id, period_start_date: (
+        lambda customer_id, customer_location_id, product_id, period_start_date, site_label=None: (
             f"{customer_id}-{customer_location_id}-{product_id}-{period_start_date}"
         ),
     )

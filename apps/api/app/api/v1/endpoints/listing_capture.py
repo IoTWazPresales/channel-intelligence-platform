@@ -12,6 +12,7 @@ from app.services.listing_capture.marketplace_vocab import (
     LISTING_SOURCES,
     LISTING_STATUSES,
 )
+from app.services.listing_capture.intelligence_v1 import build_listing_intelligence
 from app.services.listing_capture.registry import (
     confirm_proposal,
     confirm_suggested_proposals,
@@ -235,6 +236,25 @@ def get_observations(
             return {"items": items, "total": len(items), "data_unavailable": False}
         except Exception:
             return {"items": [], "total": 0, "data_unavailable": True}
+
+
+@router.get("/intelligence")
+def get_listing_intelligence():
+    """P5 intelligence v1: ≥14d span, activation, price drift, not_activated worklist."""
+    with SessionLocal() as session:
+        try:
+            return build_listing_intelligence(session)
+        except Exception:
+            return {
+                "min_span_days": 14,
+                "listings": 0,
+                "ready": 0,
+                "accumulating": 0,
+                "not_activated_worklist": 0,
+                "items": [],
+                "worklist": [],
+                "data_unavailable": True,
+            }
 
 
 @router.post("/poll")

@@ -361,8 +361,7 @@ windows first; Sell out PP only when no covering promo (Warren 2026-08-13). BACK
 Three Takealot accessories with no `dim_product` (listings 55–57: Sheath II / Raikiri II /
 Keris II Origin) stamped `ignore_no_catalogue` → Product catalogue gaps 2026-08-13 — do not
 auto-create PM.
-**Still open under P5:** intelligence v1 (≥2 weeks promo activated vs not); Takealot parse
-residuals if REST miss; promote is the housekeeping close for the residual branch.
+**Still open under P5:** Takealot parse residuals if REST miss; promote is the housekeeping close for the residual branch. Intelligence v1 shipped 2026-08-17 (`GET /listing-capture/intelligence` + Intelligence tab; ≥14d ready else accumulating; `not_activated` worklist). Live listings still accumulating (span 0) until observation history crosses 14 days.
 
 ---
 
@@ -389,7 +388,7 @@ Runs alongside all phases in GREEN autonomy. Never blocks a phase; never blocked
 - **Ops-list grid parity** (BACKLOG-085) — **Done** 2026-08-15 fold (CST steward / PO gap / PM-gaps client paging; CPOR + PVE already paged)
 - **Lifecycle defect trio** — CST validate `progress_at` **wired 2026-08-09**; reaper inspect +
   retry/busy-guard already shipped for main pipeline. Remaining: non-CST importers if any gap.
-- **BACKLOG-076** — corrupt unit amounts (~$36M). KPI exclude shipped; fact cleanup needs Warren.
+- **BACKLOG-076** — closed 2026-08-17: Unship Unit Price is source sentinel 999999; quarantine zeroed amounts. Do not re-import junk.
 - **BACKLOG-066 → 086** — worked down at phase boundaries, prioritised by trigger (087 removed)
 
 ---
@@ -458,9 +457,9 @@ Anything whose blocker is satisfied. **P1 exited 2026-08-01** (census + defect l
 unaided landing (`viewer@local` Control tower → Shipping / PvE; Users forbidden) + restore
 into `cip_alembic_smoke` (`RESTORE_SMOKE_OK`, alembic `20260814_0016`). P3-1 U1 overlay + U2
 composition + U3 Settings editor shipped; P3-5 unattended Monday 07:00 beat soak (run-now / Send to inbox
-proven; overnight beat not). P4 Amazon ASIN FLAG + optional Game W27 + historical backfill;
-P5 intelligence v1; P6 second tenant; Lane X TRIGGER items (076 Unship re-import, 089 richer
-baselines, 079/085 ops-list fold-in). Lane X runs continuously in GREEN alongside anything.
+proven; 2026-08-17 due-fire of WoC smoke hung — 097). P4 Amazon notebooks assigned via shipping; 19 networking
+ASINs catalogue-gap. P5 intelligence v1 shipped (accumulating until ≥14d). P6 second tenant; Lane X 097
+if Monday beat must deliver WoC. Amazon historical weekly upload is Warren’s file, not a build unit.
 
 ### What you cannot do
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.cpor import CporCase, CporCaseLine
@@ -27,6 +27,31 @@ def _case_window_days(case: CporCase) -> int:
         return 1
 
 
+def _lookback_bounds(case: CporCase, lookback_days: int) -> tuple[date, date]:
+    end = case.window_start - timedelta(days=1)
+    start = end - timedelta(days=max(1, lookback_days) - 1)
+    return start, end
+
+
+def _period_units(
+    session: Session,
+    *,
+    customer_id: int,
+    product_id: int,
+    start: date,
+    end: date,
+) -> list[float]:
+    rows = session.execute(
+        select(FactCustomerSellthrough.units_sold).where(
+            FactCustomerSellthrough.customer_id == int(customer_id),
+            FactCustomerSellthrough.product_id == int(product_id),
+            FactCustomerSellthrough.period_start_date >= start,
+            FactCustomerSellthrough.period_start_date <= end,
+        )
+    ).all()
+    return [float(r[0] or 0) for r in rows]
+
+
 def _baseline_units_for_line(
     session: Session,
     *,
@@ -34,38 +59,48 @@ def _baseline_units_for_line(
     product_id: int,
     case: CporCase,
     lookback_days: int,
+    method: str,
 ) -> dict[str, Any]:
-    """prior_window_same_sku_customer: sum CST units in lookback before window_start, scale to case length."""
-    end = case.window_start - timedelta(days=1)
-    start = end - timedelta(days=max(1, lookback_days) - 1)
-    qty = session.scalar(
-        select(func.coalesce(func.sum(FactCustomerSellthrough.units_sold), 0)).where(
-            FactCustomerSellthrough.customer_id == int(customer_id),
-            FactCustomerSellthrough.product_id == int(product_id),
-            FactCustomerSellthrough.period_start_date >= start,
-            FactCustomerSellthrough.period_start_date <= end,
-        )
+    """Build a scaled baseline for one SKU. Never invents lift — empty lookback is obs=0."""
+    start, end = _lookback_bounds(case, lookback_days)
+    units = _period_units(
+        session, customer_id=customer_id, product_id=product_id, start=start, end=end
     )
-    obs = session.scalar(
-        select(func.count()).select_from(FactCustomerSellthrough).where(
-            FactCustomerSellthrough.customer_id == int(customer_id),
-            FactCustomerSellthrough.product_id == int(product_id),
-            FactCustomerSellthrough.period_start_date >= start,
-            FactCustomerSellthrough.period_start_date <= end,
-        )
-    )
-    raw = float(qty or 0)
-    obs_n = int(obs or 0)
-    # Extrapolate lookback sum → expected units over case window length.
-    scale = _case_window_days(case) / float(max(1, lookback_days))
-    baseline_qty = raw * scale
+    obs_n = len(units)
+    raw_sum = float(sum(units))
+    case_days = float(_case_window_days(case))
+    lookback = float(max(1, lookback_days))
+    velocity_scale = case_days / lookback
+    if method == "comparable_median":
+        ordered = sorted(units)
+        if ordered:
+            mid = len(ordered) // 2
+            median = (
+                ordered[mid]
+                if len(ordered) % 2 == 1
+                else (ordered[mid - 1] + ordered[mid]) / 2.0
+            )
+        else:
+            median = 0.0
+        # Weekly CST grain: median week × case weeks.
+        baseline_qty = median * (case_days / 7.0)
+        scale = case_days / 7.0
+        extra = {"median_week_units": median}
+    else:
+        # prior_window_same_sku_customer and velocity_extrapolate share the
+        # lookback-sum × (case_days / lookback_days) identity.
+        baseline_qty = raw_sum * velocity_scale
+        scale = velocity_scale
+        extra = {}
     return {
         "baseline_qty": baseline_qty,
-        "lookback_units": raw,
+        "lookback_units": raw_sum,
         "obs_count": obs_n,
         "lookback_start": start.isoformat(),
         "lookback_end": end.isoformat(),
         "scale": scale,
+        "method": method,
+        **extra,
     }
 
 
@@ -129,22 +164,13 @@ def evaluate_case_incremental_cost(
                 }
             )
             continue
-        if method != "prior_window_same_sku_customer":
-            # v1 ships one method; others reserved for later without inventing numbers.
-            line_details.append(
-                {
-                    "line_id": int(ln.id),
-                    "product_id": int(ln.product_id),
-                    "baseline_status": "method_unimplemented",
-                }
-            )
-            continue
         bl = _baseline_units_for_line(
             session,
             customer_id=int(case.customer_id),
             product_id=int(ln.product_id),
             case=case,
             lookback_days=lookback,
+            method=method,
         )
         total_baseline += float(bl["baseline_qty"])
         obs_total += int(bl["obs_count"])

@@ -571,12 +571,22 @@ def lineup_export_columns(tenant_id: str = "default") -> list[dict[str, str]]:
 
 
 def incremental_baseline_config(tenant_id: str = "default") -> dict[str, object]:
-    """BACKLOG-089 baseline knobs — env overrides for lookback/min obs; method fixed default for v1."""
+    """BACKLOG-089 baseline knobs — profile/env overrides; methods are implemented."""
     lookback = _env_int("CIP_INCREMENTAL_BASELINE_LOOKBACK_DAYS", DEFAULT_BASELINE_LOOKBACK_DAYS, lo=7, hi=730)
     min_obs = _env_int("CIP_INCREMENTAL_MIN_BASELINE_OBS", DEFAULT_MIN_BASELINE_OBS, lo=1, hi=100)
+    overrides = load_tenant_profile_overrides(tenant_id)
+    raw_method = str(overrides.get("incremental_baseline_method") or DEFAULT_BASELINE_METHOD).strip()
+    method: BaselineMethod = (
+        raw_method  # type: ignore[assignment]
+        if raw_method in ("prior_window_same_sku_customer", "comparable_median", "velocity_extrapolate")
+        else DEFAULT_BASELINE_METHOD
+    )
+    env_method = (os.environ.get("CIP_INCREMENTAL_BASELINE_METHOD") or "").strip()
+    if env_method in ("prior_window_same_sku_customer", "comparable_median", "velocity_extrapolate"):
+        method = env_method  # type: ignore[assignment]
     return {
         "tenant_id": tenant_id,
-        "baseline_method": DEFAULT_BASELINE_METHOD,
+        "baseline_method": method,
         "baseline_lookback_days": lookback,
         "min_baseline_obs": min_obs,
     }
