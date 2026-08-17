@@ -224,9 +224,9 @@ quarter / customer, …). Invalid combinations refused with an explanation. Libr
 Power BI.
 **Shipped Unit 14 (VERIFY PASS 2026-08-14):** 14A series + period_grain week/month/quarter;
 14B `dashboard_widget` persist; 14C ECharts canvas on `/dashboards`. BACKLOG-131 closed.
-Remaining P3: P3-1 U1 overlay + U2 composition + U3 admin Settings shipped;
-unattended Monday 07:00 beat soak (BACKLOG-098 caveat); reopen MV only if cold `/query/execute`
-regularly exceeds 5s (097).
+Remaining P3: P3-1 U1 overlay + U2 composition + U3 admin Settings shipped.
+BACKLOG-097 (WoC observation series) and BACKLOG-098 (API startup catch-up) shipped 2026-08-17.
+Reopen a materialised view only if cold `/query/execute` regularly exceeds 5s after the observation tape.
 
 ### P3-5 Export and delivery
 Excel and PDF export. **Scheduled delivery** — event-triggered (load completes → dependent
@@ -456,10 +456,11 @@ Anything whose blocker is satisfied. **P1 exited 2026-08-01** (census + defect l
 (admin **Reset password** is the local bar). **P2 local exit re-proven 2026-08-14:** second-user
 unaided landing (`viewer@local` Control tower → Shipping / PvE; Users forbidden) + restore
 into `cip_alembic_smoke` (`RESTORE_SMOKE_OK`, alembic `20260814_0016`). P3-1 U1 overlay + U2
-composition + U3 Settings editor shipped; P3-5 unattended Monday 07:00 beat soak (run-now / Send to inbox
-proven; 2026-08-17 due-fire of WoC smoke hung — 097). P4 Amazon notebooks assigned via shipping; 19 networking
-ASINs catalogue-gap. P5 intelligence v1 shipped (accumulating until ≥14d). P6 second tenant; Lane X 097
-if Monday beat must deliver WoC. Amazon historical weekly upload is Warren’s file, not a build unit.
+composition + U3 Settings editor shipped; P3-5 calendar catch-up on API reconnect (BACKLOG-098)
+and WoC observation tape (BACKLOG-097, Alembic `20260817_0017`) shipped 2026-08-17 — inbox **#6**
+WoC smoke ok in 0.61s. P4 Amazon notebooks assigned via shipping; 19 networking
+ASINs catalogue-gap. P5 intelligence v1 shipped (accumulating until ≥14d). P6 second tenant.
+Amazon historical weekly upload is Warren’s file, not a build unit.
 
 ### What you cannot do
 

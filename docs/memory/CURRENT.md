@@ -1,14 +1,14 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-17 (CST store grain + Amazon notebooks + P5 intel v1)
+**Last updated:** 2026-08-17 (097 WoC observations + 098 catch-up)
 
 **Branch:** `feat/finish-roadmap`
 
-**Last content pin:** `1afdff4` — do not treat a hash in this file as HEAD
+**Last content pin:** `cce913b` — do not treat a hash in this file as HEAD
 
-**Alembic (code):** `20260814_0016` (`20260814_0016_customer_term_cover_weeks.py`)
+**Alembic (code):** `20260817_0017` (`20260817_0017_weeks_of_cover_observation.py`)
 
-**Alembic on cip:** `20260814_0016` (head) — do not upgrade unless approved
+**Alembic on cip:** `20260817_0017` (head) — applied 2026-08-17 (Warren approved)
 
 ## On this branch
 
@@ -18,16 +18,16 @@
 - **P5 intelligence v1:** `GET /listing-capture/intelligence` + Intelligence tab. ≥14d span → ready; else accumulating. `not_activated` worklist. Browser: rows show accumulating / span 0 (history still short).
 - **BACKLOG-089:** `comparable_median` + `velocity_extrapolate` implemented; default remains `prior_window_same_sku_customer`.
 - **BACKLOG-076:** quarantine complete (17 rows, 0 still-suspect). Source `Unit Price` is `999999`; Amount = Qty×999999. Do not re-import.
-- **BACKLOG-098:** calendar runner due (schedule 1 since 2026-08-03). Unattended beat still off (`CIP_ENABLE_DEV_BEAT`). This Monday due-fire of WoC smoke hung >5 min — cancelled (097 cold path). Last successful inbox delivery remains `#4` sellout_units (2026-08-14).
+- **BACKLOG-097:** `weeks_of_cover_observation` derived series. Apply-time reconstruct (DSI + shipment) + ops replay. Channel Ops / A3 / Monday schedule 1 read latest observation per pair. Live calculator only `woc_source=live` / `recompute=1`. **Proven:** reconstruct 10 distributors in ~21s (176982 rows / 2481 pairs); A3 query **0.61s**; inbox **#6** WoC smoke `status=ok value=23.68` `woc_source=observations`; Channel Ops Overview **61,776** / **23.7 weeks of cover**.
+- **BACKLOG-098:** API lifespan poller claims overdue calendar schedules on startup + interval. Beat (when enabled) uses the same interval, not crontab 07:00-only. Claim-first; 90s statement timeout writes failed inbox. Does **not** require `CIP_ENABLE_DEV_BEAT`. **Proven this reconnect:** poller started then `reason=startup due_count: 0` (clock already at 2026-08-24 after the earlier catch-up). Inbox **#6** is the successful WoC delivery after 097.
 
 ## Last recorded test snapshot
 
-Focused 2026-08-17: `test_incremental_unit_cost` + `test_listing_intelligence_v1` **6 passed**; CST foundation **26 passed** earlier this session. Do not treat the full API suite as green against live `cip`.
+Focused 2026-08-17: `test_woc_observation` + derived-stock + channel-ops + query-engine + tenant-profile + celery_queues + report_export **71 passed**. Live: Alembic `20260817_0017` on cip; Monday WoC delivery **#6** ok; API reconnect catch-up `due_count: 0`. Do not treat the full API suite as green against live `cip`.
 
 ## Next
 
 1. Do not start P6, Q-003 hosting, or Amazon historical weekly upload (Warren will upload).
-2. BACKLOG-097 if Monday beat must deliver WoC at distributor×product (query currently exceeds proxy timeout).
-3. Promote `feat/finish-roadmap` to main only when Warren says so — later-phase items remain (P6, hosting, 097, 098 overnight soak).
+2. Promote `feat/finish-roadmap` to main (Warren authorized this session).
 
-**Env:** local Windows. Web `:3000` + API `:8001` (restarted this session). No Docker.
+**Env:** local Windows. Web `:3000` + API `:8001`. No Docker. 098 poller requires the API process.

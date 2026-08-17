@@ -261,7 +261,7 @@ async def run_schedule_now(
     db: AsyncSession = Depends(get_db),
     user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
-    """Manual/ops trigger — also used until Celery beat owns Monday 07:00."""
+    """Manual/ops trigger. Calendar catch-up is the API poller + beat interval, not this path."""
     tid = tenant_id_from_user(user)
     sched = await db.get(ReportSchedule, schedule_id)
     if sched is None or sched.tenant_id != tid:

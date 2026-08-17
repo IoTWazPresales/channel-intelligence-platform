@@ -565,16 +565,16 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Shipped 2026-08-08** — runner on `main`. **2026-08-17 Monday:** schedule 1 was due (`next_run_at` 2026-08-03 09:00 SAST; `last_run_at` still 2026-08-01). Unattended Celery beat did not fire (`CIP_ENABLE_DEV_BEAT` off). Due-fire of WoC smoke hung >5 min and was cancelled — that is BACKLOG-097 cold `weeks_of_cover`, not a missing beat task. Last working inbox delivery remains `#4` sellout_units (2026-08-14). |
+| **Status / parked** | **Shipped 2026-08-17** — API lifespan poller claims overdue `report_schedule` rows on startup and every `CIP_REPORT_SCHEDULE_POLL_SECONDS` (default 60s). Celery beat, when enabled, uses the same interval instead of crontab 07:00 UTC only. Cadence remains `next_run_at`. Claim-first so API poll + beat cannot double-deliver. Statement timeout (default 90s) writes a **failed** inbox row rather than hanging the process. **Do not** turn on Windows `CIP_ENABLE_DEV_BEAT` just for 098. **097 closed the WoC hang:** schedule 1 delivery **#6** `status=ok` in 0.61s (`woc_source=observations`). Reconnect 2026-08-17: poller started, `due_count: 0` (next_run already 2026-08-24). |
 | **Effort** | Medium (beat task + import hook; small) |
 | **Source** | P3-5 authored 2026-08-01 — `report_schedule` + `run-now` inbox path; ROADMAP P3-5 calendar + event delivery |
 | **Idea** | Wire Celery beat for `weekly_monday_0700` / `daily_0700` and fan-out `on_import_complete` schedules after DSI/shipment apply completes. |
-| **Caveat** | Confirmed proof so far is the **run-now path** (`POST /reports/schedules/{id}/run-now`) and the fan-out task existing and being callable — not an unattended overnight Monday-07:00 beat firing in production. Unattended beat requires `CIP_ENABLE_DEV_BEAT=1` locally (Windows dev defaults beat **off** — see `dev_beat_disabled()` in `apps/api/app/worker/celery_queues.py`); production beat scheduling posture is untouched by this note. **2026-08-14:** Report builder **Send to inbox** delivered `#4` (`sellout_units` 178261.85, vintage on `/inbox` face). That is the P3-5 local delivery bar — not the overnight soak. |
-| **What the work is** | Done — beat entry + task iterating enabled schedules due; import apply progress-complete hook for `on_import_complete`; optional email_stub channel later remains a separate idea, not required for "shipped". |
+| **Caveat** | Catch-up is “fire as soon as the API is up if `next_run_at` is already due”. Overnight Monday WoC now reads observations (BACKLOG-097). Windows beat remains off by default (BACKLOG-038). **2026-08-17:** inbox **#6** WoC smoke ok. |
+| **What the work is** | Done — due-list + claim-first runner; API startup/interval catch-up; beat interval when beat is enabled; import apply hook for `on_import_complete`. email_stub remains a separate idea. |
 | **Regression traps** | Never skip delivery when metric returns empty — missing data is the alert; always stamp `data_vintage`. |
 | **Behavior to retain** | Inbox channel + missing_data_alert + tenant scope. |
 | **Out of scope** | External SMTP productization; P3-6 SQL viewer. |
-| **TRIGGER** | Reopen only if Warren wants true unattended overnight delivery with `CIP_ENABLE_DEV_BEAT=1` left running across a Monday 07:00 **and** the scheduled metric finishes inside the proxy window (WoC at distributor×product currently does not — BACKLOG-097). |
+| **TRIGGER** | Reopen only if catch-up does not fire overdue rows after an API restart. |
 
 ---
 
@@ -582,16 +582,16 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Resolved 2026-08-01** — set-based `derived_stock_components_by_dist_product` (latest join + aggregated sell-out/POD-landed); cold WoC ~7.4s→~3.2s; value parity 13.600643219087154 on cip. No MV needed yet. |
+| **Status / parked** | **Shipped 2026-08-17** — `weeks_of_cover_observation` derived series (Alembic `20260817_0017`). Set-based reconstruct at DSI/shipment apply; Channel Ops + A3 + Monday schedule 1 read latest observation per pair. Live calculator only `woc_source=live` / `recompute=1`. Cold query 0.61s (was hang >5 min). Inbox **#6** WoC smoke ok. |
 | **Effort** | Medium–Large (SQL rewrite + optional refresh job; maybe MV) |
 | **Source** | P3-2 live soak 2026-08-01 — cold `weeks_of_cover` full portfolio ~7.4s / `fill_rate` ~5.7s vs ROADMAP report render &lt;5s p95; warm cache &lt;1ms OK |
 | **Idea** | Replace per-pair scalar sell-out/landed loops in `derived_stock_by_dist_product` with set-based CTEs; optionally Postgres MATERIALIZED VIEW + refresh on import apply; keep latest-per-(distributor,product) invariant. |
 | **Why it matters / deferrable** | Meets NFR for cold governed report without relying only on 60s result cache. Deferrable while warm-cache path + report builder (P3-3) are primary; P3-2 ships process-local/Redis TTL cache. |
-| **What the work is** | Done for set-based path; MV deferred unless cold misses return. |
+| **What the work is** | Done — observation table + fact indexes; apply-time reconstruct; read cutover; ops replay of the same SQL. |
 | **Regression traps** | Never sum SOH snapshot history; pipeline/open_order must stay out; tenant_id filter required. |
 | **Behavior to retain** | Formula: latest reported − sell-out since + POD-landed shipped since; WoC at distributor×product only. |
 | **Out of scope** | Report builder UI (P3-3); changing COMMERCIAL_SEMANTICS formulas. |
-| **TRIGGER** | — shipped set-based; reopen only if cold `/query/execute` regularly exceeds 5s again — then consider MV. |
+| **TRIGGER** | — shipped — |
 
 ---
 
