@@ -4,6 +4,7 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -47,6 +48,7 @@ export type AliasRow = {
   product_name: string | null;
   sales_model_name: string | null;
   status: string;
+  sku_twin_flag?: boolean;
   valid_from?: string | null;
   valid_to?: string | null;
   evidence_json?: Record<string, unknown> | null;
@@ -61,6 +63,7 @@ type AliasImportSummary = {
   collisions: number;
   customer_unresolved: number;
   model_ambiguous: number;
+  sku_twin_proposed?: number;
   model_miss: number;
   blank_skipped: number;
   proposed_alias_ids: number[];
@@ -298,7 +301,7 @@ export function CstArticleAliasesSection() {
     onSuccess: async (summary) => {
       const confirmed = summary.confirm?.confirmed ?? 0;
       setAliasImportMsg(
-        `Read ${summary.rows_deduped} · proposed ${summary.proposed + summary.updated_proposed} · confirmed ${confirmed} · collisions ${summary.collisions} · model miss ${summary.model_miss} · ambiguous ${summary.model_ambiguous}`,
+        `Read ${summary.rows_deduped} · proposed ${summary.proposed + summary.updated_proposed} · SKU twins ${summary.sku_twin_proposed ?? 0} · confirmed ${confirmed} · collisions ${summary.collisions} · model miss ${summary.model_miss} · ambiguous ${summary.model_ambiguous}`,
       );
       await refetchAliases();
     },
@@ -406,7 +409,25 @@ export function CstArticleAliasesSection() {
         hide: true,
         valueFormatter: (p) => p.value || '+∞',
       },
-      { field: 'status', headerName: CST_ALIAS_COLUMN_LABELS.status, width: 110 },
+      {
+        field: 'status',
+        headerName: CST_ALIAS_COLUMN_LABELS.status,
+        width: 150,
+        cellRenderer: (p: ICellRendererParams<AliasRow>) =>
+          p.data ? (
+            <Stack direction="row" spacing={0.5} alignItems="center">
+              <span>{p.value}</span>
+              {p.data.sku_twin_flag ? (
+                <Chip
+                  size="small"
+                  label="FLAG"
+                  color="warning"
+                  data-testid={`cst-alias-sku-twin-flag-${p.data.id}`}
+                />
+              ) : null}
+            </Stack>
+          ) : null,
+      },
       {
         colId: 'actions',
         headerName: '',
@@ -601,8 +622,10 @@ export function CstArticleAliasesSection() {
         intro={
           <>
             <strong>Article</strong> is the retailer key (ASIN on Amazon). <strong>Sales model</strong> comes
-            from Product Master via the linked product — it is not stored on the alias. FLAG ≠ BLOCK:
-            unconfirmed aliases never auto-resolve CST rows.
+            from Product Master via the linked product — it is not stored on the alias. Duplicate
+            Product Master SKUs for one sales model are proposed (prefilled), never skipped.
+            Confirm is still required. Tied shipping shows FLAG. FLAG ≠ BLOCK: unconfirmed aliases
+            never auto-resolve CST rows.
           </>
         }
         introWhen="always"

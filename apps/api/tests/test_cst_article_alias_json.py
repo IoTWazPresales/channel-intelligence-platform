@@ -31,6 +31,7 @@ def test_alias_json_includes_sales_model_from_product_not_alias_row():
     assert out["product_sku"] == "90NB12"
     assert out["article_no_normalized"] == "B0TESTASIN"
     assert out["product_id"] == 88
+    assert out["sku_twin_flag"] is False
     assert "ignored-evidence-copy" not in (out["sales_model_name"] or "")
 
 

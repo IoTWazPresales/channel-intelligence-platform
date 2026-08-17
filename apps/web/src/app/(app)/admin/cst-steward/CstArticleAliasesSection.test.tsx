@@ -28,6 +28,7 @@ const mockState = vi.hoisted(() => ({
       product_name: 'Notebook',
       sales_model_name: 'Vivobook 16',
       status: 'proposed',
+      sku_twin_flag: true,
       valid_from: null,
       valid_to: null,
     },
@@ -138,7 +139,7 @@ describe('CstArticleAliasesSection', () => {
     renderSection();
     await waitFor(() => expect(screen.getByTestId('cst-alias-grid-mock')).toBeInTheDocument());
     expect(screen.getAllByText('Sales model').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('Vivobook 16')).toBeInTheDocument();
+    expect(screen.getByTestId('cst-alias-sku-twin-flag-41')).toHaveTextContent('FLAG');
     expect(screen.getByTestId('module-data-section-intro')).toHaveTextContent(/Sales model/i);
 
     const byField = Object.fromEntries(lastColumnDefs.filter((c) => c.field).map((c) => [c.field, c]));

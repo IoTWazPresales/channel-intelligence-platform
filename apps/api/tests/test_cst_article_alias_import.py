@@ -70,3 +70,65 @@ def test_import_skips_collision_same_article_two_models():
     assert summary.collisions == 1
     assert summary.proposed == 0
     session.add.assert_not_called()
+
+
+def test_import_proposes_sku_twin_instead_of_skipping():
+    session = MagicMock()
+    session.scalar.return_value = None
+    added = []
+
+    def _add(obj):
+        obj.id = 501
+        added.append(obj)
+
+    session.add.side_effect = _add
+    session.flush.return_value = None
+
+    idx = MagicMock()
+    idx.sales_model_name_to_ids = {"model-x": (10, 11)}
+    pick = MagicMock()
+    pick.product_id = 10
+    pick.as_evidence.return_value = {
+        "sku_twin": True,
+        "sku_twin_flag": False,
+        "sku_twin_pick_reason": "lifecycle_filter",
+        "unique_pm_match": False,
+    }
+
+    rows = [{"customer": "Amazon", "article": "B08H8NH4XG", "sales_model": "MODEL-X"}]
+    with patch(
+        "app.services.imports.cst_article_alias_import._load_product_resolution_index",
+        return_value=idx,
+    ), patch(
+        "app.services.imports.cst_article_alias_import._resolve_customer_id",
+        return_value=26,
+    ), patch(
+        "app.services.imports.cst_article_alias_import.resolve_product_id_single_match",
+        return_value=None,
+    ), patch(
+        "app.services.imports.cst_sku_twin_disambiguate.disambiguate_sales_model_sku_twins",
+        return_value=pick,
+    ):
+        summary = import_article_alias_rows(session, rows, source="scm_upload")
+
+    assert summary.sku_twin_proposed == 1
+    assert summary.proposed == 1
+    assert summary.model_ambiguous == 0
+    assert added[0].product_id == 10
+    assert added[0].status == "proposed"
+    assert added[0].evidence_json["sku_twin"] is True
+    assert added[0].evidence_json["unique_pm_match"] is False
+
+
+def test_confirm_unique_skips_sku_twin_evidence():
+    from app.services.imports.cst_article_alias_import import confirm_scm_unique_proposed
+
+    session = MagicMock()
+    row = MagicMock()
+    row.status = "proposed"
+    row.evidence_json = {"source": "scm_upload", "sku_twin": True}
+    session.get.return_value = row
+    with patch("app.services.imports.cst_d1.confirm_customer_article_alias") as confirm:
+        out = confirm_scm_unique_proposed(session, [9], actor="test")
+    assert out == {"confirmed": 0, "skipped": 1}
+    confirm.assert_not_called()

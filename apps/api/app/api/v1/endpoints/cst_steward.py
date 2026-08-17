@@ -81,6 +81,7 @@ def article_alias_q_match(q: str):
 
 
 def _alias_json(row: CustomerArticleAlias, customer: DimCustomer | None, product: DimProduct | None) -> dict:
+    evidence = row.evidence_json if isinstance(row.evidence_json, dict) else {}
     return {
         "id": row.id,
         "customer_id": row.customer_id,
@@ -92,6 +93,7 @@ def _alias_json(row: CustomerArticleAlias, customer: DimCustomer | None, product
         "product_name": product.name if product else None,
         "sales_model_name": product.sales_model_name if product else None,
         "status": row.status,
+        "sku_twin_flag": bool(evidence.get("sku_twin_flag")),
         "valid_from": row.valid_from.isoformat() if row.valid_from else None,
         "valid_to": row.valid_to.isoformat() if row.valid_to else None,
         "evidence_json": row.evidence_json,
