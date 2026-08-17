@@ -18,7 +18,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
-- 2026-08-17 — **CST store grain + Amazon notebooks + P5 intel v1** on `feat/finish-roadmap` (uncommitted): Game `source_key` uses `site_label` (job 971 564 facts / 1308 units); `850016147` + 19 Amazon networking ASINs `ignore_no_catalogue`; `B0CND7JMYP`/`B0CZ97VQ4H` shipping picks 11045/5959; browser FLAG on CST aliases + Listing Intelligence tab. 089 methods implemented. 076 source Unit Price=999999 — quarantine is the fix. 098 due-fire hung on WoC (097). `dim_product` 18177. No migration.
+- 2026-08-17 — **CST store grain + Amazon notebooks + P5 intel v1** (`bb186d2`) on `feat/finish-roadmap`: Game `source_key` uses `site_label` (job 971 564 facts / 1308 units); `850016147` + 19 Amazon networking ASINs `ignore_no_catalogue`; `B0CND7JMYP`/`B0CZ97VQ4H` shipping picks 11045/5959; browser FLAG on CST aliases + Listing Intelligence tab. 089 methods implemented. 076 source Unit Price=999999 — quarantine is the fix. 098 due-fire hung on WoC (097). `dim_product` 18177. No migration.
 
 - 2026-08-17 — **Game W27 steward residual** (`53a2830`) on `feat/finish-roadmap`: jobs 928/971 426→564/565 resolved+applied; aliases 682–684 + 6 confirmed (SCM/SKU-twin); leftover `850016147`. Game facts 38→48 (site labels unmapped → loc=0 last-write-wins). `dim_product` 18177. No migration.
 
