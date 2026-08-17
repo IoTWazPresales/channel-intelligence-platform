@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from app.services.channel_ops_derived_stock import (
     VARIANCE_FLAG_PCT,
+    VELOCITY_WINDOW_DAYS,
     compute_derived_stock,
     compute_snapshot_variance,
     replenishment_flag_v1,
+    velocity_method_for_days,
+    velocity_window_days_used,
+    weekly_velocity_from_units,
     weeks_of_cover_or_none,
     yoy_pct_or_none,
 )
@@ -146,3 +150,26 @@ def test_date_ordering_for_variance_window() -> None:
         reported_next=170, predicted_at_next=predicted
     )
     assert flagged is False
+
+
+def test_velocity_window_days_continuous_at_364() -> None:
+    as_of = date(2026, 8, 17)
+    first = as_of - timedelta(days=VELOCITY_WINDOW_DAYS)
+    days = velocity_window_days_used(as_of=as_of, first_observation=first)
+    assert days == 364
+    assert velocity_method_for_days(days) == "a3_02_364_over_52"
+    # 364 units over 364 days → weekly = 7; same as /52 of 364.
+    assert weekly_velocity_from_units(364, days) == Decimal("7")
+    assert weekly_velocity_from_units(364, 364) == Decimal("364") / Decimal("52")
+
+
+def test_velocity_window_never_divides_short_history_by_52() -> None:
+    as_of = date(2026, 8, 17)
+    first = as_of - timedelta(days=90)
+    days = velocity_window_days_used(as_of=as_of, first_observation=first)
+    assert days == 90
+    assert velocity_method_for_days(days) == "available_window_over_weeks"
+    # 90 units in 90 days → weekly = 7, NOT 90/52 ≈ 1.73
+    weekly = weekly_velocity_from_units(90, days)
+    assert weekly == Decimal("7")
+    assert weekly != Decimal("90") / Decimal("52")

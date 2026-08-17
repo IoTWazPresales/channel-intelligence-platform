@@ -1,6 +1,18 @@
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -27,6 +39,54 @@ class WeeksOfStock(Base, TimestampMixin):
     as_of_date: Mapped[date] = mapped_column(Date, nullable=False)
     wos: Mapped[float] = mapped_column(Numeric(10, 4), nullable=False)
     target_wos: Mapped[float] = mapped_column(Numeric(10, 4), nullable=False)
+
+
+class WeeksOfCoverObservation(Base, TimestampMixin):
+    """A3 distributor×product cover tape — derived observation, not a fact.
+
+    Apply-time rows (``dsi_apply`` / ``shipment_apply``) are decision observations.
+    ``as_of_backfill`` rows are reconstructions from current facts, date-filtered.
+    """
+
+    __tablename__ = "weeks_of_cover_observation"
+    __table_args__ = (
+        UniqueConstraint("source_key", name="uq_weeks_of_cover_observation_source_key"),
+        CheckConstraint(
+            "trigger IN ('dsi_apply', 'shipment_apply', 'as_of_backfill')",
+            name="ck_woc_observation_trigger",
+        ),
+        Index(
+            "ix_woc_observation_current",
+            "tenant_id",
+            "distributor_id",
+            "product_id",
+            "cover_as_of_date",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    distributor_id: Mapped[int] = mapped_column(ForeignKey("dim_distributor.id"), nullable=False)
+    product_id: Mapped[int] = mapped_column(ForeignKey("dim_product.id"), nullable=False)
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
+    cover_as_of_date: Mapped[date] = mapped_column(Date, nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    import_job_id: Mapped[int | None] = mapped_column(
+        ForeignKey("import_job.id", ondelete="SET NULL"), nullable=True
+    )
+    trigger: Mapped[str] = mapped_column(String(32), nullable=False)
+    reported_soh: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False)
+    sell_out_since: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False)
+    landed_since: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False)
+    derived_stock: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False)
+    weekly_velocity: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
+    weeks_of_cover: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
+    replenishment_flag: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    replenishment_threshold_weeks: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False)
+    params: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    formula_version: Mapped[str] = mapped_column(String(32), nullable=False, default="A3-02.v1")
+    data_vintage: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    source_key: Mapped[str] = mapped_column(String(256), nullable=False)
 
 
 class StockRisk(Base, RecommendationMixin, TimestampMixin):

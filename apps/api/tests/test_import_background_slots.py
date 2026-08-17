@@ -110,6 +110,7 @@ def test_clear_all_task_slots_strips_every_slot_and_timing() -> None:
         "dsi_soh_reconcile_task": {"task_id": "s"},
         "dsi_velocity_compute_task": {"task_id": "v"},
         "dsi_forecasting_task": {"task_id": "f"},
+        "woc_observation_task": {"task_id": "w"},
         "pm_validate_task": {"task_id": "pv"},
         "pm_commit_task": {"task_id": "pc"},
         "lineup_parse_task": {"task_id": "lp"},
@@ -176,4 +177,5 @@ def test_slot_meta_keys_cover_all_known_slots() -> None:
         "cpor_resolution_plan_task",
         "cst_resolution_plan_task",
         "cst_bulk_task",
+        "woc_observation_task",
     }

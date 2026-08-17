@@ -40,6 +40,10 @@ from app.services.channel_ops_derived_stock import (
     weeks_of_cover_or_none,
     yoy_pct_or_none,
 )
+from app.services.woc_observation_read import (
+    latest_woc_observations,
+    observations_to_stock_vel,
+)
 from app.services.imports.shipment_evidence_read import (
     apply_active_evidence_filter,
     shipment_evidence_read_model,
@@ -132,10 +136,19 @@ async def channel_ops_weekly_series(
     return {"weeks": weeks, "points": points}
 
 
+def _wants_live_woc(woc_source: str | None, recompute: str | None) -> bool:
+    if str(woc_source or "").strip().lower() == "live":
+        return True
+    return str(recompute or "").strip().lower() in {"1", "true", "yes"}
+
+
 @router.get("/summary")
 async def channel_ops_summary(
     db: AsyncSession = Depends(get_db),
     distributor_id: int | None = None,
+    woc_source: str | None = Query(None),
+    recompute: str | None = Query(None),
+    user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
     today = date.today()
     q_start, q_end = _quarter_bounds(today)
@@ -190,22 +203,32 @@ async def channel_ops_summary(
         yoy_pct_or_none(cur_units, py_units) if current_quarter_has_data else None
     )
 
-    # Channel stock = sum of derived latest per (distributor, product).
-    # NEVER sum raw snapshots across periods.
-    stock_by_pair = await derived_stock_by_dist_product(
-        db, distributor_id=int(distributor_id) if distributor_id is not None else None
-    )
+    # Channel stock / WoC: observation tape by default (BACKLOG-097). Live calculator
+    # only when woc_source=live or recompute=1 — never a silent fallback.
+    from app.core.tenant_scope import tenant_id_from_user
+
+    tid = tenant_id_from_user(user if isinstance(user, dict) else None)
+    use_live = _wants_live_woc(woc_source, recompute)
+    woc_src = "live" if use_live else "observations"
+    if use_live:
+        stock_by_pair = await derived_stock_by_dist_product(
+            db, distributor_id=int(distributor_id) if distributor_id is not None else None, tenant_id=tid
+        )
+        vel_by_pair = await sellout_velocity_52wk_by_dist_product(
+            db, distributor_id=int(distributor_id) if distributor_id is not None else None, tenant_id=tid
+        )
+    else:
+        obs = await latest_woc_observations(
+            db,
+            tenant_id=tid,
+            distributor_id=int(distributor_id) if distributor_id is not None else None,
+        )
+        stock_by_pair, vel_by_pair = observations_to_stock_vel(obs)
     total_inv = float(sum(stock_by_pair.values())) if stock_by_pair else 0.0
     pair_count = len(stock_by_pair)
-
-    # WoC grain = distributor × product only (COMMERCIAL_SEMANTICS A3-02).
-    # Never average FactCustomerVelocity (customer grain) against channel stock.
-    vel_by_pair = await sellout_velocity_52wk_by_dist_product(
-        db, distributor_id=int(distributor_id) if distributor_id is not None else None
-    )
     total_weekly_velocity = sum(vel_by_pair.values()) if vel_by_pair else 0.0
     weeks_of_cover = weeks_of_cover_or_none(total_inv, total_weekly_velocity or None)
-    has_sellout_velocity = bool(vel_by_pair)
+    has_sellout_velocity = bool(vel_by_pair) or bool(stock_by_pair)
 
     threshold = float(REPLENISHMENT_WOC_THRESHOLD_WEEKS)
     pairs_below = 0
@@ -264,6 +287,8 @@ async def channel_ops_summary(
         },
         "total_inventory_units": int(total_inv),
         "weeks_of_cover": weeks_of_cover,
+        "woc_source": woc_src,
+        "missing_data_alert": not stock_by_pair,
         "replenishment_threshold_weeks": threshold,
         "replenishment_flag": portfolio_replenishment,
         "replenishment_pairs_below_threshold": pairs_below,
@@ -396,6 +421,8 @@ async def channel_ops_inventory(
     db: AsyncSession = Depends(get_db),
     distributor_id: int | None = Query(None),
     product_id: int | None = None,
+    woc_source: str | None = Query(None),
+    recompute: str | None = Query(None),
     user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
     if distributor_id is None:
@@ -403,10 +430,49 @@ async def channel_ops_inventory(
 
     from app.core.tenant_scope import tenant_id_from_user
 
-    tid = tenant_id_from_user(user)
-    derived_rows = await derived_stock_rows_for_distributor(
-        db, distributor_id=int(distributor_id), product_id=product_id, tenant_id=tid
-    )
+    tid = tenant_id_from_user(user if isinstance(user, dict) else None)
+    use_live = _wants_live_woc(woc_source, recompute)
+    woc_src = "live" if use_live else "observations"
+
+    if use_live:
+        derived_rows = await derived_stock_rows_for_distributor(
+            db, distributor_id=int(distributor_id), product_id=product_id, tenant_id=tid
+        )
+        vel_by_pair = await sellout_velocity_52wk_by_dist_product(
+            db, distributor_id=int(distributor_id), tenant_id=tid
+        )
+        velocity_by_product = {pid: vel for (_did, pid), vel in vel_by_pair.items()}
+    else:
+        obs = await latest_woc_observations(
+            db,
+            tenant_id=tid,
+            distributor_id=int(distributor_id),
+            product_id=int(product_id) if product_id is not None else None,
+        )
+        derived_rows = [
+            {
+                "distributor_id": r.distributor_id,
+                "product_id": r.product_id,
+                "snapshot_date": r.snapshot_date.isoformat() if r.snapshot_date else None,
+                "reported_soh": r.reported_soh,
+                "sell_out_since": r.sell_out_since,
+                "landed_since": r.landed_since,
+                "derived_stock": r.derived_stock,
+                "calculated_soh": None,
+                "variance_units": None,
+                "reconciliation_status": None,
+                "weeks_of_cover": r.weeks_of_cover,
+                "weekly_velocity": r.weekly_velocity,
+                "replenishment_flag": r.replenishment_flag,
+                "cover_as_of_date": r.cover_as_of_date.isoformat(),
+                "trigger": r.trigger,
+            }
+            for r in obs
+        ]
+        velocity_by_product = {
+            r.product_id: r.weekly_velocity for r in obs if r.weekly_velocity is not None
+        }
+
     product_ids = [int(r["product_id"]) for r in derived_rows]
     product_meta: dict[int, tuple[str | None, str | None]] = {}
     dist_name: str | None = None
@@ -423,10 +489,6 @@ async def channel_ops_inventory(
             select(DimDistributor.name).where(DimDistributor.id == int(distributor_id))
         )
 
-    vel_by_pair = await sellout_velocity_52wk_by_dist_product(
-        db, distributor_id=int(distributor_id)
-    )
-    velocity_by_product = {pid: vel for (_did, pid), vel in vel_by_pair.items()}
     threshold = float(REPLENISHMENT_WOC_THRESHOLD_WEEKS)
 
     # B1-04: distributor×product rollup of demand forecast (next 13 weeks from today).
@@ -461,8 +523,12 @@ async def channel_ops_inventory(
         sku, pname = product_meta.get(pid, (None, None))
         v52 = velocity_by_product.get(pid)
         derived = float(row["derived_stock"])
-        weeks = weeks_of_cover_or_none(derived, v52)
-        flag = replenishment_flag_v1(weeks, threshold_weeks=threshold)
+        if "weeks_of_cover" in row and not use_live:
+            weeks = row.get("weeks_of_cover")
+            flag = bool(row.get("replenishment_flag"))
+        else:
+            weeks = weeks_of_cover_or_none(derived, v52)
+            flag = replenishment_flag_v1(weeks, threshold_weeks=threshold)
         items.append(
             {
                 "distributor_id": int(row["distributor_id"]),
@@ -487,12 +553,16 @@ async def channel_ops_inventory(
                 "reorder_signal": flag,  # alias — prefer replenishment_flag (A3-03)
                 "velocity_grain": "distributor_product",
                 "demand_forecast_units_13w": demand_by_product.get(pid),
+                "woc_source": woc_src,
+                "cover_as_of_date": row.get("cover_as_of_date"),
             }
         )
 
     return {
         "items": items,
         "total": len(items),
+        "woc_source": woc_src,
+        "missing_data_alert": not items,
         "replenishment_threshold_weeks": threshold,
         "replenishment_pairs_below_threshold": sum(1 for i in items if i["replenishment_flag"]),
     }

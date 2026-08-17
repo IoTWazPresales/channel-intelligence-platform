@@ -208,6 +208,31 @@ def run_shipment_apply_sync(
         persist_clear_background_task_metadata(db, job)
         db.commit()
 
+    # BACKLOG-097: reconstruct WoC observations before report fan-out (best-effort).
+    try:
+        from app.services.imports.woc_observation import (
+            WOC_TRIGGER_SHIPMENT_APPLY,
+            shipment_distributor_ids_for_job,
+        )
+        from app.services.imports.woc_observation_sync import (
+            run_woc_observation_for_distributor_sync,
+        )
+
+        tid = str(getattr(job, "tenant_id", None) or "default") if job is not None else "default"
+        for dist_id in shipment_distributor_ids_for_job(db, int(job_id)):
+            run_woc_observation_for_distributor_sync(
+                tenant_id=tid,
+                distributor_id=int(dist_id),
+                import_job_id=int(job_id),
+                trigger=WOC_TRIGGER_SHIPMENT_APPLY,
+                file_period_end=None,
+            )
+    except Exception:
+        logger.exception(
+            "Shipment post-apply WoC observation failed job_id=%s; apply remains complete",
+            job_id,
+        )
+
     # BACKLOG-098: fan-out on_import_complete report schedules (best-effort).
     # Only delivers ReportSchedule rows with enabled=True (config/opt-in).
     try:

@@ -11,6 +11,7 @@ from app.models.derived import (
     RoadmapRecommendation,
     StockHealth,
     StockRisk,
+    WeeksOfCoverObservation,
     WeeksOfStock,
 )
 from app.models.dimensions import (
@@ -183,6 +184,7 @@ __all__ = [
     "FactBudgetActual",
     "FactBudgetRequest",
     "StockHealth",
+    "WeeksOfCoverObservation",
     "WeeksOfStock",
     "StockRisk",
     "ForecastSummary",

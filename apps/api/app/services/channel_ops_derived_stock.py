@@ -18,7 +18,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Sequence
 
-from sqlalchemy import Select, and_, func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
@@ -129,28 +129,65 @@ VELOCITY_WINDOW_DAYS = 364
 VELOCITY_WEEK_DIVISOR = Decimal("52")
 
 
+def velocity_window_days_used(
+    *,
+    as_of: date,
+    first_observation: date,
+    max_window_days: int = VELOCITY_WINDOW_DAYS,
+) -> int:
+    """Calendar-elapsed observable window, capped at 364. Continuous with /52 at maturity.
+
+    ``weeks_used = max(days, 1) / 7``. Never first-to-last transaction span.
+    Never ``sum(90d units) / 52``.
+    """
+    window_start = as_of - timedelta(days=int(max_window_days))
+    observable_start = max(window_start, first_observation)
+    return max(1, (as_of - observable_start).days)
+
+
+def weekly_velocity_from_units(
+    units: Decimal | float | int,
+    days_used: int,
+) -> Decimal:
+    """``sum(units in window) * 7 / days_used``. At 364 days this is exactly /52."""
+    days = max(int(days_used), 1)
+    return Decimal(str(units or 0)) * Decimal(7) / Decimal(days)
+
+
+def velocity_method_for_days(days_used: int) -> str:
+    if int(days_used) >= VELOCITY_WINDOW_DAYS:
+        return "a3_02_364_over_52"
+    return "available_window_over_weeks"
+
+
 async def sellout_velocity_52wk_by_dist_product(
     db: AsyncSession,
     *,
     distributor_id: int | None = None,
     tenant_id: str | None = None,
+    as_of: date | None = None,
 ) -> dict[tuple[int, int], float]:
     """Weekly avg sell-out units over 364d, grain distributor × product only.
 
     Matches DSI velocity window math (sum units in window / 52) without customer grain.
+    Live path (``as_of is None``) anchors to global ``max(transaction_date)`` — byte-for-byte
+    with the pre-097 calculator. Pass ``as_of`` only for reconstructions.
     """
     tid = (tenant_id or "").strip() or None
-    anchor_q = select(func.max(FactSalesSellout.transaction_date)).where(
-        FactSalesSellout.distributor_id.isnot(None),
-        FactSalesSellout.product_id.isnot(None),
-    )
-    if distributor_id is not None:
-        anchor_q = anchor_q.where(FactSalesSellout.distributor_id == int(distributor_id))
-    if tid is not None:
-        anchor_q = anchor_q.where(FactSalesSellout.tenant_id == tid)
-    anchor = await db.scalar(anchor_q)
-    if anchor is None:
-        return {}
+    if as_of is None:
+        anchor_q = select(func.max(FactSalesSellout.transaction_date)).where(
+            FactSalesSellout.distributor_id.isnot(None),
+            FactSalesSellout.product_id.isnot(None),
+        )
+        if distributor_id is not None:
+            anchor_q = anchor_q.where(FactSalesSellout.distributor_id == int(distributor_id))
+        if tid is not None:
+            anchor_q = anchor_q.where(FactSalesSellout.tenant_id == tid)
+        anchor = await db.scalar(anchor_q)
+        if anchor is None:
+            return {}
+    else:
+        anchor = as_of
 
     window_start = anchor - timedelta(days=VELOCITY_WINDOW_DAYS)
     q = (
@@ -200,8 +237,9 @@ def _latest_snapshot_subquery(
     distributor_id: int | None = None,
     *,
     tenant_id: str | None = None,
-) -> Select[Any]:
-    """Distinct (distributor_id, product_id) with max(as_of_date)."""
+    as_of: date | None = None,
+) -> Any:
+    """Distinct (distributor, product) with max(as_of_date) [optionally <= as_of]."""
     q = select(
         FactInventoryDistributor.distributor_id.label("distributor_id"),
         FactInventoryDistributor.product_id.label("product_id"),
@@ -214,6 +252,8 @@ def _latest_snapshot_subquery(
         q = q.where(FactInventoryDistributor.distributor_id == int(distributor_id))
     if tenant_id is not None:
         q = q.where(FactInventoryDistributor.tenant_id == tenant_id)
+    if as_of is not None:
+        q = q.where(FactInventoryDistributor.as_of_date <= as_of)
     return q.subquery()
 
 
@@ -244,17 +284,17 @@ def compute_derived_for_pair_sync(
     as_of: date | None = None,
 ) -> DerivedStockComponents | None:
     """Sync read of derived stock for one (distributor, product)."""
+    snap_q = select(
+        FactInventoryDistributor.as_of_date,
+        FactInventoryDistributor.on_hand_units,
+    ).where(
+        FactInventoryDistributor.distributor_id == int(distributor_id),
+        FactInventoryDistributor.product_id == int(product_id),
+    )
+    if as_of is not None:
+        snap_q = snap_q.where(FactInventoryDistributor.as_of_date <= as_of)
     snap = session.execute(
-        select(
-            FactInventoryDistributor.as_of_date,
-            FactInventoryDistributor.on_hand_units,
-        )
-        .where(
-            FactInventoryDistributor.distributor_id == int(distributor_id),
-            FactInventoryDistributor.product_id == int(product_id),
-        )
-        .order_by(FactInventoryDistributor.as_of_date.desc())
-        .limit(1)
+        snap_q.order_by(FactInventoryDistributor.as_of_date.desc()).limit(1)
     ).one_or_none()
     if snap is None:
         return None
@@ -366,6 +406,7 @@ async def derived_stock_by_dist_product(
     *,
     distributor_id: int | None = None,
     tenant_id: str | None = None,
+    as_of: date | None = None,
 ) -> dict[tuple[int, int], float]:
     """Latest derived stock per (distributor, product). Never sums snapshot history.
 
@@ -373,7 +414,7 @@ async def derived_stock_by_dist_product(
     (no per-pair scalar round-trips).
     """
     components = await derived_stock_components_by_dist_product(
-        db, distributor_id=distributor_id, tenant_id=tenant_id
+        db, distributor_id=distributor_id, tenant_id=tenant_id, as_of=as_of
     )
     return {k: float(v.derived_stock) for k, v in components.items()}
 
@@ -384,10 +425,11 @@ async def derived_stock_components_by_dist_product(
     distributor_id: int | None = None,
     tenant_id: str | None = None,
     product_id: int | None = None,
+    as_of: date | None = None,
 ) -> dict[tuple[int, int], DerivedStockComponents]:
     """Set-based derived stock components keyed by (distributor_id, product_id)."""
     tid = (tenant_id or "").strip() or None
-    latest = _latest_snapshot_subquery(distributor_id, tenant_id=tid)
+    latest = _latest_snapshot_subquery(distributor_id, tenant_id=tid, as_of=as_of)
 
     inv_q = select(
         FactInventoryDistributor.distributor_id.label("distributor_id"),
@@ -424,6 +466,8 @@ async def derived_stock_components_by_dist_product(
         )
         .group_by(FactSalesSellout.distributor_id, FactSalesSellout.product_id)
     )
+    if as_of is not None:
+        sell_q = sell_q.where(FactSalesSellout.transaction_date <= as_of)
     if tid is not None:
         sell_q = sell_q.where(FactSalesSellout.tenant_id == tid)
     if distributor_id is not None:
@@ -450,6 +494,8 @@ async def derived_stock_components_by_dist_product(
         )
         .group_by(FactInboundShipment.distributor_id, FactInboundShipment.product_id)
     )
+    if as_of is not None:
+        land_q = land_q.where(FactInboundShipment.pod_date <= as_of)
     if tid is not None:
         land_q = land_q.where(FactInboundShipment.tenant_id == tid)
     if distributor_id is not None:

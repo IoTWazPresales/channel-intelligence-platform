@@ -117,6 +117,7 @@ async def test_a3_handler_invariants_and_value():
             metric="weeks_of_cover",
             grains=["distributor", "product"],
             tenant_id="default",
+            filters={"woc_source": "live"},
         )
         hr = await a3_stock.handle_a3(db, req, metric_key="weeks_of_cover")
     assert hr.status == "ok"
@@ -125,6 +126,59 @@ async def test_a3_handler_invariants_and_value():
     # portfolio WoC = 150 / 15 = 10
     assert hr.value == pytest.approx(10.0)
     assert len(hr.rows or []) == 2
+
+
+@pytest.mark.anyio
+async def test_a3_handler_default_reads_observations() -> None:
+    from datetime import date
+
+    from app.query.handlers import a3_stock
+    from app.services.woc_observation_read import WocObservationRow
+
+    db = AsyncMock()
+    obs = [
+        WocObservationRow(
+            distributor_id=1,
+            product_id=10,
+            snapshot_date=date(2026, 8, 10),
+            cover_as_of_date=date(2026, 8, 17),
+            reported_soh=100,
+            sell_out_since=0,
+            landed_since=0,
+            derived_stock=100,
+            weekly_velocity=10.0,
+            weeks_of_cover=10.0,
+            replenishment_flag=False,
+            replenishment_threshold_weeks=4.0,
+            trigger="dsi_apply",
+            formula_version="A3-02.v1",
+            params={},
+            data_vintage={},
+            import_job_id=12,
+        )
+    ]
+    with (
+        patch(
+            "app.query.handlers.a3_stock.latest_woc_observations",
+            new_callable=AsyncMock,
+            return_value=obs,
+        ),
+        patch(
+            "app.query.handlers.a3_stock.derived_stock_by_dist_product",
+            new_callable=AsyncMock,
+            return_value={(1, 10): 999.0},
+        ) as live,
+    ):
+        req = QueryRequest(
+            metric="weeks_of_cover",
+            grains=["distributor", "product"],
+            tenant_id="default",
+        )
+        hr = await a3_stock.handle_a3(db, req, metric_key="weeks_of_cover")
+    live.assert_not_awaited()
+    assert hr.value == pytest.approx(10.0)
+    assert hr.data_vintage and hr.data_vintage.get("woc_source") == "observations"
+    assert hr.scorecard and hr.scorecard.get("missing_data_alert") is False
 
 
 @pytest.mark.anyio

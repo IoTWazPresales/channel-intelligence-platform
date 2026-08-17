@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -119,6 +120,24 @@ def protected_lineup_case_ids() -> frozenset[int]:
     return protected_lineup_case_ids_from_config()
 
 
+# BACKLOG-097 — WoC reconstruction cadence (file JSON; no extra migration).
+ReportingCadence = Literal[
+    "weekly_monday",
+    "weekly_tuesday",
+    "weekly_wednesday",
+    "weekly_thursday",
+    "weekly_friday",
+    "weekly_saturday",
+    "weekly_sunday",
+    "daily",
+]
+DEFAULT_REPORTING_CADENCE: ReportingCadence = "weekly_monday"
+DEFAULT_WOC_MIN_VELOCITY_DAYS = 90
+WOC_MIN_VELOCITY_DAYS_LO = 28
+WOC_MIN_VELOCITY_DAYS_HI = 90
+# DATE bounds for cover_as_of / Monday alignment (ASUS SA). P6 tenants override later if needed.
+REPORTING_TIMEZONE = "Africa/Johannesburg"
+
 # BACKLOG-096 (P6) — onboarding-editable subset. Everything else on this module
 # (money ceiling, support-norms window, protected case ids) stays env-only.
 # Lineup export sheet/column maps are also tenant-editable (Lane B) — never OEM-hardcoded law.
@@ -131,6 +150,8 @@ TENANT_PROFILE_OVERRIDE_KEYS: tuple[str, ...] = (
     "lineup_export_draft_sheet",
     "lineup_export_columns",
     "semantic_overlay",
+    "reporting_cadence",
+    "woc_min_velocity_days",
 )
 
 # Governed metric overlay (P3-1). Only label / hidden / allowed_grains persist;
@@ -145,6 +166,18 @@ _TENANT_PROFILE_VALID_VALUES: dict[str, frozenset[str]] = {
     "over_budget_action": frozenset({"require_reapproval", "warn", "block"}),
     "reservation_source": frozenset({"derived_from_profit", "explicit_column", "hybrid"}),
     "pm_attribution_mode": frozenset({"business_line", "person_field", "none"}),
+    "reporting_cadence": frozenset(
+        {
+            "weekly_monday",
+            "weekly_tuesday",
+            "weekly_wednesday",
+            "weekly_thursday",
+            "weekly_friday",
+            "weekly_saturday",
+            "weekly_sunday",
+            "daily",
+        }
+    ),
 }
 
 # Free-text export sheet names (validated as non-empty safe sheet titles).
@@ -671,6 +704,15 @@ def save_tenant_profile_overrides(tenant_id: str, overrides: dict[str, object]) 
                 continue
             clean[key] = _normalize_lineup_export_columns(raw)
             continue
+        if key == "woc_min_velocity_days":
+            if raw is None or str(raw).strip() == "":
+                continue
+            try:
+                days = int(str(raw).strip())
+            except (TypeError, ValueError) as exc:
+                raise ValueError("woc_min_velocity_days: integer required") from exc
+            clean[key] = max(WOC_MIN_VELOCITY_DAYS_LO, min(WOC_MIN_VELOCITY_DAYS_HI, days))
+            continue
         if raw is None or str(raw).strip() == "":
             continue
         val = str(raw).strip()
@@ -719,4 +761,34 @@ def profile_snapshot(tenant_id: str = "default") -> dict[str, object]:
         "money_ceiling_usd": _env_float("MONEY_CEILING_USD"),
         "support_norms_trailing_quarters": support_norms_trailing_quarters(),
         "protected_lineup_case_ids": sorted(protected_lineup_case_ids()),
+        "reporting_cadence": reporting_cadence(tenant_id),
+        "woc_min_velocity_days": woc_min_velocity_days(tenant_id),
+        "reporting_timezone": REPORTING_TIMEZONE,
     }
+
+
+def reporting_cadence(tenant_id: str = "default") -> str:
+    overrides = load_tenant_profile_overrides(tenant_id)
+    raw = str(overrides.get("reporting_cadence") or DEFAULT_REPORTING_CADENCE).strip()
+    if raw not in _TENANT_PROFILE_VALID_VALUES["reporting_cadence"]:
+        return DEFAULT_REPORTING_CADENCE
+    return raw
+
+
+def woc_min_velocity_days(tenant_id: str = "default") -> int:
+    overrides = load_tenant_profile_overrides(tenant_id)
+    raw = overrides.get("woc_min_velocity_days", DEFAULT_WOC_MIN_VELOCITY_DAYS)
+    try:
+        days = int(str(raw).strip())
+    except (TypeError, ValueError):
+        days = DEFAULT_WOC_MIN_VELOCITY_DAYS
+    return max(WOC_MIN_VELOCITY_DAYS_LO, min(WOC_MIN_VELOCITY_DAYS_HI, days))
+
+
+def reporting_today(tenant_id: str = "default") -> date:
+    """Calendar date in the tenant reporting timezone (DATE bounds, not UTC wall clock)."""
+    from datetime import date, datetime
+    from zoneinfo import ZoneInfo
+
+    _ = tenant_id  # reserved for a future per-tenant timezone key
+    return datetime.now(ZoneInfo(REPORTING_TIMEZONE)).date()

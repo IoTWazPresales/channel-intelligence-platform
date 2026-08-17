@@ -39,6 +39,7 @@ KIND_DSI_RESOLUTION_PLAN_COMPUTE = "dsi_resolution_plan_compute"
 KIND_DSI_SOH_RECONCILIATION = "dsi_soh_reconciliation"
 KIND_DSI_VELOCITY_COMPUTE = "dsi_velocity_compute"
 KIND_DSI_FORECASTING = "dsi_forecasting"
+KIND_WOC_OBSERVATION = "woc_observation_reconstruct"
 KIND_SHIPMENT_IMPORT = "shipment_import"
 KIND_SHIPMENT_BULK = "shipment_bulk"
 KIND_COMMERCIAL_PLANNER_LINEUP_PARSE = "commercial_planner_lineup_parse"
@@ -92,6 +93,7 @@ SLOT_DSI_BULK = "dsi_bulk_task"
 SLOT_DSI_SOH = "dsi_soh_reconcile_task"
 SLOT_DSI_VELOCITY = "dsi_velocity_compute_task"
 SLOT_DSI_FORECASTING = "dsi_forecasting_task"
+SLOT_WOC_OBSERVATION = "woc_observation_task"
 SLOT_PM_VALIDATE = "pm_validate_task"
 SLOT_PM_COMMIT = "pm_commit_task"
 SLOT_LINEUP_PARSE = "lineup_parse_task"
@@ -136,6 +138,15 @@ TASK_SLOTS: tuple[SlotDescriptor, ...] = (
         label_source=LABEL_PAYLOAD,
         fixed_kind=KIND_DSI_VELOCITY_COMPUTE,
         default_label="Computing sell-out velocity…",
+    ),
+    SlotDescriptor(
+        slot_key=SLOT_WOC_OBSERVATION,
+        meta_key="woc_observation_task",
+        kind_resolution=FIXED,
+        payload_shape=SHAPE_DICT,
+        label_source=LABEL_PAYLOAD,
+        fixed_kind=KIND_WOC_OBSERVATION,
+        default_label="Reconstructing weeks of cover…",
     ),
     SlotDescriptor(
         slot_key=SLOT_DSI_FORECASTING,
@@ -252,6 +263,8 @@ def task_label(job: ImportJob, *, kind: str) -> str:
         return f"Reconciling inventory (DSI job {jid})"
     if kind == KIND_DSI_VELOCITY_COMPUTE:
         return f"Computing sell-out velocity (DSI job {jid})"
+    if kind == KIND_WOC_OBSERVATION:
+        return f"Reconstructing weeks of cover (job {jid})"
     if kind == KIND_DSI_FORECASTING:
         return f"Generating forecasts (DSI job {jid})"
     if kind == KIND_PRODUCT_MASTER_VALIDATE:
