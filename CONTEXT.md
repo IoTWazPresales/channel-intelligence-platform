@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-08-17 — **merged `feat/finish-roadmap` → `main`** (`87b2277`): 097 WoC observations (`cce913b`) + 098 API catch-up (`8ce0f8b`). Alembic `20260817_0017` on cip.
+
 - 2026-08-17 — **097 WoC observations** (`cce913b`) + **098 catch-up** (`8ce0f8b`) on `feat/finish-roadmap`: `weeks_of_cover_observation` (Alembic `20260817_0017`); apply reconstruct; A3/Channel Ops/Monday read observations. Live proof: 0.61s query, inbox **#6** ok, Channel Ops 23.7w / 61,776. 098 poller on API reconnect `due_count: 0`.
 
 - 2026-08-17 — **CST store grain + Amazon notebooks + P5 intel v1** (`bb186d2`) on `feat/finish-roadmap`: Game `source_key` uses `site_label` (job 971 564 facts / 1308 units); `850016147` + 19 Amazon networking ASINs `ignore_no_catalogue`; `B0CND7JMYP`/`B0CZ97VQ4H` shipping picks 11045/5959; browser FLAG on CST aliases + Listing Intelligence tab. 089 methods implemented. 076 source Unit Price=999999 — quarantine is the fix. 098 due-fire hung on WoC (097). `dim_product` 18177. No migration.

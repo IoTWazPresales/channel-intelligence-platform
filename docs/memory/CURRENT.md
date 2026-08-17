@@ -1,8 +1,8 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-17 (097 WoC observations + 098 catch-up)
+**Last updated:** 2026-08-17 (097/098 merged to main)
 
-**Branch:** `feat/finish-roadmap`
+**Branch:** `main`
 
 **Last content pin:** `8ce0f8b` — do not treat a hash in this file as HEAD
 
@@ -28,6 +28,6 @@ Focused 2026-08-17: `test_woc_observation` + derived-stock + channel-ops + query
 ## Next
 
 1. Do not start P6, Q-003 hosting, or Amazon historical weekly upload (Warren will upload).
-2. Promote `feat/finish-roadmap` to main (Warren authorized this session).
+2. Next theme is Warren's call — 097/098 are on `main`.
 
 **Env:** local Windows. Web `:3000` + API `:8001`. No Docker. 098 poller requires the API process.
