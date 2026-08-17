@@ -4,7 +4,7 @@
 
 **Branch:** `feat/finish-roadmap`
 
-**Last content pin:** `cce913b` — do not treat a hash in this file as HEAD
+**Last content pin:** `8ce0f8b` — do not treat a hash in this file as HEAD
 
 **Alembic (code):** `20260817_0017` (`20260817_0017_weeks_of_cover_observation.py`)
 
