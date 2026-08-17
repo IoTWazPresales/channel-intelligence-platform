@@ -18,9 +18,11 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ---
 
+- 2026-08-17 — **Game W27 steward residual** on `feat/finish-roadmap`: jobs 928/971 426→564/565 resolved+applied; aliases 682–684 + 6 confirmed (SCM/SKU-twin); leftover `850016147`. Game facts 38→48 (site labels unmapped → loc=0 last-write-wins). `dim_product` 18177. No migration.
+
 - 2026-08-17 — **P4 Amazon 7 SKU-twin confirms + job 918 apply** on `feat/finish-roadmap`: aliases 675–681 confirmed from SCM sales models; reresolve+apply +7 facts (Amazon 23→30). 21 leftover (19 networking not in PM; `B0CND7JMYP`/`B0CZ97VQ4H` no unique model). No dim_product create. No migration.
 
-- 2026-08-17 — **P4 Amazon SKU-twin propose** on `feat/finish-roadmap`: CST alias import no longer voids duplicate `sales_model_name` SKUs; lifecycle + inbound POD pick writes **proposed** (confirm_unique skips twins). Job 918 already had 23 facts applied. 7 Amazon ASINs proposed on cip (FLAG `B0DJ3KKZ29`). No migration. Next: Warren Confirm on aliases tab, then reresolve 918.
+- 2026-08-17 — **P4 Amazon SKU-twin propose** (`11ca581`) on `feat/finish-roadmap`: CST alias import no longer voids duplicate `sales_model_name` SKUs; lifecycle + inbound POD pick writes **proposed** (confirm_unique skips twins). Job 918 already had 23 facts applied. 7 Amazon ASINs proposed then confirmed (675–681). No migration.
 
 - 2026-08-16 — **Hygiene batch** (`e8df502`, stamp `287db99`) on `feat/finish-roadmap`: 054 migrate-url guard; fixture predicate + catch-up [6] junit; 104/111/101/047/071/057/058; 086+084 closed not-needed. No migration. No CPOR/alias. Next: P4 Amazon ASIN FLAG.
 
