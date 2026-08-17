@@ -19,6 +19,7 @@ import { useMemo, useRef, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { apiGet, apiPost, apiPostFormData } from '@/lib/api';
 
 type Listing = {
@@ -40,6 +41,22 @@ type Proposal = {
   product_id: number | null;
   status: string;
   suggested_url?: string | null;
+};
+
+type IntelligenceRow = {
+  listing_id: number;
+  customer_id: number;
+  product_id: number | null;
+  marketplace: string;
+  url: string;
+  observation_count: number;
+  span_days: number | null;
+  history_status: string;
+  first_price: number | null;
+  last_price: number | null;
+  price_drift_pct: number | null;
+  activation_status: string | null;
+  worklist: boolean;
 };
 
 type Observation = {
@@ -99,6 +116,23 @@ export default function ListingCapturePage() {
         { signal },
       ),
     enabled: tab === 2,
+  });
+
+  const {
+    data: intelligence,
+    isLoading: intelLoading,
+  } = useQuery({
+    queryKey: ['listing-capture', 'intelligence'],
+    queryFn: ({ signal }) =>
+      apiGet<{
+        items: IntelligenceRow[];
+        worklist: IntelligenceRow[];
+        ready: number;
+        accumulating: number;
+        not_activated_worklist: number;
+        data_unavailable?: boolean;
+      }>('/api/v1/listing-capture/intelligence', { signal }),
+    enabled: tab === 3,
   });
 
   const createMut = useMutation({
@@ -238,11 +272,31 @@ export default function ListingCapturePage() {
     [],
   );
 
+  const intelCols = useMemo<ColDef<IntelligenceRow>[]>(
+    () => [
+      { field: 'listing_id', headerName: 'Listing', width: 90 },
+      { field: 'marketplace', width: 110 },
+      { field: 'history_status', headerName: 'History', width: 130 },
+      { field: 'span_days', headerName: 'Span d', width: 90 },
+      { field: 'observation_count', headerName: 'Obs', width: 80 },
+      { field: 'activation_status', headerName: 'Activation', width: 150 },
+      {
+        field: 'price_drift_pct',
+        headerName: 'Drift %',
+        width: 100,
+        valueFormatter: (p) =>
+          p.value == null ? '—' : `${(Number(p.value) * 100).toFixed(1)}%`,
+      },
+      { field: 'worklist', headerName: 'Worklist', width: 110 },
+      { field: 'url', flex: 1, minWidth: 200 },
+    ],
+    [],
+  );
+
   return (
     <>
       <PageHeader
-        crumbs={[{ label: 'Channel Intelligence' }, { label: 'Listing Capture' }]}
-        title="Listing Capture v0"
+        {...navPageChrome('/listing-capture')}
         actions={
           <Stack direction="row" spacing={1}>
             <Button size="small" variant="outlined" onClick={() => refetch()}>
@@ -274,7 +328,7 @@ export default function ListingCapturePage() {
         <code>listing_observation</code> (price / availability / parse) and a CPOR activation flag (
         <code>no_case_detected</code> when no covering case). Live schedule needs{' '}
         <code>CIP_LISTING_CAPTURE_SCHEDULE</code> + <code>CIP_LISTING_LIVE_FETCH</code> (beat via{' '}
-        <code>CIP_ENABLE_DEV_BEAT=1</code>). Not intelligence v1.
+        <code>CIP_ENABLE_DEV_BEAT=1</code>). Intelligence tab: ≥14 day span, activation, price drift.
       </Alert>
       {data?.data_unavailable ? (
         <Alert severity="warning" sx={{ mb: 2 }}>
@@ -285,6 +339,7 @@ export default function ListingCapturePage() {
         <Tab label="Registry" />
         <Tab label="Feed proposals" />
         <Tab label="Observations" data-testid="listing-capture-obs-tab" />
+        <Tab label="Intelligence" data-testid="listing-capture-intel-tab" />
       </Tabs>
       {tab === 1 ? (
         <Stack direction="row" spacing={1} sx={{ mb: 1 }} alignItems="center">
@@ -375,6 +430,20 @@ export default function ListingCapturePage() {
             columnDefs={obsCols}
             height={480}
             gridOptions={{ getRowId: (p) => String(p.data.id) }}
+          />
+        )
+      ) : null}
+      {tab === 3 ? (
+        intelLoading ? (
+          <Typography>Loading…</Typography>
+        ) : intelligence?.data_unavailable ? (
+          <Alert severity="warning">Listing intelligence unavailable.</Alert>
+        ) : (
+          <EnterpriseDataGrid
+            rowData={intelligence?.items ?? []}
+            columnDefs={intelCols}
+            height={480}
+            gridOptions={{ getRowId: (p) => String(p.data.listing_id) }}
           />
         )
       ) : null}

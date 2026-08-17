@@ -1,7 +1,13 @@
 from pydantic import ValidationError
 
 from app.api.v1.endpoints.lineup import LineupBulkBody, LineupBulkRow
+from app.services.commercial_planner.lineup_bulk_backfill_apply import bulk_apply_terminal_status
 from app.services.lineup.bulk import dedupe_lineup_input_rows
+
+
+def test_bulk_apply_terminal_status_completed_and_errors():
+    assert bulk_apply_terminal_status([{"outcome": "enqueued"}]) == "completed"
+    assert bulk_apply_terminal_status([{"outcome": "error"}]) == "completed_with_errors"
 
 
 def test_dedupe_lineup_input_rows_last_wins():

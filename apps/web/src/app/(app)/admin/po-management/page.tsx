@@ -4,15 +4,13 @@ import { Alert } from '@mui/material';
 import Link from 'next/link';
 
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { PoManagementView } from '@/features/commercial-planner/PoManagementView';
 
 export default function AdminPoManagementPage() {
   return (
     <>
-      <PageHeader
-        crumbs={[{ label: 'Admin' }, { label: 'PO management' }]}
-        title="PO management"
-      />
+      <PageHeader {...navPageChrome('/admin/po-management')} />
       <Alert severity="info" sx={{ mb: 2 }}>
         Observed purchase orders are derived from <strong>shipment evidence</strong>. Linked groups show
         units-primary reconciliation against confirmed lineups; unlinked groups and the gap worklist let you

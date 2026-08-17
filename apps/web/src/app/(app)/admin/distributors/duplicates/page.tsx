@@ -5,6 +5,7 @@ import { Alert, Typography } from '@mui/material';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 
 import { DistributorNameSimilarityMergeSection } from './DistributorNameSimilarityMergeSection';
 
@@ -47,10 +48,7 @@ function AdminDistributorDuplicatesPageContent() {
 
   return (
     <>
-      <PageHeader
-        crumbs={[{ label: 'Admin' }, { label: 'Distributors', href: '/admin/distributors' }, { label: 'Duplicates' }]}
-        title="Distributor duplicates (name similarity)"
-      />
+      <PageHeader {...navPageChrome('/admin/distributors/duplicates')} />
       <Alert severity="warning" sx={{ mb: 2 }}>
         <strong>Name-similarity merge</strong> consolidates whole <code>dim_distributor</code> records with runtime FK
         discovery and PO row consolidation when <code>po_number_norm</code> collides. Preview always lists PO merge plans

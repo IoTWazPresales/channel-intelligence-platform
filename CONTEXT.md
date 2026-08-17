@@ -16,7 +16,39 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
----
+- 2026-08-17 — **097 WoC observations** (`cce913b`) + **098 catch-up** (`8ce0f8b`) on `feat/finish-roadmap`: `weeks_of_cover_observation` (Alembic `20260817_0017`); apply reconstruct; A3/Channel Ops/Monday read observations. Live proof: 0.61s query, inbox **#6** ok, Channel Ops 23.7w / 61,776. 098 poller on API reconnect `due_count: 0`.
+
+- 2026-08-17 — **CST store grain + Amazon notebooks + P5 intel v1** (`bb186d2`) on `feat/finish-roadmap`: Game `source_key` uses `site_label` (job 971 564 facts / 1308 units); `850016147` + 19 Amazon networking ASINs `ignore_no_catalogue`; `B0CND7JMYP`/`B0CZ97VQ4H` shipping picks 11045/5959; browser FLAG on CST aliases + Listing Intelligence tab. 089 methods implemented. 076 source Unit Price=999999 — quarantine is the fix. 098 due-fire hung on WoC (097). `dim_product` 18177. No migration.
+
+- 2026-08-17 — **Game W27 steward residual** (`53a2830`) on `feat/finish-roadmap`: jobs 928/971 426→564/565 resolved+applied; aliases 682–684 + 6 confirmed (SCM/SKU-twin); leftover `850016147`. Game facts 38→48 (site labels unmapped → loc=0 last-write-wins). `dim_product` 18177. No migration.
+
+- 2026-08-17 — **P4 Amazon 7 SKU-twin confirms + job 918 apply** on `feat/finish-roadmap`: aliases 675–681 confirmed from SCM sales models; reresolve+apply +7 facts (Amazon 23→30). 21 leftover (19 networking not in PM; `B0CND7JMYP`/`B0CZ97VQ4H` no unique model). No dim_product create. No migration.
+
+- 2026-08-17 — **P4 Amazon SKU-twin propose** (`11ca581`) on `feat/finish-roadmap`: CST alias import no longer voids duplicate `sales_model_name` SKUs; lifecycle + inbound POD pick writes **proposed** (confirm_unique skips twins). Job 918 already had 23 facts applied. 7 Amazon ASINs proposed then confirmed (675–681). No migration.
+
+- 2026-08-16 — **Hygiene batch** (`e8df502`, stamp `287db99`) on `feat/finish-roadmap`: 054 migrate-url guard; fixture predicate + catch-up [6] junit; 104/111/101/047/071/057/058; 086+084 closed not-needed. No migration. No CPOR/alias. Next: P4 Amazon ASIN FLAG.
+
+- 2026-08-16 — **Housekeeping close-out** (`f3f97a7`) on `feat/finish-roadmap`: purged 217 fixture `import_job` rows from cip (kept ACZA `#276`/`#763` — `latest` matches predicate `test`); catch-up v1.1.0 already at `63d05de`; bare no-`--since` JSONL marker appended. API 1563 pass / 487 cip-guard errors / 3 skip; web 532 pass. Next: P4 Amazon ASIN FLAG (CST aliases surface — do not touch until restructure).
+
+- 2026-08-16 — **Claude-in-browser catch-up v1.1.0** (`63d05de`) on `feat/finish-roadmap`: pointer-not-paste; [6] junit-or-NO; [9] OK/FLAG every check; import_job fixture split. Manual SELECT-only. Next: P4 Amazon ASIN FLAG.
+
+- 2026-08-16 — **Claude-in-browser catch-up generator** (`3d5c01a`) on `feat/finish-roadmap`: gitignored snapshot + committed JSONL marker; `--since` delta floor; SELECT-only. Manual only. Next: P4 Amazon ASIN FLAG.
+
+- 2026-08-16 — **CST Article aliases VERIFY PASS (Opus)** (`49ccec4` / stamp `cd5d3d5`) on `feat/finish-roadmap`. Next: P4 Amazon ASIN FLAG / optional Game W27.
+
+- 2026-08-16 — **CST Article aliases steward surface** (`49ccec4`) on `feat/finish-roadmap`: sales_model_name from DimProduct; Additional columns; product search-and-pick. No shell, no Alembic. Next: Opus VERIFY then P4 Amazon ASIN FLAG.
+
+- 2026-08-16 — **P3-1 U3 VERIFY PASS (Opus)** (`24d2cf3` / stamp `71fe06f`) on `feat/finish-roadmap`. Next: P4 Amazon ASIN FLAG / optional Game W27.
+
+- 2026-08-16 — **P3-1 U3 admin Settings overlay editor** (`24d2cf3`) on `feat/finish-roadmap`: GET/PUT `/semantics/overlay` (admin PUT); Settings panel relabel/hide/ratio-alias; default-tenant browser E2E then overlay reverted. Next: Opus VERIFY then P4 Amazon ASIN FLAG.
+
+- 2026-08-16 — **P3-1 U2 composition evaluator** (`fbac384`) on `feat/finish-roadmap`: intra-family ratio + grain-restricted alias over handler-backed metrics; den==0 is governed null. No new SQL. Next: Opus VERIFY then U3 Settings editor.
+
+- 2026-08-16 — **P3-1 U1 governed overlay** (`02854cd`) on `feat/finish-roadmap`: `semantic_overlay` on tenant-profile JSON; field-whitelist merge (no formula rewrite); hidden metrics omitted for non-admins. No migration. Next: Opus VERIFY then U2 composition evaluator.
+
+- 2026-08-15 — **BACKLOG-079 chrome + 085 fold** (`a90f191`) on `feat/finish-roadmap`: `navPageChrome` crumbs/titles on owning routes; CST/PO-gap/PM-gaps AG Grid paging. Did not wrap PvE/PM-gaps in `MasterDataGridShell`. Next: Opus VERIFY then P3-1 CONSULT.
+
+- 2026-08-15 — **P0 hygiene** (`4effbb5`) on `feat/finish-roadmap`: `tsc --noEmit` 0; CI lint+typecheck; BACKLOG-070 legacy shim. API vs live cip still not green (env/data). Next: Opus VERIFY then BACKLOG-079.
 
 - 2026-08-15 — **Next lock** (`c3a056e`): finish ROADMAP + outstanding leftover-close + fired BACKLOG TRIGGERs (hygiene first). Module deepening only when Warren asks. No deepening menu at end of close-out.
 

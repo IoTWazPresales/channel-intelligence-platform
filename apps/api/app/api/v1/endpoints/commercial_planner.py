@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from app.api.deps import get_db
+from app.core.security import get_optional_current_user
 from app.models.commercial_lineup import (
     COMMERCIAL_LINEUP_STATUSES,
     CommercialLineupCase,
@@ -3709,7 +3710,11 @@ async def delete_lineup_case_preview(case_id: int, db: AsyncSession = Depends(ge
 
 
 @router.delete("/lineup-cases/{case_id}", status_code=204)
-async def delete_lineup_case(case_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_lineup_case(
+    case_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: dict | None = Depends(get_optional_current_user),
+):
     from app.services.commercial_planner.lineup_case_supersession import lineup_case_delete_audit_fields
     from app.services.steward_audit import record_steward_audit
 
@@ -3749,10 +3754,9 @@ async def delete_lineup_case(case_id: int, db: AsyncSession = Depends(get_db)):
         ).scalar()
         or 0
     )
-    # Actor is anonymous when this route has no auth dependency (same as pre-audit surface).
     await record_steward_audit(
         db,
-        None,
+        user,
         commit=False,
         **lineup_case_delete_audit_fields(
             case,
@@ -3994,7 +3998,7 @@ async def bulk_lineup_1h_rederivation_apply(
 
     from app.core.config import get_settings
     from app.services.commercial_planner.lineup_bulk_rederivation import apply_1h_rederivation_sync
-    from app.services.imports.import_background_slots import SLOT_MAIN, set_task_slot_on_job
+    from app.services.imports.import_background_slots import SLOT_BULK_LINEUP_APPLY, set_task_slot_on_job
     from app.services.task_run_ledger import (
         ENTITY_IMPORT_JOB,
         TRANSPORT_IN_PROCESS_THREAD,
@@ -4053,7 +4057,7 @@ async def bulk_lineup_1h_rederivation_apply(
     if job is not None:
         set_task_slot_on_job(
             job,
-            SLOT_MAIN,
+            SLOT_BULK_LINEUP_APPLY,
             task_id=celery_task_id,
             label="1H re-derivation apply…",
         )

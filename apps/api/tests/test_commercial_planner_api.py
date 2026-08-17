@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_db
+from app.core.security import get_optional_current_user
 from app.main import app
 
 client = TestClient(app)
@@ -1549,6 +1550,47 @@ def test_commercial_lineup_case_delete_draft_only():
     r = client.delete("/api/v1/commercial-planner/lineup-cases/21")
     assert r.status_code == 409
     assert "draft_imported" in r.json()["detail"]
+
+
+def test_commercial_lineup_case_delete_audit_uses_current_user():
+    """BACKLOG-101: DELETE wires get_current_user so steward_audit is not always anonymous."""
+    draft_case = _make_case(id=22, commercial_status="draft_imported")
+    captured: dict = {}
+
+    async def fake_db_draft():
+        sess = MagicMock()
+        sess.get = AsyncMock(return_value=draft_case)
+        children_result = MagicMock()
+        children_result.scalars.return_value.all.return_value = []
+        count_result = MagicMock()
+        count_result.scalar.return_value = 0
+        sess.execute = AsyncMock(side_effect=[children_result, count_result, count_result])
+        sess.delete = AsyncMock()
+        sess.add = MagicMock()
+        sess.flush = AsyncMock()
+        sess.commit = AsyncMock()
+        yield sess
+
+    async def fake_user():
+        return {
+            "id": "warren-steward",
+            "role": "steward",
+            "tenant_id": "default",
+            "email": "warren@acza",
+            "display_name": "Warren",
+        }
+
+    async def capture_audit(_db, user, **_kwargs):
+        captured["user"] = user
+        return MagicMock()
+
+    app.dependency_overrides[get_db] = fake_db_draft
+    app.dependency_overrides[get_optional_current_user] = fake_user
+    with patch("app.services.steward_audit.record_steward_audit", side_effect=capture_audit):
+        r = client.delete("/api/v1/commercial-planner/lineup-cases/22")
+    assert r.status_code == 204
+    assert captured["user"]["id"] == "warren-steward"
+    assert captured["user"]["id"] != "anonymous"
 
 
 def test_current_lineup_template_exists():

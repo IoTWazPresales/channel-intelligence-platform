@@ -236,7 +236,8 @@ class TenantCommercialProfileUpdate(BaseModel):
     pm_attribution_mode: str | None = None
     lineup_export_net_requirement_sheet: str | None = None
     lineup_export_draft_sheet: str | None = None
-    lineup_export_columns: list[dict[str, str]] | None = None
+    reporting_cadence: str | None = None
+    woc_min_velocity_days: int | None = None
 
 
 @router.get("/tenant-commercial-profile")

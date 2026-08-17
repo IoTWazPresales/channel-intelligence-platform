@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { apiGet, apiPost, apiPostFormData, safeDisplayError } from '@/lib/api';
 
@@ -145,12 +146,10 @@ export default function CporPaymentEvidenceImportPage() {
   return (
     <>
       <PageHeader
-        crumbs={[
-          { label: 'Commercial Planning' },
-          { label: 'CPOR Cases', href: '/commercial-planner/cpor-cases' },
-          { label: 'Payment / CN import' },
-        ]}
-        title="Import payment / CN evidence"
+        {...navPageChrome('/commercial-planner/cpor-cases/payment-evidence-import', {
+          extraCrumbs: [{ label: 'Payment / CN import' }],
+          title: 'Import payment / CN evidence',
+        })}
       />
       <Alert severity="info" sx={{ mb: 2 }}>
         Generic payment evidence — profile maps tenant columns onto case ID, credit note, statuses,

@@ -24,6 +24,7 @@ import {
 
 /** Row shape for inbound evidence mapping candidates (matches API + shipment steward). */
 export type InboundEvidenceMappingCandidateRow = ImportStewardCandidateRowBase & {
+  import_job_id: number;
   suggested_entity_id: number | null;
   suggested_action: string | null;
   suggested_distributor_code: string | null;

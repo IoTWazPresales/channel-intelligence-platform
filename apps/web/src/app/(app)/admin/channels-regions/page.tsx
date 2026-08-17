@@ -4,6 +4,7 @@ import { Alert, Tab, Tabs } from '@mui/material';
 import { useState } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import {
   CatalogDimensionGridPanel,
   type CatalogDimensionGridConfig,
@@ -40,10 +41,7 @@ export default function AdminChannelsRegionsPage() {
 
   return (
     <>
-      <PageHeader
-        crumbs={[{ label: 'Master Data' }, { label: 'Channels & Regions' }]}
-        title="Channels & Regions"
-      />
+      <PageHeader {...navPageChrome('/admin/channels-regions')} />
       <Alert severity="info" sx={{ mb: 2 }}>
         Govern channel and region dimensions used across product defaults, customer classification, and import
         mapping. Use bulk actions to preview reference blockers before deleting multiple rows.

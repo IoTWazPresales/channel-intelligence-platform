@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import re
 from datetime import date
 from typing import Any
 
@@ -65,15 +67,50 @@ STRUCTURE_MULTI_SHEET = "multi_sheet"
 STRUCTURE_MTD_DELTA = "mtd_delta"
 STRUCTURE_WIDE_EXTRACT = "wide_extract"
 
+_SITE_LABEL_KEY_RE = re.compile(r"[^A-Z0-9]+")
+
+
+def _source_key_site_part(
+    *,
+    customer_location_id: int | None,
+    site_label: str | None,
+) -> str:
+    """Store grain: mapped location id, else verbatim site_label, else chain-level 0.
+
+    Unmapped Game (and similar) site codes must not share loc=0 — that last-write-wins
+    the week down to one store. FLAG ≠ BLOCK: we do not auto-create customer_location.
+    """
+    if customer_location_id is not None:
+        return str(int(customer_location_id))
+    raw = str(site_label or "").strip()
+    if not raw:
+        return "0"
+    norm = _SITE_LABEL_KEY_RE.sub("_", raw.upper()).strip("_")
+    if not norm:
+        return "0"
+    if len(norm) > 80:
+        digest = hashlib.sha1(norm.encode("utf-8")).hexdigest()[:12]
+        return f"sl:{digest}"
+    return f"sl:{norm}"
+
+
 def customer_sellthrough_source_key(
     *,
     customer_id: int,
     customer_location_id: int | None,
     product_id: int,
     period_start_date: date,
+    site_label: str | None = None,
 ) -> str:
-    """Natural upsert key: ``ct:{customer_id}:{location_id|0}:{product_id}:{period_start_date}``."""
-    loc_part = int(customer_location_id) if customer_location_id is not None else 0
+    """Natural upsert key: ``ct:{customer}:{loc|sl:SITE|0}:{product}:{period}``.
+
+    Siteless reports (Amazon ASIN) stay ``…:0:…``. Site-named reports (Game G007)
+    persist one fact per site×product×week without requiring a location master.
+    """
+    loc_part = _source_key_site_part(
+        customer_location_id=customer_location_id,
+        site_label=site_label,
+    )
     return f"ct:{customer_id}:{loc_part}:{product_id}:{period_start_date.isoformat()}"
 
 

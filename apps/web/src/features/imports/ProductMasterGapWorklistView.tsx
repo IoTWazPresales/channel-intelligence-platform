@@ -25,6 +25,7 @@ import { useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
+import { OPS_LIST_GRID_PAGINATION } from '@/features/shell/opsListGridPagination';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 
 type GapRow = {
@@ -231,6 +232,7 @@ export function ProductMasterGapWorklistView() {
       onSelectionChanged: (e: { api: GridApi<GapRow> }) => {
         setSelectedCount(e.api.getSelectedRows().length);
       },
+      ...OPS_LIST_GRID_PAGINATION,
     }),
     [],
   );

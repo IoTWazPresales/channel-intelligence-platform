@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -119,6 +120,24 @@ def protected_lineup_case_ids() -> frozenset[int]:
     return protected_lineup_case_ids_from_config()
 
 
+# BACKLOG-097 — WoC reconstruction cadence (file JSON; no extra migration).
+ReportingCadence = Literal[
+    "weekly_monday",
+    "weekly_tuesday",
+    "weekly_wednesday",
+    "weekly_thursday",
+    "weekly_friday",
+    "weekly_saturday",
+    "weekly_sunday",
+    "daily",
+]
+DEFAULT_REPORTING_CADENCE: ReportingCadence = "weekly_monday"
+DEFAULT_WOC_MIN_VELOCITY_DAYS = 90
+WOC_MIN_VELOCITY_DAYS_LO = 28
+WOC_MIN_VELOCITY_DAYS_HI = 90
+# DATE bounds for cover_as_of / Monday alignment (ASUS SA). P6 tenants override later if needed.
+REPORTING_TIMEZONE = "Africa/Johannesburg"
+
 # BACKLOG-096 (P6) — onboarding-editable subset. Everything else on this module
 # (money ceiling, support-norms window, protected case ids) stays env-only.
 # Lineup export sheet/column maps are also tenant-editable (Lane B) — never OEM-hardcoded law.
@@ -130,13 +149,35 @@ TENANT_PROFILE_OVERRIDE_KEYS: tuple[str, ...] = (
     "lineup_export_net_requirement_sheet",
     "lineup_export_draft_sheet",
     "lineup_export_columns",
+    "semantic_overlay",
+    "reporting_cadence",
+    "woc_min_velocity_days",
 )
+
+# Governed metric overlay (P3-1). Only label / hidden / allowed_grains persist;
+# formula / source_facts / owner_surface / new metric ids are never stored.
+# Composition (`compose`) is U2.
+_SEMANTIC_OVERLAY_LABEL_MAX = 128
+_COMPOSED_KEY_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+_COMPOSED_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
 
 _TENANT_PROFILE_VALID_VALUES: dict[str, frozenset[str]] = {
     "constraint_axis": frozenset({"money", "support_pct", "dual", "none"}),
     "over_budget_action": frozenset({"require_reapproval", "warn", "block"}),
     "reservation_source": frozenset({"derived_from_profit", "explicit_column", "hybrid"}),
     "pm_attribution_mode": frozenset({"business_line", "person_field", "none"}),
+    "reporting_cadence": frozenset(
+        {
+            "weekly_monday",
+            "weekly_tuesday",
+            "weekly_wednesday",
+            "weekly_thursday",
+            "weekly_friday",
+            "weekly_saturday",
+            "weekly_sunday",
+            "daily",
+        }
+    ),
 }
 
 # Free-text export sheet names (validated as non-empty safe sheet titles).
@@ -233,6 +274,323 @@ def _normalize_lineup_export_columns(raw: object) -> list[dict[str, str]]:
     return out
 
 
+def _grain_frozenset(items: object) -> frozenset[str]:
+    if not isinstance(items, (list, tuple, set, frozenset)):
+        return frozenset()
+    out: set[str] = set()
+    for item in items:
+        token = str(item).strip().lower().replace(" ", "_")
+        if token:
+            out.add(token)
+    return frozenset(out)
+
+
+def _platform_metric_grain_index() -> dict[str, tuple[frozenset[str], ...]]:
+    """Platform catalog grains (YAML default, no tenant overlay) — avoids catalog recursion."""
+    from app.semantics.registry import load_catalog
+
+    cat = load_catalog()
+    index: dict[str, tuple[frozenset[str], ...]] = {}
+    for metric in cat.metrics:
+        grains = metric.allowed_grains
+        index[metric.id.lower()] = grains
+        index[metric.key.lower()] = grains
+    return index
+
+
+def _normalize_metric_overlay_patch(
+    ident: str,
+    patch: dict[str, Any],
+    *,
+    grain_index: dict[str, tuple[frozenset[str], ...]] | None,
+    strict: bool,
+) -> dict[str, Any] | None:
+    """Keep label / hidden / allowed_grains only. Unknown metrics and widened grains fail closed."""
+    cleaned: dict[str, Any] = {}
+    if "label" in patch:
+        label = re.sub(r"[\r\n\t]", " ", str(patch.get("label") or "")).strip()[:_SEMANTIC_OVERLAY_LABEL_MAX]
+        if label:
+            cleaned["label"] = label
+        elif strict:
+            raise ValueError(f"semantic_overlay.metrics[{ident!r}].label: non-empty string required")
+    if "hidden" in patch:
+        hidden = patch.get("hidden")
+        if isinstance(hidden, bool):
+            cleaned["hidden"] = hidden
+        elif isinstance(hidden, str) and hidden.strip().lower() in {"true", "false", "1", "0", "yes", "no"}:
+            cleaned["hidden"] = hidden.strip().lower() in {"true", "1", "yes"}
+        elif strict:
+            raise ValueError(f"semantic_overlay.metrics[{ident!r}].hidden: boolean required")
+        else:
+            cleaned["hidden"] = bool(hidden)
+    if "allowed_grains" in patch:
+        raw_grains = patch.get("allowed_grains")
+        if not isinstance(raw_grains, list) or not raw_grains:
+            if strict:
+                raise ValueError(
+                    f"semantic_overlay.metrics[{ident!r}].allowed_grains: non-empty list of grain sets required"
+                )
+            return None
+        requested: list[frozenset[str]] = []
+        for i, grain_list in enumerate(raw_grains):
+            grain_set = _grain_frozenset(grain_list)
+            if not grain_set:
+                if strict:
+                    raise ValueError(
+                        f"semantic_overlay.metrics[{ident!r}].allowed_grains[{i}]: non-empty grain set required"
+                    )
+                continue
+            requested.append(grain_set)
+        if not requested:
+            if strict:
+                raise ValueError(f"semantic_overlay.metrics[{ident!r}].allowed_grains: no valid grain sets")
+            return None
+        if grain_index is None:
+            if strict:
+                raise ValueError(f"semantic_overlay.metrics[{ident!r}].allowed_grains: catalog unavailable")
+            return None
+        base_grains = grain_index.get(ident.strip().lower())
+        if base_grains is None:
+            if strict:
+                raise ValueError(
+                    f"semantic_overlay.metrics[{ident!r}]: unknown metric (overlay cannot invent ids)"
+                )
+            return None
+        base_set = set(base_grains)
+        for grain_set in requested:
+            if grain_set not in base_set:
+                if strict:
+                    pretty = "{" + ", ".join(sorted(grain_set)) + "}"
+                    raise ValueError(
+                        f"semantic_overlay.metrics[{ident!r}].allowed_grains: {pretty} is not an "
+                        f"existing grain set for this metric (restrict only; never widen)"
+                    )
+                return None
+        cleaned["allowed_grains"] = [sorted(g) for g in requested]
+    if not cleaned:
+        return None
+    if grain_index is not None and ident.strip().lower() not in grain_index:
+        if strict:
+            raise ValueError(f"semantic_overlay.metrics[{ident!r}]: unknown metric (overlay cannot invent ids)")
+        return None
+    return cleaned
+
+
+def _effective_input_grain_lookup(
+    grain_index: dict[str, tuple[frozenset[str], ...]],
+    platform_by_ident: dict[str, Any],
+    patches: dict[str, dict[str, Any]],
+) -> tuple[dict[str, tuple[frozenset[str], ...]], frozenset[str]]:
+    """Platform grains after same-document restrict/hide patches (for compose validation)."""
+    lookup = dict(grain_index)
+    hidden: set[str] = set()
+    for ident, patch in patches.items():
+        rec = platform_by_ident.get(str(ident).strip().lower())
+        if rec is None:
+            continue
+        keys = {str(rec.id).lower(), str(rec.key).lower()}
+        if patch.get("hidden") is True:
+            hidden.update(keys)
+        if "allowed_grains" in patch:
+            grains = tuple(_grain_frozenset(g) for g in (patch.get("allowed_grains") or []))
+            grains = tuple(g for g in grains if g)
+            if grains:
+                for k in keys:
+                    lookup[k] = grains
+    return lookup, frozenset(hidden)
+
+
+def _normalize_composed_entry(
+    ident: str,
+    body: dict[str, Any],
+    *,
+    grain_index: dict[str, tuple[frozenset[str], ...]],
+    platform_by_ident: dict[str, Any],
+    patches: dict[str, dict[str, Any]],
+    strict: bool,
+) -> dict[str, Any] | None:
+    from app.query.compose import canonicalize_compose_block
+
+    key = str(body.get("key") or ident).strip().lower()
+    if not _COMPOSED_KEY_RE.match(key):
+        if strict:
+            raise ValueError(
+                f"semantic_overlay.composed[{ident!r}].key: must be lowercase snake_case (got {key!r})"
+            )
+        return None
+    if key in grain_index or ident.strip().lower() in grain_index:
+        if strict:
+            raise ValueError(
+                f"semantic_overlay.composed[{ident!r}]: cannot shadow platform metric {key!r}"
+            )
+        return None
+    mid = str(body.get("id") or f"T-{key.upper()}").strip()
+    if not _COMPOSED_ID_RE.match(mid):
+        if strict:
+            raise ValueError(f"semantic_overlay.composed[{ident!r}].id: invalid {mid!r}")
+        return None
+    label = re.sub(r"[\r\n\t]", " ", str(body.get("label") or key)).strip()[:_SEMANTIC_OVERLAY_LABEL_MAX]
+    if not label:
+        if strict:
+            raise ValueError(f"semantic_overlay.composed[{ident!r}].label: required")
+        return None
+    lookup, hidden = _effective_input_grain_lookup(grain_index, platform_by_ident, patches)
+    try:
+        compose = canonicalize_compose_block(
+            body.get("compose"),
+            input_grain_lookup=lookup,
+            hidden_inputs=hidden,
+        )
+    except ValueError:
+        if strict:
+            raise
+        return None
+    out: dict[str, Any] = {
+        "id": mid,
+        "key": key,
+        "label": label,
+        "compose": compose,
+    }
+    if body.get("hidden") is True:
+        out["hidden"] = True
+    return out
+
+
+def _platform_ident_index() -> dict[str, Any]:
+    from app.semantics.registry import load_catalog
+
+    cat = load_catalog()
+    index: dict[str, Any] = {}
+    for metric in cat.metrics:
+        index[metric.id.lower()] = metric
+        index[metric.key.lower()] = metric
+    return index
+
+
+def _normalize_semantic_overlay(raw: object, *, strict: bool = False) -> dict[str, Any]:
+    """Shape: metrics patches + optional composed defs (ratio / alias only)."""
+    parsed: object = raw
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            if strict:
+                raise ValueError("semantic_overlay: invalid JSON") from exc
+            return {"metrics": {}}
+    if not isinstance(parsed, dict):
+        if strict:
+            raise ValueError("semantic_overlay: object required")
+        return {"metrics": {}}
+    metrics_raw = parsed.get("metrics")
+    if metrics_raw is None:
+        metrics_raw = {}
+    elif not isinstance(metrics_raw, dict):
+        if strict:
+            raise ValueError("semantic_overlay.metrics: object required")
+        return {"metrics": {}}
+    composed_raw = parsed.get("composed")
+    if composed_raw is None:
+        composed_raw = {}
+    elif not isinstance(composed_raw, dict):
+        if strict:
+            raise ValueError("semantic_overlay.composed: object required")
+        composed_raw = {}
+
+    try:
+        grain_index: dict[str, tuple[frozenset[str], ...]] | None = _platform_metric_grain_index()
+        platform_by_ident = _platform_ident_index()
+    except Exception:
+        if strict:
+            raise
+        grain_index = None
+        platform_by_ident = {}
+
+    out_metrics: dict[str, Any] = {}
+    pending_composed: list[tuple[str, dict[str, Any]]] = []
+    for ident_raw, patch in metrics_raw.items():
+        ident = str(ident_raw).strip()
+        if not ident:
+            if strict:
+                raise ValueError("semantic_overlay.metrics: empty metric key")
+            continue
+        if not isinstance(patch, dict):
+            if strict:
+                raise ValueError(f"semantic_overlay.metrics[{ident!r}]: object required")
+            continue
+        if patch.get("compose") is not None:
+            pending_composed.append((ident, patch))
+            continue
+        try:
+            cleaned = _normalize_metric_overlay_patch(
+                ident, patch, grain_index=grain_index, strict=strict
+            )
+        except ValueError:
+            if strict:
+                raise
+            continue
+        if cleaned:
+            out_metrics[ident] = cleaned
+    for ident_raw, body in composed_raw.items():
+        ident = str(ident_raw).strip()
+        if not ident:
+            if strict:
+                raise ValueError("semantic_overlay.composed: empty metric key")
+            continue
+        if not isinstance(body, dict):
+            if strict:
+                raise ValueError(f"semantic_overlay.composed[{ident!r}]: object required")
+            continue
+        pending_composed.append((ident, body))
+
+    out_composed: dict[str, Any] = {}
+    if pending_composed:
+        if grain_index is None:
+            if strict:
+                raise ValueError("semantic_overlay.composed: catalog unavailable")
+        else:
+            seen: set[str] = set()
+            for ident, body in pending_composed:
+                try:
+                    cleaned = _normalize_composed_entry(
+                        ident,
+                        body,
+                        grain_index=grain_index,
+                        platform_by_ident=platform_by_ident,
+                        patches=out_metrics,
+                        strict=strict,
+                    )
+                except ValueError:
+                    if strict:
+                        raise
+                    continue
+                if not cleaned:
+                    continue
+                ckey = str(cleaned["key"])
+                if ckey in seen:
+                    if strict:
+                        raise ValueError(f"semantic_overlay.composed: duplicate key {ckey!r}")
+                    continue
+                seen.add(ckey)
+                out_composed[ckey] = cleaned
+
+    out: dict[str, Any] = {"metrics": out_metrics}
+    if out_composed:
+        out["composed"] = out_composed
+    return out
+
+
+def semantic_overlay_for_tenant(tenant_id: str = "default") -> dict[str, Any]:
+    """Governed overlay document for ``tenant_id``. Missing/invalid → empty metrics (FLAG != BLOCK)."""
+    raw = load_tenant_profile_overrides(tenant_id).get("semantic_overlay")
+    if not isinstance(raw, dict):
+        return {"metrics": {}}
+    metrics = raw.get("metrics") if isinstance(raw.get("metrics"), dict) else {}
+    out: dict[str, Any] = {"metrics": metrics}
+    if isinstance(raw.get("composed"), dict) and raw["composed"]:
+        out["composed"] = raw["composed"]
+    return out
+
+
 def lineup_export_columns(tenant_id: str = "default") -> list[dict[str, str]]:
     """Resolved draft-lineup column map (override or CIP default). Never OEM-branded."""
     overrides = load_tenant_profile_overrides(tenant_id)
@@ -246,12 +604,22 @@ def lineup_export_columns(tenant_id: str = "default") -> list[dict[str, str]]:
 
 
 def incremental_baseline_config(tenant_id: str = "default") -> dict[str, object]:
-    """BACKLOG-089 baseline knobs — env overrides for lookback/min obs; method fixed default for v1."""
+    """BACKLOG-089 baseline knobs — profile/env overrides; methods are implemented."""
     lookback = _env_int("CIP_INCREMENTAL_BASELINE_LOOKBACK_DAYS", DEFAULT_BASELINE_LOOKBACK_DAYS, lo=7, hi=730)
     min_obs = _env_int("CIP_INCREMENTAL_MIN_BASELINE_OBS", DEFAULT_MIN_BASELINE_OBS, lo=1, hi=100)
+    overrides = load_tenant_profile_overrides(tenant_id)
+    raw_method = str(overrides.get("incremental_baseline_method") or DEFAULT_BASELINE_METHOD).strip()
+    method: BaselineMethod = (
+        raw_method  # type: ignore[assignment]
+        if raw_method in ("prior_window_same_sku_customer", "comparable_median", "velocity_extrapolate")
+        else DEFAULT_BASELINE_METHOD
+    )
+    env_method = (os.environ.get("CIP_INCREMENTAL_BASELINE_METHOD") or "").strip()
+    if env_method in ("prior_window_same_sku_customer", "comparable_median", "velocity_extrapolate"):
+        method = env_method  # type: ignore[assignment]
     return {
         "tenant_id": tenant_id,
-        "baseline_method": DEFAULT_BASELINE_METHOD,
+        "baseline_method": method,
         "baseline_lookback_days": lookback,
         "min_baseline_obs": min_obs,
     }
@@ -294,6 +662,14 @@ def load_tenant_profile_overrides(tenant_id: str = "default") -> dict[str, Any]:
             except ValueError:
                 continue
             continue
+        if key == "semantic_overlay":
+            try:
+                normalized = _normalize_semantic_overlay(value, strict=False)
+            except (TypeError, ValueError):
+                continue
+            if normalized.get("metrics") or normalized.get("composed"):
+                out[key] = normalized
+            continue
         text = str(value).strip()
         if text:
             out[key] = text
@@ -303,18 +679,39 @@ def load_tenant_profile_overrides(tenant_id: str = "default") -> dict[str, Any]:
 def save_tenant_profile_overrides(tenant_id: str, overrides: dict[str, object]) -> dict[str, Any]:
     """Validate + persist overrides to ``{local_storage_path}/tenant_profiles/{tenant_id}.json``.
 
-    Unknown keys are dropped silently; empty/None values clear that key. Invalid
-    values raise ``ValueError`` — the API layer turns this into a 400.
+    Keys omitted from ``overrides`` are kept from the existing file (merge) so a
+    semantic-overlay save cannot wipe commercial policy. Empty/None values clear
+    that key. Unknown keys are dropped. Invalid values raise ``ValueError`` (400).
     """
+    existing = load_tenant_profile_overrides(tenant_id)
     clean: dict[str, Any] = {}
     for key in TENANT_PROFILE_OVERRIDE_KEYS:
-        if key not in overrides:
+        incoming = key in overrides
+        if not incoming:
+            if key in existing:
+                clean[key] = existing[key]
             continue
         raw = overrides[key]
+        if key == "semantic_overlay":
+            if raw is None or raw == "" or raw == {}:
+                continue
+            normalized = _normalize_semantic_overlay(raw, strict=True)
+            if normalized.get("metrics") or normalized.get("composed"):
+                clean[key] = normalized
+            continue
         if key == "lineup_export_columns":
             if raw is None or raw == "" or raw == []:
                 continue
             clean[key] = _normalize_lineup_export_columns(raw)
+            continue
+        if key == "woc_min_velocity_days":
+            if raw is None or str(raw).strip() == "":
+                continue
+            try:
+                days = int(str(raw).strip())
+            except (TypeError, ValueError) as exc:
+                raise ValueError("woc_min_velocity_days: integer required") from exc
+            clean[key] = max(WOC_MIN_VELOCITY_DAYS_LO, min(WOC_MIN_VELOCITY_DAYS_HI, days))
             continue
         if raw is None or str(raw).strip() == "":
             continue
@@ -334,6 +731,11 @@ def save_tenant_profile_overrides(tenant_id: str, overrides: dict[str, object]) 
         clean[key] = val
     path = _tenant_profile_override_path(tenant_id)
     path.write_text(json.dumps(clean, indent=2, sort_keys=True), encoding="utf-8")
+    from app.query.cache import clear_query_cache
+    from app.semantics.registry import clear_catalog_cache
+
+    clear_catalog_cache()
+    clear_query_cache()
     return clean
 
 
@@ -359,4 +761,34 @@ def profile_snapshot(tenant_id: str = "default") -> dict[str, object]:
         "money_ceiling_usd": _env_float("MONEY_CEILING_USD"),
         "support_norms_trailing_quarters": support_norms_trailing_quarters(),
         "protected_lineup_case_ids": sorted(protected_lineup_case_ids()),
+        "reporting_cadence": reporting_cadence(tenant_id),
+        "woc_min_velocity_days": woc_min_velocity_days(tenant_id),
+        "reporting_timezone": REPORTING_TIMEZONE,
     }
+
+
+def reporting_cadence(tenant_id: str = "default") -> str:
+    overrides = load_tenant_profile_overrides(tenant_id)
+    raw = str(overrides.get("reporting_cadence") or DEFAULT_REPORTING_CADENCE).strip()
+    if raw not in _TENANT_PROFILE_VALID_VALUES["reporting_cadence"]:
+        return DEFAULT_REPORTING_CADENCE
+    return raw
+
+
+def woc_min_velocity_days(tenant_id: str = "default") -> int:
+    overrides = load_tenant_profile_overrides(tenant_id)
+    raw = overrides.get("woc_min_velocity_days", DEFAULT_WOC_MIN_VELOCITY_DAYS)
+    try:
+        days = int(str(raw).strip())
+    except (TypeError, ValueError):
+        days = DEFAULT_WOC_MIN_VELOCITY_DAYS
+    return max(WOC_MIN_VELOCITY_DAYS_LO, min(WOC_MIN_VELOCITY_DAYS_HI, days))
+
+
+def reporting_today(tenant_id: str = "default") -> date:
+    """Calendar date in the tenant reporting timezone (DATE bounds, not UTC wall clock)."""
+    from datetime import date, datetime
+    from zoneinfo import ZoneInfo
+
+    _ = tenant_id  # reserved for a future per-tenant timezone key
+    return datetime.now(ZoneInfo(REPORTING_TIMEZONE)).date()

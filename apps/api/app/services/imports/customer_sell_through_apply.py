@@ -101,16 +101,17 @@ def apply_customer_sellthrough_staging(
         prod_id = int(line.resolved_product_id)
         loc_id = int(line.resolved_location_id) if line.resolved_location_id is not None else None
         period = line.period_start_date
+        # site_label: prefer explicit staging column; fall back to raw location token (verbatim).
+        site_label = getattr(line, "site_label", None)
+        if site_label is None and line.raw_location_token:
+            site_label = str(line.raw_location_token).strip() or None
         sk = customer_sellthrough_source_key(
             customer_id=cust_id,
             customer_location_id=loc_id,
             product_id=prod_id,
             period_start_date=period,
+            site_label=site_label,
         )
-        # site_label: prefer explicit staging column; fall back to raw location token (verbatim).
-        site_label = getattr(line, "site_label", None)
-        if site_label is None and line.raw_location_token:
-            site_label = str(line.raw_location_token).strip() or None
         values = {
             "source_key": sk,
             "customer_id": cust_id,

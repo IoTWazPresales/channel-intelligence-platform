@@ -1,6 +1,6 @@
 # Async, Celery, and Redis — index
 
-**Last verified:** 2026-06-21
+**Last verified:** 2026-08-17
 
 **Canonical detail:** [`docs/memory/derived/platform_async_and_background_truth.md`](memory/derived/platform_async_and_background_truth.md)
 
@@ -33,6 +33,7 @@
 | Shipment apply | `imports.shipment_apply` | shipment evidence apply |
 | PM validate / commit | `imports.product_master_validate` / `imports.product_master_commit` | PM endpoints |
 | Maintenance | `imports.reap_stale_running_jobs` | Celery beat |
+| Calendar report schedules | `reports.run_due_schedules` | API lifespan poller (startup catch-up + interval); Celery beat interval when beat is enabled |
 
 **Not true anymore:** "Only PM commit uses Celery" — see derived truth doc.
 

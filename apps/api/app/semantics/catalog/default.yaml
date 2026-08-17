@@ -1,7 +1,9 @@
 # P3-1 semantic catalog — config, not code.
 # Source of truth: docs/COMMERCIAL_SEMANTICS.md
 # Metrics not listed here are not queryable via the governed layer.
-# Tenant overlays: catalog/tenants/{tenant_id}.yaml (merge metrics by id/key).
+# Tenant overlays (no-deploy): tenant_profiles/{tenant_id}.json → semantic_overlay.
+# Package YAML catalog/tenants/{id}.yaml is back-compat only and cannot rewrite
+# formula / source_facts / owner_surface or invent metrics.
 
 version: 2
 source_doc: docs/COMMERCIAL_SEMANTICS.md

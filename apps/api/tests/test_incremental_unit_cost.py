@@ -35,8 +35,7 @@ def test_insufficient_obs_flags_null(monkeypatch) -> None:
     line = SimpleNamespace(id=10, product_id=100, ttl_support_usd=1000.0, ttl_support=18000.0, result_qty=50.0)
     session = MagicMock()
     session.scalars.return_value.all.return_value = [line]
-    # qty sum then obs count
-    session.scalar.side_effect = [10.0, 1]  # lookback units, obs=1 < min 3
+    session.execute.return_value.all.return_value = [(10.0,)]  # obs=1 < min 3
 
     out = evaluate_case_incremental_cost(session, case)
     assert out["baseline_status"] == "insufficient"
@@ -55,11 +54,32 @@ def test_ok_when_lift_positive(monkeypatch) -> None:
     line = SimpleNamespace(id=11, product_id=100, ttl_support_usd=500.0, ttl_support=9000.0, result_qty=100.0)
     session = MagicMock()
     session.scalars.return_value.all.return_value = [line]
-    # lookback 84d default → scale = 14/84 = 1/6; lookback_units=60 → baseline=10; lift=90
-    session.scalar.side_effect = [60.0, 5]
+    # 5 weeks summing to 60 → lookback_units=60; scale 14/84; baseline=10; lift=90
+    session.execute.return_value.all.return_value = [(12.0,), (12.0,), (12.0,), (12.0,), (12.0,)]
 
     out = evaluate_case_incremental_cost(session, case)
     assert out["baseline_status"] == "ok"
     assert out["lift_qty"] == 100.0 - 60.0 * (14 / 84)
     assert out["cost_per_incremental_unit_usd"] is not None
     assert abs(float(out["cost_per_incremental_unit_usd"]) - (500.0 / out["lift_qty"])) < 1e-6
+
+
+def test_comparable_median_scales_median_week(monkeypatch) -> None:
+    monkeypatch.setenv("CIP_INCREMENTAL_BASELINE_METHOD", "comparable_median")
+    case = SimpleNamespace(
+        id=4,
+        case_code="C4",
+        customer_id=20,
+        window_start=date(2026, 8, 1),
+        window_end=date(2026, 8, 14),
+    )
+    line = SimpleNamespace(id=12, product_id=100, ttl_support_usd=200.0, ttl_support=0.0, result_qty=50.0)
+    session = MagicMock()
+    session.scalars.return_value.all.return_value = [line]
+    session.execute.return_value.all.return_value = [(10.0,), (20.0,), (30.0,)]  # median 20
+
+    out = evaluate_case_incremental_cost(session, case)
+    assert out["line_baselines"][0]["median_week_units"] == 20.0
+    expected_baseline = 20.0 * (14 / 7)
+    assert abs(float(out["baseline_qty"]) - expected_baseline) < 1e-9
+    assert out["baseline_status"] == "ok"

@@ -37,7 +37,7 @@ before blaming application code.
 | **Next.js web** | Separate Node process | Never run Celery in web |
 | **FastAPI** | Separate process | Must not run 19-minute validates synchronously in request path |
 | **Celery worker** | Separate process(es) | Batch + interactive should be **queues**, not one solo thread in prod |
-| **Celery beat** | Separate process in Docker; **disabled by default** on Windows solo dev | Set `CIP_ENABLE_DEV_BEAT=1` for local reaper; prod uses Docker `beat` service |
+| **Celery beat** | Separate process in Docker; **disabled by default** on Windows solo dev | Set `CIP_ENABLE_DEV_BEAT=1` for local reaper; prod uses Docker `beat` service. Calendar report catch-up (BACKLOG-098) runs in the **API process** on startup + interval — it does not wait for Windows beat. |
 | **Postgres** | One primary per tenant | Pooler ≠ same as direct primary for long sync writes |
 | **Redis** | One broker per env | Required for broker dispatch |
 
@@ -74,3 +74,9 @@ If mode **A** and symptom is queue timeout → **scheduling/topology**, not brok
 - `infra/docker/README.md` — Compose ports (API **8010** on host)
 - `docs/memory/derived/platform_runtime_truth.md`
 - `docs/memory/derived/platform_async_and_background_truth.md`
+
+---
+
+## Lineup parse worker restart (BACKLOG-111)
+
+After any commit that changes `lineup_case_parser.py` or month-split allocation, **restart the Celery worker** (`pnpm dev:worker`) before enqueueing parse jobs. A long-lived worker keeps the old module in memory; `CIP_DEV_CELERY_DISPATCH=in_process_thread` loads current API-process code instead. Worker boot logs `celery worker code pin sha=… lineup_case_parser_mtime=…`. Do **not** reintroduce `uniform_half` on the parse path (D-028).

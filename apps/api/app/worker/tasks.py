@@ -618,6 +618,18 @@ def dsi_velocity_compute_task(self, job_id: int, payload: dict) -> dict:
         raise
 
 
+@celery_app.task(name="imports.woc_observation_reconstruct", bind=True, ack_late=True)
+def woc_observation_reconstruct_task(self, job_id: int, payload: dict) -> dict:
+    """Ops replay / retry of weeks-of-cover observation reconstruct (BACKLOG-097-D)."""
+    from app.services.imports.woc_observation_sync import run_woc_observation_after_apply_sync
+
+    try:
+        return run_woc_observation_after_apply_sync(job_id, payload)
+    except Exception:
+        logger.exception("woc_observation_reconstruct failed job_id=%s", job_id)
+        raise
+
+
 @celery_app.task(name="imports.dsi_forecasting", bind=True, ack_late=True)
 def dsi_forecasting_task(self, job_id: int, payload: dict) -> dict:
     """Background DSI forecasting after velocity compute."""
@@ -785,7 +797,7 @@ def cst_advance_report_slots_task() -> dict:
 
 @celery_app.task(name="reports.run_due_schedules")
 def reports_run_due_schedules_task() -> dict:
-    """Beat task: deliver enabled weekly/daily report schedules that are due."""
+    """Beat/interval task: deliver enabled weekly/daily schedules whose next_run_at is due."""
     from app.services.report_schedule_runner import run_due_schedules_sync
     from app.worker.celery_queues import dev_beat_disabled
 

@@ -110,3 +110,89 @@ def test_reports_beat_task_registered():
 
     assert "reports.run_due_schedules" in celery_app.tasks
     assert "reports.fanout_import_complete" in celery_app.tasks
+
+
+def test_reports_beat_schedule_is_interval_not_crontab():
+    from celery.schedules import crontab, schedule as celery_interval
+
+    from app.worker.celery_app import build_beat_schedule
+
+    spec = build_beat_schedule()["reports-run-due-schedules"]
+    assert spec["task"] == "reports.run_due_schedules"
+    assert isinstance(spec["schedule"], celery_interval)
+    assert not isinstance(spec["schedule"], crontab)
+
+
+def test_report_schedule_poll_disabled_under_pytest():
+    from app.services.report_schedule_runner import report_schedule_poll_enabled
+
+    assert report_schedule_poll_enabled() is False
+
+
+def test_report_schedule_poll_enabled_outside_pytest(monkeypatch):
+    from app.services.report_schedule_runner import report_schedule_poll_enabled
+
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.delenv("CIP_REPORT_SCHEDULE_CATCHUP", raising=False)
+    assert report_schedule_poll_enabled() is True
+    monkeypatch.setenv("CIP_REPORT_SCHEDULE_CATCHUP", "0")
+    assert report_schedule_poll_enabled() is False
+
+
+def test_claim_due_calendar_schedule_ids_uses_rowcount():
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from app.services.report_schedule_runner import claim_due_calendar_schedule_ids
+
+    now = datetime(2026, 8, 17, 10, 0, tzinfo=timezone.utc)
+    due = SimpleNamespace(
+        id=1,
+        enabled=True,
+        cadence="weekly_monday_0700",
+        next_run_at=datetime(2026, 8, 3, 7, 0, tzinfo=timezone.utc),
+    )
+    db = MagicMock()
+    db.scalars.return_value.all.return_value = [due]
+    hit = MagicMock()
+    hit.rowcount = 1
+    db.execute.return_value = hit
+    assert claim_due_calendar_schedule_ids(db, now=now) == [1]
+    db.commit.assert_called_once()
+
+    miss = MagicMock()
+    miss.rowcount = 0
+    db.execute.return_value = miss
+    db.commit.reset_mock()
+    assert claim_due_calendar_schedule_ids(db, now=now) == []
+    db.commit.assert_not_called()
+
+
+def test_run_due_schedules_sync_does_not_re_advance_clock(monkeypatch):
+    from unittest.mock import MagicMock
+
+    from app.services import report_schedule_runner as runner
+
+    class _Session:
+        def __enter__(self):
+            return MagicMock()
+
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr("app.db.session_sync.SessionLocal", lambda: _Session())
+    monkeypatch.setattr(runner, "claim_due_calendar_schedule_ids", lambda db, now=None: [7])
+
+    seen: dict[str, bool] = {}
+
+    async def _fake_deliver(schedule_id, *, trigger, advance_clock=True):
+        seen["advance_clock"] = advance_clock
+        seen["schedule_id"] = schedule_id
+        seen["trigger"] = trigger
+        return {"ok": True, "schedule_id": schedule_id}
+
+    monkeypatch.setattr(runner, "_deliver_schedule_async", _fake_deliver)
+    out = runner.run_due_schedules_sync()
+    assert out["claimed"] == [7]
+    assert seen["advance_clock"] is False
+    assert seen["trigger"] == "schedule"

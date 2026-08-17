@@ -38,6 +38,7 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { AddProductSetDialog } from '@/features/commercial-planner/AddProductSetDialog';
 import { IntelligentAddDialog } from '@/features/commercial-planner/IntelligentAddDialog';
 import { ColumnSelectorModal, type ColumnMetadata } from '@/features/commercial-planner/ColumnSelectorModal';
@@ -3461,7 +3462,7 @@ export default function CommercialPlannerPage() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Commercial' }, { label: 'Planner' }]} title="Commercial planner" />
+      <PageHeader {...navPageChrome('/commercial-planner')} />
       <Box sx={{ mb: 2 }} data-testid="commercial-planner-workflow-guide">
         <Button
           size="small"

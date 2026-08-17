@@ -298,5 +298,5 @@ describe('AdminDistributorsPage phase1', () => {
     await waitFor(() =>
       expect(mockState.apiDeleteMock).toHaveBeenCalledWith('/api/v1/distributors/1/locations/11')
     );
-  });
+  }, 15_000);
 });

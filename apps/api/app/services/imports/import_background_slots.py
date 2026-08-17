@@ -39,9 +39,11 @@ KIND_DSI_RESOLUTION_PLAN_COMPUTE = "dsi_resolution_plan_compute"
 KIND_DSI_SOH_RECONCILIATION = "dsi_soh_reconciliation"
 KIND_DSI_VELOCITY_COMPUTE = "dsi_velocity_compute"
 KIND_DSI_FORECASTING = "dsi_forecasting"
+KIND_WOC_OBSERVATION = "woc_observation_reconstruct"
 KIND_SHIPMENT_IMPORT = "shipment_import"
 KIND_SHIPMENT_BULK = "shipment_bulk"
 KIND_COMMERCIAL_PLANNER_LINEUP_PARSE = "commercial_planner_lineup_parse"
+KIND_COMMERCIAL_PLANNER_BULK_LINEUP_APPLY = "commercial_planner_bulk_lineup_apply"
 KIND_CPOR_HISTORICAL_IMPORT = "cpor_historical_import"
 KIND_CPOR_RESOLUTION_PLAN = "cpor_resolution_plan"
 KIND_CST_RESOLUTION_PLAN = "cst_resolution_plan"
@@ -91,9 +93,11 @@ SLOT_DSI_BULK = "dsi_bulk_task"
 SLOT_DSI_SOH = "dsi_soh_reconcile_task"
 SLOT_DSI_VELOCITY = "dsi_velocity_compute_task"
 SLOT_DSI_FORECASTING = "dsi_forecasting_task"
+SLOT_WOC_OBSERVATION = "woc_observation_task"
 SLOT_PM_VALIDATE = "pm_validate_task"
 SLOT_PM_COMMIT = "pm_commit_task"
 SLOT_LINEUP_PARSE = "lineup_parse_task"
+SLOT_BULK_LINEUP_APPLY = "bulk_lineup_apply_task"
 SLOT_SHIPMENT_BULK = "shipment_bulk_task"
 # Unit C (D-013): own slot — never SLOT_MAIN. Case apply (imports.cpor_historical_apply) keeps
 # using SLOT_MAIN; resolution-plan compute/apply are a separate interactive steward action.
@@ -136,6 +140,15 @@ TASK_SLOTS: tuple[SlotDescriptor, ...] = (
         default_label="Computing sell-out velocity…",
     ),
     SlotDescriptor(
+        slot_key=SLOT_WOC_OBSERVATION,
+        meta_key="woc_observation_task",
+        kind_resolution=FIXED,
+        payload_shape=SHAPE_DICT,
+        label_source=LABEL_PAYLOAD,
+        fixed_kind=KIND_WOC_OBSERVATION,
+        default_label="Reconstructing weeks of cover…",
+    ),
+    SlotDescriptor(
         slot_key=SLOT_DSI_FORECASTING,
         meta_key="dsi_forecasting_task",
         kind_resolution=FIXED,
@@ -170,6 +183,15 @@ TASK_SLOTS: tuple[SlotDescriptor, ...] = (
         label_source=LABEL_PAYLOAD,
         fixed_kind=KIND_COMMERCIAL_PLANNER_LINEUP_PARSE,
         default_label="Parsing current lineup…",
+    ),
+    SlotDescriptor(
+        slot_key=SLOT_BULK_LINEUP_APPLY,
+        meta_key="bulk_lineup_apply_task",
+        kind_resolution=FIXED,
+        payload_shape=SHAPE_DICT,
+        label_source=LABEL_PAYLOAD,
+        fixed_kind=KIND_COMMERCIAL_PLANNER_BULK_LINEUP_APPLY,
+        default_label="Applying bulk lineup backfill…",
     ),
     SlotDescriptor(
         slot_key=SLOT_SHIPMENT_BULK,
@@ -241,12 +263,16 @@ def task_label(job: ImportJob, *, kind: str) -> str:
         return f"Reconciling inventory (DSI job {jid})"
     if kind == KIND_DSI_VELOCITY_COMPUTE:
         return f"Computing sell-out velocity (DSI job {jid})"
+    if kind == KIND_WOC_OBSERVATION:
+        return f"Reconstructing weeks of cover (job {jid})"
     if kind == KIND_DSI_FORECASTING:
         return f"Generating forecasts (DSI job {jid})"
     if kind == KIND_PRODUCT_MASTER_VALIDATE:
         return f"Validating product master (job {jid})"
     if kind == KIND_COMMERCIAL_PLANNER_LINEUP_PARSE:
         return f"Parsing current lineup (job {jid})"
+    if kind == KIND_COMMERCIAL_PLANNER_BULK_LINEUP_APPLY:
+        return f"Applying bulk lineup backfill (job {jid})"
     if kind == KIND_SHIPMENT_BULK:
         return f"Applying shipment steward bulk action (job {jid})"
     if kind == KIND_CPOR_HISTORICAL_IMPORT:

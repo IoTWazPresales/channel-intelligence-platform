@@ -22,6 +22,7 @@ describe('keepDsiCandidatesPageDataIfSameEntity', () => {
         verifyNameOnly: false,
         specialCategoryOnly: false,
         duplicateUnresolvedOnly: false,
+        queue: 'all',
       }),
     };
   }

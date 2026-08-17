@@ -4,6 +4,7 @@ import { Tab, Tabs, ToggleButton, ToggleButtonGroup } from '@mui/material';
 import { useState } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 
 import { ChannelOpsInventoryTab } from './ChannelOpsInventoryTab';
 import { ChannelOpsMovementsTab } from './ChannelOpsMovementsTab';
@@ -19,8 +20,7 @@ export default function ChannelOperationsPage() {
   return (
     <>
       <PageHeader
-        crumbs={[{ label: 'Commercial' }, { label: 'Channel Operations' }]}
-        title="Channel Operations"
+        {...navPageChrome('/sell-out')}
         actions={
           <ToggleButtonGroup
             exclusive

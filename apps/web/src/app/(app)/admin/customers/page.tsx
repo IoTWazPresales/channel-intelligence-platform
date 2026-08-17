@@ -32,6 +32,7 @@ import {
 import type { BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
 import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { CustomerCommercialTermsPanel } from '@/features/admin/CustomerCommercialTermsPanel';
 import { CustomerBulkPromoteDialog } from '@/features/admin/CustomerBulkPromoteDialog';
 import { CustomerDispositionDialog } from '@/features/admin/CustomerDispositionDialog';
@@ -826,7 +827,7 @@ function AdminCustomersPageContent() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Admin' }, { label: 'Customers' }]} title="Customers & channels" />
+      <PageHeader {...navPageChrome('/admin/customers')} />
       <Alert severity="info" sx={{ mb: 2 }}>
         Customer account master is governed here. For bulk updates use Data & imports; use this table for operational
         maintenance, filters, and classification edits.

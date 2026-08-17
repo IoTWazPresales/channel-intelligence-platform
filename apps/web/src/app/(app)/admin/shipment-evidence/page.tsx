@@ -26,6 +26,7 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 import { fetchDsiImportPipelineProgress } from '@/features/background-tasks/fetchImportJobProgress';
@@ -460,13 +461,7 @@ export default function ShipmentEvidenceAdminPage() {
 
   return (
     <Box sx={{ p: 2 }}>
-      <PageHeader
-        crumbs={[
-          { label: 'Data imports', href: '/admin/imports' },
-          { label: 'Shipment evidence' },
-        ]}
-        title="Shipment & order evidence"
-      />
+      <PageHeader {...navPageChrome('/admin/shipment-evidence')} />
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
         Canonical lines from shipment / open-order imports (report auto-detect). Upload via Data imports using
         template &quot;Shipment / order evidence&quot;.

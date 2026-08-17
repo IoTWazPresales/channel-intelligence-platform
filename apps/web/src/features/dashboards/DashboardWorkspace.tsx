@@ -31,6 +31,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut, safeDisplayError } from '@/lib/api';
 
 import { CanvasDropTarget, MetricPalette } from './MetricPalette';
@@ -221,8 +222,7 @@ export function DashboardWorkspace() {
   return (
     <>
       <PageHeader
-        crumbs={[{ label: 'Dashboards' }]}
-        title="Dashboards"
+        {...navPageChrome('/dashboards')}
         actions={
           <Button size="small" variant="contained" onClick={() => setCreateOpen(true)} data-testid="dashboard-create">
             New

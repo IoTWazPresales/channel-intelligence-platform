@@ -61,6 +61,7 @@ TASK_CLASS_BY_NAME: dict[str, str] = {
     "imports.cst_bulk_ignore": "steward",
     "imports.dsi_soh_reconciliation": "derive",
     "imports.dsi_velocity_compute": "derive",
+    "imports.woc_observation_reconstruct": "derive",
     "imports.dsi_forecasting": "derive",
     "customers.alias_scope_merge_confirm": "master",
     "customers.full_merge_confirm": "master",

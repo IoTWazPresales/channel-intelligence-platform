@@ -12,6 +12,7 @@ from app.services.commercial_planner.lineup_bulk_backfill_preview import (
     aggregate_catalogue_miss_worklist,
     build_case_proposals_for_file,
     detect_supersession_collisions,
+    existing_case_sheet_matches_proposal,
 )
 from app.services.commercial_planner.lineup_bulk_backfill_preview import BulkFileInput
 from app.services.imports.distributor_sales_inventory import ProductResolutionIndex
@@ -275,3 +276,13 @@ def test_sheet1_subset_of_primary_sheet_excluded():
     nr = [p for p in proposals if p.sheet_name == "NR" and p.status == "ready"]
     assert nr
     assert sum(p.row_count for p in nr) == 2
+
+
+def test_null_notes_wildcard_matches_sheet1_and_nb():
+    """BACKLOG-104: notes=NULL must not skip collisions against Sheet1/NB proposals."""
+    assert existing_case_sheet_matches_proposal(None, "Sheet1") is True
+    assert existing_case_sheet_matches_proposal(None, "NB") is True
+    assert existing_case_sheet_matches_proposal("", "Sheet1") is True
+    assert existing_case_sheet_matches_proposal("unrelated notes", "Sheet1") is True
+    assert existing_case_sheet_matches_proposal("sheet=NB; period=2026Q1", "NB") is True
+    assert existing_case_sheet_matches_proposal("sheet=NB; period=2026Q1", "Sheet1") is False

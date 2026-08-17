@@ -65,6 +65,7 @@ class AliasImportSummary:
     collisions: int = 0
     customer_unresolved: int = 0
     model_ambiguous: int = 0
+    sku_twin_proposed: int = 0
     model_miss: int = 0
     blank_skipped: int = 0
     collision_samples: list[dict[str, Any]] = field(default_factory=list)
@@ -208,21 +209,31 @@ def import_article_alias_rows(
 
         model = next(iter(models))
         pid = resolve_product_id_single_match(idx, model)
+        twin_pick = None
         if pid is None:
-            # Distinguish ambiguous vs miss via index
+            from app.services.imports.cst_sku_twin_disambiguate import disambiguate_sales_model_sku_twins
             from app.services.imports.distributor_sales_inventory import _product_token_key
 
             mk = _product_token_key(model)
-            sm_ids = idx.sales_model_name_to_ids.get(mk) if mk else None
-            if sm_ids and len(sm_ids) > 1:
-                summary.model_ambiguous += 1
-                if len(summary.model_ambiguous_samples) < 20:
-                    summary.model_ambiguous_samples.append(model)
+            sm_ids = list(idx.sales_model_name_to_ids.get(mk) or ())
+            if len(sm_ids) > 1:
+                twin_pick = disambiguate_sales_model_sku_twins(
+                    session,
+                    product_ids=sm_ids,
+                    customer_id=cid,
+                )
+                if twin_pick is None:
+                    summary.model_ambiguous += 1
+                    if len(summary.model_ambiguous_samples) < 20:
+                        summary.model_ambiguous_samples.append(model)
+                    continue
+                pid = int(twin_pick.product_id)
+                summary.sku_twin_proposed += 1
             else:
                 summary.model_miss += 1
                 if len(summary.model_miss_samples) < 20:
                     summary.model_miss_samples.append(model)
-            continue
+                continue
 
         existing = session.scalar(
             select(CustomerArticleAlias).where(
@@ -235,7 +246,10 @@ def import_article_alias_rows(
             "sales_model_name": model,
             "imported_at": now,
             "actor": actor,
+            "unique_pm_match": twin_pick is None,
         }
+        if twin_pick is not None:
+            evidence.update(twin_pick.as_evidence())
         if existing is None:
             row = CustomerArticleAlias(
                 customer_id=cid,
@@ -286,6 +300,11 @@ def confirm_scm_unique_proposed(
             continue
         evidence = row.evidence_json if isinstance(row.evidence_json, dict) else {}
         if evidence.get("source") not in ("scm_upload", "scm_articles_xlsx"):
+            skipped += 1
+            continue
+        from app.services.imports.cst_sku_twin_disambiguate import sku_twin_blocks_auto_confirm
+
+        if sku_twin_blocks_auto_confirm(evidence):
             skipped += 1
             continue
         confirm_customer_article_alias(session, alias_id=int(aid), actor=actor or "scm_import")

@@ -32,6 +32,7 @@
     "docker:e2e": "node scripts/docker-e2e.cjs",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
+    "typecheck": "pnpm --filter @cip/web typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "test:web": "pnpm --filter @cip/web test",
     "test:api": "node scripts/run-pytest.cjs",

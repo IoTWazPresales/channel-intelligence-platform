@@ -5,6 +5,7 @@ from sqlalchemy import create_engine
 
 from app.core.config import get_settings
 from app.db.base import Base
+from app.db.migrate_url_guard import resolve_alembic_migrate_url
 from app.db.sync_url import sqlalchemy_sync_engine_url
 from app.models import (  # noqa: F401
     BudgetHealth,
@@ -81,6 +82,7 @@ from app.models import (  # noqa: F401
     StockHealth,
     StockRisk,
     TaskRun,
+    WeeksOfCoverObservation,
     WeeksOfStock,
 )
 
@@ -93,7 +95,10 @@ target_metadata = Base.metadata
 
 def get_url() -> str:
     settings = get_settings()
-    sync_url = settings.database_url_sync_migrate or settings.database_url_sync
+    sync_url = resolve_alembic_migrate_url(
+        database_url_sync=settings.database_url_sync,
+        database_url_sync_migrate=settings.database_url_sync_migrate,
+    )
     return sqlalchemy_sync_engine_url(sync_url)
 
 

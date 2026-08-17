@@ -45,6 +45,26 @@ def test_source_key_store_level_includes_location_id() -> None:
     assert key == "ct:10:55:20:2026-05-01"
 
 
+def test_source_key_unmapped_site_label_is_distinct_from_chain() -> None:
+    key = customer_sellthrough_source_key(
+        customer_id=57,
+        customer_location_id=None,
+        product_id=5376,
+        period_start_date=date(2026, 5, 25),
+        site_label="G007",
+    )
+    assert key == "ct:57:sl:G007:5376:2026-05-25"
+    other = customer_sellthrough_source_key(
+        customer_id=57,
+        customer_location_id=None,
+        product_id=5376,
+        period_start_date=date(2026, 5, 25),
+        site_label="G018",
+    )
+    assert other == "ct:57:sl:G018:5376:2026-05-25"
+    assert key != other
+
+
 def test_staging_line_defaults_to_pending() -> None:
     line = new_customer_sellthrough_staging_line(
         import_job_id=1,

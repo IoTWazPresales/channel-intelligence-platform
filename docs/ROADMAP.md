@@ -3,7 +3,7 @@
 **Owner:** Warren · **Version:** 3.2 · 2026-08-14
 **Status:** living — if this file disagrees with `docs/memory/CURRENT.md` about what's next, CURRENT wins and this file gets corrected.
 **v3.2 changes:** Pin Units 13–15 VERIFY PASS (P3 widget canvas, B1 history forecast, B4 editable promo planner) and P5 residual (Takealot REST + activation) on the promote-to-main path. Close stale “queued Unit 14 / B4 next / P4-P5 still on p4 branch” claims. **2026-08-14 addendum:** P2 local unaided-landing + restore re-proven; hosting still deferred.
-**2026-08-15 addendum:** D-022 / BACKLOG-082 re-verified in code (template `_policy`, memory last). Next: finish remaining ROADMAP + leftover-close outstanding + BACKLOG with fired TRIGGERs (hygiene first). Module deepening only when Warren asks. `CURRENT.md` wins if this file disagrees.
+**2026-08-16 addendum:** P3-1 U1–U3 shipped on `feat/finish-roadmap` — tenant metric overlay lives in `tenant_profiles/{id}.json` (`semantic_overlay`); governed merge cannot rewrite `fill_rate` formula / `source_facts` / `owner_surface`; composition is intra-family ratio + alias; admin Settings editor is the no-deploy authoring surface. Module deepening only when Warren asks. `CURRENT.md` wins if this file disagrees.
 **v3.1 changes:** Open decisions #1/#2 marked resolved (align with OPEN_QUESTIONS Q-001/Q-002);
 register lists only still-open items.
 **v3.0 changes:** B2+B3 merged into one lineup+budget builder (reservation is embedded in the
@@ -101,7 +101,7 @@ These are the "optimisation not speed" bar. Measured at P2 exit and held thereaf
 outside `main` · CI with real Postgres and `cip_test` · `scripts/verify-gate` proven (caught
 its own false PASS).
 
-**Remaining:** none. Header vocabulary (D-022 / BACKLOG-082) **Done 2026-08-01**; **re-verified in code 2026-08-15** (`distributor_inventory._policy`; memory overlays last). Generic substring heuristics remain as fallback — do not re-open 082 from this line.
+**Remaining:** none for load-blocker work. Header vocabulary (D-022 / BACKLOG-082) **Done 2026-08-01**; **re-verified in code 2026-08-15**. **2026-08-15 P0 hygiene:** GitHub CI now runs `pnpm lint` (`ESLINT_USE_FLAT_CONFIG=false`) and `pnpm typecheck` (`tsc --noEmit`) before API tests. Hook-warning mass-fix is not in scope. Generic substring heuristics remain as fallback — do not re-open 082 from this line.
 
 **Deferred:** required GitHub status check on `main` — **dropped** (BACKLOG-087 removed;
 Warren will not buy Pro). Process gate = CI + `scripts/verify-gate` + no casual `--admin` merges.
@@ -224,8 +224,9 @@ quarter / customer, …). Invalid combinations refused with an explanation. Libr
 Power BI.
 **Shipped Unit 14 (VERIFY PASS 2026-08-14):** 14A series + period_grain week/month/quarter;
 14B `dashboard_widget` persist; 14C ECharts canvas on `/dashboards`. BACKLOG-131 closed.
-Remaining P3: tenant-defined metrics without a deploy (P3-1), unattended Monday 07:00 beat
-soak (BACKLOG-098 caveat), reopen MV only if cold `/query/execute` regularly exceeds 5s (097).
+Remaining P3: P3-1 U1 overlay + U2 composition + U3 admin Settings shipped.
+BACKLOG-097 (WoC observation series) and BACKLOG-098 (API startup catch-up) shipped 2026-08-17.
+Reopen a materialised view only if cold `/query/execute` regularly exceeds 5s after the observation tape.
 
 ### P3-5 Export and delivery
 Excel and PDF export. **Scheduled delivery** — event-triggered (load completes → dependent
@@ -360,8 +361,7 @@ windows first; Sell out PP only when no covering promo (Warren 2026-08-13). BACK
 Three Takealot accessories with no `dim_product` (listings 55–57: Sheath II / Raikiri II /
 Keris II Origin) stamped `ignore_no_catalogue` → Product catalogue gaps 2026-08-13 — do not
 auto-create PM.
-**Still open under P5:** intelligence v1 (≥2 weeks promo activated vs not); Takealot parse
-residuals if REST miss; promote is the housekeeping close for the residual branch.
+**Still open under P5:** Takealot parse residuals if REST miss; promote is the housekeeping close for the residual branch. Intelligence v1 shipped 2026-08-17 (`GET /listing-capture/intelligence` + Intelligence tab; ≥14d ready else accumulating; `not_activated` worklist). Live listings still accumulating (span 0) until observation history crosses 14 days.
 
 ---
 
@@ -385,10 +385,10 @@ Runs alongside all phases in GREEN autonomy. Never blocks a phase; never blocked
 - **Distributor merge** — same engine as customer merge, extended to `dim_distributor`
 - **Existing surface retrofit** — PO management, PM gaps, channels/regions, product master,
   admin masters, commercial planner: audit each against the contract, retrofit or waive
-- **Ops-list grid parity** (BACKLOG-085) — fold into whichever phase touches those pages
+- **Ops-list grid parity** (BACKLOG-085) — **Done** 2026-08-15 fold (CST steward / PO gap / PM-gaps client paging; CPOR + PVE already paged)
 - **Lifecycle defect trio** — CST validate `progress_at` **wired 2026-08-09**; reaper inspect +
   retry/busy-guard already shipped for main pipeline. Remaining: non-CST importers if any gap.
-- **BACKLOG-076** — corrupt unit amounts (~$36M). KPI exclude shipped; fact cleanup needs Warren.
+- **BACKLOG-076** — closed 2026-08-17: Unship Unit Price is source sentinel 999999; quarantine zeroed amounts. Do not re-import junk.
 - **BACKLOG-066 → 086** — worked down at phase boundaries, prioritised by trigger (087 removed)
 
 ---
@@ -451,15 +451,16 @@ Anything whose blocker is satisfied. **P1 exited 2026-08-01** (census + defect l
 **A1 / A2 / A3** core + residuals closed 2026-08-08 (A1-09, A2-093, A3-V). **068 landed lens Done.**
 **Units 13–15 VERIFY PASS 2026-08-14:** 092 payment recon · 131 widget canvas · 094 B1+B4 planner.
 **P5 residual** (Takealot REST + activation) is on the same promote path as 13–15.
-**2026-08-15 next (Warren):** finish remaining ROADMAP, leftover-close outstanding, and BACKLOG with fired TRIGGERs. Start with P0 hygiene (live lint/tsc/pytest), then 079 chrome. Do not start module deepening until Warren asks. DSI header vocabulary is already in the tree.
+**2026-08-16 next (Warren):** P3-1 U1–U3 shipped on `feat/finish-roadmap`. Next after U3 VERIFY: P4 Amazon ASIN FLAG / optional Game W27. Do not start module deepening until Warren asks.
 **Still open (later phases):** P2 hosting deferred (Q-003 local-only); self-serve email reset not built
 (admin **Reset password** is the local bar). **P2 local exit re-proven 2026-08-14:** second-user
 unaided landing (`viewer@local` Control tower → Shipping / PvE; Users forbidden) + restore
-into `cip_alembic_smoke` (`RESTORE_SMOKE_OK`, alembic `20260814_0016`). P3-1 tenant-defined
-metrics without a deploy; P3-5 unattended Monday 07:00 beat soak (run-now / Send to inbox
-proven; overnight beat not). P4 Amazon ASIN FLAG + optional Game W27 + historical backfill;
-P5 intelligence v1; P6 second tenant; Lane X TRIGGER items (076 Unship re-import, 089 richer
-baselines, 079/085 ops-list fold-in). Lane X runs continuously in GREEN alongside anything.
+into `cip_alembic_smoke` (`RESTORE_SMOKE_OK`, alembic `20260814_0016`). P3-1 U1 overlay + U2
+composition + U3 Settings editor shipped; P3-5 calendar catch-up on API reconnect (BACKLOG-098)
+and WoC observation tape (BACKLOG-097, Alembic `20260817_0017`) shipped 2026-08-17 — inbox **#6**
+WoC smoke ok in 0.61s. P4 Amazon notebooks assigned via shipping; 19 networking
+ASINs catalogue-gap. P5 intelligence v1 shipped (accumulating until ≥14d). P6 second tenant.
+Amazon historical weekly upload is Warren’s file, not a build unit.
 
 ### What you cannot do
 

@@ -30,6 +30,8 @@ jobs:
       DATABASE_URL_SYNC_MIGRATE: postgresql://cip:cip@localhost:5432/cip_test
       # No Redis in CI — skip broker retry loops; use in-process thread fallback for import tasks.
       CIP_DEV_CELERY_DISPATCH: in_process_thread
+      # Next.js 15 + ESLint 9: legacy eslintrc until a dedicated flat-config migration (BACKLOG-070).
+      ESLINT_USE_FLAT_CONFIG: "false"
     steps:
       # Pinned 2026-08-02 to the commit currently resolved by moving tag @v4 (do not upgrade).
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -53,6 +55,12 @@ jobs:
 
       - name: Install Node dependencies
         run: pnpm install
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck web
+        run: pnpm typecheck
 
       - name: Install Python dependencies
         run: pip install -r apps/api/requirements.txt

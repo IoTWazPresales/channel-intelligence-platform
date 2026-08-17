@@ -195,6 +195,15 @@ def test_sheet_and_folder_helpers() -> None:
     assert infer_business_unit_from_folder_path(r"NR\2025\Q2\file.xlsx") == "NR"
 
 
+def _alembic_script_head() -> str:
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    heads = set(ScriptDirectory.from_config(Config("alembic.ini")).get_heads())
+    assert len(heads) == 1, f"expected single alembic head, got {sorted(heads)}"
+    return next(iter(heads))
+
+
 def test_migration_0064_column_on_disposable_db() -> None:
     """Smoke: business_unit column exists after upgrade on disposable clone — never cip."""
     from sqlalchemy import create_engine, text
@@ -206,6 +215,7 @@ def test_migration_0064_column_on_disposable_db() -> None:
     if "cip_alembic_smoke" not in smoke_url and os.environ.get("ALLOW_TESTS_ON_DEV_DB") != "1":
         pytest.skip("Set CIP_SMOKE_DATABASE_URL_SYNC to a disposable DB for migration smoke.")
 
+    expected_tip = _alembic_script_head()
     with create_engine(smoke_url).connect() as conn:
         current = conn.execute(text("SELECT current_database()")).scalar_one()
         assert current != "cip", "Refusing migration smoke against cip"
@@ -218,5 +228,5 @@ def test_migration_0064_column_on_disposable_db() -> None:
             )
         ).first()
         rev = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
-        assert rev == "20260812_0014", f"expected tip 20260812_0014 on smoke DB, got {rev}"
+        assert rev == expected_tip, f"expected tip {expected_tip} on smoke DB, got {rev}"
         assert row is not None, "business_unit column missing after tip migrate on smoke DB"

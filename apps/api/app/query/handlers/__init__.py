@@ -24,6 +24,20 @@ A2_KEYS = frozenset({"support_spend", "delivery_rate", "support_cost_per_unit_so
 VOLUME_KEYS = volume_series.VOLUME_KEYS
 
 
+def fact_family_for(metric_key: str) -> str | None:
+    """Handler group / fact family. None → not a v1 handler-backed metric."""
+    key = (metric_key or "").strip().lower()
+    if key in A1_KEYS:
+        return "a1"
+    if key in A2_KEYS:
+        return "a2"
+    if key in A3_KEYS:
+        return "a3"
+    if key in VOLUME_KEYS:
+        return "volume"
+    return None
+
+
 async def dispatch_handler(
     db: AsyncSession,
     req: QueryRequest,
@@ -71,7 +85,7 @@ async def dispatch_handler(
     )
 
 
-def handler_name_for(metric_key: str) -> str | None:
+def handler_name_for(metric_key: str, catalog: object | None = None) -> str | None:
     key = (metric_key or "").strip().lower()
     if key in A3_KEYS:
         return "a3_stock"
@@ -81,11 +95,16 @@ def handler_name_for(metric_key: str) -> str | None:
         return "a2_cpor"
     if key in VOLUME_KEYS:
         return "volume_series"
+    if catalog is not None:
+        metric = getattr(catalog, "metric_by_key", lambda _k: None)(key)
+        if metric is not None and getattr(metric, "compose", None) is not None:
+            return "composed"
     return None
 
 
 __all__ = [
     "dispatch_handler",
+    "fact_family_for",
     "handler_name_for",
     "A1_KEYS",
     "A2_KEYS",

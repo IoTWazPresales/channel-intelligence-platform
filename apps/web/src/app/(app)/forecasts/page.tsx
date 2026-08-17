@@ -12,6 +12,7 @@ import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
@@ -205,7 +206,7 @@ export default function ForecastsPage() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Forecast' }]} title="Demand Forecast" />
+      <PageHeader {...navPageChrome('/forecasts', { title: 'Demand Forecast' })} />
       <Paper sx={{ p: 2 }}>
         {computeMsg ? (
           <Alert

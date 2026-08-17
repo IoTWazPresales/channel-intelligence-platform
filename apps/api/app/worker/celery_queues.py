@@ -40,6 +40,7 @@ BATCH_TASK_NAMES: frozenset[str] = frozenset(
         "imports.shipment_apply",
         "imports.dsi_soh_reconciliation",
         "imports.dsi_velocity_compute",
+        "imports.woc_observation_reconstruct",
         "imports.dsi_forecasting",
         "imports.reap_stale_running_jobs",
         "imports.flush_deferred_dsi_post_validate_auto_apply",

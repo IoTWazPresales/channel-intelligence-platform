@@ -112,7 +112,7 @@ def test_preview_counts_and_dsi_facts_flag(mock_idx: MagicMock) -> None:
         import_job_id=300,
         product_id=None,
     )
-    session = _session_returning([ship], [cand], [claim])
+    session = _session_returning([ship], [cand], [claim], [])
     out = preview_gap_resolve(session, ["GAP-SKU"])
     item = out["items"][0]
     assert item["matched"] is True
@@ -168,15 +168,17 @@ def test_apply_repoints_and_skips_dsi_facts(mock_idx: MagicMock, mock_inv: Magic
         product_id=None,
     )
 
-    # preview: ship, dsi, claim; repoint_ship; repoint_dsi cands+staging; repoint_cpor
+    # preview: ship, dsi, claim, cst; then repoint ship / dsi(+staging) / cpor / cst
     session = _session_returning(
         [ship],
         [cand],
         [claim],
+        [],
         [ship],
         [cand],
         [staging],
         [claim],
+        [],
     )
     out = apply_gap_resolve(
         session,
@@ -205,7 +207,7 @@ def test_apply_repoints_and_skips_dsi_facts(mock_idx: MagicMock, mock_inv: Magic
 @patch("app.services.imports.product_master_gap_resolve.get_product_resolution_index")
 def test_apply_idempotent_when_already_resolved(mock_idx: MagicMock, _inv: MagicMock) -> None:
     mock_idx.return_value = _idx(sku_to_id={"gap-sku": 10})
-    session = _session_returning([], [], [], [], [], [])
+    session = _session_returning([], [], [], [], [], [], [], [])
     out = apply_gap_resolve(session, tokens=["GAP-SKU"], confirm=True, write_alias=False)
     assert out["ok"] is True
     item = out["items"][0]

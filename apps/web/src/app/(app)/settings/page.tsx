@@ -22,6 +22,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
+import { SemanticCatalogOverlayPanel } from '@/features/settings/SemanticCatalogOverlayPanel';
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
 import { apiGet, apiPost, apiPut, getApiBase, safeDisplayError } from '@/lib/api';
 import { loadWipeAvailability } from '@/lib/wipeAvailability';
@@ -36,12 +37,24 @@ type PmAttributionMode = 'business_line' | 'person_field' | 'none';
 
 type LineupExportColumn = { field: string; header: string };
 
+type ReportingCadence =
+  | 'weekly_monday'
+  | 'weekly_tuesday'
+  | 'weekly_wednesday'
+  | 'weekly_thursday'
+  | 'weekly_friday'
+  | 'weekly_saturday'
+  | 'weekly_sunday'
+  | 'daily';
+
 type TenantCommercialProfile = {
   tenant_id: string;
   constraint_axis: ConstraintAxis;
   over_budget_action: OverBudgetAction;
   reservation_source: ReservationSource;
   pm_attribution_mode: PmAttributionMode;
+  reporting_cadence?: ReportingCadence;
+  woc_min_velocity_days?: number;
   lineup_export_sheets?: { net_requirement: string; draft_lineup: string };
   lineup_export_columns?: LineupExportColumn[];
   overrides_present: string[];
@@ -54,6 +67,16 @@ const CONSTRAINT_AXIS_OPTIONS: ConstraintAxis[] = ['money', 'support_pct', 'dual
 const OVER_BUDGET_ACTION_OPTIONS: OverBudgetAction[] = ['require_reapproval', 'warn', 'block'];
 const RESERVATION_SOURCE_OPTIONS: ReservationSource[] = ['derived_from_profit', 'explicit_column', 'hybrid'];
 const PM_ATTRIBUTION_MODE_OPTIONS: PmAttributionMode[] = ['business_line', 'person_field', 'none'];
+const REPORTING_CADENCE_OPTIONS: ReportingCadence[] = [
+  'weekly_monday',
+  'weekly_tuesday',
+  'weekly_wednesday',
+  'weekly_thursday',
+  'weekly_friday',
+  'weekly_saturday',
+  'weekly_sunday',
+  'daily',
+];
 
 export default function SettingsPage() {
   const apiDisplay =
@@ -77,6 +100,8 @@ export default function SettingsPage() {
   const [overBudgetAction, setOverBudgetAction] = useState<OverBudgetAction>('require_reapproval');
   const [reservationSource, setReservationSource] = useState<ReservationSource>('derived_from_profit');
   const [pmAttributionMode, setPmAttributionMode] = useState<PmAttributionMode>('business_line');
+  const [reportingCadence, setReportingCadence] = useState<ReportingCadence>('weekly_monday');
+  const [wocMinVelocityDays, setWocMinVelocityDays] = useState(90);
   const [exportNetReqSheet, setExportNetReqSheet] = useState('NetRequirement');
   const [exportDraftSheet, setExportDraftSheet] = useState('DraftLineup');
   const [exportColumns, setExportColumns] = useState<LineupExportColumn[]>([]);
@@ -89,6 +114,12 @@ export default function SettingsPage() {
     setOverBudgetAction(tenantProfileQuery.data.over_budget_action);
     setReservationSource(tenantProfileQuery.data.reservation_source);
     setPmAttributionMode(tenantProfileQuery.data.pm_attribution_mode);
+    if (tenantProfileQuery.data.reporting_cadence) {
+      setReportingCadence(tenantProfileQuery.data.reporting_cadence);
+    }
+    if (typeof tenantProfileQuery.data.woc_min_velocity_days === 'number') {
+      setWocMinVelocityDays(tenantProfileQuery.data.woc_min_velocity_days);
+    }
     const sheets = tenantProfileQuery.data.lineup_export_sheets;
     if (sheets?.net_requirement) setExportNetReqSheet(sheets.net_requirement);
     if (sheets?.draft_lineup) setExportDraftSheet(sheets.draft_lineup);
@@ -104,6 +135,8 @@ export default function SettingsPage() {
         over_budget_action: overBudgetAction,
         reservation_source: reservationSource,
         pm_attribution_mode: pmAttributionMode,
+        reporting_cadence: reportingCadence,
+        woc_min_velocity_days: wocMinVelocityDays,
         lineup_export_net_requirement_sheet: exportNetReqSheet.trim() || undefined,
         lineup_export_draft_sheet: exportDraftSheet.trim() || undefined,
         lineup_export_columns: exportColumns.length ? exportColumns : undefined,
@@ -259,6 +292,32 @@ export default function SettingsPage() {
                 ))}
               </Select>
             </FormControl>
+            <FormControl fullWidth disabled={!isAdmin}>
+              <InputLabel id="tenant-profile-reporting-cadence-label">Reporting cadence (WoC)</InputLabel>
+              <Select
+                labelId="tenant-profile-reporting-cadence-label"
+                label="Reporting cadence (WoC)"
+                value={reportingCadence}
+                onChange={(ev) => setReportingCadence(ev.target.value as ReportingCadence)}
+                inputProps={{ 'data-testid': 'tenant-profile-reporting-cadence' }}
+              >
+                {REPORTING_CADENCE_OPTIONS.map((v) => (
+                  <MenuItem key={v} value={v}>
+                    {v}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              label="WoC minimum velocity days"
+              type="number"
+              value={wocMinVelocityDays}
+              onChange={(ev) => setWocMinVelocityDays(Number(ev.target.value))}
+              disabled={!isAdmin}
+              fullWidth
+              helperText="Thin history below this writes NULL cover (clamp 28–90). Default 90."
+              inputProps={{ 'data-testid': 'tenant-profile-woc-min-velocity-days', min: 28, max: 90 }}
+            />
             <TextField
               label="Lineup export — Net requirement sheet"
               value={exportNetReqSheet}
@@ -353,6 +412,13 @@ export default function SettingsPage() {
             ) : null}
           </Stack>
         )}
+
+        {isAdmin ? (
+          <>
+            <Divider sx={{ my: 3 }} />
+            <SemanticCatalogOverlayPanel />
+          </>
+        ) : null}
 
         <Divider sx={{ my: 3 }} />
         <Typography variant="subtitle1" fontWeight={600} gutterBottom>

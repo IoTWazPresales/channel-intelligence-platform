@@ -133,6 +133,19 @@ def complete_dsi_import_job_to_loaded(db: Session, job_id: int) -> dict[str, Any
             from app.services.imports.dsi_velocity_enqueue import dispatch_dsi_velocity_after_apply
 
             dispatch_dsi_velocity_after_apply(db, job, int(dist_id))
+            from app.services.imports.woc_observation_sync import (
+                run_woc_observation_for_distributor_sync,
+            )
+            from app.services.imports.woc_observation import WOC_TRIGGER_DSI_APPLY
+
+            period = period_end if isinstance(period_end, date) else None
+            run_woc_observation_for_distributor_sync(
+                tenant_id=str(getattr(job, "tenant_id", None) or "default"),
+                distributor_id=int(dist_id),
+                import_job_id=int(job.id),
+                trigger=WOC_TRIGGER_DSI_APPLY,
+                file_period_end=period,
+            )
             db.commit()
             db.refresh(job)
         except Exception:

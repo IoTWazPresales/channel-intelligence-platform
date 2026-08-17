@@ -345,7 +345,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-03 |
+| **Status / parked** | **Done** · 2026-08-16 — worker boot logs git SHA + `lineup_case_parser` mtime; `DEV_TOPOLOGY.md` restart checklist. Parse path still refuses `uniform_half` (D-028). |
 | **Effort** | Small |
 | **Source** | f4 apply created case 144 via job 790 with `allocation=uniform_half` / null `month_split_json`; re-parse in-process with current tree → month_derived 289/289 |
 | **Idea** | Ensure worker restart / version pin after parse-path commits so enqueued jobs cannot invent retired allocations. |
@@ -462,7 +462,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-02 |
+| **Status / parked** | **Done** · 2026-08-16 — null/missing sheet in notes is a wildcard match; `winner_member_key` stays `existing:{id}`. |
 | **Effort** | Small |
 | **Source** | Corpus restore preview session_import_job_id=752; surviving cases 7/9/90 have `notes=NULL` so `_sheet_from_case_notes` → None while proposals use sheet `Sheet1`/`NB` → `existing_case_collisions=0` despite same `file_name` |
 | **Idea** | When existing case has no sheet in notes, treat sheet match as wildcard (or compare file_name+BU+period only) so po_issued / unified survivors are surfaced as collisions instead of silent duplicate-ready proposals. |
@@ -514,7 +514,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-02 |
+| **Status / parked** | **Done** · 2026-08-16 — DELETE uses `get_optional_current_user`; bulk apply sets `completed` / `completed_with_errors` instead of leaving `running`. |
 | **Effort** | Small |
 | **Source** | Corpus-safety unit 2A–2D (2026-08-02); `delete_lineup_case` still has no auth dependency; `apply_bulk_lineup_batch_sync` leaves `import_job.status='running'` after apply |
 | **Idea** | (1) Wire `get_current_user` (or optional user) on `DELETE /lineup-cases/{id}` so steward_audit actor is not always `anonymous`. (2) Set bulk lineup session job to an existing terminal status (`completed` / `completed_with_errors`) when apply finishes so reaper/UI do not treat finished applies as live work. |
@@ -565,16 +565,16 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Shipped 2026-08-08** — code on `main` (`reports.run_due_schedules` beat task + `reports.fanout_import_complete` fan-out, `apps/api/app/worker/tasks.py`); `report_schedule` id=1 (`weekly_monday_0700`, `tenant_id=default`, `enabled=true`) exists on `cip` with a real `last_run_at` (2026-08-01), confirming the run-now path has executed against it. |
+| **Status / parked** | **Shipped 2026-08-17** — API lifespan poller claims overdue `report_schedule` rows on startup and every `CIP_REPORT_SCHEDULE_POLL_SECONDS` (default 60s). Celery beat, when enabled, uses the same interval instead of crontab 07:00 UTC only. Cadence remains `next_run_at`. Claim-first so API poll + beat cannot double-deliver. Statement timeout (default 90s) writes a **failed** inbox row rather than hanging the process. **Do not** turn on Windows `CIP_ENABLE_DEV_BEAT` just for 098. **097 closed the WoC hang:** schedule 1 delivery **#6** `status=ok` in 0.61s (`woc_source=observations`). Reconnect 2026-08-17: poller started, `due_count: 0` (next_run already 2026-08-24). |
 | **Effort** | Medium (beat task + import hook; small) |
 | **Source** | P3-5 authored 2026-08-01 — `report_schedule` + `run-now` inbox path; ROADMAP P3-5 calendar + event delivery |
 | **Idea** | Wire Celery beat for `weekly_monday_0700` / `daily_0700` and fan-out `on_import_complete` schedules after DSI/shipment apply completes. |
-| **Caveat** | Confirmed proof so far is the **run-now path** (`POST /reports/schedules/{id}/run-now`) and the fan-out task existing and being callable — not an unattended overnight Monday-07:00 beat firing in production. Unattended beat requires `CIP_ENABLE_DEV_BEAT=1` locally (Windows dev defaults beat **off** — see `dev_beat_disabled()` in `apps/api/app/worker/celery_queues.py`); production beat scheduling posture is untouched by this note. **2026-08-14:** Report builder **Send to inbox** delivered `#4` (`sellout_units` 178261.85, vintage on `/inbox` face). That is the P3-5 local delivery bar — not the overnight soak. |
-| **What the work is** | Done — beat entry + task iterating enabled schedules due; import apply progress-complete hook for `on_import_complete`; optional email_stub channel later remains a separate idea, not required for "shipped". |
+| **Caveat** | Catch-up is “fire as soon as the API is up if `next_run_at` is already due”. Overnight Monday WoC now reads observations (BACKLOG-097). Windows beat remains off by default (BACKLOG-038). **2026-08-17:** inbox **#6** WoC smoke ok. |
+| **What the work is** | Done — due-list + claim-first runner; API startup/interval catch-up; beat interval when beat is enabled; import apply hook for `on_import_complete`. email_stub remains a separate idea. |
 | **Regression traps** | Never skip delivery when metric returns empty — missing data is the alert; always stamp `data_vintage`. |
 | **Behavior to retain** | Inbox channel + missing_data_alert + tenant scope. |
 | **Out of scope** | External SMTP productization; P3-6 SQL viewer. |
-| **TRIGGER** | — shipped — reopen only if Warren wants true unattended overnight delivery proven end-to-end with `CIP_ENABLE_DEV_BEAT=1` left running across a real Monday 07:00. |
+| **TRIGGER** | Reopen only if catch-up does not fire overdue rows after an API restart. |
 
 ---
 
@@ -582,16 +582,16 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Resolved 2026-08-01** — set-based `derived_stock_components_by_dist_product` (latest join + aggregated sell-out/POD-landed); cold WoC ~7.4s→~3.2s; value parity 13.600643219087154 on cip. No MV needed yet. |
+| **Status / parked** | **Shipped 2026-08-17** — `weeks_of_cover_observation` derived series (Alembic `20260817_0017`). Set-based reconstruct at DSI/shipment apply; Channel Ops + A3 + Monday schedule 1 read latest observation per pair. Live calculator only `woc_source=live` / `recompute=1`. Cold query 0.61s (was hang >5 min). Inbox **#6** WoC smoke ok. |
 | **Effort** | Medium–Large (SQL rewrite + optional refresh job; maybe MV) |
 | **Source** | P3-2 live soak 2026-08-01 — cold `weeks_of_cover` full portfolio ~7.4s / `fill_rate` ~5.7s vs ROADMAP report render &lt;5s p95; warm cache &lt;1ms OK |
 | **Idea** | Replace per-pair scalar sell-out/landed loops in `derived_stock_by_dist_product` with set-based CTEs; optionally Postgres MATERIALIZED VIEW + refresh on import apply; keep latest-per-(distributor,product) invariant. |
 | **Why it matters / deferrable** | Meets NFR for cold governed report without relying only on 60s result cache. Deferrable while warm-cache path + report builder (P3-3) are primary; P3-2 ships process-local/Redis TTL cache. |
-| **What the work is** | Done for set-based path; MV deferred unless cold misses return. |
+| **What the work is** | Done — observation table + fact indexes; apply-time reconstruct; read cutover; ops replay of the same SQL. |
 | **Regression traps** | Never sum SOH snapshot history; pipeline/open_order must stay out; tenant_id filter required. |
 | **Behavior to retain** | Formula: latest reported − sell-out since + POD-landed shipped since; WoC at distributor×product only. |
 | **Out of scope** | Report builder UI (P3-3); changing COMMERCIAL_SEMANTICS formulas. |
-| **TRIGGER** | — shipped set-based; reopen only if cold `/query/execute` regularly exceeds 5s again — then consider MV. |
+| **TRIGGER** | — shipped — |
 
 ---
 
@@ -724,16 +724,16 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Shipped (FLAG-first)** · 2026-08-10 — baseline method `prior_window_same_sku_customer`; null when obs < min or lift ≤ 0 |
+| **Status / parked** | **Closed 2026-08-17** — default `prior_window_same_sku_customer`; residual methods `comparable_median` and `velocity_extrapolate` implemented (tenant profile / `CIP_INCREMENTAL_BASELINE_METHOD`). Weak baseline still null + FLAG. |
 | **Effort** | Medium |
 | **Source** | Warren 2026-08-10 arc: proceed with best-practice baseline; `docs/COMMERCIAL_SEMANTICS.md` A2-X |
 | **Idea** | `cost_per_incremental_unit = support / max(0, result − baseline)` with tenant-configurable lookback; never alias A2-06. |
-| **Why it matters / deferrable** | Core promo effectiveness beyond support÷qty. Residual: richer methods (`comparable_median`, `velocity_extrapolate`) when data denser. |
+| **Why it matters / deferrable** | Core promo effectiveness beyond support÷qty. Richer methods now exist; default stays prior-window so sparse CST does not invent lift. |
 | **What the work is** | Done: semantics + `incremental_unit_cost.py` + portfolio payload + UI tile + tests. |
 | **Regression traps** | Do not ship placeholder that is just support÷qty under another name. FLAG when baseline weak. |
 | **Behavior to retain** | A2-06 support÷result_qty remains separate. |
 | **Out of scope** | Inventing lift without sell-through history. |
-| **TRIGGER** | Residual: unlock alternate baseline methods when Warren asks / CST history dense enough. |
+| **TRIGGER** | — closed 2026-08-17 — reopen only if a new baseline identity is required (do not alias A2-06). |
 
 ---
 
@@ -767,7 +767,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-29 · cherry-pick skipped |
+| **Status / parked** | **Closed — not needed** · 2026-08-16 — `product_import_sync.py` VALUES/CASE has no `channel_id` (that column is on `dim_customer`, not the PM upsert). Date staging columns already use `cast(..., Date)`. The psycopg3 typeless-NULL `channel_id` CASE hazard cannot fire on this path. |
 | **Effort** | Small–Medium |
 | **Source** | `fix/pm-bulk-upsert-coercion-and-sql-types` @ `558d088`; ROADMAP P0 item 3; hygiene session conflict abort |
 | **Idea** | Re-apply the psycopg3 typeless-NULL fix: typed casts on VALUES staging columns mixed with ORM columns in CASE (notably `channel_id`), plus any still-needed tabular coercion from that commit. |
@@ -785,7 +785,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-29 · extracted from `feat/ops-master-grid-shell-parity` per D-021 |
+| **Status / parked** | **Done** · 2026-08-15 fold on `feat/finish-roadmap` — client AG Grid pagination (`OPS_LIST_GRID_PAGINATION`, page size 25) on CST steward, PO gap grid, and PM-gaps worklist. CPOR Cases already had URL `page`/`page_size` via `MasterDataGridShell`. PVE exception lists already had AG Grid pagination. Did not pull BACKLOG-084 URL helpers. |
 | **Effort** | Small (mechanical per page) |
 | **Source** | D-021 fuller diff; CST steward / CPOR / PM gaps / PO gap / PVE list paging chrome on ops-master |
 | **Idea** | When touching those ops list pages, bring skip/limit (or equivalent) pagination UX to the current route layout — same fold-in rule as BACKLOG-079. |
@@ -802,7 +802,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-29 · extracted from `feat/ops-master-grid-shell-parity` per D-021 |
+| **Status / parked** | **Closed — not needed** · 2026-08-16 — TRIGGER (fold with BACKLOG-079/085) already fired; 085 shipped client AG Grid paging without these helpers. No consumer needs a new shared URL skip/limit module; ops lists already use per-page `searchParams` or AG Grid paging. |
 | **Effort** | Small (mechanical) |
 | **Source** | D-021; ops-master shared helper modules used by ops list paging |
 | **Idea** | Debounced URL query sync + skip/limit search-param helpers for list pages. |
@@ -888,7 +888,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Partial** · 2026-08-14 · CPOR Cases list on `MasterDataGridShell`. Warren asked for leftover close 2026-08-14 — **not closed**: PM gaps is a worklist (`ProductMasterGapWorklistView`), PVE exception lists are scorecard grids (D-021: do not resurrect ops-master KPI chrome), shipment evidence already has `ModuleGridToolbar` + Enterprise AG Grid. Fold only when those pages are next edited; do not standalone. |
+| **Status / parked** | **Partial** · 2026-08-15 — PageHeader crumbs/titles on COMMERCIAL_SEMANTICS owning routes shipped (`navPageChrome` from `navConfig`; group hub hrefs). CPOR Cases list remains on `MasterDataGridShell`. **Do not** wrap PvE scorecard or PM-gaps worklist in that shell (D-021 / Warren 2026-08-15). Shipment evidence already has `ModuleGridToolbar` + Enterprise AG Grid. Remaining shell wrap is not a standalone project. |
 | **Effort** | Medium (mechanical per page) |
 | **Source** | D-021; commits `ddb712c`…`d789ad9` — shell on CPOR cases, PM gaps, shipment evidence, PVE |
 | **Idea** | Re-apply `MasterDataGridShell` / ops list chrome to CPOR cases, product-master gaps, shipment evidence, PVE exception lists when those pages are touched. |
@@ -982,16 +982,16 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-08 |
+| **Status / parked** | **Shipped 2026-08-15** — CI + local lint gate via `ESLINT_USE_FLAT_CONFIG=false` (legacy eslintrc shim). `pnpm lint` is 0 errors; 51 `react-hooks/exhaustive-deps` warnings remain and are **not** a mass-fix. Full ESLint 9 `eslint.config.js` migration is still out of scope. |
 | **Effort** | Small–medium (web + root lint wiring) |
 | **Source** | Agent session (2026-07-08): shipment apply hardening gate; `eslint` v9 installed; no `eslint.config.js` / flat config; `eslint .` fails repo-wide; `ESLINT_USE_FLAT_CONFIG=false` required for Next.js only; zero enforced frontend lint in default dev path. |
 | **Idea** | Restore a single working lint entrypoint for `apps/web` and shared packages — either adopt ESLint 9 flat config (Next.js-compatible) or pin/document the legacy config path in CI and `pnpm lint`. |
 | **Why it matters / deferrable** | Drift accumulates without lint gate; deferrable while Vitest + typecheck cover critical paths. |
-| **What the work is** | (1) Audit `pnpm lint` / `apps/web` ESLint integration. (2) Add flat config or explicit legacy shim. (3) Wire CI to fail on lint. |
+| **What the work is** | Done as the legacy-shim path: job env `ESLINT_USE_FLAT_CONFIG=false`; CI `pnpm lint` + `pnpm typecheck`; root `typecheck` script. Do not mass-fix hook warnings. |
 | **Regression traps** | Breaking Next.js 15 ESLint plugin; duplicate configs; CI false greens. |
 | **Behavior to retain** | `pnpm test:web` unchanged; no rule thrash without cause. |
-| **Out of scope** | Full design-system lint overhaul. |
-| **TRIGGER** | Next frontend-heavy unit or CI hardening pass. |
+| **Out of scope** | Full design-system lint overhaul; ESLint 9 flat-config rewrite. |
+| **TRIGGER** | — shipped — reopen only for a dedicated `eslint.config.js` migration or if CI lint runs without the legacy env and fails. |
 
 ---
 
@@ -999,7 +999,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-08 |
+| **Status / parked** | **Done** · 2026-08-16 — `scripts/ops/clone_cip_db.py` resolves `PG_BIN`, refuses clone target `cip`; documented in LOCAL_DEV_WINDOWS + docker README. |
 | **Effort** | Small (docs + helper script) |
 | **Source** | Agent session (2026-07-08): shipment apply clone gate; `pg_dump` not on PATH in PowerShell; binaries at `C:\Program Files\PostgreSQL\18\bin\`; gate used explicit full paths; prior session used `CREATE DATABASE … TEMPLATE cip` (not pg_dump proof). |
 | **Idea** | Standardize disposable clone creation for destructive-class gates: `scripts/ops/clone_cip_db.py` wrapping explicit `pg_dump`/`pg_restore` paths (Windows + Linux), env override for bin dir, refuse `current_database()='cip'` writes. |
@@ -1067,7 +1067,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-01 |
+| **Status / parked** | **Done** · 2026-08-16 — alembic `resolve_alembic_migrate_url` hard-fails when migrate URL is `cip` while sync URL is not; `CIP_SMOKE_MIGRATE=1` requires both URLs set to the same non-`cip` DB. Ordinary `cip` upgrades unchanged. |
 | **Effort** | Small (env override checklist + optional guard in alembic preflight or smoke helper script) |
 | **Source** | Spec C Step A session (2026-07-01): disposable `cip_alembic_smoke` migration smoke briefly applied `20260701_0064` to `cip` because `DATABASE_URL_SYNC` alone was overridden while `DATABASE_URL_SYNC_MIGRATE` in `.env` still pointed at `cip`. Caught and downgraded before review; approved apply to `cip` followed in a separate step. |
 | **Idea** | Disposable-smoke migrate runs must **never** fall through to `.env`'s `DATABASE_URL_SYNC_MIGRATE` (which points at `cip` for local dev). Require **both** `DATABASE_URL_SYNC` and `DATABASE_URL_SYNC_MIGRATE` in the smoke override set; optionally refuse `alembic upgrade` when a smoke-run marker is set and the resolved migrate DB is `cip`. |
@@ -1141,7 +1141,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-01 |
+| **Status / parked** | **Closed — documented, persist kept** · 2026-08-16 — apply/poll/`session_import_job_id` consumers depend on the coordinator `ImportJob`. Stopping persist would break dispatch. Loud docstring on `persist_preview_session`. |
 | **Effort** | Small (in-memory preview session **or** loud docs + size guard) |
 | **Source** | Step B `persist_preview_session` — writes `ImportJob.staged_metadata` + base64 file manifest; ~60 files may be heavy. |
 | **Idea** | "Preview is read-only" is false against lineup tables but still writes coordinator `ImportJob` rows on live API. Fix: non-persisting preview **or** document loudly + optional manifest externalization. |
@@ -1153,7 +1153,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-01 |
+| **Status / parked** | **Done** · 2026-08-16 — `SLOT_BULK_LINEUP_APPLY` / `bulk_lineup_apply_task` registered; cancel/retry clears it via `TASK_SLOTS`. No longer uses `SLOT_MAIN`. |
 | **Effort** | Small |
 | **Source** | `lineup_bulk_backfill_api.py` uses `SLOT_MAIN`; DSI apply uses dedicated slot + registry. |
 | **Idea** | Dedicated slot/registry entry for bulk lineup apply to match DSI parity and avoid orphan-slot clears. |
@@ -1250,7 +1250,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-06-24 |
+| **Status / parked** | **Done** · 2026-08-16 — shipment draft clears on job-id change; mapping panel waits until `mapping-state.id` matches; remount `key`; banner “New file — previous mapping cleared”. `?job=` remap retained. |
 | **Effort** | Small–medium (web); may touch shared `CanonicalColumnMappingPanel` |
 | **Source** | Warren session (2026-06-24): on inbound shipment import, click **Back**, re-upload a **new** file — dropdown mapping UI still reflects the **previous** file (column/target selections stale) while validate/apply still proceeds on the new job. `apps/web/src/app/(app)/admin/imports/page.tsx` (`shipmentMapDraft`, `shipment-mapping-state` query, upload `onSuccess` invalidation, wizard Back handlers without full draft reset); `CanonicalColumnMappingPanel.tsx` (Autocomplete sections: “Selected for this column”, “Already mapped in this file”); parallel DSI path (`dsiMapDraft`, `dsi-mapping-state`) likely same class of bug |
 | **Idea** | Wizard **client state** (mapping draft, query cache, panel local filter) is not fully reset when the operator navigates back to upload and creates a **new** job with different headers. UI misleads (old column names / targets in Maps-to dropdown); server uses new job file — **silent mismatch** until operator notices or validate surfaces errors. |
@@ -1647,16 +1647,16 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Root-cause quarantine applied 2026-08-10** — suspect amounts zeroed + `raw_source_row.backlog_076_quarantine` stamp; KPI exclusion remains as safety net |
+| **Status / parked** | **Closed 2026-08-17** — quarantine is the complete fix. Live sample: Qty 36, Unit Price **999999**, Amount 35999964 (= Qty×Unit Price). Mapping is not swapped. Re-import would restore the same junk. 17 quarantined, 0 still-suspect (`abs(amount)/qty > 100_000`). KPI exclude remains. Source workbook not on disk at the documented Desktop path. |
 | **Effort** | Medium (import mapping audit + optional purge of junk job facts) |
 | **Source** | Shipping KPI Phase 0 (`docs/SHIPPING_COMMERCIAL_KPI_CONTRACT.md` §Phase 0; `.tmp/shipping_kpi_phase0_diag.json`). Old “Pipeline value” = **$288M**; **$214M** of that is on **267** scheduled lines with **null ETA and null promise**. Top rows show qty **36** with amount **~$36M** each (`~1e6` unit price) from `acza_workbook_unship` source keys. |
 | **Idea** | Diagnose whether OEM amount/unit_price columns were mapped with wrong scale or currency; quarantine or re-import affected jobs. Do **not** silently rewrite amounts from the `/shipping` UI. |
 | **Mitigation shipped 2026-08-08** | `apps/api/app/services/shipping/amount_scale.py` — KPI excludes suspect unit prices. |
 | **Quarantine 2026-08-10** | Zeroed `amount` on rows with `abs(amount)/qty > 100_000`; stamped JSON audit flag. Corrective re-import of Unship workbook still optional if operators want restored true amounts. |
-| **Why deferrable (remaining)** | Optional full Unship re-map + re-import if true commercial amounts are needed on those lines. |
+| **Why deferrable (remaining)** | Closed — there are no true commercial amounts in the Unship Amount/Unit Price cells (sentinel 999999). |
 | **Regression traps** | Do not change DAP vs PM cost concepts; do not mass-UPDATE without audit trail; preserve `source_key` upsert semantics. |
 | **Out of scope** | Changing commercial KPI predicates again; MasterDataGridShell rewrite. |
-| **TRIGGER** | Optional: Warren asks for Unship corrective re-import with verified column mapping. |
+| **TRIGGER** | — closed 2026-08-17 — reopen only if a new Unship file has real unit prices (not 999999) and Warren asks to re-import. |
 
 ---
 

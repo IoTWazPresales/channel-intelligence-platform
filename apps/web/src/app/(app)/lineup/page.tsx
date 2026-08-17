@@ -36,6 +36,7 @@ import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { parseLineupImportCsv } from '@/lib/lineupImportCsv';
 import { toQueryError } from '@/lib/queryError';
@@ -451,7 +452,7 @@ export default function LineupPage() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Planning' }, { label: 'Line-up planning' }]} title="Line-up planning" />
+      <PageHeader {...navPageChrome('/lineup')} />
       <Alert severity="info" sx={{ mb: 2 }}>
         <Typography variant="body2" component="div">
           <strong>Line-up</strong> is customer / channel / period assortment planning with optional links to buy plans,
@@ -576,7 +577,7 @@ export default function LineupPage() {
               <Checkbox
                 checked={applyBias}
                 onChange={(_, c) => setApplyBias(c)}
-                inputProps={{ 'data-testid': 'lineup-apply-bias' }}
+                data-testid="lineup-apply-bias"
               />
             }
             label="A1 bias on forecast"
@@ -587,7 +588,7 @@ export default function LineupPage() {
               <Checkbox
                 checked={writeCommercialCase}
                 onChange={(_, c) => setWriteCommercialCase(c)}
-                inputProps={{ 'data-testid': 'lineup-write-commercial-case' }}
+                data-testid="lineup-write-commercial-case"
               />
             }
             label="Write commercial lineup case"

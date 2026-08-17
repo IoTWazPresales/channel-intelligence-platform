@@ -11,6 +11,8 @@ import { fetchBulkProvisionalTaskProgress } from '@/features/background-tasks/fe
 describe('pollDsiResolutionPlanApplyTask', () => {
   it('distinguishes queue timeout from execution timeout', async () => {
     vi.mocked(fetchBulkProvisionalTaskProgress).mockResolvedValue({
+      import_job_id: 43,
+      task_id: 'task-1',
       state: 'PENDING',
       result: undefined,
       error: undefined,
