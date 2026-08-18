@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-08-18 — **Shipping-mailer recipients UI:** Settings list + DB table `shipping_mailer_recipient` (Alembic `20260818_0019`). UI list wins; empty table seeds the five.
+- 2026-08-18 — **Shipping-mailer recipients UI** `6a35332`: Settings list + DB table `shipping_mailer_recipient` (Alembic `20260818_0019`). UI list wins; empty table seeds the five.
 
 - 2026-08-18 — **Merged to main** `eb73232`: mailbox ingest + shipping digest mailer (`847aaf8`).
 
