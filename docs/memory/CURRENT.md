@@ -23,7 +23,7 @@
 
 ## Next
 
-1. Opus VERIFY of this branch.
-2. Do not re-audit IMAP/Graph/job 1159.
+1. Merge to `main` when Warren says (VERIFY PASS).
+2. Do not re-audit IMAP/Graph/job 1159. Alembic `20260818_0019` is already on this cip.
 
 **Env:** local Windows. Web `:3000` + API `:8001`. No Docker.
