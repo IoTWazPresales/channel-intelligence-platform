@@ -16,9 +16,9 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-08-18 — **Digest grouped by disti, sorted by customer.** Inbox **#17** preview only (not re-sent). Uncommitted.
+- 2026-08-18 — **Digest grouped by disti, sorted by customer.** Inbox **#17** preview. `847aaf8`.
 
-- 2026-08-18 — **BACKLOG-132 live send:** Alembic `20260818_0018` on cip. Job 1159 digest emailed to the five ASUS addresses (audit rows 12–16 delivered). From Gmail SMTPS :465. `CIP_SHIPPING_MAILER_SEND=1`. Uncommitted.
+- 2026-08-18 — **BACKLOG-132 live send:** Alembic `20260818_0018` on cip. Job 1159 digest emailed to the five ASUS addresses (audit rows 12–16 delivered). From Gmail SMTPS :465. `847aaf8`.
 
 - 2026-08-18 — **BACKLOG-132 Unit C coded (uncommitted):** Alembic `20260818_0018` (channel=`email` + recipient_email). SMTP gated `CIP_SHIPPING_MAILER_SEND` still off. cip still `20260817_0017`. Waiting Warren: upgrade and send job 1159 to the five.
 

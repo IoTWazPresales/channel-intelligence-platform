@@ -4,7 +4,7 @@
 
 **Branch:** `feat/mailbox-ingest-shipping`
 
-**Last content pin:** `464b3f6` — do not treat a hash in this file as HEAD
+**Last content pin:** `847aaf8` — do not treat a hash in this file as HEAD
 
 **Alembic (code):** `20260818_0018` (`20260818_0018_report_delivery_email_channel.py`)
 
