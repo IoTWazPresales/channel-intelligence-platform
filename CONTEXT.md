@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-08-18 — **Merged to main** `eb73232`: mailbox ingest + shipping digest mailer (`847aaf8`).
+
 - 2026-08-18 — **Digest grouped by disti, sorted by customer.** Inbox **#17** preview. `847aaf8`.
 
 - 2026-08-18 — **BACKLOG-132 live send:** Alembic `20260818_0018` on cip. Job 1159 digest emailed to the five ASUS addresses (audit rows 12–16 delivered). From Gmail SMTPS :465. `847aaf8`.
