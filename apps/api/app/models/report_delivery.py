@@ -14,7 +14,10 @@ from app.db.base import Base
 class ReportDelivery(Base):
     __tablename__ = "report_delivery"
     __table_args__ = (
-        CheckConstraint("channel IN ('inbox', 'email_stub')", name="ck_report_delivery_channel"),
+        CheckConstraint(
+            "channel IN ('inbox', 'email_stub', 'email')",
+            name="ck_report_delivery_channel",
+        ),
         CheckConstraint(
             "trigger IN ('manual', 'schedule', 'import_event')",
             name="ck_report_delivery_trigger",
@@ -46,8 +49,10 @@ class ReportDelivery(Base):
     missing_data_alert: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     metric_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     value_preview: Mapped[str | None] = mapped_column(Text, nullable=True)
-    storage_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    storage_key: Mapped[str | None] = mapped_column(Text, nullable=True, deferred=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    recipient_email: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provider_message_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )

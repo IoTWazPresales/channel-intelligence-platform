@@ -246,6 +246,18 @@ def run_shipment_apply_sync(
             job_id,
         )
 
+    # BACKLOG-132: shipping digest inbox preview; SMTP when CIP_SHIPPING_MAILER_SEND=1.
+    try:
+        from app.services.shipping_digest.dispatch import dispatch_shipping_digest
+
+        tid = getattr(job, "tenant_id", None) if job is not None else None
+        dispatch_shipping_digest(tenant_id=str(tid or "default"), import_job_id=int(job_id))
+    except Exception:
+        logger.exception(
+            "Shipment post-apply shipping digest preview failed job_id=%s; apply remains complete",
+            job_id,
+        )
+
     _emit("complete", "Apply complete", fact_rows, fact_rows)
     return {
         "id": job_id,

@@ -16,6 +16,36 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-08-18 — **Digest grouped by disti, sorted by customer.** Inbox **#17** preview. `847aaf8`.
+
+- 2026-08-18 — **BACKLOG-132 live send:** Alembic `20260818_0018` on cip. Job 1159 digest emailed to the five ASUS addresses (audit rows 12–16 delivered). From Gmail SMTPS :465. `847aaf8`.
+
+- 2026-08-18 — **BACKLOG-132 Unit C coded (uncommitted):** Alembic `20260818_0018` (channel=`email` + recipient_email). SMTP gated `CIP_SHIPPING_MAILER_SEND` still off. cip still `20260817_0017`. Waiting Warren: upgrade and send job 1159 to the five.
+
+- 2026-08-18 — **File-vs-file digest:** 1159 vs Jul 28 xlsx: 1 newly POD’d, 24 ETA this week, 134 ETA next week, 686 real ETA moves (not 6700). Inbox **#10** email preview modal with Distis/Customers/Models/Qty summary. Uncommitted.
+
+- 2026-08-18 — **SH-04 6416 false:** job **605** stored 0 POD (empty mapping). Skip zero-POD snapshots → job 1159 newly-POD'd **1**. Digest groups disti×customer×date×model (sum qty). Inbox 500 was API down + stale 0007 copy, not a missing migration. Inbox **#8** corrected preview. Uncommitted.
+
+- 2026-08-18 — **BACKLOG-132 Unit B preview** (uncommitted): inbox **#7** `[PREVIEW] Shipping digest job 1159`; HTML `.tmp/b132_preview_job1159.html`. Sections: landing-this-week **137** · newly-POD'd **6416** · ETA changes remainder (**13285** total lines). No SMTP. No re-apply. **Superseded:** 6416 was vs broken job 605; see 2026-08-18 SH-04 line.
+
+- 2026-08-18 — **BACKLOG-132 Unit A** on `feat/mailbox-ingest-shipping`: SH-04 newly-landed owner + shared observation LAG. Uncommitted. Live job 1159: 6416 rows. Next: Opus VERIFY then Unit B preview (no send).
+
+- 2026-08-18 — **job 1159 mailbox apply:** mapping complete; 6928 facts; 15 customer tokens needs_review (Homeless/Sample/SADC — FLAG≠BLOCK). BACKLOG-132 TRIGGER fired.
+
+- 2026-08-18 — **mailbox ingest proven:** Gmail IMAP job **1159** `ACZA Shipped Unshipped 20260818_P2.xlsx` completed/loaded. Later polls checksum-skip the same file. Graph unused (ASUS Entra denied).
+
+- 2026-08-18 — **mailbox Gmail fetch**: SINCE+BODY.PEEK (not UNSEEN/RFC822) so opened forwards still ingest; nested rfc822 attachments; drop failing X-GM-RAW FLAG spam.
+
+- 2026-08-18 — **mailbox Gmail IMAP** (ASUS Entra app registration access denied). Graph stays in-tree unused. Local proof: `imap.gmail.com` + App Password → same `inbound_shipments` intake.
+
+- 2026-08-18 — **mailbox Graph fetch** on `feat/mailbox-ingest-shipping`: ASUS M365 rejected IMAP basic auth. Same `inbound_shipments` intake; Graph unread+attachments; device-code login (`graph_login`) or client secret. Live Graph unproven (needs Entra app id).
+
+- 2026-08-18 — **mailbox ingest Unit 1** on `feat/mailbox-ingest-shipping`: IMAP lifespan poller → existing shipment infer/validate/apply + unattended provisionals. Allowlist Jess_Mah@asus.com + warren_eliason@asus.com. Source id 6. No migration. Mailers to a list deferred BACKLOG-132. Live IMAP unproven (needs .env + API restart).
+
+- 2026-08-18 — **mailbox ingest CONSULT READY** (`feat/mailbox-ingest-shipping` @ `464b3f6`). Unit 1 prompt `.tmp/mailbox_ingest_shipping_u1_cursor_prompt.md`: IMAP lifespan poller → existing shipment `ImportJob` infer/validate/apply; unattended provisional create via existing steward ops; no new table; change-diff later (D-024). Awaiting Warren skim before IMPLEMENT.
+
+- 2026-08-18 — **mailbox ingest CONSULT** on `feat/mailbox-ingest-shipping` @ `464b3f6` (from `main`). Path map `.tmp/mailbox_ingest_shipping_path_map.md`. Opus CONSULT `NEED_HUMAN` (A–E). No code. No migration.
+
 - 2026-08-17 — **merged `feat/finish-roadmap` → `main`** (`87b2277`): 097 WoC observations (`cce913b`) + 098 API catch-up (`8ce0f8b`). Alembic `20260817_0017` on cip.
 
 - 2026-08-17 — **097 WoC observations** (`cce913b`) + **098 catch-up** (`8ce0f8b`) on `feat/finish-roadmap`: `weeks_of_cover_observation` (Alembic `20260817_0017`); apply reconstruct; A3/Channel Ops/Monday read observations. Live proof: 0.61s query, inbox **#6** ok, Channel Ops 23.7w / 61,776. 098 poller on API reconnect `due_count: 0`.

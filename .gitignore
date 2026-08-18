@@ -20,6 +20,7 @@ dist/
 .env.local
 .env.*.local
 *.pem
+apps/api/.mailbox-msal.bin
 
 # Storage (dev uploads)
 storage/uploads/
@@ -52,6 +53,8 @@ blob-report/
 *.sql.gz
 *.backup
 queryex
+.tmp/
+**/.tmp/
 
 # Source commercial files / uploads (never commit)
 *.xlsx

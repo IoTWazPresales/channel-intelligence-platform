@@ -88,6 +88,7 @@ _WRITE_CAPABLE_TEST_MODULES: frozenset[str] = frozenset(
         "test_shipment_resolved_entities.py",
         "test_shipment_steward_bulk_preview.py",
         "test_shipping_commercial_kpis.py",
+        "test_shipping_newly_landed.py",
         "test_sql_viewer.py",
         "test_task_run_ledger.py",
         "test_unified_lineup_import.py",
