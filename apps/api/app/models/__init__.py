@@ -131,6 +131,7 @@ from app.models.steward_audit import StewardAuditEvent
 from app.models.saved_reports import Dashboard, DashboardWidget, SavedReport
 from app.models.report_delivery import ReportDelivery, ReportSchedule
 from app.models.sql_viewer_audit import SqlViewerAudit
+from app.models.shipping_mailer_recipient import ShippingMailerRecipient
 
 __all__ = [
     "DimProduct",
@@ -253,4 +254,5 @@ __all__ = [
     "ReportDelivery",
     "ReportSchedule",
     "SqlViewerAudit",
+    "ShippingMailerRecipient",
 ]

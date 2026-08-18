@@ -146,7 +146,10 @@ class Settings(BaseSettings):
     )
     cip_shipping_mailer_recipients: str = Field(
         default="",
-        description="Comma-separated To list; empty uses the locked five ASUS addresses (env CIP_SHIPPING_MAILER_RECIPIENTS).",
+        description=(
+            "Comma-separated seed for an empty shipping_mailer_recipient table "
+            "(env CIP_SHIPPING_MAILER_RECIPIENTS). Ignored once any UI row exists."
+        ),
     )
     cip_shipping_mailer_smtp_host: str = "smtp.gmail.com"
     cip_shipping_mailer_smtp_port: int = 587

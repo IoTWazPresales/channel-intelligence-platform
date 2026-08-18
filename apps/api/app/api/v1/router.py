@@ -47,6 +47,7 @@ from app.api.v1.endpoints import (
     semantics,
     shipment_evidence,
     shipping,
+    shipping_mailer,
     sql_viewer,
     steward_audit,
 )
@@ -73,6 +74,9 @@ api_router.include_router(listing_capture.router, prefix="/listing-capture", tag
 api_router.include_router(inbound_shipments.router, prefix="/inbound-shipments", tags=["inbound-shipments"])
 api_router.include_router(shipment_evidence.router, prefix="/shipment-evidence", tags=["shipment-evidence"])
 api_router.include_router(shipping.router, prefix="/shipping", tags=["shipping"])
+api_router.include_router(
+    shipping_mailer.router, prefix="/shipping-mailer", tags=["shipping-mailer"]
+)
 api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
 api_router.include_router(forecasts.router, prefix="/forecasts", tags=["forecasts"])
 api_router.include_router(buy_plans.router, prefix="/buy-plans", tags=["buy-plans"])

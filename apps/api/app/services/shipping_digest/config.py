@@ -1,4 +1,4 @@
-"""Shipping-digest send gates and recipient resolution. No second secret store."""
+"""Shipping-digest send gates and seed-source helper. Send list is DB-backed."""
 
 from __future__ import annotations
 
@@ -15,6 +15,12 @@ def mailer_smtp_check_enabled() -> bool:
 
 
 def mailer_recipients() -> tuple[str, ...]:
+    """Seed source only — not the live send list.
+
+    ``CIP_SHIPPING_MAILER_RECIPIENTS`` when set is the first-run seed / break-glass
+    source for an *empty* table. A populated UI list wins; see
+    ``resolve_shipping_recipients``.
+    """
     settings = Settings()
     dedicated = tuple(
         part.strip()
@@ -23,13 +29,6 @@ def mailer_recipients() -> tuple[str, ...]:
     )
     if dedicated:
         return dedicated
-    mailbox = tuple(
-        part.strip()
-        for part in (settings.cip_mailbox_mailer_recipients or "").split(",")
-        if part.strip()
-    )
-    if len(mailbox) >= 2:
-        return mailbox
     return DEFAULT_SHIPPING_MAILER_RECIPIENTS
 
 

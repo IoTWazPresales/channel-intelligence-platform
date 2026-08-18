@@ -14,11 +14,16 @@ vi.mock('@/lib/wipeAvailability', () => ({
 
 const apiGet = vi.fn();
 const apiPut = vi.fn();
+const apiPost = vi.fn();
+const apiPatch = vi.fn();
+const apiDelete = vi.fn();
 
 vi.mock('@/lib/api', () => ({
   apiGet: (...args: unknown[]) => apiGet(...args),
   apiPut: (...args: unknown[]) => apiPut(...args),
-  apiPost: vi.fn(),
+  apiPost: (...args: unknown[]) => apiPost(...args),
+  apiPatch: (...args: unknown[]) => apiPatch(...args),
+  apiDelete: (...args: unknown[]) => apiDelete(...args),
   getApiBase: () => '',
   safeDisplayError: (err: unknown) => String(err),
 }));
@@ -59,6 +64,9 @@ describe('SettingsPage semantic overlay gate', () => {
           compose_ops: ['ratio', 'alias'],
         };
       }
+      if (String(path).includes('shipping-mailer/recipients')) {
+        return { items: [] };
+      }
       return {};
     });
   });
@@ -74,5 +82,18 @@ describe('SettingsPage semantic overlay gate', () => {
     wrap();
     expect(await screen.findByTestId('tenant-profile-heading')).toBeInTheDocument();
     expect(screen.queryByTestId('semantic-overlay-heading')).not.toBeInTheDocument();
+  });
+
+  it('shows the shipping digest recipients panel for admin', async () => {
+    roleState.current = 'admin';
+    wrap();
+    expect(await screen.findByTestId('shipping-mailer-recipients-heading')).toBeInTheDocument();
+  });
+
+  it('hides the shipping digest recipients panel for non-admin', async () => {
+    roleState.current = 'steward';
+    wrap();
+    expect(await screen.findByTestId('tenant-profile-heading')).toBeInTheDocument();
+    expect(screen.queryByTestId('shipping-mailer-recipients-heading')).not.toBeInTheDocument();
   });
 });

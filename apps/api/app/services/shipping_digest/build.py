@@ -22,7 +22,7 @@ from app.services.shipping.observation_transitions import (
     _merge_line_columns,
     _qty,
 )
-from app.services.shipping_digest.recipients import intended_mailer_recipients
+from app.services.shipping_digest.recipients_store import resolve_shipping_recipients
 
 SECTION_ARRIVING = "arriving_week"
 SECTION_ARRIVING_NEXT = "arriving_next_week"
@@ -233,7 +233,6 @@ async def build_shipping_digest(
     tenant_id: str = "default",
     import_job_id: int | None = None,
 ) -> dict[str, Any]:
-    del tenant_id
     today = _utc_today()
     this_w0, this_w1 = _iso_week_bounds(today)
     next_w0, next_w1 = _iso_week_bounds(today + timedelta(days=7))
@@ -311,6 +310,6 @@ async def build_shipping_digest(
             "section_counts": {s["id"]: len(s["rows"]) for s in sections},
             "section_dims": {s["id"]: section_dims(s["rows"]) for s in sections},
         },
-        "intended_recipients": list(intended_mailer_recipients()),
+        "intended_recipients": list(await resolve_shipping_recipients(db, tenant_id)),
         "sections": sections,
     }

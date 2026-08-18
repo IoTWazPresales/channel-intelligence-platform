@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import AsyncSessionLocal
 from app.models.report_delivery import ReportDelivery
 from app.services.shipping_digest.build import build_shipping_digest
-from app.services.shipping_digest.config import mailer_recipients, mailer_send_enabled
+from app.services.shipping_digest.config import mailer_send_enabled
 from app.services.shipping_digest.render import render_html, render_text
 from app.services.shipping_digest.smtp_send import send_digest_to_recipients
 
@@ -35,7 +35,7 @@ async def _write_preview_row(
     text_body: str,
     preview: bool,
 ) -> ReportDelivery:
-    recipients = digest.get("intended_recipients") or list(mailer_recipients())
+    recipients = list(digest.get("intended_recipients") or [])
     vintage = dict(digest.get("data_vintage") or {})
     job = vintage.get("source_job_id")
     subject = _digest_subject(import_job_id=job, preview=preview)
@@ -140,7 +140,7 @@ async def dispatch_shipping_digest_async(
             job = (digest.get("data_vintage") or {}).get("source_job_id")
             subject = _digest_subject(import_job_id=job, preview=False)
             results = send_digest_to_recipients(
-                recipients=list(digest.get("intended_recipients") or mailer_recipients()),
+                recipients=list(digest.get("intended_recipients") or []),
                 subject=subject,
                 html_body=html_body,
                 text_body=text_body,
