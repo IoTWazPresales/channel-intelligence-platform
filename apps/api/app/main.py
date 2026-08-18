@@ -22,9 +22,15 @@ async def lifespan(app: FastAPI):
             "Product Master commits run in API daemon threads (no Celery worker/Redis for that path). "
             "Do not use in production. For broker-backed commits unset this and run a worker."
         )
+    from app.services.mailbox_ingest_runner import spawn_mailbox_ingest_poller
     from app.services.report_schedule_runner import spawn_report_schedule_poller
 
     spawn_report_schedule_poller()
+    spawn_mailbox_ingest_poller()
+    if s.cip_shipping_mailer_smtp_check:
+        from app.services.shipping_digest.smtp_check import smtp_login_check
+
+        smtp_login_check()
     yield
 
 

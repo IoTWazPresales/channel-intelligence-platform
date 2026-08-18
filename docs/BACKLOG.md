@@ -6,6 +6,23 @@
 
 ---
 
+## BACKLOG-132 — Post-apply shipping mailer to a mailing list (M365)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Shipped** · 2026-08-18 · Gmail SMTP digest after shipment apply (job 1159 mailed to the five ASUS addresses). Graph `Mail.Send` From-ASUS still blocked (app registration). Reopen only for Graph-from-ASUS or recipient-list change. |
+| **Effort** | Medium–large (Graph send as `warren_eliason@asus.com` or SMTP; list of recipients; content from existing SH-01/SH-02 + consecutive-job/observation diffs) |
+| **Source** | Warren 2026-08-18 after mailbox CONSULT READY: “The whole point is to send mailers to a mailing list with the details.” Watched mailbox `warren_eliason@asus.com`; report From `Jess_Mah@asus.com`. |
+| **Idea** | After a successful shipping apply, send one digest to a governed mailing list using the **existing** inbox/`on_import_complete` rail for in-app copy **and** Microsoft 365 send (Graph `Mail.Send`) so it lands in Outlook. Do **not** invent a second shipping mailer beside `dispatch_import_complete_report_fanout`. Change-diff (last vs this file) needs D-024 halt + `COMMERCIAL_SEMANTICS` owner before new tiles. |
+| **Why it matters / deferrable** | This is the operator-facing payoff. Deferrable until Graph intake is proven (job appears from Jess’s attachment). Graph app registration can cover **read + send** (`Mail.ReadWrite` + later `Mail.Send`). |
+| **What the work is** | (1) Recipient list (CIP users vs SMTP addresses). (2) CONSULT lock inbox vs real email (098 left SMTP out). (3) Content = reuse `shipping_commercial_kpis.py` + evidence/observation history — no duplicate KPI math. (4) Graph send from Warren’s ASUS mailbox if IT allows. |
+| **Regression traps** | No second notification pipeline; no new mail schema; D-024/D-025 for new metrics; never send secrets; FLAG send failures. |
+| **Behavior to retain** | Unit 1 Graph/IMAP intake into existing `inbound_shipments`; `on_import_complete` fan-out; `/shipping` as SH-01/SH-02 owner. |
+| **Out of scope** | DSI/CST mailbox; IMAP-only send. |
+| **TRIGGER** | Fired 2026-08-18: Unit 1 job 1159 completed **and** Warren asked to send mailers to email addresses. |
+
+---
+
 ## BACKLOG-130 — Listing ↔ CPOR activation check (live price vs case)
 
 | Field | Detail |
@@ -947,7 +964,7 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-18 · renumbered from multifile **074** on 2026-07-27 merge |
+| **Status / parked** | **Parked** · 2026-07-18 · **Shipping slice in progress** 2026-08-18 on `feat/mailbox-ingest-shipping` (Graph → `inbound_shipments` after IMAP basic auth disabled on ASUS M365; not DSI batch-propose). DSI/CST retain original “review-queue only / never silent apply” trap until re-consulted. |
 | **Effort** | Large (mailbox connector + allowlist + activity-feed failures + same propose/batch path) |
 | **Source** | Warren product discussion (2026-07-18): weekly DSI ops speed — email attach → app auto-upload; agree not silly, but premature until unified multi-file batch + mapping autosave + per-file distributor stamps soak-stable. |
 | **Idea** | Inbound mailbox (allowlisted senders) drops attachments into the existing DSI **batch-propose** path: capability merge (one job for all mappable files), mapping memory, file stamps, steward queue. Never silent apply to facts. |

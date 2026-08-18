@@ -127,6 +127,7 @@ UI label: scorecard shows **Over-plan intake** (A1-02; BACKLOG-091 resolved 2026
 | SH-01 | Lifecycle buckets shipped / pipeline / landed | IMPLEMENTED | Chips + filters on `line_state` / `pod_date` | Shipping |
 | SH-02 | Commercial cohorts (arriving / overdue / landed week) | IMPLEMENTED | `shipping_commercial_kpis.py` predicates on **fact** `pod_date` | Shipping |
 | SH-03 | POD completeness / awaiting ageing | PARTIAL | UI has `awaiting_pod_days`; truthful completeness blocked by BACKLOG-088 | Shipping |
+| SH-04 | Newly POD'd since prior report | IMPLEMENTED | Consecutive `shipment_evidence_observation` LAG on `pod_date` (`NULL` → set), partitioned by `line_identity_key` ordered by `valid_from`. Requires a **prior observation** (first-seen already-POD'd lines are not this metric). **Skip inbound jobs that recorded zero `pod_date` values** when the current job recorded some (job 605 empty mapping). Digest ETA vs last usable report skips jobs with **zero POD and zero Est POD** (605 stored Promise-only leftovers; that is not an ETA change). Grain = observation transition (not fact ISO-week `landed_week`). Digest display groups disti × customer × date × sales_model (sum qty). Owner API: `GET /shipping/newly-landed`. No query-engine key. | Shipping |
 
 ### 4.3 CPOR intelligence — `/commercial-planner/cpor-cases`
 

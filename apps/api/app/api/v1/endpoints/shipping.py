@@ -17,7 +17,6 @@ from app.core.security import get_optional_current_user
 from app.core.tenant_scope import DEFAULT_TENANT_ID, tenant_id_from_user, where_tenant
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.facts import FactInboundShipment
-from app.models.shipment_evidence_observation import ShipmentEvidenceObservation
 from app.services.commercial_planner.inbound_lineup_quarter import (
     available_plan_periods,
     enrich_fact_lineup_fields,
@@ -31,6 +30,12 @@ from app.services.commercial_planner.lineup_period_canonical import parse_period
 from app.services.shipping.amount_scale import (
     amount_scale_not_suspect_clause,
     amount_scale_suspect_clause,
+)
+from app.services.shipping.newly_landed import newly_landed_transitions
+from app.services.shipping.observation_transitions import (
+    compute_eta_shifts,
+    empty_eta_shift_result,
+    identity_scope_from_fact_subquery,
 )
 from app.services.shipping_commercial_kpis import (
     COHORT_DEFINITIONS,
@@ -708,16 +713,16 @@ async def _eta_shift_metrics(
     scoped_ids: list[int] | None = None,
     require_current_incoming: bool = True,
     today: date | None = None,
+    cap_samples: bool = True,
+    include_line_columns: bool = False,
 ) -> dict[str, Any]:
     """Compare consecutive observations per ``line_identity_key`` (LAG on ``valid_from``).
 
-    Default scopes to current-incoming facts (KPI contract). Observations are
-    pre-filtered to evidence lines for scoped facts so we do not LAG the full
-    lifetime observation table.
+    Default scopes to current-incoming facts (KPI contract). Window SQL lives in
+    ``observation_transitions`` so newly-landed (SH-04) shares the same mechanism.
     """
     ref = today or _utc_today()
 
-    # Pre-scope fact → evidence_line_id to keep the window function small.
     fact_scope = select(
         FactInboundShipment.id,
         FactInboundShipment.shipment_evidence_line_id,
@@ -726,13 +731,7 @@ async def _eta_shift_metrics(
         fact_scope = fact_scope.where(predicate_current_incoming(ref))
     if scoped_ids is not None:
         if not scoped_ids:
-            return {
-                "slipped_count": 0,
-                "improved_count": 0,
-                "net_direction": "neutral",
-                "samples": [],
-                "cohort_definition": "current_incoming" if require_current_incoming else "lifetime",
-            }
+            return empty_eta_shift_result(require_current_incoming=require_current_incoming)
         fact_scope = fact_scope.where(FactInboundShipment.id.in_(scoped_ids))
     elif filt is not None and _shipping_filters_active(filt):
         need_dist, need_prod, need_cust = _dim_join_flags(filt)
@@ -745,123 +744,16 @@ async def _eta_shift_metrics(
             **filt,
         )
     fact_scope = fact_scope.where(FactInboundShipment.shipment_evidence_line_id.is_not(None)).subquery()
-
-    evid_ids = select(fact_scope.c.shipment_evidence_line_id).distinct()
-    identity_keys = (
-        select(ShipmentEvidenceObservation.line_identity_key)
-        .where(ShipmentEvidenceObservation.evidence_line_id.in_(evid_ids))
-        .distinct()
+    evid_ids, identity_keys = identity_scope_from_fact_subquery(fact_scope)
+    return await compute_eta_shifts(
+        db,
+        evid_ids=evid_ids,
+        identity_keys=identity_keys,
+        sample_limit=sample_limit,
+        require_current_incoming=require_current_incoming,
+        cap_samples=cap_samples,
+        include_line_columns=include_line_columns,
     )
-
-    lag_est = func.lag(ShipmentEvidenceObservation.est_pod_date).over(
-        partition_by=ShipmentEvidenceObservation.line_identity_key,
-        order_by=ShipmentEvidenceObservation.valid_from.asc(),
-    )
-    lag_prom = func.lag(ShipmentEvidenceObservation.promise_date).over(
-        partition_by=ShipmentEvidenceObservation.line_identity_key,
-        order_by=ShipmentEvidenceObservation.valid_from.asc(),
-    )
-    # LAG over full identity history for scoped keys, then keep rows tied to scoped evidence lines.
-    line_win = (
-        select(
-            ShipmentEvidenceObservation.id,
-            ShipmentEvidenceObservation.line_identity_key,
-            ShipmentEvidenceObservation.source_key,
-            ShipmentEvidenceObservation.import_job_id,
-            ShipmentEvidenceObservation.evidence_line_id,
-            ShipmentEvidenceObservation.est_pod_date,
-            ShipmentEvidenceObservation.promise_date,
-            lag_est.label("prev_est"),
-            lag_prom.label("prev_prom"),
-        )
-        .where(ShipmentEvidenceObservation.line_identity_key.in_(identity_keys))
-        .subquery()
-    )
-
-    cur_eff = func.coalesce(line_win.c.est_pod_date, line_win.c.promise_date)
-    prev_eff = func.coalesce(line_win.c.prev_est, line_win.c.prev_prom)
-    delta_days = (cur_eff - prev_eff)
-
-    base = (
-        select(
-            line_win.c.source_key,
-            cur_eff.label("current_effective"),
-            prev_eff.label("previous_effective"),
-            line_win.c.est_pod_date.label("current_est_pod"),
-            line_win.c.promise_date.label("current_promise"),
-            line_win.c.prev_est.label("previous_est_pod"),
-            line_win.c.prev_prom.label("previous_promise"),
-            delta_days.label("delta_days"),
-        )
-        .select_from(line_win)
-        .where(
-            prev_eff.is_not(None),
-            cur_eff.is_not(None),
-            line_win.c.evidence_line_id.in_(evid_ids),
-        )
-    )
-
-    slipped_sub = base.where(cur_eff > prev_eff).subquery()
-    improved_sub = base.where(cur_eff < prev_eff).subquery()
-    slipped_count = int((await db.scalar(select(func.count()).select_from(slipped_sub))) or 0)
-    improved_count = int((await db.scalar(select(func.count()).select_from(improved_sub))) or 0)
-
-    samples: list[dict[str, Any]] = []
-    lim = max(0, min(sample_limit, 50))
-    if lim > 0:
-        slip_rows = (
-            (
-                await db.execute(
-                    select(slipped_sub).order_by(desc(slipped_sub.c.delta_days)).limit(lim)
-                )
-            )
-            .mappings()
-            .all()
-        )
-        imp_rows = (
-            (
-                await db.execute(
-                    select(improved_sub).order_by(improved_sub.c.delta_days.asc()).limit(lim)
-                )
-            )
-            .mappings()
-            .all()
-        )
-
-        def _row_to_sample(row: dict[str, Any], direction: str) -> dict[str, Any]:
-            ce = row.get("current_effective")
-            pe = row.get("previous_effective")
-            dd = row.get("delta_days")
-            cep = row.get("current_est_pod")
-            cpr = row.get("current_promise")
-            return {
-                "source_key": row.get("source_key"),
-                "direction": direction,
-                "previous_effective": pe.isoformat() if pe is not None and hasattr(pe, "isoformat") else pe,
-                "current_effective": ce.isoformat() if ce is not None and hasattr(ce, "isoformat") else ce,
-                "delta_days": int(dd) if dd is not None else None,
-                "current_est_pod": cep.isoformat() if cep is not None and hasattr(cep, "isoformat") else cep,
-                "current_promise": cpr.isoformat() if cpr is not None and hasattr(cpr, "isoformat") else cpr,
-            }
-
-        for r in slip_rows:
-            samples.append(_row_to_sample(dict(r), "slipped"))
-        for r in imp_rows:
-            samples.append(_row_to_sample(dict(r), "improved"))
-
-    net = "neutral"
-    if slipped_count > improved_count:
-        net = "slipped"
-    elif improved_count > slipped_count:
-        net = "improved"
-
-    return {
-        "slipped_count": slipped_count,
-        "improved_count": improved_count,
-        "net_direction": net,
-        "samples": samples,
-        "cohort_definition": "current_incoming" if require_current_incoming else "lifetime",
-    }
 
 
 @router.get("/filter-options")
@@ -1192,6 +1084,7 @@ async def shipping_eta_shifts(
     lifecycle_bucket: str | None = None,
     slip_direction: str | None = None,
     cohort: str | None = None,
+    include_line_columns: bool = Query(False),
     user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
     """ETA / promise slip vs prior observation — scoped to current-incoming ∩ filters."""
@@ -1243,6 +1136,7 @@ async def shipping_eta_shifts(
             scoped_ids=scoped_ids,
             require_current_incoming=True,
             today=today,
+            include_line_columns=include_line_columns,
         )
     if cohort_clause is not None:
         need_dist, need_prod, need_cust = _dim_join_flags(filt)
@@ -1263,9 +1157,120 @@ async def shipping_eta_shifts(
             scoped_ids=scoped_ids,
             require_current_incoming=True,
             today=today,
+            include_line_columns=include_line_columns,
         )
     return await _eta_shift_metrics(
-        db, sample_limit=sample_limit, filt=filt, require_current_incoming=True, today=today
+        db,
+        sample_limit=sample_limit,
+        filt=filt,
+        require_current_incoming=True,
+        today=today,
+        include_line_columns=include_line_columns,
+    )
+
+
+@router.get("/newly-landed")
+async def shipping_newly_landed(
+    db: AsyncSession = Depends(get_db),
+    import_job_id: int | None = None,
+    distributor_id: int | None = None,
+    customer_id: int | None = None,
+    purchase_order_id: int | None = None,
+    line_state: str | None = None,
+    report_type: str | None = None,
+    product_resolution_status: str | None = None,
+    distributor_resolution_status: str | None = None,
+    customer_resolution_status: str | None = None,
+    status: str | None = None,
+    search: str | None = None,
+    eta_from: str | None = None,
+    eta_to: str | None = None,
+    date_field: str = Query("eta_date"),
+    date_from: str | None = None,
+    date_to: str | None = None,
+    pod_date_is_null: bool | None = None,
+    currency_code: str | None = None,
+    operating_unit: str | None = None,
+    product_family: str | None = None,
+    product_model: str | None = None,
+    plan_quarter: str | None = None,
+    plan_quarter_label: str | None = None,
+    plan_business_unit: str | None = None,
+    lineup_attribution: str | None = None,
+    lifecycle_bucket: str | None = None,
+    slip_direction: str | None = None,
+    cohort: str | None = None,
+    user: dict | None = Depends(get_optional_current_user),
+) -> dict[str, Any]:
+    """SH-04: POD date set on this report's observation and null on the prior one.
+
+    Not ``landed_week``. Unfiltered default is the latest completed inbound_shipments job.
+    """
+    filt = _build_shipping_fact_filters(
+        import_job_id=None,
+        distributor_id=distributor_id,
+        customer_id=customer_id,
+        purchase_order_id=purchase_order_id,
+        line_state=line_state,
+        report_type=report_type,
+        product_resolution_status=product_resolution_status,
+        distributor_resolution_status=distributor_resolution_status,
+        customer_resolution_status=customer_resolution_status,
+        status=status,
+        search=search,
+        eta_from=eta_from,
+        eta_to=eta_to,
+        date_field=date_field,
+        date_from=date_from,
+        date_to=date_to,
+        pod_date_is_null=pod_date_is_null,
+        currency_code=currency_code,
+        operating_unit=operating_unit,
+        product_family=product_family,
+        product_model=product_model,
+        cohort=cohort,
+        tenant_id=tenant_id_from_user(user),
+    )
+    _attach_lineup_filter_keys(
+        filt,
+        plan_quarter=plan_quarter,
+        plan_quarter_label=plan_quarter_label,
+        plan_business_unit=plan_business_unit,
+        lineup_attribution=lineup_attribution,
+        lifecycle_bucket=lifecycle_bucket,
+        slip_direction=slip_direction,
+    )
+    today = _utc_today()
+    w0, w1 = _iso_week_bounds(today)
+    cohort_clause = _cohort_clause(filt, today=today, week_start=w0, week_end=w1)
+    scoped_ids: list[int] | None = None
+    filters_beyond_job = _shipping_filters_active(filt) or _lineup_filters_active(filt)
+    if _lineup_filters_active(filt):
+        po_clause = await _lineup_po_prefilter_clause(db, filt)
+        extras = [c for c in (po_clause, cohort_clause) if c is not None]
+        scoped_ids = await _lineup_matching_fact_ids(db, filt, *extras)
+    elif filters_beyond_job or cohort_clause is not None:
+        need_dist, need_prod, need_cust = _dim_join_flags(filt)
+        id_stmt = select(FactInboundShipment.id).select_from(FactInboundShipment)
+        id_stmt = _apply_outer_joins(id_stmt, need_dist, need_prod, need_cust)
+        id_stmt = _apply_fact_where_clause(
+            id_stmt,
+            join_distributor=need_dist,
+            join_product=need_prod,
+            join_customer=need_cust,
+            **filt,
+        )
+        if import_job_id is not None:
+            id_stmt = id_stmt.where(FactInboundShipment.import_job_id == int(import_job_id))
+        if cohort_clause is not None:
+            id_stmt = id_stmt.where(cohort_clause)
+        scoped_ids = [int(r[0]) for r in (await db.execute(id_stmt)).all()]
+    return await newly_landed_transitions(
+        db,
+        import_job_id=import_job_id,
+        scoped_ids=scoped_ids,
+        with_line_columns=True,
+        today=today,
     )
 
 

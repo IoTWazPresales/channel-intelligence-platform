@@ -108,6 +108,9 @@ def delivery_to_dict(row: ReportDelivery) -> dict[str, Any]:
         "value_preview": row.value_preview,
         "error_message": row.error_message,
         "created_at": row.created_at.isoformat() if row.created_at else None,
+        "recipient_email": row.recipient_email,
+        "has_html_preview": bool((row.data_vintage or {}).get("html_preview"))
+        or (row.metric_key == "shipping_digest" and row.channel == "inbox"),
     }
 
 

@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only, undefer
 
 from app.api.deps import get_db
 from app.core.security import get_optional_current_user
@@ -192,6 +193,28 @@ async def list_inbox(
     uid = parse_user_id(user)
     q = (
         select(ReportDelivery)
+        .options(
+            load_only(
+                ReportDelivery.id,
+                ReportDelivery.tenant_id,
+                ReportDelivery.recipient_user_id,
+                ReportDelivery.saved_report_id,
+                ReportDelivery.dashboard_id,
+                ReportDelivery.channel,
+                ReportDelivery.trigger,
+                ReportDelivery.format,
+                ReportDelivery.status,
+                ReportDelivery.subject,
+                ReportDelivery.body_summary,
+                ReportDelivery.data_vintage,
+                ReportDelivery.missing_data_alert,
+                ReportDelivery.metric_key,
+                ReportDelivery.value_preview,
+                ReportDelivery.error_message,
+                ReportDelivery.created_at,
+                ReportDelivery.recipient_email,
+            )
+        )
         .where(ReportDelivery.tenant_id == tid)
         .order_by(ReportDelivery.created_at.desc())
         .limit(limit)
@@ -210,6 +233,32 @@ async def list_inbox(
             )
     rows = (await db.execute(q)).scalars().all()
     return {"items": [delivery_to_dict(r) for r in rows], "count": len(rows)}
+
+
+@router.get("/inbox/{delivery_id}/html")
+async def inbox_html_preview(
+    delivery_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: dict | None = Depends(get_optional_current_user),
+) -> dict[str, Any]:
+    tid = tenant_id_from_user(user)
+    row = (
+        await db.execute(
+            select(ReportDelivery)
+            .options(undefer(ReportDelivery.storage_key))
+            .where(
+                ReportDelivery.id == int(delivery_id),
+                ReportDelivery.tenant_id == tid,
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None or not row.storage_key:
+        raise HTTPException(status_code=404, detail={"message": "No HTML preview for this delivery."})
+    return {
+        "id": int(row.id),
+        "subject": row.subject,
+        "html": row.storage_key,
+    }
 
 
 @router.get("/schedules")

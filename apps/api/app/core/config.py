@@ -125,6 +125,37 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Mailbox ingest (apps/api/.env). Loaded via Settings — os.environ alone misses .env.
+    cip_mailbox_ingest_enabled: bool = False
+    cip_mailbox_imap_host: str = "outlook.office365.com"
+    cip_mailbox_imap_port: int = 993
+    cip_mailbox_imap_user: str = ""
+    cip_mailbox_imap_password: str = ""
+    cip_mailbox_folder: str = "INBOX"
+    cip_mailbox_allowed_senders: str = ""
+    cip_mailbox_shipment_source_id: int | None = None
+    cip_mailbox_poll_seconds: int = 60
+    cip_mailbox_mailer_recipients: str = ""
+    cip_shipping_mailer_send: bool = Field(
+        default=False,
+        description="When true, shipment apply SMTP-sends the shipping digest (env CIP_SHIPPING_MAILER_SEND).",
+    )
+    cip_shipping_mailer_smtp_check: bool = Field(
+        default=False,
+        description="When true, API startup runs EHLO/STARTTLS/login/QUIT with no DATA (env CIP_SHIPPING_MAILER_SMTP_CHECK).",
+    )
+    cip_shipping_mailer_recipients: str = Field(
+        default="",
+        description="Comma-separated To list; empty uses the locked five ASUS addresses (env CIP_SHIPPING_MAILER_RECIPIENTS).",
+    )
+    cip_shipping_mailer_smtp_host: str = "smtp.gmail.com"
+    cip_shipping_mailer_smtp_port: int = 587
+    # auto = Graph when CIP_MAILBOX_GRAPH_CLIENT_ID is set, else IMAP.
+    cip_mailbox_transport: str = "auto"
+    cip_mailbox_graph_client_id: str = ""
+    cip_mailbox_graph_client_secret: str = ""
+    cip_mailbox_graph_tenant: str = ""
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.api_cors_origins.split(",") if o.strip()]
