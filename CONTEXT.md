@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-08-19 — **Resolver guard (Unit 1):** follow `merged_into_*` on customer/distributor resolvers; exclude merged from provisional reuse and pickers. Canonical `merge_redirect.py`. No repair yet. Branch `fix/merged-customer-resolver-guard`.
+- 2026-08-19 — **Resolver guard (Unit 1):** follow `merged_into_*` on customer/distributor resolvers; exclude merged from provisional reuse and pickers. Canonical `merge_redirect.py`. No repair yet. Branch `fix/merged-customer-resolver-guard`. `fc14962`.
 
 - 2026-08-18 — **Merged to main** `eb73232`: mailbox ingest + shipping digest mailer (`847aaf8`).
 
