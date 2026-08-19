@@ -29,6 +29,17 @@ async def get_or_create_customer(db: AsyncSession, code: str) -> DimCustomer:
     res = await db.execute(select(DimCustomer).where(DimCustomer.code == code))
     row = res.scalar_one_or_none()
     if row:
+        from app.services.merge_redirect import (
+            follow_customer_merge_redirect_async,
+            is_merged_customer_row,
+        )
+
+        if is_merged_customer_row(row):
+            winner_id = await follow_customer_merge_redirect_async(db, int(row.id))
+            if winner_id is not None and int(winner_id) != int(row.id):
+                winner = await db.get(DimCustomer, int(winner_id))
+                if winner is not None:
+                    return winner
         return row
     row = DimCustomer(code=code, name=f"Imported — {code}")
     db.add(row)
@@ -56,4 +67,6 @@ async def resolve_customer_id(db: AsyncSession, code: str | None, *, create: boo
     row = res.scalar_one_or_none()
     if not row:
         raise ValueError(f"Unknown customer_code {str(code).strip()!r}")
-    return row.id
+    from app.services.merge_redirect import follow_customer_merge_redirect_async
+
+    return await follow_customer_merge_redirect_async(db, int(row.id))

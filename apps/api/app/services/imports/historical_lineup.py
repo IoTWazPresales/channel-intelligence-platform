@@ -439,15 +439,22 @@ def process_historical_lineup_import(db: Session, job: ImportJob, filename: str,
     job.mapping_decisions = {s.sheet_name: s.mapping for s in parsed_sheets}
     errors = 0
 
+    from app.services.merge_redirect import build_redirect_map, collapse_ids, index_by_code_and_name
+
     customers = db.scalars(select(DimCustomer)).all()
     distributors = db.scalars(select(DimDistributor)).all()
     channels = db.scalars(select(DimChannel)).all()
     products = db.scalars(select(DimProduct)).all()
 
-    customer_by_code = {c.code.lower(): c for c in customers}
-    customer_by_name = {c.name.lower(): c for c in customers if c.name}
-    distributor_by_code = {d.code.lower(): d for d in distributors}
-    distributor_by_name = {d.name.lower(): d for d in distributors if d.name}
+    customer_idx = index_by_code_and_name(customers, merged_into_attr="merged_into_customer_id")
+    customer_by_code = customer_idx
+    customer_by_name = customer_idx
+    customer_redirect = build_redirect_map(
+        (int(c.id), c.merged_into_customer_id) for c in customers
+    )
+    distributor_idx = index_by_code_and_name(distributors, merged_into_attr="merged_into_distributor_id")
+    distributor_by_code = distributor_idx
+    distributor_by_name = distributor_idx
     channel_by_code = {c.code.lower(): c for c in channels}
     product_by_sku = {p.sku.lower(): p for p in products}
     # Part-number is UNIQUE — safe direct dict.
@@ -555,12 +562,19 @@ def process_historical_lineup_import(db: Session, job: ImportJob, filename: str,
                             )
                         )
                     ).all()
-                    if len(_ilike_customers) == 1:
-                        customer_id = _ilike_customers[0].id
-                        diagnostics.append("customer_matched_by_ilike")
-                    elif len(_ilike_customers) > 1:
-                        diagnostics.append("ambiguous_customer_match")
-                        errors += 1
+                    if len(_ilike_customers) >= 1:
+                        terminals = collapse_ids(
+                            [int(c.id) for c in _ilike_customers], customer_redirect
+                        )
+                        if len(terminals) == 1:
+                            customer_id = terminals[0]
+                            diagnostics.append("customer_matched_by_ilike")
+                        elif len(terminals) > 1:
+                            diagnostics.append("ambiguous_customer_match")
+                            errors += 1
+                        else:
+                            diagnostics.append("ambiguous_customer_match")
+                            errors += 1
                     else:
                         from app.services.imports.ai_resolver_wiring import (
                             customer_candidates,

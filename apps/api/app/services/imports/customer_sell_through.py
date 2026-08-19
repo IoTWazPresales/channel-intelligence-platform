@@ -157,11 +157,13 @@ def _write_parse_failed(job: ImportJob, message: str) -> None:
 
 def resolve_customer_id_for_job(db: Session, job: ImportJob) -> int | None:
     """Resolve anchor customer for this import job (source-scoped, not row-derived)."""
+    from app.services.merge_redirect import follow_customer_merge_redirect_sync
+
     meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
     raw = meta.get("customer_id")
     if raw is not None:
         try:
-            return int(raw)
+            return follow_customer_merge_redirect_sync(db, int(raw))
         except (TypeError, ValueError):
             pass
 
@@ -170,14 +172,14 @@ def resolve_customer_id_for_job(db: Session, job: ImportJob) -> int | None:
         cid = source.expected_template.get("customer_id")
         if cid is not None:
             try:
-                return int(cid)
+                return follow_customer_merge_redirect_sync(db, int(cid))
             except (TypeError, ValueError):
                 pass
 
     if source and source.code:
         found = db.scalar(select(DimCustomer.id).where(DimCustomer.code == source.code.strip()))
         if found is not None:
-            return int(found)
+            return follow_customer_merge_redirect_sync(db, int(found))
 
     return None
 

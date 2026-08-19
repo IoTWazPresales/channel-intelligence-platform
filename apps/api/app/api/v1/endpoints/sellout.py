@@ -11,6 +11,7 @@ from app.core.security import get_optional_current_user
 from app.core.tenant_scope import where_tenant
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.facts import FactSalesSellout
+from app.services.merge_redirect import living_customer_clause, living_distributor_clause
 
 router = APIRouter()
 
@@ -40,13 +41,13 @@ async def sellout_filter_options(
 ) -> dict[str, object]:
     dr = await db.execute(
         select(DimDistributor.id, DimDistributor.code, DimDistributor.name)
-        .where(where_tenant(DimDistributor.tenant_id, user))
+        .where(where_tenant(DimDistributor.tenant_id, user), living_distributor_clause())
         .order_by(DimDistributor.name.asc(), DimDistributor.code.asc())
         .limit(limit)
     )
     cr = await db.execute(
         select(DimCustomer.id, DimCustomer.code, DimCustomer.name)
-        .where(where_tenant(DimCustomer.tenant_id, user))
+        .where(where_tenant(DimCustomer.tenant_id, user), living_customer_clause())
         .order_by(DimCustomer.name.asc(), DimCustomer.code.asc())
         .limit(limit)
     )

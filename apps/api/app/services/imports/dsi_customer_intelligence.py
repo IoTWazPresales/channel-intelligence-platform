@@ -484,9 +484,12 @@ def load_historical_customer_resolutions(
     current_job_id: int,
 ) -> dict[tuple[int | None, str], HistoricalCustomerResolution]:
     """Preload best prior steward/alias resolutions keyed by (distributor_id, normalized_key)."""
+    from app.services.merge_redirect import load_customer_redirect_map, redirect_id
+
     out: dict[tuple[int | None, str], HistoricalCustomerResolution] = {}
     if source_definition_id is None:
         return out
+    redirect = load_customer_redirect_map(session)
 
     dom_col = ImportEntityMappingCandidate.context["dominant_distributor_id"].astext
     cand_rows = session.execute(
@@ -522,7 +525,7 @@ def load_historical_customer_resolutions(
         if dist_key is not None and slot_scoped not in out:
             mr = (reason or "").strip()
             out[slot_scoped] = HistoricalCustomerResolution(
-                customer_id=int(cid),
+                customer_id=int(redirect_id(int(cid), redirect) or cid),
                 import_job_id=int(jid),
                 match_reason=mr or None,
                 confidence=0.94 if mr in _STEWARD_RESOLVED_REASONS else 0.88,
@@ -533,7 +536,7 @@ def load_historical_customer_resolutions(
             continue
         mr = (reason or "").strip()
         out[slot_global] = HistoricalCustomerResolution(
-            customer_id=int(cid),
+            customer_id=int(redirect_id(int(cid), redirect) or cid),
             import_job_id=int(jid),
             match_reason=mr or None,
             confidence=0.94 if mr in _STEWARD_RESOLVED_REASONS else 0.88,
@@ -562,7 +565,7 @@ def load_historical_customer_resolutions(
             continue
         jid = int(alias.created_from_import_job_id) if alias.created_from_import_job_id else 0
         out[slot] = HistoricalCustomerResolution(
-            customer_id=int(alias.customer_id),
+            customer_id=int(redirect_id(int(alias.customer_id), redirect) or alias.customer_id),
             import_job_id=jid,
             match_reason="historical_approved_alias",
             confidence=conf,
@@ -693,4 +696,7 @@ def resolve_customer_id_distributor_scoped_alias(
             continue
         matches.append(int(a.customer_id))
     unique = list(dict.fromkeys(matches))
+    from app.services.merge_redirect import collapse_ids
+
+    unique = collapse_ids(unique, getattr(res_cache, "customer_redirect", {}) or {})
     return unique[0] if len(unique) == 1 else None

@@ -77,18 +77,67 @@ def build_shipment_enrich_refs(db: Session) -> "ShipmentEnrichRefs":
 
 def build_unique_approved_customer_alias_id_by_token(
     cust_aliases: list[tuple[str, int, int | None]] | list[tuple[str, int]],
+    *,
+    redirect: dict[int, int] | None = None,
 ) -> dict[str, int]:
     """Map ``normalized_token`` → ``customer_id`` when exactly one distinct id is approved.
 
     Used by lineup parse/backfill and any path that must not guess on ambiguous alias scope.
+    Optional ``redirect`` collapses merged loser ids onto the survivor before uniqueness.
     """
+    from app.services.merge_redirect import redirect_id
+
+    redir = redirect or {}
     by_token: dict[str, set[int]] = defaultdict(set)
     for row in cust_aliases:
         nt = str(row[0] or "").strip()
         if not nt:
             continue
-        by_token[nt].add(int(row[1]))
+        cid = int(redirect_id(int(row[1]), redir) or row[1])
+        by_token[nt].add(cid)
     return {nt: next(iter(ids)) for nt, ids in by_token.items() if len(ids) == 1}
+
+
+def _collapse_party_ids(
+    db: Session,
+    ids: list[int],
+    *,
+    kind: str,
+    refs: "ShipmentEnrichRefs | None" = None,
+) -> list[int]:
+    from app.services.merge_redirect import (
+        build_redirect_map,
+        collapse_ids,
+        follow_customer_merge_redirect_sync,
+        follow_distributor_merge_redirect_sync,
+    )
+
+    if not ids:
+        return []
+    if refs is not None:
+        if kind == "customer":
+            parent = {
+                int(c.id): int(c.merged_into_customer_id) if c.merged_into_customer_id is not None else None
+                for c in refs.customers
+            }
+        else:
+            parent = {
+                int(d.id): int(d.merged_into_distributor_id) if d.merged_into_distributor_id is not None else None
+                for d in refs.distributors
+            }
+        return collapse_ids(ids, build_redirect_map(parent.items()))
+    follow = (
+        follow_customer_merge_redirect_sync if kind == "customer" else follow_distributor_merge_redirect_sync
+    )
+    seen: set[int] = set()
+    out: list[int] = []
+    for raw in ids:
+        tid = follow(db, int(raw)) or int(raw)
+        if tid in seen:
+            continue
+        seen.add(tid)
+        out.append(tid)
+    return out
 
 
 def _alias_source_match(alias_source_id: int | None, source_definition_id: int | None) -> bool:
@@ -113,7 +162,7 @@ def _alias_distributor_ids(
             for nt, did, sdid in refs.dist_aliases
             if nt == normalized_token and _alias_source_match(sdid, source_definition_id)
         ]
-        return list(dict.fromkeys(out))
+        return _collapse_party_ids(db, list(dict.fromkeys(out)), kind="distributor", refs=refs)
     q = select(DistributorSourceTokenAlias.distributor_id).where(
         DistributorSourceTokenAlias.normalized_token == normalized_token,
         DistributorSourceTokenAlias.status == "approved",
@@ -127,8 +176,8 @@ def _alias_distributor_ids(
         )
     else:
         q = q.where(DistributorSourceTokenAlias.source_definition_id.is_(None))
-    rows = list(dict.fromkeys(db.scalars(q).all()))
-    return [int(x) for x in rows]
+    rows = list(dict.fromkeys(int(x) for x in db.scalars(q).all()))
+    return _collapse_party_ids(db, rows, kind="distributor", refs=None)
 
 
 def _alias_customer_ids(
@@ -146,7 +195,7 @@ def _alias_customer_ids(
             for nt, cid, sdid in refs.cust_aliases
             if nt == normalized_token and _alias_source_match(sdid, source_definition_id)
         ]
-        return list(dict.fromkeys(out))
+        return _collapse_party_ids(db, list(dict.fromkeys(out)), kind="customer", refs=refs)
     q = select(CustomerSourceTokenAlias.customer_id).where(
         CustomerSourceTokenAlias.normalized_token == normalized_token,
         CustomerSourceTokenAlias.status == "approved",
@@ -160,8 +209,8 @@ def _alias_customer_ids(
         )
     else:
         q = q.where(CustomerSourceTokenAlias.source_definition_id.is_(None))
-    rows = list(dict.fromkeys(db.scalars(q).all()))
-    return [int(x) for x in rows]
+    rows = list(dict.fromkeys(int(x) for x in db.scalars(q).all()))
+    return _collapse_party_ids(db, rows, kind="customer", refs=None)
 
 
 def _exact_dim_matches(
@@ -178,7 +227,7 @@ def _exact_dim_matches(
         name = (d.name or "").strip().lower()
         if code == nk or name == nk:
             out.append(int(d.id))
-    return sorted(set(out))
+    return sorted(_collapse_party_ids(db, out, kind="distributor", refs=refs))
 
 
 def _exact_dim_customer_matches(
@@ -194,7 +243,7 @@ def _exact_dim_customer_matches(
         name = (c.name or "").strip().lower()
         if code == nk or name == nk:
             out.append(int(c.id))
-    return sorted(set(out))
+    return sorted(_collapse_party_ids(db, out, kind="customer", refs=refs))
 
 
 def _distributor_display_name_hint(cand: ImportEntityMappingCandidate) -> str:

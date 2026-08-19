@@ -423,6 +423,12 @@ def _process_customer_master(db: Session, job: ImportJob, df: pd.DataFrame, mapp
             candidate = str(row.get(dist_col, "")).strip()
             if candidate:
                 preferred_distributor_id = distributors.get(candidate.lower())
+                if preferred_distributor_id is not None:
+                    from app.services.merge_redirect import follow_distributor_merge_redirect_sync
+
+                    preferred_distributor_id = follow_distributor_merge_redirect_sync(
+                        db, int(preferred_distributor_id)
+                    )
                 if preferred_distributor_id is None:
                     from app.services.imports.ai_resolver_wiring import (
                         distributor_candidates,
@@ -478,6 +484,17 @@ def _process_customer_master(db: Session, job: ImportJob, df: pd.DataFrame, mapp
         for item in pending:
             current = existing.get(item["code"].lower())
             if current:
+                from app.services.merge_redirect import (
+                    follow_customer_merge_redirect_sync,
+                    is_merged_customer_row,
+                )
+
+                if is_merged_customer_row(current):
+                    winner_id = follow_customer_merge_redirect_sync(db, int(current.id))
+                    if winner_id is not None and int(winner_id) != int(current.id):
+                        winner = db.get(DimCustomer, int(winner_id))
+                        if winner is not None:
+                            current = winner
                 current.name = item["name"]
                 current.customer_status = item["customer_status"]
                 current.partner_tier = item["partner_tier"]
@@ -640,6 +657,17 @@ def _process_distributor_master(db: Session, job: ImportJob, df: pd.DataFrame, m
         for item in pending:
             current = existing.get(item["code"].lower())
             if current:
+                from app.services.merge_redirect import (
+                    follow_distributor_merge_redirect_sync,
+                    is_merged_distributor_row,
+                )
+
+                if is_merged_distributor_row(current):
+                    winner_id = follow_distributor_merge_redirect_sync(db, int(current.id))
+                    if winner_id is not None and int(winner_id) != int(current.id):
+                        winner = db.get(DimDistributor, int(winner_id))
+                        if winner is not None:
+                            current = winner
                 current.name = item["name"]
                 updated += 1
             else:

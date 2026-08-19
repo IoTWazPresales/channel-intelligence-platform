@@ -67,8 +67,12 @@ def _dim_record_candidates(
     code_attr: str = "code",
     name_attr: str = "name",
 ) -> list[dict[str, Any]]:
+    from app.services.merge_redirect import is_merged_customer_row, is_merged_distributor_row
+
     out: list[dict[str, Any]] = []
     for row in rows:
+        if is_merged_customer_row(row) or is_merged_distributor_row(row):
+            continue
         rid = getattr(row, "id", None)
         if rid is None:
             continue
@@ -104,8 +108,10 @@ def distributor_candidates_from_dim_list(
 
 
 def distributor_candidates(db: Session, raw_token: str, *, limit: int = 20) -> list[dict[str, Any]]:
+    from app.services.merge_redirect import living_distributor_clause
+
     key = (raw_token or "").strip().lower()
-    q = select(DimDistributor).limit(limit * 3)
+    q = select(DimDistributor).where(living_distributor_clause()).limit(limit * 3)
     rows = list(db.scalars(q).all())
     if key:
         filtered = [
@@ -123,8 +129,10 @@ def distributor_candidates(db: Session, raw_token: str, *, limit: int = 20) -> l
 
 
 def customer_candidates(db: Session, raw_token: str, *, limit: int = 20) -> list[dict[str, Any]]:
+    from app.services.merge_redirect import living_customer_clause
+
     key = (raw_token or "").strip().lower()
-    rows = list(db.scalars(select(DimCustomer).limit(limit * 3)).all())
+    rows = list(db.scalars(select(DimCustomer).where(living_customer_clause()).limit(limit * 3)).all())
     if key:
         filtered = [
             c

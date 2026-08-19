@@ -295,6 +295,14 @@ def apply_map_dsi_customer_scoped_sync(
     cust = session.get(DimCustomer, int(customer_id))
     if not cust:
         raise StewardOpError("customer_id not found", status_code=400)
+    from app.services.merge_redirect import follow_customer_merge_redirect_sync
+
+    living_id = follow_customer_merge_redirect_sync(session, int(cust.id))
+    if living_id is not None and int(living_id) != int(cust.id):
+        cust = session.get(DimCustomer, int(living_id))
+        if not cust:
+            raise StewardOpError("customer_id not found", status_code=400)
+        customer_id = int(cust.id)
     raw = (raw_token or _source_customer_alias_raw_for_dsi_candidate(cand)).strip()
     if not raw:
         raise StewardOpError("raw_token required", status_code=400)
@@ -315,11 +323,16 @@ def apply_map_dsi_customer_scoped_sync(
             approved_alias_by_scope[scope_key] = existing_alias
 
     if existing_alias is not None:
-        if int(existing_alias.customer_id) != int(customer_id):
+        from app.services.merge_redirect import follow_customer_merge_redirect_sync
+
+        existing_cid = follow_customer_merge_redirect_sync(session, int(existing_alias.customer_id))
+        if existing_cid is None:
+            existing_cid = int(existing_alias.customer_id)
+        if int(existing_cid) != int(customer_id):
             raise _alias_scope_customer_conflict(
-                int(existing_alias.customer_id), int(customer_id), normalized_token=nt
+                int(existing_cid), int(customer_id), normalized_token=nt
             )
-        keeper = session.get(DimCustomer, int(existing_alias.customer_id))
+        keeper = session.get(DimCustomer, int(existing_cid))
         if keeper is None:
             raise StewardOpError("Approved alias points at missing customer", status_code=409)
         return _bind_candidate_to_mapped_customer(
@@ -364,11 +377,14 @@ def apply_map_dsi_customer_scoped_sync(
         if race_alias is None:
             raise StewardOpError("Could not create or reuse customer alias for scope", status_code=409)
         approved_alias_by_scope[scope_key] = race_alias
-        if int(race_alias.customer_id) != int(customer_id):
+        existing_cid = follow_customer_merge_redirect_sync(session, int(race_alias.customer_id))
+        if existing_cid is None:
+            existing_cid = int(race_alias.customer_id)
+        if int(existing_cid) != int(customer_id):
             raise _alias_scope_customer_conflict(
-                int(race_alias.customer_id), int(customer_id), normalized_token=nt
+                int(existing_cid), int(customer_id), normalized_token=nt
             )
-        keeper = session.get(DimCustomer, int(race_alias.customer_id))
+        keeper = session.get(DimCustomer, int(existing_cid))
         if keeper is None:
             raise StewardOpError("Approved alias points at missing customer", status_code=409)
         return _bind_candidate_to_mapped_customer(
@@ -405,6 +421,14 @@ async def apply_map_dsi_customer_scoped_async(
     cust = await db.get(DimCustomer, int(customer_id))
     if not cust:
         raise StewardOpError("customer_id not found", status_code=400)
+    from app.services.merge_redirect import follow_customer_merge_redirect_async
+
+    living_id = await follow_customer_merge_redirect_async(db, int(cust.id))
+    if living_id is not None and int(living_id) != int(cust.id):
+        cust = await db.get(DimCustomer, int(living_id))
+        if not cust:
+            raise StewardOpError("customer_id not found", status_code=400)
+        customer_id = int(cust.id)
     raw = (raw_token or _source_customer_alias_raw_for_dsi_candidate(cand)).strip()
     if not raw:
         raise StewardOpError("raw_token required", status_code=400)
@@ -420,11 +444,14 @@ async def apply_map_dsi_customer_scoped_async(
         distributor_id=None,
     )
     if existing_alias is not None:
-        if int(existing_alias.customer_id) != int(customer_id):
+        existing_cid = await follow_customer_merge_redirect_async(db, int(existing_alias.customer_id))
+        if existing_cid is None:
+            existing_cid = int(existing_alias.customer_id)
+        if int(existing_cid) != int(customer_id):
             raise _alias_scope_customer_conflict(
-                int(existing_alias.customer_id), int(customer_id), normalized_token=nt
+                int(existing_cid), int(customer_id), normalized_token=nt
             )
-        keeper = await db.get(DimCustomer, int(existing_alias.customer_id))
+        keeper = await db.get(DimCustomer, int(existing_cid))
         if keeper is None:
             raise StewardOpError("Approved alias points at missing customer", status_code=409)
         return _bind_candidate_to_mapped_customer(
@@ -457,11 +484,14 @@ async def apply_map_dsi_customer_scoped_async(
         )
         if race_alias is None:
             raise StewardOpError("Could not create or reuse customer alias for scope", status_code=409)
-        if int(race_alias.customer_id) != int(customer_id):
+        existing_cid = await follow_customer_merge_redirect_async(db, int(race_alias.customer_id))
+        if existing_cid is None:
+            existing_cid = int(race_alias.customer_id)
+        if int(existing_cid) != int(customer_id):
             raise _alias_scope_customer_conflict(
-                int(race_alias.customer_id), int(customer_id), normalized_token=nt
+                int(existing_cid), int(customer_id), normalized_token=nt
             )
-        keeper = await db.get(DimCustomer, int(race_alias.customer_id))
+        keeper = await db.get(DimCustomer, int(existing_cid))
         if keeper is None:
             raise StewardOpError("Approved alias points at missing customer", status_code=409)
         return _bind_candidate_to_mapped_customer(

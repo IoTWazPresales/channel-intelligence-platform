@@ -34,6 +34,13 @@ from app.services.imports.provisional_entity_identity import (
 )
 
 
+def _living_customer(session: Session, customer_id: int) -> DimCustomer | None:
+    from app.services.merge_redirect import follow_customer_merge_redirect_sync
+
+    lid = follow_customer_merge_redirect_sync(session, int(customer_id))
+    return session.get(DimCustomer, int(lid or customer_id))
+
+
 def _generate_tmp_customer_code_sync(session: Session) -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     for _ in range(8):
@@ -100,7 +107,7 @@ def _apply_one_provisional_customer_sync(
         in ("steward_created_provisional_customer", "steward_reused_approved_customer_alias")
         and cand.suggested_entity_id
     ):
-        cust = session.get(DimCustomer, int(cand.suggested_entity_id))
+        cust = _living_customer(session, int(cand.suggested_entity_id))
         if cust:
             alias_row = session.scalars(
                 select(CustomerSourceTokenAlias).where(
@@ -185,7 +192,7 @@ def _apply_one_provisional_customer_sync(
             alias_lookup[scope_key] = existing_alias
 
     if existing_alias is not None:
-        cust = session.get(DimCustomer, int(existing_alias.customer_id))
+        cust = _living_customer(session, int(existing_alias.customer_id))
         if cust is None:
             raise StewardOpError("Approved alias points at missing customer", status_code=409)
         return bind_candidate_to_reused_customer(
@@ -197,7 +204,7 @@ def _apply_one_provisional_customer_sync(
 
     batch_customer_id = batch_lookup.get(scope_key)
     if batch_customer_id is not None:
-        cust = session.get(DimCustomer, int(batch_customer_id))
+        cust = _living_customer(session, int(batch_customer_id))
         if cust is None:
             raise StewardOpError("Batch reuse customer missing", status_code=409)
         return bind_candidate_to_reused_customer(
@@ -255,7 +262,7 @@ def _apply_one_provisional_customer_sync(
         if race_alias is None:
             raise StewardOpError("Could not create or reuse customer alias for scope", status_code=409)
         alias_lookup[scope_key] = race_alias
-        keeper = session.get(DimCustomer, int(race_alias.customer_id))
+        keeper = _living_customer(session, int(race_alias.customer_id))
         if keeper is None:
             raise StewardOpError("Approved alias points at missing customer", status_code=409)
         if created_new_customer and row.id != keeper.id:

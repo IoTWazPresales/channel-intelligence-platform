@@ -763,12 +763,9 @@ async def build_bulk_lineup_preview(
     parser_ctx = await asyncio.to_thread(load_lineup_parser_context_sync)
 
     customers = (await db.execute(select(DimCustomer))).scalars().all()
-    customer_map: dict[str, DimCustomer] = {}
-    for c in customers:
-        if c.name:
-            customer_map[c.name.lower().strip()] = c
-        if c.code:
-            customer_map[c.code.lower().strip()] = c
+    from app.services.merge_redirect import index_by_code_and_name
+
+    customer_map = index_by_code_and_name(list(customers), merged_into_attr="merged_into_customer_id")
 
     overrides = manual_overrides or {}
     all_proposals: list[CaseProposal] = []

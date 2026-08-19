@@ -309,6 +309,11 @@ async def preview_map_dsi_customer(
         return {"ok": False, "skip_reason": "wrong_entity_type", "detail": "Not customer_dealer_token"}
     if _is_dsi_steward_terminal_status(cand.status):
         return {"ok": False, "skip_reason": "terminal_status", "detail": "Candidate already terminal"}
+    from app.services.merge_redirect import follow_customer_merge_redirect_async
+
+    living = await follow_customer_merge_redirect_async(db, int(customer_id))
+    if living is not None:
+        customer_id = int(living)
     cust = await db.get(DimCustomer, customer_id)
     if not cust:
         return {"ok": False, "skip_reason": "customer_not_found", "detail": "customer_id not found"}
@@ -345,7 +350,7 @@ async def _apply_map_dsi_customer_without_commit(
     return await apply_map_dsi_customer_scoped_async(
         db,
         cand,
-        customer_id=int(customer_id),
+        customer_id=int(pv["customer_id"]),
         raw_token=raw_token,
     )
 
@@ -379,6 +384,11 @@ async def preview_map_dsi_distributor(
         return {"ok": False, "skip_reason": "wrong_entity_type", "detail": "Not distributor_token"}
     if _is_dsi_steward_terminal_status(cand.status):
         return {"ok": False, "skip_reason": "terminal_status", "detail": "Candidate already terminal"}
+    from app.services.merge_redirect import follow_distributor_merge_redirect_async
+
+    living = await follow_distributor_merge_redirect_async(db, int(distributor_id))
+    if living is not None:
+        distributor_id = int(living)
     dist = await db.get(DimDistributor, distributor_id)
     if not dist:
         return {"ok": False, "skip_reason": "distributor_not_found", "detail": "distributor_id not found"}
@@ -410,7 +420,7 @@ async def execute_map_dsi_distributor(
     raw = (raw_token or _first_sample_raw(cand)).strip()
     nt = _norm_key(raw)
     alias = DistributorSourceTokenAlias(
-        distributor_id=distributor_id,
+        distributor_id=int(pv["distributor_id"]),
         raw_token=raw[:512],
         normalized_token=nt[:512],
         source_definition_id=cand.source_definition_id,
@@ -571,7 +581,10 @@ async def preview_create_provisional_dsi_customer(
         return {"ok": False, "skip_reason": "wrong_entity_type", "detail": "Not customer_dealer_token"}
 
     if cand.status == "resolved" and cand.match_reason == "steward_created_provisional_customer" and cand.suggested_entity_id:
-        cust = await db.get(DimCustomer, int(cand.suggested_entity_id))
+        from app.services.merge_redirect import follow_customer_merge_redirect_async
+
+        living = await follow_customer_merge_redirect_async(db, int(cand.suggested_entity_id))
+        cust = await db.get(DimCustomer, int(living or cand.suggested_entity_id))
         if cust:
             ar = (
                 await db.execute(
@@ -663,7 +676,10 @@ async def execute_create_provisional_dsi_customer(
     notes_summary: str | None,
 ) -> dict[str, Any]:
     if cand.status == "resolved" and cand.match_reason == "steward_created_provisional_customer" and cand.suggested_entity_id:
-        cust = await db.get(DimCustomer, int(cand.suggested_entity_id))
+        from app.services.merge_redirect import follow_customer_merge_redirect_async
+
+        living = await follow_customer_merge_redirect_async(db, int(cand.suggested_entity_id))
+        cust = await db.get(DimCustomer, int(living or cand.suggested_entity_id))
         if cust:
             alias_row = (
                 await db.execute(

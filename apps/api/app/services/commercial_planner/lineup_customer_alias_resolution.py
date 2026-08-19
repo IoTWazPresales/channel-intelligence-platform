@@ -32,6 +32,8 @@ KNOWN_FIXABLE_LINEUP_CUSTOMER_TOKENS: tuple[str, ...] = (
 
 def load_approved_customer_alias_id_by_token_sync(db: Session) -> dict[str, int]:
     """Load approved customer aliases once (sync), keyed by ``normalized_token``."""
+    from app.services.merge_redirect import load_customer_redirect_map
+
     rows = list(
         db.execute(
             select(
@@ -41,7 +43,7 @@ def load_approved_customer_alias_id_by_token_sync(db: Session) -> dict[str, int]
             ).where(CustomerSourceTokenAlias.status == "approved")
         ).all()
     )
-    return build_unique_approved_customer_alias_id_by_token(rows)
+    return build_unique_approved_customer_alias_id_by_token(rows, redirect=load_customer_redirect_map(db))
 
 
 async def load_approved_customer_alias_id_by_token_async(db: AsyncSession) -> dict[str, int]:
@@ -57,7 +59,10 @@ async def load_approved_customer_alias_id_by_token_async(db: AsyncSession) -> di
             )
         ).all()
     )
-    return build_unique_approved_customer_alias_id_by_token(rows)
+    from app.services.merge_redirect import load_customer_redirect_map_async
+
+    redirect = await load_customer_redirect_map_async(db)
+    return build_unique_approved_customer_alias_id_by_token(rows, redirect=redirect)
 
 
 def resolve_lineup_customer_id_from_token(

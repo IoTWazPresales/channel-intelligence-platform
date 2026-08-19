@@ -81,7 +81,9 @@ async def _resolve_customer_id(db: AsyncSession, customer_code: str | None) -> i
             raise ValueError(
                 f"Unknown customer_code {customer_code!r} — resolve in Customer Master first"
             )
-        return int(row.id)
+        from app.services.merge_redirect import follow_customer_merge_redirect_async
+
+        return int(await follow_customer_merge_redirect_async(db, int(row.id)) or row.id)
     oc = (
         await db.execute(
             select(DimCustomer).where(DimCustomer.code == OPEN_CHANNEL_CUSTOMER_CODE)
@@ -103,7 +105,9 @@ async def _resolve_distributor_id(db: AsyncSession, distributor_code: str | None
             raise ValueError(
                 f"Unknown distributor_code {distributor_code!r} — resolve in Distributor Master first"
             )
-        return int(row.id)
+        from app.services.merge_redirect import follow_distributor_merge_redirect_async
+
+        return int(await follow_distributor_merge_redirect_async(db, int(row.id)) or row.id)
     un = (
         await db.execute(
             select(DimDistributor).where(DimDistributor.code == UNASSIGNED_DISTRIBUTOR_CODE)

@@ -89,6 +89,9 @@ async def _load_distributor_match_maps(
             name_to_id[nk] = int(d.id)
     alias_to_id: dict[str, int] = {}
     from app.models.import_distributor_si import DistributorSourceTokenAlias
+    from app.services.merge_redirect import load_distributor_redirect_map_async, redirect_id
+
+    dist_redirect = await load_distributor_redirect_map_async(db)
 
     for a in (
         await db.execute(
@@ -99,7 +102,7 @@ async def _load_distributor_match_maps(
     ).scalars().all():
         nk = _norm_key(a.normalized_token)
         if nk and nk not in alias_to_id:
-            alias_to_id[nk] = int(a.distributor_id)
+            alias_to_id[nk] = int(redirect_id(int(a.distributor_id), dist_redirect) or a.distributor_id)
     return name_to_id, alias_to_id
 
 
@@ -289,13 +292,20 @@ async def _build_candidate_provenance(
     token_lines: list[CommercialLineupLine],
 ) -> tuple[set[int], list[dict[str, Any]], set[int], set[int]]:
     """Return (all_cands, provenance, alias_cids, ship_cids)."""
+    from app.services.merge_redirect import load_customer_redirect_map_async, redirect_id
+
+    redirect = await load_customer_redirect_map_async(db)
     alias_rows = await _load_approved_alias_rows(db, norm_token=norm_token)
-    alias_cids = {int(cid) for _, cid, _ in alias_rows}
+    alias_cids = {int(redirect_id(int(cid), redirect) or cid) for _, cid, _ in alias_rows}
     provenance: list[dict[str, Any]] = [
         {"source": "alias", "customer_id": cid, "purchase_order_id": None, "po_distributor_id": None, "product_id": None}
         for cid in sorted(alias_cids)
     ]
     ship_cids, ship_prov = await _ship_evidence_for_token_lines(db, token_lines=token_lines)
+    ship_cids = {int(redirect_id(int(cid), redirect) or cid) for cid in ship_cids}
+    for row in ship_prov:
+        if row.get("customer_id") is not None:
+            row["customer_id"] = int(redirect_id(int(row["customer_id"]), redirect) or row["customer_id"])
     provenance.extend(ship_prov)
     return alias_cids | ship_cids, provenance, alias_cids, ship_cids
 
@@ -338,6 +348,11 @@ async def preview_customer_token_stamp(
     nt = _norm_key(norm_token)
     if not nt:
         raise CustomerTokenStampError("empty token — cannot stamp; see backlog tokenless path")
+    from app.services.merge_redirect import follow_customer_merge_redirect_async
+
+    living = await follow_customer_merge_redirect_async(db, int(target_customer_id))
+    if living is not None:
+        target_customer_id = int(living)
     target = await db.get(DimCustomer, int(target_customer_id))
     if target is None:
         raise CustomerTokenStampError(f"target customer {target_customer_id} does not exist")
@@ -453,6 +468,11 @@ async def apply_customer_token_stamp(
     if not reason_s:
         raise CustomerTokenStampError("reason required")
 
+    from app.services.merge_redirect import follow_customer_merge_redirect_async
+
+    living = await follow_customer_merge_redirect_async(db, int(target_customer_id))
+    if living is not None:
+        target_customer_id = int(living)
     target = await db.get(DimCustomer, int(target_customer_id))
     if target is None:
         raise CustomerTokenStampError(f"target customer {target_customer_id} does not exist")
@@ -535,31 +555,35 @@ async def apply_customer_token_stamp(
     else:
         alias = existing
         if int(alias.customer_id) != int(target_customer_id):
-            if oc_id is not None and int(alias.customer_id) == int(oc_id):
+            existing_cid = int(
+                (await follow_customer_merge_redirect_async(db, int(alias.customer_id)))
+                or alias.customer_id
+            )
+            if oc_id is not None and existing_cid == int(oc_id):
                 alias.customer_id = int(target_customer_id)
             elif dist_match is not None and oc_id is not None and int(target_customer_id) == int(oc_id):
                 # named→OC only when distributor-token rule explicitly rewrites (after revoke)
                 alias.customer_id = int(target_customer_id)
+            elif existing_cid == int(target_customer_id):
+                alias.customer_id = int(target_customer_id)
             else:
                 raise CustomerTokenConflictError(
-                    nt, sorted({int(alias.customer_id), int(target_customer_id)})
+                    nt, sorted({existing_cid, int(target_customer_id)})
                 )
         await db.flush()
 
     alias_id = int(alias.id)
 
     all_rows = await _load_approved_alias_rows(db)
-    alias_map = build_unique_approved_customer_alias_id_by_token(all_rows)
+    from app.services.merge_redirect import index_by_code_and_name, load_customer_redirect_map_async
+
+    redirect = await load_customer_redirect_map_async(db)
+    alias_map = build_unique_approved_customer_alias_id_by_token(all_rows, redirect=redirect)
     alias_map[nt] = int(target_customer_id)
 
     cust_rows = list((await db.execute(select(DimCustomer))).scalars().all())
     customers_by_id = {int(c.id): c for c in cust_rows}
-    customer_map: dict[str, DimCustomer] = {}
-    for c in cust_rows:
-        if c.name:
-            customer_map[c.name.strip().lower()] = c
-        if c.code:
-            customer_map[c.code.strip().lower()] = c
+    customer_map = index_by_code_and_name(cust_rows, merged_into_attr="merged_into_customer_id")
 
     per_line: list[dict[str, Any]] = []
     line_ids: list[int] = []

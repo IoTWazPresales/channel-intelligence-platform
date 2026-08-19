@@ -140,7 +140,11 @@ def _resolve_customer_id(session: Session, scm_name: str) -> int | None:
     row = session.scalar(
         select(DimCustomer).where(func.lower(func.btrim(DimCustomer.name)) == canon.strip().lower())
     )
-    return int(row.id) if row is not None else None
+    if row is None:
+        return None
+    from app.services.merge_redirect import follow_customer_merge_redirect_sync
+
+    return follow_customer_merge_redirect_sync(session, int(row.id))
 
 
 def import_article_alias_rows(

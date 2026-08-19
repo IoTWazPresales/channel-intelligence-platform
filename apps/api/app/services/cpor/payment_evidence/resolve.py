@@ -40,27 +40,37 @@ def resolve_payment_staging(db: Session, import_job_id: int) -> dict[str, Any]:
 
     cust_by_token: dict[str, int] = {}
     if cust_tokens:
+        from app.services.merge_redirect import build_redirect_map, collapse_ids
+
         customers = db.scalars(select(DimCustomer)).all()
+        redirect = build_redirect_map(
+            (int(c.id), c.merged_into_customer_id) for c in customers
+        )
         buckets: dict[str, list[int]] = defaultdict(list)
         for c in customers:
             for key in (_norm(c.code), _norm(c.name)):
                 if key and key in cust_tokens:
-                    buckets[key].append(c.id)
+                    buckets[key].append(int(c.id))
         for tok, ids in buckets.items():
-            uniq = sorted(set(ids))
+            uniq = collapse_ids(ids, redirect)
             if len(uniq) == 1:
                 cust_by_token[tok] = uniq[0]
 
     dist_by_token: dict[str, int] = {}
     if dist_tokens:
+        from app.services.merge_redirect import build_redirect_map, collapse_ids
+
         dists = db.scalars(select(DimDistributor)).all()
+        redirect_d = build_redirect_map(
+            (int(d.id), d.merged_into_distributor_id) for d in dists
+        )
         buckets_d: dict[str, list[int]] = defaultdict(list)
         for d in dists:
             for key in (_norm(d.code), _norm(d.name)):
                 if key and key in dist_tokens:
-                    buckets_d[key].append(d.id)
+                    buckets_d[key].append(int(d.id))
         for tok, ids in buckets_d.items():
-            uniq = sorted(set(ids))
+            uniq = collapse_ids(ids, redirect_d)
             if len(uniq) == 1:
                 dist_by_token[tok] = uniq[0]
 
@@ -112,6 +122,15 @@ def map_payment_token(
     token_n = _norm(token)
     if entity not in {"customer", "distributor"}:
         raise ValueError("entity must be customer or distributor")
+
+    if entity == "customer":
+        from app.services.merge_redirect import follow_customer_merge_redirect_sync
+
+        entity_id = int(follow_customer_merge_redirect_sync(db, int(entity_id)) or entity_id)
+    else:
+        from app.services.merge_redirect import follow_distributor_merge_redirect_sync
+
+        entity_id = int(follow_distributor_merge_redirect_sync(db, int(entity_id)) or entity_id)
 
     q = select(ImportCporPaymentStagingLine).where(
         ImportCporPaymentStagingLine.import_job_id == import_job_id
