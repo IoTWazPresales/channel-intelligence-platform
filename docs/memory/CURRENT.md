@@ -4,7 +4,7 @@
 
 **Branch:** `fix/merged-customer-resolver-guard`
 
-**Last content pin:** `6a78ae2` — do not treat a hash in this file as HEAD
+**Last content pin:** `3372915` — do not treat a hash in this file as HEAD
 
 **Alembic (code):** `20260818_0018` (`20260818_0018_report_delivery_email_channel.py`)
 
