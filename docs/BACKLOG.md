@@ -146,16 +146,16 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-20 |
+| **Status / parked** | **Parked** · 2026-08-20 · amended 2026-08-20 (Phase 4 housekeeping) |
 | **Effort** | Small (ops) |
-| **Source** | `docs/memory/CURRENT.md` Next on `main` (`cip_merged_leftover_repair` drop pointer) plus R1c/R1d leftovers that had no home after CURRENT Next was replaced: clone DB `cip_test`, untracked `.tmp_lf_rerun.txt`, unmerged `feat/shipping-mailer-recipients`. |
+| **Source** | `docs/memory/CURRENT.md` Next on `main` (`cip_merged_leftover_repair` drop pointer) plus R1c/R1d leftovers. Amended after shipping-mailer + RBAC promotion and steward queue-depth run. |
 | **Idea** | One ops sweep to drop or keep, on purpose, leftover local state that is not application code. |
-| **Why it matters / deferrable** | None of these block R1d merge. They do confuse the next agent (wrong DB, mystery file, 0019-only branch). Deferrable until Warren wants a clean machine / before the next migration. |
-| **What the work is** | (1) Drop clone DB `cip_merged_leftover_repair` if leftover repair will not be re-run. (2) Keep or drop `cip_test` (R1c/R1d disposable; OWNER cip; stamped `20260818_0018`). (3) Delete untracked `.tmp_lf_rerun.txt` or commit it only if it is still a needed artefact. (4) Promote or close `feat/shipping-mailer-recipients` (`b5cf3a0`) — this is also the 0019 migration blocker. |
-| **Regression traps** | Do not drop `cip`. Do not `alembic upgrade` cip from a branch that lacks `0019`. Do not force-push `main`. |
-| **Behavior to retain** | Live `cip` data; R1d session e2e remains runnable against `cip_test` until that DB is dropped. |
-| **Out of scope** | R2 role CONSULT; authoring a new Alembic revision. |
-| **TRIGGER** | Warren asks to tidy local DBs / working tree, or immediately before authoring any new migration. |
+| **Why it matters / deferrable** | Confuses the next agent (wrong DB). Deferrable until Warren wants a clean machine / before the next migration. |
+| **What the work is** | (1) Drop clone DB `cip_merged_leftover_repair` when leftover repair will not be re-run. Present on 2026-08-20: **2325 MB**; `pg_stat_file` age unavailable (not superuser). **Do not drop from a queue-depth / docs unit.** (2) ~~Keep or drop `cip_test`~~ — **`cip_test` is real test infra** (R1d session e2e + default API suite). Do not drop. Stamped `20260818_0018`; do not treat as a leftover clone. (3) Untracked `.tmp_lf_rerun.txt` **deleted** 2026-08-20 on `feat/steward-queue-depth`. (4) ~~Promote `feat/shipping-mailer-recipients`~~ — **stale:** merged to main `b5e92d1` (Alembic `0019`). |
+| **Regression traps** | Do not drop `cip`. Do not drop `cip_test`. Do not `alembic upgrade` cip from a branch that lacks `0019`. Do not force-push `main`. |
+| **Behavior to retain** | Live `cip` data; `cip_test` remains the disposable-but-kept suite DB (BACKLOG-144 seed gap is a fixture decision, not a drop). |
+| **Out of scope** | R2 role CONSULT; authoring a new Alembic revision; leftover repair re-run. |
+| **TRIGGER** | Warren asks to drop `cip_merged_leftover_repair` specifically, or immediately before authoring any new migration if disk is tight. |
 
 ---
 
