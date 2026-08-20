@@ -19,17 +19,23 @@ def clear_overrides():
 
 
 def test_dsi_detail_requires_admin_header():
-    r = client.get("/api/v1/products/id/1/dependencies/distributor-inventory")
+    r = client.get(
+        "/api/v1/products/id/1/dependencies/distributor-inventory",
+        headers={"X-User-Role": "viewer"},
+    )
     assert r.status_code == 403
+    assert r.json().get("detail") == "Insufficient role"
 
 
 def test_dsi_clear_requires_admin_header():
     r = client.request(
         "DELETE",
         "/api/v1/products/id/1/dependencies/distributor-inventory",
+        headers={"X-User-Role": "viewer"},
         json={"confirm": CLEAR_DISTRIBUTOR_INVENTORY_FOR_PRODUCT},
     )
     assert r.status_code == 403
+    assert r.json().get("detail") == "Insufficient role"
 
 
 def test_dsi_clear_rejects_wrong_confirm():

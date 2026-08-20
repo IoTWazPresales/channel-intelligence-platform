@@ -144,7 +144,12 @@ def test_approve_drift_flags_without_rewriting_stored_cost():
     )
     with patch.object(cpor_cases, "suggest_cost_basis", return_value=fresh):
         with patch.object(cpor_cases, "_record_event"):
-            drifts = cpor_cases._run_drift_check(session, case, actor="test")
+            drifts = cpor_cases._run_drift_check(
+                session,
+                case,
+                actor="test",
+                user={"id": "test", "role": "admin", "email": None, "tenant_id": "default"},
+            )
     assert line.cost_basis == Decimal("100")
     assert drifts and drifts[0]["flag"] == "cost_basis_drift"
     assert "cost_basis_drift" in (line.cost_evidence_json.get("flags") or [])

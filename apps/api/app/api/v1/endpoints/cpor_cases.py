@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -52,8 +52,24 @@ router = APIRouter()
 # --- helpers -----------------------------------------------------------------
 
 
-def _actor(x_user_id: str | None) -> str | None:
-    return x_user_id
+def _actor(user: dict) -> str:
+    """Stable non-null identifier from the authenticated user — never a request header."""
+    raw = user.get("id")
+    ident = str(raw).strip() if raw is not None else ""
+    if not ident:
+        raise HTTPException(status_code=500, detail="Authenticated user missing id")
+    return ident
+
+
+def _actor_trail(user: dict) -> dict[str, Any]:
+    trail: dict[str, Any] = {}
+    email = user.get("email")
+    if isinstance(email, str) and email.strip():
+        trail["actor_email"] = email.strip()
+    role = user.get("role")
+    if role is not None:
+        trail["actor_role"] = str(getattr(role, "value", role))
+    return trail
 
 
 def _record_event(
@@ -63,13 +79,21 @@ def _record_event(
     event_type: str,
     actor: str | None,
     payload: dict | None = None,
+    user: dict | None = None,
 ) -> None:
+    payload_json: dict[str, Any] | None
+    if payload is None and user is None:
+        payload_json = None
+    else:
+        payload_json = dict(payload or {})
+        if user is not None:
+            payload_json.update(_actor_trail(user))
     session.add(
         CporCaseEvent(
             case_id=case_id,
             event_type=event_type,
             actor=actor,
-            payload_json=payload,
+            payload_json=payload_json,
         )
     )
 
@@ -227,7 +251,7 @@ def _products_map(session: Session, product_ids: list[int]) -> dict[int, DimProd
     return {int(p.id): p for p in rows}
 
 
-def _run_drift_check(session: Session, case: CporCase, actor: str | None) -> list[dict]:
+def _run_drift_check(session: Session, case: CporCase, actor: str | None, user: dict) -> list[dict]:
     """On approve/activate: flag drift, never rewrite cost_basis."""
     drifts: list[dict] = []
     lines = session.scalars(select(CporCaseLine).where(CporCaseLine.case_id == case.id)).all()
@@ -258,6 +282,7 @@ def _run_drift_check(session: Session, case: CporCase, actor: str | None) -> lis
             event_type="cost_basis_drift",
             actor=actor,
             payload={"drifts": drifts},
+            user=user,
         )
     return drifts
 
@@ -418,10 +443,9 @@ def list_cases(
 @router.post("/cases", status_code=201)
 def create_case(
     body: CaseCreate,
-    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
     user: dict = Depends(get_current_user),
 ):
-    actor = _actor(x_user_id) or (user.get("email") if isinstance(user.get("email"), str) else None) or "system"
+    actor = _actor(user)
     if body.promotion_type not in CPOR_PROMOTION_TYPE_SET:
         raise HTTPException(
             status_code=400,
@@ -459,7 +483,9 @@ def create_case(
         except IntegrityError:
             session.rollback()
             raise HTTPException(status_code=409, detail="case_code already exists")
-        _record_event(session, case_id=case.id, event_type="created", actor=actor, payload={"case_code": code})
+        _record_event(
+            session, case_id=case.id, event_type="created", actor=actor, payload={"case_code": code}, user=user
+        )
         session.commit()
         session.refresh(case)
         return _case_json(case, customer=cust, lines=[], include_lines=True)
@@ -480,9 +506,9 @@ def get_case(case_id: int, user: dict = Depends(get_current_user)):
 def patch_case(
     case_id: int,
     body: CasePatch,
-    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    user: dict = Depends(get_current_user),
 ):
-    actor = _actor(x_user_id)
+    actor = _actor(user)
     with SessionLocal() as session:
         case = _load_case(session, case_id)
         if case.status not in EDITABLE_STATUSES:
@@ -499,7 +525,7 @@ def patch_case(
         for k, v in data.items():
             setattr(case, k, v)
         session.add(case)
-        _record_event(session, case_id=case.id, event_type="case_patched", actor=actor, payload=data)
+        _record_event(session, case_id=case.id, event_type="case_patched", actor=actor, payload=data, user=user)
         recompute_report = None
         if roe_changed:
             recompute_report = recompute_case(session, case, actor=actor)
@@ -522,9 +548,9 @@ def patch_case(
 def create_line(
     case_id: int,
     body: LineCreate,
-    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    user: dict = Depends(get_current_user),
 ):
-    actor = _actor(x_user_id)
+    actor = _actor(user)
     with SessionLocal() as session:
         case = _load_case(session, case_id)
         if case.status not in EDITABLE_STATUSES and case.status not in {"proposed", "approved", "active"}:
@@ -613,6 +639,7 @@ def create_line(
             event_type="line_created",
             actor=actor,
             payload={"line_id": line.id, "recompute_flags": rep["flags"]},
+            user=user,
         )
         session.commit()
         session.refresh(line)
@@ -624,9 +651,9 @@ def patch_line(
     case_id: int,
     line_id: int,
     body: LinePatch,
-    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    user: dict = Depends(get_current_user),
 ):
-    actor = _actor(x_user_id)
+    actor = _actor(user)
     with SessionLocal() as session:
         case = _load_case(session, case_id)
         if case.status not in EDITABLE_STATUSES:
@@ -666,6 +693,7 @@ def patch_line(
             event_type="line_patched",
             actor=actor,
             payload={"line_id": line.id, "fields": list(data.keys()), "flags": rep["flags"]},
+            user=user,
         )
         session.commit()
         session.refresh(line)
@@ -677,10 +705,10 @@ def patch_line(
 def void_line(
     case_id: int,
     line_id: int,
-    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    user: dict = Depends(get_current_user),
 ):
     """Soft-remove: zero estimate + remark; no hard delete. Row retained."""
-    actor = _actor(x_user_id)
+    actor = _actor(user)
     with SessionLocal() as session:
         case = _load_case(session, case_id)
         if case.status not in EDITABLE_STATUSES:
@@ -698,6 +726,7 @@ def void_line(
             event_type="line_voided",
             actor=actor,
             payload={"line_id": line.id},
+            user=user,
         )
         session.commit()
         session.refresh(line)
@@ -710,10 +739,10 @@ def split_layers(
     case_id: int,
     line_id: int,
     body: LayerSplitBody,
-    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    user: dict = Depends(get_current_user),
 ):
     """Clone a line into explicit POD-quarter layers (no FIFO fabrication)."""
-    actor = _actor(x_user_id)
+    actor = _actor(user)
     with SessionLocal() as session:
         case = _load_case(session, case_id)
         if case.status not in EDITABLE_STATUSES:
@@ -761,6 +790,7 @@ def split_layers(
             event_type="line_split_layers",
             actor=actor,
             payload={"source_line_id": src.id, "new_line_ids": [l.id for l in created]},
+            user=user,
         )
         session.commit()
         prod = session.get(DimProduct, src.product_id)
@@ -774,8 +804,8 @@ def split_layers(
 
 
 @router.post("/cases/{case_id}/recompute")
-def recompute(case_id: int, x_user_id: str | None = Header(default=None, alias="X-User-Id")):
-    actor = _actor(x_user_id)
+def recompute(case_id: int, user: dict = Depends(get_current_user)):
+    actor = _actor(user)
     with SessionLocal() as session:
         case = _load_case(session, case_id)
         report = recompute_case(session, case, actor=actor)
@@ -858,9 +888,9 @@ def case_pivot(case_id: int):
 def transition_case(
     case_id: int,
     body: TransitionBody,
-    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    user: dict = Depends(get_current_user),
 ):
-    actor = _actor(x_user_id)
+    actor = _actor(user)
     action = body.action.strip().lower()
     if action not in LIFECYCLE_ACTIONS:
         raise HTTPException(status_code=400, detail=f"Unknown action; allowed={sorted(LIFECYCLE_ACTIONS)}")
@@ -925,7 +955,7 @@ def transition_case(
             case.decided_by = actor
             case.last_comment = None
             case.needs_reapproval = False
-            drifts = _run_drift_check(session, case, actor)
+            drifts = _run_drift_check(session, case, actor, user)
         elif action == "reject":
             case.status = "rejected"
             case.workflow_status = "rejected"
@@ -942,7 +972,7 @@ def transition_case(
             case.last_comment = None
         elif action == "activate":
             case.status = "active"
-            drifts = _run_drift_check(session, case, actor)
+            drifts = _run_drift_check(session, case, actor, user)
         elif action == "end":
             case.status = "ended"
         elif action == "settle":
@@ -966,6 +996,7 @@ def transition_case(
                 "confirm_over_budget_reapproval": body.confirm_over_budget_reapproval,
                 "needs_reapproval": bool(case.needs_reapproval),
             },
+            user=user,
         )
         # Fix payload 'from' — we already mutated status; re-read from event is fine for U3
         session.commit()
@@ -1118,7 +1149,10 @@ class PromoPlanRecomputeBody(BaseModel):
 
 
 @router.post("/intelligence/promo-plan-draft/recompute")
-def cpor_promo_plan_recompute(body: PromoPlanRecomputeBody) -> dict[str, Any]:
+def cpor_promo_plan_recompute(
+    body: PromoPlanRecomputeBody,
+    _user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
     """Recompute per-line suggestions for the given identities. Dirty merge is client-owned (D-052)."""
     with SessionLocal() as session:
         return build_promo_plan_draft(
@@ -1162,11 +1196,28 @@ class PromoPlanCreateFromDraftBody(BaseModel):
 @router.post("/intelligence/promo-plan-draft/create-case", status_code=201)
 def cpor_promo_plan_create_case(
     body: PromoPlanCreateFromDraftBody,
-    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
     user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     """B4 — write a draft CPOR case from compose output (existing case/line path)."""
-    actor = _actor(x_user_id) or (user.get("email") if isinstance(user.get("email"), str) else None) or "b4_promo_draft"
+    actor = _actor(user)
+
+    def _record_event_for_user(
+        session,
+        *,
+        case_id: int,
+        event_type: str,
+        actor: str | None,
+        payload: dict | None = None,
+    ) -> None:
+        _record_event(
+            session,
+            case_id=case_id,
+            event_type=event_type,
+            actor=actor,
+            payload=payload,
+            user=user,
+        )
+
     with SessionLocal() as session:
         try:
             return create_case_from_promo_draft(
@@ -1181,7 +1232,7 @@ def cpor_promo_plan_create_case(
                 actor=actor,
                 lines=[row.model_dump() for row in body.lines] if body.lines is not None else None,
                 generate_case_code=_generate_case_code,
-                record_event=_record_event,
+                record_event=_record_event_for_user,
                 recompute_case_line=recompute_case_line,
                 resolve_default_margin=resolve_default_margin,
                 suggest_cost_basis=suggest_cost_basis,
@@ -1214,10 +1265,10 @@ async def import_claim_evidence(
     case_id: int,
     file: UploadFile = File(...),
     include_out_of_window: bool = Form(default=False),
-    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    user: dict = Depends(get_current_user),
 ):
     """Case-scoped claim evidence upload → upsert cpor_claim_evidence_line + rollup."""
-    actor = _actor(x_user_id)
+    actor = _actor(user)
     raw = await file.read()
     with SessionLocal() as session:
         _load_case(session, case_id)
@@ -1237,6 +1288,7 @@ async def import_claim_evidence(
             event_type="claim_evidence_imported",
             actor=actor,
             payload={"import": result, "rollup": rollup},
+            user=user,
         )
         session.commit()
         consolidation = build_settlement_consolidation(session, case_id)
@@ -1246,9 +1298,9 @@ async def import_claim_evidence(
 @router.post("/cases/{case_id}/settlement/rollup")
 def post_settlement_rollup(
     case_id: int,
-    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    user: dict = Depends(get_current_user),
 ):
-    actor = _actor(x_user_id)
+    actor = _actor(user)
     with SessionLocal() as session:
         _load_case(session, case_id)
         rollup = rollup_result_qty_from_claims(session, case_id, actor=actor)

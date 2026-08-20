@@ -93,6 +93,7 @@ _WRITE_CAPABLE_TEST_MODULES: frozenset[str] = frozenset(
         "test_pipeline_failure_writeback.py",
         "test_product_dsi_maintenance.py",
         "test_product_resolution_index_plain.py",
+        "test_rbac_r1d_session_e2e.py",
         "test_products_delete.py",
         "test_purchase_order.py",
         "test_running_import_job_reaper.py",

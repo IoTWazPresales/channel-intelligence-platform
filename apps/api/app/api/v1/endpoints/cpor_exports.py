@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Header, HTTPException
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from io import BytesIO
 from sqlalchemy import select
 
+from app.core.security import get_current_user
 from app.db.session_sync import SessionLocal
 from app.models.cpor import CporCase, CporCaseEvent
 from app.services.cpor.export_xlsx import RESELLER_HEADERS, build_cpor_case_workbook_bytes
@@ -15,8 +18,24 @@ from app.storage.local import LocalStorageBackend
 router = APIRouter()
 
 
-def _actor(x_user_id: str | None) -> str | None:
-    return x_user_id
+def _actor(user: dict) -> str:
+    """Stable non-null identifier from the authenticated user — never a request header."""
+    raw = user.get("id")
+    ident = str(raw).strip() if raw is not None else ""
+    if not ident:
+        raise HTTPException(status_code=500, detail="Authenticated user missing id")
+    return ident
+
+
+def _actor_trail(user: dict) -> dict[str, Any]:
+    trail: dict[str, Any] = {}
+    email = user.get("email")
+    if isinstance(email, str) and email.strip():
+        trail["actor_email"] = email.strip()
+    role = user.get("role")
+    if role is not None:
+        trail["actor_role"] = str(getattr(role, "value", role))
+    return trail
 
 
 def _load_case(session, case_id: int) -> CporCase:
@@ -37,8 +56,8 @@ def _file_name(case_code: str, version: int) -> str:
 
 
 @router.post("/cases/{case_id}/export")
-def generate_export(case_id: int, x_user_id: str | None = Header(default=None, alias="X-User-Id")):
-    actor = _actor(x_user_id)
+def generate_export(case_id: int, user: dict = Depends(get_current_user)):
+    actor = _actor(user)
     storage = LocalStorageBackend()
     with SessionLocal() as session:
         case = _load_case(session, case_id)
@@ -66,20 +85,22 @@ def generate_export(case_id: int, x_user_id: str | None = Header(default=None, a
         file_name = _file_name(case.case_code, version)
         key = _storage_key(case_id, version, case.case_code)
         storage.save(key, data)
+        payload_json: dict[str, Any] = {
+            "export_version": version,
+            "storage_key": key,
+            "file_name": file_name,
+            "checksum_sha256": digest,
+            "line_count": meta["line_count"],
+            "flags_present": meta["flags_present"],
+            "headers": list(RESELLER_HEADERS),
+        }
+        payload_json.update(_actor_trail(user))
         session.add(
             CporCaseEvent(
                 case_id=case.id,
                 event_type="export_generated",
                 actor=actor,
-                payload_json={
-                    "export_version": version,
-                    "storage_key": key,
-                    "file_name": file_name,
-                    "checksum_sha256": digest,
-                    "line_count": meta["line_count"],
-                    "flags_present": meta["flags_present"],
-                    "headers": list(RESELLER_HEADERS),
-                },
+                payload_json=payload_json,
             )
         )
         session.commit()

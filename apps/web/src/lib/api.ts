@@ -1,4 +1,4 @@
-import { getAuthToken } from '@/lib/authSession';
+import { clearAuthToken, getAuthToken } from '@/lib/authSession';
 
 /**
  * API origin for browser `fetch`.
@@ -96,23 +96,29 @@ export function safeDisplayError(e: unknown): string {
   return 'Something went wrong.';
 }
 
-const defaultHeaders = (init?: RequestInit, includeJsonContentType = true): HeadersInit => {
+export function authHeaders(init?: RequestInit, includeJsonContentType = true): HeadersInit {
   const token = getAuthToken();
   const headers: Record<string, string> = {
     ...(includeJsonContentType ? { 'Content-Type': 'application/json' } : {}),
   };
   if (token) {
     headers.Authorization = `Bearer ${token}`;
-  } else {
-    // Stub-mode fallback while CIP_AUTH_MODE=stub; session mode rejects these without Bearer.
-    headers['X-User-Role'] = 'admin';
-    headers['X-User-Id'] = 'demo-user';
   }
   return {
     ...headers,
     ...init?.headers,
   };
-};
+}
+
+/** Expired/missing session: drop the stored token and send the operator to login. */
+function redirectToLoginOn401(status: number, requestPath: string): void {
+  if (status !== 401) return;
+  if (typeof window === 'undefined') return;
+  if (requestPath.includes('/api/v1/auth/login')) return;
+  if (window.location.pathname === '/login') return;
+  clearAuthToken();
+  window.location.assign('/login');
+}
 
 /**
  * Browser `fetch` for JSON GET. Pass `{ signal }` from TanStack Query `queryFn` so superseded
@@ -121,10 +127,11 @@ const defaultHeaders = (init?: RequestInit, includeJsonContentType = true): Head
 export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(apiUrl(path), {
     ...init,
-    headers: defaultHeaders(init),
+    headers: authHeaders(init),
     cache: 'no-store',
   });
   if (!res.ok) {
+    redirectToLoginOn401(res.status, path);
     throw new Error(await readFetchError(res));
   }
   return res.json() as Promise<T>;
@@ -134,12 +141,13 @@ export async function apiPost<T>(path: string, body?: unknown, init?: RequestIni
   const res = await fetch(apiUrl(path), {
     method: 'POST',
     ...init,
-    headers: defaultHeaders(init, body !== undefined),
+    headers: authHeaders(init, body !== undefined),
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: 'no-store',
   });
   if (!res.ok) {
     const text = await res.text();
+    redirectToLoginOn401(res.status, path);
     throw parseConflictError(res.status, text);
   }
   return res.json() as Promise<T>;
@@ -150,11 +158,12 @@ export async function apiPostFormData<T>(path: string, formData: FormData, init?
   const res = await fetch(apiUrl(path), {
     method: 'POST',
     ...init,
-    headers: defaultHeaders(init, false),
+    headers: authHeaders(init, false),
     body: formData,
     cache: 'no-store',
   });
   if (!res.ok) {
+    redirectToLoginOn401(res.status, path);
     throw new Error(await readFetchError(res));
   }
   return res.json() as Promise<T>;
@@ -164,11 +173,12 @@ export async function apiPatch<T>(path: string, body?: unknown, init?: RequestIn
   const res = await fetch(apiUrl(path), {
     method: 'PATCH',
     ...init,
-    headers: defaultHeaders(init, body !== undefined),
+    headers: authHeaders(init, body !== undefined),
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: 'no-store',
   });
   if (!res.ok) {
+    redirectToLoginOn401(res.status, path);
     throw new Error(await readFetchError(res));
   }
   return res.json() as Promise<T>;
@@ -178,11 +188,12 @@ export async function apiPut<T>(path: string, body?: unknown, init?: RequestInit
   const res = await fetch(apiUrl(path), {
     method: 'PUT',
     ...init,
-    headers: defaultHeaders(init, body !== undefined),
+    headers: authHeaders(init, body !== undefined),
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: 'no-store',
   });
   if (!res.ok) {
+    redirectToLoginOn401(res.status, path);
     throw new Error(await readFetchError(res));
   }
   return res.json() as Promise<T>;
@@ -289,11 +300,12 @@ export async function apiDelete(path: string, init?: RequestInit): Promise<void>
   const res = await fetch(apiUrl(path), {
     method: 'DELETE',
     ...init,
-    headers: defaultHeaders(init, false),
+    headers: authHeaders(init, false),
     cache: 'no-store',
   });
   if (!res.ok) {
     const text = await res.text();
+    redirectToLoginOn401(res.status, path);
     throw parseDeleteError(res.status, text);
   }
 }
@@ -303,12 +315,13 @@ export async function apiDeleteJson<T>(path: string, body: unknown, init?: Reque
   const res = await fetch(apiUrl(path), {
     method: 'DELETE',
     ...init,
-    headers: defaultHeaders(init, true),
+    headers: authHeaders(init, true),
     body: JSON.stringify(body ?? {}),
     cache: 'no-store',
   });
   const text = await res.text();
   if (!res.ok) {
+    redirectToLoginOn401(res.status, path);
     throw new Error(parseApiErrorDetailText(text) || `Request failed (${res.status})`);
   }
   if (!text.trim()) return {} as T;
@@ -348,7 +361,7 @@ export async function apiDownloadBlob(path: string, filename: string, init?: Req
     !(typeof FormData !== 'undefined' && init?.body instanceof FormData) &&
     method !== 'GET' &&
     method !== 'HEAD';
-  const base = defaultHeaders(init, wantsJson) as Record<string, string>;
+  const base = authHeaders(init, wantsJson) as Record<string, string>;
   const extra =
     init?.headers == null
       ? {}
@@ -363,6 +376,7 @@ export async function apiDownloadBlob(path: string, filename: string, init?: Req
     cache: 'no-store',
   });
   if (!res.ok) {
+    redirectToLoginOn401(res.status, path);
     throw new Error(`${res.status} ${await readFetchError(res)}`);
   }
   const blob = await res.blob();

@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiUrl, parseApiErrorDetailText } from '@/lib/api';
+import { apiGet, apiPost, apiUrl, parseApiErrorDetailText, authHeaders } from '@/lib/api';
 
 import type {
   CporCandidatesPageResponse,
@@ -6,8 +6,6 @@ import type {
   CporPlanClass,
   CporHistoricalSummary,
 } from './cporHistoricalSteward.config';
-
-const ADMIN = { headers: { 'X-User-Role': 'admin' } } as const;
 
 export type CporDimPick =
   | { id: number; sku: string; name: string }
@@ -26,7 +24,6 @@ export async function fetchCporHistoricalSummary(
 ): Promise<CporHistoricalSummary> {
   return apiGet<CporHistoricalSummary>(`/api/v1/cpor/historical-import/jobs/${jobId}/summary`, {
     signal,
-    ...ADMIN,
   });
 }
 
@@ -54,7 +51,7 @@ export async function fetchCporHistoricalCandidates(
 ): Promise<CporCandidatesPageResponse> {
   return apiGet<CporCandidatesPageResponse>(
     buildCporHistoricalCandidatesUrl(jobId, entity, opts.skip, opts.limit, opts.planClass),
-    { signal, ...ADMIN }
+    { signal }
   );
 }
 
@@ -66,8 +63,7 @@ export async function mapCporHistoricalToken(args: {
 }): Promise<{ updated: number }> {
   return apiPost<{ updated: number }>(
     `/api/v1/cpor/historical-import/jobs/${args.jobId}/map-token`,
-    { entity: args.entity, token: args.token, dim_id: args.dimId },
-    ADMIN
+    { entity: args.entity, token: args.token, dim_id: args.dimId }
   );
 }
 
@@ -85,11 +81,7 @@ export async function bulkMapCporHistoricalTokens(args: {
 
   const res = await fetch(apiUrl(`/api/v1/cpor/historical-import/jobs/${args.jobId}/bulk-map-token`), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-User-Role': 'admin',
-      'X-User-Id': 'demo-user',
-    },
+    headers: authHeaders(),
     body: JSON.stringify({ entity: args.entity, tokens, dim_id: args.dimId }),
     cache: 'no-store',
   });
@@ -122,22 +114,14 @@ export async function validateCporHistoricalJob(
 ): Promise<{ async: boolean; task_id: string | null }> {
   const res = await fetch(apiUrl(`/api/v1/cpor/historical-import/jobs/${jobId}/validate`), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-User-Role': 'admin',
-      'X-User-Id': 'demo-user',
-    },
+    headers: authHeaders(),
     body: '{}',
     cache: 'no-store',
   });
   if (res.status === 404) {
     const processRes = await fetch(apiUrl(`/api/v1/imports/jobs/${jobId}/process`), {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-User-Role': 'admin',
-        'X-User-Id': 'demo-user',
-      },
+      headers: authHeaders(),
       body: '{}',
       cache: 'no-store',
     });
@@ -159,8 +143,7 @@ export async function applyCporHistoricalJob(
 ): Promise<{ async: boolean; task_id: string | null }> {
   return apiPost<{ async: boolean; task_id: string | null }>(
     `/api/v1/cpor/historical-import/jobs/${jobId}/apply`,
-    { confirm: true },
-    ADMIN
+    { confirm: true }
   );
 }
 

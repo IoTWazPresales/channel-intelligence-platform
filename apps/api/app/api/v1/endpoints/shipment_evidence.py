@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Annotated, Any, Literal, Self
+from typing import Any, Literal, Self
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.core.security import get_current_user
+from app.core.security import Role, require_roles
 from app.db.session_sync import SessionLocal
 from app.ingestion.pipeline import STAGE_LOADED, STAGE_VALIDATED
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
@@ -103,18 +103,6 @@ def _dispatch_shipment_apply(job_id: int) -> tuple[bool, str | None]:
         in_process_thread_name=f"shipment-apply-{job_id}",
         sync_work=run_shipment_apply_sync,
     )
-
-
-def _is_admin(x_user_role: str | None) -> bool:
-    return (x_user_role or "").strip().lower() == "admin"
-
-
-def _require_admin(x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None) -> None:
-    if not _is_admin(x_user_role):
-        raise HTTPException(
-            status_code=403,
-            detail={"error": "admin_required", "message": "Requires X-User-Role: admin"},
-        )
 
 
 def _line_to_dict(
@@ -212,11 +200,10 @@ def _apply_filters(stmt: Any, model: Any, **kwargs: Any) -> Any:
 @router.get("/raw-column-keys")
 async def list_shipment_evidence_raw_column_keys(
     db: AsyncSession = Depends(get_db),
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(require_roles(Role.ADMIN)),
     import_job_id: int = Query(..., ge=1),
 ) -> dict[str, Any]:
     """Distinct JSON keys present in ``raw_source_row`` for one import job (for admin column picker)."""
-    _require_admin(x_user_role)
     relation = shipment_evidence_read_relation()
     superseded_clause = (
         "" if shipment_bitemporal_read_enabled() else " AND corpus_superseded_at IS NULL"
@@ -238,10 +225,9 @@ async def list_shipment_evidence_raw_column_keys(
 async def list_shipment_import_job_mapping_candidates(
     job_id: int,
     db: AsyncSession = Depends(get_db),
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> list[dict[str, Any]]:
     """``shipment_distributor`` and ``shipment_customer_token`` candidates for an inbound_shipments job."""
-    _require_admin(x_user_role)
     job = await db.get(ImportJob, job_id)
     if not job or (job.template_slug or "") != "inbound_shipments":
         raise HTTPException(status_code=404, detail="Shipment import job not found")
@@ -316,10 +302,9 @@ async def list_shipment_import_job_mapping_candidates_paginated(
     duplicate_unresolved_only: bool = False,
     status: str = "open",
     db: AsyncSession = Depends(get_db),
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> dict[str, Any]:
     """Paginated shipment mapping candidates (default limit 100, max 1000)."""
-    _require_admin(x_user_role)
     job = await db.get(ImportJob, job_id)
     if not job or (job.template_slug or "") != "inbound_shipments":
         raise HTTPException(status_code=404, detail="Shipment import job not found")
@@ -351,9 +336,8 @@ async def list_shipment_import_job_mapping_candidates_paginated(
 async def shipment_mapping_candidate_tab_counts(
     job_id: int,
     db: AsyncSession = Depends(get_db),
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     job = await db.get(ImportJob, job_id)
     if not job or (job.template_slug or "") != "inbound_shipments":
         raise HTTPException(status_code=404, detail="Shipment import job not found")
@@ -397,9 +381,8 @@ class ShipmentResolutionPlanApplyBody(BaseModel):
 async def shipment_resolution_plan_compute_async(
     job_id: int,
     body: ShipmentResolutionPlanGenerateBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     with SessionLocal() as s:
         job = s.get(ImportJob, job_id)
         if not job or (job.template_slug or "") != "inbound_shipments":
@@ -426,9 +409,8 @@ async def shipment_resolution_plan_compute_async(
 async def shipment_resolution_plan_generate(
     job_id: int,
     body: ShipmentResolutionPlanGenerateBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     from app.services.imports.shipment_resolution_plan import build_shipment_resolution_plan_sync
 
     def _work(sess: Session) -> dict[str, Any]:
@@ -445,9 +427,8 @@ async def shipment_resolution_plan_generate(
 async def shipment_resolution_plan_effective(
     job_id: int,
     body: ShipmentResolutionPlanEffectiveBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     from app.services.imports.shipment_resolution_plan import build_shipment_resolution_plan_effective_sync
 
     def _work(sess: Session) -> dict[str, Any]:
@@ -469,9 +450,8 @@ async def shipment_resolution_plan_effective(
 async def shipment_resolution_plan_apply_async(
     job_id: int,
     body: ShipmentResolutionPlanApplyBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     with SessionLocal() as s:
         job = s.get(ImportJob, job_id)
         if not job or (job.template_slug or "") != "inbound_shipments":
@@ -641,14 +621,13 @@ def _write_shipment_bulk_slot(job_id: int, task_id: str, *, async_poll: bool, la
 async def shipment_import_job_bulk_apply_confirmed_plans(
     job_id: int,
     body: ShipmentBulkApplyPlansBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> dict[str, Any]:
     """Enqueue apply of each candidate's persisted planner ``suggested_action`` as a background task.
 
     Returns ``{async_poll, task_id}`` immediately; poll ``.../shipment-bulk-task/{task_id}``. Bypasses
     partner-text guards in the worker (existing plan executes). No proxy-timeout risk on large jobs.
     """
-    _require_admin(x_user_role)
     with SessionLocal() as s:
         job = s.get(ImportJob, job_id)
         if not job or (job.template_slug or "") != "inbound_shipments":
@@ -668,14 +647,12 @@ async def shipment_import_job_bulk_apply_confirmed_plans(
 @router.post("/import-candidates/bulk-map-customer", status_code=202)
 async def shipment_import_candidates_bulk_map_customer(
     body: ShipmentBulkMapCustomerBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> dict[str, Any]:
     """Enqueue bulk-map of many shipment customer candidates to one existing customer (background task).
 
     Returns ``{async_poll, task_id}`` immediately; poll ``.../shipment-bulk-task/{task_id}``.
     """
-    _require_admin(x_user_role)
     job_id_for_slot: int | None = None
     with SessionLocal() as s:
         first = s.get(ImportEntityMappingCandidate, int(body.candidate_ids[0]))
@@ -713,10 +690,8 @@ async def shipment_import_candidates_bulk_map_customer(
 async def shipment_import_candidate_map_distributor(
     candidate_id: int,
     body: ShipmentMapDistributorBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     with SessionLocal() as s:
         cand = s.get(ImportEntityMappingCandidate, candidate_id)
         if not cand or cand.entity_type != SHIPMENT_DISTRIBUTOR_ENTITY:
@@ -747,10 +722,8 @@ async def shipment_import_candidate_map_distributor(
 async def shipment_import_candidate_create_provisional_distributor(
     candidate_id: int,
     body: ShipmentCreateProvisionalDistributorBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     with SessionLocal() as s:
         cand = s.get(ImportEntityMappingCandidate, candidate_id)
         if not cand or cand.entity_type != SHIPMENT_DISTRIBUTOR_ENTITY:
@@ -785,10 +758,8 @@ async def shipment_import_candidate_create_provisional_distributor(
 async def shipment_import_candidate_map_customer(
     candidate_id: int,
     body: ShipmentMapCustomerBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     with SessionLocal() as s:
         cand = s.get(ImportEntityMappingCandidate, candidate_id)
         if not cand or cand.entity_type != SHIPMENT_CUSTOMER_ENTITY:
@@ -823,9 +794,8 @@ class ShipmentManualSpecialCategoryBody(BaseModel):
 async def shipment_import_candidate_manual_special_category(
     candidate_id: int,
     body: ShipmentManualSpecialCategoryBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     with SessionLocal() as s:
         cand = s.get(ImportEntityMappingCandidate, candidate_id)
         if not cand or cand.entity_type not in (SHIPMENT_DISTRIBUTOR_ENTITY, SHIPMENT_CUSTOMER_ENTITY):
@@ -841,9 +811,8 @@ async def shipment_import_candidate_manual_special_category(
 @router.post("/import-candidates/{candidate_id}/clear-special-category")
 async def shipment_import_candidate_clear_special_category(
     candidate_id: int,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     with SessionLocal() as s:
         cand = s.get(ImportEntityMappingCandidate, candidate_id)
         if not cand or cand.entity_type not in (SHIPMENT_DISTRIBUTOR_ENTITY, SHIPMENT_CUSTOMER_ENTITY):
@@ -857,10 +826,8 @@ async def shipment_import_candidate_clear_special_category(
 @router.post("/import-candidates/{candidate_id}/reject")
 async def shipment_import_candidate_reject(
     candidate_id: int,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     with SessionLocal() as s:
         cand = s.get(ImportEntityMappingCandidate, candidate_id)
         if not cand or cand.entity_type not in (SHIPMENT_DISTRIBUTOR_ENTITY, SHIPMENT_CUSTOMER_ENTITY):
@@ -888,10 +855,8 @@ async def shipment_import_candidate_reject(
 async def shipment_import_candidate_duplicate_different_entity(
     candidate_id: int,
     body: ShipmentDuplicateReviewPeerBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     with SessionLocal() as s:
         cand = s.get(ImportEntityMappingCandidate, candidate_id)
         if not cand or cand.entity_type != SHIPMENT_CUSTOMER_ENTITY:
@@ -924,10 +889,8 @@ async def shipment_import_candidate_duplicate_different_entity(
 async def shipment_import_candidate_duplicate_same_entity(
     candidate_id: int,
     body: ShipmentDuplicateReviewPeerBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     with SessionLocal() as s:
         cand = s.get(ImportEntityMappingCandidate, candidate_id)
         if not cand or cand.entity_type != SHIPMENT_CUSTOMER_ENTITY:
@@ -960,10 +923,8 @@ async def shipment_import_candidate_duplicate_same_entity(
 async def shipment_import_candidate_create_provisional_customer(
     candidate_id: int,
     body: ShipmentCreateProvisionalCustomerBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     with SessionLocal() as s:
         cand = s.get(ImportEntityMappingCandidate, candidate_id)
         if not cand or cand.entity_type != SHIPMENT_CUSTOMER_ENTITY:
@@ -1002,14 +963,13 @@ async def shipment_import_job_bulk_create_provisional_customers(
     job_id: int,
     body: ShipmentBulkProvisionalCustomersBody,
     db: AsyncSession = Depends(get_db),
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> dict[str, Any]:
     """Enqueue bulk provisional customer creation as a background task (governance: steward-driven only).
 
     Returns ``{async_poll, task_id}`` immediately; poll ``.../shipment-bulk-task/{task_id}``. Provisional
     creation stays steward-initiated — this endpoint only backgrounds the work, it does not auto-create.
     """
-    _require_admin(x_user_role)
     job = await db.get(ImportJob, job_id)
     if not job or (job.template_slug or "") != "inbound_shipments":
         raise HTTPException(status_code=404, detail="Shipment import job not found")
@@ -1050,10 +1010,9 @@ async def shipment_steward_bulk_provisional_apply_async(
     job_id: int,
     body: ShipmentBulkStewardBody,
     db: AsyncSession = Depends(get_db),
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> dict[str, Any]:
     """Enqueue batch provisional customer creation (DSI-shaped route alias)."""
-    _require_admin(x_user_role)
     job = await db.get(ImportJob, job_id)
     if not job or (job.template_slug or "") != "inbound_shipments":
         raise HTTPException(status_code=404, detail="Shipment import job not found")
@@ -1356,7 +1315,7 @@ def _clear_shipment_bulk_slot(job_id: int) -> None:
 async def apply_shipment_import_job(
     job_id: int,
     db: AsyncSession = Depends(get_db),
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> dict[str, Any]:
     """Apply an inbound_shipments import job in the background: auto-map ``map_*`` candidates, upsert facts, ``loaded``.
 
@@ -1365,7 +1324,6 @@ async def apply_shipment_import_job(
     ``/api/v1/imports/jobs/{job_id}/dsi-progress`` and the job stage. Re-applying a job already at
     ``loaded`` is an idempotent no-op that returns the current unresolved-candidate summary.
     """
-    _require_admin(x_user_role)
     job = await db.get(ImportJob, job_id)
     if not job or (job.template_slug or "") != "inbound_shipments":
         raise HTTPException(status_code=404, detail="Shipment import job not found")
@@ -1445,7 +1403,7 @@ async def apply_shipment_import_job(
 @router.get("")
 async def list_shipment_evidence(
     db: AsyncSession = Depends(get_db),
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(require_roles(Role.ADMIN)),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     import_job_id: int | None = None,
@@ -1456,7 +1414,6 @@ async def list_shipment_evidence(
     search: str | None = None,
     include_raw_row: bool = Query(False),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     EV = shipment_evidence_read_model()
     filt: dict[str, Any] = {
         "import_job_id": import_job_id,
@@ -1512,10 +1469,9 @@ async def list_shipment_change_events(
     event_type: list[str] | None = Query(None, description="Filter: date_slip, qty_change, graduated, pod_reversal"),
     line_identity_key: str | None = Query(None),
     limit: int = Query(500, ge=1, le=5000),
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> dict[str, Any]:
     """Derived-on-read shipment lifecycle events from observation chains (Plan D v1)."""
-    _require_admin(x_user_role)
     from app.services.imports.shipment_change_events import (
         derive_change_events,
         group_events_by_line,
@@ -1549,9 +1505,8 @@ async def list_shipment_change_events(
 async def get_shipment_evidence_line(
     line_id: int,
     db: AsyncSession = Depends(get_db),
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     EV = shipment_evidence_read_model()
     row = await db.get(EV, line_id)
     if not row:

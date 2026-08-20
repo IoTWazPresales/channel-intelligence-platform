@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.api.deps import get_db
+from app.core.security import Role, require_roles
 from app.core.config import get_settings
 from app.core.dev_celery_logging import DEV_CELERY_LOGGER
 from app.db.session_sync import SessionLocal
@@ -82,20 +83,14 @@ class PMMappingBody(BaseModel):
     columns: list[PMColumnMapping]
 
 
-def _require_admin(x_user_role: str | None) -> None:
-    if (x_user_role or "").strip().lower() != "admin":
-        raise HTTPException(status_code=403, detail="Product Master mapping workflow requires admin for this slice")
-
-
 @router.post("/jobs")
 async def create_product_master_job(
     source_id: int = Form(...),
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    x_user_role: str | None = Header(default=None, alias="X-User-Role"),
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ):
     """Upload file only; infers headers. Does not apply catalog changes."""
-    _require_admin(x_user_role)
     source = await db.scalar(
         select(SourceDefinition)
         .options(joinedload(SourceDefinition.import_template))
@@ -141,9 +136,8 @@ async def create_product_master_job(
 async def get_product_master_job_state(
     job_id: int,
     db: AsyncSession = Depends(get_db),
-    x_user_role: str | None = Header(default=None, alias="X-User-Role"),
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ):
-    _require_admin(x_user_role)
     try:
         job = await db.scalar(
             select(ImportJob)
@@ -199,9 +193,8 @@ async def put_product_master_mapping(
     job_id: int,
     body: PMMappingBody,
     db: AsyncSession = Depends(get_db),
-    x_user_role: str | None = Header(default=None, alias="X-User-Role"),
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ):
-    _require_admin(x_user_role)
     job = await db.get(ImportJob, job_id)
     if not job or job.template_slug != "product_master":
         raise HTTPException(status_code=404, detail="Job not found")
@@ -219,9 +212,8 @@ async def put_product_master_mapping(
 async def post_product_master_validate(
     job_id: int,
     db: AsyncSession = Depends(get_db),
-    x_user_role: str | None = Header(default=None, alias="X-User-Role"),
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ):
-    _require_admin(x_user_role)
     try:
         with SessionLocal() as sync_db:
             out = try_enqueue_pm_validate_sync(sync_db, job_id)
@@ -348,9 +340,8 @@ async def post_product_master_commit(
     job_id: int,
     confirm_destructive: bool = Form(default=False),
     db: AsyncSession = Depends(get_db),
-    x_user_role: str | None = Header(default=None, alias="X-User-Role"),
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ):
-    _require_admin(x_user_role)
     try:
         with SessionLocal() as sync_db:
             out = try_enqueue_pm_commit_sync(sync_db, job_id, confirm_destructive=confirm_destructive)

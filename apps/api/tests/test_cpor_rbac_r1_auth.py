@@ -1,0 +1,210 @@
+"""RBAC R1 — CPOR write routes must authenticate; actor is non-null from the user payload.
+
+No database access: route introspection + pure `_actor()` calls only.
+"""
+
+from __future__ import annotations
+
+import inspect
+from datetime import date
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+
+from fastapi.routing import APIRoute
+from fastapi.testclient import TestClient
+
+from app.api.v1.endpoints.cpor_cases import _actor as cases_actor
+from app.api.v1.endpoints.cpor_exports import _actor as exports_actor
+from app.core.security import Role, get_current_user
+from app.main import app
+
+_WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+def _dependant_calls(dependant) -> set:
+    found: set[object] = set()
+    if dependant is None:
+        return found
+    call = getattr(dependant, "call", None)
+    if call is not None:
+        found.add(call)
+    for dep in getattr(dependant, "dependencies", None) or []:
+        found |= _dependant_calls(dep)
+    return found
+
+
+def _is_cpor_path(path: str) -> bool:
+    return "/cpor/" in path or path.rstrip("/").endswith("/cpor")
+
+
+def test_actor_non_null_for_stub_mode_user_payload():
+    user = {"id": "demo-user", "role": Role.ADMIN, "email": None}
+    assert cases_actor(user) == "demo-user"
+    assert exports_actor(user) == "demo-user"
+
+
+def test_all_cpor_write_routes_depend_on_get_current_user():
+    missing: list[tuple[str, str]] = []
+    writes: list[str] = []
+    for route in app.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        path = route.path
+        if not _is_cpor_path(path):
+            continue
+        methods = set(route.methods or ())
+        if not (methods & _WRITE_METHODS):
+            continue
+        writes.append(path)
+        if get_current_user not in _dependant_calls(route.dependant):
+            missing.append((",".join(sorted(methods)), path))
+    assert writes, "expected CPOR write routes to be mounted"
+    assert missing == [], f"CPOR write routes missing get_current_user: {missing}"
+
+
+def test_sync_cpor_writes_resolve_async_get_current_user():
+    """Several CPOR writes are sync `def`; FastAPI still injects async get_current_user."""
+    assert inspect.iscoroutinefunction(get_current_user)
+    sync_authenticated: list[str] = []
+    for route in app.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        if not _is_cpor_path(route.path):
+            continue
+        if not (set(route.methods or ()) & _WRITE_METHODS):
+            continue
+        if inspect.iscoroutinefunction(route.endpoint):
+            continue
+        if get_current_user in _dependant_calls(route.dependant):
+            sync_authenticated.append(route.path)
+    assert sync_authenticated, "expected at least one sync CPOR write with get_current_user"
+
+
+def test_sync_write_route_responds_with_get_current_user():
+    """Sync ``def`` transition still responds when get_current_user is the async dependency."""
+
+    def override_user() -> dict:
+        return {"id": "demo-user", "role": Role.ADMIN, "email": None, "tenant_id": "default"}
+
+    app.dependency_overrides[get_current_user] = override_user
+    client = TestClient(app)
+    case = SimpleNamespace(
+        id=10,
+        status="draft",
+        customer_id=1,
+        case_code="X",
+        case_name=None,
+        promotion_type="Sell out PP",
+        window_start=date(2026, 1, 1),
+        window_end=date(2026, 1, 7),
+        roe_snapshot=None,
+        currency_code="ZAR",
+        channel="reseller",
+        notes=None,
+        created_by=None,
+        export_version=1,
+        workflow_status="draft",
+        last_comment=None,
+        submitted_at=None,
+        decided_at=None,
+        decided_by=None,
+        superseded_by_case_id=None,
+        created_at=None,
+    )
+    session = MagicMock()
+    session.get = MagicMock(return_value=case)
+    try:
+        with patch("app.api.v1.endpoints.cpor_cases.SessionLocal") as sl:
+            sl.return_value.__enter__.return_value = session
+            sl.return_value.__exit__.return_value = None
+            response = client.post("/api/v1/cpor/cases/10/transition", json={"action": "approve"})
+        assert response.status_code == 409, response.text
+        assert response.json()["detail"]["current"] == "draft"
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+
+_HIST_IMPORT_PREFIX = "/api/v1/cpor/historical-import"
+
+
+def test_historical_import_require_admin_gone():
+    """Grep-level: no header 403 helper remains in the historical-import module."""
+    import app.api.v1.endpoints.cpor_historical_import as hist
+
+    src = inspect.getsource(hist)
+    assert "_require_admin" not in src
+    assert "X-User-Role" not in src
+    assert "x_user_role" not in src
+    assert not hasattr(hist, "_require_admin")
+
+
+def test_historical_import_gets_depend_on_get_current_user():
+    missing: list[str] = []
+    found: list[str] = []
+    for route in app.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        if _HIST_IMPORT_PREFIX not in route.path:
+            continue
+        if "GET" not in set(route.methods or ()):
+            continue
+        found.append(route.path)
+        if get_current_user not in _dependant_calls(route.dependant):
+            missing.append(route.path)
+    assert found, "expected historical-import GET routes to be mounted"
+    assert missing == [], f"historical-import GETs missing get_current_user: {missing}"
+
+
+def test_historical_import_posts_depend_on_get_current_user():
+    missing: list[str] = []
+    found: list[str] = []
+    for route in app.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        if _HIST_IMPORT_PREFIX not in route.path:
+            continue
+        if not (set(route.methods or ()) & _WRITE_METHODS):
+            continue
+        found.append(route.path)
+        if get_current_user not in _dependant_calls(route.dependant):
+            missing.append(route.path)
+    assert found, "expected historical-import write routes to be mounted"
+    assert missing == [], f"historical-import writes missing get_current_user: {missing}"
+
+
+def _route_own_user_header_params(route: APIRoute) -> list[str]:
+    """Header params declared on the view, not nested get_current_user (security.py)."""
+    hits: list[str] = []
+    for hp in getattr(route.dependant, "header_params", None) or []:
+        name = (getattr(hp, "name", None) or "").lower()
+        alias = (getattr(hp, "alias", None) or "").lower()
+        field_info = getattr(hp, "field_info", None)
+        fi_alias = (getattr(field_info, "alias", None) or "").lower() if field_info is not None else ""
+        lowered = {
+            name,
+            alias,
+            fi_alias,
+            name.replace("_", "-"),
+            alias.replace("_", "-"),
+        }
+        if lowered & {"x-user-id", "x_user_id", "x-user-role", "x_user_role"}:
+            hits.append(f"{getattr(hp, 'name', '?')} alias={getattr(hp, 'alias', '')}")
+    return hits
+
+
+def test_cpor_routes_declare_no_x_user_headers():
+    """R1d: no CPOR view may still take X-User-Id / X-User-Role as a Header param."""
+    offenders: list[str] = []
+    scanned = 0
+    for route in app.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        if not _is_cpor_path(route.path):
+            continue
+        scanned += 1
+        hits = _route_own_user_header_params(route)
+        if hits:
+            methods = ",".join(sorted(m for m in (route.methods or ()) if m not in {"HEAD", "OPTIONS"}))
+            offenders.append(f"{methods} {route.path} :: {hits}")
+    assert scanned, "expected CPOR routes to be mounted"
+    assert offenders == [], f"CPOR routes still declare X-User-* Header params: {offenders}"

@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.v1.endpoints.cpor_cases import _actor
 from app.core.security import get_current_user
 from app.db.session_sync import SessionLocal
 from app.models.cpor_payment import CporPaymentEvidence, CporPaymentMappingProfile
@@ -121,7 +122,6 @@ def candidates(
 def map_token(
     job_id: int,
     body: MapTokenBody,
-    x_user_id: Annotated[str | None, Header()] = None,
     _user: Annotated[dict, Depends(get_current_user)] = None,
     db: Session = Depends(_sync_db),
 ) -> dict[str, Any]:
@@ -152,7 +152,6 @@ def map_token(
 def mark_shell(
     job_id: int,
     body: ShellCaseBody,
-    x_user_id: Annotated[str | None, Header()] = None,
     _user: Annotated[dict, Depends(get_current_user)] = None,
     db: Session = Depends(_sync_db),
 ) -> dict[str, Any]:
@@ -188,14 +187,13 @@ def re_resolve(
 def apply_job(
     job_id: int,
     body: ApplyBody,
-    x_user_id: Annotated[str | None, Header()] = None,
     _user: Annotated[dict, Depends(get_current_user)] = None,
     db: Session = Depends(_sync_db),
 ) -> dict[str, Any]:
     if not body.confirm:
         raise HTTPException(status_code=400, detail="confirm=true required")
     job = _job_or_404(db, job_id)
-    out = apply_cpor_payment_evidence_job(db, job, actor=x_user_id)
+    out = apply_cpor_payment_evidence_job(db, job, actor=_actor(_user))
     record_steward_audit_sync(
         _user,
         action="cpor_payment_apply",

@@ -451,7 +451,7 @@ export default function SettingsPage() {
                 <Typography variant="body2" sx={{ mt: 1 }}>
                   If other pages load data, compare <code>NEXT_PUBLIC_API_URL</code> (build-time) to the API you are
                   actually running, and ensure this API version includes <code>GET /api/v1/dev/database-wipe</code>{' '}
-                  (CORS must allow your web origin and <code>X-User-Id</code> / <code>X-User-Role</code> headers).
+                  (CORS must allow your web origin and Authorization headers).
                 </Typography>
               )}
             </Alert>

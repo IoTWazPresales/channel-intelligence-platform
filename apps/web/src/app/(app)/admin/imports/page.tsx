@@ -56,7 +56,7 @@ import {
   type CanonicalRequiredGroup,
   type CanonicalTargetOption,
 } from '@/features/import-mapping/CanonicalColumnMappingPanel';
-import { apiGet, apiPost, apiUrl, readFetchError, safeDisplayError } from '@/lib/api';
+import { apiGet, apiPost, apiUrl, readFetchError, safeDisplayError, authHeaders } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
 import { ImportFileUploadZone } from './ImportFileUploadZone';
@@ -383,7 +383,6 @@ const stepsDsi = [
   'Apply',
 ];
 
-const defaultHeaders = { 'X-User-Role': 'admin', 'X-User-Id': 'demo-user' };
 const DEFERRED_TEMPLATE_SLUGS = new Set(['customer_channel_mapping']);
 
 /** Human labels for inbound shipment canonical mapping targets (imports column-mapping step). */
@@ -1286,7 +1285,7 @@ function AdminImportsPageContent() {
       const payload = dsiIsMultiSheet ? dsiNestedMapDraft : dsiMapDraft;
       const res = await fetch(apiUrl(`/api/v1/imports/jobs/${lastJobId}/dsi-field-mapping`), {
         method: 'PUT',
-        headers: { ...defaultHeaders, 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify({ field_mapping: payload }),
       });
       if (!res.ok) throw new Error(await readFetchError(res));
@@ -1318,7 +1317,7 @@ function AdminImportsPageContent() {
       if (lastJobId == null) throw new Error('No job');
       const res = await fetch(apiUrl(`/api/v1/imports/jobs/${lastJobId}/dsi-validate`), {
         method: 'POST',
-        headers: defaultHeaders,
+        headers: authHeaders(undefined, false),
       });
       if (!res.ok) throw new Error(await readFetchError(res));
       const json = (await res.json()) as DsiMappingState & { async?: boolean; task_id?: string | null };
@@ -1488,7 +1487,7 @@ function AdminImportsPageContent() {
       const res = await fetch(apiUrl(`/api/v1/imports/jobs/${lastJobId}/dsi-apply`), {
         method: 'POST',
         body: fd,
-        headers: defaultHeaders,
+        headers: authHeaders(undefined, false),
       });
       if (!res.ok) throw new Error(await readFetchError(res));
       // Apply now dispatches to the worker and returns immediately with {async:true,...}; the
@@ -1529,7 +1528,7 @@ function AdminImportsPageContent() {
       const res = await fetch(apiUrl(`/api/v1/imports/jobs/${lastJobId}/dsi-apply`), {
         method: 'POST',
         body: fd,
-        headers: defaultHeaders,
+        headers: authHeaders(undefined, false),
       });
       if (!res.ok) throw new Error(await readFetchError(res));
       return res.json() as Promise<DsiMappingState & { async?: boolean; task_id?: string | null }>;
@@ -1881,7 +1880,7 @@ function AdminImportsPageContent() {
       const res = await fetch(apiUrl('/api/v1/imports/jobs'), {
         method: 'POST',
         body: fd,
-        headers: defaultHeaders,
+        headers: authHeaders(undefined, false),
       });
       if (!res.ok) throw new Error(await readFetchError(res));
       return res.json() as Promise<{ id: number; status: string; stage: string; import_mode: 'validate' | 'apply' }>;
@@ -2058,7 +2057,7 @@ function AdminImportsPageContent() {
       if (jid == null) throw new Error('No job');
       const res = await fetch(apiUrl(`/api/v1/imports/jobs/${jid}/shipment-field-mapping`), {
         method: 'PUT',
-        headers: { ...defaultHeaders, 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify({ field_mapping: shipmentMapDraft }),
       });
       if (!res.ok) throw new Error(await readFetchError(res));
@@ -2077,7 +2076,7 @@ function AdminImportsPageContent() {
       if (jid == null) throw new Error('No job');
       const res = await fetch(apiUrl(`/api/v1/imports/jobs/${jid}/shipment-validate`), {
         method: 'POST',
-        headers: defaultHeaders,
+        headers: authHeaders(undefined, false),
       });
       if (!res.ok) throw new Error(await readFetchError(res));
       const body = (await res.json()) as { async?: boolean; task_id?: string | null };
@@ -2223,7 +2222,7 @@ function AdminImportsPageContent() {
       const res = await fetch(apiUrl('/api/v1/imports/product-master/jobs'), {
         method: 'POST',
         body: fd,
-        headers: defaultHeaders,
+        headers: authHeaders(undefined, false),
       });
       if (!res.ok) throw new Error(await readFetchError(res));
       return res.json() as Promise<{ id: number; stage: string; file_headers: string[] }>;
@@ -2240,7 +2239,7 @@ function AdminImportsPageContent() {
       if (lastJobId == null) throw new Error('No job');
       const res = await fetch(apiUrl(`/api/v1/imports/product-master/jobs/${lastJobId}/mapping`), {
         method: 'PUT',
-        headers: { ...defaultHeaders, 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify({ columns: pmDraftsToApiColumns(pmColumns) }),
       });
       if (!res.ok) throw new Error(await readFetchError(res));
@@ -2256,7 +2255,7 @@ function AdminImportsPageContent() {
       if (lastJobId == null) throw new Error('No job');
       const res = await fetch(apiUrl(`/api/v1/imports/product-master/jobs/${lastJobId}/validate`), {
         method: 'POST',
-        headers: defaultHeaders,
+        headers: authHeaders(undefined, false),
       });
       const text = await res.text();
       if (res.status !== 202 && !res.ok) {
@@ -2288,7 +2287,7 @@ function AdminImportsPageContent() {
       const res = await fetch(apiUrl(`/api/v1/imports/product-master/jobs/${lastJobId}/commit`), {
         method: 'POST',
         body: fd,
-        headers: defaultHeaders,
+        headers: authHeaders(undefined, false),
       });
       const text = await res.text();
       if (!res.ok) {
@@ -2394,7 +2393,7 @@ function AdminImportsPageContent() {
   const downloadSample = useCallback(async () => {
     if (!selectedSlug) return;
     const res = await fetch(apiUrl(`/api/v1/imports/templates/${selectedSlug}/sample`), {
-      headers: defaultHeaders,
+      headers: authHeaders(undefined, false),
     });
     if (!res.ok) return;
     const blob = await res.blob();

@@ -29,9 +29,7 @@ import {
 import { useMutation } from '@tanstack/react-query';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
-import { apiUrl, readFetchError, safeDisplayError } from '@/lib/api';
-
-const DEMO_HEADERS = { 'X-User-Role': 'admin', 'X-User-Id': 'demo-user' };
+import { apiPostFormData, safeDisplayError } from '@/lib/api';
 
 const ACCEPT =
   '.csv,.xlsx,.xlsm,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.ms-excel,text/csv';
@@ -138,13 +136,7 @@ export function DsiBulkUploadDialog({
       for (const file of files) {
         fd.append('files', file);
       }
-      const res = await fetch(apiUrl('/api/v1/imports/dsi/batch-propose'), {
-        method: 'POST',
-        headers: DEMO_HEADERS,
-        body: fd,
-      });
-      if (!res.ok) throw new Error(await readFetchError(res));
-      return (await res.json()) as BatchProposeResponse;
+      return apiPostFormData<BatchProposeResponse>('/api/v1/imports/dsi/batch-propose', fd);
     },
     onSuccess: (data) => setPreview(data),
   });
@@ -158,13 +150,7 @@ export function DsiBulkUploadDialog({
       for (const file of files) {
         fd.append('files', file);
       }
-      const res = await fetch(apiUrl('/api/v1/imports/dsi/batch-jobs'), {
-        method: 'POST',
-        headers: DEMO_HEADERS,
-        body: fd,
-      });
-      if (!res.ok) throw new Error(await readFetchError(res));
-      return (await res.json()) as BatchJobsResponse;
+      return apiPostFormData<BatchJobsResponse>('/api/v1/imports/dsi/batch-jobs', fd);
     },
     onSuccess: (data) => {
       setResults(data);

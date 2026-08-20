@@ -20,6 +20,14 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 - 2026-08-20 — **Merged to main** `b5e92d1`: `feat/shipping-mailer-recipients` (Alembic `20260818_0019`). cip already stamped `0019`; no upgrade of cip.
 
+- 2026-08-20 — **RBAC R1d** on `feat/rbac-r1-session-actor`: 401 → clear token + `/login`; payment-evidence actor from `_actor`; CPOR has zero `X-User-*` Header params; session e2e on cip_test 200/403/401 per five R1c routers. CURRENT 0019 explained; BACKLOG-143 leftovers. No migration. No cip writes. `44530a4`.
+
+- 2026-08-20 — **RBAC R1c** on `feat/rbac-r1-session-actor`: 41 non-CPOR `X-User-Role` gates → `require_roles(Role.ADMIN)`. Import template/source filters use session role. CPOR untouched. BACKLOG-136 traps + BACKLOG-141/142. `cip_test` created at `20260818_0018`. `0f88e1d`.
+
+- 2026-08-20 — **RBAC R1b** on `feat/rbac-r1-session-actor`: historical-import `_require_admin` removed; GETs use `get_current_user`. Auth-only until R2. `cip_test` missing — write-capable tests not run. `17a99bd`.
+
+- 2026-08-20 — **RBAC R1** on `feat/rbac-r1-session-actor`: CPOR writes authenticate via `get_current_user`; actor from `user["id"]`; web forged `X-User-*` removed. No migration. Historical-import GETs still header-gated (FLAG). `5b2a6a4`.
+
 - 2026-08-20 — **CPOR settlement design** locked in `docs/CPOR_SETTLEMENT_SPEC.md`. D-057–D-065. BACKLOG-135–140 for §9 gaps. Docs only.
 
 - 2026-08-20 — **Merged to main** `57528c5`: resolver guard + leftover repair. getattr-safe `merged_into_*` (`1aaeef1`). BACKLOG-133 / BACKLOG-134 parked. `1901d8b`.

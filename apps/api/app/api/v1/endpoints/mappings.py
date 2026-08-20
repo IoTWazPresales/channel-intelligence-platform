@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 from typing_extensions import Self
 
-from fastapi import APIRouter, Depends, HTTPException, Header, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.core.config import get_settings
 from app.core.dev_celery_logging import DEV_CELERY_LOGGER
-from app.core.security import get_current_user
+from app.core.security import Role, get_current_user, require_roles
 from app.db.session_sync import SessionLocal
 from app.worker.celery_app import celery_app
 from app.ingestion.pipeline import process_import_job_sync
@@ -95,14 +95,6 @@ from app.services.imports import dsi_resolution_plan_enqueue as _dsi_plan_enqueu
 
 _dev_dsi_bulk_task_results = _dsi_plan_enqueue._dev_dsi_bulk_task_results
 _dev_dsi_bulk_provisional_results = _dev_dsi_bulk_task_results
-
-
-def _require_admin_role(x_user_role: str | None = Header(default=None, alias="X-User-Role")) -> None:
-    if (x_user_role or "").strip().lower() != "admin":
-        raise HTTPException(
-            status_code=403,
-            detail={"error": "admin_required", "message": "Admin maintenance requires X-User-Role: admin"},
-        )
 
 
 class ClearConfirmBody(BaseModel):
@@ -1528,7 +1520,7 @@ async def dsi_resolution_plan_apply_endpoint(
 async def dsi_apply_complete_to_loaded(
     job_id: int,
     db: AsyncSession = Depends(get_db),
-    _: None = Depends(_require_admin_role),
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ) -> dict[str, Any]:
     """Refresh DSI staging resolutions, upsert facts, and promote job to ``loaded`` when rules pass."""
     await _assert_dsi_import_job(db, job_id)
@@ -1662,7 +1654,7 @@ async def dsi_geo_steward_channel_create(
     job_id: int,
     body: DsiGeoStewardChannelCreateBody,
     db: AsyncSession = Depends(get_db),
-    _: None = Depends(_require_admin_role),
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ):
     await _assert_dsi_import_job(db, job_id)
 
@@ -1689,7 +1681,7 @@ async def dsi_geo_steward_channel_alias(
     job_id: int,
     body: DsiGeoStewardChannelAliasBody,
     db: AsyncSession = Depends(get_db),
-    _: None = Depends(_require_admin_role),
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ):
     await _assert_dsi_import_job(db, job_id)
 
@@ -1715,7 +1707,7 @@ async def dsi_geo_steward_region_create(
     job_id: int,
     body: DsiGeoStewardRegionCreateBody,
     db: AsyncSession = Depends(get_db),
-    _: None = Depends(_require_admin_role),
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ):
     await _assert_dsi_import_job(db, job_id)
 
@@ -1742,7 +1734,7 @@ async def dsi_geo_steward_region_alias(
     job_id: int,
     body: DsiGeoStewardRegionAliasBody,
     db: AsyncSession = Depends(get_db),
-    _: None = Depends(_require_admin_role),
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ):
     await _assert_dsi_import_job(db, job_id)
 
@@ -1802,7 +1794,7 @@ async def dsi_geo_steward_region_register_from_hint(
     job_id: int,
     body: DsiGeoRegisterRegionHintBody,
     db: AsyncSession = Depends(get_db),
-    _: None = Depends(_require_admin_role),
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ):
     """Create or resolve ISO region and alias a file token (channel geographic hint — not channel→region mapping)."""
     await _assert_dsi_import_job(db, job_id)
@@ -1844,7 +1836,7 @@ async def dsi_geo_steward_bulk_apply(
     job_id: int,
     body: DsiGeoStewardBulkBody,
     db: AsyncSession = Depends(get_db),
-    _: None = Depends(_require_admin_role),
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ):
     """Bulk register region/channel catalog rows + aliases for unresolved geo file tokens."""
     await _assert_dsi_import_job(db, job_id)

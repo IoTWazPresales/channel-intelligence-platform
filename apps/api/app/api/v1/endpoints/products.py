@@ -1,12 +1,12 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import Date, and_, asc, desc, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db
-from app.core.security import get_optional_current_user
+from app.core.security import Role, get_optional_current_user, require_roles
 from app.core.tenant_scope import tenant_id_from_user, where_tenant
 from app.models.dimensions import DimProduct
 from app.models.ingestion import ImportJob
@@ -250,19 +250,11 @@ async def get_product_refs_for_delete_ux(product_id: int, db: AsyncSession = Dep
     return await _product_references_bundle(db, product_id)
 
 
-def _require_admin_role(x_user_role: str | None = Header(default=None, alias="X-User-Role")) -> None:
-    if (x_user_role or "").strip().lower() != "admin":
-        raise HTTPException(
-            status_code=403,
-            detail={"error": "admin_required", "message": "Admin maintenance requires X-User-Role: admin"},
-        )
-
-
 @router.get("/id/{product_id}/dependencies/distributor-inventory")
 async def get_dsi_dependency_detail_for_product(
     product_id: int,
     db: AsyncSession = Depends(get_db),
-    _: None = Depends(_require_admin_role),
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ):
     """Small sample + counts for DSI facts that block product delete (inventory snapshot + sell-out)."""
     payload = await dsi_dependency_detail_payload(db, product_id)
@@ -283,7 +275,7 @@ async def clear_dsi_dependency_facts_for_product(
     product_id: int,
     body: ClearDistributorInventoryFactsBody,
     db: AsyncSession = Depends(get_db),
-    _: None = Depends(_require_admin_role),
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ):
     """Admin maintenance: remove DSI ``fact_inventory_distributor`` + ``fact_sales_sellout`` rows for this product.
 

@@ -9,6 +9,6 @@ export async function fetchCporHistoricalProgress(
 ): Promise<ImportJobPipelineProgress> {
   return apiGet<ImportJobPipelineProgress>(
     `/api/v1/cpor/historical-import/jobs/${importJobId}/progress`,
-    { signal, headers: { 'X-User-Role': 'admin' } }
+    { signal }
   );
 }

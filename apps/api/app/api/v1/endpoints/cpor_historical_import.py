@@ -6,7 +6,7 @@ import logging
 import uuid
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -79,14 +79,6 @@ class ResolutionPlanGenerateBody(BaseModel):
 
 class ResolutionPlanApplyBody(BaseModel):
     candidate_ids: list[int] = Field(min_length=1)
-
-
-def _require_admin(x_user_role: str | None) -> None:
-    if (x_user_role or "").strip().lower() != "admin":
-        raise HTTPException(
-            status_code=403,
-            detail={"error": "admin_required", "message": "Admin required for historical CPOR import"},
-        )
 
 
 def _get_job_sync(db: Session, job_id: int) -> ImportJob:
@@ -213,9 +205,8 @@ def _dispatch_cpor_historical_apply(job_id: int) -> tuple[bool, str | None]:
 @router.get("/historical-import/profiles")
 async def list_mapping_profiles(
     db: Annotated[AsyncSession, Depends(get_db)],
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     # Ensure default exists via sync (seed)
     with SessionLocal() as sdb:
         ensure_default_mapping_profile(sdb)
@@ -243,9 +234,8 @@ async def list_mapping_profiles(
 @router.get("/historical-import/jobs/{job_id}/summary")
 def historical_job_summary(
     job_id: int,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     with SessionLocal() as db:
         job = _get_job_sync(db, job_id)
         staging_count = (
@@ -303,7 +293,7 @@ def historical_candidates(
     ] = None,
     skip: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int | None, Query(ge=1, le=5000)] = None,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Steward candidates for one entity tab (Unit C S12 server pagination, S9 plan_class filter).
 
@@ -313,7 +303,6 @@ def historical_candidates(
     page. When ``limit`` is omitted, all matching rows are returned (byte-compatible with the
     pre-Unit-C response) — pass ``skip``/``limit`` to opt into pagination.
     """
-    _require_admin(x_user_role)
     with SessionLocal() as db:
         _get_job_sync(db, job_id)
         all_c = list_unresolved_candidates(db, job_id=job_id)
@@ -342,10 +331,8 @@ def historical_candidates(
 def historical_map_token(
     job_id: int,
     body: MapTokenBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
     user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     with SessionLocal() as db:
         _get_job_sync(db, job_id)
         updated = map_staging_token(
@@ -370,10 +357,8 @@ def historical_map_token(
 def historical_bulk_map_token(
     job_id: int,
     body: BulkMapTokenBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
     user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     tokens = [t.strip() for t in body.tokens if (t or "").strip()]
     if not tokens:
         raise HTTPException(status_code=400, detail={"error": "tokens_required"})
@@ -404,10 +389,9 @@ def historical_bulk_map_token(
 @router.post("/historical-import/jobs/{job_id}/validate")
 def historical_validate(
     job_id: int,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Async validate (parse → stage → deterministic resolve) — same bar as DSI validate."""
-    _require_admin(x_user_role)
     with SessionLocal() as db:
         _get_job_sync(db, job_id)
     claim_import_pipeline_dispatch(job_id, import_mode="validate")
@@ -437,9 +421,8 @@ def historical_validate(
 def historical_apply(
     job_id: int,
     body: ApplyBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     if not body.confirm:
         raise HTTPException(
             status_code=400,
@@ -485,10 +468,9 @@ def historical_apply(
 @router.get("/historical-import/jobs/{job_id}/progress")
 def historical_progress(
     job_id: int,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Celery PROGRESS + DB fallback — same shape as DSI ``dsi-progress``."""
-    _require_admin(x_user_role)
     from app.services.imports.background_tasks import read_celery_with_timeout
     from app.services.imports.import_job_background_metadata import (
         ACTIVE_CELERY_STATES,
@@ -583,10 +565,9 @@ def historical_progress(
 def historical_resolution_plan_generate(
     job_id: int,
     body: ResolutionPlanGenerateBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Synchronous plan generation — small jobs / tests. Prefer compute-async for steward UI."""
-    _require_admin(x_user_role)
     with SessionLocal() as db:
         try:
             out = build_cpor_historical_resolution_plan_sync(db, job_id, candidate_ids=body.candidate_ids)
@@ -600,9 +581,8 @@ def historical_resolution_plan_generate(
 def historical_resolution_plan_compute_async(
     job_id: int,
     body: ResolutionPlanGenerateBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     with SessionLocal() as s:
         job = _get_job_sync(s, job_id)
         _assert_cpor_resolution_plan_dispatch_allowed(job)
@@ -631,10 +611,9 @@ def historical_resolution_plan_compute_async(
 def historical_resolution_plan_apply_async(
     job_id: int,
     body: ResolutionPlanApplyBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Apply ready resolution-plan rows — per-token map_staging_token (D-013; never bulk single-target)."""
-    _require_admin(x_user_role)
     with SessionLocal() as s:
         job = _get_job_sync(s, job_id)
         _assert_cpor_resolution_plan_dispatch_allowed(job)
@@ -660,7 +639,11 @@ def historical_resolution_plan_apply_async(
 
 
 @router.get("/historical-import/jobs/{job_id}/resolution-plan-task/{task_id}", status_code=200)
-def historical_resolution_plan_task_status(job_id: int, task_id: str) -> dict[str, Any]:
+def historical_resolution_plan_task_status(
+    job_id: int,
+    task_id: str,
+    _user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
     """Poll a CPOR resolution-plan Celery task (or dev in-process / sync fallback) state + result.
 
     Mirrors ``shipment_evidence.shipment_bulk_task_status``: clears the registered
