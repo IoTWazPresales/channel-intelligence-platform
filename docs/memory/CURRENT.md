@@ -4,7 +4,7 @@
 
 **Branch:** `feat/rbac-r1-session-actor`
 
-**Last content pin:** `3967598` — do not treat a hash in this file as HEAD
+**Last content pin:** `0f88e1d` — do not treat a hash in this file as HEAD
 
 **Alembic (code):** `20260818_0018` (`20260818_0018_report_delivery_email_channel.py`) — no new revision in R1c
 

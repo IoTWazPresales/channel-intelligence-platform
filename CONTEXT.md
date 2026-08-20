@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-08-20 — **RBAC R1c** on `feat/rbac-r1-session-actor`: 41 non-CPOR `X-User-Role` gates → `require_roles(Role.ADMIN)`. Import template/source filters use session role. CPOR untouched. BACKLOG-136 traps + BACKLOG-141/142.
+- 2026-08-20 — **RBAC R1c** on `feat/rbac-r1-session-actor`: 41 non-CPOR `X-User-Role` gates → `require_roles(Role.ADMIN)`. Import template/source filters use session role. CPOR untouched. BACKLOG-136 traps + BACKLOG-141/142. `cip_test` created at `20260818_0018`. `0f88e1d`.
 
 - 2026-08-20 — **RBAC R1b** on `feat/rbac-r1-session-actor`: historical-import `_require_admin` removed; GETs use `get_current_user`. Auth-only until R2. `cip_test` missing — write-capable tests not run. `17a99bd`.
 
