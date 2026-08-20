@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-08-20 — **Merged to main** `57528c5`: resolver guard + leftover repair. getattr-safe `merged_into_*` (`1aaeef1`). BACKLOG-133 / BACKLOG-134 parked.
+- 2026-08-20 — **Merged to main** `57528c5`: resolver guard + leftover repair. getattr-safe `merged_into_*` (`1aaeef1`). BACKLOG-133 / BACKLOG-134 parked. `1901d8b`.
 
 - 2026-08-19 — **Leftover repair (Unit 2):** 9 losers / 3266 FKs repointed via `repoint_customer_footprint_full`. Clone `cip_merged_leftover_repair` PASS then cip leftover=0. Compuspeed 1152 flagged. Branch `fix/merged-customer-resolver-guard`. `3372915`.
 
