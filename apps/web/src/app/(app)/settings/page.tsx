@@ -23,6 +23,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
 import { SemanticCatalogOverlayPanel } from '@/features/settings/SemanticCatalogOverlayPanel';
+import { ShippingDigestRecipientsPanel } from '@/features/shipping-mailer';
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
 import { apiGet, apiPost, apiPut, getApiBase, safeDisplayError } from '@/lib/api';
 import { loadWipeAvailability } from '@/lib/wipeAvailability';
@@ -415,6 +416,8 @@ export default function SettingsPage() {
 
         {isAdmin ? (
           <>
+            <Divider sx={{ my: 3 }} />
+            <ShippingDigestRecipientsPanel />
             <Divider sx={{ my: 3 }} />
             <SemanticCatalogOverlayPanel />
           </>

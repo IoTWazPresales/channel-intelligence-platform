@@ -17,6 +17,25 @@ from pathlib import Path
 
 import pytest
 
+# Pin, not a fix: the suite historically assumed stub header identity (optional
+# X-User-* / implicit admin) and silently inherited whatever apps/api/.env set.
+# Do not edit .env or the config.py default. An explicit process CIP_AUTH_MODE
+# (e.g. session for R1d e2e) wins; otherwise tests pin stub so a run is
+# reproducible without ambient .env.
+def pytest_configure(config) -> None:  # type: ignore[no-untyped-def]
+    os.environ.setdefault("CIP_AUTH_MODE", "stub")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+
+
+def pytest_report_header(config) -> list[str]:  # type: ignore[no-untyped-def]
+    return [
+        "CIP_AUTH_MODE pin={!r} (conftest setdefault stub; not a fix)".format(
+            os.environ.get("CIP_AUTH_MODE")
+        )
+    ]
+
 # Historical hand-maintained frozenset (pre-deny-by-default). Kept as documentation of the
 # original five import-pipeline modules; the live gate uses `_WRITE_CAPABLE_TEST_MODULES`.
 _IMPORT_PIPELINE_DB_TEST_MODULES: frozenset[str] = frozenset(

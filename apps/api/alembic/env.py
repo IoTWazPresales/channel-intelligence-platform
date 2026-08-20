@@ -84,6 +84,7 @@ from app.models import (  # noqa: F401
     TaskRun,
     WeeksOfCoverObservation,
     WeeksOfStock,
+    ShippingMailerRecipient,
 )
 
 config = context.config

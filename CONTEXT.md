@@ -16,6 +16,10 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-08-20 — **API tests pin `CIP_AUTH_MODE=stub`** in `apps/api/tests/conftest.py` (`setdefault`; not a fix). BACKLOG-144: `cip_test` seed gap for lineup distributor-as-customer remediation. Do not edit `.env`. `94e1f5c`.
+
+- 2026-08-20 — **Merged to main** `b5e92d1`: `feat/shipping-mailer-recipients` (Alembic `20260818_0019`). cip already stamped `0019`; no upgrade of cip.
+
 - 2026-08-20 — **RBAC R1d** on `feat/rbac-r1-session-actor`: 401 → clear token + `/login`; payment-evidence actor from `_actor`; CPOR has zero `X-User-*` Header params; session e2e on cip_test 200/403/401 per five R1c routers. CURRENT 0019 explained; BACKLOG-143 leftovers. No migration. No cip writes. `44530a4`.
 
 - 2026-08-20 — **RBAC R1c** on `feat/rbac-r1-session-actor`: 41 non-CPOR `X-User-Role` gates → `require_roles(Role.ADMIN)`. Import template/source filters use session role. CPOR untouched. BACKLOG-136 traps + BACKLOG-141/142. `cip_test` created at `20260818_0018`. `0f88e1d`.
@@ -32,6 +36,10 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 - 2026-08-19 — **Resolver guard (Unit 1):** follow `merged_into_*` on customer/distributor resolvers; exclude merged from provisional reuse and pickers. Canonical `merge_redirect.py`. No repair yet. Branch `fix/merged-customer-resolver-guard`. `fc14962`.
 
+
+- 2026-08-18 — **VERIFY PASS** shipping-mailer recipients (Opus) `6a35332` / stamp `e5e0702`.
+
+- 2026-08-18 — **Shipping-mailer recipients UI** `6a35332`: Settings list + DB table `shipping_mailer_recipient` (Alembic `20260818_0019`). UI list wins; empty table seeds the five.
 - 2026-08-18 — **Merged to main** `eb73232`: mailbox ingest + shipping digest mailer (`847aaf8`).
 
 - 2026-08-18 — **Digest grouped by disti, sorted by customer.** Inbox **#17** preview. `847aaf8`.
