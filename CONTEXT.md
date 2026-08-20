@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-08-20 — **Merged to main** `22c2305`: `feat/rbac-r1-session-actor` (R1–R1d). RBAC program CLOSED at authentication + ADMIN `require_roles` on the 41 non-CPOR gates. CPOR stays auth-only until R2 (BACKLOG-136 / 141 parked). No migration. No cip upgrade.
+
 - 2026-08-20 — **API tests pin `CIP_AUTH_MODE=stub`** in `apps/api/tests/conftest.py` (`setdefault`; not a fix). BACKLOG-144: `cip_test` seed gap for lineup distributor-as-customer remediation. Do not edit `.env`. `94e1f5c`.
 
 - 2026-08-20 — **Merged to main** `b5e92d1`: `feat/shipping-mailer-recipients` (Alembic `20260818_0019`). cip already stamped `0019`; no upgrade of cip.
