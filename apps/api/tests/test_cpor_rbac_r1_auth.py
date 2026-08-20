@@ -122,3 +122,51 @@ def test_sync_write_route_responds_with_get_current_user():
         assert response.json()["detail"]["current"] == "draft"
     finally:
         app.dependency_overrides.pop(get_current_user, None)
+
+
+_HIST_IMPORT_PREFIX = "/api/v1/cpor/historical-import"
+
+
+def test_historical_import_require_admin_gone():
+    """Grep-level: no header 403 helper remains in the historical-import module."""
+    import app.api.v1.endpoints.cpor_historical_import as hist
+
+    src = inspect.getsource(hist)
+    assert "_require_admin" not in src
+    assert "X-User-Role" not in src
+    assert "x_user_role" not in src
+    assert not hasattr(hist, "_require_admin")
+
+
+def test_historical_import_gets_depend_on_get_current_user():
+    missing: list[str] = []
+    found: list[str] = []
+    for route in app.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        if _HIST_IMPORT_PREFIX not in route.path:
+            continue
+        if "GET" not in set(route.methods or ()):
+            continue
+        found.append(route.path)
+        if get_current_user not in _dependant_calls(route.dependant):
+            missing.append(route.path)
+    assert found, "expected historical-import GET routes to be mounted"
+    assert missing == [], f"historical-import GETs missing get_current_user: {missing}"
+
+
+def test_historical_import_posts_depend_on_get_current_user():
+    missing: list[str] = []
+    found: list[str] = []
+    for route in app.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        if _HIST_IMPORT_PREFIX not in route.path:
+            continue
+        if not (set(route.methods or ()) & _WRITE_METHODS):
+            continue
+        found.append(route.path)
+        if get_current_user not in _dependant_calls(route.dependant):
+            missing.append(route.path)
+    assert found, "expected historical-import write routes to be mounted"
+    assert missing == [], f"historical-import writes missing get_current_user: {missing}"

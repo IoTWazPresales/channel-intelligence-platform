@@ -33,10 +33,12 @@
 | **Idea** | Stamp a real actor on every CPOR write (null actor is a defect, §7). Enforce: KAM proposes/amends/owns terms; PM amends **pre-approval only**; Ken compiles/settles and must not touch MAC/terms; MDM+Wayne approve; Wayne re-approves. |
 | **Why it matters / deferrable** | Tree: some GETs use `get_current_user`; most writes use nullable `X-User-Id`; `require_roles` unused on `/cpor`; stub mode forges `admin`; Role enum has no these four roles. Deferrable until settlement/amendment units, but any new CPOR write should not extend the header-actor pattern. |
 | **What the work is** | (1) Map KAM/PM/Ken/Wayne onto IAM (new roles vs compose on planner/steward/admin) — CONSULT, do not invent. (2) `require_roles` (or equivalent) on every CPOR write including export. (3) Actor from session user, never null. |
-| **Regression traps** | Do not leave stub-admin as production. Do not give PM post-approval writes (D-059). Do not give Ken MAC/term writes. |
+| **Regression traps** | Do not leave stub-admin as production. Do not give PM post-approval writes (D-059). Do not give Ken MAC/term writes. R1/R1b replaced the forgeable `_require_admin(X-User-Role)` admin gate on the CPOR historical-import router (11 routes incl. `/apply`) with authentication only. Until R2 lands, any authenticated user can run historical validate/apply/resolution-plan. R2 must restore an equivalent or stronger check on these routes specifically. `scripts/e2e_dsi_phase1_phase2_validate.py` forges `X-User-Role: admin` and breaks under session mode — fix when R3 or the mode flip lands. |
 | **Behavior to retain** | Lifecycle actions in `lifecycle.py`; Wayne as re-approval actor (D-059). |
 | **Out of scope** | Customer portal login. |
 | **TRIGGER** | Next CPOR write-path unit, or session-auth hardening of `/cpor`. |
+
+Also: `scripts/e2e_dsi_phase1_phase2_validate.py` forges `X-User-Role: admin` and breaks under session mode — fix when R3 or the mode flip lands.
 
 ---
 

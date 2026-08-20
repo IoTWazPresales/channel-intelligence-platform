@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-08-20 — **RBAC R1b** on `feat/rbac-r1-session-actor`: historical-import `_require_admin` removed; GETs use `get_current_user`. Auth-only until R2. `cip_test` missing — write-capable tests not run.
+
 - 2026-08-20 — **RBAC R1** on `feat/rbac-r1-session-actor`: CPOR writes authenticate via `get_current_user`; actor from `user["id"]`; web forged `X-User-*` removed. No migration. Historical-import GETs still header-gated (FLAG). `5b2a6a4`.
 
 - 2026-08-20 — **CPOR settlement design** locked in `docs/CPOR_SETTLEMENT_SPEC.md`. D-057–D-065. BACKLOG-135–140 for §9 gaps. Docs only.
