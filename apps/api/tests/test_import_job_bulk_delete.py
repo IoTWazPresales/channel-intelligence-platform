@@ -153,8 +153,13 @@ def _seed_job_with_artifacts(session) -> int:
 
 def test_bulk_delete_preview_requires_admin() -> None:
     with TestClient(app) as client:
-        r = client.post("/api/v1/imports/jobs/bulk-delete-preview", json={"job_ids": [1]})
+        r = client.post(
+            "/api/v1/imports/jobs/bulk-delete-preview",
+            json={"job_ids": [1]},
+            headers={"X-User-Role": "viewer"},
+        )
         assert r.status_code == 403
+        assert r.json().get("detail") == "Insufficient role"
 
 
 def test_bulk_delete_preview_and_confirm_round_trip() -> None:

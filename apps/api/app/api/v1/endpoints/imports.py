@@ -3,9 +3,9 @@ import json
 import logging
 import threading
 import uuid
-from typing import Annotated, Any, Callable
+from typing import Any, Callable
 
-from fastapi import APIRouter, Body, Depends, File, Form, Header, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError
@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.api.deps import get_db
 from app.core.config import get_settings
 from app.core.dev_celery_logging import DEV_CELERY_LOGGER
-from app.core.security import get_current_user, get_optional_current_user
+from app.core.security import Role, get_current_user, get_optional_current_user, require_roles
 from app.core.tenant_scope import tenant_id_from_user, where_tenant
 from app.db.session_sync import SessionLocal
 from app.ingestion.pipeline import process_import_job_sync
@@ -220,20 +220,6 @@ def _persist_pipeline_celery_task_id(job_id: int, task_id: str | None) -> None:
         meta_db.commit()
 
 
-def _is_admin(x_user_role: str | None) -> bool:
-    return (x_user_role or "").strip().lower() == "admin"
-
-
-def _require_admin_import_maintenance(
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
-) -> None:
-    if not _is_admin(x_user_role):
-        raise HTTPException(
-            status_code=403,
-            detail={"error": "admin_required", "message": "Admin maintenance requires X-User-Role: admin"},
-        )
-
-
 class ImportJobBulkIdsBody(BaseModel):
     job_ids: list[int] = Field(default_factory=list, max_length=200)
 
@@ -273,10 +259,10 @@ def _template_to_api(t: ImportTemplate) -> dict[str, Any]:
 @router.get("/templates")
 async def list_import_templates(
     db: AsyncSession = Depends(get_db),
-    x_user_role: str | None = Header(default=None, alias="X-User-Role"),
+    user: dict = Depends(get_current_user),
 ):
     """First-class import types (product master, distributor inventory, …)."""
-    admin = _is_admin(x_user_role)
+    admin = user["role"] == Role.ADMIN
     stmt = select(ImportTemplate).where(ImportTemplate.enabled.is_(True)).order_by(ImportTemplate.slug)
     if not admin:
         stmt = stmt.where(ImportTemplate.hidden.is_(False), ImportTemplate.admin_only.is_(False))
@@ -289,9 +275,9 @@ async def list_import_templates(
 async def get_import_template(
     slug: str,
     db: AsyncSession = Depends(get_db),
-    x_user_role: str | None = Header(default=None, alias="X-User-Role"),
+    user: dict = Depends(get_current_user),
 ):
-    admin = _is_admin(x_user_role)
+    admin = user["role"] == Role.ADMIN
     t = await db.scalar(select(ImportTemplate).where(ImportTemplate.slug == slug))
     if not t or not t.enabled:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -316,10 +302,10 @@ async def download_sample_template(slug: str):
 async def list_sources(
     db: AsyncSession = Depends(get_db),
     template_slug: str | None = Query(default=None, description="Filter feeds for this import template"),
-    x_user_role: str | None = Header(default=None, alias="X-User-Role"),
+    user: dict = Depends(get_current_user),
 ):
     """Provider / feed instances (dim on `import_template`)."""
-    admin = _is_admin(x_user_role)
+    admin = user["role"] == Role.ADMIN
     stmt = (
         select(SourceDefinition)
         .options(joinedload(SourceDefinition.import_template))
@@ -408,7 +394,7 @@ async def list_jobs(
 @router.post("/jobs/bulk-delete-preview")
 async def post_import_jobs_bulk_delete_preview(
     body: ImportJobBulkIdsBody,
-    _admin: None = Depends(_require_admin_import_maintenance),
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ):
     """Return artifact counts for selected import jobs (admin maintenance; preview before delete)."""
     if not normalize_job_ids(body.job_ids):
@@ -423,7 +409,7 @@ async def post_import_jobs_bulk_delete_preview(
 @router.post("/jobs/bulk-delete-confirm")
 async def post_import_jobs_bulk_delete_confirm(
     body: ImportJobBulkDeleteConfirmBody,
-    _admin: None = Depends(_require_admin_import_maintenance),
+    _user: dict = Depends(require_roles(Role.ADMIN)),
 ):
     """Transactionally delete import jobs and directly linked ingestion artifacts (admin only)."""
     if not normalize_job_ids(body.job_ids):

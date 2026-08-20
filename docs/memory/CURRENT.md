@@ -1,26 +1,34 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-20 (RBAC R1b on `feat/rbac-r1-session-actor`)
+**Last updated:** 2026-08-20 (RBAC R1c on `feat/rbac-r1-session-actor`)
 
 **Branch:** `feat/rbac-r1-session-actor`
 
-**Last content pin:** `4ea1782` — do not treat a hash in this file as HEAD
+**Last content pin:** `3967598` — do not treat a hash in this file as HEAD
 
-**Alembic (code):** `20260818_0018` (`20260818_0018_report_delivery_email_channel.py`)
+**Alembic (code):** `20260818_0018` (`20260818_0018_report_delivery_email_channel.py`) — no new revision in R1c
 
-**Alembic on cip:** `20260818_0018` (head)
+**Alembic on cip_test:** `20260818_0018` (created this unit, OWNER cip)
+
+**Alembic on cip:** `20260818_0019` — **ahead of this branch's files** (no `0019` revision in the tree). R1c only `SELECT`ed cip; it did not migrate cip. Investigate before any cip upgrade.
 
 ## On this branch
 
-- **RBAC R1 + R1b (BACKLOG-136 slice):** CPOR writes authenticate via `get_current_user`; actor from `user["id"]`. Historical-import `_require_admin(X-User-Role)` removed; GETs and POSTs authenticate only. Web forged `X-User-*` literals gone. Code default `cip_auth_mode` remains `"stub"`. No migration, no Role enum, no `require_roles`.
-- Structural test: `apps/api/tests/test_cpor_rbac_r1_auth.py` (no DB). `cip_test` does **not** exist — write-capable CPOR tests not run.
+- **RBAC R1 + R1b:** CPOR writes authenticate via `get_current_user`; actor from `user["id"]`. Historical-import header admin gate removed; CPOR stays authentication-only until R2.
+- **RBAC R1c:** 41 non-CPOR `X-User-Role` 403 gates replaced with `Depends(require_roles(Role.ADMIN))` — `shipment_evidence.py` 25, `mappings.py` 7, `imports_product_master.py` 5, `products.py` 2, `imports.py` 2. Three import template/source GETs filter on session `user["role"]`. No CPOR router change. No Role widening to STEWARD.
+- Structural tests: `test_cpor_rbac_r1_auth.py`, `test_rbac_r1c_admin_gates.py`.
+- Code default `cip_auth_mode` remains `"stub"`.
 
-## FLAG (closed by R1b)
+## FLAG
 
-Historical-import GETs now use `Depends(get_current_user)`. `_require_admin(X-User-Role)` is gone from `cpor_historical_import.py`. Authorization on those 11 routes is authentication-only until R2.
+- CPOR routes remain authentication-only (no `require_roles`) until R2.
+- Shipment steward panel is ADMIN-only (BACKLOG-141).
+- `X-User-Id` actor stamps remain on CST / listing / lineup / promo / product-master-gaps (R3). `cpor_payment_evidence.py` still has unaliased `Header()` `x_user_id` (CPOR — not touched).
+- `test_cpor_cases_api.py` / `test_cpor_historical_unit_c.py` PASS on cip_test but are mocked / SQLite — they do **not** prove HTTP `/apply` against Postgres.
+- Bulk-delete mutating tests skipped on empty cip_test (no dim rows). Auth-only preview 403 test passed.
 
 ## Next
 
-R2: role enforcement (`require_roles`, KAM/PM/Ken/Wayne mapping) — CONSULT first. Restore a stronger check on historical-import writes (validate/apply/resolution-plan). Settlement / MAC / line-windows still not started.
+R2: role enforcement CONSULT. BACKLOG-141 (STEWARD on steward panels). Do not migrate cip onto an unknown `0019`.
 
 **Env:** local Windows. Web `:3000` + API `:8001`. `cip_auth_mode` default in `config.py` is `stub`.

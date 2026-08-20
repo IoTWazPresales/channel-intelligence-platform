@@ -183,9 +183,12 @@ def test_commit_requires_validated_and_passed() -> None:
 
 def test_product_master_api_requires_admin() -> None:
     with TestClient(app) as client:
-        r = client.get("/api/v1/imports/product-master/jobs/1/state")
+        r = client.get(
+            "/api/v1/imports/product-master/jobs/1/state",
+            headers={"X-User-Role": "viewer"},
+        )
         assert r.status_code == 403
-        assert "admin" in r.json().get("detail", "").lower()
+        assert r.json().get("detail") == "Insufficient role"
 
 
 def test_commit_catalog_skips_without_product_catalog_id() -> None:

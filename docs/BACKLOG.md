@@ -33,7 +33,7 @@
 | **Idea** | Stamp a real actor on every CPOR write (null actor is a defect, §7). Enforce: KAM proposes/amends/owns terms; PM amends **pre-approval only**; Ken compiles/settles and must not touch MAC/terms; MDM+Wayne approve; Wayne re-approves. |
 | **Why it matters / deferrable** | Tree: some GETs use `get_current_user`; most writes use nullable `X-User-Id`; `require_roles` unused on `/cpor`; stub mode forges `admin`; Role enum has no these four roles. Deferrable until settlement/amendment units, but any new CPOR write should not extend the header-actor pattern. |
 | **What the work is** | (1) Map KAM/PM/Ken/Wayne onto IAM (new roles vs compose on planner/steward/admin) — CONSULT, do not invent. (2) `require_roles` (or equivalent) on every CPOR write including export. (3) Actor from session user, never null. |
-| **Regression traps** | Do not leave stub-admin as production. Do not give PM post-approval writes (D-059). Do not give Ken MAC/term writes. R1/R1b replaced the forgeable `_require_admin(X-User-Role)` admin gate on the CPOR historical-import router (11 routes incl. `/apply`) with authentication only. Until R2 lands, any authenticated user can run historical validate/apply/resolution-plan. R2 must restore an equivalent or stronger check on these routes specifically. `scripts/e2e_dsi_phase1_phase2_validate.py` forges `X-User-Role: admin` and breaks under session mode — fix when R3 or the mode flip lands. |
+| **Regression traps** | Do not leave stub-admin as production. Do not give PM post-approval writes (D-059). Do not give Ken MAC/term writes. R1/R1b replaced the forgeable `_require_admin(X-User-Role)` admin gate on the CPOR historical-import router (11 routes incl. `/apply`) with authentication only. Until R2 lands, any authenticated user can run historical validate/apply/resolution-plan. R2 must restore an equivalent or stronger check on these routes specifically. R1c restored the 41 non-CPOR header gates (`shipment_evidence` 25, `mappings` 7, `imports_product_master` 5, `products` 2, `imports` 2) to a **real** admin check: `Depends(require_roles(Role.ADMIN))`. CPOR routes remain authentication-only pending R2 — do not copy `require_roles` onto CPOR in R1c. `scripts/e2e_dsi_phase1_phase2_validate.py` forges `X-User-Role: admin` and breaks under session mode — fix when R3 or the mode flip lands. |
 | **Behavior to retain** | Lifecycle actions in `lifecycle.py`; Wayne as re-approval actor (D-059). |
 | **Out of scope** | Customer portal login. |
 | **TRIGGER** | Next CPOR write-path unit, or session-auth hardening of `/cpor`. |
@@ -107,6 +107,40 @@ Also: `scripts/e2e_dsi_phase1_phase2_validate.py` forges `X-User-Role: admin` an
 | **Behavior to retain** | CSV/paste map path; single-row promote; TMP reuse rules. |
 | **Out of scope** | Distributor mint; ERP sync. |
 | **TRIGGER** | Warren schedules named-account promote, or CPOR settlement work needs stable non-TMP codes on the case customer. |
+
+---
+
+## BACKLOG-141 — Shipment steward panel is gated on Role.ADMIN (R2 decision)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-20 |
+| **Effort** | Small (role-matrix consult) then small code |
+| **Source** | RBAC R1c on `feat/rbac-r1-session-actor`: `shipment_evidence.py` previously 403'd unless `X-User-Role: admin`. R1c preserved that intent as `require_roles(Role.ADMIN)`. |
+| **Idea** | Decide whether shipment (and sibling import) steward panels should accept `Role.STEWARD` as well as `Role.ADMIN`. Today a logged-in steward session 403s those routes. |
+| **Why it matters / deferrable** | Operators on steward accounts cannot run the shipment steward UI after R1 removed forged headers. Deferrable until R2 role matrix; do not silently widen ADMIN→STEWARD in a sweep. |
+| **What the work is** | CONSULT the role matrix; if steward panels should be STEWARD+ADMIN, change the allowed set on those routes only — do not widen bulk-delete / product-master commit without a separate decision. |
+| **Regression traps** | Preserve admin-only for import-job bulk delete and Product Master commit unless explicitly reopened. Do not put `require_roles` on CPOR (still R2). Do not invent new Role enum values here. |
+| **Behavior to retain** | Session actor from `get_current_user`; no forged `X-User-*` from `apps/web/src`. |
+| **Out of scope** | CPOR KAM/PM/Ken/Wayne; the ~213 still-unauthenticated non-CPOR writes (R3). |
+| **TRIGGER** | R2 role-enforcement CONSULT, or Warren says steward accounts must operate shipment/DSI steward panels. |
+
+---
+
+## BACKLOG-142 — `apps/web` typecheck is red on main (blocks verify-gate)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-20 |
+| **Effort** | Small |
+| **Source** | RBAC R1c unit prompt: typecheck already red on main at `CstArticleAliasesSection.test.tsx` and `SemanticCatalogOverlayPanel.tsx`. |
+| **Idea** | Fix the two typecheck failures so `pnpm` / verify-gate typecheck can actually prove web changes. |
+| **Why it matters / deferrable** | While red, typecheck cannot verify RBAC or anything else. Pre-existing; not caused by R1c. Deferrable until a web typecheck / CST overlay unit. |
+| **What the work is** | Make `CstArticleAliasesSection.test.tsx` and `SemanticCatalogOverlayPanel.tsx` typecheck-clean; do not paper over with `any` if a real type bug exists. |
+| **Regression traps** | Do not treat a green typecheck as proof of RBAC. Do not expand into overlay behaviour changes unless the types require it. |
+| **Behavior to retain** | Existing CST alias + semantic catalog overlay UI. |
+| **Out of scope** | R1c API sweep; ESLint flat-config (BACKLOG-070). |
+| **TRIGGER** | Next web typecheck / CST overlay / verify-gate unit, or Warren asks to restore typecheck as a merge gate. |
 
 ---
 
