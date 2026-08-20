@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -33,6 +34,7 @@ _PM_JOB_FILE = "r1d-e2e-pm.xlsx"
 
 
 def _print_and_assert_cip_test() -> None:
+    get_settings.cache_clear()
     settings = get_settings()
     async_url = settings.database_url
     sync_url = settings.database_url_sync
@@ -48,9 +50,13 @@ def _print_and_assert_cip_test() -> None:
         f"dbname={migrate_name!r}"
     )
     print(f"CIP_AUTH_MODE={auth_mode!r} (process={os.environ.get('CIP_AUTH_MODE')!r})")
+    if auth_mode != "session":
+        pytest.skip(
+            "R1d requires CIP_AUTH_MODE=session in the process environment before pytest "
+            f"(conftest pins stub otherwise). got {auth_mode!r}"
+        )
     assert async_name == "cip_test", f"DATABASE_URL must name cip_test, got {async_name!r}"
     assert sync_name == "cip_test", f"DATABASE_URL_SYNC must name cip_test, got {sync_name!r}"
-    assert auth_mode == "session", f"CIP_AUTH_MODE must be session, got {auth_mode!r}"
 
 
 def _upsert_user(session, *, email: str, role: str, password: str, display_name: str) -> None:
