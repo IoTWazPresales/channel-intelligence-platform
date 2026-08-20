@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-08-20 — **Steward + CPOR queue depth** on `feat/steward-queue-depth`: read-only `steward_queue_depth.py` against cip. Live steward 409 dealer + 455 product NR; TMP-CUST open 4795; leftovers 0/0; CPOR past-window 74; status≠workflow 2; TMP-CUST cases 308; null-actor events 4. BACKLOG-143 amended (`cip_test` kept). Not merged to main.
+- 2026-08-20 — **Steward + CPOR queue depth** on `feat/steward-queue-depth`: read-only `steward_queue_depth.py` against cip. Live steward 409 dealer + 455 product NR; TMP-CUST open 4795; leftovers 0/0; CPOR past-window 74; status≠workflow 2; TMP-CUST cases 308; null-actor events 4. BACKLOG-143 amended (`cip_test` kept). Not merged to main. `df1e4fa`.
 
 - 2026-08-20 — **Merged to main** `22c2305`: `feat/rbac-r1-session-actor` (R1–R1d). RBAC program CLOSED at authentication + ADMIN `require_roles` on the 41 non-CPOR gates. CPOR stays auth-only until R2 (BACKLOG-136 / 141 parked). No migration. No cip upgrade.
 
