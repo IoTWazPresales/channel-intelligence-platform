@@ -20,6 +20,7 @@ from app.models.customer_article_alias import CustomerArticleAlias
 from app.models.customer_cst_report_slot import CustomerCstReportSlot
 from app.models.customer_report_config import CustomerReportConfig
 from app.models.dimensions import DimCustomer, DimProduct
+from app.services.merge_redirect import living_customer_clause
 from app.services.imports.cst_article_alias_import import (
     confirm_scm_unique_proposed,
     import_article_alias_rows,
@@ -196,6 +197,7 @@ def list_key_account_steward(
             .outerjoin(CustomerReportConfig, CustomerReportConfig.customer_id == DimCustomer.id)
             .order_by(DimCustomer.name.asc(), DimCustomer.id.asc())
         )
+        stmt = stmt.where(living_customer_clause())
         if key_only:
             stmt = stmt.where(DimCustomer.is_key_account.is_(True))
         if q and q.strip():

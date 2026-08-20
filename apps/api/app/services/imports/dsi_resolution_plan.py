@@ -963,6 +963,9 @@ def plan_dsi_candidate_sync(
                 exclude_normalized_key=str(cand.normalized_key or ""),
             )
             if sibling is not None:
+                from app.services.merge_redirect import follow_customer_merge_redirect_sync
+
+                sibling_cid = follow_customer_merge_redirect_sync(session, int(sibling.customer_id))
                 return _fin({
                     **base,
                     "suggested_action": "map_customer",
@@ -971,14 +974,14 @@ def plan_dsi_candidate_sync(
                     "confidence": 0.82,
                     "reason": (
                         f"Another token on this import job ({sibling.normalized_key}) already maps to "
-                        f"customer {sibling.customer_id} — confirm before applying"
+                        f"customer {sibling_cid} — confirm before applying"
                     ),
-                    "suggested_target_id": int(sibling.customer_id),
+                    "suggested_target_id": int(sibling_cid) if sibling_cid is not None else int(sibling.customer_id),
                     "needs_defaults": False,
                     "needs_confirm_suspicious_distributor": False,
                     "sibling_mapping_hint": {
                         "normalized_key": sibling.normalized_key,
-                        "customer_id": int(sibling.customer_id),
+                        "customer_id": int(sibling_cid) if sibling_cid is not None else int(sibling.customer_id),
                         "match_reason": sibling.match_reason,
                     },
                 })

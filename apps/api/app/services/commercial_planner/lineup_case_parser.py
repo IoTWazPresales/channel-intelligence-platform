@@ -154,23 +154,15 @@ def _build_product_map(products: list[DimProduct]) -> dict[str, DimProduct]:
 
 
 def _build_customer_map(customers: list[DimCustomer]) -> dict[str, DimCustomer]:
-    m: dict[str, DimCustomer] = {}
-    for c in customers:
-        if c.name:
-            m[c.name.lower().strip()] = c
-        if c.code:
-            m[c.code.lower().strip()] = c
-    return m
+    from app.services.merge_redirect import index_by_code_and_name
+
+    return index_by_code_and_name(customers, merged_into_attr="merged_into_customer_id")
 
 
 def _build_distributor_map(distributors: list[DimDistributor]) -> dict[str, DimDistributor]:
-    m: dict[str, DimDistributor] = {}
-    for d in distributors:
-        if d.name:
-            m[d.name.lower().strip()] = d
-        if d.code:
-            m[d.code.lower().strip()] = d
-    return m
+    from app.services.merge_redirect import index_by_code_and_name
+
+    return index_by_code_and_name(distributors, merged_into_attr="merged_into_distributor_id")
 
 
 def _resolve_pricing_for_row_dict(

@@ -123,6 +123,9 @@ def pick_provisional_customer_for_reuse(
     Canonical key match first; then unique ``normalize_customer_name_for_similarity`` match.
     Two or more similarity matches → None (caller creates; consolidation is out of scope).
     """
+    from app.services.merge_redirect import is_merged_customer_row
+
+    rows = [c for c in rows if not is_merged_customer_row(c)]
     key = canonical_provisional_entity_name_key(display_name)
     sim_key = normalize_customer_name_for_similarity(display_name)
     if not key and not sim_key:
@@ -156,11 +159,19 @@ def find_existing_provisional_distributor_by_canonical_name(
 ) -> DimDistributor | None:
     """Return earliest ``TMP-DIST-%`` row matching canonical display name, else None."""
     from app.models.dimensions import DimDistributor
+    from app.services.merge_redirect import living_distributor_clause
 
     key = canonical_provisional_entity_name_key(display_name)
     if not key:
         return None
-    rows = list(session.scalars(select(DimDistributor).where(DimDistributor.code.like("TMP-DIST-%"))).all())
+    rows = list(
+        session.scalars(
+            select(DimDistributor).where(
+                DimDistributor.code.like("TMP-DIST-%"),
+                living_distributor_clause(),
+            )
+        ).all()
+    )
     matches = [d for d in rows if canonical_provisional_entity_name_key(d.name) == key]
     return _pick_earliest_provisional_distributor(matches)
 
@@ -170,11 +181,17 @@ async def find_existing_provisional_distributor_by_canonical_name_async(
     display_name: str | None,
 ) -> DimDistributor | None:
     from app.models.dimensions import DimDistributor
+    from app.services.merge_redirect import living_distributor_clause
 
     key = canonical_provisional_entity_name_key(display_name)
     if not key:
         return None
-    result = await session.scalars(select(DimDistributor).where(DimDistributor.code.like("TMP-DIST-%")))
+    result = await session.scalars(
+        select(DimDistributor).where(
+            DimDistributor.code.like("TMP-DIST-%"),
+            living_distributor_clause(),
+        )
+    )
     rows = list(result.all())
     matches = [d for d in rows if canonical_provisional_entity_name_key(d.name) == key]
     return _pick_earliest_provisional_distributor(matches)
@@ -191,11 +208,14 @@ def find_existing_provisional_customer_by_canonical_name(
         display_name
     ):
         return None
+    from app.services.merge_redirect import living_customer_clause
+
     rows = list(
         session.scalars(
             select(DimCustomer).where(
                 DimCustomer.code.like("TMP-CUST-%"),
                 DimCustomer.customer_status == "unverified",
+                living_customer_clause(),
             )
         ).all()
     )
@@ -212,10 +232,13 @@ async def find_existing_provisional_customer_by_canonical_name_async(
         display_name
     ):
         return None
+    from app.services.merge_redirect import living_customer_clause
+
     result = await session.scalars(
         select(DimCustomer).where(
             DimCustomer.code.like("TMP-CUST-%"),
             DimCustomer.customer_status == "unverified",
+            living_customer_clause(),
         )
     )
     rows = list(result.all())

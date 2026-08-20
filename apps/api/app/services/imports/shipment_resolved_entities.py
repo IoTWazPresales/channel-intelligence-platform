@@ -55,7 +55,11 @@ def resolve_shipment_customer_id_from_token(
         source_definition_id=source_definition_id,
         distributor_id=None,
     )
-    return int(row.customer_id) if row is not None else None
+    if row is None:
+        return None
+    from app.services.merge_redirect import follow_customer_merge_redirect_sync
+
+    return follow_customer_merge_redirect_sync(db, int(row.customer_id))
 
 
 def resolve_shipment_distributor_id_from_line(
@@ -106,7 +110,9 @@ def apply_resolved_entities_to_line(
             line.resolved_distributor_id = did
 
     if line.customer_id is not None:
-        line.resolved_customer_id = int(line.customer_id)
+        from app.services.merge_redirect import follow_customer_merge_redirect_sync
+
+        line.resolved_customer_id = follow_customer_merge_redirect_sync(db, int(line.customer_id))
     elif line.resolved_customer_id is None and line.customer_dealer_token:
         cid = resolve_shipment_customer_id_from_token(
             db, line.customer_dealer_token, source_definition_id

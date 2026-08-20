@@ -16,6 +16,10 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-08-19 — **Leftover repair (Unit 2):** 9 losers / 3266 FKs repointed via `repoint_customer_footprint_full`. Clone `cip_merged_leftover_repair` PASS then cip leftover=0. Compuspeed 1152 flagged. Branch `fix/merged-customer-resolver-guard`. `3372915`.
+
+- 2026-08-19 — **Resolver guard (Unit 1):** follow `merged_into_*` on customer/distributor resolvers; exclude merged from provisional reuse and pickers. Canonical `merge_redirect.py`. No repair yet. Branch `fix/merged-customer-resolver-guard`. `fc14962`.
+
 - 2026-08-18 — **Merged to main** `eb73232`: mailbox ingest + shipping digest mailer (`847aaf8`).
 
 - 2026-08-18 — **Digest grouped by disti, sorted by customer.** Inbox **#17** preview. `847aaf8`.

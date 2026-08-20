@@ -126,11 +126,18 @@ def append_shipment_customer_aliases_scoped(
                 source_definition_id=cand.source_definition_id,
                 distributor_id=None,
             )
-            if conflict is not None and int(conflict.customer_id) != int(customer_id):
-                raise ShipmentCustomerAliasScopeError(
-                    "A source token normalises to an approved alias for a different customer",
-                    status_code=409,
+            if conflict is not None:
+                from app.services.merge_redirect import follow_customer_merge_redirect_sync
+
+                conflict_cid = follow_customer_merge_redirect_sync(
+                    session, int(conflict.customer_id)
                 )
+                target_cid = follow_customer_merge_redirect_sync(session, int(customer_id))
+                if int(conflict_cid or conflict.customer_id) != int(target_cid or customer_id):
+                    raise ShipmentCustomerAliasScopeError(
+                        "A source token normalises to an approved alias for a different customer",
+                        status_code=409,
+                    )
             if conflict is not None:
                 alias_ids.append(int(conflict.id))
     return alias_ids

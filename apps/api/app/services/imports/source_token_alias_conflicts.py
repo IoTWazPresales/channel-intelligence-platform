@@ -36,7 +36,9 @@ def distributor_alias_conflict_reason_from_cache(
         ):
             continue
         matches.append(int(a.distributor_id))
-    unique = list(dict.fromkeys(matches))
+    from app.services.merge_redirect import collapse_ids
+
+    unique = collapse_ids(matches, getattr(res_cache, "distributor_redirect", {}) or {})
     if len(unique) > 1:
         return MULTIPLE_DISTRIBUTOR_ALIASES
     return None
@@ -79,7 +81,9 @@ def customer_alias_conflict_reason_from_db(
         ):
             continue
         matches.append(int(row.customer_id))
-    unique = list(dict.fromkeys(matches))
+    from app.services.merge_redirect import collapse_ids, load_customer_redirect_map
+
+    unique = collapse_ids(matches, load_customer_redirect_map(db))
     if len(unique) > 1:
         return MULTIPLE_CUSTOMER_ALIASES
     return None
@@ -113,7 +117,9 @@ def customer_alias_conflict_reason_from_cache(
         ):
             continue
         matches.append(int(a.customer_id))
-    unique = list(dict.fromkeys(matches))
+    from app.services.merge_redirect import collapse_ids
+
+    unique = collapse_ids(matches, getattr(res_cache, "customer_redirect", {}) or {})
     if len(unique) > 1:
         return MULTIPLE_CUSTOMER_ALIASES
     return None

@@ -48,6 +48,8 @@ def load_lineup_parser_context_sync() -> dict[str, Any]:
         distributors = list(session.scalars(select(DimDistributor)).all())
         customer_alias_map = load_approved_customer_alias_id_by_token_sync(session)
 
+    from app.services.merge_redirect import index_by_code_and_name
+
     product_map: dict[str, DimProduct] = {}
     for p in products:
         for val in (p.sku, p.part_number, p.model_name, p.sales_model_name):
@@ -56,20 +58,8 @@ def load_lineup_parser_context_sync() -> dict[str, Any]:
                 if key and key not in product_map:
                     product_map[key] = p
 
-    customer_map: dict[str, DimCustomer] = {}
-    for c in customers:
-        if c.name:
-            customer_map[c.name.lower().strip()] = c
-        if c.code:
-            customer_map[c.code.lower().strip()] = c
-
-    distributor_map: dict[str, DimDistributor] = {}
-    for d in distributors:
-        for val in (d.code, d.name):
-            if val:
-                key = val.lower().strip()
-                if key and key not in distributor_map:
-                    distributor_map[key] = d
+    customer_map = index_by_code_and_name(customers, merged_into_attr="merged_into_customer_id")
+    distributor_map = index_by_code_and_name(distributors, merged_into_attr="merged_into_distributor_id")
 
     customers_by_id = {int(c.id): c for c in customers}
     return {

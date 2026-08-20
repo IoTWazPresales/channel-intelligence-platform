@@ -568,16 +568,14 @@ async def accept_ship_corroborated_distributor(
             )
         ).all()
     )
-    alias_map = build_unique_approved_customer_alias_id_by_token(all_rows)
+    from app.services.merge_redirect import index_by_code_and_name, load_customer_redirect_map_async
+
+    redirect = await load_customer_redirect_map_async(db)
+    alias_map = build_unique_approved_customer_alias_id_by_token(all_rows, redirect=redirect)
     alias_map[nt] = int(oc_id)
     cust_rows = list((await db.execute(select(DimCustomer))).scalars().all())
     customers_by_id = {int(c.id): c for c in cust_rows}
-    customer_map: dict[str, DimCustomer] = {}
-    for c in cust_rows:
-        if c.name:
-            customer_map[c.name.strip().lower()] = c
-        if c.code:
-            customer_map[c.code.strip().lower()] = c
+    customer_map = index_by_code_and_name(cust_rows, merged_into_attr="merged_into_customer_id")
 
     per_line: list[dict[str, Any]] = []
     prior_customer_ids: dict[str, int | None] = {}

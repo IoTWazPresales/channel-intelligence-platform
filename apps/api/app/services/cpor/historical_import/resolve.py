@@ -48,16 +48,30 @@ def _norm(token: str | None) -> str:
 def _load_party_token_index(
     db: Session, *, model: type[DimCustomer] | type[DimDistributor]
 ) -> tuple[dict[str, list[int]], dict[int, str]]:
+    from app.services.merge_redirect import build_redirect_map
+
+    merged_col = (
+        DimCustomer.merged_into_customer_id
+        if model is DimCustomer
+        else DimDistributor.merged_into_distributor_id
+    )
+    rows = list(db.execute(select(model.id, model.code, model.name, merged_col)).all())
+    redirect = build_redirect_map((int(did), mid) for did, _code, _name, mid in rows)
     idx: dict[str, list[int]] = defaultdict(list)
     labels: dict[int, str] = {}
-    for did, code, name in db.execute(select(model.id, model.code, model.name)).all():
+    raw_labels: dict[int, str] = {}
+    for did, code, name, _mid in rows:
         dim_id = int(did)
-        label = (str(name or "").strip() or str(code or "").strip() or str(dim_id))
-        labels[dim_id] = label
+        raw_labels[dim_id] = str(name or "").strip() or str(code or "").strip() or str(dim_id)
+    for dim_id, label in raw_labels.items():
+        tid = int(redirect.get(dim_id, dim_id))
+        labels.setdefault(tid, raw_labels.get(tid, label))
+    for did, code, name, _mid in rows:
+        tid = int(redirect.get(int(did), int(did)))
         for raw in (code, name):
             key = _norm(raw)
-            if key and dim_id not in idx[key]:
-                idx[key].append(dim_id)
+            if key and tid not in idx[key]:
+                idx[key].append(tid)
     return idx, labels
 
 

@@ -672,6 +672,33 @@ class DSIResolutionCache:
     customer_sim_name_to_ids: dict[str, list[int]]
     cust_aliases: list[DSIResolutionCustAliasRow]
     open_channel_cid: int | None
+    # id → merge-chain terminal (identity when empty). Resolution always follows.
+    customer_redirect: dict[int, int] = field(default_factory=dict)
+    distributor_redirect: dict[int, int] = field(default_factory=dict)
+
+
+def _cached_customer_id(res_cache: "DSIResolutionCache", cid: int | None) -> int | None:
+    from app.services.merge_redirect import redirect_id
+
+    return redirect_id(cid, res_cache.customer_redirect)
+
+
+def _cached_distributor_id(res_cache: "DSIResolutionCache", did: int | None) -> int | None:
+    from app.services.merge_redirect import redirect_id
+
+    return redirect_id(did, res_cache.distributor_redirect)
+
+
+def _collapse_cached_customer_ids(res_cache: "DSIResolutionCache", ids: list[int]) -> list[int]:
+    from app.services.merge_redirect import collapse_ids
+
+    return collapse_ids(ids, res_cache.customer_redirect)
+
+
+def _collapse_cached_distributor_ids(res_cache: "DSIResolutionCache", ids: list[int]) -> list[int]:
+    from app.services.merge_redirect import collapse_ids
+
+    return collapse_ids(ids, res_cache.distributor_redirect)
 
 
 _DSI_VALIDATE_SUB_PHASE_LABELS: dict[str, str] = {
@@ -711,10 +738,19 @@ def _build_resolution_cache(
     """Load all DSI entity-resolution reference tables in one pass before the row loop."""
     _ = source_def_id  # alias rows are filtered per-token at resolve time
 
+    from app.services.merge_redirect import (
+        build_redirect_map,
+        merged_into_customer_id,
+        merged_into_distributor_id,
+    )
+
     if on_sub_phase is not None:
         on_sub_phase("distributors")
     all_distributors = _dsi_session_read_with_transient_retry(
         db, lambda: list(db.scalars(select(DimDistributor)).all())
+    )
+    distributor_redirect = build_redirect_map(
+        (int(d.id), merged_into_distributor_id(d)) for d in all_distributors
     )
     distributor_rows = [_distributor_row_from_orm(d) for d in all_distributors]
 
@@ -735,20 +771,31 @@ def _build_resolution_cache(
     all_customers_orm = _dsi_session_read_with_transient_retry(
         db, lambda: list(db.scalars(select(DimCustomer)).all())
     )
+    customer_redirect = build_redirect_map(
+        (int(c.id), merged_into_customer_id(c)) for c in all_customers_orm
+    )
     customer_rows = [_customer_row_from_orm(c) for c in all_customers_orm]
+    living_customer_rows = [
+        c for c in customer_rows if customer_redirect.get(int(c.id), int(c.id)) == int(c.id)
+    ]
     customer_code_to_id: dict[str, int] = {}
     customer_name_to_ids: dict[str, list[int]] = {}
     customer_sim_name_to_ids: dict[str, list[int]] = {}
     for c in customer_rows:
+        tid = int(customer_redirect.get(int(c.id), int(c.id)))
         ck = (c.code or "").strip().lower()
         if ck:
-            customer_code_to_id[ck] = int(c.id)
+            customer_code_to_id[ck] = tid
         nk = (c.name or "").strip().lower()
         if nk:
-            customer_name_to_ids.setdefault(nk, []).append(int(c.id))
+            bucket = customer_name_to_ids.setdefault(nk, [])
+            if tid not in bucket:
+                bucket.append(tid)
         sk = normalize_customer_name_for_similarity(c.name)
         if sk:
-            customer_sim_name_to_ids.setdefault(sk, []).append(int(c.id))
+            sbucket = customer_sim_name_to_ids.setdefault(sk, [])
+            if tid not in sbucket:
+                sbucket.append(tid)
 
     if on_sub_phase is not None:
         on_sub_phase("customer_aliases")
@@ -777,12 +824,14 @@ def _build_resolution_cache(
     return DSIResolutionCache(
         all_distributors=distributor_rows,
         dist_aliases=dist_alias_rows,
-        all_customers=customer_rows,
+        all_customers=living_customer_rows,
         customer_code_to_id=customer_code_to_id,
         customer_name_to_ids=customer_name_to_ids,
         customer_sim_name_to_ids=customer_sim_name_to_ids,
         cust_aliases=cust_alias_rows,
         open_channel_cid=int(open_channel_cid) if open_channel_cid is not None else None,
+        customer_redirect=customer_redirect,
+        distributor_redirect=distributor_redirect,
     )
 
 
@@ -795,6 +844,11 @@ def _build_distributor_resolution_cache(db: Session, source_def_id: int | None =
     """
     _ = source_def_id  # alias rows are filtered per-token at resolve time
     all_distributors = list(db.scalars(select(DimDistributor)).all())
+    from app.services.merge_redirect import build_redirect_map, merged_into_distributor_id
+
+    distributor_redirect = build_redirect_map(
+        (int(d.id), merged_into_distributor_id(d)) for d in all_distributors
+    )
     dist_aliases_orm = list(
         db.scalars(
             select(DistributorSourceTokenAlias).where(DistributorSourceTokenAlias.status == "approved")
@@ -809,6 +863,8 @@ def _build_distributor_resolution_cache(db: Session, source_def_id: int | None =
         customer_sim_name_to_ids={},
         cust_aliases=[],
         open_channel_cid=None,
+        customer_redirect={},
+        distributor_redirect=distributor_redirect,
     )
 
 
@@ -1071,27 +1127,39 @@ def _alias_distributor_id(db: Session, source_id: int | None, normalized_token: 
                 DistributorSourceTokenAlias.source_definition_id == source_id,
             )
         )
-    rows = list(dict.fromkeys(db.scalars(q).all()))
-    if len(rows) == 1:
-        return int(rows[0])
-    return None
+    rows = list(dict.fromkeys(int(x) for x in db.scalars(q).all()))
+    if not rows:
+        return None
+    from app.services.merge_redirect import follow_distributor_merge_redirect_sync
+
+    terminals: list[int] = []
+    seen: set[int] = set()
+    for rid in rows:
+        tid = follow_distributor_merge_redirect_sync(db, rid)
+        if tid is None or tid in seen:
+            continue
+        seen.add(tid)
+        terminals.append(tid)
+    return terminals[0] if len(terminals) == 1 else None
 
 
 def _resolve_distributor(db: Session, raw: str | None, source_id: int | None = None) -> tuple[int | None, str | None]:
+    from app.services.merge_redirect import follow_distributor_merge_redirect_sync
+
     if not raw or not str(raw).strip():
         return None, "missing_distributor_cell_value"
     token = raw.strip().lower()
     nt = _norm_key(raw)
     alias_id = _alias_distributor_id(db, source_id, nt)
     if alias_id is not None:
-        return alias_id, None
+        return follow_distributor_merge_redirect_sync(db, alias_id), None
     for d in db.scalars(select(DimDistributor)).all():
         if d.code.strip().lower() == token or d.name.strip().lower() == token:
-            return d.id, None
+            return follow_distributor_merge_redirect_sync(db, int(d.id)), None
         if token in d.name.strip().lower() or d.name.strip().lower() in token:
             # avoid loose substring false positives for very short tokens
             if len(token) >= 4:
-                return d.id, None
+                return follow_distributor_merge_redirect_sync(db, int(d.id)), None
     return None, "unresolved_distributor_token"
 
 
@@ -1123,7 +1191,7 @@ def _resolve_distributor_from_cache(
             ):
                 continue
             matches.append(int(a.distributor_id))
-        unique = list(dict.fromkeys(matches))
+        unique = _collapse_cached_distributor_ids(res_cache, list(dict.fromkeys(matches)))
         if len(unique) == 1:
             return unique[0], None
 
@@ -1132,10 +1200,10 @@ def _resolve_distributor_from_cache(
         code = (d.code or "").strip().lower()
         name = (d.name or "").strip().lower()
         if code == token or name == token:
-            return d.id, None
+            return _cached_distributor_id(res_cache, d.id), None
         if token in name or name in token:
             if len(token) >= 4:
-                return d.id, None
+                return _cached_distributor_id(res_cache, d.id), None
 
     return None, "unresolved_distributor_token"
 
@@ -1169,7 +1237,7 @@ def _resolve_distributor_strict_from_cache(
             ):
                 continue
             matches.append(int(a.distributor_id))
-        unique = list(dict.fromkeys(matches))
+        unique = _collapse_cached_distributor_ids(res_cache, list(dict.fromkeys(matches)))
         if len(unique) == 1:
             return unique[0], None
 
@@ -1177,7 +1245,7 @@ def _resolve_distributor_strict_from_cache(
         code = (d.code or "").strip().lower()
         name = (d.name or "").strip().lower()
         if code == token or name == token:
-            return d.id, None
+            return _cached_distributor_id(res_cache, d.id), None
 
     return None, "unresolved_distributor_token"
 
@@ -1195,9 +1263,11 @@ def _resolve_distributor_strict(db: Session, raw: str | None, source_id: int | N
     alias_id = _alias_distributor_id(db, source_id, nt)
     if alias_id is not None:
         return alias_id, None
+    from app.services.merge_redirect import follow_distributor_merge_redirect_sync
+
     for d in db.scalars(select(DimDistributor)).all():
         if d.code.strip().lower() == token or d.name.strip().lower() == token:
-            return d.id, None
+            return follow_distributor_merge_redirect_sync(db, int(d.id)), None
     return None, "unresolved_distributor_token"
 
 
@@ -1232,10 +1302,20 @@ def _alias_customer_id(
                 CustomerSourceTokenAlias.distributor_id == distributor_id,
             )
         )
-    rows = list(dict.fromkeys(db.scalars(q).all()))
-    if len(rows) == 1:
-        return int(rows[0])
-    return None
+    rows = list(dict.fromkeys(int(x) for x in db.scalars(q).all()))
+    if not rows:
+        return None
+    from app.services.merge_redirect import follow_customer_merge_redirect_sync
+
+    terminals: list[int] = []
+    seen: set[int] = set()
+    for rid in rows:
+        tid = follow_customer_merge_redirect_sync(db, rid)
+        if tid is None or tid in seen:
+            continue
+        seen.add(tid)
+        terminals.append(tid)
+    return terminals[0] if len(terminals) == 1 else None
 
 
 def _resolve_customer(
@@ -1293,15 +1373,27 @@ def _resolve_customer(
     stmt = select(DimCustomer.id).where(func.lower(DimCustomer.code) == nt)
     cid = db.scalar(stmt)
     if cid:
+        from app.services.merge_redirect import follow_customer_merge_redirect_sync
+
         diagnostics.append("customer_resolved_code")
-        return int(cid), diagnostics
+        return follow_customer_merge_redirect_sync(db, int(cid)), diagnostics
 
     stmt2 = select(DimCustomer.id).where(func.lower(DimCustomer.name) == nt)
-    ids = list(db.scalars(stmt2).all())
-    if len(ids) == 1:
+    ids = list(int(x) for x in db.scalars(stmt2).all())
+    from app.services.merge_redirect import follow_customer_merge_redirect_sync
+
+    terminals: list[int] = []
+    seen: set[int] = set()
+    for rid in ids:
+        tid = follow_customer_merge_redirect_sync(db, rid)
+        if tid is None or tid in seen:
+            continue
+        seen.add(tid)
+        terminals.append(tid)
+    if len(terminals) == 1:
         diagnostics.append("customer_resolved_exact_name")
-        return int(ids[0]), diagnostics
-    if len(ids) > 1:
+        return terminals[0], diagnostics
+    if len(terminals) > 1:
         diagnostics.append("ambiguous_customer_name")
         return None, diagnostics
 
@@ -1361,7 +1453,7 @@ def _resolve_customer_from_cache(
                 ):
                     continue
                 matches.append(int(a.customer_id))
-            unique = list(dict.fromkeys(matches))
+            unique = _collapse_cached_customer_ids(res_cache, list(dict.fromkeys(matches)))
             if len(unique) == 1:
                 diagnostics.append("customer_resolved_alias")
                 return unique[0], diagnostics
@@ -1389,12 +1481,12 @@ def _resolve_customer_from_cache(
         diagnostics.append("customer_sentinel_unresolved")
         return None, diagnostics
 
-    cid = res_cache.customer_code_to_id.get(nt)
+    cid = _cached_customer_id(res_cache, res_cache.customer_code_to_id.get(nt))
     if cid is not None:
         diagnostics.append("customer_resolved_code")
         return cid, diagnostics
 
-    ids = res_cache.customer_name_to_ids.get(nt, [])
+    ids = _collapse_cached_customer_ids(res_cache, list(res_cache.customer_name_to_ids.get(nt, [])))
     if len(ids) == 1:
         diagnostics.append("customer_resolved_exact_name")
         return ids[0], diagnostics

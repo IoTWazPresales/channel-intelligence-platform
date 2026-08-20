@@ -78,7 +78,11 @@ async def bulk_upsert_lineup_items(
         raise ValueError("Too many rows (max 2000)")
 
     cust_res = await db.execute(select(DimCustomer))
-    customers = {c.code.strip().lower(): c for c in cust_res.scalars().all()}
+    from app.services.merge_redirect import index_by_code_and_name
+
+    customers = index_by_code_and_name(
+        list(cust_res.scalars().all()), merged_into_attr="merged_into_customer_id"
+    )
 
     ch_res = await db.execute(select(DimChannel))
     channels = {c.code.strip().lower(): c for c in ch_res.scalars().all()}
