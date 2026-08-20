@@ -6,6 +6,40 @@
 
 ---
 
+## BACKLOG-133 — Assert zero leftover FKs to merged customer/distributor ids on import completion
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-20 |
+| **Effort** | Small–medium |
+| **Source** | Warren 2026-08-20 after merge of `fix/merged-customer-resolver-guard`: periodic assertion that no fact/FK still points at a merged loser, checked on import completion. |
+| **Idea** | After each successful import apply/complete, assert leftover row count is zero for every `dim_customer` / `dim_distributor` id that has `merged_into_*` set. Fail loudly (FLAG the job / activity feed) rather than silently re-accumulating loser FKs. Reuse leftover-query logic from `customer_leftover_repair.py` / `repoint_customer_footprint_full` discovery — do not invent a parallel scan. |
+| **Why it matters / deferrable** | Unit 1 now follows redirects; Unit 2 cleaned cip to leftover=0. Without a recurring check, the next importer regression will only be noticed in an ad-hoc audit. Deferrable until the next importer-completion / data-integrity pass is scheduled. |
+| **What the work is** | (1) Shared leftover-count helper covering customer **and** distributor merged ids. (2) Call it from the existing import-complete / `on_import_complete` rail (or `data_integrity_audit`) — not a new pipeline. (3) Surface a non-zero count as FLAG≠BLOCK so apply still succeeds. |
+| **Regression traps** | Do not skip `dim_*.merged_into_*` itself (that column *should* point at the winner). Do not auto-repoint from the assertion. Do not query `cip` from tests without `ALLOW_TESTS_ON_DEV_DB=1`. Never auto-create master rows. |
+| **Behavior to retain** | Resolver follow/exclude; leftover repair remains an explicit ops script; FLAG≠BLOCK. |
+| **Out of scope** | Re-running leftover repair; mint/promote; changing DSI resolution order. |
+| **TRIGGER** | Next importer apply/completion work, or Warren schedules a data-integrity check on import complete. |
+
+---
+
+## BACKLOG-134 — Assert no `customer_source_token_alias` points at a merged customer id
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-20 |
+| **Effort** | Small |
+| **Source** | Warren 2026-08-20 after leftover repair on cip: verify no `customer_source_token_alias` row still points at a merged loser id. |
+| **Idea** | Post-repair (and periodically) query `customer_source_token_alias.customer_id` against `dim_customer.merged_into_customer_id IS NOT NULL`. Expected count is 0. If any remain, follow the merge chain and repoint the alias to the survivor via the existing alias-write path — do not add a second writer. Same check for distributor aliases if a twin table exists. |
+| **Why it matters / deferrable** | Resolver follow already collapses alias targets at read time (`customer_redirect`). A loser-pointing alias is still a stored-truth bug: the next steward edit or a path that skips redirect would write the loser again. Deferrable because read paths now follow; this is stored-integrity, not an open operator incident. |
+| **What the work is** | (1) Read-only count query (customer, then distributor alias twin). (2) If non-zero: one-shot repoint through the canonical alias update, not a new SQL loop. (3) Optional: include in BACKLOG-133 import-complete assertion. |
+| **Regression traps** | Do not delete aliases; do not auto-create dims; keep unique-token / source-scope rules; cycle-safe follow via `merge_redirect`. |
+| **Behavior to retain** | Unique alias collapse to survivor at resolve time; steward still confirms ambiguous tokens. |
+| **Out of scope** | Re-audit of leftover fact FKs (already 0 on cip); mint/promote. |
+| **TRIGGER** | Next alias-integrity audit, or after another leftover-repair / merge campaign. |
+
+---
+
 ## BACKLOG-132 — Post-apply shipping mailer to a mailing list (M365)
 
 | Field | Detail |
