@@ -6,6 +6,108 @@
 
 ---
 
+## BACKLOG-135 — Land customer SOH (CST) into a usable fact for CPOR MAC check
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-20 |
+| **Effort** | Medium |
+| **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` §9.1 / D-062. Warren: `fact_inventory_customer` is empty; customer SOH is arriving and not landing. |
+| **Idea** | Customer weekly SOH (actual cost) is the **check** on derived customer MAC, not the input. Evetech has no SOH file. Tree today: CST apply writes `reported_soh` / `unit_cost` / `unit_mac` to **`fact_customer_sellthrough`**. `fact_inventory_customer` has no writer; `/inventory` still names that table. Decide whether the MAC check reads CST facts or a real `fact_inventory_customer` writer is required — then implement **one** landing path. |
+| **Why it matters / deferrable** | Without a landed SOH cost, D-062 cannot run. Deferrable until settlement unit starts; CST ingest already exists. |
+| **What the work is** | (1) Confirm grain: customer×SKU×week cost on CST vs inventory fact. (2) If CST is canonical, point the MAC-check at `fact_customer_sellthrough` and stop claiming `fact_inventory_customer`. (3) If inventory fact is required, add a set-based writer from CST — no second parse. |
+| **Regression traps** | SOH is derived-not-stored for **channel** stock; retailer-reported SOH is a checkpoint only. Never treat CST SOH as the MAC author (D-062). Never silently pro-rate a boundary week. |
+| **Behavior to retain** | CST apply to `fact_customer_sellthrough`; Evetech exemption. |
+| **Out of scope** | Building the MAC master; customer portal. |
+| **TRIGGER** | Settlement / customer-MAC unit starts, or Warren picks CST vs `fact_inventory_customer` as the SOH check source. |
+
+---
+
+## BACKLOG-136 — CPOR routers: session auth + KAM / PM / Ken / Wayne enforcement
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-20 |
+| **Effort** | Medium |
+| **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` §2 / §9.2. Warren: CPOR routers have no authentication or role enforcement. |
+| **Idea** | Stamp a real actor on every CPOR write (null actor is a defect, §7). Enforce: KAM proposes/amends/owns terms; PM amends **pre-approval only**; Ken compiles/settles and must not touch MAC/terms; MDM+Wayne approve; Wayne re-approves. |
+| **Why it matters / deferrable** | Tree: some GETs use `get_current_user`; most writes use nullable `X-User-Id`; `require_roles` unused on `/cpor`; stub mode forges `admin`; Role enum has no these four roles. Deferrable until settlement/amendment units, but any new CPOR write should not extend the header-actor pattern. |
+| **What the work is** | (1) Map KAM/PM/Ken/Wayne onto IAM (new roles vs compose on planner/steward/admin) — CONSULT, do not invent. (2) `require_roles` (or equivalent) on every CPOR write including export. (3) Actor from session user, never null. |
+| **Regression traps** | Do not leave stub-admin as production. Do not give PM post-approval writes (D-059). Do not give Ken MAC/term writes. |
+| **Behavior to retain** | Lifecycle actions in `lifecycle.py`; Wayne as re-approval actor (D-059). |
+| **Out of scope** | Customer portal login. |
+| **TRIGGER** | Next CPOR write-path unit, or session-auth hardening of `/cpor`. |
+
+---
+
+## BACKLOG-137 — `cpor_case_line` week-aligned effective windows
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-20 |
+| **Effort** | Medium (approved migration) |
+| **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` §3 / §9.3 / D-058. Warren: `cpor_case_line` has no effective window columns. |
+| **Idea** | Each line carries a week-aligned window + fixed rate. Supersession: old line closes end of prior week; new line from new week to case end. Unique grain today `(case_id, product_id, distributor_id, pod_quarter)` cannot hold two living lines for the same SKU. Settlement `_claim_in_window` currently uses **case** dates. |
+| **Why it matters / deferrable** | Blocks D-058 mid-case supersede and line-window expected. Deferrable until amendment/settlement unit; needs an approved Alembic. |
+| **What the work is** | (1) Add line `window_start` / `window_end` (week-aligned). (2) Change unique grain so two windows for the same SKU coexist. (3) Point claim rollup at **line** windows. (4) Flag, never pro-rate, a week that straddles a boundary. |
+| **Regression traps** | Do not mutate approved terms in place (D-058). Do not silently pro-rate. Migration requires Warren approval. Case-level window remains the case span. |
+| **Behavior to retain** | `support_unit` as the rate (D-027 / D-063). `cap_qty` stays per line. |
+| **Out of scope** | Customer notification; IAM roles (136). |
+| **TRIGGER** | Mid-case amendment or settlement-expected unit is scheduled; Warren approves the migration. |
+
+---
+
+## BACKLOG-138 — Writer for `cpor_case.superseded_by_case_id`
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-20 |
+| **Effort** | Small–medium |
+| **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` §9.4. Warren: `superseded_by_case_id` is read by three modules and written by none. |
+| **Idea** | Soft-supersede a CPOR case (re-issue / replace) by writing `cpor_case.superseded_by_case_id`. Readers already filter `IS NULL`: serialize, `incremental_unit_cost`, `payment_recon`, `portfolio_intelligence`, `support_bias`, `norms_and_comparable`, `cpor_activation` (seven, not three). Lineup’s column on `commercial_lineup_case` is a **different** writer — do not reuse it. |
+| **Why it matters / deferrable** | Filters are dead: nothing ever sets the pointer, so “exclude superseded” is a no-op. Deferrable until a CPOR re-issue path exists. In-case **line** supersession (D-058) is BACKLOG-137, not this pointer. |
+| **What the work is** | One canonical CPOR supersede writer (preview → confirm); set pointer + status; never hard-delete. Port lineup copy-not-move lessons only where CPOR has a twin child table. |
+| **Regression traps** | Do not write lineup `superseded_by_case_id` from a CPOR path or vice versa. Do not treat line supersession as case supersession. |
+| **Behavior to retain** | Soft everything; readers’ `IS NULL` filter once writes exist. |
+| **Out of scope** | Line-window supersession (137); leftover FK repair. |
+| **TRIGGER** | A CPOR case needs to be re-issued / replaced, or a unit is scheduled to make the pointer real. |
+
+---
+
+## BACKLOG-139 — Repair `cpor_case.status` vs `workflow_status` drift
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-20 |
+| **Effort** | Small |
+| **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` §9.6. Warren: status and workflow_status have drifted on ~4 rows. |
+| **Idea** | `cpor_case` has both `status` (lifecycle.py) and `workflow_status` (promo-export-shaped). They can disagree. Count, explain, and either (a) make `workflow_status` a projection of `status` or (b) document two distinct machines and stop writing both from uncoordinated paths. Then repair the drifted rows on a clone, then cip. |
+| **Why it matters / deferrable** | Dual columns invite silent filter bugs (list-by-status vs list-by-workflow). Deferrable while ~4 rows; becomes a blocker if filters disagree on approve/settle. **This session did not re-count the rows.** |
+| **What the work is** | (1) `SELECT` the disagreeing rows on cip (read-only). (2) Pick one owner column. (3) Clone repair then cip. (4) One writer going forward. |
+| **Regression traps** | Do not dual-write forever. Lifecycle transitions stay on `status` unless explicitly moved. Clone first. |
+| **Behavior to retain** | `draft → proposed → approved → active → ended → settled` on `status`. |
+| **Out of scope** | Inventing new lifecycle states; IAM (136). |
+| **TRIGGER** | Next CPOR list/filter bug, or Warren asks to reconcile the ~4 rows. |
+
+---
+
+## BACKLOG-140 — CIP mints customer codes (named accounts off `TMP-CUST`)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-20 |
+| **Effort** | Medium (approved settings table / mint path) |
+| **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` §9.5 / D-065. Warren: named accounts still carry TMP-CUST; promote works but is unused because no code scheme exists; CIP will mint its own, updatable later. |
+| **Idea** | Mint CIP-owned codes on promote (research already in `docs/design/BACKLOG-061-U2a_customer_code_mint_research.md`). BACKLOG-061 promote **map** was pruned as shipped — operator-supplied `new_code`. Mint was never built. ERP/customer-file codes are an optional later mapping, not a blocker. |
+| **Why it matters / deferrable** | CPOR cases display TMP codes on named accounts. Promote-map is unusable without a scheme to type. Deferrable until Warren schedules a mint pass; D-065 is locked so a future unit does not wait on ERP. |
+| **What the work is** | (1) Settings + collision-safe sequence (U2a Candidate A unless Warren picks otherwise). (2) Promote `mode=mint` on the existing promote endpoint — no second writer. (3) Codes append-only; later scheme does not rewrite history. |
+| **Regression traps** | Never auto-create `dim_customer`. Never invent a global hard-coded format in code (settings). FLAG≠BLOCK on collision. Do not mass-rename after a later ERP mapping. |
+| **Behavior to retain** | CSV/paste map path; single-row promote; TMP reuse rules. |
+| **Out of scope** | Distributor mint; ERP sync. |
+| **TRIGGER** | Warren schedules named-account promote, or CPOR settlement work needs stable non-TMP codes on the case customer. |
+
+---
+
 ## BACKLOG-133 — Assert zero leftover FKs to merged customer/distributor ids on import completion
 
 | Field | Detail |

@@ -704,5 +704,82 @@ the B4 owner; the grid replaces the B4 TextField panel in place.
 **Rejected:** Hardcoded `TENANT_LINEUP_SHEET_HEADERS` as write order; OEM-branded columns;
 new export-profile table.
 
+## D-057 · 2026-08-20 · Support and budget are per SKU line, never case-level
+**Locked.** A CPOR case is a set of lines. Support (rate, ttl_support, cap) and budget
+ask live on the **SKU line**. Case-level money is a rollup only, never the grain of
+terms or settlement. See `docs/CPOR_SETTLEMENT_SPEC.md` §3.
+**Origin:** Warren 2026-08-20 settlement design.
+**Rejected:** Case-level support % or budget as the stored term.
+
+## D-058 · 2026-08-20 · Terms never mutate after approval; changes supersede with week-aligned windows
+**Locked.** After approval, a line’s rate and window are immutable. A change **supersedes**:
+the old line closes at the end of the prior week; a new line runs from the new week to the
+case end date. Same pattern for adding a SKU mid-case. Weekly grain; a week straddling a
+boundary is flagged, never silently pro-rated.
+**Origin:** Warren 2026-08-20 settlement design. Blocked in tree until `cpor_case_line`
+has effective-window columns and the unique grain can hold two living lines per SKU
+(BACKLOG-137).
+**Rejected:** In-place UPDATE of approved rate/window; silent pro-rata across a boundary week.
+
+## D-059 · 2026-08-20 · Mid-case amendment re-flags for approval and notifies the customer; the case continues
+**Locked.** MAC change, added SKU, or price change after approval re-flags the case for
+approval **and** notifies the customer. Wayne approves re-approvals. The case **keeps
+running** — no pause, no mid-case chase or settlement. PM has no authority after the
+original approval.
+**Origin:** Warren 2026-08-20 settlement design.
+**Rejected:** Pausing the case pending re-approval; silent mid-case term edits; PM amending
+an approved case.
+
+## D-060 · 2026-08-20 · Over-cap flags and continues; nothing is chased mid-case
+**Locked.** Cap is in **units**, derived from a rand→USD ceiling; FX (`roe_snapshot`) is
+recorded at approval. Crossing the unit cap **flags and continues** — it does not stop
+the case. Flags accrue and resolve at case end. Distinct from BACKLOG-095 money-ceiling
+`needs_reapproval`, which still gates **approve/export** on the money axis.
+**Origin:** Warren 2026-08-20 settlement design.
+**Rejected:** Halting an active case at unit cap; settling or chasing results mid-case.
+
+## D-061 · 2026-08-20 · Customer MAC is first DSI sell-out forward; edits are forward-only
+**Locked.** Customer MAC is derived per customer × SKU, anchored on the **first DSI
+sell-out** of that SKU to that customer, weighted average forward. Steward edits take
+effect **from the edit forward**. Never retrospective. Never rewrite settled cases.
+POD (ASUS→distributor) is **not** the customer’s cost; distributor sell-out is the
+purchase event. Distinct from D-044 / D-049 planner/disti MAC legs.
+**Origin:** Warren 2026-08-20 settlement design.
+**Rejected:** Rewriting settled `cost_basis` from a later MAC edit; using POD as customer cost.
+
+## D-062 · 2026-08-20 · Customer SOH report is the check on derived MAC, not the input
+**Locked.** Weekly customer SOH carries actual cost and **checks** the derived MAC; it
+does not replace it as the input. Evetech has no SOH file. Rebates are irrelevant — SOH
+cost is what the customer paid. A week straddling a MAC/term boundary is flagged, never
+silently pro-rated.
+**Origin:** Warren 2026-08-20 settlement design. CST currently lands `reported_soh` /
+`unit_cost` on `fact_customer_sellthrough`, not empty `fact_inventory_customer`
+(BACKLOG-135).
+**Rejected:** Treating retailer SOH cost as the MAC author; silent pro-rata on boundary weeks.
+
+## D-063 · 2026-08-20 · Settlement has no negotiated middle: correct the wrong input and recompute
+**Locked.** Expected = sum over lines of (units in that line’s window × that line’s rate),
+with rate = approved `support_unit` (D-027 — no independent owed amount). Disagreement
+means an input is wrong; correct it on the case and recompute until both sides align.
+Amendments are case events; the trail is the justification. Ken compiles from the
+customer report and settles; Ken does not touch MAC or terms.
+**Origin:** Warren 2026-08-20 settlement design.
+**Rejected:** A negotiated settlement amount distinct from recomputed `ttl_result`.
+
+## D-064 · 2026-08-20 · The customer’s results report is stored as the HQ audit artifact
+**Locked.** The file the customer returns is uploaded and **attached to the case**. It is
+the HQ audit artifact, not only a parse source. `raw_source_row` on claim evidence is
+necessary and not sufficient.
+**Origin:** Warren 2026-08-20 settlement design.
+**Rejected:** Parse-only ingest that discards the original workbook as the audit copy.
+
+## D-065 · 2026-08-20 · CIP mints its own customer codes; ERP codes are an optional later mapping
+**Locked.** Named accounts must not remain on `TMP-CUST-*` for want of an ASUS/ERP scheme.
+CIP **mints** its own codes (updatable later). Promote-in-place mapping (BACKLOG-061
+pruned as shipped) stays for operator-supplied codes. ERP/customer-file codes are an
+**optional later mapping**, not a blocker for mint.
+**Origin:** Warren 2026-08-20 settlement design. Research: `docs/design/BACKLOG-061-U2a_customer_code_mint_research.md`.
+**Rejected:** Waiting on an ERP code list before promoting named accounts; mass-renaming
+minted codes when a later scheme arrives.
 
 
