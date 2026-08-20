@@ -60,7 +60,6 @@ export default function CporPaymentEvidenceImportPage() {
     queryFn: ({ signal }) =>
       apiGet<{ profiles: Profile[] }>('/api/v1/cpor/payment-evidence/profiles', {
         signal,
-        headers: { 'X-User-Role': 'admin' },
       }),
   });
   const profile = profiles?.profiles?.find((p) => p.is_default) ?? profiles?.profiles?.[0];
@@ -71,7 +70,6 @@ export default function CporPaymentEvidenceImportPage() {
     queryFn: ({ signal }) =>
       apiGet<Source[]>(`/api/v1/imports/sources?template_slug=cpor_payment_evidence`, {
         signal,
-        headers: { 'X-User-Role': 'admin' },
       }),
   });
   const sourceId = sources?.[0]?.id ?? null;

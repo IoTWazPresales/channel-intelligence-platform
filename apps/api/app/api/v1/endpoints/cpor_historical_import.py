@@ -342,10 +342,8 @@ def historical_candidates(
 def historical_map_token(
     job_id: int,
     body: MapTokenBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
     user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     with SessionLocal() as db:
         _get_job_sync(db, job_id)
         updated = map_staging_token(
@@ -370,10 +368,8 @@ def historical_map_token(
 def historical_bulk_map_token(
     job_id: int,
     body: BulkMapTokenBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
     user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     tokens = [t.strip() for t in body.tokens if (t or "").strip()]
     if not tokens:
         raise HTTPException(status_code=400, detail={"error": "tokens_required"})
@@ -404,10 +400,9 @@ def historical_bulk_map_token(
 @router.post("/historical-import/jobs/{job_id}/validate")
 def historical_validate(
     job_id: int,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Async validate (parse → stage → deterministic resolve) — same bar as DSI validate."""
-    _require_admin(x_user_role)
     with SessionLocal() as db:
         _get_job_sync(db, job_id)
     claim_import_pipeline_dispatch(job_id, import_mode="validate")
@@ -437,9 +432,8 @@ def historical_validate(
 def historical_apply(
     job_id: int,
     body: ApplyBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     if not body.confirm:
         raise HTTPException(
             status_code=400,
@@ -583,10 +577,9 @@ def historical_progress(
 def historical_resolution_plan_generate(
     job_id: int,
     body: ResolutionPlanGenerateBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Synchronous plan generation — small jobs / tests. Prefer compute-async for steward UI."""
-    _require_admin(x_user_role)
     with SessionLocal() as db:
         try:
             out = build_cpor_historical_resolution_plan_sync(db, job_id, candidate_ids=body.candidate_ids)
@@ -600,9 +593,8 @@ def historical_resolution_plan_generate(
 def historical_resolution_plan_compute_async(
     job_id: int,
     body: ResolutionPlanGenerateBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
-    _require_admin(x_user_role)
     with SessionLocal() as s:
         job = _get_job_sync(s, job_id)
         _assert_cpor_resolution_plan_dispatch_allowed(job)
@@ -631,10 +623,9 @@ def historical_resolution_plan_compute_async(
 def historical_resolution_plan_apply_async(
     job_id: int,
     body: ResolutionPlanApplyBody,
-    x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
+    _user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Apply ready resolution-plan rows — per-token map_staging_token (D-013; never bulk single-target)."""
-    _require_admin(x_user_role)
     with SessionLocal() as s:
         job = _get_job_sync(s, job_id)
         _assert_cpor_resolution_plan_dispatch_allowed(job)

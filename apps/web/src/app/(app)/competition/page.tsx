@@ -10,7 +10,7 @@ import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
-import { apiDelete, apiGet, apiPost, apiUrl } from '@/lib/api';
+import { apiDelete, apiGet, apiPost, apiUrl, authHeaders } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
 type MapRow = {
@@ -54,7 +54,7 @@ export default function CompetitionPage() {
     mutationFn: async (id: number) => {
       const res = await fetch(apiUrl(`/api/v1/competition/mappings/${id}/approve`), {
         method: 'POST',
-        headers: { 'X-User-Role': 'admin' },
+        headers: authHeaders(undefined, false),
       });
       return res.json();
     },

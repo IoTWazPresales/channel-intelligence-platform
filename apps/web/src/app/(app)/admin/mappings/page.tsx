@@ -13,7 +13,7 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
-import { apiDelete, apiGet, apiPost, apiUrl } from '@/lib/api';
+import { apiDelete, apiGet, apiPost, apiUrl, authHeaders } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
 type LegacyRow = {
@@ -103,7 +103,7 @@ function AdminMappingsPageContent() {
     mutationFn: async ({ id, entityId }: { id: number; entityId: number }) => {
       const res = await fetch(apiUrl(`/api/v1/mappings/queue/${id}/approve?entity_id=${entityId}`), {
         method: 'POST',
-        headers: { 'X-User-Role': 'steward' },
+        headers: authHeaders(undefined, false),
       });
       return res.json();
     },

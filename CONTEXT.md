@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-08-20 — **RBAC R1** on `feat/rbac-r1-session-actor`: CPOR writes authenticate via `get_current_user`; actor from `user["id"]`; web forged `X-User-*` removed. No migration. Historical-import GETs still header-gated (FLAG).
+
 - 2026-08-20 — **CPOR settlement design** locked in `docs/CPOR_SETTLEMENT_SPEC.md`. D-057–D-065. BACKLOG-135–140 for §9 gaps. Docs only.
 
 - 2026-08-20 — **Merged to main** `57528c5`: resolver guard + leftover repair. getattr-safe `merged_into_*` (`1aaeef1`). BACKLOG-133 / BACKLOG-134 parked. `1901d8b`.

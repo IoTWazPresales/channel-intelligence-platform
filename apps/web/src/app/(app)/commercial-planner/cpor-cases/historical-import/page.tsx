@@ -69,7 +69,6 @@ export default function CporHistoricalImportPage() {
     queryFn: ({ signal }) =>
       apiGet<Source[]>(`/api/v1/imports/sources?template_slug=cpor_historical_cases`, {
         signal,
-        headers: { 'X-User-Role': 'admin' },
       }),
   });
   const sourceId = sources?.[0]?.id ?? null;
@@ -79,7 +78,6 @@ export default function CporHistoricalImportPage() {
     queryFn: ({ signal }) =>
       apiGet<{ profiles: Profile[] }>('/api/v1/cpor/historical-import/profiles', {
         signal,
-        headers: { 'X-User-Role': 'admin' },
       }),
   });
   const profile = profiles?.profiles?.find((p) => p.is_default) ?? profiles?.profiles?.[0];
