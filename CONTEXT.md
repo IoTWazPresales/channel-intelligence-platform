@@ -24,6 +24,10 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 - 2026-08-19 — **Resolver guard (Unit 1):** follow `merged_into_*` on customer/distributor resolvers; exclude merged from provisional reuse and pickers. Canonical `merge_redirect.py`. No repair yet. Branch `fix/merged-customer-resolver-guard`. `fc14962`.
 
+
+- 2026-08-18 — **VERIFY PASS** shipping-mailer recipients (Opus) `6a35332` / stamp `e5e0702`.
+
+- 2026-08-18 — **Shipping-mailer recipients UI** `6a35332`: Settings list + DB table `shipping_mailer_recipient` (Alembic `20260818_0019`). UI list wins; empty table seeds the five.
 - 2026-08-18 — **Merged to main** `eb73232`: mailbox ingest + shipping digest mailer (`847aaf8`).
 
 - 2026-08-18 — **Digest grouped by disti, sorted by customer.** Inbox **#17** preview. `847aaf8`.
