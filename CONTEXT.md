@@ -16,6 +16,10 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-08-20 — **API tests pin `CIP_AUTH_MODE=stub`** in `apps/api/tests/conftest.py` (`setdefault`; not a fix). BACKLOG-144: `cip_test` seed gap for lineup distributor-as-customer remediation. Do not edit `.env`.
+
+- 2026-08-20 — **Merged to main** `b5e92d1`: `feat/shipping-mailer-recipients` (Alembic `20260818_0019`). cip already stamped `0019`; no upgrade of cip.
+
 - 2026-08-20 — **CPOR settlement design** locked in `docs/CPOR_SETTLEMENT_SPEC.md`. D-057–D-065. BACKLOG-135–140 for §9 gaps. Docs only.
 
 - 2026-08-20 — **Merged to main** `57528c5`: resolver guard + leftover repair. getattr-safe `merged_into_*` (`1aaeef1`). BACKLOG-133 / BACKLOG-134 parked. `1901d8b`.

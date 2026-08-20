@@ -108,6 +108,23 @@
 
 ---
 
+## BACKLOG-144 — `cip_test` seed gap for lineup distributor-as-customer remediation tests
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-20 |
+| **Effort** | Small |
+| **Source** | Close-off GATE 2 / 2.7: `apps/api/tests/test_lineup_distributor_as_customer_remediation.py` fails on `cip_test` (distributor 50 missing; no syntech / smd lineup fixtures). Proven on unmerged `origin/main` @ `4ea1782` and on merged main; not caused by shipping-mailer or RBAC. |
+| **Idea** | Those four tests read live `dim_distributor` / `commercial_lineup_line` rows that exist on `cip` (distributor 50, syntech lines on OC+dist 51, unresolved `smd`) but were never seeded into `cip_test`. Decide whether the tests seed their own fixtures or are marked as requiring a populated DB. |
+| **Why it matters / deferrable** | They fail every honest `cip_test` suite run. Deferrable because the failures are a fixture gap, not a product regression; do not seed blindly from `cip`. |
+| **What the work is** | (1) List the exact rows the four tests need (open_channel customer 1, absorb losers 4145/1152, distributor 50 + syntech dist 51, syntech/smd lineup lines). (2) Either add a test-local seed that creates only those rows on `cip_test`, or mark the module as requiring a populated DB and exclude it from the default `cip_test` gate. |
+| **Regression traps** | Do not copy production `cip` into `cip_test`. Do not `ALLOW_TESTS_ON_DEV_DB=1` to “make them pass” on cip. Do not auto-create master records from import evidence. |
+| **Behavior to retain** | BACKLOG-125/126 remediation helpers on real cip; `cip_test` remains disposable test infra (not a drop candidate). |
+| **Out of scope** | Fixing `test_shipment_resolved_entities.py::test_apply_resolved_entities_syncs_stamped_ids` (MagicMock `assert 1 == 10`; separate pre-existing). Auth-mode pin in `conftest.py`. |
+| **TRIGGER** | Next `cip_test` / API-suite hygiene unit, or Warren wants those four tests green on disposable DB. |
+
+---
+
 ## BACKLOG-133 — Assert zero leftover FKs to merged customer/distributor ids on import completion
 
 | Field | Detail |
