@@ -4,7 +4,7 @@
 
 **Branch:** `feat/rbac-r1-session-actor` — flip this line back to `main` when this branch is merged.
 
-**Last content pin:** `0f88e1d` — do not treat a hash in this file as HEAD (R1d commit is newer)
+**Last content pin:** `44530a4` — do not treat a hash in this file as HEAD
 
 **Alembic (code on this branch):** `20260818_0018` (`20260818_0018_report_delivery_email_channel.py`) — R1d authored no revision.
 

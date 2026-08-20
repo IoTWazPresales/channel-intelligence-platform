@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-08-20 — **RBAC R1d** on `feat/rbac-r1-session-actor`: 401 → clear token + `/login`; payment-evidence actor from `_actor`; CPOR has zero `X-User-*` Header params; session e2e on cip_test 200/403/401 per five R1c routers. CURRENT 0019 explained; BACKLOG-143 leftovers. No migration. No cip writes.
+- 2026-08-20 — **RBAC R1d** on `feat/rbac-r1-session-actor`: 401 → clear token + `/login`; payment-evidence actor from `_actor`; CPOR has zero `X-User-*` Header params; session e2e on cip_test 200/403/401 per five R1c routers. CURRENT 0019 explained; BACKLOG-143 leftovers. No migration. No cip writes. `44530a4`.
 
 - 2026-08-20 — **RBAC R1c** on `feat/rbac-r1-session-actor`: 41 non-CPOR `X-User-Role` gates → `require_roles(Role.ADMIN)`. Import template/source filters use session role. CPOR untouched. BACKLOG-136 traps + BACKLOG-141/142. `cip_test` created at `20260818_0018`. `0f88e1d`.
 
