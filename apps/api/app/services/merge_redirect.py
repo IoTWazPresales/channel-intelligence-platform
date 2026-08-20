@@ -76,10 +76,22 @@ def redirect_id(raw_id: int | None, redirect: Mapping[int, int]) -> int | None:
     return int(redirect.get(cid, cid))
 
 
+def merged_into_customer_id(row: Any) -> int | None:
+    """Read ``merged_into_customer_id``; missing attribute means not merged."""
+    raw = getattr(row, "merged_into_customer_id", None)
+    return int(raw) if raw is not None else None
+
+
+def merged_into_distributor_id(row: Any) -> int | None:
+    """Read ``merged_into_distributor_id``; missing attribute means not merged."""
+    raw = getattr(row, "merged_into_distributor_id", None)
+    return int(raw) if raw is not None else None
+
+
 def is_merged_customer_row(row: Any) -> bool:
     if row is None:
         return False
-    if getattr(row, "merged_into_customer_id", None) is not None:
+    if merged_into_customer_id(row) is not None:
         return True
     return str(getattr(row, "customer_status", "") or "").strip().lower() == "merged"
 
@@ -87,7 +99,7 @@ def is_merged_customer_row(row: Any) -> bool:
 def is_merged_distributor_row(row: Any) -> bool:
     if row is None:
         return False
-    if getattr(row, "merged_into_distributor_id", None) is not None:
+    if merged_into_distributor_id(row) is not None:
         return True
     return str(getattr(row, "distributor_status", "") or "").strip().lower() == "merged"
 
@@ -225,10 +237,10 @@ def index_by_code_and_name(
 ) -> dict[str, Any]:
     """Map lowercased code/name → surviving row (loser keys point at the winner object)."""
     by_id = {int(r.id): r for r in rows}
-    parent = {
-        int(r.id): int(getattr(r, merged_into_attr)) if getattr(r, merged_into_attr) is not None else None
-        for r in rows
-    }
+    if merged_into_attr == "merged_into_distributor_id":
+        parent = {int(r.id): merged_into_distributor_id(r) for r in rows}
+    else:
+        parent = {int(r.id): merged_into_customer_id(r) for r in rows}
     redirect = build_redirect_map(parent.items())
     out: dict[str, Any] = {}
     for r in rows:

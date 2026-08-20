@@ -40,11 +40,15 @@ def resolve_payment_staging(db: Session, import_job_id: int) -> dict[str, Any]:
 
     cust_by_token: dict[str, int] = {}
     if cust_tokens:
-        from app.services.merge_redirect import build_redirect_map, collapse_ids
+        from app.services.merge_redirect import (
+            build_redirect_map,
+            collapse_ids,
+            merged_into_customer_id,
+        )
 
         customers = db.scalars(select(DimCustomer)).all()
         redirect = build_redirect_map(
-            (int(c.id), c.merged_into_customer_id) for c in customers
+            (int(c.id), merged_into_customer_id(c)) for c in customers
         )
         buckets: dict[str, list[int]] = defaultdict(list)
         for c in customers:
@@ -58,11 +62,15 @@ def resolve_payment_staging(db: Session, import_job_id: int) -> dict[str, Any]:
 
     dist_by_token: dict[str, int] = {}
     if dist_tokens:
-        from app.services.merge_redirect import build_redirect_map, collapse_ids
+        from app.services.merge_redirect import (
+            build_redirect_map,
+            collapse_ids,
+            merged_into_distributor_id,
+        )
 
         dists = db.scalars(select(DimDistributor)).all()
         redirect_d = build_redirect_map(
-            (int(d.id), d.merged_into_distributor_id) for d in dists
+            (int(d.id), merged_into_distributor_id(d)) for d in dists
         )
         buckets_d: dict[str, list[int]] = defaultdict(list)
         for d in dists:

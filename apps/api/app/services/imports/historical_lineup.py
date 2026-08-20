@@ -439,7 +439,12 @@ def process_historical_lineup_import(db: Session, job: ImportJob, filename: str,
     job.mapping_decisions = {s.sheet_name: s.mapping for s in parsed_sheets}
     errors = 0
 
-    from app.services.merge_redirect import build_redirect_map, collapse_ids, index_by_code_and_name
+    from app.services.merge_redirect import (
+        build_redirect_map,
+        collapse_ids,
+        index_by_code_and_name,
+        merged_into_customer_id,
+    )
 
     customers = db.scalars(select(DimCustomer)).all()
     distributors = db.scalars(select(DimDistributor)).all()
@@ -450,7 +455,7 @@ def process_historical_lineup_import(db: Session, job: ImportJob, filename: str,
     customer_by_code = customer_idx
     customer_by_name = customer_idx
     customer_redirect = build_redirect_map(
-        (int(c.id), c.merged_into_customer_id) for c in customers
+        (int(c.id), merged_into_customer_id(c)) for c in customers
     )
     distributor_idx = index_by_code_and_name(distributors, merged_into_attr="merged_into_distributor_id")
     distributor_by_code = distributor_idx

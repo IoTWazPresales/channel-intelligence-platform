@@ -738,7 +738,11 @@ def _build_resolution_cache(
     """Load all DSI entity-resolution reference tables in one pass before the row loop."""
     _ = source_def_id  # alias rows are filtered per-token at resolve time
 
-    from app.services.merge_redirect import build_redirect_map
+    from app.services.merge_redirect import (
+        build_redirect_map,
+        merged_into_customer_id,
+        merged_into_distributor_id,
+    )
 
     if on_sub_phase is not None:
         on_sub_phase("distributors")
@@ -746,7 +750,7 @@ def _build_resolution_cache(
         db, lambda: list(db.scalars(select(DimDistributor)).all())
     )
     distributor_redirect = build_redirect_map(
-        (int(d.id), d.merged_into_distributor_id) for d in all_distributors
+        (int(d.id), merged_into_distributor_id(d)) for d in all_distributors
     )
     distributor_rows = [_distributor_row_from_orm(d) for d in all_distributors]
 
@@ -768,7 +772,7 @@ def _build_resolution_cache(
         db, lambda: list(db.scalars(select(DimCustomer)).all())
     )
     customer_redirect = build_redirect_map(
-        (int(c.id), c.merged_into_customer_id) for c in all_customers_orm
+        (int(c.id), merged_into_customer_id(c)) for c in all_customers_orm
     )
     customer_rows = [_customer_row_from_orm(c) for c in all_customers_orm]
     living_customer_rows = [
@@ -840,10 +844,10 @@ def _build_distributor_resolution_cache(db: Session, source_def_id: int | None =
     """
     _ = source_def_id  # alias rows are filtered per-token at resolve time
     all_distributors = list(db.scalars(select(DimDistributor)).all())
-    from app.services.merge_redirect import build_redirect_map
+    from app.services.merge_redirect import build_redirect_map, merged_into_distributor_id
 
     distributor_redirect = build_redirect_map(
-        (int(d.id), d.merged_into_distributor_id) for d in all_distributors
+        (int(d.id), merged_into_distributor_id(d)) for d in all_distributors
     )
     dist_aliases_orm = list(
         db.scalars(

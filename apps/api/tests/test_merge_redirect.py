@@ -23,6 +23,8 @@ from app.services.merge_redirect import (
     follow_merge_chain,
     index_by_code_and_name,
     is_merged_customer_row,
+    merged_into_customer_id,
+    merged_into_distributor_id,
 )
 
 
@@ -118,6 +120,15 @@ def test_provisional_reuse_never_selects_merged_row() -> None:
     pick = pick_provisional_customer_for_reuse([merged, living], "Acme Stores")
     assert pick is living
     assert pick_provisional_customer_for_reuse([merged], "Acme Stores") is None
+
+
+def test_missing_merged_into_attr_is_not_merged() -> None:
+    row = SimpleNamespace(id=1, code="X", name="X")
+    assert is_merged_customer_row(row) is False
+    assert merged_into_customer_id(row) is None
+    assert merged_into_distributor_id(row) is None
+    m = index_by_code_and_name([row], merged_into_attr="merged_into_customer_id")
+    assert m["x"] is row
 
 
 def test_index_by_code_and_name_points_loser_keys_at_winner() -> None:

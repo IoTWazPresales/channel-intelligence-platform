@@ -110,21 +110,17 @@ def _collapse_party_ids(
         collapse_ids,
         follow_customer_merge_redirect_sync,
         follow_distributor_merge_redirect_sync,
+        merged_into_customer_id,
+        merged_into_distributor_id,
     )
 
     if not ids:
         return []
     if refs is not None:
         if kind == "customer":
-            parent = {
-                int(c.id): int(c.merged_into_customer_id) if c.merged_into_customer_id is not None else None
-                for c in refs.customers
-            }
+            parent = {int(c.id): merged_into_customer_id(c) for c in refs.customers}
         else:
-            parent = {
-                int(d.id): int(d.merged_into_distributor_id) if d.merged_into_distributor_id is not None else None
-                for d in refs.distributors
-            }
+            parent = {int(d.id): merged_into_distributor_id(d) for d in refs.distributors}
         return collapse_ids(ids, build_redirect_map(parent.items()))
     follow = (
         follow_customer_merge_redirect_sync if kind == "customer" else follow_distributor_merge_redirect_sync
