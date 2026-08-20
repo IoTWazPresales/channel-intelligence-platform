@@ -1,4 +1,4 @@
-import { getAuthToken } from '@/lib/authSession';
+import { clearAuthToken, getAuthToken } from '@/lib/authSession';
 
 /**
  * API origin for browser `fetch`.
@@ -110,6 +110,16 @@ export function authHeaders(init?: RequestInit, includeJsonContentType = true): 
   };
 }
 
+/** Expired/missing session: drop the stored token and send the operator to login. */
+function redirectToLoginOn401(status: number, requestPath: string): void {
+  if (status !== 401) return;
+  if (typeof window === 'undefined') return;
+  if (requestPath.includes('/api/v1/auth/login')) return;
+  if (window.location.pathname === '/login') return;
+  clearAuthToken();
+  window.location.assign('/login');
+}
+
 /**
  * Browser `fetch` for JSON GET. Pass `{ signal }` from TanStack Query `queryFn` so superseded
  * requests abort and cannot overwrite the cache with stale responses.
@@ -121,6 +131,7 @@ export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {
     cache: 'no-store',
   });
   if (!res.ok) {
+    redirectToLoginOn401(res.status, path);
     throw new Error(await readFetchError(res));
   }
   return res.json() as Promise<T>;
@@ -136,6 +147,7 @@ export async function apiPost<T>(path: string, body?: unknown, init?: RequestIni
   });
   if (!res.ok) {
     const text = await res.text();
+    redirectToLoginOn401(res.status, path);
     throw parseConflictError(res.status, text);
   }
   return res.json() as Promise<T>;
@@ -151,6 +163,7 @@ export async function apiPostFormData<T>(path: string, formData: FormData, init?
     cache: 'no-store',
   });
   if (!res.ok) {
+    redirectToLoginOn401(res.status, path);
     throw new Error(await readFetchError(res));
   }
   return res.json() as Promise<T>;
@@ -165,6 +178,7 @@ export async function apiPatch<T>(path: string, body?: unknown, init?: RequestIn
     cache: 'no-store',
   });
   if (!res.ok) {
+    redirectToLoginOn401(res.status, path);
     throw new Error(await readFetchError(res));
   }
   return res.json() as Promise<T>;
@@ -179,6 +193,7 @@ export async function apiPut<T>(path: string, body?: unknown, init?: RequestInit
     cache: 'no-store',
   });
   if (!res.ok) {
+    redirectToLoginOn401(res.status, path);
     throw new Error(await readFetchError(res));
   }
   return res.json() as Promise<T>;
@@ -290,6 +305,7 @@ export async function apiDelete(path: string, init?: RequestInit): Promise<void>
   });
   if (!res.ok) {
     const text = await res.text();
+    redirectToLoginOn401(res.status, path);
     throw parseDeleteError(res.status, text);
   }
 }
@@ -305,6 +321,7 @@ export async function apiDeleteJson<T>(path: string, body: unknown, init?: Reque
   });
   const text = await res.text();
   if (!res.ok) {
+    redirectToLoginOn401(res.status, path);
     throw new Error(parseApiErrorDetailText(text) || `Request failed (${res.status})`);
   }
   if (!text.trim()) return {} as T;
@@ -359,6 +376,7 @@ export async function apiDownloadBlob(path: string, filename: string, init?: Req
     cache: 'no-store',
   });
   if (!res.ok) {
+    redirectToLoginOn401(res.status, path);
     throw new Error(`${res.status} ${await readFetchError(res)}`);
   }
   const blob = await res.blob();

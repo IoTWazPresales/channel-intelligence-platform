@@ -38,8 +38,6 @@
 | **Out of scope** | Customer portal login. |
 | **TRIGGER** | Next CPOR write-path unit, or session-auth hardening of `/cpor`. |
 
-Also: `scripts/e2e_dsi_phase1_phase2_validate.py` forges `X-User-Role: admin` and breaks under session mode — fix when R3 or the mode flip lands.
-
 ---
 
 ## BACKLOG-137 — `cpor_case_line` week-aligned effective windows
@@ -141,6 +139,23 @@ Also: `scripts/e2e_dsi_phase1_phase2_validate.py` forges `X-User-Role: admin` an
 | **Behavior to retain** | Existing CST alias + semantic catalog overlay UI. |
 | **Out of scope** | R1c API sweep; ESLint flat-config (BACKLOG-070). |
 | **TRIGGER** | Next web typecheck / CST overlay / verify-gate unit, or Warren asks to restore typecheck as a merge gate. |
+
+---
+
+## BACKLOG-143 — Disposable leftover state to clear
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-20 |
+| **Effort** | Small (ops) |
+| **Source** | `docs/memory/CURRENT.md` Next on `main` (`cip_merged_leftover_repair` drop pointer) plus R1c/R1d leftovers that had no home after CURRENT Next was replaced: clone DB `cip_test`, untracked `.tmp_lf_rerun.txt`, unmerged `feat/shipping-mailer-recipients`. |
+| **Idea** | One ops sweep to drop or keep, on purpose, leftover local state that is not application code. |
+| **Why it matters / deferrable** | None of these block R1d merge. They do confuse the next agent (wrong DB, mystery file, 0019-only branch). Deferrable until Warren wants a clean machine / before the next migration. |
+| **What the work is** | (1) Drop clone DB `cip_merged_leftover_repair` if leftover repair will not be re-run. (2) Keep or drop `cip_test` (R1c/R1d disposable; OWNER cip; stamped `20260818_0018`). (3) Delete untracked `.tmp_lf_rerun.txt` or commit it only if it is still a needed artefact. (4) Promote or close `feat/shipping-mailer-recipients` (`b5cf3a0`) — this is also the 0019 migration blocker. |
+| **Regression traps** | Do not drop `cip`. Do not `alembic upgrade` cip from a branch that lacks `0019`. Do not force-push `main`. |
+| **Behavior to retain** | Live `cip` data; R1d session e2e remains runnable against `cip_test` until that DB is dropped. |
+| **Out of scope** | R2 role CONSULT; authoring a new Alembic revision. |
+| **TRIGGER** | Warren asks to tidy local DBs / working tree, or immediately before authoring any new migration. |
 
 ---
 

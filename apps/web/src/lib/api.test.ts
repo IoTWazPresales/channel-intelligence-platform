@@ -66,6 +66,63 @@ describe('readFetchError', () => {
   });
 });
 
+describe('401 session handling', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    localStorage.clear();
+    vi.unstubAllGlobals();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  it('clears the stored token and routes to /login on 401', async () => {
+    localStorage.setItem('cip.auth.token.v1', 'expired-token');
+    const assign = vi.fn();
+    const loc = { pathname: '/admin/shipment-evidence', assign };
+    vi.stubGlobal('location', loc);
+    Object.defineProperty(window, 'location', { configurable: true, value: loc });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ detail: 'Authentication required' }), { status: 401 }))
+    );
+    const { apiGet } = await import('./api');
+    await expect(apiGet('/api/v1/shipment-evidence')).rejects.toThrow();
+    expect(localStorage.getItem('cip.auth.token.v1')).toBeNull();
+    expect(assign).toHaveBeenCalledWith('/login');
+  });
+
+  it('does not redirect on 403', async () => {
+    const assign = vi.fn();
+    const loc = { pathname: '/admin/shipment-evidence', assign };
+    vi.stubGlobal('location', loc);
+    Object.defineProperty(window, 'location', { configurable: true, value: loc });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ detail: 'Insufficient role' }), { status: 403 }))
+    );
+    const { apiGet } = await import('./api');
+    await expect(apiGet('/api/v1/shipment-evidence')).rejects.toThrow(/Insufficient role/);
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it('does not redirect a failed /auth/login 401', async () => {
+    const assign = vi.fn();
+    const loc = { pathname: '/login', assign };
+    vi.stubGlobal('location', loc);
+    Object.defineProperty(window, 'location', { configurable: true, value: loc });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ detail: 'Invalid credentials' }), { status: 401 }))
+    );
+    const { apiPost } = await import('./api');
+    await expect(apiPost('/api/v1/auth/login', { email: 'x@y.z', password: 'no' })).rejects.toThrow();
+    expect(assign).not.toHaveBeenCalled();
+  });
+});
+
 describe('safeDisplayError', () => {
   it('stringifies Error and strings', async () => {
     const { safeDisplayError } = await import('./api');

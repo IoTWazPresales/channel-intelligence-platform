@@ -170,3 +170,41 @@ def test_historical_import_posts_depend_on_get_current_user():
             missing.append(route.path)
     assert found, "expected historical-import write routes to be mounted"
     assert missing == [], f"historical-import writes missing get_current_user: {missing}"
+
+
+def _route_own_user_header_params(route: APIRoute) -> list[str]:
+    """Header params declared on the view, not nested get_current_user (security.py)."""
+    hits: list[str] = []
+    for hp in getattr(route.dependant, "header_params", None) or []:
+        name = (getattr(hp, "name", None) or "").lower()
+        alias = (getattr(hp, "alias", None) or "").lower()
+        field_info = getattr(hp, "field_info", None)
+        fi_alias = (getattr(field_info, "alias", None) or "").lower() if field_info is not None else ""
+        lowered = {
+            name,
+            alias,
+            fi_alias,
+            name.replace("_", "-"),
+            alias.replace("_", "-"),
+        }
+        if lowered & {"x-user-id", "x_user_id", "x-user-role", "x_user_role"}:
+            hits.append(f"{getattr(hp, 'name', '?')} alias={getattr(hp, 'alias', '')}")
+    return hits
+
+
+def test_cpor_routes_declare_no_x_user_headers():
+    """R1d: no CPOR view may still take X-User-Id / X-User-Role as a Header param."""
+    offenders: list[str] = []
+    scanned = 0
+    for route in app.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        if not _is_cpor_path(route.path):
+            continue
+        scanned += 1
+        hits = _route_own_user_header_params(route)
+        if hits:
+            methods = ",".join(sorted(m for m in (route.methods or ()) if m not in {"HEAD", "OPTIONS"}))
+            offenders.append(f"{methods} {route.path} :: {hits}")
+    assert scanned, "expected CPOR routes to be mounted"
+    assert offenders == [], f"CPOR routes still declare X-User-* Header params: {offenders}"
