@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-08-21 — **Promote provisionals Phase B** on `feat/promote-provisionals-run`: mint confirm on cip. CUST seq 1..4795 (next_seq 4796); DIST 1..25 (next_seq 26). Note `system-minted code, BACKLOG-061 bulk mint; recode pending BACKLOG-145`. Customer notes_summary 4795/4795; distributor notes_summary column missing (merge_note 25/25, not backfilled). Open TMP 0/0; CPOR TMP cases 0. BACKLOG-145 accepted.
+
 - 2026-08-21 — **Promote provisionals Phase A** on `feat/promote-provisionals-run` (off main `0a649df`): mint dry-run, zero writes. Open TMP 4795/25 all ready; next_seq still 1/1; 308 CPOR TMP cases all covered. BACKLOG-145 recode-after-promote. Phase B not started. `0b0fa8a`.
 
 - 2026-08-20 — **Merged to main** `22c2305`: `feat/rbac-r1-session-actor` (R1–R1d). RBAC program CLOSED at authentication + ADMIN `require_roles` on the 41 non-CPOR gates. CPOR stays auth-only until R2 (BACKLOG-136 / 141 parked). No migration. No cip upgrade.

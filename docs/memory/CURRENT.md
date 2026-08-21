@@ -1,6 +1,6 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-21 (promote provisionals Phase A dry-run)
+**Last updated:** 2026-08-21 (promote provisionals Phase B confirm)
 
 **Branch:** `feat/promote-provisionals-run`
 
@@ -15,14 +15,18 @@
 ## On this branch
 
 - Steward mint run, not a build. No migration, no model/service change.
-- **Phase A complete (dry-run).** `current_database()=cip`. Open TMP **4795 / 25** (delta 0 vs queue-depth). All **4795** customers and **25** distributors `ready`. Zero ineligible. Intra-batch reserved-set collisions: **0**. Sequential-confirm projection: `CUST-000001`..`CUST-004795`, `DIST-000001`..`DIST-000025`. Both `next_seq` still **1**. All **308** TMP-coded `cpor_case` rows would be covered.
-- Shipped bulk cap is **500**; dry_run chunks remint from seq 1 (does not advance). Phase B confirm chunks would consume seq sequentially.
-- **Phase B not started** — waits for Warren’s explicit word.
-- BACKLOG-145: recode-after-promote has no path (customer and distributor).
+- **Phase B complete (2026-08-21).** `current_database()=cip` at B.1 / B.2 / B.3.
+- Customers promoted **4795/4795**, seq **1..4795**, `customer_code_mint_setting.next_seq` **1 → 4796**. Failures: none.
+- Distributors promoted **25/25**, seq **1..25**, `distributor_code_mint_setting.next_seq` **1 → 26**. Failures: none.
+- Provenance note (same on every row): `system-minted code, BACKLOG-061 bulk mint; recode pending BACKLOG-145`
+- `dim_customer.notes_summary` contains that string: **4795** (= promoted).
+- `dim_distributor.notes_summary`: **column does not exist**. Shipped path writes `merge_note`. `merge_note` contains the string: **25** (= promoted). Not backfilled onto a notes_summary column. GAP vs the B.3 notes_summary check is structural.
+- Queue-depth after: TMP-CUST open **0**; TMP-DIST open **0**; `cpor_case` customer TMP-CUST% **0**. Merged-loser TMP-CUST excluded still **216**.
+- BACKLOG-145: recode-after-promote has no path (accepted going in).
 - **RBAC program CLOSED at R1–R1d** (on main, inherited).
 
 ## Next
 
-Warren reads Phase A and says whether to run Phase B (`dry_run=false`, customers then distributors). Do not start B without that word. After B: re-run queue-depth; expected open TMP near 0 and the 308 gone.
+Mint is done. Recode when an ERP code is needed (BACKLOG-145). CPOR settlement / MAC / line-windows from `docs/CPOR_SETTLEMENT_SPEC.md` §8 and BACKLOG-135–140. Merge `feat/promote-provisionals-run` (docs) and `feat/steward-queue-depth` when Warren says. **`cip_test` is real test infra — do not drop.**
 
 **Env:** local Windows. Web `:3000` + API `:8001`. `cip_auth_mode` default in `config.py` is `stub`.
