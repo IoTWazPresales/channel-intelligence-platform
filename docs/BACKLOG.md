@@ -176,6 +176,23 @@
 
 ---
 
+## BACKLOG-145 — Recode-after-promote has no path (customer and distributor)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-21 |
+| **Effort** | Medium |
+| **Source** | Steward run `feat/promote-provisionals-run` Phase A. `confirm_customer_promote` (`apps/api/app/services/customer_promote.py`) raises `code="already_promoted"` when current code is not `TMP-CUST-*`. `confirm_distributor_promote` (`distributor_promote.py`) does the same for non-`TMP-DIST-*`. `POST /customers/bulk` looks up `DimCustomer.code == code` and **inserts** when missing. `POST /distributors` creates by code (409 if the code exists); `PATCH /distributors/{id}` cannot change `code`. No distributor `/bulk` twin. |
+| **Idea** | After a mint promote, the row holds `CUST-######` / `DIST-######`. There is no shipped path to rename that to a later ERP / real business code without creating a second master row. Promote refuses the recode; bulk/create is code-keyed identity. |
+| **Why it matters / deferrable** | CIP mint is Candidate A, not ERP. Named accounts will eventually need a real code. Deferrable until an ERP mapping / recode unit; do not bolt recode onto a steward mint run. |
+| **What the work is** | Design a promote-in-place recode (same `id`, change `code` only) with collision preview, or an explicit alias/ERP mapping that does **not** insert a second `dim_*` row. Customers and distributors both. |
+| **Regression traps** | Do not use `/customers/bulk` or `POST /distributors` to “fix” a minted code — that creates a duplicate identity. Never auto-create master from import evidence. Do not merge distinct businesses to fake a recode. Unique `code` still blocks reuse while a minted row holds the string. |
+| **Behavior to retain** | Promote-in-place for TMP only; mint `next_seq`; no auto-create on apply. |
+| **Out of scope** | This steward mint run; BACKLOG-140 mint-scheme product work; duplicate-resolution (complete). |
+| **TRIGGER** | First minted customer/distributor needs an ERP / real business code, or Warren schedules a recode unit. |
+
+---
+
 ## BACKLOG-133 — Assert zero leftover FKs to merged customer/distributor ids on import completion
 
 | Field | Detail |

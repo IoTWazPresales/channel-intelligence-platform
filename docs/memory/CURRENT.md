@@ -1,10 +1,10 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-20 (RBAC R1–R1d merged to main)
+**Last updated:** 2026-08-21 (promote provisionals Phase A dry-run)
 
-**Branch:** `main`
+**Branch:** `feat/promote-provisionals-run`
 
-**Last content pin:** `44530a4` — do not treat a hash in this file as HEAD
+**Last content pin:** `0a649df` (main at branch-off) — do not treat a hash in this file as HEAD
 
 **Alembic (code):** `20260818_0019` (`20260818_0019_shipping_mailer_recipient.py`)
 
@@ -12,16 +12,17 @@
 
 **Alembic on cip_test:** `20260818_0018` (OWNER cip)
 
-## On main
+## On this branch
 
-- **RBAC program CLOSED at R1–R1d.** CPOR writes authenticate; actor from `user["id"]`. 41 non-CPOR header gates → `require_roles(Role.ADMIN)`. Web 401 clears token and routes to `/login`. No Role enum expansion. No `require_roles` on CPOR (R2). BACKLOG-136 / BACKLOG-141 parked; triggers unchanged.
-- Merged `feat/shipping-mailer-recipients` at `b5e92d1`. Code + cip head `0019`.
-- **API test pin (not a fix):** `apps/api/tests/conftest.py` `setdefault("CIP_AUTH_MODE", "stub")`. Explicit process `CIP_AUTH_MODE=session` still wins (R1d). Do not edit `.env` or `config.py` default.
-- **CPOR settlement design** (docs only): `docs/CPOR_SETTLEMENT_SPEC.md`. D-057–D-065. BACKLOG-135–140 for §9 gaps.
-- BACKLOG-144: `cip_test` lacks fixtures for lineup distributor-as-customer remediation tests.
+- Steward mint run, not a build. No migration, no model/service change.
+- **Phase A complete (dry-run).** `current_database()=cip`. Open TMP **4795 / 25** (delta 0 vs queue-depth). All **4795** customers and **25** distributors `ready`. Zero ineligible. Intra-batch reserved-set collisions: **0**. Sequential-confirm projection: `CUST-000001`..`CUST-004795`, `DIST-000001`..`DIST-000025`. Both `next_seq` still **1**. All **308** TMP-coded `cpor_case` rows would be covered.
+- Shipped bulk cap is **500**; dry_run chunks remint from seq 1 (does not advance). Phase B confirm chunks would consume seq sequentially.
+- **Phase B not started** — waits for Warren’s explicit word.
+- BACKLOG-145: recode-after-promote has no path (customer and distributor).
+- **RBAC program CLOSED at R1–R1d** (on main, inherited).
 
 ## Next
 
-Steward + CPOR queue depth on `feat/steward-queue-depth` (read-only against cip). Then settlement / MAC / line-windows from the spec + D-057–D-065; pick a BACKLOG-135–140 TRIGGER rather than re-deriving. **`cip_test` is real test infra — do not drop.** Clone DB `cip_merged_leftover_repair` can still be dropped when convenient.
+Warren reads Phase A and says whether to run Phase B (`dry_run=false`, customers then distributors). Do not start B without that word. After B: re-run queue-depth; expected open TMP near 0 and the 308 gone.
 
 **Env:** local Windows. Web `:3000` + API `:8001`. `cip_auth_mode` default in `config.py` is `stub`.
