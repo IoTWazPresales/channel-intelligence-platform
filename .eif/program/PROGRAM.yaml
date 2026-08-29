@@ -1,0 +1,139 @@
+schema: eif.program/1
+programme:
+  id: PRG-20260827T105203
+  outcome_statement: Imported from v0.4 ROADMAP/WORK_ITEM
+  conservation_nouns: []
+  charter:
+    status: pending
+    by: null
+    at: null
+    workstreams: []
+    assumptions: []
+    inclusions: []
+    exclusions: []
+    root_interpretation: null
+  status: active
+  identity:
+    form: pre_history
+    project_id: null
+    root_commit: null
+  snapshot_revision: 4
+  log_sha256: 48f38fe09516c5eaba461b63ff0c78eea203234318f108eddd0ed31207b2cabe
+  acceptance_policy:
+    milestone: operator
+    root: operator
+    r3_plus: operator
+    default: auto
+  debug_budget: 5
+nodes:
+  N-0001:
+    id: N-0001
+    parent: null
+    title: Product/engineering outcomes
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on: []
+    facets: []
+    risk: R1
+    touches_existing: false
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria: []
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality: {}
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags:
+    - Product/engineering outcomes
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+  N-0002:
+    id: N-0002
+    parent: null
+    title: Outcome 1
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on: []
+    facets: []
+    risk: R1
+    touches_existing: false
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria: []
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality: {}
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags:
+    - Outcome 1
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+  N-0003:
+    id: N-0003
+    parent: null
+    title: Dependencies / decision deadlines
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on: []
+    facets: []
+    risk: R1
+    touches_existing: false
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria: []
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality: {}
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags:
+    - Dependencies / decision deadlines
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+decisions: {}
+evidence: {}
+baselines: {}
+ids:
+  node: 3
+  decision: 0
+  blocker: 0
+  evidence: 0
+  baseline: 0

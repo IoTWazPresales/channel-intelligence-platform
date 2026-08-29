@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "command": ".cursor/hooks/eif_guard.cmd",
+        "timeout": 10,
+        "failClosed": true
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": ".cursor/hooks/eif_guard.cmd",
+        "timeout": 10,
+        "failClosed": false
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": ".cursor/hooks/eif_guard.cmd",
+        "timeout": 10,
+        "failClosed": true
+      }
+    ],
+    "beforeMCPExecution": [
+      {
+        "command": ".cursor/hooks/eif_guard.cmd",
+        "timeout": 10,
+        "failClosed": true
+      }
+    ],
+    "afterMCPExecution": [
+      {
+        "command": ".cursor/hooks/eif_guard.cmd",
+        "timeout": 10,
+        "failClosed": false
+      }
+    ],
+    "beforeReadFile": [
+      {
+        "command": ".cursor/hooks/eif_guard.cmd",
+        "timeout": 10,
+        "failClosed": true
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "command": ".cursor/hooks/eif_guard.cmd",
+        "timeout": 10,
+        "failClosed": false
+      }
+    ],
+    "subagentStart": [
+      {
+        "command": ".cursor/hooks/eif_guard.cmd",
+        "timeout": 10,
+        "failClosed": true
+      }
+    ],
+    "subagentStop": [
+      {
+        "command": ".cursor/hooks/eif_guard.cmd",
+        "timeout": 10,
+        "failClosed": false
+      }
+    ],
+    "stop": [
+      {
+        "command": ".cursor/hooks/eif_guard.cmd",
+        "timeout": 10,
+        "failClosed": false
+      }
+    ],
+    "sessionStart": [
+      {
+        "command": ".cursor/hooks/eif_guard.cmd",
+        "timeout": 10,
+        "failClosed": false
+      }
+    ]
+  }
+}

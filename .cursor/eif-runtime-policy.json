@@ -1,0 +1,137 @@
+{
+  "action_classes": {
+    "artifact_write": true,
+    "control_plane_change": false,
+    "delete": true,
+    "destructive_data": false,
+    "force_vcs": false,
+    "identity_mutation": false,
+    "infrastructure_control": false,
+    "read": true,
+    "release": false,
+    "remote_push": false,
+    "write": true
+  },
+  "allowed_roots": [
+    "C:\\Users\\warren_eliason\\channel-intelligence-platform"
+  ],
+  "artifact_scopes": [
+    ".eif/audit/**"
+  ],
+  "budgets": {
+    "debug_iterations": 10,
+    "debug_iterations_role": "advisory",
+    "repeat_mutating_limit": 12,
+    "tool_calls": 500,
+    "wall_clock_minutes": 120,
+    "wall_clock_role": "advisory_wrap_up",
+    "wrap_up_ratio": 0.85
+  },
+  "change_scopes": [
+    ".eif/**",
+    "apps/api/**",
+    "apps/web/**",
+    "docs/**"
+  ],
+  "control_plane_paths": [
+    ".cursor/eif-runtime-policy.json",
+    ".cursor/hooks.json",
+    ".cursor/hooks/**",
+    ".cursor/rules/eif-core.mdc",
+    ".cursor/rules/eif-project-adapter.mdc",
+    ".cursor/permissions.json",
+    ".eif/PROJECT_MANIFEST.md",
+    ".eif/AUTONOMY_POLICY.md",
+    ".eif/ENVIRONMENT_POLICY.md",
+    ".eif/RUNTIME_CAPABILITIES.md",
+    ".eif/runtime-events.jsonl",
+    ".eif/runtime-budget/**",
+    ".eif/program/**",
+    ".eif/upgrade-work/**"
+  ],
+  "derived": true,
+  "framework_version": "0.4.0-draft",
+  "identity": {
+    "expected_remotes": [
+      "https://github.com/IoTWazPresales/channel-intelligence-platform.git"
+    ],
+    "expected_vcs_root": "C:\\Users\\warren_eliason\\channel-intelligence-platform",
+    "repository_anchors": [
+      {
+        "allowed_root": "C:\\Users\\warren_eliason\\channel-intelligence-platform",
+        "expected_remotes": [
+          "https://github.com/IoTWazPresales/channel-intelligence-platform.git"
+        ],
+        "expected_vcs_root": "C:\\Users\\warren_eliason\\channel-intelligence-platform",
+        "root_commit": "8f7f1b53e3555dd3010244c7fe8b398ecb881548"
+      }
+    ],
+    "root_commit": "8f7f1b53e3555dd3010244c7fe8b398ecb881548"
+  },
+  "max_authority": "L3",
+  "max_risk_without_escalation": "R3",
+  "mcp": {
+    "browser": "interact",
+    "mode": "allowlist",
+    "tools": [
+      {
+        "server_pattern": "*",
+        "tool_pattern": "browser_*"
+      }
+    ]
+  },
+  "network": {
+    "classes": [
+      "loopback",
+      "public_read"
+    ],
+    "destinations": []
+  },
+  "observation_scopes": [
+    ".eif/**",
+    "**"
+  ],
+  "path_scopes": [
+    ".eif/**",
+    "apps/api/**",
+    "apps/web/**",
+    "docs/**"
+  ],
+  "policy_id": "AUTONOMY-001",
+  "policy_status": "accepted",
+  "project_id": "channel-intelligence-platform",
+  "protected_paths": [
+    "vendor/**",
+    "**/vendor/**",
+    "dist/**",
+    "build/**",
+    "**/generated/**"
+  ],
+  "runtime_mode": "local",
+  "schema_version": 3,
+  "secrets": {
+    "mode": "none",
+    "names": []
+  },
+  "sensitive_read_paths": [
+    ".env",
+    ".env.*",
+    "**/*.pem",
+    "**/*secret*",
+    "**/*credential*"
+  ],
+  "shell": {
+    "mode": "workspace"
+  },
+  "sources": {
+    "autonomy_policy": {
+      "path": ".eif/AUTONOMY_POLICY.md",
+      "sha256": "d4bdafe5a4f6a8ab2c2c695298daa246379a8cc4ed279bbaf6697e425c3df94c"
+    },
+    "manifest": {
+      "path": ".eif/PROJECT_MANIFEST.md",
+      "sha256": "13819d54b59ddbf0ce244e35fcdd48c2534e56ddff9342321e101cb6da1325cc"
+    }
+  },
+  "state_root": ".eif"
+}

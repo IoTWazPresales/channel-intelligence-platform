@@ -1,0 +1,4 @@
+{"seq":1,"ts":"2026-08-27T10:52:02Z","run":"MIGRATE","actor":"gov-001","event":"programme.init","payload":{"outcome_statement":"Imported from v0.4 ROADMAP/WORK_ITEM","conservation_nouns":[],"identity_form":"pre_history"}}
+{"seq":2,"ts":"2026-08-27T10:52:02Z","run":"MIGRATE","actor":"gov-001","event":"node.add","payload":{"title":"Product/engineering outcomes","class":"feature","origin":"operator","status":"proposed","conservation_tags":["Product/engineering outcomes"]}}
+{"seq":3,"ts":"2026-08-27T10:52:02Z","run":"MIGRATE","actor":"gov-001","event":"node.add","payload":{"title":"Outcome 1","class":"feature","origin":"operator","status":"proposed","conservation_tags":["Outcome 1"]}}
+{"seq":4,"ts":"2026-08-27T10:52:03Z","run":"MIGRATE","actor":"gov-001","event":"node.add","payload":{"title":"Dependencies / decision deadlines","class":"feature","origin":"operator","status":"proposed","conservation_tags":["Dependencies / decision deadlines"]}}

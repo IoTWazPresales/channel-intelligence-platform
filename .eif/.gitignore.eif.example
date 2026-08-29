@@ -1,0 +1,15 @@
+# EIF example only — choose according to project sensitivity/audit requirements.
+# Durable verified state is often committed. Transient artifacts may be local.
+
+# Common transient choices:
+.eif/HANDOFF.md
+.eif/ESCALATION.md
+.eif/EMERGENCY_RECORD.md
+
+# Optional: keep discovery reports local if they may contain sensitive topology.
+# .eif/DISCOVERY_REPORT.md
+
+# Runtime policy may expose policy shape/allowlists; decide per repository.
+# .cursor/eif-runtime-policy.json
+
+# Never use .gitignore as the only secret-control mechanism.

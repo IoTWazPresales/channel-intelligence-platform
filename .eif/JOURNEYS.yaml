@@ -1,0 +1,9 @@
+# Named user journeys for the rendered gate. Evidence is a used UI, not source inspection.
+journeys:
+  - id: first-path
+    name: First successful user path
+    required_for: [skeleton]
+    steps:
+      - land
+      - complete_primary_action
+    evidence: rendered observation with path/url and outcome
