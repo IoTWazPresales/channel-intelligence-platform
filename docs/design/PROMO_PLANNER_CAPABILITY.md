@@ -136,7 +136,7 @@ Staging volume confirms the tenant workbook is the **system of record** for hist
 
 **Evidence:** 1,823 rows, 8 customers, multi-year weekly/monthly mix.
 
-**Wired:** CST import → steward → act_customer_sellthrough; GET /api/v1/channel-intelligence compute-on-read velocity, aged inventory, trend.
+**Wired:** CST import → steward → `fact_customer_sellthrough`; GET `/api/v1/channel-intelligence` compute-on-read velocity, aged inventory, trend.
 
 **Gaps:**
 
@@ -163,7 +163,7 @@ Staging volume confirms the tenant workbook is the **system of record** for hist
 
 **Gaps:**
 
-- act_promotion_performance has no writers.
+- `fact_promotion_performance` has no writers.
 - promotion_plan import template remains stub_noop.
 - PromoReadiness derived rows lack a live calculator service.
 
@@ -189,7 +189,7 @@ Staging volume confirms the tenant workbook is the **system of record** for hist
 
 ### 4.7 Market context — **NOT AVAILABLE**
 
-**Evidence:** act_competitor_price count 0.
+**Evidence:** `fact_competitor_price` count 0.
 
 ### 4.8 Seasonality — **PARTIAL**
 
@@ -203,7 +203,7 @@ Export RESELLER_HEADERS (32 columns) vs import ASUS_COLUMN_MAP (39 fields), two 
 
 ### 4.10 Tenant export — **PARTIAL**
 
-pps/api/app/services/cpor/export_xlsx.py freezes header order; tests lock contract in 	est_cpor_export.py.
+`apps/api/app/services/cpor/export_xlsx.py` freezes header order; tests lock contract in `test_cpor_export.py`.
 
 
 ---
@@ -214,7 +214,7 @@ Export RESELLER_HEADERS (32 columns) vs import ASUS_COLUMN_MAP (39 fields), two 
 
 | Property | Value |
 |----------|-------|
-| Module | pp.services.cpor.export_xlsx |
+| Module | `apps/api/app/services/cpor/export_xlsx.py` |
 | Constant | RESELLER_HEADERS — **32** columns |
 | Sheets | **Reseller**, **USD Pivot** |
 | Semantics | Stored computed columns only — no waterfall recompute in export |
@@ -225,7 +225,7 @@ Representative headers: Case Code, Case Name, Customer, Promotion Type, Window S
 
 | Property | Value |
 |----------|-------|
-| Profile | sus_consumer_cpor_tracking_v1 |
+| Profile | `asus_consumer_cpor_tracking_v1` |
 | header_row_index | **1** |
 | Sheets | Disti Sell out, Reseller Sell out (pivot sheets ignored) |
 | Column map | **39** canonical fields in ASUS_COLUMN_MAP |
@@ -298,7 +298,7 @@ These encode **ASUS Consumer CPOR** assumptions in code or frozen contracts. The
 | **H-11** | Module tenant policy defaults | commercial_tenant_profile.py | New tenants inherit ASUS money-axis rules |
 | **H-12** | Import-only columns absent from export | DAP invoiced, rebate, disti margin | Export loses tracking-sheet fields |
 | **H-13** | Excel serial vs native datetime | Import parser vs openpyxl write | Round-trip date failures |
-| **H-14** | header_row_index: 1 default | sus_consumer_cpor_tracking_v1 | Title rows above headers break mapping |
+| **H-14** | header_row_index: 1 default | `asus_consumer_cpor_tracking_v1` | Title rows above headers break mapping |
 
 ---
 
@@ -308,9 +308,9 @@ These encode **ASUS Consumer CPOR** assumptions in code or frozen contracts. The
 |---------------------------|--------------|--------|
 | Fund promo on weak cover customer×SKU | CST + customer×SKU WoC | **Blocked** — wrong WoC grain |
 | Fund promo with budget guardrail | Budget facts + case spend | **Partial** — ceiling only |
-| Prioritize by forecast gap | act_demand_forecast | **Available** (volume) |
-| Prioritize by seasonality | seasonal_index on velocity | **Partial** |
-| Compare to market | act_competitor_price | **Blocked** |
+| Prioritize by forecast gap | `fact_demand_forecast` | **Available** (volume) |
+| Prioritize by seasonality | `seasonal_index` on velocity | **Partial** |
+| Compare to market | `fact_competitor_price` | **Blocked** |
 | Draft case from ranking | promo-plan-draft API | **Partial** |
 | Publish tenant tracking sheet | case export | **Partial** — H-01–H-03 |
 | Close loop on results | estimate vs result qty | **Partial** — 386 lines |
@@ -333,7 +333,7 @@ These encode **ASUS Consumer CPOR** assumptions in code or frozen contracts. The
 
 ### P0 — Contract and truth
 
-1. Unify export headers with sus_consumer_cpor_tracking_v1; store export_schema_version on exports.
+1. Unify export headers with `asus_consumer_cpor_tracking_v1`; store `export_schema_version` on exports.
 2. Deprecate or alias legacy promo_export/cpor_xlsx.py (H-08).
 3. Persist customer×SKU cover observations or document CST compute-on-read as the NS-6 cover contract.
 
@@ -345,7 +345,7 @@ These encode **ASUS Consumer CPOR** assumptions in code or frozen contracts. The
 
 ### P2 — Performance loop
 
-7. Backfill act_promotion_performance from case lines + CST windows, or retire scaffold table.
+7. Backfill `fact_promotion_performance` from case lines + CST windows, or retire scaffold table.
 8. Revive promotion_plan import only if product commits to dim_promotion.
 
 ### P3 — Tenant portability
@@ -359,11 +359,11 @@ These encode **ASUS Consumer CPOR** assumptions in code or frozen contracts. The
 
 | Topic | Path |
 |-------|------|
-| Export headers | pps/api/app/services/cpor/export_xlsx.py |
-| Import profile | pps/api/app/services/cpor/historical_import/profile_defaults.py |
-| Promo plan draft | pps/api/app/services/cpor/promo_plan_builder.py |
-| CST read model | pps/api/app/services/channel_intelligence/cst_read_model.py |
-| Tenant policy | pps/api/app/services/commercial_tenant_profile.py |
+| Export headers | `apps/api/app/services/cpor/export_xlsx.py` |
+| Import profile | `apps/api/app/services/cpor/historical_import/profile_defaults.py` |
+| Promo plan draft | `apps/api/app/services/cpor/promo_plan_builder.py` |
+| CST read model | `apps/api/app/services/channel_intelligence/cst_read_model.py` |
+| Tenant policy | `apps/api/app/services/commercial_tenant_profile.py` |
 | Substrate audit | docs/PROMOTION_PLANNING_DATA_SUBSTRATE_AUDIT.md |
 | Design packet | docs/design/PACKET_DATA.md |
 
