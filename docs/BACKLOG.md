@@ -2028,7 +2028,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 | **Regression traps** | No silent ZAR aggregation across mixed currencies; per-case ZAR sums only; no `fx_mode` column in this unit. |
 | **Behavior to retain** | `payment_recon.py` FLAG semantics; `missing_roe` on pivot/export. |
 | **Out of scope** | Settle API enforcement (BACKLOG-155); full queue+case redesign (BACKLOG-151). |
-| **TRIGGER** | `design-language-v1` on `main`; Warren approves NS-1a start. |
+| **TRIGGER** | `design-language-v1` on `main`; plan branch rebased; Warren approves NS-1a start. |
 
 ---
 

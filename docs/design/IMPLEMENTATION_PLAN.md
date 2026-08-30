@@ -2,7 +2,20 @@
 
 **Date:** 2026-08-30  
 **Status:** PLANNING — no product source in this document  
-**Governing inputs (must be on branch before unit 1 starts):**
+
+## Branch prerequisite (exact state — 2026-08-30)
+
+| Question | Answer |
+|---|---|
+| Is `design-language-v1` merged to `main`? | **Yes.** Fast-forward to `83b4290` on `main` (`0ed0d37` with CONTEXT promotion line). |
+| Is charter v1.3 on `main`? | **Yes.** `docs/AUTONOMOUS_BUILD_CHARTER.md` v1.3 — amendments 1–7 applied (`docs/design/CHARTER_AMENDMENTS.md` APPLIED). |
+| Frozen design language on `main`? | **Yes.** `docs/design/CIP_DESIGN_LANGUAGE.md` FROZEN v1.1, nav map, mockups, `PACKET_DATA.md`, `SPEC_GAPS.md` GAP-001–015 resolved. |
+
+**Gate:** Met — NS-1a may start when Warren approves.
+
+**This plan branch:** Rebased onto `main` `0ed0d37` after promotion.
+
+**Governing inputs (required on `main` before NS-1a):**
 
 | Document | Version / state |
 |---|---|
@@ -12,10 +25,6 @@
 | `docs/design/PACKET_DATA.md` | Canonical mockup figures |
 | `docs/AUTONOMOUS_BUILD_CHARTER.md` | v1.3 — amendments 1–7 applied |
 | `docs/design/CHARTER_AMENDMENTS.md` | APPLIED |
-
-**Prerequisite merge:** branch `design-language-v1` (design freeze + charter v1.3 + VERIFY-debt
-register) must land on `main` before NS-1 implementation starts. This plan may ship on
-`docs/north-star-implementation-plan` ahead of that merge.
 
 **Out of scope for this phase:** Reports (grammar 6), Admin utilities beyond spine placement,
 `/market` parked stub.
@@ -41,38 +50,40 @@ Charter v1.3 amendment 7. Full register in `docs/BACKLOG.md` § VERIFY-debt regi
 | **15B** | 2026-08-14 · B1 forecast | `/forecasts` compute-from-history; `tenant_id` never NULL; velocity + analogue provenance; B1-07 semantics; paste/add remain overrides only | Browser `/forecasts` compute; DB `tenant_id` NOT NULL on new rows; provenance JSON on forecast lines |
 | **B4 (15C)** | 2026-08-14 · promo planner | Per-line `build_promo_plan_draft`; dirty MAC/units survive Refresh; create-case `lines[]` (`manual` vs `intake_weighted`); D-051–D056 column-mapped export; BACKLOG-094 closed criteria | Browser promo planner dirty-state refresh; create-case payload inspection; export column map vs D-051–D056 |
 
-**Recommendation:** Run VERIFY debt as a **parallel hygiene track** before or alongside NS-1;
+**Recommendation:** Run VERIFY debt as a **parallel hygiene track** before or alongside NS-1a;
 do not start NS container redesign until Warren accepts VERIFY backlog or waives rows in
 CURRENT.
 
 ---
 
-## Unit NS-1 — FX honesty on Settlement (domain gate)
+## Unit NS-1a — FX display honesty (no migration)
 
-**Goal:** Settlement money surfaces never silent-convert FX; undeclared FX blocks settle;
-booked vs floating modes per domain §1.5 are explicit on the case; Brief/Settlement Reads can
-cite blocked-FX figures truthfully.
+**Goal:** Settlement money surfaces never silent-convert FX in **display**; readiness chips
+reflect real case state using **existing columns only** (`roe_snapshot`, `currency_code`,
+`missing_roe`, `currency_mismatch` flags). No schema change. Brief/Settlement Reads can cite
+FX-blocked counts from null-ROE and mismatch flags.
 
-**Grammar / container:** Grammar 1 · **Settlement** (readiness + blocked state on existing
-routes — not full queue+case redesign; that is NS-4).
+**Grammar / container:** Grammar 1 · **Settlement** (readiness + blocked **display** on
+existing routes — not full queue+case redesign; that is NS-4).
+
+**Depends on:** `design-language-v1` merged to `main`; plan branch rebased.
 
 ### Routes (`NAV_COVERAGE.md`)
 
 | Route | Role in unit |
 |---|---|
 | `/commercial-planner/cpor-cases` | Book list: `blocked` badge, `missing_roe` / `currency_mismatch` flags visible |
-| `/commercial-planner/cpor-cases/[id]` | Case pane: readiness row FX chip; settle action gated |
-| `/commercial-planner/cpor-cases/payment-evidence-import` | Evidence ingest: declare FX when evidence ccy ≠ case ccy |
-| `/budgets`, `/budget-requests` | Context only — regime figures must not aggregate across undeclared FX |
+| `/commercial-planner/cpor-cases/[id]` | Case pane: readiness row FX chip from `roe_snapshot` / flags |
+| `/commercial-planner/cpor-cases/payment-evidence-import` | Surface `currency_mismatch` when evidence ccy ≠ case ccy |
+| `/budgets`, `/budget-requests` | Context only — regime figures must not aggregate across flagged cases |
 
 ### API changes
 
 | Area | Change |
 |---|---|
-| `cpor_cases.py` read models | Expose `fx_blocked`, `roe_snapshot`, `missing_roe`, `currency_mismatch`, `fx_mode` (booked/floating) on list + detail |
-| `payment_recon.py` | Already FLAGS `currency_mismatch` — ensure all book aggregations respect flags (no silent ZAR sum of mixed ccy) |
+| `cpor_cases.py` read models | Expose `fx_blocked` (derived: null `roe_snapshot` and/or `currency_mismatch`), `roe_snapshot`, `missing_roe`, `currency_mismatch` on list + detail — **no `fx_mode`** |
+| `payment_recon.py` | Ensure book aggregations respect `currency_mismatch` flags (no silent ZAR sum of mixed ccy) |
 | `waterfall.py` / `pivot.py` | Propagate `missing_roe` to book-level blocked count |
-| Settle transition | Refuse settle when `fx_blocked` unless Warren waives in scope |
 
 **Readers that must migrate with any new writer:** `GET /cpor/cases`, `GET /cpor/cases/{id}`,
 payment recon read model, portfolio intelligence panel, export xlsx pivot, Brief signal
@@ -83,50 +94,116 @@ feeder (NS-2).
 | Area | Change |
 |---|---|
 | `cpor-cases/page.tsx` | Inline `blocked` / `FX undeclared` badges; book shape segment for blocked (hatched) |
-| `cpor-cases/[id]` | Readiness row: `FX declared · {rate}` pass / `FX undeclared` fail; blocked state shell |
+| `cpor-cases/[id]` | Readiness row: `FX declared · {rate}` pass / `FX undeclared` fail from `roe_snapshot` |
 | Payment recon columns | Show `paid_other_currency` aside — never fold into outstanding |
+| All money columns | **USD never rendered as ZAR** — label currency explicitly; dim wrong-currency cells |
 
 ### Migration required?
 
-**YES — separate gate.** Add `fx_mode` (`booked` \| `floating`) on `cpor_case` if not present;
-optional `fx_declared_at` / `fx_declared_by` audit fields. Warren explicit approval before
-`alembic revision`. Until migration: surface `roe_snapshot IS NULL` as blocked using existing
-column only (interim — does not satisfy booked/floating attribute).
+**No.**
 
 ### Contract rows (pre-build)
 
 | ID | Row |
 |---|---|
-| C-NS1-01 | Grammar 1 · Settlement · blocked state (FX undeclared) per `CIP_DESIGN_LANGUAGE.md` §6 |
-| C-NS1-02 | Readiness row FX chip pass/fail before consequential settle |
-| C-NS1-03 | No silent currency conversion — `currency_mismatch` visible; `COMMERCIAL_DOMAIN_RULES.md` §1.4–1.5 |
-| C-NS1-04 | Book aggregation sums per-case ZAR only (`COMMERCIAL_SEMANTICS.md` currency rule) |
-| C-NS1-05 | Settle preview prints FX basis line (`settlement-confirm.html` exemplar) |
+| C-NS1a-01 | Grammar 1 · Settlement · blocked state (FX undeclared) per `CIP_DESIGN_LANGUAGE.md` §6 |
+| C-NS1a-02 | Readiness row FX chip reflects `roe_snapshot` / flags — no invented state |
+| C-NS1a-03 | No silent currency conversion in display — `currency_mismatch` visible; `COMMERCIAL_DOMAIN_RULES.md` §1.4 |
+| C-NS1a-04 | Book aggregation sums per-case ZAR only (`COMMERCIAL_SEMANTICS.md` currency rule) |
+| C-NS1a-05 | USD amounts never labelled or formatted as ZAR (browser-verifiable) |
 
 ### VERIFY / test evidence
 
 - Pytest: `payment_recon` mixed-currency case → `currency_mismatch` flag; book total excludes `paid_other`
-- Pytest: settle endpoint 409 when `roe_snapshot` null
-- Browser: open case with null ROE → blocked badge → declare FX → readiness pass → preview settle
+- **Browser (done-bar):** case list + detail — USD line/case amounts show USD; ZAR show ZAR; no column presents USD figure with ZAR symbol/label
+- **Browser (done-bar):** readiness chips match case state (null `roe_snapshot` → fail chip; declared rate → pass chip)
 - SQL: real row through recon on dev `cip` (project SQL rule)
 
 ### Done state
 
-- Zero silent FX convert paths in settlement read/aggregate/settle chain
+- Zero silent FX convert paths in settlement **read/display/aggregate** chain
 - Blocked cases countable for Brief signal (feeds NS-2)
-- Migration applied **or** interim null-ROE blocked documented in CURRENT with TRIGGER for schema gate
+- No migration; no settle **enforcement** (that is NS-1b)
 
 ### Risks and gates
 
 | Gate | Constraint |
 |---|---|
-| `COMMERCIAL_DOMAIN_RULES.md` §1.4–1.5 | USD compute; ZAR display per-case FX; booked vs floating |
-| No auto-create | FX declaration does not auto-create master dims |
-| DB safety | Migration gate; `alembic current` before revision; `current_database() = 'cip'` |
-| Clone-proof | N/A (no destructive bulk) |
-| Create-path-before-consolidation | Ship FX honesty on **existing** CPOR routes before NS-4 replaces chrome |
+| `COMMERCIAL_DOMAIN_RULES.md` §1.4 | USD compute; ZAR display per-case FX |
+| No auto-create | FX display does not auto-create master dims |
+| DB safety | No migration in this unit |
+| Create-path-before-consolidation | Ship on **existing** CPOR routes before NS-4 replaces chrome |
 
-**Destructive paths:** None in this unit.
+**Destructive paths:** None.
+
+---
+
+## Unit NS-1b — FX mode + blocked-settle enforcement (migration gate)
+
+**Goal:** Booked vs floating FX modes per domain §1.5 on the case; API **refuses settle** when
+FX is undeclared or blocked per enforced rules; settle preview prints FX basis.
+
+**Grammar / container:** Grammar 1 · **Settlement** (write enforcement).
+
+**Depends on:** NS-1a VERIFY PASS.
+
+### Routes
+
+Same routes as NS-1a; enforcement applies on settle transition and case patch (`roe_snapshot`,
+`fx_mode`).
+
+### API changes
+
+| Area | Change |
+|---|---|
+| `cpor_case` schema | `fx_mode` (`booked` \| `floating`); optional `fx_declared_at` / `fx_declared_by` |
+| Settle transition | Refuse settle when `fx_blocked` / missing declared FX per enforced rules |
+| Case patch | Persist `fx_mode` + `roe_snapshot` with audit |
+
+**Readers that must migrate:** All NS-1a readers plus settle/preview endpoints, NS-4 settle flow.
+
+### Web changes
+
+| Area | Change |
+|---|---|
+| Case detail | `fx_mode` selector (booked / floating) when declaring FX |
+| Settle action | Disabled until readiness pass; preview shows FX basis line (`settlement-confirm.html`) |
+
+### Migration required?
+
+**YES — own gate.** Warren explicit approval before `alembic revision`; `alembic current`
+before generate; `current_database() = 'cip'` verified. **Clone-proof:** settle attempt on
+disposable DB with null-ROE case → 409; declared case → preview succeeds.
+
+### Contract rows (pre-build)
+
+| ID | Row |
+|---|---|
+| C-NS1b-01 | `fx_mode` booked vs floating per `COMMERCIAL_DOMAIN_RULES.md` §1.5 |
+| C-NS1b-02 | Settle endpoint refuses blocked FX (409 or equivalent) |
+| C-NS1b-03 | Settle preview prints FX basis line |
+| C-NS1b-04 | Migration reversible plan documented before apply |
+
+### VERIFY / test evidence
+
+- Pytest: settle endpoint 409 when `roe_snapshot` null / FX blocked
+- Browser: declare FX + mode → readiness pass → preview settle → confirm
+- Clone-proof settle on disposable DB before prod
+
+### Done state
+
+- `fx_mode` column live; blocked-settle enforced in API
+- NS-4 may ship full settle UX (depends on NS-1b for enforcement)
+
+### Risks and gates
+
+| Gate | Constraint |
+|---|---|
+| Migration approval | Warren gate — separate PR from NS-1a |
+| Clone-proof | Settle enforcement proven on clone before `cip` |
+| NS-1a | Display honesty must be live first |
+
+**Destructive paths:** Settle on blocked case — prevented by enforcement; clone-proof required.
 
 ---
 
@@ -153,7 +230,7 @@ retired routes redirect, not 404.
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /brief/signals` (new) | Federated signal rows: failed imports, stale DSI, cover breaches, FX-blocked cases (NS-1), recon-not-run, missing assumptions |
+| `GET /brief/signals` (new) | Federated signal rows: failed imports, stale DSI, cover breaches, FX-blocked cases (NS-1a), recon-not-run, missing assumptions |
 | Existing freshness | Reuse import-job freshness for signal provenance |
 
 **Readers migrating:** All pages using `navConfig.ts`, `AppShell`, login redirect target,
@@ -202,11 +279,12 @@ retired routes redirect, not 404.
 | Create-path-before-consolidation | `/brief` live **before** removing `/dashboard` content |
 | P2-4 charter | Brief grammar 3 exit — not control tower |
 | RBAC | `navConfig` role gates unchanged (BACKLOG-141 shipment panel separate) |
-| Brief signals | FX-blocked signal requires NS-1; others may ship `data_unavailable` until backends ready |
+| Brief signals | FX-blocked signal requires NS-1a; others may ship `data_unavailable` until backends ready |
 
 **Destructive paths:** None.
 
-**Sequencing note:** NS-2 **after** NS-1 so Brief can cite real FX-blocked counts.
+**Sequencing note:** NS-2 **after** NS-1a so Brief can cite real FX-blocked counts (display
+flags only — settle enforcement is NS-1b).
 
 ---
 
@@ -337,7 +415,15 @@ export paths, Brief settlement signal.
 
 ### Migration required?
 
-**No** if NS-1 migration landed. Otherwise blocked on NS-1 schema gate.
+**No** for layout/chrome. **Settle enforcement** requires NS-1b VERIFY PASS before preview-confirm
+settle ships in this unit.
+
+### Dependencies
+
+| Dependency | Required for |
+|---|---|
+| NS-1a | Blocked FX display, readiness chips, hatched shape segments |
+| NS-1b | Settle preview-confirm **enforcement** (API refuse + `fx_mode`) |
 
 ### Contract rows
 
@@ -353,8 +439,8 @@ export paths, Brief settlement signal.
 ### VERIFY / test evidence
 
 - Browser: queue selection persists; case opens in place
-- Browser: blocked FX case (NS-1) shows hatched shape segment
-- Browser: settle preview → confirm → book counts tick down
+- Browser: blocked FX case (NS-1a) shows hatched shape segment
+- Browser: settle preview → confirm → book counts tick down (**requires NS-1b**)
 - Fable batch audit vs `funding-settlement-r3.html`
 
 ### Done state
@@ -367,7 +453,8 @@ export paths, Brief settlement signal.
 
 | Gate | Constraint |
 |---|---|
-| NS-1 dependency | FX honesty must be live before settle UX ships |
+| NS-1a dependency | FX display honesty live before book shape segments |
+| NS-1b dependency | Blocked-settle enforcement before preview-confirm settle ships |
 | `CPOR_SETTLEMENT_SPEC.md` | Hops 2/5/6/10 system-assisted; 3/4/7/8/9/11 human |
 | BACKLOG-136 | CPOR RBAC — coordinate; do not ship null actors on new writes |
 | BACKLOG-095 | Reapproval ceiling — readiness chip |
@@ -602,7 +689,8 @@ migration, etc.) — separate TRIGGERs.
 ```mermaid
 flowchart TD
   V[VERIFY debt 6f-B4]
-  NS1[NS-1 FX honesty]
+  NS1a[NS-1a FX display]
+  NS1b[NS-1b FX enforce]
   NS2[NS-2 Nav + Brief]
   NS3[NS-3 Stock lenses]
   NS4[NS-4 Settlement split]
@@ -610,9 +698,10 @@ flowchart TD
   NS6[NS-6 Response]
   NS7[NS-7 Steward]
 
-  V --> NS1
-  NS1 --> NS2
-  NS1 --> NS4
+  V --> NS1a
+  NS1a --> NS1b
+  NS1a --> NS2
+  NS1b --> NS4
   NS2 --> NS3
   NS2 --> NS4
   NS2 --> NS5
@@ -625,20 +714,36 @@ flowchart TD
 
 ---
 
+## Ordering decision — NS-4 (Settlement) before NS-5 (Lineup)
+
+**Decision (locked in plan):** Ship the **funding desk** (NS-4) before Lineup redesign (NS-5).
+
+| Principle | Application |
+|---|---|
+| Business priority | Settlement queue+case is the highest-value operator surface in phase 1 |
+| Upstream data | Lineup is upstream of Stock/Response, but **old `/lineup` remains fully usable** until NS-5 VERIFY PASS |
+| Create-path-before-consolidation | No route retires until its replacement passes VERIFY — `/lineup` and commercial-planner Lineup tab stay until NS-5 done; NS-4 does not remove them |
+| Stock Execution lens | NS-3 may wrap existing `plan_vs_executed` API against old lineup data — no NS-5 blocker for read-only execution views |
+
+**Not a dependency violation:** NS-4 before NS-5 is intentional; mitigated by keeping legacy
+Lineup routes until NS-5 ships.
+
+---
+
 ## Sequencing review — proposed order vs repo
 
 | # | Unit | Verdict |
 |---|---|---|
-| 1 | FX honesty before nav | **Correct** — Brief cites FX-blocked signal; settle gate must precede Settlement redesign |
-| 2 | Nav before Stock | **Correct** — spine + shared shell before largest surface merge |
-| 3 | Stock before Settlement UI | **Acceptable** — independent domains; Settlement list UX does not block Stock. Alternative: NS-4 before NS-3 if Settlement is higher business priority — trade-off is operator learns new nav then old Stock chrome |
-| 4 | Settlement before Lineup | **Debatable** — Lineup is upstream of Stock/Response. **Recommend:** keep NS-4 before NS-5 for funding desk priority; Lineup still readable at old `/lineup` until NS-5. Document explicit dependency: Stock Execution lens uses existing lineup API until NS-5 ships |
-| 5 | Lineup before Response | **Correct** — Response reads lineup; promo creates Settlement cases |
-| 6 | Steward last | **Correct** — largest parity surface; benefits from stable spine; Unit 11 VERIFY closes here |
+| 1 | NS-1a display before NS-1b migration | **Correct** — phase opens without migration gate; enforcement follows |
+| 2 | NS-1a before NS-2 | **Correct** — Brief cites FX-blocked counts from display flags |
+| 3 | Nav before Stock | **Correct** — spine + shared shell before largest surface merge |
+| 4 | Stock before Settlement UI | **Acceptable** — independent domains; NS-4 can proceed on old Stock routes until NS-3 |
+| 5 | Settlement (NS-4) before Lineup (NS-5) | **Locked decision** — funding desk first; old `/lineup` serves until NS-5 VERIFY PASS (see § Ordering decision) |
+| 6 | Lineup before Response | **Correct** — Response reads lineup; promo creates Settlement cases |
+| 7 | Steward last | **Correct** — largest parity surface; Unit 11 VERIFY closes here |
 
-**Mis-sequenced if strict dependency-only:** Lineup (NS-5) strictly precedes Stock Execution
-lens polish — mitigated by keeping old `/lineup` until NS-5; not a blocker for NS-3 if
-Execution lens wraps existing `plan_vs_executed` without lineup chrome changes.
+**Soft dependency (mitigated):** Stock Execution lens polish vs Lineup redesign — NS-3 uses
+existing `plan_vs_executed` until NS-5 ships; not a sequencing blocker.
 
 ---
 
@@ -657,4 +762,29 @@ Execution lens wraps existing `plan_vs_executed` without lineup chrome changes.
 
 ## Backlog cross-reference
 
-Implementation units are tracked as BACKLOG-148–BACKLOG-154 in `docs/BACKLOG.md`.
+| Unit | BACKLOG ID | Migration gate |
+|---|---|---|
+| NS-1a | BACKLOG-148 | **No** |
+| NS-1b | BACKLOG-155 | **Yes** |
+| NS-2 | BACKLOG-149 | No |
+| NS-3 | BACKLOG-150 | No |
+| NS-4 | BACKLOG-151 | No* |
+| NS-5 | BACKLOG-152 | No |
+| NS-6 | BACKLOG-153 | No |
+| NS-7 | BACKLOG-154 | No |
+
+## Unit list (execution order)
+
+| Order | Unit | Migration gate | Depends on |
+|---|---|---|---|
+| 0 | VERIFY debt (6f-B4) | No | — |
+| 1 | NS-1a FX display honesty | **No** | Warren approves NS-1a start (design gate met) |
+| 2 | NS-1b FX mode + blocked settle | **Yes** | NS-1a |
+| 3 | NS-2 Nav + Brief | No | NS-1a |
+| 4 | NS-3 Stock lenses | No | NS-2 |
+| 5 | NS-4 Settlement split | No* | NS-2, NS-1a, NS-1b |
+| 6 | NS-5 Lineup | No | NS-2 |
+| 7 | NS-6 Response | No | NS-4, NS-5 or legacy /lineup |
+| 8 | NS-7 Steward | No | NS-2 |
+
+\*NS-4: no own migration; settle enforcement requires NS-1b.
