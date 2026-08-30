@@ -98,12 +98,65 @@ def main() -> None:
         run_query(
             session,
             """
+            SELECT id, case_id, distributor_attribution_status, distributor_id
+            FROM commercial_lineup_line
+            WHERE distributor_attribution_status = 'conflict'
+            ORDER BY id
+            LIMIT 20
+            """,
+            "6f.1 conflict lines",
+        )
+        run_query(
+            session,
+            """
             SELECT line_state, count(*) AS cnt
             FROM fact_inbound_shipment
             GROUP BY line_state
             ORDER BY line_state
             """,
             "7.4 fact_inbound_shipment by line_state",
+        )
+        run_query(
+            session,
+            """
+            SELECT
+              count(*) FILTER (
+                WHERE pod_date >= DATE '2026-04-01' AND pod_date < DATE '2026-07-01'
+              ) AS rows_pod_in_26q2,
+              coalesce(sum(quantity) FILTER (
+                WHERE pod_date >= DATE '2026-04-01' AND pod_date < DATE '2026-07-01'
+              ), 0) AS units_pod_in_26q2,
+              count(*) FILTER (
+                WHERE line_state = 'shipped' AND pod_date IS NULL
+              ) AS rows_shipped_null_pod,
+              coalesce(sum(quantity) FILTER (
+                WHERE line_state = 'shipped' AND pod_date IS NULL
+              ), 0) AS units_shipped_null_pod
+            FROM fact_inbound_shipment
+            """,
+            "7.4 fact 26Q2 calendar vs shipped-null-pod (global, not lineup-attributed)",
+        )
+        run_query(
+            session,
+            """
+            SELECT id, created_at, entity_type, action
+            FROM steward_audit_event
+            WHERE entity_type ILIKE '%distributor%'
+               OR payload_json::text ILIKE '%attribution%'
+            ORDER BY created_at DESC
+            LIMIT 5
+            """,
+            "6f.4 steward_audit_event after browser walk (no HTTP writes)",
+        )
+        run_query(
+            session,
+            """
+            SELECT id, case_id, distributor_attribution_status, distributor_id
+            FROM commercial_lineup_line
+            WHERE id IN (344, 345, 8420, 8419)
+            ORDER BY id
+            """,
+            "6f.4 substitute + historical lines after browser walk",
         )
 
     import asyncio

@@ -1,5 +1,130 @@
 # SESSION D Evidence — VERIFY debt runbook (6f + 7)
 
+## Run 2026-08-30 ~21:50–22:15 UTC+2 (this chat)
+
+**Collection timestamp:** 2026-08-30 (Sunday), ~21:50–22:15 UTC+2  
+**Collector:** Cursor agent (this chat)  
+**Branch:** `feat/ns-1a-fx-readiness-chips` (already checked out at chat start; `git branch --show-current` printed this name)  
+**HEAD at collection:** `eb65b5ccacd505acbb3f106e89b5c4140619dee9`  
+**Environment:** local Windows; web `:3000` responded HTTP 200; API `:8001` `/health` 200 and `/health/ready` `{"status":"ready","database":"cip","ok":true}` (API's own connection)  
+**Database policy:** read-only queries on `cip`; no HTTP writes (Accept / confirmer / soft-clear / override) because the running API's `current_database()` is `cip`  
+**Collection method:** `scripts/restart-dev.ps1` then no-reload uvicorn on `:8001` after `--reload` drops; Playwright MCP + cursor-ide-browser after navigating to `http://127.0.0.1:3000` first; `apps/api/scripts/ops/session_d_readonly_evidence.py`; HTTP GET `/health/ready`, `/api/v1/shipping/lineup-quarter-summary?plan_quarter=26Q2`, `/api/v1/commercial-planner/lineup/distributor-attribution/review`
+
+**Hooks:** `.cursor/hooks/` was already present in the working tree at chat start (untracked). First shell call returned git output (not mute `hook returned no output`). One later burst of parallel Playwright MCP calls was fail-closed (`eif_guard.cmd` exit 1); subsequent serial browser calls succeeded. Shell `Add-Content : Stream was not readable` appeared after several commands; command stdout was still captured.
+
+**Services:** `scripts/restart-dev.ps1` spawned Redis/worker/API/web. First `/health/ready` on the spawned API returned `database=cip`, then the reload API dropped (`WinError 10061`). Web stayed up. App import of `app.main` succeeded (552 routes). Uvicorn without `--reload` then stayed up for the browser walk.
+
+**No PASS/FAIL verdict.**
+
+### Outstanding from prior gap record (kept; this run's status)
+
+Prior run (~21:09) was blocked by API HTTP 500 and Signed out. That record is preserved below.
+
+---
+
+### Unit 6f — DistributorAttributionReviewSection
+
+#### Observed
+
+- **Login:** Session already authenticated after `http://127.0.0.1:3000` → redirected to `/dashboard` with **Sign out** and shell name **Local Admin**. No login POST in this run.
+- **Case 1016:** still absent on `cip` (no case row, no lines).
+- **Substitute (UI, newest review page):** **case 146** — lines **8420** / **8419** (`token_proposed`, Compuspeed id 12, period 2026 Q3). Review list is `ORDER BY line id DESC LIMIT 200`.
+- **Substitute (prior record, still on `cip`):** **case 7** lines **344** and **345** (`token_proposed`, distributor_id 51). Not on the first 200 UI rows.
+- **Section chrome (verbatim innerText / screenshot):** heading `Distributor attribution review`; helper `Token proposes; shipment confirms. Soft-clear removes distributor only (keeps Open Channel).`; chips `All 1035` / `Proposed 1035` / `Conflict 0`; buttons `Run shipment confirmer`, `Override selected`, `Soft-clear dist`.
+- **GET review (API, unauthenticated, 200):** `total=1035`, `status_counts={"token_proposed":1035,"all":1035}`, first item `line_id=8420, case_id=146, distributor_attribution_status=token_proposed`.
+- **Conflict filter (click, read-only GET):** innerText `Conflict 0` / `No lines in selected attribution statuses.` SQL `distributor_attribution_status = 'conflict'` → no rows.
+- **After returning to All filter:** `All 1035` / `Proposed 1035` still; line 8420 still `token_proposed` with selection mark `✓`. Soft-clear **enabled** after select (`disabled: false`); **not clicked**.
+- **Accept control:** no button whose text matches `/Accept/i` on `/admin/po-management` this run. Ship-corroborated Accept lives on Customer-token stamp (`Accept OC + dist {id}`) when `ship_corroboration_offer` is present; that section had no such offer. `Run shipment confirmer` is the in-section confirm path and POSTs `/confirmer/apply`.
+- **Post-walk SQL:** `steward_audit_event` latest still id 62 dated 2026-08-08 (no new attribution events). Lines 344, 345, 8419, 8420 remain `token_proposed`.
+
+#### Blocked
+
+- **Proposed → Accept (HTTP write):** not performed. Running API `/health/ready` printed `API_CURRENT_DATABASE cip`. Prior note stands: env override of `DATABASE_URL_SYNC` in a probe script does not retarget the running API. Reason: would write `commercial_lineup_line` / `steward_audit_event` on `cip`.
+- **Soft-clear (HTTP write):** control observed enabled after selecting line 8420; POST `/soft-clear` not sent. Same reason (`cip`).
+- **Confirmer apply / no-auto-clear-on-conflict under write:** not performed (confirmer POST would write on `cip`). Zero `conflict` rows exist to demonstrate auto-clear vs remain-reviewable after a confirmer run.
+
+#### Still outstanding
+
+1. Point the **running** API at `cip_test`, prove `current_database()` from `/health/ready` (not from a sidecar script), then Accept / confirmer / soft-clear on a disposable row; post-query audit + `distributor_attribution_status`.
+2. Re-seed or name a disposable analogue of historical smoke case **1016** if VERIFY still requires that id.
+3. Exercise confirmer against a real `conflict` row (none on `cip` now) to capture no-auto-clear under mutation — only after (1).
+
+---
+
+### Unit 7 — Shipping labels and plan-vs-executed
+
+#### Observed
+
+- **Strip labels (rendered, plan quarter 26Q2, verbatim):** `Shipped (awaiting POD)` with value `10`; `Landed this quarter` with value `39,074`. Full strip innerText:
+
+```
+Lineup plan quarter — 2026 Q2
+Planned
+
+47,775
+
+Shipped (awaiting POD)
+
+10
+
+Landed (plan quarter)
+
+18,484
+
+Landed this quarter
+
+39,074
+
+Pipeline
+
+4,535
+
+Slipped in
+
+328
+
+Slipped out
+
+1,877
+
+Unattributed
+
+1,266,781
+
+11 PO(s) link to multiple plan quarters — row attribution uses customer×product lineup match where possible.
+```
+
+- **HTTP `GET /api/v1/shipping/lineup-quarter-summary?plan_quarter=26Q2`:** 200; `planned_units=47775.0`, `shipped_units=10.0`, `landed_units=18484.0`, `landed_this_quarter_units=39074.0`, `shipped_not_landed_units=10.0`, `pipeline_units=4535.0`, `slipped_in_units=328.0`, `slipped_out_units=1877.0`, `unattributed_units=1266781.0`, `ambiguous_po_count=11`. Matches the rendered strip and the service-layer `lineup_quarter_summary` for 26Q2.
+- **Fact spot-check (read-only, global, not lineup-attributed):** `fact_inbound_shipment` `line_state` counts `open_order=1405`, `shipped=13319`. Calendar 26Q2 (`pod_date >= 2026-04-01 AND pod_date < 2026-07-01`): **485 rows, 39074.0000 units** — equals summary `landed_this_quarter_units`. Global `line_state='shipped' AND pod_date IS NULL`: **308 rows, 26163.0000 units** — not equal to lineup-attributed `shipped_not_landed_units=10` (expected: summary is plan-quarter attributed).
+- **`/plan-vs-executed` fill %:** From **26Q3** / To **26Q3** / All BUs. Tile **Fill rate (headline) 19.5%** (Line-hit 8.5%; 32,509 planned; 6,352 shipped against plan; Total shipped in scope 6,640). Pre-change cited value: `docs/UNIT8_DEMO_P2_GATE.md` **13.2%** (26Q3) on 2026-08-14. Copy still says `Fill rate uses in-plan shipped only.` Console: AG Grid pagination warnings only (no API 500).
+
+#### Blocked
+
+- None for read-only strip / HTTP summary / PvE tile once the no-reload API stayed up. (Earlier in this same run, `--reload` API drop caused `WinError 10061` until uvicorn was restarted without reload.)
+
+#### Still outstanding
+
+1. Consultant review of fill **19.5%** vs historical **13.2%** (26Q3) — data/time drift vs formula change; this artifact does not decide.
+2. Write-path items remain those listed under 6f (API still on `cip`).
+
+---
+
+### Environment notes (this run)
+
+| Item | Value |
+|------|-------|
+| `git rev-parse HEAD` | `eb65b5ccacd505acbb3f106e89b5c4140619dee9` |
+| `git branch --show-current` | `feat/ns-1a-fx-readiness-chips` |
+| Origin used for browser | `http://127.0.0.1:3000` (navigate first; origin-gated interact) |
+| Web session | Already signed in (Local Admin); Sign out present |
+| API `current_database()` via `/health/ready` | `cip` |
+| `cip_test` write path | **not used** (API not pointed at it) |
+| HTTP writes | **not attempted** |
+
+---
+
+## Prior gap record — 2026-08-30 ~21:09–21:20 UTC+2
+
 **Collection timestamp:** 2026-08-30 (Sunday), ~21:09–21:20 UTC+2  
 **Collector:** Cursor agent (subagent under parent VERIFY debt run)  
 **Branch:** `feat/ns-1a-fx-readiness-chips`  
