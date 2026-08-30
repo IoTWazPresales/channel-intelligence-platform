@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-08-30 — **Design language v1** on `design-language-v1` `8d7fdb4`: Concept-A / Channel Desk HF and fresh-audit five-frame packet superseded as visual direction. Governing spec: `docs/design/CIP_DESIGN_LANGUAGE.md` (Fable R1–R3; ref `docs/design/funding-settlement-r3.html`). Job-spine architecture in `docs/design/CIP_NAV_MAP.md` and route coverage in `docs/design/NAV_COVERAGE.md` remain valid input. Remaining design work proceeds as implementer-builds / Opus-CONSULT-audits batches against the spec.
+
 - 2026-08-20 — **Merged to main** `22c2305`: `feat/rbac-r1-session-actor` (R1–R1d). RBAC program CLOSED at authentication + ADMIN `require_roles` on the 41 non-CPOR gates. CPOR stays auth-only until R2 (BACKLOG-136 / 141 parked). No migration. No cip upgrade.
 
 - 2026-08-20 — **API tests pin `CIP_AUTH_MODE=stub`** in `apps/api/tests/conftest.py` (`setdefault`; not a fix). BACKLOG-144: `cip_test` seed gap for lineup distributor-as-customer remediation. Do not edit `.env`. `94e1f5c`.
