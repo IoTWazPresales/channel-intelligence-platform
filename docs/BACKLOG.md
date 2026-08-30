@@ -1945,3 +1945,37 @@ These were on a verification checklist but **no deferral/pending wording** was f
 | **Shipment async steward endpoints** | DSI documents `dsi-steward-bulk-provisional-customers/apply-async` (`docs/DSI_RESOLUTION_PERFORMANCE.md`); shipment-evidence routes have no parallel async steward apply-async pattern in `shipment_evidence.py`. No explicit “defer shipment async” text — parity gap only. |
 
 If either is intended backlog, add a sourced entry after confirming where the decision is recorded.
+
+---
+
+## BACKLOG-146 — Design batch 1 — Channel cover, Today blotter, Shipping/inbound mockups
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-30 |
+| **Effort** | Medium |
+| **Source** | `docs/design/CIP_DESIGN_LANGUAGE.md` v1; `docs/design/CIP_NAV_MAP.md`; `CONTEXT.md` 2026-08-30 design-language decision. |
+| **Idea** | First implementer-build / Fable-audit batch: high-fidelity mockups (or product slices) for **Channel Cover** (grammar 2), **Today signal blotter** (grammar 3), and **Shipping/inbound** lens — all audited against `CIP_DESIGN_LANGUAGE.md`, not legacy Concept-A or fresh-audit frame HTML. |
+| **Why it matters / deferrable** | Proves the converged Workbench spec on operational surfaces before charter. Deferrable until container nav vocabulary is settled — mockups must use final job names, not placeholder labels. |
+| **What the work is** | (1) Warren confirms final nav vocabulary for containers 1, 2, 4, 5 (`CIP_NAV_MAP.md` open naming). (2) Build three surfaces to spec density, Read + shape, dual-channel severity. (3) Fable rendered audit per `docs/WORKFLOW_DUAL_AGENT.md`. (4) Resolve UNMAPPED routes in `docs/design/NAV_COVERAGE.md` only if Warren disposes them — do not guess. |
+| **Regression traps** | Do not revive Channel Desk paper/bronze. Do not treat `.eif/audit/` frames as implementation baselines. Product source changes are a separate TRIGGER after charter. |
+| **Behavior to retain** | Job-spine containment from `CIP_NAV_MAP.md`; Funding grammar 1 reference `docs/design/funding-settlement-r3.html`. |
+| **Out of scope** | Charter acceptance; production nav collapse; EIF programme commit. |
+| **TRIGGER** | Warren supplies final nav vocabulary for Today / Channel / Planner / Imports containers. |
+
+---
+
+## BACKLOG-147 — Charter acceptance gate
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-30 |
+| **Effort** | Small (gate, not build) |
+| **Source** | `docs/design/CIP_DESIGN_LANGUAGE.md` § surface grammars; `docs/AUTONOMOUS_BUILD_CHARTER.md` (pending). |
+| **Idea** | Do not accept the autonomous-build charter until each of the **five surface grammars** in `CIP_DESIGN_LANGUAGE.md` has at least one **audited exemplar** (rendered + Fable PASS or PASS WITH NOTES) — not wireframes, not disposition prose alone. |
+| **Why it matters / deferrable** | Charter without grammar proof repeats the North Star HF failure mode (architecture without operable UI). Deferrable until batch work starts. |
+| **What the work is** | Checklist: (1) grammar 1 Funding — `funding-settlement-r3.html` + R3 audit; (2) grammar 2 Channel instrument+grid; (3) grammar 3 Today blotter; (4) grammar 4 Planner ranked actions+calculator; (5) grammar 5 Import factory grid. Record audit ids in charter appendix or `docs/design/`. |
+| **Regression traps** | Do not count `.eif/audit/R20260830130000_FRESH_NS` frames as grammar exemplars unless re-audited against `CIP_DESIGN_LANGUAGE.md` v1. Do not accept charter on architecture docs alone. |
+| **Behavior to retain** | `CIP_DESIGN_LANGUAGE.md` is the single visual authority post 2026-08-30. |
+| **Out of scope** | Implementing all five in product source in one unit. |
+| **TRIGGER** | All five surface grammars have an audited exemplar on file. |

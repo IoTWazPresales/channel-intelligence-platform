@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Funding · Settlement book — Channel Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg:#14161a; --elev:#1a1d23; --surf:#1e2229; --surf2:#252a33;
+  --line:rgba(120,160,190,.16); --line2:rgba(120,160,190,.3);
+  --tx:rgba(245,247,250,.96); --t2:rgba(186,198,210,.75); --t3:rgba(160,176,192,.5);
+  --ac:#3db8e8; --ac-dim:rgba(61,184,232,.13);
+  --ok:#3d9b6a; --ok-dim:rgba(61,155,106,.14);
+  --wn:#d4a15a; --wn-dim:rgba(212,161,90,.13);
+  --st:#c45c5c; --st-dim:rgba(196,92,92,.14);
+  --ui:Inter,system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font:12.5px/1.45 var(--ui);background:var(--bg);color:var(--tx);-webkit-font-smoothing:antialiased}
+.n{font-family:var(--mono);font-variant-numeric:tabular-nums lining-nums;letter-spacing:-.01em}
+.cur{color:var(--t3);font-weight:400;margin-right:.3em}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--ac);outline-offset:1px;border-radius:3px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* ---------- shell ---------- */
+.app{display:grid;grid-template-columns:190px minmax(0,1fr);min-height:100vh}
+.spine{background:var(--elev);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:0 0 14px}
+.mark{padding:18px 16px 16px;border-bottom:1px solid var(--line)}
+.mark .word{font-size:13px;font-weight:650;letter-spacing:-.01em;display:block}
+.mark .sub{display:block;margin-top:4px;font-family:var(--mono);font-size:10px;color:var(--t3);letter-spacing:.08em;text-transform:uppercase}
+.nav{padding:10px 8px 0;display:flex;flex-direction:column;gap:1px}
+.nav a{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:5px;color:var(--t2);font-size:13px;font-weight:500}
+.nav a:hover{background:var(--surf);color:var(--tx)}
+.nav a.on{background:var(--ac-dim);color:var(--tx);box-shadow:inset 2px 0 0 var(--ac)}
+.nav a .ct{font-family:var(--mono);font-size:10.5px;color:var(--t3)}
+.nav a.on .ct{color:var(--ac)}
+.nav a .ct.alert{color:var(--st)}
+.nav-rule{height:1px;background:var(--line);margin:12px 16px}
+.nav.util a{font-size:12px;font-weight:400;color:var(--t3);padding:6px 10px}
+.who{margin-top:auto;padding:12px 16px 0;border-top:1px solid var(--line);font-size:11px;color:var(--t3)}
+.who b{display:block;color:var(--t2);font-weight:500;font-size:12px;margin-bottom:1px}
+
+.main{display:flex;flex-direction:column;min-width:0;min-height:100vh}
+.top{display:flex;align-items:baseline;gap:18px;padding:11px 22px 10px;border-bottom:1px solid var(--line)}
+.crumb{font-size:12px;color:var(--t3)}
+.crumb b{color:var(--t2);font-weight:500}
+.regime{margin-left:auto;display:flex;gap:26px}
+.regime div{display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+.regime .l{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--t3)}
+.regime .v{font-family:var(--mono);font-size:13px;color:var(--t2)}
+.regime .v.risk{color:#e8b4b4}
+.regime .d{font-family:var(--mono);font-size:10px;margin-top:1px}
+.regime .d.up{color:#9dceb4}
+.regime .d.dn{color:#e8b4b4}
+
+/* ---------- CIP filter bar — sticky, structural ---------- */
+.scope{display:flex;align-items:flex-end;gap:12px;padding:10px 22px 11px;border-bottom:1px solid var(--line);background:var(--elev);position:sticky;top:0;z-index:3}
+.scope .f{display:flex;flex-direction:column;gap:4px}
+.scope .f .fl{font-size:9.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.07em}
+.scope select,.scope .pick{appearance:none;font:500 12px var(--ui);color:var(--tx);background:var(--surf);border:1px solid var(--line2);border-radius:4px;padding:5px 26px 5px 10px;min-width:96px;background-image:linear-gradient(45deg,transparent 50%,var(--t3) 50%),linear-gradient(135deg,var(--t3) 50%,transparent 50%);background-position:calc(100% - 14px) 12px,calc(100% - 10px) 12px;background-size:4px 4px;background-repeat:no-repeat}
+.scope .apply{font:600 12px var(--ui);color:#bfe8f8;background:rgba(61,184,232,.16);border:1px solid rgba(61,184,232,.55);border-radius:4px;padding:6px 16px;margin-bottom:1px}
+.scope .reset{font:500 12px var(--ui);color:var(--t3);background:none;border:0;padding:6px 4px;margin-bottom:1px}
+.scope .view{margin-left:auto;display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+.scope .view .fl{font-size:9.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.07em}
+.scope .view .pick{min-width:170px;color:var(--ac);border-color:rgba(61,184,232,.35)}
+
+/* ---------- book read ---------- */
+.bookshape{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(260px,.75fr);gap:26px;padding:13px 22px 13px;border-bottom:1px solid var(--line);background:var(--elev)}
+.read-line{display:flex;align-items:baseline;gap:10px;margin-bottom:9px}
+.tagread{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--ac);border:1px solid rgba(61,184,232,.35);border-radius:3px;padding:2px 6px;white-space:nowrap}
+.read-line p{margin:0;font-size:12px;color:var(--t2)}
+.read-line p b{color:var(--tx);font-weight:600}
+.seg-track{display:flex;height:10px;border-radius:2px;overflow:hidden;gap:1px}
+.seg-track i{display:block}
+.seg-track .s-ok{background:rgba(61,155,106,.75)}
+.seg-track .s-open{background:rgba(196,92,92,.4)}
+.seg-track .s-blk{background:repeating-linear-gradient(135deg,rgba(196,92,92,.95) 0 3px,rgba(196,92,92,.4) 3px 6px)}
+.seg-keys{display:flex;gap:20px;margin-top:6px;font-family:var(--mono);font-size:10.5px;color:var(--t3)}
+.seg-keys .k{display:flex;align-items:center;gap:6px}
+.seg-keys .sw{width:8px;height:8px;border-radius:2px}
+.seg-keys .sw.ok{background:rgba(61,155,106,.75)}
+.seg-keys .sw.open{background:rgba(196,92,92,.4)}
+.seg-keys .sw.blk{background:repeating-linear-gradient(135deg,rgba(196,92,92,.95) 0 2px,rgba(196,92,92,.4) 2px 4px)}
+.seg-keys b{color:var(--t2);font-weight:500}
+.conc .cl{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);margin-bottom:7px}
+.conc .row{display:grid;grid-template-columns:118px minmax(0,1fr) 74px;gap:8px;align-items:center;margin-bottom:4px;font-size:11px}
+.conc .row .nm{color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conc .bar{height:5px;background:var(--surf2);border-radius:1px;position:relative;overflow:hidden}
+.conc .bar i{position:absolute;inset:0 auto 0 0;background:rgba(196,92,92,.6);border-radius:1px}
+.conc .row.first .bar i{background:rgba(196,92,92,.85)}
+.conc .amt{font-family:var(--mono);font-size:10.5px;color:var(--t3);text-align:right}
+.conc .row.first .amt{color:#e8b4b4}
+
+/* ---------- split ---------- */
+.split{display:grid;grid-template-columns:minmax(600px,56%) minmax(0,1fr);flex:1;min-height:0}
+.queue{display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--line)}
+.gridwrap{flex:1;overflow:auto}
+table.g{width:100%;border-collapse:collapse;font-size:12px}
+table.g th{position:sticky;top:0;z-index:1;background:var(--surf);text-align:left;font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);padding:9px 10px 8px;border-bottom:1px solid var(--line2);white-space:nowrap}
+table.g th.r,table.g td.r{text-align:right}
+table.g td{padding:0 10px;height:36px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:middle}
+table.g tbody tr:hover{background:var(--surf)}
+tr.sel{background:var(--ac-dim)!important;box-shadow:inset 2px 0 0 var(--ac)}
+td.case{font-family:var(--mono);font-size:11.5px;color:var(--t2)}
+tr.sel td.case{color:var(--ac)}
+td.cust{font-weight:500}
+td.money{font-family:var(--mono);font-variant-numeric:tabular-nums}
+td.money.zero{color:var(--t3)}
+td.money.out{font-weight:600;color:#e8c4b4}
+tr.done td.money.out{color:var(--t3);font-weight:400}
+td.delta{font-family:var(--mono);font-size:10.5px}
+td.delta.up{color:#9dceb4}
+td.delta.dn{color:#e8b4b4}
+td.delta.flat{color:var(--t3)}
+.badge{display:inline-block;font-family:var(--mono);font-size:9.5px;letter-spacing:.04em;padding:2px 6px;border-radius:3px;margin-left:8px;vertical-align:1px}
+.badge.blocked{color:#e8b4b4;border:1px solid rgba(196,92,92,.5);background:var(--st-dim)}
+.badge.settled{color:#9dceb4;border:1px solid rgba(61,155,106,.4);background:var(--ok-dim)}
+.badge.flag{color:#e8d4a8;border:1px solid rgba(212,161,90,.4);background:var(--wn-dim)}
+tr.done td{color:var(--t3)}
+tr.done td.cust{color:var(--t2);font-weight:400}
+td.shape{width:82px;padding-right:14px}
+.sbar{position:relative;height:5px;background:rgba(196,92,92,.22);border-radius:1px;overflow:hidden}
+.sbar i{position:absolute;inset:0 auto 0 0;background:rgba(61,155,106,.8)}
+.sbar.allout{background:rgba(196,92,92,.42)}
+.sbar.blockedbar{background:transparent;border-top:1px dashed rgba(196,92,92,.7);height:0;margin-top:2px;border-radius:0}
+td.age{font-family:var(--mono);font-size:11px;color:var(--t3)}
+td.age.hot{color:var(--wn)}
+.qfoot{display:flex;align-items:baseline;gap:18px;padding:8px 22px;border-top:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--t3)}
+.qfoot .risk{color:#e8b4b4}
+.qfoot .ok{color:#9dceb4}
+.qfoot .end{margin-left:auto}
+
+/* ---------- case file ---------- */
+.file{display:flex;flex-direction:column;min-width:0;background:var(--elev);overflow:auto;box-shadow:inset 1px 0 0 rgba(0,0,0,.25)}
+.fhead{padding:20px 26px 0}
+.eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3)}
+.eyebrow b{color:var(--ac);font-weight:500}
+.fhead h1{font-size:21px;font-weight:650;letter-spacing:-.015em;margin:6px 0 3px}
+.fhead .kicker{font-size:12px;color:var(--t2)}
+.fhead .kicker i{font-style:normal;color:var(--t3);padding:0 2px}
+.owed{display:grid;grid-template-columns:minmax(0,1fr) 208px;gap:22px;align-items:end;margin:16px 0 0;padding:15px 16px 14px;background:var(--surf);border:1px solid var(--line);border-radius:6px}
+.owed .l{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#e8b4b4;font-weight:600}
+.owed .fig{font-family:var(--mono);font-size:34px;font-weight:500;letter-spacing:-.02em;line-height:1.05;margin-top:5px}
+.owed .fig .cur{font-size:19px;vertical-align:5px}
+.owed .fx-line{font-family:var(--mono);font-size:11.5px;color:var(--t2);margin-top:6px}
+.owed .fx-line em{font-style:normal;color:var(--t3)}
+.spark .l{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--t3);display:flex;justify-content:space-between}
+.spark .l b{font-family:var(--mono);color:var(--ac);font-weight:500;letter-spacing:0}
+.spark .wk{display:flex;align-items:flex-end;gap:3px;height:42px;margin-top:8px;position:relative;border-top:1px dashed rgba(160,176,192,.3)}
+.spark .wk::after{content:"claimed";position:absolute;top:-13px;right:0;font-family:var(--mono);font-size:8px;color:var(--t3);letter-spacing:.05em}
+.spark .w{flex:1;position:relative;background:rgba(120,160,190,.14);border-radius:1px 1px 0 0;align-self:flex-end}
+.spark .w i{position:absolute;inset:auto 0 0 0;background:var(--ac);opacity:.75;border-radius:1px 1px 0 0}
+.spark .cap{display:flex;justify-content:space-between;margin-top:4px;font-family:var(--mono);font-size:9px;color:var(--t3)}
+.readiness{display:flex;gap:8px;margin:14px 26px 0}
+.chk{display:flex;align-items:center;gap:7px;font-size:11.5px;padding:6px 11px;border-radius:4px;border:1px solid var(--line)}
+.chk .m{font-family:var(--mono);font-size:10px}
+.chk.pass{color:#9dceb4;border-color:rgba(61,155,106,.35);background:var(--ok-dim)}
+.chk.open{color:#e8d4a8;border-color:rgba(212,161,90,.35);background:var(--wn-dim)}
+.chk.fail{color:#e8b4b4;border-color:rgba(196,92,92,.4);background:var(--st-dim)}
+.readiness .rl{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--t3);align-self:center;margin-right:2px}
+.sysread{display:flex;gap:10px;align-items:flex-start;margin:12px 26px 0;padding:10px 12px;background:var(--surf);border:1px solid var(--line);border-left:2px solid var(--ac);border-radius:4px}
+.sysread p{margin:0;font-size:12px;color:var(--t2);line-height:1.5}
+.sysread p b{color:var(--tx);font-weight:600}
+.perf{display:flex;gap:32px;margin:16px 26px 0;padding:13px 0 14px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.perf div{min-width:118px}
+.perf .l{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--t3)}
+.perf .v{font-family:var(--mono);font-size:15px;margin-top:4px}
+.perf .bullet{position:relative;height:4px;background:var(--surf2);border-radius:1px;margin-top:7px;width:118px}
+.perf .bullet i{position:absolute;inset:0 auto 0 0;background:var(--ac);opacity:.8;border-radius:1px}
+.perf .bullet u{position:absolute;top:-3px;bottom:-3px;width:1px;background:var(--t2)}
+.perf .note{font-size:10.5px;color:var(--t3);margin-top:6px}
+.tabs{display:flex;gap:2px;padding:0 26px;margin-top:16px;border-bottom:1px solid var(--line)}
+.tabs a{font-size:12.5px;font-weight:500;color:var(--t3);padding:9px 13px;border-bottom:2px solid transparent}
+.tabs a .ct{font-family:var(--mono);font-size:10.5px;margin-left:5px}
+.tabs a.on{color:var(--tx);border-bottom-color:var(--ac)}
+.tabs a.warnct .ct{color:var(--wn)}
+.lines{padding:0 26px}
+table.l{width:100%;border-collapse:collapse;font-size:12px;margin-top:2px}
+table.l th{text-align:left;font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);padding:10px 8px 7px;border-bottom:1px solid var(--line2);white-space:nowrap}
+table.l th.r,table.l td.r{text-align:right}
+table.l td{padding:0 8px;height:31px;border-bottom:1px solid var(--line);white-space:nowrap}
+table.l td.sku{font-family:var(--mono);font-size:11.5px;color:var(--t2)}
+table.l td.assn{font-size:11px;color:var(--t3)}
+table.l td.assn .badge{margin-left:0}
+table.l tfoot td{height:33px;font-weight:600;color:var(--tx);border-bottom:0;border-top:1px solid var(--line2)}
+.provenance{padding:9px 26px 0;font-size:11px;color:var(--t3)}
+.provenance b{color:var(--t2);font-weight:500}
+.fact{display:flex;align-items:center;gap:10px;padding:14px 26px 22px;margin-top:12px;border-top:1px solid var(--line)}
+.rule{font-size:11px;color:var(--t3);line-height:1.5;max-width:44%;margin-right:auto}
+.btn{font:500 12.5px var(--ui);border-radius:4px;padding:8px 14px;border:1px solid var(--line2);background:var(--surf);color:var(--tx);cursor:default;white-space:nowrap;position:relative}
+.btn:hover{background:var(--surf2)}
+.btn .hint{position:absolute;top:-7px;right:-6px;font-family:var(--mono);font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:var(--ac);background:var(--bg);border:1px solid rgba(61,184,232,.45);border-radius:3px;padding:1px 5px}
+.btn.pri{background:rgba(61,184,232,.16);border-color:rgba(61,184,232,.55);color:#bfe8f8;font-weight:600}
+.btn.pri:hover{background:rgba(61,184,232,.22)}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="spine">
+    <div class="mark">
+      <span class="word">Channel Intelligence</span>
+      <span class="sub">ASUS SA · 26Q3</span>
+    </div>
+    <nav class="nav">
+      <a href="#">Today <span class="ct alert">7</span></a>
+      <a href="#">Channel <span class="ct">119</span></a>
+      <a class="on" href="#">Funding <span class="ct">310</span></a>
+      <a href="#">Planner <span class="ct">6</span></a>
+      <a href="#">Imports <span class="ct alert">23</span></a>
+    </nav>
+    <div class="nav-rule"></div>
+    <nav class="nav util">
+      <a href="#">Reports</a>
+      <a href="#">Admin</a>
+    </nav>
+    <div class="who"><b>W. Eliason</b>Key accounts · session 26m</div>
+  </aside>
+
+  <div class="main">
+    <div class="top">
+      <div class="crumb">Funding / <b>Settlement book</b></div>
+      <div class="regime">
+        <div><span class="l">Book</span><span class="v n"><span class="cur">R</span>28,988,034</span></div>
+        <div><span class="l">Settled</span><span class="v n"><span class="cur">R</span>9,741,206</span><span class="d up n">▲ 213,410 wk</span></div>
+        <div><span class="l">Outstanding</span><span class="v n risk"><span class="cur">R</span>19,246,828</span><span class="d dn n">▼ 213,410 wk</span></div>
+      </div>
+    </div>
+
+    <div class="scope">
+      <div class="f"><span class="fl">From</span><span class="pick">26Q3</span></div>
+      <div class="f"><span class="fl">To</span><span class="pick">26Q3</span></div>
+      <div class="f"><span class="fl">BU</span><span class="pick">All BUs</span></div>
+      <div class="f"><span class="fl">Customer</span><span class="pick">All customers</span></div>
+      <div class="f"><span class="fl">State</span><span class="pick">Open · 262</span></div>
+      <span class="apply">Apply</span>
+      <span class="reset">Reset</span>
+      <div class="view"><span class="fl">Saved view</span><span class="pick">Settlement desk ▾</span></div>
+    </div>
+
+    <div class="bookshape">
+      <div>
+        <div class="read-line">
+          <span class="tagread">Read</span>
+          <p><b>66% of the book is unsettled</b>, and 84% of that sits in 12 cases. Settlement cleared R 213k this week — at this pace the open book runs 22 weeks.</p>
+        </div>
+        <div class="seg-track">
+          <i class="s-ok" style="width:33.6%"></i><i class="s-open" style="width:65.4%"></i><i class="s-blk" style="width:1%"></i>
+        </div>
+        <div class="seg-keys">
+          <span class="k"><span class="sw ok"></span>Settled <b class="n">R 9,741,206</b></span>
+          <span class="k"><span class="sw open"></span>Outstanding <b class="n">R 18,958,428</b></span>
+          <span class="k"><span class="sw blk"></span>Blocked · FX <b class="n">R 288,400</b></span>
+        </div>
+      </div>
+      <div class="conc">
+        <div class="cl">Largest exposures · share of outstanding</div>
+        <div class="row first"><span class="nm">Takealot</span><div class="bar"><i style="width:84%"></i></div><span class="amt">1,616,232</span></div>
+        <div class="row"><span class="nm">Makro</span><div class="bar"><i style="width:19%"></i></div><span class="amt">356,731</span></div>
+        <div class="row"><span class="nm">Game · blocked</span><div class="bar"><i style="width:15%"></i></div><span class="amt">288,400</span></div>
+        <div class="row"><span class="nm">Pinnacle</span><div class="bar"><i style="width:12%"></i></div><span class="amt">234,900</span></div>
+        <div class="row"><span class="nm">Incredible Conn.</span><div class="bar"><i style="width:8%"></i></div><span class="amt">154,200</span></div>
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="queue">
+        <div class="gridwrap">
+          <table class="g">
+            <thead>
+              <tr>
+                <th>Case</th>
+                <th>Customer</th>
+                <th class="r">Total ZAR</th>
+                <th class="r">Settled</th>
+                <th class="r">Outstanding</th>
+                <th></th>
+                <th class="r">Δ wk</th>
+                <th class="r">Age</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="sel">
+                <td class="case">C26760971</td>
+                <td class="cust">Takealot</td>
+                <td class="r money">1,616,231.52</td>
+                <td class="r money zero">0.00</td>
+                <td class="r money out">1,616,231.52</td>
+                <td class="shape"><div class="sbar allout"><i style="width:0%"></i></div></td>
+                <td class="r delta flat">—</td>
+                <td class="r age">18d</td>
+              </tr>
+              <tr>
+                <td class="case">C26753797</td>
+                <td class="cust">Makro</td>
+                <td class="r money">408,112.00</td>
+                <td class="r money">51,380.87</td>
+                <td class="r money out">356,731.13</td>
+                <td class="shape"><div class="sbar"><i style="width:13%"></i></div></td>
+                <td class="r delta dn">▼ 51,381</td>
+                <td class="r age hot">44d</td>
+              </tr>
+              <tr>
+                <td class="case">C26754102</td>
+                <td class="cust">Game<span class="badge blocked">FX undeclared</span></td>
+                <td class="r money">288,400.00</td>
+                <td class="r money zero">0.00</td>
+                <td class="r money out">288,400.00</td>
+                <td class="shape"><div class="sbar blockedbar"></div></td>
+                <td class="r delta flat">—</td>
+                <td class="r age hot">61d</td>
+              </tr>
+              <tr>
+                <td class="case">C26761488</td>
+                <td class="cust">Pinnacle<span class="badge flag">2 missing SKU</span></td>
+                <td class="r money">234,900.00</td>
+                <td class="r money zero">0.00</td>
+                <td class="r money out">234,900.00</td>
+                <td class="shape"><div class="sbar allout"><i style="width:0%"></i></div></td>
+                <td class="r delta flat">new</td>
+                <td class="r age">9d</td>
+              </tr>
+              <tr>
+                <td class="case">C26762010</td>
+                <td class="cust">Rectron</td>
+                <td class="r money">187,420.00</td>
+                <td class="r money">93,710.00</td>
+                <td class="r money out">93,710.00</td>
+                <td class="shape"><div class="sbar"><i style="width:50%"></i></div></td>
+                <td class="r delta dn">▼ 93,710</td>
+                <td class="r age">37d</td>
+              </tr>
+              <tr>
+                <td class="case">C26756111</td>
+                <td class="cust">Incredible Connection</td>
+                <td class="r money">174,200.00</td>
+                <td class="r money">20,000.00</td>
+                <td class="r money out">154,200.00</td>
+                <td class="shape"><div class="sbar"><i style="width:11%"></i></div></td>
+                <td class="r delta flat">—</td>
+                <td class="r age hot">52d</td>
+              </tr>
+              <tr>
+                <td class="case">C26761203</td>
+                <td class="cust">Mustek</td>
+                <td class="r money">142,560.00</td>
+                <td class="r money">71,280.00</td>
+                <td class="r money out">71,280.00</td>
+                <td class="shape"><div class="sbar"><i style="width:50%"></i></div></td>
+                <td class="r delta dn">▼ 35,640</td>
+                <td class="r age">29d</td>
+              </tr>
+              <tr>
+                <td class="case">C26755018</td>
+                <td class="cust">Computer Mania</td>
+                <td class="r money">96,040.00</td>
+                <td class="r money zero">0.00</td>
+                <td class="r money out">96,040.00</td>
+                <td class="shape"><div class="sbar allout"><i style="width:0%"></i></div></td>
+                <td class="r delta flat">—</td>
+                <td class="r age">12d</td>
+              </tr>
+              <tr>
+                <td class="case">C26759077</td>
+                <td class="cust">First Technology</td>
+                <td class="r money">61,200.00</td>
+                <td class="r money zero">0.00</td>
+                <td class="r money out">61,200.00</td>
+                <td class="shape"><div class="sbar allout"><i style="width:0%"></i></div></td>
+                <td class="r delta flat">—</td>
+                <td class="r age">21d</td>
+              </tr>
+              <tr class="done">
+                <td class="case">C26759761</td>
+                <td class="cust">Esquire<span class="badge settled">Settled</span></td>
+                <td class="r money">51,380.87</td>
+                <td class="r money">51,380.87</td>
+                <td class="r money zero">0.00</td>
+                <td class="shape"><div class="sbar"><i style="width:100%"></i></div></td>
+                <td class="r delta up">▲ closed</td>
+                <td class="r age">71d</td>
+              </tr>
+              <tr>
+                <td class="case">C26762145</td>
+                <td class="cust">Syntech</td>
+                <td class="r money">44,760.00</td>
+                <td class="r money zero">0.00</td>
+                <td class="r money out">44,760.00</td>
+                <td class="shape"><div class="sbar allout"><i style="width:0%"></i></div></td>
+                <td class="r delta flat">—</td>
+                <td class="r age">15d</td>
+              </tr>
+              <tr>
+                <td class="case">C26758120</td>
+                <td class="cust">Hirsch's</td>
+                <td class="r money">33,300.00</td>
+                <td class="r money zero">0.00</td>
+                <td class="r money out">33,300.00</td>
+                <td class="shape"><div class="sbar allout"><i style="width:0%"></i></div></td>
+                <td class="r delta flat">—</td>
+                <td class="r age">26d</td>
+              </tr>
+              <tr>
+                <td class="case">C26762390</td>
+                <td class="cust">Wootware</td>
+                <td class="r money">27,300.00</td>
+                <td class="r money">13,650.00</td>
+                <td class="r money out">13,650.00</td>
+                <td class="shape"><div class="sbar"><i style="width:50%"></i></div></td>
+                <td class="r delta dn">▼ 13,650</td>
+                <td class="r age">33d</td>
+              </tr>
+              <tr>
+                <td class="case">C26757004</td>
+                <td class="cust">Evetech</td>
+                <td class="r money">12,880.00</td>
+                <td class="r money zero">0.00</td>
+                <td class="r money out">12,880.00</td>
+                <td class="shape"><div class="sbar allout"><i style="width:0%"></i></div></td>
+                <td class="r delta flat">—</td>
+                <td class="r age">8d</td>
+              </tr>
+              <tr>
+                <td class="case">C26762511</td>
+                <td class="cust">Titan Ice</td>
+                <td class="r money">9,840.00</td>
+                <td class="r money zero">0.00</td>
+                <td class="r money out">9,840.00</td>
+                <td class="shape"><div class="sbar allout"><i style="width:0%"></i></div></td>
+                <td class="r delta flat">new</td>
+                <td class="r age">5d</td>
+              </tr>
+              <tr class="done">
+                <td class="case">C26760001</td>
+                <td class="cust">Dion Wired<span class="badge settled">Settled</span></td>
+                <td class="r money">8,910.00</td>
+                <td class="r money">8,910.00</td>
+                <td class="r money zero">0.00</td>
+                <td class="shape"><div class="sbar"><i style="width:100%"></i></div></td>
+                <td class="r delta up">▲ closed</td>
+                <td class="r age">66d</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="qfoot">
+          <span>1–16 of 310</span>
+          <span><span class="risk">1 blocked</span> in view · <span class="ok">46 settled</span> this quarter</span>
+          <span class="end">Sorted by outstanding, descending</span>
+        </div>
+      </div>
+
+      <div class="file">
+        <div class="fhead">
+          <div class="eyebrow">Case <b>C26760971</b> · 26Q3 · NB promotional support · Active</div>
+          <h1>Takealot</h1>
+          <div class="kicker">Opened 12 Aug 2026 <i>·</i> 14 claim rows <i>·</i> Wayne approved 14 Aug <i>·</i> 3 CST divergences noted</div>
+          <div class="owed">
+            <div>
+              <div class="l">Outstanding</div>
+              <div class="fig n"><span class="cur">R</span>1,616,231.52</div>
+              <div class="fx-line">USD 89,790.64 <em>at declared ZAR 18.00 — case terms</em></div>
+            </div>
+            <div class="spark">
+              <span class="l">Claimed vs POE · weekly <b>−38.6%</b></span>
+              <div class="wk">
+                <div class="w" style="height:60%"><i style="height:78%"></i></div>
+                <div class="w" style="height:80%"><i style="height:75%"></i></div>
+                <div class="w" style="height:93%"><i style="height:71%"></i></div>
+                <div class="w" style="height:100%"><i style="height:60%"></i></div>
+                <div class="w" style="height:87%"><i style="height:54%"></i></div>
+                <div class="w" style="height:80%"><i style="height:50%"></i></div>
+                <div class="w" style="height:67%"><i style="height:42%"></i></div>
+              </div>
+              <div class="cap"><span>26W28</span><span>26W34</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="readiness">
+          <span class="rl">Readiness</span>
+          <span class="chk pass"><span class="m">✓</span>FX declared · 18.00</span>
+          <span class="chk open"><span class="m">1</span>Assumption open · MON-27-4K</span>
+          <span class="chk fail"><span class="m">0</span>No claim evidence attached</span>
+        </div>
+
+        <div class="sysread">
+          <span class="tagread">Read</span>
+          <p>POE supports <b>61.4%</b> of claimed units through 26W34, weakening week on week. The blocker is <b>evidence, not performance</b> — nothing is attached against R 1.6M owed.</p>
+        </div>
+
+        <div class="perf">
+          <div>
+            <span class="l">Delivery vs case plan</span>
+            <span class="v n">61.4%</span>
+            <div class="bullet"><i style="width:61.4%"></i><u style="left:100%"></u></div>
+            <div class="note">Daily POE, weeks 26W28–26W34</div>
+          </div>
+          <div>
+            <span class="l">Units claimed</span>
+            <span class="v n">8,500</span>
+            <div class="note">4 SKUs · 14 rows</div>
+          </div>
+          <div>
+            <span class="l">Support bias, book</span>
+            <span class="v n">262.5%</span>
+            <div class="note">This case within band</div>
+          </div>
+        </div>
+
+        <div class="tabs">
+          <a class="on" href="#">Lines <span class="ct n">14</span></a>
+          <a href="#">Evidence <span class="ct n">0</span></a>
+          <a class="warnct" href="#">Assumptions <span class="ct n">1</span></a>
+          <a href="#">Activity</a>
+        </div>
+
+        <div class="lines">
+          <table class="l">
+            <thead>
+              <tr>
+                <th>SKU</th>
+                <th class="r">Units</th>
+                <th class="r">Support/u USD</th>
+                <th class="r">Total ZAR</th>
+                <th>Assumption</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="sku">NB-X13-16-512</td>
+                <td class="r money n">4,200</td>
+                <td class="r money n">12.50</td>
+                <td class="r money n">945,000.00</td>
+                <td class="assn">Approved terms</td>
+              </tr>
+              <tr>
+                <td class="sku">NB-X14-32-1T</td>
+                <td class="r money n">1,100</td>
+                <td class="r money n">18.00</td>
+                <td class="r money n">356,400.00</td>
+                <td class="assn">Approved terms</td>
+              </tr>
+              <tr>
+                <td class="sku">MON-27-4K</td>
+                <td class="r money n">800</td>
+                <td class="r money n">9.75</td>
+                <td class="r money n">140,400.00</td>
+                <td class="assn"><span class="badge flag">Missing SKU assumption</span></td>
+              </tr>
+              <tr>
+                <td class="sku">ACC-DOCK-USBC</td>
+                <td class="r money n">2,400</td>
+                <td class="r money n">4.00</td>
+                <td class="r money n">174,431.52</td>
+                <td class="assn">Approved terms</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>Case total</td>
+                <td class="r money n">8,500</td>
+                <td></td>
+                <td class="r money n">1,616,231.52</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div class="provenance">Evidence basis: <b>claim files are primary</b> — daily POE sell-through, week windows 26W28–26W34. CST shown for divergence only.</div>
+
+        <div class="fact">
+          <div class="rule">CST divergence never blocks settlement. Unresolved SKUs stay on the assumptions worklist. Settlement records the case as settled — it does not post a payment.</div>
+          <span class="btn">Attach evidence<span class="hint">Suggested</span></span>
+          <span class="btn pri">Record settlement · R 1,616,231.52</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
