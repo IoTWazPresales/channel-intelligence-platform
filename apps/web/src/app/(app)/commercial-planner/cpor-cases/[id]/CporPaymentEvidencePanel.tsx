@@ -128,7 +128,7 @@ export function CporPaymentEvidencePanel({ caseId }: { caseId: number }) {
                     ? 'warning'
                     : 'default'
               }
-              label={`Outstanding ${money(recon.outstanding_amount)}`}
+              label={`Outstanding ${money(recon.outstanding_amount)} ${recon.currency_code}`}
               data-testid="cpor-recon-outstanding"
             />
             <Chip size="small" variant="outlined" label={recon.recon_status} data-testid="cpor-recon-status" />
