@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-08-30 — **Promoted to main** `83b4290`: `design-language-v1` fast-forward — CIP design language FROZEN v1.1 (`docs/design/CIP_DESIGN_LANGUAGE.md`), nav map (`docs/design/CIP_NAV_MAP.md`), mockup packet, and charter v1.3 (`docs/AUTONOMOUS_BUILD_CHARTER.md`, amendments 1–7 APPLIED) now governing on `main`. No product source. No migration.
+
 - 2026-08-30 — **Charter v1.3 accepted** on `design-language-v1`: design language frozen v1.1 + grammar 6 Composer; Warren accepted `docs/AUTONOMOUS_BUILD_CHARTER.md` v1.3 with amendments 1–7 (`docs/design/CHARTER_AMENDMENTS.md` APPLIED); implementation phase open for six job containers (Brief · Lineup · Stock · Settlement · Response · Steward); Reports and Admin deferred as later design increment. VERIFY-debt register added for units 6f–B4 (`docs/BACKLOG.md`).
 
 - 2026-08-30 — **Design packet frozen v1.1** on `design-language-v1` `17ba08e`: batch 1+2 audited (Opus CONSULT), cross-grammar identity check passed (Fable), packet frozen as North Star design language in `docs/design/CIP_DESIGN_LANGUAGE.md`; all five grammars have audited exemplars (`brief.html`, `stock-cover.html`, `lineup.html`, `response.html`, `steward.html` + state frames). BACKLOG-146 done; BACKLOG-147 trigger MET — charter decision with Warren.
