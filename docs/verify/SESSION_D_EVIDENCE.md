@@ -1,5 +1,191 @@
 # SESSION D Evidence — VERIFY debt runbook (6f + 7)
 
+## Run 2026-08-30 ~22:20+ UTC+2 — fill-rate discrepancy + unit 6f cip_test writes
+
+**Collection timestamp:** 2026-08-30 (Sunday), from ~22:20 UTC+2  
+**Collector:** Cursor agent (this chat; continuation of SESSION D)  
+**Branch:** `feat/ns-1a-fx-readiness-chips`  
+**HEAD at collection:** `32e0af60da04780bc4195f4af64cc218c2cd0a47`  
+**No PASS/FAIL verdict.** Prior gap records below are kept.
+
+---
+
+### Task 1 — 26Q3 fill rate 13.2% (2026-08-14) vs 19.5% (today)
+
+**Finding: (a) DATA MOVED.** The fill formula and its inputs in code did not change between the 14 Aug pin and HEAD. Today’s numerator/denominator on `cip` are `6352 / 32509 = 19.5%`. That identity is the current readout; 13.2% is not reproducible from today’s rows with the same formula. This is **not** a unit 7 calculation regression.
+
+#### Git (quoted)
+
+Pin commit on 2026-08-14:
+
+```
+d80d13c 2026-08-14 17:59:00 +0200 docs: pin full audit and test results on main
+```
+
+`plan_vs_executed.py` last touched **before** that pin:
+
+```
+e87f6e8 2026-08-01 15:58:13 +0200 commercial: resolve Q-001/002/009 tenant profile + Channel Ops VERIFY fixes
+```
+
+Empty log / empty diff (no commits, no file change 14 Aug → HEAD):
+
+```
+$ git log --since=2026-08-14 -- apps/api/app/services/commercial_planner/plan_vs_executed.py
+(empty)
+
+$ git log --since=2026-08-14 -- apps/api/app/services/commercial_planner/lineup_po_reconciliation.py
+(empty)
+
+$ git diff --stat d80d13c HEAD -- apps/api/app/services/commercial_planner/plan_vs_executed.py
+(empty)
+
+$ git diff --stat d80d13c HEAD -- apps/api/app/services/commercial_planner/lineup_po_reconciliation.py
+(empty)
+
+$ git diff --stat d80d13c HEAD -- apps/web/src/features/plan-vs-executed/
+(empty)
+```
+
+Formula at HEAD, blamed to `a35a8ae` (2026-07-06) — unchanged at `d80d13c` (`git show d80d13c:...plan_vs_executed.py` still has the same lines):
+
+```
+sum_min = sum(min(float(r["shipped_units"]), float(r["planned_units"])) for r in in_plan)
+fill_rate = sum_min / sum_p if sum_p > 0 else None
+```
+
+UI percent format, also `a35a8ae` 2026-07-06:
+
+```
+return `${(n * 100).toFixed(1)}%`;
+```
+
+`git show d80d13c:...plan_vs_executed.py` matches on `fill_rate` / `sum_min`. Post-14-Aug commits under `commercial_planner/` (`fc14962` merge-redirect, bulk-apply slot, parser notes, token stamp, attribution resolver) **do not** include `plan_vs_executed.py`. `git diff --stat d80d13c HEAD -- apps/api/app/services/commercial_planner/` lists eight other files; none is the scorecard aggregator.
+
+#### Today’s 26Q3 all-BUs counts (read-only, `cip`)
+
+`apps/api/scripts/ops/session_d_fill_rate_evidence.py` via `collect_execution_rows(..., period_from="26Q3", period_to="26Q3")` + `compute_scorecard_from_execution_rows`:
+
+```
+current_database() cip
+in_plan_row_count 224
+all_row_count 230
+denominator_sum_planned 32509.0
+numerator_sum_min_shipped_capped 6352.0
+shipped_units_in_plan_uncapped 6352.0
+fill_rate 0.19539204527976867
+fill_rate_pct_1dp 19.5
+scorecard_planned_units 32509.0
+scorecard_shipped_units_in_plan 6352.0
+scorecard_shipped_units_total 6640.0
+13.2pct_of_today_planned 4291.2
+implied_planned_if_num_fixed_at_sum_min_for_13.2pct 48121.2
+```
+
+`6352 / 32509 = 0.19539…` which is the headline **19.5%**. The Aug 14 gate (`docs/UNIT8_DEMO_P2_GATE.md` A6: `/plan-vs-executed` fill **13.2%** (26Q3) on 2026-08-14) did not store the scorecard components, so we cannot say whether planned shrank or shipped grew — only that **today’s counts alone produce 19.5%, not 13.2%**, and the code that divides them is the same as on 14 Aug.
+
+Capped vs uncapped in-plan shipped are equal (6352); the min() cap is not the 13.2→19.5 move.
+
+---
+
+### Task 2 — unit 6f write-path on cip_test
+
+**.env not edited.** API process env only. `.cursor/hooks` untouched.
+
+#### Retarget (required for `/health/ready`)
+
+`GET /health/ready` uses async `DATABASE_URL` / `AsyncSessionLocal`, not `DATABASE_URL_SYNC`. Overriding only the two sync vars would leave `/health/ready` on `cip` and is a **STOP**. This run also set `DATABASE_URL` (async) to `cip_test` in the **child process only**, together with `DATABASE_URL_SYNC` and `DATABASE_URL_SYNC_MIGRATE`. That is how the proof gate can pass; it is not a guard weakening.
+
+Stopped the listener on `:8001` only (did not run `stop-dev.ps1`). Started `apps/api/scripts/ops/session_d_run_api.py cip_test` (no `--reload`).
+
+```
+GET /health/ready
+HTTP 200
+{"status":"ready","database":"cip_test","ok":true}
+```
+
+Writes proceeded only after that body.
+
+#### Seed (cip_test, after ready proof)
+
+`cip_test` had **0** lineup lines and **0** `conflict` rows (`SELECT count(*) … status = 'conflict'` printed `current_database() cip_test` → `(0,)`).
+
+Disposable case **43** (`SESSION-D-UNIT6F`, `inferred_period_start=2026-07-01`):
+
+| line | token | before | purpose |
+|------|--------|--------|---------|
+| 22 | SESSION-D-ACCEPT | dist NULL, `token_proposed` | Accept (sole exact-qty ship dist 92) |
+| 23 | SESSION-D-CLEAR | dist 92, `token_proposed` | soft-clear |
+| 24 | SESSION-D-CONFLICT | dist 94, `token_proposed` | confirmer → conflict, keep dist |
+
+Ships: product/qty 36 → dist 92; conflict SKU qty 20 × dist 92 and 93 (proposed 94 absent from ships). `OPEN_CHANNEL` customer id 1. Every SQL block printed `current_database() cip_test`.
+
+#### Proposed → Accept
+
+Confirmer preview (HTTP 200): `action=offer_accept`, `ship_corroboration_offer.reason=sole_resolved_distributor_exact_qty`, `distributor_id=92`.
+
+`POST .../accept-ship` 200: `stamped_count=1`, `status=steward_set` (this is the Accept path; it sets `steward_set`, not `shipment_confirmed`).
+
+```
+AFTER accept-ship line  current_database() cip_test
+(22, 43, 92, 'steward_set', 'SESSION-D-ACCEPT')
+
+AFTER accept-ship audit
+(17, …, 'anonymous', 'lineup_ship_corroborated_distributor_accept', 'customer_token', 'session-d-accept', 'dim_distributor', 92)
+```
+
+#### Soft-clear
+
+`POST .../soft-clear` 200: `cleared_count=1`, prior dist 92 / `token_proposed`.
+
+```
+AFTER soft-clear line  current_database() cip_test
+(23, 43, None, None, 'SESSION-D-CLEAR')
+
+AFTER soft-clear audit
+(18, …, 'anonymous', 'lineup_distributor_soft_clear', 'distributor_attribution', None, 'commercial_lineup_line', None)
+```
+
+#### No auto-clear on conflict
+
+`cip` has zero conflict rows; `cip_test` had zero before seed. Confirmer apply on SESSION-D-CONFLICT:
+
+```
+POST 1: updated_count=1 action=conflict prior=token_proposed new=conflict distributor_id=94
+AFTER confirmer-1  current_database() cip_test
+(24, 43, 94, 'conflict', 'SESSION-D-CONFLICT')
+audit 19 lineup_distributor_attribution_confirm
+
+POST 2: updated_count=1 action=conflict prior=conflict new=conflict distributor_id=94
+AFTER confirmer-2  current_database() cip_test
+(24, 43, 94, 'conflict', 'SESSION-D-CONFLICT')
+```
+
+`distributor_id` stayed **94** (never null). Status stayed `conflict`. Second apply re-stamped conflict→conflict; it did not clear the distributor.
+
+Final seed lines on `cip_test`:
+
+```
+(22, 43, 92, 'steward_set', 'SESSION-D-ACCEPT')
+(23, 43, None, None, 'SESSION-D-CLEAR')
+(24, 43, 94, 'conflict', 'SESSION-D-CONFLICT')
+conflict count (1,)
+```
+
+#### Restore
+
+Stopped `:8001`. Started `session_d_run_api.py env` (DATABASE_* forced from `.env` file; no inherited cip_test). `.env` still not edited.
+
+```
+GET /health/ready
+HTTP 200
+{"status":"ready","database":"cip","ok":true}
+```
+
+No writes were sent to `cip`.
+
+---
+
 ## Run 2026-08-30 ~21:50–22:15 UTC+2 (this chat)
 
 **Collection timestamp:** 2026-08-30 (Sunday), ~21:50–22:15 UTC+2  
