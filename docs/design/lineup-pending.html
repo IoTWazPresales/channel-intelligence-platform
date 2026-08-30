@@ -2,37 +2,83 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Lineup · pending approval — Channel Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 <style>
-:root{--bg:#14161a;--elev:#1a1d23;--surf:#1e2229;--line:rgba(120,160,190,.16);--line2:rgba(120,160,190,.3);--tx:rgba(245,247,250,.96);--t2:rgba(186,198,210,.75);--t3:rgba(160,176,192,.5);--ac:#3db8e8;--ac-dim:rgba(61,184,232,.13);--wn:#d4a15a;--wn-dim:rgba(212,161,90,.13);--ui:Inter,system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace}
-*{box-sizing:border-box}body{margin:0;font:12.5px/1.45 var(--ui);background:var(--bg);color:var(--tx)}
-.n{font-family:var(--mono)}.app{display:grid;grid-template-columns:190px 1fr;min-height:100vh}.spine{background:var(--elev);border-right:1px solid var(--line)}.mark{padding:18px 16px;border-bottom:1px solid var(--line)}.nav a.on{background:var(--ac-dim);box-shadow:inset 2px 0 0 var(--ac)}
-.main{display:flex;flex-direction:column;min-height:100vh}.top,.scope,.empty,.qfoot{padding:11px 22px;border-bottom:1px solid var(--line)}.scope{background:var(--elev);display:flex;gap:12px;align-items:flex-end;position:sticky;top:0}.scope .fl{font-size:9.5px;color:var(--t3);text-transform:uppercase}.scope .pick{padding:5px 10px;background:var(--surf);border:1px solid var(--line2);border-radius:4px}.scope .view{margin-left:auto}
-.empty{flex:1;padding:28px 22px 40px}.empty .k{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--t3)}.empty p{color:var(--t2);line-height:1.55}.qfoot{font-family:var(--mono);font-size:11px;color:var(--t3)}
+:root{--bg:#14161a;--elev:#1a1d23;--surf:#1e2229;--surf2:#252a33;--line:rgba(120,160,190,.16);--line2:rgba(120,160,190,.3);--tx:rgba(245,247,250,.96);--t2:rgba(186,198,210,.75);--t3:rgba(160,176,192,.5);--ac:#3db8e8;--ac-dim:rgba(61,184,232,.13);--ok:#3d9b6a;--ok-dim:rgba(61,155,106,.14);--wn:#d4a15a;--wn-dim:rgba(212,161,90,.13);--st:#c45c5c;--st-dim:rgba(196,92,92,.14);--ui:Inter,system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace}
+*{box-sizing:border-box}html,body{margin:0;height:100%}body{font:12.5px/1.45 var(--ui);background:var(--bg);color:var(--tx)}
+.n{font-family:var(--mono);font-variant-numeric:tabular-nums lining-nums}a{color:inherit;text-decoration:none}
+.app{display:grid;grid-template-columns:190px minmax(0,1fr);min-height:100vh}
+.spine{background:var(--elev);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:0 0 14px}
+.mark{padding:18px 16px 16px;border-bottom:1px solid var(--line)}.mark .word{font-size:13px;font-weight:650}.mark .sub{display:block;margin-top:4px;font-family:var(--mono);font-size:10px;color:var(--t3);letter-spacing:.08em;text-transform:uppercase}
+.nav{padding:10px 8px 0;display:flex;flex-direction:column;gap:1px}.nav a{display:flex;justify-content:space-between;padding:8px 10px;border-radius:5px;color:var(--t2);font-size:13px;font-weight:500}.nav a.on{background:var(--ac-dim);box-shadow:inset 2px 0 0 var(--ac);color:var(--tx)}.nav a .ct{font-family:var(--mono);font-size:10.5px;color:var(--t3)}.nav a.on .ct{color:var(--ac)}.nav a .ct.alert{color:var(--st)}
+.nav-rule{height:1px;background:var(--line);margin:12px 16px}.nav.util a{font-size:12px;color:var(--t3);padding:6px 10px}
+.who{margin-top:auto;padding:12px 16px 0;border-top:1px solid var(--line);font-size:11px;color:var(--t3)}.who b{display:block;color:var(--t2);font-size:12px}
+.main{display:flex;flex-direction:column;min-width:0;min-height:100vh}
+.top{display:flex;align-items:baseline;padding:11px 22px 10px;border-bottom:1px solid var(--line)}.crumb{font-size:12px;color:var(--t3)}.crumb b{color:var(--t2)}
+.scope{display:flex;align-items:flex-end;gap:12px;padding:10px 22px 11px;border-bottom:1px solid var(--line);background:var(--elev);position:sticky;top:0;z-index:3}.scope .f{display:flex;flex-direction:column;gap:4px}.scope .f .fl{font-size:9.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.07em}.scope .pick{font:500 12px var(--ui);color:var(--tx);background:var(--surf);border:1px solid var(--line2);border-radius:4px;padding:5px 10px;min-width:96px}.scope .apply{font:600 12px var(--ui);color:#bfe8f8;background:rgba(61,184,232,.16);border:1px solid rgba(61,184,232,.55);border-radius:4px;padding:6px 16px}.scope .reset{font:500 12px var(--ui);color:var(--t3);background:none;border:0;padding:6px 4px}.scope .view{margin-left:auto;display:flex;flex-direction:column;gap:4px;align-items:flex-end}.scope .view .fl{font-size:9.5px;color:var(--t3);text-transform:uppercase}.scope .view .pick{min-width:170px;color:var(--ac);border:1px solid rgba(61,184,232,.35);border-radius:4px;padding:5px 10px}
+.directive{padding:14px 22px 12px;border-bottom:1px solid var(--line);background:var(--elev)}.directive .k{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--t3);margin-bottom:6px}.directive p{margin:0;font-size:12px;color:var(--t2);line-height:1.55}.directive p b{color:var(--tx);font-weight:600}
+.work{display:flex;flex-direction:column;flex:1;min-height:0}.gridwrap{flex:1;overflow:auto}
+table.g{width:100%;border-collapse:collapse;font-size:12px}table.g th{position:sticky;top:0;background:var(--surf);text-align:left;font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);padding:9px 10px 8px;border-bottom:1px solid var(--line2)}table.g th.r,table.g td.r{text-align:right}table.g td{padding:0 10px;height:36px;border-bottom:1px solid var(--line);vertical-align:middle}table.g tbody tr:hover{background:var(--surf)}
+td.cust{font-weight:500}td.sku{font-family:var(--mono);font-size:11.5px;color:var(--t2)}td.money{font-family:var(--mono)}td.bu{font-family:var(--mono);font-size:11px;color:var(--t2)}
+.badge{display:inline-block;font-family:var(--mono);font-size:9.5px;padding:2px 6px;border-radius:3px;color:#e8d4a8;border:1px solid rgba(212,161,90,.4);background:var(--wn-dim)}
+.row-act{display:flex;gap:6px;justify-content:flex-end}.row-act .btn{font:500 11px var(--ui);padding:4px 8px;border-radius:3px;border:1px solid var(--line2);background:var(--surf);color:var(--t2);white-space:nowrap}.row-act .btn.ok{color:#9dceb4;border-color:rgba(61,155,106,.4)}.row-act .btn.st{color:#e8b4b4;border-color:rgba(196,92,92,.4)}
+.qfoot{display:flex;gap:18px;padding:8px 22px;border-top:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--t3)}.qfoot .end{margin-left:auto}
 </style>
 </head>
 <body>
-<!-- Grammar 2 — Lineup empty/pending filter state (spec §6). PACKET_DATA.md -->
+<!-- Grammar 2 — Lineup pending-approval filter state (spec §6). PACKET_DATA.md -->
 <div class="app">
-<aside class="spine"><div class="mark"><b>Channel Intelligence</b><div class="sub" style="font-family:var(--mono);font-size:10px;color:var(--t3)">ASUS SA · 26Q3</div></div>
-<nav class="nav"><a class="on" href="#">Lineup</a></nav></aside>
+<aside class="spine">
+<div class="mark"><span class="word">Channel Intelligence</span><span class="sub">ASUS SA · 26Q3</span></div>
+<nav class="nav">
+<a href="#">Brief <span class="ct alert">8</span></a>
+<a class="on" href="#">Lineup</a>
+<a href="#">Stock <span class="ct alert">119</span></a>
+<a href="#">Settlement <span class="ct">310</span></a>
+<a href="#">Response <span class="ct">6</span></a>
+<a href="#">Steward <span class="ct alert">23</span></a>
+</nav>
+<div class="nav-rule"></div>
+<nav class="nav util"><a href="#">Reports</a><a href="#">Admin</a></nav>
+<div class="who"><b>W. Eliason</b>Key accounts · session 26m</div>
+</aside>
 <div class="main">
-<div class="top"><span style="color:var(--t3)">Lineup / <b style="color:var(--t2)">Pending approval</b></span></div>
+<div class="top"><div class="crumb">Lineup / <b>Pending approval</b></div></div>
 <div class="scope">
-<div><span class="fl">From</span><span class="pick">26Q3</span></div>
-<div><span class="fl">To</span><span class="pick">26Q3</span></div>
-<div><span class="fl">BU</span><span class="pick">All BUs</span></div>
-<div><span class="fl">Approval</span><span class="pick">Pending · 14</span></div>
-<span class="pick" style="color:#bfe8f8;border-color:rgba(61,184,232,.55)">Apply</span>
+<div class="f"><span class="fl">From</span><span class="pick">26Q3</span></div>
+<div class="f"><span class="fl">To</span><span class="pick">26Q3</span></div>
+<div class="f"><span class="fl">BU</span><span class="pick">All BUs</span></div>
+<div class="f"><span class="fl">Approval</span><span class="pick">Pending · 14</span></div>
+<span class="apply">Apply</span><span class="reset">Reset</span>
 <div class="view"><span class="fl">Saved view</span><span class="pick">Pending only ▾</span></div>
 </div>
-<div class="empty">
+<div class="directive">
 <div class="k">Pending approval cut</div>
 <p><b>14 lineup items</b> await approval before they flow to Stock Fill vs plan. Approve or reject here — Response and Stock read the approved plan only.</p>
-<p style="color:var(--t3);margin-top:10px">Clear the filter to return to the full <b>248-item</b> lineup.</p>
 </div>
-<div class="qfoot">0 of 14 shown in this preview frame · filter: Pending</div>
+<div class="work"><div class="gridwrap"><table class="g"><thead><tr>
+<th>Customer</th><th>SKU</th><th>Period</th><th class="r">Planned</th><th>BU</th><th>Approval</th><th></th>
+</tr></thead><tbody>
+<tr><td class="cust">Incredible Connection</td><td class="sku">MON-27-4K</td><td>26Q3 Q1</td><td class="r money n">220</td><td class="bu">ACC</td><td><span class="badge">Pending</span></td><td><span class="row-act"><span class="btn ok">Approve</span><span class="btn st">Reject</span></span></td></tr>
+<tr><td class="cust">Pinnacle</td><td class="sku">NB-X14-32-1T</td><td>26Q3 Q2</td><td class="r money n">290</td><td class="bu">NB</td><td><span class="badge">Pending</span></td><td><span class="row-act"><span class="btn ok">Approve</span><span class="btn st">Reject</span></span></td></tr>
+<tr><td class="cust">First Technology</td><td class="sku">MON-27-4K</td><td>26Q3 Q2</td><td class="r money n">140</td><td class="bu">ACC</td><td><span class="badge">Pending</span></td><td><span class="row-act"><span class="btn ok">Approve</span><span class="btn st">Reject</span></span></td></tr>
+<tr><td class="cust">Wootware</td><td class="sku">NB-X14-32-1T</td><td>26Q3 Q1</td><td class="r money n">88</td><td class="bu">NB</td><td><span class="badge">Pending</span></td><td><span class="row-act"><span class="btn ok">Approve</span><span class="btn st">Reject</span></span></td></tr>
+<tr><td class="cust">Hirsch's</td><td class="sku">DT-R7-32-1T</td><td>26Q3 Q2</td><td class="r money n">72</td><td class="bu">DT</td><td><span class="badge">Pending</span></td><td><span class="row-act"><span class="btn ok">Approve</span><span class="btn st">Reject</span></span></td></tr>
+<tr><td class="cust">Evetech</td><td class="sku">ACC-DOCK-USBC</td><td>26Q3 Q1</td><td class="r money n">160</td><td class="bu">ACC</td><td><span class="badge">Pending</span></td><td><span class="row-act"><span class="btn ok">Approve</span><span class="btn st">Reject</span></span></td></tr>
+<tr><td class="cust">Syntech</td><td class="sku">NB-X13-16-512</td><td>26Q3 Q2</td><td class="r money n">340</td><td class="bu">NB</td><td><span class="badge">Pending</span></td><td><span class="row-act"><span class="btn ok">Approve</span><span class="btn st">Reject</span></span></td></tr>
+<tr><td class="cust">Titan Ice</td><td class="sku">MON-27-4K</td><td>26Q3 Q1</td><td class="r money n">48</td><td class="bu">ACC</td><td><span class="badge">Pending</span></td><td><span class="row-act"><span class="btn ok">Approve</span><span class="btn st">Reject</span></span></td></tr>
+<tr><td class="cust">Rectron</td><td class="sku">NB-X14-32-1T</td><td>26Q3 Q2</td><td class="r money n">210</td><td class="bu">NB</td><td><span class="badge">Pending</span></td><td><span class="row-act"><span class="btn ok">Approve</span><span class="btn st">Reject</span></span></td></tr>
+<tr><td class="cust">Computer Mania</td><td class="sku">ACC-DOCK-USBC</td><td>26Q3 Q1</td><td class="r money n">96</td><td class="bu">ACC</td><td><span class="badge">Pending</span></td><td><span class="row-act"><span class="btn ok">Approve</span><span class="btn st">Reject</span></span></td></tr>
+<tr><td class="cust">Makro</td><td class="sku">DT-R7-32-1T</td><td>26Q3 Q2</td><td class="r money n">124</td><td class="bu">DT</td><td><span class="badge">Pending</span></td><td><span class="row-act"><span class="btn ok">Approve</span><span class="btn st">Reject</span></span></td></tr>
+<tr><td class="cust">Axiz</td><td class="sku">MON-27-4K</td><td>26Q3 Q1</td><td class="r money n">56</td><td class="bu">ACC</td><td><span class="badge">Pending</span></td><td><span class="row-act"><span class="btn ok">Approve</span><span class="btn st">Reject</span></span></td></tr>
+<tr><td class="cust">Mustek</td><td class="sku">NB-X14-32-1T</td><td>26Q3 Q2</td><td class="r money n">175</td><td class="bu">NB</td><td><span class="badge">Pending</span></td><td><span class="row-act"><span class="btn ok">Approve</span><span class="btn st">Reject</span></span></td></tr>
+<tr><td class="cust">Game</td><td class="sku">NB-X13-16-512</td><td>26Q3 Q1</td><td class="r money n">198</td><td class="bu">NB</td><td><span class="badge">Pending</span></td><td><span class="row-act"><span class="btn ok">Approve</span><span class="btn st">Reject</span></span></td></tr>
+</tbody></table></div>
+<div class="qfoot"><span>1–14 of 14 pending</span><span>Filter: Pending approval</span><span class="end">Clear filter to return to full 248-item lineup</span></div>
+</div>
 </div>
 </div>
 </body>

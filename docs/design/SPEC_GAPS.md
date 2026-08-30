@@ -65,3 +65,22 @@ plan · Cover · Inbound per confirmed Stock surface; map lens names aligned in
 ## GAP-012 — Concentration Read basis — **RESOLVED 2026-08-30**
 
 **Disposition:** One basis; footer restates same basis (spec §5).
+
+## GAP-013 — Lineup plan-owner affordances — **RESOLVED 2026-08-30**
+
+**Disposition:** Folded into spec §4 grammar 2 — pending rows: Approve/Reject; Planned
+column inline-edit cue; plan action bar (Net requirement · Calc · Export ·
+Apply); decided rows keep badges only. Reference: `lineup.html`,
+`lineup-pending.html`.
+
+## GAP-014 — State-frame shell parity — **RESOLVED 2026-08-30**
+
+**Disposition:** Folded into spec §6 — state frames (loading, empty, blocked,
+filtered cut) keep full shell; only work area differs. Reference:
+`lineup-pending.html`, `response-blocked.html`, `stock-cover-empty.html`.
+
+## GAP-015 — SUGGESTED hint casing — **RESOLVED 2026-08-30**
+
+**Disposition:** Folded into spec §3 — `.hint` class renders uppercase via CSS;
+markup casing not normative. Reference: `brief.html`, `response.html`,
+`funding-settlement-r3.html`.

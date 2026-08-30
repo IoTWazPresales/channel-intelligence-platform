@@ -1,5 +1,8 @@
 # CIP Design Language v1 — "Workbench"
 
+**STATUS: FROZEN v1.1 — 2026-08-30. Governing for implementation. Changes via
+SPEC_GAPS + adjudication only.**
+
 Status: converged with Warren over R1→R3 of the Funding settlement desk
 (`funding-settlement-r3.html` is the reference artifact). This document is the
 governing design spec for all CIP surfaces. Implementers build against it;
@@ -113,6 +116,9 @@ wk` (unit suffix after the figure when needed: `0.4w`, `1.2 pt`, `R 213,410`).
   fail 0 red) before any consequential action.
 - **Suggested action**: small cyan `SUGGESTED` hint on the next-best action.
   Exactly one per surface, only when the system can genuinely rank it.
+  **Rendered uppercase via CSS** on the `.hint` class *(folded from batch-2
+  audit, 2026-08-30)* — markup casing (`Suggested` vs `SUGGESTED`) is not
+  normative.
 - **Buttons**: secondary = surf + hairline; primary = cyan-dim fill, amount
   included when money moves. Destructive/consequential actions always route
   through preview/confirm surfaces (existing safety culture made visible).
@@ -137,6 +143,13 @@ use; if none fits, that is a design decision requiring review, not improv.
    fill %** (Inbound lens) — never bare "Fill %". **Not received** grain =
    open inbound lines with outstanding quantity; partial unit receipt does not
    reduce the line count (see `docs/design/PACKET_DATA.md`).
+   **Lineup ownership affordances** *(folded from SPEC_GAPS GAP-013,
+   2026-08-30)*: Lineup is plan origination on grammar 2 — pending rows carry
+   **Approve / Reject** row actions; the **Planned** column shows an inline-edit
+   cue (dashed underline + edit glyph on hover); a **plan action bar** below the
+   grid states net requirement and offers **Calc · Export · Apply**. Decided rows
+   keep approval badges only (no row actions). Reference: `lineup.html`,
+   `lineup-pending.html`.
 3. **Signal blotter** (landing page): ranked full-width signal rows — severity
    tick, one-line signal with figures, age/count, single next action. No KPI
    cards. Read at top ("what changed since yesterday"). **No filter bar**
@@ -185,6 +198,13 @@ e.g. FX undeclared) · confirmation (preview-first dialog with printed
 amounts/counts, warnings for irregular conditions such as zero evidence) ·
 mid-workflow (partially settled, partially received — the shape bars carry
 this). Every implemented surface ships all applicable states.
+
+**State frames keep the full shell** *(folded from batch-2 audit,
+2026-08-30)*: loading, empty, blocked, and filtered-cut states render the
+complete app chrome — spine with all nav containers and counts, top strip,
+util nav, session block — and vary **only the work area** (skeleton rows,
+directive copy, blocked panel, filtered grid). Reference:
+`lineup-pending.html`, `response-blocked.html`, `stock-cover-empty.html`.
 
 **Book-level blocked / stale on grammar 2** *(folded from SPEC_GAPS GAP-003,
 2026-08-30)*: when the whole book cut is untrusted (e.g. SOH reconciliation

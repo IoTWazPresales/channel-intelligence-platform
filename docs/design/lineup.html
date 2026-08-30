@@ -30,6 +30,9 @@
 table.g{width:100%;border-collapse:collapse;font-size:12px}table.g th{position:sticky;top:0;background:var(--surf);text-align:left;font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);padding:9px 10px 8px;border-bottom:1px solid var(--line2)}table.g th.r,table.g td.r{text-align:right}table.g td{padding:0 10px;height:36px;border-bottom:1px solid var(--line);vertical-align:middle}table.g tbody tr:hover{background:var(--surf)}tr.sel{background:var(--ac-dim)!important;box-shadow:inset 2px 0 0 var(--ac)}
 td.cust{font-weight:500}td.sku{font-family:var(--mono);font-size:11.5px;color:var(--t2)}td.money{font-family:var(--mono)}td.bu{font-family:var(--mono);font-size:11px;color:var(--t2)}
 .badge{display:inline-block;font-family:var(--mono);font-size:9.5px;padding:2px 6px;border-radius:3px;margin-left:6px}.badge.ok{color:#9dceb4;border:1px solid rgba(61,155,106,.4);background:var(--ok-dim)}.badge.wn{color:#e8d4a8;border:1px solid rgba(212,161,90,.4);background:var(--wn-dim)}.badge.sup{color:var(--t3);border:1px solid var(--line2)}
+td.planned-edit{cursor:text;position:relative}td.planned-edit .n{border-bottom:1px dashed rgba(61,184,232,.45);padding-bottom:1px}td.planned-edit::after{content:"✎";position:absolute;right:4px;top:50%;transform:translateY(-50%);font-size:9px;color:var(--t3);opacity:0}tr:hover td.planned-edit::after,tr.sel td.planned-edit::after{opacity:1}
+.row-act{display:flex;gap:6px;justify-content:flex-end}.row-act .btn{font:500 11px var(--ui);padding:4px 8px;border-radius:3px;border:1px solid var(--line2);background:var(--surf);color:var(--t2);white-space:nowrap}.row-act .btn.ok{color:#9dceb4;border-color:rgba(61,155,106,.4)}.row-act .btn.st{color:#e8b4b4;border-color:rgba(196,92,92,.4)}
+.planbar{display:flex;align-items:center;gap:16px;padding:10px 22px;border-top:1px solid var(--line);background:var(--elev);font-size:12px;color:var(--t2)}.planbar .lbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--t3)}.planbar .acts{display:flex;gap:10px;margin-left:auto}.planbar .acts .btn{font:500 12px var(--ui);padding:6px 12px;border-radius:4px;border:1px solid var(--line2);background:var(--surf);color:var(--t2)}.planbar .acts .btn.pri{background:rgba(61,184,232,.16);border-color:rgba(61,184,232,.55);color:#bfe8f8;font-weight:600}
 .qfoot{display:flex;gap:18px;padding:8px 22px;border-top:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--t3)}.qfoot .end{margin-left:auto}
 </style>
 </head>
@@ -67,7 +70,7 @@ td.cust{font-weight:500}td.sku{font-family:var(--mono);font-size:11.5px;color:va
 <div class="view"><span class="fl">Saved view</span><span class="pick">Lineup · 26Q3 ▾</span></div>
 </div>
 <div class="instr">
-<div class="read-line"><span class="tagread">Read</span><p><b>71% plan coverage</b> shipped against 26Q3 lineup — Q1 at <b>78%</b>, Q2 at <b>64%</b>. <b>14 items</b> still pending approval before Stock can trust Fill vs plan.</p></div>
+<div class="read-line"><span class="tagread">Read</span><p><b>71% plan coverage</b> shipped against 26Q3 lineup (Q1+Q2 combined). <b>14 items</b> still pending approval before Stock can trust Fill vs plan.</p></div>
 <div class="trend-h"><span class="lbl">Planned vs shipped by period</span><span class="leg">plan · shipped</span></div>
 <div class="trend">
 <div class="period"><div class="ph">Q1 · Jan–Mar</div><div class="bars"><div class="wk"><div class="plan" style="height:100%"></div><div class="ship" style="height:78%"></div></div><div class="wk"><div class="plan" style="height:88%"></div><div class="ship" style="height:70%"></div></div><div class="wk"><div class="plan" style="height:92%"></div><div class="ship" style="height:76%"></div></div></div></div>
@@ -80,20 +83,21 @@ td.cust{font-weight:500}td.sku{font-family:var(--mono);font-size:11.5px;color:va
 <tr class="sel"><td class="cust">Takealot</td><td class="sku">NB-X13-16-512</td><td>26Q3 Q1</td><td class="r money n">1,200</td><td class="bu">NB</td><td><span class="badge ok">Approved</span></td><td></td></tr>
 <tr><td class="cust">Takealot</td><td class="sku">NB-X14-32-1T</td><td>26Q3 Q2</td><td class="r money n">800</td><td class="bu">NB</td><td><span class="badge ok">Approved</span></td><td></td></tr>
 <tr><td class="cust">Makro</td><td class="sku">NB-X13-16-512</td><td>26Q3 Q1</td><td class="r money n">640</td><td class="bu">NB</td><td><span class="badge ok">Approved</span></td><td></td></tr>
-<tr><td class="cust">Incredible Connection</td><td class="sku">MON-27-4K</td><td>26Q3 Q1</td><td class="r money n">220</td><td class="bu">ACC</td><td><span class="badge wn">Pending</span></td><td></td></tr>
+<tr><td class="cust">Incredible Connection</td><td class="sku">MON-27-4K</td><td>26Q3 Q1</td><td class="r money n planned-edit">220</td><td class="bu">ACC</td><td><span class="badge wn">Pending</span></td><td><span class="row-act"><span class="btn ok">Approve</span><span class="btn st">Reject</span></span></td></tr>
 <tr><td class="cust">Game</td><td class="sku">ACC-DOCK-USBC</td><td>26Q3 Q2</td><td class="r money n">480</td><td class="bu">ACC</td><td><span class="badge ok">Approved</span></td><td></td></tr>
 <tr><td class="cust">Rectron</td><td class="sku">DT-R7-32-1T</td><td>26Q3 Q1</td><td class="r money n">360</td><td class="bu">DT</td><td><span class="badge ok">Approved</span></td><td></td></tr>
-<tr><td class="cust">Pinnacle</td><td class="sku">NB-X14-32-1T</td><td>26Q3 Q2</td><td class="r money n">290</td><td class="bu">NB</td><td><span class="badge wn">Pending</span></td><td></td></tr>
+<tr><td class="cust">Pinnacle</td><td class="sku">NB-X14-32-1T</td><td>26Q3 Q2</td><td class="r money n planned-edit">290</td><td class="bu">NB</td><td><span class="badge wn">Pending</span></td><td><span class="row-act"><span class="btn ok">Approve</span><span class="btn st">Reject</span></span></td></tr>
 <tr><td class="cust">Mustek</td><td class="sku">NB-X13-16-512</td><td>26Q3 Q1</td><td class="r money n">520</td><td class="bu">NB</td><td><span class="badge ok">Approved</span></td><td></td></tr>
 <tr><td class="cust">Computer Mania</td><td class="sku">DT-R7-32-1T</td><td>26Q3 Q2</td><td class="r money n">180</td><td class="bu">DT</td><td><span class="badge ok">Approved</span></td><td><span class="badge sup">Superseded</span></td></tr>
 <tr><td class="cust">Evetech</td><td class="sku">NB-X13-16-512</td><td>26Q3 Q1</td><td class="r money n">310</td><td class="bu">NB</td><td><span class="badge ok">Approved</span></td><td></td></tr>
-<tr><td class="cust">First Technology</td><td class="sku">MON-27-4K</td><td>26Q3 Q2</td><td class="r money n">140</td><td class="bu">ACC</td><td><span class="badge wn">Pending</span></td><td></td></tr>
+<tr><td class="cust">First Technology</td><td class="sku">MON-27-4K</td><td>26Q3 Q2</td><td class="r money n planned-edit">140</td><td class="bu">ACC</td><td><span class="badge wn">Pending</span></td><td><span class="row-act"><span class="btn ok">Approve</span><span class="btn st">Reject</span></span></td></tr>
 <tr><td class="cust">Hirsch's</td><td class="sku">MON-27-4K</td><td>26Q3 Q1</td><td class="r money n">96</td><td class="bu">ACC</td><td><span class="badge ok">Approved</span></td><td></td></tr>
 <tr><td class="cust">Axiz</td><td class="sku">NB-X13-16-512</td><td>26Q3 Q2</td><td class="r money n">420</td><td class="bu">NB</td><td><span class="badge ok">Approved</span></td><td></td></tr>
-<tr><td class="cust">Wootware</td><td class="sku">NB-X14-32-1T</td><td>26Q3 Q1</td><td class="r money n">88</td><td class="bu">NB</td><td><span class="badge wn">Pending</span></td><td></td></tr>
+<tr><td class="cust">Wootware</td><td class="sku">NB-X14-32-1T</td><td>26Q3 Q1</td><td class="r money n planned-edit">88</td><td class="bu">NB</td><td><span class="badge wn">Pending</span></td><td><span class="row-act"><span class="btn ok">Approve</span><span class="btn st">Reject</span></span></td></tr>
 <tr><td class="cust">Syntech</td><td class="sku">ACC-DOCK-USBC</td><td>26Q3 Q2</td><td class="r money n">200</td><td class="bu">ACC</td><td><span class="badge ok">Approved</span></td><td></td></tr>
 <tr><td class="cust">Titan Ice</td><td class="sku">DT-R7-32-1T</td><td>26Q3 Q1</td><td class="r money n">64</td><td class="bu">DT</td><td><span class="badge ok">Approved</span></td><td></td></tr>
 </tbody></table></div>
+<div class="planbar"><span class="lbl">Net requirement</span><span class="n">3,420 units (B2)</span><span class="acts"><span class="btn">Calc</span><span class="btn">Export</span><span class="btn pri">Apply</span></span></div>
 <div class="qfoot"><span>1–16 of 248</span><span>14 pending approval · B2 net req <b>3,420</b></span><span class="end">Sorted by customer, period</span></div>
 </div>
 </div>

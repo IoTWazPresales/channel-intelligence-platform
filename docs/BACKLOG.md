@@ -1952,7 +1952,7 @@ If either is intended backlog, add a sourced entry after confirming where the de
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-30 |
+| **Status / parked** | **Done** · 2026-08-30 |
 | **Effort** | Medium |
 | **Source** | `docs/design/CIP_DESIGN_LANGUAGE.md` v1; `docs/design/CIP_NAV_MAP.md`; `CONTEXT.md` 2026-08-30 design-language decision. |
 | **Idea** | First implementer-build / Fable-audit batch: high-fidelity mockups (or product slices) for **Channel Cover** (grammar 2), **Today signal blotter** (grammar 3), and **Shipping/inbound** lens — all audited against `CIP_DESIGN_LANGUAGE.md`, not legacy Concept-A or fresh-audit frame HTML. |
@@ -1962,6 +1962,7 @@ If either is intended backlog, add a sourced entry after confirming where the de
 | **Behavior to retain** | Job-spine containment from `CIP_NAV_MAP.md`; Funding grammar 1 reference `docs/design/funding-settlement-r3.html`. |
 | **Out of scope** | Charter acceptance; production nav collapse; EIF programme commit. |
 | **TRIGGER** | Warren supplies final nav vocabulary for Today / Channel / Planner / Imports containers. |
+| **Resolution** | TRIGGER met 2026-08-30 (NAMING.md). Batch 1+2 mockups audited; packet frozen v1.1. Exemplars: `brief.html`, `stock-cover.html`, `stock-inbound.html`, `lineup.html`, `response.html`, `steward.html` + state frames. |
 
 ---
 
@@ -1969,7 +1970,7 @@ If either is intended backlog, add a sourced entry after confirming where the de
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-30 |
+| **Status / parked** | **Trigger MET** · 2026-08-30 — **decision with Warren** |
 | **Effort** | Small (gate, not build) |
 | **Source** | `docs/design/CIP_DESIGN_LANGUAGE.md` § surface grammars; `docs/AUTONOMOUS_BUILD_CHARTER.md` (pending). |
 | **Idea** | Do not accept the autonomous-build charter until each of the **five surface grammars** in `CIP_DESIGN_LANGUAGE.md` has at least one **audited exemplar** (rendered + Fable PASS or PASS WITH NOTES) — not wireframes, not disposition prose alone. |
@@ -1979,3 +1980,4 @@ If either is intended backlog, add a sourced entry after confirming where the de
 | **Behavior to retain** | `CIP_DESIGN_LANGUAGE.md` is the single visual authority post 2026-08-30. |
 | **Out of scope** | Implementing all five in product source in one unit. |
 | **TRIGGER** | All five surface grammars have an audited exemplar on file. |
+| **Resolution** | TRIGGER met 2026-08-30 — all five grammars have audited exemplars in `docs/design/` (batch 1+2 freeze). Warren to accept or defer charter (`docs/AUTONOMOUS_BUILD_CHARTER.md`). |

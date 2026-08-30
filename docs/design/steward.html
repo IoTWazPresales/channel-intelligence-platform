@@ -2,33 +2,71 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Steward — Channel Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 <style>
 :root{--bg:#14161a;--elev:#1a1d23;--surf:#1e2229;--line:rgba(120,160,190,.16);--line2:rgba(120,160,190,.3);--tx:rgba(245,247,250,.96);--t2:rgba(186,198,210,.75);--t3:rgba(160,176,192,.5);--ac:#3db8e8;--ac-dim:rgba(61,184,232,.13);--st:#c45c5c;--st-dim:rgba(196,92,92,.14);--ui:Inter,system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace}
-body{margin:0;font:12.5px/1.45 var(--ui);background:var(--bg);color:var(--tx)}.n{font-family:var(--mono)}
-.app{display:grid;grid-template-columns:190px 1fr;min-height:100vh}.spine{background:var(--elev);border-right:1px solid var(--line)}.nav a.on{background:var(--ac-dim);box-shadow:inset 2px 0 0 var(--ac)}
-.main{display:flex;flex-direction:column;min-height:100vh}.top,.queues,.qfoot{padding:10px 22px;border-bottom:1px solid var(--line)}.queues{display:flex;gap:16px;background:var(--elev);font-family:var(--mono);font-size:11px;color:var(--t3)}.queues b{color:var(--t2)}
-table.g{width:100%;border-collapse:collapse;font-size:12px}table.g th{text-align:left;font-size:9.5px;text-transform:uppercase;color:var(--t3);padding:9px 10px;border-bottom:1px solid var(--line2);background:var(--surf)}table.g td{padding:0 10px;height:36px;border-bottom:1px solid var(--line)}.fail{color:#e8b4b4}
-.btn{font-size:12px;padding:5px 10px;border:1px solid var(--line2);border-radius:4px;background:var(--surf)}
+*{box-sizing:border-box}html,body{margin:0;height:100%}body{font:12.5px/1.45 var(--ui);background:var(--bg);color:var(--tx)}
+.n{font-family:var(--mono);font-variant-numeric:tabular-nums}a{color:inherit;text-decoration:none}
+.app{display:grid;grid-template-columns:190px minmax(0,1fr);min-height:100vh}
+.spine{background:var(--elev);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:0 0 14px}
+.mark{padding:18px 16px 16px;border-bottom:1px solid var(--line)}.mark .word{font-size:13px;font-weight:650}.mark .sub{display:block;margin-top:4px;font-family:var(--mono);font-size:10px;color:var(--t3);letter-spacing:.08em;text-transform:uppercase}
+.nav{padding:10px 8px 0;display:flex;flex-direction:column;gap:1px}.nav a{display:flex;justify-content:space-between;padding:8px 10px;border-radius:5px;color:var(--t2);font-size:13px;font-weight:500}.nav a.on{background:var(--ac-dim);box-shadow:inset 2px 0 0 var(--ac);color:var(--tx)}.nav a .ct{font-family:var(--mono);font-size:10.5px;color:var(--t3)}.nav a.on .ct{color:var(--ac)}.nav a .ct.alert{color:#e8b4b4}
+.nav-rule{height:1px;background:var(--line);margin:12px 16px}.nav.util a{font-size:12px;color:var(--t3);padding:6px 10px}
+.who{margin-top:auto;padding:12px 16px 0;border-top:1px solid var(--line);font-size:11px;color:var(--t3)}.who b{display:block;color:var(--t2);font-size:12px}
+.main{display:flex;flex-direction:column;min-width:0;min-height:100vh}
+.top{padding:11px 22px;border-bottom:1px solid var(--line)}.crumb{font-size:12px;color:var(--t3)}.crumb b{color:var(--t2)}
+.queues{display:flex;gap:16px;padding:10px 22px;border-bottom:1px solid var(--line);background:var(--elev);font-family:var(--mono);font-size:11px;color:var(--t3)}.queues b{color:var(--t2)}
+.work{flex:1;overflow:auto}
+table.g{width:100%;border-collapse:collapse;font-size:12px}table.g th{position:sticky;top:0;z-index:1;text-align:left;font-size:9.5px;text-transform:uppercase;color:var(--t3);padding:9px 10px;border-bottom:1px solid var(--line2);background:var(--surf)}table.g td{padding:0 10px;height:36px;border-bottom:1px solid var(--line);vertical-align:middle}table.g tbody tr:hover{background:var(--surf)}.fail{color:#e8b4b4}
+.btn{font-size:12px;padding:5px 10px;border:1px solid var(--line2);border-radius:4px;background:var(--surf);color:var(--t2);margin-right:4px}
+.qfoot{display:flex;gap:18px;padding:8px 22px;border-top:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--t3)}.qfoot .end{margin-left:auto}
 </style>
 </head>
 <body>
 <!-- Grammar 5: Import Center jobs grid. PACKET_DATA.md -->
 <div class="app">
-<aside class="spine"><div style="padding:18px 16px;border-bottom:1px solid var(--line)"><b>Channel Intelligence</b></div>
-<nav><a class="on" href="#" style="display:block;padding:8px 10px">Steward <span class="n" style="color:#e8b4b4">23</span></a></nav></aside>
+<aside class="spine">
+<div class="mark"><span class="word">Channel Intelligence</span><span class="sub">ASUS SA · 26Q3</span></div>
+<nav class="nav">
+<a href="#">Brief <span class="ct alert">8</span></a>
+<a href="#">Lineup</a>
+<a href="#">Stock <span class="ct alert">119</span></a>
+<a href="#">Settlement <span class="ct">310</span></a>
+<a href="#">Response <span class="ct">6</span></a>
+<a class="on" href="#">Steward <span class="ct alert">23</span></a>
+</nav>
+<div class="nav-rule"></div>
+<nav class="nav util"><a href="#">Reports</a><a href="#">Admin</a></nav>
+<div class="who"><b>W. Eliason</b>Key accounts · session 26m</div>
+</aside>
 <div class="main">
-<div class="top"><span style="color:var(--t3)">Steward / <b style="color:var(--t2)">Import Center</b></span></div>
+<div class="top"><div class="crumb">Steward / <b>Import Center</b></div></div>
 <div class="queues"><span>DSI <b>41</b></span><span>CST <b>18</b></span><span>Shipment <b>12</b></span><span>Lineup <b>6</b></span><span>Customer <b>7</b></span></div>
-<table class="g"><thead><tr><th>Job</th><th>Template</th><th>Reason</th><th>Failed</th><th></th></tr></thead><tbody>
-<tr><td class="n">IMP-99201</td><td>DSI</td><td class="fail">Column "SOH" not mapped — file uses "Stock on hand"</td><td class="n">18 Aug</td><td><span class="btn">Retry</span> <span class="btn">Archive</span></td></tr>
-<tr><td class="n">IMP-99188</td><td>DSI</td><td class="fail">Distributor token "AXIZ JHB" has no steward mapping</td><td class="n">18 Aug</td><td><span class="btn">Retry</span> <span class="btn">Steward</span></td></tr>
+<div class="work"><table class="g"><thead><tr><th>Job</th><th>Template</th><th>Reason</th><th>Failed</th><th></th></tr></thead><tbody>
+<tr><td class="n">IMP-99201</td><td>DSI</td><td class="fail">Column "SOH" not mapped — file uses "Stock on hand"</td><td class="n">18 Aug</td><td><span class="btn">Retry</span><span class="btn">Archive</span></td></tr>
+<tr><td class="n">IMP-99188</td><td>DSI</td><td class="fail">Distributor token "AXIZ JHB" has no steward mapping</td><td class="n">18 Aug</td><td><span class="btn">Retry</span><span class="btn">Steward</span></td></tr>
 <tr><td class="n">IMP-99170</td><td>Shipment</td><td class="fail">ETA week missing on 14 rows</td><td class="n">17 Aug</td><td><span class="btn">Retry</span></td></tr>
 <tr><td class="n">IMP-99155</td><td>CST sell-through</td><td class="fail">Customer file stopped at row 4,210 — encoding error</td><td class="n">16 Aug</td><td><span class="btn">Retry</span></td></tr>
 <tr><td class="n">IMP-99142</td><td>Lineup</td><td class="fail">Period "26Q3Q1" not recognised — use Q1+Q2 split</td><td class="n">15 Aug</td><td><span class="btn">Retry</span></td></tr>
-</tbody></table>
-<div class="qfoot" style="font-family:var(--mono);font-size:11px;color:var(--t3)">1–5 of 23 failed · sorted by failed date</div>
-</div></div>
+<tr><td class="n">IMP-99138</td><td>DSI</td><td class="fail">Product token "NB-X13-16" ambiguous — 3 candidates</td><td class="n">15 Aug</td><td><span class="btn">Retry</span><span class="btn">Steward</span></td></tr>
+<tr><td class="n">IMP-99125</td><td>Shipment</td><td class="fail">Distributor "RECTRON CPT" not mapped</td><td class="n">14 Aug</td><td><span class="btn">Retry</span><span class="btn">Steward</span></td></tr>
+<tr><td class="n">IMP-99112</td><td>DSI</td><td class="fail">Transaction date before distributor go-live on 22 rows</td><td class="n">14 Aug</td><td><span class="btn">Retry</span></td></tr>
+<tr><td class="n">IMP-99098</td><td>CST sell-through</td><td class="fail">Customer token "GAME ONLINE" has no steward mapping</td><td class="n">13 Aug</td><td><span class="btn">Retry</span><span class="btn">Steward</span></td></tr>
+<tr><td class="n">IMP-99085</td><td>Lineup</td><td class="fail">SKU "MON-27" not found — use full model code</td><td class="n">12 Aug</td><td><span class="btn">Retry</span></td></tr>
+<tr><td class="n">IMP-99071</td><td>DSI</td><td class="fail">Negative SOH on 8 rows — file rejected</td><td class="n">12 Aug</td><td><span class="btn">Retry</span></td></tr>
+<tr><td class="n">IMP-99058</td><td>Shipment</td><td class="fail">Ordered quantity zero on 6 rows</td><td class="n">11 Aug</td><td><span class="btn">Retry</span></td></tr>
+<tr><td class="n">IMP-99044</td><td>DSI</td><td class="fail">File vintage 2026-08-04 older than current book 2026-08-18</td><td class="n">10 Aug</td><td><span class="btn">Retry</span><span class="btn">Archive</span></td></tr>
+<tr><td class="n">IMP-99031</td><td>CST sell-through</td><td class="fail">Price column missing — template expects "Unit price"</td><td class="n">9 Aug</td><td><span class="btn">Retry</span></td></tr>
+<tr><td class="n">IMP-99018</td><td>Lineup</td><td class="fail">Customer "TAKEALOT MKT" not mapped to dim_customer</td><td class="n">8 Aug</td><td><span class="btn">Retry</span><span class="btn">Steward</span></td></tr>
+<tr><td class="n">IMP-99005</td><td>DSI</td><td class="fail">Duplicate source_key on 41 rows — re-import blocked</td><td class="n">7 Aug</td><td><span class="btn">Retry</span></td></tr>
+<tr><td class="n">IMP-98992</td><td>Shipment</td><td class="fail">PO reference missing on 19 rows</td><td class="n">6 Aug</td><td><span class="btn">Retry</span></td></tr>
+<tr><td class="n">IMP-98978</td><td>DSI</td><td class="fail">Workbook sheet "Inventory" not found — expected "DSI"</td><td class="n">5 Aug</td><td><span class="btn">Retry</span></td></tr>
+</tbody></table></div>
+<div class="qfoot"><span>1–18 of 23 failed</span><span>Sorted by failed date</span><span class="end">Retry re-queues job · Archive removes from attention count</span></div>
+</div>
+</div>
 </body>
 </html>
