@@ -1,8 +1,8 @@
 # CIP navigation naming study
 
-Status: recommendation. Labels for containers 1, 3, 4, 5, 6 and the two
-utilities are **provisional** until Warren confirms. **Lineup** is settled and
-is not re-opened here.
+Status: **confirmed** (Warren, 2026-08-30). Full set: Brief · Lineup · Stock ·
+Settlement · Response · Steward · Reports · Admin. **Lineup** was already
+settled; the other seven labels are now confirmed and are not re-opened here.
 
 Specialist: UX-006 (ux-content-naming-specialist). Tests applied: a good label
 tells the user what the thing is; uses the same term everywhere; avoids
@@ -229,5 +229,5 @@ Spine order: Brief (attention count) · Lineup · Stock (cover-tail count) ·
 Settlement (open-book count) · Response (ranked-item count) · Steward
 (failed-job count, red) · rule · Reports · Admin.
 
-Lineup is settled. The other seven words are the naming-study recommendation,
-still provisional until Warren confirms.
+Lineup was settled earlier. The other seven words were confirmed by Warren on
+2026-08-30 and are binding for mockups and implementation.

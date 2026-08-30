@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Brief — Channel Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg:#14161a; --elev:#1a1d23; --surf:#1e2229; --surf2:#252a33;
+  --line:rgba(120,160,190,.16); --line2:rgba(120,160,190,.3);
+  --tx:rgba(245,247,250,.96); --t2:rgba(186,198,210,.75); --t3:rgba(160,176,192,.5);
+  --ac:#3db8e8; --ac-dim:rgba(61,184,232,.13);
+  --ok:#3d9b6a; --ok-dim:rgba(61,155,106,.14);
+  --wn:#d4a15a; --wn-dim:rgba(212,161,90,.13);
+  --st:#c45c5c; --st-dim:rgba(196,92,92,.14);
+  --ui:Inter,system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font:12.5px/1.45 var(--ui);background:var(--bg);color:var(--tx);-webkit-font-smoothing:antialiased}
+.n{font-family:var(--mono);font-variant-numeric:tabular-nums lining-nums;letter-spacing:-.01em}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--ac);outline-offset:1px;border-radius:3px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.app{display:grid;grid-template-columns:190px minmax(0,1fr);min-height:100vh}
+.spine{background:var(--elev);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:0 0 14px}
+.mark{padding:18px 16px 16px;border-bottom:1px solid var(--line)}
+.mark .word{font-size:13px;font-weight:650;letter-spacing:-.01em;display:block}
+.mark .sub{display:block;margin-top:4px;font-family:var(--mono);font-size:10px;color:var(--t3);letter-spacing:.08em;text-transform:uppercase}
+.nav{padding:10px 8px 0;display:flex;flex-direction:column;gap:1px}
+.nav a{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:5px;color:var(--t2);font-size:13px;font-weight:500}
+.nav a:hover{background:var(--surf);color:var(--tx)}
+.nav a.on{background:var(--ac-dim);color:var(--tx);box-shadow:inset 2px 0 0 var(--ac)}
+.nav a .ct{font-family:var(--mono);font-size:10.5px;color:var(--t3)}
+.nav a.on .ct{color:var(--ac)}
+.nav a .ct.alert{color:var(--st)}
+.nav-rule{height:1px;background:var(--line);margin:12px 16px}
+.nav.util a{font-size:12px;font-weight:400;color:var(--t3);padding:6px 10px}
+.who{margin-top:auto;padding:12px 16px 0;border-top:1px solid var(--line);font-size:11px;color:var(--t3)}
+.who b{display:block;color:var(--t2);font-weight:500;font-size:12px;margin-bottom:1px}
+
+.main{display:flex;flex-direction:column;min-width:0;min-height:100vh}
+.top{display:flex;align-items:baseline;padding:11px 22px 10px;border-bottom:1px solid var(--line)}
+.crumb{font-size:12px;color:var(--t3)}
+.crumb b{color:var(--t2);font-weight:500}
+
+.readblock{padding:14px 22px 12px;border-bottom:1px solid var(--line);background:var(--elev)}
+.read-line{display:flex;align-items:baseline;gap:10px}
+.tagread{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--ac);border:1px solid rgba(61,184,232,.35);border-radius:3px;padding:2px 6px;white-space:nowrap}
+.read-line p{margin:0;font-size:12px;color:var(--t2);line-height:1.5}
+.read-line p b{color:var(--tx);font-weight:600}
+
+.blotter{flex:1;overflow:auto}
+.sig{display:grid;grid-template-columns:20px minmax(0,1fr) 88px 148px;gap:12px 16px;align-items:center;padding:12px 22px;border-bottom:1px solid var(--line)}
+.sig:hover{background:var(--surf)}
+.sig .tick{width:8px;height:8px;border-radius:2px;margin-left:6px}
+.sig .tick.st{background:var(--st)}
+.sig .tick.wn{background:var(--wn)}
+.sig .tick.ok{background:var(--ok)}
+.sig .line{font-size:12.5px;color:var(--t2)}
+.sig .line b{color:var(--tx);font-weight:600}
+.sig .meta{font-family:var(--mono);font-size:10.5px;color:var(--t3);text-align:right}
+.sig .meta.hot{color:var(--wn)}
+.sig .act{text-align:right}
+.btn-act{display:inline-block;font:500 12px var(--ui);padding:6px 12px;border-radius:4px;border:1px solid var(--line2);background:var(--surf);color:var(--tx);white-space:nowrap;position:relative}
+.btn-act.pri{background:rgba(61,184,232,.16);border-color:rgba(61,184,232,.55);color:#bfe8f8;font-weight:600}
+.btn-act .hint{position:absolute;top:-7px;right:-6px;font-family:var(--mono);font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:var(--ac);background:var(--bg);border:1px solid rgba(61,184,232,.45);border-radius:3px;padding:1px 5px}
+
+.bfoot{display:flex;align-items:baseline;gap:18px;padding:8px 22px;border-top:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--t3)}
+.bfoot .end{margin-left:auto}
+</style>
+</head>
+<body>
+<!--
+  Grammar 3: signal blotter (CIP_DESIGN_LANGUAGE.md §4).
+  Ranking: trust → position → money. Exactly one SUGGESTED hint.
+  Confirmed nav (NAMING.md, 2026-08-30).
+-->
+<div class="app">
+  <aside class="spine">
+    <div class="mark">
+      <span class="word">Channel Intelligence</span>
+      <span class="sub">ASUS SA · 26Q3</span>
+    </div>
+    <nav class="nav">
+      <a class="on" href="#">Brief <span class="ct alert">7</span></a>
+      <a href="#">Lineup</a>
+      <a href="#">Stock <span class="ct alert">119</span></a>
+      <a href="#">Settlement <span class="ct">310</span></a>
+      <a href="#">Response <span class="ct">6</span></a>
+      <a href="#">Steward <span class="ct alert">23</span></a>
+    </nav>
+    <div class="nav-rule"></div>
+    <nav class="nav util">
+      <a href="#">Reports</a>
+      <a href="#">Admin</a>
+    </nav>
+    <div class="who"><b>W. Eliason</b>Key accounts · session 26m</div>
+  </aside>
+
+  <div class="main">
+    <div class="top">
+      <div class="crumb"><b>Brief</b> · attention queue</div>
+    </div>
+
+    <div class="readblock">
+      <div class="read-line">
+        <span class="tagread">Read</span>
+        <p>Since yesterday: <b>8 pairs</b> dropped under 4w cover, <b>1</b> new failed import, settlement cleared <b>R 213k</b>. Book trust is blocked until SOH recon runs.</p>
+      </div>
+    </div>
+
+    <div class="blotter">
+      <div class="sig">
+        <span class="tick st"></span>
+        <span class="line"><b>23 failed imports</b> — steward queue; latest batch DSI 2026-08-18</span>
+        <span class="meta hot">23 jobs</span>
+        <span class="act"><span class="btn-act pri">Open steward queue<span class="hint">Suggested</span></span></span>
+      </div>
+      <div class="sig">
+        <span class="tick st"></span>
+        <span class="line"><b>SOH reconciliation not run</b> — derived cover and replenish flags are unverified</span>
+        <span class="meta">book-wide</span>
+        <span class="act"><span class="btn-act">Run SOH recon</span></span>
+      </div>
+      <div class="sig">
+        <span class="tick wn"></span>
+        <span class="line">DSI vintage <b>2026-08-18</b> — stock position is 12 days stale</span>
+        <span class="meta hot">12d</span>
+        <span class="act"><span class="btn-act">Import DSI</span></span>
+      </div>
+      <div class="sig">
+        <span class="tick wn"></span>
+        <span class="line">Sell-out gap since <b>2026-06-12</b> — customer sales file missing for 6 accounts</span>
+        <span class="meta hot">79d</span>
+        <span class="act"><span class="btn-act">Import sell-out</span></span>
+      </div>
+      <div class="sig">
+        <span class="tick st"></span>
+        <span class="line"><b>119 pairs</b> under 4 weeks of cover vs book mean <b>24.3w</b></span>
+        <span class="meta">119 pairs</span>
+        <span class="act"><span class="btn-act">Open Stock · Cover</span></span>
+      </div>
+      <div class="sig">
+        <span class="tick wn"></span>
+        <span class="line"><b>1,713</b> inbound lines not received — pipeline fill <b>38%</b></span>
+        <span class="meta">1,713 lines</span>
+        <span class="act"><span class="btn-act">Open Stock · Inbound</span></span>
+      </div>
+      <div class="sig">
+        <span class="tick wn"></span>
+        <span class="line">Settlement blocked — <b>1</b> case FX undeclared; funding recon holds <b>R 288k</b></span>
+        <span class="meta">1 case</span>
+        <span class="act"><span class="btn-act">Open Settlement</span></span>
+      </div>
+      <div class="sig">
+        <span class="tick wn"></span>
+        <span class="line"><b>103</b> missing SKU assumptions on open settlement cases</span>
+        <span class="meta">103 SKUs</span>
+        <span class="act"><span class="btn-act">Open assumptions</span></span>
+      </div>
+    </div>
+
+    <div class="bfoot">
+      <span>8 signals · ranked trust → position → money</span>
+      <span class="end">Updated 30 Aug 2026 · 16:04</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

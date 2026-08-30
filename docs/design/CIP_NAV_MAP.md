@@ -4,13 +4,13 @@ Companion to CIP_DESIGN_LANGUAGE.md. This restates the completed disposition
 work (route audit + fresh SHOULD-BE) as navigation: **six job containers** plus
 Reports and Admin utilities, with every disposed surface assigned.
 
-**Container LABELS are provisional** pending Warren’s confirmation of
-`docs/design/NAMING.md`, except **LINEUP**, which is settled operator
-vocabulary. The **STRUCTURE** below is decided. Rename any provisional
-container at will; the containment does not change.
+**Container labels are confirmed** (Warren, 2026-08-30; see
+`docs/design/NAMING.md`). **LINEUP** was settled earlier. The **STRUCTURE**
+below is decided — rename containment only through an explicit disposition,
+not ad hoc.
 
-Working provisional labels (naming study recommendations, not confirmed):
-Brief · Lineup · Stock · Settlement · Response · Steward · Reports · Admin.
+Confirmed spine labels: Brief · Lineup · Stock · Settlement · Response ·
+Steward · Reports · Admin.
 
 Legend: (lens) = tab within the surface · (record) = opens in place, context
 preserved · (context) = appears as evidence/strip on a parent, not a page ·
@@ -19,7 +19,7 @@ exists as a stub; not a job container.
 
 ---
 
-## 1. Landing / attention blotter  [provisional label: Brief — grammar 3]
+## 1. Landing / attention blotter  [Brief — grammar 3]
 
 Roles: landing / attention blotter. Signal blotter grammar.
 
@@ -58,7 +58,7 @@ ranks commercial responses — both read, neither edits.
 Absorbs: `/lineup`; commercial-planner **Lineup coverage** tab; `/buy-plans`
 (net-requirement).
 
-## 3. Channel position & execution  [provisional label: Stock — grammar 2]
+## 3. Channel position & execution  [Stock — grammar 2]
 
 One surface, sticky From/To/BU filter bar. Measures execution against LINEUP;
 does not edit the plan. Lenses:
@@ -75,7 +75,7 @@ does not edit the plan. Lenses:
 - (retired) /inventory paste as a second SOH — reported SOH remains a recon
   check only
 
-## 4. Funding & settlement  [provisional label: Settlement — grammar 1]
+## 4. Funding & settlement  [Settlement — grammar 1]
 
 - Queue + case split: the 310-case settlement book
 - (record) Case: Lines / Evidence / Assumptions / Activity; settle flow with
@@ -86,7 +86,7 @@ does not edit the plan. Lenses:
   `/budget-requests` as ceiling/request workflow context on this book
 - Administration of budgets lives in ADMIN — not this container
 
-## 5. Commercial response  [provisional label: Response — grammar 4]
+## 5. Commercial response  [Response — grammar 4]
 
 - Ranked commercial actions; do-nothing is a first-class recorded action
 - Calculators unparked as evidence-backed tools: buy/cover math, promo
@@ -98,7 +98,7 @@ does not edit the plan. Lenses:
 - (retired) /promotions scaffold as a standalone module
 - Reads LINEUP; does not edit the plan
 
-## 6. Ingest & steward  [provisional label: Steward — grammar 5 + grammar 1 worklists]
+## 6. Ingest & steward  [Steward — grammar 5 + grammar 1 worklists]
 
 - Import Center: jobs, failures, retry/archive (grammar 5 grid)
 - Steward engine: DSI / CST / shipment / lineup worklists (grammar 1
@@ -114,12 +114,11 @@ does not edit the plan. Lenses:
   record**, not a standalone admin page; consumed by containers (4) and (5)
 - (retired, on trigger) /admin/mappings once steward is the only queue
 
-## UTILITIES  [labels provisional — see NAMING.md]
+## UTILITIES
 
-- REPORTS [provisional: Reports]: report builder, saved views, scheduled
-  deliveries/inbox digest
-- ADMIN [provisional: Admin]: users, settings, SQL, ops, audit, **planner
-  defaults**, budget administration, semantic overlay
+- REPORTS: report builder, saved views, scheduled deliveries/inbox digest
+- ADMIN: users, settings, SQL, ops, audit, **planner defaults**, budget
+  administration, semantic overlay
 
 ## SHELL / UTILITY  [not containers]
 
@@ -146,9 +145,9 @@ from this document. The UNMAPPED section of `NAV_COVERAGE.md` must be empty.
 Any new unmapped route is a disposition gap to resolve before charter, not a
 nav-naming problem.
 
-## Open naming decisions (Warren)
+## Naming (settled)
 
-Container labels for 1, 3, 4, 5, 6 and the two utilities are **provisional**.
-LINEUP is settled. Study: `docs/design/NAMING.md`. Lens and tab names above
-are proposals and equally renameable. Spec instrument switcher uses
-Sell-out / Fill vs plan / Cover / Inbound — see `docs/design/SPEC_GAPS.md`.
+Container labels confirmed 2026-08-30 (`docs/design/NAMING.md`). Stock lens
+switcher (instrument control): Sell-out · Fill vs plan · Cover · Inbound
+(spec §5). Map lens names (Cover · Movement · Execution · Inbound) are
+internal job names; operator-facing switcher uses the spec labels above.

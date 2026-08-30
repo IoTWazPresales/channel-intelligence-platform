@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Stock · Inbound — Channel Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg:#14161a; --elev:#1a1d23; --surf:#1e2229; --surf2:#252a33;
+  --line:rgba(120,160,190,.16); --line2:rgba(120,160,190,.3);
+  --tx:rgba(245,247,250,.96); --t2:rgba(186,198,210,.75); --t3:rgba(160,176,192,.5);
+  --ac:#3db8e8; --ac-dim:rgba(61,184,232,.13);
+  --ok:#3d9b6a; --ok-dim:rgba(61,155,106,.14);
+  --wn:#d4a15a; --wn-dim:rgba(212,161,90,.13);
+  --st:#c45c5c; --st-dim:rgba(196,92,92,.14);
+  --ui:Inter,system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font:12.5px/1.45 var(--ui);background:var(--bg);color:var(--tx);-webkit-font-smoothing:antialiased}
+.n{font-family:var(--mono);font-variant-numeric:tabular-nums lining-nums;letter-spacing:-.01em}
+.cur{color:var(--t3);font-weight:400;margin-right:.3em}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--ac);outline-offset:1px;border-radius:3px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.app{display:grid;grid-template-columns:190px minmax(0,1fr);min-height:100vh}
+.spine{background:var(--elev);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:0 0 14px}
+.mark{padding:18px 16px 16px;border-bottom:1px solid var(--line)}
+.mark .word{font-size:13px;font-weight:650;letter-spacing:-.01em;display:block}
+.mark .sub{display:block;margin-top:4px;font-family:var(--mono);font-size:10px;color:var(--t3);letter-spacing:.08em;text-transform:uppercase}
+.nav{padding:10px 8px 0;display:flex;flex-direction:column;gap:1px}
+.nav a{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:5px;color:var(--t2);font-size:13px;font-weight:500}
+.nav a:hover{background:var(--surf);color:var(--tx)}
+.nav a.on{background:var(--ac-dim);color:var(--tx);box-shadow:inset 2px 0 0 var(--ac)}
+.nav a .ct{font-family:var(--mono);font-size:10.5px;color:var(--t3)}
+.nav a.on .ct{color:var(--ac)}
+.nav a .ct.alert{color:var(--st)}
+.nav-rule{height:1px;background:var(--line);margin:12px 16px}
+.nav.util a{font-size:12px;font-weight:400;color:var(--t3);padding:6px 10px}
+.who{margin-top:auto;padding:12px 16px 0;border-top:1px solid var(--line);font-size:11px;color:var(--t3)}
+.who b{display:block;color:var(--t2);font-weight:500;font-size:12px;margin-bottom:1px}
+
+.main{display:flex;flex-direction:column;min-width:0;min-height:100vh}
+.top{display:flex;align-items:baseline;gap:18px;padding:11px 22px 10px;border-bottom:1px solid var(--line)}
+.crumb{font-size:12px;color:var(--t3)}
+.crumb b{color:var(--t2);font-weight:500}
+.regime{margin-left:auto;display:flex;gap:26px}
+.regime div{display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+.regime .l{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--t3)}
+.regime .v{font-family:var(--mono);font-size:13px;color:var(--t2)}
+.regime .v.risk{color:#e8b4b4}
+.regime .d{font-family:var(--mono);font-size:10px;margin-top:1px}
+.regime .d.good{color:#9dceb4}
+.regime .d.bad{color:#e8b4b4}
+
+.scope{display:flex;align-items:flex-end;gap:12px;padding:10px 22px 11px;border-bottom:1px solid var(--line);background:var(--elev);position:sticky;top:0;z-index:3}
+.scope .f{display:flex;flex-direction:column;gap:4px}
+.scope .f .fl{font-size:9.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.07em}
+.scope .pick{font:500 12px var(--ui);color:var(--tx);background:var(--surf);border:1px solid var(--line2);border-radius:4px;padding:5px 26px 5px 10px;min-width:96px;background-image:linear-gradient(45deg,transparent 50%,var(--t3) 50%),linear-gradient(135deg,var(--t3) 50%,transparent 50%);background-position:calc(100% - 14px) 12px,calc(100% - 10px) 12px;background-size:4px 4px;background-repeat:no-repeat}
+.scope .apply{font:600 12px var(--ui);color:#bfe8f8;background:rgba(61,184,232,.16);border:1px solid rgba(61,184,232,.55);border-radius:4px;padding:6px 16px;margin-bottom:1px}
+.scope .reset{font:500 12px var(--ui);color:var(--t3);background:none;border:0;padding:6px 4px;margin-bottom:1px}
+.scope .view{margin-left:auto;display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+.scope .view .fl{font-size:9.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.07em}
+.scope .view .pick{min-width:170px;color:var(--ac);border-color:rgba(61,184,232,.35)}
+
+.instr{padding:13px 22px 14px;border-bottom:1px solid var(--line);background:var(--elev)}
+.read-line{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
+.tagread{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--ac);border:1px solid rgba(61,184,232,.35);border-radius:3px;padding:2px 6px;white-space:nowrap}
+.read-line p{margin:0;font-size:12px;color:var(--t2)}
+.read-line p b{color:var(--tx);font-weight:600}
+.switch{display:flex;gap:2px;margin:0 0 12px;border-bottom:1px solid var(--line)}
+.switch a{font-size:12.5px;font-weight:500;color:var(--t3);padding:8px 13px 9px;border-bottom:2px solid transparent}
+.switch a.on{color:var(--tx);border-bottom-color:var(--ac)}
+.trend-h{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px}
+.trend-h .lbl{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--t3)}
+.trend-h .leg{display:flex;gap:14px;font-family:var(--mono);font-size:10px;color:var(--t3)}
+.trend-h .leg i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.trend-h .leg .eta i{background:rgba(120,160,190,.35)}
+.trend-h .leg .land i{background:var(--ac);opacity:.85}
+.trend{display:flex;align-items:flex-end;gap:6px;height:72px;border-top:1px dashed rgba(160,176,192,.28);padding-top:8px;position:relative}
+.trend .wk{flex:1;display:flex;align-items:flex-end;gap:3px;height:100%}
+.trend .wk .eta{flex:1;background:rgba(120,160,190,.18);border-radius:1px 1px 0 0;align-self:flex-end}
+.trend .wk .land{flex:1;background:var(--ac);opacity:.78;border-radius:1px 1px 0 0;align-self:flex-end}
+.trend .cap{display:flex;justify-content:space-between;margin-top:6px;font-family:var(--mono);font-size:9px;color:var(--t3);position:absolute;left:0;right:0;bottom:-16px}
+
+.work{display:flex;flex-direction:column;flex:1;min-height:0}
+.gridwrap{flex:1;overflow:auto}
+table.g{width:100%;border-collapse:collapse;font-size:12px}
+table.g th{position:sticky;top:0;z-index:1;background:var(--surf);text-align:left;font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);padding:9px 10px 8px;border-bottom:1px solid var(--line2);white-space:nowrap}
+table.g th.r,table.g td.r{text-align:right}
+table.g td{padding:0 10px;height:36px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:middle}
+table.g tbody tr:hover{background:var(--surf)}
+tr.sel{background:var(--ac-dim)!important;box-shadow:inset 2px 0 0 var(--ac)}
+td.id{font-family:var(--mono);font-size:11px;color:var(--t2)}
+td.dist{font-weight:500}
+td.sku{font-family:var(--mono);font-size:11.5px;color:var(--t2)}
+td.money{font-family:var(--mono);font-variant-numeric:tabular-nums}
+td.delta{font-family:var(--mono);font-size:10.5px}
+td.delta.good{color:#9dceb4}
+td.delta.bad{color:#e8b4b4}
+td.delta.flat{color:var(--t3)}
+.badge{display:inline-block;font-family:var(--mono);font-size:9.5px;letter-spacing:.04em;padding:2px 6px;border-radius:3px;margin-left:8px;vertical-align:1px}
+.badge.shipped{color:#9dceb4;border:1px solid rgba(61,155,106,.4);background:var(--ok-dim)}
+.badge.short{color:#e8d4a8;border:1px solid rgba(212,161,90,.4);background:var(--wn-dim)}
+.badge.over{color:#e8b4b4;border:1px solid rgba(196,92,92,.5);background:var(--st-dim)}
+.badge.unshipped{color:#e8b4b4;border:1px solid rgba(196,92,92,.5);background:var(--st-dim)}
+.qfoot{display:flex;align-items:baseline;gap:18px;padding:8px 22px;border-top:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--t3)}
+.qfoot .risk{color:#e8b4b4}
+.qfoot .end{margin-left:auto}
+</style>
+</head>
+<body>
+<!--
+  Grammar 2: instrument + grid — Inbound lens (spec §4.2).
+  Weekly-trend instrument (spec §5). Confirmed nav 2026-08-30.
+-->
+<div class="app">
+  <aside class="spine">
+    <div class="mark">
+      <span class="word">Channel Intelligence</span>
+      <span class="sub">ASUS SA · 26Q3</span>
+    </div>
+    <nav class="nav">
+      <a href="#">Brief <span class="ct alert">7</span></a>
+      <a href="#">Lineup</a>
+      <a class="on" href="#">Stock <span class="ct alert">119</span></a>
+      <a href="#">Settlement <span class="ct">310</span></a>
+      <a href="#">Response <span class="ct">6</span></a>
+      <a href="#">Steward <span class="ct alert">23</span></a>
+    </nav>
+    <div class="nav-rule"></div>
+    <nav class="nav util">
+      <a href="#">Reports</a>
+      <a href="#">Admin</a>
+    </nav>
+    <div class="who"><b>W. Eliason</b>Key accounts · session 26m</div>
+  </aside>
+
+  <div class="main">
+    <div class="top">
+      <div class="crumb">Stock / <b>Inbound</b></div>
+      <div class="regime">
+        <div><span class="l">Pipeline units</span><span class="v n">4,051</span><span class="d good n">▲ 240 this wk</span></div>
+        <div><span class="l">Not received</span><span class="v n risk">1,713</span><span class="d good n">▼ 86 this wk</span></div>
+        <div><span class="l">Fill %</span><span class="v n">38%</span><span class="d good n">▲ 2 pt this wk</span></div>
+      </div>
+    </div>
+
+    <div class="scope">
+      <div class="f"><span class="fl">From</span><span class="pick">26Q3</span></div>
+      <div class="f"><span class="fl">To</span><span class="pick">26Q3</span></div>
+      <div class="f"><span class="fl">BU</span><span class="pick">All BUs</span></div>
+      <div class="f"><span class="fl">Distributor</span><span class="pick">All distributors</span></div>
+      <div class="f"><span class="fl">State</span><span class="pick">Open · 1,713</span></div>
+      <span class="apply">Apply</span>
+      <span class="reset">Reset</span>
+      <div class="view"><span class="fl">Saved view</span><span class="pick">Inbound · overdue ▾</span></div>
+    </div>
+
+    <div class="instr">
+      <div class="read-line">
+        <span class="tagread">Read</span>
+        <p><b>1,713 lines</b> not received; <b>62%</b> of overdue unit value sits with Mustek and Axiz — both have ETA slips in 26W30.</p>
+      </div>
+      <div class="switch">
+        <a href="#">Sell-out</a>
+        <a href="#">Fill vs plan</a>
+        <a href="#">Cover</a>
+        <a class="on" href="#">Inbound</a>
+      </div>
+      <div class="trend-h">
+        <span class="lbl">Inbound landing by week vs ETA</span>
+        <span class="leg"><span class="eta"><i></i>ETA plan</span><span class="land"><i></i>Landed</span></span>
+      </div>
+      <div class="trend" style="margin-bottom:18px">
+        <div class="wk"><div class="eta" style="height:55%"></div><div class="land" style="height:48%"></div></div>
+        <div class="wk"><div class="eta" style="height:62%"></div><div class="land" style="height:58%"></div></div>
+        <div class="wk"><div class="eta" style="height:70%"></div><div class="land" style="height:52%"></div></div>
+        <div class="wk"><div class="eta" style="height:78%"></div><div class="land" style="height:61%"></div></div>
+        <div class="wk"><div class="eta" style="height:85%"></div><div class="land" style="height:44%"></div></div>
+        <div class="wk"><div class="eta" style="height:92%"></div><div class="land" style="height:38%"></div></div>
+        <div class="wk"><div class="eta" style="height:100%"></div><div class="land" style="height:31%"></div></div>
+        <div class="cap"><span>26W28</span><span>26W34</span></div>
+      </div>
+    </div>
+
+    <div class="work">
+      <div class="gridwrap">
+        <table class="g">
+          <thead>
+            <tr>
+              <th>Delivery</th>
+              <th>Distributor</th>
+              <th>SKU</th>
+              <th class="r">Ordered</th>
+              <th class="r">Received</th>
+              <th>State</th>
+              <th class="r">ETA</th>
+              <th class="r">Δ landed this wk</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="sel">
+              <td class="id">SHP-88421</td>
+              <td class="dist">Mustek</td>
+              <td class="sku">NB-X13-16-512</td>
+              <td class="r money n">400</td>
+              <td class="r money n">0</td>
+              <td><span class="badge unshipped">Unshipped</span></td>
+              <td class="r n">26W28</td>
+              <td class="r delta flat">—</td>
+            </tr>
+            <tr>
+              <td class="id">SHP-88455</td>
+              <td class="dist">Axiz</td>
+              <td class="sku">DT-R7-32-1T</td>
+              <td class="r money n">320</td>
+              <td class="r money n">0</td>
+              <td><span class="badge unshipped">Unshipped</span></td>
+              <td class="r n">26W29</td>
+              <td class="r delta flat">—</td>
+            </tr>
+            <tr>
+              <td class="id">SHP-88502</td>
+              <td class="dist">Mustek</td>
+              <td class="sku">MON-27-4K</td>
+              <td class="r money n">180</td>
+              <td class="r money n">0</td>
+              <td><span class="badge unshipped">Unshipped</span></td>
+              <td class="r n">26W29</td>
+              <td class="r delta flat">—</td>
+            </tr>
+            <tr>
+              <td class="id">SHP-88519</td>
+              <td class="dist">Rectron</td>
+              <td class="sku">ACC-DOCK-USBC</td>
+              <td class="r money n">240</td>
+              <td class="r money n">120</td>
+              <td><span class="badge short">Short</span></td>
+              <td class="r n">26W30</td>
+              <td class="r delta good">▲ 120</td>
+            </tr>
+            <tr>
+              <td class="id">SHP-88544</td>
+              <td class="dist">Pinnacle</td>
+              <td class="sku">NB-X14-32-1T</td>
+              <td class="r money n">150</td>
+              <td class="r money n">0</td>
+              <td><span class="badge unshipped">Unshipped</span></td>
+              <td class="r n">26W30</td>
+              <td class="r delta flat">—</td>
+            </tr>
+            <tr>
+              <td class="id">SHP-88561</td>
+              <td class="dist">Axiz</td>
+              <td class="sku">NB-X13-16-512</td>
+              <td class="r money n">280</td>
+              <td class="r money n">0</td>
+              <td><span class="badge unshipped">Unshipped</span></td>
+              <td class="r n">26W30</td>
+              <td class="r delta flat">—</td>
+            </tr>
+            <tr>
+              <td class="id">SHP-88588</td>
+              <td class="dist">Syntech</td>
+              <td class="sku">NB-X13-16-512</td>
+              <td class="r money n">200</td>
+              <td class="r money n">200</td>
+              <td><span class="badge shipped">Shipped</span></td>
+              <td class="r n">26W31</td>
+              <td class="r delta good">▲ 200</td>
+            </tr>
+            <tr>
+              <td class="id">SHP-88602</td>
+              <td class="dist">Computer Mania</td>
+              <td class="sku">DT-R7-32-1T</td>
+              <td class="r money n">96</td>
+              <td class="r money n">0</td>
+              <td><span class="badge unshipped">Unshipped</span></td>
+              <td class="r n">26W31</td>
+              <td class="r delta flat">—</td>
+            </tr>
+            <tr>
+              <td class="id">SHP-88615</td>
+              <td class="dist">First Technology</td>
+              <td class="sku">MON-27-4K</td>
+              <td class="r money n">60</td>
+              <td class="r money n">72</td>
+              <td><span class="badge over">Over</span></td>
+              <td class="r n">26W31</td>
+              <td class="r delta bad">▲ 72</td>
+            </tr>
+            <tr>
+              <td class="id">SHP-88633</td>
+              <td class="dist">Evetech</td>
+              <td class="sku">ACC-DOCK-USBC</td>
+              <td class="r money n">120</td>
+              <td class="r money n">0</td>
+              <td><span class="badge unshipped">Unshipped</span></td>
+              <td class="r n">26W32</td>
+              <td class="r delta flat">—</td>
+            </tr>
+            <tr>
+              <td class="id">SHP-88648</td>
+              <td class="dist">Wootware</td>
+              <td class="sku">NB-X14-32-1T</td>
+              <td class="r money n">48</td>
+              <td class="r money n">16</td>
+              <td><span class="badge short">Short</span></td>
+              <td class="r n">26W32</td>
+              <td class="r delta good">▲ 16</td>
+            </tr>
+            <tr>
+              <td class="id">SHP-88671</td>
+              <td class="dist">Hirsch's</td>
+              <td class="sku">MON-27-4K</td>
+              <td class="r money n">24</td>
+              <td class="r money n">24</td>
+              <td><span class="badge shipped">Shipped</span></td>
+              <td class="r n">26W33</td>
+              <td class="r delta good">▲ 24</td>
+            </tr>
+            <tr>
+              <td class="id">SHP-88689</td>
+              <td class="dist">Game</td>
+              <td class="sku">ACC-DOCK-USBC</td>
+              <td class="r money n">120</td>
+              <td class="r money n">0</td>
+              <td><span class="badge unshipped">Unshipped</span></td>
+              <td class="r n">26W33</td>
+              <td class="r delta flat">—</td>
+            </tr>
+            <tr>
+              <td class="id">SHP-88704</td>
+              <td class="dist">Incredible Connection</td>
+              <td class="sku">NB-X13-16-512</td>
+              <td class="r money n">80</td>
+              <td class="r money n">40</td>
+              <td><span class="badge short">Short</span></td>
+              <td class="r n">26W34</td>
+              <td class="r delta good">▲ 40</td>
+            </tr>
+            <tr>
+              <td class="id">SHP-88722</td>
+              <td class="dist">Titan Ice</td>
+              <td class="sku">DT-R7-32-1T</td>
+              <td class="r money n">36</td>
+              <td class="r money n">0</td>
+              <td><span class="badge unshipped">Unshipped</span></td>
+              <td class="r n">26W34</td>
+              <td class="r delta flat">—</td>
+            </tr>
+            <tr>
+              <td class="id">SHP-88738</td>
+              <td class="dist">Dion Wired</td>
+              <td class="sku">NB-X14-32-1T</td>
+              <td class="r money n">52</td>
+              <td class="r money n">52</td>
+              <td><span class="badge shipped">Shipped</span></td>
+              <td class="r n">26W34</td>
+              <td class="r delta good">▲ 52</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="qfoot">
+        <span>1–16 of 1,713</span>
+        <span><span class="risk">9 unshipped</span> in view · 4 short · 1 over · 3 shipped · overdue Mustek+Axiz <b>62%</b> of open units</span>
+        <span class="end">Sorted by ETA, ascending</span>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

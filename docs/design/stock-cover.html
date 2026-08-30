@@ -55,8 +55,9 @@ a{color:inherit;text-decoration:none}
 .regime .v{font-family:var(--mono);font-size:13px;color:var(--t2)}
 .regime .v.risk{color:#e8b4b4}
 .regime .d{font-family:var(--mono);font-size:10px;margin-top:1px}
-.regime .d.up{color:#9dceb4}
-.regime .d.dn{color:#e8b4b4}
+.regime .d.good{color:#9dceb4}
+.regime .d.bad{color:#e8b4b4}
+.regime .d.flat{color:var(--t3)}
 
 /* ---------- CIP filter bar — sticky, structural ---------- */
 .scope{display:flex;align-items:flex-end;gap:12px;padding:10px 22px 11px;border-bottom:1px solid var(--line);background:var(--elev);position:sticky;top:0;z-index:3}
@@ -126,9 +127,8 @@ td.delta.flat{color:var(--t3)}
 <!--
   Grammar 2: instrument + grid (CIP_DESIGN_LANGUAGE.md §4).
   Surface: channel position / Cover. Isolated static mockup — not product source.
-  Provisional nav labels (docs/design/NAMING.md; Warren has not confirmed):
-  Brief · Lineup · Stock · Settlement · Response · Steward · Reports · Admin
-  Lineup is settled. Counts are attention, not numbered markers (spec §3 spine).
+  Confirmed nav (NAMING.md, 2026-08-30): Brief · Lineup · Stock · Settlement ·
+  Response · Steward · Reports · Admin. Counts are attention, not numbered markers.
 -->
 <div class="app">
   <aside class="spine">
@@ -156,10 +156,10 @@ td.delta.flat{color:var(--t3)}
     <div class="top">
       <div class="crumb">Stock / <b>Cover</b></div>
       <div class="regime">
-        <div><span class="l">Under 4w</span><span class="v n risk">119</span><span class="d dn n">▲ 8 wk</span></div>
-        <div><span class="l">Book mean</span><span class="v n">24.3w</span><span class="d dn n">▼ 0.4w wk</span></div>
-        <div><span class="l">Fill vs plan</span><span class="v n">19.5%</span><span class="d up n">▲ 1.2 pt wk</span></div>
-        <div><span class="l">Not received</span><span class="v n">1,713</span><span class="d up n">▼ 86 wk</span></div>
+        <div><span class="l">Under 4w</span><span class="v n risk">119</span><span class="d bad n">▲ 8 this wk</span></div>
+        <div><span class="l">Book mean</span><span class="v n">24.3w</span><span class="d good n">▼ 0.4w this wk</span></div>
+        <div><span class="l">Fill vs plan</span><span class="v n">19.5%</span><span class="d good n">▲ 1.2 pt this wk</span></div>
+        <div><span class="l">Not received</span><span class="v n">1,713</span><span class="d good n">▼ 86 this wk</span></div>
       </div>
     </div>
 

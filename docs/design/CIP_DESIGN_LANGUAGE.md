@@ -57,6 +57,13 @@ Numerals: `font-variant-numeric: tabular-nums lining-nums` everywhere.
 Money right-aligned, decimals aligned, currency symbol dimmed (`--t3`) before
 the figure. Radii 3–5px. Hairline borders from --line/--line2 only.
 
+**Delta convention** *(folded from SPEC_GAPS, 2026-08-30)*: valence in color
+(good = `--ok` / `#9dceb4`, bad = `--st` / `#e8b4b4`), direction in the glyph
+(▲ rise · ▼ fall). Color and glyph are independent — a red ▲ means
+rising-and-bad (e.g. pairs under 4w tick up). Neutral movement uses `--t3` and
+`—`. Regime-strip and grid Δ captions use the form `▲ n this wk` / `▼ n this
+wk` (unit suffix after the figure when needed: `0.4w`, `1.2 pt`, `R 213,410`).
+
 ## 3. Component inventory (reference: funding-settlement-r3.html)
 
 - **Spine** (190px): wordmark + tenant/period stamp; primary nav with mono
@@ -76,6 +83,13 @@ the figure. Radii 3–5px. Hairline borders from --line/--line2 only.
   5px settled-vs-outstanding bar; blocked rows show a broken (dashed) bar.
 - **Concentration list**: top-N proportional bars with name + amount, first
   row emphasized. Use wherever "most of X sits in few Y" is decision-relevant.
+- **Histogram instrument** *(folded from SPEC_GAPS GAP-001, 2026-08-30;
+  built in `stock-cover.html`)*: WOC-bucket columns with state fills
+  (`--ok` / `--wn` / `--st` — no gradient-as-identity); book **mean** as an
+  11px provenance caption on the tail bucket; **selected range** as a 2px
+  underline in the state color (color + position — two channels); **metric
+  switcher** is the `.tabs` component on the instrument panel (same control as
+  the lens switcher — see §5), not a second lens row.
 - **Data grid**: sticky uppercase 9.5px headers; 36px rows; hover; selected
   row = --ac-dim fill + 2px inset cyan edge; settled/closed rows recede to
   --t3; badges inline after the name (blocked/flag/settled); Δ-week column
@@ -127,10 +141,16 @@ bullet). Two hard rules:
 - **A Read must be computable from data the surface already has.** Run-rate,
   concentration, attribution (evidence-vs-performance), staleness. If the
   sentence can be wrong or vague, omit it — a wrong Read is worse than none.
-- **Charts answer a decision question on that surface.** A metric switcher is
-  allowed only when one visual form serves several metrics (the Channel trend
-  instrument: sell-out / fill / cover / inbound by week). Funding's visuals
-  stay fixed-purpose. No chart exists to fill space.
+- **Charts answer a decision question on that surface.** The instrument
+  switcher is **one control** — the **lens control** on grammar-2 position
+  surfaces. Switcher labels follow the confirmed nav vocabulary for Stock
+  lenses: Sell-out · Fill vs plan · Cover · Inbound *(folded from SPEC_GAPS
+  GAP-004, 2026-08-30)*. Visual form may change per lens when the decision
+  question differs — **form follows the question, never decoration**
+  *(folded from SPEC_GAPS GAP-002 option a, 2026-08-30)*: **Cover** uses a
+  distribution histogram (mean-vs-tail); **Sell-out**, **Fill vs plan**, and
+  **Inbound** share a weekly-trend form (landing or movement by week vs plan or
+  ETA). Funding's visuals stay fixed-purpose. No chart exists to fill space.
 
 Budget: no standalone commercial page. Ceiling context on Funding (tick on the
 book shape + "Budget remaining" regime figure + Read mention); buy-budget
@@ -145,6 +165,13 @@ e.g. FX undeclared) · confirmation (preview-first dialog with printed
 amounts/counts, warnings for irregular conditions such as zero evidence) ·
 mid-workflow (partially settled, partially received — the shape bars carry
 this). Every implemented surface ships all applicable states.
+
+**Book-level blocked / stale on grammar 2** *(folded from SPEC_GAPS GAP-003,
+2026-08-30)*: when the whole book cut is untrusted (e.g. SOH reconciliation
+not run, DSI vintage stale), render an inline `.badge.blocked` on the **Read**
+line — same badge component as row-level blocked — and restate the condition in
+the grid footer provenance. No dedicated recon column (would add a sixth
+severity channel).
 
 ## 7. Anti-patterns (reject on sight)
 
@@ -172,6 +199,7 @@ restyle.
    are trustworthy, metric priorities. Taste iterations happen against this
    spec, not from scratch.
 
-Open items owed by Warren: the five nav words (current placeholder set:
-Today · Channel · Funding · Planner · Imports); confirmation of which Read
-sentences are computable/trustworthy in production.
+Open items owed by Warren: confirmation of which Read sentences are
+computable/trustworthy in production. Nav vocabulary confirmed 2026-08-30:
+Brief · Lineup · Stock · Settlement · Response · Steward · Reports · Admin
+(`docs/design/NAMING.md`).

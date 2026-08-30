@@ -55,8 +55,9 @@ a{color:inherit;text-decoration:none}
 .regime .v{font-family:var(--mono);font-size:13px;color:var(--t2)}
 .regime .v.risk{color:#e8b4b4}
 .regime .d{font-family:var(--mono);font-size:10px;margin-top:1px}
-.regime .d.up{color:#9dceb4}
-.regime .d.dn{color:#e8b4b4}
+.regime .d.good{color:#9dceb4}
+.regime .d.bad{color:#e8b4b4}
+.regime .d.flat{color:var(--t3)}
 
 /* ---------- CIP filter bar — sticky, structural ---------- */
 .scope{display:flex;align-items:flex-end;gap:12px;padding:10px 22px 11px;border-bottom:1px solid var(--line);background:var(--elev);position:sticky;top:0;z-index:3}
@@ -207,11 +208,12 @@ table.l tfoot td{height:33px;font-weight:600;color:var(--tx);border-bottom:0;bor
       <span class="sub">ASUS SA · 26Q3</span>
     </div>
     <nav class="nav">
-      <a href="#">Today <span class="ct alert">7</span></a>
-      <a href="#">Channel <span class="ct">119</span></a>
-      <a class="on" href="#">Funding <span class="ct">310</span></a>
-      <a href="#">Planner <span class="ct">6</span></a>
-      <a href="#">Imports <span class="ct alert">23</span></a>
+      <a href="#">Brief <span class="ct alert">7</span></a>
+      <a href="#">Lineup</a>
+      <a href="#">Stock <span class="ct">119</span></a>
+      <a class="on" href="#">Settlement <span class="ct">310</span></a>
+      <a href="#">Response <span class="ct">6</span></a>
+      <a href="#">Steward <span class="ct alert">23</span></a>
     </nav>
     <div class="nav-rule"></div>
     <nav class="nav util">
@@ -223,11 +225,11 @@ table.l tfoot td{height:33px;font-weight:600;color:var(--tx);border-bottom:0;bor
 
   <div class="main">
     <div class="top">
-      <div class="crumb">Funding / <b>Settlement book</b></div>
+      <div class="crumb">Settlement / <b>Book</b></div>
       <div class="regime">
         <div><span class="l">Book</span><span class="v n"><span class="cur">R</span>28,988,034</span></div>
-        <div><span class="l">Settled</span><span class="v n"><span class="cur">R</span>9,741,206</span><span class="d up n">▲ 213,410 wk</span></div>
-        <div><span class="l">Outstanding</span><span class="v n risk"><span class="cur">R</span>19,246,828</span><span class="d dn n">▼ 213,410 wk</span></div>
+        <div><span class="l">Settled</span><span class="v n"><span class="cur">R</span>9,741,206</span><span class="d good n">▲ 213,410 this wk</span></div>
+        <div><span class="l">Outstanding</span><span class="v n risk"><span class="cur">R</span>19,246,828</span><span class="d good n">▼ 213,410 this wk</span></div>
       </div>
     </div>
 
