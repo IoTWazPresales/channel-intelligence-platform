@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Steward · customer worklist — Channel Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root{--bg:#14161a;--elev:#1a1d23;--surf:#1e2229;--line:rgba(120,160,190,.16);--line2:rgba(120,160,190,.3);--tx:rgba(245,247,250,.96);--t2:rgba(186,198,210,.75);--t3:rgba(160,176,192,.5);--ac:#3db8e8;--ac-dim:rgba(61,184,232,.13);--wn:#d4a15a;--wn-dim:rgba(212,161,90,.13);--ui:Inter,system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace}
+body{margin:0;font:12.5px/1.45 var(--ui);background:var(--bg);color:var(--tx)}.n{font-family:var(--mono)}
+.app{display:grid;grid-template-columns:190px 1fr;min-height:100vh}.spine{background:var(--elev);border-right:1px solid var(--line)}
+.split{display:grid;grid-template-columns:56% 44%;flex:1;min-height:0}.queue{border-right:1px solid var(--line);overflow:auto}.file{background:var(--elev);padding:20px 24px;overflow:auto}
+table.g{width:100%;border-collapse:collapse;font-size:12px}table.g th{font-size:9.5px;text-transform:uppercase;color:var(--t3);padding:9px 10px;border-bottom:1px solid var(--line2);background:var(--surf);text-align:left}table.g td{padding:0 10px;height:36px;border-bottom:1px solid var(--line)}tr.sel{background:var(--ac-dim);box-shadow:inset 2px 0 0 var(--ac)}
+.badge{display:inline-block;font-family:var(--mono);font-size:9.5px;padding:2px 6px;border-radius:3px;color:#e8d4a8;border:1px solid rgba(212,161,90,.4);background:var(--wn-dim)}
+.evidence{margin-top:14px;padding:12px;background:var(--surf);border:1px solid var(--line);border-radius:4px;font-size:12px;color:var(--t2)}.rule{margin-top:14px;font-size:11px;color:var(--t3);line-height:1.5}
+.btn{display:inline-block;margin-top:12px;padding:8px 14px;border-radius:4px;border:1px solid var(--line2);background:var(--surf)}
+</style>
+</head>
+<body>
+<!-- Grammar 1 worklist: customer token resolution. Exact-match only; no auto-create. PACKET_DATA.md -->
+<div class="app">
+<aside class="spine"><div style="padding:18px 16px;border-bottom:1px solid var(--line)"><b>Channel Intelligence</b></div></aside>
+<div style="display:flex;flex-direction:column;min-height:100vh">
+<div style="padding:11px 22px;border-bottom:1px solid var(--line);color:var(--t3)">Steward / <b style="color:var(--t2)">Customer mapping</b></div>
+<div class="split">
+<div class="queue"><table class="g"><thead><tr><th>Token</th><th>Source</th><th>Hits</th></tr></thead><tbody>
+<tr class="sel"><td class="n">INC CONN CT</td><td>DSI · Makro file</td><td class="n">84</td></tr>
+<tr><td class="n">TAKEALOT MKT</td><td>CST</td><td class="n">12</td></tr>
+<tr><td class="n">GAME STORES</td><td>Shipment</td><td class="n">6</td></tr>
+</tbody></table></div>
+<div class="file">
+<div style="font-family:var(--mono);font-size:10px;color:var(--t3);text-transform:uppercase">Unmapped token</div>
+<h1 style="font-size:21px;margin:8px 0">INC CONN CT</h1>
+<p style="color:var(--t2)">84 rows blocked · exact-match candidates only</p>
+<div class="evidence"><b>Alias evidence</b> — prior steward map: "Incredible Connection" (confirmed 14 Jun 2026). No substring match applied.</div>
+<p class="rule">Steward confirms mapping — <b>no auto-create</b> of dim_customer from import evidence. Provisional creation stays steward-initiated.</p>
+<span class="btn">Map to Incredible Connection</span>
+<span class="btn" style="margin-left:8px">Create provisional customer</span>
+</div>
+</div>
+</div></div>
+</body>
+</html>

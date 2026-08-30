@@ -29,3 +29,39 @@ grid footer provenance; no recon column.
 **Disposition:** Instrument switcher = lens control; labels Sell-out · Fill vs
 plan · Cover · Inbound per confirmed Stock surface; map lens names aligned in
 `CIP_NAV_MAP.md`.
+
+## GAP-005 — Grammar-3 filter bar — **RESOLVED 2026-08-30**
+
+**Disposition:** Brief exempt; period from tenant stamp (spec §3/§4).
+
+## GAP-006 — Nav badge vs row count — **RESOLVED 2026-08-30**
+
+**Disposition:** Badge = on-surface row count (spec §3); canonical figures in
+`PACKET_DATA.md`.
+
+## GAP-007 — Fill vs plan vs Pipeline fill % — **RESOLVED 2026-08-30**
+
+**Disposition:** Lens-scoped names in spec §4/§5; canonical values in
+`PACKET_DATA.md`.
+
+## GAP-008 — Not received grain — **RESOLVED 2026-08-30**
+
+**Disposition:** Open lines; partial receipt does not reduce count (spec §4;
+`PACKET_DATA.md`).
+
+## GAP-009 — Drill filter bar additive — **RESOLVED 2026-08-30**
+
+**Disposition:** From/To/BU + saved view always present on drill (spec §3).
+
+## GAP-010 — Lens control class name — **RESOLVED 2026-08-30**
+
+**Disposition:** Behavior normative, class name not (spec §3).
+
+## GAP-011 — Brief federated Read — **RESOLVED 2026-08-30**
+
+**Disposition:** Federated by design; figures trace to signals/PACKET_DATA
+(spec §5).
+
+## GAP-012 — Concentration Read basis — **RESOLVED 2026-08-30**
+
+**Disposition:** One basis; footer restates same basis (spec §5).

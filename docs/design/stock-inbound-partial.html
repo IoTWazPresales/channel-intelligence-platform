@@ -55,8 +55,12 @@ a{color:inherit;text-decoration:none}
 .scope{display:flex;align-items:flex-end;gap:12px;padding:10px 22px 11px;border-bottom:1px solid var(--line);background:var(--elev);position:sticky;top:0;z-index:3}
 .scope .f{display:flex;flex-direction:column;gap:4px}
 .scope .f .fl{font-size:9.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.07em}
-.scope .pick{font:500 12px var(--ui);color:var(--tx);background:var(--surf);border:1px solid var(--line2);border-radius:4px;padding:5px 26px 5px 10px;min-width:96px}
-
+.scope .view{margin-left:auto;display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+.scope .view .fl{font-size:9.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.07em}
+.scope .view .pick{min-width:170px;color:var(--ac);border-color:rgba(61,184,232,.35)}
+.scope .apply{font:600 12px var(--ui);color:#bfe8f8;background:rgba(61,184,232,.16);border:1px solid rgba(61,184,232,.55);border-radius:4px;padding:6px 16px;margin-bottom:1px}
+.scope .reset{font:500 12px var(--ui);color:var(--t3);background:none;border:0;padding:6px 4px;margin-bottom:1px}
+.scope .pick{font:500 12px var(--ui);color:var(--tx);background:var(--surf);border:1px solid var(--line2);border-radius:4px;padding:5px 26px 5px 10px;min-width:96px;background-image:linear-gradient(45deg,transparent 50%,var(--t3) 50%),linear-gradient(135deg,var(--t3) 50%,transparent 50%);background-position:calc(100% - 14px) 12px,calc(100% - 10px) 12px;background-size:4px 4px;background-repeat:no-repeat}
 .instr{padding:13px 22px 14px;border-bottom:1px solid var(--line);background:var(--elev)}
 .read-line{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
 .tagread{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--ac);border:1px solid rgba(61,184,232,.35);border-radius:3px;padding:2px 6px;white-space:nowrap}
@@ -108,7 +112,7 @@ td.shape{width:72px}
       <span class="sub">ASUS SA · 26Q3</span>
     </div>
     <nav class="nav">
-      <a href="#">Brief <span class="ct alert">7</span></a>
+      <a href="#">Brief <span class="ct alert">8</span></a>
       <a href="#">Lineup</a>
       <a class="on" href="#">Stock <span class="ct alert">119</span></a>
       <a href="#">Settlement <span class="ct">310</span></a>
@@ -128,17 +132,22 @@ td.shape{width:72px}
       <div class="crumb">Stock / <b>Inbound</b> / SHP-88519</div>
       <div class="regime">
         <div><span class="l">Pipeline units</span><span class="v n">4,051</span></div>
-        <div><span class="l">Not received</span><span class="v n">1,593</span><span class="d good n">▼ 120 this wk</span></div>
-        <div><span class="l">Fill %</span><span class="v n">41%</span><span class="d good n">▲ 3 pt this wk</span></div>
+        <div><span class="l">Not received</span><span class="v n">1,713</span></div>
+        <div><span class="l">Pipeline fill %</span><span class="v n">38%</span></div>
+        <div><span class="l">Landed this wk</span><span class="v n">120</span><span class="d good n">▲ 120 units</span></div>
       </div>
     </div>
 
     <div class="scope">
+      <div class="f"><span class="fl">From</span><span class="pick">26Q3</span></div>
+      <div class="f"><span class="fl">To</span><span class="pick">26Q3</span></div>
+      <div class="f"><span class="fl">BU</span><span class="pick">All BUs</span></div>
       <div class="f"><span class="fl">Delivery</span><span class="pick">SHP-88519</span></div>
       <div class="f"><span class="fl">Distributor</span><span class="pick">Rectron</span></div>
       <div class="f"><span class="fl">State</span><span class="pick">Short · partial</span></div>
       <span class="apply">Apply</span>
       <span class="reset">Reset</span>
+      <div class="view"><span class="fl">Saved view</span><span class="pick">Inbound · overdue ▾</span></div>
     </div>
 
     <div class="instr">

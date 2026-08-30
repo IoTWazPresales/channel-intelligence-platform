@@ -74,8 +74,16 @@ wk` (unit suffix after the figure when needed: `0.4w`, `1.2 pt`, `R 213,410`).
   figures for the surface, with weekly deltas where computable).
 - **Filter bar** (sticky, structural — the shipped PvE interaction): From /
   To / BU + surface-specific selects, Apply (primary), Reset, and a
-  **saved-view control** right-aligned. Identical placement on every surface;
-  this bar is the muscle-memory anchor of the product.
+  **saved-view control** right-aligned. Identical placement on every grammar-1
+  and grammar-2 surface; **grammar-3 Brief is exempt** *(folded from batch-1
+  audit, 2026-08-30)* — period comes from the tenant stamp, not a filter bar.
+  **Drill views are additive** *(folded from batch-1 audit, 2026-08-30)*:
+  From / To / BU and saved view always remain; record-specific fields
+  (Delivery, Distributor, Case, etc.) are added alongside — never replace
+  the invariant trio.
+- **Nav badge count** *(folded from batch-1 audit, 2026-08-30)*: equals the
+  on-surface row count for that container (Brief signal rows, Stock under-4w
+  pairs, Settlement open cases, etc.) — not a deduped theme count.
 - **Read strip**: `READ` mono tag (cyan, bordered) + one computed sentence
   with bolded figures. Book-level Reads pair with a population shape.
 - **Shape bars**: segmented population bar (e.g. settled/outstanding/blocked)
@@ -88,8 +96,9 @@ wk` (unit suffix after the figure when needed: `0.4w`, `1.2 pt`, `R 213,410`).
   (`--ok` / `--wn` / `--st` — no gradient-as-identity); book **mean** as an
   11px provenance caption on the tail bucket; **selected range** as a 2px
   underline in the state color (color + position — two channels); **metric
-  switcher** is the `.tabs` component on the instrument panel (same control as
-  the lens switcher — see §5), not a second lens row.
+  switcher** is the lens control on the instrument panel (see §5), not a
+  second lens row. Class name (`.tabs`, `.switch`, etc.) is **not normative**
+  *(folded from batch-1 audit, 2026-08-30)* — behavior and placement are.
 - **Data grid**: sticky uppercase 9.5px headers; 36px rows; hover; selected
   row = --ac-dim fill + 2px inset cyan edge; settled/closed rows recede to
   --t3; badges inline after the name (blocked/flag/settled); Δ-week column
@@ -119,13 +128,19 @@ use; if none fits, that is a design decision requiring review, not improv.
 2. **Instrument + grid**: population instrument (histogram / trend panel with
    metric switcher / shape strip) above a dense filtered grid. Channel cover,
    sell-out, movements, execution, **shipping/inbound**. For shipping: regime =
-   pipeline units / not-received / fill %; instrument = inbound landing by week
-   vs ETA; grid = delivery lines with state bands (shipped/short/over/unshipped)
-   as badges; Δ column = landed this week; Read = e.g. "1,713 lines not
-   received; 62% of overdue value sits with two distributors."
+   pipeline units / not-received / **Pipeline fill %**; instrument = inbound
+   landing by week vs ETA; grid = delivery lines with state bands
+   (shipped/short/over/unshipped) as badges; Δ column = landed this week;
+   Read = e.g. "1,713 lines not received; 62% of open units sit with two
+   distributors." **Lens-scoped metric names** *(folded from batch-1 audit,
+   2026-08-30)*: **Fill vs plan** (Cover / Execution lenses) and **Pipeline
+   fill %** (Inbound lens) — never bare "Fill %". **Not received** grain =
+   open inbound lines with outstanding quantity; partial unit receipt does not
+   reduce the line count (see `docs/design/PACKET_DATA.md`).
 3. **Signal blotter** (landing page): ranked full-width signal rows — severity
    tick, one-line signal with figures, age/count, single next action. No KPI
-   cards. Read at top ("what changed since yesterday").
+   cards. Read at top ("what changed since yesterday"). **No filter bar**
+   *(folded from batch-1 audit, 2026-08-30)* — period from tenant stamp only.
 4. **Ranked actions + calculator** (Planner/Decide grammar): action list left
    (do-nothing is a first-class action), fixed-purpose calculator right,
    drafts clearly marked as drafts ("does not write a PO").
@@ -141,6 +156,11 @@ bullet). Two hard rules:
 - **A Read must be computable from data the surface already has.** Run-rate,
   concentration, attribution (evidence-vs-performance), staleness. If the
   sentence can be wrong or vague, omit it — a wrong Read is worse than none.
+  **Brief Read is federated by design** *(folded from batch-1 audit,
+  2026-08-30)*: every figure in the Brief Read must trace to a listed signal
+  row or a documented book delta in `docs/design/PACKET_DATA.md`. **Concentration
+  Reads** *(folded from batch-1 audit, 2026-08-30)*: state one basis (units,
+  lines, or value) and the grid footer must restate the same basis — else omit.
 - **Charts answer a decision question on that surface.** The instrument
   switcher is **one control** — the **lens control** on grammar-2 position
   surfaces. Switcher labels follow the confirmed nav vocabulary for Stock

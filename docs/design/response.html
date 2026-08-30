@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Response — Channel Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root{--bg:#14161a;--elev:#1a1d23;--surf:#1e2229;--line:rgba(120,160,190,.16);--line2:rgba(120,160,190,.3);--tx:rgba(245,247,250,.96);--t2:rgba(186,198,210,.75);--t3:rgba(160,176,192,.5);--ac:#3db8e8;--ac-dim:rgba(61,184,232,.13);--ok-dim:rgba(61,155,106,.14);--wn-dim:rgba(212,161,90,.13);--ui:Inter,system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace}
+*{box-sizing:border-box}body{margin:0;font:12.5px/1.45 var(--ui);background:var(--bg);color:var(--tx)}
+.n{font-family:var(--mono)}.app{display:grid;grid-template-columns:190px 1fr;min-height:100vh}.spine{background:var(--elev);border-right:1px solid var(--line);display:flex;flex-direction:column}.mark{padding:18px 16px;border-bottom:1px solid var(--line)}.nav a{display:flex;justify-content:space-between;padding:8px 10px;color:var(--t2)}.nav a.on{background:var(--ac-dim);box-shadow:inset 2px 0 0 var(--ac);color:var(--tx)}.nav a .ct{font-family:var(--mono);font-size:10.5px;color:var(--t3)}.nav a.on .ct{color:var(--ac)}.nav a .ct.alert{color:#e8b4b4}
+.main{display:flex;flex-direction:column;min-height:100vh}.top{padding:11px 22px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between}.readblock{padding:12px 22px;background:var(--elev);border-bottom:1px solid var(--line)}.tagread{font-family:var(--mono);font-size:9px;color:var(--ac);border:1px solid rgba(61,184,232,.35);padding:2px 6px;border-radius:3px}
+.split{display:grid;grid-template-columns:minmax(380px,44%) minmax(0,1fr);flex:1;min-height:0}
+.actions{border-right:1px solid var(--line);overflow:auto}.actrow{padding:12px 22px;border-bottom:1px solid var(--line)}.actrow.on{background:var(--ac-dim);box-shadow:inset 2px 0 0 var(--ac)}.actrow h3{margin:0 0 4px;font-size:13px;font-weight:600}.actrow p{margin:0;font-size:12px;color:var(--t2)}.actrow .meta{font-family:var(--mono);font-size:10.5px;color:var(--t3);margin-top:6px}
+.calc{padding:18px 22px;background:var(--elev);overflow:auto}.calc h2{font-size:15px;margin:0 0 12px}.calc .draft{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);margin-bottom:14px}.field{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}.field label{font-size:9.5px;color:var(--t3);text-transform:uppercase;display:block;margin-bottom:4px}.field .v{font-family:var(--mono);padding:6px 10px;background:var(--surf);border:1px solid var(--line2);border-radius:4px}
+.out{margin:16px 0;padding:14px;background:var(--surf);border:1px solid var(--line);border-radius:5px}.out .fig{font-family:var(--mono);font-size:21px}.btn{display:inline-block;margin-top:12px;padding:8px 14px;border-radius:4px;border:1px solid var(--line2);background:var(--surf);position:relative}.btn.pri{background:rgba(61,184,232,.16);border-color:rgba(61,184,232,.55);color:#bfe8f8;font-weight:600}.btn .hint{position:absolute;top:-7px;right:-6px;font-family:var(--mono);font-size:8px;color:var(--ac);border:1px solid rgba(61,184,232,.45);padding:1px 5px;background:var(--bg)}
+.note{font-size:11px;color:var(--t3);margin-top:14px;line-height:1.5}
+</style>
+</head>
+<body>
+<!-- Grammar 4: ranked actions + calculator. Reads Lineup/Stock; does not edit plan. PACKET_DATA.md -->
+<div class="app">
+<aside class="spine"><div class="mark"><b>Channel Intelligence</b></div>
+<nav class="nav">
+<a href="#">Brief <span class="ct alert">8</span></a><a href="#">Lineup</a><a href="#">Stock <span class="ct alert">119</span></a><a href="#">Settlement <span class="ct">310</span></a>
+<a class="on" href="#">Response <span class="ct">6</span></a><a href="#">Steward <span class="ct alert">23</span></a>
+</nav></aside>
+<div class="main">
+<div class="top"><span style="color:var(--t3)">Response / <b style="color:var(--t2)">Ranked actions</b></span></div>
+<div class="readblock"><span class="tagread">Read</span> <span style="font-size:12px;color:var(--t2)"><b>6 open responses</b> — top priority is cover for Takealot NB-X13 at <b>2.1w</b> with <b>400</b> inbound due and SOH recon blocked.</span></div>
+<div class="split">
+<div class="actions">
+<div class="actrow on"><h3>Buy to cover · Takealot × NB-X13-16-512</h3><p>2.1w cover · 4w sell-out 2,210 · inbound 400 due</p><p class="meta">Impact high · trust blocked</p></div>
+<div class="actrow"><h3>Do nothing · Makro tail</h3><p>1.4w cover but inbound 80 due 26W31 — wait for landing</p><p class="meta">Recorded reason: inbound covers gap</p></div>
+<div class="actrow"><h3>Compose promo support · Game ACC-DOCK</h3><p>B4 support case for Q3 bundle — creates Settlement case</p><p class="meta">Funding path</p></div>
+<div class="actrow"><h3>Reallocate · Mustek DT-R7</h3><p>Move 200 inbound units to Computer Mania 0.8w pair</p><p class="meta">Position only</p></div>
+<div class="actrow"><h3>Do nothing · book mean stable</h3><p>24.3w mean · 78% of pairs above 4w</p><p class="meta">Recorded reason: tail not actionable</p></div>
+<div class="actrow"><h3>Escalate · SOH recon</h3><p>Cover flags unverified until recon runs</p><p class="meta">Trust · links Brief signal</p></div>
+</div>
+<div class="calc">
+<h2>Buy-cover calculator</h2>
+<div class="draft">Draft — does not write a PO</div>
+<div class="field"><div><label>On-hand SOH</label><div class="v n">1,840</div></div><div><label>4w sell-out</label><div class="v n">2,210</div></div></div>
+<div class="field"><div><label>Inbound due</label><div class="v n">400</div></div><div><label>Target weeks</label><div class="v n">6.0</div></div></div>
+<div class="out"><div style="font-size:9.5px;color:var(--t3);text-transform:uppercase">Proposed buy</div><div class="fig n">1,420 units</div></div>
+<span class="btn pri">Save draft buy<span class="hint">Suggested</span></span>
+<p class="note">B4 compose promo support → <b>creates a Settlement case</b> (does not settle here). Calculator uses Stock Cover data — Lineup plan is read-only.</p>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

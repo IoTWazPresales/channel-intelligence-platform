@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Settlement · confirm — Channel Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root{--bg:#14161a;--elev:#1a1d23;--surf:#1e2229;--line:rgba(120,160,190,.16);--line2:rgba(120,160,190,.3);--tx:rgba(245,247,250,.96);--t2:rgba(186,198,210,.75);--t3:rgba(160,176,192,.5);--ac:#3db8e8;--st:#c45c5c;--st-dim:rgba(196,92,92,.14);--ok-dim:rgba(61,155,106,.14);--wn-dim:rgba(212,161,90,.13);--ui:Inter,system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace}
+body{margin:0;font:12.5px/1.45 var(--ui);background:rgba(0,0,0,.55);color:var(--tx);min-height:100vh;display:flex;align-items:center;justify-content:center}
+.dialog{width:min(520px,92vw);background:var(--elev);border:1px solid var(--line2);border-radius:6px;box-shadow:0 12px 40px rgba(0,0,0,.45)}
+.dhead{padding:18px 22px 12px;border-bottom:1px solid var(--line)}.dhead h1{margin:0;font-size:17px;font-weight:650}.dhead p{margin:6px 0 0;font-size:12px;color:var(--t2)}
+.dbody{padding:16px 22px}.amt{font-family:var(--mono);font-size:28px;margin:8px 0 14px}
+.warn{padding:10px 12px;background:var(--st-dim);border:1px solid rgba(196,92,92,.5);border-radius:4px;color:#e8b4b4;font-size:12px;margin-bottom:12px}
+.ready{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}.chk{font-size:11.5px;padding:6px 10px;border-radius:4px;border:1px solid var(--line)}.chk.pass{color:#9dceb4;background:var(--ok-dim);border-color:rgba(61,155,106,.35)}.chk.fail{color:#e8b4b4;background:var(--st-dim);border-color:rgba(196,92,92,.4)}.chk.open{color:#e8d4a8;background:var(--wn-dim);border-color:rgba(212,161,90,.35)}
+.rule{font-size:11px;color:var(--t3);line-height:1.5;margin-bottom:14px}
+.dfoot{display:flex;justify-content:flex-end;gap:10px;padding:14px 22px 18px;border-top:1px solid var(--line)}.btn{padding:8px 14px;border-radius:4px;border:1px solid var(--line2);background:var(--surf)}.btn.pri{background:rgba(61,184,232,.16);border-color:rgba(61,184,232,.55);color:#bfe8f8;font-weight:600}
+</style>
+</head>
+<body>
+<!-- Grammar 1 — confirmation state (spec §6). Case C26760971 · PACKET_DATA.md -->
+<div class="dialog">
+<div class="dhead"><h1>Record settlement?</h1><p>Case <b class="n">C26760971</b> · Takealot · 26Q3</p></div>
+<div class="dbody">
+<div style="font-size:9.5px;color:var(--t3);text-transform:uppercase">Outstanding</div>
+<div class="amt n">R 1,616,231.52</div>
+<div class="ready">
+<span class="chk pass">✓ FX declared · 18.00</span>
+<span class="chk open">1 assumption open</span>
+<span class="chk fail">0 evidence rows</span>
+</div>
+<div class="warn"><b>Zero claim evidence attached.</b> Settlement will record the case as settled — it does not post a payment. CST divergence never blocks settlement.</div>
+<p class="rule">Unresolved SKUs stay on the assumptions worklist. Confirm only if you accept settling without evidence.</p>
+</div>
+<div class="dfoot"><span class="btn">Cancel</span><span class="btn pri">Confirm settlement · R 1,616,231.52</span></div>
+</div>
+</body>
+</html>

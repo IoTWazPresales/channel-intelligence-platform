@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Lineup · pending approval — Channel Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root{--bg:#14161a;--elev:#1a1d23;--surf:#1e2229;--line:rgba(120,160,190,.16);--line2:rgba(120,160,190,.3);--tx:rgba(245,247,250,.96);--t2:rgba(186,198,210,.75);--t3:rgba(160,176,192,.5);--ac:#3db8e8;--ac-dim:rgba(61,184,232,.13);--wn:#d4a15a;--wn-dim:rgba(212,161,90,.13);--ui:Inter,system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace}
+*{box-sizing:border-box}body{margin:0;font:12.5px/1.45 var(--ui);background:var(--bg);color:var(--tx)}
+.n{font-family:var(--mono)}.app{display:grid;grid-template-columns:190px 1fr;min-height:100vh}.spine{background:var(--elev);border-right:1px solid var(--line)}.mark{padding:18px 16px;border-bottom:1px solid var(--line)}.nav a.on{background:var(--ac-dim);box-shadow:inset 2px 0 0 var(--ac)}
+.main{display:flex;flex-direction:column;min-height:100vh}.top,.scope,.empty,.qfoot{padding:11px 22px;border-bottom:1px solid var(--line)}.scope{background:var(--elev);display:flex;gap:12px;align-items:flex-end;position:sticky;top:0}.scope .fl{font-size:9.5px;color:var(--t3);text-transform:uppercase}.scope .pick{padding:5px 10px;background:var(--surf);border:1px solid var(--line2);border-radius:4px}.scope .view{margin-left:auto}
+.empty{flex:1;padding:28px 22px 40px}.empty .k{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--t3)}.empty p{color:var(--t2);line-height:1.55}.qfoot{font-family:var(--mono);font-size:11px;color:var(--t3)}
+</style>
+</head>
+<body>
+<!-- Grammar 2 — Lineup empty/pending filter state (spec §6). PACKET_DATA.md -->
+<div class="app">
+<aside class="spine"><div class="mark"><b>Channel Intelligence</b><div class="sub" style="font-family:var(--mono);font-size:10px;color:var(--t3)">ASUS SA · 26Q3</div></div>
+<nav class="nav"><a class="on" href="#">Lineup</a></nav></aside>
+<div class="main">
+<div class="top"><span style="color:var(--t3)">Lineup / <b style="color:var(--t2)">Pending approval</b></span></div>
+<div class="scope">
+<div><span class="fl">From</span><span class="pick">26Q3</span></div>
+<div><span class="fl">To</span><span class="pick">26Q3</span></div>
+<div><span class="fl">BU</span><span class="pick">All BUs</span></div>
+<div><span class="fl">Approval</span><span class="pick">Pending · 14</span></div>
+<span class="pick" style="color:#bfe8f8;border-color:rgba(61,184,232,.55)">Apply</span>
+<div class="view"><span class="fl">Saved view</span><span class="pick">Pending only ▾</span></div>
+</div>
+<div class="empty">
+<div class="k">Pending approval cut</div>
+<p><b>14 lineup items</b> await approval before they flow to Stock Fill vs plan. Approve or reject here — Response and Stock read the approved plan only.</p>
+<p style="color:var(--t3);margin-top:10px">Clear the filter to return to the full <b>248-item</b> lineup.</p>
+</div>
+<div class="qfoot">0 of 14 shown in this preview frame · filter: Pending</div>
+</div>
+</div>
+</body>
+</html>

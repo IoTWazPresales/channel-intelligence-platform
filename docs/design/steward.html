@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Steward — Channel Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root{--bg:#14161a;--elev:#1a1d23;--surf:#1e2229;--line:rgba(120,160,190,.16);--line2:rgba(120,160,190,.3);--tx:rgba(245,247,250,.96);--t2:rgba(186,198,210,.75);--t3:rgba(160,176,192,.5);--ac:#3db8e8;--ac-dim:rgba(61,184,232,.13);--st:#c45c5c;--st-dim:rgba(196,92,92,.14);--ui:Inter,system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace}
+body{margin:0;font:12.5px/1.45 var(--ui);background:var(--bg);color:var(--tx)}.n{font-family:var(--mono)}
+.app{display:grid;grid-template-columns:190px 1fr;min-height:100vh}.spine{background:var(--elev);border-right:1px solid var(--line)}.nav a.on{background:var(--ac-dim);box-shadow:inset 2px 0 0 var(--ac)}
+.main{display:flex;flex-direction:column;min-height:100vh}.top,.queues,.qfoot{padding:10px 22px;border-bottom:1px solid var(--line)}.queues{display:flex;gap:16px;background:var(--elev);font-family:var(--mono);font-size:11px;color:var(--t3)}.queues b{color:var(--t2)}
+table.g{width:100%;border-collapse:collapse;font-size:12px}table.g th{text-align:left;font-size:9.5px;text-transform:uppercase;color:var(--t3);padding:9px 10px;border-bottom:1px solid var(--line2);background:var(--surf)}table.g td{padding:0 10px;height:36px;border-bottom:1px solid var(--line)}.fail{color:#e8b4b4}
+.btn{font-size:12px;padding:5px 10px;border:1px solid var(--line2);border-radius:4px;background:var(--surf)}
+</style>
+</head>
+<body>
+<!-- Grammar 5: Import Center jobs grid. PACKET_DATA.md -->
+<div class="app">
+<aside class="spine"><div style="padding:18px 16px;border-bottom:1px solid var(--line)"><b>Channel Intelligence</b></div>
+<nav><a class="on" href="#" style="display:block;padding:8px 10px">Steward <span class="n" style="color:#e8b4b4">23</span></a></nav></aside>
+<div class="main">
+<div class="top"><span style="color:var(--t3)">Steward / <b style="color:var(--t2)">Import Center</b></span></div>
+<div class="queues"><span>DSI <b>41</b></span><span>CST <b>18</b></span><span>Shipment <b>12</b></span><span>Lineup <b>6</b></span><span>Customer <b>7</b></span></div>
+<table class="g"><thead><tr><th>Job</th><th>Template</th><th>Reason</th><th>Failed</th><th></th></tr></thead><tbody>
+<tr><td class="n">IMP-99201</td><td>DSI</td><td class="fail">Column "SOH" not mapped — file uses "Stock on hand"</td><td class="n">18 Aug</td><td><span class="btn">Retry</span> <span class="btn">Archive</span></td></tr>
+<tr><td class="n">IMP-99188</td><td>DSI</td><td class="fail">Distributor token "AXIZ JHB" has no steward mapping</td><td class="n">18 Aug</td><td><span class="btn">Retry</span> <span class="btn">Steward</span></td></tr>
+<tr><td class="n">IMP-99170</td><td>Shipment</td><td class="fail">ETA week missing on 14 rows</td><td class="n">17 Aug</td><td><span class="btn">Retry</span></td></tr>
+<tr><td class="n">IMP-99155</td><td>CST sell-through</td><td class="fail">Customer file stopped at row 4,210 — encoding error</td><td class="n">16 Aug</td><td><span class="btn">Retry</span></td></tr>
+<tr><td class="n">IMP-99142</td><td>Lineup</td><td class="fail">Period "26Q3Q1" not recognised — use Q1+Q2 split</td><td class="n">15 Aug</td><td><span class="btn">Retry</span></td></tr>
+</tbody></table>
+<div class="qfoot" style="font-family:var(--mono);font-size:11px;color:var(--t3)">1–5 of 23 failed · sorted by failed date</div>
+</div></div>
+</body>
+</html>
