@@ -37,14 +37,15 @@ Rank order: trust → position → money.
 | 7 | Settlement blocked | **1** case FX undeclared · **R 288,400** held |
 | 8 | Missing assumptions | **103** SKUs on open cases |
 
-### Brief federated Read deltas (since yesterday)
+### Brief federated Read (current signals only)
 
-| Figure | Value | Source |
-|---|---|---|
-| Pairs dropped under 4w | **+8** (111 → 119) | Cover breach signal |
-| New failed import | **+1** (22 → 23) | Failed-import signal |
-| Settlement cleared | **R 213,410** this wk | Settlement book delta |
-| SOH recon | not run | SOH recon signal |
+Cross-day deltas (e.g. 111→119, 22→23) are **deferred** until day-over-day
+snapshotting exists in the platform. The Brief Read is computable from listed
+signal rows only — no yesterday comparison.
+
+Example Read (traces to signals #1, #2, #5 + Settlement outstanding):
+**23** imports failed · SOH recon not run · **119** pairs under 4w cover ·
+**R 19,246,828** outstanding · book trust blocked until SOH recon runs.
 
 ---
 

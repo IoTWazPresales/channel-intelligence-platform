@@ -116,7 +116,10 @@ does not edit the plan. Lenses:
 
 ## UTILITIES
 
-- REPORTS: report builder, saved views, scheduled deliveries/inbox digest
+- REPORTS **[grammar 6 — Composer]**: report builder (source/scope · artifact
+  canvas · output panel), saved views as first-class named objects, scheduled
+  deliveries/inbox digest; preview required before save or delivery. Exemplar:
+  `reports-builder.html`.
 - ADMIN: users, settings, SQL, ops, audit, **planner defaults**, budget
   administration, semantic overlay
 

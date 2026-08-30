@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Reports · Country manager pack — Channel Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg:#14161a; --elev:#1a1d23; --surf:#1e2229; --surf2:#252a33;
+  --line:rgba(120,160,190,.16); --line2:rgba(120,160,190,.3);
+  --tx:rgba(245,247,250,.96); --t2:rgba(186,198,210,.75); --t3:rgba(160,176,192,.5);
+  --ac:#3db8e8; --ac-dim:rgba(61,184,232,.13);
+  --ok:#3d9b6a; --ok-dim:rgba(61,155,106,.14);
+  --wn:#d4a15a; --wn-dim:rgba(212,161,90,.13);
+  --st:#c45c5c; --st-dim:rgba(196,92,92,.14);
+  --ui:Inter,system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font:12.5px/1.45 var(--ui);background:var(--bg);color:var(--tx);-webkit-font-smoothing:antialiased}
+.n{font-family:var(--mono);font-variant-numeric:tabular-nums lining-nums;letter-spacing:-.01em}
+.cur{color:var(--t3);font-weight:400;margin-right:.3em}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--ac);outline-offset:1px;border-radius:3px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.app{display:grid;grid-template-columns:190px minmax(0,1fr);min-height:100vh}
+.spine{background:var(--elev);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:0 0 14px}
+.mark{padding:18px 16px 16px;border-bottom:1px solid var(--line)}
+.mark .word{font-size:13px;font-weight:650;letter-spacing:-.01em;display:block}
+.mark .sub{display:block;margin-top:4px;font-family:var(--mono);font-size:10px;color:var(--t3);letter-spacing:.08em;text-transform:uppercase}
+.nav{padding:10px 8px 0;display:flex;flex-direction:column;gap:1px}
+.nav a{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:5px;color:var(--t2);font-size:13px;font-weight:500}
+.nav a:hover{background:var(--surf);color:var(--tx)}
+.nav a.on{background:var(--ac-dim);color:var(--tx);box-shadow:inset 2px 0 0 var(--ac)}
+.nav a .ct{font-family:var(--mono);font-size:10.5px;color:var(--t3)}
+.nav a.on .ct{color:var(--ac)}
+.nav a .ct.alert{color:var(--st)}
+.nav-rule{height:1px;background:var(--line);margin:12px 16px}
+.nav.util a{font-size:12px;font-weight:400;color:var(--t3);padding:6px 10px}
+.who{margin-top:auto;padding:12px 16px 0;border-top:1px solid var(--line);font-size:11px;color:var(--t3)}
+.who b{display:block;color:var(--t2);font-weight:500;font-size:12px;margin-bottom:1px}
+
+.main{display:flex;flex-direction:column;min-width:0;min-height:100vh;position:relative}
+.top{display:flex;align-items:baseline;gap:18px;padding:11px 22px 10px;border-bottom:1px solid var(--line)}
+.crumb{font-size:12px;color:var(--t3)}
+.crumb b{color:var(--t2);font-weight:500}
+.regime{margin-left:auto;display:flex;gap:26px}
+.regime div{display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+.regime .l{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--t3)}
+.regime .v{font-family:var(--mono);font-size:13px;color:var(--t2)}
+
+.composer{display:grid;grid-template-columns:248px minmax(0,1fr)248px;flex:1;min-height:0}
+.panel{border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;background:var(--elev)}
+.panel:last-child{border-right:0;border-left:1px solid var(--line)}
+.ph{padding:14px 16px 10px;border-bottom:1px solid var(--line)}
+.ph h2{margin:0;font-size:12px;font-weight:650;letter-spacing:-.01em}
+.ph p{margin:4px 0 0;font-size:11px;color:var(--t3);line-height:1.4}
+.pbody{padding:12px 16px 16px;overflow:auto;flex:1}
+.sec{margin-bottom:16px}
+.sec .sl{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);margin-bottom:8px}
+.chk{display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);font-size:12px;color:var(--t2)}
+.chk:last-child{border-bottom:0}
+.chk input{accent-color:var(--ac);margin-top:2px}
+.chk b{color:var(--tx);font-weight:600}
+.pick{display:block;width:100%;font:500 12px var(--ui);color:var(--tx);background:var(--surf);border:1px solid var(--line2);border-radius:4px;padding:6px 10px;margin-bottom:8px}
+.pick.dim{color:var(--t3)}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.fl{font-size:9.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}
+
+.canvas{display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+.chead{padding:12px 20px 10px;border-bottom:1px solid var(--line);background:var(--elev)}
+.read-line{display:flex;align-items:baseline;gap:10px}
+.tagread{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--ac);border:1px solid rgba(61,184,232,.35);border-radius:3px;padding:2px 6px;white-space:nowrap}
+.read-line p{margin:0;font-size:12px;color:var(--t2)}
+.read-line p b{color:var(--tx);font-weight:600}
+.cbody{flex:1;overflow:auto;padding:18px 22px 22px}
+.artifact{background:var(--surf);border:1px solid var(--line);border-radius:5px;padding:18px 20px 20px;max-width:720px;margin:0 auto;box-shadow:0 1px 0 rgba(0,0,0,.2)}
+.artifact h1{margin:0 0 4px;font-size:17px;font-weight:650;letter-spacing:-.015em}
+.artifact .sub{font-family:var(--mono);font-size:10.5px;color:var(--t3);margin-bottom:16px}
+.artifact section{margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+.artifact section h3{margin:0 0 8px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--t3)}
+.artifact .lead{font-size:12.5px;color:var(--t2);line-height:1.55;margin:0 0 10px}
+.artifact .lead b{color:var(--tx);font-weight:600}
+table.rpt{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
+table.rpt th{text-align:left;font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);padding:8px 8px 6px;border-bottom:1px solid var(--line2)}
+table.rpt th.num,table.rpt td.num{text-align:right}
+table.rpt td{padding:0 8px;height:32px;border-bottom:1px solid var(--line);color:var(--t2)}
+table.rpt td.num{font-family:var(--mono)}
+table.rpt tr.em td{font-weight:600;color:var(--tx)}
+.badge{display:inline-block;font-family:var(--mono);font-size:9.5px;padding:2px 6px;border-radius:3px;margin-left:6px;vertical-align:1px}
+.badge.blocked{color:#e8b4b4;border:1px solid rgba(196,92,92,.5);background:var(--st-dim)}
+.prov{font-size:11px;color:var(--t3);margin-top:14px;line-height:1.45}
+.prov b{color:var(--t2);font-weight:500}
+
+.out-act{padding:12px 16px 16px;border-top:1px solid var(--line);margin-top:auto}
+.btn{display:block;width:100%;text-align:center;font:500 12.5px var(--ui);border-radius:4px;padding:9px 14px;border:1px solid var(--line2);background:var(--surf);color:var(--tx);margin-bottom:8px;position:relative;cursor:default}
+.btn.pri{background:rgba(61,184,232,.16);border-color:rgba(61,184,232,.55);color:#bfe8f8;font-weight:600}
+.btn.sec{font-size:12px;padding:7px 12px}
+.btn .hint{position:absolute;top:-7px;right:-6px;font-family:var(--mono);font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:var(--ac);background:var(--bg);border:1px solid rgba(61,184,232,.45);border-radius:3px;padding:1px 5px}
+.recip{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.tag{font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:3px;background:var(--surf2);border:1px solid var(--line);color:var(--t2)}
+
+.overlay{position:absolute;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:10}
+.dialog{width:min(520px,92vw);background:var(--elev);border:1px solid var(--line2);border-radius:6px;box-shadow:0 12px 40px rgba(0,0,0,.45)}
+.dhead{padding:18px 22px 12px;border-bottom:1px solid var(--line)}
+.dhead h1{margin:0;font-size:17px;font-weight:650}
+.dhead p{margin:6px 0 0;font-size:12px;color:var(--t2)}
+.dbody{padding:16px 22px}
+.dbody ul{margin:0;padding:0 0 0 16px;color:var(--t2);font-size:12px;line-height:1.55}
+.dbody li{margin-bottom:6px}
+.dbody li b{color:var(--tx)}
+.warn{padding:10px 12px;background:var(--wn-dim);border:1px solid rgba(212,161,90,.45);border-radius:4px;color:#e8d4a8;font-size:12px;margin-top:12px;line-height:1.45}
+.dfoot{display:flex;justify-content:flex-end;gap:10px;padding:14px 22px 18px;border-top:1px solid var(--line)}
+.dfoot .btn{display:inline-block;width:auto;margin:0}
+</style>
+</head>
+<body>
+<!--
+  Grammar 6: Composer (CIP_DESIGN_LANGUAGE.md §4, added 2026-08-30).
+  Country-manager pack from Stock · Cover + Settlement · figures from PACKET_DATA.md.
+  Preview-before-save: overlay is the mandatory confirm step before schedule/delivery.
+  Exactly one SUGGESTED hint (Preview & save view).
+
+  §7 anti-pattern self-check:
+  ✓ No uniform KPI-card row or equal-weight card grid — report uses Read + prose + one dense table.
+  ✓ No pill color as sole hierarchy — severity via copy, table emphasis, blocked badge.
+  ✓ No numbered nav markers — spine counts only.
+  ✓ No decorative command bar — actions are output-panel buttons with stated outcomes.
+  ✓ No toy table — realistic row heights, tabular nums, footer provenance.
+  ✓ No verbs-as-nav — spine labels match NAMING.md.
+  ✓ No meta-commentary — product voice throughout.
+  ✓ No chart without a decision question — tables answer “what does the country manager need to act on?”
+  ✓ No KPI-card composer — grammar 6 explicitly forbids; not used here.
+  ✓ No trend-styling identity — workbench tokens only.
+-->
+<div class="app">
+  <aside class="spine">
+    <div class="mark">
+      <span class="word">Channel Intelligence</span>
+      <span class="sub">ASUS SA · 26Q3</span>
+    </div>
+    <nav class="nav">
+      <a href="#">Brief <span class="ct alert">8</span></a>
+      <a href="#">Lineup</a>
+      <a href="#">Stock <span class="ct alert">119</span></a>
+      <a href="#">Settlement <span class="ct">310</span></a>
+      <a href="#">Response <span class="ct">6</span></a>
+      <a href="#">Steward <span class="ct alert">23</span></a>
+    </nav>
+    <div class="nav-rule"></div>
+    <nav class="nav util">
+      <a class="on" href="#">Reports</a>
+      <a href="#">Admin</a>
+    </nav>
+    <div class="who"><b>W. Eliason</b>Key accounts · session 26m</div>
+  </aside>
+
+  <div class="main">
+    <div class="top">
+      <div class="crumb">Reports / <b>Country manager pack</b></div>
+      <div class="regime">
+        <div><span class="l">Sources</span><span class="v">2</span></div>
+        <div><span class="l">Period</span><span class="v n">26Q3</span></div>
+      </div>
+    </div>
+
+    <div class="composer">
+      <!-- source / scope (left) -->
+      <aside class="panel">
+        <div class="ph">
+          <h2>Source &amp; scope</h2>
+          <p>What data feeds this artifact.</p>
+        </div>
+        <div class="pbody">
+          <div class="sec">
+            <div class="sl">Data sources</div>
+            <label class="chk"><input type="checkbox" checked disabled /> <span><b>Stock · Cover</b> — pairs under 4w, book mean WOC</span></label>
+            <label class="chk"><input type="checkbox" checked disabled /> <span><b>Settlement · Book</b> — open cases, outstanding ZAR</span></label>
+          </div>
+          <div class="sec">
+            <div class="sl">Period</div>
+            <div class="frow">
+              <div><div class="fl">From</div><span class="pick">26Q3</span></div>
+              <div><div class="fl">To</div><span class="pick">26Q3</span></div>
+            </div>
+            <div class="fl">BU</div>
+            <span class="pick">All BUs</span>
+          </div>
+          <div class="sec">
+            <div class="sl">Filters</div>
+            <div class="fl">Cover threshold</div>
+            <span class="pick">&lt; 4 weeks</span>
+            <div class="fl">Settlement state</div>
+            <span class="pick">Open cases</span>
+            <div class="fl">Customer</div>
+            <span class="pick dim">All strategic accounts</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- artifact canvas (centre) -->
+      <section class="canvas">
+        <div class="chead">
+          <div class="read-line">
+            <span class="tagread">Read</span>
+            <p>Pack highlights <b>119</b> cover breaches and <b>R 19,246,828</b> settlement outstanding — book trust blocked until SOH recon runs.</p>
+          </div>
+        </div>
+        <div class="cbody">
+          <div class="artifact">
+            <h1>Country manager pack · ASUS SA</h1>
+            <div class="sub n">26Q3 · generated preview · DSI vintage 2026-08-18</div>
+
+            <section>
+              <h3>Position · cover</h3>
+              <p class="lead"><b>119</b> customer×SKU pairs sit under 4 weeks of cover against a book mean of <b>24.3w</b> (<b>448</b> pairs in book). Derived cover is unverified — SOH reconciliation has not run.<span class="badge blocked">blocked</span></p>
+              <table class="rpt">
+                <thead>
+                  <tr><th>Customer</th><th class="num">Pairs &lt;4w</th><th class="num">Worst WOC</th></tr>
+                </thead>
+                <tbody>
+                  <tr class="em"><td>Takealot</td><td class="num">34</td><td class="num">1.2w</td></tr>
+                  <tr><td>Makro</td><td class="num">21</td><td class="num">2.1w</td></tr>
+                  <tr><td>Incredible Connection</td><td class="num">18</td><td class="num">2.8w</td></tr>
+                  <tr><td>Computer Mania</td><td class="num">14</td><td class="num">3.1w</td></tr>
+                  <tr><td>Evetech</td><td class="num">11</td><td class="num">3.4w</td></tr>
+                </tbody>
+              </table>
+            </section>
+
+            <section>
+              <h3>Funding · settlement</h3>
+              <p class="lead"><b>310</b> open cases · book <b>R 28,988,034</b> · outstanding <b>R 19,246,828</b> · <b>1</b> case blocked on undeclared FX (<b>R 288,400</b>).</p>
+              <table class="rpt">
+                <thead>
+                  <tr><th>Customer</th><th class="num">Outstanding</th><th class="num">Age</th></tr>
+                </thead>
+                <tbody>
+                  <tr class="em"><td>Takealot</td><td class="num">1,616,232</td><td class="num">18d</td></tr>
+                  <tr><td>Makro</td><td class="num">356,731</td><td class="num">44d</td></tr>
+                  <tr><td>Game</td><td class="num">288,400</td><td class="num">61d</td></tr>
+                  <tr><td>Pinnacle</td><td class="num">234,900</td><td class="num">9d</td></tr>
+                </tbody>
+              </table>
+            </section>
+
+            <p class="prov"><b>Provenance:</b> Stock · Cover lens and Settlement book as of tenant stamp 26Q3. Figures match design packet — not for production reconciliation.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- output (right) -->
+      <aside class="panel">
+        <div class="ph">
+          <h2>Output</h2>
+          <p>Format, schedule, and saved-view identity.</p>
+        </div>
+        <div class="pbody">
+          <div class="sec">
+            <div class="sl">Format</div>
+            <span class="pick">PDF · email body</span>
+          </div>
+          <div class="sec">
+            <div class="sl">Schedule</div>
+            <span class="pick">Weekly · Monday 07:00 SAST</span>
+          </div>
+          <div class="sec">
+            <div class="sl">Recipients</div>
+            <div class="recip">
+              <span class="tag">country.mgr@asus-sa</span>
+              <span class="tag">w.eliason@</span>
+            </div>
+          </div>
+          <div class="sec">
+            <div class="sl">Saved view</div>
+            <span class="pick" style="color:var(--ac);border-color:rgba(61,184,232,.35)">CM pack · Cover + Settlement</span>
+            <p style="margin:6px 0 0;font-size:11px;color:var(--t3);line-height:1.4">Named view — not filter memory. Re-open from Reports saved views.</p>
+          </div>
+        </div>
+        <div class="out-act">
+          <span class="btn pri">Preview &amp; save view<span class="hint">Suggested</span></span>
+          <span class="btn sec">Send test now</span>
+        </div>
+      </aside>
+    </div>
+
+    <!-- preview / confirm state (grammar 6 — mandatory before delivery) -->
+    <div class="overlay" role="dialog" aria-labelledby="confirm-title">
+      <div class="dialog">
+        <div class="dhead">
+          <h1 id="confirm-title">Save scheduled delivery?</h1>
+          <p>Saved view <b>CM pack · Cover + Settlement</b> · weekly Monday 07:00</p>
+        </div>
+        <div class="dbody">
+          <ul>
+            <li><b>119</b> pairs under 4w cover · book mean <b>24.3w</b></li>
+            <li><b>R 19,246,828</b> settlement outstanding across <b>310</b> open cases</li>
+            <li>SOH recon not run — pack includes trust warning</li>
+          </ul>
+          <div class="warn">Preview matches the artifact canvas. Confirm only if recipients should receive these figures on the stated schedule.</div>
+        </div>
+        <div class="dfoot">
+          <span class="btn">Back to edit</span>
+          <span class="btn pri">Confirm save &amp; schedule</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

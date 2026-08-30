@@ -125,7 +125,7 @@ wk` (unit suffix after the figure when needed: `0.4w`, `1.2 pt`, `R 213,410`).
 
 ## 4. Surface grammars
 
-Every CIP page is one of five grammars. New pages must declare which one they
+Every CIP page is one of six grammars. New pages must declare which one they
 use; if none fits, that is a design decision requiring review, not improv.
 
 1. **Queue + case** (split 56/44, queue persists, case opens in place):
@@ -152,13 +152,24 @@ use; if none fits, that is a design decision requiring review, not improv.
    `lineup-pending.html`.
 3. **Signal blotter** (landing page): ranked full-width signal rows — severity
    tick, one-line signal with figures, age/count, single next action. No KPI
-   cards. Read at top ("what changed since yesterday"). **No filter bar**
-   *(folded from batch-1 audit, 2026-08-30)* — period from tenant stamp only.
+   cards. Read at top — **current attention state only** (figures trace to
+   listed signal rows; no cross-day deltas until snapshotting exists). **No
+   filter bar** *(folded from batch-1 audit, 2026-08-30)* — period from tenant
+   stamp only.
 4. **Ranked actions + calculator** (Planner/Decide grammar): action list left
    (do-nothing is a first-class action), fixed-purpose calculator right,
    drafts clearly marked as drafts ("does not write a PO").
 5. **Factory** (Imports): jobs grid with state, failure reasons in product
    voice, retry/archive actions, steward entry points. Same grid rules.
+6. **Composer** *(added 2026-08-30)*: the operator assembles an artifact rather
+   than working a queue. Three-panel structure: **source/scope panel left**
+   (what data, what period, what filters); **artifact canvas centre** (the
+   report, view or deck taking shape — rendered as it will be delivered);
+   **output panel right** (format, schedule, recipients, saved-view identity).
+   Preview before save — the artifact is never delivered without an explicit
+   preview step. Saved views are first-class named objects, not filter memory.
+   Density and token rules unchanged; **no KPI-card composers**. Exemplar:
+   `reports-builder.html`.
 
 ## 5. Intelligence signatures — rules of use
 
@@ -170,8 +181,9 @@ bullet). Two hard rules:
   concentration, attribution (evidence-vs-performance), staleness. If the
   sentence can be wrong or vague, omit it — a wrong Read is worse than none.
   **Brief Read is federated by design** *(folded from batch-1 audit,
-  2026-08-30)*: every figure in the Brief Read must trace to a listed signal
-  row or a documented book delta in `docs/design/PACKET_DATA.md`. **Concentration
+  2026-08-30; cross-day deltas deferred 2026-08-30)*: every figure in the
+  Brief Read must trace to a listed signal row in `docs/design/PACKET_DATA.md`
+  (or a book figure named in that file for the cited surface). **Concentration
   Reads** *(folded from batch-1 audit, 2026-08-30)*: state one basis (units,
   lines, or value) and the grid footer must restate the same basis — else omit.
 - **Charts answer a decision question on that surface.** The instrument
