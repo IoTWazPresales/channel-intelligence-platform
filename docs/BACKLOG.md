@@ -6,6 +6,27 @@
 
 ---
 
+## VERIFY-debt register (charter v1.3 amendment 7)
+
+Outstanding consultant VERIFY for units that closed when the CLI consultant was unavailable.
+**Blocks promotion to `main`** until each row is cleared (`VERDICT: PASS`, Warren waiver in
+CURRENT, or row marked cleared with date). Does **not** block the next unit.
+
+| Unit | Shipped | VERIFY would check |
+|------|---------|-------------------|
+| **6f** | 2026-08-08 · PR #18 / D-040 | D-040 propose→confirm attribution: `distributor_attribution_status` transitions; Accept ship-corroborated; soft-clear; confirmer exact-qty Phase-1; no auto-clear on conflict; browser smoke Proposed 1016 |
+| **7** | 2026-08-12 · BACKLOG-068 | Shipping lineup-quarter strip: `landed_this_quarter_units` (pod_date quarter) + `shipped_not_landed_units`; PvE fill rate untouched; strip labels match semantics |
+| **8** | 2026-08-12 · Demo/P2 gate | Second-user login → landing → Shipping unaided; Users RBAC default-deny; backup→`cip_alembic_smoke` RESTORE_SMOKE_OK; `docs/UNIT8_DEMO_P2_GATE.md` steps |
+| **11** | 2026-08-12 · import parity | BACKLOG-044/027 steward/import parity vs DSI/shipment bar: async apply+progress, shared steward engine slots, contract S-rows on shipped tree |
+| **12** | 2026-08-12 · P6 polish | BACKLOG-026 PM pipeline retired; Settings lineup export sheet titles; no regression to import parity from Unit 11 |
+| **15B** | 2026-08-14 · B1 forecast | `/forecasts` compute-from-history; `tenant_id` never NULL; velocity + analogue provenance; B1-07 semantics; paste/add remain overrides only |
+| **B4 (15C)** | 2026-08-14 · promo planner | Per-line `build_promo_plan_draft`; dirty MAC/units survive Refresh; create-case `lines[]` (`manual` vs `intake_weighted`); D-051–D056 column-mapped export; BACKLOG-094 closed criteria |
+
+**Source:** seven consecutive units (6f–B4) shipped without VERIFY when consultant unavailable;
+debt untracked until charter v1.3 amendment 7 (2026-08-30).
+
+---
+
 ## BACKLOG-135 — Land customer SOH (CST) into a usable fact for CPOR MAC check
 
 | Field | Detail |
@@ -1970,9 +1991,9 @@ If either is intended backlog, add a sourced entry after confirming where the de
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Trigger MET** · 2026-08-30 — **decision with Warren** |
+| **Status / parked** | **Closed · accepted** · 2026-08-30 — charter **v1.3** (amendments 1–7 applied) |
 | **Effort** | Small (gate, not build) |
-| **Source** | `docs/design/CIP_DESIGN_LANGUAGE.md` § surface grammars; `docs/AUTONOMOUS_BUILD_CHARTER.md` (pending). |
+| **Source** | `docs/design/CIP_DESIGN_LANGUAGE.md` § surface grammars; `docs/AUTONOMOUS_BUILD_CHARTER.md` v1.3. |
 | **Idea** | Do not accept the autonomous-build charter until each of the **five surface grammars** in `CIP_DESIGN_LANGUAGE.md` has at least one **audited exemplar** (rendered + Fable PASS or PASS WITH NOTES) — not wireframes, not disposition prose alone. |
 | **Why it matters / deferrable** | Charter without grammar proof repeats the North Star HF failure mode (architecture without operable UI). Deferrable until batch work starts. |
 | **What the work is** | Checklist: (1) grammar 1 Funding — `funding-settlement-r3.html` + R3 audit; (2) grammar 2 Channel instrument+grid; (3) grammar 3 Today blotter; (4) grammar 4 Planner ranked actions+calculator; (5) grammar 5 Import factory grid. Record audit ids in charter appendix or `docs/design/`. |
@@ -1980,4 +2001,4 @@ If either is intended backlog, add a sourced entry after confirming where the de
 | **Behavior to retain** | `CIP_DESIGN_LANGUAGE.md` is the single visual authority post 2026-08-30. |
 | **Out of scope** | Implementing all five in product source in one unit. |
 | **TRIGGER** | All five surface grammars have an audited exemplar on file. |
-| **Resolution** | TRIGGER met 2026-08-30 — all five grammars have audited exemplars in `docs/design/` (batch 1+2 freeze). Warren to accept or defer charter (`docs/AUTONOMOUS_BUILD_CHARTER.md`). |
+| **Resolution** | TRIGGER met 2026-08-30 — exemplars in `docs/design/` (batch 1+2 freeze + grammar 6 `reports-builder.html`). Warren accepted charter v1.3 with amendments 1–7 (`docs/design/CHARTER_AMENDMENTS.md` APPLIED). |

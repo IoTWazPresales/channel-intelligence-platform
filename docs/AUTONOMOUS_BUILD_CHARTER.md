@@ -1,17 +1,27 @@
 # CIP Autonomous Build Charter
 
-**Version:** 1.2 · 2026-08-01 · Owner: Warren  
+**Version:** 1.3 · 2026-08-30 · Owner: Warren  
 **Status:** authoritative execution doc (absorbs former `docs/WORKFLOW_DUAL_AGENT.md`).
+
+**Changelog v1.3 (2026-08-30):** Warren accepted v1.2 with amendments 1–7 from
+`docs/design/CHARTER_AMENDMENTS.md` (review: `docs/design/CHARTER_REVIEW.md` §(e)):
+(1) governing design language + nav map in header; (2) P2-4 Brief grammar 3 exit;
+(3) P3-3 grammar 6 Composer; (4) demo spine via job containers; (5) design packet
+mockup-only scope; (6) UI contract rows cite grammar + container; (7) VERIFY-debt
+BACKLOG fallback when consultant unavailable.
 
 This governs how Cursor builds the remainder of CIP with bounded autonomy — zones, gates,
 verification, and the Cursor ↔ CLI dual-agent loop. It sits **under** `docs/ROADMAP.md`
 (what to build, in what order), is bound by `docs/COMMERCIAL_DOMAIN_RULES.md` (**domain
 ground truth — never overridden**), and sits **beside**
 `docs/STEWARD_EXPERIENCE_CONTRACT.md` (what done means),
-`docs/STEWARD_ENGINE_DECISIONS.md` (why it's built this way), and
-`docs/COMMERCIAL_SEMANTICS.md` (metrics, grains, owning surfaces — **authoritative**).
+`docs/STEWARD_ENGINE_DECISIONS.md` (why it's built this way),
+`docs/COMMERCIAL_SEMANTICS.md` (metrics, grains, owning surfaces — **authoritative**),
+`docs/design/CIP_DESIGN_LANGUAGE.md` (**FROZEN — UI grammar, components, anti-patterns**),
+and `docs/design/CIP_NAV_MAP.md` (job containers, spine labels, disposition).
 A metric mattering to a phase does not make that phase's screen its home. Where they
-conflict, the contract, decisions log, and commercial semantics win.
+conflict, the contract, decisions log, and commercial semantics win for **metrics and
+domain rules**; for **UI implementation**, the frozen design language and nav map win.
 
 
 ---
@@ -119,11 +129,11 @@ logged · committed and pushed · CURRENT + CONTEXT updated.
 | **P2-1 Deployment** | *(deferred — no hosting target set)* | — | RED until hosting decided | — |
 | **P2-2 Alembic replayability** | Chain replays on empty DB without `stamp head` | Fresh DB provisions from migrations alone | **DONE (B1-01 squash `20260801_0001`)** | — |
 | **P2-3 Auth + RBAC + user mgmt** | Login, sessions, 4 roles, admin-adds-users, tenant scoping, steward audit | Cross-tenant leakage impossible; roles enforced server-side | AMBER | 2 sessions |
-| **P2-4 App shell + landing** | Navigation, IA, landing surface, freshness banner | A manager reaches any surface unaided | AMBER | 2 sessions |
+| **P2-4 App shell + landing** | Navigation, IA, Brief (grammar 3 signal blotter), spine per nav map | Brief (grammar 3) reachable; spine matches `CIP_NAV_MAP.md`; manager reaches any container unaided | AMBER | 2 sessions |
 | **P2-5 Monitoring + backup/DR** | Error tracking, job-failure alerts, automated backup, tested restore | A restore has actually been performed | GREEN | 1 session |
 | **P3-1 Semantic layer** | Metric registry, dimension registry, validity rules, config-driven | Invalid metric×grain combos refused with explanation | AMBER | 3 sessions |
 | **P3-2 Query engine** | Metric+dim→SQL, invariants applied, aggregates, cache | NFR render targets met | GREEN | 2 sessions |
-| **P3-3 Report builder** | Build, slice, filter, visualise; author + consume modes | A governed report built end-to-end in UI | AMBER | 3 sessions |
+| **P3-3 Report builder** | Grammar 6 Composer (source/scope · artifact canvas · output panel); preview before save; named saved views; scheduled delivery | A country-manager pack assembled end-to-end per `reports-builder.html`; preview step exercised; test send does not substitute for preview | AMBER | 3 sessions |
 | **P3-4 Dashboards + sharing** | Save, publish, role-aware share | — | GREEN | 2 sessions |
 | **P3-5 Export + delivery** | Excel/PDF, event + scheduled trigger, freshness declared, missing-data alert | Report lands in an inbox stating its vintage | AMBER | 2 sessions |
 | **P3-6 SQL viewer (admin)** | Read-only, role-gated, timeout, row cap, audit log | Not reachable by non-admin roles | GREEN | 1 session |
@@ -237,6 +247,10 @@ export templates are **configuration**. Any tenant-specific string entering code
 not a shortcut. Uploaded ASUS files are **examples of a shape**, never the definition of it.
 Every module must be answerable to: *what changes for tenant #2, and is it config?*
 
+**Design packet (`docs/design/PACKET_DATA.md`):** canonical figures for `docs/design/*.html`
+mockups only. Production surfaces reconcile to loaded facts and `COMMERCIAL_SEMANTICS.md`;
+mockup packet figures are not production truth.
+
 ---
 
 ## Regression strategy
@@ -266,9 +280,9 @@ maintained as a first-class deliverable rather than assembled in a panic.
 the numbers each screen should show, and what to say about each. Updated at every module exit
 that touches a demo surface.
 
-**Minimum demo spine:** login → landing surface with freshness → plan accuracy and PM bias
-across years → promo effectiveness → author next quarter's lineup → scheduled report landing
-in an inbox.
+**Minimum demo spine:** login → **Brief** (signal blotter) → **Lineup** (plan origination) →
+**Stock** (cover lens) → **Settlement** (case book) → **Response** (ranked actions) →
+**Reports** (scheduled country-manager pack in inbox). No KPI-card landing.
 
 **Rule:** if a defect would make a demo screen wrong or embarrassing, it is AMBER, not
 log-and-continue. BACKLOG-076 (corrupt unit amounts) is the current example.
@@ -345,7 +359,7 @@ never for speed or “smallest diff.”
 | **Canonical clone or STOP** | Clone living reference behaviour/operator experience, not merely import a shared primitive. |
 | **No half-PASS** | Thin mounts / stub wizards / sync-only where async+progress is the bar → incomplete. |
 | **Code is evidence; docs are claims** | CURRENT/BACKLOG/ROADMAP “done” must be proven in the running tree. |
-| **Cursor must not self-PASS** | After clone/parity units, seed CLI VERIFY; only `VERDICT: PASS` closes. |
+| **Cursor must not self-PASS** | After clone/parity units, seed CLI VERIFY; only `VERDICT: PASS` closes. When VERIFY cannot run (consultant unavailable), record a **VERIFY-debt** entry in `docs/BACKLOG.md` naming the unit and what VERIFY would check; unit may close; debt must be cleared before promotion to `main`. |
 | **VERIFY walks the contract** | Steward/import: S1–S14 against shipped tree; REQUIRED absent without waiver → STOP. |
 
 **Product bar:** best practice is default; propose the better path; patches are last resort.
@@ -378,8 +392,10 @@ Multi-unit roadmap / BACKLOG Large / mushy product decisions / independent verif
 5. On PASS: next unit; on STOP: fix and re-verify
 ```
 
-**Hard gate:** no next-unit implementation until `VERDICT: PASS` (or Warren written waiver
-in CURRENT).
+**Hard gate:** steward/import parity units require `VERDICT: PASS` (or Warren written waiver
+in CURRENT) before promotion to `main`. When VERIFY cannot run, a VERIFY-debt BACKLOG entry
+is mandatory; **outstanding VERIFY debt blocks promotion to `main`, not the next unit.**
+Cursor must not self-PASS without PASS, waiver, or recorded debt.
 
 ### CIP standing rules (dual-agent)
 
@@ -399,7 +415,9 @@ in CURRENT).
 
 Greenfield → interview (max 5 questions/round). Complete BACKLOG → short scope lock.
 Steward/import: CONSULT enumerates S-rows of `STEWARD_EXPERIENCE_CONTRACT.md`; exclude only
-with Warren waiver line. Reduced “lean/chrome-only” scope without waiver → defective prompt.
+with Warren waiver line. **New UI surfaces:** contract rows must cite the declared grammar
+from `CIP_DESIGN_LANGUAGE.md` §4 and the owning container from `CIP_NAV_MAP.md` in addition
+to any steward S-rows. Reduced “lean/chrome-only” scope without waiver → defective prompt.
 
 ### Artifacts
 

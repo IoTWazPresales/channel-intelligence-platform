@@ -1,7 +1,7 @@
 # Proposed amendments — `docs/AUTONOMOUS_BUILD_CHARTER.md` v1.2
 
 **Date:** 2026-08-30  
-**Status:** draft for Warren adjudication — **do not apply to the charter until accepted.**  
+**Status:** **APPLIED** · 2026-08-30 — amendments 1–7 merged into charter **v1.3**.  
 **Source review:** `docs/design/CHARTER_REVIEW.md` §(e), plus amendment 7 (VERIFY fallback).
 
 These amendments are **targeted** corrections where the charter predates the frozen design
