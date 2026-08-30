@@ -53,7 +53,7 @@ a{color:inherit;text-decoration:none}
 .regime .l{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--t3)}
 .regime .v{font-family:var(--mono);font-size:13px;color:var(--t2)}
 
-.composer{display:grid;grid-template-columns:248px minmax(0,1fr)248px;flex:1;min-height:0}
+.composer{display:grid;grid-template-columns:248px minmax(0,1fr) 248px;flex:1;min-height:0}
 .panel{border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;background:var(--elev)}
 .panel:last-child{border-right:0;border-left:1px solid var(--line)}
 .ph{padding:14px 16px 10px;border-bottom:1px solid var(--line)}
@@ -123,6 +123,7 @@ table.rpt tr.em td{font-weight:600;color:var(--tx)}
   Grammar 6: Composer (CIP_DESIGN_LANGUAGE.md §4, added 2026-08-30).
   Country-manager pack from Stock · Cover + Settlement · figures from PACKET_DATA.md.
   Preview-before-save: overlay is the mandatory confirm step before schedule/delivery.
+  Test send delivers only to the authoring user and does not satisfy preview (spec §4).
   Exactly one SUGGESTED hint (Preview & save view).
 
   §7 anti-pattern self-check:
@@ -248,7 +249,7 @@ table.rpt tr.em td{font-weight:600;color:var(--tx)}
               </table>
             </section>
 
-            <p class="prov"><b>Provenance:</b> Stock · Cover lens and Settlement book as of tenant stamp 26Q3. Figures match design packet — not for production reconciliation.</p>
+            <p class="prov"><b>Source:</b> Stock · Cover lens and Settlement book · tenant stamp 26Q3 · DSI vintage 2026-08-18.</p>
           </div>
         </div>
       </section>

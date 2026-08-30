@@ -167,7 +167,9 @@ use; if none fits, that is a design decision requiring review, not improv.
    report, view or deck taking shape — rendered as it will be delivered);
    **output panel right** (format, schedule, recipients, saved-view identity).
    Preview before save — the artifact is never delivered without an explicit
-   preview step. Saved views are first-class named objects, not filter memory.
+   preview step. A **test send** delivers only to the authoring user and does
+   **not** satisfy the preview requirement. Saved views are first-class named
+   objects, not filter memory.
    Density and token rules unchanged; **no KPI-card composers**. Exemplar:
    `reports-builder.html`.
 
