@@ -1,10 +1,10 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-20 (RBAC R1–R1d merged to main)
+**Last updated:** 2026-08-30 (design-language-v1 nav map + Cover mockup)
 
-**Branch:** `main`
+**Branch:** `design-language-v1`
 
-**Last content pin:** `44530a4` — do not treat a hash in this file as HEAD
+**Last content pin:** `f40e5a9` — do not treat a hash in this file as HEAD
 
 **Alembic (code):** `20260818_0019` (`20260818_0019_shipping_mailer_recipient.py`)
 
@@ -12,16 +12,14 @@
 
 **Alembic on cip_test:** `20260818_0018` (OWNER cip)
 
-## On main
+## On this branch
 
-- **RBAC program CLOSED at R1–R1d.** CPOR writes authenticate; actor from `user["id"]`. 41 non-CPOR header gates → `require_roles(Role.ADMIN)`. Web 401 clears token and routes to `/login`. No Role enum expansion. No `require_roles` on CPOR (R2). BACKLOG-136 / BACKLOG-141 parked; triggers unchanged.
-- Merged `feat/shipping-mailer-recipients` at `b5e92d1`. Code + cip head `0019`.
-- **API test pin (not a fix):** `apps/api/tests/conftest.py` `setdefault("CIP_AUTH_MODE", "stub")`. Explicit process `CIP_AUTH_MODE=session` still wins (R1d). Do not edit `.env` or `config.py` default.
-- **CPOR settlement design** (docs only): `docs/CPOR_SETTLEMENT_SPEC.md`. D-057–D-065. BACKLOG-135–140 for §9 gaps.
-- BACKLOG-144: `cip_test` lacks fixtures for lineup distributor-as-customer remediation tests.
+- **Nav structure closed (docs).** Six job containers + Reports/Admin utilities. LINEUP settled (origination). Labels for 1, 3, 4, 5, 6 and utilities are **provisional** — study in `docs/design/NAMING.md`. UNMAPPED routes = 0 (`docs/design/NAV_COVERAGE.md`).
+- **Recommended label set (provisional):** Brief · Lineup · Stock · Settlement · Response · Steward · Reports · Admin.
+- **Cover mockup (grammar 2)** in the design packet: `docs/design/stock-cover.html` plus empty and loading variants. Spec gaps: `docs/design/SPEC_GAPS.md` GAP-001–004. No product source, no migration, no charter.
 
 ## Next
 
-Steward + CPOR queue depth on `feat/steward-queue-depth` (read-only against cip). Then settlement / MAC / line-windows from the spec + D-057–D-065; pick a BACKLOG-135–140 TRIGGER rather than re-deriving. **`cip_test` is real test infra — do not drop.** Clone DB `cip_merged_leftover_repair` can still be dropped when convenient.
+Warren confirms nav labels. Then remaining BACKLOG-146 surfaces (landing blotter, Inbound lens) — do not build them until labels are confirmed if the mockups must ship final names. BACKLOG-147 charter gate unchanged: do not accept the programme charter until each grammar has an audited exemplar.
 
-**Env:** local Windows. Web `:3000` + API `:8001`. `cip_auth_mode` default in `config.py` is `stub`.
+**Env:** local Windows. No DB writes this session. Web `:3000` + API `:8001` unchanged.

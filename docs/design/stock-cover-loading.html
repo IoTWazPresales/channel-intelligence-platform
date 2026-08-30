@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Stock · Cover · loading — Channel Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg:#14161a; --elev:#1a1d23; --surf:#1e2229; --surf2:#252a33;
+  --line:rgba(120,160,190,.16); --line2:rgba(120,160,190,.3);
+  --tx:rgba(245,247,250,.96); --t2:rgba(186,198,210,.75); --t3:rgba(160,176,192,.5);
+  --ac:#3db8e8; --ac-dim:rgba(61,184,232,.13);
+  --ok:#3d9b6a; --ok-dim:rgba(61,155,106,.14);
+  --wn:#d4a15a; --wn-dim:rgba(212,161,90,.13);
+  --st:#c45c5c; --st-dim:rgba(196,92,92,.14);
+  --ui:Inter,system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font:12.5px/1.45 var(--ui);background:var(--bg);color:var(--tx);-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--ac);outline-offset:1px;border-radius:3px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.app{display:grid;grid-template-columns:190px minmax(0,1fr);min-height:100vh}
+.spine{background:var(--elev);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:0 0 14px}
+.mark{padding:18px 16px 16px;border-bottom:1px solid var(--line)}
+.mark .word{font-size:13px;font-weight:650;letter-spacing:-.01em;display:block}
+.mark .sub{display:block;margin-top:4px;font-family:var(--mono);font-size:10px;color:var(--t3);letter-spacing:.08em;text-transform:uppercase}
+.nav{padding:10px 8px 0;display:flex;flex-direction:column;gap:1px}
+.nav a{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:5px;color:var(--t2);font-size:13px;font-weight:500}
+.nav a.on{background:var(--ac-dim);color:var(--tx);box-shadow:inset 2px 0 0 var(--ac)}
+.nav a .ct{font-family:var(--mono);font-size:10.5px;color:var(--t3)}
+.nav a.on .ct{color:var(--ac)}
+.nav a .ct.alert{color:var(--st)}
+.nav-rule{height:1px;background:var(--line);margin:12px 16px}
+.nav.util a{font-size:12px;font-weight:400;color:var(--t3);padding:6px 10px}
+.who{margin-top:auto;padding:12px 16px 0;border-top:1px solid var(--line);font-size:11px;color:var(--t3)}
+.who b{display:block;color:var(--t2);font-weight:500;font-size:12px;margin-bottom:1px}
+
+.main{display:flex;flex-direction:column;min-width:0;min-height:100vh}
+.top{display:flex;align-items:baseline;gap:18px;padding:11px 22px 10px;border-bottom:1px solid var(--line)}
+.crumb{font-size:12px;color:var(--t3)}
+.crumb b{color:var(--t2);font-weight:500}
+.regime{margin-left:auto;display:flex;gap:26px}
+.regime div{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.regime .l{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--t3)}
+
+.scope{display:flex;align-items:flex-end;gap:12px;padding:10px 22px 11px;border-bottom:1px solid var(--line);background:var(--elev);position:sticky;top:0;z-index:3}
+.scope .f{display:flex;flex-direction:column;gap:4px}
+.scope .f .fl{font-size:9.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.07em}
+.scope .pick{font:500 12px var(--ui);color:var(--tx);background:var(--surf);border:1px solid var(--line2);border-radius:4px;padding:5px 26px 5px 10px;min-width:96px;background-image:linear-gradient(45deg,transparent 50%,var(--t3) 50%),linear-gradient(135deg,var(--t3) 50%,transparent 50%);background-position:calc(100% - 14px) 12px,calc(100% - 10px) 12px;background-size:4px 4px;background-repeat:no-repeat}
+.scope .apply{font:600 12px var(--ui);color:#bfe8f8;background:rgba(61,184,232,.16);border:1px solid rgba(61,184,232,.55);border-radius:4px;padding:6px 16px;margin-bottom:1px}
+.scope .reset{font:500 12px var(--ui);color:var(--t3);background:none;border:0;padding:6px 4px;margin-bottom:1px}
+.scope .view{margin-left:auto;display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+.scope .view .fl{font-size:9.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.07em}
+.scope .view .pick{min-width:170px;color:var(--ac);border-color:rgba(61,184,232,.35)}
+
+.instr{padding:13px 22px 14px;border-bottom:1px solid var(--line);background:var(--elev)}
+.switch{display:flex;gap:2px;margin:0 0 12px;border-bottom:1px solid var(--line)}
+.switch a{font-size:12.5px;font-weight:500;color:var(--t3);padding:8px 13px 9px;border-bottom:2px solid transparent}
+.switch a.on{color:var(--tx);border-bottom-color:var(--ac)}
+.sk{background:rgba(120,160,190,.16);border-radius:2px}
+.sk.read{height:12px;width:78%;margin:6px 0 14px}
+.sk.plot{display:flex;align-items:flex-end;gap:8px;height:78px}
+.sk.plot i{display:block;flex:1;background:rgba(120,160,190,.22);border-radius:1px 1px 0 0}
+.sk.caps{display:flex;gap:8px;margin-top:8px}
+.sk.caps i{flex:1;height:8px;background:rgba(120,160,190,.16);border-radius:2px}
+
+.work{display:flex;flex-direction:column;flex:1;min-height:0}
+.gridwrap{flex:1;overflow:auto}
+table.g{width:100%;border-collapse:collapse;font-size:12px}
+table.g th{position:sticky;top:0;z-index:1;background:var(--surf);text-align:left;font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);padding:9px 10px 8px;border-bottom:1px solid var(--line2);white-space:nowrap}
+table.g th.r{text-align:right}
+table.g td{padding:0 10px;height:36px;border-bottom:1px solid var(--line);vertical-align:middle}
+.sk.cell{height:8px;background:rgba(120,160,190,.16);border-radius:2px}
+.sk.w1{width:88px}.sk.w2{width:72px}.sk.w3{width:36px;margin-left:auto}
+
+.qfoot{display:flex;align-items:baseline;gap:18px;padding:8px 22px;border-top:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--t3)}
+.qfoot .end{margin-left:auto}
+</style>
+</head>
+<body>
+<!--
+  Grammar 2: instrument + grid. Loading state (spec §6): skeleton rows in-grid, never a blank screen.
+  Filter bar held (muscle-memory anchor). Regime and Read are skeletons — no invented zeros.
+  Provisional nav: Brief · Lineup · Stock · Settlement · Response · Steward · Reports · Admin
+-->
+<div class="app">
+  <aside class="spine">
+    <div class="mark">
+      <span class="word">Channel Intelligence</span>
+      <span class="sub">ASUS SA · 26Q3</span>
+    </div>
+    <nav class="nav">
+      <a href="#">Brief <span class="ct alert">7</span></a>
+      <a href="#">Lineup</a>
+      <a class="on" href="#">Stock <span class="ct alert">119</span></a>
+      <a href="#">Settlement <span class="ct">310</span></a>
+      <a href="#">Response <span class="ct">6</span></a>
+      <a href="#">Steward <span class="ct alert">23</span></a>
+    </nav>
+    <div class="nav-rule"></div>
+    <nav class="nav util">
+      <a href="#">Reports</a>
+      <a href="#">Admin</a>
+    </nav>
+    <div class="who"><b>W. Eliason</b>Key accounts · session 26m</div>
+  </aside>
+
+  <div class="main">
+    <div class="top">
+      <div class="crumb">Stock / <b>Cover</b></div>
+      <div class="regime">
+        <div><span class="l">Under 4w</span><span class="sk" style="width:36px;height:13px"></span></div>
+        <div><span class="l">Book mean</span><span class="sk" style="width:44px;height:13px"></span></div>
+        <div><span class="l">Fill vs plan</span><span class="sk" style="width:40px;height:13px"></span></div>
+        <div><span class="l">Not received</span><span class="sk" style="width:48px;height:13px"></span></div>
+      </div>
+    </div>
+
+    <div class="scope">
+      <div class="f"><span class="fl">From</span><span class="pick">26Q3</span></div>
+      <div class="f"><span class="fl">To</span><span class="pick">26Q3</span></div>
+      <div class="f"><span class="fl">BU</span><span class="pick">All BUs</span></div>
+      <div class="f"><span class="fl">Customer</span><span class="pick">All customers</span></div>
+      <div class="f"><span class="fl">State</span><span class="pick">Under 4w · 119</span></div>
+      <span class="apply">Apply</span>
+      <span class="reset">Reset</span>
+      <div class="view"><span class="fl">Saved view</span><span class="pick">Cover · under 4w ▾</span></div>
+    </div>
+
+    <div class="instr">
+      <div class="sk read"></div>
+      <div class="switch">
+        <a href="#">Sell-out</a>
+        <a href="#">Fill vs plan</a>
+        <a class="on" href="#">Cover</a>
+        <a href="#">Inbound</a>
+      </div>
+      <div class="sk plot">
+        <i style="height:16px"></i><i style="height:30px"></i><i style="height:72px"></i><i style="height:36px"></i><i style="height:20px"></i>
+      </div>
+      <div class="sk caps"><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+
+    <div class="work">
+      <div class="gridwrap">
+        <table class="g">
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>SKU</th>
+              <th class="r">SOH</th>
+              <th class="r">WOC</th>
+              <th class="r">4w sell-out</th>
+              <th class="r">Inbound due</th>
+              <th class="r">Fill vs plan</th>
+              <th class="r">Δ wk</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><div class="sk cell w1"></div></td><td><div class="sk cell w2"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td></tr>
+            <tr><td><div class="sk cell w1"></div></td><td><div class="sk cell w2"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td></tr>
+            <tr><td><div class="sk cell w1"></div></td><td><div class="sk cell w2"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td></tr>
+            <tr><td><div class="sk cell w1"></div></td><td><div class="sk cell w2"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td></tr>
+            <tr><td><div class="sk cell w1"></div></td><td><div class="sk cell w2"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td></tr>
+            <tr><td><div class="sk cell w1"></div></td><td><div class="sk cell w2"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td></tr>
+            <tr><td><div class="sk cell w1"></div></td><td><div class="sk cell w2"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td></tr>
+            <tr><td><div class="sk cell w1"></div></td><td><div class="sk cell w2"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td></tr>
+            <tr><td><div class="sk cell w1"></div></td><td><div class="sk cell w2"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td></tr>
+            <tr><td><div class="sk cell w1"></div></td><td><div class="sk cell w2"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td></tr>
+            <tr><td><div class="sk cell w1"></div></td><td><div class="sk cell w2"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td></tr>
+            <tr><td><div class="sk cell w1"></div></td><td><div class="sk cell w2"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td></tr>
+            <tr><td><div class="sk cell w1"></div></td><td><div class="sk cell w2"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td></tr>
+            <tr><td><div class="sk cell w1"></div></td><td><div class="sk cell w2"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td></tr>
+            <tr><td><div class="sk cell w1"></div></td><td><div class="sk cell w2"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td></tr>
+            <tr><td><div class="sk cell w1"></div></td><td><div class="sk cell w2"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td><td><div class="sk cell w3"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="qfoot">
+        <span>Loading pairs</span>
+        <span class="end">Sorted by weeks of cover, ascending</span>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -9,21 +9,19 @@ notation. Generated 2026-08-30 on branch `design-language-v1`.
 login). API proxy `apps/web/src/app/api/v1/[[...path]]/route.ts` is not a page.
 
 **Map source:** `docs/design/CIP_NAV_MAP.md` v1 — each route must map to exactly
-one disposition line (container / lens / record / context / retired / utility).
+one disposition line (container / lens / record / context / retired / parked /
+shell / utility). Container **labels** are provisional except LINEUP; numbers
+below are structural (1–6 + utilities + shell).
 
 ---
 
 ## UNMAPPED — disposition gaps (do not implement without Warren)
 
+*(empty — all seven previously unmapped routes resolved 2026-08-30)*
+
 | Route | `page.tsx` evidence | Why unmapped |
 |---|---|---|
-| `/` | `apps/web/src/app/page.tsx` | Redirect-only (`redirect('/dashboard')`); not a disposed surface. Target landing is §1 TODAY but this route is not the Today blotter. |
-| `/login` | `apps/web/src/app/login/page.tsx` | Auth shell; no line in CIP_NAV_MAP.md. |
-| `/commercial-planner` | `apps/web/src/app/(app)/commercial-planner/page.tsx` | Ambiguous: §2 CHANNEL `(context)` lineup net-requirement **and** §4 PLANNER promo/support composition (B4) both claim planner surfaces. |
-| `/lineup` | `apps/web/src/app/(app)/lineup/page.tsx` | Ambiguous: §5 IMPORTS unified lineup ingest **and** §2 CHANNEL `(context)` lineup net-requirement. |
-| `/market` | `apps/web/src/app/(app)/market/page.tsx` | No line in CIP_NAV_MAP.md. |
-| `/budget-requests` | `apps/web/src/app/(app)/budget-requests/page.tsx` | No explicit line (nearest: §3 FUNDING `(context)` budgets **or** UTILITIES ADMIN budget administration — not named). |
-| `/admin/customer-commercial-terms` | `apps/web/src/app/(app)/admin/customer-commercial-terms/page.tsx` | No explicit line (ADMIN “semantic overlay” is not specific enough for this route). |
+| — | — | — |
 
 ---
 
@@ -31,38 +29,45 @@ one disposition line (container / lens / record / context / retired / utility).
 
 | Route | CIP_NAV_MAP.md line |
 |---|---|
-| `/dashboard` | §1 TODAY — Absorbs: Dashboard/Control tower (retired as cards) |
-| `/exceptions` | §1 TODAY — Absorbs: Exceptions inbox (retired as a place) |
-| `/getting-started` | §1 TODAY — Absorbs: Getting-started coach (retired) |
-| `/sell-out` | §2 CHANNEL — (lens) Movement — absorbs /sell-out and the Sell-Through duplicate |
-| `/plan-vs-executed` | §2 CHANNEL — (lens) Execution — Plan vs Executed (kept and improved) |
-| `/shipping` | §2 CHANNEL — (lens) Inbound — absorbs /shipping and PO Management out of Admin |
-| `/admin/po-management` | §2 CHANNEL — (lens) Inbound — absorbs /shipping and PO Management out of Admin |
-| `/forecasts` | §2 CHANNEL — (context) Forecast as demand input chip |
-| `/channel-intelligence` | §2 CHANNEL — (context) CST velocity at customer grain (absorbs /channel-intelligence) |
-| `/inventory` | §2 CHANNEL — (retired) /inventory paste as a second SOH |
-| `/buy-plans` | §2 CHANNEL — (context) lineup net-requirement (absorbs planner Lineup-coverage tab and /buy-plans) |
-| `/commercial-planner/cpor-cases` | §3 FUNDING — Queue + case split (grammar 1): the 310-case settlement book |
-| `/commercial-planner/cpor-cases/[id]` | §3 FUNDING — (record) Case: Lines / Evidence / Assumptions / Activity |
-| `/commercial-planner/cpor-cases/historical-import` | §3 FUNDING — Absorbs: … historical + payment-evidence import as evidence ingest on the case |
-| `/commercial-planner/cpor-cases/payment-evidence-import` | §3 FUNDING — Absorbs: … historical + payment-evidence import as evidence ingest on the case |
-| `/budgets` | §3 FUNDING — (context) Budgets as money ceiling (tick on book shape + regime figure) |
-| `/promotions` | §4 PLANNER — (retired) /promotions scaffold as a standalone module |
-| `/pricing` | §4 PLANNER — Calculators unparked … pricing recs |
-| `/competition` | §4 PLANNER — competition/listing intelligence as evidence on actions |
-| `/roadmap` | §4 PLANNER — (context) Roadmap parked as portfolio intent notes |
-| `/admin/imports` | §5 IMPORTS — Import Center: jobs, failures, retry/archive (grammar 5 grid) |
-| `/admin/shipment-evidence` | §5 IMPORTS — Steward engine … shipment evidence merged in |
-| `/listing-capture` | §5 IMPORTS — listing capture as a data job |
-| `/admin/products` | §5 IMPORTS — Identity masters as records: products, customers, distributors, channels/regions |
-| `/admin/product-master-gaps` | §5 IMPORTS — … gaps and duplicates surface in TODAY, resolve here |
-| `/admin/customers` | §5 IMPORTS — Identity masters as records: products, customers, distributors, channels/regions |
-| `/admin/customers/duplicates` | §5 IMPORTS — Identity masters … gaps and duplicates surface in TODAY, resolve here |
-| `/admin/distributors` | §5 IMPORTS — Identity masters as records: products, customers, distributors, channels/regions |
-| `/admin/distributors/duplicates` | §5 IMPORTS — Identity masters … gaps and duplicates surface in TODAY, resolve here |
-| `/admin/cst-steward` | §5 IMPORTS — Steward engine: DSI / CST / shipment / lineup worklists |
-| `/admin/channels-regions` | §5 IMPORTS — Identity masters … channels/regions |
-| `/admin/mappings` | §5 IMPORTS — (retired, on trigger) /admin/mappings once steward is the only queue |
+| `/` | SHELL / UTILITY — redirect to landing blotter (container 1). Not a container. |
+| `/login` | SHELL / UTILITY — auth shell. Not a container. |
+| `/dashboard` | §1 landing — Absorbs: Dashboard/Control tower (retired as cards) |
+| `/exceptions` | §1 landing — Absorbs: Exceptions inbox (retired as a place) |
+| `/getting-started` | §1 landing — Absorbs: Getting-started coach (retired) |
+| `/lineup` | §2 LINEUP — plan composition / items grid / net requirement / history |
+| `/buy-plans` | §2 LINEUP — net-requirement (absorbs /buy-plans) |
+| `/commercial-planner` | RETIRED as a single page, split: Lineup coverage → §2 LINEUP; Plans & lines → §5 commercial response; Planner defaults → UTILITIES ADMIN; Data map → §6 ingest & steward |
+| `/sell-out` | §3 position — (lens) Movement — absorbs /sell-out and the Sell-Through duplicate |
+| `/plan-vs-executed` | §3 position — (lens) Execution — Plan vs Executed (kept and improved) |
+| `/shipping` | §3 position — (lens) Inbound — absorbs /shipping and PO Management out of Admin |
+| `/admin/po-management` | §3 position — (lens) Inbound — absorbs /shipping and PO Management out of Admin |
+| `/forecasts` | §3 position — (context) Forecast as demand input chip |
+| `/channel-intelligence` | §3 position — (context) CST velocity at customer grain (absorbs /channel-intelligence) |
+| `/inventory` | §3 position — (retired) /inventory paste as a second SOH |
+| `/market` | PARKED — static placeholder stub (source: `market/page.tsx` “static JSON stub”) |
+| `/commercial-planner/cpor-cases` | §4 funding & settlement — Queue + case split (grammar 1): the 310-case settlement book |
+| `/commercial-planner/cpor-cases/[id]` | §4 funding & settlement — (record) Case: Lines / Evidence / Assumptions / Activity |
+| `/commercial-planner/cpor-cases/historical-import` | §4 funding & settlement — Absorbs: … historical + payment-evidence import as evidence ingest on the case |
+| `/commercial-planner/cpor-cases/payment-evidence-import` | §4 funding & settlement — Absorbs: … historical + payment-evidence import as evidence ingest on the case |
+| `/budgets` | §4 funding & settlement — (context) Budgets as money ceiling (tick on book shape + regime figure) |
+| `/budget-requests` | §4 funding & settlement — (context) ceiling/request workflow; budget administration remains ADMIN |
+| `/promotions` | §5 commercial response — (retired) /promotions scaffold as a standalone module |
+| `/pricing` | §5 commercial response — Calculators unparked … pricing recs |
+| `/competition` | §5 commercial response — competition/listing intelligence as evidence on actions |
+| `/roadmap` | §5 commercial response — (context) Roadmap parked as portfolio intent notes |
+| `/admin/imports` | §6 ingest & steward — Import Center: jobs, failures, retry/archive (grammar 5 grid) |
+| `/admin/shipment-evidence` | §6 ingest & steward — Steward engine … shipment evidence merged in |
+| `/listing-capture` | §6 ingest & steward — listing capture as a data job |
+| `/admin/products` | §6 ingest & steward — Identity masters as records: products, customers, distributors, channels/regions |
+| `/admin/product-master-gaps` | §6 ingest & steward — … gaps and duplicates surface in (1), resolve here |
+| `/admin/customers` | §6 ingest & steward — Identity masters as records: products, customers, distributors, channels/regions |
+| `/admin/customers/duplicates` | §6 ingest & steward — … gaps and duplicates surface in (1), resolve here |
+| `/admin/distributors` | §6 ingest & steward — Identity masters as records: products, customers, distributors, channels/regions |
+| `/admin/distributors/duplicates` | §6 ingest & steward — Identity masters as records: products, customers, distributors, channels/regions |
+| `/admin/cst-steward` | §6 ingest & steward — Steward engine: DSI / CST / shipment / lineup worklists |
+| `/admin/channels-regions` | §6 ingest & steward — Identity masters … channels/regions |
+| `/admin/mappings` | §6 ingest & steward — (retired, on trigger) /admin/mappings once steward is the only queue |
+| `/admin/customer-commercial-terms` | §6 ingest & steward — customer record (dealer margin and rebate consumed by (4) and (5)); not a standalone admin page |
 | `/reports` | UTILITIES REPORTS — report builder |
 | `/dashboards` | UTILITIES REPORTS — saved views |
 | `/inbox` | UTILITIES REPORTS — scheduled deliveries/inbox digest |
@@ -79,8 +84,10 @@ one disposition line (container / lens / record / context / retired / utility).
 | | Count |
 |---|---|
 | `page.tsx` files (routable) | 47 |
-| Mapped (unique routes) | 40 |
-| UNMAPPED / ambiguous | 7 |
+| Mapped (unique routes) | 47 |
+| UNMAPPED / ambiguous | 0 |
 | API `route.ts` (excluded) | 1 |
 
-Activity feed / running jobs (§1 TODAY) has no dedicated `page.tsx` — shell chrome only.
+Activity feed / running jobs (§1 landing) has no dedicated `page.tsx` — shell chrome only.
+Planner defaults have no dedicated `page.tsx` — they live as a tab on the retired
+`/commercial-planner` page and map to UTILITIES ADMIN.
