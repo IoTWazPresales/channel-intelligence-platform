@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-08-30 — **Nav map closed + Cover mockup** on `design-language-v1`: six job containers (LINEUP settled); UNMAPPED routes resolved; naming study `docs/design/NAMING.md` (provisional: Brief · Lineup · Stock · Settlement · Response · Steward · Reports · Admin); grammar-2 Cover frames in `docs/design/stock-cover*.html`. No product source. No charter.
+- 2026-08-30 — **Nav map closed + Cover mockup** on `design-language-v1` `d9e3b79`: six job containers (LINEUP settled); UNMAPPED routes resolved; naming study `docs/design/NAMING.md` (provisional: Brief · Lineup · Stock · Settlement · Response · Steward · Reports · Admin); grammar-2 Cover frames in `docs/design/stock-cover*.html`. No product source. No charter.
 
 - 2026-08-30 — **Design language v1** on `design-language-v1` `8d7fdb4`: Concept-A / Channel Desk HF and fresh-audit five-frame packet superseded as visual direction. Governing spec: `docs/design/CIP_DESIGN_LANGUAGE.md` (Fable R1–R3; ref `docs/design/funding-settlement-r3.html`). Job-spine architecture in `docs/design/CIP_NAV_MAP.md` and route coverage in `docs/design/NAV_COVERAGE.md` remain valid input. Remaining design work proceeds as implementer-builds / Opus-CONSULT-audits batches against the spec.
 
