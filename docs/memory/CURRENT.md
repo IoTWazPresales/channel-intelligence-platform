@@ -1,6 +1,8 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-21 (promote provisionals Phase B confirm)
+**Last updated:** 2026-08-23 (EIF v0.5.0 upgrade blocked — framework only; mint state unchanged)
+
+**EIF:** compiled `0.4.0-draft` L3 accepted, workspace shell. v0.5.0 Programme Release **not installed**. Installer/product tree is outside CIP `allowed_roots` (`FOREIGN_PATH`); control-plane writes denied. Operator must run v0.5.0 install/migrate/compile from host PowerShell. Do not reuse probe `R20260822192834_EECF1A` as v0.5 evidence. North Star programme **not started**. Details: `.eif/ESCALATION.md` `ESC-20260823-EIF-V050-PROGRAMME`.
 
 **Branch:** `feat/promote-provisionals-run`
 
