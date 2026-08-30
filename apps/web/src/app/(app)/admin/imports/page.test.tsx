@@ -153,36 +153,40 @@ vi.mock('./pmMappingHelpers', () => ({
   applyPmDispositionDraft: (prev: any) => prev,
 }));
 
-vi.mock('@/lib/api', () => ({
-  apiGet: vi.fn(async (url: string) => {
-    if (url === '/api/v1/imports/templates') return mockState.templates;
-    if (
-      url === '/api/v1/imports/jobs' ||
-      url === '/api/v1/imports/jobs?limit=100' ||
-      url === '/api/v1/imports/jobs?include_archived=true&limit=100'
-    ) {
-      return { items: [], total: 0, limit: 100, offset: 0, has_more: false };
-    }
-    if (url.startsWith('/api/v1/imports/sources')) {
-      if (url.includes('historical_lineup')) return mockState.hlSources ?? [];
-      if (url.includes('distributor_inventory')) return mockState.dsiSources ?? [];
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>();
+  return {
+    ...actual,
+    apiGet: vi.fn(async (url: string) => {
+      if (url === '/api/v1/imports/templates') return mockState.templates;
+      if (
+        url === '/api/v1/imports/jobs' ||
+        url === '/api/v1/imports/jobs?limit=100' ||
+        url === '/api/v1/imports/jobs?include_archived=true&limit=100'
+      ) {
+        return { items: [], total: 0, limit: 100, offset: 0, has_more: false };
+      }
+      if (url.startsWith('/api/v1/imports/sources')) {
+        if (url.includes('historical_lineup')) return mockState.hlSources ?? [];
+        if (url.includes('distributor_inventory')) return mockState.dsiSources ?? [];
+        return [];
+      }
+      if (url === '/api/v1/imports/jobs/42') return mockState.jobDetail;
+      if (url === '/api/v1/imports/jobs/42/rows') return mockState.jobRows;
+      if (url === '/api/v1/imports/jobs/50') return mockState.hlValidateJobDetail;
+      if (url === '/api/v1/imports/jobs/50/rows') return mockState.hlValidateJobRows;
+      if (url.match(/\/api\/v1\/imports\/jobs\/\d+\/lineup-lines$/)) return mockState.lineupLines;
+      if (url === '/api/v1/imports/jobs/99') return mockState.pmJobDetail;
+      if (url === '/api/v1/imports/jobs/99/rows') return [];
+      if (url.match(/\/api\/v1\/imports\/jobs\/\d+\/rows$/)) return [];
+      if (url.match(/\/api\/v1\/imports\/jobs\/\d+$/)) return null;
       return [];
-    }
-    if (url === '/api/v1/imports/jobs/42') return mockState.jobDetail;
-    if (url === '/api/v1/imports/jobs/42/rows') return mockState.jobRows;
-    if (url === '/api/v1/imports/jobs/50') return mockState.hlValidateJobDetail;
-    if (url === '/api/v1/imports/jobs/50/rows') return mockState.hlValidateJobRows;
-    if (url.match(/\/api\/v1\/imports\/jobs\/\d+\/lineup-lines$/)) return mockState.lineupLines;
-    if (url === '/api/v1/imports/jobs/99') return mockState.pmJobDetail;
-    if (url === '/api/v1/imports/jobs/99/rows') return [];
-    if (url.match(/\/api\/v1\/imports\/jobs\/\d+\/rows$/)) return [];
-    if (url.match(/\/api\/v1\/imports\/jobs\/\d+$/)) return null;
-    return [];
-  }),
-  apiUrl: (path: string) => path,
-  readFetchError: async () => 'error',
-  safeDisplayError: () => 'error',
-}));
+    }),
+    apiUrl: (path: string) => path,
+    readFetchError: async () => 'error',
+    safeDisplayError: () => 'error',
+  };
+});
 
 vi.mock('@/lib/queryError', () => ({ toQueryError: () => null }));
 

@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-08-30 — **Web test harness fix** on `fix/web-test-harness-authheaders`: RBAC commit `5b2a6a4` switched the imports upload path to `authHeaders()`; the `page.test.tsx` `@/lib/api` mock omitted that export and silently broke 19 historical_lineup vitest cases (undetected until VERIFY debt Session B). Fix is test-only (`importOriginal` partial mock + customers drawer wait for loaded locations). No product regression; operators could apply validated files throughout. Diagnosis: `docs/verify/WEB_TEST_FAILURE_DIAGNOSIS.md`.
+
 - 2026-08-30 — **Promoted to main** `83b4290`: `design-language-v1` fast-forward — CIP design language FROZEN v1.1 (`docs/design/CIP_DESIGN_LANGUAGE.md`), nav map (`docs/design/CIP_NAV_MAP.md`), mockup packet, and charter v1.3 (`docs/AUTONOMOUS_BUILD_CHARTER.md`, amendments 1–7 APPLIED) now governing on `main`. No product source. No migration.
 
 - 2026-08-30 — **Charter v1.3 accepted** on `design-language-v1`: design language frozen v1.1 + grammar 6 Composer; Warren accepted `docs/AUTONOMOUS_BUILD_CHARTER.md` v1.3 with amendments 1–7 (`docs/design/CHARTER_AMENDMENTS.md` APPLIED); implementation phase open for six job containers (Brief · Lineup · Stock · Settlement · Response · Steward); Reports and Admin deferred as later design increment. VERIFY-debt register added for units 6f–B4 (`docs/BACKLOG.md`).

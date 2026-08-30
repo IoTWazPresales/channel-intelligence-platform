@@ -302,22 +302,36 @@ describe('AdminCustomersPage phase1 behaviors', () => {
     expect(await screen.findByDisplayValue('Alex Buyer')).toBeInTheDocument();
   });
 
-  it('submits add location and add contact from drawer', async () => {
-    renderPage();
-    fireEvent.click(await screen.findByRole('button', { name: 'Open' }));
-    const locationCodeInputs = await screen.findAllByLabelText('Location code');
-    const locationNameInputs = await screen.findAllByLabelText('Location name');
-    fireEvent.change(locationCodeInputs[locationCodeInputs.length - 1], { target: { value: 'LOC-NEW' } });
-    fireEvent.change(locationNameInputs[locationNameInputs.length - 1], { target: { value: 'Annex' } });
-    fireEvent.click(await screen.findByRole('button', { name: 'Add location' }));
-    const contactNameInputs = await screen.findAllByLabelText('Contact name');
-    fireEvent.change(contactNameInputs[contactNameInputs.length - 1], { target: { value: 'Taylor Ops' } });
-    fireEvent.click(await screen.findByRole('button', { name: 'Add contact' }));
-    await waitFor(() => expect(mockState.apiPostMock).toHaveBeenCalled());
-    const urls = mockState.apiPostMock.mock.calls.map((x: any[]) => x[0]);
-    expect(urls).toContain('/api/v1/customers/1/locations');
-    expect(urls).toContain('/api/v1/customers/1/contacts');
-  });
+  it(
+    'submits add location and add contact from drawer',
+    async () => {
+      renderPage();
+      fireEvent.click(await screen.findByRole('button', { name: 'Open' }));
+      expect(await screen.findByText('Locations')).toBeInTheDocument();
+      // Drawer locations load via react-query; under full-suite load the fields can appear after the heading.
+      await waitFor(
+        () => {
+          expect(screen.getAllByLabelText('Location code').length).toBeGreaterThanOrEqual(2);
+          expect(screen.getByDisplayValue('LOC-001')).toBeInTheDocument();
+        },
+        { timeout: 8000 }
+      );
+      const locationCodeInputs = screen.getAllByLabelText('Location code');
+      const locationNameInputs = screen.getAllByLabelText('Location name');
+      fireEvent.change(locationCodeInputs[locationCodeInputs.length - 1], { target: { value: 'LOC-NEW' } });
+      fireEvent.change(locationNameInputs[locationNameInputs.length - 1], { target: { value: 'Annex' } });
+      fireEvent.click(await screen.findByRole('button', { name: 'Add location' }));
+      expect(await screen.findByText('Contacts')).toBeInTheDocument();
+      const contactNameInputs = await screen.findAllByLabelText('Contact name');
+      fireEvent.change(contactNameInputs[contactNameInputs.length - 1], { target: { value: 'Taylor Ops' } });
+      fireEvent.click(await screen.findByRole('button', { name: 'Add contact' }));
+      await waitFor(() => expect(mockState.apiPostMock).toHaveBeenCalled(), { timeout: 8000 });
+      const urls = mockState.apiPostMock.mock.calls.map((x: any[]) => x[0]);
+      expect(urls).toContain('/api/v1/customers/1/locations');
+      expect(urls).toContain('/api/v1/customers/1/contacts');
+    },
+    15000
+  );
 
   it('submits location/contact edit saves from drawer', async () => {
     renderPage();
