@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-08-30 — **Design packet frozen v1.1** on `design-language-v1`: batch 1+2 audited (Opus CONSULT), cross-grammar identity check passed (Fable), packet frozen as North Star design language in `docs/design/CIP_DESIGN_LANGUAGE.md`; all five grammars have audited exemplars (`brief.html`, `stock-cover.html`, `lineup.html`, `response.html`, `steward.html` + state frames). BACKLOG-146 done; BACKLOG-147 trigger MET — charter decision with Warren.
+- 2026-08-30 — **Design packet frozen v1.1** on `design-language-v1` `17ba08e`: batch 1+2 audited (Opus CONSULT), cross-grammar identity check passed (Fable), packet frozen as North Star design language in `docs/design/CIP_DESIGN_LANGUAGE.md`; all five grammars have audited exemplars (`brief.html`, `stock-cover.html`, `lineup.html`, `response.html`, `steward.html` + state frames). BACKLOG-146 done; BACKLOG-147 trigger MET — charter decision with Warren.
 
 - 2026-08-30 — **Nav map closed + Cover mockup** on `design-language-v1` `d9e3b79`: six job containers (LINEUP settled); UNMAPPED routes resolved; naming study `docs/design/NAMING.md` (provisional: Brief · Lineup · Stock · Settlement · Response · Steward · Reports · Admin); grammar-2 Cover frames in `docs/design/stock-cover*.html`. No product source. No charter.
 
