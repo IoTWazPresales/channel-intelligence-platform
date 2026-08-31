@@ -224,6 +224,18 @@ def test_inferred_schema_includes_source_columns() -> None:
     assert "SKU" in source_cols
 
 
+def test_inferred_schema_includes_column_samples() -> None:
+    """selected_sheet_details must include column_samples for mapping panel Examples."""
+    _sheets, schema = parse_historical_workbook("historical_lineup.xlsx", _build_workbook_bytes())
+    detail = schema["selected_sheet_details"][0]
+    assert "column_samples" in detail, "column_samples missing from selected_sheet_details"
+    samples = detail["column_samples"]
+    assert isinstance(samples, dict)
+    assert samples.get("Customer"), "Expected sample values for Customer column"
+    assert "CUST-HL-01" in samples["Customer"]
+    assert samples.get("SKU"), "Expected sample values for SKU column"
+
+
 def test_mapping_override_fixes_undetected_column() -> None:
     """If a workbook uses a non-standard column name, mapping_override should bind it.
 

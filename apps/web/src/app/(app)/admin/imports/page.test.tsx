@@ -108,6 +108,12 @@ const mockState = vi.hoisted(() => ({
           header_row_number: 4,
           mapped_fields: ['model_raw', 'quantity_units', 'sku_raw'],
           source_columns: ['Product Line', 'Country', 'Customer', 'Model Name', 'Part Number', 'Qty'],
+          column_samples: {
+            Customer: ['CUST-01', 'CUST-02'],
+            'Model Name': ['Widget Pro'],
+            'Part Number': ['PN-99'],
+            Qty: ['10', '12'],
+          },
           row_count: 10,
           mapping_confidence: 0.35,
         },
@@ -424,6 +430,36 @@ describe('AdminImportsPage historical_lineup mapping review panel', () => {
       },
     ];
     mockState.hlSources = [];
+    mockState.hlValidateJobDetail = {
+      id: 50,
+      status: 'completed_with_errors',
+      stage: 'validated',
+      file_name: 'lineup.xlsx',
+      error_summary: '5 rows require attention',
+      template_slug: 'historical_lineup',
+      import_mode: 'validate',
+      field_mapping: {
+        NB: { model_raw: 'Model Name', sku_raw: 'Part Number', quantity_units: 'Qty' },
+      },
+      inferred_schema: {
+        selected_sheet_details: [
+          {
+            sheet_name: 'NB',
+            header_row_number: 4,
+            mapped_fields: ['model_raw', 'quantity_units', 'sku_raw'],
+            source_columns: ['Product Line', 'Country', 'Customer', 'Model Name', 'Part Number', 'Qty'],
+            column_samples: {
+              Customer: ['CUST-01', 'CUST-02'],
+              'Model Name': ['Widget Pro'],
+              'Part Number': ['PN-99'],
+              Qty: ['10', '12'],
+            },
+            row_count: 10,
+            mapping_confidence: 0.35,
+          },
+        ],
+      },
+    } as any;
     vi.restoreAllMocks();
   });
 
@@ -460,6 +496,41 @@ describe('AdminImportsPage historical_lineup mapping review panel', () => {
 
     expect(await screen.findByTestId('hl-map-Customer')).toBeInTheDocument();
     expect(screen.getByTestId('hl-map-Model Name')).toBeInTheDocument();
+  });
+
+  it('mapping review panel renders column samples, required-group chips, and blocking errors', async () => {
+    mockState.hlValidateJobDetail = {
+      ...mockState.hlValidateJobDetail,
+      field_mapping: { NB: { quantity_units: 'Qty' } },
+      inferred_schema: {
+        selected_sheet_details: [
+          {
+            sheet_name: 'NB',
+            header_row_number: 4,
+            mapped_fields: ['quantity_units'],
+            source_columns: ['Customer', 'Qty'],
+            column_samples: { Customer: ['CUST-01'], Qty: ['10'] },
+            row_count: 1,
+            mapping_confidence: 0.1,
+          },
+        ],
+      },
+    };
+
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => VALIDATE_JOB } as any);
+
+    const { user } = renderPage();
+    await navigateToUploadStep(user);
+    await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, xlsxFile());
+
+    await screen.findByText(/Column mapping review/i);
+    await user.click(screen.getByRole('button', { name: /Show \/ edit/i }));
+
+    expect(await screen.findByTestId('hl-samples-Customer')).toHaveTextContent('CUST-01');
+    expect(screen.getByTestId('hl-samples-Qty')).toHaveTextContent('10');
+    expect(screen.getByText(/Product identity: needs mapping/i)).toBeInTheDocument();
+    expect(screen.getByText(/Fix mapping before validating/i)).toBeInTheDocument();
+    expect(screen.getByText(/Map at least one column to product identity/i)).toBeInTheDocument();
   });
 
   it('re-validate with corrections sends mapping_override in FormData', async () => {

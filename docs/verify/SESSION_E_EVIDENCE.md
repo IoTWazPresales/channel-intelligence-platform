@@ -248,3 +248,160 @@ Grading applies primarily to **ShipmentImportJobResolutionSection**. PM and HL h
 ---
 
 *Evidence-only — no VERDICT. For Opus CONSULT.*
+
+---
+
+## 2026-08-31 Unit 11 fix pass — HL mapping parity + S11 stall (main @ ba0d46c)
+
+**Collection timestamp:** 2026-08-31 (Monday), ~14:07–14:35 UTC+2  
+**Branch:** `main` @ `ba0d46cc509069a707eb44102ae561cbc47b97ab` (`git rev-parse HEAD`)  
+**Fix scope:** Opus CONSULT second-pass FAIL pillars — HL `CanonicalColumnMappingPanel` mount parity + S11 worker/API DB binding proof + re-run apply on `cip_test`.
+
+### Proof gate + restore
+
+| Step | OBSERVED |
+|------|----------|
+| Pre-write | `session_d_run_api.py cip_test` → `GET /health/ready` → `"database":"cip_test"` |
+| All SQL writes | `current_database(): cip_test` printed on every block |
+| Post-fix restore | Kill `:8001`; `session_d_run_api.py env` → `session_d_poll_health.py` → **HTTP 200** `{"status":"ready","database":"cip","ok":true}` |
+
+---
+
+### Finding 1 — HL mapping parity (Rule #4)
+
+#### Before mounts (code at FAIL baseline)
+
+**PM reference** (`page.tsx` **3185–3203**):
+
+```tsx
+<CanonicalColumnMappingPanel
+  testIdPrefix="pm"
+  fileHeaders={pmJobState.file_headers}
+  draft={pmMapDraft}
+  onChange={(next) => setPmColumns((prev) => applyPmTargetDraft(prev, next))}
+  targetOptions={pmCanonicalTargetOptions}
+  columnSamples={pmColumnSamples}
+  columnNotes={pmColumnNotes}
+  requiredGroups={pmRequiredGroups}
+  dispositionOptions={[ ... ]}
+  dispositionDraft={pmDispositionDraft}
+  onDispositionChange={(next) => setPmColumns((prev) => applyPmDispositionDraft(prev, next))}
+  formatSamples={(samples) => formatPmSamples(samples)}
+  dirty={pmMappingDirty}
+/>
+```
+
+**HL thin mount (FAIL)** — only five props: `testIdPrefix`, `fileHeaders`, `draft`, `targetOptions`, `dirty`.
+
+#### After mounts (fix shipped)
+
+**HL** (`page.tsx` **4503–4515**):
+
+```tsx
+<CanonicalColumnMappingPanel
+  testIdPrefix="hl"
+  fileHeaders={hlSourceColumns}
+  draft={hlMapDraft}
+  onChange={setHlMapDraft}
+  targetOptions={hlCanonicalTargetOptions}
+  columnSamples={hlColumnSamples}
+  columnNotes={hlColumnNotes}
+  requiredGroups={HL_MAPPING_REQUIRED_GROUPS}
+  blockingErrors={hlBlockingErrors}
+  formatSamples={formatDsiSamples}
+  dirty={hlHasEdits}
+/>
+```
+
+#### Backend data for `columnSamples`
+
+- `historical_lineup.py`: `_collect_column_samples()` → `selected_sheet_details[].column_samples` in `inferred_schema`.
+- Job **642** on `cip_test` (`session_e_hl642_samples.py`):
+
+```json
+{
+  "Customer": ["CUST-HL-01"],
+  "Distributor": ["DIST-HL-01"],
+  "SKU": ["SKU-HL-01"],
+  "Qty": ["12"],
+  "MSRP": ["100"],
+  "Period": ["2026-04-01"],
+  "Channel": ["RET"],
+  "Promo Price": ["90"],
+  "Disti Margin": ["8"],
+  "Notes": ["SESSION E valid row"]
+}
+```
+
+(`current_database(): cip_test` on query.)
+
+#### Backend gap — disposition props (not faked)
+
+HL apply/validate uses **`mapping_override` only**; there is no PM-style per-column disposition channel (`ignore` / `stage_raw` / `attribute_candidate`) in the HL API payload. **`dispositionOptions` / `dispositionDraft` / `onDispositionChange` intentionally omitted** — document as **backend gap**, not a frontend stub.
+
+#### Automated tests (fix pass)
+
+| Suite | Command | Result |
+|-------|---------|--------|
+| API HL import | `pytest tests/test_historical_lineup_import.py` (`ALLOW_TESTS_ON_DEV_DB=1`) | **22 passed** |
+| HL helpers | `vitest run hlMappingHelpers.test.ts` | **5 passed** |
+| HL page mapping panel | `vitest run page.test.tsx -t "mapping review panel"` | **6 passed** (incl. samples + required-group chips + blocking errors) |
+
+#### Browser evidence — job 642 on `cip_test` API
+
+**URL:** `http://127.0.0.1:3000/admin/imports?job=642` → **Column mapping review → Show / edit** (`cursor-ide-browser`, origin `127.0.0.1:3000`).
+
+**OBSERVED (operator-visible):**
+
+- Summary chips: **Mapped: 6**, **Unmapped: 4**, **Product identity: OK** (required-group chip — was absent on thin mount).
+- **Customer** row: green `Customer (customer_token)` badge; **Examples: CUST-HL-01** (was em dash); Target **Customer (customer_token)**.
+- **Distributor** row: **Examples: DIST-HL-01**.
+- No disposition column (expected — backend gap above).
+
+Browser capture filename: `hl-job642-mapping-expanded.png` (cursor-ide-browser screenshot, 2026-08-31 fix pass).
+
+---
+
+### Finding 2 — S11 stall (job 640) — binding proof + re-run
+
+#### Original stall (job 640, pre-fix evidence — retained)
+
+| Field | OBSERVED |
+|-------|----------|
+| Apply | `POST …/jobs/640/apply` → **200**, `async: true`, `task_id: b6a64ac3-b3fd-4fb4-b258-9cd729cec78a` |
+| Progress poll ~90s | `phase: processing_rows`, `task_state: STARTED`, `pct: 0` |
+| Terminal | Job stuck `validated`/`running`/`apply`; **`fact_inbound_shipment` count = 0** (`current_database(): cip_test`) |
+
+#### Worker vs API DB binding (`session_e_s11_proof.py` — printed evidence)
+
+```
+.env DATABASE_URL_SYNC dbname=cip   (default Celery worker startup)
+GET /health/ready → "database":"cip_test"   (API proof gate)
+BINDING_MISMATCH: API on cip_test but worker .env default is cip
+```
+
+**Ruling (evidence):** Job **640** stall is explained by **topology mismatch** (API dispatching against `cip_test` while worker `.env` defaults to `cip`) — **not a product defect** in apply/progress code when worker is aligned.
+
+#### Re-run with worker on `cip_test` (fix pass)
+
+Worker started via `session_e_run_worker_cip_test.py` (DATABASE_* rewritten to `cip_test`). Apply re-run via `session_e_s11_proof.py`:
+
+| Job | Apply | Phase transitions | Final | `fact_inbound_shipment` |
+|-----|-------|-------------------|-------|-------------------------|
+| **641** | 200 + task_id | `processing_rows`/STARTED/0% → **`complete`/100%** | `loaded`/`completed` | **1** |
+| **643** | 200 + task_id | same pattern | `loaded`/`completed` | **1** |
+| **644** (fix-pass script) | 200 + task_id `fa53963d-…` | single poll **`complete`/100%** | `loaded`/`completed` | **1** (`current_database(): cip_test`) |
+
+**Conclusion:** With API + worker both on `cip_test`, S11 reaches terminal **`complete`/100%**, job **`loaded`**, and writes **1** fact row. No product defect observed when binding is correct.
+
+---
+
+### Fix-pass summary table (Opus CONSULT pillars)
+
+| Pillar | Pre-fix FAIL | Post-fix evidence |
+|--------|--------------|-------------------|
+| HL Rule #4 thin mount | 5 props only; Examples em dash | Full mount + backend `column_samples`; browser **CUST-HL-01** / **DIST-HL-01**; tests green |
+| HL disposition parity | N/A | **Backend gap** — disposition channel not in HL API |
+| S11 stall | STARTED/0%, 0 facts | **BINDING_MISMATCH** explains job 640; jobs **641/643/644** complete with facts on aligned worker |
+
+*Evidence-only — no VERDICT. For Opus CONSULT re-review.*

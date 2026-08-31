@@ -136,7 +136,13 @@ import {
   type PmDisposition,
   type PmFieldDefinition,
 } from './pmMappingHelpers';
-import { hlFieldMapToHeaderDraft, hlHeaderDraftToOverride } from './hlMappingHelpers';
+import {
+  hlBlockingMappingErrors,
+  hlColumnNotesFromDetected,
+  hlFieldMapToHeaderDraft,
+  hlHeaderDraftToOverride,
+  HL_MAPPING_REQUIRED_GROUPS,
+} from './hlMappingHelpers';
 
 type ImportTemplate = {
   id: number;
@@ -203,6 +209,7 @@ type HlSheetDetail = {
   header_row_number: number;
   mapped_fields: string[];
   source_columns: string[];
+  column_samples?: Record<string, string[]>;
   row_count: number;
   mapping_confidence: number;
 };
@@ -774,6 +781,11 @@ function AdminImportsPageContent() {
           status: jobDetail.status ?? '',
         });
         if (derived != null) setActiveStep(derived);
+      } else if (jobDetail.template_slug === 'historical_lineup') {
+        setActiveStep(4);
+        if (jobDetail.import_mode === 'validate' && jobDetail.stage === 'validated') {
+          setHistoricalValidatedJobId(jobDetail.id);
+        }
       } else {
         setActiveStep(4);
       }
@@ -1845,6 +1857,16 @@ function AdminImportsPageContent() {
     return Object.keys(o).length ? o : undefined;
   }, [hlSheetName, hlMapDraft, hlDetectedMapping]);
   const hlHasEdits = Boolean(hlMappingOverride);
+
+  const hlColumnSamples = useMemo(
+    () => hlSheetDetail?.column_samples ?? ({} as Record<string, string[]>),
+    [hlSheetDetail?.column_samples]
+  );
+  const hlColumnNotes = useMemo(
+    () => hlColumnNotesFromDetected(hlSourceColumns, hlDetectedMapping),
+    [hlSourceColumns, hlDetectedMapping]
+  );
+  const hlBlockingErrors = useMemo(() => hlBlockingMappingErrors(hlMapDraft), [hlMapDraft]);
 
   const hlCanonicalTargetOptions = useMemo<CanonicalTargetOption[]>(
     () =>
@@ -4484,6 +4506,11 @@ function AdminImportsPageContent() {
                       draft={hlMapDraft}
                       onChange={setHlMapDraft}
                       targetOptions={hlCanonicalTargetOptions}
+                      columnSamples={hlColumnSamples}
+                      columnNotes={hlColumnNotes}
+                      requiredGroups={HL_MAPPING_REQUIRED_GROUPS}
+                      blockingErrors={hlBlockingErrors}
+                      formatSamples={formatDsiSamples}
                       dirty={hlHasEdits}
                     />
                     {hlHasEdits && lastGenericFile ? (

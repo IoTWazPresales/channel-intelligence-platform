@@ -3,6 +3,23 @@
  * CanonicalColumnMappingPanel uses file header → canonical.
  */
 
+export type HlMappingBlockingError = { code: string; message: string };
+
+export type HlRequiredGroup = {
+  id: string;
+  label: string;
+  anyOf: string[];
+};
+
+/** Mirrors HL row gate: at least one product identity column must be mapped. */
+export const HL_MAPPING_REQUIRED_GROUPS: HlRequiredGroup[] = [
+  {
+    id: 'product_identity',
+    label: 'Product identity',
+    anyOf: ['sku_raw', 'part_number_raw', 'model_raw'],
+  },
+];
+
 /** Invert field_mapping (canonical → column) to panel draft (column → canonical). */
 export function hlFieldMapToHeaderDraft(fieldMap: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
@@ -11,6 +28,43 @@ export function hlFieldMapToHeaderDraft(fieldMap: Record<string, string>): Recor
     if (!c) continue;
     // First claim wins if two canonicals somehow share a column (should not happen).
     if (!(c in out)) out[c] = canonical;
+  }
+  return out;
+}
+
+export function hlMappedCanonicalTargets(draft: Record<string, string>): Set<string> {
+  return new Set(
+    Object.values(draft)
+      .map((v) => (v ?? '').trim())
+      .filter(Boolean)
+  );
+}
+
+/** Live requirement chips + blocking alert for CanonicalColumnMappingPanel. */
+export function hlBlockingMappingErrors(draft: Record<string, string>): HlMappingBlockingError[] {
+  const mapped = hlMappedCanonicalTargets(draft);
+  const errors: HlMappingBlockingError[] = [];
+  for (const group of HL_MAPPING_REQUIRED_GROUPS) {
+    if (!group.anyOf.some((f) => mapped.has(f))) {
+      errors.push({
+        code: `missing_${group.id}`,
+        message: `Map at least one column to ${group.label.toLowerCase()} (${group.anyOf.join(' or ')}).`,
+      });
+    }
+  }
+  return errors;
+}
+
+/** Caption under file headers when auto-detection mapped the column. */
+export function hlColumnNotesFromDetected(
+  fileHeaders: string[],
+  detectedFieldMap: Record<string, string>
+): Record<string, string> {
+  const headerDraft = hlFieldMapToHeaderDraft(detectedFieldMap);
+  const out: Record<string, string> = {};
+  for (const h of fileHeaders) {
+    const canon = headerDraft[h];
+    if (canon) out[h] = `Auto-detected: ${canon}`;
   }
   return out;
 }

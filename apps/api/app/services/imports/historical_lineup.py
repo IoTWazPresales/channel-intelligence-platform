@@ -211,6 +211,30 @@ def _row_is_summary(row: pd.Series) -> bool:
     return any(marker in t for marker in _SUMMARY_ROW_MARKERS)
 
 
+def _collect_column_samples(
+    data: pd.DataFrame,
+    header_tokens: list[str],
+    *,
+    max_samples: int = 3,
+) -> dict[str, list[str]]:
+    """First non-empty cell values per workbook column (mapping panel Examples)."""
+    out: dict[str, list[str]] = {}
+    for col in header_tokens:
+        if col not in data.columns:
+            continue
+        samples: list[str] = []
+        for val in data[col].tolist():
+            text = _clean_str(val)
+            if not text or text in samples:
+                continue
+            samples.append(text)
+            if len(samples) >= max_samples:
+                break
+        if samples:
+            out[col] = samples
+    return out
+
+
 def _extract_row_tokens(row: pd.Series) -> list[str]:
     tokens: list[str] = []
     for value in row.values.tolist():
@@ -307,6 +331,7 @@ def parse_historical_workbook(
         data = frame.iloc[header_idx + 1 :].copy()
         data.columns = header_tokens[: data.shape[1]]
         data = data.loc[:, [c for c in data.columns if _clean_str(c) is not None]]
+        column_samples = _collect_column_samples(data, header_tokens)
 
         # Detect monthly phasing columns (Jan–Dec 3-letter abbreviations) that are not
         # already claimed by a canonical mapping.  Values will be collected per row and
@@ -408,6 +433,7 @@ def parse_historical_workbook(
                 "header_row_number": header_idx + 1,
                 "mapped_fields": sorted(mapping.keys()),
                 "source_columns": header_tokens,
+                "column_samples": column_samples,
                 "row_count": len(rows),
                 "mapping_confidence": map_conf,
             }
