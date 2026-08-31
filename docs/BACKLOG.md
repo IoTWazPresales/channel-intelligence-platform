@@ -8,23 +8,37 @@
 
 ## VERIFY-debt register (charter v1.3 amendment 7)
 
-Outstanding consultant VERIFY for units that closed when the CLI consultant was unavailable.
-**Blocks promotion to `main`** until each row is cleared (`VERDICT: PASS`, Warren waiver in
-CURRENT, or row marked cleared with date). Does **not** block the next unit.
+**Status:** **Cleared** · 2026-08-31 · `12404bc`  
+**Register:** empty — Warren accepted Opus CONSULT fourth-pass `VERDICT: PASS` for all seven
+units (`docs/verify/VERIFY_VERDICTS.md`). Charter v1.3 amendment 7 satisfied; promotion to
+`main` is no longer gated by outstanding VERIFY debt.
 
-| Unit | Shipped | VERIFY would check |
-|------|---------|-------------------|
-| **6f** | 2026-08-08 · PR #18 / D-040 | D-040 propose→confirm attribution: `distributor_attribution_status` transitions; Accept ship-corroborated; soft-clear; confirmer exact-qty Phase-1; no auto-clear on conflict; browser smoke Proposed 1016 |
-| **7** | 2026-08-12 · BACKLOG-068 | Shipping lineup-quarter strip: `landed_this_quarter_units` (pod_date quarter) + `shipped_not_landed_units`; PvE fill rate untouched; strip labels match semantics |
-| **8** | 2026-08-12 · Demo/P2 gate | Second-user login → landing → Shipping unaided; Users RBAC default-deny; backup→`cip_alembic_smoke` RESTORE_SMOKE_OK; `docs/UNIT8_DEMO_P2_GATE.md` steps |
-| **11** | 2026-08-12 · import parity | BACKLOG-044/027 steward/import parity vs DSI/shipment bar: async apply+progress, shared steward engine slots, contract S-rows on shipped tree |
-| **12** | 2026-08-12 · P6 polish | BACKLOG-026 PM pipeline retired; Settings lineup export sheet titles; no regression to import parity from Unit 11 |
-| **15B** | 2026-08-14 · B1 forecast | `/forecasts` compute-from-history; `tenant_id` never NULL; velocity + analogue provenance; B1-07 semantics; paste/add remain overrides only |
-| **B4 (15C)** | 2026-08-14 · promo planner | Per-line `build_promo_plan_draft`; dirty MAC/units survive Refresh; create-case `lines[]` (`manual` vs `intake_weighted`); D-051–D056 column-mapped export; BACKLOG-094 closed criteria |
+| Unit | Verdict | Cleared |
+|------|---------|---------|
+| **6f** | PASS | 2026-08-31 · `12404bc` |
+| **7** | PASS | 2026-08-31 · `12404bc` |
+| **8** | PASS | 2026-08-31 · `12404bc` |
+| **11** | PASS | 2026-08-31 · `12404bc` |
+| **12** | PASS | 2026-08-31 · `12404bc` |
+| **15B** | PASS | 2026-08-31 · `12404bc` |
+| **B4 (15C)** | PASS | 2026-08-31 · `12404bc` |
+
+**Arc findings (retained):** 19 web tests broken by RBAC commit `5b2a6a4` and fixed
+(`docs/verify/WEB_TEST_FAILURE_DIAGNOSIS.md`); HL mapping parity gap closed; shipment steward
+S2/S3/S4 fixed; S11 stall proven to be worker/API binding mismatch, not a product defect.
+
+**Deferred (not VERIFY debt — do not lose):**
+
+- CPOR case **#313** on `cip` — fixture contamination from SESSION F probe; exclude from
+  settlement/B4 evidence.
+- Readiness **evidence-chip pass** state unproven — no case on dev with claim evidence rows to
+  exercise the chip in browser.
+- HL **disposition backend gap** — historical lineup has no disposition channel; only
+  `mapping_override` (documented in Unit 11 fix pass).
 
 **Source:** seven consecutive units (6f–B4) shipped without VERIFY when consultant unavailable;
-debt untracked until charter v1.3 amendment 7 (2026-08-30). Evidence-to-close detail:
-`docs/design/IMPLEMENTATION_PLAN.md` § Item 0.
+debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
+`docs/verify/VERIFY_VERDICTS.md` fourth pass · `docs/design/IMPLEMENTATION_PLAN.md` § Item 0.
 
 ---
 

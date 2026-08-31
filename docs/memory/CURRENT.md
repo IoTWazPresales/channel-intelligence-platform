@@ -1,25 +1,44 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-30 (design-language-v1 nav map + Cover mockup)
+**Last updated:** 2026-08-31 (VERIFY debt cleared; NS-2 readiness)
 
-**Branch:** `design-language-v1`
+**Branch:** `main`
 
-**Last content pin:** `f40e5a9` — do not treat a hash in this file as HEAD
+**Last content pin:** `12404bc` — confirm HEAD with `git rev-parse`
 
 **Alembic (code):** `20260818_0019` (`20260818_0019_shipping_mailer_recipient.py`)
 
-**Alembic on cip:** `20260818_0019` (already stamped; no upgrade of cip this session)
+**Alembic on cip:** `20260818_0019`
 
-**Alembic on cip_test:** `20260818_0018` (OWNER cip)
+## On main
 
-## On this branch
+- **VERIFY debt cleared (2026-08-31 · `12404bc`).** All seven charter v1.3 amendment 7 units
+  (6f, 7, 8, 11, 12, 15B, B4) closed with Opus CONSULT fourth-pass PASS; register empty in
+  `docs/BACKLOG.md`. Promotion to `main` no longer gated by VERIFY debt.
+- **Design language FROZEN v1.1** + nav map + charter v1.3 governing (`83b4290` promotion).
+- **NS-1a display groundwork** in tree (`settle_readiness.py`, `missing_roe` on CPOR list/detail)
+  — BACKLOG-148 not formally VERIFY-closed as a north-star unit.
+- **NS-2 readiness** documented in `docs/design/NS2_READINESS.md` — discovery only; no
+  implementation this session.
 
-- **Nav structure closed (docs).** Six job containers + Reports/Admin utilities. LINEUP settled (origination). Labels for 1, 3, 4, 5, 6 and utilities are **provisional** — study in `docs/design/NAMING.md`. UNMAPPED routes = 0 (`docs/design/NAV_COVERAGE.md`).
-- **Recommended label set (provisional):** Brief · Lineup · Stock · Settlement · Response · Steward · Reports · Admin.
-- **Cover mockup (grammar 2)** in the design packet: `docs/design/stock-cover.html` plus empty and loading variants. Spec gaps: `docs/design/SPEC_GAPS.md` GAP-001–004. No product source, no migration, no charter.
+## VERIFY arc findings (retained)
+
+- 19 web tests broken by RBAC `5b2a6a4` — fixed via `importOriginal` partial mock
+  (`WEB_TEST_FAILURE_DIAGNOSIS.md`).
+- HL mapping parity gap closed (Unit 11 fix pass).
+- Shipment steward S2/S3/S4 closed (tab reset, debounced search, confidence band).
+- S11 apply stall = worker/API DB binding mismatch, not product defect.
+
+## Deferred (not VERIFY debt)
+
+- CPOR case #313 on `cip` (SESSION F fixture contamination).
+- Evidence-chip pass state unproven — no dev case with claim evidence rows.
+- HL disposition backend gap — no disposition channel; `mapping_override` only.
 
 ## Next
 
-Warren confirms nav labels. Then remaining BACKLOG-146 surfaces (landing blotter, Inbound lens) — do not build them until labels are confirmed if the mockups must ship final names. BACKLOG-147 charter gate unchanged: do not accept the programme charter until each grammar has an audited exemplar.
+- **NS-2** (BACKLOG-149): nav collapse + Brief landing per `docs/design/NS2_READINESS.md` when
+  Warren schedules unit start (BACKLOG-148 FX display or waiver still on TRIGGER).
+- Shared shell extraction feeds NS-3–NS-7.
 
-**Env:** local Windows. No DB writes this session. Web `:3000` + API `:8001` unchanged.
+**Env:** local Windows. Web `:3000` + API `:8001`.
