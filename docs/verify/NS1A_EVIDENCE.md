@@ -270,3 +270,11 @@ After full load (no `Loading…`):
 |-----|-------------|--------|----------|
 | NS1a-05 | List money columns use explicit currency; USD shows “FX undeclared” when no ROE | **SATISFIED** | H2-SMOKE-556 Ttl USD cell = `FX undeclared` (not `—`) after `formatGridMoney` ordering fix |
 | NS1a-04 (312 detail supplement) | Readiness row on detail matches live columns | **SATISFIED** | 312 detail readiness chips + anchor quoted above; prior detail gap was collection timing, not assumption-flag conditional |
+
+---
+
+## KNOWN EVIDENCE GAP
+
+The readiness **evidence chip pass state** (`N evidence row(s)`, green tone when `claim_evidence_count > 0`) is **unproven on live data** on this `cip` database: all 311 `cpor_case` rows have zero `cpor_claim_evidence_line` rows (see §Read-only cip inventory). Only the **fail** state (`0 evidence rows`) is browser-evidenced. Unit tests (`fxDisplay.test.ts`) cover pass/fail label logic with mocked counts only — not API→UI with real claim evidence.
+
+**Re-evidence trigger:** when any case on `cip` has one or more claim-evidence rows, capture list + detail readiness chips showing the pass-tone evidence chip and confirm the count matches `load_claim_counts_by_case_id`.

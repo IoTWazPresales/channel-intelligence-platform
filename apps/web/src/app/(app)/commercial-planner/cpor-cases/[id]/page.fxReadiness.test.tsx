@@ -151,4 +151,33 @@ describe('CporCaseDetailPage FX/readiness (case 312 shape)', () => {
     );
     expect(screen.getByTestId('cpor-case-readiness-evidence')).toHaveTextContent('0 evidence rows');
   });
+
+  it('withholds USD anchor when API marks missing_roe for zero ROE', async () => {
+    const zeroRoePayload = {
+      ...case312Payload,
+      roe_snapshot: 0,
+      missing_roe: true,
+      settle_readiness: {
+        fx_declared: false,
+        roe_snapshot: null,
+        open_assumption_count: 2,
+        claim_evidence_count: 0,
+      },
+    };
+    const { apiGet } = await import('@/lib/api');
+    vi.mocked(apiGet).mockImplementation(async (url: string) => {
+      if (url === '/api/v1/cpor/cases/312') return zeroRoePayload;
+      if (url.startsWith('/api/v1/cpor/intelligence/comparable-cases')) {
+        return { case_id: 312, total_candidates: 0, rank_order: [], items: [] };
+      }
+      throw new Error(`Unexpected GET ${url}`);
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('cpor-fx-undeclared')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('cpor-fx-anchor-usd-basis')).not.toBeInTheDocument();
+  });
 });

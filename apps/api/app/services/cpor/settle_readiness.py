@@ -27,6 +27,11 @@ def fx_declared(case: CporCase) -> bool:
     return case.roe_snapshot is not None and float(case.roe_snapshot) > 0
 
 
+def case_missing_roe(case: CporCase) -> bool:
+    """Inverse of fx_declared — null, zero, or negative ROE is undeclared FX."""
+    return not fx_declared(case)
+
+
 def count_open_assumptions_from_line_flags(flags: list[str]) -> int:
     return sum(1 for f in flags if f in ASSUMPTION_LINE_FLAGS)
 

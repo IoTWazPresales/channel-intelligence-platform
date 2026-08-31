@@ -43,6 +43,7 @@ from app.services.cpor.promotion_type_vocab import CPOR_CASE_STATUS_SET, CPOR_PR
 from app.services.cpor.recompute import recompute_case, recompute_case_line
 from app.services.cpor.settle_readiness import (
     build_settle_readiness,
+    case_missing_roe,
     count_open_assumptions_from_line_flags,
     load_claim_counts_by_case_id,
     load_settle_readiness_by_case_id,
@@ -220,7 +221,7 @@ def _case_json(
         "allowed_next": allowed_next(case.status),
         "ttl_support_zar": ttl_zar,
         "ttl_support_usd": ttl_usd,
-        "missing_roe": case.roe_snapshot is None,
+        "missing_roe": case_missing_roe(case),
         "origin": getattr(case, "origin", None) or "native",
     }
     if include_lines and lines is not None:

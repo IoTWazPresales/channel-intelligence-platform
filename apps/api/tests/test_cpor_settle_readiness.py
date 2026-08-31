@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+import pytest
 
 from app.models.cpor import CporCase, CporCaseLine
+from app.services.cpor.pivot import build_case_pivot
 from app.services.cpor.settle_readiness import (
     ASSUMPTION_LINE_FLAGS,
     build_settle_readiness,
+    case_missing_roe,
     count_open_assumptions_from_line_flags,
     fx_declared,
 )
@@ -18,8 +24,21 @@ def test_fx_declared_requires_positive_roe():
     assert fx_declared(case) is False
     case.roe_snapshot = Decimal("0")
     assert fx_declared(case) is False
+    case.roe_snapshot = Decimal("-1.5")
+    assert fx_declared(case) is False
     case.roe_snapshot = Decimal("18")
     assert fx_declared(case) is True
+
+
+def test_case_missing_roe_aligns_with_fx_declared():
+    case = CporCase(case_code="C26C00001", roe_snapshot=None)
+    assert case_missing_roe(case) is True
+    case.roe_snapshot = Decimal("0")
+    assert case_missing_roe(case) is True
+    case.roe_snapshot = Decimal("-2")
+    assert case_missing_roe(case) is True
+    case.roe_snapshot = Decimal("18")
+    assert case_missing_roe(case) is False
 
 
 def test_count_open_assumptions_from_line_flags():
@@ -43,3 +62,31 @@ def test_line_with_no_cost_basis_counts_as_assumption():
     if line.cost_basis is None:
         flags.append("no_cost_basis")
     assert count_open_assumptions_from_line_flags(flags) == 1
+
+
+def _pivot_fixture(roe_snapshot):
+    case = SimpleNamespace(id=1, case_code="X", roe_snapshot=roe_snapshot)
+    line = SimpleNamespace(
+        product_id=1,
+        pod_quarter="26Q1",
+        support_usd=10.0,
+        ttl_support_usd=50.0,
+        estimate_qty=5,
+        remark=None,
+    )
+    products = {1: SimpleNamespace(product_line="NB")}
+    return case, line, products
+
+
+@pytest.mark.parametrize("roe_snapshot", [None, Decimal("0"), Decimal("-1.5")])
+def test_pivot_missing_roe_when_roe_not_positive(roe_snapshot):
+    case, line, products = _pivot_fixture(roe_snapshot)
+    pivot = build_case_pivot(MagicMock(), case, [line], products)
+    assert pivot["missing_roe"] is True
+    assert pivot["grand_total_usd"] == 50.0
+
+
+def test_pivot_missing_roe_false_when_roe_positive():
+    case, line, products = _pivot_fixture(Decimal("18.5"))
+    pivot = build_case_pivot(MagicMock(), case, [line], products)
+    assert pivot["missing_roe"] is False

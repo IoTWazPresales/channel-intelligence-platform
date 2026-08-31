@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildFxMoneyDisplay,
   buildSettleReadinessChips,
   buildUsdBasisLine,
   formatGridMoney,
@@ -13,9 +14,10 @@ describe('isFxDeclared', () => {
     expect(isFxDeclared(18, true)).toBe(false);
   });
 
-  it('returns false when roe is null or zero', () => {
+  it('returns false when roe is null, zero, or negative', () => {
     expect(isFxDeclared(null)).toBe(false);
     expect(isFxDeclared(0)).toBe(false);
+    expect(isFxDeclared(-1.5)).toBe(false);
   });
 
   it('returns true for positive roe', () => {
@@ -42,6 +44,24 @@ describe('buildUsdBasisLine', () => {
 
   it('returns null when FX undeclared', () => {
     expect(buildUsdBasisLine(null, 89790.64, true)).toBeNull();
+    expect(buildUsdBasisLine(0, 89790.64, false)).toBeNull();
+    expect(buildUsdBasisLine(-2, 89790.64, false)).toBeNull();
+  });
+});
+
+describe('buildFxMoneyDisplay', () => {
+  it('withholds USD basis on list/anchor path when ROE is zero or negative', () => {
+    for (const roe of [0, -1.5]) {
+      const fx = buildFxMoneyDisplay({
+        currencyCode: 'ZAR',
+        roeSnapshot: roe,
+        missingRoe: true,
+        localAmount: 100,
+        usdAmount: 50,
+      });
+      expect(fx.fxUndeclared).toBe(true);
+      expect(fx.usdBasisLine).toBeNull();
+    }
   });
 });
 
@@ -56,6 +76,12 @@ describe('formatGridMoney', () => {
     expect(
       formatGridMoney(null, 'usd', { roeSnapshot: null, missingRoe: true }),
     ).toBe('FX undeclared');
+  });
+
+  it('shows FX undeclared for zero or negative ROE on list USD column', () => {
+    expect(formatGridMoney(100, 'usd', { roeSnapshot: 0, missingRoe: true })).toBe('FX undeclared');
+    expect(formatGridMoney(100, 'usd', { roeSnapshot: -2, missingRoe: true })).toBe('FX undeclared');
+    expect(formatGridMoney(null, 'usd', { roeSnapshot: 0, missingRoe: true })).toBe('FX undeclared');
   });
 
   it('shows dash for null USD amount when FX is declared', () => {
