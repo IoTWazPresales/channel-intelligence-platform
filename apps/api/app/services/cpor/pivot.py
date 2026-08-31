@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.models.cpor import CporCase, CporCaseLine
 from app.models.dimensions import DimProduct
+from app.services.cpor.settle_readiness import case_missing_roe
 
 
 def is_voided_line(line: CporCaseLine) -> bool:
@@ -67,7 +68,7 @@ def build_case_pivot(
         "case_id": case.id,
         "case_code": case.case_code,
         "roe_snapshot": float(case.roe_snapshot) if case.roe_snapshot is not None else None,
-        "missing_roe": case.roe_snapshot is None,
+        "missing_roe": case_missing_roe(case),
         "cells": cells,
         "row_totals": row_totals,
         "col_totals": col_totals,

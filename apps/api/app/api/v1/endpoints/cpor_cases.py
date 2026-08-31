@@ -41,6 +41,13 @@ from app.services.cpor.payment_recon import load_payment_recon_by_case_id
 from app.services.cpor.promo_load_recon import build_promo_load_recon
 from app.services.cpor.promotion_type_vocab import CPOR_CASE_STATUS_SET, CPOR_PROMOTION_TYPE_SET
 from app.services.cpor.recompute import recompute_case, recompute_case_line
+from app.services.cpor.settle_readiness import (
+    build_settle_readiness,
+    case_missing_roe,
+    count_open_assumptions_from_line_flags,
+    load_claim_counts_by_case_id,
+    load_settle_readiness_by_case_id,
+)
 from app.services.cpor.settlement import (
     build_settlement_consolidation,
     rollup_result_qty_from_claims,
@@ -214,7 +221,7 @@ def _case_json(
         "allowed_next": allowed_next(case.status),
         "ttl_support_zar": ttl_zar,
         "ttl_support_usd": ttl_usd,
-        "missing_roe": case.roe_snapshot is None,
+        "missing_roe": case_missing_roe(case),
         "origin": getattr(case, "origin", None) or "native",
     }
     if include_lines and lines is not None:
@@ -413,6 +420,7 @@ def list_cases(
         cases = [case for case, _ in rows]
         cust_map = {cust.id: cust for _, cust in rows}
         recon_by = load_payment_recon_by_case_id(session, cases, customers=cust_map)
+        readiness_by = load_settle_readiness_by_case_id(session, cases)
 
         out = []
         for case, cust in rows:
@@ -433,6 +441,10 @@ def list_cases(
                 row["ttl_support_zar"] = recon.get("owed_amount")
             if row.get("ttl_support_usd") is None and (case.currency_code or "ZAR").upper() == "USD":
                 row["ttl_support_usd"] = recon.get("owed_amount")
+            row["settle_readiness"] = readiness_by.get(
+                case.id,
+                build_settle_readiness(case, claim_row_count=0, open_assumption_count=0),
+            )
             out.append(row)
 
         if paginate:
@@ -499,7 +511,19 @@ def get_case(case_id: int, user: dict = Depends(get_current_user)):
         lines = session.scalars(select(CporCaseLine).where(CporCaseLine.case_id == case.id)).all()
         pmap = _products_map(session, [int(l.product_id) for l in lines])
         line_jsons = [_line_json(l, pmap.get(int(l.product_id))) for l in lines]
-        return _case_json(case, customer=cust, lines=line_jsons, include_lines=True)
+        claim_count = load_claim_counts_by_case_id(session, [case.id]).get(int(case.id), 0)
+        open_assumptions = sum(
+            1
+            for lj in line_jsons
+            if count_open_assumptions_from_line_flags(lj.get("flags") or []) > 0
+        )
+        out = _case_json(case, customer=cust, lines=line_jsons, include_lines=True)
+        out["settle_readiness"] = build_settle_readiness(
+            case,
+            claim_row_count=claim_count,
+            open_assumption_count=open_assumptions,
+        )
+        return out
 
 
 @router.patch("/cases/{case_id}")
@@ -535,7 +559,18 @@ def patch_case(
         lines = session.scalars(select(CporCaseLine).where(CporCaseLine.case_id == case.id)).all()
         pmap = _products_map(session, [int(l.product_id) for l in lines])
         line_jsons = [_line_json(l, pmap.get(int(l.product_id))) for l in lines]
+        claim_count = load_claim_counts_by_case_id(session, [case.id]).get(int(case.id), 0)
+        open_assumptions = sum(
+            1
+            for lj in line_jsons
+            if count_open_assumptions_from_line_flags(lj.get("flags") or []) > 0
+        )
         out = _case_json(case, customer=cust, lines=line_jsons, include_lines=True)
+        out["settle_readiness"] = build_settle_readiness(
+            case,
+            claim_row_count=claim_count,
+            open_assumption_count=open_assumptions,
+        )
         if recompute_report:
             out["recompute"] = recompute_report
         return out

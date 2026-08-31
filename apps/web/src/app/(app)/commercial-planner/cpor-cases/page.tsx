@@ -27,6 +27,8 @@ import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySe
 import { apiGet, apiPost } from '@/lib/api';
 
 import { CporPortfolioIntelligencePanel } from './CporPortfolioIntelligencePanel';
+import { CporSettleReadinessRow } from '@/features/cpor/CporSettleReadinessRow';
+import { formatGridMoney, type SettleReadiness } from '@/features/cpor/fxDisplay';
 
 type CporCaseRow = {
   id: number;
@@ -40,8 +42,12 @@ type CporCaseRow = {
   workflow_status: string;
   export_version: number;
   origin?: string | null;
+  currency_code?: string;
+  roe_snapshot?: number | null;
+  missing_roe?: boolean;
   ttl_support_zar: number | null;
   ttl_support_usd: number | null;
+  settle_readiness?: SettleReadiness;
   payment_evidence_count?: number;
   paid_amount_sum?: number | null;
   owed_amount?: number | null;
@@ -69,7 +75,7 @@ const COLUMN_GROUPS: MasterColumnPickerGroup[] = [
   },
   {
     label: 'Support',
-    fields: ['ttl_support_zar', 'ttl_support_usd', 'export_version'],
+    fields: ['ttl_support_zar', 'ttl_support_usd', 'settle_readiness', 'export_version'],
   },
   {
     label: 'Payment recon',
@@ -196,33 +202,86 @@ export default function CporCasesListPage() {
       { field: 'export_version', headerName: 'Ver', width: 70 },
       {
         field: 'ttl_support_zar',
-        headerName: 'Ttl ZAR',
-        width: 110,
-        valueFormatter: (p) => (p.value == null ? '' : Number(p.value).toFixed(2)),
+        headerName: 'Ttl (local)',
+        width: 130,
+        valueFormatter: (p) => {
+          const row = p.data;
+          if (!row || p.value == null) return '—';
+          return formatGridMoney(p.value as number, 'local', {
+            currencyCode: row.currency_code,
+            roeSnapshot: row.roe_snapshot,
+            missingRoe: row.missing_roe,
+          });
+        },
       },
       {
         field: 'ttl_support_usd',
         headerName: 'Ttl USD',
-        width: 110,
-        valueFormatter: (p) => (p.value == null ? '' : Number(p.value).toFixed(2)),
+        width: 130,
+        valueFormatter: (p) => {
+          const row = p.data;
+          if (!row) return '—';
+          return formatGridMoney(p.value as number | null, 'usd', {
+            currencyCode: row.currency_code,
+            roeSnapshot: row.roe_snapshot,
+            missingRoe: row.missing_roe,
+          });
+        },
+      },
+      {
+        colId: 'settle_readiness',
+        headerName: 'Settle readiness',
+        width: 320,
+        autoHeight: true,
+        cellRenderer: (p: { data?: CporCaseRow }) =>
+          p.data?.settle_readiness ? (
+            <CporSettleReadinessRow
+              readiness={p.data.settle_readiness}
+              testIdPrefix={`cpor-list-readiness-${p.data.id}`}
+            />
+          ) : null,
       },
       {
         field: 'owed_amount',
         headerName: 'Owed',
-        width: 110,
-        valueFormatter: (p) => (p.value == null ? '' : Number(p.value).toFixed(2)),
+        width: 130,
+        valueFormatter: (p) => {
+          const row = p.data;
+          if (!row || p.value == null) return '—';
+          return formatGridMoney(p.value as number, 'local', {
+            currencyCode: row.currency_code,
+            roeSnapshot: row.roe_snapshot,
+            missingRoe: row.missing_roe,
+          });
+        },
       },
       {
         field: 'paid_amount_sum',
         headerName: 'Paid',
-        width: 110,
-        valueFormatter: (p) => (p.value == null ? '' : Number(p.value).toFixed(2)),
+        width: 130,
+        valueFormatter: (p) => {
+          const row = p.data;
+          if (!row || p.value == null) return '—';
+          return formatGridMoney(p.value as number, 'local', {
+            currencyCode: row.currency_code,
+            roeSnapshot: row.roe_snapshot,
+            missingRoe: row.missing_roe,
+          });
+        },
       },
       {
         field: 'outstanding_amount',
         headerName: 'Outstanding',
-        width: 120,
-        valueFormatter: (p) => (p.value == null ? '' : Number(p.value).toFixed(2)),
+        width: 140,
+        valueFormatter: (p) => {
+          const row = p.data;
+          if (!row || p.value == null) return '—';
+          return formatGridMoney(p.value as number, 'local', {
+            currencyCode: row.currency_code,
+            roeSnapshot: row.roe_snapshot,
+            missingRoe: row.missing_roe,
+          });
+        },
       },
       {
         field: 'recon_status',

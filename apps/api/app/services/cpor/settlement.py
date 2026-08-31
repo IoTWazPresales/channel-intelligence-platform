@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.models.cpor import CporCase, CporCaseLine, CporClaimEvidenceLine
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.services.cpor.recompute import recompute_case_line
+from app.services.cpor.settle_readiness import build_settle_readiness, count_open_assumptions_from_line_flags
 from app.services.cpor.waterfall import compute_ttl_result
 
 
@@ -142,6 +143,20 @@ def build_settlement_consolidation(session: Session, case_id: int) -> dict[str, 
             }
         )
 
+    open_assumptions = 0
+    for line in lines:
+        line_flags: list[str] = []
+        if line.distributor_id is None:
+            line_flags.append("no_distributor")
+        if line.cost_basis is None:
+            line_flags.append("no_cost_basis")
+        ev = line.cost_evidence_json or {}
+        for f in ev.get("flags") or []:
+            if f not in line_flags:
+                line_flags.append(str(f))
+        if count_open_assumptions_from_line_flags(line_flags) > 0:
+            open_assumptions += 1
+
     return {
         "case_id": case_id,
         "status": case.status,
@@ -153,6 +168,11 @@ def build_settlement_consolidation(session: Session, case_id: int) -> dict[str, 
             {"token": k, "units": v} for k, v in sorted(unresolved_tokens.items())
         ],
         "cst_reconciliation": cst_flags,
+        "settle_readiness": build_settle_readiness(
+            case,
+            claim_row_count=len(claims),
+            open_assumption_count=open_assumptions,
+        ),
         "lines": items,
         "can_settle": case.status == "ended",
     }

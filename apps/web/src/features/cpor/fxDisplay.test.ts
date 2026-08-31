@@ -1,0 +1,118 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  buildFxMoneyDisplay,
+  buildSettleReadinessChips,
+  buildUsdBasisLine,
+  formatGridMoney,
+  formatLocalMoney,
+  isFxDeclared,
+} from './fxDisplay';
+
+describe('isFxDeclared', () => {
+  it('returns false when missing_roe is true', () => {
+    expect(isFxDeclared(18, true)).toBe(false);
+  });
+
+  it('returns false when roe is null, zero, or negative', () => {
+    expect(isFxDeclared(null)).toBe(false);
+    expect(isFxDeclared(0)).toBe(false);
+    expect(isFxDeclared(-1.5)).toBe(false);
+  });
+
+  it('returns true for positive roe', () => {
+    expect(isFxDeclared(18)).toBe(true);
+  });
+});
+
+describe('formatLocalMoney', () => {
+  it('prefixes ZAR with R', () => {
+    expect(formatLocalMoney(1616231.52, 'ZAR')).toMatch(/^R /);
+  });
+
+  it('prefixes USD with $', () => {
+    expect(formatLocalMoney(100, 'USD')).toMatch(/^\$ /);
+  });
+});
+
+describe('buildUsdBasisLine', () => {
+  it('states declared case rate when FX is declared', () => {
+    const line = buildUsdBasisLine(18, 89790.64);
+    expect(line).toContain('USD');
+    expect(line).toContain('declared case rate ZAR 18.00');
+  });
+
+  it('returns null when FX undeclared', () => {
+    expect(buildUsdBasisLine(null, 89790.64, true)).toBeNull();
+    expect(buildUsdBasisLine(0, 89790.64, false)).toBeNull();
+    expect(buildUsdBasisLine(-2, 89790.64, false)).toBeNull();
+  });
+});
+
+describe('buildFxMoneyDisplay', () => {
+  it('withholds USD basis on list/anchor path when ROE is zero or negative', () => {
+    for (const roe of [0, -1.5]) {
+      const fx = buildFxMoneyDisplay({
+        currencyCode: 'ZAR',
+        roeSnapshot: roe,
+        missingRoe: true,
+        localAmount: 100,
+        usdAmount: 50,
+      });
+      expect(fx.fxUndeclared).toBe(true);
+      expect(fx.usdBasisLine).toBeNull();
+    }
+  });
+});
+
+describe('formatGridMoney', () => {
+  it('does not show USD amount when FX undeclared', () => {
+    expect(
+      formatGridMoney(1234.56, 'usd', { roeSnapshot: null, missingRoe: true }),
+    ).toBe('FX undeclared');
+  });
+
+  it('shows FX undeclared for null USD amount when ROE is missing', () => {
+    expect(
+      formatGridMoney(null, 'usd', { roeSnapshot: null, missingRoe: true }),
+    ).toBe('FX undeclared');
+  });
+
+  it('shows FX undeclared for zero or negative ROE on list USD column', () => {
+    expect(formatGridMoney(100, 'usd', { roeSnapshot: 0, missingRoe: true })).toBe('FX undeclared');
+    expect(formatGridMoney(100, 'usd', { roeSnapshot: -2, missingRoe: true })).toBe('FX undeclared');
+    expect(formatGridMoney(null, 'usd', { roeSnapshot: 0, missingRoe: true })).toBe('FX undeclared');
+  });
+
+  it('shows dash for null USD amount when FX is declared', () => {
+    expect(formatGridMoney(null, 'usd', { roeSnapshot: 18 })).toBe('—');
+  });
+
+  it('shows USD with symbol when FX declared', () => {
+    expect(formatGridMoney(1234.56, 'usd', { roeSnapshot: 18 })).toMatch(/^\$ /);
+  });
+});
+
+describe('buildSettleReadinessChips', () => {
+  it('marks evidence fail when zero rows', () => {
+    const chips = buildSettleReadinessChips({
+      fx_declared: true,
+      roe_snapshot: 18,
+      open_assumption_count: 0,
+      claim_evidence_count: 0,
+    });
+    expect(chips.find((c) => c.key === 'evidence')?.tone).toBe('fail');
+    expect(chips.find((c) => c.key === 'evidence')?.label).toBe('0 evidence rows');
+  });
+
+  it('marks assumptions open when count > 0', () => {
+    const chips = buildSettleReadinessChips({
+      fx_declared: false,
+      roe_snapshot: null,
+      open_assumption_count: 2,
+      claim_evidence_count: 5,
+    });
+    expect(chips.find((c) => c.key === 'fx')?.label).toBe('FX undeclared');
+    expect(chips.find((c) => c.key === 'assumptions')?.tone).toBe('open');
+  });
+});

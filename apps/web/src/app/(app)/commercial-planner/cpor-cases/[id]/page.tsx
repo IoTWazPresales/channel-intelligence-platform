@@ -31,6 +31,14 @@ import { apiGet, apiPost, apiPostFormData } from '@/lib/api';
 import { CporComparableCasesPanel } from './CporComparableCasesPanel';
 import { CporPaymentEvidencePanel } from './CporPaymentEvidencePanel';
 import { CporPromoLoadPanel } from './CporPromoLoadPanel';
+import { CporFxAnchorPanel } from '@/features/cpor/CporFxAnchorPanel';
+import { CporSettleReadinessRow } from '@/features/cpor/CporSettleReadinessRow';
+import {
+  formatGridMoney,
+  formatLocalMoney,
+  formatUsdMoney,
+  type SettleReadiness,
+} from '@/features/cpor/fxDisplay';
 
 type LineRow = {
   id: number;
@@ -65,6 +73,7 @@ type CaseDetail = {
   status: string;
   workflow_status: string;
   export_version: number;
+  currency_code?: string;
   roe_snapshot: number | null;
   last_comment: string | null;
   allowed_next: string[];
@@ -73,6 +82,7 @@ type CaseDetail = {
   missing_roe: boolean;
   ttl_support_zar: number | null;
   ttl_support_usd: number | null;
+  settle_readiness?: SettleReadiness;
   needs_reapproval?: boolean;
 };
 
@@ -113,6 +123,7 @@ type SettlementPayload = {
     divergence_count?: number;
     products_compared?: number;
   };
+  settle_readiness?: SettleReadiness;
   lines: SettlementLine[];
   can_settle: boolean;
 };
@@ -283,9 +294,10 @@ export default function CporCaseDetailPage() {
       },
       {
         field: 'ttl_support',
-        headerName: 'Ttl ZAR',
-        width: 100,
-        valueFormatter: (p) => (p.value == null ? '' : Number(p.value).toFixed(2)),
+        headerName: 'Ttl (local)',
+        width: 120,
+        valueFormatter: (p) =>
+          formatLocalMoney(p.value as number | null, data?.currency_code ?? 'ZAR'),
       },
       {
         headerName: 'Flags',
@@ -293,7 +305,7 @@ export default function CporCaseDetailPage() {
         valueGetter: (p) => (p.data?.flags ?? []).join(', '),
       },
     ],
-    [],
+    [data?.currency_code],
   );
 
   const settlementCols = useMemo<ColDef<SettlementLine>[]>(
@@ -309,15 +321,21 @@ export default function CporCaseDetailPage() {
       },
       {
         field: 'ttl_result',
-        headerName: 'Ttl result ZAR',
-        width: 130,
-        valueFormatter: (p) => (p.value == null ? '' : Number(p.value).toFixed(2)),
+        headerName: 'Ttl result (local)',
+        width: 140,
+        valueFormatter: (p) =>
+          formatLocalMoney(p.value as number | null, data?.currency_code ?? 'ZAR'),
       },
       {
         field: 'ttl_result_usd',
         headerName: 'Ttl result USD',
-        width: 130,
-        valueFormatter: (p) => (p.value == null ? '' : Number(p.value).toFixed(2)),
+        width: 140,
+        valueFormatter: (p) =>
+          formatGridMoney(p.value as number | null, 'usd', {
+            currencyCode: data?.currency_code,
+            roeSnapshot: data?.roe_snapshot,
+            missingRoe: data?.missing_roe,
+          }),
       },
       {
         headerName: 'Flags',
@@ -326,7 +344,7 @@ export default function CporCaseDetailPage() {
         valueGetter: (p) => (p.data?.flags ?? []).join(', '),
       },
     ],
-    [],
+    [data?.currency_code, data?.missing_roe, data?.roe_snapshot],
   );
 
   if (isLoading) return <Typography sx={{ p: 2 }}>Loading…</Typography>;
@@ -371,6 +389,11 @@ export default function CporCaseDetailPage() {
           <Chip key={f} label={f} size="small" variant="outlined" />
         ))}
       </Stack>
+      {data.settle_readiness ? (
+        <Box sx={{ mb: 1.5 }}>
+          <CporSettleReadinessRow readiness={data.settle_readiness} testIdPrefix="cpor-case-readiness" />
+        </Box>
+      ) : null}
       {data.needs_reapproval ? (
         <Alert severity="warning" sx={{ mb: 1 }} data-testid="cpor-reapproval-banner">
           Money ceiling exceeded or reapproval required. Approve with over-budget confirmation, or reduce
@@ -380,9 +403,17 @@ export default function CporCaseDetailPage() {
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
         {data.customer_code} — {data.customer_name} · {data.promotion_type} · {data.window_start} →{' '}
         {data.window_end}
-        {data.roe_snapshot != null ? ` · ROE ${data.roe_snapshot}` : ''}
+        {data.currency_code ? ` · ${data.currency_code}` : ''}
         {data.last_comment ? ` · PM: ${data.last_comment}` : ''}
       </Typography>
+      <CporFxAnchorPanel
+        currencyCode={data.currency_code}
+        roeSnapshot={data.roe_snapshot}
+        missingRoe={data.missing_roe}
+        localAmount={data.ttl_support_zar}
+        usdAmount={data.ttl_support_usd}
+        localLabel="Approved case support"
+      />
       <CporComparableCasesPanel caseId={caseId} />
       <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap">
         {actions.map(([action, label]) => (
@@ -435,10 +466,21 @@ export default function CporCaseDetailPage() {
 
       {tab === 1 ? (
         <Box>
-          {pivot?.missing_roe ? <Alert severity="warning">ROE missing — USD totals may be empty.</Alert> : null}
-          <Typography variant="subtitle2" sx={{ mt: 1 }}>
-            Grand total USD: {pivot ? pivot.grand_total_usd.toFixed(2) : '…'}
-          </Typography>
+          {pivot?.missing_roe ? (
+            <Alert severity="warning" data-testid="cpor-pivot-missing-roe">
+              FX undeclared — USD pivot totals are withheld until a case rate of exchange is recorded.
+            </Alert>
+          ) : null}
+          {pivot && !pivot.missing_roe ? (
+            <Typography variant="subtitle2" sx={{ mt: 1 }} data-testid="cpor-pivot-grand-total">
+              Grand total USD: {formatUsdMoney(pivot.grand_total_usd)}
+              {data.roe_snapshot != null ? (
+                <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                  at declared case rate ZAR {data.roe_snapshot.toFixed(2)} (declared case terms)
+                </Typography>
+              ) : null}
+            </Typography>
+          ) : null}
           <pre style={{ fontSize: 12, overflow: 'auto' }}>{JSON.stringify(pivot?.cells ?? {}, null, 2)}</pre>
         </Box>
       ) : null}
@@ -567,6 +609,12 @@ export default function CporCaseDetailPage() {
               {importClaims.data.import.unresolved_product_rows}; out-of-window:{' '}
               {importClaims.data.import.out_of_window_rows}.
             </Alert>
+          ) : null}
+          {(settlement?.settle_readiness ?? data.settle_readiness) ? (
+            <CporSettleReadinessRow
+              readiness={(settlement?.settle_readiness ?? data.settle_readiness)!}
+              testIdPrefix="cpor-settlement-readiness"
+            />
           ) : null}
           <Stack direction="row" spacing={1} flexWrap="wrap">
             <Chip size="small" label={`claims: ${settlement?.claim_row_count ?? '…'}`} />

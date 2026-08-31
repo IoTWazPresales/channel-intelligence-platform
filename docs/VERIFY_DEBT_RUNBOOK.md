@@ -429,7 +429,7 @@ pnpm --filter @cip/web exec vitest run src/app/(app)/forecasts/page.test.tsx
 
 ### (b) Browser (on **`cip_test`** — compute writes)
 
-Point API at `cip_test` (both sync URLs). Start stack.
+Point API at `cip_test` using the **DATABASE PROOF GATE** (async `DATABASE_URL` plus both sync URLs; prove `/health/ready` then restore). Start stack.
 
 | Step | Route | Observe |
 |------|-------|---------|
@@ -447,13 +447,15 @@ FROM fact_demand_forecast
 WHERE tenant_id IS NULL;
 
 SELECT method, count(*),
-       count(*) FILTER (WHERE provenance_json IS NOT NULL) AS with_provenance
+       count(*) FILTER (WHERE velocity_basis IS NOT NULL) AS with_velocity_basis,
+       count(*) FILTER (WHERE analogue_basis IS NOT NULL) AS with_analogue_basis
 FROM fact_demand_forecast
 GROUP BY method;
 ```
 
-**Pass criteria:** `null_tenant = 0`; `method` ∈ `{velocity, analogue, manual}`; compute did not
-modify `fact_sales_sellout` / DSI tables (B1-07).
+**Pass criteria:** `null_tenant = 0`; `method` ∈ `{velocity, analogue, manual}`; provenance is
+`velocity_basis` (text) and `analogue_basis` (JSONB) — there is **no** `provenance_json` column;
+compute did not modify `fact_sales_sellout` / DSI tables (B1-07).
 
 ### Superseded?
 
@@ -564,3 +566,66 @@ Final line of response must be exactly `VERDICT: PASS` or `VERDICT: STOP`.
 1. CONTEXT `2026-08-08 VERIFY PASS 6f→B4` contradicts amendment 7 register — treat register as authoritative.
 2. `test_d040_*` glob in IMPLEMENTATION_PLAN — stale; use `test_lineup_distributor_attribution.py`.
 3. Case 1016 — confirm still on Warren's `cip` before Session D browser write plan.
+
+---
+
+## Corrections from SESSION D (2026-08-30)
+
+Discovery on `feat/ns-1a-fx-readiness-chips`. These supersede the sync-only retarget
+wording above for any **HTTP** write. Do not treat them as a VERIFY PASS.
+
+### DATABASE PROOF GATE
+
+`GET /health/ready` (`apps/api/app/main.py`) reads `SELECT current_database()` through
+**async** `AsyncSessionLocal`, which is built from **`DATABASE_URL`**, not
+`DATABASE_URL_SYNC`.
+
+Overriding only `DATABASE_URL_SYNC` and `DATABASE_URL_SYNC_MIGRATE` leaves the **running
+API** on `cip`. Sidecar scripts that rewrite the sync URL do not retarget HTTP.
+
+Any VERIFY step that writes via HTTP must:
+
+1. Not edit `.env`.
+2. Override **`DATABASE_URL`**, `DATABASE_URL_SYNC`, and `DATABASE_URL_SYNC_MIGRATE` in the
+   **child process only** (so a parent shell cannot leak `cip_test` into restore).
+3. Prove `GET /health/ready` shows `"database":"<test db>"` (e.g. `cip_test`). If it still
+   reports `cip`, **STOP — no writes**.
+4. Restore afterwards and prove `/health/ready` is `cip` again.
+
+**Reference (SESSION D):** `apps/api/scripts/ops/session_d_run_api.py`
+
+```text
+python apps/api/scripts/ops/session_d_run_api.py cip_test
+# GET http://127.0.0.1:8001/health/ready  →  {"status":"ready","database":"cip_test","ok":true}
+# … HTTP writes only after that body …
+python apps/api/scripts/ops/session_d_run_api.py env
+# GET /health/ready  →  {"status":"ready","database":"cip","ok":true}
+```
+
+`cip_test` mode rewrites `DATABASE_URL`, `DATABASE_URL_SYNC`, and
+`DATABASE_URL_SYNC_MIGRATE` (and sets migrate from sync if unset). `env` mode forces
+`DATABASE_*` from the `.env` file so restore cannot keep an inherited override.
+
+### GATE EVIDENCE
+
+Numeric gates must record the **numerator and denominator** (or component counts), not
+only the resulting percentage.
+
+The 14 Aug Unit 8 / PvE fill gate (`docs/UNIT8_DEMO_P2_GATE.md` A6) stored **13.2%**
+(26Q3) alone. SESSION D later read **19.5%** for the same cut. Git showed the fill formula
+unchanged (`sum_min / sum_p`); today's counts were `6352 / 32509`. Without the 14 Aug
+components, the move cannot be attributed to data vs calculation from the gate record
+itself. Record `sum_min`, `sum_p`, row counts, and `current_database()` on the gate date.
+
+### 15B criterion (schema)
+
+`fact_demand_forecast` has **no** `provenance_json` column. Provenance is `velocity_basis`
+(varchar) and `analogue_basis` (JSONB). SESSION F's `SELECT … provenance_json` failed with
+`UndefinedColumn`. The Unit 15B data query and pass criteria above are corrected to those
+columns.
+
+### Fixture contamination (cip)
+
+CPOR case **#313** (`C26C00004`) was created on **`cip`** by a SESSION F API probe (live
+API was still on `cip`; HTTP create-case was not retargeted). Treat as fixture
+contamination pending removal. Do not treat it as B4 VERIFY evidence.
