@@ -715,3 +715,167 @@ CPOR case **#313** on **`cip`** — still exclude from B4 verify evidence.
 | **11, 12, B4** | Remain open in `docs/BACKLOG.md` VERIFY-debt register |
 
 **VERDICT: PASS** — **Units 6f, 7, 8, and 15B only**
+
+---
+
+# Fourth pass — 2026-08-31
+
+**Verifier:** Independent CONSULT (did not produce session evidence)  
+**Charter:** v1.3 amendment 7 — only `VERDICT: PASS` closes a register row  
+**Branch reviewed:** `main` @ `d186bee` (evidence consolidated)  
+**Evidence inputs:** `docs/VERIFY_DEBT_RUNBOOK.md`, `docs/verify/SESSION_{A,B,C,D,E,F}_EVIDENCE.md`, `docs/verify/artifacts/*.png`, code tree at HEAD  
+**Units 6f, 7, 8, and 15B:** PASS from passes 1–3 **stand** — not re-ruled below.
+
+**Pass-3 deltas weighed:** `SESSION_E_EVIDENCE.md` §Run 2026-08-31 S2/S3/S4 fixes + steward browser (job **641**); `SESSION_B_EVIDENCE.md` §Run 2026-08-31 Unit 12 PM Import Centre mapping; `SESSION_F_EVIDENCE.md` §Run 2026-08-31 B4 MAC popover + create-case; seventeen PNGs under `docs/verify/artifacts/`.
+
+**Independent re-run at verdict time:** scoped vitest for S2/S3/S4 **not executed** — EIF hook `eif_guard.cmd` blocked shell. Session E documents **6/6 passed**; verifier inspected test files and production wiring at HEAD.
+
+---
+
+## Summary (fourth pass)
+
+| Unit | Third pass | Fourth pass | Change |
+|------|------------|-------------|--------|
+| **6f** | PASS | **PASS** | Stands (not re-ruled) |
+| **7** | PASS | **PASS** | Stands (not re-ruled) |
+| **8** | PASS | **PASS** | Stands (not re-ruled) |
+| **11** | FAIL | **PASS** | S2/S3/S4 closed; HL + S11 carried forward |
+| **12** | FAIL | **PASS** | Unit 11 gate green; PM mapping browser closed |
+| **15B** | PASS | **PASS** | Stands (not re-ruled) |
+| **B4** | FAIL | **PASS** | D-055 popover + browser create-case closed |
+
+**VERDICT: PASS** — **Units 6f, 7, 8, 11, 12, 15B, and B4**
+
+---
+
+## Unit 11 — Import parity (BACKLOG-026 / 027 / 044 + S1–S14)
+
+**Contract version:** `docs/STEWARD_EXPERIENCE_CONTRACT.md` v1.6 — no waiver lines in unit prompt.
+
+### Backlog / Rule #4 mapping rows
+
+| ID | Requirement | Evidence | Ruled |
+|----|-------------|----------|-------|
+| **BACKLOG-026** | Generic PM pipeline retired | `SESSION_B_EVIDENCE.md` + `SESSION_E_EVIDENCE.md`; pytest green | **PASS** |
+| **BACKLOG-027** | PM + HL → `CanonicalColumnMappingPanel` at DSI/shipment parity bar | PM job **30** full panel; HL job **642** + mount **4503–4515** (pass-3 ruling **stands**) | **PASS** |
+| **BACKLOG-044** | Shipment steward parity vs DSI/shipment bar | S-rows below; S2/S3/S4 **closed** this pass | **PASS** |
+
+### Shipment steward S-rows
+
+| ID | EXPECTED | Evidence | Grade | Blocks unit? |
+|----|----------|----------|-------|--------------|
+| **S1** | Viewport shell | Browser job **1159** / **641** workspace **OBSERVED** (`SESSION_E_EVIDENCE.md`) | **PASS** | No |
+| **S2** | Tabs + counts; **tab switch resets filters/selection** | Code: `onTabChange` calls `shipmentStewardFiltersAfterTabSwitch()` + clears `searchInput`/`debouncedSearch` (`ShipmentImportJobResolutionSection.tsx` **156–164**); `importJobId` change resets filters + search (**330–341**); vitest `shipmentEntityTabs.test.ts` **2/2**; browser job **641**: **No match** on Distributors → **Channel partners** → filters reset (**Clear filters** disabled; **No match** not active) | **PASS** | No |
+| **S3** | Chip filters + **300ms debounced list search** | `data-testid="shipment-steward-search"` + 300ms debounce (**151–154**); `filterShipmentStewardRowsBySearch` (**266**); vitest `shipmentStewardListSearch.test.ts` **3/3**; browser: **Search candidates…** visible; typed `SESSION-E` → row `SESSION-E-20260831-DIST` visible | **PASS** | No |
+| **S4** | Confidence **band** on list (when plan has score) | `ShipmentPlanConfidenceBandCell` + `confidenceBand.ts` thresholds (`SESSION_E_EVIDENCE.md`); vitest `shipmentResolutionWorkspaceTableProps.test.tsx` **2/2** — band chips at high/medium/low + plan column renders **High** + `0.95` (not `score 0.95` only); browser job **641** distributor no-match row: **no plan score in a11y tree** (band correctly absent) | **PASS** | No |
+| **S5–S7** | Drawer chrome / evidence / override | Browser job **641**: **Review…** opened drawer — Close steward drawer, Apply plan, Map/Prov/Special/Reject, Evidence, Suggested masters (`SESSION_E_EVIDENCE.md`); artifact `session-e-unit11-s5-s7-drawer.png` | **PASS** (browser) | No |
+| **S8–S9, S12, S14** | Bulk, plan toolbar, pagination, ambiguity | Browser **OBSERVED** (pass-3 + job **641** steward) | **PASS** | No |
+| **S10** | Async dispatch | Jobs **640/641/643/644**: 200, `async: true`, `task_id` | **PASS** | No |
+| **S11** | Progress poll → terminal `loaded` + facts | Binding proof + jobs **641/643/644** terminal completion (pass-3 ruling **stands**) | **PASS** | No |
+| **S13** | Error surfaces | Not triggered | **PASS** (code) | No |
+
+### S4 — explicit ruling (live band vs unit test)
+
+Pass-3 **PARTIAL** was numeric `score 0.95` without list band chip. Fourth-pass fix wires `ShipmentPlanConfidenceBandCell` through shared `confidenceBand.ts` (high ≥0.90, medium ≥0.70, low &lt;0.70).
+
+| Question | Ruling |
+|----------|--------|
+| Distributor **no-match** row without plan score in a11y tree | **Not a gap** — S4 band appears when plan carries a numeric score; empty plan correctly omits the cell |
+| Live browser band chip capture required? | **No** for PASS — contract v1.6 grades **path:line or live browser**. Vitest renders the **production** plan column cell and `ShipmentPlanConfidenceBandCell` with `getByTestId('shipment-plan-confidence-band')` at all three thresholds plus confidence **0.95 → High**; same bar used to close S5–S7 wiring in pass-3 |
+| Residual risk | Post-fix live band on a **scored** row not snapshotted in job **641** walk; component tests + prior job **1159** scored row context close the row |
+
+**S2/S3/S4 — pass-3 STOP rule:** REQUIRED rows are **PASS** this pass; **`VERDICT: STOP` superseded** for S2/S3/S4.
+
+**VERDICT: PASS** — HL Rule #4 and S11 from pass-3 stand; S2, S3, S4, and S5–S7 browser drawer close the remaining shipment steward gaps.
+
+---
+
+## Unit 12 — P6 polish
+
+**Dependency (explicit):** `docs/VERIFY_DEBT_RUNBOOK.md` — Unit 12 requires **Unit 11 S-rows (S1–S14) still PASS**. Unit 11 is **PASS** (above). **Gate is green.**
+
+### Contract rows
+
+| ID | Requirement | Evidence | Ruled |
+|----|-------------|----------|-------|
+| **BACKLOG-026** | No PM pipeline regression | `SESSION_B_EVIDENCE.md`: **2/2** `test_product_master_pipeline_retired.py` | **PASS** |
+| **P6 automated** | Settings export sheet titles + column map persist | `SESSION_B_EVIDENCE.md`: **15/15** pytest | **PASS** (automated) |
+| **P6 browser `/settings`** | Edit net-req + draft sheet titles → Save → reload | `SESSION_B_EVIDENCE.md` §Run 2026-08-31 + artifacts | **PASS** (pass-3; stands) |
+| **pnpm test:web** | Harness regression signal | `WEB_TEST_FAILURE_DIAGNOSIS.md` STALE TEST; pass-3 ruling stands | **PASS** (harness) |
+| **Unit 11 non-regression gate** | S-rows still PASS | Unit 11 **PASS** | **PASS** (dependency) |
+| **Browser PM Import Centre** | PM via Import Centre + `CanonicalColumnMappingPanel` | `SESSION_B_EVIDENCE.md` §Run 2026-08-31: `/admin/imports?job=30` on **`cip` read-only** — wizard **Column mapping**, **Map file columns → canonical fields**, bulk actions (**All unmapped → Ignore**, **Apply suggested mappings only**, **Clear all mappings**); artifact `session-b-12-pm-mapping-874103b.png` | **PASS** |
+
+### PM mapping on `cip` vs `cip_test` — explicit ruling
+
+| Question | Ruling |
+|----------|--------|
+| `PM_NO_VALIDATED_JOB_ON_CIP_TEST` (only job **2** `uploaded`/`pending`) | Documented disposable-DB gap; does **not** block read-only PM mapping smoke |
+| Read-only capture on **`cip` job 30** satisfies runbook step 3? | **Yes** — runbook allows **`cip` read-only** for browser steps that do not require writes (Session D / 6f pattern). Step 3 requires operator-visible Import Centre + mapping panel, not a write on disposable DB |
+| PM on `cip_test` | **Unevidenced** — acceptable substitute when validated PM job absent on disposable DB |
+
+**VERDICT: PASS** — P6 browser persistence (pass-3) + PM Import Centre mapping (this pass) + Unit 11 gate green.
+
+---
+
+## Unit B4 (15C) — Promo planner
+
+### Contract rows
+
+| ID | Requirement | Evidence | Ruled |
+|----|-------------|----------|-------|
+| **D-051** | Per-line draft JSON rows | `SESSION_B_EVIDENCE.md`: **4/4** `test_promo_plan_builder.py` | **PASS** |
+| **D-052** | Dirty MAC/units survive Refresh | Vitest **3/3** + browser dirty **99** / **88.55** survive Refresh (`SESSION_F_EVIDENCE.md` §Run 2026-08-31 + artifacts) | **PASS** (browser) |
+| **D-053** | `create_case_from_promo_draft` `lines[]`; `cost_source` manual vs intake_weighted | Service case **2** on `cip_test` + browser create-case (below) | **PASS** |
+| **D-054** | Cover override session-only | `SESSION_B_EVIDENCE.md` pytest PASS | **PASS** |
+| **D-055** | Editable vs display-only split (MAC popover) | Browser: **MAC buckets** info → popover **Intake-weighted MAC (display legs not in blend)** with Bucket A/B, Planned supply, Sell-out value, Disti cost proxy, Blend formula; artifact `session-f-b4-d055-mac-popover-874103b.png` | **PASS** (browser) |
+| **D-056** | Tenant `lineup_export_columns` for export | Pass-3: 17 field/header pairs from resolver + draft embed (`SESSION_F_EVIDENCE.md`) | **PASS** (service/resolver) |
+| **Browser create-case** | End-to-end from planner UI on `cip_test` | Browser: **Create draft CPOR case** → alert **Created draft case #3 (C26C00002) · 2 line(s)**; SQL `cpor_cases: (3, 'C26C00002', 'draft')`; artifact `session-f-b4-create-case-874103b.png` | **PASS** (browser) |
+
+### D-056 browser export — explicit ruling
+
+| Question | Ruling |
+|----------|--------|
+| D-056 export column map browser evidence still deferred | **Separable** — does **not** block Unit B4 |
+| Why | D-056 row **PASS** since pass-3 via resolver + embedded draft headers (17 pairs), not browser-only. Session F consistently scopes export-column browser as deferred. Pass-3 B4 FAIL was **D-055** + **create-case UI**, both closed this pass. Runbook browser step 6 (export headers) is reinforcement when resolver + pytest already satisfy D-056 |
+
+### Contamination
+
+CPOR case **#313** on **`cip`** — still exclude from B4 verify evidence.
+
+**VERDICT: PASS** — D-052 Refresh (pass-3), D-055 MAC popover display split, and browser create-case journey on `cip_test` are closed. D-056 browser export remains deferred but does not reopen the unit.
+
+---
+
+## SUPERSEDED (fourth pass)
+
+| Item | Ruling |
+|------|--------|
+| Pass-3 Unit 11 S2/S3/S4 PARTIAL (STOP blockers) | **SUPERSEDED** — code + vitest + browser job **641** |
+| Pass-3 Unit 12 "fails on Unit 11 dependency" | **SUPERSEDED** — Unit 11 PASS |
+| Pass-3 Unit 12 "PM Import Centre unevidenced" | **SUPERSEDED** — `SESSION_B_EVIDENCE.md` §Run 2026-08-31 + artifact |
+| Pass-3 Unit B4 "D-055 unevidenced" | **SUPERSEDED** — MAC popover browser |
+| Pass-3 Unit B4 "browser create-case partial" | **SUPERSEDED** — case **#3** `C26C00002` on `cip_test` |
+| Pass-3 Unit 11 S5–S7 code-only | **SUPERSEDED** — drawer opened browser job **641** |
+| D-056 browser export deferred | **Not SUPERSEDED** — still deferred; **does not block** B4 PASS |
+
+---
+
+## Evidence integrity notes (fourth pass)
+
+1. **Artifact set** at `d186bee`: seventeen PNGs including `session-e-unit11-s2-s3-s4-steward.png`, `session-e-unit11-s5-s7-drawer.png`, `session-b-12-pm-mapping-874103b.png`, `session-f-b4-d055-mac-popover-874103b.png`, `session-f-b4-create-case-874103b.png`.
+2. **S4 live band on scored row** not captured post-fix in browser; closure relies on production component vitest + `confidenceBand.ts` contract (explicit ruling above).
+3. **PM mapping** on **`cip` job 30** read-only — not on `cip_test`; documented `PM_NO_VALIDATED_JOB_ON_CIP_TEST`.
+4. **Verifier vitest re-run** blocked by EIF hook; Session E **6/6** + code inspection at HEAD used.
+5. **CPOR #313 on `cip`** — still exclude from B4 PASS.
+
+---
+
+## Register actions (fourth pass)
+
+| Unit | Action |
+|------|--------|
+| **11, 12, B4** | Clear VERIFY-debt register rows on Warren acceptance (date + SHA `d186bee` or successor carrying this pass) |
+| **6f, 7, 8, 15B** | Clear per pass-3 actions when accepted |
+| **VERIFY debt register** | All seven units in this charter slice may clear once Warren accepts fourth-pass PASS rows |
+
+**VERDICT: PASS** — **Units 6f, 7, 8, 11, 12, 15B, and B4**
