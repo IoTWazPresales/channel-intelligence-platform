@@ -298,3 +298,226 @@ Charter question: does the row close on **code + documented manual path**, or **
 | 8 | Clear row on Warren acceptance of this PASS (date + SHA `0276f50`) |
 
 **VERDICT: PASS** — **Unit 8 only**
+
+---
+
+# Second pass — 2026-08-31
+
+**Verifier:** Independent CONSULT (did not produce session evidence)  
+**Charter:** v1.3 amendment 7 — only `VERDICT: PASS` closes a register row  
+**Branch reviewed:** `main` @ `2a9c668` (evidence consolidated); verifier re-run at `a0875d6`  
+**Evidence inputs (full set on branch):** `docs/verify/SESSION_{A,B,C,D,E,F}_EVIDENCE.md`, `docs/verify/WEB_TEST_FAILURE_DIAGNOSIS.md`, `docs/VERIFY_DEBT_RUNBOOK.md`, code tree at HEAD  
+**First-pass deltas:** Prior pass listed `SESSION_A_EVIDENCE.md`, `SESSION_B_EVIDENCE.md`, and `WEB_TEST_FAILURE_DIAGNOSIS.md` as missing — all three are now committed on `main`. Session D browser strip evidence and Session D `cip_test` write block were under-weighted in pass 1.
+
+**Unit 8:** PASS from first pass **stands** — not re-ruled below.  
+**Unit 11:** HL thin-mount FAIL and S11 stall **re-confirmed** unless new evidence explicitly overturns (it does not).
+
+---
+
+## Summary (second pass)
+
+| Unit | First pass | Second pass | Change |
+|------|------------|-------------|--------|
+| **6f** | FAIL | **FAIL** | No change — browser Accept still unevidenced |
+| **7** | FAIL | **PASS** | Session D browser strip + HTTP + PvE formula unchanged |
+| **8** | PASS | **PASS** | Stands (not re-ruled) |
+| **11** | FAIL | **FAIL** | HL thin mount + S11 stall stand; S2/S3/S4 PARTIAL |
+| **12** | FAIL | **FAIL** | Unit 11 gate + no `/settings` browser; web diagnosis clarifies harness only |
+| **15B** | FAIL | **FAIL** | No browser compute on `cip_test` |
+| **B4** | FAIL | **FAIL** | No browser dirty-MAC Refresh journey |
+
+**VERDICT: PASS** — **Units 7 and 8 only** (Unit 8 carried forward from first pass)
+
+---
+
+## Unit 6f — D-040 distributor attribution propose→confirm
+
+### Contract rows
+
+| ID | Requirement | Evidence | Ruled |
+|----|-------------|----------|-------|
+| **D-040** | `token_proposed` → `steward_set` / `conflict`; Accept ship-corroborated; soft-clear; Phase-1 confirmer exact qty; **no auto-clear on conflict** | `SESSION_D_EVIDENCE.md` §Task 2 `cip_test`: Accept → `steward_set` + audit `lineup_ship_corroborated_distributor_accept`; soft-clear → `distributor_id` NULL; confirmer ×2 → stays `conflict`, `distributor_id=94` | **Evidenced** (`cip_test` HTTP/SQL) |
+| **D-038 amend** | Dual-write OPEN_CHANNEL + line `distributor_id` on token stamp | Accept audit cites `dim_distributor` 92 (`SESSION_D_EVIDENCE.md`) | **Partial** — not re-proven end-to-end in browser |
+| **D-040 pytest** | Phase-1/2 confirmer logic | `SESSION_A_EVIDENCE.md`: **10/10** `test_lineup_distributor_attribution.py` | **PASS** |
+| **BACKLOG register** | Browser smoke: `/admin/po-management` → Proposed → Accept | `SESSION_D_EVIDENCE.md` §~21:50: section chrome + 1035 proposed rows **OBSERVED**; **no** button matching `/Accept/i`; ship-corroborated Accept is on Customer-token stamp when `ship_corroboration_offer` present — not exercised; soft-clear enabled, **not clicked** | **Unevidenced** (browser write path) |
+| **Case 1016** | Historical smoke target | Absent on `cip`; substitute case 7 / 146 identified read-only (`SESSION_D_EVIDENCE.md`) | N/A — substitute acceptable only with exercised Accept |
+
+### Automation limits
+
+| Row | Code + documented path closes? | Human click required? |
+|-----|-------------------------------|----------------------|
+| D-040 transition semantics | **Yes** — `cip_test` HTTP + pytest (`SESSION_A`, `SESSION_D`) | **No** for backend semantics |
+| Register browser Accept smoke | **No** | **Yes** — operator must click Accept (or documented ship-corroborated Accept on token-stamp section) in browser |
+
+**VERDICT: FAIL** — D-040 semantics are proven on disposable `cip_test` and in pytest (`SESSION_A_EVIDENCE.md`, `SESSION_D_EVIDENCE.md`). Charter amendment 7 and `smoke-via-browser.mdc` require **browser operator Accept** on the attribution review surface. HTTP on `cip_test` does not substitute. Committed Session A strengthens the pytest chain but does not close the browser row.
+
+---
+
+## Unit 7 — BACKLOG-068 shipping lineup-quarter strip
+
+### Contract rows
+
+| ID | Requirement | Evidence | Ruled |
+|----|-------------|----------|-------|
+| **BACKLOG-068** | `landed_this_quarter_units` + `shipped_not_landed_units`; PvE fill **unchanged** (shipped-basis formula) | Service: 26Q2 `shipped_not_landed_units=10`, `landed_this_quarter_units=39074` (`SESSION_D_EVIDENCE.md`); git blame: `plan_vs_executed.py` fill formula unchanged since before 2026-08-14 pin (`SESSION_D_EVIDENCE.md` §Task 1) | **PASS** |
+| **SH-01 / SH-02** | Lifecycle cohort semantics | `SESSION_A_EVIDENCE.md`: **12/12** `test_inbound_lineup_quarter.py` including `test_accumulate_landed_this_quarter_vs_plan_landed` | **PASS** |
+| **Strip labels** | **"Shipped (awaiting POD)"**, **"Landed this quarter"** rendered | `SESSION_D_EVIDENCE.md` §~21:50 browser innerText verbatim: `Shipped (awaiting POD)` **10**; `Landed this quarter` **39,074** (plan quarter 26Q2) | **PASS** |
+| **HTTP summary** | `GET /api/v1/shipping/lineup-quarter-summary?plan_quarter=26Q2` | `SESSION_D_EVIDENCE.md`: **200**; JSON keys match rendered strip (`landed_this_quarter_units=39074.0`, `shipped_not_landed_units=10.0`) | **PASS** |
+| **PvE fill % unchanged** | Shipped-basis formula not regressed; fill visible in browser | Browser: **Fill rate (headline) 19.5%** 26Q3 (`SESSION_D_EVIDENCE.md`); git: formula `sum_min / sum_p` unchanged (`SESSION_D_EVIDENCE.md` §Task 1); today `6352/32509=19.5%` — **data moved**, not calculation regression | **PASS** |
+
+### Automation limits
+
+| Row | Code + documented path closes? | Human click required? |
+|-----|-------------------------------|----------------------|
+| Strip labels | **Yes** — browser snapshot in `SESSION_D_EVIDENCE.md` | **No** |
+| PvE fill unchanged | **Yes** — formula git-unchanged + live tile shows expected % from current data | **No** — 13.2% → 19.5% is data drift, not Unit 7 regression |
+
+**VERDICT: PASS** — First pass FAIL was driven by missing/incorrect weighting of Session D's successful browser run (~21:50 UTC+2). With full evidence on branch, automated SH-01/SH-02, rendered strip labels, HTTP spot-check, and PvE formula non-regression are all evidenced.
+
+---
+
+## Unit 11 — Import parity (unchanged FAIL pillars)
+
+**Contract version:** `docs/STEWARD_EXPERIENCE_CONTRACT.md` v1.6  
+**Pass-1 HL thin-mount FAIL and S11 stall:** **stand** — new Session A/B evidence does not overturn.
+
+### Backlog / Rule #4 mapping rows
+
+| ID | Requirement | Evidence | Ruled |
+|----|-------------|----------|-------|
+| **BACKLOG-026** | Generic PM pipeline retired | `SESSION_B_EVIDENCE.md` + `SESSION_E_EVIDENCE.md`; pytest green | **PASS** |
+| **BACKLOG-027** | PM + HL → `CanonicalColumnMappingPanel` | PM: `SESSION_E_EVIDENCE.md` job **30** full panel **OBSERVED**; HL: `page.tsx` **4481–4488** + `SESSION_E_EVIDENCE.md` expected-render table (no `columnSamples`, `requiredGroups`, dispositions) | **PM PASS; HL FAIL** |
+| **BACKLOG-044** | Shipment steward parity | S2/S3/S4 PARTIAL; S11 FAIL below | **FAIL** |
+
+### HL thin-mount (re-confirmed FAIL)
+
+`SESSION_E_EVIDENCE.md` job **639** on `cip_test` seeded; live HL mapping snapshot blocked by `FILE_CHOOSER_UNAUTOMATABLE` / `PLAYWRIGHT_FILE_ROOT`. Code mount at `page.tsx` **4481–4488** passes only `testIdPrefix`, `fileHeaders`, `draft`, `targetOptions`, `dirty`. Expected operator render documented in Session E (Examples em dash, no required-group chips, no disposition column). **Code evidence closes the thin-mount defect** — no human click required to prove **FAIL on parity**. Human click would be required only to claim HL **full parity PASS**.
+
+### Shipment steward S-rows (material to unit verdict)
+
+| ID | EXPECTED | Evidence | Grade | Unit impact |
+|----|----------|----------|-------|-------------|
+| **S1** | Viewport shell | Browser job **1159** workspace **OBSERVED** (`SESSION_E_EVIDENCE.md`) | **PASS** | — |
+| **S2** | Tabs + counts; tab switch resets filters/selection | Tabs/counts **OBSERVED**; no selection reset on tab change (code **487**) | **PARTIAL** | STOP |
+| **S3** | Chip filters + **300ms debounced list search** | Chips **OBSERVED**; no list search field (`SESSION_E_EVIDENCE.md`) | **PARTIAL** | STOP |
+| **S4** | Confidence **band** on list | Numeric `score 0.95` in browser; band chips drawer-only | **PARTIAL** | STOP |
+| **S5–S7** | Drawer chrome / evidence / override | Code wired; drawer not opened (`BROWSER_UNSAFE`) | **PASS** (code wiring) | Does not cure S2–S4/S11 |
+| **S8–S9, S12, S14** | Bulk, plan toolbar, pagination, ambiguity | Browser **OBSERVED** (`SESSION_E_EVIDENCE.md`) | **PASS** | — |
+| **S10** | Async dispatch | Job **640** `cip_test`: 200, `async: true`, `task_id` (`SESSION_E_EVIDENCE.md`) | **PASS** | — |
+| **S11** | Progress poll → terminal `loaded` + facts | Job **640**: poll **200** ~90s, `task_state: STARTED`, `pct: 0`; **0** fact rows (`SESSION_E_EVIDENCE.md`) | **FAIL** | Sufficient alone to fail unit |
+| **S13** | Error surfaces | Not triggered | **PASS** (code) | — |
+
+**S11 ruling (unchanged):** Worker-topology hypothesis in Session E is not proof. S11 requires terminal progress and fact write (or explicit failed terminal). **FAIL** stands.
+
+**VERDICT: FAIL** — HL Rule #4 thin mount; S2/S3/S4 PARTIAL without waiver; S11 runtime incomplete.
+
+---
+
+## Unit 12 — P6 polish
+
+### Contract rows
+
+| ID | Requirement | Evidence | Ruled |
+|----|-------------|----------|-------|
+| **BACKLOG-026** | No PM pipeline regression | `SESSION_B_EVIDENCE.md`: **2/2** `test_product_master_pipeline_retired.py` | **PASS** |
+| **P6 automated** | Settings export sheet titles + column map persist | `SESSION_B_EVIDENCE.md`: **13/13** pytest across `test_commercial_tenant_profile_p6_persistence.py`, `test_lineup_export_apply.py`, retired PM | **PASS** (automated) |
+| **Unit 11 non-regression** | S-rows still PASS | Unit 11 **FAIL** (above) | **FAIL** (dependency) |
+| **pnpm test:web** | No import UX regression signal | Session B: **20 failed**; `WEB_TEST_FAILURE_DIAGNOSIS.md`: **19/20 STALE TEST** (`authHeaders` mock gap since `5b2a6a4`); HEAD `page.test.tsx` uses `importOriginal` partial mock spreading real `authHeaders` (**156–188**) | **PASS** (harness fixed on HEAD; not product regression) |
+| **Browser `/settings`** | Save custom sheet titles, reload | **No session evidence** in Sessions B/F or A | **FAIL** |
+| **Browser PM Import Centre** | PM still via Import Centre | Not browser-evidenced in Session B | **Unevidenced** |
+
+### Automation limits
+
+| Row | Code + documented path closes? | Human click required? |
+|-----|-------------------------------|----------------------|
+| P6 file-based persistence | **Yes** — pytest roundtrip (`SESSION_B_EVIDENCE.md`) | **No** for file logic |
+| `/settings` UI persist | **No** | **Yes** — operator must save/reload in browser |
+
+**VERDICT: FAIL** — Session B + `WEB_TEST_FAILURE_DIAGNOSIS.md` clarify vitest failures were test-harness stale, not product removal of Apply. That does **not** close mandatory browser Settings persistence or Unit 11 regression gate.
+
+---
+
+## Unit 15B — B1 forecast compute-from-history
+
+### Contract rows
+
+| ID | Requirement | Evidence | Ruled |
+|----|-------------|----------|-------|
+| **B1-07** | Forecast never merged into actuals | `SESSION_F_EVIDENCE.md`: `fact_sales_sellout` **31** unchanged after compute on `cip_test` | **PASS** (`cip_test` direct) |
+| **B1-04 / tenant_id** | Compute-from-history; `tenant_id` never NULL | `SESSION_A_EVIDENCE.md`: pytest **3/3**; `SESSION_F_EVIDENCE.md`: `null_tenant=0` on `cip_test` | **PASS** (service) |
+| **Provenance** | Velocity + analogue on persisted rows | `SESSION_F_EVIDENCE.md`: `velocity_basis` populated; no `provenance_json` column (runbook-corrected) | **PASS** (schema-aligned) |
+| **pytest / vitest** | Automated CTA + POST shape | `SESSION_A_EVIDENCE.md`: **3/3** pytest + **1/1** vitest | **PASS** |
+| **Alembic** | `cip_test` migrate head | `SESSION_F_EVIDENCE.md`: **20260818_0018 → 20260819_0019** | **PASS** |
+| **Browser on `cip_test`** | Primary CTA click → confirm → grid refresh | `SESSION_F_EVIDENCE.md`: **not captured**; bundle `forecast-compute-from-history` present; compute via direct Python on `cip_test` only | **FAIL** |
+
+### Automation limits
+
+| Row | Code + documented path closes? | Human click required? |
+|-----|-------------------------------|----------------------|
+| Service compute + tenant guard | **Yes** — `SESSION_F_EVIDENCE.md` direct `compute_from_history` | **No** for service layer |
+| Charter browser row | **No** | **Yes** — operator must click Compute from history on `/forecasts` against `cip_test` API |
+
+**VERDICT: FAIL** — `SESSION_A_EVIDENCE.md` and `SESSION_F_EVIDENCE.md` strengthen automated and `cip_test` service proof. Mandatory browser compute-from-history on `cip_test` remains unevidenced.
+
+---
+
+## Unit B4 (15C) — Promo planner
+
+### Contract rows
+
+| ID | Requirement | Evidence | Ruled |
+|----|-------------|----------|-------|
+| **D-051** | Per-line draft JSON rows | `SESSION_B_EVIDENCE.md`: **4/4** `test_promo_plan_builder.py` | **PASS** |
+| **D-052** | Dirty MAC/units survive Refresh | `SESSION_B_EVIDENCE.md`: vitest **3/3** `promoPlanDraftMerge.test.ts`; `SESSION_F_EVIDENCE.md` client merge sim | **PASS** (unit); browser **FAIL** |
+| **D-053** | `create_case_from_promo_draft` `lines[]`; `cost_source` manual vs intake_weighted | `SESSION_F_EVIDENCE.md`: case **2** on `cip_test`, manual + intake_weighted lines | **PASS** (`cip_test` service) |
+| **D-054** | Cover override session-only | `SESSION_B_EVIDENCE.md`: `test_create_case_from_promo_draft_carries_edits_and_skips_cover_persist` | **PASS** |
+| **D-055** | Editable vs display-only split | `display_only_fields` in build draft test only; no MAC popover UI browser | **Unevidenced** (UI) |
+| **D-056** | Tenant `lineup_export_columns` for export | `SESSION_F_EVIDENCE.md`: 17 field/header pairs from resolver | **PASS** |
+| **Browser dirty MAC + Refresh** | `/promotions` AG Grid journey | `SESSION_F_EVIDENCE.md`: **not run** (MCP blocked) | **FAIL** |
+| **Browser create-case** | End-to-end from planner UI | Service layer `cip_test` only | **Partial** |
+
+### Contamination
+
+`SESSION_F_EVIDENCE.md`: CPOR case **#313** on **`cip`** — exclude from B4 verify evidence.
+
+### Automation limits
+
+| Row | Code + documented path closes? | Human click required? |
+|-----|-------------------------------|----------------------|
+| D-052 merge logic | **Yes** — vitest (`SESSION_B_EVIDENCE.md`) | **No** for client merge |
+| Dirty-cell Refresh browser journey | **No** | **Yes** |
+| D-055 popover split | **No** | **Yes** |
+
+**VERDICT: FAIL** — `SESSION_B_EVIDENCE.md` commits the automated chain Session B captured. Browser dirty-MAC Refresh and D-055 display split remain unevidenced.
+
+---
+
+## SUPERSEDED (second pass)
+
+| Item | Ruling |
+|------|--------|
+| Pass-1 note "SESSION A/B absent" | **SUPERSEDED** — files now on `main` |
+| Pass-1 note "WEB_TEST_FAILURE_DIAGNOSIS absent" | **SUPERSEDED** — file now on `main` |
+| Pass-1 Unit 7 browser strip "unevidenced" | **SUPERSEDED** — Session D browser evidence closes row |
+| NS-2/NS-3/NS-6/NS-7 future gate rewrites | Not SUPERSEDED — active VERIFY debt remains on current routes |
+
+---
+
+## Evidence integrity notes (second pass)
+
+1. **SESSION_A_EVIDENCE.md** and **SESSION_B_EVIDENCE.md** are committed on `main` — chain of custody improved vs pass 1 `.tmp_*` reliance.
+2. **WEB_TEST_FAILURE_DIAGNOSIS.md** documents Session B `pnpm test:web` failures as **STALE TEST**; HEAD `importOriginal` mock at `page.test.tsx` **156–188** is the fix owner evidence — not re-run by verifier this pass.
+3. **Session D** contains two runs: early API-500 blocked run is superseded for strip labels by later ~21:50 browser success; `cip_test` write block is authoritative for D-040 HTTP semantics.
+4. **CPOR #313 on `cip`** — still exclude from B4 PASS.
+
+---
+
+## Register actions (second pass)
+
+| Unit | Action |
+|------|--------|
+| 6f, 11, 12, 15B, B4 | Remain open in `docs/BACKLOG.md` VERIFY-debt register |
+| 7 | Clear row on Warren acceptance of this PASS (date + SHA `a0875d6` or successor) |
+| 8 | Clear row on Warren acceptance of first-pass PASS (date + SHA `2a9c668` / evidence `SESSION_C_EVIDENCE.md`) |
+
+**VERDICT: PASS** — **Units 7 and 8 only**
