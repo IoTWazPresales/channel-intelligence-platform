@@ -28,7 +28,7 @@ North-star nav (NS-2) treats /dashboard as landing absorbing legacy Control towe
 |-------|----------|----------|
 | A1 | /admin/users | Create user form; tenant table lists admin@local and viewer@local |
 | A2 | (same) | viewer@local Smoke Viewer role viewer active yes |
-| A3 | - | NOT RUN (no reset-password action) |
+| A3 | - | **`AUTOMATION_LIMIT`** **`PROMPT_DIALOG_UNAUTOMATABLE`** — UI uses `window.prompt`; ops reset on `cip` documented in 2026-08-31 supplement |
 | A4 | /login after logout | Login form returned |
 | A5 | /dashboard | Control tower heading; Loading partial (see NS-2 flag) |
 | A6 | /shipping | Inbound shipments chrome; grid loading at capture |
@@ -72,7 +72,7 @@ Gate runbook still targets viewer at `/dashboard` with Control tower naming. NS-
 |-------|----------|------------------------|----------------|
 | **A1** | `/admin/users` (admin) | Create user form visible (Email, Display name, Temporary password, Role, Create user). | — |
 | **A2** | (same) | Tenant table: `admin@local` / Local Admin / admin / yes; `viewer@local` / Smoke Viewer / viewer / yes. | — |
-| **A3** | Admin → Users → Reset password | UI uses `window.prompt` for new password — **not automatable** in cursor-ide-browser. | **`PROMPT_DIALOG_UNAUTOMATABLE`**. Ops equivalent on `cip`: stdin Python set `viewer@local` password → `changeme1`, revoke sessions; `current_database(): cip`. |
+| **A3** | Admin → Users → Reset password | UI uses `window.prompt` for new password — **not automatable** in cursor-ide-browser or Playwright without dialog handler. | **`AUTOMATION_LIMIT`** **`PROMPT_DIALOG_UNAUTOMATABLE`**. Ops equivalent on `cip`: stdin Python set `viewer@local` password → `changeme1`, revoke sessions; `current_database(): cip`. **Manual operator check:** Admin → Users → **Reset password** on `viewer@local` → enter new password in browser prompt → sign out → sign in as viewer with new password. Opus may accept ops reset as equivalent if UI prompt path is out of scope for automation. |
 | **A4** | `/login` after sign out | Login form returned (email/password fields, Sign in). | — |
 | **A5** | `/dashboard` (viewer) | Heading **Control tower**; **Welcome , Smoke Viewer**; freshness **Newest successful import: 12d ago (2026-08-18T13:12:11.539572+00:00). Stale after 168 h.** | **`NS-2_GATE_REWRITE`** — run as written; flag for post-NS-2 gate update. |
 | **A6** | `/shipping` (viewer) | **Inbound shipments** heading; grid **1–50 of 14724** with data (not loading-only). | **`NS-2_GATE_REWRITE`** — executed at `/shipping` not `/plan-vs-executed`; result recorded. |
@@ -91,7 +91,7 @@ Gate runbook still targets viewer at `/dashboard` with Control tower naming. NS-
 
 | Item | Status |
 |------|--------|
-| A3 UI Reset password click path | Blocked **`PROMPT_DIALOG_UNAUTOMATABLE`** — ops reset documented |
+| A3 UI Reset password click path | **`AUTOMATION_LIMIT`** **`PROMPT_DIALOG_UNAUTOMATABLE`** — ops reset documented; not a product defect. Manual: **Reset password** → `window.prompt` → viewer re-login. |
 | A5/A6 vs NS-2 landing | Observed as runbook stands; gate rewrite flagged **`NS-2_GATE_REWRITE`** |
 | Prior 2026-08-30 partial loads (A5/A6 Loading) | Superseded by 2026-08-31 observations above |
 

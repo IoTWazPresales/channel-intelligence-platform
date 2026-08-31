@@ -1,11 +1,11 @@
 # SESSION E Evidence — Unit 11 import parity
 
-**Collection timestamp:** 2026-08-30 (Sunday), ~20:38 UTC+2 — **supplemented 2026-08-31 ~10:45 UTC+2**  
+**Collection timestamp:** 2026-08-30 (Sunday), ~20:38 UTC+2 — **supplemented 2026-08-31 ~10:45 UTC+2** — **cip_test runtime 2026-08-31 ~11:30 UTC+2**  
 **Collector:** Cursor agent (VERIFY run + SESSION E continuation)  
-**Branch (verified):** `feat/ns-1a-fx-readiness-chips` @ `8f3c10f` (`git rev-parse --short HEAD` on 2026-08-31)  
+**Branch (verified):** `feat/ns-1a-fx-readiness-chips` @ `b88657a` (`git rev-parse --short HEAD` on 2026-08-31 cip_test pass)  
 **Contract version (file):** **1.6 · 2026-07-27 · Owner: Warren** — matches seed expectation  
-**Environment:** local Windows; web `:3000`, API `:8001`; `session_d_poll_health.py` → `"database":"cip"`  
-**Database policy:** read-only queries on `cip` with `current_database()` printed; apply/progress on `cip_test` **not executed**  
+**Environment:** local Windows; web `:3000`, API `:8001`  
+**Database policy:** writes on `cip_test` only after proof gate; API restored to `cip` after walk (`session_d_poll_health.py` → `"database":"cip"`)  
 **Waiver lines from unit prompt:** *(none supplied — all S1–S14 in scope)*
 
 **Surfaces in scope (operator):**
@@ -20,14 +20,14 @@
 
 ## Collection methods
 
-| Method | Result (2026-08-30) | Result (2026-08-31 supplement) |
-|--------|---------------------|--------------------------------|
-| Code read (`Read` / `Grep`) | **Succeeded** | **Succeeded** (unchanged) |
-| `git rev-parse` / branch | **Succeeded** @ `3f10ae4` | **Succeeded** @ `8f3c10f` |
-| Playwright MCP | **Partial** — login redirect; guard blocked follow-ups | Not used |
-| `cursor-ide-browser` MCP | **Blocked** by EIF guard | **Succeeded** — admin authenticated at `http://127.0.0.1:3000` |
-| Apply/progress on `cip_test` | **Not executed** | **Not executed** — see **`CIP_TEST_NOT_EXECUTED`** |
-| Read-only DB (`SessionLocal`) | Not run | **`current_database(): cip`**; **`historical_lineup` import_job rows: (none)** |
+| Method | Result (2026-08-30) | Result (2026-08-31 supplement) | Result (2026-08-31 cip_test) |
+|--------|---------------------|--------------------------------|------------------------------|
+| Code read (`Read` / `Grep`) | **Succeeded** | **Succeeded** (unchanged) | **Succeeded** (unchanged) |
+| `git rev-parse` / branch | **Succeeded** @ `3f10ae4` | **Succeeded** @ `8f3c10f` | **Succeeded** @ `b88657a` |
+| Playwright MCP | **Partial** — login redirect; guard blocked follow-ups | Not used | **Partial** — login + HL wizard to upload; **`PLAYWRIGHT_FILE_ROOT`** blocked file drop |
+| `cursor-ide-browser` MCP | **Blocked** by EIF guard | **Succeeded** — admin @ `:3000` | **Partial** — HL wizard to upload step; **`FILE_CHOOSER_UNAUTOMATABLE`** |
+| Apply/progress on `cip_test` | **Not executed** | **`CIP_TEST_NOT_EXECUTED`** | **Executed** — shipment job **640**; see S10–S11 below |
+| Read-only / write DB | Not run | **`current_database(): cip`**; zero HL jobs on `cip` | **`current_database(): cip_test`** on every SQL block in `session_e_cip_test_walk.py` |
 
 ---
 
@@ -43,6 +43,74 @@ Shared component: `apps/web/src/features/import-mapping/CanonicalColumnMappingPa
 | **Shipment (reference)** | `?job=1159` → Back to validate & resolve | Full `CanonicalColumnMappingPanel` on step 5 in wizard (not re-captured this pass; prior code-read reference **3505–3518**). | Unchanged code evidence |
 
 **HL thin-mount parity finding (code + data):** Implementation passes only `testIdPrefix`, `fileHeaders`, `draft`, `targetOptions`, `dirty` — no `columnSamples`, `requiredGroups`, `blockingErrors`, or disposition column. **Cannot refute or confirm in live UI** until a validated HL job exists on dev DB.
+
+---
+
+## 2026-08-31 cip_test runtime supplement — proof gate + HL + shipment apply
+
+**Collection timestamp:** 2026-08-31 (Monday), ~11:28 UTC+2  
+**Script:** `apps/api/scripts/ops/session_e_cip_test_walk.py`  
+**Fixture:** `apps/api/scripts/ops/session_e_hl_fixture.xlsx` (1-row Historical Lineup Apr sheet + Summary sheet; seeded dims `DIST-HL-01`, `CUST-HL-01`, `SKU-HL-01`, channel `RET`)  
+**Proof gate (pre-write):** `GET /health/ready` → `{"status":"ready","database":"cip_test","ok":true}` with `DATABASE_URL`, `DATABASE_URL_SYNC`, `DATABASE_URL_SYNC_MIGRATE` rewritten via `session_d_run_api.py cip_test`.  
+**Post-walk restore:** killed `:8001` listener; `session_d_run_api.py env` → `GET /health/ready` → `"database":"cip"`.
+
+### HL validated job on `cip_test`
+
+| Field | OBSERVED |
+|-------|----------|
+| Job id | **639** (`HL_JOB_ID` from walk script) |
+| `current_database()` | **`cip_test`** on seed + post-validate queries |
+| `template_slug` / mode | `historical_lineup` / `validate` |
+| `stage` / `status` | `validated` / `completed` |
+| File | `session_e_hl_fixture.xlsx` |
+
+### HL mapping panel — live browser (Rule #4 unit 11)
+
+**Goal:** After validate, expand **Column mapping review → Show / edit** and compare panel vs PM (`columnSamples`, `requiredGroups`, `blockingErrors`, disposition column).
+
+| Attempt | OBSERVED | Blocker |
+|---------|----------|---------|
+| `cursor-ide-browser` | Admin session; HL wizard through provider select → upload step (**Choose file** visible) | **`FILE_CHOOSER_UNAUTOMATABLE`** — no file-input attach in cursor-ide-browser |
+| `user-playwright` | Login `admin@local`; same wizard to upload step; **`browser_drop`** on drop zone | **`PLAYWRIGHT_FILE_ROOT`** — fixture path outside MCP allowed roots (`~/.playwright-mcp`, home root only) |
+| `browser_run_code_unsafe` | Not run | **`BROWSER_UNSAFE`** — EIF hook denies evaluate/unsafe execution |
+
+**Code finding (CONFIRMED — mount props):** `page.tsx` **4481–4488** passes only `testIdPrefix="hl"`, `fileHeaders`, `draft`, `targetOptions`, `dirty`. PM mount **3163–3181** passes `columnSamples`, `requiredGroups`, `dispositionOptions`, `dispositionDraft`, `onDispositionChange`, `formatSamples`.
+
+**Expected operator-visible panel when mapping review is expanded (from `CanonicalColumnMappingPanel` + HL props — not a verdict):**
+
+| PM feature | HL expected render |
+|------------|-------------------|
+| Per-column sample values | **`Examples: —`** on each row (`formatSamples` default when `columnSamples` absent); testids `hl-samples-*` present but show em dash |
+| Required-group summary chips | **Absent** — only **Mapped:** / **Unmapped:** chips (`requiredGroups` not passed → `groupStatus` empty) |
+| Blocking mapping alert | **Absent** — no **Fix mapping before validating** (`blockingErrors` not passed) |
+| Disposition / bulk mapping toolbar | **Absent** — table is **File column + Maps to** only (no **Unmapped handling** column; no Apply suggested / All unmapped → Ignore) |
+| Show columns filter + mapping table | **Present** (shared panel shell) |
+
+**Manual operator check (to close live-browser gap):** On `cip_test` API (`/health/ready` → `cip_test`), Import Center → Historical lineup → upload `session_e_hl_fixture.xlsx` → validate → expand **Show / edit** under **Column mapping review**. Confirm table matches table above vs PM job **30** step 4.
+
+**AUTOMATION_LIMIT — not a product defect:** live HL mapping snapshot blocked by **`FILE_CHOOSER_UNAUTOMATABLE`** + **`PLAYWRIGHT_FILE_ROOT`**; code mount + component defaults are the corroborating evidence until manual attach succeeds.
+
+### Shipment apply + progress (S10–S11) on `cip_test`
+
+**Job:** **640** (`inbound_shipments`, validate completed; 1 evidence line, 1 mapping candidate). All SQL: **`current_database(): cip_test`**.
+
+| Row | EXPECTED | OBSERVED (runtime) |
+|-----|----------|-------------------|
+| **S10** | Async dispatch; `{async, task_id}`; job → `running` / apply | **OBSERVED:** `POST /api/v1/shipment-evidence/jobs/640/apply` → **200**; body `async: true`, `task_id: b6a64ac3-b3fd-4fb4-b258-9cd729cec78a`, `status: running`, `import_mode: apply`. Post-dispatch SQL: stage `validated`, status `running`, mode `apply`. |
+| **S11** | Progress poll → phases advance → terminal `loaded` / facts written | **PARTIAL:** `GET /api/v1/imports/jobs/640/dsi-progress` **200** for ~90s; repeated payload `phase: processing_rows`, `task_state: STARTED`, `pct: 0`, `pipeline_started_at: null`. Post-poll SQL: still `validated`/`running`/`apply`. `fact_inbound_shipment` rows matching `%SESSION-E-20260831%`: **0**. |
+
+**Interpretation (evidence only):** S10 dispatch contract met; S11 poll endpoint responds but worker did not advance (`STARTED` stall — likely Celery/worker not consuming shipment apply queue in this topology; not diagnosed further this session).
+
+---
+
+## Automation limits (not product defects)
+
+| Item | Reason code | Manual operator check |
+|------|-------------|----------------------|
+| **S5–S7** steward drawer | **`BROWSER_UNSAFE`** / drawer not opened | Shipment job on `cip_test` or `cip` revisit → **Review…** on a channel-partner row → confirm drawer chrome, evidence body, suggestion cards + override |
+| **CDP evaluate** (drawer automation) | **`BROWSER_UNSAFE`** | Same as above without script injection |
+| **HL mapping live snapshot** | **`FILE_CHOOSER_UNAUTOMATABLE`** + **`PLAYWRIGHT_FILE_ROOT`** | Upload `session_e_hl_fixture.xlsx` manually; expand **Show / edit**; compare to PM panel checklist above |
+| **S11 completion** | **`WORKER_QUEUE_STALL`** (observed `task_state: STARTED`) | Ensure Redis + `pnpm dev:worker` (or `CIP_DEV_CELERY_DISPATCH=in_process_thread`); re-apply job **640**; poll until `loaded` and fact row count > 0 |
 
 ---
 
@@ -79,13 +147,13 @@ Grading applies primarily to **ShipmentImportJobResolutionSection**. PM and HL h
 | **S2** | Entity tabs + counts; tab switch resets filters to default | Tabs **Distributors (0)** / **Channel partners (15, 15 needs work)** with counts | PARTIAL | Browser **confirms tabs/counts**; filter reset on tab switch **not exercised** |
 | **S3** | Chip filters + list search debounced 300ms | Chip filters + Clear filters **OBSERVED**; **no** free-text search field on list | PARTIAL | Browser **confirms chips-only** (matches code-read gap) |
 | **S4** | Token, counts, plan_class, confidence band, units/value | Token, Rows, Qty/value, Suggested, Plan chip + **numeric score 0.95** (not band chip) | PARTIAL | Browser **confirms numeric score** on plan column |
-| **S5** | Drawer chrome | Drawer not opened | PASS-equivalent | Browser: **NOT OPENED** |
-| **S6** | Drawer evidence body | Drawer not opened | PASS-equivalent | Browser: **NOT OPENED** |
-| **S7** | Suggestion cards + override | Drawer not opened | PASS-equivalent | Browser: **NOT OPENED** |
+| **S5** | Drawer chrome | Drawer not opened | PASS-equivalent | **`AUTOMATION_LIMIT`** **`BROWSER_UNSAFE`** — manual Review… click |
+| **S6** | Drawer evidence body | Drawer not opened | PASS-equivalent | **`AUTOMATION_LIMIT`** **`BROWSER_UNSAFE`** |
+| **S7** | Suggestion cards + override | Drawer not opened | PASS-equivalent | **`AUTOMATION_LIMIT`** **`BROWSER_UNSAFE`** |
 | **S8** | Bulk preview → apply | Bulk map / Bulk provisional / Select visible ready **OBSERVED** (disabled at default selection) | PASS-equivalent | Browser: toolbar **OBSERVED**; preview dialog **not triggered** |
 | **S9** | Plan toolbar apply-all-ready | **Apply all ready (4)** + Resolution plan options **OBSERVED** | PASS-equivalent | Browser: plan toolbar **OBSERVED** |
-| **S10** | Async dispatch apply | Not exercised | PASS-equivalent *(code)* | **`CIP_TEST_NOT_EXECUTED`** |
-| **S11** | Progress poll + bell | Validation-complete state on revisit; no live poll captured | PASS-equivalent *(code)* | Progress poll **not exercised** |
+| **S10** | Async dispatch apply | **OBSERVED on cip_test job 640** — async 200 + task_id | PASS-equivalent *(code)* | **Runtime OBSERVED** dispatch; see cip_test supplement |
+| **S11** | Progress poll + bell | **PARTIAL on cip_test** — poll 200, phase stuck `STARTED` | PASS-equivalent *(code)* | **Runtime PARTIAL** — no terminal `loaded`; 0 fact rows |
 | **S12** | Server pagination | **Showing 1–15 of 15**; Rows per page combobox **OBSERVED** | PASS-equivalent | Browser **OBSERVED** |
 | **S13** | Action feedback alerts | No plan-apply or bulk error banner triggered | PASS-equivalent *(code)* | Browser: **not triggered** |
 | **S14** | No auto-create; reviewable ambiguity | Match column **Needs review** / alias coverage copy **OBSERVED** | PASS-equivalent | Browser **OBSERVED** on sample row |
@@ -98,11 +166,12 @@ Grading applies primarily to **ShipmentImportJobResolutionSection**. PM and HL h
 
 ### S10 — Async dispatch
 
-- **OBSERVED (runtime):** Apply/progress exercise **NOT EXECUTED** on `cip_test`. Pre-write proof gate requires `/health/ready` → `"database":"cip_test"` with all three `DATABASE_URL*` vars rewritten (`docs/VERIFY_DEBT_RUNBOOK.md`). Live API at collection: `"database":"cip"` only.
+- **OBSERVED (runtime, cip_test job 640):** `POST …/jobs/640/apply` → **200**, `async: true`, `task_id: b6a64ac3-b3fd-4fb4-b258-9cd729cec78a`. SQL after dispatch: `current_database(): cip_test`; job `running` / `apply`.
 
 ### S11 — Progress
 
-- **OBSERVED (browser):** Validation-complete banner on job **1159** revisit; no async validate poll captured this session.
+- **OBSERVED (browser 2026-08-31 AM):** Validation-complete banner on job **1159** revisit; no async validate poll captured that session.
+- **OBSERVED (runtime, cip_test job 640):** `GET …/dsi-progress` **200** for ~90s; `phase: processing_rows`, `task_state: STARTED`, `pct: 0`; job never reached `loaded`; **0** `fact_inbound_shipment` rows for SESSION-E stamp. SQL: `current_database(): cip_test`.
 
 ---
 
@@ -112,7 +181,7 @@ Grading applies primarily to **ShipmentImportJobResolutionSection**. PM and HL h
 |------|----|----|
 | S1–S13 | **ABSENT** (mapping-only) | **ABSENT** (mapping review only when validated job exists) |
 | S14 | API/import governance | Same |
-| Rule #4 mapping | **OBSERVED full panel** on job **30** step 4 | **Code PARTIAL**; **browser UNABLE_TO_RENDER** — **`HL_NO_JOBS_ON_CIP`** |
+| Rule #4 mapping | **OBSERVED full panel** on job **30** step 4 | **Code CONFIRMED thin mount**; **browser PARTIAL** (upload blocked); job **639** on `cip_test`. Manual: upload + **Show / edit**. |
 
 ---
 
@@ -130,7 +199,15 @@ Grading applies primarily to **ShipmentImportJobResolutionSection**. PM and HL h
 3. PM job **30**: revisit wizard → **Back** to column mapping → full `CanonicalColumnMappingPanel` with samples and dispositions.
 4. PM job **95** with `?template=product_master`: read-only revisit — **`PM_REVISIT_READONLY`**.
 5. `?template=historical_lineup`: no HL jobs on `cip` — **`HL_NO_JOBS_ON_CIP`**.
-6. Drawer open / CDP evaluate: **`BROWSER_UNSAFE`**.
+6. Drawer open / CDP evaluate: **`BROWSER_UNSAFE`** → **`AUTOMATION_LIMIT`** (S5–S7).
+
+### 2026-08-31 cip_test (runtime + browser partial)
+
+1. Proof gate: `session_d_run_api.py cip_test` → health `"database":"cip_test"`.
+2. `session_e_cip_test_walk.py`: HL job **639**, shipment job **640**; S10 dispatch OK; S11 poll stuck `STARTED`.
+3. `cursor-ide-browser`: HL wizard to upload — **`FILE_CHOOSER_UNAUTOMATABLE`**.
+4. `user-playwright`: HL wizard to upload — **`PLAYWRIGHT_FILE_ROOT`** on drop.
+5. Restore: `session_d_run_api.py env` → health `"database":"cip"`.
 
 ---
 
@@ -138,7 +215,9 @@ Grading applies primarily to **ShipmentImportJobResolutionSection**. PM and HL h
 
 **Planned:** Stop API; `python scripts/ops/session_d_run_api.py cip_test`; `session_d_poll_health.py` must print `"database":"cip_test"`; exercise steward apply + progress; restore `env` mode; confirm `"database":"cip"`.
 
-**OBSERVED:** **NOT EXECUTED (`CIP_TEST_NOT_EXECUTED`).** Read-only proof only: `session_d_poll_health.py` on running stack → `{"status":"ready","database":"cip","ok":true}`. No HTTP write against `cip_test`.
+**OBSERVED (2026-08-31 ~11:28):** **EXECUTED.** Shipment job **640** on `cip_test`. S10 dispatch **OBSERVED**; S11 poll **PARTIAL** (worker stall). HL job **639** seeded; mapping panel live snapshot **not captured** (automation limits). Post-walk: health → `"database":"cip"`.
+
+**OBSERVED (2026-08-31 AM supplement):** **NOT EXECUTED (`CIP_TEST_NOT_EXECUTED`).** Read-only proof only on `cip`.
 
 ---
 
@@ -146,7 +225,8 @@ Grading applies primarily to **ShipmentImportJobResolutionSection**. PM and HL h
 
 | Source | Branch claim |
 |--------|--------------|
-| Git (2026-08-31) | `feat/ns-1a-fx-readiness-chips` @ `8f3c10f` |
+| Git (2026-08-31 cip_test) | @ `b88657a` |
+| Git (2026-08-31 AM) | @ `8f3c10f` |
 | Git (2026-08-30) | @ `3f10ae4` |
 | `docs/memory/CURRENT.md` (historical) | May lag branch field — pin VERIFY to git |
 
@@ -154,15 +234,16 @@ Grading applies primarily to **ShipmentImportJobResolutionSection**. PM and HL h
 
 ## Summary — evidence gaps (not verdicts)
 
-| Code | Browser 2026-08-31 | Outstanding |
-|------|----------------------|-------------|
-| S2, S3, S4 PARTIAL | Partial gaps **confirmed** on live shipment steward | Tab-filter reset behavior; list search; confidence bands |
-| PM mapping PASS-equivalent | **OBSERVED** full panel job **30** | — |
-| HL mapping PARTIAL | **UNABLE_TO_RENDER** — no HL jobs | Seed validated HL job or use env with HL data |
-| Steward drawer S5–S7 | **NOT OPENED** | Manual Review… click or unblocked drawer automation |
-| S10–S11 apply/progress | **`CIP_TEST_NOT_EXECUTED`** | Full proof gate + apply on disposable DB |
+| Code | Browser 2026-08-31 | cip_test 2026-08-31 | Outstanding |
+|------|----------------------|----------------------|-------------|
+| S2, S3, S4 PARTIAL | Partial gaps **confirmed** on live shipment steward | — | Tab-filter reset; list search; confidence bands |
+| PM mapping PASS-equivalent | **OBSERVED** full panel job **30** | — | — |
+| HL mapping thin mount | Upload step only (**FILE_CHOOSER**) | Job **639** seeded; code **CONFIRMED** | Manual **Show / edit** snapshot |
+| Steward drawer S5–S7 | **`AUTOMATION_LIMIT`** | **`AUTOMATION_LIMIT`** | Manual Review… |
+| S10 apply dispatch | **`CIP_TEST_NOT_EXECUTED`** (AM) | **OBSERVED** job **640** | — |
+| S11 progress completion | Not exercised (AM) | **PARTIAL** — worker stall | Worker topology + re-run apply |
 
-**Import mapping (Rule #4):** PM **OBSERVED full**; HL **code PARTIAL**, **browser blocked by data**.
+**Import mapping (Rule #4):** PM **OBSERVED full**; HL **code CONFIRMED thin mount**; live HL panel **AUTOMATION_LIMIT** (not refuted).
 
 ---
 
