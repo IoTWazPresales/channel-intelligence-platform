@@ -607,3 +607,56 @@ planned_units: 47775.0
 ## Verdict
 
 **Evidence-only artifact.** Read-only `cip` DB + service-layer quarter summary collected; browser paths **blocked by API 500** and unsigned session. Historical 2026-08-08 smoke and pytest artifacts cited where live runtime unavailable. **No PASS/FAIL.**
+
+---
+
+## Run 2026-08-31 — Unit 6f browser VERIFY gap (cip_test writes)
+
+**Collection timestamp:** 2026-08-31 (Monday), ~12:00–13:15 UTC+2  
+**Branch:** `main` @ `15ab61ab99bf5db6e37691dfb43334b08aea220c`  
+**Origin:** `http://127.0.0.1:3000` (cursor-ide-browser, serial)  
+**API proof gate:** `GET /health/ready` → `{"status":"ready","database":"cip_test","ok":true}` before writes  
+**Post-session restore:** `GET /health/ready` → `{"status":"ready","database":"cip","ok":true}`  
+**Evidence only — no PASS verdict.**
+
+### Seed + prep (cip_test)
+
+| Item | Value |
+|------|-------|
+| Case | **44** |
+| Lines | **25** ACCEPT (`SESSION-D-ACCEPT`), **26** CLEAR (`SESSION-D-CLEAR`), **27** CONFLICT |
+| Prep script | `session_d_unit6f_browser_prep.py` — NULL `customer_id` on line 25; remove blocking alias so worklist shows `ship_corroboration_offer` (dist **92**) |
+
+### Browser journey — `/admin/po-management`
+
+1. **Before:** Drawer open; worklist item `SESSION-D-ACCEPT` shows **Accept OC + dist 92** (`customer-token-accept-ship-*`).
+2. **Accept:** Green alert — *Accepted ship-corroborated distributor 92 on 2 line(s) (steward_set)*.
+3. **Soft-clear:** Select line **26** → **Soft-clear dist**.
+
+**Screenshots:** `docs/verify/artifacts/session-d-6f-before-accept.png`, `session-d-6f-after-accept.png`, `session-d-6f-after-soft-clear.png`
+
+### Post-action SQL (`cip_test`, `verify_browser_query.py`)
+
+```text
+--- seed lines ---
+current_database() cip_test
+(25, 44, 92, 'steward_set', 'SESSION-D-ACCEPT')
+(26, 44, None, None, 'SESSION-D-CLEAR')
+(27, 44, 94, 'token_proposed', 'SESSION-D-CONFLICT')
+
+--- audit tail ---
+current_database() cip_test
+(21, ..., 'lineup_ship_corroborated_distributor_accept', 'customer_token', 'session-d-accept', 'dim_distributor', 92)
+(22, ..., 'lineup_distributor_soft_clear', 'distributor_attribution', ...)
+```
+
+### Unit 6f gap status
+
+| Check | Captured? | Note |
+|-------|-----------|------|
+| Browser Accept on `token_proposed` / ship-corroboration offer | **Yes** | Case 44 line 25 |
+| Browser soft-clear | **Yes** | Line 26 |
+| `steward_audit_event` | **Yes** | ids 21–22 |
+| `distributor_attribution_status` on seed lines | **Yes** | `steward_set` / cleared |
+
+**Outstanding (not in scope this run):** Unit **7** browser strip / PvE fill still per prior BLOCKED rows above.

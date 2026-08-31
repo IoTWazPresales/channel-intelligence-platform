@@ -322,3 +322,61 @@ feat/ns-1a-fx-readiness-chips
 2. **HTTP forecast compute** against disposable DB — live API binds `cip`; no cip_test routing without API env change (explicitly out of scope: do not edit `.env`).
 3. **`provenance_json` column** — not present in ORM or cip_test schema; session query used `analogue_basis` / velocity fields instead.
 4. **Accidental default-env `alembic upgrade head`** early in session targeted **`cip`** (already at head; no DDL applied).
+
+---
+
+## Run 2026-08-31 — Units 15B + B4 browser VERIFY gaps (cip_test)
+
+**Collection timestamp:** 2026-08-31 (Monday), ~12:30–13:10 UTC+2  
+**Branch:** `main` @ `15ab61ab99bf5db6e37691dfb43334b08aea220c`  
+**Origin:** `http://127.0.0.1:3000` (cursor-ide-browser, serial)  
+**API proof gate:** `GET /health/ready` → `"database":"cip_test"` before writes  
+**Post-session restore:** `GET /health/ready` → `"database":"cip"`  
+**Evidence only — no PASS verdict.**
+
+### Unit 15B — `/forecasts` → Compute from history
+
+**Browser:**
+
+1. Navigate `/forecasts`.
+2. Click **Compute from history**; confirm dialog via **Enter**.
+3. Success alert: *Computed from history: 13 velocity + 0 analogue rows (tenant default). Overrides kept: 0*.
+4. Grid shows 13 weekly velocity rows (`52wk*seasonal`).
+
+**Screenshots:** `docs/verify/artifacts/session-f-15b-before-compute.png`, `session-f-15b-after-compute.png`
+
+**SQL (`cip_test`):**
+
+```text
+--- null tenant ---
+current_database() cip_test
+(0,)
+
+--- sample forecasts ---
+current_database() cip_test
+(15, 'default', 'velocity', '52wk*seasonal', None)
+(14, 'default', 'velocity', '52wk*seasonal', None)
+...
+```
+
+| Check | Captured? |
+|-------|-----------|
+| UI compute journey | **Yes** |
+| `tenant_id IS NULL` count = 0 | **Yes** |
+| `velocity_basis` / `analogue_basis` on sample rows | **Yes** (`52wk*seasonal` / `None`) |
+
+### Unit B4 — `/promotions` dirty MAC/units survive Refresh
+
+**Browser:**
+
+1. Case **2** (`C26C00001`) — **Build draft** → 2-row grid.
+2. Edit row 1: **Units 40→99**, **MAC —→88.55** (dirty highlighting).
+3. **Refresh suggestions** → **99** and **88.55** persist; summary confirms dirty cells survive refresh.
+
+**Screenshots:** `docs/verify/artifacts/session-f-b4-dirty-before-refresh.png`, `session-f-b4-dirty-after-refresh.png`
+
+| Check | Captured? |
+|-------|-----------|
+| Dirty MAC/units before Refresh | **Yes** |
+| Values after Refresh | **Yes** |
+| D-056 export column map browser | **No** — not in B4 browser scope this run |

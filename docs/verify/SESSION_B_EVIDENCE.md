@@ -308,3 +308,52 @@ At C:\Users\warren_eliason\AppData\Roaming\npm\pnpm.ps1:24 char:5
 | **B4** | vitest `promoPlanDraftMerge.test.ts` | **Passed** | 0 / 3 |
 
 **No unit is PASS, closed, or verified.** Session B is input for Opus CONSULT only.
+
+---
+
+## Run 2026-08-31 — Unit 12 browser VERIFY gap (Settings export sheet titles)
+
+**Collection timestamp:** 2026-08-31 (Monday), ~13:10–13:55 UTC+2  
+**Branch:** `main` @ `15ab61ab99bf5db6e37691dfb43334b08aea220c`  
+**Origin:** `http://127.0.0.1:3000` (cursor-ide-browser, serial)  
+**Write target:** File persistence only (`tenant_profiles/default.json` on API host) — **no DB writes**  
+**API:** `session_d_run_api.py cip_test` during mixed session; tenant profile file lives under `apps/api/storage/uploads/` (gitignored)  
+**Evidence only — no PASS verdict.**
+
+### Browser journey — `/settings`
+
+1. **Edit** (MUI `browser_type` with `clear:true`, `slowly:true` — `browser_fill` does not fire React `onChange`):
+   - `tenant-profile-export-net-req-sheet` → **`SESSION-B-NET-REQ`**
+   - `tenant-profile-export-draft-sheet` → **`SESSION-B-DRAFT`**
+2. **Save:** `data-testid="tenant-profile-save"` (ref **e178** after scroll).
+3. **Reload** `/settings` — after tenant profile query completes, fields show **`SESSION-B-NET-REQ`** / **`SESSION-B-DRAFT`** (not defaults).
+
+**Screenshots:** `docs/verify/artifacts/session-b-12-before-save-final.png` (alias of `page-2026-08-31T11-51-12-002Z.png`), `session-b-12-after-reload.png`, `session-b-12-before-save.png`
+
+### File persistence (API cwd `apps/api`)
+
+```text
+tenant_profile_path storage\uploads\tenant_profiles\default.json
+{
+  "lineup_export_draft_sheet": "SESSION-B-DRAFT",
+  "lineup_export_net_requirement_sheet": "SESSION-B-NET-REQ",
+  ...
+}
+```
+
+### Automation notes (not verdicts)
+
+| Issue | Code | Mitigation used |
+|-------|------|-----------------|
+| `browser_fill` skips React state | `AUTOMATION_LIMIT` | `browser_type` + `clear` + `slowly` |
+| Early reload snapshot shows defaults before query settles | `TIMING` | Wait for full snapshot (418 refs) or scroll + screenshot |
+| Save button ref off-screen in large snapshot | `AUTOMATION_LIMIT` | Scroll + ref `e178` click |
+
+### Unit 12 gap status
+
+| Check | Captured? |
+|-------|-----------|
+| UI edit export sheet titles | **Yes** |
+| Save tenant profile | **Yes** |
+| Reload persistence in UI | **Yes** |
+| `tenant_profiles/default.json` on disk | **Yes** |
