@@ -4,6 +4,11 @@ import type { ReactNode } from 'react';
 import { Chip, Stack, Typography } from '@mui/material';
 
 import type { ImportStewardWorkspaceColumn } from '@/features/import-steward/importStewardCandidateWorkspace.types';
+import {
+  confidenceBand,
+  confidenceBandColor,
+  confidenceBandLabel,
+} from '@/features/import-steward/confidenceBand';
 import { effectiveSuggestedAction } from '@/features/import-steward/stewardCandidateFilterLogic';
 import { formatPlanActionLabel } from '@/features/import-steward/stewardResolutionPlanDisplay';
 import {
@@ -20,6 +25,32 @@ function shipmentActionChipColor(action: string): 'success' | 'warning' | 'error
   if (action === 'create_provisional_customer' || action === 'create_provisional_distributor') return 'warning';
   if (action === 'needs_review') return 'error';
   return 'default';
+}
+
+/** S4: shared band vocabulary from `features/import-steward/confidenceBand.ts`. */
+export function ShipmentPlanConfidenceBandCell({ score }: { score: number | null | undefined }) {
+  const band = confidenceBand(score);
+  if (band == null) {
+    return (
+      <Typography variant="caption" color="text.secondary" data-testid="shipment-plan-confidence-empty">
+        —
+      </Typography>
+    );
+  }
+  return (
+    <Stack direction="row" spacing={0.5} alignItems="center">
+      <Chip
+        size="small"
+        variant="outlined"
+        color={confidenceBandColor(band)}
+        label={confidenceBandLabel(band)}
+        data-testid="shipment-plan-confidence-band"
+      />
+      <Typography variant="caption" color="text.secondary">
+        {Number(score).toFixed(2)}
+      </Typography>
+    </Stack>
+  );
 }
 
 export type ShipmentResolutionWorkspaceColumnOptions = {
@@ -63,11 +94,7 @@ export function buildShipmentResolutionWorkspaceColumns(
             <Chip size="small" label={formatPlanActionLabel(act)} color={shipmentActionChipColor(act)} />
           ) : null}
           {ready ? <Chip size="small" color="success" variant="outlined" label="Ready" /> : null}
-          {conf != null ? (
-            <Typography variant="caption" color="text.secondary">
-              score {Number(conf).toFixed(2)}
-            </Typography>
-          ) : null}
+          {conf != null ? <ShipmentPlanConfidenceBandCell score={conf} /> : null}
         </Stack>
       );
     },

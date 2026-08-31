@@ -51,6 +51,11 @@ export function shipmentStewardFiltersMatchTabDefault(
   );
 }
 
+/** S2: tab switch resets chip filters to the tab default (CPOR/CST parity). */
+export function shipmentStewardFiltersAfterTabSwitch(tabId: ShipmentEntityTabId): ShipmentStewardCandidateFilterState {
+  return defaultShipmentStewardFiltersForTab(tabId);
+}
+
 export function formatShipmentEntityTabLabel(
   tab: Pick<ShipmentEntityTabMeta, 'label'>,
   total: number | null,

@@ -380,3 +380,43 @@ current_database() cip_test
 | Dirty MAC/units before Refresh | **Yes** |
 | Values after Refresh | **Yes** |
 | D-056 export column map browser | **No** — not in B4 browser scope this run |
+
+---
+
+## Run 2026-08-31 — Unit B4 MAC popover + create-case (main @ 874103b, cip_test)
+
+**Collection timestamp:** 2026-08-31 (Monday), ~15:30 UTC+2  
+**Branch:** `main` @ `874103b`  
+**Origin:** `http://127.0.0.1:3000` (user-playwright after login; serial)  
+**API proof gate:** `GET /health/ready` → `"database":"cip_test"` before writes  
+**Post-session restore:** `session_d_run_api.py env` → `"database":"cip"`  
+**Evidence only — no PASS verdict.**
+
+### B4 browser journey (`/promotions`)
+
+1. Seed case **2** (`C26C00001` on `cip_test`) → **Build draft** → 2-row grid.
+2. Row 1: **Units 40→99**, **MAC —→88.55** (dirty highlighting).
+3. **MAC buckets** info button → popover **Intake-weighted MAC (display legs not in blend)** with Bucket A/B, Planned supply, Sell-out value, Disti cost proxy, Blend formula (**D-055 display split**).
+4. **Refresh suggestions** → **99** and **88.55** persist.
+5. **Create draft CPOR case** → alert: **Created draft case #3 (C26C00002) · 2 line(s) · budget missing_sku_economics**.
+
+**Screenshots:**  
+`docs/verify/artifacts/session-f-b4-dirty-before-refresh-874103b.png`,  
+`session-f-b4-d055-mac-popover-874103b.png`,  
+`session-f-b4-dirty-after-refresh-874103b.png`,  
+`session-f-b4-create-case-874103b.png`
+
+**SQL (`cip_test`, read-only after create):**
+
+```text
+current_database() cip_test
+cpor_cases: (3, 'C26C00002', 'draft'), (2, 'C26C00001', 'draft'), ...
+```
+
+| Check | Captured? |
+|-------|-----------|
+| Dirty MAC/units before Refresh | **Yes** |
+| D-055 MAC popover display legs | **Yes** |
+| Values after Refresh | **Yes** |
+| Create-case journey + new draft case | **Yes** (#3 `C26C00002`) |
+| D-056 export column map browser | **No** — unchanged deferred scope |

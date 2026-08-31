@@ -11,6 +11,7 @@ import {
   DialogTitle,
   Stack,
   Typography,
+  TextField,
 } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
@@ -50,10 +51,12 @@ import {
   defaultShipmentStewardFiltersForTab,
   formatShipmentEntityTabLabel,
   SHIPMENT_ENTITY_TAB_DEFS,
+  shipmentStewardFiltersAfterTabSwitch,
   shipmentStewardFiltersMatchTabDefault,
   type ShipmentEntityTabId,
 } from './shipmentEntityTabs';
 import { filterShipmentStewardCandidates } from './shipmentStewardCandidateFilterLogic';
+import { filterShipmentStewardRowsBySearch } from './shipmentStewardListSearch';
 import { invalidateShipmentImportJobStewardQueries, SHIPMENT_STEWARD_CONFIG } from './shipmentSteward.config';
 import { useShipmentCandidatesPage } from './useShipmentCandidatesPage';
 import { useShipmentEntityTabCounts } from './useShipmentEntityTabCounts';
@@ -120,6 +123,8 @@ export function ShipmentImportJobResolutionSection({
     distributor: defaultShipmentStewardFiltersForTab('distributor'),
     customer: defaultShipmentStewardFiltersForTab('customer'),
   }));
+  const [searchInput, setSearchInput] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [bulkMode, setBulkMode] = useState<BulkTableSelectionMode>('normal');
   const [bulkProvNamesById, setBulkProvNamesById] = useState<Record<number, string>>({});
@@ -142,6 +147,21 @@ export function ShipmentImportJobResolutionSection({
   useEffect(() => {
     setVisitedTabs((prev) => new Set([...prev, activeTab]));
   }, [activeTab]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [searchInput]);
+
+  const onTabChange = useCallback((tab: ShipmentEntityTabId) => {
+    setActiveTab(tab);
+    setFiltersByTab((prev) => ({
+      ...prev,
+      [tab]: shipmentStewardFiltersAfterTabSwitch(tab),
+    }));
+    setSearchInput('');
+    setDebouncedSearch('');
+  }, []);
 
   const candidatesPage = useShipmentCandidatesPage(importJobId ?? 0, activeFilters, {
     enabled: tabbedMode && visitedTabs.has(activeTab),
@@ -243,12 +263,15 @@ export function ShipmentImportJobResolutionSection({
 
   const filteredCandidates = useMemo(
     () =>
-      filterShipmentStewardCandidates(
-        candidates as ShipmentMappingCandidateRow[],
-        activeFilters,
-        plan.planByCandidateId
+      filterShipmentStewardRowsBySearch(
+        filterShipmentStewardCandidates(
+          candidates as ShipmentMappingCandidateRow[],
+          activeFilters,
+          plan.planByCandidateId
+        ),
+        debouncedSearch
       ),
-    [candidates, activeFilters, plan.planByCandidateId]
+    [candidates, activeFilters, plan.planByCandidateId, debouncedSearch]
   );
 
   const clientQueueFilterActive = candidatesPage.clientQueueFilterActive;
@@ -308,7 +331,18 @@ export function ShipmentImportJobResolutionSection({
     setDetailCandidate(null);
     setSelectedIds([]);
     setBulkProvNamesById({});
-  }, [importJobId, activeTab, candidatesPage.page, candidatesPage.pageSize]);
+    setBulkMode('normal');
+    setSearchInput('');
+    setDebouncedSearch('');
+    setFiltersByTab((prev) => ({
+      ...prev,
+      [activeTab]: shipmentStewardFiltersAfterTabSwitch(activeTab),
+    }));
+  }, [importJobId, activeTab]);
+  useEffect(() => {
+    setDetailCandidate(null);
+    setSelectedIds([]);
+  }, [candidatesPage.page, candidatesPage.pageSize]);
 
   const effectiveDetailCandidate = useMemo(() => {
     if (detailCandidate == null) return null;
@@ -484,7 +518,7 @@ export function ShipmentImportJobResolutionSection({
                   <StewardEntityTabsBar
                     tabs={SHIPMENT_ENTITY_TAB_DEFS}
                     activeTab={activeTab}
-                    onChange={setActiveTab}
+                    onChange={onTabChange}
                     counts={counts}
                     busy={stewardOverlayBusy}
                     testIdPrefix="shipment"
@@ -493,7 +527,16 @@ export function ShipmentImportJobResolutionSection({
                   />
                 }
                 filtersSlot={
-                  <StewardCandidateFilters
+                  <Stack spacing={1}>
+                    <TextField
+                      size="small"
+                      placeholder="Search candidates…"
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                      inputProps={{ 'data-testid': 'shipment-steward-search' }}
+                      fullWidth
+                    />
+                    <StewardCandidateFilters
                     filters={activeFilters}
                     onChange={(next) => setFiltersByTab((prev) => ({ ...prev, [activeTab]: next }))}
                     visibleCount={
@@ -505,6 +548,7 @@ export function ShipmentImportJobResolutionSection({
                     clearToDefault={() => defaultShipmentStewardFiltersForTab(activeTab)}
                     isAtDefault={(filters) => shipmentStewardFiltersMatchTabDefault(filters, activeTab)}
                   />
+                  </Stack>
                 }
                 toolbarSlot={
                   <Stack ref={workspaceToolbarRef} direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>

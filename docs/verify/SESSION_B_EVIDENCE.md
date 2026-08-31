@@ -357,3 +357,32 @@ tenant_profile_path storage\uploads\tenant_profiles\default.json
 | Save tenant profile | **Yes** |
 | Reload persistence in UI | **Yes** |
 | `tenant_profiles/default.json` on disk | **Yes** |
+| PM Import Centre column mapping (`CanonicalColumnMappingPanel`) | **Yes** — see run below |
+
+---
+
+## Run 2026-08-31 — Unit 12 PM Import Centre mapping (main @ 874103b)
+
+**Collection timestamp:** 2026-08-31 (Monday), ~15:40 UTC+2  
+**Branch:** `main` @ `874103b`  
+**Origin:** `http://127.0.0.1:3000` (user-playwright, serial)  
+**Database:** **read-only browser on `cip`** — `cip_test` has no validated PM job (only job **2** `uploaded`/`pending`); PM mapping panel captured on dev `cip` job **30** per operator allowance for read-only `cip` queries  
+**API:** `session_d_run_api.py env` → `GET /health/ready` → `"database":"cip"`  
+**Evidence only — no PASS verdict.**
+
+### Browser journey — `/admin/imports?job=30`
+
+1. Login `admin@local` / `changeme` (session refresh after API switch).
+2. Job **30** (`product_master`, `pm_mapping_saved` / `validation_failed`) opens on **Validate** step.
+3. **Back** → **Column mapping** step (step 4).
+4. **OBSERVED:** Product Master Import Centre workflow — wizard step **Column mapping**, heading **Map file columns → canonical fields**, bulk actions (**All unmapped → Ignore**, **Apply suggested mappings only**, **Clear all mappings**), `CanonicalColumnMappingPanel` mount (required-core alert, disposition copy).
+
+**Screenshot:** `docs/verify/artifacts/session-b-12-pm-mapping-874103b.png`
+
+### Unit 12 gap status (updated)
+
+| Check | Captured? |
+|-------|-----------|
+| Settings export sheet titles | **Yes** (prior run) |
+| PM Import Centre mapping path | **Yes** (this run, `cip` read-only) |
+| PM on `cip_test` disposable job | **No** — `PM_NO_VALIDATED_JOB_ON_CIP_TEST` (only job 2 pending upload) |

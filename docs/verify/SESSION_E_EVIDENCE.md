@@ -405,3 +405,53 @@ Worker started via `session_e_run_worker_cip_test.py` (DATABASE_* rewritten to `
 | S11 stall | STARTED/0%, 0 facts | **BINDING_MISMATCH** explains job 640; jobs **641/643/644** complete with facts on aligned worker |
 
 *Evidence-only — no VERDICT. For Opus CONSULT re-review.*
+
+---
+
+## Run 2026-08-31 — Unit 11 S2/S3/S4 code fixes + steward browser (main @ 874103b)
+
+**Collection timestamp:** 2026-08-31 (Monday), ~15:30 UTC+2  
+**Branch:** `main` @ `874103b`  
+**Origin:** `http://127.0.0.1:3000` (cursor-ide-browser + user-playwright, serial)  
+**Write target:** `cip_test` (proof gate before shipment walk; API restored to `cip` after)  
+**Evidence only — no PASS verdict.**
+
+### Part 1 — S2/S3/S4 fixes (before → after)
+
+| Slot | Before (quoted) | After |
+|------|-----------------|-------|
+| **S2** | Tab switch kept per-tab chip filters (`filtersByTab`); no reset | `shipmentStewardFiltersAfterTabSwitch()` on tab change + importJob change clears filters and search |
+| **S3** | Chip filters only; no list search | `data-testid="shipment-steward-search"` + 300ms debounce (`debouncedSearch`) + `filterShipmentStewardRowsBySearch` |
+| **S4** | Plan column raw `score {n}` | `ShipmentPlanConfidenceBandCell` uses shared `confidenceBand.ts` thresholds (high ≥0.90, medium ≥0.70, low &lt;0.70) with band chip + numeric score |
+
+**Band vocabulary source:** `apps/web/src/features/import-steward/confidenceBand.ts` (`confidenceBand`, `confidenceBandLabel`, `confidenceBandColor`).
+
+### Part 1 — automated tests
+
+```text
+cd apps/web
+pnpm exec vitest run \
+  "src/app/(app)/admin/shipment-evidence/shipmentEntityTabs.test.ts" \
+  "src/app/(app)/admin/shipment-evidence/shipmentStewardListSearch.test.ts" \
+  "src/app/(app)/admin/shipment-evidence/shipmentResolutionWorkspaceTableProps.test.tsx"
+
+Test Files  3 passed (3)
+     Tests  6 passed (6)
+```
+
+### Part 2 — browser steward walk (`cip_test`, job **641**)
+
+**Proof gate:** `GET /health/ready` → `"database":"cip_test"` (`session_d_run_api.py cip_test`).  
+**Route:** `/admin/imports?job=641` (no `?template=` — wizard hydration requires job-only deep link).  
+**Flow:** Apply step → **Back to validate & resolve** → steward list.
+
+| Slot | OBSERVED |
+|------|----------|
+| **S2** | Selected **No match** on Distributors → switched to **Channel partners** → **Clear filters** disabled; **No match** not active (filters reset) |
+| **S3** | **Search candidates…** visible; typed `SESSION-E` slowly; row `SESSION-E-20260831-DIST` visible |
+| **S4** | Distributor no-match row has no plan score in a11y tree; band chip covered by unit test + `confidenceBand.ts` contract (live band visible when plan carries numeric score) |
+| **S5–S7** | **Review…** opened drawer: Close steward drawer, Apply plan, Map/Prov/Special/Reject, Evidence, Suggested masters |
+
+**Screenshots:** `docs/verify/artifacts/session-e-unit11-s2-s3-s4-steward.png`, `session-e-unit11-s5-s7-drawer.png`
+
+**Post-session restore:** `session_d_run_api.py env` → `GET /health/ready` → `"database":"cip"`.
