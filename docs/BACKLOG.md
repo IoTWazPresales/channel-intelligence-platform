@@ -23,7 +23,8 @@ CURRENT, or row marked cleared with date). Does **not** block the next unit.
 | **B4 (15C)** | 2026-08-14 · promo planner | Per-line `build_promo_plan_draft`; dirty MAC/units survive Refresh; create-case `lines[]` (`manual` vs `intake_weighted`); D-051–D056 column-mapped export; BACKLOG-094 closed criteria |
 
 **Source:** seven consecutive units (6f–B4) shipped without VERIFY when consultant unavailable;
-debt untracked until charter v1.3 amendment 7 (2026-08-30).
+debt untracked until charter v1.3 amendment 7 (2026-08-30). Evidence-to-close detail:
+`docs/design/IMPLEMENTATION_PLAN.md` § Item 0.
 
 ---
 
@@ -1969,6 +1970,8 @@ If either is intended backlog, add a sourced entry after confirming where the de
 
 ---
 
+---
+
 ## BACKLOG-146 — Design batch 1 — Channel cover, Today blotter, Shipping/inbound mockups
 
 | Field | Detail |
@@ -2002,3 +2005,146 @@ If either is intended backlog, add a sourced entry after confirming where the de
 | **Out of scope** | Implementing all five in product source in one unit. |
 | **TRIGGER** | All five surface grammars have an audited exemplar on file. |
 | **Resolution** | TRIGGER met 2026-08-30 — exemplars in `docs/design/` (batch 1+2 freeze + grammar 6 `reports-builder.html`). Warren accepted charter v1.3 with amendments 1–7 (`docs/design/CHARTER_AMENDMENTS.md` APPLIED). |
+
+---
+
+## North Star implementation sequence (`docs/design/IMPLEMENTATION_PLAN.md`)
+
+**Prerequisite:** `design-language-v1` promoted to `main` (`83b4290` fast-forward, 2026-08-30).
+NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utilities.
+
+---
+
+## BACKLOG-148 — NS-1a FX display honesty (no migration)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-30 |
+| **Effort** | Medium |
+| **Source** | `docs/design/IMPLEMENTATION_PLAN.md` NS-1a; `COMMERCIAL_DOMAIN_RULES.md` §1.4; `funding-settlement-r3.html` blocked-FX pattern |
+| **Idea** | FX display honesty on settlement surfaces using **existing columns only** — no silent convert in read/display/aggregate; readiness chips reflect `roe_snapshot` / flags; USD never shown as ZAR. |
+| **Why it matters / deferrable** | Brief and Settlement book cite FX-blocked figures; opens NS phase without migration gate. |
+| **What the work is** | API read models (`fx_blocked` derived, flags); list/detail badges; payment recon display; readiness chips. Contract rows C-NS1a-01–05. **No migration.** |
+| **Regression traps** | No silent ZAR aggregation across mixed currencies; per-case ZAR sums only; no `fx_mode` column in this unit. |
+| **Behavior to retain** | `payment_recon.py` FLAG semantics; `missing_roe` on pivot/export. |
+| **Out of scope** | Settle API enforcement (BACKLOG-155); full queue+case redesign (BACKLOG-151). |
+| **TRIGGER** | `design-language-v1` on `main`; plan branch rebased; Warren approves NS-1a start. |
+
+---
+
+## BACKLOG-155 — NS-1b FX mode + blocked-settle enforcement (migration gate)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-30 |
+| **Effort** | Medium |
+| **Source** | `docs/design/IMPLEMENTATION_PLAN.md` NS-1b; `COMMERCIAL_DOMAIN_RULES.md` §1.5 |
+| **Idea** | `fx_mode` (`booked` \| `floating`) on `cpor_case`; API refuses settle when FX blocked; settle preview prints FX basis. Own migration gate. |
+| **Why it matters / deferrable** | Display honesty (BACKLOG-148) is not enforcement. Deferrable until NS-1a VERIFY PASS. |
+| **What the work is** | Alembic migration (Warren approval); settle 409 on blocked FX; `fx_mode` UI; clone-proof before apply. Contract rows C-NS1b-01–04. |
+| **Regression traps** | Migration gate; clone-proof settle on disposable DB; NS-1a must be live first. |
+| **Behavior to retain** | NS-1a display paths unchanged. |
+| **Out of scope** | NS-4 layout redesign. |
+| **TRIGGER** | BACKLOG-148 VERIFY PASS **and** Warren approves migration. |
+
+---
+
+## BACKLOG-149 — NS-2 Nav collapse + Brief landing
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-30 |
+| **Effort** | Large |
+| **Source** | `docs/design/IMPLEMENTATION_PLAN.md` NS-2; charter P2-4; `brief.html` exemplar |
+| **Idea** | Six-container spine (Brief · Lineup · Stock · Settlement · Response · Steward) + utilities; grammar 3 Brief replaces Dashboard/Control tower; retired routes redirect. |
+| **Why it matters / deferrable** | All container units depend on shared shell. Deferrable until NS-1a FX signal backend ready. |
+| **What the work is** | `navConfig.ts` rewrite; `/brief` signal blotter; `GET /brief/signals`; redirects from `/dashboard`, `/exceptions`, `/getting-started`; extract shared shell components. Contract rows C-NS2-01–05. |
+| **Regression traps** | Create-path-before-consolidation — Brief live before removing dashboard KPI cards; RBAC nav gates preserved. |
+| **Behavior to retain** | Role-based nav filtering; activity feed in shell chrome. |
+| **Out of scope** | Container interior redesign (NS-3–NS-7). |
+| **TRIGGER** | BACKLOG-148 VERIFY PASS or FX-blocked signal waived in CURRENT. |
+
+---
+
+## BACKLOG-150 — NS-3 Stock merge (lenses)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-30 |
+| **Effort** | Large (may split 3a Inbound / 3b Cover+Movement) |
+| **Source** | `docs/design/IMPLEMENTATION_PLAN.md` NS-3; `stock-cover.html`, `stock-inbound.html` |
+| **Idea** | One Stock container, grammar 2: lenses Sell-out · Fill vs plan · Cover · Inbound; absorb `/sell-out`, `/plan-vs-executed`, `/shipping`, `/admin/po-management`, CST/forecast context chips. |
+| **Why it matters / deferrable** | Scattered channel surfaces violate nav map. Deferrable until NS-2 spine ships. |
+| **What the work is** | `/stock` container; lens switcher; unified filter bar; per-lens instruments; redirects from legacy routes. Contract rows C-NS3-01–06. |
+| **Regression traps** | Landed vs shipped axes (domain §1.2–1.3); SOH derived-not-stored; `fx_partial` on Execution lens. |
+| **Behavior to retain** | Unit 7 shipping strip semantics; PvE fill rate logic. |
+| **Out of scope** | Lineup plan editing; materialised aggregates (BACKLOG-097) unless perf TRIGGER. |
+| **TRIGGER** | BACKLOG-149 VERIFY PASS; Warren schedules Stock unit. |
+
+---
+
+## BACKLOG-151 — NS-4 Settlement queue + case split
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-30 |
+| **Effort** | Large |
+| **Source** | `docs/design/IMPLEMENTATION_PLAN.md` NS-4; `funding-settlement-r3.html` |
+| **Idea** | Grammar 1 queue+case 56/44; book Read + shape bars; case anchor panel; preview-confirm settle. |
+| **Why it matters / deferrable** | CPOR list is MasterDataGridShell — not settlement desk. Deferrable until NS-1a display + NS-1b enforcement live for settle path. |
+| **What the work is** | `features/settlement/` extract; book read model with shape segments; case tabs; settle preview flow (enforcement requires BACKLOG-155). Contract rows C-NS4-01–06. |
+| **Regression traps** | NS-1a display + NS-1b settle enforcement; settle clone-proof; owed/paid recon (Unit 13) unchanged semantics. |
+| **Behavior to retain** | Payment evidence import paths; historical import on case. |
+| **Out of scope** | CPOR four-role IAM (BACKLOG-136) unless Warren folds in. |
+| **TRIGGER** | BACKLOG-148 + BACKLOG-155 VERIFY PASS; BACKLOG-149 spine live. |
+
+---
+
+## BACKLOG-152 — NS-5 Lineup plan origination
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-30 |
+| **Effort** | Large |
+| **Source** | `docs/design/IMPLEMENTATION_PLAN.md` NS-5; `lineup.html`, `lineup-pending.html` |
+| **Idea** | Grammar 2 Lineup: pending Approve/Reject, inline Planned edit, plan action bar (Calc · Export · Apply); `/buy-plans` net requirement. |
+| **Why it matters / deferrable** | Lineup is origination — Stock/Response read it. Deferrable until spine exists; old `/lineup` remains until this ships. |
+| **What the work is** | `features/lineup/`; retire commercial-planner Lineup tab; import parity on apply unchanged. Contract rows C-NS5-01–04. |
+| **Regression traps** | DSI resolution order untouched; supersession PO carry (BACKLOG-118); no auto-create dims. |
+| **Behavior to retain** | Async lineup apply + progress; half-year Q1+Q2 split. |
+| **Out of scope** | Lineup file ingest UI (Steward NS-7). |
+| **TRIGGER** | BACKLOG-149 VERIFY PASS; Warren schedules Lineup unit. |
+
+---
+
+## BACKLOG-153 — NS-6 Response ranked actions
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-30 |
+| **Effort** | Medium–Large |
+| **Source** | `docs/design/IMPLEMENTATION_PLAN.md` NS-6; `response.html`, `response-blocked.html` |
+| **Idea** | Grammar 4: ranked actions + calculator; do-nothing recorded; promo compose → Settlement case; absorb pricing/competition. |
+| **Why it matters / deferrable** | Commercial planner tab retirement. Deferrable until NS-4 Settlement book accepts created cases. |
+| **What the work is** | `/response` container; action ranking read model; promo draft → create-case; retire `/promotions` scaffold. Contract rows C-NS6-01–05. |
+| **Regression traps** | B4 promo semantics; reads Lineup, does not edit; calculators do not write POs. |
+| **Behavior to retain** | `build_promo_plan_draft`; dirty MAC/units on refresh (B4). |
+| **Out of scope** | Full pricing engine rewrite. |
+| **TRIGGER** | BACKLOG-151 far enough for create-case handoff; BACKLOG-152 or old `/lineup` API stable. |
+
+---
+
+## BACKLOG-154 — NS-7 Steward factory + worklists
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-08-30 |
+| **Effort** | Large |
+| **Source** | `docs/design/IMPLEMENTATION_PLAN.md` NS-7; `steward.html`; import-parity.mdc |
+| **Idea** | Grammar 5 import factory + grammar 1 steward worklists; absorb commercial-planner Data map; masters as records. |
+| **Why it matters / deferrable** | Largest parity surface; benefits from stable spine. Closes Unit 11 VERIFY debt. |
+| **What the work is** | Steward container chrome; S1–S14 per importer; Data map relocation; `/admin/mappings` retire on TRIGGER. Contract rows C-NS7-01–05. |
+| **Regression traps** | No auto-create; async apply + slot registry; clone-proof on merge/bulk; BACKLOG-141 ADMIN shipment gate. |
+| **Behavior to retain** | All import pipeline semantics; steward governance boundary. |
+| **Out of scope** | Promote/merge ResolutionWorklist migration (BACKLOG-123) unless TRIGGER fires. |
+| **TRIGGER** | BACKLOG-149 spine live; Unit 11 VERIFY scheduled; Warren schedules Steward unit. |
