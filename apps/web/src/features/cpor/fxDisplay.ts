@@ -120,10 +120,10 @@ export function formatGridMoney(
     missingRoe?: boolean;
   },
 ): string {
-  if (amount == null || Number.isNaN(amount)) return '—';
-  if (kind === 'usd') {
-    if (!isFxDeclared(ctx.roeSnapshot, ctx.missingRoe)) return 'FX undeclared';
-    return formatUsdMoney(amount);
+  if (kind === 'usd' && !isFxDeclared(ctx.roeSnapshot, ctx.missingRoe)) {
+    return 'FX undeclared';
   }
+  if (amount == null || Number.isNaN(amount)) return '—';
+  if (kind === 'usd') return formatUsdMoney(amount);
   return formatLocalMoney(amount, ctx.currencyCode);
 }

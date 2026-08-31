@@ -52,6 +52,16 @@ describe('formatGridMoney', () => {
     ).toBe('FX undeclared');
   });
 
+  it('shows FX undeclared for null USD amount when ROE is missing', () => {
+    expect(
+      formatGridMoney(null, 'usd', { roeSnapshot: null, missingRoe: true }),
+    ).toBe('FX undeclared');
+  });
+
+  it('shows dash for null USD amount when FX is declared', () => {
+    expect(formatGridMoney(null, 'usd', { roeSnapshot: 18 })).toBe('—');
+  });
+
   it('shows USD with symbol when FX declared', () => {
     expect(formatGridMoney(1234.56, 'usd', { roeSnapshot: 18 })).toMatch(/^\$ /);
   });

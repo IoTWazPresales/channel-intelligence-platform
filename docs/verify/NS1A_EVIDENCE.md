@@ -204,3 +204,69 @@ Source: NS-1a unit contract from the FX-display CONSULT (Grammar 1). **Not a PAS
 - Every case on this `cip` has **zero** claim-evidence rows, so the evidence chip cannot be demonstrated in the `N evidence rows` pass state from live data.
 - List Ttl USD is `—` on declared-FX rows when `ttl_support_usd` is null (311 still shows USD on the **detail** anchor/pivot from a populated USD total).
 - Workspace was switched off this branch twice during the session (`docs/eif-unit-declaration`); evidence was captured against the running tree that served NS-1a UI on 311/4/list, then this file was written after checking `feat/ns-1a-fx-readiness-chips` back out at `3e2227e`.
+
+---
+
+## Re-capture — NS1a-05 fix + case 312 detail (2026-08-31)
+
+**No PASS/FAIL verdict.** Supplements rows NS1a-05 and case 312 detail only; prior sections unchanged.
+
+| Field | Value |
+|-------|-------|
+| Collection | 2026-08-31 ~08:50 UTC+2 |
+| Branch | `feat/ns-1a-fx-readiness-chips` |
+| Base commit (pre-fix) | `b97393291419b83ad08b3e0075cfc8489000673d` |
+| App origin | `http://127.0.0.1:3000` (browser automation; API warm via `scripts/restart-dev.ps1`) |
+| Database | `cip` (`current_database() = cip`) |
+| Writes | none |
+
+### Fixes applied
+
+**NS1a-05 — `formatGridMoney` ordering:** For `kind === 'usd'`, check `!isFxDeclared(...)` **before** the null-amount early return so undeclared-FX rows emit `FX undeclared` even when `ttl_support_usd` is null; declared-FX rows with null amount still emit `—`.
+
+**Case 312 detail — render conditions (no code change):**
+
+- **FX anchor panel:** unconditional — always mounts `<CporFxAnchorPanel … />` once case data has loaded (`page.tsx` after the loading gate).
+- **Readiness row:** `{data.settle_readiness ? ( <CporSettleReadinessRow … /> ) : null}` — gated only on API `settle_readiness` presence, **not** on assumption flags.
+
+Original gap was a **collection artifact** (list captured while grid still loading; detail captured mid-session after branch switches per note above). Warm re-capture below shows both surfaces on id 312 with assumption flags present. Regression test added: `page.fxReadiness.test.tsx`.
+
+### Tests (post-fix)
+
+```
+pytest tests/test_cpor_settle_readiness.py -v
+4 passed in 2.86s
+
+pnpm --filter @cip/web exec vitest run src/features/cpor/fxDisplay.test.ts \
+  "src/app/(app)/commercial-planner/cpor-cases/[id]/page.fxReadiness.test.tsx"
+✓ fxDisplay.test.ts (13 tests)
+✓ page.fxReadiness.test.tsx (1 test)
+```
+
+### Browser — NS1a-05 list (H2-SMOKE-556)
+
+URL: `http://127.0.0.1:3000/commercial-planner/cpor-cases?q=H2-SMOKE-556`  
+Grid loaded after API warm (`Page 1 / 1 ( 1 rows)`).
+
+| Case | Ttl (local) | Ttl USD | Settle readiness |
+|------|-------------|---------|------------------|
+| H2-SMOKE-556 | `—` | **`FX undeclared`** | `Readiness FX undeclared 1 assumption open 0 evidence rows` |
+
+Prior capture showed Ttl USD `—`; post-fix cell is the literal string **`FX undeclared`**.
+
+### Browser — case 312 detail (C26C00003)
+
+URL: `http://127.0.0.1:3000/commercial-planner/cpor-cases/312`  
+After full load (no `Loading…`):
+
+- Flag chips include `no_cost_basis`, `no_cost_evidence`, `no_cst_mac`, …
+- **Readiness:** `FX declared · 18.78` · `2 assumptions open` · `0 evidence rows`
+- **Anchor:** **Approved case support** `R 0.00`
+- Basis: `USD 0.00 at declared case rate ZAR 18.78 (declared case terms)`
+
+### Updated contract status (re-capture rows only)
+
+| Row | Requirement | Status | Evidence |
+|-----|-------------|--------|----------|
+| NS1a-05 | List money columns use explicit currency; USD shows “FX undeclared” when no ROE | **SATISFIED** | H2-SMOKE-556 Ttl USD cell = `FX undeclared` (not `—`) after `formatGridMoney` ordering fix |
+| NS1a-04 (312 detail supplement) | Readiness row on detail matches live columns | **SATISFIED** | 312 detail readiness chips + anchor quoted above; prior detail gap was collection timing, not assumption-flag conditional |
