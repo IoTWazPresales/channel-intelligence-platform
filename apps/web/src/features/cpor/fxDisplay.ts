@@ -3,6 +3,10 @@
 export type SettleReadiness = {
   fx_declared: boolean;
   roe_snapshot: number | null;
+  fx_mode?: string | null;
+  fx_mode_declared?: boolean;
+  fx_settle_allowed?: boolean;
+  fx_basis_line?: string | null;
   open_assumption_count: number;
   claim_evidence_count: number;
 };
@@ -83,8 +87,10 @@ export function buildSettleReadinessChips(readiness: SettleReadiness): Readiness
   const fxChip: ReadinessChip = readiness.fx_declared
     ? {
         key: 'fx',
-        tone: 'pass',
-        label: `FX declared · ${readiness.roe_snapshot?.toFixed(2) ?? '—'}`,
+        tone: readiness.fx_settle_allowed === false ? 'open' : 'pass',
+        label:
+          readiness.fx_basis_line ??
+          `FX declared · ${readiness.roe_snapshot?.toFixed(2) ?? '—'}${readiness.fx_mode ? ` · ${readiness.fx_mode}` : ''}`,
       }
     : { key: 'fx', tone: 'fail', label: 'FX undeclared' };
 

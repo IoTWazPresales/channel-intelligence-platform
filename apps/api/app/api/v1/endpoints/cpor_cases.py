@@ -45,8 +45,12 @@ from app.services.cpor.settle_readiness import (
     build_settle_readiness,
     case_missing_roe,
     count_open_assumptions_from_line_flags,
+    fx_declared,
+    fx_mode_valid,
+    FX_MODES,
     load_claim_counts_by_case_id,
     load_settle_readiness_by_case_id,
+    settle_fx_blocked,
 )
 from app.services.cpor.settlement import (
     build_settlement_consolidation,
@@ -206,6 +210,9 @@ def _case_json(
         "window_end": case.window_end.isoformat() if case.window_end else None,
         "status": case.status,
         "roe_snapshot": float(case.roe_snapshot) if case.roe_snapshot is not None else None,
+        "fx_mode": getattr(case, "fx_mode", None),
+        "fx_declared_at": case.fx_declared_at.isoformat() if getattr(case, "fx_declared_at", None) else None,
+        "fx_declared_by": getattr(case, "fx_declared_by", None),
         "currency_code": case.currency_code,
         "channel": case.channel,
         "notes": case.notes,
@@ -316,6 +323,7 @@ class CasePatch(BaseModel):
     window_start: date | None = None
     window_end: date | None = None
     roe_snapshot: float | None = None
+    fx_mode: str | None = None
     currency_code: str | None = None
     notes: str | None = None
 
@@ -545,9 +553,23 @@ def patch_case(
             raise HTTPException(status_code=400, detail="No fields to update")
         if "promotion_type" in data and data["promotion_type"] not in CPOR_PROMOTION_TYPE_SET:
             raise HTTPException(status_code=400, detail="Unknown promotion_type")
+        if "fx_mode" in data:
+            mode = (data["fx_mode"] or "").strip().lower() if data["fx_mode"] is not None else None
+            if mode is not None and mode not in FX_MODES:
+                raise HTTPException(status_code=400, detail=f"fx_mode must be one of: {sorted(FX_MODES)}")
+            data["fx_mode"] = mode
         roe_changed = "roe_snapshot" in data
+        fx_mode_changed = "fx_mode" in data
         for k, v in data.items():
             setattr(case, k, v)
+        if fx_declared(case) and not fx_mode_valid(case):
+            raise HTTPException(
+                status_code=400,
+                detail="fx_mode (booked or floating) required when ROE is declared",
+            )
+        if fx_declared(case) and fx_mode_valid(case) and (roe_changed or fx_mode_changed):
+            case.fx_declared_at = datetime.now(timezone.utc)
+            case.fx_declared_by = actor
         session.add(case)
         _record_event(session, case_id=case.id, event_type="case_patched", actor=actor, payload=data, user=user)
         recompute_report = None
@@ -1011,6 +1033,21 @@ def transition_case(
         elif action == "end":
             case.status = "ended"
         elif action == "settle":
+            if settle_fx_blocked(case):
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "fx_blocked",
+                        "message": "Settle refused: declare positive ROE and fx_mode (booked or floating) before settling.",
+                        "missing_roe": case_missing_roe(case),
+                        "fx_mode": getattr(case, "fx_mode", None),
+                        "fx_basis_line": build_settle_readiness(
+                            case,
+                            claim_row_count=load_claim_counts_by_case_id(session, [case.id]).get(int(case.id), 0),
+                            open_assumption_count=0,
+                        ).get("fx_basis_line"),
+                    },
+                )
             case.status = "settled"
         elif action == "cancel":
             case.status = "cancelled"

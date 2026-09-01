@@ -26,7 +26,7 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { PageHeader } from '@/components/PageHeader';
 import { navPageChrome } from '@/features/shell/navPageChrome';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
-import { apiGet, apiPost, apiPostFormData } from '@/lib/api';
+import { apiGet, apiPatch, apiPost, apiPostFormData } from '@/lib/api';
 
 import { CporComparableCasesPanel } from './CporComparableCasesPanel';
 import { CporPaymentEvidencePanel } from './CporPaymentEvidencePanel';
@@ -75,6 +75,7 @@ type CaseDetail = {
   export_version: number;
   currency_code?: string;
   roe_snapshot: number | null;
+  fx_mode?: string | null;
   last_comment: string | null;
   allowed_next: string[];
   lines: LineRow[];
@@ -271,6 +272,14 @@ export default function CporCaseDetailPage() {
     },
   });
 
+  const patchFxMode = useMutation({
+    mutationFn: (fx_mode: 'booked' | 'floating') => apiPatch(`/api/v1/cpor/cases/${caseId}`, { fx_mode }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['cpor', 'case', caseId] });
+      await refetch();
+    },
+  });
+
   const lineCols = useMemo<ColDef<LineRow>[]>(
     () => [
       { field: 'product_sku', headerName: 'SKU', width: 120 },
@@ -365,6 +374,7 @@ export default function CporCaseDetailPage() {
       cancel: 'cancelled',
     };
     if (action === 'resend') return data.status === 'rejected';
+    if (action === 'settle' && data.settle_readiness?.fx_settle_allowed === false) return false;
     const target = map[action];
     return target ? data.allowed_next.includes(target) : false;
   });
@@ -392,7 +402,36 @@ export default function CporCaseDetailPage() {
       {data.settle_readiness ? (
         <Box sx={{ mb: 1.5 }}>
           <CporSettleReadinessRow readiness={data.settle_readiness} testIdPrefix="cpor-case-readiness" />
+          {data.settle_readiness.fx_basis_line ? (
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              data-testid="cpor-fx-basis-line"
+              sx={{ display: 'block', mt: 0.5 }}
+            >
+              {data.settle_readiness.fx_basis_line}
+            </Typography>
+          ) : null}
         </Box>
+      ) : null}
+      {!data.missing_roe ? (
+        <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} flexWrap="wrap" useFlexGap>
+          <Typography variant="body2" color="text.secondary" sx={{ alignSelf: 'center' }}>
+            FX mode:
+          </Typography>
+          {(['booked', 'floating'] as const).map((mode) => (
+            <Button
+              key={mode}
+              size="small"
+              variant={data.fx_mode === mode ? 'contained' : 'outlined'}
+              disabled={patchFxMode.isPending}
+              onClick={() => patchFxMode.mutate(mode)}
+              data-testid={`cpor-fx-mode-${mode}`}
+            >
+              {mode}
+            </Button>
+          ))}
+        </Stack>
       ) : null}
       {data.needs_reapproval ? (
         <Alert severity="warning" sx={{ mb: 1 }} data-testid="cpor-reapproval-banner">

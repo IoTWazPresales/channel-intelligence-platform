@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.models.cpor import CporCase, CporCaseLine, CporClaimEvidenceLine
 
+FX_MODES = frozenset({"booked", "floating"})
+
 # Line flags that represent open assumptions on the case surface (existing `_line_flags` output).
 ASSUMPTION_LINE_FLAGS: frozenset[str] = frozenset(
     {
@@ -36,6 +38,24 @@ def count_open_assumptions_from_line_flags(flags: list[str]) -> int:
     return sum(1 for f in flags if f in ASSUMPTION_LINE_FLAGS)
 
 
+def fx_mode_valid(case: CporCase) -> bool:
+    mode = getattr(case, "fx_mode", None)
+    return mode in FX_MODES
+
+
+def settle_fx_blocked(case: CporCase) -> bool:
+    """True when settle must be refused for FX reasons (NS-1b)."""
+    return case_missing_roe(case) or not fx_mode_valid(case)
+
+
+def build_fx_basis_line(case: CporCase) -> str | None:
+    if settle_fx_blocked(case):
+        return None
+    roe = float(case.roe_snapshot)  # type: ignore[arg-type]
+    mode = str(case.fx_mode)
+    return f"FX basis: {mode} · ROE ZAR {roe:.2f}/USD"
+
+
 def build_settle_readiness(
     case: CporCase,
     *,
@@ -44,9 +64,14 @@ def build_settle_readiness(
 ) -> dict[str, Any]:
     declared = fx_declared(case)
     roe = float(case.roe_snapshot) if declared else None
+    mode_ok = fx_mode_valid(case)
     return {
         "fx_declared": declared,
         "roe_snapshot": roe,
+        "fx_mode": getattr(case, "fx_mode", None),
+        "fx_mode_declared": mode_ok,
+        "fx_settle_allowed": declared and mode_ok,
+        "fx_basis_line": build_fx_basis_line(case),
         "open_assumption_count": int(open_assumption_count),
         "claim_evidence_count": int(claim_row_count),
     }
