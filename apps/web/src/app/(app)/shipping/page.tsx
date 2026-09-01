@@ -140,7 +140,7 @@ function dateColFormatter(p: ValueFormatterParams<ShippingLine>): string {
   return fmtShortDate(p.value as string | undefined);
 }
 
-export default function InboundShipmentsPage() {
+export function InboundShipmentsWorkspace() {
   const [lineState, setLineState] = useState<string>('');
   const [cargoStatus, setCargoStatus] = useState<string>('');
   const [distributorPick, setDistributorPick] = useState<DistHit | null>(null);
@@ -561,7 +561,6 @@ export default function InboundShipmentsPage() {
 
   return (
     <>
-      <PageHeader {...navPageChrome('/shipping')} />
       <Alert severity="info" sx={{ mb: 2 }}>
         Truth layer from <strong>fact_inbound_shipment</strong> (populated when an inbound import job is applied).
         Steward raw imports under <strong>Admin → Shipment evidence</strong>.
@@ -1005,6 +1004,15 @@ export default function InboundShipmentsPage() {
         columnOptions={allowedOptional}
         columnsLoading={colMetaLoading}
       />
+    </>
+  );
+}
+
+export default function InboundShipmentsPage() {
+  return (
+    <>
+      <PageHeader {...navPageChrome('/shipping')} />
+      <InboundShipmentsWorkspace />
     </>
   );
 }

@@ -12,8 +12,8 @@ export type NavPageChrome = {
  * Master Data and Admin have no hub — group crumb stays a label.
  */
 const GROUP_HOME_HREF: Record<string, string> = {
-  overview: '/dashboard',
-  'channel-intelligence': '/sell-out',
+  overview: '/brief',
+  'channel-intelligence': '/stock',
   'commercial-planning': '/commercial-planner',
   'data-imports': '/admin/imports',
 };

@@ -677,3 +677,77 @@ async def channel_ops_forecasts(
             }
         )
     return {"items": items, "total": len(items)}
+
+
+def _woc_histogram_bucket(weeks: float | None) -> str | None:
+    if weeks is None:
+        return None
+    if weeks < 2:
+        return "lt2"
+    if weeks < 4:
+        return "2to4"
+    if weeks < 8:
+        return "4to8"
+    if weeks < 13:
+        return "8to13"
+    return "gte13"
+
+
+@router.get("/cover-distribution")
+async def channel_ops_cover_distribution(
+    db: AsyncSession = Depends(get_db),
+    user: dict | None = Depends(get_optional_current_user),
+) -> dict[str, Any]:
+    """Book-wide weeks-of-cover histogram for Stock · Cover lens (read-model only)."""
+    from app.core.tenant_scope import tenant_id_from_user
+
+    tid = tenant_id_from_user(user if isinstance(user, dict) else None)
+    obs = await latest_woc_observations(db, tenant_id=tid)
+    if not obs:
+        return {
+            "data_unavailable": True,
+            "pair_count": 0,
+            "under_4w": 0,
+            "mean_woc": None,
+            "buckets": {"lt2": 0, "2to4": 0, "4to8": 0, "8to13": 0, "gte13": 0},
+            "items": [],
+            "cover_as_of_date": None,
+        }
+
+    buckets: dict[str, int] = {"lt2": 0, "2to4": 0, "4to8": 0, "8to13": 0, "gte13": 0}
+    woc_values: list[float] = []
+    items: list[dict[str, Any]] = []
+    max_cover_date: date | None = None
+
+    for r in obs:
+        bucket = _woc_histogram_bucket(r.weeks_of_cover)
+        if bucket:
+            buckets[bucket] += 1
+        if r.weeks_of_cover is not None:
+            woc_values.append(float(r.weeks_of_cover))
+        if max_cover_date is None or r.cover_as_of_date > max_cover_date:
+            max_cover_date = r.cover_as_of_date
+        items.append(
+            {
+                "distributor_id": r.distributor_id,
+                "product_id": r.product_id,
+                "weeks_of_cover": r.weeks_of_cover,
+                "derived_stock": r.derived_stock,
+                "replenishment_flag": r.replenishment_flag,
+                "cover_as_of_date": r.cover_as_of_date.isoformat(),
+            }
+        )
+
+    pair_count = len(obs)
+    under_4w = buckets["lt2"] + buckets["2to4"]
+    mean_woc = round(sum(woc_values) / len(woc_values), 1) if woc_values else None
+
+    return {
+        "data_unavailable": False,
+        "pair_count": pair_count,
+        "under_4w": under_4w,
+        "mean_woc": mean_woc,
+        "buckets": buckets,
+        "items": items,
+        "cover_as_of_date": max_cover_date.isoformat() if max_cover_date else None,
+    }

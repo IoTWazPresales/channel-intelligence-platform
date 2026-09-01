@@ -41,9 +41,10 @@ export const spineContainers: SpineContainer[] = [
   {
     id: 'stock',
     label: 'Stock',
-    href: '/sell-out',
+    href: '/stock',
     roles: ALL,
     routePrefixes: [
+      '/stock',
       '/sell-out',
       '/plan-vs-executed',
       '/shipping',

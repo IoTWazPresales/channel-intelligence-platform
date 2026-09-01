@@ -21,9 +21,10 @@ describe('spine nav', () => {
     expect(ids).not.toContain('settlement');
   });
 
-  it('activeSpineContainerId maps dashboard to brief', () => {
+  it('activeSpineContainerId maps dashboard to brief and stock hub', () => {
     expect(activeSpineContainerId('/dashboard')).toBe('brief');
     expect(activeSpineContainerId('/brief')).toBe('brief');
+    expect(activeSpineContainerId('/stock')).toBe('stock');
     expect(activeSpineContainerId('/sell-out')).toBe('stock');
   });
 

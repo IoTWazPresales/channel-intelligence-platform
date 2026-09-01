@@ -3,6 +3,13 @@ import type { NextRequest } from 'next/server';
 
 const RETIRED_TO_BRIEF = ['/dashboard', '/exceptions', '/getting-started'];
 
+const STOCK_LEGACY_REDIRECTS: Record<string, string> = {
+  '/sell-out': '/stock?lens=movement',
+  '/plan-vs-executed': '/stock?lens=execution',
+  '/shipping': '/stock?lens=inbound',
+  '/inventory': '/stock?lens=cover',
+};
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (pathname === '/') {
@@ -15,9 +22,20 @@ export function middleware(request: NextRequest) {
     url.pathname = '/brief';
     return NextResponse.redirect(url);
   }
+  const stockTarget = STOCK_LEGACY_REDIRECTS[pathname];
+  if (stockTarget) {
+    const url = request.nextUrl.clone();
+    const [path, query] = stockTarget.split('?');
+    url.pathname = path;
+    if (query) {
+      const params = new URLSearchParams(query);
+      params.forEach((v, k) => url.searchParams.set(k, v));
+    }
+    return NextResponse.redirect(url);
+  }
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/', '/dashboard', '/exceptions', '/getting-started'],
+  matcher: ['/', '/dashboard', '/exceptions', '/getting-started', '/sell-out', '/plan-vs-executed', '/shipping', '/inventory'],
 };
