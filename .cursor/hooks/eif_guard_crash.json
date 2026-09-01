@@ -1,0 +1,1 @@
+{"permission":"deny","reason_code":"HOOK_INTERNAL_ERROR","user_message":"HOOK_INTERNAL_ERROR: Python interpreter exited before a permission JSON decision","agent_message":"HOOK_INTERNAL_ERROR: Python interpreter exited before a permission JSON decision"}

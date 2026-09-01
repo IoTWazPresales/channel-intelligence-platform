@@ -43,7 +43,7 @@ export default function LoginPage() {
         display_name: res.user.display_name,
         auth_mode: 'session',
       });
-      router.replace('/dashboard');
+      router.replace('/brief');
     } catch (err) {
       setError(safeDisplayError(err));
     } finally {

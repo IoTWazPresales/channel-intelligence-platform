@@ -1,44 +1,28 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-08-31 (VERIFY debt cleared; NS-2 readiness)
+**Last updated:** 2026-09-01 (EIF host-runtime upgrade + N-0004 complete)
 
-**Branch:** `main`
+**Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `12404bc` — confirm HEAD with `git rev-parse`
+**Last content pin:** confirm HEAD with `git rev-parse` after commit
 
-**Alembic (code):** `20260818_0019` (`20260818_0019_shipping_mailer_recipient.py`)
+**Alembic (code):** `20260818_0019`
 
 **Alembic on cip:** `20260818_0019`
 
-## On main
+## On feat/ns-2-brief-nav-collapse
 
-- **VERIFY debt cleared (2026-08-31 · `12404bc`).** All seven charter v1.3 amendment 7 units
-  (6f, 7, 8, 11, 12, 15B, B4) closed with Opus CONSULT fourth-pass PASS; register empty in
-  `docs/BACKLOG.md`. Promotion to `main` no longer gated by VERIFY debt.
-- **Design language FROZEN v1.1** + nav map + charter v1.3 governing (`83b4290` promotion).
-- **NS-1a display groundwork** in tree (`settle_readiness.py`, `missing_roe` on CPOR list/detail)
-  — BACKLOG-148 not formally VERIFY-closed as a north-star unit.
-- **NS-2 readiness** documented in `docs/design/NS2_READINESS.md` — discovery only; no
-  implementation this session.
+- **EIF host runtime upgraded** to programme-host-execution repair (`9f74d9c`); host-local `python .eif/runtime/programme/program.py` operational.
+- **Programme:** PRG-20260831T145514 rev 53; charter accepted; **N-0004 complete** (NS-2 Brief + six-container nav).
+- **NS-2 shipped:** `/brief` grammar-3 landing, `WorkbenchSpine`, `GET /api/v1/brief/signals`, middleware redirects (`/`, `/dashboard` → `/brief`).
+- **Baseline:** `46368f6` (BLN-0001) pre-NS-2 drawer shell.
+- **Rendered verification:** `.eif/audit/NS2_RESUME_20260901/rendered-verification.md`
 
-## VERIFY arc findings (retained)
+## Next (programme frontier)
 
-- 19 web tests broken by RBAC `5b2a6a4` — fixed via `importOriginal` partial mock
-  (`WEB_TEST_FAILURE_DIAGNOSIS.md`).
-- HL mapping parity gap closed (Unit 11 fix pass).
-- Shipment steward S2/S3/S4 closed (tab reset, debounced search, confidence band).
-- S11 apply stall = worker/API DB binding mismatch, not product defect.
-
-## Deferred (not VERIFY debt)
-
-- CPOR case #313 on `cip` (SESSION F fixture contamination).
-- Evidence-chip pass state unproven — no dev case with claim evidence rows.
-- HL disposition backend gap — no disposition channel; `mapping_override` only.
-
-## Next
-
-- **NS-2** (BACKLOG-149): nav collapse + Brief landing per `docs/design/NS2_READINESS.md` when
-  Warren schedules unit start (BACKLOG-148 FX display or waiver still on TRIGGER).
-- Shared shell extraction feeds NS-3–NS-7.
+- **N-0006** NS-1b FX mode (R3) — no N-0004 dependency
+- **N-0007** NS-3 Stock (depends N-0004 ✓)
+- **N-0009** NS-5 Lineup (depends N-0004 ✓)
+- **N-0011** NS-7 Steward (depends N-0004 ✓)
 
 **Env:** local Windows. Web `:3000` + API `:8001`.

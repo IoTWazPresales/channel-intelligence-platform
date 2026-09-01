@@ -16,6 +16,10 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-09-01 — **EIF host-runtime upgrade + N-0004 complete** on `feat/ns-2-brief-nav-collapse`: upgraded CIP to EIF programme-host repair (`9f74d9c`); host-local `python .eif/runtime/programme/program.py` verified; programme PRG-20260831T145514 rev 53; N-0004 NS-2 Brief + six-container spine **complete** (baseline `46368f6` / BLN-0001; rendered evidence `.eif/audit/NS2_RESUME_20260901/`). Product: `/brief`, `WorkbenchSpine`, `GET /api/v1/brief/signals`, middleware redirects.
+
+- 2026-08-31 — **Pushed `main` to `origin/main` `46368f6`:** two docs commits (`dc70a51` VERIFY debt register closed at `12404bc`; `46368f6` NS-2 readiness report). Local and remote `main` in sync. EIF guard did not block.
+
 - 2026-08-31 — **VERIFY debt cleared on `main` `12404bc`:** Opus CONSULT fourth-pass PASS for units 6f, 7, 8, 11, 12, 15B, B4 (`docs/verify/VERIFY_VERDICTS.md`); charter v1.3 amendment 7 satisfied; `docs/BACKLOG.md` register empty — promotion no longer gated by VERIFY debt. Arc: 19 web tests fixed (RBAC `5b2a6a4`); HL mapping parity closed; shipment S2/S3/S4 fixed; S11 stall = worker/API binding mismatch. Deferred: CPOR #313 on `cip`, evidence-chip pass unproven, HL disposition backend gap. NS-2 readiness: `docs/design/NS2_READINESS.md`.
 
 - 2026-08-30 — **Web test harness fix** on `fix/web-test-harness-authheaders` `6e96b9c`: RBAC commit `5b2a6a4` switched the imports upload path to `authHeaders()`; the `page.test.tsx` `@/lib/api` mock omitted that export and silently broke 19 historical_lineup vitest cases (undetected until VERIFY debt Session B). Fix is test-only (`importOriginal` partial mock + customers drawer wait for loaded locations). No product regression; operators could apply validated files throughout. Diagnosis: `docs/verify/WEB_TEST_FAILURE_DIAGNOSIS.md`.

@@ -1,0 +1,85 @@
+# Facet → required quality dimensions. min_risk is inclusive (R2 means R2+).
+# Nodes with no facets have no dimensions.
+
+auth:
+  security: {min_risk: R0}
+  threat: {min_risk: R2}
+  testing: {min_risk: R0}
+  observability: {min_risk: R1}
+
+ui:
+  ux: {min_risk: R0}
+  a11y: {min_risk: R0}
+  rendered: {min_risk: R0}
+  content: {min_risk: R1}
+
+# Material UI/product design intelligence — attach explicitly; not implied by ui alone.
+# Extra dimensions are process/evidence gates keyed by per-node artifact class
+# (ia_concept < interaction < high_fidelity). Aesthetic quality is not scored here.
+design_experience:
+  design_artifact_class: {min_risk: R0}
+  design_divergence: {min_risk: R0}
+  design_signatures: {min_risk: R0}
+  rendered_comparison: {min_risk: R0}
+  design_sameness_review: {min_risk: R0}
+  design_interaction_spec: {min_risk: R0}
+  design_state_coverage: {min_risk: R0}
+  design_identity_tokens: {min_risk: R0}
+  design_execution_decisions: {min_risk: R0}
+
+personal_data:
+  privacy: {min_risk: R0}
+  data_governance: {min_risk: R1}
+
+schema:
+  data_integrity: {min_risk: R0}
+  backup_recovery: {min_risk: R2}
+  migration_safety: {min_risk: R2}
+
+data_migration:
+  data_integrity: {min_risk: R0}
+  backup_recovery: {min_risk: R1}
+  migration_safety: {min_risk: R0}
+
+payment:
+  data_integrity: {min_risk: R0}
+  domain_correctness: {min_risk: R0}
+  audit_trail: {min_risk: R1}
+
+api:
+  testing: {min_risk: R0}
+  observability: {min_risk: R1}
+
+public_api:
+  api_dx: {min_risk: R0}
+  docs_surface: {min_risk: R0}
+  versioning: {min_risk: R1}
+
+infra:
+  reliability: {min_risk: R0}
+  finops: {min_risk: R2}
+  observability: {min_risk: R1}
+
+locale:
+  i18n: {min_risk: R0}
+
+ai_behavior:
+  ai_eval: {min_risk: R1}
+  ai_observability: {min_risk: R1}
+
+docs_surface:
+  docs_surface: {min_risk: R0}
+
+dependency_change:
+  licensing: {min_risk: R0}
+  supply_chain: {min_risk: R1}
+
+milestone:
+  bc_dr: {min_risk: R2}
+  observability: {min_risk: R1}
+  release_readiness: {min_risk: R1}
+  docs_surface: {min_risk: R1}
+  support_readiness: {min_risk: R2}
+
+instrumentation:
+  instrumentation: {min_risk: R1}
