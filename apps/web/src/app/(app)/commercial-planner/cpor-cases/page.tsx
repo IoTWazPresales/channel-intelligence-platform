@@ -21,14 +21,15 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
 import { navPageChrome } from '@/features/shell/navPageChrome';
+import { SettlementContainer } from '@/features/settlement/SettlementContainer';
 import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
 import type { MasterColumnPickerGroup } from '@/components/masterGrid/MasterColumnPickerDialog';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { apiGet, apiPost } from '@/lib/api';
 
-import { CporPortfolioIntelligencePanel } from './CporPortfolioIntelligencePanel';
 import { CporSettleReadinessRow } from '@/features/cpor/CporSettleReadinessRow';
 import { formatGridMoney, type SettleReadiness } from '@/features/cpor/fxDisplay';
+import { SettlementShapeBar } from '@/features/settlement/SettlementShapeBar';
 
 type CporCaseRow = {
   id: number;
@@ -270,6 +271,29 @@ export default function CporCasesListPage() {
         },
       },
       {
+        colId: 'case_shape',
+        headerName: 'Shape',
+        width: 72,
+        sortable: false,
+        cellRenderer: (p: { data?: CporCaseRow }) => {
+          const row = p.data;
+          if (!row) return null;
+          const owed = Number(row.owed_amount) || 0;
+          const paid = Number(row.paid_amount_sum) || 0;
+          const blocked = row.settle_readiness?.fx_settle_allowed === false;
+          const settledPct = owed > 0 ? (paid / owed) * 100 : 0;
+          const outstandingPct = owed > 0 ? Math.max(0, 100 - settledPct) : 0;
+          return (
+            <SettlementShapeBar
+              settledPct={settledPct}
+              outstandingPct={outstandingPct}
+              blockedPct={blocked ? outstandingPct : 0}
+              height={5}
+            />
+          );
+        },
+      },
+      {
         field: 'outstanding_amount',
         headerName: 'Outstanding',
         width: 140,
@@ -312,15 +336,8 @@ export default function CporCasesListPage() {
     return m;
   }, [columnDefs]);
 
-  return (
+  const queue = (
     <>
-      <PageHeader {...navPageChrome('/commercial-planner/cpor-cases')} />
-      <Alert severity="info" sx={{ mb: 2 }}>
-        Reseller-channel promotion funding cases. Recon: <strong>owed</strong> = approved
-        ttl_support; <strong>paid</strong> = payment/CN evidence in paid/processed/closed.
-        File case status stays evidence-only.
-      </Alert>
-      <CporPortfolioIntelligencePanel />
       <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} alignItems="center" flexWrap="wrap">
         <TextField
           select
@@ -395,8 +412,9 @@ export default function CporCasesListPage() {
         onRefresh={() => void refetch()}
         gridOptions={{
           getRowId: (p) => String(p.data.id),
+          rowHeight: 36,
           onRowClicked: (e) => {
-            if (e.data?.id) router.push(`/commercial-planner/cpor-cases/${e.data.id}`);
+            if (e.data?.id) setParamState({ case: String(e.data.id) });
           },
         }}
       />
@@ -505,6 +523,13 @@ export default function CporCasesListPage() {
           </Button>
         </DialogActions>
       </Dialog>
+    </>
+  );
+
+  return (
+    <>
+      <PageHeader {...navPageChrome('/commercial-planner/cpor-cases')} />
+      <SettlementContainer queue={queue} />
     </>
   );
 }

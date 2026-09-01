@@ -36,6 +36,7 @@ from app.services.cpor.pivot import build_case_pivot
 from app.services.cpor.norms_and_comparable import build_comparable_cases, build_support_norms
 from app.services.cpor.promo_plan_builder import build_promo_plan_draft, create_case_from_promo_draft
 from app.services.cpor.portfolio_intelligence import build_portfolio_intelligence
+from app.services.cpor.settlement_book_read import build_settlement_book_read_model
 from app.services.cpor.support_bias import build_support_bias
 from app.services.cpor.payment_recon import load_payment_recon_by_case_id
 from app.services.cpor.promo_load_recon import build_promo_load_recon
@@ -1087,6 +1088,14 @@ def tenant_profile_hard_enforce() -> bool:
     from app.services import commercial_tenant_profile as tenant_profile
 
     return bool(tenant_profile.HARD_ENFORCE_BUDGET)
+
+
+@router.get("/settlement/book")
+def cpor_settlement_book(user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    """NS-4 book read model: regime totals, shape segments, concentration."""
+    _ = user
+    with SessionLocal() as session:
+        return build_settlement_book_read_model(session)
 
 
 @router.get("/intelligence/portfolio")
