@@ -1,5 +1,5 @@
 import React from 'react';
-import { screen, within } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,21 +7,22 @@ import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
 import LineupPage from './page';
 
-vi.mock('@/components/PageHeader', () => ({
-  PageHeader: ({ title }: { title: string }) => <div>{title}</div>,
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => '/lineup',
 }));
-vi.mock('@/components/ModuleGridToolbar', () => ({
-  ModuleGridToolbar: () => <div data-testid="toolbar" />,
-}));
+
 vi.mock('@/components/EnterpriseDataGrid', () => ({
-  EnterpriseDataGrid: () => <div data-testid="grid" />,
+  EnterpriseDataGrid: () => <div data-testid="lineup-plan-grid-mock" />,
 }));
 vi.mock('@/lib/queryError', () => ({ toQueryError: () => null }));
 
 const apiGetMock = vi.fn(async (url: string) => {
   if (url.includes('/lineup/items')) return [];
-  if (url.includes('/lineup/events')) return [];
-  return [];
+  if (url.includes('/lineup/net-requirement')) return { row_count: 0, rows: [] };
+  if (url.includes('/plan-vs-executed')) return { data_unavailable: true };
+  return {};
 });
 vi.mock('@/lib/api', () => ({
   apiGet: (url: string) => apiGetMock(url),
@@ -35,17 +36,17 @@ describe('LineupPage', () => {
     apiGetMock.mockClear();
   });
 
-  it('renders ModuleDataSection intro without nesting block content inside a paragraph', async () => {
+  it('renders grammar-2 lineup container shell', async () => {
     const qc = new QueryClient();
     renderWithProviders(
       <QueryClientProvider client={qc}>
         <LineupPage />
-      </QueryClientProvider>
+      </QueryClientProvider>,
     );
-    const intro = await screen.findByTestId('module-data-section-intro');
-    expect(intro.tagName.toLowerCase()).toBe('div');
-    const code = within(intro).getByText('fact_lineup_plan_item');
-    expect(code.tagName.toLowerCase()).toBe('code');
-    expect(code.closest('p')).toBeNull();
+    expect(await screen.findByTestId('lineup-container')).toBeInTheDocument();
+    expect(screen.getByTestId('lineup-regime-strip')).toBeInTheDocument();
+    expect(screen.getByTestId('lineup-scope-bar')).toBeInTheDocument();
+    expect(screen.getByTestId('lineup-read-strip')).toBeInTheDocument();
+    expect(screen.getByTestId('lineup-trend-instrument')).toBeInTheDocument();
   });
 });

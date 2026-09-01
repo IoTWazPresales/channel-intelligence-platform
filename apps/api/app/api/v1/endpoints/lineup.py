@@ -72,6 +72,7 @@ _LINEUP_APPROVAL_STATUSES = frozenset({"draft", "pending_approval", "submitted",
 class LineupItemPatch(BaseModel):
     approval_status: str | None = None
     notes: str | None = None
+    planned_volume_units: float | None = Field(default=None, ge=0)
 
 
 class LineupBulkRow(BaseModel):
@@ -233,6 +234,8 @@ async def patch_lineup_item(
         row.approval_status = st
     if "notes" in data:
         row.notes = (data["notes"] or "").strip() or None
+    if "planned_volume_units" in data and data["planned_volume_units"] is not None:
+        row.planned_volume_units = float(data["planned_volume_units"])
     if not data:
         raise HTTPException(status_code=400, detail="No fields to update")
     if approval_changed:
@@ -251,6 +254,7 @@ async def patch_lineup_item(
         "id": row.id,
         "approval_status": row.approval_status,
         "notes": row.notes,
+        "planned_volume_units": float(row.planned_volume_units),
     }
 
 
