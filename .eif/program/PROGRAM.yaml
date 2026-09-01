@@ -6,7 +6,7 @@ programme:
   charter:
     status: accepted
     by: operator
-    at: '2026-09-01T09:31:22Z'
+    at: '2026-09-01T18:13:04Z'
     workstreams:
     - North Star UI redesign
     assumptions:
@@ -29,8 +29,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 53
-  log_sha256: 9ed7250e040d056317248bc7c09f93a962b717d8ac038f77a692bafe4c9c8f77
+  snapshot_revision: 56
+  log_sha256: 553ba472ab7ea90298b94c156e8a6a7b523a21846cf53701ff7555fa090e9880
   acceptance_policy:
     milestone: operator
     root: operator
@@ -160,7 +160,7 @@ nodes:
     origin: operator
     status: complete
     stage: null
-    revision: 27
+    revision: 30
     lease: null
     depends_on: []
     facets:
@@ -188,6 +188,8 @@ nodes:
           class: high_fidelity
           path: .eif/audit/NS2_RESUME_20260901/rendered-verification.md
         rationale: null
+        pass_run: NS2_RESUME_AFTER_RUNTIME_REPAIR_20260901
+        pass_actor: agent
       design_divergence:
         required: true
         state: pass
@@ -196,6 +198,8 @@ nodes:
           decision: retain_frozen_benchmark
           rationale: Rendered comparison shows parity with frozen brief.html; no material improvement demonstrated.
         rationale: null
+        pass_run: NS2_RESUME_AFTER_RUNTIME_REPAIR_20260901
+        pass_actor: agent
       design_signatures:
         required: true
         state: pass
@@ -207,6 +211,8 @@ nodes:
           - ibm_plex_mono_meta
           - accent_cyan_3db8e8
         rationale: null
+        pass_run: NS2_RESUME_AFTER_RUNTIME_REPAIR_20260901
+        pass_actor: agent
       rendered_comparison:
         required: true
         state: pass
@@ -214,16 +220,22 @@ nodes:
           artifact_class: high_fidelity
           benchmark: docs/design/brief.html
           product_url: http://localhost:3000/brief
-          path: .eif/audit/NS2_RESUME_20260901/rendered-verification.md
+          path: .eif/audit/NS2_INDEPENDENT_REVIEW_20260901/independent-rendered-review.md
+          comparison_verdict: parity
         rationale: null
+        pass_run: NS2_INDEPENDENT_REVIEW_20260901
+        pass_actor: gov-008
       design_sameness_review:
         required: true
         state: pass
         evidence:
-          visual_vocabulary_challenge: Challenged Brief chrome duplication (background tasks in crumb row); retained frozen
-            layout priority over marginal density gain.
-          path: .eif/audit/NS2_RESUME_20260901/rendered-verification.md
+          visual_vocabulary_challenge: Independently challenged chrome density, card-vs-blotter alternatives, and task-in-crumb
+            duplication; frozen six-container grammar-3 blotter remains the best operator landing answer per FROZEN v1.1 charter.
+          path: .eif/audit/NS2_INDEPENDENT_REVIEW_20260901/independent-rendered-review.md
+          decision: retain_frozen_benchmark
         rationale: null
+        pass_run: NS2_INDEPENDENT_REVIEW_20260901
+        pass_actor: gov-008
       design_interaction_spec:
         required: true
         state: pass
@@ -235,6 +247,8 @@ nodes:
           - mobile_drawer_nav
           path: .eif/audit/NS2_RESUME_20260901/rendered-verification.md
         rationale: null
+        pass_run: NS2_RESUME_AFTER_RUNTIME_REPAIR_20260901
+        pass_actor: agent
       design_state_coverage:
         required: true
         state: pass
@@ -247,6 +261,8 @@ nodes:
           - mobile_nav
           path: .eif/audit/NS2_RESUME_20260901/rendered-verification.md
         rationale: null
+        pass_run: NS2_RESUME_AFTER_RUNTIME_REPAIR_20260901
+        pass_actor: agent
       design_identity_tokens:
         required: true
         state: pass
@@ -258,6 +274,8 @@ nodes:
             accent: '#3db8e8'
             mono: IBM Plex Mono
         rationale: null
+        pass_run: NS2_RESUME_AFTER_RUNTIME_REPAIR_20260901
+        pass_actor: agent
       design_execution_decisions:
         required: true
         state: pass
@@ -274,6 +292,8 @@ nodes:
             rationale: Signal row actions deep-link to steward/stock/settlement routes with suggested primary CTA.
             evidence: .eif/audit/NS2_RESUME_20260901/rendered-verification.md
         rationale: null
+        pass_run: NS2_RESUME_AFTER_RUNTIME_REPAIR_20260901
+        pass_actor: agent
       ux:
         required: true
         state: pass
@@ -281,6 +301,8 @@ nodes:
           path: .eif/audit/NS2_RESUME_20260901/rendered-verification.md
           summary: Operator can scan ranked signals and reach steward/stock/settlement in one click.
         rationale: null
+        pass_run: NS2_RESUME_AFTER_RUNTIME_REPAIR_20260901
+        pass_actor: agent
       a11y:
         required: true
         state: pass
@@ -288,13 +310,22 @@ nodes:
           path: .eif/audit/NS2_RESUME_20260901/rendered-verification.md
           summary: Labeled nav controls; link-based actions; focus-visible on interactive elements.
         rationale: null
+        pass_run: NS2_RESUME_AFTER_RUNTIME_REPAIR_20260901
+        pass_actor: agent
       rendered:
         required: true
         state: pass
         evidence: &id001
-          path: .eif/audit/NS2_RESUME_20260901/rendered-verification.md
+          path: .eif/audit/NS2_INDEPENDENT_REVIEW_20260901/independent-rendered-review.md
           url: http://localhost:3000/brief
+          viewports:
+          - desktop_1280
+          - mobile_390
+          redirects_verified:
+          - /dashboard -> /brief
         rationale: null
+        pass_run: NS2_INDEPENDENT_REVIEW_20260901
+        pass_actor: gov-008
       content:
         required: true
         state: pass
@@ -302,11 +333,14 @@ nodes:
           path: .eif/audit/NS2_RESUME_20260901/rendered-verification.md
           summary: 'Grammar-3 copy: attention queue, Read strip, ranked trust→position→money footer.'
         rationale: null
+        pass_run: NS2_RESUME_AFTER_RUNTIME_REPAIR_20260901
+        pass_actor: agent
     verification:
       rendered:
         state: pass
+        pass_run: NS2_INDEPENDENT_REVIEW_20260901
+        pass_actor: gov-008
         evidence: *id001
-        independence: playwright_rendered_review
         path: null
     evidence: []
     blockers: []
@@ -323,6 +357,8 @@ nodes:
       response_container_badge: spine_badges.response null until Response container scoped in NS-6
     target_artifact_class: high_fidelity
     design_artifact_class: high_fidelity
+    implementation_run: NS2_RESUME_AFTER_RUNTIME_REPAIR_20260901
+    implementation_actor: agent
   N-0005:
     id: N-0005
     parent: null
