@@ -6,7 +6,7 @@ programme:
   charter:
     status: accepted
     by: operator
-    at: '2026-09-02T07:33:24Z'
+    at: '2026-09-02T08:19:10Z'
     workstreams:
     - North Star UI redesign
     assumptions:
@@ -29,8 +29,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 131
-  log_sha256: 70ca840c0d282c35dda5c0b3edf404dd4ee3cc8559090139dded27973019244c
+  snapshot_revision: 149
+  log_sha256: 06e440bba21230aba8eed4a8369fecad7e385a2d22c48927ec1eccae4c1cf466
   acceptance_policy:
     milestone: operator
     root: operator
@@ -653,7 +653,7 @@ nodes:
     origin: decomposition
     status: in_progress
     stage: verify
-    revision: 12
+    revision: 30
     lease: null
     depends_on:
     - N-0004
@@ -676,70 +676,174 @@ nodes:
     quality:
       design_artifact_class:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          class: high_fidelity
+          path: .eif/audit/NS4_SETTLEMENT_20260902/independent-rendered-review.md
         rationale: null
+        pass_run: NS4_INDEPENDENT_REVIEW_20260902
+        pass_actor: gov-008
       design_divergence:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          benchmark: docs/design/funding-settlement-r3.html
+          decision: retain_with_deferrals
+          rationale: Structural period/BU/customer scope filters deferred; State + Saved view active
         rationale: null
+        pass_run: NS4_INDEPENDENT_REVIEW_20260902
+        pass_actor: gov-008
       design_signatures:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          signatures:
+          - grammar_1_scope_bar
+          - regime_strip
+          - book_read_strip
+          - portfolio_tiles
+          - queue_case_split
+          - settle_preview_dialog
         rationale: null
+        pass_run: NS4_INDEPENDENT_REVIEW_20260902
+        pass_actor: gov-008
       rendered_comparison:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          artifact_class: high_fidelity
+          benchmark: docs/design/funding-settlement-r3.html
+          product_url: http://localhost:3000/commercial-planner/cpor-cases
+          path: .eif/audit/NS4_SETTLEMENT_20260902/independent-rendered-review.md
+          comparison_verdict: parity
         rationale: null
+        pass_run: NS4_INDEPENDENT_REVIEW_20260902
+        pass_actor: gov-008
       design_sameness_review:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          visual_vocabulary_challenge: Challenged grid queue vs HTML table; retained AG Grid. Split pane vs single scroll
+            retained.
+          path: .eif/audit/NS4_SETTLEMENT_20260902/independent-rendered-review.md
+          decision: retain_frozen_benchmark
         rationale: null
+        pass_run: NS4_INDEPENDENT_REVIEW_20260902
+        pass_actor: gov-008
       design_interaction_spec:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          interactions:
+          - state_filter_url
+          - saved_view_desk_blocked_all
+          - queue_to_case_selection
+          - deep_link_case_param
+          - settle_preview_safe_only
+          - claim_upload_rollup
         rationale: null
+        pass_run: NS4_INDEPENDENT_REVIEW_20260902
+        pass_actor: gov-008
       design_state_coverage:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          states:
+          - loading
+          - empty_case_pane
+          - populated_case
+          - fx_blocked_confirm
+          - mobile_nav
+          - zero_claims_warning
         rationale: null
+        pass_run: NS4_INDEPENDENT_REVIEW_20260902
+        pass_actor: gov-008
       design_identity_tokens:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          tokens:
+            direction_name: CIP FROZEN v1.1
+            bg: '#14161a'
+            elev: '#1a1d23'
+            accent: '#3db8e8'
+            mono: IBM Plex Mono
         rationale: null
+        pass_run: NS4_INDEPENDENT_REVIEW_20260902
+        pass_actor: gov-008
       design_execution_decisions:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          responsive_decision:
+            status: applicable
+            rationale: Scope bar wraps at 390px; queue/case stack
+            evidence: .eif/audit/NS4_SETTLEMENT_20260902/independent-rendered-review.md
+          visualisation_decision:
+            status: applicable
+            rationale: Portfolio tiles + shape read per benchmark
+          consequential_action_decision:
+            status: applicable
+            rationale: Settle confirm disabled when fx_settle_allowed false; e2e settle not executed
+            evidence: .eif/audit/NS4_SETTLEMENT_20260902/independent-rendered-review.md
         rationale: null
+        pass_run: NS4_INDEPENDENT_REVIEW_20260902
+        pass_actor: gov-008
       ux:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: blocked
+        evidence:
+          path: .eif/audit/NS4_SETTLEMENT_20260902/independent-rendered-review.md
+          finding: Apply button inert; From/To/BU/Customer pseudo-selects not labeled deferred
+          remediation: Disable inert controls or wire structural filters
+        rationale: Apply button inert; From/To/BU/Customer pseudo-selects not labeled deferred
       a11y:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/NS4_SETTLEMENT_20260902/independent-rendered-review.md
+          summary: State/saved-view comboboxes; grid headers; mobile nav drawer
         rationale: null
+        pass_run: NS4_INDEPENDENT_REVIEW_20260902
+        pass_actor: gov-008
       rendered:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence: &id003
+          path: .eif/audit/NS4_SETTLEMENT_20260902/independent-rendered-review.md
+          url: http://localhost:3000/commercial-planner/cpor-cases
+          viewports:
+          - desktop_1280
+          - mobile_390
+          settle_e2e_clone: not_executed
+          risk: unmitigated settle confirm path on disposable clone
         rationale: null
+        pass_run: NS4_INDEPENDENT_REVIEW_20260902
+        pass_actor: gov-008
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: blocked
+        evidence:
+          path: .eif/audit/NS4_SETTLEMENT_20260902/independent-rendered-review.md
+          finding: Apply CTA styled active without effect
+          remediation: Label deferred or disable Apply until structural filters ship
+        rationale: Apply CTA styled active without effect
+    verification:
+      rendered:
+        state: pass
+        pass_run: NS4_INDEPENDENT_REVIEW_20260902
+        pass_actor: gov-008
+        evidence: *id003
+        path: null
+      referent:
+        state: pass
+        pass_run: NS4_INDEPENDENT_REVIEW_20260902
+        pass_actor: gov-008
+        evidence:
+          benchmark: docs/design/funding-settlement-r3.html
+          path: .eif/audit/NS4_SETTLEMENT_20260902/independent-rendered-review.md
+          method: independent_rendered_comparison
+        path: null
     evidence: []
     blockers: []
     conservation_tags: []
@@ -922,7 +1026,7 @@ nodes:
       rendered:
         required: true
         state: pass
-        evidence: &id003
+        evidence: &id004
           path: .eif/audit/NS5_LINEUP_20260902/independent-rendered-review.md
           url: http://localhost:3000/lineup
           viewports:
@@ -947,7 +1051,7 @@ nodes:
         state: pass
         pass_run: NS5_LINEUP_INDEPENDENT_REVIEW_20260902
         pass_actor: gov-008
-        evidence: *id003
+        evidence: *id004
         path: null
     evidence: []
     blockers: []
