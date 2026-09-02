@@ -6,7 +6,7 @@ programme:
   charter:
     status: accepted
     by: operator
-    at: '2026-09-01T18:13:04Z'
+    at: '2026-09-02T07:33:24Z'
     workstreams:
     - North Star UI redesign
     assumptions:
@@ -29,8 +29,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 56
-  log_sha256: 553ba472ab7ea90298b94c156e8a6a7b523a21846cf53701ff7555fa090e9880
+  snapshot_revision: 131
+  log_sha256: 70ca840c0d282c35dda5c0b3edf404dd4ee3cc8559090139dded27973019244c
   acceptance_policy:
     milestone: operator
     root: operator
@@ -407,9 +407,10 @@ nodes:
     origin: decomposition
     status: proposed
     stage: null
-    revision: 1
+    revision: 2
     lease: null
-    depends_on: []
+    depends_on:
+    - N-0012
     facets: []
     risk: R3
     touches_existing: true
@@ -442,9 +443,9 @@ nodes:
     title: NS-3 Stock merge — Sell-out, Fill vs plan, Cover and Inbound
     class: redesign
     origin: decomposition
-    status: proposed
+    status: complete
     stage: null
-    revision: 1
+    revision: 30
     lease: null
     depends_on:
     - N-0004
@@ -458,77 +459,172 @@ nodes:
     acceptance_criteria:
     - 'target_artifact_class: high_fidelity'
     - 'Governing design input: docs/design/CIP_DESIGN_LANGUAGE.md FROZEN v1.1, grammar 2, container Stock'
-    baseline_ref: null
+    baseline_ref: BLN-0001
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
     quality:
       design_artifact_class:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          class: high_fidelity
+          path: .eif/audit/NS3_STOCK_20260901/rendered-verification.md
         rationale: null
+        pass_run: NS3_STOCK_IMPL_20260901
+        pass_actor: agent
       design_divergence:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          benchmark: docs/design/stock-cover.html
+          decision: retain_with_deferrals
+          rationale: Filter bar C-NS3-02 deferred; grammar-2 shell parity
         rationale: null
+        pass_run: NS3_STOCK_IMPL_20260901
+        pass_actor: agent
       design_signatures:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          signatures:
+          - grammar_2_lens_switcher
+          - regime_strip
+          - read_strip_cover
+          - woc_histogram
+          - buyer_lens_labels
         rationale: null
+        pass_run: NS3_STOCK_IMPL_20260901
+        pass_actor: agent
       rendered_comparison:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          artifact_class: high_fidelity
+          benchmark: docs/design/stock-cover.html
+          product_url: http://localhost:3000/stock
+          path: .eif/audit/NS3_STOCK_20260901/independent-rendered-review.md
+          comparison_verdict: parity
         rationale: null
+        pass_run: NS3_STOCK_INDEPENDENT_REVIEW_20260901
+        pass_actor: gov-008
       design_sameness_review:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          visual_vocabulary_challenge: Challenged nested Channel Ops tabs vs outer lens chrome; retained to preserve KPI depth
+            without stranding operators.
+          path: .eif/audit/NS3_STOCK_20260901/independent-rendered-review.md
+          decision: retain_frozen_benchmark
         rationale: null
+        pass_run: NS3_STOCK_INDEPENDENT_REVIEW_20260901
+        pass_actor: gov-008
       design_interaction_spec:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          interactions:
+          - lens_switcher_url_param
+          - legacy_redirects
+          - movement_depth_toggle
+          - cover_read_strip
         rationale: null
+        pass_run: NS3_STOCK_IMPL_20260901
+        pass_actor: agent
       design_state_coverage:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          states:
+          - loading
+          - empty
+          - populated
+          - mobile_nav
+          - all_four_lenses
         rationale: null
+        pass_run: NS3_STOCK_IMPL_20260901
+        pass_actor: agent
       design_identity_tokens:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          tokens:
+            direction_name: CIP FROZEN v1.1
+            bg: '#14161a'
+            elev: '#1a1d23'
+            accent: '#3db8e8'
+            mono: IBM Plex Mono
         rationale: null
+        pass_run: NS3_STOCK_IMPL_20260901
+        pass_actor: agent
       design_execution_decisions:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          responsive_decision:
+            status: applicable
+            rationale: Regime strip wraps; lens switcher scrolls at 390px
+            evidence: .eif/audit/NS3_STOCK_20260901/rendered-verification.md
+          visualisation_decision:
+            status: applicable
+            rationale: Cover WoC histogram buckets per stock-cover.html
+          consequential_action_decision:
+            status: applicable
+            rationale: Inbound lens mounts full shipment workspace
         rationale: null
+        pass_run: NS3_STOCK_IMPL_20260901
+        pass_actor: agent
       ux:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/NS3_STOCK_20260901/rendered-verification.md
+          summary: Buyer can reach sell-out, fill vs plan, cover, and inbound in one container
         rationale: null
+        pass_run: NS3_STOCK_IMPL_20260901
+        pass_actor: agent
       a11y:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/NS3_STOCK_20260901/rendered-verification.md
+          summary: Lens tablist role=tablist; aria-selected on active lens
         rationale: null
+        pass_run: NS3_STOCK_IMPL_20260901
+        pass_actor: agent
       rendered:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence: &id002
+          path: .eif/audit/NS3_STOCK_20260901/independent-rendered-review.md
+          url: http://localhost:3000/stock
+          viewports:
+          - desktop_1280
+          - mobile_390
+          redirects_verified:
+          - /sell-out -> /stock?lens=movement
+          - /plan-vs-executed -> /stock?lens=execution
+          - /shipping -> /stock?lens=inbound
+          - /inventory -> /stock?lens=cover
         rationale: null
+        pass_run: NS3_STOCK_INDEPENDENT_REVIEW_20260901
+        pass_actor: gov-008
       content:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/NS3_STOCK_20260901/rendered-verification.md
+          summary: Buyer-facing lens labels; task-in-crumb Stock / {lens}
         rationale: null
-    verification: {}
+        pass_run: NS3_STOCK_IMPL_20260901
+        pass_actor: agent
+    verification:
+      rendered:
+        state: pass
+        pass_run: NS3_STOCK_INDEPENDENT_REVIEW_20260901
+        pass_actor: gov-008
+        evidence: *id002
+        path: null
     evidence: []
     blockers: []
     conservation_tags: []
@@ -538,18 +634,26 @@ nodes:
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      forecasts: context_route_preserved
+      channel_intelligence: context_route_preserved
+      legacy: middleware_redirects
+      customer_account_sell_out_gap: brief signal unchanged; not surfaced on stock container
+      pipeline_fill_pct: regime strip Not received uses shipping summary; line-grain fill pct still pending
+      response_container_badge: spine response badge unchanged until NS-6
     target_artifact_class: high_fidelity
-    design_artifact_class: null
+    design_artifact_class: high_fidelity
+    implementation_run: NS3_STOCK_IMPL_20260901
+    implementation_actor: agent
   N-0008:
     id: N-0008
     parent: null
     title: NS-4 CPOR Settlement — queue and case redesign
     class: redesign
     origin: decomposition
-    status: proposed
-    stage: null
-    revision: 1
+    status: in_progress
+    stage: verify
+    revision: 12
     lease: null
     depends_on:
     - N-0004
@@ -565,7 +669,7 @@ nodes:
     - 'target_artifact_class: high_fidelity'
     - 'Governing design input: docs/design/CIP_DESIGN_LANGUAGE.md FROZEN v1.1, grammar 1, container Settlement, reference
       docs/design/funding-settlement-r3.html'
-    baseline_ref: null
+    baseline_ref: BLN-0001
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
@@ -645,18 +749,29 @@ nodes:
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      cpor_case_detail_route: /commercial-planner/cpor-cases/[id] preserved via CporCaseWorkspace
+      fx_settle_allowed: NS-1b blocked-settle enforcement unchanged
+      settle_readiness: chips + fx_basis_line preserved
+      portfolio_intelligence_api: folded into SettlementPortfolioRead; CporPortfolioIntelligencePanel retained for reuse
+      deep_link_case_param: ?case= queue selection preserved
+      steward_imports: historical + payment evidence routes unchanged
+      customer_account_sell_out_gap: brief signal unchanged; not surfaced on settlement container
+      pipeline_fill_pct: stock regime strip unchanged; not on settlement container
+      response_container_badge: spine response badge unchanged until NS-6
     target_artifact_class: high_fidelity
-    design_artifact_class: null
+    design_artifact_class: high_fidelity
+    implementation_run: NS4_SETTLEMENT_IMPL_20260902
+    implementation_actor: agent
   N-0009:
     id: N-0009
     parent: null
     title: NS-5 Lineup plan origination
     class: redesign
     origin: decomposition
-    status: proposed
+    status: complete
     stage: null
-    revision: 1
+    revision: 29
     lease: null
     depends_on:
     - N-0004
@@ -670,77 +785,170 @@ nodes:
     acceptance_criteria:
     - 'target_artifact_class: high_fidelity'
     - 'Governing design input: docs/design/CIP_DESIGN_LANGUAGE.md FROZEN v1.1, grammar 2, container Lineup'
-    baseline_ref: null
+    baseline_ref: BLN-0001
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
     quality:
       design_artifact_class:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          class: high_fidelity
+          path: .eif/audit/NS5_LINEUP_20260902/rendered-verification.md
         rationale: null
+        pass_run: NS5_LINEUP_IMPL_20260902
+        pass_actor: agent
       design_divergence:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          benchmark: docs/design/lineup.html
+          decision: retain_with_deferrals
+          rationale: Scope filter persistence + live trend series deferred
         rationale: null
+        pass_run: NS5_LINEUP_IMPL_20260902
+        pass_actor: agent
       design_signatures:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          signatures:
+          - grammar_2_scope_bar
+          - regime_strip
+          - read_strip
+          - trend_q1_q2
+          - plan_action_bar_b2
+          - approve_reject_pending
         rationale: null
+        pass_run: NS5_LINEUP_IMPL_20260902
+        pass_actor: agent
       rendered_comparison:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          artifact_class: high_fidelity
+          benchmark: docs/design/lineup.html
+          product_url: http://localhost:3000/lineup
+          path: .eif/audit/NS5_LINEUP_20260902/independent-rendered-review.md
+          comparison_verdict: parity
         rationale: null
+        pass_run: NS5_LINEUP_INDEPENDENT_REVIEW_20260902
+        pass_actor: gov-008
       design_sameness_review:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          visual_vocabulary_challenge: AG Grid vs table mockup; retained grid
+          path: .eif/audit/NS5_LINEUP_20260902/independent-rendered-review.md
+          decision: retain_frozen_benchmark
         rationale: null
+        pass_run: NS5_LINEUP_INDEPENDENT_REVIEW_20260902
+        pass_actor: gov-008
       design_interaction_spec:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          interactions:
+          - pending_saved_view
+          - approve_reject_row
+          - planned_inline_edit
+          - net_req_calc_export_apply
+          - legacy_buy_plans_redirect
         rationale: null
+        pass_run: NS5_LINEUP_IMPL_20260902
+        pass_actor: agent
       design_state_coverage:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          states:
+          - loading
+          - empty
+          - populated
+          - pending_filter
+          - mobile_nav
         rationale: null
+        pass_run: NS5_LINEUP_IMPL_20260902
+        pass_actor: agent
       design_identity_tokens:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          tokens:
+            direction_name: CIP FROZEN v1.1
+            bg: '#14161a'
+            elev: '#1a1d23'
+            accent: '#3db8e8'
+            mono: IBM Plex Mono
         rationale: null
+        pass_run: NS5_LINEUP_IMPL_20260902
+        pass_actor: agent
       design_execution_decisions:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          responsive_decision:
+            status: applicable
+            rationale: Scope bar wraps at 390px
+            evidence: .eif/audit/NS5_LINEUP_20260902/rendered-verification.md
+          visualisation_decision:
+            status: applicable
+            rationale: Q1/Q2 instrument per lineup.html
+          consequential_action_decision:
+            status: applicable
+            rationale: Apply net requirement confirm path retained
         rationale: null
+        pass_run: NS5_LINEUP_IMPL_20260902
+        pass_actor: agent
       ux:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/NS5_LINEUP_20260902/rendered-verification.md
+          summary: Grammar-2 lineup container; buy-plans absorbed
         rationale: null
+        pass_run: NS5_LINEUP_IMPL_20260902
+        pass_actor: agent
       a11y:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/NS5_LINEUP_20260902/rendered-verification.md
+          summary: Saved view combobox; mobile nav drawer
         rationale: null
+        pass_run: NS5_LINEUP_IMPL_20260902
+        pass_actor: agent
       rendered:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence: &id003
+          path: .eif/audit/NS5_LINEUP_20260902/independent-rendered-review.md
+          url: http://localhost:3000/lineup
+          viewports:
+          - desktop_1280
+          - mobile_390
+          redirects_verified:
+          - /buy-plans -> /lineup
         rationale: null
+        pass_run: NS5_LINEUP_INDEPENDENT_REVIEW_20260902
+        pass_actor: gov-008
       content:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/NS5_LINEUP_20260902/rendered-verification.md
+          summary: Lineup / assortment or Pending approval crumbs
         rationale: null
-    verification: {}
+        pass_run: NS5_LINEUP_IMPL_20260902
+        pass_actor: agent
+    verification:
+      rendered:
+        state: pass
+        pass_run: NS5_LINEUP_INDEPENDENT_REVIEW_20260902
+        pass_actor: gov-008
+        evidence: *id003
+        path: null
     evidence: []
     blockers: []
     conservation_tags: []
@@ -750,9 +958,18 @@ nodes:
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      commercial_planner_lineup_tab: deferred until container VERIFY; route preserved
+      buy_plans_route: middleware redirect to /lineup
+      steward_imports: C-NS5-04 — no file jobs on lineup surface
+      stock_execution_lens: read-only plan reference unchanged
+      customer_account_sell_out_gap: brief signal unchanged; not on lineup container
+      pipeline_fill_pct: stock regime strip unchanged
+      response_container_badge: spine response badge unchanged until NS-6
     target_artifact_class: high_fidelity
-    design_artifact_class: null
+    design_artifact_class: high_fidelity
+    implementation_run: NS5_LINEUP_IMPL_20260902
+    implementation_actor: agent
   N-0010:
     id: N-0010
     parent: null
@@ -964,6 +1181,48 @@ nodes:
     preservation: {}
     target_artifact_class: high_fidelity
     design_artifact_class: null
+  N-0012:
+    id: N-0012
+    parent: null
+    title: NS-1a FX display honesty (no migration)
+    class: feature
+    origin: decomposition
+    status: complete
+    stage: null
+    revision: 5
+    lease: null
+    depends_on: []
+    facets: []
+    risk: R2
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: accepted
+    acceptance_criteria:
+    - Expose fx_blocked derived flags on CPOR list/detail
+    - readiness chips
+    - no silent currency conversion
+    - contract rows C-NS1a-01 through C-NS1a-05
+    - no migration
+    baseline_ref: BLN-0001
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality: {}
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    implementation_run: NS3_NS1A_COMPLETE_20260901
+    implementation_actor: agent
 decisions: {}
 evidence: {}
 baselines:
