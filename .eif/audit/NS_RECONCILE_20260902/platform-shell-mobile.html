@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Brief — mobile (proposed shell)</title>
-  <link rel="stylesheet" href="cip.css" />
+  <title>Brief — mobile (amended shell)</title>
+  <link rel="stylesheet" href="cip-base.css" />
   <style>
-    :root { --spine-w: 0px; }
-    html, body { min-width: 0; }
-    .app { display: flex; flex-direction: column; min-height: 100vh; min-width: 0; }
+    /* Self-contained 390px drawer — does NOT inherit cip.css row-nav breakpoint */
+    html, body { min-width: 0; width: 100%; }
+    .app { display: flex; flex-direction: column; min-height: 100vh; min-width: 0; width: 100%; }
     .mob-top {
       display: flex; align-items: center; gap: 12px;
       padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--elev);
@@ -16,19 +16,25 @@
     .hamburger { font-size: 18px; color: var(--dim); background: none; border: 0; padding: 4px; }
     .mob-title { font-size: 13px; font-weight: 600; }
     .mob-title span { color: var(--muted); font-weight: 400; }
-    .drawer {
-      position: fixed; inset: 0; z-index: 100;
-      background: rgba(10,12,16,.72);
+    .scrim {
+      position: fixed; inset: 0; z-index: 100; background: rgba(10, 12, 16, 0.72);
       display: flex;
     }
     .drawer-panel {
-      width: min(280px, 88vw);
-      background: var(--elev);
-      border-right: 1px solid var(--line);
-      display: flex; flex-direction: column;
-      padding: 14px 0;
+      width: min(280px, 88vw); max-width: 100%;
+      background: var(--elev); border-right: 1px solid var(--line);
+      display: flex; flex-direction: column; padding: 14px 0; overflow-y: auto;
     }
-    .drawer .nav a { padding: 10px 16px; font-size: 14px; }
+    .drawer-panel .nav { flex-direction: column; flex-wrap: nowrap; }
+    .drawer-panel .nav a {
+      flex-direction: row; justify-content: space-between; width: 100%;
+      padding: 10px 16px; font-size: 14px;
+    }
+    .drawer-panel .nav.util a { padding: 8px 16px 8px 24px; font-size: 13px; }
+    .drawer-panel .nav-sub {
+      font-size: 10px; color: var(--muted); padding: 2px 16px 6px 24px; display: block;
+    }
+    .content { flex: 1; min-width: 0; }
     .readblock { padding: 12px 14px; border-bottom: 1px solid var(--line); background: var(--elev); font-size: 12px; color: var(--dim); }
     .readblock b { color: var(--text); }
     .ranks li { grid-template-columns: 28px 6px 1fr 72px; padding: 10px 14px; min-height: 48px; }
@@ -37,51 +43,55 @@
   </style>
 </head>
 <body>
-<!-- Proposed mobile shell — slim chrome, drawer spine, Brief-first -->
+<!-- Amended mobile evidence @ 390px — vertical drawer nav, all six jobs + utilities visible -->
 <div class="app">
-  <div class="drawer" aria-hidden="false">
+  <div class="scrim" aria-hidden="false">
     <div class="drawer-panel">
       <div class="mark" style="border:0;margin:0;padding:0 16px 12px">
         <span class="word">Channel Intelligence</span>
         <span class="sub">SA · 26Q3</span>
       </div>
       <nav class="nav">
-        <a class="on" href="#">Brief <span class="ct" style="margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--stop)">8</span></a>
+        <a class="on" href="#">Brief <span class="ct alert">8</span></a>
         <a href="#">Plan</a>
-        <a href="#">Channel</a>
+        <a href="#">Position <span class="ct alert">119</span></a>
         <a href="#">Settlement</a>
         <a href="#">Actions</a>
-        <a href="#">Data</a>
+        <a href="#">Imports <span class="ct alert">23</span></a>
       </nav>
       <div class="nav-rule"></div>
       <nav class="nav util">
         <a href="#">Reports</a>
+        <span class="nav-sub">Build · Dashboards · Inbox</span>
         <a href="#">Admin</a>
+        <span class="nav-sub">Access · Platform · Trust</span>
       </nav>
     </div>
   </div>
-  <div class="mob-top">
-    <button class="hamburger" aria-label="Navigation">☰</button>
-    <div class="mob-title">Brief <span>/ Attention</span></div>
+  <div class="content">
+    <div class="mob-top">
+      <button class="hamburger" aria-label="Navigation">☰</button>
+      <div class="mob-title">Brief <span>/ Attention</span></div>
+    </div>
+    <div class="readblock"><b>8 signals</b> — DSI stale blocks 119 cover pairs. Open Position on desktop for grid.</div>
+    <ol class="ranks">
+      <li>
+        <span class="rk">1</span><span class="tick stop"></span>
+        <div><span class="title">DSI import failed</span><span class="why">Rectron · 2,410 rows</span></div>
+        <span class="age n">2h</span>
+      </li>
+      <li>
+        <span class="rk">2</span><span class="tick stop"></span>
+        <div><span class="title">119 pairs under 4w</span><span class="why">Cover breach</span></div>
+        <span class="age n">today</span>
+      </li>
+      <li>
+        <span class="rk">3</span><span class="tick wait"></span>
+        <div><span class="title">FX blocked settle</span><span class="why">CPOR-0412</span></div>
+        <span class="age n">1d</span>
+      </li>
+    </ol>
   </div>
-  <div class="readblock"><b>8 signals</b> — DSI stale blocks 119 cover pairs. Open Channel on desktop for grid.</div>
-  <ol class="ranks">
-    <li>
-      <span class="rk">1</span><span class="tick stop"></span>
-      <div><span class="title">DSI import failed</span><span class="why">Rectron · 2,410 rows</span></div>
-      <span class="age n">2h</span>
-    </li>
-    <li>
-      <span class="rk">2</span><span class="tick stop"></span>
-      <div><span class="title">119 pairs under 4w</span><span class="why">Cover breach</span></div>
-      <span class="age n">today</span>
-    </li>
-    <li>
-      <span class="rk">3</span><span class="tick wait"></span>
-      <div><span class="title">FX blocked settle</span><span class="why">CPOR-0412</span></div>
-      <span class="age n">1d</span>
-    </li>
-  </ol>
 </div>
 </body>
 </html>

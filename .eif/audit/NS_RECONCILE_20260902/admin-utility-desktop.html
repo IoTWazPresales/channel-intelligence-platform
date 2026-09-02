@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin utility — amended</title>
+  <link rel="stylesheet" href="cip-base.css" />
+</head>
+<body>
+<div class="app">
+  <aside class="spine">
+    <div class="mark"><span class="word">Channel Intelligence</span><span class="sub">SA · 26Q3</span></div>
+    <nav class="nav">
+      <a href="platform-shell-desktop.html"><span>Brief</span></a>
+      <a href="#"><span>Plan</span></a>
+      <a href="position-cover-desktop.html"><span>Position</span></a>
+      <a href="#"><span>Settlement</span></a>
+      <a href="#"><span>Actions</span></a>
+      <a href="#"><span>Imports</span></a>
+    </nav>
+    <div class="nav-rule"></div>
+    <nav class="nav util">
+      <a href="reports-utility-desktop.html">Reports</a>
+      <a class="on" href="#">Admin</a>
+    </nav>
+    <div class="who"><strong>Local Admin</strong>stub session</div>
+  </aside>
+  <div class="main">
+    <div class="top"><div class="crumb">Admin / <b>Platform operations</b></div></div>
+    <div class="readblock">
+      <div class="read-line">
+        <span class="tagread">Read</span>
+        <p>Admin is <b>not</b> a daily job container — access, tenant config, and trust tooling grouped for operators who maintain the platform.</p>
+      </div>
+    </div>
+    <div class="util-hub">
+      <div class="admin-grid">
+        <div class="tile">
+          <h2>Access</h2>
+          <p>Users and roles. Who can reach Settlement, Imports, and Reports.</p>
+          <div class="meta">/admin/users</div>
+        </div>
+        <div class="tile">
+          <h2>Settings</h2>
+          <p>Tenant profile, commercial defaults, dev wipe panel.</p>
+          <div class="meta">/settings</div>
+        </div>
+        <div class="tile">
+          <h2>Operations</h2>
+          <p>Queue health, worker status, runtime monitoring.</p>
+          <div class="meta">/admin/ops</div>
+        </div>
+        <div class="tile">
+          <h2>Trust</h2>
+          <p>Steward audit trail and SQL viewer for power users — evidence of who changed what.</p>
+          <div class="meta">/admin/steward-audit · /admin/sql-viewer</div>
+        </div>
+      </div>
+      <p style="margin:8px 0 0;font-size:12px;color:var(--muted)">Imports job container owns file ingest and master grids; Admin owns platform governance only.</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -3,49 +3,33 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CIP Full-Platform Architecture — Design Evidence Gallery</title>
-  <link rel="stylesheet" href="cip.css" />
+  <title>N-0013 amended evidence gallery</title>
+  <link rel="stylesheet" href="cip-base.css" />
   <style>
     body { min-width: auto; padding: 32px; max-width: 960px; margin: 0 auto; }
     h1 { font-size: 20px; margin: 0 0 8px; }
-    .meta { color: var(--muted); font-size: 12px; margin-bottom: 24px; }
+    .meta { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+    .warn { padding: 10px 12px; margin-bottom: 20px; background: rgba(212,161,90,.12); border: 1px solid rgba(212,161,90,.4); border-radius: 4px; font-size: 12px; color: #e8d4a8; }
     .cards { display: grid; gap: 12px; }
-    .card {
-      display: block;
-      padding: 16px 18px;
-      background: var(--elev);
-      border: 1px solid var(--line);
-      border-radius: 5px;
-      text-decoration: none;
-      color: inherit;
-    }
-    .card:hover { border-color: var(--accent); background: var(--surf); }
+    .card { display: block; padding: 14px 16px; background: var(--elev); border: 1px solid var(--line); border-radius: 5px; color: inherit; text-decoration: none; }
+    .card:hover { border-color: var(--accent); }
     .card h2 { font-size: 14px; margin: 0 0 4px; }
     .card p { margin: 0; font-size: 12px; color: var(--muted); }
     .tag { font-family: var(--mono); font-size: 10px; color: var(--accent); }
-    .note { margin-top: 24px; padding: 12px 14px; background: var(--accent-dim); border: 1px solid rgba(61,184,232,.35); border-radius: 4px; font-size: 12px; color: var(--dim); }
+    .retired { opacity: 0.55; }
   </style>
 </head>
 <body>
-  <h1>CIP Full-Platform Architecture — High-Fidelity Evidence</h1>
-  <p class="meta">N-0013 · PRG-20260831T145514 · 2026-09-02 · Proposal: Brief · Plan · Channel · Settlement · Actions · Data</p>
+  <h1>N-0013 — Amended architecture evidence</h1>
+  <p class="meta">Brief · Plan · Position · Settlement · Actions · Imports · Reports · Admin</p>
+  <p class="warn">r1 mobile PASS withdrawn. Use r2 artifacts only. See <code>OPERATOR_DECISIONS.md</code> for D-0001–D-0003.</p>
   <div class="cards">
-    <a class="card" href="platform-shell-desktop.html">
-      <span class="tag">DESKTOP 1280</span>
-      <h2>Platform shell — Brief landing</h2>
-      <p>Proposed spine with renamed containers and expanded Reports/Admin utilities.</p>
-    </a>
-    <a class="card" href="platform-shell-mobile.html">
-      <span class="tag">MOBILE 390</span>
-      <h2>Platform shell — mobile drawer</h2>
-      <p>Slim chrome; hamburger spine; Brief signal queue on phone.</p>
-    </a>
-    <a class="card" href="channel-cover-desktop.html">
-      <span class="tag">DESKTOP 1280</span>
-      <h2>Channel container — Cover lens</h2>
-      <p>Renamed from Stock; unified workbench chrome; Fill vs plan lens label.</p>
-    </a>
+    <a class="card" href="platform-shell-desktop.html"><span class="tag">DESKTOP</span><h2>Brief shell</h2><p>Amended spine labels and utility links.</p></a>
+    <a class="card" href="platform-shell-mobile.html"><span class="tag">MOBILE 390</span><h2>Drawer shell (corrected)</h2><p>Vertical six-job nav; isolated from cip.css row breakpoint.</p></a>
+    <a class="card" href="position-cover-desktop.html"><span class="tag">DESKTOP</span><h2>Position · Cover</h2><p>Renamed from Channel; context route note.</p></a>
+    <a class="card" href="reports-utility-desktop.html"><span class="tag">DESKTOP</span><h2>Reports utility</h2><p>Build · Dashboards · Inbox — three distinct jobs.</p></a>
+    <a class="card" href="admin-utility-desktop.html"><span class="tag">DESKTOP</span><h2>Admin utility</h2><p>Access · Settings · Operations · Trust.</p></a>
+    <div class="card retired"><span class="tag">SUPERSEDED</span><h2>channel-cover-desktop.html (r1)</h2><p>Replaced by position-cover-desktop.html</p></div>
   </div>
-  <p class="note">Audit-only mockups. Not product source. Governing proposal: <code>docs/design/CIP_PLATFORM_ARCHITECTURE_PROPOSAL.md</code>. Quality benchmark: CIP_DESIGN_LANGUAGE.md FROZEN v1.1.</p>
 </body>
 </html>

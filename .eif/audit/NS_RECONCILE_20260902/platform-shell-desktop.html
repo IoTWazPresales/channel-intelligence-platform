@@ -3,23 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Brief — Channel Intelligence (proposed shell)</title>
-  <link rel="stylesheet" href="cip.css" />
-  <style>
-    .readblock { padding: 14px 18px 12px; border-bottom: 1px solid var(--line); background: var(--elev); }
-    .read-line { display: flex; align-items: baseline; gap: 10px; }
-    .tagread { font-family: var(--mono); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); border: 1px solid rgba(61,184,232,.35); border-radius: 3px; padding: 2px 6px; }
-    .read-line p { margin: 0; font-size: 12px; color: var(--dim); }
-    .read-line p b { color: var(--text); font-weight: 600; }
-    .nav a .ct { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--muted); }
-    .nav a.on .ct { color: var(--accent); }
-    .nav a .ct.alert { color: var(--stop); }
-    .util-sub { font-size: 10px; color: var(--muted); padding: 2px 8px 2px 22px; display: block; }
-    .bell { margin-left: auto; font-size: 12px; color: var(--dim); }
-  </style>
+  <title>Brief — proposed shell (amended)</title>
+  <link rel="stylesheet" href="cip-base.css" />
 </head>
 <body>
-<!-- Proposed full-platform shell — desktop. Names: Brief·Plan·Channel·Settlement·Actions·Data -->
 <div class="app">
   <aside class="spine">
     <div class="mark">
@@ -29,24 +16,21 @@
     <nav class="nav">
       <a class="on" href="#"><span>Brief</span><span class="ct alert">8</span></a>
       <a href="#"><span>Plan</span><span class="ct">12</span></a>
-      <a href="channel-cover-desktop.html"><span>Channel</span><span class="ct alert">119</span></a>
+      <a href="position-cover-desktop.html"><span>Position</span><span class="ct alert">119</span></a>
       <a href="#"><span>Settlement</span><span class="ct">310</span></a>
       <a href="#"><span>Actions</span><span class="ct">6</span></a>
-      <a href="#"><span>Data</span><span class="ct alert">23</span></a>
+      <a href="#"><span>Imports</span><span class="ct alert">23</span></a>
     </nav>
     <div class="nav-rule"></div>
     <nav class="nav util">
-      <a href="#">Reports</a>
-      <span class="util-sub">Builder · Dashboards · Inbox</span>
-      <a href="#">Admin</a>
-      <span class="util-sub">Users · Settings · SQL · Ops · Audit</span>
+      <a href="reports-utility-desktop.html">Reports</a>
+      <a href="admin-utility-desktop.html">Admin</a>
     </nav>
     <div class="who"><strong>Local Admin</strong>stub session</div>
   </aside>
   <div class="main">
     <div class="top">
       <div class="crumb">Brief / <b>Attention queue</b></div>
-      <span class="bell">⏳ 2 jobs</span>
     </div>
     <div class="readblock">
       <div class="read-line">
@@ -57,42 +41,25 @@
     <div class="work">
       <ol class="ranks">
         <li>
-          <span class="rk">1</span>
-          <span class="tick stop"></span>
-          <div><span class="title">DSI import failed · Rectron</span><span class="why">Job #1842 · 2,410 rows rejected · blocks Movement lens</span></div>
+          <span class="rk">1</span><span class="tick stop"></span>
+          <div><span class="title">DSI import failed · Rectron</span><span class="why">Job #1842 · blocks Position Movement lens</span></div>
           <span class="age n">2h</span>
-          <span class="btn pri">Open in Data</span>
+          <span class="btn pri">Open Imports</span>
         </li>
         <li>
-          <span class="rk">2</span>
-          <span class="tick stop"></span>
-          <div><span class="title">Cover below 4w · 119 customer×SKU pairs</span><span class="why">Mean book 24.3w — tail concentration on Takealot NB-X13</span></div>
+          <span class="rk">2</span><span class="tick stop"></span>
+          <div><span class="title">Cover below 4w · 119 pairs</span><span class="why">Tail concentration on Takealot NB-X13</span></div>
           <span class="age n">today</span>
-          <span class="btn pri">Open Channel</span>
+          <span class="btn pri">Open Position</span>
         </li>
         <li>
-          <span class="rk">3</span>
-          <span class="tick wait"></span>
-          <div><span class="title">Settlement blocked · FX undeclared</span><span class="why">Case CPOR-2026-0412 · ZAR booked USD evidence</span></div>
+          <span class="rk">3</span><span class="tick wait"></span>
+          <div><span class="title">Settlement blocked · FX undeclared</span><span class="why">Case CPOR-2026-0412</span></div>
           <span class="age n">1d</span>
           <span class="btn">Open Settlement</span>
         </li>
-        <li>
-          <span class="rk">4</span>
-          <span class="tick wait"></span>
-          <div><span class="title">Plan pending approval · Q3 assortment</span><span class="why">7 line items awaiting sign-off before net requirement</span></div>
-          <span class="age n">3d</span>
-          <span class="btn">Open Plan</span>
-        </li>
-        <li>
-          <span class="rk">5</span>
-          <span class="tick wait"></span>
-          <div><span class="title">Inbound overdue · 565 shipments</span><span class="why">Not received against PO · Channel Inbound lens</span></div>
-          <span class="age n">5d</span>
-          <span class="btn">Open Channel</span>
-        </li>
       </ol>
-      <div class="today-foot">Ranked trust → position → money · 3 more signals below fold</div>
+      <div class="today-foot">Ranked trust → position → money · analytical KPI tiles live under Reports → Dashboards (see D-0003)</div>
     </div>
   </div>
 </div>
