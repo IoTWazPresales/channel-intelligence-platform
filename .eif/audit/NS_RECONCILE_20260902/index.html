@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CIP Full-Platform Architecture — Design Evidence Gallery</title>
+  <link rel="stylesheet" href="cip.css" />
+  <style>
+    body { min-width: auto; padding: 32px; max-width: 960px; margin: 0 auto; }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    .meta { color: var(--muted); font-size: 12px; margin-bottom: 24px; }
+    .cards { display: grid; gap: 12px; }
+    .card {
+      display: block;
+      padding: 16px 18px;
+      background: var(--elev);
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      text-decoration: none;
+      color: inherit;
+    }
+    .card:hover { border-color: var(--accent); background: var(--surf); }
+    .card h2 { font-size: 14px; margin: 0 0 4px; }
+    .card p { margin: 0; font-size: 12px; color: var(--muted); }
+    .tag { font-family: var(--mono); font-size: 10px; color: var(--accent); }
+    .note { margin-top: 24px; padding: 12px 14px; background: var(--accent-dim); border: 1px solid rgba(61,184,232,.35); border-radius: 4px; font-size: 12px; color: var(--dim); }
+  </style>
+</head>
+<body>
+  <h1>CIP Full-Platform Architecture — High-Fidelity Evidence</h1>
+  <p class="meta">N-0013 · PRG-20260831T145514 · 2026-09-02 · Proposal: Brief · Plan · Channel · Settlement · Actions · Data</p>
+  <div class="cards">
+    <a class="card" href="platform-shell-desktop.html">
+      <span class="tag">DESKTOP 1280</span>
+      <h2>Platform shell — Brief landing</h2>
+      <p>Proposed spine with renamed containers and expanded Reports/Admin utilities.</p>
+    </a>
+    <a class="card" href="platform-shell-mobile.html">
+      <span class="tag">MOBILE 390</span>
+      <h2>Platform shell — mobile drawer</h2>
+      <p>Slim chrome; hamburger spine; Brief signal queue on phone.</p>
+    </a>
+    <a class="card" href="channel-cover-desktop.html">
+      <span class="tag">DESKTOP 1280</span>
+      <h2>Channel container — Cover lens</h2>
+      <p>Renamed from Stock; unified workbench chrome; Fill vs plan lens label.</p>
+    </a>
+  </div>
+  <p class="note">Audit-only mockups. Not product source. Governing proposal: <code>docs/design/CIP_PLATFORM_ARCHITECTURE_PROPOSAL.md</code>. Quality benchmark: CIP_DESIGN_LANGUAGE.md FROZEN v1.1.</p>
+</body>
+</html>

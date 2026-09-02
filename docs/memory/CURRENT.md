@@ -1,10 +1,10 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-09-02 (full-platform reconciliation audit complete)
+**Last updated:** 2026-09-02 (N-0013 architecture approval gate — operator decision required)
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `a3ee26d` (confirm HEAD with `git rev-parse` after commit)
+**Last content pin:** confirm HEAD with `git rev-parse` after commit
 
 **Alembic (code):** `20260902_0020` (N-0006 FX enforcement)
 
@@ -12,21 +12,25 @@
 
 ## On feat/ns-2-brief-nav-collapse
 
-- **Programme:** PRG-20260831T145514 rev **166**; log events **166** (SHA256 `0f56b1bb58aef8e6ec119a1172940ac53a525446b42e69152ad9860e18223573`).
-- **N-0008** **`complete`** — review run `NS4_INDEPENDENT_REREVIEW_20260902` / `gov-008`; `implementation_run` `NS4_SETTLEMENT_IMPL_20260902` preserved; gates_valid **true**; independence_issues **[]**.
-- **N-0006** programme ledger still **`proposed`** — product shipped at `92f8edb` / Alembic `20260902_0020`; **no first-class historical reconciliation path** in programme runtime (Warren decision required).
-- **N-0004**, **N-0007**, **N-0009**, **N-0012** complete.
+- **Programme:** PRG-20260831T145514 rev **199**; `verify` **ok** (no issues).
+- **Charter amended** — full-platform UI/UX redesign; design language = quality benchmark only; Reports/Admin now in scope; construction blocked until N-0013 operator acceptance.
+- **N-0013** **`ready`** — full-platform IA architecture approval package; operator acceptance **pending**; decision **D-0001** proposed.
+- **N-0010** **`blocked`** — re-titled NS-6 Actions container; depends N-0013.
+- **N-0011** **`blocked`** — re-titled NS-7 Data container; depends N-0013.
+- **N-0004**, **N-0007**, **N-0008**, **N-0009**, **N-0012** complete (preserved; convergence waves follow approval).
+- **N-0006** programme ledger still **`proposed`** — product shipped; Warren hygiene decision on backfill.
 
 ## Programme frontier
 
-- **N-0006** NS-1b FX — ledger sync blocked pending Warren reconciliation decision
-- **N-0010** Response — proposed (dependency N-0008 now complete)
-- **N-0011** Steward — proposed
+- **N-0013** — **operator approval required** (architecture/UI/language package)
+- **N-0006** — FX ledger hygiene (not architecture-blocked)
 
-**Review evidence:** `.eif/audit/NS4_SETTLEMENT_20260902/independent-rereview.md`
+**Blocked until N-0013 accepted:** N-0010, N-0011, all post-approval shell/primitive/migration work.
 
-**Deferred hygiene:** BACKLOG-156 (Lineup inert scope bar); BACKLOG-157 (design-language interaction honesty).
+**Approval package:** `docs/design/CIP_PLATFORM_ARCHITECTURE_PROPOSAL.md` · rendered evidence `.eif/audit/NS_RECONCILE_20260902/` · independent review PASS (`independent-rendered-review.md`).
 
-**Full-platform reconciliation:** performed 2026-09-02 — authoritative matrix at `docs/design/CIP_FULL_PLATFORM_RECONCILIATION.md` (BLN-0001 baseline `46368f6`; 50 capabilities reconciled; 0 RETIRE; 10 API-without-UI gaps). Warren reviews before RESTORE/RETIRE/IA commitments.
+**Reconciliation evidence:** `docs/design/CIP_FULL_PLATFORM_RECONCILIATION.md` (50 capabilities; 0 RETIRE).
+
+**Deferred hygiene:** BACKLOG-156; BACKLOG-157.
 
 **Env:** local Windows. Web `:3000` + API `:8001`.
