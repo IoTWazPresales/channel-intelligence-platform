@@ -215,7 +215,9 @@ any shell text containing `http://localhost:…/path` (FOREIGN_PATH — URL path
 paths); reads of the agent's own terminal/transcript files (FOREIGN_PATH); the EIF repository
 `C:\AI\engineering-intelligence-framework` (FOREIGN_PATH — not a declared root in this session);
 HOOK_TIMEOUT / HOOK_INPUT_INVALID under concurrent tool calls. Consequence: subagent audits could not be
-collected; EIF remedies cannot be written into the EIF repo from this session.
+collected during the run (the subagents themselves were blocked mid-audit and their reports only surfaced
+after the r3 package was committed — filed late as `SUBAGENT_AUDITS_LATE.md`, corroborating not
+authoritative); EIF remedies cannot be written into the EIF repo from this session.
 
 ### Non-defects (do not blame EIF for these)
 
