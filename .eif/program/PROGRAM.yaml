@@ -6,7 +6,7 @@ programme:
   charter:
     status: accepted
     by: operator
-    at: '2026-09-02T08:19:10Z'
+    at: '2026-09-02T09:11:40Z'
     workstreams:
     - North Star UI redesign
     assumptions:
@@ -29,8 +29,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 149
-  log_sha256: 06e440bba21230aba8eed4a8369fecad7e385a2d22c48927ec1eccae4c1cf466
+  snapshot_revision: 158
+  log_sha256: 863f95cf2aab1cf30cfd222ebb8f784ce617fd854c40976a31bab802e03c8b68
   acceptance_policy:
     milestone: operator
     root: operator
@@ -653,7 +653,7 @@ nodes:
     origin: decomposition
     status: in_progress
     stage: verify
-    revision: 30
+    revision: 39
     lease: null
     depends_on:
     - N-0004
@@ -773,30 +773,21 @@ nodes:
         pass_actor: gov-008
       design_execution_decisions:
         required: true
-        state: pass
+        state: pending
         evidence:
-          responsive_decision:
-            status: applicable
-            rationale: Scope bar wraps at 390px; queue/case stack
-            evidence: .eif/audit/NS4_SETTLEMENT_20260902/independent-rendered-review.md
-          visualisation_decision:
-            status: applicable
-            rationale: Portfolio tiles + shape read per benchmark
           consequential_action_decision:
             status: applicable
-            rationale: Settle confirm disabled when fx_settle_allowed false; e2e settle not executed
-            evidence: .eif/audit/NS4_SETTLEMENT_20260902/independent-rendered-review.md
-        rationale: null
-        pass_run: NS4_INDEPENDENT_REVIEW_20260902
-        pass_actor: gov-008
+            rationale: Settle confirm blocked/allowed paths exercised on disposable clone DB
+            evidence: apps/api/tests/test_cpor_settle_confirm_clone.py
+        rationale: Remediation recorded; await fresh gov-008 re-review
       ux:
         required: true
-        state: blocked
+        state: pending
         evidence:
-          path: .eif/audit/NS4_SETTLEMENT_20260902/independent-rendered-review.md
-          finding: Apply button inert; From/To/BU/Customer pseudo-selects not labeled deferred
-          remediation: Disable inert controls or wire structural filters
-        rationale: Apply button inert; From/To/BU/Customer pseudo-selects not labeled deferred
+          path: apps/web/src/features/settlement/SettlementScopeBar.tsx
+          remediation: Structural filters dashed/disabled; Apply disabled with not-active label
+          prior_review: .eif/audit/NS4_SETTLEMENT_20260902/independent-rendered-review.md
+        rationale: Remediation recorded; await fresh gov-008 re-review
       a11y:
         required: true
         state: pass
@@ -822,12 +813,12 @@ nodes:
         pass_actor: gov-008
       content:
         required: true
-        state: blocked
+        state: pending
         evidence:
-          path: .eif/audit/NS4_SETTLEMENT_20260902/independent-rendered-review.md
-          finding: Apply CTA styled active without effect
-          remediation: Label deferred or disable Apply until structural filters ship
-        rationale: Apply CTA styled active without effect
+          path: apps/web/src/features/settlement/SettlementScopeBar.tsx
+          remediation: Apply CTA no longer styled as primary active control
+          prior_review: .eif/audit/NS4_SETTLEMENT_20260902/independent-rendered-review.md
+        rationale: Remediation recorded; await fresh gov-008 re-review
     verification:
       rendered:
         state: pass

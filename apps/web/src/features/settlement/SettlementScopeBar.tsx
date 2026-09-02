@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Button, MenuItem, Select, Typography } from '@mui/material';
+import { Box, Button, MenuItem, Select, Tooltip, Typography } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback } from 'react';
@@ -19,6 +19,8 @@ type Props = {
   scope: SettlementScope;
   onScopeChange: (next: Partial<SettlementScope>) => void;
 };
+
+const DEFERRED_SCOPE_TOOLTIP = 'Period, BU, and customer filters are not active yet';
 
 const STATE_OPTIONS: { value: SettlementStateFilter; label: string }[] = [
   { value: 'open', label: 'Open' },
@@ -78,32 +80,40 @@ export function SettlementScopeBar({ scope, onScopeChange }: Props) {
       }}
     >
       {(['From', 'To', 'BU', 'Customer'] as const).map((label) => (
-        <Box key={label} sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-          <Typography
-            sx={{
-              fontSize: '9.5px',
-              color: alpha(theme.palette.text.primary, 0.45),
-              textTransform: 'uppercase',
-              letterSpacing: '0.07em',
-            }}
+        <Tooltip key={label} title={DEFERRED_SCOPE_TOOLTIP} placement="top">
+          <Box
+            sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}
+            data-testid={`settlement-scope-${label.toLowerCase()}-deferred`}
+            aria-disabled="true"
           >
-            {label}
-          </Typography>
-          <Typography
-            sx={{
-              fontSize: '12px',
-              fontWeight: 500,
-              px: 1.25,
-              py: 0.625,
-              borderRadius: '4px',
-              border: `1px solid ${alpha(theme.palette.common.white, 0.2)}`,
-              bgcolor: '#1e2229',
-              minWidth: 96,
-            }}
-          >
-            {label === 'From' || label === 'To' ? scope.periodLabel : label === 'BU' ? 'All BUs' : 'All customers'}
-          </Typography>
-        </Box>
+            <Typography
+              sx={{
+                fontSize: '9.5px',
+                color: alpha(theme.palette.text.primary, 0.35),
+                textTransform: 'uppercase',
+                letterSpacing: '0.07em',
+              }}
+            >
+              {label}
+            </Typography>
+            <Typography
+              sx={{
+                fontSize: '12px',
+                fontWeight: 500,
+                px: 1.25,
+                py: 0.625,
+                borderRadius: '4px',
+                border: `1px dashed ${alpha(theme.palette.common.white, 0.14)}`,
+                bgcolor: alpha('#1e2229', 0.65),
+                minWidth: 96,
+                color: alpha(theme.palette.text.primary, 0.45),
+                cursor: 'not-allowed',
+              }}
+            >
+              {label === 'From' || label === 'To' ? scope.periodLabel : label === 'BU' ? 'All BUs' : 'All customers'}
+            </Typography>
+          </Box>
+        </Tooltip>
       ))}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
         <Typography
@@ -140,21 +150,27 @@ export function SettlementScopeBar({ scope, onScopeChange }: Props) {
           ))}
         </Select>
       </Box>
-      <Button
-        size="small"
-        sx={{
-          fontWeight: 600,
-          color: '#bfe8f8',
-          bgcolor: alpha('#3db8e8', 0.16),
-          border: `1px solid ${alpha('#3db8e8', 0.55)}`,
-          px: 2,
-          py: 0.75,
-          textTransform: 'none',
-        }}
-        data-testid="settlement-scope-apply"
-      >
-        Apply
-      </Button>
+      <Tooltip title={DEFERRED_SCOPE_TOOLTIP} placement="top">
+        <span>
+          <Button
+            size="small"
+            disabled
+            sx={{
+              fontWeight: 600,
+              color: alpha(theme.palette.text.primary, 0.4),
+              bgcolor: alpha(theme.palette.common.white, 0.04),
+              border: `1px dashed ${alpha(theme.palette.common.white, 0.18)}`,
+              px: 2,
+              py: 0.75,
+              textTransform: 'none',
+            }}
+            data-testid="settlement-scope-apply"
+            aria-label="Apply scope filters (not active yet)"
+          >
+            Apply (not active)
+          </Button>
+        </span>
+      </Tooltip>
       <Button
         size="small"
         sx={{ color: alpha(theme.palette.text.primary, 0.45), textTransform: 'none' }}

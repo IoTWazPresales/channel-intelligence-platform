@@ -439,6 +439,7 @@ For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warre
 
 ## Changelog
 
+- 2026-09-02 — **N-0008 NS-4 remediation:** scope bar deferred controls disabled/labeled; settle confirm clone path proven on `cip_ns4_settle_clone`; programme rev 158; N-0006 ledger reconciliation stopped (no runtime backfill path). Ready for fresh gov-008 re-review.
 | Date | Summary |
 |------|---------|
 | 2026-08-08 | **PR #20 merged to main (`a307229`):** BACKLOG-125/126. Next 127/128 or roadmap gate. |
