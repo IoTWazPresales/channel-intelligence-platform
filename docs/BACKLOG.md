@@ -2148,6 +2148,40 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 ---
 
+## BACKLOG-156 — N-0009 Lineup scope bar inert-control honesty
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-02 |
+| **Effort** | Small |
+| **Source** | `.eif/audit/NS4_SETTLEMENT_20260902/independent-rereview.md` (N-0009 finding); `apps/web/src/features/lineup/LineupScopeBar.tsx` |
+| **Idea** | Apply the same interaction-honesty treatment used on Settlement remediation: disable or clearly label inert From/To/BU/Customer pseudo-selects and the **Apply** button (currently styled as primary CTA with no handler). |
+| **Why it matters / deferrable** | Operators see operable-looking controls that do nothing — same presentation defect that blocked N-0008 ux/content. N-0009 programme status remains **complete**; this is product hygiene, not a programme reopen. Deferrable until a Lineup scope-filter unit is scheduled. |
+| **What the work is** | Mirror `SettlementScopeBar` deferred pattern (dashed/disabled styling, tooltip, `Apply (not active)` label) or wire structural filters if product decides to ship them. |
+| **Regression traps** | Do not break Pending approval saved view or lineup row actions; preserve grammar-2 shell parity. |
+| **Behavior to retain** | Approval filter via Saved view; lineup grid and approve/reject paths unchanged. |
+| **Out of scope** | Reopening N-0009 programme gates; structural period/BU/customer filter implementation unless separately scoped. |
+| **TRIGGER** | Warren schedules Lineup scope-bar remediation, or NS-6/NS-7 work touches `LineupScopeBar.tsx`. |
+
+---
+
+## BACKLOG-157 — CIP design language: interaction honesty requirement
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-02 |
+| **Effort** | Small (docs) |
+| **Source** | `.eif/audit/NS4_SETTLEMENT_20260902/independent-rereview.md`; N-0008 blocked for inert controls while N-0009 passed the same review role without a written standard |
+| **Idea** | Amend `docs/design/CIP_DESIGN_LANGUAGE.md` with an explicit **interaction honesty** rule: any control that does not perform its represented action must be disabled, labeled unavailable, or visibly non-interactive per container grammar — not styled as primary/active. |
+| **Why it matters / deferrable** | Without a design-language requirement, independent review will continue to pass inert controls on one container and fail them on another. Substantive prevention for Steward, Response, and future scope bars. Deferrable as docs-only until next design-language touch. |
+| **What the work is** | Add a short normative subsection (controls + deferral labeling) to CIP_DESIGN_LANGUAGE.md FROZEN v1.1+; cross-reference from steward/response grammar sections. |
+| **Regression traps** | Amendment must not retroactively invalidate completed nodes; state applicability forward. |
+| **Behavior to retain** | Existing frozen tokens and container grammars; additive requirement only. |
+| **Out of scope** | Mass remediation of all scope bars in one pass. |
+| **TRIGGER** | Next design-language revision, or second inert-control defect found on a programme-complete container. |
+
+---
+
 ## BACKLOG-154 — NS-7 Steward factory + worklists
 
 | Field | Detail |
