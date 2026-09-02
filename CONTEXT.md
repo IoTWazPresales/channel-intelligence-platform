@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-09-02 — **N-0013 full-platform architecture approval gate** on `feat/ns-2-brief-nav-collapse`: charter amended (full-platform redesign; design language = quality benchmark); N-0013 `ready` operator acceptance pending; N-0010/N-0011 blocked; proposal `docs/design/CIP_PLATFORM_ARCHITECTURE_PROPOSAL.md`; HF evidence `.eif/audit/NS_RECONCILE_20260902/`; programme rev 198 verify ok; decision D-0001 proposed (Brief·Plan·Channel·Settlement·Actions·Data + Reports·Admin).
+- 2026-09-02 — **N-0013 full-platform architecture approval gate** on `feat/ns-2-brief-nav-collapse` `d8defda`: charter amended (full-platform redesign; design language = quality benchmark); N-0013 `ready` operator acceptance pending; N-0010/N-0011 blocked; proposal `docs/design/CIP_PLATFORM_ARCHITECTURE_PROPOSAL.md`; HF evidence `.eif/audit/NS_RECONCILE_20260902/`; programme rev 199 verify ok; decision D-0001 proposed (Brief·Plan·Channel·Settlement·Actions·Data + Reports·Admin). Programme ledger `04ebc5c`.
 
 - 2026-09-02 — **N-0008 NS-4 independent re-review PASS → programme complete** on `feat/ns-2-brief-nav-collapse` `a3ee26d`: programme rev 166 (log SHA256 before `863f95cf…` / 158 events, after `0f56b1bb…` / 166 events); review run `NS4_INDEPENDENT_REREVIEW_20260902` / `gov-008`; `implementation_run` `NS4_SETTLEMENT_IMPL_20260902` preserved; gates_valid true; evidence `.eif/audit/NS4_SETTLEMENT_20260902/independent-rereview.md`. BACKLOG-156 (Lineup inert scope bar), BACKLOG-157 (design-language interaction honesty).
 
