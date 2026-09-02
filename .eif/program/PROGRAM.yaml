@@ -6,7 +6,7 @@ programme:
   charter:
     status: accepted
     by: operator
-    at: '2026-09-02T09:11:40Z'
+    at: '2026-09-02T09:42:27Z'
     workstreams:
     - North Star UI redesign
     assumptions:
@@ -29,8 +29,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 158
-  log_sha256: 863f95cf2aab1cf30cfd222ebb8f784ce617fd854c40976a31bab802e03c8b68
+  snapshot_revision: 166
+  log_sha256: 0f56b1bb58aef8e6ec119a1172940ac53a525446b42e69152ad9860e18223573
   acceptance_policy:
     milestone: operator
     root: operator
@@ -651,9 +651,9 @@ nodes:
     title: NS-4 CPOR Settlement — queue and case redesign
     class: redesign
     origin: decomposition
-    status: in_progress
-    stage: verify
-    revision: 39
+    status: complete
+    stage: null
+    revision: 47
     lease: null
     depends_on:
     - N-0004
@@ -773,21 +773,34 @@ nodes:
         pass_actor: gov-008
       design_execution_decisions:
         required: true
-        state: pending
+        state: pass
         evidence:
+          responsive_decision:
+            status: applicable
+            rationale: Scope bar wraps at 390px; queue/case stack
+            evidence: .eif/audit/NS4_SETTLEMENT_20260902/independent-rendered-review.md
+          visualisation_decision:
+            status: applicable
+            rationale: Portfolio tiles + shape read per benchmark
           consequential_action_decision:
             status: applicable
-            rationale: Settle confirm blocked/allowed paths exercised on disposable clone DB
+            rationale: Settle confirm blocked 409 fx_blocked and allowed 200 on disposable clone
             evidence: apps/api/tests/test_cpor_settle_confirm_clone.py
+            database: cip_ns4_settle_clone
+            settle_e2e_clone: executed
         rationale: Remediation recorded; await fresh gov-008 re-review
+        pass_run: NS4_INDEPENDENT_REREVIEW_20260902
+        pass_actor: gov-008
       ux:
         required: true
-        state: pending
+        state: pass
         evidence:
-          path: apps/web/src/features/settlement/SettlementScopeBar.tsx
-          remediation: Structural filters dashed/disabled; Apply disabled with not-active label
+          path: .eif/audit/NS4_SETTLEMENT_20260902/independent-rereview.md
+          summary: Deferred structural filters dashed/disabled with tooltip; Apply disabled and labeled not active
           prior_review: .eif/audit/NS4_SETTLEMENT_20260902/independent-rendered-review.md
         rationale: Remediation recorded; await fresh gov-008 re-review
+        pass_run: NS4_INDEPENDENT_REREVIEW_20260902
+        pass_actor: gov-008
       a11y:
         required: true
         state: pass
@@ -801,28 +814,32 @@ nodes:
         required: true
         state: pass
         evidence: &id003
-          path: .eif/audit/NS4_SETTLEMENT_20260902/independent-rendered-review.md
+          path: .eif/audit/NS4_SETTLEMENT_20260902/independent-rereview.md
           url: http://localhost:3000/commercial-planner/cpor-cases
           viewports:
           - desktop_1280
           - mobile_390
-          settle_e2e_clone: not_executed
-          risk: unmitigated settle confirm path on disposable clone
+          settle_e2e_clone: executed
+          clone_test: apps/api/tests/test_cpor_settle_confirm_clone.py
+          database: cip_ns4_settle_clone
+          cleanup_note: test uses hard delete on disposable clone — hygiene finding only
         rationale: null
-        pass_run: NS4_INDEPENDENT_REVIEW_20260902
+        pass_run: NS4_INDEPENDENT_REREVIEW_20260902
         pass_actor: gov-008
       content:
         required: true
-        state: pending
+        state: pass
         evidence:
-          path: apps/web/src/features/settlement/SettlementScopeBar.tsx
-          remediation: Apply CTA no longer styled as primary active control
+          path: .eif/audit/NS4_SETTLEMENT_20260902/independent-rereview.md
+          summary: Apply CTA reads Apply (not active); no primary-active styling on inert control
           prior_review: .eif/audit/NS4_SETTLEMENT_20260902/independent-rendered-review.md
         rationale: Remediation recorded; await fresh gov-008 re-review
+        pass_run: NS4_INDEPENDENT_REREVIEW_20260902
+        pass_actor: gov-008
     verification:
       rendered:
         state: pass
-        pass_run: NS4_INDEPENDENT_REVIEW_20260902
+        pass_run: NS4_INDEPENDENT_REREVIEW_20260902
         pass_actor: gov-008
         evidence: *id003
         path: null
