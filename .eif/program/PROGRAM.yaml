@@ -6,7 +6,7 @@ programme:
   charter:
     status: accepted
     by: eif
-    at: '2026-09-02T19:28:12Z'
+    at: '2026-09-02T22:44:56Z'
     workstreams:
     - Full-platform UI/UX redesign
     - Shell & primitive convergence
@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 254
-  log_sha256: 66c07a1a1757f418ed0dd300394ec7f28ac641d8da1b3dd899988e1ca765ff04
+  snapshot_revision: 273
+  log_sha256: 7f0a93a6e8e79cbe2c2ea7e60144666e998ce990b7cfae3abe12ffba132d2277
   acceptance_policy:
     milestone: operator
     root: operator
@@ -1094,7 +1094,7 @@ nodes:
     origin: decomposition
     status: blocked
     stage: null
-    revision: 3
+    revision: 6
     lease: null
     depends_on:
     - N-0008
@@ -1186,11 +1186,15 @@ nodes:
     - id: BL-0001
       type: dependency
       ref: N-0013
-      opened: '2026-09-02T19:28:12Z'
+      opened: '2026-09-02T22:44:56Z'
       note: Blocked pending N-0013 operator architecture approval
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: '2026-09-02 reconciliation into post-N-0013 programme: this node is the ''Actions container'', not the Promotion
+      Planner (B4, partly shipped). Its acceptance criteria cite rejected design input (FROZEN v1.1 / container Response)
+      — recorded as a doc/code contradiction. Disposition proposal D-0009 (retire framing; charter Promotions & Funding surface,
+      Market & Listings surface, promotion-plan template profile after D-0008). Evidence: .eif/audit/NS_REDESIGN_R3_20260902/commercial/COMMERCIAL_DIRECTION.md
+      §5, CAPABILITY_ACCOUNTING.md. Remains blocked on N-0013.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -1297,7 +1301,7 @@ nodes:
     - id: BL-0002
       type: dependency
       ref: N-0013
-      opened: '2026-09-02T19:28:12Z'
+      opened: '2026-09-02T22:44:56Z'
       note: Blocked pending N-0013 operator architecture approval
     conservation_tags: []
     fingerprint: null
@@ -1359,7 +1363,7 @@ nodes:
     origin: decomposition
     status: blocked
     stage: verify
-    revision: 72
+    revision: 85
     lease: null
     depends_on: []
     facets:
@@ -1393,25 +1397,31 @@ nodes:
           paths:
           - apps/web/src/design-lab/
           - apps/web/src/app/(design-lab)/
+          note: r3.1 adds PromotionPlannerSurface, PlanTemplatesSurface (mounts production CanonicalColumnMappingPanel), MarketSurface,
+            LifecycleRail, CapabilityLedger, CapabilityStatus
           independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
-            CLI) for IA only
+            CLI, separate process) for IA/template questions only
           reviewer_required: separate GOV-008 session, other model where available
           dim: design_artifact_class
-        rationale: r3 package authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008 and operator acceptance.
+        rationale: r3.1 commercial amendment authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008
+          and operator acceptance of D-0008.
       design_divergence:
         required: true
         state: authored_unverified
         evidence:
           paths:
           - .eif/audit/NS_REDESIGN_R3_20260902/CONCEPTS.md
-          - .eif/audit/NS_REDESIGN_R3_20260902/CONSULT_SEED.md
-          - .eif/audit/NS_REDESIGN_R3_20260902/CONSULT_RESPONSE.md
+          - .eif/audit/NS_REDESIGN_R3_20260902/commercial/CONSULT_SEED.md
+          - .eif/audit/NS_REDESIGN_R3_20260902/commercial/CONSULT_RESPONSE.md
           consult_model: claude opus (CLI, separate process)
+          note: 'commercial IA: planner placement (3 options), evidence-domain placement (3), template architecture (3), status
+            vocabulary, N-0010, naming'
           independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
-            CLI) for IA only
+            CLI, separate process) for IA/template questions only
           reviewer_required: separate GOV-008 session, other model where available
           dim: design_divergence
-        rationale: r3 package authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008 and operator acceptance.
+        rationale: r3.1 commercial amendment authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008
+          and operator acceptance of D-0008.
       design_signatures:
         required: true
         state: pass
@@ -1431,29 +1441,32 @@ nodes:
         evidence:
           paths:
           - .eif/audit/NS_REDESIGN_R3_20260902/rendered-verification.md
-          - .eif/audit/NS_REDESIGN_R3_20260902/renders/proto/manifest.json
+          - .eif/audit/NS_REDESIGN_R3_20260902/commercial/rendered-verification.md
+          - .eif/audit/NS_REDESIGN_R3_20260902/commercial/renders/manifest.json
           viewports:
           - 1280x800
           - 390x844
-          captures: 34
+          captures: 61
           independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
-            CLI) for IA only
+            CLI, separate process) for IA/template questions only
           reviewer_required: separate GOV-008 session, other model where available
           dim: rendered_comparison
-        rationale: r3 package authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008 and operator acceptance.
+        rationale: r3.1 commercial amendment authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008
+          and operator acceptance of D-0008.
       design_sameness_review:
         required: true
         state: authored_unverified
         evidence:
           paths:
           - .eif/audit/NS_REDESIGN_R3_20260902/FAULT_FINDINGS.md
-          - .eif/audit/NS_REDESIGN_R3_20260902/DIRECTION.md#2
-          note: structural change vs rejected six containers documented
+          - .eif/audit/NS_REDESIGN_R3_20260902/commercial/COMMERCIAL_DIRECTION.md#2
+          note: r3.1 delta table vs D-0007; binary data-gating rule withdrawn
           independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
-            CLI) for IA only
+            CLI, separate process) for IA/template questions only
           reviewer_required: separate GOV-008 session, other model where available
           dim: design_sameness_review
-        rationale: r3 package authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008 and operator acceptance.
+        rationale: r3.1 commercial amendment authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008
+          and operator acceptance of D-0008.
       design_interaction_spec:
         required: true
         state: pass
@@ -1534,73 +1547,81 @@ nodes:
         evidence:
           paths:
           - .eif/audit/NS_REDESIGN_R3_20260902/rendered-verification.md
+          - .eif/audit/NS_REDESIGN_R3_20260902/commercial/rendered-verification.md
           viewports:
           - 1280x800
           - 390x844
           independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
-            CLI) for IA only
+            CLI, separate process) for IA/template questions only
           reviewer_required: separate GOV-008 session, other model where available
           dim: rendered
-        rationale: r3 package authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008 and operator acceptance.
+        rationale: r3.1 commercial amendment authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008
+          and operator acceptance of D-0008.
       content:
         required: true
         state: authored_unverified
         evidence:
           paths:
-          - .eif/audit/NS_REDESIGN_R3_20260902/DIRECTION.md#3
+          - .eif/audit/NS_REDESIGN_R3_20260902/commercial/COMMERCIAL_DIRECTION.md#3
           - apps/web/src/design-lab/shell/labNav.ts
-          note: domain nouns + one-line what-it-computes per leaf
+          note: Promotions & Funding / Market & Listings nouns; four-state labels 'Partly built / Data only / Planned'
           independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
-            CLI) for IA only
+            CLI, separate process) for IA/template questions only
           reviewer_required: separate GOV-008 session, other model where available
           dim: content
-        rationale: r3 package authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008 and operator acceptance.
+        rationale: r3.1 commercial amendment authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008
+          and operator acceptance of D-0008.
       accessibility:
         required: false
         state: authored_unverified
         evidence:
           paths:
+          - apps/web/src/design-lab/primitives/LifecycleRail.tsx
           - apps/web/src/design-lab/primitives/Panel.tsx
-          - apps/web/src/design-lab/primitives/HeadlineFigure.tsx
-          note: focus-visible outlines, keyboard on PanelRow/HeadlineFigure; NOT audited by axe — UNVERIFIED
+          note: LifecycleRail stages are buttons with aria-current; NOT audited by axe — UNVERIFIED
           independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
-            CLI) for IA only
+            CLI, separate process) for IA/template questions only
           reviewer_required: separate GOV-008 session, other model where available
           dim: accessibility
-        rationale: r3 package authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008 and operator acceptance.
+        rationale: r3.1 commercial amendment authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008
+          and operator acceptance of D-0008.
       interaction_spec:
         required: false
         state: authored_unverified
         evidence:
           paths:
-          - .eif/audit/NS_REDESIGN_R3_20260902/rendered-verification.md
-          note: edit dashboard, drill panel, approve case, map token, metric switch + pin proven in prototype
+          - .eif/audit/NS_REDESIGN_R3_20260902/commercial/rendered-verification.md
+          note: inline cell edit → waterfall recompute; evidence panel from non-editable cells; export dialog; template mapping
+            with blocking error; approve/reject mapping; confirm/reject feed proposal
           independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
-            CLI) for IA only
+            CLI, separate process) for IA/template questions only
           reviewer_required: separate GOV-008 session, other model where available
           dim: interaction_spec
-        rationale: r3 package authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008 and operator acceptance.
+        rationale: r3.1 commercial amendment authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008
+          and operator acceptance of D-0008.
       state_coverage:
         required: false
         state: authored_unverified
         evidence:
           paths:
-          - .eif/audit/NS_REDESIGN_R3_20260902/rendered-verification.md
-          note: empty/gated (forecast), scope-empty, mobile cards, edit mode
+          - .eif/audit/NS_REDESIGN_R3_20260902/commercial/rendered-verification.md
+          note: partial / substrate / planned lenses rendered honestly (budget ledger, competitor prices, listing quality);
+            needs-mapping template; draft plan blocked by template
           independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
-            CLI) for IA only
+            CLI, separate process) for IA/template questions only
           reviewer_required: separate GOV-008 session, other model where available
           dim: state_coverage
-        rationale: r3 package authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008 and operator acceptance.
+        rationale: r3.1 commercial amendment authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008
+          and operator acceptance of D-0008.
     verification:
       rendered:
         state: authored_unverified
         evidence:
           paths:
-          - .eif/audit/NS_REDESIGN_R3_20260902/rendered-verification.md
-          - .eif/audit/NS_REDESIGN_R3_20260902/renders/proto/
+          - .eif/audit/NS_REDESIGN_R3_20260902/commercial/rendered-verification.md
+          - .eif/audit/NS_REDESIGN_R3_20260902/commercial/renders/
           independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
-            CLI) for IA only
+            CLI, separate process) for IA/template questions only
           reviewer_required: separate GOV-008 session, other model where available
         path: null
       referent:
@@ -1628,15 +1649,17 @@ nodes:
     - id: BL-OPERATOR-REJECTION-20260902
       type: decision
       ref: D-0004,D-0005,D-0006
-      opened: '2026-09-02T19:28:12Z'
+      opened: '2026-09-02T22:44:56Z'
       note: Operator rejected r2 package 2026-09-02. New design package (React prototype + rendered evidence) required; Phase
         A / production redesign implementation blocked until operator accepts a direction.
     conservation_tags: []
     fingerprint: null
-    stage_note: 'r3 design package complete for operator review (2026-09-02): FAULT_FINDINGS, PRODUCT_CAPABILITY_AUDIT, COMPONENT_ECOSYSTEM_AUDIT,
-      CONCEPTS (3), CONSULT (opus, separate process) -> DIRECTION (hybrid H, D-0007 proposed); React prototype under apps/web/src/design-lab
-      + app/(design-lab) (fixtures, no API); 34 renders @1280/@390 with manifest; EIF_REMEDIES_PROPOSAL (not applied); OPERATOR_SUMMARY.
-      Node remains blocked on operator acceptance; production implementation not started.'
+    stage_note: 'r3.1 commercial amendment (2026-09-02): operator truths on Promotion Planner / listing intelligence / product
+      competition applied. Source+roadmap discovery (CAPABILITY_ACCOUNTING), CONSULT (opus, separate process) on 6 questions,
+      COMMERCIAL_DIRECTION (D-0007→D-0008 delta, IA, template architecture, N-0010 disposition, cross-domain links, remaining
+      operator decisions). Design-lab: Funding & Settlement → Promotions & Funding with planner/templates/budgets lenses;
+      Commercial inputs removed; Market & Listings added; four-state LeafStatus; 27 renders. D-0007 superseded by D-0008 (proposed);
+      D-0009 proposed for N-0010. Node remains blocked on operator acceptance; production implementation not started.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -1708,6 +1731,42 @@ decisions:
       pins as widget). Mapping/resolution stays reachable per-job and as a cross-job Steward queue leaf (D-0002 still deferred).
       Evidence: .eif/audit/NS_REDESIGN_R3_20260902/DIRECTION.md, CONCEPTS.md, CONSULT_RESPONSE.md, rendered-verification.md,
       prototype apps/web/src/design-lab + app/(design-lab).'
+    origin: agent
+    status: superseded
+    supersedes: null
+  D-0008:
+    id: D-0008
+    scope: N-0013
+    statement: 'PROPOSED 2026-09-02 (r3.1): D-0007 as amended for the commercial capability. Δ1 Funding & Settlement → ''Promotions
+      & Funding'' owning the whole cpor_case lifecycle (Promotion planner · Case book · Claims evidence · Payments · Plan
+      templates · Terms & assumptions · Budget ledger). Δ2 ''Commercial inputs'' removed (its fixture tables promotion_plan/price_observations
+      do not exist; promotion object is the same cpor_case row). Δ3 new evidence domain ''Market & Listings'' (Monitored listings
+      · Price history · Promotion activation · Feed proposals · Competitor mappings[partial] · Competitor prices[substrate]
+      · Competitor listings[planned] · Listing quality/SEO[planned]). Δ4 binary data-gating withdrawn → four-state leaf vocabulary
+      live/partial/substrate/planned; rail = live+partial (marked), directory = all four labelled. Δ5 export = canonical cpor_case
+      model ↔ per-customer direction-aware template profile learned once via CanonicalColumnMappingPanel (supersedes CporHistoricalMappingProfile;
+      retires RESELLER_HEADERS; round-trip diff = 0 is the certification). Δ6 cross-domain links: product panel → listings/competitors;
+      case panel → LifecycleRail + activation. Δ7 proposed attention signals promo_not_activated / listing_price_change /
+      competitor_mapping_pending shown as proposed, not live. Everything else in D-0007 unchanged; D-0002 remains deferred.
+      Evidence: .eif/audit/NS_REDESIGN_R3_20260902/commercial/COMMERCIAL_DIRECTION.md, CAPABILITY_ACCOUNTING.md, CONSULT_SEED.md,
+      CONSULT_RESPONSE.md, rendered-verification.md (27 captures @1280/@390); prototype apps/web/src/design-lab (FundingSurface,
+      PromotionPlannerSurface, PlanTemplatesSurface, MarketSurface, labNav LeafStatus).'
+    origin: agent
+    status: proposed
+    supersedes: D-0007
+  D-0009:
+    id: D-0009
+    scope: N-0010
+    statement: 'PROPOSED 2026-09-02: N-0010 disposition. N-0010 (''NS-6 Actions container'', blocked) is not the Promotion
+      Planner and its acceptance criteria cite rejected design input (CIP_DESIGN_LANGUAGE.md FROZEN v1.1 / container Response).
+      Recommend: retire that framing; after D-0008 acceptance charter (a) Promotions & Funding surface (B4 planner becomes
+      the authoring surface of a draft case; from-scratch entry + entity pickers; retire /promotions scaffold notice), (b)
+      Market & Listings surface (re-home /listing-capture + /competition under honest status; wire score_competitor_candidate
+      behind ''Propose candidates''; promo_not_activated Brief signal; fix market.py readiness claim), (c) promotion-plan
+      template profile (map once; same profile parses + renders; RESELLER_HEADERS removed; round-trip diff = 0); (d) keep
+      ''ranked commercial actions'' only as a slimmed re-chartered planned node if it retains product value. ACs must forbid
+      hard-coded template law and fabricated uplift/elasticity/causality/impact/confidence. Operator decision required; no
+      nodes chartered by this run. Evidence: .eif/audit/NS_REDESIGN_R3_20260902/commercial/COMMERCIAL_DIRECTION.md §5.'
     origin: agent
     status: proposed
     supersedes: null
