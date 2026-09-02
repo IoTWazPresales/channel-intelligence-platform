@@ -7,16 +7,17 @@ import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 import { fmtInt, tenant } from '../fixtures/entities';
-import { lineupSummary, planVsShipped, poCoverage, priceObservations, promotionPlanLines, shipmentLifecycle, signals } from '../fixtures/operations';
+import { lineupSummary, planVsShipped, poCoverage, shipmentLifecycle, signals } from '../fixtures/operations';
+import { CapabilityStatus } from '../primitives/CapabilityStatus';
 import { CategoryBars, PairedBars, ProportionBar, TrendChart } from '../primitives/charts';
 import { DomainHeader } from '../primitives/DomainHeader';
 import { HeadlineFigure, HeadlineStrip } from '../primitives/HeadlineFigure';
 import { Panel, PanelRow } from '../primitives/Panel';
-import { labDomains, type LabDomain } from '../shell/labNav';
+import { inRail, labDomains, leafStatusLabel, type LabDomain } from '../shell/labNav';
 
 /**
  * Domain overview pattern (CONSULT gate: a domain must compose headline figures + its attention
- * items + workflow links, never a folder of routes). Planning / Supply / Commercial / Admin use it.
+ * items + workflow links, never a folder of routes). Planning / Supply / Admin use it.
  */
 function DomainOverview({ domain, headline, analysis, extra }: { domain: LabDomain; headline: ReactNode; analysis: ReactNode; extra?: ReactNode }) {
   const router = useRouter();
@@ -41,14 +42,23 @@ function DomainOverview({ domain, headline, analysis, extra }: { domain: LabDoma
           </Panel>
           <Panel title="Workflows" subtitle="What you can do here" flush>
             <Stack spacing={0.25} sx={{ px: 1, pb: 1 }}>
-              {domain.leaves
-                .filter((l) => l.populated !== false)
-                .map((l) => (
-                  <PanelRow key={l.href} severity="neutral" primary={l.label} secondary={l.what} onClick={() => router.push(l.href)} />
-                ))}
-              {domain.leaves.some((l) => l.populated === false) ? (
+              {domain.leaves.filter(inRail).map((l) => (
+                <PanelRow
+                  key={l.href}
+                  severity="neutral"
+                  primary={
+                    <Stack direction="row" spacing={0.75} alignItems="center" component="span">
+                      <span>{l.label}</span>
+                      <CapabilityStatus status={l.status} size="inline" />
+                    </Stack>
+                  }
+                  secondary={l.what}
+                  onClick={() => router.push(l.href)}
+                />
+              ))}
+              {domain.leaves.some((l) => !inRail(l)) ? (
                 <Typography variant="caption" color="text.disabled" sx={{ px: 1.5, pt: 1 }}>
-                  Not yet populated: {domain.leaves.filter((l) => l.populated === false).map((l) => l.label).join(', ')} — shown in the directory, hidden from navigation until data exists.
+                  Not in navigation yet: {domain.leaves.filter((l) => !inRail(l)).map((l) => `${l.label} (${leafStatusLabel[l.status ?? 'live'].toLowerCase()})`).join(', ')} — listed in the capability directory.
                 </Typography>
               ) : null}
             </Stack>
@@ -140,83 +150,6 @@ export function SupplySurface() {
               ))}
             </Stack>
           </Panel>
-        </>
-      }
-    />
-  );
-}
-
-export function CommercialSurface() {
-  return (
-    <DomainOverview
-      domain={byId('commercial')}
-      headline={
-        <HeadlineStrip columns={4}>
-          <HeadlineFigure label="Promotion plan lines P09" value={64} compact caption="Imported from promotion_plan" />
-          <HeadlineFigure label="Products with price observations" value={7} unit="of 10" compact caption="Captured listings, last 30 days" />
-          <HeadlineFigure label="Pricing support terms" value={23} compact caption="Feed funding case economics" />
-          <HeadlineFigure label="Uplift / competitor impact" value="—" compact caption="Not computed by the data layer; not shown as a number" />
-        </HeadlineStrip>
-      }
-      analysis={
-        <>
-          <Panel
-            title="Listing price observed — 27″ QHD IPS Monitor UX2780Q"
-            subtitle="Captured retailer listing prices by week (price_observations). Observed only: CIP does not yet compute price impact or elasticity."
-            actions={<Button size="small" component={NextLink} href="/design-lab/commercial?lens=prices">All products</Button>}
-          >
-            <TrendChart
-              data={priceObservations}
-              x="week"
-              height={220}
-              yScale="fit"
-              format={(v) => `R${Math.round(v).toLocaleString('en-ZA')}`}
-              series={[
-                { key: 'TechMart', label: 'TechMart', kind: 'line', tone: 'primary' },
-                { key: 'Metro Electronics', label: 'Metro Electronics', kind: 'line', tone: 'secondary' },
-                { key: 'OfficeWorld', label: 'OfficeWorld', kind: 'line', tone: 'muted' },
-              ]}
-            />
-          </Panel>
-          <Panel
-            title="Promotion plan lines — P09 / P10"
-            subtitle="As imported (promotion_plan). Support and units are inputs; uplift and effectiveness are not derived and are not shown."
-            actions={<Button size="small" component={NextLink} href="/design-lab/commercial?lens=promotions">Open plan lines</Button>}
-            flush
-          >
-            <Box sx={{ overflowX: 'auto' }}>
-            <Table size="small" sx={{ '& td, & th': { py: 0.6 }, '& th': { whiteSpace: 'nowrap' } }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Customer</TableCell>
-                  <TableCell>Product</TableCell>
-                  <TableCell>Period</TableCell>
-                  <TableCell>Mechanic</TableCell>
-                  <TableCell>Support</TableCell>
-                  <TableCell align="right">Plan units</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {promotionPlanLines.map((l) => (
-                  <TableRow key={l.customer + l.sku} hover>
-                    <TableCell>{l.customer}</TableCell>
-                    <TableCell>
-                      <Typography variant="body2">{l.product}</Typography>
-                      <Typography variant="caption" color="text.secondary">{l.sku}</Typography>
-                    </TableCell>
-                    <TableCell>{l.period}</TableCell>
-                    <TableCell>{l.mechanic}</TableCell>
-                    <TableCell>{l.support}</TableCell>
-                    <TableCell align="right">{fmtInt(l.units)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            </Box>
-          </Panel>
-          <Typography variant="caption" color="text.secondary">
-            Competition, roadmap and budgets exist as routes but compute nothing today; they are listed in the capability directory as “not yet populated” and hidden from navigation until a derived metric exists — the same data-gating rule as everywhere else.
-          </Typography>
         </>
       }
     />

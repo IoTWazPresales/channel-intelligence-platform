@@ -11,18 +11,27 @@ import { useCallback, useMemo, useState } from 'react';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 
+import { lifecycleStages, promotionPlans, stageLabel, type PlanStage } from '../fixtures/commercial';
 import { fmtCurrency, fmtInt, tenant } from '../fixtures/entities';
 import { ageingBuckets, fundingBook, fundingCases, statusLabel, type CaseStatus, type FundingCase } from '../fixtures/funding';
+import { CapabilityStatus } from '../primitives/CapabilityStatus';
 import { CategoryBars } from '../primitives/charts';
 import { LensTabs, ScopeBar, StatusChip } from '../primitives/controls';
 import { DomainHeader } from '../primitives/DomainHeader';
 import { EntityContextPanel, KeyValueList } from '../primitives/EntityContextPanel';
 import { HeadlineFigure, HeadlineStrip } from '../primitives/HeadlineFigure';
+import { LifecycleRail } from '../primitives/LifecycleRail';
 import { Panel, PanelRow } from '../primitives/Panel';
+import { labDomains } from '../shell/labNav';
+import { PlanTemplatesSurface } from './PlanTemplatesSurface';
+import { PromotionPlannerSurface } from './PromotionPlannerSurface';
 
 const tone = (s: CaseStatus) => (s === 'blocked' ? 'danger' : s === 'evidence_pending' ? 'warning' : s === 'open' ? 'info' : s === 'settled' ? 'success' : 'neutral');
 
-type Lens = 'book' | 'claims' | 'payments' | 'pricing';
+type Lens = 'planner' | 'book' | 'claims' | 'payments' | 'templates' | 'pricing' | 'budgets';
+
+/** Settlement-side statuses sit in the ended → settled half of the one promotion lifecycle. */
+const stageForCase = (s: CaseStatus): PlanStage => (s === 'settled' ? 'settled' : 'ended');
 
 export function FundingSurface() {
   const theme = useTheme();
@@ -32,15 +41,15 @@ export function FundingSurface() {
   const lens = (search.get('lens') as Lens) || 'book';
   const status = search.get('status') as CaseStatus | null;
   const sku = search.get('sku');
-  const setParam = useCallback(
-    (k: string, v: string | null) => {
+  const setParams = useCallback(
+    (patch: Record<string, string | null>) => {
       const next = new URLSearchParams(search.toString());
-      if (v === null) next.delete(k);
-      else next.set(k, v);
+      Object.entries(patch).forEach(([k, v]) => (v === null ? next.delete(k) : next.set(k, v)));
       router.replace(`/design-lab/funding?${next.toString()}`, { scroll: false });
     },
     [router, search]
   );
+  const setParam = useCallback((k: string, v: string | null) => setParams({ [k]: v }), [setParams]);
 
   const [cases, setCases] = useState<FundingCase[]>(fundingCases);
   const [selectedId, setSelectedId] = useState<string | null>(search.get('case'));
@@ -98,34 +107,54 @@ export function FundingSurface() {
     </Stack>
   );
 
+  const domain = labDomains.find((d) => d.id === 'funding')!;
+  const planningCounts = lifecycleStages.reduce<Partial<Record<PlanStage, number>>>((m, s) => ({ ...m, [s]: promotionPlans.filter((p) => p.stage === s).length }), {});
+
   return (
     <Box data-testid="funding-surface">
       <DomainHeader
-        crumbs={[{ label: 'Funding & Settlement' }]}
-        title="Funding & Settlement"
-        description="Price protection, rebate and support cases from claim to settlement: what is claimed, what is evidenced, what is blocked and why, and what has been paid."
-        meta={`${tenant.period} · ${fundingBook.cases} cases · book ${fmtCurrency(fundingBook.book)} · delivery rate ${(fundingBook.deliveryRate * 100).toFixed(0)}%`}
+        crumbs={[{ label: domain.label }]}
+        title={domain.label}
+        description={domain.what}
+        meta={`${tenant.period} · ${promotionPlans.filter((p) => ['draft', 'proposed', 'approved'].includes(p.stage)).length} plans in planning · ${promotionPlans.filter((p) => p.stage === 'active').length} live · ${fundingBook.cases} in settlement · book ${fmtCurrency(fundingBook.book)} · delivery rate ${(fundingBook.deliveryRate * 100).toFixed(0)}%`}
         actions={
           <>
             <Button variant="outlined" size="small" href="/design-lab/reports">Open in Reports</Button>
-            <Button variant="contained" size="small" href="/design-lab/data?tab=imports">Import claims / payments</Button>
+            <Button variant="outlined" size="small" href="/design-lab/data?tab=imports">Import claims / payments</Button>
+            <Button variant="contained" size="small" onClick={() => { setParam('lens', 'planner'); }}>New promotion plan</Button>
           </>
         }
       />
       <LensTabs
         value={lens}
-        onChange={(l) => setParam('lens', l === 'book' ? null : l)}
-        ariaLabel="Funding lenses"
+        onChange={(l) => setParams({ plan: null, stage: null, template: null, lens: l === 'book' ? null : l })}
+        ariaLabel="Promotions & Funding lenses"
         lenses={[
+          { value: 'planner', label: 'Promotion planner', count: (planningCounts.draft ?? 0) + (planningCounts.proposed ?? 0) + (planningCounts.approved ?? 0) },
           { value: 'book', label: 'Case book', count: fundingBook.cases },
           { value: 'claims', label: 'Claims evidence' },
           { value: 'payments', label: 'Payments' },
-          { value: 'pricing', label: 'Pricing support' },
+          { value: 'templates', label: 'Plan templates' },
+          { value: 'pricing', label: 'Terms & assumptions' },
+          { value: 'budgets', label: 'Budget ledger' },
         ]}
       />
 
+      {lens === 'planner' ? <PromotionPlannerSurface /> : null}
+      {lens === 'templates' ? <PlanTemplatesSurface /> : null}
+
       {lens === 'book' ? (
         <Stack spacing={2} sx={{ mt: 2 }}>
+          <Alert severity="info" variant="outlined" icon={false} sx={{ '& .MuiAlert-message': { width: '100%' } }}>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ md: 'center' }} justifyContent="space-between">
+              <Typography variant="body2">
+                <b>The Case book is the settlement half of the same lifecycle.</b> Cases here were authored or approved in the Promotion planner; claimed, settled and blocked describe what happened after the window ended.
+              </Typography>
+              <Box sx={{ minWidth: { md: 520 } }}>
+                <LifecycleRail stages={lifecycleStages} labels={stageLabel} counts={{ ...planningCounts, ended: cases.filter((c) => c.status !== 'settled').length, settled: cases.filter((c) => c.status === 'settled').length }} dense onSelect={(s) => (s === 'ended' || s === 'settled' ? setParam('status', s === 'settled' ? 'settled' : null) : router.push(`/design-lab/funding?lens=planner&stage=${s}`))} />
+              </Box>
+            </Stack>
+          </Alert>
           <HeadlineStrip columns={5}>
             <HeadlineFigure label="Book total" value={fmtCurrency(fundingBook.book, { compact: true })} compact caption={`${fundingBook.cases} cases`} />
             <HeadlineFigure label="Settled" value={fmtCurrency(fundingBook.settled, { compact: true })} compact severity="good" caption={`Delivery rate ${(fundingBook.deliveryRate * 100).toFixed(0)}%`} />
@@ -150,7 +179,7 @@ export function FundingSurface() {
             </Panel>
           </Box>
 
-          <ScopeBar chips={chips} summary={`${rows.length} of ${cases.length} cases${sku ? ` · SKU ${sku}` : ''}`} onClear={() => { setParam('status', null); setParam('sku', null); }} />
+          <ScopeBar chips={chips} summary={`${rows.length} of ${cases.length} cases${sku ? ` · SKU ${sku}` : ''}`} onClear={() => setParams({ status: null, sku: null })} />
 
           <ModuleDataSection isEmpty={rows.length === 0} empty={{ title: 'No cases in this scope', description: 'Clear the status chips or import claim evidence to create cases.', primary: { label: 'Clear scope', onClick: () => setParam('status', null) } }}>
             {isMobile ? (
@@ -182,20 +211,39 @@ export function FundingSurface() {
             )}
           </ModuleDataSection>
         </Stack>
-      ) : (
+      ) : null}
+
+      {lens === 'claims' || lens === 'payments' || lens === 'pricing' ? (
         <Box sx={{ mt: 2 }}>
           <ModuleDataSection
             isEmpty
             empty={{
-              title: lens === 'claims' ? 'Claim evidence is matched per case' : lens === 'payments' ? 'Payment evidence and delivery rate' : 'Pricing support terms',
-              description: lens === 'claims' ? '64 claim rows from Metro_claims_P08.xlsx are validated and awaiting apply (4 unresolved tokens). Open the import job to finish stewarding.' : lens === 'payments' ? 'Payment evidence links settled value to cases. Delivery rate = settled cases ÷ all cases in the programme.' : 'Sell-in pricing support terms per customer × SKU feed case economics (support per unit sold).',
-              primary: { label: 'Open Import Center', href: '/design-lab/data?tab=imports' },
+              title: lens === 'claims' ? 'Claim evidence is matched per case' : lens === 'payments' ? 'Payment evidence and delivery rate' : 'Terms & assumptions',
+              description: lens === 'claims' ? '64 claim rows from Metro_claims_P08.xlsx are validated and awaiting apply (4 unresolved tokens). Open the import job to finish stewarding.' : lens === 'payments' ? 'Payment evidence links settled value to cases. Delivery rate = result ÷ estimate per case.' : 'Customer margin and rebate defaults plus per-SKU assumptions feed the waterfall in the planner (dealer price → support per unit). Edited here, applied on the next recompute.',
+              primary: { label: lens === 'pricing' ? 'Open customer masters' : 'Open Import Center', href: lens === 'pricing' ? '/design-lab/data?tab=masters&m=customers' : '/design-lab/data?tab=imports' },
             }}
           >
             <span />
           </ModuleDataSection>
         </Box>
-      )}
+      ) : null}
+
+      {lens === 'budgets' ? (
+        <Box sx={{ mt: 2 }} data-testid="lens-substrate">
+          <Panel
+            title={
+              <Stack direction="row" spacing={1} alignItems="center">
+                <span>Budget ledger — data only</span>
+                <CapabilityStatus status="substrate" />
+              </Stack>
+            }
+          >
+            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 760 }}>
+              Allocation → commitment → actual tables (fact_budget_*) exist with no writer and no rows. The planner’s budget check therefore uses the lineup-derived profit reservation instead, and says so on the figure. When a budget import or ledger writer lands, this lens shows allocation vs drawn per programme and period; until then nothing is shown rather than a placeholder.
+            </Typography>
+          </Panel>
+        </Box>
+      ) : null}
 
       <EntityContextPanel
         open={!!selected}
@@ -216,6 +264,8 @@ export function FundingSurface() {
         related={
           selected
             ? [
+                { label: 'Open in Promotion planner', href: `/design-lab/funding?lens=planner&stage=ended`, hint: 'Promotions & Funding › same case, planning view' },
+                { label: 'Was the promotion live at the planned price?', href: `/design-lab/market?lens=activation&product=${products_idFor(selected.sku)}`, hint: 'Market & Listings › Activation' },
                 { label: 'Stock cover for this SKU', href: `/design-lab/stock?lens=cover&product=${products_idFor(selected.sku)}`, hint: 'Stock & Sell-through › Cover' },
                 { label: `Lineup plan — ${selected.customer}`, href: `/design-lab/planning?customer=${selected.customerId}`, hint: 'Planning › Lineup cases' },
                 { label: 'Customer master & terms', href: `/design-lab/data?tab=masters&m=customers&id=${selected.customerId}`, hint: 'Data & Stewardship › Customers' },
@@ -239,6 +289,15 @@ export function FundingSurface() {
       >
         {selected ? (
           <Stack spacing={2}>
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}>Lifecycle</Typography>
+              <Box sx={{ mt: 1 }}>
+                <LifecycleRail stages={lifecycleStages} labels={stageLabel} current={stageForCase(selected.status)} dense />
+              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                Planned and approved in the Promotion planner; the window has ended and the case is now in settlement.
+              </Typography>
+            </Box>
             {selected.blockedReason ? <Alert severity="error" variant="outlined">{selected.blockedReason}</Alert> : null}
             <Box>
               <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}>Evidence</Typography>

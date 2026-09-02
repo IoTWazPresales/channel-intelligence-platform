@@ -12,7 +12,7 @@ export type Signal = {
 export const signals: Signal[] = [
   { id: 'failed_imports', severity: 'danger', headline: 'DSI imports failed', count: 33, detail: 'Meridian W35 sell-out; Coastal W36 SOH — parse errors on 2 files', href: '/design-lab/data?tab=imports&status=failed', area: 'Data & Stewardship' },
   { id: 'cover_breach', severity: 'danger', headline: 'Distributor × product pairs under 2 weeks cover', count: 11, detail: 'NBP16-I9 at 3 of 4 distributors', href: '/design-lab/stock?lens=cover&status=breach', area: 'Stock & Sell-through' },
-  { id: 'settlement_blocked', severity: 'warning', headline: 'Funding cases blocked', count: 7, detail: 'R612k outstanding · 4 need sell-through evidence', href: '/design-lab/funding?status=blocked', area: 'Funding & Settlement' },
+  { id: 'settlement_blocked', severity: 'warning', headline: 'Funding cases blocked', count: 7, detail: 'R612k outstanding · 4 need sell-through evidence', href: '/design-lab/funding?status=blocked', area: 'Promotions & Funding' },
   { id: 'inbound_open', severity: 'warning', headline: 'Inbound shipments unreceived past ETA', count: 1714, detail: 'Oldest 41 days · Highveld receipt file missing since W33', href: '/design-lab/supply?lens=receipts', area: 'Supply & Inbound' },
   { id: 'dsi_vintage_stale', severity: 'warning', headline: 'Distributor stock vintage older than 10 days', count: 2, detail: 'Highveld (14d), Kwazulu (12d)', href: '/design-lab/stock?lens=cover&vintage=stale', area: 'Stock & Sell-through' },
   { id: 'missing_assumptions', severity: 'info', headline: 'Lineup lines missing SKU assumptions', count: 18, detail: 'TechMart P10 lineup — cost basis absent', href: '/design-lab/planning?lens=readiness', area: 'Planning' },
@@ -109,22 +109,6 @@ export const planVsShipped = [
   { customer: 'Open channel', plan: 3_300, shipped: 1_000 },
 ];
 
-/** Captured listing prices (price_observations import) — one product, three retailers, weekly. Observed only; no impact computed. */
-export const priceObservations = [
-  { week: 'W30', TechMart: 8_999, 'Metro Electronics': 9_199, OfficeWorld: 8_899 },
-  { week: 'W31', TechMart: 8_999, 'Metro Electronics': 9_199, OfficeWorld: 8_899 },
-  { week: 'W32', TechMart: 8_499, 'Metro Electronics': 9_199, OfficeWorld: 8_899 },
-  { week: 'W33', TechMart: 8_499, 'Metro Electronics': 8_799, OfficeWorld: 8_699 },
-  { week: 'W34', TechMart: 8_499, 'Metro Electronics': 8_799, OfficeWorld: 8_699 },
-  { week: 'W35', TechMart: 8_999, 'Metro Electronics': 8_799, OfficeWorld: 8_699 },
-  { week: 'W36', TechMart: 8_999, 'Metro Electronics': 8_999, OfficeWorld: 8_699 },
-];
-
-/** Promotion plan lines (promotion_plan import) — inputs as imported; no uplift or effectiveness is derived. */
-export const promotionPlanLines = [
-  { customer: 'TechMart', product: 'Notebook Pro 14 i7 / 16GB / 512', sku: 'NBP14-I7', period: 'P09 W37–W38', mechanic: 'Price drop', support: 'R400 / unit', units: 1_200 },
-  { customer: 'TechMart', product: '27" QHD IPS Monitor UX2780Q', sku: 'UX2780Q', period: 'P09 W37–W38', mechanic: 'Bundle', support: 'R250 / unit', units: 600 },
-  { customer: 'Metro Electronics', product: '4K Webcam WC-4K', sku: 'WC-4K', period: 'P09 W36–W39', mechanic: 'Catalogue feature', support: 'Fixed R45k', units: 2_400 },
-  { customer: 'OfficeWorld', product: 'Mechanical Keyboard KB-MX', sku: 'KB-MX', period: 'P10 W40–W41', mechanic: 'Price drop', support: 'R120 / unit', units: 900 },
-  { customer: 'HiFi House', product: '34" UWQHD Curved UX3440W', sku: 'UX3440W', period: 'P10 W40–W43', mechanic: 'Display allowance', support: 'R600 / unit', units: 350 },
-];
+// Commercial fixtures (promotion plans, listings, competition) live in ./commercial.ts. The earlier
+// `priceObservations` / `promotionPlanLines` fixtures were removed: they modelled a deprecated
+// `promotion_plan` scaffold and a `price_observations` table that do not match the real data layer.

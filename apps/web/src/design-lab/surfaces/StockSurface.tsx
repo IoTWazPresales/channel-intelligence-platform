@@ -203,7 +203,9 @@ function CoverLens() {
             ? [
                 { label: 'Plan lines for this product', href: `/design-lab/planning?lens=cases&product=${selected.productId}`, hint: 'Planning › Lineup cases' },
                 { label: 'Open inbound shipments', href: `/design-lab/supply?lens=shipments&product=${selected.productId}`, hint: 'Supply & Inbound › Shipments' },
-                { label: 'Funding cases on this SKU', href: `/design-lab/funding?sku=${selected.sku}`, hint: 'Funding & Settlement › Case book' },
+                { label: 'Promotion cases on this SKU', href: `/design-lab/funding?sku=${selected.sku}`, hint: 'Promotions & Funding › Case book' },
+                { label: 'Retail listings & shelf price', href: `/design-lab/market?product=${selected.productId}`, hint: 'Market & Listings › Monitored listings' },
+                { label: 'Competitor products', href: `/design-lab/market?lens=competition&product=${selected.productId}`, hint: 'Market & Listings › Competitor mappings' },
                 { label: 'Product master record', href: `/design-lab/data?tab=masters&m=products&id=${selected.productId}`, hint: 'Data & Stewardship › Products' },
               ]
             : []

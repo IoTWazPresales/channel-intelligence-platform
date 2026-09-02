@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
 import { customers, distributors, products } from '../fixtures/entities';
-import { labDomains } from './labNav';
+import { inRail, labDomains } from './labNav';
 
 type Hit = { kind: 'workflow' | 'product' | 'customer' | 'distributor'; label: string; meta: string; href: string };
 
@@ -22,8 +22,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     const needle = q.trim().toLowerCase();
     const workflows: Hit[] = labDomains.flatMap((d) =>
       d.leaves
-        .filter((l) => l.populated !== false)
-        .map((l) => ({ kind: 'workflow' as const, label: `${d.label} › ${l.label}`, meta: l.what, href: l.href }))
+        .filter(inRail)
+        .map((l) => ({ kind: 'workflow' as const, label: `${d.label} › ${l.label}${l.status === 'partial' ? ' (partly built)' : ''}`, meta: l.what, href: l.href }))
     );
     if (!needle) return workflows.slice(0, 8);
     const ents: Hit[] = [

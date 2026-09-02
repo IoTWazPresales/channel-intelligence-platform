@@ -1,22 +1,40 @@
 /**
- * Design-lab information architecture (N-0013 r3, hybrid "H" — see
- * .eif/audit/NS_REDESIGN_R3_20260902/DIRECTION.md). Domains are derived from the capability audit;
- * placement rule: a workflow lives in the domain of its primary governed metric / entity.
+ * Design-lab information architecture (N-0013 r3 + commercial amendment — see
+ * .eif/audit/NS_REDESIGN_R3_20260902/DIRECTION.md and commercial/COMMERCIAL_DIRECTION.md).
+ * Domains are derived from the capability audit; placement rule: a workflow lives in the domain of its
+ * primary governed metric / entity.
  *
- * `populated: false` marks leaves whose route exists in production but whose data layer computes
- * nothing yet (data-gated visibility — shown in the directory as "not yet populated", hidden in rail).
+ * Leaf `status` is the honest four-state vocabulary (CONSULT Q4). Rail shows `live` + `partial`
+ * (partial is marked); the capability directory shows all four, each labelled. Nothing unbuilt is
+ * presented as working. The r3 binary "computes nothing → hidden" rule is withdrawn: stored
+ * observations, mappings and planning workflows are first-class capabilities before derived analytics.
  */
 import type { SvgIconComponent } from '@mui/icons-material';
 import AccountBalanceOutlinedIcon from '@mui/icons-material/AccountBalanceOutlined';
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
-import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
 import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
 import EventNoteOutlinedIcon from '@mui/icons-material/EventNoteOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
+import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import StorageOutlinedIcon from '@mui/icons-material/StorageOutlined';
 
 export type Role = 'admin' | 'steward' | 'planner' | 'viewer';
+
+/**
+ * live      — end-to-end usable on real data.
+ * partial   — real code path, but a required step is missing, manual or hard-coded (rail, marked).
+ * substrate — tables / endpoints exist, no working user-facing view (directory only, "data only").
+ * planned   — chartered, not built (directory only, labelled).
+ */
+export type LeafStatus = 'live' | 'partial' | 'substrate' | 'planned';
+
+export const leafStatusLabel: Record<LeafStatus, string> = {
+  live: 'Works today',
+  partial: 'Partly built',
+  substrate: 'Data only',
+  planned: 'Planned',
+};
 
 export type LabLeaf = {
   label: string;
@@ -24,8 +42,11 @@ export type LabLeaf = {
   /** One sentence: what this workflow computes or lets you do. Shown in directory + palette. */
   what: string;
   roles?: Role[];
-  populated?: boolean;
+  /** Defaults to 'live'. */
+  status?: LeafStatus;
 };
+
+export const inRail = (l: LabLeaf) => (l.status ?? 'live') === 'live' || l.status === 'partial';
 
 export type LabDomain = {
   id: string;
@@ -94,35 +115,42 @@ export const labDomains: LabDomain[] = [
       { label: 'Line economics', href: '/design-lab/planning?lens=economics', what: 'Recalculated line economics with explanation and flags per line.' },
       { label: 'PO reconciliation', href: '/design-lab/planning?lens=po', what: 'Plan lines matched to purchase orders; auto-link results.' },
       { label: 'Rankings', href: '/design-lab/planning?lens=rankings', what: 'Product rankings within a customer lineup.' },
+      { label: 'Product roadmap', href: '/design-lab/planning?lens=roadmap', what: 'Lifecycle phase and replacement candidates per product (fact_product_roadmap). Table exists; no writer or view yet.', status: 'substrate' },
     ],
   },
   {
     id: 'funding',
-    label: 'Funding & Settlement',
-    short: 'Funding',
+    label: 'Promotions & Funding',
+    short: 'Promotions',
     href: '/design-lab/funding',
     icon: AccountBalanceOutlinedIcon,
-    what: 'Price protection, rebate and support cases: book, evidence, approval and settlement.',
+    what: 'One promotion case from plan to settlement: propose or author the plan, approve it, watch it run, claim and settle the support.',
     leaves: [
-      { label: 'Case book', href: '/design-lab/funding', what: 'All funding cases: claimed, settled, outstanding, blocked reasons, ageing.' },
-      { label: 'Claims evidence', href: '/design-lab/funding?lens=claims', what: 'Imported claim evidence matched to cases.' },
-      { label: 'Payments', href: '/design-lab/funding?lens=payments', what: 'Payment evidence and delivery rate.' },
-      { label: 'Pricing support', href: '/design-lab/funding?lens=pricing', what: 'Sell-in pricing support terms feeding case economics.' },
+      { label: 'Promotion planner', href: '/design-lab/funding?lens=planner', what: 'Propose or author a promotion plan per customer and window: lines, waterfall economics, evidence, budget check, export in the customer’s format.', status: 'partial' },
+      { label: 'Case book', href: '/design-lab/funding', what: 'Every promotion case across the lifecycle: draft → proposed → approved → live → ended → settled; claimed, settled, outstanding, blocked reasons, ageing.' },
+      { label: 'Claims evidence', href: '/design-lab/funding?lens=claims', what: 'Imported claim evidence matched to case lines; out-of-window rows flagged.' },
+      { label: 'Payments', href: '/design-lab/funding?lens=payments', what: 'Payment evidence and delivery rate (result ÷ estimate).' },
+      { label: 'Plan templates', href: '/design-lab/funding?lens=templates', what: 'Customer promotion-plan workbook layouts mapped once to the canonical case model; used to read historical plans and to export new ones.', status: 'partial' },
+      { label: 'Terms & assumptions', href: '/design-lab/funding?lens=pricing', what: 'Customer margin / rebate defaults and SKU assumptions feeding the waterfall.' },
+      { label: 'Budget ledger', href: '/design-lab/funding?lens=budgets', what: 'Allocation → commitment → actual (fact_budget_*). Tables exist with no rows; the planner uses the lineup-derived reservation instead.', status: 'substrate' },
     ],
   },
   {
-    id: 'commercial',
-    label: 'Commercial inputs',
-    short: 'Commercial',
-    href: '/design-lab/commercial',
-    icon: CampaignOutlinedIcon,
-    what: 'Plan inputs and market evidence: promotion plans, price observations. Shown only where data exists.',
+    id: 'market',
+    label: 'Market & Listings',
+    short: 'Market',
+    href: '/design-lab/market',
+    icon: StorefrontOutlinedIcon,
+    what: 'Evidence from the shelf: monitored retailer listings and prices, whether promotions are live at the planned price, and which competitor products sit against ours. Reused by planning, promotions, dashboards and attention.',
     leaves: [
-      { label: 'Promotion plans', href: '/design-lab/commercial?lens=promotions', what: 'Imported promotion plan lines per customer and period (inputs — no uplift calculation yet).' },
-      { label: 'Price observations', href: '/design-lab/commercial?lens=prices', what: 'Captured listing prices over time per product and retailer.' },
-      { label: 'Competition', href: '/design-lab/commercial?lens=competition', what: 'Not yet populated.', populated: false },
-      { label: 'Roadmap', href: '/design-lab/commercial?lens=roadmap', what: 'Not yet populated.', populated: false },
-      { label: 'Budgets', href: '/design-lab/commercial?lens=budgets', what: 'Not yet populated.', populated: false },
+      { label: 'Monitored listings', href: '/design-lab/market', what: 'Registry of customer listing URLs per product with status history; manual, CSV, feed proposals and auto-finder.' },
+      { label: 'Price history', href: '/design-lab/market?lens=history', what: 'Observed price and availability per listing over time, with the covering promotion price overlaid.' },
+      { label: 'Promotion activation', href: '/design-lab/market?lens=activation', what: 'Each observation checked against the covering case line SRP: live at price, not activated, or no promotion covering.' },
+      { label: 'Feed proposals', href: '/design-lab/market?lens=proposals', what: 'Listing ids seen in retailer sell-through feeds, proposed for the registry; steward confirms.' },
+      { label: 'Competitor mappings', href: '/design-lab/market?lens=competition', what: 'Our SKU ↔ competitor SKU with score, factor breakdown and approval. Workflow works; rows are seed-only and candidate scoring is not yet wired.', status: 'partial' },
+      { label: 'Competitor prices', href: '/design-lab/market?lens=competitor-prices', what: 'Observed competitor prices (fact_competitor_price). Table and list exist; no import and no rows.', status: 'substrate' },
+      { label: 'Competitor listings', href: '/design-lab/market?lens=competitor-listings', what: 'Monitor competitor product listings alongside ours (BACKLOG §9.9).', status: 'planned' },
+      { label: 'Listing quality / SEO', href: '/design-lab/market?lens=quality', what: 'Content, specification and search-quality checks on listings (roadmap P5).', status: 'planned' },
     ],
   },
   {
@@ -169,5 +197,5 @@ export function visibleDomains(role: Role): LabDomain[] {
 }
 
 export function visibleLeaves(domain: LabDomain, role: Role): LabLeaf[] {
-  return domain.leaves.filter((l) => l.populated !== false && (!l.roles || l.roles.includes(role)));
+  return domain.leaves.filter((l) => inRail(l) && (!l.roles || l.roles.includes(role)));
 }
