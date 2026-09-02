@@ -14,9 +14,7 @@
 ## Ready leaves
 
 - **N-0006** NS-1b FX mode and blocked-settle enforcement (feature, R3, stage=None)
-- **N-0011** NS-7 Steward import factory and resolution worklists (redesign, R3, stage=None)
-- **N-0007** NS-3 Stock merge — Sell-out, Fill vs plan, Cover and Inbound (redesign, R2, stage=None)
-- **N-0009** NS-5 Lineup plan origination (redesign, R2, stage=None)
+- **N-0013** Full-platform IA architecture and buyer vocabulary approval (discovery, R3, stage=verify)
 
 ## In progress / leased
 
@@ -24,4 +22,4 @@ _none_
 
 ## Decision queue
 
-_empty_
+- **D-0001** scope=N-0013: Adopt Brief·Plan·Channel·Settlement·Actions·Data + Reports·Admin as governing full-platform IA

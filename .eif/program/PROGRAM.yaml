@@ -5,32 +5,36 @@ programme:
   conservation_nouns: []
   charter:
     status: accepted
-    by: operator
-    at: '2026-09-02T09:42:27Z'
+    by: eif
+    at: '2026-09-02T11:14:27Z'
     workstreams:
-    - North Star UI redesign
+    - Full-platform UI/UX redesign
+    - Shell & primitive convergence
+    - Container migration waves
     assumptions:
-    - docs/design/CIP_DESIGN_LANGUAGE.md FROZEN v1.1 is accepted architecture/design evidence and the minimum quality benchmark.
-      Visual, interaction, naming and composition execution may be superseded only when rendered comparison and independent
-      review demonstrate material improvement. Do not reopen the accepted product architecture.
+    - docs/design/CIP_DESIGN_LANGUAGE.md FROZEN v1.1 is the minimum quality/craft benchmark (tokens, grammars, interaction
+      discipline).
+    - docs/design/CIP_FULL_PLATFORM_RECONCILIATION.md is authoritative capability evidence.
+    - Product architecture and buyer-facing IA require operator approval via N-0013 before further container construction.
+    - Completed NS tranches N-0004–N-0009 are preserved implementation evidence; convergence follows approved architecture.
     inclusions:
-    - NS-2 Brief and nav collapse
-    - NS-3 Stock
-    - NS-4 Settlement
-    - NS-5 Lineup
-    - NS-6 Response
-    - NS-7 Steward
+    - Global shell and spine IA
+    - Brief, Plan, Channel, Settlement, Actions, Data job containers
+    - Reports and Admin utilities (full redesign)
+    - Workbench primitive library
+    - Legacy surface migration waves
+    - Buyer-facing naming and URL honesty
     exclusions:
-    - Reports
-    - Admin
-    root_interpretation: Redesign of the CIP operator surface into six job containers
+    - Implementation of new architecture before N-0013 operator acceptance
+    root_interpretation: 'Full-platform operator-surface redesign: coherent job spine, unified chrome, and capability preservation
+      across 50 reconciled surfaces'
   status: active
   identity:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 166
-  log_sha256: 0f56b1bb58aef8e6ec119a1172940ac53a525446b42e69152ad9860e18223573
+  snapshot_revision: 199
+  log_sha256: 1184c1ef6c3fd244380ba371c8b7392000e8c4930e7500037d49e3d81c4a0fed
   acceptance_policy:
     milestone: operator
     root: operator
@@ -1085,16 +1089,17 @@ nodes:
   N-0010:
     id: N-0010
     parent: null
-    title: NS-6 Promotion Planner / Response
+    title: NS-6 Actions container (was Response)
     class: redesign
     origin: decomposition
-    status: proposed
+    status: blocked
     stage: null
-    revision: 1
+    revision: 3
     lease: null
     depends_on:
     - N-0008
     - N-0009
+    - N-0013
     facets:
     - design_experience
     - ui
@@ -1177,7 +1182,12 @@ nodes:
         rationale: null
     verification: {}
     evidence: []
-    blockers: []
+    blockers:
+    - id: BL-0001
+      type: dependency
+      ref: N-0013
+      opened: '2026-09-02T11:14:27Z'
+      note: Blocked pending N-0013 operator architecture approval
     conservation_tags: []
     fingerprint: null
     stage_note: null
@@ -1191,15 +1201,16 @@ nodes:
   N-0011:
     id: N-0011
     parent: null
-    title: NS-7 Steward import factory and resolution worklists
+    title: NS-7 Data container (was Steward)
     class: redesign
     origin: decomposition
-    status: proposed
+    status: blocked
     stage: null
-    revision: 1
+    revision: 3
     lease: null
     depends_on:
     - N-0004
+    - N-0013
     facets:
     - design_experience
     - ui
@@ -1282,7 +1293,12 @@ nodes:
         rationale: null
     verification: {}
     evidence: []
-    blockers: []
+    blockers:
+    - id: BL-0002
+      type: dependency
+      ref: N-0013
+      opened: '2026-09-02T11:14:27Z'
+      note: Blocked pending N-0013 operator architecture approval
     conservation_tags: []
     fingerprint: null
     stage_note: null
@@ -1335,7 +1351,224 @@ nodes:
     design_artifact_class: null
     implementation_run: NS3_NS1A_COMPLETE_20260901
     implementation_actor: agent
-decisions: {}
+  N-0013:
+    id: N-0013
+    parent: null
+    title: Full-platform IA architecture and buyer vocabulary approval
+    class: discovery
+    origin: decomposition
+    status: ready
+    stage: verify
+    revision: 26
+    lease: null
+    depends_on: []
+    facets:
+    - design_experience
+    - ui
+    risk: R3
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - 'target_artifact_class: high_fidelity'
+    - Proposed architecture in docs/design/CIP_PLATFORM_ARCHITECTURE_PROPOSAL.md
+    - All 50 reconciliation capabilities accounted for
+    - Rendered evidence desktop 1280 and mobile 390
+    - Independent gov-008 rendered review PASS
+    - Operator records accept or amend before N-0010/N-0011 unblock
+    baseline_ref: BLN-0001
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      design_artifact_class:
+        required: true
+        state: pass
+        evidence:
+          class: high_fidelity
+          path: .eif/audit/NS_RECONCILE_20260902/rendered-verification.md
+        rationale: null
+        pass_run: NS_RECONCILE_20260902
+        pass_actor: agent
+      design_divergence:
+        required: true
+        state: pass
+        evidence:
+          benchmark: docs/design/CIP_FULL_PLATFORM_RECONCILIATION.md
+          decision: architecture_reproposal
+          rationale: Reconciliation proves six-container IA incomplete; charter amended; names and utilities revised
+        rationale: null
+        pass_run: NS_RECONCILE_20260902
+        pass_actor: agent
+      design_signatures:
+        required: true
+        state: pass
+        evidence:
+          signatures:
+          - six_job_spine_renamed
+          - utility_restore_reports_admin
+          - slim_chrome_unified
+          - grammar_preservation
+          - url_honesty_proposed
+        rationale: null
+        pass_run: NS_RECONCILE_20260902
+        pass_actor: agent
+      rendered_comparison:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/NS_RECONCILE_20260902/independent-rendered-review.md
+          comparison_verdict: challenge_accepted_proposal
+          artifact_class: high_fidelity
+          product_url: file://.eif/audit/NS_RECONCILE_20260902/index.html
+        rationale: null
+        pass_run: NS_RECONCILE_20260902
+        pass_actor: agent
+      design_sameness_review:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/NS_RECONCILE_20260902/independent-rendered-review.md
+          decision: challenge_accepted_proposal
+          visual_vocabulary_challenge: Five-job FRESH_NS and legacy six-name spine both rejected; Plan/Channel/Actions/Data
+            rename is material
+        rationale: null
+        pass_run: NS_RECONCILE_20260902
+        pass_actor: agent
+      design_interaction_spec:
+        required: true
+        state: pass
+        evidence:
+          interactions:
+          - spine_count_badges
+          - utility_sub_links
+          - brief_signal_deep_links
+          - channel_lens_switcher
+          - mobile_drawer_spine
+        rationale: null
+        pass_run: NS_RECONCILE_20260902
+        pass_actor: agent
+      design_state_coverage:
+        required: true
+        state: pass
+        evidence:
+          states:
+          - populated_brief
+          - populated_channel
+          - mobile_nav
+          - utility_expanded
+        rationale: null
+        pass_run: NS_RECONCILE_20260902
+        pass_actor: agent
+      design_identity_tokens:
+        required: true
+        state: pass
+        evidence:
+          tokens:
+            direction_name: CIP FROZEN v1.1
+            bg: '#14161a'
+            elev: '#1a1d23'
+            accent: '#3db8e8'
+            mono: IBM Plex Mono
+        rationale: null
+        pass_run: NS_RECONCILE_20260902
+        pass_actor: agent
+      design_execution_decisions:
+        required: true
+        state: pass
+        evidence:
+          responsive_decision:
+            status: applicable
+            rationale: Mobile drawer spine for all containers; Channel grid desktop-first
+            evidence: .eif/audit/NS_RECONCILE_20260902/platform-shell-mobile.html
+          visualisation_decision:
+            status: applicable
+            rationale: WoC histogram on Channel Cover lens per grammar-2
+          consequential_action_decision:
+            status: not_applicable
+            rationale: Approval-gate discovery — no product mutations
+        rationale: null
+        pass_run: NS_RECONCILE_20260902
+        pass_actor: agent
+      ux:
+        required: true
+        state: pass
+        evidence:
+          path: docs/design/CIP_PLATFORM_ARCHITECTURE_PROPOSAL.md
+          summary: Buyer can navigate six named jobs plus restored utilities without legacy navConfig
+        rationale: null
+        pass_run: NS_RECONCILE_20260902
+        pass_actor: agent
+      a11y:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/NS_RECONCILE_20260902/independent-rendered-review.md
+          summary: Static contrast pass; focus trap deferred to implementation
+        rationale: null
+        pass_run: NS_RECONCILE_20260902
+        pass_actor: agent
+      rendered:
+        required: true
+        state: pass
+        evidence: &id005
+          path: .eif/audit/NS_RECONCILE_20260902/rendered-verification.md
+          gallery: .eif/audit/NS_RECONCILE_20260902/index.html
+          viewports:
+          - desktop_1280
+          - mobile_390
+          proposal: docs/design/CIP_PLATFORM_ARCHITECTURE_PROPOSAL.md
+        rationale: null
+        pass_run: NS_RECONCILE_20260902
+        pass_actor: agent
+      content:
+        required: true
+        state: pass
+        evidence:
+          path: docs/design/CIP_PLATFORM_ARCHITECTURE_PROPOSAL.md
+          summary: Brief·Plan·Channel·Settlement·Actions·Data; Fill vs plan lens; Data subtitle Imports & masters
+        rationale: null
+        pass_run: NS_RECONCILE_20260902
+        pass_actor: agent
+    verification:
+      rendered:
+        state: pass
+        pass_run: NS_RECONCILE_20260902
+        pass_actor: agent
+        evidence: *id005
+        path: null
+      referent:
+        state: pass
+        pass_run: NS_RECONCILE_INDEPENDENT_20260902
+        pass_actor: gov-008
+        evidence:
+          benchmark: docs/design/CIP_FULL_PLATFORM_RECONCILIATION.md
+          path: .eif/audit/NS_RECONCILE_20260902/independent-rendered-review.md
+          method: independent_architecture_challenge
+        path: null
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation:
+      reconciliation_matrix: docs/design/CIP_FULL_PLATFORM_RECONCILIATION.md section 6 — 50 capabilities
+      completed_ns_tranches: N-0004 N-0007 N-0008 N-0009 preserved; convergence waves post-approval
+      frontier_blocked: N-0010 N-0011 until operator accepts architecture
+    target_artifact_class: high_fidelity
+    design_artifact_class: high_fidelity
+decisions:
+  D-0001:
+    id: D-0001
+    scope: N-0013
+    statement: Adopt Brief·Plan·Channel·Settlement·Actions·Data + Reports·Admin as governing full-platform IA
+    origin: eif
+    status: proposed
+    supersedes: null
 evidence: {}
 baselines:
   BLN-0001:
@@ -1359,6 +1592,6 @@ baselines:
 ids:
   node: 5
   decision: 0
-  blocker: 0
+  blocker: 2
   evidence: 0
   baseline: 1

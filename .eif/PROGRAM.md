@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 53
+**Snapshot revision:** 199
 
 ## Outcome (verbatim)
 
@@ -28,8 +28,10 @@ _none_
 | N-0004 | NS-2 Brief and six-container nav collapse | redesign | complete | complete | yes |
 | N-0005 | TEST criteria probe | discovery | rejected | rejected | yes |
 | N-0006 | NS-1b FX mode and blocked-settle enforcement | feature | proposed | proposed | yes |
-| N-0007 | NS-3 Stock merge — Sell-out, Fill vs plan, Cover and Inbound | redesign | proposed | proposed | yes |
-| N-0008 | NS-4 CPOR Settlement — queue and case redesign | redesign | proposed | proposed | yes |
-| N-0009 | NS-5 Lineup plan origination | redesign | proposed | proposed | yes |
-| N-0010 | NS-6 Promotion Planner / Response | redesign | proposed | proposed | yes |
-| N-0011 | NS-7 Steward import factory and resolution worklists | redesign | proposed | proposed | yes |
+| N-0007 | NS-3 Stock merge — Sell-out, Fill vs plan, Cover and Inbound | redesign | complete | complete | yes |
+| N-0008 | NS-4 CPOR Settlement — queue and case redesign | redesign | complete | complete | yes |
+| N-0009 | NS-5 Lineup plan origination | redesign | complete | complete | yes |
+| N-0010 | NS-6 Actions container (was Response) | redesign | blocked | blocked | yes |
+| N-0011 | NS-7 Data container (was Steward) | redesign | blocked | blocked | yes |
+| N-0012 | NS-1a FX display honesty (no migration) | feature | complete | complete | yes |
+| N-0013 | Full-platform IA architecture and buyer vocabulary approval | discovery | ready | ready | yes |
