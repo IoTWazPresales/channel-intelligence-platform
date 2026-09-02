@@ -6,7 +6,7 @@ programme:
   charter:
     status: accepted
     by: eif
-    at: '2026-09-02T11:14:27Z'
+    at: '2026-09-02T19:28:12Z'
     workstreams:
     - Full-platform UI/UX redesign
     - Shell & primitive convergence
@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 199
-  log_sha256: 1184c1ef6c3fd244380ba371c8b7392000e8c4930e7500037d49e3d81c4a0fed
+  snapshot_revision: 254
+  log_sha256: 66c07a1a1757f418ed0dd300394ec7f28ac641d8da1b3dd899988e1ca765ff04
   acceptance_policy:
     milestone: operator
     root: operator
@@ -1186,7 +1186,7 @@ nodes:
     - id: BL-0001
       type: dependency
       ref: N-0013
-      opened: '2026-09-02T11:14:27Z'
+      opened: '2026-09-02T19:28:12Z'
       note: Blocked pending N-0013 operator architecture approval
     conservation_tags: []
     fingerprint: null
@@ -1297,7 +1297,7 @@ nodes:
     - id: BL-0002
       type: dependency
       ref: N-0013
-      opened: '2026-09-02T11:14:27Z'
+      opened: '2026-09-02T19:28:12Z'
       note: Blocked pending N-0013 operator architecture approval
     conservation_tags: []
     fingerprint: null
@@ -1357,9 +1357,9 @@ nodes:
     title: Full-platform IA architecture and buyer vocabulary approval
     class: discovery
     origin: decomposition
-    status: ready
+    status: blocked
     stage: verify
-    revision: 26
+    revision: 72
     lease: null
     depends_on: []
     facets:
@@ -1371,11 +1371,15 @@ nodes:
     acceptance_state: pending
     acceptance_criteria:
     - 'target_artifact_class: high_fidelity'
-    - Proposed architecture in docs/design/CIP_PLATFORM_ARCHITECTURE_PROPOSAL.md
-    - All 50 reconciliation capabilities accounted for
-    - Rendered evidence desktop 1280 and mobile 390
-    - Independent gov-008 rendered review PASS
-    - Operator records accept or amend before N-0010/N-0011 unblock
+    - 'high_fidelity MEANS: interactive React design prototype inside apps/web using the real stack and component ecosystem
+      with fixture data — standalone HTML/CSS is not acceptable design evidence'
+    - Architecture derived from source-level product + component discovery; no assumed container count
+    - Materially different product concepts compared with evidence before convergence; CONSULT with genuine model separation
+      recorded
+    - 'Rendered evidence: 1280px every prototyped surface; 390px shell + every mobile-required workflow; each claim cites
+      screenshot + viewport'
+    - D-0001/D-0003 rejected (D-0004/D-0005); D-0002 deferred (D-0006) — mapping/resolution remains reachable
+    - Production redesign implementation remains blocked until operator accepts the new direction
     baseline_ref: BLN-0001
     parity_source: []
     parity_matrix: {}
@@ -1383,23 +1387,31 @@ nodes:
     quality:
       design_artifact_class:
         required: true
-        state: pass
+        state: authored_unverified
         evidence:
-          class: high_fidelity
-          path: .eif/audit/NS_RECONCILE_20260902/rendered-verification.md
-        rationale: null
-        pass_run: NS_RECONCILE_20260902
-        pass_actor: agent
+          class: react_prototype_in_repo
+          paths:
+          - apps/web/src/design-lab/
+          - apps/web/src/app/(design-lab)/
+          independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
+            CLI) for IA only
+          reviewer_required: separate GOV-008 session, other model where available
+          dim: design_artifact_class
+        rationale: r3 package authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008 and operator acceptance.
       design_divergence:
         required: true
-        state: pass
+        state: authored_unverified
         evidence:
-          benchmark: docs/design/CIP_FULL_PLATFORM_RECONCILIATION.md
-          decision: architecture_reproposal
-          rationale: Reconciliation proves six-container IA incomplete; charter amended; names and utilities revised
-        rationale: null
-        pass_run: NS_RECONCILE_20260902
-        pass_actor: agent
+          paths:
+          - .eif/audit/NS_REDESIGN_R3_20260902/CONCEPTS.md
+          - .eif/audit/NS_REDESIGN_R3_20260902/CONSULT_SEED.md
+          - .eif/audit/NS_REDESIGN_R3_20260902/CONSULT_RESPONSE.md
+          consult_model: claude opus (CLI, separate process)
+          independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
+            CLI) for IA only
+          reviewer_required: separate GOV-008 session, other model where available
+          dim: design_divergence
+        rationale: r3 package authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008 and operator acceptance.
       design_signatures:
         required: true
         state: pass
@@ -1415,26 +1427,33 @@ nodes:
         pass_actor: agent
       rendered_comparison:
         required: true
-        state: pass
+        state: authored_unverified
         evidence:
-          path: .eif/audit/NS_RECONCILE_20260902/independent-rendered-review.md
-          comparison_verdict: challenge_accepted_proposal
-          artifact_class: high_fidelity
-          product_url: file://.eif/audit/NS_RECONCILE_20260902/index.html
-        rationale: null
-        pass_run: NS_RECONCILE_20260902
-        pass_actor: agent
+          paths:
+          - .eif/audit/NS_REDESIGN_R3_20260902/rendered-verification.md
+          - .eif/audit/NS_REDESIGN_R3_20260902/renders/proto/manifest.json
+          viewports:
+          - 1280x800
+          - 390x844
+          captures: 34
+          independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
+            CLI) for IA only
+          reviewer_required: separate GOV-008 session, other model where available
+          dim: rendered_comparison
+        rationale: r3 package authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008 and operator acceptance.
       design_sameness_review:
         required: true
-        state: pass
+        state: authored_unverified
         evidence:
-          path: .eif/audit/NS_RECONCILE_20260902/independent-rendered-review.md
-          decision: challenge_accepted_proposal
-          visual_vocabulary_challenge: Five-job FRESH_NS and legacy six-name spine both rejected; Plan/Channel/Actions/Data
-            rename is material
-        rationale: null
-        pass_run: NS_RECONCILE_20260902
-        pass_actor: agent
+          paths:
+          - .eif/audit/NS_REDESIGN_R3_20260902/FAULT_FINDINGS.md
+          - .eif/audit/NS_REDESIGN_R3_20260902/DIRECTION.md#2
+          note: structural change vs rejected six containers documented
+          independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
+            CLI) for IA only
+          reviewer_required: separate GOV-008 session, other model where available
+          dim: design_sameness_review
+        rationale: r3 package authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008 and operator acceptance.
       design_interaction_spec:
         required: true
         state: pass
@@ -1443,10 +1462,10 @@ nodes:
           - spine_count_badges
           - utility_sub_links
           - brief_signal_deep_links
-          - channel_lens_switcher
+          - position_lens_switcher
           - mobile_drawer_spine
         rationale: null
-        pass_run: NS_RECONCILE_20260902
+        pass_run: NS_RECONCILE_AMEND_FINISH_20260902
         pass_actor: agent
       design_state_coverage:
         required: true
@@ -1454,11 +1473,11 @@ nodes:
         evidence:
           states:
           - populated_brief
-          - populated_channel
+          - populated_position
           - mobile_nav
-          - utility_expanded
+          - utility_hubs
         rationale: null
-        pass_run: NS_RECONCILE_20260902
+        pass_run: NS_RECONCILE_AMEND_FINISH_20260902
         pass_actor: agent
       design_identity_tokens:
         required: true
@@ -1503,54 +1522,121 @@ nodes:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/NS_RECONCILE_20260902/independent-rendered-review.md
-          summary: Static contrast pass; focus trap deferred to implementation
+          path: .eif/audit/NS_RECONCILE_20260902/independent-rendered-review-r2.md
+          summary: 'r2: focus-visible in cip-base.css; contrast pass; trap deferred to implementation'
+          r1_superseded: .eif/audit/NS_RECONCILE_20260902/independent-rendered-review.md
         rationale: null
-        pass_run: NS_RECONCILE_20260902
+        pass_run: NS_RECONCILE_AMEND_FINISH_20260902
         pass_actor: agent
       rendered:
         required: true
-        state: pass
-        evidence: &id005
-          path: .eif/audit/NS_RECONCILE_20260902/rendered-verification.md
-          gallery: .eif/audit/NS_RECONCILE_20260902/index.html
+        state: authored_unverified
+        evidence:
+          paths:
+          - .eif/audit/NS_REDESIGN_R3_20260902/rendered-verification.md
           viewports:
-          - desktop_1280
-          - mobile_390
-          proposal: docs/design/CIP_PLATFORM_ARCHITECTURE_PROPOSAL.md
-        rationale: null
-        pass_run: NS_RECONCILE_20260902
-        pass_actor: agent
+          - 1280x800
+          - 390x844
+          independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
+            CLI) for IA only
+          reviewer_required: separate GOV-008 session, other model where available
+          dim: rendered
+        rationale: r3 package authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008 and operator acceptance.
       content:
         required: true
-        state: pass
+        state: authored_unverified
         evidence:
-          path: docs/design/CIP_PLATFORM_ARCHITECTURE_PROPOSAL.md
-          summary: Brief·Plan·Channel·Settlement·Actions·Data; Fill vs plan lens; Data subtitle Imports & masters
-        rationale: null
-        pass_run: NS_RECONCILE_20260902
-        pass_actor: agent
+          paths:
+          - .eif/audit/NS_REDESIGN_R3_20260902/DIRECTION.md#3
+          - apps/web/src/design-lab/shell/labNav.ts
+          note: domain nouns + one-line what-it-computes per leaf
+          independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
+            CLI) for IA only
+          reviewer_required: separate GOV-008 session, other model where available
+          dim: content
+        rationale: r3 package authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008 and operator acceptance.
+      accessibility:
+        required: false
+        state: authored_unverified
+        evidence:
+          paths:
+          - apps/web/src/design-lab/primitives/Panel.tsx
+          - apps/web/src/design-lab/primitives/HeadlineFigure.tsx
+          note: focus-visible outlines, keyboard on PanelRow/HeadlineFigure; NOT audited by axe — UNVERIFIED
+          independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
+            CLI) for IA only
+          reviewer_required: separate GOV-008 session, other model where available
+          dim: accessibility
+        rationale: r3 package authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008 and operator acceptance.
+      interaction_spec:
+        required: false
+        state: authored_unverified
+        evidence:
+          paths:
+          - .eif/audit/NS_REDESIGN_R3_20260902/rendered-verification.md
+          note: edit dashboard, drill panel, approve case, map token, metric switch + pin proven in prototype
+          independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
+            CLI) for IA only
+          reviewer_required: separate GOV-008 session, other model where available
+          dim: interaction_spec
+        rationale: r3 package authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008 and operator acceptance.
+      state_coverage:
+        required: false
+        state: authored_unverified
+        evidence:
+          paths:
+          - .eif/audit/NS_REDESIGN_R3_20260902/rendered-verification.md
+          note: empty/gated (forecast), scope-empty, mobile cards, edit mode
+          independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
+            CLI) for IA only
+          reviewer_required: separate GOV-008 session, other model where available
+          dim: state_coverage
+        rationale: r3 package authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008 and operator acceptance.
     verification:
       rendered:
-        state: pass
-        pass_run: NS_RECONCILE_20260902
-        pass_actor: agent
-        evidence: *id005
+        state: authored_unverified
+        evidence:
+          paths:
+          - .eif/audit/NS_REDESIGN_R3_20260902/rendered-verification.md
+          - .eif/audit/NS_REDESIGN_R3_20260902/renders/proto/
+          independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
+            CLI) for IA only
+          reviewer_required: separate GOV-008 session, other model where available
         path: null
       referent:
-        state: pass
-        pass_run: NS_RECONCILE_INDEPENDENT_20260902
-        pass_actor: gov-008
+        state: pending
         evidence:
-          benchmark: docs/design/CIP_FULL_PLATFORM_RECONCILIATION.md
-          path: .eif/audit/NS_RECONCILE_20260902/independent-rendered-review.md
-          method: independent_architecture_challenge
+          superseded_by_operator: true
+          operator_decision_date: '2026-09-02'
+          rejected_package: N-0013 amended architecture r2 (Brief·Plan·Position·Settlement·Actions·Imports)
+          rejected_evidence:
+          - .eif/audit/NS_RECONCILE_20260902/rendered-verification.md
+          - .eif/audit/NS_RECONCILE_20260902/rendered-verification-r2.md
+          - .eif/audit/NS_RECONCILE_20260902/independent-rendered-review.md
+          - .eif/audit/NS_RECONCILE_20260902/independent-rendered-review-r2.md
+          - .eif/audit/NS_RECONCILE_20260902/index.html
+          - docs/design/CIP_PLATFORM_ARCHITECTURE_PROPOSAL.md
+          reason: Standalone HTML/CSS artifacts recreated application UI and did not prove the real React product; insufficient
+            information scent; sparse generic console; weak analytical visualisation; independence was actor-label only (same
+            run, same process, same model).
+          replacement_required: .eif/audit/NS_REDESIGN_R3_20260902/ — React design prototype in the real apps/web stack +
+            rendered evidence
+          verification_kind: referent
         path: null
     evidence: []
-    blockers: []
+    blockers:
+    - id: BL-OPERATOR-REJECTION-20260902
+      type: decision
+      ref: D-0004,D-0005,D-0006
+      opened: '2026-09-02T19:28:12Z'
+      note: Operator rejected r2 package 2026-09-02. New design package (React prototype + rendered evidence) required; Phase
+        A / production redesign implementation blocked until operator accepts a direction.
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: 'r3 design package complete for operator review (2026-09-02): FAULT_FINDINGS, PRODUCT_CAPABILITY_AUDIT, COMPONENT_ECOSYSTEM_AUDIT,
+      CONCEPTS (3), CONSULT (opus, separate process) -> DIRECTION (hybrid H, D-0007 proposed); React prototype under apps/web/src/design-lab
+      + app/(design-lab) (fixtures, no API); 34 renders @1280/@390 with manifest; EIF_REMEDIES_PROPOSAL (not applied); OPERATOR_SUMMARY.
+      Node remains blocked on operator acceptance; production implementation not started.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -1565,8 +1651,64 @@ decisions:
   D-0001:
     id: D-0001
     scope: N-0013
-    statement: Adopt Brief·Plan·Channel·Settlement·Actions·Data + Reports·Admin as governing full-platform IA
+    statement: 'Adopt amended IA: Brief·Plan·Position·Settlement·Actions·Imports + Reports·Admin utilities (r2 evidence)'
     origin: eif
+    status: superseded
+    supersedes: null
+  D-0002:
+    id: D-0002
+    scope: N-0013
+    statement: 'Mapping queue UI: RESTORE under Imports (recommended) vs RETIRE UI — operator choice'
+    origin: eif
+    status: proposed
+    supersedes: null
+  D-0003:
+    id: D-0003
+    scope: N-0013
+    statement: 'KPI analytical capability vs Brief landing: Dashboards under Reports (recommended) vs Brief strip vs secondary
+      /dashboard'
+    origin: eif
+    status: superseded
+    supersedes: null
+  D-0004:
+    id: D-0004
+    scope: N-0013
+    statement: 'REJECTED 2026-09-02: D-0001 amended IA (Brief·Plan·Position·Settlement·Actions·Imports) is not accepted. Not
+      a rename problem: insufficient information scent for an unfamiliar commercial operator; architecture must be re-derived
+      from the real product with no target container count.'
+    origin: operator
+    status: accepted
+    supersedes: D-0001
+  D-0005:
+    id: D-0005
+    scope: N-0013
+    statement: 'REJECTED 2026-09-02: D-0003 framing of Dashboards as a saved-report destination under Reports is rejected.
+      Dashboards are a strategically important configurable view of the business; prominence, location, relationship to reporting/landing
+      and configuration model must be re-derived.'
+    origin: operator
+    status: accepted
+    supersedes: D-0003
+  D-0006:
+    id: D-0006
+    scope: N-0013
+    statement: 'DEFERRED 2026-09-02: D-0002 (mapping queue UI restore vs retire) is deferred, not rejected. Mapping/resolution
+      capability must remain accounted for and reachable until Warren explicitly accepts retirement/replacement after the
+      new architecture is known.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0007:
+    id: D-0007
+    scope: N-0013
+    statement: 'PROPOSED 2026-09-02 (r3): primary navigation = capability domains derived from the data layer (Overview ·
+      Stock & Sell-through · Supply & Inbound · Planning · Funding & Settlement · Commercial inputs · Data & Stewardship ·
+      Administration[admin]); first destination = composed Overview with distinct Business dashboard (configurable, per-role
+      seeded, governed metrics) and Needs-attention zones; every figure drills into an entity/case context panel; command
+      palette + capability directory as accelerators; leaves data-gated. Reports and Dashboards are siblings (saved report
+      pins as widget). Mapping/resolution stays reachable per-job and as a cross-job Steward queue leaf (D-0002 still deferred).
+      Evidence: .eif/audit/NS_REDESIGN_R3_20260902/DIRECTION.md, CONCEPTS.md, CONSULT_RESPONSE.md, rendered-verification.md,
+      prototype apps/web/src/design-lab + app/(design-lab).'
+    origin: agent
     status: proposed
     supersedes: null
 evidence: {}
