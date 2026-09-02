@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 199
+**Snapshot revision:** 254
 
 ## Outcome (verbatim)
 
@@ -34,4 +34,4 @@ _none_
 | N-0010 | NS-6 Actions container (was Response) | redesign | blocked | blocked | yes |
 | N-0011 | NS-7 Data container (was Steward) | redesign | blocked | blocked | yes |
 | N-0012 | NS-1a FX display honesty (no migration) | feature | complete | complete | yes |
-| N-0013 | Full-platform IA architecture and buyer vocabulary approval | discovery | ready | ready | yes |
+| N-0013 | Full-platform IA architecture and buyer vocabulary approval | discovery | blocked | blocked | yes |

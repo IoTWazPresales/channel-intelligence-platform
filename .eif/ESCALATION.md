@@ -2,4 +2,8 @@
 
 # Escalation / decision queue
 
-_No open blockers or proposed decisions._
+- blocker **BL-0001** on N-0010 type=dependency ref=N-0013 Blocked pending N-0013 operator architecture approval
+- blocker **BL-0002** on N-0011 type=dependency ref=N-0013 Blocked pending N-0013 operator architecture approval
+- blocker **BL-OPERATOR-REJECTION-20260902** on N-0013 type=decision ref=D-0004,D-0005,D-0006 Operator rejected r2 package 2026-09-02. New design package (React prototype + rendered evidence) required; Phase A / production redesign implementation blocked until operator accepts a direction.
+- decision **D-0002** scope=N-0013: Mapping queue UI: RESTORE under Imports (recommended) vs RETIRE UI — operator choice
+- decision **D-0007** scope=N-0013: PROPOSED 2026-09-02 (r3): primary navigation = capability domains derived from the data layer (Overview · Stock & Sell-through · Supply & Inbound · Planning · Funding & Settlement · Commercial inputs · Data & Stewardship · Administration[admin]); first destination = composed Overview with distinct Business dashboard (configurable, per-role seeded, governed metrics) and Needs-attention zones; every figure drills into an entity/case context panel; command palette + capability directory as accelerators; leaves data-gated. Reports and Dashboards are siblings (saved report pins as widget). Mapping/resolution stays reachable per-job and as a cross-job Steward queue leaf (D-0002 still deferred). Evidence: .eif/audit/NS_REDESIGN_R3_20260902/DIRECTION.md, CONCEPTS.md, CONSULT_RESPONSE.md, rendered-verification.md, prototype apps/web/src/design-lab + app/(design-lab).

@@ -14,7 +14,6 @@
 ## Ready leaves
 
 - **N-0006** NS-1b FX mode and blocked-settle enforcement (feature, R3, stage=None)
-- **N-0013** Full-platform IA architecture and buyer vocabulary approval (discovery, R3, stage=verify)
 
 ## In progress / leased
 
@@ -22,4 +21,5 @@ _none_
 
 ## Decision queue
 
-- **D-0001** scope=N-0013: Adopt Brief·Plan·Channel·Settlement·Actions·Data + Reports·Admin as governing full-platform IA
+- **D-0002** scope=N-0013: Mapping queue UI: RESTORE under Imports (recommended) vs RETIRE UI — operator choice
+- **D-0007** scope=N-0013: PROPOSED 2026-09-02 (r3): primary navigation = capability domains derived from the data layer (Overview · Stock & Sell-through · Supply & Inbound · Planning · Funding & Settlement · Commercial inputs · Data & Stewardship · Administration[admin]); first destination = composed Overview with distinct Business dashboard (configurable, per-role seeded, governed metrics) and Needs-attention zones; every figure drills into an entity/case context panel; command palette + capability directory as accelerators; leaves data-gated. Reports and Dashboards are siblings (saved report pins as widget). Mapping/resolution stays reachable per-job and as a cross-job Steward queue leaf (D-0002 still deferred). Evidence: .eif/audit/NS_REDESIGN_R3_20260902/DIRECTION.md, CONCEPTS.md, CONSULT_RESPONSE.md, rendered-verification.md, prototype apps/web/src/design-lab + app/(design-lab).
