@@ -2165,6 +2165,40 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 ---
 
+## BACKLOG-159 — EIF remedies for proven N-0013 governance defects (EIF repo)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-02 |
+| **Effort** | Medium (EIF repo; ~6 days across R-1…R-9) |
+| **Source** | `.eif/audit/NS_REDESIGN_R3_20260902/EIF_REMEDIES_PROPOSAL.md`; `FAULT_FINDINGS.md` §3 E-1…E-9 |
+| **Idea** | Structural independence tokens; model-separation field; gates at PASS not only `complete`; `rejected`/`deferred` decision states; evidence-pointer resolution for `pass`; framework-dirty quarantine; product-quality preservation dimension; declared artifact class; guard path-parser fixes. |
+| **Why it matters / deferrable** | Without them the next R3 design node can again show PASS records nobody independently checked. Deferrable because CIP evidence must be frozen first and the work lives in `C:\AI\engineering-intelligence-framework`, not CIP. |
+| **What the work is** | Separate EIF-repo session applying R-4/R-8 (config) first, then R-1/R-3/R-5 (code), then R-6/R-7/R-9; each with a `governance.change` event; then re-run N-0013 independence verification from another session/model. |
+| **Regression traps** | Do not mix into CIP commits; do not rewrite historical events; existing PASS records re-render as `unverified independence` (truthful) — not a regression. The uncommitted `.eif/runtime/**` + `eif_guard.py` edits on disk pre-date r3 and are not part of any CIP commit. |
+| **Behavior to retain** | Append-only ledger; CONSULT ladder; CONTROL_PLANE_PROTECTED on writes. |
+| **Out of scope** | Any CIP product change. |
+| **TRIGGER** | Operator authorises an EIF-repo session (OPERATOR_SUMMARY decision 5), after the r3 CIP evidence commit lands. |
+
+---
+
+## BACKLOG-158 — Design-lab prototype disposition after N-0013 decision
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-02 |
+| **Effort** | Small (delete) or Large (Phase A promotion plan) |
+| **Source** | `apps/web/src/design-lab/**`, `apps/web/src/app/(design-lab)/`; `.eif/audit/NS_REDESIGN_R3_20260902/DIRECTION.md` §7 |
+| **Idea** | The prototype is design evidence, not product. On acceptance of D-0007, its primitives (`HeadlineFigure`, `Panel`, `ScopeBar`, `LensTabs`, `charts.tsx`, `EntityContextPanel`, `CommandPalette`, `DomainHeader`, `LabShell`) become the Phase A promotion candidates into `apps/web/src/components` / `features`, replacing the duplicates named in `COMPONENT_ECOSYSTEM_AUDIT.md`; on rejection, the route group is deleted. Either way it must not linger as a second UI universe. |
+| **Why it matters / deferrable** | Two shells in one app is exactly the drift the redesign is meant to end. Deferrable until the operator decides. |
+| **What the work is** | Accept → Phase A plan node(s) with per-primitive promotion + consolidation list, gated by rendered comparison against `renders/proto/`. Reject → remove `design-lab` + `(design-lab)` in one commit. |
+| **Regression traps** | Prototype fixtures must never be imported by production code; `cip.design-lab.role` localStorage key is prototype-only. Preserve steward engine depth (benchmark) when promoting. |
+| **Behavior to retain** | Production routes unchanged until Phase A is explicitly approved. |
+| **Out of scope** | Any production route replacement before acceptance. |
+| **TRIGGER** | Operator decision on D-0007 (OPERATOR_SUMMARY decision 1). |
+
+---
+
 ## BACKLOG-157 — CIP design language: interaction honesty requirement
 
 | Field | Detail |
