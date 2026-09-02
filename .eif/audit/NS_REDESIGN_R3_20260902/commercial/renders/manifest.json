@@ -1,0 +1,223 @@
+{
+  "base": "http://localhost:3000",
+  "capturedAt": "2026-09-02T22:39:53.583Z",
+  "shots": [
+    {
+      "file": "d-directory-status.png",
+      "viewport": "1280x800",
+      "url": "http://localhost:3000/design-lab/directory",
+      "fullPage": true,
+      "scrollWidth": 1280,
+      "note": "Capability directory with four-state status: Promotions & Funding and Market & Listings replace Commercial inputs; partly built / data only / planned labelled"
+    },
+    {
+      "file": "d-pf-casebook.png",
+      "viewport": "1280x800",
+      "url": "http://localhost:3000/design-lab/funding",
+      "fullPage": true,
+      "scrollWidth": 1280,
+      "note": "Promotions & Funding › Case book: lifecycle rail shows the same case object across planning and settlement"
+    },
+    {
+      "file": "d-pf-case-panel-lifecycle.png",
+      "viewport": "1280x800",
+      "url": "http://localhost:3000/design-lab/funding",
+      "fullPage": false,
+      "scrollWidth": 1280,
+      "note": "Case panel now carries the lifecycle rail + activation link to Market"
+    },
+    {
+      "file": "d-pf-planner-list.png",
+      "viewport": "1280x800",
+      "url": "http://localhost:3000/design-lab/funding?lens=planner",
+      "fullPage": true,
+      "scrollWidth": 1280,
+      "note": "Promotion planner: lifecycle rail with counts, plan grid, decision list, capability ledger"
+    },
+    {
+      "file": "d-pf-plan-workspace.png",
+      "viewport": "1280x800",
+      "url": "http://localhost:3000/design-lab/funding?lens=planner&plan=CPR-26-1204",
+      "fullPage": true,
+      "scrollWidth": 1280,
+      "note": "Plan workspace (proposed by CIP): parameters, waterfall figures, editable lines grid, comparables, cross-domain evidence, validation, export target"
+    },
+    {
+      "file": "d-pf-plan-edit-recompute.png",
+      "viewport": "1280x800",
+      "url": "http://localhost:3000/design-lab/funding?lens=planner&plan=CPR-26-1204",
+      "fullPage": false,
+      "scrollWidth": 1280,
+      "note": "After editing Est. units 600→650 in the inline editor: line support, total support and budget figure recompute; snackbar explains"
+    },
+    {
+      "file": "d-pf-line-evidence.png",
+      "viewport": "1280x800",
+      "url": "http://localhost:3000/design-lab/funding?lens=planner&plan=CPR-26-1204",
+      "fullPage": false,
+      "scrollWidth": 1280,
+      "note": "Line evidence panel: waterfall, cost tier ladder, quantity evidence, market evidence, related workflows"
+    },
+    {
+      "file": "d-pf-export-dialog.png",
+      "viewport": "1280x800",
+      "url": "http://localhost:3000/design-lab/funding?lens=planner&plan=CPR-26-1204",
+      "fullPage": false,
+      "scrollWidth": 1280,
+      "note": "Export dialog: template-driven XLSX, version recorded on the case; honest note that today’s export is a frozen tuple"
+    },
+    {
+      "file": "d-pf-plan-draft-needs-template.png",
+      "viewport": "1280x800",
+      "url": "http://localhost:3000/design-lab/funding?lens=planner&plan=CPR-26-1202",
+      "fullPage": true,
+      "scrollWidth": 1280,
+      "note": "Draft plan whose export template needs mapping — export target panel warns, dialog would block"
+    },
+    {
+      "file": "d-pf-templates-mapped.png",
+      "viewport": "1280x800",
+      "url": "http://localhost:3000/design-lab/funding?lens=templates&template=techmart_promo_grid_v2",
+      "fullPage": true,
+      "scrollWidth": 1280,
+      "note": "Plan templates: bidirectional profile; REAL production CanonicalColumnMappingPanel mounted with fixture headers"
+    },
+    {
+      "file": "d-pf-templates-needs-mapping.png",
+      "viewport": "1280x800",
+      "url": "http://localhost:3000/design-lab/funding?lens=templates&template=officeworld_promo_v1",
+      "fullPage": true,
+      "scrollWidth": 1280,
+      "note": "OfficeWorld template: required canonical field missing → blocking error, still-needed chips, Save disabled"
+    },
+    {
+      "file": "d-pf-budgets-substrate.png",
+      "viewport": "1280x800",
+      "url": "http://localhost:3000/design-lab/funding?lens=budgets",
+      "fullPage": false,
+      "scrollWidth": 1280,
+      "note": "Budget ledger lens: “Data only” — explains why nothing is shown"
+    },
+    {
+      "file": "d-market-listings.png",
+      "viewport": "1280x800",
+      "url": "http://localhost:3000/design-lab/market",
+      "fullPage": true,
+      "scrollWidth": 1280,
+      "note": "Market & Listings: listing figures, observed price vs case window chart, attention candidates, capability ledger, registry grid"
+    },
+    {
+      "file": "d-market-listing-panel.png",
+      "viewport": "1280x800",
+      "url": "http://localhost:3000/design-lab/market",
+      "fullPage": false,
+      "scrollWidth": 1280,
+      "note": "Listing panel: price history, activation alert, related case / stock / competition"
+    },
+    {
+      "file": "d-market-activation.png",
+      "viewport": "1280x800",
+      "url": "http://localhost:3000/design-lab/market?lens=activation",
+      "fullPage": true,
+      "scrollWidth": 1280,
+      "note": "Promotion activation lens: observed vs case SRP per live case; where it feeds"
+    },
+    {
+      "file": "d-market-proposals.png",
+      "viewport": "1280x800",
+      "url": "http://localhost:3000/design-lab/market?lens=proposals",
+      "fullPage": true,
+      "scrollWidth": 1280,
+      "note": "Feed proposals: steward confirms listings proposed from CST feed ids"
+    },
+    {
+      "file": "d-market-competition.png",
+      "viewport": "1280x800",
+      "url": "http://localhost:3000/design-lab/market?lens=competition",
+      "fullPage": true,
+      "scrollWidth": 1280,
+      "note": "Competitor mappings: our SKU ↔ competitor SKU with score bars; Propose candidates disabled with honest reason"
+    },
+    {
+      "file": "d-market-mapping-panel.png",
+      "viewport": "1280x800",
+      "url": "http://localhost:3000/design-lab/market?lens=competition",
+      "fullPage": false,
+      "scrollWidth": 1280,
+      "note": "Mapping panel: factor breakdown × weights, approve/reject for a pending proposal"
+    },
+    {
+      "file": "d-market-competitor-prices-substrate.png",
+      "viewport": "1280x800",
+      "url": "http://localhost:3000/design-lab/market?lens=competitor-prices",
+      "fullPage": false,
+      "scrollWidth": 1280,
+      "note": "Competitor prices lens: Data only — no placeholder chart"
+    },
+    {
+      "file": "d-market-quality-planned.png",
+      "viewport": "1280x800",
+      "url": "http://localhost:3000/design-lab/market?lens=quality",
+      "fullPage": false,
+      "scrollWidth": 1280,
+      "note": "Listing quality / SEO lens: Planned — nothing pretends to work"
+    },
+    {
+      "file": "d-stock-panel-market-links.png",
+      "viewport": "1280x800",
+      "url": "http://localhost:3000/design-lab/stock?lens=cover",
+      "fullPage": false,
+      "scrollWidth": 1280,
+      "note": "Stock product panel related workflows scrolled into view: links to Market & Listings (retail listings & shelf price, competitor products)"
+    },
+    {
+      "file": "d-palette-promotion.png",
+      "viewport": "1280x800",
+      "url": "http://localhost:3000/design-lab",
+      "fullPage": false,
+      "scrollWidth": 1280,
+      "note": "Command palette: “promotion” finds planner, activation, templates across two domains"
+    },
+    {
+      "file": "m-pf-planner-list.png",
+      "viewport": "390x844",
+      "url": "http://localhost:3000/design-lab/funding?lens=planner",
+      "fullPage": false,
+      "scrollWidth": 390,
+      "note": "Planner list as record cards at 390 (review-and-approve is a mobile job)"
+    },
+    {
+      "file": "m-pf-plan-workspace.png",
+      "viewport": "390x844",
+      "url": "http://localhost:3000/design-lab/funding?lens=planner&plan=CPR-26-1204",
+      "fullPage": false,
+      "scrollWidth": 390,
+      "note": "Plan workspace at 390: lifecycle rail wraps, lines as cards, approve/return actions"
+    },
+    {
+      "file": "m-pf-line-evidence.png",
+      "viewport": "390x844",
+      "url": "http://localhost:3000/design-lab/funding?lens=planner&plan=CPR-26-1204",
+      "fullPage": false,
+      "scrollWidth": 390,
+      "note": "Line evidence as bottom sheet"
+    },
+    {
+      "file": "m-market-activation.png",
+      "viewport": "390x844",
+      "url": "http://localhost:3000/design-lab/market?lens=activation",
+      "fullPage": false,
+      "scrollWidth": 390,
+      "note": "Activation check on a phone: is the promo live at the planned price on the shelf?"
+    },
+    {
+      "file": "m-market-listings.png",
+      "viewport": "390x844",
+      "url": "http://localhost:3000/design-lab/market",
+      "fullPage": false,
+      "scrollWidth": 390,
+      "note": "Listings as record cards at 390"
+    }
+  ],
+  "errors": []
+}

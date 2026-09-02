@@ -8,6 +8,14 @@ concepts), `CONSULT_SEED.md` → `CONSULT_RESPONSE.md` (independent model), `FAU
 Proof: interactive React prototype at `apps/web/src/design-lab/**` (route group `/design-lab`) and
 rendered evidence in `renders/proto/` (see `rendered-verification.md`).
 
+> **Amended 2026-09-02 (r3.1) — `commercial/COMMERCIAL_DIRECTION.md`.** D-0007 is superseded by **D-0008
+> (proposed)**. For the commercial capability this document is corrected as follows: *Funding & Settlement* →
+> **Promotions & Funding** owning the whole `cpor_case` lifecycle (planner, case book, claims, payments, plan
+> templates, terms, budget ledger); *Commercial inputs* **removed** (its "promotion_plan lines" and
+> "price_observations" are not tables); new evidence domain **Market & Listings**; the binary data-gating rule in
+> §3/§5 is **withdrawn** in favour of the four-state leaf vocabulary live / partial / substrate / planned; export
+> becomes a per-customer template profile. Everything else below stands. Text below is preserved as written.
+
 ---
 
 ## 1. Direction in one paragraph
