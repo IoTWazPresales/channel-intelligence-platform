@@ -2148,6 +2148,23 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 ---
 
+## BACKLOG-160 — Commercial doc/code contradictions surfaced by N-0013 r3.1
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-02 |
+| **Effort** | Small (three bounded edits) |
+| **Source** | `.eif/audit/NS_REDESIGN_R3_20260902/commercial/CAPABILITY_ACCOUNTING.md` §6; `apps/api/app/api/v1/endpoints/market.py`; `apps/web/src/app/(app)/promotions/page.tsx`; `.eif/program/PROGRAM.yaml` N-0010 `acceptance_criteria` |
+| **Idea** | (1) `market.py` reports `competitor_price_import: ready` although no such template exists in `template_definitions.py` and `fact_competitor_price` has no writer — report `substrate` truthfully. (2) The shipped `/promotions` page shows a "Scaffold plans/readiness are parked" notice beside the live B4 planner — remove the dead scaffold tabs or the notice. (3) N-0010 acceptance criteria cite `CIP_DESIGN_LANGUAGE.md FROZEN v1.1 … container Response`, a rejected design input — re-charter per D-0009. |
+| **Why it matters / deferrable** | Each is a place where the product or the programme claims a capability state it does not have — the exact class of misstatement the r3.1 four-state vocabulary exists to stop. Deferrable because none changes behaviour and (3) needs the operator's D-0009 decision. |
+| **What the work is** | (1) one-line readiness change + test; (2) remove the parked scaffold tabs from `/promotions` (or fold the page into the CPOR case surface when the Promotions & Funding node is chartered); (3) `node.patch` on N-0010 after D-0009. |
+| **Regression traps** | Do not delete `promotion_plan` importer history or `promo_plan_export` tables — legacy data may exist; hide, don't drop. Do not touch B4 `PromoPlanBuilderPanel` behaviour. |
+| **Behavior to retain** | B4 planner, CPOR case surface, competition approve/reject, listing capture pages. |
+| **Out of scope** | Building competitor-price import, template-driven export, or any redesign implementation. |
+| **TRIGGER** | Operator decision on D-0008/D-0009, or the next touch of `market.py` / `promotions/page.tsx`. |
+
+---
+
 ## BACKLOG-156 — N-0009 Lineup scope bar inert-control honesty
 
 | Field | Detail |
