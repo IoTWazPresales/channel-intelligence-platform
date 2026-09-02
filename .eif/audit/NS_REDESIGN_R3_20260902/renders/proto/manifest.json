@@ -1,0 +1,274 @@
+[
+  {
+    "file": "d-overview.png",
+    "viewport": "1280x800",
+    "url": "http://localhost:3000/design-lab",
+    "fullPage": true,
+    "scrollWidth": 1280,
+    "note": "Overview: composed business dashboard + attention + pinned reports"
+  },
+  {
+    "file": "d-overview-edit.png",
+    "viewport": "1280x800",
+    "url": "http://localhost:3000/design-lab",
+    "fullPage": false,
+    "scrollWidth": 1280,
+    "note": "Dashboard edit mode: widget remove affordances + add-widget picker"
+  },
+  {
+    "file": "d-stock-cover.png",
+    "viewport": "1280x800",
+    "url": "http://localhost:3000/design-lab/stock?lens=cover",
+    "fullPage": true,
+    "scrollWidth": 1280,
+    "note": "Stock cover lens: headline strip, distribution + trend, scope chips, cover grid"
+  },
+  {
+    "file": "d-stock-cover-panel.png",
+    "viewport": "1280x800",
+    "url": "http://localhost:3000/design-lab/stock?lens=cover",
+    "fullPage": false,
+    "scrollWidth": 1280,
+    "note": "Entity context panel over the grid (product drill-down, related workflows)"
+  },
+  {
+    "file": "d-stock-movement.png",
+    "viewport": "1280x800",
+    "url": "http://localhost:3000/design-lab/stock?lens=movement",
+    "fullPage": true,
+    "scrollWidth": 1280,
+    "note": "Stock movement lens"
+  },
+  {
+    "file": "d-stock-forecast.png",
+    "viewport": "1280x800",
+    "url": "http://localhost:3000/design-lab/stock?lens=forecast",
+    "fullPage": true,
+    "scrollWidth": 1280,
+    "note": "Forecast lens (method-labelled projections / gated empty state)"
+  },
+  {
+    "file": "d-supply.png",
+    "viewport": "1280x800",
+    "url": "http://localhost:3000/design-lab/supply",
+    "fullPage": true,
+    "scrollWidth": 1280,
+    "note": "Supply & Inbound domain overview"
+  },
+  {
+    "file": "d-planning.png",
+    "viewport": "1280x800",
+    "url": "http://localhost:3000/design-lab/planning",
+    "fullPage": true,
+    "scrollWidth": 1280,
+    "note": "Planning domain overview"
+  },
+  {
+    "file": "d-funding-book.png",
+    "viewport": "1280x800",
+    "url": "http://localhost:3000/design-lab/funding",
+    "fullPage": true,
+    "scrollWidth": 1280,
+    "note": "Funding case book: book figures, ageing, blocked reasons, case grid"
+  },
+  {
+    "file": "d-funding-case-panel.png",
+    "viewport": "1280x800",
+    "url": "http://localhost:3000/design-lab/funding",
+    "fullPage": false,
+    "scrollWidth": 1280,
+    "note": "Case panel: evidence checklist, approve / return actions"
+  },
+  {
+    "file": "d-commercial.png",
+    "viewport": "1280x800",
+    "url": "http://localhost:3000/design-lab/commercial",
+    "fullPage": true,
+    "scrollWidth": 1280,
+    "note": "Commercial inputs domain (data-gated leaves visible as not-yet-populated)"
+  },
+  {
+    "file": "d-data-imports.png",
+    "viewport": "1280x800",
+    "url": "http://localhost:3000/design-lab/data?tab=imports",
+    "fullPage": true,
+    "scrollWidth": 1280,
+    "note": "Import Center: start-import launcher, job list, status chips"
+  },
+  {
+    "file": "d-data-steward.png",
+    "viewport": "1280x800",
+    "url": "http://localhost:3000/design-lab/data?tab=steward",
+    "fullPage": true,
+    "scrollWidth": 1280,
+    "note": "Cross-job steward queue: entity tabs, confidence bands, bulk selection"
+  },
+  {
+    "file": "d-data-steward-drawer.png",
+    "viewport": "1280x800",
+    "url": "http://localhost:3000/design-lab/data?tab=steward",
+    "fullPage": false,
+    "scrollWidth": 1280,
+    "note": "Steward resolution drawer for a token (candidates + evidence)"
+  },
+  {
+    "file": "d-data-masters.png",
+    "viewport": "1280x800",
+    "url": "http://localhost:3000/design-lab/data?tab=masters",
+    "fullPage": true,
+    "scrollWidth": 1280,
+    "note": "Master data hub"
+  },
+  {
+    "file": "d-reports.png",
+    "viewport": "1280x800",
+    "url": "http://localhost:3000/design-lab/reports",
+    "fullPage": true,
+    "scrollWidth": 1280,
+    "note": "Reports: governed builder (metric catalogue · grain · run · result) beside saved reports and recent runs"
+  },
+  {
+    "file": "d-reports-shipped-vs-plan.png",
+    "viewport": "1280x800",
+    "url": "http://localhost:3000/design-lab/reports",
+    "fullPage": false,
+    "scrollWidth": 1280,
+    "note": "Metric switched to Shipped vs plan (paired bars + attainment table); Save & pin adds a saved report and confirms"
+  },
+  {
+    "file": "d-admin.png",
+    "viewport": "1280x800",
+    "url": "http://localhost:3000/design-lab/admin",
+    "fullPage": true,
+    "scrollWidth": 1280,
+    "note": "Administration domain overview (role = admin; the domain is rail-visible only for admins)"
+  },
+  {
+    "file": "d-directory.png",
+    "viewport": "1280x800",
+    "url": "http://localhost:3000/design-lab/directory",
+    "fullPage": true,
+    "scrollWidth": 1280,
+    "note": "What CIP does: capability directory"
+  },
+  {
+    "file": "d-command-palette.png",
+    "viewport": "1280x800",
+    "url": "http://localhost:3000/design-lab",
+    "fullPage": false,
+    "scrollWidth": 1280,
+    "note": "Command palette: workflows + entities by name"
+  },
+  {
+    "file": "d-overview-role-viewer.png",
+    "viewport": "1280x800",
+    "url": "http://localhost:3000/design-lab",
+    "fullPage": false,
+    "scrollWidth": 1280,
+    "note": "Role = viewer: same domain set minus Administration; steward leaves hidden"
+  },
+  {
+    "file": "m-overview.png",
+    "viewport": "390x844",
+    "url": "http://localhost:3000/design-lab",
+    "fullPage": false,
+    "scrollWidth": 390,
+    "note": "Mobile shell: top bar, single-column dashboard, bottom nav"
+  },
+  {
+    "file": "m-overview-full.png",
+    "viewport": "390x844",
+    "url": "http://localhost:3000/design-lab",
+    "fullPage": true,
+    "scrollWidth": 390,
+    "note": "Mobile overview full page: dashboard → attention → pinned reports"
+  },
+  {
+    "file": "m-drawer.png",
+    "viewport": "390x844",
+    "url": "http://localhost:3000/design-lab",
+    "fullPage": false,
+    "scrollWidth": 390,
+    "note": "Mobile navigation drawer: full capability tree"
+  },
+  {
+    "file": "m-attention.png",
+    "viewport": "390x844",
+    "url": "http://localhost:3000/design-lab?zone=attention",
+    "fullPage": false,
+    "scrollWidth": 390,
+    "note": "Attention-first ordering on mobile (deep link from notification)"
+  },
+  {
+    "file": "m-funding-cards.png",
+    "viewport": "390x844",
+    "url": "http://localhost:3000/design-lab/funding?status=open",
+    "fullPage": false,
+    "scrollWidth": 390,
+    "note": "Funding approvals as record cards (dense grid replaced intentionally)"
+  },
+  {
+    "file": "m-funding-case.png",
+    "viewport": "390x844",
+    "url": "http://localhost:3000/design-lab/funding?status=open",
+    "fullPage": false,
+    "scrollWidth": 390,
+    "note": "Case sheet full-screen: evidence checklist, approve/return footer"
+  },
+  {
+    "file": "m-funding-approved.png",
+    "viewport": "390x844",
+    "url": "http://localhost:3000/design-lab/funding?status=open",
+    "fullPage": false,
+    "scrollWidth": 390,
+    "note": "After approval: counts update, toast confirms"
+  },
+  {
+    "file": "m-stock-breaches.png",
+    "viewport": "390x844",
+    "url": "http://localhost:3000/design-lab/stock?lens=cover&status=breach",
+    "fullPage": false,
+    "scrollWidth": 390,
+    "note": "Stock cover on mobile: breach list as cards, chart stacked"
+  },
+  {
+    "file": "m-stock-breaches-full.png",
+    "viewport": "390x844",
+    "url": "http://localhost:3000/design-lab/stock?lens=cover&status=breach",
+    "fullPage": true,
+    "scrollWidth": 390,
+    "note": "Stock cover on mobile full page"
+  },
+  {
+    "file": "m-data-imports.png",
+    "viewport": "390x844",
+    "url": "http://localhost:3000/design-lab/data?tab=imports",
+    "fullPage": false,
+    "scrollWidth": 390,
+    "note": "Import Center on mobile: figures 2-up, launcher"
+  },
+  {
+    "file": "m-data-imports-full.png",
+    "viewport": "390x844",
+    "url": "http://localhost:3000/design-lab/data?tab=imports",
+    "fullPage": true,
+    "scrollWidth": 390,
+    "note": "Import job status on mobile (record cards, below the launcher)"
+  },
+  {
+    "file": "m-directory.png",
+    "viewport": "390x844",
+    "url": "http://localhost:3000/design-lab/directory",
+    "fullPage": true,
+    "scrollWidth": 390,
+    "note": "Capability directory on mobile"
+  },
+  {
+    "file": "m-command-palette.png",
+    "viewport": "390x844",
+    "url": "http://localhost:3000/design-lab",
+    "fullPage": false,
+    "scrollWidth": 390,
+    "note": "Command palette on mobile"
+  }
+]
