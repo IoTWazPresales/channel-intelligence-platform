@@ -391,7 +391,7 @@ Migrating surfaces before extracting primitives will recreate Settlement/Lineup 
 | Saved dashboards (`/dashboards`) | `navConfig` leaf at baseline; no spine utility link at HEAD | Add Reports utility sub-link or Steward-adjacent entry |
 | Report inbox (`/inbox`) | Same | Same |
 | SQL viewer, ops monitoring, steward audit | `navConfig` admin leaves; spine Admin → Users only | Extend Admin utility menu or Steward footer links |
-| Full dashboard KPI cards | `/dashboard` page完整 retained but middleware-blocked; Brief blotter is thinner summary | **NEEDS PRODUCT DECISION** whether KPI cards are RESTORE on Brief or acceptable MERGE — listed here as visibility gap |
+| Full dashboard KPI cards | `/dashboard` page fully retained but middleware-blocked; Brief blotter is thinner summary | **NEEDS PRODUCT DECISION** whether KPI cards are RESTORE on Brief or acceptable MERGE — listed here as visibility gap |
 
 ### 7.2 REDESIGN (capability exists but materially changed shape)
 
