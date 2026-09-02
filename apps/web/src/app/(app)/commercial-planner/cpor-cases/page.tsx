@@ -22,6 +22,10 @@ import { useCallback, useMemo, useState } from 'react';
 import { PageHeader } from '@/components/PageHeader';
 import { navPageChrome } from '@/features/shell/navPageChrome';
 import { SettlementContainer } from '@/features/settlement/SettlementContainer';
+import {
+  parseSettlementStateFilter,
+  settlementStateToStatusParam,
+} from '@/features/settlement/settlementViews';
 import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
 import type { MasterColumnPickerGroup } from '@/components/masterGrid/MasterColumnPickerDialog';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
@@ -103,9 +107,11 @@ export default function CporCasesListPage() {
   const page = Math.max(1, Number(searchParams.get('page') || '1') || 1);
   const pageSize = Math.max(1, Number(searchParams.get('page_size') || String(DEFAULT_PAGE_SIZE)) || DEFAULT_PAGE_SIZE);
   const q = searchParams.get('q') || '';
-  const status = searchParams.get('status') || '';
+  const scopeState = parseSettlementStateFilter(searchParams.get('state'));
+  const status = searchParams.get('status') || settlementStateToStatusParam(scopeState);
   const sortBy = searchParams.get('sort_by') || DEFAULT_SORT_BY;
   const sortDir = (searchParams.get('sort_dir') === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc';
+  const selectedCaseParam = searchParams.get('case') || '';
 
   const setParamState = useCallback(
     (patch: Record<string, string | null>, resetPage?: boolean) => {
@@ -136,16 +142,34 @@ export default function CporCasesListPage() {
   });
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['cpor', 'cases', page, pageSize, q, status, sortBy, sortDir],
+    queryKey: ['cpor', 'cases', page, pageSize, q, status, scopeState, sortBy, sortDir],
     queryFn: ({ signal }) => {
       const sp = new URLSearchParams();
       sp.set('page', String(page));
       sp.set('page_size', String(pageSize));
       if (q.trim()) sp.set('q', q.trim());
-      if (status) sp.set('status', status);
+      if (scopeState === 'blocked') {
+        sp.set('page_size', '200');
+      } else if (scopeState === 'open') {
+        sp.set('page_size', '200');
+      } else if (status) {
+        const firstStatus = status.split(',')[0];
+        if (firstStatus) sp.set('status', firstStatus);
+      }
       return apiGet<CasesPage>(`/api/v1/cpor/cases?${sp.toString()}`, { signal });
     },
   });
+
+  const queueItems = useMemo(() => {
+    const items = data?.items ?? [];
+    if (scopeState === 'blocked') {
+      return items.filter((row) => row.settle_readiness?.fx_settle_allowed === false);
+    }
+    if (scopeState === 'open' && !searchParams.get('status')) {
+      return items.filter((row) => !['settled', 'cancelled', 'draft'].includes(row.status));
+    }
+    return items;
+  }, [data?.items, scopeState, searchParams]);
 
   const create = useMutation({
     mutationFn: () =>
@@ -339,23 +363,6 @@ export default function CporCasesListPage() {
   const queue = (
     <>
       <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} alignItems="center" flexWrap="wrap">
-        <TextField
-          select
-          size="small"
-          label="Status"
-          value={status}
-          onChange={(e) => setParamState({ status: e.target.value || null }, true)}
-          sx={{ minWidth: 160 }}
-        >
-          <MenuItem value="">All</MenuItem>
-          {['draft', 'proposed', 'approved', 'rejected', 'active', 'ended', 'settled', 'cancelled'].map(
-            (s) => (
-              <MenuItem key={s} value={s}>
-                {s}
-              </MenuItem>
-            ),
-          )}
-        </TextField>
         <Button
           component={Link}
           variant="outlined"
@@ -379,9 +386,9 @@ export default function CporCasesListPage() {
 
       <MasterDataGridShell
         entityKey="cpor-cases"
-        rows={data?.items ?? []}
+        rows={queueItems}
         columnDefs={columnDefs}
-        total={data?.total ?? 0}
+        total={scopeState === 'blocked' || scopeState === 'open' ? queueItems.length : (data?.total ?? 0)}
         isLoading={isLoading}
         isError={isError}
         error={error as Error | null}
@@ -413,6 +420,9 @@ export default function CporCasesListPage() {
         gridOptions={{
           getRowId: (p) => String(p.data.id),
           rowHeight: 36,
+          rowClassRules: {
+            'settlement-queue-selected': (p) => String(p.data?.id) === selectedCaseParam,
+          },
           onRowClicked: (e) => {
             if (e.data?.id) setParamState({ case: String(e.data.id) });
           },

@@ -2,24 +2,20 @@
 
 import { Box, Stack, Typography } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
-import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 
-import { formatGridMoney } from '@/features/cpor/fxDisplay';
+import { formatLocalMoney } from '@/features/cpor/fxDisplay';
+import { SettlementPortfolioRead } from '@/features/settlement/SettlementPortfolioRead';
 import { SettlementShapeBar } from '@/features/settlement/SettlementShapeBar';
-import type { SettlementBookRead } from '@/features/settlement/SettlementRegimeStrip';
-import { apiGet } from '@/lib/api';
+import { useSettlementBook } from '@/features/settlement/useSettlementBook';
 
 export function SettlementBookRead() {
   const theme = useTheme();
-  const { data, isLoading } = useQuery({
-    queryKey: ['cpor', 'settlement', 'book'],
-    queryFn: ({ signal }) => apiGet<SettlementBookRead>('/api/v1/cpor/settlement/book', { signal }),
-    staleTime: 30_000,
-  });
+  const { data, isLoading, isFetching } = useSettlementBook();
 
   const seg = data?.shape_segments;
   const ccy = data?.currency_code ?? 'ZAR';
+  const loading = isLoading && !data;
 
   return (
     <Box data-testid="settlement-book-read">
@@ -37,8 +33,8 @@ export function SettlementBookRead() {
         >
           Read
         </Typography>
-        <Typography variant="body2" color="text.secondary">
-          {isLoading ? 'Loading book…' : data?.read_line ?? '—'}
+        <Typography variant="body2" color="text.secondary" data-testid="settlement-book-read-line">
+          {loading ? 'Loading book…' : data?.read_line ?? (isFetching ? 'Refreshing book…' : '—')}
         </Typography>
       </Stack>
       {seg ? (
@@ -48,6 +44,7 @@ export function SettlementBookRead() {
           blockedPct={seg.blocked_pct}
         />
       ) : null}
+      <SettlementPortfolioRead />
       {data?.concentration?.length ? (
         <Stack spacing={0.5} sx={{ mt: 1.5 }}>
           <Typography variant="caption" color="text.secondary">
@@ -55,11 +52,11 @@ export function SettlementBookRead() {
           </Typography>
           {data.concentration.slice(0, 5).map((row) => (
             <Typography key={row.case_id} variant="body2" sx={{ fontSize: '12px' }}>
-              <Link href={`/commercial-planner/cpor-cases/${row.case_id}`}>{row.case_code}</Link>
+              <Link href={`/commercial-planner/cpor-cases?case=${row.case_id}`}>{row.case_code}</Link>
               {' · '}
               {row.customer_code ?? '—'}
               {' · '}
-              {formatGridMoney(row.outstanding_amount, ccy)}
+              {formatLocalMoney(row.outstanding_amount, ccy)}
               {row.fx_blocked ? ' · FX blocked' : ''}
             </Typography>
           ))}

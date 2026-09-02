@@ -91,15 +91,15 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
   EnterpriseDataGrid: () => <div data-testid="mock-grid">grid</div>,
 }));
 
-vi.mock('./CporComparableCasesPanel', () => ({
+vi.mock('@/app/(app)/commercial-planner/cpor-cases/[id]/CporComparableCasesPanel', () => ({
   CporComparableCasesPanel: () => null,
 }));
 
-vi.mock('./CporPaymentEvidencePanel', () => ({
+vi.mock('@/app/(app)/commercial-planner/cpor-cases/[id]/CporPaymentEvidencePanel', () => ({
   CporPaymentEvidencePanel: () => null,
 }));
 
-vi.mock('./CporPromoLoadPanel', () => ({
+vi.mock('@/app/(app)/commercial-planner/cpor-cases/[id]/CporPromoLoadPanel', () => ({
   CporPromoLoadPanel: () => null,
 }));
 

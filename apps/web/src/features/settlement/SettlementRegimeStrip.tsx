@@ -2,10 +2,9 @@
 
 import { Box, Typography } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
-import { useQuery } from '@tanstack/react-query';
 
-import { formatGridMoney } from '@/features/cpor/fxDisplay';
-import { apiGet } from '@/lib/api';
+import { formatLocalMoney } from '@/features/cpor/fxDisplay';
+import { useSettlementBook } from '@/features/settlement/useSettlementBook';
 
 export type SettlementBookRead = {
   data_unavailable?: boolean;
@@ -29,23 +28,24 @@ export type SettlementBookRead = {
 
 export function SettlementRegimeStrip() {
   const theme = useTheme();
-  const { data } = useQuery({
-    queryKey: ['cpor', 'settlement', 'book'],
-    queryFn: ({ signal }) => apiGet<SettlementBookRead>('/api/v1/cpor/settlement/book', { signal }),
-    staleTime: 30_000,
-  });
+  const { data, isLoading, isFetching } = useSettlementBook();
 
   const ccy = data?.currency_code ?? 'ZAR';
+  const loading = isLoading && !data;
   const tiles = [
-    { label: 'Book total', value: data ? formatGridMoney(data.book_total, ccy) : '—' },
-    { label: 'Settled', value: data ? formatGridMoney(data.settled_amount, ccy) : '—' },
-    { label: 'Outstanding', value: data ? formatGridMoney(data.outstanding_amount, ccy) : '—' },
+    { label: 'Book total', value: loading ? 'Loading…' : data ? formatLocalMoney(data.book_total, ccy) : '—' },
+    { label: 'Settled', value: loading ? 'Loading…' : data ? formatLocalMoney(data.settled_amount, ccy) : '—' },
+    {
+      label: 'Outstanding',
+      value: loading ? 'Loading…' : data ? formatLocalMoney(data.outstanding_amount, ccy) : '—',
+    },
   ];
 
   return (
     <Box
       data-testid="settlement-regime-strip"
       sx={{ display: 'flex', gap: 3.25, ml: 'auto', flexWrap: 'wrap', justifyContent: 'flex-end' }}
+      aria-busy={isFetching}
     >
       {tiles.map((t) => (
         <Box key={t.label} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.25 }}>
@@ -60,6 +60,7 @@ export function SettlementRegimeStrip() {
             {t.label}
           </Typography>
           <Typography
+            data-testid={`settlement-regime-${t.label.toLowerCase().replace(/\s+/g, '-')}`}
             sx={{
               fontFamily: '"IBM Plex Mono", monospace',
               fontSize: '13px',
