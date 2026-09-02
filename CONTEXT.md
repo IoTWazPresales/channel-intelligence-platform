@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-09-02 — **N-0008 NS-4 independent review FAIL** on `feat/ns-2-brief-nav-collapse`: programme rev 149 (log hash before `70ca840c…`, after `06e440bb…`, 149 events); review run `NS4_INDEPENDENT_REVIEW_20260902` / `gov-008`; `ux`/`content` **blocked** (scope bar Apply inert + pseudo-filters); implementation_run `NS4_SETTLEMENT_IMPL_20260902` preserved; evidence `.eif/audit/NS4_SETTLEMENT_20260902/independent-rendered-review.md`. Remediation: disable or label deferred structural scope controls.
+
 - 2026-09-01 — **EIF host-runtime upgrade + N-0004 complete** on `feat/ns-2-brief-nav-collapse` `6792d71`: upgraded CIP to EIF programme-host repair (`9f74d9c`); host-local `python .eif/runtime/programme/program.py` verified; programme PRG-20260831T145514 rev 53; N-0004 NS-2 Brief + six-container spine **complete** (baseline `46368f6` / BLN-0001; rendered evidence `.eif/audit/NS2_RESUME_20260901/`). Product: `/brief`, `WorkbenchSpine`, `GET /api/v1/brief/signals`, middleware redirects.
 
 - 2026-08-31 — **Pushed `main` to `origin/main` `46368f6`:** two docs commits (`dc70a51` VERIFY debt register closed at `12404bc`; `46368f6` NS-2 readiness report). Local and remote `main` in sync. EIF guard did not block.
