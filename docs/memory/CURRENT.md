@@ -1,6 +1,6 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-09-02 (N-0008 NS-4 independent re-review complete)
+**Last updated:** 2026-09-02 (full-platform reconciliation audit complete)
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
@@ -26,5 +26,7 @@
 **Review evidence:** `.eif/audit/NS4_SETTLEMENT_20260902/independent-rereview.md`
 
 **Deferred hygiene:** BACKLOG-156 (Lineup inert scope bar); BACKLOG-157 (design-language interaction honesty).
+
+**Full-platform reconciliation:** performed 2026-09-02 — authoritative matrix at `docs/design/CIP_FULL_PLATFORM_RECONCILIATION.md` (BLN-0001 baseline `46368f6`; 50 capabilities reconciled; 0 RETIRE; 10 API-without-UI gaps). Warren reviews before RESTORE/RETIRE/IA commitments.
 
 **Env:** local Windows. Web `:3000` + API `:8001`.
