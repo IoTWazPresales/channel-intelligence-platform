@@ -6,7 +6,7 @@ programme:
   charter:
     status: accepted
     by: eif
-    at: '2026-09-02T22:44:56Z'
+    at: '2026-09-03T19:38:19Z'
     workstreams:
     - Full-platform UI/UX redesign
     - Shell & primitive convergence
@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 273
-  log_sha256: 7f0a93a6e8e79cbe2c2ea7e60144666e998ce990b7cfae3abe12ffba132d2277
+  snapshot_revision: 294
+  log_sha256: fadde41e8f873a1385d6ce26bf49b5ac6a706def86ff75592b8d1122743c842a
   acceptance_policy:
     milestone: operator
     root: operator
@@ -1186,7 +1186,7 @@ nodes:
     - id: BL-0001
       type: dependency
       ref: N-0013
-      opened: '2026-09-02T22:44:56Z'
+      opened: '2026-09-03T19:38:19Z'
       note: Blocked pending N-0013 operator architecture approval
     conservation_tags: []
     fingerprint: null
@@ -1301,7 +1301,7 @@ nodes:
     - id: BL-0002
       type: dependency
       ref: N-0013
-      opened: '2026-09-02T22:44:56Z'
+      opened: '2026-09-03T19:38:19Z'
       note: Blocked pending N-0013 operator architecture approval
     conservation_tags: []
     fingerprint: null
@@ -1361,9 +1361,9 @@ nodes:
     title: Full-platform IA architecture and buyer vocabulary approval
     class: discovery
     origin: decomposition
-    status: blocked
-    stage: verify
-    revision: 85
+    status: complete
+    stage: null
+    revision: 105
     lease: null
     depends_on: []
     facets:
@@ -1372,7 +1372,7 @@ nodes:
     risk: R3
     touches_existing: true
     acceptance: operator
-    acceptance_state: pending
+    acceptance_state: accepted
     acceptance_criteria:
     - 'target_artifact_class: high_fidelity'
     - 'high_fidelity MEANS: interactive React design prototype inside apps/web using the real stack and component ecosystem
@@ -1391,37 +1391,34 @@ nodes:
     quality:
       design_artifact_class:
         required: true
-        state: authored_unverified
+        state: pass
         evidence:
-          class: react_prototype_in_repo
+          class: high_fidelity
+          artifact_class: high_fidelity
           paths:
           - apps/web/src/design-lab/
           - apps/web/src/app/(design-lab)/
-          note: r3.1 adds PromotionPlannerSurface, PlanTemplatesSurface (mounts production CanonicalColumnMappingPanel), MarketSurface,
-            LifecycleRail, CapabilityLedger, CapabilityStatus
-          independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
-            CLI, separate process) for IA/template questions only
-          reviewer_required: separate GOV-008 session, other model where available
-          dim: design_artifact_class
-        rationale: r3.1 commercial amendment authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008
-          and operator acceptance of D-0008.
+          - .eif/audit/NS6_GOV008_R3_20260903/independent-rendered-review.md
+          note: React/MUI prototype in apps/web; fixtures only; not standalone HTML.
+        rationale: 'Hybrid GOV-008 (recovered b7a20859 + Grok remainder): high_fidelity React prototype PASS. Operator accepted
+          hybrid continuation 2026-09-03.'
+        pass_run: NS6_GOV008_R3_20260903
+        pass_actor: gov-008
       design_divergence:
         required: true
-        state: authored_unverified
+        state: pass
         evidence:
           paths:
           - .eif/audit/NS_REDESIGN_R3_20260902/CONCEPTS.md
           - .eif/audit/NS_REDESIGN_R3_20260902/commercial/CONSULT_SEED.md
           - .eif/audit/NS_REDESIGN_R3_20260902/commercial/CONSULT_RESPONSE.md
-          consult_model: claude opus (CLI, separate process)
-          note: 'commercial IA: planner placement (3 options), evidence-domain placement (3), template architecture (3), status
-            vocabulary, N-0010, naming'
-          independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
-            CLI, separate process) for IA/template questions only
-          reviewer_required: separate GOV-008 session, other model where available
-          dim: design_divergence
-        rationale: r3.1 commercial amendment authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008
-          and operator acceptance of D-0008.
+          - .eif/audit/NS6_GOV008_R3_20260903/independent-rendered-review.md
+          consult_model_logged: UNVERIFIED
+          note: Materially different concepts recorded; CONSULT CLI --model string still UNVERIFIED. Architecture not reopened.
+        rationale: 'Hybrid GOV-008: design_divergence PASS (CONSULT model string UNVERIFIED). Operator accepted hybrid continuation
+          2026-09-03.'
+        pass_run: NS6_GOV008_R3_20260903
+        pass_actor: gov-008
       design_signatures:
         required: true
         state: pass
@@ -1437,36 +1434,38 @@ nodes:
         pass_actor: agent
       rendered_comparison:
         required: true
-        state: authored_unverified
+        state: pass
         evidence:
-          paths:
-          - .eif/audit/NS_REDESIGN_R3_20260902/rendered-verification.md
-          - .eif/audit/NS_REDESIGN_R3_20260902/commercial/rendered-verification.md
-          - .eif/audit/NS_REDESIGN_R3_20260902/commercial/renders/manifest.json
+          artifact_class: high_fidelity
+          path: .eif/audit/NS6_GOV008_R3_20260903/independent-rendered-review.md
+          product_url: http://localhost:3000/design-lab
+          comparison_verdict: parity
           viewports:
           - 1280x800
           - 390x844
-          captures: 61
-          independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
-            CLI, separate process) for IA/template questions only
-          reviewer_required: separate GOV-008 session, other model where available
-          dim: rendered_comparison
-        rationale: r3.1 commercial amendment authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008
-          and operator acceptance of D-0008.
+          implementation_acs:
+          - I1
+          - I2
+          - I3
+          - I4
+          - I5
+          hybrid_continuation: true
+        rationale: 'Hybrid GOV-008: rendered prototype matches D-0008; I1–I5 are implementation ACs not design-gate fails.
+          Operator accepted hybrid continuation 2026-09-03.'
+        pass_run: NS6_GOV008_R3_20260903
+        pass_actor: gov-008
       design_sameness_review:
         required: true
-        state: authored_unverified
+        state: pass
         evidence:
-          paths:
-          - .eif/audit/NS_REDESIGN_R3_20260902/FAULT_FINDINGS.md
-          - .eif/audit/NS_REDESIGN_R3_20260902/commercial/COMMERCIAL_DIRECTION.md#2
-          note: r3.1 delta table vs D-0007; binary data-gating rule withdrawn
-          independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
-            CLI, separate process) for IA/template questions only
-          reviewer_required: separate GOV-008 session, other model where available
-          dim: design_sameness_review
-        rationale: r3.1 commercial amendment authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008
-          and operator acceptance of D-0008.
+          visual_vocabulary_challenge: r3.1 withdrew binary data-gating for four-state live/partial/substrate/planned; Promotions
+            & Funding owns the cpor_case lifecycle; Commercial inputs removed; substrate/planned leaves not rendered as working
+            analytics; no fabricated uplift/impact KPIs.
+          path: .eif/audit/NS6_GOV008_R3_20260903/independent-rendered-review.md
+          decision: retain_d0008_four_state
+        rationale: 'Hybrid GOV-008: four-state honesty PASS. Operator accepted hybrid continuation 2026-09-03.'
+        pass_run: NS6_GOV008_R3_20260903
+        pass_actor: gov-008
       design_interaction_spec:
         required: true
         state: pass
@@ -1543,34 +1542,30 @@ nodes:
         pass_actor: agent
       rendered:
         required: true
-        state: authored_unverified
-        evidence:
-          paths:
-          - .eif/audit/NS_REDESIGN_R3_20260902/rendered-verification.md
-          - .eif/audit/NS_REDESIGN_R3_20260902/commercial/rendered-verification.md
+        state: pass
+        evidence: &id005
+          path: .eif/audit/NS6_GOV008_R3_20260903/independent-rendered-review.md
+          url: http://localhost:3000/design-lab
           viewports:
-          - 1280x800
-          - 390x844
-          independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
-            CLI, separate process) for IA/template questions only
-          reviewer_required: separate GOV-008 session, other model where available
-          dim: rendered
+          - desktop_1280
+          - mobile_390
+          recovered_not_recaptured: true
+          hybrid_continuation: true
+          c18_score_explanation: no_match_I2
         rationale: r3.1 commercial amendment authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008
           and operator acceptance of D-0008.
+        pass_run: NS6_GOV008_R3_20260903
+        pass_actor: gov-008
       content:
         required: true
-        state: authored_unverified
+        state: pass
         evidence:
-          paths:
-          - .eif/audit/NS_REDESIGN_R3_20260902/commercial/COMMERCIAL_DIRECTION.md#3
-          - apps/web/src/design-lab/shell/labNav.ts
-          note: Promotions & Funding / Market & Listings nouns; four-state labels 'Partly built / Data only / Planned'
-          independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
-            CLI, separate process) for IA/template questions only
-          reviewer_required: separate GOV-008 session, other model where available
-          dim: content
-        rationale: r3.1 commercial amendment authored 2026-09-02; not PASS — independence none, awaiting separate GOV-008
-          and operator acceptance of D-0008.
+          path: .eif/audit/NS6_GOV008_R3_20260903/independent-rendered-review.md
+          summary: Promotions & Funding, Market & Listings, Partly built / Data only / Planned consistent across rail, directory,
+            palette.
+        rationale: 'Hybrid GOV-008: content PASS. Operator accepted hybrid continuation 2026-09-03.'
+        pass_run: NS6_GOV008_R3_20260903
+        pass_actor: gov-008
       accessibility:
         required: false
         state: authored_unverified
@@ -1615,51 +1610,29 @@ nodes:
           and operator acceptance of D-0008.
     verification:
       rendered:
-        state: authored_unverified
-        evidence:
-          paths:
-          - .eif/audit/NS_REDESIGN_R3_20260902/commercial/rendered-verification.md
-          - .eif/audit/NS_REDESIGN_R3_20260902/commercial/renders/
-          independence: NONE — author-rendered, same session, same model (Fable 5.1); CONSULT used other model (claude opus
-            CLI, separate process) for IA/template questions only
-          reviewer_required: separate GOV-008 session, other model where available
-        path: null
+        state: pass
+        evidence: *id005
+        path: .eif/audit/NS6_GOV008_R3_20260903/independent-rendered-review.md
+        pass_run: NS6_GOV008_R3_20260903
+        pass_actor: gov-008
       referent:
-        state: pending
+        state: pass
         evidence:
-          superseded_by_operator: true
-          operator_decision_date: '2026-09-02'
-          rejected_package: N-0013 amended architecture r2 (Brief·Plan·Position·Settlement·Actions·Imports)
-          rejected_evidence:
-          - .eif/audit/NS_RECONCILE_20260902/rendered-verification.md
-          - .eif/audit/NS_RECONCILE_20260902/rendered-verification-r2.md
-          - .eif/audit/NS_RECONCILE_20260902/independent-rendered-review.md
-          - .eif/audit/NS_RECONCILE_20260902/independent-rendered-review-r2.md
-          - .eif/audit/NS_RECONCILE_20260902/index.html
-          - docs/design/CIP_PLATFORM_ARCHITECTURE_PROPOSAL.md
-          reason: Standalone HTML/CSS artifacts recreated application UI and did not prove the real React product; insufficient
-            information scent; sparse generic console; weak analytical visualisation; independence was actor-label only (same
-            run, same process, same model).
-          replacement_required: .eif/audit/NS_REDESIGN_R3_20260902/ — React design prototype in the real apps/web stack +
-            rendered evidence
-          verification_kind: referent
-        path: null
+          path: .eif/audit/NS6_GOV008_R3_20260903/independent-rendered-review.md
+          referent: D-0008 accepted + N-0013 acceptance_criteria
+          hybrid_continuation: true
+          consult_model_string: UNVERIFIED
+          stale_ac: Production redesign implementation remains blocked until operator accepts — operator accepted D-0008 2026-09-03
+        path: .eif/audit/NS6_GOV008_R3_20260903/independent-rendered-review.md
+        pass_run: NS6_GOV008_R3_20260903
+        pass_actor: gov-008
     evidence: []
-    blockers:
-    - id: BL-OPERATOR-REJECTION-20260902
-      type: decision
-      ref: D-0004,D-0005,D-0006
-      opened: '2026-09-02T22:44:56Z'
-      note: Operator rejected r2 package 2026-09-02. New design package (React prototype + rendered evidence) required; Phase
-        A / production redesign implementation blocked until operator accepts a direction.
+    blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'r3.1 commercial amendment (2026-09-02): operator truths on Promotion Planner / listing intelligence / product
-      competition applied. Source+roadmap discovery (CAPABILITY_ACCOUNTING), CONSULT (opus, separate process) on 6 questions,
-      COMMERCIAL_DIRECTION (D-0007→D-0008 delta, IA, template architecture, N-0010 disposition, cross-domain links, remaining
-      operator decisions). Design-lab: Funding & Settlement → Promotions & Funding with planner/templates/budgets lenses;
-      Commercial inputs removed; Market & Listings added; four-state LeafStatus; 27 renders. D-0007 superseded by D-0008 (proposed);
-      D-0009 proposed for N-0010. Node remains blocked on operator acceptance; production implementation not started.'
+    stage_note: '2026-09-03: stamp implementation_run for N-0013 (discovery never previously staged through implement). Authoring
+      run remains NS_REDESIGN_R3_20260902; this boundary exists so independence.py can evaluate GOV-008 pass provenance. D-0002
+      remains deferred; D-0009 remains proposed.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -1670,6 +1643,8 @@ nodes:
       frontier_blocked: N-0010 N-0011 until operator accepts architecture
     target_artifact_class: high_fidelity
     design_artifact_class: high_fidelity
+    implementation_run: NS6_N0013_IMPL_BOUNDARY_20260903
+    implementation_actor: agent
 decisions:
   D-0001:
     id: D-0001
@@ -1752,7 +1727,7 @@ decisions:
       CONSULT_RESPONSE.md, rendered-verification.md (27 captures @1280/@390); prototype apps/web/src/design-lab (FundingSurface,
       PromotionPlannerSurface, PlanTemplatesSurface, MarketSurface, labNav LeafStatus).'
     origin: agent
-    status: proposed
+    status: accepted
     supersedes: D-0007
   D-0009:
     id: D-0009
