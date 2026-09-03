@@ -1,0 +1,284 @@
+- generic [active] [ref=f49e1]:
+  - generic [ref=f49e2]:
+    - complementary [ref=f49e3]:
+      - generic [ref=f49e4]:
+        - generic [ref=f49e6]:
+          - generic [ref=f49e7]: CI
+          - generic [ref=f49e8]:
+            - heading "Channel Intelligence" [level=6] [ref=f49e9]
+            - generic [ref=f49e10]: Aurora Displays SA
+        - separator [ref=f49e11]
+        - navigation "Capability areas" [ref=f49e12]:
+          - generic [ref=f49e13]:
+            - link "Overview 5 Collapse Overview" [ref=f49e14] [cursor=pointer]:
+              - /url: /design-lab
+              - paragraph [ref=f49e19]: Overview
+              - generic [ref=f49e20]: "5"
+              - button "Collapse Overview" [ref=f49e22]
+            - list [ref=f49e28]:
+              - link [ref=f49e29] [cursor=pointer]:
+                - /url: /design-lab
+                - paragraph [ref=f49e31]: Business dashboard
+              - link [ref=f49e32] [cursor=pointer]:
+                - /url: /design-lab?zone=attention
+                - paragraph [ref=f49e34]: Attention
+              - link [ref=f49e35] [cursor=pointer]:
+                - /url: /design-lab/reports
+                - paragraph [ref=f49e37]: Reports
+          - link [ref=f49e39] [cursor=pointer]:
+            - /url: /design-lab/stock
+            - paragraph [ref=f49e45]: Stock & Sell-through
+            - button "Expand Stock & Sell-through" [ref=f49e46]
+          - link [ref=f49e50] [cursor=pointer]:
+            - /url: /design-lab/supply
+            - paragraph [ref=f49e55]: Supply & Inbound
+            - button "Expand Supply & Inbound" [ref=f49e56]
+          - link [ref=f49e60] [cursor=pointer]:
+            - /url: /design-lab/planning
+            - paragraph [ref=f49e65]: Planning
+            - button "Expand Planning" [ref=f49e66]
+          - link [ref=f49e70] [cursor=pointer]:
+            - /url: /design-lab/funding
+            - paragraph [ref=f49e75]: Promotions & Funding
+            - button "Expand Promotions & Funding" [ref=f49e76]
+          - link [ref=f49e80] [cursor=pointer]:
+            - /url: /design-lab/market
+            - paragraph [ref=f49e85]: Market & Listings
+            - button "Expand Market & Listings" [ref=f49e86]
+          - link [ref=f49e90] [cursor=pointer]:
+            - /url: /design-lab/data
+            - paragraph [ref=f49e95]: Data & Stewardship
+            - button "Expand Data & Stewardship" [ref=f49e96]
+        - separator [ref=f49e99]
+        - list [ref=f49e100]:
+          - link "What CIP does Capability directory" [ref=f49e101] [cursor=pointer]:
+            - /url: /design-lab/directory
+            - generic [ref=f49e105]:
+              - paragraph [ref=f49e106]: What CIP does
+              - generic [ref=f49e107]: Capability directory
+    - generic [ref=f49e108]:
+      - banner [ref=f49e109]:
+        - generic [ref=f49e110]:
+          - paragraph [ref=f49e111]: Overview
+          - generic [ref=f49e112]: FY26 P09 · W36
+        - button "Search CIP" [ref=f49e114] [cursor=pointer]:
+          - paragraph [ref=f49e117]: Find a workflow or entity…
+          - generic [ref=f49e118]: ⌘K
+        - link "Attention" [ref=f49e119] [cursor=pointer]:
+          - /url: /design-lab?zone=attention
+          - generic [ref=f49e120]: "5"
+        - generic [ref=f49e124]:
+          - combobox "Role (design-lab fixture)" [ref=f49e125] [cursor=pointer]: planner
+          - textbox [aria-hidden]: planner
+          - group [aria-hidden]
+        - generic [ref=f49e126]: W
+      - main [ref=f49e127]:
+        - generic [ref=f49e128]:
+          - generic [ref=f49e131]:
+            - heading "Good morning — Aurora Displays SA" [level=1] [ref=f49e132]
+            - paragraph [ref=f49e133]: Your configurable view of the business, alongside what needs attention right now. Every figure drills into the workflow that owns it.
+            - generic [ref=f49e134]: FY26 P09 · W36 · data as at 09:20 today · sell-out through W36 for 3 of 4 distributors
+          - generic [ref=f49e135]:
+            - generic [ref=f49e136]:
+              - generic [ref=f49e137]:
+                - generic [ref=f49e138]:
+                  - heading "Business dashboard planner default · published" [level=6] [ref=f49e139]:
+                    - generic [ref=f49e140]:
+                      - generic [ref=f49e141]: Business dashboard
+                      - generic [ref=f49e142]: planner default · published
+                  - generic [ref=f49e144]: 9 widgets over governed metrics · FY26 P09 · W36 · refreshed 09:20
+                - button [ref=f49e147] [cursor=pointer]
+              - generic [ref=f49e152]:
+                - button "Network stock on hand 14 234 units 40 distributor × product pairs" [ref=f49e154] [cursor=pointer]:
+                  - generic [ref=f49e155]: Network stock on hand
+                  - generic [ref=f49e156]:
+                    - generic [ref=f49e157]: 14 234
+                    - generic [ref=f49e158]: units
+                  - generic [ref=f49e159]: 40 distributor × product pairs
+                - button "Network weeks of cover 5.1 weeks 4 pairs under 2w · 4 over 8w" [ref=f49e162] [cursor=pointer]:
+                  - generic [ref=f49e163]: Network weeks of cover
+                  - generic [ref=f49e164]:
+                    - generic [ref=f49e165]: "5.1"
+                    - generic [ref=f49e166]: weeks
+                  - generic [ref=f49e167]: 4 pairs under 2w · 4 over 8w
+                - button "Sell-out this week 2 848 units ▼ -12.8% vs W35 W36 · all distributors" [ref=f49e170] [cursor=pointer]:
+                  - generic [ref=f49e171]: Sell-out this week
+                  - generic [ref=f49e172]:
+                    - generic [ref=f49e173]: 2 848
+                    - generic [ref=f49e174]: units
+                  - generic [ref=f49e175]:
+                    - generic [ref=f49e176]: ▼ -12.8% vs W35
+                    - generic [ref=f49e177]: W36 · all distributors
+                - button "Funding outstanding R1.1m 26 cases · 6 blocked (R367k)" [ref=f49e179] [cursor=pointer]:
+                  - generic [ref=f49e180]: Funding outstanding
+                  - generic [ref=f49e181]: R1.1m
+                  - generic [ref=f49e183]: 26 cases · 6 blocked (R367k)
+                - generic [ref=f49e186]:
+                  - generic [ref=f49e188]:
+                    - heading "Sell-out vs shipments, W24–W36" [level=6] [ref=f49e189]
+                    - generic [ref=f49e190]: Distributor sell-out units
+                  - generic [ref=f49e327]:
+                    - img [ref=f49e328]:
+                      - generic [ref=f49e332]:
+                        - generic [ref=f49e333]: W24
+                        - generic [ref=f49e335]: W26
+                        - generic [ref=f49e337]: W28
+                        - generic [ref=f49e339]: W30
+                        - generic [ref=f49e341]: W32
+                        - generic [ref=f49e343]: W34
+                        - generic [ref=f49e345]: W36
+                      - generic [ref=f49e348]:
+                        - generic [ref=f49e349]: "0"
+                        - generic [ref=f49e351]: "850"
+                        - generic [ref=f49e353]: 1 700
+                        - generic [ref=f49e355]: 2 550
+                        - generic [ref=f49e357]: 3 400
+                    - list [ref=f49e390]:
+                      - listitem [ref=f49e391]: Shipped in
+                      - listitem [ref=f49e394]: Sell-out
+                - generic [ref=f49e196]:
+                  - generic [ref=f49e198]:
+                    - heading "Cover distribution (distributor × product)" [level=6] [ref=f49e199]
+                    - generic [ref=f49e200]: Pairs under cover threshold
+                  - img [ref=f49e398]:
+                    - generic [ref=f49e402]:
+                      - generic [ref=f49e403]: <1w
+                      - generic [ref=f49e405]: 1–2w
+                      - generic [ref=f49e407]: 2–4w
+                      - generic [ref=f49e409]: 4–6w
+                      - generic [ref=f49e411]: 6–8w
+                      - generic [ref=f49e413]: 8w+
+                    - generic [ref=f49e416]:
+                      - generic [ref=f49e417]: "0"
+                      - generic [ref=f49e419]: "4"
+                      - generic [ref=f49e421]: "8"
+                      - generic [ref=f49e423]: "12"
+                      - generic [ref=f49e425]: "16"
+                - generic [ref=f49e206]:
+                  - generic [ref=f49e208]:
+                    - heading "Shipped vs plan by customer, P09" [level=6] [ref=f49e209]
+                    - generic [ref=f49e210]: Shipped vs plan
+                  - generic [ref=f49e439]:
+                    - img [ref=f49e440]:
+                      - generic [ref=f49e444]:
+                        - generic [ref=f49e445]: TechMart
+                        - generic [ref=f49e447]: Metro Elec…
+                        - generic [ref=f49e449]: OfficeWorld
+                        - generic [ref=f49e451]: HiFi House
+                        - generic [ref=f49e453]: Game Zone
+                        - generic [ref=f49e455]: Byte & Co
+                        - generic [ref=f49e457]: Open chann…
+                      - generic [ref=f49e460]:
+                        - generic [ref=f49e461]: "0"
+                        - generic [ref=f49e463]: 7 500
+                        - generic [ref=f49e465]: 15 000
+                        - generic [ref=f49e467]: 22 500
+                        - generic [ref=f49e469]: 30 000
+                    - list [ref=f49e504]:
+                      - listitem [ref=f49e505]: Plan
+                      - listitem [ref=f49e508]: Shipped
+                - generic [ref=f49e216]:
+                  - generic [ref=f49e218]:
+                    - heading "Funding outstanding by age" [level=6] [ref=f49e219]
+                    - generic [ref=f49e220]: Funding outstanding
+                  - img [ref=f49e512]:
+                    - generic [ref=f49e516]:
+                      - generic [ref=f49e517]: 0–14d
+                      - generic [ref=f49e519]: 15–30d
+                      - generic [ref=f49e521]: 31–60d
+                      - generic [ref=f49e523]: 60d+
+                    - generic [ref=f49e526]:
+                      - generic [ref=f49e527]: R0
+                      - generic [ref=f49e529]: R150k
+                      - generic [ref=f49e531]: R300k
+                      - generic [ref=f49e533]: R450k
+                      - generic [ref=f49e535]: R600k
+                - generic [ref=f49e226]:
+                  - generic [ref=f49e228]:
+                    - heading "Sell-out by family" [level=6] [ref=f49e229]
+                    - generic [ref=f49e230]: Distributor sell-out units
+                  - table [ref=f49e233]:
+                    - rowgroup [ref=f49e234]:
+                      - row "Family Units WoW" [ref=f49e235]:
+                        - columnheader "Family" [ref=f49e236]
+                        - columnheader "Units" [ref=f49e237]
+                        - columnheader "WoW" [ref=f49e238]
+                    - rowgroup [ref=f49e239]:
+                      - row "Monitors 12 840 +4%" [ref=f49e240] [cursor=pointer]:
+                        - cell "Monitors" [ref=f49e241]
+                        - cell "12 840" [ref=f49e242]
+                        - cell "+4%" [ref=f49e243]
+                      - row "Notebooks 9 120 -2%" [ref=f49e244] [cursor=pointer]:
+                        - cell "Notebooks" [ref=f49e245]
+                        - cell "9 120" [ref=f49e246]
+                        - cell "-2%" [ref=f49e247]
+                      - row "Accessories 4 330 +11%" [ref=f49e248] [cursor=pointer]:
+                        - cell "Accessories" [ref=f49e249]
+                        - cell "4 330" [ref=f49e250]
+                        - cell "+11%" [ref=f49e251]
+                      - row "Print 1 410 -6%" [ref=f49e252] [cursor=pointer]:
+                        - cell "Print" [ref=f49e253]
+                        - cell "1 410" [ref=f49e254]
+                        - cell "-6%" [ref=f49e255]
+            - generic [ref=f49e256]:
+              - generic [ref=f49e257]:
+                - generic [ref=f49e259]:
+                  - heading "Needs attention" [level=6] [ref=f49e260]
+                  - generic [ref=f49e261]: 5 urgent · 3 informational · live from imports, stock, funding, supply
+                - generic [ref=f49e263]:
+                  - button "33 DSI imports failed Data & Stewardship · Meridian W35 sell-out; Coastal W36 SOH — parse errors on 2 files" [ref=f49e264] [cursor=pointer]:
+                    - generic [ref=f49e265]:
+                      - paragraph [ref=f49e266]: 33 DSI imports failed
+                      - generic [ref=f49e267]: Data & Stewardship · Meridian W35 sell-out; Coastal W36 SOH — parse errors on 2 files
+                  - button "11 Distributor × product pairs under 2 weeks cover Stock & Sell-through · NBP16-I9 at 3 of 4 distributors" [ref=f49e268] [cursor=pointer]:
+                    - generic [ref=f49e269]:
+                      - paragraph [ref=f49e270]: 11 Distributor × product pairs under 2 weeks cover
+                      - generic [ref=f49e271]: Stock & Sell-through · NBP16-I9 at 3 of 4 distributors
+                  - button "7 Funding cases blocked Promotions & Funding · R612k outstanding · 4 need sell-through evidence" [ref=f49e272] [cursor=pointer]:
+                    - generic [ref=f49e273]:
+                      - paragraph [ref=f49e274]: 7 Funding cases blocked
+                      - generic [ref=f49e275]: Promotions & Funding · R612k outstanding · 4 need sell-through evidence
+                  - button "1 714 Inbound shipments unreceived past ETA Supply & Inbound · Oldest 41 days · Highveld receipt file missing since W33" [ref=f49e276] [cursor=pointer]:
+                    - generic [ref=f49e277]:
+                      - paragraph [ref=f49e278]: 1 714 Inbound shipments unreceived past ETA
+                      - generic [ref=f49e279]: Supply & Inbound · Oldest 41 days · Highveld receipt file missing since W33
+                  - button "2 Distributor stock vintage older than 10 days Stock & Sell-through · Highveld (14d), Kwazulu (12d)" [ref=f49e280] [cursor=pointer]:
+                    - generic [ref=f49e281]:
+                      - paragraph [ref=f49e282]: 2 Distributor stock vintage older than 10 days
+                      - generic [ref=f49e283]: Stock & Sell-through · Highveld (14d), Kwazulu (12d)
+                  - generic [ref=f49e284]: Informational
+                  - button "18 Lineup lines missing SKU assumptions Planning · TechMart P10 lineup — cost basis absent" [ref=f49e285] [cursor=pointer]:
+                    - generic [ref=f49e286]:
+                      - paragraph [ref=f49e287]: 18 Lineup lines missing SKU assumptions
+                      - generic [ref=f49e288]: Planning · TechMart P10 lineup — cost basis absent
+                  - button "1 SOH reconciliation not run this week Stock & Sell-through · Last run W35 · 3 distributors reported" [ref=f49e289] [cursor=pointer]:
+                    - generic [ref=f49e290]:
+                      - paragraph [ref=f49e291]: 1 SOH reconciliation not run this week
+                      - generic [ref=f49e292]: Stock & Sell-through · Last run W35 · 3 distributors reported
+                  - button "42 Tokens awaiting steward resolution Data & Stewardship · 19 customers · 15 products · 8 distributors" [ref=f49e293] [cursor=pointer]:
+                    - generic [ref=f49e294]:
+                      - paragraph [ref=f49e295]: 42 Tokens awaiting steward resolution
+                      - generic [ref=f49e296]: Data & Stewardship · 19 customers · 15 products · 8 distributors
+              - generic [ref=f49e297]:
+                - generic [ref=f49e298]:
+                  - generic [ref=f49e299]:
+                    - heading "Pinned reports" [level=6] [ref=f49e300]
+                    - generic [ref=f49e301]: Saved governed reports; any saved report can be pinned as a widget
+                  - link "All reports" [ref=f49e303] [cursor=pointer]:
+                    - /url: /design-lab/reports
+                - generic [ref=f49e305]:
+                  - button "Weekly cover by distributor Weeks of cover · distributor × week · Mon 07:00" [ref=f49e306] [cursor=pointer]:
+                    - generic [ref=f49e307]:
+                      - paragraph [ref=f49e308]: Weekly cover by distributor
+                      - generic [ref=f49e309]: Weeks of cover · distributor × week · Mon 07:00
+                  - button "P09 shipped vs plan — strategic customers Shipped vs plan · customer · On demand" [ref=f49e313] [cursor=pointer]:
+                    - generic [ref=f49e314]:
+                      - paragraph [ref=f49e315]: P09 shipped vs plan — strategic customers
+                      - generic [ref=f49e316]: Shipped vs plan · customer · On demand
+                  - button "Funding outstanding > 30d Funding outstanding · age bucket · Fri 16:00" [ref=f49e320] [cursor=pointer]:
+                    - generic [ref=f49e321]:
+                      - paragraph [ref=f49e322]: Funding outstanding > 30d
+                      - generic [ref=f49e323]: Funding outstanding · age bucket · Fri 16:00
+  - button "Open Next.js Dev Tools" [ref=f49e552] [cursor=pointer]
+  - alert [ref=f49e556]
+  - generic [aria-hidden] [ref=f49e557]: R0

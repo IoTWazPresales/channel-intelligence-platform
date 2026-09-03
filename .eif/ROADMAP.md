@@ -14,4 +14,4 @@
 - N-0010 **NS-6 Actions container (was Response)** `blocked`/`blocked` (redesign)
 - N-0011 **NS-7 Data container (was Steward)** `blocked`/`blocked` (redesign)
 - N-0012 **NS-1a FX display honesty (no migration)** `complete`/`complete` (feature)
-- N-0013 **Full-platform IA architecture and buyer vocabulary approval** `blocked`/`blocked` (discovery)
+- N-0013 **Full-platform IA architecture and buyer vocabulary approval** `complete`/`complete` (discovery)
