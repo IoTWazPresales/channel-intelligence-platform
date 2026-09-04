@@ -97,11 +97,17 @@ def main() -> None:
 
     results = {}
 
-    print("=== A hung-open-pipe (complete JSON, stdin not closed, watchdog=2) ===", flush=True)
+    print("=== A hung-open-pipe (incomplete JSON, stdin not closed, watchdog=2) ===", flush=True)
     results["hung_open_watchdog2"] = run_guard(
-        payload=allow_payload, close_stdin=False, watchdog="2", hang_s=12
+        payload=b'{"hook_event_name":', close_stdin=False, watchdog="2", hang_s=12
     )
     print(json.dumps(results["hung_open_watchdog2"], indent=2), flush=True)
+
+    print("=== A2 complete-JSON held-open (must not wait for EOF; expect allow) ===", flush=True)
+    results["held_open_complete_json"] = run_guard(
+        payload=allow_payload, close_stdin=False, watchdog="2", hang_s=12
+    )
+    print(json.dumps(results["held_open_complete_json"], indent=2), flush=True)
 
     print("=== B closed-stdin allow git status (watchdog=8) ===", flush=True)
     results["closed_allow"] = run_guard(
@@ -123,7 +129,14 @@ def main() -> None:
 
     hung = results["hung_open_watchdog2"]
     parsed_hung = hung.get("stdout_parsed")
+    if parsed_hung is None and hung.get("stdout"):
+        try:
+            parsed_hung = json.loads(str(hung.get("stdout")).strip().splitlines()[0])
+        except Exception:
+            parsed_hung = None
     reason_hung = parsed_hung.get("reason_code") if isinstance(parsed_hung, dict) else None
+    complete_held = results["held_open_complete_json"]
+    parsed_complete = complete_held.get("stdout_parsed")
     print("=== VERDICT ===", flush=True)
     print(
         json.dumps(
@@ -132,6 +145,12 @@ def main() -> None:
                 and reason_hung != "HOOK_TIMEOUT",
                 "hung_elapsed_s": hung.get("elapsed_s"),
                 "hung_reason_code": reason_hung,
+                "complete_json_held_open_elapsed_s": complete_held.get("elapsed_s"),
+                "complete_json_held_open_permission": (
+                    parsed_complete.get("permission")
+                    if isinstance(parsed_complete, dict)
+                    else None
+                ),
                 "allow_elapsed_s": results["closed_allow"].get("elapsed_s"),
                 "allow_permission": (results["closed_allow"].get("stdout_parsed") or {}).get(
                     "permission"

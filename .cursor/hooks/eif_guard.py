@@ -68,35 +68,46 @@ LOOPBACK_HOSTS = {'localhost','127.0.0.1','::1','0.0.0.0','[::1]'}
 NETWORK_CLASSES = frozenset({'loopback','public_read'})
 
 
-def read_hook_stdin_eof() -> bytes:
-    """Read the Cursor hook pipe until a 0-byte EOF.
+HOOK_STDIN_MAX_BYTES = 1_048_576
 
-    Windows anonymous pipes return the first available chunk from a single
-    os.read / FileIO.read. Stopping there is payload-size-dependent truncation
-    and surfaces as HOOK_INPUT_INVALID (JSONDecodeError). Loop until a 0-byte
-    read — the only EOF signal. Do not arm the decision watchdog until this
-    returns; stdin wait is not identity cost.
+
+def _hook_bytes_complete_json(raw: bytes) -> bool:
+    """True when raw bytes contain at least one complete JSON value.
+
+    Cursor may hold the hook pipe open after writing the payload. A complete
+    object is a finished payload; waiting for EOF is the silent-kill path.
     """
-    chunks = []
-    fd = None
+    if not raw or not raw.strip():
+        return False
+    if raw.startswith((b'\xff\xfe', b'\xfe\xff')):
+        try:
+            text = raw.decode('utf-16')
+        except UnicodeDecodeError:
+            return False
+    else:
+        try:
+            text = raw.decode('utf-8-sig')
+        except UnicodeDecodeError:
+            try:
+                text = raw.decode('utf-16')
+            except UnicodeDecodeError:
+                return False
+    text = text.strip()
+    if not text:
+        return False
     try:
-        fd = sys.stdin.fileno()
-    except Exception:
-        fd = None
-    if fd is None:
-        try:
-            return sys.stdin.buffer.read() or b''
-        except Exception:
-            return b''
-    if os.name == 'nt':
-        try:
-            import msvcrt
-            msvcrt.setmode(fd, os.O_BINARY)
-        except Exception:
-            pass
+        json.JSONDecoder().raw_decode(text)
+        return True
+    except json.JSONDecodeError:
+        return False
+
+
+def _read_hook_stdin_chunks(read_chunk) -> bytes:
+    chunks: list[bytes] = []
+    total = 0
     while True:
         try:
-            chunk = os.read(fd, 65536)
+            chunk = read_chunk()
         except InterruptedError:
             continue
         except OSError:
@@ -104,7 +115,48 @@ def read_hook_stdin_eof() -> bytes:
         if not chunk:
             break
         chunks.append(chunk)
+        total += len(chunk)
+        joined = b''.join(chunks)
+        if _hook_bytes_complete_json(joined):
+            return joined
+        if total >= HOOK_STDIN_MAX_BYTES:
+            raise TimeoutError(
+                'hook stdin exceeded max bytes without a complete JSON object; fail-closed'
+            )
     return b''.join(chunks)
+
+
+def read_hook_stdin_eof() -> bytes:
+    """Read the Cursor hook pipe until a complete JSON value or EOF.
+
+    Windows anonymous pipes return the first available chunk from a single
+    os.read / FileIO.read. Stopping there is payload-size-dependent truncation
+    and surfaces as HOOK_INPUT_INVALID (JSONDecodeError). Loop across chunks,
+    but treat a complete JSON object as finished — do not wait for EOF.
+
+    The decision watchdog must already be armed. A held-open pipe that never
+    delivers a complete object is HOOK_TIMEOUT, never a silent host kill.
+    """
+    fd = None
+    try:
+        fd = sys.stdin.fileno()
+    except Exception:
+        fd = None
+    if fd is None:
+        buf = getattr(sys.stdin, 'buffer', None)
+        if buf is None:
+            try:
+                return (sys.stdin.read() or '').encode('utf-8')
+            except Exception:
+                return b''
+        return _read_hook_stdin_chunks(lambda: buf.read(65536))
+    if os.name == 'nt':
+        try:
+            import msvcrt
+            msvcrt.setmode(fd, os.O_BINARY)
+        except Exception:
+            pass
+    return _read_hook_stdin_chunks(lambda: os.read(fd, 65536))
 
 
 def parse_cursor_hook_stdin(raw: bytes) -> dict:
@@ -166,6 +218,7 @@ _EMITTED = False
 _EMIT_RC = 1
 _EMIT_LOCK = threading.Lock()
 _DONE = threading.Event()
+_WATCHDOG_ARMED = False
 
 
 def _project_root() -> Path:
@@ -292,10 +345,18 @@ def deny(code, message):
 
 
 def _arm_watchdog():
-    """Self-deny before the host runtime kills the hook with empty stdout."""
+    """Self-deny before the host runtime kills the hook with empty stdout.
+
+    Must run before stdin is read. A held-open pipe never reaches EOF, so
+    arming after the read made the host kill mute (no HOOK_TIMEOUT).
+    """
+    global _WATCHDOG_ARMED
+    if _WATCHDOG_ARMED:
+        return
     sec = watchdog_sec()
     if sec <= 0:
         return
+    _WATCHDOG_ARMED = True
 
     def run():
         if _DONE.wait(sec):
@@ -1193,8 +1254,11 @@ def mcp_decision(data, policy, root=None, roots=None):
 def main(raw=None):
     try:
         if raw is None:
+            _arm_watchdog()
             raw = read_hook_stdin_eof()
         data = parse_cursor_hook_stdin(raw)
+    except TimeoutError as e:
+        return deny('HOOK_TIMEOUT', str(e) or 'unbounded hook stdin; fail-closed')
     except Exception as e:
         return deny('HOOK_INPUT_INVALID', f'cannot parse Cursor hook input: {type(e).__name__}: {e}')
     event=data.get('hook_event_name','')
@@ -1354,17 +1418,19 @@ def main(raw=None):
     return out()
 
 if __name__=='__main__':
+    _arm_watchdog()
     raw=b''
     try:
         raw=read_hook_stdin_eof()
+    except TimeoutError as e:
+        rc=deny('HOOK_TIMEOUT', str(e) or 'unbounded hook stdin; fail-closed')
+        raise SystemExit(0 if rc is None else rc)
     except Exception as e:
-        _arm_watchdog()
         try:
             rc=deny('HOOK_INPUT_INVALID', f'cannot read Cursor hook stdin: {type(e).__name__}: {e}')
         except Exception:
             rc=0
         raise SystemExit(0 if rc is None else rc)
-    _arm_watchdog()
     try:
         rc=main(raw)
     except BrokenPipeError:
