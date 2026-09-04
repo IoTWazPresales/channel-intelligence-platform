@@ -4,7 +4,7 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `4fd05c4`
+**Last content pin:** `96e35b7`
 
 **Alembic (code):** `20260902_0020` (N-0006 FX enforcement)
 
