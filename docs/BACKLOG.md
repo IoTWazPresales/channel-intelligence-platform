@@ -2271,16 +2271,16 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-04; **reproduced 2026-09-04** on a different file |
+| **Status / parked** | **Done** · 2026-09-04. Config-level `testTimeout: 15000` in `apps/web/vitest.config.ts`. Guard-on full suite **107 files / 583 passed**. |
 | **Effort** | Small |
-| **Source** | Prior: two `admin/imports/page.test.tsx` tests at 5s under full suite, ~2.1s in isolation. 2026-09-04 guard-on full suite: **107 collected**, `DsiCandidateStewardPanel.test.tsx` second test 5270ms timeout; isolation **2 passed** in 1.88s (that test 1651ms). Log: `.eif/audit/GUARD_STDIN_20260904/vitest-guard-on.txt` (not committed). |
-| **Idea** | Raise the 5s timeout for user-event dialog tests, or run heavy files in a separate vitest project so suite-load GC/jsdom contention cannot fail a commit. |
-| **Why it matters / deferrable** | Isolation green is not a green full suite. This session’s 104/461 report did **not** reproduce (that was uncollected files; this flake is 107/582+1). Deferrable — do not edit the steward panel test just to obtain green. |
-| **What the work is** | Next blocking full-suite 5s timeout: bump timeout on that `it()` only, or extract the dialog case. |
-| **Regression traps** | Do not weaken steward/import assertions. Do not treat curl/API scripts as UI smoke. Do not assume EIF guard denials without an `EIF_GUARD_*` reason code. |
+| **Source** | Prior: two `admin/imports/page.test.tsx` tests at 5s under full suite, ~2.1s in isolation. 2026-09-04: `DsiCandidateStewardPanel.test.tsx` resolve-product 5270ms timeout under full suite; isolation 1651ms. Same 5s Vitest default. |
+| **Idea** | Raise the runner budget at config level. Per-test timeouts would paper over the same machine/suite-load defect in every new dialog test. |
+| **Why it matters / deferrable** | Closed: 5s is too tight for this machine under 107-file jsdom load; isolation stays ~2s. |
+| **What the work is** | Shipped `testTimeout: 15000`. Do not weaken assertions. |
+| **Regression traps** | Do not disable the Cursor guard to “fix” vitest. Do not treat curl/API as UI smoke. |
 | **Behavior to retain** | Existing AdminImportsPage and DsiCandidateStewardPanel coverage. |
-| **Out of scope** | Rewriting those pages. Disabling the Cursor guard to “fix” vitest. |
-| **TRIGGER** | Next time a 5s vitest timeout under **full-suite** load blocks a commit. |
+| **Out of scope** | Splitting those pages. |
+| **TRIGGER** | Closed. Reopen only if a test exceeds 15s under full-suite load. |
 
 ---
 
@@ -2322,16 +2322,16 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **CIP observation-path slice done; shell stdin hang remaining** · 2026-09-04. EIF-repo items remain parked. |
+| **Status / parked** | **CIP observation-path slice done; shell stdin hang remaining** · 2026-09-04. Conversational write grant for `eif_guard.py` did **not** lift mechanical `CONTROL_PLANE_PROTECTED` (one StrReplace deny, not retried). EIF-repo items remain parked. |
 | **Effort** | Medium (EIF repo and/or CIP-owned hooks — separate grants) |
 | **Source** | N-0013 `complete_n0013.py` synthetic `implementation_run`; `.eif/hook-guard.log` `HOOK_TIMEOUT` / `HOOK_INPUT_INVALID`; Write to `.cursor/hooks/eif_guard.py` → `CONTROL_PLANE_PROTECTED`. 2026-09-04 harness: `.eif/audit/GUARD_STDIN_20260904/prove_stdin.py` — complete JSON with stdin left open, watchdog 2s, hung 12.048s, **empty stdout, no `HOOK_TIMEOUT`**. |
 | **Idea** | Record, do **not** fix in `C:\AI\engineering-intelligence-framework`: (1) design nodes required a synthetic `implementation_run` to satisfy independence; (2) guard fail-closed + mute/timeout poisons an entire session; (3) tool-burst budget kills long autonomous runs. CIP-owned repair shipped 2026-09-04: cheap identity; stdin read-to-EOF; crash vs policy labels. **Remaining CIP hook bug:** watchdog is armed **after** the blocking EOF read, so a held-open Cursor pipe never self-classifies. Intended fix (blocked this session): arm watchdog first; finish the payload when JSON parses (do not require EOF); hung read emits `HOOK_TIMEOUT`. `PROGRAMME_GIT_STAGE` is not a reason code and must not be added. CONSULT (opus CLI) **keep_true** on `beforeReadFile` `failClosed`. Identity on a closed pipe is ~0.57s (allow 1.006s minus read 0.437s) — not a 10s class. |
 | **Why it matters / deferrable** | Live git and `program.py --help` ran this session; the unprotected read is still a silent-kill path when the pipe stays open. Deferrable until control-plane write is granted. Remaining EIF-repo items unchanged. |
-| **What the work is** | **CIP remaining:** operator grant to edit `.cursor/hooks/eif_guard.py`; land the stdin-deadline / complete-JSON fix; re-run `prove_stdin.py` hung case expecting `HOOK_TIMEOUT` under 3s. **EIF repo still parked:** independence without synthetic implement; host burst-budget wrap-up. |
+| **What the work is** | **CIP remaining:** a grant that the **compiled policy / hook** will honour (chat grant is not `control_plane_change`); then land the stdin-deadline / complete-JSON fix; re-run `prove_stdin.py`. Do not set `beforeReadFile` `failClosed:false` (CONSULT keep_true). **EIF repo still parked:** BACKLOG-171. |
 | **Regression traps** | A repair that only lengthens timeout or turns all `failClosed` off has disabled the guard. Do not stage `.eif/runtime/**`. Do not mix ledger + views + product in one `git add`. |
 | **Behavior to retain** | Launcher always `exit /b 0`; policy denials still deny; `CONTROL_PLANE_PROTECTED` on hook source. |
 | **Out of scope** | Editing `C:\AI\engineering-intelligence-framework` from a CIP session. |
-| **TRIGGER** | Operator grants CIP control-plane write for `.cursor/hooks/**`, or authorises a separate EIF-repo session. |
+| **TRIGGER** | A control-plane write the hook will actually allow (policy `control_plane_change`, or operator edits `.cursor/hooks/eif_guard.py` outside the agent), or an EIF-repo session. |
 
 ---
 
@@ -2407,7 +2407,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-04. Node left `proposed`. No ledger events. CONSULT not used (invariant is not contested). |
+| **Status / parked** | **Accepted** · 2026-09-04. Operator: N-0006 stays `proposed`. No synthetic `implementation_run`. FX enforcement is live in the product; the ledger gap is bookkeeping and waits for the EIF repair (BACKLOG-171). |
 | **Effort** | Medium (programme walk + independent R3 referent) once Warren accepts the post-hoc stamp **in writing** |
 | **Source** | `.eif/program/PROGRAM.yaml` N-0006 (`class: feature`, `status: proposed`, `stage: null`, `risk: R3`, `touches_existing: true`, `baseline_ref: null`, `quality: {}`, `verification: {}`, `depends_on: [N-0012]`); `.eif/runtime/programme/eif_program/engine.py` `stamp_implementation_boundary` / `h_stage` / `h_status` / `needs_baseline` / `gates_ok`; `.eif/runtime/programme/eif_program/independence.py` `verification_requires_independence` / `independence_issue`; product already ships `fx_mode` / `fx_settle_allowed` (Alembic `20260902_0020`). Same class as N-0013 synthetic `implementation_run` and BACKLOG-169 (no post-hoc event type). |
 | **Idea** | Reconcile the N-0006 ledger with shipped FX enforcement **only** via the engine’s closed event set — not by editing `PROGRAM.yaml` or inventing a “already shipped” event. |
@@ -2416,7 +2416,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 | **Regression traps** | Do not reopen N-0013. Do not fire `node.status → complete` while `gates_ok` is false. Do not set `implementation_run` except via `h_stage` dest `implement`. Do not use this session’s actor as both implementer and independent referent. Do not invent `caveat.resolve`. Do not edit `C:\AI\engineering-intelligence-framework`. Do not mix ledger + views + product in one commit. |
 | **Behavior to retain** | Append-only `PROGRAM_LOG`; `UNKNOWN_EVENT` for undeclared types; R3 referent gate; baseline-before-leaving-discovery for feature+touches_existing+R≥2. |
 | **Out of scope** | Re-implementing FX; I1–I5; resolving D-0002/D-0009; EIF-repo event-model work. |
-| **TRIGGER** | Warren accepts in writing a post-hoc `implementation_run` for already-shipped NS-1b, **or** authorises an EIF-repo session to add a pre-existing-implementation event. |
+| **TRIGGER** | EIF repair session (BACKLOG-171). Do not lease N-0006 in CIP to stamp implement. |
 
 Exact engine invariants (do not complete around them):
 
@@ -2425,4 +2425,21 @@ Exact engine invariants (do not complete around them):
 3. `risk_rank>=3` requires `verification.referent` in `{pass, resolved, na}` (`gates_ok`).
 4. Referent independence is required at rank ≥2 (`independence.py` `verification_requires_independence`). A referent state in `QUALITY_DONE` (including **`na`**) still requires `implementation_run` (`independence_issue` verify_kind path — unlike quality dims, `na` is not skipped).
 5. `implementation_run` is written only by `stamp_implementation_boundary` on the **first** `node.stage → implement` (`h_stage`). There is no handler for “product already shipped”. Unknown event types raise `UNKNOWN_EVENT`.
-6. Independent pass requires `pass_run != implementation_run` or a different `pass_actor` (`_pass_provenance_ok`). Stamping implement in this session and then passing referent in the same run/actor fails independence — the N-0013 pattern. |
+6. Independent pass requires `pass_run != implementation_run` or a different `pass_actor` (`_pass_provenance_ok`). Stamping implement in this session and then passing referent in the same run/actor fails independence — the N-0013 pattern.
+
+---
+
+## BACKLOG-171 — Programme cannot reconcile work that arrived out of order (EIF repair #1)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-04. **First item for the EIF repair session.** Do **not** fix in CIP. Do not edit `C:\AI\engineering-intelligence-framework` from a CIP session. |
+| **Effort** | Large (EIF event-model + independence semantics) |
+| **Source** | Three CIP instances of one engine gap: (1) N-0013 synthetic `implementation_run` (`NS6_N0013_IMPL_BOUNDARY_20260903`) so independent gates could evaluate a design node whose implement stage was not the product change; (2) BACKLOG-169 — CONSULT caveat resolved in an audit file with no append-only event that can point at prior seq 287; (3) BACKLOG-170 — NS-1b `fx_mode` / `fx_settle_allowed` already shipped (Alembic `20260902_0020`) while N-0006 remains `proposed` with no lawful complete path without a post-hoc implement stamp. Engine: closed `apply_event` handler set; `stamp_implementation_boundary` first `stage→implement` only; `UNKNOWN_EVENT` otherwise. |
+| **Idea** | The programme assumes work is recorded in stage order inside the ledger. It has no lawful event for “this already happened in git / in an audit file / in a later caveat.” CIP then either manufactures a boundary (N-0013) or parks the node (N-0006) or splits truth across PROGRAM_LOG vs audit (BACKLOG-169). |
+| **Why it matters / deferrable** | Every later node that ships ahead of the ledger, or that needs a post-hoc caveat, will repeat this. Deferrable until an authorised EIF-repo session. Operator accepted BACKLOG-170: N-0006 stays proposed; no synthetic stamp. |
+| **What the work is** | In the EIF repo, design append-only event(s) that can (a) attach pre-existing implementation provenance without lying that this run wrote the code, (b) resolve a caveat against a prior seq without mutating `h_quality` evidence, (c) keep `UNKNOWN_EVENT` for undeclared types. Then host-upgrade CIP. Until then CIP records the gap in BACKLOG-169/170/171 only. |
+| **Regression traps** | Do not invent `caveat.resolve` / `already_shipped` in CIP. Do not reopen N-0013. Do not lease N-0006 to `stage implement` as a bookkeeping trick. Do not rewrite PROGRAM_LOG. Do not mix this into a CIP product commit. |
+| **Behavior to retain** | Append-only log; independence (pass run ≠ implement run or different actor); R3 referent gate. |
+| **Out of scope** | CIP product source; D-0002/D-0009; I1–I5; stdin guard patch (BACKLOG-165). |
+| **TRIGGER** | Operator authorises an EIF-repo session. This is item 1 on that session. | |
