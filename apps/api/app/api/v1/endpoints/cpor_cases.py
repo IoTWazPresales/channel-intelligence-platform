@@ -250,6 +250,45 @@ def _cost_suggestion_json(sug: CostSuggestion) -> dict[str, Any]:
     }
 
 
+def _case_line_aggregates(session: Session, case_ids: list[int]) -> dict[int, dict[str, Any]]:
+    """Set-based line totals for the list view.
+
+    List support must be the waterfall sum of ``cpor_case_line.ttl_support`` — the same figure
+    the case workspace shows — never payment-recon ``owed_amount``.
+    """
+    if not case_ids:
+        return {}
+    rows = session.execute(
+        select(
+            CporCaseLine.case_id,
+            func.count(CporCaseLine.id),
+            func.sum(CporCaseLine.estimate_qty),
+            func.sum(CporCaseLine.ttl_support),
+            func.sum(CporCaseLine.ttl_support_usd),
+        )
+        .where(CporCaseLine.case_id.in_(case_ids))
+        .group_by(CporCaseLine.case_id)
+    ).all()
+    out: dict[int, dict[str, Any]] = {}
+    for case_id, n_lines, est, ttl, ttl_usd in rows:
+        out[int(case_id)] = {
+            "line_count": int(n_lines or 0),
+            "estimate_qty_sum": float(est) if est is not None else None,
+            "ttl_support": float(ttl) if ttl is not None else None,
+            "ttl_support_usd": float(ttl_usd) if ttl_usd is not None else None,
+        }
+    return out
+
+
+def _status_counts(session: Session, user: dict) -> dict[str, int]:
+    rows = session.execute(
+        select(CporCase.status, func.count())
+        .where(where_tenant(CporCase.tenant_id, user))
+        .group_by(CporCase.status)
+    ).all()
+    return {str(status): int(n) for status, n in rows}
+
+
 def _load_case(session: Session, case_id: int, user: dict | None = None) -> CporCase:
     case = session.get(CporCase, case_id)
     if not case:
@@ -430,13 +469,22 @@ def list_cases(
         cust_map = {cust.id: cust for _, cust in rows}
         recon_by = load_payment_recon_by_case_id(session, cases, customers=cust_map)
         readiness_by = load_settle_readiness_by_case_id(session, cases)
+        line_agg = _case_line_aggregates(session, [c.id for c in cases])
+        status_counts = _status_counts(session, user)
 
         out = []
         for case, cust in rows:
             # List view: do not N+1 load every case line into JSON.
-            # Owed/paid/outstanding come from the batch recon read model.
+            # Support totals come from a set-based line aggregate (same grain as the workspace).
+            # Owed/paid/outstanding stay on the payment-recon fields — they are not support.
             row = _case_json(case, customer=cust, lines=None, include_lines=False)
             recon = recon_by.get(case.id) or {}
+            agg = line_agg.get(case.id) or {}
+            row["line_count"] = int(agg.get("line_count") or 0)
+            row["estimate_qty_sum"] = agg.get("estimate_qty_sum")
+            row["ttl_support_zar"] = agg.get("ttl_support")
+            if agg.get("ttl_support_usd") is not None:
+                row["ttl_support_usd"] = agg["ttl_support_usd"]
             row["payment_evidence_count"] = int(recon.get("payment_evidence_count") or 0)
             row["paid_amount_sum"] = recon.get("paid_amount")
             row["owed_amount"] = recon.get("owed_amount")
@@ -446,10 +494,6 @@ def list_cases(
             row["last_payment_date"] = recon.get("last_payment_date")
             row["latest_payment_status"] = recon.get("latest_payment_status")
             row["credit_note_ids"] = recon.get("credit_note_ids") or []
-            if row.get("ttl_support_zar") is None and (case.currency_code or "ZAR").upper() != "USD":
-                row["ttl_support_zar"] = recon.get("owed_amount")
-            if row.get("ttl_support_usd") is None and (case.currency_code or "ZAR").upper() == "USD":
-                row["ttl_support_usd"] = recon.get("owed_amount")
             row["settle_readiness"] = readiness_by.get(
                 case.id,
                 build_settle_readiness(case, claim_row_count=0, open_assumption_count=0),
@@ -457,7 +501,13 @@ def list_cases(
             out.append(row)
 
         if paginate:
-            return {"items": out, "total": total, "page": page, "page_size": page_size}
+            return {
+                "items": out,
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "status_counts": status_counts,
+            }
         return out
 
 

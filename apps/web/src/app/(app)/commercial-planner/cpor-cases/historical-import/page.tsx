@@ -11,8 +11,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
-import { PageHeader } from '@/components/PageHeader';
-import { navPageChrome } from '@/features/shell/navPageChrome';
+import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
 import { registerClientBackgroundTask } from '@/features/background-tasks/backgroundTaskRegistry';
 import { useImportJobProgressQuery } from '@/features/background-tasks/useImportJobProgressQuery';
 import { apiGet, apiPostFormData, safeDisplayError } from '@/lib/api';
@@ -195,16 +194,12 @@ export default function CporHistoricalImportPage() {
 
   return (
     <>
-      <PageHeader
-        {...navPageChrome('/commercial-planner/cpor-cases/historical-import', {
-          extraCrumbs: [{ label: 'Historical import' }],
-          title: 'CPOR historical import',
-        })}
-      />
+      <FundingChrome />
       <Alert severity="info" sx={{ mb: 2 }}>
-        Upload an ASUS-style tracking workbook. Settled Results are stored as a frozen snapshot (parity
+        Upload a customer tracking workbook. Settled Results are stored as a frozen snapshot (parity
         flags only). Unresolved entities block that case only — never auto-create masters. Column mapping
         is driven by the seeded profile; steward mapping resolves products, customers, and distributors.
+        Export-side template render is not built — those gaps surface in Attention.
       </Alert>
 
       <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>

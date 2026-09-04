@@ -213,13 +213,19 @@ export const navGroups: NavGroup[] = [
         href: '/promotions',
         roles: PLANNER_PLUS,
         status: 'partial',
-        what: 'Propose or author a promotion plan (CPOR case) per customer and window: lines, waterfall economics, budget check. Needs a seed case id; no entity pickers yet.',
+        what: 'Author and review promotion cases (the same cpor_case as the Case book): lines, waterfall, budget check, export. Propose-from-customer still needs a seed case id.',
       },
       {
         label: 'Case book',
         href: '/commercial-planner/cpor-cases',
         roles: PLANNER_PLUS,
         what: 'Every promotion case across the lifecycle: draft → proposed → approved → active → ended → settled; claimed, settled, outstanding, blocked reasons.',
+      },
+      {
+        label: 'Claims evidence',
+        href: '/commercial-planner/cpor-cases/claims',
+        roles: PLANNER_PLUS,
+        what: 'Imported claim evidence matched to case lines; out-of-window rows flagged. Apply happens on the case settlement desk.',
       },
       {
         label: 'Payments',

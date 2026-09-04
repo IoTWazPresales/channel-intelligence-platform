@@ -81,6 +81,9 @@ const case312Payload = {
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({ id: '312' }),
+  usePathname: () => '/commercial-planner/cpor-cases/312',
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock('@/components/PageHeader', () => ({

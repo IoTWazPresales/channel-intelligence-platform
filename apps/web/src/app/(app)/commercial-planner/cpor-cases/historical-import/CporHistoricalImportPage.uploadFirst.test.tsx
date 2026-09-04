@@ -5,6 +5,12 @@ import type { ReactElement } from 'react';
 
 import CporHistoricalImportPage from './page';
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  usePathname: () => '/commercial-planner/cpor-cases/historical-import',
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 vi.mock('@/lib/api', async () => {
   const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
   return {

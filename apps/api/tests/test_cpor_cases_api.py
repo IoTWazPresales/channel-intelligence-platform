@@ -151,6 +151,23 @@ def test_reject_requires_comment():
     assert r.status_code == 400
 
 
+def test_case_line_aggregates_use_ttl_support_not_owed():
+    """I1: list support is the line waterfall sum, never payment-recon owed."""
+    from app.api.v1.endpoints.cpor_cases import _case_line_aggregates
+
+    session = MagicMock()
+    session.execute.return_value.all.return_value = [
+        (41, 4, 1820, 368_640, None),
+    ]
+    out = _case_line_aggregates(session, [41, 99])
+    assert out[41]["line_count"] == 4
+    assert out[41]["estimate_qty_sum"] == 1820.0
+    assert out[41]["ttl_support"] == 368_640.0
+    assert 99 not in out
+    empty = _case_line_aggregates(session, [])
+    assert empty == {}
+
+
 def test_no_delete_route():
     # FastAPI should 405/404 for DELETE — no hard-delete route registered
     r = client.delete("/api/v1/cpor/cases/1")

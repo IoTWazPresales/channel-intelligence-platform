@@ -14,8 +14,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useState } from 'react';
 
-import { PageHeader } from '@/components/PageHeader';
-import { navPageChrome } from '@/features/shell/navPageChrome';
+import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { apiGet, apiPost, apiPostFormData, safeDisplayError } from '@/lib/api';
 
@@ -143,12 +142,7 @@ export default function CporPaymentEvidenceImportPage() {
 
   return (
     <>
-      <PageHeader
-        {...navPageChrome('/commercial-planner/cpor-cases/payment-evidence-import', {
-          extraCrumbs: [{ label: 'Payment / CN import' }],
-          title: 'Import payment / CN evidence',
-        })}
-      />
+      <FundingChrome />
       <Alert severity="info" sx={{ mb: 2 }}>
         Generic payment evidence — profile maps tenant columns onto case ID, credit note, statuses,
         amount, currency, customer, distributor, description. Case status from file is evidence-only.

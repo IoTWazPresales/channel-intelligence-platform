@@ -25,7 +25,6 @@ import { CporComparableCasesPanel } from '@/app/(app)/commercial-planner/cpor-ca
 import { CporPaymentEvidencePanel } from '@/app/(app)/commercial-planner/cpor-cases/[id]/CporPaymentEvidencePanel';
 import { CporPromoLoadPanel } from '@/app/(app)/commercial-planner/cpor-cases/[id]/CporPromoLoadPanel';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
-import { PageHeader } from '@/components/PageHeader';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { CporFxAnchorPanel } from '@/features/cpor/CporFxAnchorPanel';
 import { CporSettleReadinessRow } from '@/features/cpor/CporSettleReadinessRow';
@@ -35,8 +34,10 @@ import {
   formatUsdMoney,
   type SettleReadiness,
 } from '@/features/cpor/fxDisplay';
+import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
+import { LIFECYCLE_STAGES, STAGE_LABEL } from '@/features/promotions-funding/lifecycle';
 import { SettlementConfirmDialog } from '@/features/settlement/SettlementConfirmDialog';
-import { navPageChrome } from '@/features/shell/navPageChrome';
+import { LifecycleRail } from '@/features/workbench-ui/LifecycleRail';
 import { apiGet, apiPatch, apiPost, apiPostFormData } from '@/lib/api';
 
 type LineRow = {
@@ -398,14 +399,19 @@ export function CporCaseWorkspace({ caseId, embedded = false, defaultTab = 0 }: 
 
   const workspace = (
     <>
-      {!embedded ? (
-        <PageHeader
-          {...navPageChrome(`/commercial-planner/cpor-cases/${data.id}`, {
-            extraCrumbs: [{ label: data.case_code }],
-            title: data.case_code,
-          })}
+      {!embedded ? <FundingChrome title={data.case_code} /> : null}
+      <Box sx={{ mb: 1.5 }}>
+        <LifecycleRail
+          stages={[...LIFECYCLE_STAGES]}
+          labels={STAGE_LABEL}
+          current={
+            LIFECYCLE_STAGES.includes(data.status as (typeof LIFECYCLE_STAGES)[number])
+              ? (data.status as (typeof LIFECYCLE_STAGES)[number])
+              : undefined
+          }
+          dense
         />
-      ) : null}
+      </Box>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }} flexWrap="wrap">
         <Chip label={data.status} color="primary" size="small" />
         <Chip label={`workflow: ${data.workflow_status}`} size="small" />

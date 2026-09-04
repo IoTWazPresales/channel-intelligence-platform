@@ -1,6 +1,6 @@
 'use client';
 
-import { Paper, Tab, Tabs, Typography } from '@mui/material';
+import { Paper, Stack, Tab, Tabs, Typography } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import type { ColDef } from 'ag-grid-community';
@@ -9,8 +9,9 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
-import { PageHeader } from '@/components/PageHeader';
-import { navPageChrome } from '@/features/shell/navPageChrome';
+import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
+import { CapabilityStatus } from '@/features/shell/CapabilityStatus';
+import { Panel } from '@/features/workbench-ui/Panel';
 import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
@@ -84,7 +85,20 @@ export default function BudgetsPage() {
 
   return (
     <>
-      <PageHeader {...navPageChrome('/budgets')} />
+      <FundingChrome />
+      <Panel
+        title={
+          <Stack direction="row" spacing={1} alignItems="center">
+            <span>Budget ledger — data only</span>
+            <CapabilityStatus status="substrate" />
+          </Stack>
+        }
+      >
+        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 760, mb: 1 }}>
+          Allocation → commitment → actual tables exist with no writer and typically no rows. The planner’s
+          budget check uses the lineup-derived profit reservation instead, and says so on the figure.
+        </Typography>
+      </Panel>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1, maxWidth: 900 }}>
         Allocations show planned envelopes by owner/category; Health summarizes remaining budget pressure. Both read
         from curated finance facts—use Import Center or internal finance feeds when available.

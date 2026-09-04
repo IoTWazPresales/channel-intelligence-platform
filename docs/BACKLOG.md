@@ -2301,20 +2301,20 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 ---
 
-## BACKLOG-164 — I1–I5 design-lab ACs; I2 score is arithmetic not fixture
+## BACKLOG-164 — I2 mapping score explanation (I1/I3/I4/I5 closed in production funding)
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-04 |
-| **Effort** | Medium (capability slices, not a shell commit) |
+| **Status / parked** | **I1/I3/I4/I5 closed** on production Promotions & Funding (2026-09-04, `feat/ns-2-brief-nav-collapse`). **I2 still parked.** |
+| **Effort** | Small (Market mapping panel honesty) |
 | **Source** | `.eif/audit/NS6_GOV008_R3_20260903/independent-rendered-review.md` §4 I1–I5; `d-market-mapping-panel.png` |
-| **Idea** | Implementation ACs I1–I5 stay design-lab capability work. **I2:** mapping score **0.81** vs factor copy **0.781** (`1.00×0.25 + 1.00×0.15 + 0.70×0.25 + 0.48×0.25 + 0.86×0.1`). That gap is **arithmetic / explanation copy**, not a missing fixture row. When the Market & Listings / mapping slice is reached, check whether the **production** mapping component reproduces the 0.810-vs-0.781 bug or only the design-lab fixture/copy does. |
-| **Why it matters / deferrable** | Fixing the lab fixture would hide whether production has the same lie. Deferrable until that capability slice; do not treat I1–I5 as D-0008 shell work. |
-| **What the work is** | Per-AC slices: I1 planner list vs workspace totals; I2 production vs lab score explanation; I3 OfficeWorld/TechMart seed bleed; I4 lifecycle rail grain; I5 stale N-0010 jargon. |
-| **Regression traps** | Do not reopen N-0013 or re-audit D-0008. Do not “fix” the screenshot. Four-state status vocabulary stays. |
-| **Behavior to retain** | D-0008 production shell from `41a8c4b`. |
-| **Out of scope** | Shell/nav copy; N-0006 FX. |
-| **TRIGGER** | Market & Listings / mapping capability slice (I2 first); other I-ids when their owning surface is scheduled. |
+| **Idea** | **I2:** mapping score **0.81** vs factor copy **0.781**. Production `/competition` shows score + explanation string only — no factor panel — so the 0.810-vs-0.781 lie is **lab fixture/copy**, not reproduced on production today. When Market & Listings / mapping is migrated, do not invent a Why-this-score panel that repeats the arithmetic lie. |
+| **Why it matters / deferrable** | Funding slice is shipped; I2 is a different domain. Do not “fix” the lab fixture in isolation (BACKLOG-161). |
+| **What the work is** | Market mapping slice: if a factor panel is migrated, the displayed score must equal the weighted factors. |
+| **Regression traps** | Do not reopen N-0013 or re-audit D-0008. Do not put competitor scoring UI on the funding planner. |
+| **Behavior to retain** | Production funding list/workspace support = Σ `cpor_case_line.ttl_support`; one `status_counts` grain; Attention not N-0010. |
+| **Out of scope** | N-0006 FX; programme ledger. |
+| **TRIGGER** | Market & Listings / competitor mapping capability slice. |
 
 ---
 

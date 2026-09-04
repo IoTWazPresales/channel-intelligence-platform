@@ -1,10 +1,10 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-09-04 (guard transport crash vs IDENTITY_TOOL)
+**Last updated:** 2026-09-04 (Promotions & Funding production migration)
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `ea54b64` (confirm with `git rev-parse` after any later commit)
+**Last content pin:** `ac1fd87` (confirm with `git rev-parse` after the migration commit)
 
 **Alembic (code):** `20260902_0020` (N-0006 FX enforcement)
 
@@ -12,18 +12,19 @@
 
 ## On feat/ns-2-brief-nav-collapse
 
-- **Programme:** PRG-20260831T145514 rev **294**; `frontier` is **only N-0006**. N-0013 complete. N-0010/N-0011 **blocked** (BL-0001/BL-0002, D-0009 proposed — do not resolve). No other lawful frontier.
-- **D-0008 accepted.** **D-0002** proposed. **D-0009** proposed. Do not resolve either. Do not reopen N-0013. Do not start Promotions.
-- **Independence overlay published** `2240f1a`: `independence.py` + actor/replay-aware engine/store; `program.py verify` ok rev 294, manifest hashes reconciled.
-- **Guard transport crash (this session):** empty/truncated Cursor hook stdin is `HOOK_INPUT_INVALID` / `eif_guard_class=crash`, never `IDENTITY_TOOL`. Stdin retries 250ms after empty/incomplete. Read/Grep/Glob `preToolUse` skip git-identity (match `beforeReadFile`). CONSULT (opus CLI) `OBSERVATION_TRANSPORT: deny_crash`. `prove_stdin.py` PASS including zero-byte + mid-string truncate (Unterminated string col 49). Live policy deny: `CONTROL_PLANE_PROTECTED`. Burst after ts `1788527448`: zero `IDENTITY_TOOL` with `path:null`. Cursor Write on the guard is still `CONTROL_PLANE_PROTECTED`; repair applied via audit script.
-- **BACKLOG-165 CIP stdin slice** `6111634` plus this transport classification. `beforeReadFile` failClosed stays true. BACKLOG-172: argv event-name before `allow_crash` is lawful.
-- **hooks.json** remains restored. **Tests:** `@cip/web` **107 / 583 passed** (BACKLOG-162 closed).
-- **BACKLOG-170 ACCEPTED:** N-0006 stays proposed; no synthetic `implementation_run`. Bookkeeping waits for BACKLOG-171 (EIF repair #1).
+- **Product (this session):** Promotions & Funding design-lab experience migrated onto production routes against real `cpor_case` data. Shared chrome in `features/workbench-ui/` (lab primitives re-export). Planner `/promotions`, case book, claims leaf, payments, templates, terms, budgets, settlement desk. List `GET /cpor/cases` returns line-sum `ttl_support_zar` + tenant `status_counts` (I1/I4). No fixture writes on production paths.
+- **I1–I5:** I1/I3/I4/I5 closed on production funding (browser: C26760971 list and workspace both R1.6m / 18 lines / 420 units; rails Draft 3 · Ended 75 · Settled 210 on planner and case book; no N-0010 copy). **I2** is lab Market fixture/copy only — production `/competition` has no factor panel. Do not invent one in funding.
+- **Programme:** PRG-20260831T145514 rev **295**; `frontier` is **only N-0006**. Do not start N-0006. Do not reopen N-0013, D-0008, D-0009. D-0009 ledger (`.eif/`) may still be uncommitted — leave it.
+- **D-0009 accepted:** Actions fold into Attention; N-0010 is not a work container. **D-0002** remains the open decision.
+- **Tests:** `@cip/web` **111 / 589 passed** (was 107 / 583). API `test_cpor_cases_api.py` 9 passed with `ALLOW_TESTS_ON_DEV_DB=1` (mocked; no cip writes).
+- **Ops required:** API restart to pick up list aggregates (already running in this session).
 
-**Programme frontier:** none that is not N-0006. Stop. Do not manufacture a path. I1–I5 remain BACKLOG-164 (not programme nodes).
+**Programme frontier:** N-0006 only. Do not manufacture a path.
 
-**Design language:** `docs/design/CIP_DESIGN_LANGUAGE.md` v1.1 is **under review**.
+**Design language:** FROZEN v1.1 is **demoted**. Production funding follows the implemented design-lab React, not CIP_DESIGN_LANGUAGE.md grammar containers.
 
-**Deferred hygiene:** BACKLOG-156 … 161, 164; BACKLOG-165 EIF-repo remainder; BACKLOG-166–169; BACKLOG-170 accepted/waiting EIF; **BACKLOG-171** EIF repair #1; **BACKLOG-172** launcher event identity.
+**Findings (not invented):** no AM vs Ken permission split on CPOR API; listing/competitor/cover not joined on `cpor_case_line`; B4 propose still needs a seed case id; no `proposed→draft`; template-driven export not built.
+
+**Deferred:** BACKLOG-164 now I2-only (Market mapping). Duplicate Price History / product-scoped listing headlines are Market, not this slice.
 
 **Env:** local Windows. Web `:3000` + API `:8001`.

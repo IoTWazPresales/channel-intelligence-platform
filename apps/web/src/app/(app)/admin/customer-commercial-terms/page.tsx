@@ -17,8 +17,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
-import { PageHeader } from '@/components/PageHeader';
-import { navPageChrome } from '@/features/shell/navPageChrome';
+import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
 
@@ -138,7 +137,7 @@ export default function CustomerCommercialTermsPage() {
 
   return (
     <>
-      <PageHeader {...navPageChrome('/admin/customer-commercial-terms')} />
+      <FundingChrome />
       <Alert severity="info" sx={{ mb: 2 }} data-testid="customer-terms-steward-guide">
         Per-customer default dealer margin and rebate used by plan-line economics and promotion cases. One row per
         customer — create or update only (no delete). Margin + rebate must stay below 0.92.

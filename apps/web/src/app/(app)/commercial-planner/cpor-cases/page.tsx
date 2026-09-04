@@ -2,6 +2,7 @@
 
 import {
   Alert,
+  Box,
   Button,
   Chip,
   Dialog,
@@ -19,21 +20,22 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 
-import { PageHeader } from '@/components/PageHeader';
-import { navPageChrome } from '@/features/shell/navPageChrome';
+import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
+import type { MasterColumnPickerGroup } from '@/components/masterGrid/MasterColumnPickerDialog';
+import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
+import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
+import { LIFECYCLE_STAGES, STAGE_LABEL } from '@/features/promotions-funding/lifecycle';
 import { SettlementContainer } from '@/features/settlement/SettlementContainer';
+import { SettlementShapeBar } from '@/features/settlement/SettlementShapeBar';
 import {
   parseSettlementStateFilter,
   settlementStateToStatusParam,
 } from '@/features/settlement/settlementViews';
-import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
-import type { MasterColumnPickerGroup } from '@/components/masterGrid/MasterColumnPickerDialog';
-import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { apiGet, apiPost } from '@/lib/api';
+import { LifecycleRail } from '@/features/workbench-ui/LifecycleRail';
 
 import { CporSettleReadinessRow } from '@/features/cpor/CporSettleReadinessRow';
 import { formatGridMoney, type SettleReadiness } from '@/features/cpor/fxDisplay';
-import { SettlementShapeBar } from '@/features/settlement/SettlementShapeBar';
 
 type CporCaseRow = {
   id: number;
@@ -52,6 +54,8 @@ type CporCaseRow = {
   missing_roe?: boolean;
   ttl_support_zar: number | null;
   ttl_support_usd: number | null;
+  line_count?: number;
+  estimate_qty_sum?: number | null;
   settle_readiness?: SettleReadiness;
   payment_evidence_count?: number;
   paid_amount_sum?: number | null;
@@ -64,7 +68,13 @@ type CporCaseRow = {
   credit_note_ids?: string[];
 };
 
-type CasesPage = { items: CporCaseRow[]; total: number; page: number; page_size: number };
+type CasesPage = {
+  items: CporCaseRow[];
+  total: number;
+  page: number;
+  page_size: number;
+  status_counts?: Record<string, number>;
+};
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
 type PromoTypes = { promotion_types: string[] };
 
@@ -538,7 +548,24 @@ export default function CporCasesListPage() {
 
   return (
     <>
-      <PageHeader {...navPageChrome('/commercial-planner/cpor-cases')} />
+      <FundingChrome counts={{ book: data?.total }} />
+      <Alert severity="info" variant="outlined" icon={false} sx={{ mb: 2, '& .MuiAlert-message': { width: '100%' } }}>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ md: 'center' }} justifyContent="space-between">
+          <Typography variant="body2">
+            <b>The Case book is the settlement half of the same lifecycle.</b> Counts on this rail are
+            every promotion case — the same book as the Promotion planner, not a second object.
+          </Typography>
+          <Box sx={{ minWidth: { md: 520 } }}>
+            <LifecycleRail
+              stages={[...LIFECYCLE_STAGES]}
+              labels={STAGE_LABEL}
+              counts={data?.status_counts}
+              dense
+              onSelect={(s) => setParamState({ status: status === s ? null : s, state: null }, true)}
+            />
+          </Box>
+        </Stack>
+      </Alert>
       <SettlementContainer queue={queue} />
     </>
   );

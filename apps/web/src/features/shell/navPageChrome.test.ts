@@ -18,6 +18,13 @@ describe('matchNavLeaf (D-0008)', () => {
     expect(match?.group.id).toBe('funding');
   });
 
+  it('owns claims evidence as its own Promotions & Funding leaf', () => {
+    const match = matchNavLeaf('/commercial-planner/cpor-cases/claims');
+    expect(match?.item.href).toBe('/commercial-planner/cpor-cases/claims');
+    expect(match?.item.label).toBe('Claims evidence');
+    expect(match?.group.id).toBe('funding');
+  });
+
   it('owns sell-through under Stock & Sell-through, not a Channel Operations container', () => {
     const match = matchNavLeaf('/channel-intelligence');
     expect(match?.item.label).toBe('Sell-through');
