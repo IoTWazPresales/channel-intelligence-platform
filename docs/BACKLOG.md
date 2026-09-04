@@ -2247,3 +2247,156 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 | **Behavior to retain** | All import pipeline semantics; steward governance boundary. |
 | **Out of scope** | Promote/merge ResolutionWorklist migration (BACKLOG-123) unless TRIGGER fires. |
 | **TRIGGER** | BACKLOG-149 spine live; Unit 11 VERIFY scheduled; Warren schedules Steward unit. |
+
+---
+
+## BACKLOG-161 — Design-lab duplicates of production D-0008 shell components
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-04 |
+| **Effort** | Medium |
+| **Source** | `apps/web/src/design-lab/shell/CommandPalette.tsx`, `apps/web/src/design-lab/primitives/CapabilityStatus.tsx`, `apps/web/src/design-lab/surfaces/DirectorySurface.tsx`; production `apps/web/src/features/shell/CapabilityRail.tsx` / `CapabilityDirectory.tsx` / `CapabilityStatus.tsx` / `CommandPalette.tsx` (commit `41a8c4b`) |
+| **Idea** | Design-lab keeps its own copies of CapabilityRail / Directory / Status / CommandPalette. Production now has the D-0008 shell. Two implementations will drift. |
+| **Why it matters / deferrable** | Next shell change will be applied to one tree and missed on the other — operators and GOV-008 renders will disagree. Deferrable until the next shell/nav change; do not remediate I1–I5 by editing lab copies in isolation. |
+| **What the work is** | Either delete lab duplicates and import production shell modules into `/design-lab`, or make lab the fixture-only skin over the production components. One source of rail/directory/status/palette behaviour. |
+| **Regression traps** | Prototype fixtures must never be imported by production. Lab `/design-lab/directory` must keep fixture data; production `/directory` uses `navConfig` + live role. Do not reopen N-0013. |
+| **Behavior to retain** | Production AppShell + `/directory` from `41a8c4b`. Lab remains fixtures-only (no production API writes). |
+| **Out of scope** | I1–I5 capability acceptance criteria; N-0006. |
+| **TRIGGER** | Next production or lab shell/nav change. |
+
+---
+
+## BACKLOG-162 — `admin/imports/page.test.tsx` suite-load timeout flake
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-04 |
+| **Effort** | Small |
+| **Source** | Prior session: full `@cip/web` vitest exit 1 on two `admin/imports/page.test.tsx` tests at 5s; same tests ~2.1s in isolation. 2026-09-04 full suite `107 files / 583 passed` in 318s — flake did not reproduce. No D-0008 change in that file. |
+| **Idea** | Decide: raise the 5s timeout, isolate the heavy cases, or split the page test so suite-load GC/jsdom contention cannot fail a commit. |
+| **Why it matters / deferrable** | A green isolation rerun is not a green full suite; it has already blocked a D-0008 commit once. Deferrable until it blocks again — do not edit the file just to obtain green. |
+| **What the work is** | Reproduce under full-suite load; then either increase timeout for those two tests only, or extract them so they do not share a 5s budget with a 30s file. |
+| **Regression traps** | Do not weaken import-wizard assertions. Do not treat curl/API scripts as UI smoke. |
+| **Behavior to retain** | Existing AdminImportsPage coverage. |
+| **Out of scope** | Rewriting the imports page. |
+| **TRIGGER** | Next time `admin/imports/page.test.tsx` timeouts block a commit under full-suite load. |
+
+---
+
+## BACKLOG-163 — `eif_guard.py` permanently dirty on CRLF alone
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-04 |
+| **Effort** | Small |
+| **Source** | `git status` shows `M .cursor/hooks/eif_guard.py` with **zero** content diff vs HEAD (CRLF artifact). Every status is noisy. 2026-09-04: control-plane write to that path is `CONTROL_PLANE_PROTECTED`, so a working-tree “fix” from the agent is not available in a session that still has the hook cached. |
+| **Idea** | Add a `.gitattributes` rule for `.cursor/hooks/*.py` / `*.cmd` (LF or CRLF, one policy) so the file is not an eternal false dirty. |
+| **Why it matters / deferrable** | Agents keep re-investigating a no-diff dirty file. Deferrable until the next hooks or attributes change. |
+| **What the work is** | One `.gitattributes` line + `git add --renormalize` on that path only, in a hooks/attributes session that has operator control-plane grant. |
+| **Regression traps** | Do not change guard logic in the CRLF commit. Do not copy Desktop `.py` backups over HEAD. |
+| **Behavior to retain** | `eif_guard.cmd` always `exit /b 0`; crash JSON vs policy deny labeling. |
+| **Out of scope** | Fail-closed / timeout policy (BACKLOG-165). |
+| **TRIGGER** | Next `.gitattributes` or `.cursor/hooks` change. |
+
+---
+
+## BACKLOG-164 — I1–I5 design-lab ACs; I2 score is arithmetic not fixture
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-04 |
+| **Effort** | Medium (capability slices, not a shell commit) |
+| **Source** | `.eif/audit/NS6_GOV008_R3_20260903/independent-rendered-review.md` §4 I1–I5; `d-market-mapping-panel.png` |
+| **Idea** | Implementation ACs I1–I5 stay design-lab capability work. **I2:** mapping score **0.81** vs factor copy **0.781** (`1.00×0.25 + 1.00×0.15 + 0.70×0.25 + 0.48×0.25 + 0.86×0.1`). That gap is **arithmetic / explanation copy**, not a missing fixture row. When the Market & Listings / mapping slice is reached, check whether the **production** mapping component reproduces the 0.810-vs-0.781 bug or only the design-lab fixture/copy does. |
+| **Why it matters / deferrable** | Fixing the lab fixture would hide whether production has the same lie. Deferrable until that capability slice; do not treat I1–I5 as D-0008 shell work. |
+| **What the work is** | Per-AC slices: I1 planner list vs workspace totals; I2 production vs lab score explanation; I3 OfficeWorld/TechMart seed bleed; I4 lifecycle rail grain; I5 stale N-0010 jargon. |
+| **Regression traps** | Do not reopen N-0013 or re-audit D-0008. Do not “fix” the screenshot. Four-state status vocabulary stays. |
+| **Behavior to retain** | D-0008 production shell from `41a8c4b`. |
+| **Out of scope** | Shell/nav copy; N-0006 FX. |
+| **TRIGGER** | Market & Listings / mapping capability slice (I2 first); other I-ids when their owning surface is scheduled. |
+
+---
+
+## BACKLOG-165 — EIF friction recorded in CIP (do not fix in the EIF repo)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-04 |
+| **Effort** | Medium (EIF repo and/or CIP-owned hooks — separate grants) |
+| **Source** | N-0013 `complete_n0013.py` synthetic `implementation_run`; `.eif/hook-guard.log` `HOOK_TIMEOUT` / `HOOK_INPUT_INVALID`; this session: CONSULT CLI not logged in; Write to `.cursor/hooks/eif_guard.py` → `CONTROL_PLANE_PROTECTED` while hooks.json is disabled on disk but still cached in-session |
+| **Idea** | Record, do **not** fix in `C:\AI\engineering-intelligence-framework`: (1) design nodes required a synthetic `implementation_run` to satisfy independence; (2) guard fail-closed + mute/timeout poisons an entire session; (3) tool-burst budget kills long autonomous runs. CIP-owned intended repair (ASSERTED, CONSULT unavailable): Option C + cheap identity — skip identity git on observation hooks; dedupe same-repo `repository_anchors`; `EIF_GUARD_CRASH:` vs `EIF_GUARD_POLICY:` on `agent_message`; `eif_guard_class`; `PROGRAMME_GIT_STAGE` on mixed ledger/views/product `git add`; `beforeReadFile` `failClosed: false`. Quiet-path identity is 1.5s (six git subprocesses), not PROGRAM_LOG size (294 lines / 0.002s). |
+| **Why it matters / deferrable** | Without a written grant, the agent cannot patch the CIP hook (control-plane) and must not cross into the EIF repo. Deferrable until operator grants control-plane write or an EIF-repo session. |
+| **What the work is** | CIP: apply the ASSERTED guard patch under an explicit control-plane grant, restore `hooks.json`, prove (a) `pnpm --filter @cip/web test` allow and (b) mixed `git add` deny `PROGRAMME_GIT_STAGE`. EIF repo: independence without synthetic implement; fail-closed vs crash distinction in the host; burst budget wrap-up that does not mute the agent. |
+| **Regression traps** | A repair that only lengthens timeout or turns all `failClosed` off has disabled the guard. Do not stage `.eif/runtime/**`. Do not mix ledger + views + product in one `git add`. |
+| **Behavior to retain** | Launcher always `exit /b 0`; policy denials still deny; `CONTROL_PLANE_PROTECTED` on hook source. |
+| **Out of scope** | Editing `C:\AI\engineering-intelligence-framework` from a CIP session. |
+| **TRIGGER** | Operator grants CIP control-plane write for `.cursor/hooks/**`, or authorises a separate EIF-repo session. |
+
+---
+
+## BACKLOG-166 — CONSULT writes no invocation record of its own
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-04 |
+| **Effort** | Small (once the owning repo is confirmed) |
+| **Source** | `.eif/audit/NS6_GOV008_R3_20260903/independent-rendered-review.md` CONSULT provenance addendum 2026-09-04; `.eif/audit/NS_REDESIGN_R3_20260902/CONSULT_STDERR.txt` and `commercial/consult_stderr.txt` (empty on successful runs); N-0013 r3/r3.1 CONSULT reconstructed from `~/.claude/projects/C--Users-warren-eliason-channel-intelligence-platform/` session jsonl |
+| **Idea** | CONSULT currently writes seed/response markdown and an empty stderr file. It writes **no** invocation record of its own — no model slug, no timestamp, no exit code. GOV-008 had to reconstruct `consult_model_logged` from Claude Code CLI session logs outside the repo. The skill should capture invocation evidence into `.eif/` (model, timestamp, exit code, CLI identity) on every CONSULT-gated run. |
+| **Why it matters / deferrable** | Without an in-repo record, the next CONSULT-gated node repeats the UNVERIFIED-model caveat and depends on non-durable `~/.claude/` logs. Deferrable until the next CONSULT-gated node; do not patch CONSULT while recording this. |
+| **What the work is** | **Before touching anything:** confirm whether the fix lands in the CIP overlay (`docs/AUTONOMOUS_BUILD_CHARTER.md` invoke recipe / `cip-dual-agent-fable` / personal `dual-agent-fable`) or the external EIF repo (`C:\AI\engineering-intelligence-framework` `templates/CONSULT.md` → host `.eif/CONSULT.md`). Do not mix the two. Then write a durable invocation sidecar under `.eif/` (not `~/.claude/`). Related: BACKLOG-167. |
+| **Regression traps** | Do not copy session-log bodies or prompt/response payloads into git as a substitute for structured invocation metadata. Do not reopen N-0013 to backfill the 2026-09-03 quality event. Do not treat empty `CONSULT_STDERR.txt` as proof the CLI never ran. |
+| **Behavior to retain** | CONSULT remains a separate-process, other-model challenge; seed/response markdown stays. |
+| **Out of scope** | Re-running N-0013 CONSULT; rewriting PROGRAM.yaml quality evidence; editing the EIF repo from a CIP session without an explicit grant. |
+| **TRIGGER** | Next CONSULT-gated node. |
+
+---
+
+## BACKLOG-167 — Saved CONSULT seed/response files are transcriptions, not captures
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-04 |
+| **Effort** | Small (same owning-repo confirmation as BACKLOG-166) |
+| **Source** | `.eif/audit/NS6_GOV008_R3_20260903/independent-rendered-review.md` CONSULT provenance addendum 2026-09-04; N-0013 r3 `CONSULT_SEED.md` / r3.1 `commercial/CONSULT_SEED.md` vs Claude Code session jsonl `ce2fbf92-…` / `46068c16-…` |
+| **Idea** | Saved `CONSULT_SEED.md` / `CONSULT_RESPONSE.md` are **transcriptions**, not byte-identical captures of the CLI session payloads. Queued prompt lengths **7059 / 14130** match the seed files; bytes do not. Distinctive-phrase provenance still holds. Durable CONSULT evidence should either store a byte-identical capture or an explicit transcription hash/diff against the CLI payload. |
+| **Why it matters / deferrable** | Phrase-match is enough for this node’s model-identity caveat; it is not enough if a future gate needs to prove the exact seed the consultant saw. Deferrable until the next CONSULT-gated node. |
+| **What the work is** | Same first step as BACKLOG-166: confirm CIP overlay vs external EIF repo before touching anything. Then capture byte-identical CLI payloads (or record hash + encoding) alongside the human-readable markdown. |
+| **Regression traps** | Do not rewrite historical N-0013 CONSULT markdown to force byte-identity. Do not commit `~/.claude/` session logs. Distinctive-phrase match remains valid provenance for the 2026-09-04 addendum. |
+| **Behavior to retain** | Readable seed/response markdown in `.eif/audit/`. |
+| **Out of scope** | Reopening N-0013; treating length-match as byte-identity. |
+| **TRIGGER** | Next CONSULT-gated node (same as BACKLOG-166). |
+
+---
+
+## BACKLOG-168 — `ai_import_resolver` must fail loudly when `ANTHROPIC_API_KEY` is missing
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-04 |
+| **Effort** | Small |
+| **Source** | `apps/api/app/services/imports/ai_import_resolver.py` (`os.environ.get("ANTHROPIC_API_KEY")` after `ai_assist_enabled`); `apps/api/.env` has `AI_ASSIST_ENABLED`; the key name is defined nowhere on this machine (`apps/api/.env.example` and `app/core/config.py` have no `ANTHROPIC_API_KEY` field) |
+| **Idea** | With AI assist enabled and no key, `_anthropic_client()` logs a warning and returns `None` (module header: failures log and return None, never raise). Operators can believe AI-assisted import resolution is on while every call silently no-ops. Verify the resolver **fails loudly** rather than degrading silently — then keep that behaviour. |
+| **Why it matters / deferrable** | Silent degrade looks like “AI ran and found nothing.” Deferrable until a real user would exercise AI-assisted import resolution; do not add a key or enable the path as part of recording this. |
+| **What the work is** | Prove the enabled-but-no-key path (unit + one operator-visible signal). If it still returns `None` after a warning log, change it so the operator sees a hard failure (API error / steward banner), not a silent miss. Do not put the key in git. |
+| **Regression traps** | Do not auto-resolve tokens when AI is disabled. Do not call `suggest_token_resolution` directly (import-parity: `try_ai_token_resolution` only). Do not write secrets into `.eif/` or CURRENT. `AI_AUTO_RESOLVE_THRESHOLD` 0.90 stays. |
+| **Behavior to retain** | Deterministic-first resolution; steward governance; no auto-create of masters. |
+| **Out of scope** | Turning AI assist on for production; provisioning an Anthropic key; CONSULT provenance (BACKLOG-166/167). |
+| **TRIGGER** | Before AI-assisted import resolution is exercised by a real user. |
+
+---
+
+## BACKLOG-169 — Engine cannot record post-hoc caveat resolution against a prior event
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-04 |
+| **Effort** | Medium (EIF repo — new event type; do not invent in CIP) |
+| **Source** | `.eif/runtime/programme/eif_program/engine.py` `apply_event` handlers (closed set); `h_quality` overwrites dim evidence; `PROGRAM_LOG.ndjson` seq 287 `consult_model_logged: UNVERIFIED` vs GOV-008 addendum VERIFIED; `.eif/audit/NS6_GOV008_R3_20260903/independent-rendered-review.md` ledger-divergence paragraph |
+| **Idea** | After a quality event is written, a later caveat resolution (here: CONSULT model identity) has no lawful append-only event that *points at the prior seq* without mutating the dim. The 2026-09-03 event stays UNVERIFIED in the ledger; the audit file holds VERIFIED. Those two sources must not be collapsed. |
+| **Why it matters / deferrable** | Without an engine type, every post-hoc GOV-008 caveat fix will drift from PROGRAM_LOG or else reopen the node via `node.quality`. Deferrable until an EIF-repo session is authorised to add the type. Do not invent `caveat.resolve` / `governance.change` in CIP. |
+| **What the work is** | In `C:\AI\engineering-intelligence-framework`, design an append-only event that references `prior_seq` + resolved field + evidence path, does not overwrite `h_quality` evidence, and does not require reopening a complete node. Then re-run `program.py verify`. Until then, CIP records divergence in the audit file only. |
+| **Regression traps** | Do not rewrite PROGRAM_LOG. Do not lease N-0013 to fire a second `node.quality`. Do not treat `evidence.add` as caveat resolution (no prior-seq field). Do not mix this into a CIP product commit. |
+| **Behavior to retain** | Append-only log; `UNKNOWN_EVENT` for undeclared types; complete-node gates. |
+| **Out of scope** | Editing `.eif/runtime/**` from a CIP session; reopening N-0013; backfilling seq 287. |
+| **TRIGGER** | Operator authorises an EIF-repo session for programme event-model work, or the next post-hoc caveat resolution on a complete node. |

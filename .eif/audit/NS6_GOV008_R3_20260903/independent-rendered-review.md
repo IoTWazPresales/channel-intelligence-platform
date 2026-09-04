@@ -12,7 +12,7 @@ This is **not** a rerun of Fable and **not** a new CONSULT.
 | Layer | Who | When | What |
 |---|---|---|---|
 | Author (not this review) | Fable 5.1, authoring run | 2026-09-02 | Design-lab + author `rendered-verification.md` (independence NONE) |
-| CONSULT (IA questions only) | Claimed claude opus CLI, separate process | 2026-09-02 | `CONSULT_SEED.md` / `CONSULT_RESPONSE.md`. **CLI `--model` string not logged** — UNVERIFIED |
+| CONSULT (IA questions only) | Claimed claude opus CLI, separate process | 2026-09-02 | `CONSULT_SEED.md` / `CONSULT_RESPONSE.md`. **CLI `--model` string VERIFIED** (`claude-opus-4-8`, sdk-cli session jsonl — addendum 2026-09-04). Session logs live outside the repo and are not durable long-term. |
 | GOV-008 start (paid, interrupted) | Subagent `b7a20859-2703-46c1-b066-30883696b525` (Other Models / Fable family) | 2026-09-03 14:23 +02 until usage-limit | Source/claim read; live Playwright; six desktop captures + `snap-d-overview.md`. **Did not write this file.** |
 | GOV-008 remainder (this document) | Cursor Grok 4.6, later session | 2026-09-03 | Inspected recovered captures including `d-pf-casebook.png`; captured remaining required surfaces; wrote this file |
 
@@ -37,9 +37,9 @@ Not standalone HTML.
 
 ## 2. `design_divergence`
 
-**Verdict: PASS** (CONSULT **model identity UNVERIFIED**)
+**Verdict: PASS** (CONSULT **model identity VERIFIED** — addendum 2026-09-04)
 
-Recovered: `CONCEPTS.md` exists with alternative concepts; `FAULT_FINDINGS.md`; commercial CONSULT seed + response; Windows mojibake / timing consistent with a separate CLI process. **No invocation log of `claude -p --model …`.**
+Recovered: `CONCEPTS.md` exists with alternative concepts; `FAULT_FINDINGS.md`; commercial CONSULT seed + response; Windows mojibake / timing consistent with a separate CLI process. In-repo CONSULT wrote no `claude -p --model …` invocation record. **`consult_model_logged` resolves from Claude Code CLI session jsonl** (addendum 2026-09-04). Those logs live outside the repo and are not durable evidence long-term.
 
 Newly: not re-opened. Not re-run.
 
@@ -128,7 +128,7 @@ Also **new** (required unfinished set, not all author C-rows):
 |---|---|---|
 | high_fidelity React prototype in apps/web, fixtures, not standalone HTML | PASS | §1 |
 | Architecture from source-level discovery; no assumed container count | PASS | D-0008 eight capability domains; recovered source audit |
-| Materially different concepts + CONSULT with genuine model separation | PASS / UNVERIFIED model string | §2 |
+| Materially different concepts + CONSULT with genuine model separation | PASS / VERIFIED model string (addendum) | §2 |
 | Rendered evidence 1280 every prototyped surface; 390 shell + mobile-required; claims cite screenshot+viewport | PASS as **representative independent sample** | Every surface at 1280 was **not** fully re-walked; required unfinished set + ≥3 mobile **were**. Author’s 27-capture matrix remains author-rendered. |
 | D-0001/D-0003 rejected; D-0002 deferred | PASS | Rejected IA absent as primary nav; steward queue still reachable under Data |
 | Production implementation blocked until operator accepts | **Operator has accepted D-0008** (ledger `acceptance_state: accepted`). This AC text is stale vs 2026-09-03 operator decision. Design gate itself: PASS |
@@ -158,7 +158,7 @@ Reasons:
 
 1. Original GOV-008 agent **did not finish** this document (usage limit).  
 2. Completing reviewer is **Grok 4.6**, not the Other Models agent and not the author’s Fable 5.1.  
-3. CONSULT `--model` string is still **UNVERIFIED**.  
+3. CONSULT `--model` string is **VERIFIED** (`claude-opus-4-8` from Claude Code CLI session jsonl, addendum 2026-09-04). Session logs live outside the repo and are not durable evidence long-term.  
 4. Programme quality dims on N-0013 are still `authored_unverified` until a lawful `gov-008` quality record is written. This file is the evidence artifact; it is **not** a programme event.
 
 **N-0013 `node.status → complete` is not authorised by this review alone.** Operator `acceptance_state` is already `accepted`. Completing the discovery node still requires the control plane’s independent quality gate, which this hybrid continuation does **not** silently satisfy.
@@ -178,6 +178,35 @@ Inspected executable gate (not CONSULT.md ladder, not this file’s caution):
 - N-0013 had no `implementation_run` (never `node.stage` → `implement`). Independent PASS cannot evaluate until that boundary is stamped; `node.patch` cannot set it.
 
 Operator accepted this hybrid GOV-008 (recovered Fable subagent + Grok remainder + this document) as sufficient evidence to **record** those quality/verification events. That is the compensating control for the hybrid-reviewer caveat. It does not waive the engine: `node.status complete` is still refused if provenance or required dims fail.
+
+---
+
+## Provenance addendum — synthetic `implementation_run` (2026-09-04)
+
+This addendum does **not** change any verdict in this file. N-0013 remains **complete**. D-0008 remains **accepted**. D-0002 remains deferred. D-0009 remains proposed. This is preservation, not revision, and must not be read as a re-audit.
+
+N-0013 independence PASS in `eif_program/independence.py` `_pass_provenance_ok` is independent iff `pass_run != implementation_run` **or** `pass_actor != implementation_actor`. Discovery had never previously staged through `implement`, so `implementation_run` was absent and the engine could not evaluate GOV-008 pass provenance (`node.patch` cannot set that boundary).
+
+`complete_n0013.py` (run folder `NS6_GOV008_R3_20260903`, untracked script) stamped a **synthetic** `implementation_run` / `node.stage` → implement → verify boundary on 2026-09-03 so that check could run. The script’s own note: authoring run remains `NS_REDESIGN_R3_20260902`; the stamp exists so independence.py can evaluate GOV-008 pass provenance. That reasoning previously survived only in that untracked script.
+
+---
+
+## Provenance addendum — CONSULT `consult_model_logged` VERIFIED (2026-09-04)
+
+This addendum does **not** change any verdict in this file. N-0013 remains **complete**. D-0008 remains **accepted**. D-0002 remains deferred. D-0009 remains proposed. This is preservation, not revision, and must not be read as a re-audit. N-0013 is **not** reopened. The 2026-09-03 programme quality event is **not** rewritten.
+
+`consult_model_logged` resolves from Claude Code CLI session evidence (not from a CONSULT-written invocation record in `.eif/`):
+
+`~/.claude/projects/C--Users-warren-eliason-channel-intelligence-platform/`
+
+- `ce2fbf92-05aa-4398-a9b2-ffac6357f3dd.jsonl` (IA, 2026-09-02T16:49:43Z)
+- `46068c16-38fc-4a91-aa75-649565b45139.jsonl` (commercial, 2026-09-02T21:34:04Z)
+
+Both sessions: `entrypoint=sdk-cli`, `promptSource=sdk`, Claude Code `2.1.202`, `model=claude-opus-4-8`, `stop_reason=end_turn`.
+
+Distinctive-phrase provenance holds against saved `CONSULT_SEED.md` / `CONSULT_RESPONSE.md`. Those session logs live outside the repo and are not durable evidence long-term.
+
+**Ledger divergence (intentional, not silent):** `PROGRAM_LOG.ndjson` seq 287 (`node.quality` / `design_divergence`, 2026-09-03T19:38:05Z) still records `consult_model_logged: UNVERIFIED`. That event is append-only and is **not** rewritten. Inspected `eif_program/engine.py` `apply_event` handlers: the closed set is `programme.init` / `programme.charter` / `programme.status` / `identity.set` / `node.add` / `node.patch` / `node.lease.*` / `node.stage` / `node.status` / `node.quality` / `node.verification` / `node.blocker.*` / `node.baseline` / `node.stage_note` / `node.debug` / `node.accept` / `decision.add` / `decision.status` / `evidence.add` / `baseline.add`. None of those records a caveat resolution *against a prior event seq*. A later `node.quality` would overwrite the dim in the snapshot (`h_quality`), require a lease (`mutable_node`), and bump N-0013 — a reopen, not an annotation. `evidence.add` is a programme-level bag with no prior-event pointer. Unknown types raise `UNKNOWN_EVENT`. This addendum is the later verification; seq 287 remains the historical quality record. See BACKLOG-169. Do not invent an event type.
 
 ---
 
