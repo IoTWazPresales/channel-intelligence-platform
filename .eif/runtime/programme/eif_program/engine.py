@@ -12,6 +12,7 @@ from .clock import iso, now, parse_iso
 from .design_artifacts import design_experience_ok, materialize_artifact_classes
 from .errors import ProgramError
 from .facets import resolve_facets
+from .independence import independence_issues, independence_ok
 from .journeys import journeys_gate_ok, required_journey_ids
 
 NODE_CLASSES = {
@@ -169,7 +170,23 @@ def rebuild_quality(node: dict) -> None:
         rec['required'] = True
 
 
-def quality_check(node: dict) -> tuple[bool, str | None]:
+def stamp_implementation_boundary(node: dict, run: str, actor: str) -> None:
+    """Record implementation run/actor from the first node.stage -> implement only."""
+    if not node.get('implementation_run') and run:
+        node['implementation_run'] = run
+        node['implementation_actor'] = actor or None
+
+
+def stamp_pass_provenance(rec: dict, state: str | None, run: str, actor: str) -> None:
+    if state in QUALITY_DONE and state != 'na':
+        rec['pass_run'] = run or None
+        rec['pass_actor'] = actor or None
+    elif state in {'pending', 'blocked'}:
+        rec.pop('pass_run', None)
+        rec.pop('pass_actor', None)
+
+
+def quality_check(node: dict, *, check_independence: bool = True) -> tuple[bool, str | None]:
     """Return (ok, reason). reason is set only on failure."""
     for rec in (node.get('quality') or {}).values():
         if not rec.get('required'):
@@ -179,17 +196,39 @@ def quality_check(node: dict) -> tuple[bool, str | None]:
             return False, 'required quality dimensions incomplete'
         if st == 'na' and not rec.get('rationale'):
             return False, 'na requires rationale'
-    return design_experience_ok(node)
+    ok, reason = design_experience_ok(node)
+    if not ok:
+        return ok, reason
+    if check_independence:
+        return independence_ok(node)
+    return True, None
 
 
-def quality_ok(node: dict) -> bool:
-    ok, _reason = quality_check(node)
+def gates_valid(node: dict, *, check_independence: bool = True) -> tuple[bool, list[str]]:
+    """Current gate validity for a node snapshot (quality + independence)."""
+    ok, reason = quality_check(node, check_independence=check_independence)
+    if ok:
+        return True, []
+    issues = independence_issues(node) if check_independence else []
+    if issues:
+        return False, issues
+    return False, [reason] if reason else []
+
+
+def quality_ok(node: dict, *, check_independence: bool = True) -> bool:
+    ok, _reason = quality_check(node, check_independence=check_independence)
     return ok
 
 
-def gates_ok(state: dict, nid: str, *, check_journeys: bool = True) -> bool:
+def gates_ok(
+    state: dict,
+    nid: str,
+    *,
+    check_journeys: bool = True,
+    check_independence: bool = True,
+) -> bool:
     node = state['nodes'][nid]
-    if not quality_ok(node):
+    if not quality_ok(node, check_independence=check_independence):
         return False
     if node.get('acceptance') == 'operator' and node.get('acceptance_state') != 'accepted':
         return False
@@ -274,14 +313,28 @@ def assert_lease_owner(node: dict, run: str, *, allow_expired=False) -> None:
         raise ProgramError('LEASE_EXPIRED', 'lease expired; reclaim before mutating')
 
 
-def mutable_node(state: dict, payload: dict, run: str, *, allow_expired=False) -> dict:
+def _lease_record_owner(node: dict, run: str) -> None:
+    lease = node.get('lease')
+    if lease and lease.get('run') != run:
+        raise ProgramError('LEASE_NOT_OWNER', run)
+
+
+def mutable_node(
+    state: dict,
+    payload: dict,
+    run: str,
+    *,
+    allow_expired=False,
+    replay: bool = False,
+) -> dict:
     nid = payload.get('node') or payload.get('id')
     if nid not in state['nodes']:
         raise ProgramError('NODE_UNKNOWN', str(nid))
     node = state['nodes'][nid]
     assert_revision(node, payload.get('expected_revision'))
     assert_scope(state, nid, payload.get('decision'))
-    assert_lease_owner(node, run, allow_expired=allow_expired)
+    if not replay:
+        assert_lease_owner(node, run, allow_expired=allow_expired)
     return node
 
 
@@ -299,6 +352,7 @@ def apply_event(state: dict, event: dict, *, replay: bool = False) -> dict:
         ts = event.get('ts') or iso()
         payload['id'] = f"PRG-{str(ts).replace('-', '').replace(':', '')[:15]}"
     run = event.get('run') or ''
+    actor = event.get('actor') or ''
     handlers = {
         'programme.init': h_init,
         'programme.charter': h_charter,
@@ -328,16 +382,22 @@ def apply_event(state: dict, event: dict, *, replay: bool = False) -> dict:
     fn = handlers.get(et)
     if not fn:
         raise ProgramError('UNKNOWN_EVENT', et)
-    if et == 'node.status':
-        h_status(s, payload, run, replay=replay)
+    _REPLAY_AWARE = {
+        'node.patch', 'node.lease.acquire', 'node.lease.heartbeat', 'node.lease.release',
+        'node.lease.reclaim', 'node.stage', 'node.status', 'node.quality',
+        'node.verification', 'node.blocker.open', 'node.blocker.close', 'node.baseline',
+        'node.stage_note', 'node.debug', 'node.accept',
+    }
+    if et in _REPLAY_AWARE:
+        fn(s, payload, run, actor=actor, replay=replay)
     else:
-        fn(s, payload, run)
+        fn(s, payload, run, actor=actor)
     if event.get('seq') is not None:
         s['programme']['snapshot_revision'] = int(event['seq'])
     return s
 
 
-def h_init(s, p, run):
+def h_init(s, p, run, actor=''):
     if s['programme'].get('id'):
         raise ProgramError('ALREADY_INIT', 'programme already initialized')
     s['programme']['id'] = p.get('id') or f"PRG-{iso().replace('-', '').replace(':', '')[:15]}"
@@ -351,7 +411,7 @@ def h_init(s, p, run):
         s['programme']['debug_budget'] = int(p['debug_budget'])
 
 
-def h_charter(s, p, run):
+def h_charter(s, p, run, actor=''):
     ch = s['programme']['charter']
     status = p.get('status') or 'accepted'
     if status not in {'accepted', 'auto', 'pending'}:
@@ -366,7 +426,7 @@ def h_charter(s, p, run):
         ch['root_interpretation'] = p['root_interpretation']
 
 
-def h_prog_status(s, p, run):
+def h_prog_status(s, p, run, actor=''):
     st = p.get('status')
     if st not in {'active', 'suspended', 'complete'}:
         raise ProgramError('PROGRAMME_STATUS', str(st))
@@ -377,7 +437,7 @@ def h_prog_status(s, p, run):
     s['programme']['status'] = st
 
 
-def h_identity(s, p, run):
+def h_identity(s, p, run, actor=''):
     ident = s['programme']['identity']
     if p.get('form'):
         ident['form'] = p['form']
@@ -387,7 +447,7 @@ def h_identity(s, p, run):
         ident['root_commit'] = p['root_commit']
 
 
-def h_node_add(s, p, run):
+def h_node_add(s, p, run, actor=''):
     nid = p.get('id') or next_id(s, 'node', 'N')
     if nid in s['nodes']:
         raise ProgramError('NODE_EXISTS', nid)
@@ -458,8 +518,8 @@ def h_node_add(s, p, run):
     s['nodes'][nid] = node
 
 
-def h_node_patch(s, p, run):
-    node = mutable_node(s, p, run)
+def h_node_patch(s, p, run, actor='', replay=False):
+    node = mutable_node(s, p, run, replay=replay)
     allowed = {
         'title', 'facets', 'risk', 'depends_on', 'acceptance_criteria', 'touches_existing',
         'conservation_tags', 'parity_source', 'parity_matrix', 'parity_retire_decisions',
@@ -483,12 +543,12 @@ def h_node_patch(s, p, run):
     bump(node)
 
 
-def h_lease_acquire(s, p, run):
+def h_lease_acquire(s, p, run, actor='', replay=False):
     nid = p.get('node')
     node = s['nodes'].get(nid)
     if not node:
         raise ProgramError('NODE_UNKNOWN', str(nid))
-    if live_lease(node) and node['lease'].get('run') != run:
+    if not replay and live_lease(node) and node['lease'].get('run') != run:
         raise ProgramError('LEASE_HELD', node['lease']['run'])
     ttl = int(p.get('ttl_seconds') or 1800)
     ts = p.get('acquired_at') or iso()
@@ -504,36 +564,39 @@ def h_lease_acquire(s, p, run):
     bump(node)
 
 
-def h_lease_heartbeat(s, p, run):
+def h_lease_heartbeat(s, p, run, actor='', replay=False):
     node = s['nodes'].get(p.get('node'))
     if not node:
         raise ProgramError('NODE_UNKNOWN', str(p.get('node')))
     if not node.get('lease') or node['lease'].get('run') != run:
         raise ProgramError('LEASE_NOT_OWNER', run)
-    if not live_lease(node):
+    if not replay and not live_lease(node):
         raise ProgramError('LEASE_EXPIRED', 'cannot heartbeat an expired lease')
     ttl = int(p.get('ttl_seconds') or 1800)
     node['lease']['heartbeat_at'] = p.get('heartbeat_at') or iso()
     node['lease']['expires_at'] = p.get('expires_at') or iso(now() + timedelta(seconds=ttl))
 
 
-def h_lease_release(s, p, run):
+def h_lease_release(s, p, run, actor='', replay=False):
     node = s['nodes'].get(p.get('node'))
     if not node:
         raise ProgramError('NODE_UNKNOWN', str(p.get('node')))
-    if node.get('lease') and live_lease(node) and node['lease'].get('run') != run:
-        raise ProgramError('LEASE_NOT_OWNER', run)
+    if node.get('lease'):
+        if replay:
+            _lease_record_owner(node, run)
+        elif live_lease(node) and node['lease'].get('run') != run:
+            raise ProgramError('LEASE_NOT_OWNER', run)
     node['lease'] = None
     if p.get('stage_note'):
         node['stage_note'] = p['stage_note']
     bump(node)
 
 
-def h_lease_reclaim(s, p, run):
+def h_lease_reclaim(s, p, run, actor='', replay=False):
     node = s['nodes'].get(p.get('node'))
     if not node:
         raise ProgramError('NODE_UNKNOWN', str(p.get('node')))
-    if live_lease(node):
+    if not replay and live_lease(node):
         raise ProgramError('LEASE_HELD', node['lease']['run'])
     ttl = int(p.get('ttl_seconds') or 1800)
     ts = p.get('acquired_at') or iso()
@@ -545,8 +608,8 @@ def h_lease_reclaim(s, p, run):
     bump(node)
 
 
-def h_stage(s, p, run):
-    node = mutable_node(s, p, run)
+def h_stage(s, p, run, actor='', replay=False):
+    node = mutable_node(s, p, run, replay=replay)
     dest = p.get('to') or p.get('stage')
     if dest in {'null', ''}:
         dest = None
@@ -571,6 +634,8 @@ def h_stage(s, p, run):
         missing = [c for c in latent if c not in pres]
         if missing:
             raise ProgramError('LATENT_UNPRESERVED', f'latent capabilities lack preservation/retirement: {missing}')
+    if dest == 'implement':
+        stamp_implementation_boundary(node, run, actor)
     node['stage'] = dest
     if p.get('stage_note') is not None:
         node['stage_note'] = p.get('stage_note')
@@ -579,8 +644,8 @@ def h_stage(s, p, run):
     bump(node)
 
 
-def h_status(s, p, run, replay=False):
-    node = mutable_node(s, p, run)
+def h_status(s, p, run, actor='', replay=False):
+    node = mutable_node(s, p, run, replay=replay)
     dest = p.get('to') or p.get('status')
     if dest not in STATUSES:
         raise ProgramError('STATUS', str(dest))
@@ -588,12 +653,13 @@ def h_status(s, p, run, replay=False):
         if not is_leaf(s, node['id']):
             raise ProgramError('DERIVED_COMPLETE', 'non-leaf complete is derived; do not assert it')
         if not gates_ok(s, node['id']):
-            # v0.5.1 could complete a skeleton with rendered evidence only;
-            # journeys verification did not exist. Replay must not reinterpret
-            # those historical completes. New completes still hit the journeys
-            # gate (E-J3). Frozen required_ids when recorded stay authoritative.
-            jrec = (node.get('verification') or {}).get('journeys')
-            if not (replay and not jrec and gates_ok(s, node['id'], check_journeys=False)):
+            # Replay must not reinterpret historical completes that predate
+            # journeys or independent-review enforcement. verify/account flag
+            # invalid gates on recorded-complete nodes instead.
+            if not (
+                replay
+                and gates_ok(s, node['id'], check_journeys=False, check_independence=False)
+            ):
                 _ok, reason = quality_check(node)
                 detail = reason if not _ok and reason else 'required dimensions/verification/acceptance incomplete'
                 raise ProgramError('QUALITY_GATE', f'{node["id"]} {detail}')
@@ -613,8 +679,8 @@ def h_status(s, p, run, replay=False):
     bump(node)
 
 
-def h_quality(s, p, run):
-    node = mutable_node(s, p, run)
+def h_quality(s, p, run, actor='', replay=False):
+    node = mutable_node(s, p, run, replay=replay)
     dim = p.get('dim')
     if not dim:
         raise ProgramError('QUALITY_DIM', 'dim required')
@@ -623,6 +689,7 @@ def h_quality(s, p, run):
     )
     if 'state' in p:
         rec['state'] = p['state']
+        stamp_pass_provenance(rec, p['state'], run, actor)
     if 'evidence' in p:
         rec['evidence'] = p['evidence']
     if 'rationale' in p:
@@ -633,8 +700,8 @@ def h_quality(s, p, run):
     bump(node)
 
 
-def h_verification(s, p, run):
-    node = mutable_node(s, p, run)
+def h_verification(s, p, run, actor='', replay=False):
+    node = mutable_node(s, p, run, replay=replay)
     kind = p.get('kind')
     if kind not in {'referent', 'rendered', 'behavioral', 'journeys'}:
         raise ProgramError('VERIFY_KIND', str(kind))
@@ -656,6 +723,7 @@ def h_verification(s, p, run):
         rec['required_ids'] = required
         if 'state' in p:
             rec['state'] = p['state']
+            stamp_pass_provenance(rec, p['state'], run, actor)
         if 'covered_ids' in p:
             rec['covered_ids'] = list(p['covered_ids'])
         if 'evidence' in p:
@@ -667,9 +735,12 @@ def h_verification(s, p, run):
         bump(node)
         return
     rec = node.setdefault('verification', {}).setdefault(kind, {})
-    rec['state'] = p.get('state') or rec.get('state')
+    if 'state' in p:
+        rec['state'] = p.get('state') or rec.get('state')
+        stamp_pass_provenance(rec, rec.get('state'), run, actor)
+    else:
+        rec['state'] = p.get('state') or rec.get('state')
     rec['evidence'] = p.get('evidence', rec.get('evidence'))
-    rec['independence'] = p.get('independence', rec.get('independence'))
     rec['path'] = p.get('path', rec.get('path'))
     if kind == 'rendered' and rec.get('state') in QUALITY_DONE:
         q = node.setdefault('quality', {}).setdefault(
@@ -677,11 +748,12 @@ def h_verification(s, p, run):
         )
         q['state'] = rec['state']
         q['evidence'] = rec.get('evidence')
+        stamp_pass_provenance(q, rec['state'], run, actor)
     bump(node)
 
 
-def h_blocker_open(s, p, run):
-    node = mutable_node(s, p, run)
+def h_blocker_open(s, p, run, actor='', replay=False):
+    node = mutable_node(s, p, run, replay=replay)
     bid = p.get('id') or next_id(s, 'blocker', 'BL')
     node['blockers'].append({
         'id': bid,
@@ -696,8 +768,8 @@ def h_blocker_open(s, p, run):
     bump(node)
 
 
-def h_blocker_close(s, p, run):
-    node = mutable_node(s, p, run)
+def h_blocker_close(s, p, run, actor='', replay=False):
+    node = mutable_node(s, p, run, replay=replay)
     bid = p.get('id') or p.get('blocker')
     node['blockers'] = [b for b in node['blockers'] if b.get('id') != bid]
     if not node['blockers'] and node['status'] == 'blocked':
@@ -705,8 +777,8 @@ def h_blocker_close(s, p, run):
     bump(node)
 
 
-def h_node_baseline(s, p, run):
-    node = mutable_node(s, p, run)
+def h_node_baseline(s, p, run, actor='', replay=False):
+    node = mutable_node(s, p, run, replay=replay)
     ref = p.get('baseline_ref')
     if ref not in s['baselines']:
         raise ProgramError('BASELINE_UNKNOWN', str(ref))
@@ -718,14 +790,14 @@ def h_node_baseline(s, p, run):
     bump(node)
 
 
-def h_stage_note(s, p, run):
-    node = mutable_node(s, p, run)
+def h_stage_note(s, p, run, actor='', replay=False):
+    node = mutable_node(s, p, run, replay=replay)
     node['stage_note'] = p.get('note') or p.get('stage_note')
     bump(node)
 
 
-def h_debug(s, p, run):
-    node = mutable_node(s, p, run)
+def h_debug(s, p, run, actor='', replay=False):
+    node = mutable_node(s, p, run, replay=replay)
     node['debug_iterations'] = int(node.get('debug_iterations') or 0) + int(p.get('n') or 1)
     budget = int(s['programme'].get('debug_budget') or 5)
     if node['debug_iterations'] > budget:
@@ -733,13 +805,13 @@ def h_debug(s, p, run):
     bump(node)
 
 
-def h_accept(s, p, run):
-    node = mutable_node(s, p, run)
+def h_accept(s, p, run, actor='', replay=False):
+    node = mutable_node(s, p, run, replay=replay)
     node['acceptance_state'] = 'accepted'
     bump(node)
 
 
-def h_decision_add(s, p, run):
+def h_decision_add(s, p, run, actor=''):
     did = p.get('id') or next_id(s, 'decision', 'D')
     scope = p.get('scope')
     if scope and scope not in s['nodes']:
@@ -754,7 +826,7 @@ def h_decision_add(s, p, run):
     }
 
 
-def h_decision_status(s, p, run):
+def h_decision_status(s, p, run, actor=''):
     did = p.get('id') or p.get('decision')
     if did not in s['decisions']:
         raise ProgramError('DECISION_UNKNOWN', str(did))
@@ -764,7 +836,7 @@ def h_decision_status(s, p, run):
     s['decisions'][did]['status'] = st
 
 
-def h_evidence_add(s, p, run):
+def h_evidence_add(s, p, run, actor=''):
     eid = p.get('id') or next_id(s, 'evidence', 'EV')
     s['evidence'][eid] = {
         'id': eid,
@@ -775,7 +847,7 @@ def h_evidence_add(s, p, run):
     }
 
 
-def h_baseline_add(s, p, run):
+def h_baseline_add(s, p, run, actor=''):
     bid = p.get('id') or next_id(s, 'baseline', 'BLN')
     s['baselines'][bid] = {
         'id': bid,
@@ -849,6 +921,8 @@ def completion_account(state: dict) -> dict:
             'recorded_status': n.get('status'),
             'effective_status': effective_status(state, nid),
             'leaf': is_leaf(state, nid),
+            'gates_valid': gates_ok(state, nid),
+            'independence_issues': independence_issues(n),
         })
     roots = [i for i, n in state['nodes'].items() if not n.get('parent')]
     return {
@@ -899,4 +973,5 @@ dump_snapshot = dump_snapshot
 load_snapshot = load_snapshot
 quality_ok = quality_ok
 quality_check = quality_check
+gates_valid = gates_valid
 rebuild_quality = rebuild_quality

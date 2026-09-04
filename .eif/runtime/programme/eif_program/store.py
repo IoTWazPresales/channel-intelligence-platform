@@ -10,7 +10,8 @@ from datetime import timedelta
 from eiflib import read_utf8, write_utf8
 
 from .clock import iso, now
-from .engine import apply_event, dump_snapshot, empty_state, load_snapshot, log_sha256
+from .independence import independence_issues
+from .engine import apply_event, dump_snapshot, empty_state, gates_ok, is_leaf, load_snapshot, log_sha256
 from .journeys import journey_verification_issues, load_project_journeys
 from .errors import ProgramError
 
@@ -177,6 +178,14 @@ class ProgramStore:
                     f"seq {ev.get('seq')}: journey verification event missing frozen required_ids"
                 )
         issues.extend(journey_verification_issues(log_state, snapshot=snap))
+        for nid, node in sorted(log_state['nodes'].items()):
+            if node.get('status') != 'complete' or not is_leaf(log_state, nid):
+                continue
+            if not gates_ok(log_state, nid):
+                for msg in independence_issues(node):
+                    issues.append(f'{nid}: {msg}')
+                if not independence_issues(node):
+                    issues.append(f'{nid}: recorded complete but gates invalid')
         return {'ok': not issues, 'issues': issues, 'revision': log_state['programme']['snapshot_revision']}
 
     verify = verify
