@@ -144,14 +144,17 @@ export default function CporPaymentEvidenceImportPage() {
     <>
       <FundingChrome />
       <Alert severity="info" sx={{ mb: 2 }}>
-        Generic payment evidence — profile maps tenant columns onto case ID, credit note, statuses,
-        amount, currency, customer, distributor, description. Case status from file is evidence-only.
+        Payment evidence links settled value to cases. Delivery rate = result ÷ estimate per case
+        (portfolio figure on the domain header — not recomputed here). Generic payment evidence —
+        profile maps tenant columns onto case ID, credit note, statuses, amount, currency, customer,
+        distributor, description. Case status from file is evidence-only.
         {profile ? (
           <>
             {' '}
             Active profile: <strong>{profile.display_name}</strong> ({profile.profile_code}).
           </>
-        ) : null}
+        ) : null}{' '}
+        Template-driven export is not built.
       </Alert>
 
       <Stack spacing={2} sx={{ maxWidth: 960 }}>

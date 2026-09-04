@@ -548,7 +548,7 @@ export default function CporCasesListPage() {
 
   return (
     <>
-      <FundingChrome counts={{ book: data?.total }} />
+      <FundingChrome />
       <Alert severity="info" variant="outlined" icon={false} sx={{ mb: 2, '& .MuiAlert-message': { width: '100%' } }}>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ md: 'center' }} justifyContent="space-between">
           <Typography variant="body2">

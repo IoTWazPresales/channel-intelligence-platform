@@ -116,6 +116,14 @@ vi.mock('@/lib/api', () => ({
     if (url.startsWith('/api/v1/cpor/intelligence/comparable-cases')) {
       return { case_id: 312, total_candidates: 0, rank_order: [], items: [] };
     }
+    if (
+      url.startsWith('/api/v1/cpor/cases') ||
+      url.startsWith('/api/v1/cpor/settlement') ||
+      url.startsWith('/api/v1/cpor/intelligence') ||
+      url.startsWith('/api/v1/brief/')
+    ) {
+      return {};
+    }
     throw new Error(`Unexpected GET ${url}`);
   }),
   apiPost: vi.fn(),
@@ -172,6 +180,14 @@ describe('CporCaseDetailPage FX/readiness (case 312 shape)', () => {
       if (url === '/api/v1/cpor/cases/312') return zeroRoePayload;
       if (url.startsWith('/api/v1/cpor/intelligence/comparable-cases')) {
         return { case_id: 312, total_candidates: 0, rank_order: [], items: [] };
+      }
+      if (
+        url.startsWith('/api/v1/cpor/cases') ||
+        url.startsWith('/api/v1/cpor/settlement') ||
+        url.startsWith('/api/v1/cpor/intelligence') ||
+        url.startsWith('/api/v1/brief/')
+      ) {
+        return {};
       }
       throw new Error(`Unexpected GET ${url}`);
     });

@@ -24,7 +24,7 @@ import {
 import { useTheme } from '@mui/material/styles';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { PromoPlanBuilderPanel } from '@/app/(app)/promotions/PromoPlanBuilderPanel';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
@@ -78,25 +78,38 @@ export function PromotionPlannerSurface() {
     );
   }
 
-  return <PlannerList stageFilter={stageFilter} setParam={setParam} onOpen={(id) => setParam('plan', String(id))} />;
+  return (
+    <PlannerList
+      stageFilter={stageFilter}
+      newRequested={search.get('new') === '1'}
+      setParam={setParam}
+      onOpen={(id) => setParam('plan', String(id))}
+    />
+  );
 }
 
 function PlannerList({
   stageFilter,
+  newRequested,
   setParam,
   onOpen,
 }: {
   stageFilter: PlanStage | null;
+  newRequested: boolean;
   setParam: (k: string, v: string | null) => void;
   onOpen: (id: number) => void;
 }) {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'), { noSsr: true });
   const router = useRouter();
   const qc = useQueryClient();
   const [proposeOpen, setProposeOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (newRequested) setCreateOpen(true);
+  }, [newRequested]);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['cpor', 'cases', 'planner', stageFilter],
@@ -116,7 +129,7 @@ function PlannerList({
   const { data: endedPage } = useQuery({
     queryKey: ['cpor', 'cases', 'planner', 'ended'],
     queryFn: ({ signal }) =>
-      apiGet<CporCasesPage>('/api/v1/cpor/cases?page=1&page_size=20&status=ended', { signal }),
+      apiGet<CporCasesPage>('/api/v1/cpor/cases?page=1&page_size=200&status=ended', { signal }),
   });
 
   const { data: bias } = useQuery({
@@ -129,6 +142,7 @@ function PlannerList({
   const planningN = countPlanning(counts);
   const liveN = counts.active ?? 0;
   const proposedN = counts.proposed ?? 0;
+  const reviewN = data?.review_queue_count ?? proposedN;
   const plannedUsd = bias?.totals?.planned_usd ?? null;
   const drawnUsd = bias?.totals?.actual_usd ?? null;
   const budgetPct =
@@ -140,15 +154,7 @@ function PlannerList({
 
   return (
     <Box data-testid="promotion-planner">
-      <FundingChrome
-        counts={{ planner: planningN }}
-        actions={
-          <Button variant="contained" size="small" onClick={() => setCreateOpen(true)} data-testid="funding-new-plan">
-            New promotion plan
-          </Button>
-        }
-        meta={`${planningN} plans in planning · ${liveN} live`}
-      />
+      <FundingChrome />
       <Stack spacing={2} sx={{ mt: 2 }}>
         <Alert severity="info" variant="outlined" icon={false} sx={{ '& .MuiAlert-message': { width: '100%' } }}>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ md: 'center' }} justifyContent="space-between">
@@ -186,11 +192,11 @@ function PlannerList({
           />
           <HeadlineFigure
             label="Awaiting your review"
-            value={proposedN}
-            unit="proposed"
+            value={reviewN}
+            unit="cases"
             compact
-            severity={proposedN ? 'warn' : 'neutral'}
-            caption="CIP and planner proposals need a decision"
+            severity={reviewN ? 'warn' : 'neutral'}
+            caption="Proposed, or flagged for reapproval — not ended cases waiting on claims"
             onClick={() => setParam('stage', 'proposed')}
           />
           <HeadlineFigure
@@ -200,7 +206,7 @@ function PlannerList({
             caption={
               plannedUsd == null
                 ? 'No lineup-derived reservation in scope'
-                : `${fmtCompact(drawnUsd, 'USD')} of ${fmtCompact(plannedUsd, 'USD')} · lineup-derived`
+                : `${fmtCompact(drawnUsd, 'USD')} of ${fmtCompact(plannedUsd, 'USD')} · lineup-derived on SKU-economics lines`
             }
             severity={budgetPct != null && budgetPct > 85 ? 'warn' : 'neutral'}
           />
@@ -304,30 +310,75 @@ function PlannerList({
           </Stack>
 
           <Stack spacing={2}>
-            <Panel title="Needs a decision" subtitle="Proposals, flags and live checks on your plans" flush>
+            <Panel title="Needs a decision" subtitle="Grouped by condition, then ranked" flush>
               <Stack spacing={0.25} sx={{ px: 1, pb: 1 }}>
-                {(proposedPage?.items ?? []).map((p) => (
-                  <PanelRow
-                    key={p.id}
-                    severity="warning"
-                    primary={`${p.case_code} · review proposal`}
-                    secondary={`${p.customer_name} · ${p.line_count ?? 0} lines · ${fmtCompact(p.ttl_support_zar, p.currency_code)}`}
-                    onClick={() => onOpen(p.id)}
-                  />
-                ))}
-                {(endedPage?.items ?? [])
-                  .filter((p) => (p.settle_readiness?.claim_evidence_count ?? 0) === 0)
-                  .map((p) => (
+                {(() => {
+                  const seen = new Set<number>();
+                  const reapproval = [...(data?.items ?? []), ...(endedPage?.items ?? []), ...(proposedPage?.items ?? [])].filter(
+                    (p) => {
+                      if (!p.needs_reapproval || seen.has(p.id)) return false;
+                      seen.add(p.id);
+                      return true;
+                    },
+                  );
+                  const n = reapproval.length;
+                  if (!n) return null;
+                  const one = n === 1 ? reapproval[0] : null;
+                  return (
                     <PanelRow
-                      key={`${p.id}-claim`}
-                      severity="info"
-                      primary={`${p.case_code} · ended, claim evidence pending`}
-                      secondary="Case moves to settlement once the claim file is applied"
+                      severity="warning"
+                      primary={
+                        one
+                          ? `${one.case_code} · reapproval required`
+                          : `${n} cases flagged for reapproval`
+                      }
+                      secondary="Money-ceiling reapproval — not the same as Proposed, and not claim evidence."
                       figure="Case book"
-                      onClick={() => router.push(`/commercial-planner/cpor-cases?case=${p.id}`)}
+                      onClick={() => {
+                        if (one) onOpen(one.id);
+                        else router.push('/commercial-planner/cpor-cases');
+                      }}
                     />
-                  ))}
-                {!proposedPage?.items?.length && !(endedPage?.items ?? []).some((p) => (p.settle_readiness?.claim_evidence_count ?? 0) === 0) ? (
+                  );
+                })()}
+                {proposedN > 0 ? (
+                  <PanelRow
+                    severity="warning"
+                    primary={
+                      proposedN === 1
+                        ? `${proposedPage?.items?.[0]?.case_code ?? 'Proposal'} · review proposal`
+                        : `${proposedN} proposals need a review`
+                    }
+                    secondary={
+                      proposedN === 1
+                        ? `${proposedPage?.items?.[0]?.customer_name ?? ''} · ${proposedPage?.items?.[0]?.line_count ?? 0} lines · ${fmtCompact(proposedPage?.items?.[0]?.ttl_support_zar, proposedPage?.items?.[0]?.currency_code)}`
+                        : 'CIP and planner proposals in Proposed — open the planner filter'
+                    }
+                    onClick={() => {
+                      if (proposedN === 1 && proposedPage?.items?.[0]) onOpen(proposedPage.items[0].id);
+                      else setParam('stage', 'proposed');
+                    }}
+                  />
+                ) : null}
+                {(() => {
+                  const pending = (endedPage?.items ?? []).filter(
+                    (p) => (p.settle_readiness?.claim_evidence_count ?? 0) === 0,
+                  );
+                  const n = pending.length;
+                  if (!n) return null;
+                  return (
+                    <PanelRow
+                      severity="info"
+                      primary={`${n} ended cases · claim evidence pending`}
+                      secondary="One condition: the window ended and no claim file is applied. Open the case book on Ended."
+                      figure="Case book"
+                      onClick={() => router.push('/commercial-planner/cpor-cases?status=ended')}
+                    />
+                  );
+                })()}
+                {!proposedN &&
+                !(endedPage?.items ?? []).some((p) => p.needs_reapproval) &&
+                !(endedPage?.items ?? []).some((p) => (p.settle_readiness?.claim_evidence_count ?? 0) === 0) ? (
                   <Typography variant="body2" color="text.secondary" sx={{ px: 1.5, py: 1 }}>
                     Nothing waiting on you.
                   </Typography>
@@ -351,7 +402,10 @@ function PlannerList({
 
       <CreateCaseDialog
         open={createOpen}
-        onClose={() => setCreateOpen(false)}
+        onClose={() => {
+          setCreateOpen(false);
+          if (newRequested) setParam('new', null);
+        }}
         onCreated={(id) => {
           setCreateOpen(false);
           void qc.invalidateQueries({ queryKey: ['cpor', 'cases'] });

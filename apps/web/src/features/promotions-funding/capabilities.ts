@@ -33,3 +33,26 @@ export const PLANNER_CAPABILITIES: CapabilityItem[] = [
     note: 'Not derived until ≥5 settled cases with claim evidence — never estimated.',
   },
 ];
+
+export const TEMPLATE_CAPABILITIES: CapabilityItem[] = [
+  {
+    label: 'Store a profile: sheet roles, column map, value maps',
+    state: 'live',
+    note: 'cpor_historical_mapping_profile — the import side, used by historical CPOR loads today.',
+  },
+  {
+    label: 'Confirm a mapping in the shared mapping panel',
+    state: 'live',
+    note: 'This screen mounts the production CanonicalColumnMappingPanel. Edits here are not a writer — the stored map is applied on the next historical import.',
+  },
+  {
+    label: 'Learn a profile from an example workbook',
+    state: 'partial',
+    note: 'Header detection exists in the historical-import parser; open Learn from a workbook to run that path. Propose-mapping-from-file is not a separate writer.',
+  },
+  {
+    label: 'Render an export in the profile’s layout',
+    state: 'planned',
+    note: 'Export is one frozen 32-column tuple today. Template-driven export is not built.',
+  },
+];

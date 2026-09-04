@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.feature_flags import commercial_planner_enabled
 from app.core.tenant_scope import tenant_id_from_user, where_tenant
+from app.models.iam import Tenant
 from app.models.cpor import CporCase, CporCaseLine
 from app.models.facts import FactInboundShipment, FactInventoryReconciliation
 from app.models.ingestion import ImportJob
@@ -349,11 +350,16 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
 
     quarter = (date.today().month - 1) // 3 + 1
     year_suffix = str(date.today().year)[-2:]
-    tenant_label = tenant_id_from_user(user).upper()
+    tid = tenant_id_from_user(user)
+    tenant_row = await db.get(Tenant, tid)
+    tenant_name = (tenant_row.name if tenant_row else None) or tid
+    tenant_period = f"{year_suffix}Q{quarter}"
 
     return {
         "as_of": now.isoformat(),
-        "tenant_stamp": f"{tenant_label} · {year_suffix}Q{quarter}",
+        "tenant_stamp": f"{tenant_name} · {tenant_period}",
+        "tenant_name": tenant_name,
+        "tenant_period": tenant_period,
         "read": read_text,
         "signals": display_signals,
         "spine_badges": spine_badges,

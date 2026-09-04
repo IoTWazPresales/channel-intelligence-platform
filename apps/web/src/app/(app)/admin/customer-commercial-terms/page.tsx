@@ -15,6 +15,7 @@ import {
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
+import NextLink from 'next/link';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
@@ -139,8 +140,9 @@ export default function CustomerCommercialTermsPage() {
     <>
       <FundingChrome />
       <Alert severity="info" sx={{ mb: 2 }} data-testid="customer-terms-steward-guide">
-        Per-customer default dealer margin and rebate used by plan-line economics and promotion cases. One row per
-        customer — create or update only (no delete). Margin + rebate must stay below 0.92.
+        Customer margin and rebate defaults plus per-SKU assumptions feed the waterfall in the planner
+        (dealer price → support per unit). Edited here, applied on the next recompute. SKU assumptions
+        live on Commercial planner — this leaf does not invent a second economics editor.
       </Alert>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
         <TextField
@@ -152,6 +154,14 @@ export default function CustomerCommercialTermsPage() {
           data-testid="customer-terms-filter"
         />
         <Box sx={{ flex: 1 }} />
+        <Button
+          component={NextLink}
+          href="/commercial-planner"
+          variant="outlined"
+          data-testid="customer-terms-sku-assumptions"
+        >
+          Open SKU assumptions
+        </Button>
         <Button variant="contained" onClick={openAdd} data-testid="customer-terms-steward-add">
           Add terms
         </Button>

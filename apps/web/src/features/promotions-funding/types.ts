@@ -13,6 +13,7 @@ export type CporCaseListRow = {
   status: string;
   workflow_status: string;
   origin?: string | null;
+  needs_reapproval?: boolean;
   currency_code?: string;
   roe_snapshot?: number | null;
   missing_roe?: boolean;
@@ -32,6 +33,7 @@ export type CporCasesPage = {
   page: number;
   page_size: number;
   status_counts?: Record<string, number>;
+  review_queue_count?: number;
 };
 
 export type CporCaseLine = {

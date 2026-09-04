@@ -1,12 +1,18 @@
 'use client';
 
 import { Button } from '@mui/material';
+import { useQuery } from '@tanstack/react-query';
+import NextLink from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import type { ReactNode } from 'react';
 
-import { navPageChrome } from '@/features/shell/navPageChrome';
+import { fmtCompact, fmtPct } from '@/features/promotions-funding/format';
+import { countPlanning } from '@/features/promotions-funding/lifecycle';
+import type { CporCasesPage } from '@/features/promotions-funding/types';
+import { apiGet } from '@/lib/api';
 import { DomainHeader } from '@/features/workbench-ui/DomainHeader';
 import { LensTabs } from '@/features/workbench-ui/controls';
+
+export const FUNDING_TITLE = 'Promotions & Funding';
 
 export const FUNDING_DESCRIPTION =
   'One promotion case from plan to settlement: propose or author the plan, approve it, watch it run, claim and settle the support.';
@@ -33,31 +39,106 @@ export function fundingLensFromPath(pathname: string): FundingLens {
   return 'book';
 }
 
+type SettlementBook = {
+  book_total?: number;
+  currency_code?: string;
+};
+
+type PortfolioIntel = {
+  totals?: { delivery_rate?: number | null };
+};
+
+type BriefMeta = {
+  tenant_stamp?: string;
+  tenant_period?: string;
+};
+
 export function FundingChrome({
-  actions,
-  meta,
   counts,
   title,
-  description,
 }: {
-  actions?: ReactNode;
-  meta?: ReactNode;
   counts?: Partial<Record<FundingLens, number>>;
   title?: string;
-  description?: string;
 }) {
   const pathname = usePathname() || '/';
   const router = useRouter();
   const lens = fundingLensFromPath(pathname);
-  const chrome = navPageChrome(pathname);
+
+  const { data: listPage } = useQuery({
+    queryKey: ['cpor', 'cases', 'funding-chrome'],
+    queryFn: ({ signal }) => apiGet<CporCasesPage>('/api/v1/cpor/cases?page=1&page_size=1', { signal }),
+    staleTime: 30_000,
+  });
+  const { data: settlement } = useQuery({
+    queryKey: ['cpor', 'settlement', 'book'],
+    queryFn: ({ signal }) => apiGet<SettlementBook>('/api/v1/cpor/settlement/book', { signal }),
+    staleTime: 30_000,
+  });
+  const { data: portfolio } = useQuery({
+    queryKey: ['cpor', 'intelligence', 'portfolio'],
+    queryFn: ({ signal }) => apiGet<PortfolioIntel>('/api/v1/cpor/intelligence/portfolio', { signal }),
+    staleTime: 60_000,
+  });
+  const { data: briefMeta } = useQuery({
+    queryKey: ['brief', 'signals-meta'],
+    queryFn: ({ signal }) => apiGet<BriefMeta>('/api/v1/brief/signals', { signal }),
+    staleTime: 60_000,
+  });
+
+  const statusCounts = listPage?.status_counts ?? {};
+  const planningN = countPlanning(statusCounts);
+  const liveN = statusCounts.active ?? 0;
+  const endedN = statusCounts.ended ?? 0;
+  const period = briefMeta?.tenant_period || briefMeta?.tenant_stamp || '';
+  const bookAmt = settlement?.book_total;
+  const delivery = portfolio?.totals?.delivery_rate ?? null;
+  const meta = [
+    period || null,
+    `${planningN} plans in planning (draft / proposed / approved)`,
+    `${liveN} live`,
+    `${endedN} ended, in settlement`,
+    bookAmt != null ? `book ${fmtCompact(bookAmt, settlement?.currency_code)}` : null,
+    delivery != null ? `delivery rate ${fmtPct(delivery)}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  const tabCounts: Partial<Record<FundingLens, number>> = {
+    planner: planningN,
+    book: listPage?.total,
+    ...counts,
+  };
+
   return (
     <>
       <DomainHeader
-        crumbs={chrome.crumbs}
-        title={title ?? chrome.title}
-        description={description ?? FUNDING_DESCRIPTION}
+        crumbs={
+          title
+            ? [{ label: FUNDING_TITLE, href: '/promotions' }, { label: title }]
+            : [{ label: FUNDING_TITLE }]
+        }
+        title={FUNDING_TITLE}
+        description={FUNDING_DESCRIPTION}
         meta={meta}
-        actions={actions}
+        actions={
+          <>
+            <Button variant="outlined" size="small" component={NextLink} href="/reports">
+              Open in Reports
+            </Button>
+            <Button variant="outlined" size="small" component={NextLink} href="/admin/imports">
+              Import claims / payments
+            </Button>
+            <Button
+              variant="contained"
+              size="small"
+              component={NextLink}
+              href="/promotions?new=1"
+              data-testid="funding-new-plan"
+            >
+              New promotion plan
+            </Button>
+          </>
+        }
       />
       <LensTabs
         value={lens}
@@ -66,7 +147,7 @@ export function FundingChrome({
           if (href) router.push(href);
         }}
         ariaLabel="Promotions & Funding lenses"
-        lenses={LENSES.map((l) => ({ value: l.value, label: l.label, count: counts?.[l.value] }))}
+        lenses={LENSES.map((l) => ({ value: l.value, label: l.label, count: tabCounts[l.value] }))}
       />
     </>
   );

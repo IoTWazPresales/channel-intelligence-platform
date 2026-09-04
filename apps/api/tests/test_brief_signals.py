@@ -15,5 +15,7 @@ def test_brief_signals_endpoint_shape() -> None:
     assert "read" in body
     assert "spine_badges" in body
     assert "tenant_stamp" in body
+    assert "tenant_name" in body
+    assert "tenant_period" in body
     assert "as_of" in body
     assert isinstance(body["signals"], list)

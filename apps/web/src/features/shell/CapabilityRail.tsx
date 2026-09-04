@@ -29,11 +29,10 @@ import NextLink from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { CapabilityStatus } from '@/features/shell/CapabilityStatus';
 import { NAV_STORAGE_GROUP_EXPANDED, railNavGroups, type NavGroup } from '@/features/shell/navConfig';
 import { activeNavGroup } from '@/features/shell/navPageChrome';
 
-export const RAIL_WIDTH = 248;
+export const RAIL_WIDTH = 296;
 
 /** Icons stay out of navConfig so the nav model remains a plain, testable module. */
 export const DOMAIN_ICONS: Record<string, SvgIconComponent> = {
@@ -102,6 +101,7 @@ function useExpandedState(activeId: string | undefined): [Record<string, boolean
 
 type CapabilityRailProps = {
   role?: string | null;
+  tenantName?: string;
   tenantStamp?: string;
   displayName?: string;
   sessionMeta?: string;
@@ -109,7 +109,15 @@ type CapabilityRailProps = {
   onNavigate?: () => void;
 };
 
-export function CapabilityRail({ role, tenantStamp, displayName, sessionMeta, badges, onNavigate }: CapabilityRailProps) {
+export function CapabilityRail({
+  role,
+  tenantName,
+  tenantStamp,
+  displayName,
+  sessionMeta,
+  badges,
+  onNavigate,
+}: CapabilityRailProps) {
   const pathname = usePathname();
   const search = useSearchParams();
   const searchStr = search.toString();
@@ -144,9 +152,9 @@ export function CapabilityRail({ role, tenantStamp, displayName, sessionMeta, ba
             <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.1 }}>
               Channel Intelligence
             </Typography>
-            {tenantStamp ? (
+            {tenantName || tenantStamp ? (
               <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }} data-testid="rail-tenant-stamp">
-                {tenantStamp}
+                {tenantName || tenantStamp}
               </Typography>
             ) : null}
           </Box>
@@ -181,7 +189,12 @@ export function CapabilityRail({ role, tenantStamp, displayName, sessionMeta, ba
                 </ListItemIcon>
                 <ListItemText
                   primary={d.label}
-                  primaryTypographyProps={{ variant: 'body2', fontWeight: isActive ? 600 : 500, noWrap: true }}
+                  primaryTypographyProps={{
+                    variant: 'body2',
+                    fontWeight: isActive ? 600 : 500,
+                    noWrap: false,
+                    sx: { overflow: 'visible', textOverflow: 'clip' },
+                  }}
                 />
                 {badge != null && badge > 0 ? (
                   <Chip
@@ -232,10 +245,10 @@ export function CapabilityRail({ role, tenantStamp, displayName, sessionMeta, ba
                             variant: 'body2',
                             color: on ? 'text.primary' : 'text.secondary',
                             fontWeight: on ? 600 : 400,
-                            noWrap: true,
+                            noWrap: false,
+                            sx: { overflow: 'visible', textOverflow: 'clip' },
                           }}
                         />
-                        <CapabilityStatus status={l.status} size="inline" />
                       </ListItemButton>
                     );
                   })}

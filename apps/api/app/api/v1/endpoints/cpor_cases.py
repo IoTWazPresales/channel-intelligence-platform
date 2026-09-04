@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -289,6 +289,20 @@ def _status_counts(session: Session, user: dict) -> dict[str, int]:
     return {str(status): int(n) for status, n in rows}
 
 
+def _review_queue_count(session: Session, user: dict) -> int:
+    """Proposed cases plus any current case flagged for money-ceiling reapproval."""
+    return int(
+        session.scalar(
+            select(func.count())
+            .select_from(CporCase)
+            .where(where_tenant(CporCase.tenant_id, user))
+            .where(CporCase.superseded_by_case_id.is_(None))
+            .where(or_(CporCase.status == "proposed", CporCase.needs_reapproval.is_(True)))
+        )
+        or 0
+    )
+
+
 def _load_case(session: Session, case_id: int, user: dict | None = None) -> CporCase:
     case = session.get(CporCase, case_id)
     if not case:
@@ -471,6 +485,7 @@ def list_cases(
         readiness_by = load_settle_readiness_by_case_id(session, cases)
         line_agg = _case_line_aggregates(session, [c.id for c in cases])
         status_counts = _status_counts(session, user)
+        review_queue_count = _review_queue_count(session, user)
 
         out = []
         for case, cust in rows:
@@ -507,6 +522,7 @@ def list_cases(
                 "page": page,
                 "page_size": page_size,
                 "status_counts": status_counts,
+                "review_queue_count": review_queue_count,
             }
         return out
 

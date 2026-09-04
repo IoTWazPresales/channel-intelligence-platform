@@ -9,7 +9,10 @@ import {
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useState, Suspense } from 'react';
+
+import { PlanTemplatesSurface } from '@/features/promotions-funding/PlanTemplatesSurface';
 
 import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
 import { registerClientBackgroundTask } from '@/features/background-tasks/backgroundTaskRegistry';
@@ -54,7 +57,7 @@ const CPOR_PROGRESS_PHASES = [
   { id: 'complete', label: 'Complete' },
 ] as const;
 
-export default function CporHistoricalImportPage() {
+function CporHistoricalImportWizard() {
   const qc = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
   const [jobId, setJobId] = useState<number | null>(null);
@@ -196,11 +199,22 @@ export default function CporHistoricalImportPage() {
     <>
       <FundingChrome />
       <Alert severity="info" sx={{ mb: 2 }}>
-        Upload a customer tracking workbook. Settled Results are stored as a frozen snapshot (parity
-        flags only). Unresolved entities block that case only — never auto-create masters. Column mapping
-        is driven by the seeded profile; steward mapping resolves products, customers, and distributors.
-        Export-side template render is not built — those gaps surface in Attention.
+        Upload a customer tracking workbook to learn (or refresh) a mapping profile. Settled Results
+        are stored as a frozen snapshot (parity flags only). Unresolved entities block that case only —
+        never auto-create masters. Column mapping is driven by the stored profile; steward mapping
+        resolves products, customers, and distributors. Template-driven export is not built — the
+        frozen 32-column XLSX remains.
       </Alert>
+      <Button
+        size="small"
+        variant="text"
+        component={Link}
+        href="/commercial-planner/cpor-cases/historical-import"
+        sx={{ mb: 1 }}
+        data-testid="cpor-historical-back-templates"
+      >
+        Back to plan templates
+      </Button>
 
       <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
         {STEP_LABELS.map((s, i) => (
@@ -386,5 +400,24 @@ export default function CporHistoricalImportPage() {
         </Stack>
       ) : null}
     </>
+  );
+}
+
+function CporHistoricalImportGate() {
+  const search = useSearchParams();
+  if (search.get('learn') === '1') return <CporHistoricalImportWizard />;
+  return (
+    <>
+      <FundingChrome />
+      <PlanTemplatesSurface />
+    </>
+  );
+}
+
+export default function CporHistoricalImportPage() {
+  return (
+    <Suspense fallback={null}>
+      <CporHistoricalImportGate />
+    </Suspense>
   );
 }

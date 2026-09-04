@@ -5,10 +5,16 @@ import type { ReactElement } from 'react';
 
 import CporHistoricalImportPage from './page';
 
+const navState = vi.hoisted(() => ({ search: '' }));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
   usePathname: () => '/commercial-planner/cpor-cases/historical-import',
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(navState.search),
+}));
+
+vi.mock('@/features/import-mapping/CanonicalColumnMappingPanel', () => ({
+  CanonicalColumnMappingPanel: () => <div data-testid="plan-template-mapping" />,
 }));
 
 vi.mock('@/lib/api', async () => {
@@ -33,7 +39,7 @@ vi.mock('@/lib/api', async () => {
           ],
         };
       }
-      return {};
+      return { items: [], total: 0, page: 1, page_size: 500, status_counts: {} };
     }),
   };
 });
@@ -45,13 +51,22 @@ function wrap(ui: ReactElement) {
   return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
 }
 
-describe('CporHistoricalImportPage upload-first', () => {
+describe('CporHistoricalImportPage', () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
+    navState.search = '';
   });
 
-  it('first paint is upload CTA with no mapping table', async () => {
+  it('default lens is the plan templates surface, not the upload wizard', async () => {
+    wrap(<CporHistoricalImportPage />);
+    expect(await screen.findByTestId('plan-templates')).toBeInTheDocument();
+    expect(screen.getByTestId('template-learn')).toBeInTheDocument();
+    expect(screen.queryByTestId('cpor-historical-upload-step')).not.toBeInTheDocument();
+  });
+
+  it('learn=1 is upload CTA with no mapping table', async () => {
+    navState.search = 'learn=1';
     wrap(<CporHistoricalImportPage />);
     expect(await screen.findByTestId('cpor-historical-upload-step')).toBeInTheDocument();
     expect(screen.getByTestId('cpor-historical-file')).toBeInTheDocument();

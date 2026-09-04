@@ -37,6 +37,8 @@ import { useUiStore } from '@/stores/uiStore';
 
 type BriefSignalsMeta = {
   tenant_stamp?: string;
+  tenant_name?: string;
+  tenant_period?: string;
   signal_count?: number;
   spine_badges?: Partial<Record<string, number | null>>;
 };
@@ -113,7 +115,8 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
   const rail = (
     <CapabilityRail
       role={role}
-      tenantStamp={briefMeta?.tenant_stamp}
+      tenantName={briefMeta?.tenant_name}
+      tenantStamp={briefMeta?.tenant_period ?? briefMeta?.tenant_stamp}
       displayName={displayName}
       sessionMeta={me ? `${roleLabel(String(me.role))} · session` : undefined}
       badges={badges}
@@ -183,11 +186,11 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
             <Typography variant="body2" color="text.secondary" noWrap data-testid="topbar-context">
               {contextLabel}
             </Typography>
-            {briefMeta?.tenant_stamp ? (
+            {briefMeta?.tenant_period || briefMeta?.tenant_stamp ? (
               <Chip
                 size="small"
                 variant="outlined"
-                label={briefMeta.tenant_stamp}
+                label={briefMeta.tenant_period ?? briefMeta.tenant_stamp}
                 sx={{ height: 22, display: { xs: 'none', sm: 'inline-flex' } }}
               />
             ) : null}

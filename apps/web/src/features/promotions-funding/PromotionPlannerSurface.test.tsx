@@ -52,6 +52,7 @@ const listPayload = {
   page: 1,
   page_size: 200,
   status_counts: { proposed: 1, draft: 0, approved: 0, active: 0, ended: 0, settled: 0 },
+  review_queue_count: 1,
 };
 
 const apiGetMock = vi.fn(async (url: string) => {
@@ -82,6 +83,7 @@ describe('PromotionPlannerSurface', () => {
     );
 
     expect(await screen.findByTestId('promotion-planner')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Promotions & Funding/i })).toBeInTheDocument();
     expect(screen.getByTestId('lifecycle-rail')).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByTestId('planner-grid')).toHaveTextContent('CPR-26-1204');

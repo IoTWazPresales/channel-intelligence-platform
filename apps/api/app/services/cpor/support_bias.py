@@ -2,7 +2,9 @@
 
 CPOR-owned (not Plan vs Executed). Planned reservation is derived_from_profit:
 SKU ``reserve_total_pct`` × sell-in economics on case ``estimate_qty`` (campaign split).
-Actual = Σ non-voided ``ttl_support_usd``. Missing SKU assumption → no fabricated zero.
+Actual = Σ non-voided ``ttl_support_usd`` on the **same lines** that contribute planned
+reservation. Lines missing SKU assumption are flagged, not fabricated as zero planned, and
+are excluded from both sides of the ratio (mixed-denominator 391% was a bug).
 """
 
 from __future__ import annotations
@@ -243,9 +245,6 @@ def build_support_bias(
             if est <= 0:
                 continue
             usd = _line_ttl_support_usd(line)
-            if usd is not None:
-                actual += float(usd)
-
             sku = sku_by_pid.get(int(line.product_id))
             plan = _planned_campaign_reserve_for_line(
                 line,
@@ -277,6 +276,8 @@ def build_support_bias(
             planned_lines += 1
             case_planned_ok = True
             any_planned = True
+            if usd is not None:
+                actual += float(usd)
             sku_m = prod_meta.get(int(line.product_id), (None, None))
             line_details.append(
                 {
