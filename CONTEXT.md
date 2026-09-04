@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-09-04 — **CIP guard repair** on `feat/ns-2-brief-nav-collapse`: stdin read-to-EOF; skip git-identity on observation hooks; cache/dedupe same-repo anchors; crash vs policy (`EIF_GUARD_CRASH` / `EIF_GUARD_POLICY`, `eif_guard_class`). `hooks.json` restored. CONSULT (opus CLI) `FAILCLOSED_BEFORE_READ: keep_true`. Proof denials `ACTION_FORCE_VCS` / `SENSITIVE_READ` / `FOREIGN_READ`. `PROGRAMME_GIT_STAGE` never existed in this tree. BACKLOG-163/165 CIP slices done. Seq 287 still `UNVERIFIED` (BACKLOG-169). N-0013 not reopened.
+
 - 2026-09-04 — **CONSULT model caveat VERIFIED** on `feat/ns-2-brief-nav-collapse` (docs(eif) addendum, same class as synthetic `implementation_run` addendum): GOV-008 `consult_model_logged` resolves from Claude Code CLI session jsonl (`claude-opus-4-8`, sdk-cli; IA `ce2fbf92-…` 16:49:43Z, commercial `46068c16-…` 21:34:04Z). Verdicts unchanged. N-0013 not reopened. Seq 287 stays `UNVERIFIED` (no engine caveat-resolution event — BACKLOG-169). Session logs outside repo, not durable. BACKLOG-166/167/168/169 parked.
 
 - 2026-09-03 — **N-0013 complete** on `feat/ns-2-brief-nav-collapse` (HEAD `c014102`): hybrid GOV-008 recorded (`NS6_GOV008_R3_20260903` / `gov-008`) from `.eif/audit/NS6_GOV008_R3_20260903/independent-rendered-review.md`; operator accepted hybrid continuation; `implementation_run` stamped `NS6_N0013_IMPL_BOUNDARY_20260903`; programme rev **294** `verify` ok; D-0008 accepted; **D-0002** and **D-0009** left open. CONSULT not re-run. Do not recapture recovered GOV-008 renders.

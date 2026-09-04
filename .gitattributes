@@ -1,2 +1,9 @@
 * text=auto
 *.sh text eol=lf
+
+# Cursor hook Python/JSON/sh on LF so Windows checkout is not a permanent
+# CRLF-only dirty tree (BACKLOG-163). cmd stays CRLF.
+.cursor/hooks/*.py text eol=lf
+.cursor/hooks/*.json text eol=lf
+.cursor/hooks/*.sh text eol=lf
+.cursor/hooks/*.cmd text eol=crlf

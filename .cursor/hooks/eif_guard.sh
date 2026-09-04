@@ -16,7 +16,7 @@ emit_static() {
   if [ -f "$DIR/eif_guard_${kind}.json" ]; then
     cat "$DIR/eif_guard_${kind}.json"
   else
-    printf '%s\n' "{\"permission\":\"deny\",\"reason_code\":\"$code\",\"user_message\":\"$code: $msg\",\"agent_message\":\"$code: $msg\"}"
+    printf '%s\n' "{\"permission\":\"deny\",\"reason_code\":\"$code\",\"eif_guard_class\":\"crash\",\"user_message\":\"EIF_GUARD_CRASH: $code: $msg\",\"agent_message\":\"EIF_GUARD_CRASH: $code: $msg\"}"
   fi
 }
 

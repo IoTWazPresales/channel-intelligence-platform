@@ -2288,7 +2288,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-04 |
+| **Status / parked** | **Done** · 2026-09-04 (`.gitattributes` eol rules for `.cursor/hooks/*` shipped with the guard repair) |
 | **Effort** | Small |
 | **Source** | `git status` shows `M .cursor/hooks/eif_guard.py` with **zero** content diff vs HEAD (CRLF artifact). Every status is noisy. 2026-09-04: control-plane write to that path is `CONTROL_PLANE_PROTECTED`, so a working-tree “fix” from the agent is not available in a session that still has the hook cached. |
 | **Idea** | Add a `.gitattributes` rule for `.cursor/hooks/*.py` / `*.cmd` (LF or CRLF, one policy) so the file is not an eternal false dirty. |
@@ -2322,12 +2322,12 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-04 |
+| **Status / parked** | **CIP hook slice done** · 2026-09-04. EIF-repo items (synthetic `implementation_run`; host burst-budget wrap-up) remain parked. |
 | **Effort** | Medium (EIF repo and/or CIP-owned hooks — separate grants) |
 | **Source** | N-0013 `complete_n0013.py` synthetic `implementation_run`; `.eif/hook-guard.log` `HOOK_TIMEOUT` / `HOOK_INPUT_INVALID`; this session: CONSULT CLI not logged in; Write to `.cursor/hooks/eif_guard.py` → `CONTROL_PLANE_PROTECTED` while hooks.json is disabled on disk but still cached in-session |
-| **Idea** | Record, do **not** fix in `C:\AI\engineering-intelligence-framework`: (1) design nodes required a synthetic `implementation_run` to satisfy independence; (2) guard fail-closed + mute/timeout poisons an entire session; (3) tool-burst budget kills long autonomous runs. CIP-owned intended repair (ASSERTED, CONSULT unavailable): Option C + cheap identity — skip identity git on observation hooks; dedupe same-repo `repository_anchors`; `EIF_GUARD_CRASH:` vs `EIF_GUARD_POLICY:` on `agent_message`; `eif_guard_class`; `PROGRAMME_GIT_STAGE` on mixed ledger/views/product `git add`; `beforeReadFile` `failClosed: false`. Quiet-path identity is 1.5s (six git subprocesses), not PROGRAM_LOG size (294 lines / 0.002s). |
-| **Why it matters / deferrable** | Without a written grant, the agent cannot patch the CIP hook (control-plane) and must not cross into the EIF repo. Deferrable until operator grants control-plane write or an EIF-repo session. |
-| **What the work is** | CIP: apply the ASSERTED guard patch under an explicit control-plane grant, restore `hooks.json`, prove (a) `pnpm --filter @cip/web test` allow and (b) mixed `git add` deny `PROGRAMME_GIT_STAGE`. EIF repo: independence without synthetic implement; fail-closed vs crash distinction in the host; burst budget wrap-up that does not mute the agent. |
+| **Idea** | Record, do **not** fix in `C:\AI\engineering-intelligence-framework`: (1) design nodes required a synthetic `implementation_run` to satisfy independence; (2) guard fail-closed + mute/timeout poisons an entire session; (3) tool-burst budget kills long autonomous runs. CIP-owned repair shipped 2026-09-04: cheap identity (skip git on observation hooks; dedupe same-repo `repository_anchors`); stdin read-to-EOF; `EIF_GUARD_CRASH:` vs `EIF_GUARD_POLICY:`; `eif_guard_class`. `PROGRAMME_GIT_STAGE` was never a reason code in this tree and was not added. CONSULT (opus CLI) **keep_true** on `beforeReadFile` `failClosed` — fail-open would weaken SENSITIVE_READ / SECRET_IN_READ / FOREIGN_READ / OUT_OF_OBSERVATION_SCOPE on hook crash. Quiet-path identity was 1.5s (six git subprocesses), not PROGRAM_LOG size (294 lines / 0.002s). |
+| **Why it matters / deferrable** | CIP hook poisoning is repaired. Remaining items live in the EIF repo. |
+| **What the work is** | **CIP done:** restore `hooks.json`; prove (a) `@cip/web` tests allow, (b) git/file-read allow, (c) live policy deny `ACTION_FORCE_VCS` / `SENSITIVE_READ` / `FOREIGN_READ` (not the fabricated `PROGRAMME_GIT_STAGE`). **EIF repo still parked:** independence without synthetic implement; host burst-budget wrap-up. |
 | **Regression traps** | A repair that only lengthens timeout or turns all `failClosed` off has disabled the guard. Do not stage `.eif/runtime/**`. Do not mix ledger + views + product in one `git add`. |
 | **Behavior to retain** | Launcher always `exit /b 0`; policy denials still deny; `CONTROL_PLANE_PROTECTED` on hook source. |
 | **Out of scope** | Editing `C:\AI\engineering-intelligence-framework` from a CIP session. |

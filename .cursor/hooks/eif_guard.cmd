@@ -46,6 +46,6 @@ if not exist "%EIF_ROOT%\.eif" mkdir "%EIF_ROOT%\.eif" >nul 2>&1
 if exist "%~dp0eif_guard_%~1.json" (
   type "%~dp0eif_guard_%~1.json"
 ) else (
-  echo {"permission":"deny","reason_code":"%~2","user_message":"%~2: %~3","agent_message":"%~2: %~3"}
+  echo {"permission":"deny","reason_code":"%~2","eif_guard_class":"crash","user_message":"EIF_GUARD_CRASH: %~2: %~3","agent_message":"EIF_GUARD_CRASH: %~2: %~3"}
 )
 goto :eof

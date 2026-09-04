@@ -68,6 +68,45 @@ LOOPBACK_HOSTS = {'localhost','127.0.0.1','::1','0.0.0.0','[::1]'}
 NETWORK_CLASSES = frozenset({'loopback','public_read'})
 
 
+def read_hook_stdin_eof() -> bytes:
+    """Read the Cursor hook pipe until a 0-byte EOF.
+
+    Windows anonymous pipes return the first available chunk from a single
+    os.read / FileIO.read. Stopping there is payload-size-dependent truncation
+    and surfaces as HOOK_INPUT_INVALID (JSONDecodeError). Loop until a 0-byte
+    read — the only EOF signal. Do not arm the decision watchdog until this
+    returns; stdin wait is not identity cost.
+    """
+    chunks = []
+    fd = None
+    try:
+        fd = sys.stdin.fileno()
+    except Exception:
+        fd = None
+    if fd is None:
+        try:
+            return sys.stdin.buffer.read() or b''
+        except Exception:
+            return b''
+    if os.name == 'nt':
+        try:
+            import msvcrt
+            msvcrt.setmode(fd, os.O_BINARY)
+        except Exception:
+            pass
+    while True:
+        try:
+            chunk = os.read(fd, 65536)
+        except InterruptedError:
+            continue
+        except OSError:
+            break
+        if not chunk:
+            break
+        chunks.append(chunk)
+    return b''.join(chunks)
+
+
 def parse_cursor_hook_stdin(raw: bytes) -> dict:
     """Parse Cursor command-hook JSON from raw stdin bytes.
 
@@ -91,12 +130,36 @@ def parse_cursor_hook_stdin(raw: bytes) -> dict:
         raise ValueError('empty Cursor hook stdin')
     return json.loads(text)
 
-# Crash / launcher / emit failures must be distinguishable from policy denials
-# such as OUT_OF_CHANGE_SCOPE. Cursor failClosed treats empty/invalid stdout as a
-# mute block ("hook returned no output") with no rule name.
+# Crash / launcher / emit failures must be distinguishable from policy denials.
+# Cursor failClosed treats empty/invalid stdout as a mute block with no rule name.
+# deny() prefixes agent_message with EIF_GUARD_CRASH: or EIF_GUARD_POLICY: and
+# sets eif_guard_class. PROGRAMME_GIT_STAGE is not a reason code in this tree.
+# CONSULT 2026-09-04 (claude-opus CLI, sdk-cli): beforeReadFile failClosed must
+# stay true. failClosed:false would allow SENSITIVE_READ / SECRET_IN_READ /
+# FOREIGN_READ / OUT_OF_OBSERVATION_SCOPE into model context on hook crash.
+# Verdict FAILCLOSED_BEFORE_READ: keep_true. Residual not acceptable.
+
 CRASH_REASON_CODES = frozenset({
     'HOOK_INTERNAL_ERROR', 'HOOK_LAUNCHER_ERROR', 'HOOK_INPUT_INVALID',
     'HOOK_TIMEOUT', 'HOOK_EMIT_FAILURE',
+})
+# Live policy deny() / shell_decision / mcp_decision reason_code values in this file.
+POLICY_REASON_CODES = frozenset({
+    'ACTION_ARTIFACT_WRITE', 'ACTION_DELETE', 'ACTION_DEPENDENCY',
+    'ACTION_DESTRUCTIVE_DATA', 'ACTION_FORCE_VCS', 'ACTION_IDENTITY_MUTATION',
+    'ACTION_INFRASTRUCTURE', 'ACTION_NETWORK', 'ACTION_REMOTE_PUSH', 'ACTION_WRITE',
+    'BOOTSTRAP', 'BOOTSTRAP_MCP', 'BROWSER_INTERACT_ORIGIN', 'BROWSER_OBSERVE_ONLY',
+    'BROWSER_PUBLIC_MUTATE', 'BROWSER_UNSAFE', 'BUDGET', 'CONTROL_PLANE_PROTECTED',
+    'FOREIGN_PATH', 'FOREIGN_READ', 'IDENTITY_MCP', 'IDENTITY_SHELL', 'IDENTITY_TOOL',
+    'MCP_DENY', 'MCP_DESTRUCTIVE', 'MCP_NOT_GRANTED', 'MCP_POLICY_REQUIRED',
+    'NETWORK_DESTINATION', 'OUT_OF_CHANGE_SCOPE', 'OUT_OF_OBSERVATION_SCOPE',
+    'POLICY_INTEGRITY', 'POST_EDIT_SECRET', 'PROTECTED_PATH', 'SECRET_IN_READ',
+    'SECRET_PREWRITE', 'SENSITIVE_READ', 'SENSITIVE_TOOL_READ', 'SHELL_DENY',
+    'SHELL_POLICY_REQUIRED',
+})
+OBSERVATION_EVENTS = frozenset({
+    'beforeReadFile', 'afterFileEdit', 'afterMCPExecution', 'postToolUse',
+    'sessionStart', 'stop', 'subagentStart', 'subagentStop',
 })
 WATCHDOG_DEFAULT_SEC = 8.0
 _EMITTED = False
@@ -218,7 +281,14 @@ def out(permission='allow', message=None, extra=None):
 
 
 def deny(code, message):
-    return out('deny', f'{code}: {message}', extra={'reason_code': code})
+    crash = code in CRASH_REASON_CODES
+    klass = 'crash' if crash else 'policy'
+    prefix = 'EIF_GUARD_CRASH' if crash else 'EIF_GUARD_POLICY'
+    return out(
+        'deny',
+        f'{prefix}: {code}: {message}',
+        extra={'reason_code': code, 'eif_guard_class': klass},
+    )
 
 
 def _arm_watchdog():
@@ -248,18 +318,50 @@ def normalized_remote(s):
     return s.lower().rstrip('/')
 
 def git(root: Path, *args):
-    try: return subprocess.check_output(['git','-C',str(root),*args],text=True,stderr=subprocess.DEVNULL,timeout=3).strip()
-    except Exception: return ''
+    env=os.environ.copy()
+    env['GIT_OPTIONAL_LOCKS']='0'
+    try:
+        return subprocess.check_output(
+            ['git','-C',str(root),*args],
+            text=True, stderr=subprocess.DEVNULL, timeout=1.5, env=env,
+        ).strip()
+    except Exception:
+        return ''
+
+# Per-process cache: a same-repo repository_anchor must not spawn a second trio
+# of git subprocesses. Quiet-path identity was six calls / ~1.5s on this project.
+_GIT_SNAP = {}
+
+def git_snapshot(root: Path):
+    """Return (toplevel, remotes_text, root_commit_text). At most 3 git calls per repo per process."""
+    try:
+        key=str(Path(root).resolve())
+    except Exception:
+        key=str(root)
+    hit=_GIT_SNAP.get(key)
+    if hit is not None:
+        return hit
+    toplevel=git(root,'rev-parse','--show-toplevel')
+    remotes=git(root,'remote','-v')
+    rootc=git(root,'rev-list','--max-parents=0','HEAD')
+    snap=(toplevel, remotes, rootc)
+    _GIT_SNAP[key]=snap
+    if toplevel:
+        try:
+            _GIT_SNAP.setdefault(str(Path(toplevel).resolve()), snap)
+        except Exception:
+            pass
+    return snap
 
 def observed_remotes(root: Path):
     vals=[]
-    for line in git(root,'remote','-v').splitlines():
+    for line in git_snapshot(root)[1].splitlines():
         p=line.split()
         if len(p)>=2: vals.append(normalized_remote(p[1]))
     return sorted(set(vals))
 
 def root_commit(root: Path):
-    rows=git(root,'rev-list','--max-parents=0','HEAD').splitlines()
+    rows=git_snapshot(root)[2].splitlines()
     return rows[0] if len(rows)==1 else ''
 
 def policy_path(root: Path):
@@ -396,13 +498,14 @@ def identity_ok(root: Path, policy):
     if exp_rem and observed!=exp_rem:
         return False,f'IDENTITY_MISMATCH: remote set expected {exp_rem}, observed {observed}'
     if exp_vcs:
-        actual=Path(git(root,'rev-parse','--show-toplevel') or root).resolve()
+        actual=Path(git_snapshot(root)[0] or root).resolve()
         if str(actual)!=str(Path(exp_vcs).resolve()):
             return False,f'IDENTITY_MISMATCH: vcs root expected {exp_vcs}, observed {actual}'
     for anchor in ident.get('repository_anchors') or []:
         ar=Path(anchor.get('allowed_root') or '').resolve()
         if not ar.exists(): return False,f'IDENTITY_MISMATCH: declared repository root missing: {ar}'
-        arv=git(ar,'rev-parse','--show-toplevel')
+        # Same-repo duplicate of the primary identity block: reuse snapshot (0 extra git).
+        arv=git_snapshot(ar)[0]
         arr=root_commit(ar)
         arem=observed_remotes(ar)
         ev=anchor.get('expected_vcs_root') or ''; er=anchor.get('root_commit') or ''
@@ -1087,9 +1190,11 @@ def mcp_decision(data, policy, root=None, roots=None):
         record_browser_origin(root, data, dests, policy, roots)
     return True,'MCP_ALLOW','granted MCP tool'
 
-def main():
+def main(raw=None):
     try:
-        data = parse_cursor_hook_stdin(sys.stdin.buffer.read())
+        if raw is None:
+            raw = read_hook_stdin_eof()
+        data = parse_cursor_hook_stdin(raw)
     except Exception as e:
         return deny('HOOK_INPUT_INVALID', f'cannot parse Cursor hook input: {type(e).__name__}: {e}')
     event=data.get('hook_event_name','')
@@ -1099,9 +1204,8 @@ def main():
     # sessionStart is context only on Cursor; it is never used as a blocking boundary.
     if event=='sessionStart':
         if state=='OK':
-            ok,msg=identity_ok(root,policy)
-            text=(f'EIF runtime policy loaded for {policy.get("project_id","<unset>")}; '
-                  f'identity preflight: {msg}. Blocking identity is re-checked at actionable hooks.')
+            text=(f'EIF runtime policy loaded for {policy.get("project_id","<unset>")}. '
+                  f'Blocking identity is re-checked at actionable hooks; sessionStart does not spawn git.')
             return out(extra={'additional_context':text})
         return out(extra={'additional_context':f'EIF runtime policy state: {state}. {pmsg}. Do not treat sessionStart as a blocking control.'})
 
@@ -1127,9 +1231,9 @@ def main():
             audit(root,data,'deny','FOREIGN_READ')
             return deny('FOREIGN_READ','read target resolves outside all declared project roots')
         if state=='OK':
-            ok,msg=identity_ok(root,policy)
-            if not ok:
-                audit(root,data,'deny','IDENTITY_READ',rel); return deny('IDENTITY_READ',msg)
+            # beforeReadFile is observation. Do not spawn git-identity here
+            # (duplicate same-repo anchors were six subprocesses / ~1.5s). Blocking
+            # identity is re-checked at beforeShellExecution / preToolUse / beforeMCPExecution.
             scopes=observation_scopes(policy)
             if scopes and not matches(rel,scopes):
                 audit(root,data,'deny','OUT_OF_OBSERVATION_SCOPE',rel); return deny('OUT_OF_OBSERVATION_SCOPE',f'read target outside accepted observation scope: {rel}')
@@ -1250,9 +1354,19 @@ def main():
     return out()
 
 if __name__=='__main__':
+    raw=b''
+    try:
+        raw=read_hook_stdin_eof()
+    except Exception as e:
+        _arm_watchdog()
+        try:
+            rc=deny('HOOK_INPUT_INVALID', f'cannot read Cursor hook stdin: {type(e).__name__}: {e}')
+        except Exception:
+            rc=0
+        raise SystemExit(0 if rc is None else rc)
     _arm_watchdog()
     try:
-        rc=main()
+        rc=main(raw)
     except BrokenPipeError:
         rc=deny('HOOK_INTERNAL_ERROR', 'BrokenPipeError while producing a decision')
     except Exception as e:
@@ -1260,12 +1374,12 @@ if __name__=='__main__':
             rc=deny('HOOK_INTERNAL_ERROR', f'{type(e).__name__}: {e}')
         except Exception:
             fallback=(
-                '{"permission":"deny","reason_code":"HOOK_EMIT_FAILURE",'
-                '"user_message":"HOOK_EMIT_FAILURE: unrecoverable guard crash",'
-                '"agent_message":"HOOK_EMIT_FAILURE: unrecoverable guard crash"}\n'
+                '{"permission":"deny","reason_code":"HOOK_EMIT_FAILURE","eif_guard_class":"crash",'
+                '"user_message":"EIF_GUARD_CRASH: HOOK_EMIT_FAILURE: unrecoverable guard crash",'
+                '"agent_message":"EIF_GUARD_CRASH: HOOK_EMIT_FAILURE: unrecoverable guard crash"}\n'
             ).encode('ascii')
             wrote=_write_stdout_bytes(fallback)
-            write_operator_log('HOOK_EMIT_FAILURE', f'{type(e).__name__}: {e}', extra={'stdout_wrote': wrote})
+            write_operator_log('HOOK_EMIT_FAILURE', f'{type(e).__name__}: {e}', extra={'stdout_wrote': wrote, 'eif_guard_class': 'crash'})
             rc=0 if wrote else 1
     try:
         raise SystemExit(0 if rc is None else rc)
