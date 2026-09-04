@@ -1,10 +1,10 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-09-04 (CIP guard repair; CONSULT keep_true on beforeReadFile failClosed)
+**Last updated:** 2026-09-04 (E stdin-hang VERIFIED, hook write blocked; F vitest 107 collected; G N-0006 STOP / BACKLOG-170)
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `b664b77` (guard repair; confirm with `git rev-parse` after any later commit)
+**Last content pin:** `e728508` (confirm with `git rev-parse` after any later commit)
 
 **Alembic (code):** `20260902_0020` (N-0006 FX enforcement)
 
@@ -12,21 +12,20 @@
 
 ## On feat/ns-2-brief-nav-collapse
 
-- **Programme:** PRG-20260831T145514 rev **294**; `verify` **ok**. N-0013 **complete** (node rev 105). Frontier: **N-0006** only.
+- **Programme:** PRG-20260831T145514 rev **294**; `verify` **ok**. N-0013 **complete** (node rev 105). Frontier: **N-0006** only — **not advanced** (BACKLOG-170).
 - **D-0008 accepted** (r3.1 capability-domain IA). **D-0002** remains **proposed**. **D-0009** remains **proposed**. Do not resolve either. Do not reopen N-0013.
-- **Guard repair (2026-09-04):** stdin read-to-EOF; skip git-identity on observation hooks; cache/dedupe same-repo `repository_anchors`; `eif_guard_class` crash vs policy (`EIF_GUARD_CRASH:` / `EIF_GUARD_POLICY:`). `hooks.json` restored. CONSULT (opus CLI): `FAILCLOSED_BEFORE_READ: keep_true` — fail-open would weaken SENSITIVE_READ / SECRET_IN_READ / FOREIGN_READ / OUT_OF_OBSERVATION_SCOPE on hook crash. `PROGRAMME_GIT_STAGE` is not a reason code in this tree. Proof denials: `ACTION_FORCE_VCS`, `SENSITIVE_READ`, `FOREIGN_READ`. BACKLOG-163/165 CIP slices done; EIF-repo remainder of 165 still parked.
-- **CONSULT provenance (GOV-008 addendum, 2026-09-04):** `consult_model_logged` is **VERIFIED** from Claude Code CLI session jsonl (`claude-opus-4-8`, `entrypoint=sdk-cli`, `promptSource=sdk`, Claude Code 2.1.202, `stop_reason=end_turn`): `ce2fbf92-…` (IA, 2026-09-02T16:49:43Z) and `46068c16-…` (commercial, 21:34:04Z) under `~/.claude/projects/C--Users-warren-eliason-channel-intelligence-platform/`. Verdicts unchanged. N-0013 not reopened. Seq 287 in `PROGRAM_LOG.ndjson` remains `UNVERIFIED` (append-only; no engine event for post-hoc caveat resolution — BACKLOG-169). Session logs live outside the repo and are not durable long-term.
-- **Implementation ACs I1–I5** remain design-lab capability work, not this shell slice.
+- **Guard (2026-09-04 E):** Observation path still cheap. Shell stdin-to-EOF **hangs if the pipe stays open**: watchdog arms after `os.read` EOF, so a hung read emits nothing (`prove_stdin.py` hung-open 12.048s, empty stdout, no `HOOK_TIMEOUT`). Closed-pipe allow **1.006s**; `ACTION_FORCE_VCS` deny **0.941s**; identity ≈ **0.57s** (not a 10s class). Live `program.py --help` ran. **Fix not landed:** `CONTROL_PLANE_PROTECTED` on `.cursor/hooks/eif_guard.py` (one deny, not retried). CONSULT keep_true on `beforeReadFile` failClosed. `PROGRAMME_GIT_STAGE` is not a reason code.
+- **Tests:** `@cip/web` guard-on **107 files collected**, 582 passed + 1 full-suite 5s timeout (`DsiCandidateStewardPanel` resolve-product); isolation 2/2 in 1.88s (BACKLOG-162). Prior 104/461 uncollected **not reproduced**. Guard-off suite not run (would require hooks.json control-plane write).
+- **Implementation ACs I1–I5** remain design-lab capability work, not this slice.
 - **Production D-0008 shell** shipped in `41a8c4b`.
-- **Tests:** `@cip/web` vitest last green **107 files / 583 passed** (re-run as guard-on proof in this session). `pnpm typecheck` still fails on **pre-existing** errors — not introduced by this slice.
 
 ## Programme frontier
 
-- **N-0006** — FX ledger hygiene.
-- Next product work: capability implementation slices (I1–I5) or N-0006. Do not opportunistically retouch design-lab fixtures.
+- **N-0006** — parked at BACKLOG-170 until Warren accepts a disclosed post-hoc `implementation_run` or an EIF-repo pre-existing-implementation event. Product already ships `fx_mode` / `fx_settle_allowed`.
+- Next product work: capability implementation slices (I1–I5), or operator grant to edit `.cursor/hooks/**` (BACKLOG-165 remaining).
 
 **Design language:** `docs/design/CIP_DESIGN_LANGUAGE.md` v1.1 is **under review**; do not treat as quality ceiling.
 
-**Deferred hygiene:** BACKLOG-156 … BACKLOG-162, 164; BACKLOG-165 EIF-repo remainder; BACKLOG-166 (CONSULT invocation record); BACKLOG-167 (seed/response transcription vs capture); BACKLOG-168 (AI resolver missing `ANTHROPIC_API_KEY` must fail loudly); BACKLOG-169 (engine cannot record post-hoc caveat resolution).
+**Deferred hygiene:** BACKLOG-156 … BACKLOG-162, 164; BACKLOG-165 CIP stdin hang remaining; BACKLOG-166–169; **BACKLOG-170** (N-0006 complete invariant).
 
 **Env:** local Windows. Web `:3000` + API `:8001`.
