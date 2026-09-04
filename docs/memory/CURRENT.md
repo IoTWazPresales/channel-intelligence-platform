@@ -4,7 +4,7 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `e728508` (confirm with `git rev-parse` after any later commit)
+**Last content pin:** `8e958f4` (confirm with `git rev-parse` after any later commit)
 
 **Alembic (code):** `20260902_0020` (N-0006 FX enforcement)
 
