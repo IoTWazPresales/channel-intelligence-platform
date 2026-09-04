@@ -4,7 +4,7 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `ac1fd87` (confirm with `git rev-parse` after the migration commit)
+**Last content pin:** `4fd05c4`
 
 **Alembic (code):** `20260902_0020` (N-0006 FX enforcement)
 
@@ -17,7 +17,7 @@
 - **Programme:** PRG-20260831T145514 rev **295**; `frontier` is **only N-0006**. Do not start N-0006. Do not reopen N-0013, D-0008, D-0009. D-0009 ledger (`.eif/`) may still be uncommitted — leave it.
 - **D-0009 accepted:** Actions fold into Attention; N-0010 is not a work container. **D-0002** remains the open decision.
 - **Tests:** `@cip/web` **111 / 589 passed** (was 107 / 583). API `test_cpor_cases_api.py` 9 passed with `ALLOW_TESTS_ON_DEV_DB=1` (mocked; no cip writes).
-- **Ops required:** API restart to pick up list aggregates (already running in this session).
+- **Ops required:** `pnpm dev:api-web` — local API/web were down after the restart job exited.
 
 **Programme frontier:** N-0006 only. Do not manufacture a path.
 

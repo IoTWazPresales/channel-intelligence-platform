@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-09-04 — **Promotions & Funding production migration** on `feat/ns-2-brief-nav-collapse` (hash after commit): lab experience on real `cpor_case` data; I1/I3/I4/I5 closed in funding; I2 is lab Market only. `@cip/web` 111/589. Programme ledger / N-0006 / D-0009 `.eif/` untouched.
+- 2026-09-04 — **Promotions & Funding production migration** on `feat/ns-2-brief-nav-collapse` `4fd05c4`: lab experience on real `cpor_case` data; I1/I3/I4/I5 closed in funding; I2 is lab Market only. `@cip/web` 111/589. Programme ledger / N-0006 / D-0009 `.eif/` untouched.
 
 - 2026-09-04 — **D-0009 accepted** on `feat/ns-2-brief-nav-collapse` `ac1fd87` (uncommitted ledger seq **295**): operator resolution via host `program.py` (`NS6_D0009_20260904`); Actions/ranked-commercial-actions fold into Attention; N-0010 does not survive as a work container. `verify` ok rev 295. BL-0001/BL-0002 uncleared; N-0010/N-0011 still blocked; ACs unpatched. Frontier still **only N-0006** (do not start; BACKLOG-170). D-0002 remains the open decision. Evidence `.eif/audit/NS6_D0009_20260904/`. No product implementation. EIF repo untouched.
 
