@@ -2331,7 +2331,24 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 | **Regression traps** | A repair that only lengthens timeout or turns all `failClosed` off has disabled the guard. Do not stage `.eif/runtime/**`. Do not mix ledger + views + product in one `git add`. |
 | **Behavior to retain** | Launcher always `exit /b 0`; policy denials still deny; `CONTROL_PLANE_PROTECTED` on hook source. |
 | **Out of scope** | Editing `C:\AI\engineering-intelligence-framework` from a CIP session. |
-| **TRIGGER** | EIF-repo session (BACKLOG-171 first). CIP stdin/watchdog is done; do not reopen unless `prove_stdin.py` hung-open fails to emit `HOOK_TIMEOUT`. |
+| **TRIGGER** | EIF-repo session (BACKLOG-171 first). CIP stdin/watchdog + transport-crash classification is done; do not reopen unless `prove_stdin.py` hung-open fails to emit `HOOK_TIMEOUT` or zero-byte/truncated cases return a policy code.
+
+---
+
+## BACKLOG-172 — Launcher must pass hook event name out of band before observation allow-on-crash is lawful
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-04 |
+| **Effort** | Small (hooks.json argv + split crash verdict) |
+| **Source** | CONSULT 2026-09-04 `.eif/audit/GUARD_STDIN_20260904/consult_observation_crash_opus_response.md` `OBSERVATION_TRANSPORT: deny_crash`. Operator question: deny vs allow on unparseable/path-less observation stdin. |
+| **Idea** | `allow_crash` on observation hooks is the better architecture **after** the launcher tells the guard its event name before stdin is read (argv / `hooks.json` command suffix). Until then, unparseable stdin cannot be scoped to observation and must `deny_crash`. `beforeReadFile` failClosed stays true. |
+| **Why it matters / deferrable** | Empty Cursor stdin still deny-blocks some live Reads (crash class, distinguishable). Fail-open would skip `SENSITIVE_READ` while Cursor still holds the real path. Deferrable: retry + crash classification landed; remaining empty-stdin rate is Cursor inbound, not mislabeled policy. |
+| **What the work is** | Pass event name into `eif_guard.cmd` / `.sh` from each `hooks.json` entry; on unparseable stdin, `deny_crash` for `beforeReadFile` / `beforeShellExecution` / write `preToolUse`, and only then consider `allow_crash` for true after/observation events. |
+| **Regression traps** | Do not set `beforeReadFile` `failClosed:false`. Do not fail-open all events. Do not return `IDENTITY_TOOL` / `FOREIGN_READ` / `SENSITIVE_READ` for unparseable stdin. Do not edit `C:\AI\engineering-intelligence-framework`. |
+| **Behavior to retain** | Crash vs policy labels; `CONTROL_PLANE_PROTECTED` on hook source; `prove_stdin.py` zero-byte + truncated mid-string = `HOOK_INPUT_INVALID` crash. |
+| **Out of scope** | Product source; D-0009; Promotions; programme N-0006. |
+| **TRIGGER** | Warren asks for observation fail-open, or empty-stdin still dominates live Read/Grep after this deny_crash retry lands. |
 
 ---
 

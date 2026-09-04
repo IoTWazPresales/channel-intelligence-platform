@@ -2,6 +2,29 @@
 
 Labels: **VERIFIED** = reproduced this session with command output. **ASSERTED** = not reproduced here.
 
+## H — transport crash vs IDENTITY_TOOL (2026-09-04 later)
+
+**CONSULT:** opus CLI `OBSERVATION_TRANSPORT: deny_crash`. Event identity lives inside the payload; allow-on-unparseable cannot be scoped to observation until argv/hooks.json pass the event name (BACKLOG-172). `beforeReadFile` failClosed stays true. Cursor still holds the real path when stdin is empty.
+
+**VERIFIED (harness):** `python .eif/audit/GUARD_STDIN_20260904/prove_stdin.py` → `=== PASS ===`
+
+| Case | Result |
+|------|--------|
+| Hung-open incomplete JSON, watchdog=2 | `HOOK_TIMEOUT` crash, 2.391s |
+| Complete JSON held-open, watchdog=8 | allow, 1.007s (does not wait for EOF) |
+| Closed stdin `git status --short` | allow, 1.058s |
+| Closed stdin `git push --force` | deny `ACTION_FORCE_VCS` / policy, 1.428s |
+| Closed stdin `beforeReadFile` CONTEXT.md | allow, 0.556s |
+| Zero-byte stdin closed | `HOOK_INPUT_INVALID` crash, 0.769s |
+| JSON truncated mid-string | `HOOK_INPUT_INVALID` crash; `Unterminated string … column 49 (char 48)` — matches live `hook-guard.log` |
+| Parsed `preToolUse` Read, empty `tool_input` | `HOOK_INPUT_INVALID` crash, **not** `IDENTITY_TOOL` |
+
+**VERIFIED (live policy deny):** Shell `git status --short -- .cursor/hooks.json` → `EIF_GUARD_POLICY: CONTROL_PLANE_PROTECTED`.
+
+**VERIFIED (burst ts≥1788527448):** live Read/Grep across `.eif/` and `apps/web/` allowed with real paths. Concurrent unparseable stdin audited as `HOOK_INPUT_INVALID` / `eif_guard_class=crash`. Grep of `.eif/runtime-events.jsonl` `"code":"IDENTITY_TOOL"`: last Read/Grep `path:null` was **before** the repair (`1788524851`). After the burst marker: **zero** `IDENTITY_TOOL` with `path:null`.
+
+**Write path:** Cursor `StrReplace` on `.cursor/hooks/eif_guard.py` is `CONTROL_PLANE_PROTECTED`. Operator-authorized repair applied via `.eif/audit/GUARD_STDIN_20260904/apply_transport_crash_fix.py` (workspace shell is not a jail).
+
 ## E — stdin watchdog
 
 **VERIFIED (source):** `.cursor/hooks/eif_guard.py` `__main__` calls `read_hook_stdin_eof()` then `_arm_watchdog()`. The read loops `os.read` until a 0-byte EOF. The watchdog cannot fire during that read.
