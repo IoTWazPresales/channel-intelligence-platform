@@ -76,8 +76,8 @@ export function DistributorCommercialTermsPanel({ distributorId, distributorCode
         Commercial terms
       </Typography>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-        This default feeds Commercial Planner economics. Plan-line overrides may still be applied later. Configure on
-        this page or bulk edit in Commercial Planner → Planner defaults.
+        This default feeds Plans & line economics. Plan-line overrides may still be applied later. Configure on
+        this page or bulk edit in Plans & line economics → Planner defaults.
       </Typography>
       {isLoading ? (
         <Typography variant="body2" color="text.secondary">

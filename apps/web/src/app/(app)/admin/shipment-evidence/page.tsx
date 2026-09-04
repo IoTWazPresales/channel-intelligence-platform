@@ -463,17 +463,17 @@ export default function ShipmentEvidenceAdminPage() {
     <Box sx={{ p: 2 }}>
       <PageHeader {...navPageChrome('/admin/shipment-evidence')} />
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
-        Canonical lines from shipment / open-order imports (report auto-detect). Upload via Data imports using
+        Canonical lines from shipment / open-order imports (report auto-detect). Upload via Import Center using
         template &quot;Shipment / order evidence&quot;.
       </Typography>
 
       <Stack spacing={2} sx={{ mt: 2 }}>
         <Alert severity="info">
           Use{' '}
-          <Link href="/admin/imports?template=inbound_shipments">Data imports → Shipment / order evidence</Link> to
+          <Link href="/admin/imports?template=inbound_shipments">Import Center → Shipment / order evidence</Link> to
           load CSV or XLSX. After the job reaches stage <strong>validated</strong>, resolve distributors below, then
-          click <strong>Apply import</strong> to mark the job <strong>loaded</strong>. Re-run the import from Data
-          imports to refresh evidence lines. Open{' '}
+          click <strong>Apply import</strong> to mark the job <strong>loaded</strong>. Re-run the import from Import
+          Center to refresh evidence lines. Open{' '}
           <Link href="/admin/shipment-evidence?importJobId=">this page with <code>?importJobId=&lt;id&gt;</code></Link> to
           pre-fill the job filter. Purchase orders observed in applied shipments roll up under{' '}
           <Link href="/admin/po-management">PO management</Link>, where you can reconcile them against confirmed

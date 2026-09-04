@@ -829,7 +829,7 @@ function AdminCustomersPageContent() {
     <>
       <PageHeader {...navPageChrome('/admin/customers')} />
       <Alert severity="info" sx={{ mb: 2 }}>
-        Customer account master is governed here. For bulk updates use Data & imports; use this table for operational
+        Customer account master is governed here. For bulk updates use Import Center; use this table for operational
         maintenance, filters, and classification edits.
       </Alert>
       {statusPatchWarning ? (

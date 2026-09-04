@@ -63,7 +63,7 @@ export function LineupReadStrip() {
         <Box component="span" sx={{ fontWeight: 600, color: alpha(theme.palette.text.primary, 0.96) }}>
           {pendingCount} item{pendingCount === 1 ? '' : 's'}
         </Box>{' '}
-        still pending approval before Stock can trust Fill vs plan.
+        still pending approval before Stock can trust Execution vs plan.
       </Typography>
     </Box>
   );

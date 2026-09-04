@@ -12,6 +12,7 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { apiDelete, apiDownloadBlob, apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
@@ -191,13 +192,13 @@ export default function PromotionsPage() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Promotions' }]} title="Promo calendar & readiness" />
+      <PageHeader {...navPageChrome('/promotions')} />
       <Paper sx={{ p: 2, mb: 2 }}>
         <PromoPlanBuilderPanel />
       </Paper>
       <Alert severity="info" sx={{ mb: 2 }}>
         Scaffold plans/readiness are parked (CPOR U6 / spec §7). Use{' '}
-        <strong>Commercial Planning → CPOR Cases</strong> (
+        <strong>Promotions & Funding → Case book</strong> (
         <Link component={NextLink} href="/commercial-planner/cpor-cases">
           /commercial-planner/cpor-cases
         </Link>
@@ -205,7 +206,7 @@ export default function PromotionsPage() {
         U4 XLSX export. Legacy export tab below remains for empty scaffold only.
       </Alert>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
-        <strong>Plans</strong> and <strong>Readiness</strong> APIs return empty (parked). Prefer CPOR Cases for
+        <strong>Plans</strong> and <strong>Readiness</strong> APIs return empty (parked). Prefer Case book for
         case builder, lifecycle, and settlement.
       </Typography>
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
@@ -229,9 +230,9 @@ export default function PromotionsPage() {
             isEmpty={planRows.length === 0}
             empty={{
               title: 'No promotion plan lines',
-              description: 'Plan lines come from fact_promotion_plan. Use Data imports or internal writes to load promo data.',
-              primary: { label: 'Data imports', href: '/admin/imports' },
-              secondary: { label: 'Getting started', href: '/getting-started' },
+              description: 'Plan lines come from fact_promotion_plan. Use Import Center or internal writes to load promo data.',
+              primary: { label: 'Import Center', href: '/admin/imports' },
+              secondary: { label: 'Case book', href: '/commercial-planner/cpor-cases' },
             }}
             toolbar={
               <ModuleGridToolbar
@@ -259,7 +260,7 @@ export default function PromotionsPage() {
               title: 'No readiness recommendations',
               description: 'These rows are generated when promos and inventory signals exist in the database.',
               primary: { label: 'Plans tab', href: '/promotions' },
-              secondary: { label: 'Inventory', href: '/inventory' },
+              secondary: { label: 'Cover', href: '/stock?lens=cover' },
             }}
             toolbar={
               <ModuleGridToolbar
@@ -281,7 +282,7 @@ export default function PromotionsPage() {
             title="No promotion to export"
             description="CPOR export needs a promotion id. Load the Plans tab so the app can default to the first promotion, or type an id after plans exist."
             primary={{ label: 'Open Plans tab', href: '/promotions' }}
-            secondary={{ label: 'Getting started', href: '/getting-started' }}
+            secondary={{ label: 'Case book', href: '/commercial-planner/cpor-cases' }}
           />
         ) : (
           <Stack spacing={2}>
@@ -348,7 +349,7 @@ export default function PromotionsPage() {
               empty={{
                 title: 'No exports for this promotion yet',
                 description: 'Click Create export after Validate passes. Exports require at least one plan line for the promotion.',
-                secondary: { label: 'Getting started', href: '/getting-started' },
+                secondary: { label: 'Case book', href: '/commercial-planner/cpor-cases' },
               }}
               toolbar={
                 <ModuleGridToolbar
@@ -447,7 +448,7 @@ export default function PromotionsPage() {
                   empty={{
                     title: 'No events for this export',
                     description: 'If the export was just created, refresh or re-open the row; events should appear after actions.',
-                    secondary: { label: 'Getting started', href: '/getting-started' },
+                    secondary: { label: 'Case book', href: '/commercial-planner/cpor-cases' },
                   }}
                   toolbar={
                     <ModuleGridToolbar

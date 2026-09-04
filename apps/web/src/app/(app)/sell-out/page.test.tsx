@@ -53,7 +53,7 @@ describe('ChannelOperationsPage', () => {
   it('renders without crash on empty API responses', async () => {
     renderPage();
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Channel Operations' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Movement' })).toBeInTheDocument();
     });
     expect(screen.getByText('Overview')).toBeInTheDocument();
     expect(screen.getByText('Sell-out')).toBeInTheDocument();

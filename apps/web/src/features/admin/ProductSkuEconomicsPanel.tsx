@@ -152,9 +152,9 @@ export function ProductSkuEconomicsPanel({ productId, productSku }: Props) {
         SKU economics inputs
       </Typography>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-        These SKU-level inputs feed Commercial Planner economics. They are <strong>not</strong> populated from DAP.
+        These SKU-level inputs feed Plans & line economics. They are <strong>not</strong> populated from DAP.
         Bulk edit all products in{' '}
-        <Link href="/commercial-planner">Commercial planner</Link> → Planner defaults. True landed cost (logistics) is
+        <Link href="/commercial-planner">Plans & line economics</Link> → Planner defaults. True landed cost (logistics) is
         handled separately later.
       </Typography>
       {isLoading ? (
@@ -204,8 +204,8 @@ export function ProductSkuEconomicsPanel({ productId, productSku }: Props) {
               Product: {productSku} (id {productId})
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              <strong>Controlled cost / PM bottom</strong> is the internal SKU cost basis used by Commercial Planner
-              economics. It is <strong>not</strong> populated from DAP or lineup evidence. It does{' '}
+              <strong>Controlled cost / PM bottom</strong> is the internal SKU cost basis used by Plans & line economics.
+              It is <strong>not</strong> populated from DAP or lineup evidence. It does{' '}
               <strong>not</strong> include logistics unless a future logistics model explicitly adds it.
             </Typography>
             <TextField

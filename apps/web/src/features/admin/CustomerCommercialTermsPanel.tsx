@@ -88,7 +88,7 @@ export function CustomerCommercialTermsPanel({ customerId, customerCode }: Props
         Commercial terms
       </Typography>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-        These defaults feed Commercial Planner and CPOR funding. Plan-line overrides may still apply. Bulk steward grid:{' '}
+        These defaults feed plan-line economics and promotion cases. Plan-line overrides may still apply. Bulk steward grid:{' '}
         <MuiLink component={NextLink} href="/admin/customer-commercial-terms" underline="hover">
           Customer commercial terms
         </MuiLink>

@@ -19,20 +19,25 @@ import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined';
 import NextLink from 'next/link';
 
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 
 const steps = ['Sign in', 'Bring data in', 'Map & steward', 'Use planning views'];
 
+/** Legacy /getting-started route — middleware redirects to /brief; thin fallback if middleware is bypassed. */
 export default function GettingStartedPage() {
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Getting started' }]} title="Getting started" />
+      <PageHeader {...navPageChrome('/brief', { extraCrumbs: [{ label: 'Onboarding' }] })} />
       <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 720 }}>
         Sign in with your CIP account (session auth). Admins create users under{' '}
         <Link component={NextLink} href="/admin/users" fontWeight={600}>
-          Admin → Users
+          Administration → Users & roles
         </Link>
-        . Nav is role-gated (admin / steward / planner / viewer). After login you land on the Control tower with a data
-        freshness banner.
+        . Nav is role-gated (admin / steward / planner / viewer). After login you land on{' '}
+        <Link component={NextLink} href="/brief" fontWeight={600}>
+          Attention
+        </Link>
+        .
       </Typography>
       <Paper sx={{ p: 3, mb: 3 }}>
         <Stepper activeStep={0} alternativeLabel sx={{ mb: 2 }}>
@@ -62,7 +67,7 @@ export default function GettingStartedPage() {
                 <Box component="span" sx={{ display: 'block', mt: 0.5 }}>
                   Go to{' '}
                   <Link component={NextLink} href="/admin/imports" fontWeight={600}>
-                    Admin → Import Center
+                    Data & Stewardship → Import Center
                   </Link>
                   . Pick a <strong>source</strong> (defines expected columns), then use <strong>Choose file</strong> or
                   drag a CSV/XLSX into the drop zone. The API stores the file, infers columns, applies the source
@@ -82,7 +87,7 @@ export default function GettingStartedPage() {
                 <Box component="span" sx={{ display: 'block', mt: 0.5 }}>
                   Open the import job steward panel (DSI / shipment / CST) or{' '}
                   <Link component={NextLink} href="/admin/mappings" fontWeight={600}>
-                    Admin → Mapping queue
+                    Data & Stewardship → Steward queue
                   </Link>{' '}
                   to approve or correct entity links. Steward decisions are audited under{' '}
                   <Link component={NextLink} href="/admin/steward-audit" fontWeight={600}>
@@ -99,28 +104,28 @@ export default function GettingStartedPage() {
               <TableChartOutlinedIcon color="primary" />
             </ListItemIcon>
             <ListItemText
-              primary="3. Explore planning modules"
+              primary="3. Explore capability domains"
               secondary={
                 <Box component="span" sx={{ display: 'block', mt: 0.5 }}>
-                  From the Control tower shortcuts, open{' '}
+                  From Attention, open{' '}
                   <Link component={NextLink} href="/commercial-planner/cpor-cases" fontWeight={600}>
-                    CPOR Cases
+                    Case book
                   </Link>
                   ,{' '}
-                  <Link component={NextLink} href="/sell-out" fontWeight={600}>
-                    Channel Operations
+                  <Link component={NextLink} href="/stock?lens=movement" fontWeight={600}>
+                    Movement
                   </Link>
                   ,{' '}
-                  <Link component={NextLink} href="/shipping" fontWeight={600}>
-                    Inbound shipments
+                  <Link component={NextLink} href="/stock?lens=inbound" fontWeight={600}>
+                    Shipments
                   </Link>
                   ,{' '}
                   <Link component={NextLink} href="/forecasts" fontWeight={600}>
-                    Forecasting
+                    Forecasts
                   </Link>
                   , or{' '}
                   <Link component={NextLink} href="/lineup" fontWeight={600}>
-                    Line-up planning
+                    Lineup cases
                   </Link>
                   .
                 </Box>

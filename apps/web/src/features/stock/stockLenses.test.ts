@@ -14,8 +14,8 @@ describe('stockLenses', () => {
   });
 
   it('returns buyer-facing labels', () => {
-    expect(stockLensLabel('execution')).toBe('Fill vs plan');
-    expect(stockLensLabel('movement')).toBe('Sell-out');
+    expect(stockLensLabel('execution')).toBe('Execution vs plan');
+    expect(stockLensLabel('movement')).toBe('Movement');
   });
 
   it('buckets weeks of cover', () => {

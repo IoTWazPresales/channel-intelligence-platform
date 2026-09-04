@@ -110,7 +110,7 @@ export default function LoginPage() {
             {busy ? 'Signing in…' : 'Sign in'}
           </Button>
           <Typography variant="body2" color="text.secondary" data-testid="login-forgot-password">
-            Forgot password? Ask an admin to use <strong>Reset password</strong> on Admin → Users.
+            Forgot password? Ask an admin to use <strong>Reset password</strong> on Administration → Users & roles.
           </Typography>
           <Typography variant="caption" color="text.secondary">
             Dev seed (after IAM migration): admin@local / changeme · API {apiUrl('/api/v1/auth/me')}

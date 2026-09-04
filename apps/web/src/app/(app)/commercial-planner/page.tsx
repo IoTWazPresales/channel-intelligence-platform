@@ -2193,8 +2193,8 @@ export default function CommercialPlannerPage() {
                   before economics can calculate.
                 </Typography>
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
-                  Add SKU controlled cost assumptions in Planner defaults. These assumptions feed Commercial Planner
-                  economics and are not populated from DAP.
+                  Add SKU controlled cost assumptions in Planner defaults. These assumptions feed Plans & line economics
+                  and are not populated from DAP.
                 </Typography>
                 <Button size="small" variant="outlined" onClick={() => setTab(1)} data-testid="readiness-open-planner-defaults-sku">
                   Open Planner defaults (SKU assumptions)
@@ -3488,10 +3488,10 @@ export default function CommercialPlannerPage() {
                   changing defaults, click <strong>Recalculate</strong> so stored line calcs match.
                 </li>
                 <li>
-                  <strong>Plan vs Executed</strong> — Read-only intelligence on whether the channel shipped what
+                  <strong>Execution vs plan</strong> — Read-only intelligence on whether the channel shipped what
                   lineups planned: fill rate, exceptions, and trends.{' '}
-                  <Link href="/plan-vs-executed">Open Plan vs Executed</Link> (operational PO linking stays in PO
-                  Management).
+                  <Link href="/stock?lens=execution">Open Execution vs plan</Link> (operational PO linking stays in PO
+                  coverage).
                 </li>
                 <li>
                   <strong>Assisted suggestions</strong> — Optional hints from history and forecasts. <strong>Apply</strong> writes the

@@ -214,9 +214,9 @@ export default function PricingPage() {
             isEmpty={factRows.length === 0}
             empty={{
               title: 'No price facts',
-              description: 'Use Add row or Paste upload to create price facts, or load data through Data & imports.',
-              primary: { label: 'Data & imports', href: '/admin/imports' },
-              secondary: { label: 'Getting started', href: '/getting-started' },
+              description: 'Use Add row or Paste upload to create price facts, or load data through Import Center.',
+              primary: { label: 'Import Center', href: '/admin/imports' },
+              secondary: { label: 'Attention', href: '/brief' },
             }}
             toolbar={
               <ModuleGridToolbar
@@ -245,8 +245,8 @@ export default function PricingPage() {
             empty={{
               title: 'No pricing recommendations',
               description: 'Populate upstream facts (inventory, pricing, competition) and refresh.',
-              primary: { label: 'Inventory', href: '/inventory' },
-              secondary: { label: 'Getting started', href: '/getting-started' },
+              primary: { label: 'Cover', href: '/stock?lens=cover' },
+              secondary: { label: 'Attention', href: '/brief' },
             }}
             toolbar={
               <ModuleGridToolbar

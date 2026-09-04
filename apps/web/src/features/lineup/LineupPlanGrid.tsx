@@ -181,7 +181,7 @@ export function LineupPlanGrid({ rows, pendingOnly }: Props) {
     <Box data-testid="lineup-plan-grid" sx={{ flex: 1, minHeight: 320 }}>
       {pendingOnly ? (
         <Typography data-testid="lineup-pending-directive" sx={{ fontSize: '12px', color: alpha(theme.palette.text.primary, 0.75), px: 2.75, py: 1 }}>
-          {filtered.length} lineup item{filtered.length === 1 ? '' : 's'} await approval — Approve or Reject each row before Stock can trust Fill vs plan.
+          {filtered.length} lineup item{filtered.length === 1 ? '' : 's'} await approval — Approve or Reject each row before Stock can trust Execution vs plan.
         </Typography>
       ) : null}
       {patchMsg ? (

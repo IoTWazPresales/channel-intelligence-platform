@@ -78,7 +78,7 @@ export function ModuleGridToolbar({
       ) : null}
       {importsHref ? (
         <Button component={NextLink} href={importsHref} size="small" variant="outlined">
-          Data imports
+          Import Center
         </Button>
       ) : null}
     </Stack>

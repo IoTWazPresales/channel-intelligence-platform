@@ -327,7 +327,7 @@ export function PromoPlanBuilderPanel() {
           {createFromDraft.isPending ? 'Creating…' : 'Create draft CPOR case'}
         </Button>
         <Button size="small" href="/commercial-planner/cpor-cases">
-          Open CPOR Cases
+          Open Case book
         </Button>
       </Stack>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }} flexWrap="wrap" useFlexGap>

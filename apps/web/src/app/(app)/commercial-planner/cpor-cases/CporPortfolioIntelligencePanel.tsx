@@ -212,7 +212,7 @@ function CporSupportBiasSection() {
           </Typography>
           {missingLines ? (
             <Alert severity="info" data-testid="cpor-support-bias-missing-sku">
-              Missing SKU assumptions on {data?.missing_sku_lines ?? 0} lines. Seed via Commercial Planner
+              Missing SKU assumptions on {data?.missing_sku_lines ?? 0} lines. Seed via Plans & line economics
               SKU economics or product admin — never silent zero.
             </Alert>
           ) : null}

@@ -314,7 +314,7 @@ describe('CommercialPlannerPage', () => {
 
   it('loads planner workspace and summary', async () => {
     renderPage();
-    expect(await screen.findByText('Commercial Planner')).toBeInTheDocument();
+    expect(await screen.findByText('Plans & line economics')).toBeInTheDocument();
     const summaryPanel = await screen.findByTestId('plan-summary-panel');
     await waitFor(() => {
       expect(summaryPanel).not.toHaveTextContent('Loading plan…');
@@ -335,7 +335,7 @@ describe('CommercialPlannerPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /How this workspace fits together/i }));
     expect(guide).toHaveTextContent('open the builder');
     expect(guide).toHaveTextContent('Planner defaults');
-    expect(guide).toHaveTextContent('Plan vs Executed');
+    expect(guide).toHaveTextContent('Execution vs plan');
   });
 
   it('renders plan selector chips and action buttons in the compact plan controls', async () => {

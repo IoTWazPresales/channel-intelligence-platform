@@ -10,6 +10,7 @@ import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
@@ -54,14 +55,14 @@ export default function RoadmapPage() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Roadmap' }]} title="Portfolio roadmap" />
+      <PageHeader {...navPageChrome('/roadmap')} />
       <Paper sx={{ p: 2 }}>
         <ModuleDataSection
           intro={
             <>
               Portfolio roadmap rows describe lifecycle, launch targets, and whitespace/overlap flags per SKU. For{' '}
-              <strong>customer/channel line-up</strong> (assortment and volumes), use{' '}
-              <strong>Line-up planning</strong> in the nav—that is a separate module.
+              <strong>customer/channel lineup</strong> (assortment and volumes), use{' '}
+              <strong>Lineup cases</strong> in the nav—that is a separate module.
             </>
           }
           isLoading={isLoading}
@@ -72,8 +73,8 @@ export default function RoadmapPage() {
           empty={{
             title: 'No roadmap rows',
             description: 'Roadmap facts load when product strategy data is available through your ingestion pipelines.',
-            primary: { label: 'Data imports', href: '/admin/imports' },
-            secondary: { label: 'Line-up planning', href: '/lineup' },
+            primary: { label: 'Import Center', href: '/admin/imports' },
+            secondary: { label: 'Lineup cases', href: '/lineup' },
           }}
           toolbar={
             <ModuleGridToolbar

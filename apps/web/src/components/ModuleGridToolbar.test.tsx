@@ -19,8 +19,8 @@ describe('ModuleGridToolbar', () => {
     expect(onClearAll).toHaveBeenCalledTimes(1);
   });
 
-  it('renders Data imports link when importsHref is set', () => {
+  it('renders Import Center link when importsHref is set', () => {
     const { getByRole } = renderWithProviders(<ModuleGridToolbar importsHref="/admin/imports" />);
-    expect(getByRole('link', { name: 'Data imports' })).toHaveAttribute('href', '/admin/imports');
+    expect(getByRole('link', { name: 'Import Center' })).toHaveAttribute('href', '/admin/imports');
   });
 });

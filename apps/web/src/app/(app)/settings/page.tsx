@@ -22,6 +22,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { SemanticCatalogOverlayPanel } from '@/features/settings/SemanticCatalogOverlayPanel';
 import { ShippingDigestRecipientsPanel } from '@/features/shipping-mailer';
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
@@ -173,7 +174,7 @@ export default function SettingsPage() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Settings' }]} title="Settings" />
+      <PageHeader {...navPageChrome('/settings')} />
       <Alert severity="info" sx={{ mb: 2 }}>
         Authentication and per-user preferences are not fully wired yet. Density is saved in the browser; API
         location is build-time for the web bundle.

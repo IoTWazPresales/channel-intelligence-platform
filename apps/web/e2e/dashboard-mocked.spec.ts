@@ -32,9 +32,9 @@ test.describe('Dashboard (mocked API)', () => {
     });
   });
 
-  test('loads control tower after summary resolves', async ({ page }) => {
+  test('retired dashboard URL lands on Attention', async ({ page }) => {
     await page.goto('/dashboard');
-    await expect(page.getByRole('heading', { name: 'Control tower' })).toBeVisible();
-    await expect(page.getByText('Open exceptions')).toBeVisible();
+    await expect(page).toHaveURL(/\/brief/);
+    await expect(page.getByText(/what needs action now/i)).toBeVisible();
   });
 });

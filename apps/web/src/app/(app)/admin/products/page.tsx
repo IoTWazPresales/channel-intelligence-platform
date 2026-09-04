@@ -747,9 +747,8 @@ function AdminProductsPageContent() {
         }
         empty={{
           title: 'No products yet',
-          description: 'Upload a CSV paste or use Data imports when a product source is registered.',
-          primary: { label: 'Getting started', href: '/getting-started' },
-          secondary: { label: 'Data & imports', href: '/admin/imports' },
+          description: 'Upload a CSV paste or use Import Center when a product source is registered.',
+          primary: { label: 'Import Center', href: '/admin/imports' },
         }}
         url={{
           page,

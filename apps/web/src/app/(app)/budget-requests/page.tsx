@@ -73,8 +73,8 @@ export default function BudgetRequestsPage() {
           isEmpty={rows.length === 0}
           empty={{
             title: 'No budget requests',
-            description: 'Submit flows are not fully built in the UI yet; use Data imports when a pipeline exists.',
-            primary: { label: 'Data imports', href: '/admin/imports' },
+            description: 'Submit flows are not fully built in the UI yet; use Import Center when a pipeline exists.',
+            primary: { label: 'Import Center', href: '/admin/imports' },
             secondary: { label: 'Budgets', href: '/budgets' },
           }}
           toolbar={

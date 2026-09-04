@@ -203,17 +203,17 @@ describe('PoManagementView', () => {
     expect(pushMock).toHaveBeenCalledWith(expect.stringContaining('period=26Q1'));
   });
 
-  it('renders Plan vs Executed button for linked groups instead of reconciliation dump', async () => {
+  it('renders Execution vs plan button for linked groups instead of reconciliation dump', async () => {
     wireApi({ firstRun: false });
     renderView();
 
     const status = await screen.findByTestId('po-linked-status-2026-1-Audio');
     expect(status).toHaveTextContent('Linked 2/3 POs');
     const pveBtn = screen.getByTestId('po-pve-link-2026-1-Audio');
-    expect(pveBtn).toHaveTextContent('Plan vs Executed outcomes');
+    expect(pveBtn).toHaveTextContent('Execution vs plan outcomes');
     expect(pveBtn).toHaveAttribute(
       'href',
-      '/plan-vs-executed?period_from=26Q1&period_to=26Q1&product_line=Audio',
+      '/stock?lens=execution&period_from=26Q1&period_to=26Q1&product_line=Audio',
     );
     expect(screen.queryByText('2 matched')).not.toBeInTheDocument();
     expect(screen.queryByText('1 short')).not.toBeInTheDocument();

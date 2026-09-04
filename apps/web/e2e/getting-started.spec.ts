@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test.describe('Getting started', () => {
+test.describe('Getting started (retired URL)', () => {
   test.beforeEach(async ({ page }) => {
     await page.route('**/api/v1/auth/me', async (route) => {
       await route.fulfill({
@@ -17,10 +17,9 @@ test.describe('Getting started', () => {
     });
   });
 
-  test('shows onboarding copy', async ({ page }) => {
+  test('retired getting-started URL lands on Attention', async ({ page }) => {
     await page.goto('/getting-started');
-    await expect(page.getByRole('heading', { name: 'Getting started' })).toBeVisible();
-    await expect(page.getByText(/session auth/i)).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Admin → Import Center' })).toBeVisible();
+    await expect(page).toHaveURL(/\/brief/);
+    await expect(page.getByText(/what needs action now/i)).toBeVisible();
   });
 });

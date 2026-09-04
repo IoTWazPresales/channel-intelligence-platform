@@ -6,6 +6,7 @@ import NextLink from 'next/link';
 
 import { KpiCard } from '@/components/KpiCard';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { apiGet } from '@/lib/api';
 import { isCommercialPlannerEnabled } from '@/features/shell/navConfig';
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
@@ -64,7 +65,7 @@ export default function DashboardPage() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Overview' }]} title="Control tower" />
+      <PageHeader {...navPageChrome('/brief', { title: 'Overview (legacy)' })} />
       {isLoading ? (
         <Typography color="text.secondary">Loading…</Typography>
       ) : (
@@ -109,20 +110,20 @@ export default function DashboardPage() {
           ) : null}
 
           <Alert severity="info" sx={{ mb: 2 }}>
-            New here? Start with{' '}
-            <Link component={NextLink} href="/getting-started" fontWeight={600}>
-              Getting started
+            New here? Start at{' '}
+            <Link component={NextLink} href="/brief" fontWeight={600}>
+              Attention
             </Link>{' '}
-            (upload → map → modules), then use <strong>Data & imports</strong> under Admin.
+            (upload → map → modules), then use <strong>Import Center</strong> under Data & Stewardship.
           </Alert>
 
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mb: 2 }} useFlexGap flexWrap="wrap">
-            <Chip component={NextLink} href="/commercial-planner/cpor-cases" label="CPOR Cases" clickable />
-            <Chip component={NextLink} href="/sell-out" label="Channel Operations" clickable />
-            <Chip component={NextLink} href="/shipping" label="Inbound shipments" clickable />
+            <Chip component={NextLink} href="/commercial-planner/cpor-cases" label="Case book" clickable />
+            <Chip component={NextLink} href="/stock?lens=movement" label="Movement" clickable />
+            <Chip component={NextLink} href="/stock?lens=inbound" label="Shipments" clickable />
             <Chip component={NextLink} href="/admin/imports" label="Import Center" clickable />
-            <Chip component={NextLink} href="/admin/ops" label="Ops / monitoring" clickable />
-            <Chip component={NextLink} href="/getting-started" label="Getting started" clickable />
+            <Chip component={NextLink} href="/admin/ops" label="Operations" clickable />
+            <Chip component={NextLink} href="/brief" label="Attention" clickable />
             <Chip component={NextLink} href="/admin/steward-audit" label="Steward audit" clickable />
           </Stack>
 
@@ -159,7 +160,7 @@ export default function DashboardPage() {
                 <KpiCard
                   label="Commercial plans not ready"
                   value={data.kpis.commercial_planner.plans_not_ready}
-                  hint={`${data.kpis.commercial_planner.plan_count} plan(s) scanned — open Commercial planner`}
+                  hint={`${data.kpis.commercial_planner.plan_count} plan(s) scanned — open Plans & line economics`}
                 />
               </Box>
             ) : null}

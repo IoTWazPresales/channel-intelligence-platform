@@ -23,6 +23,7 @@ import { FormEvent, useState } from 'react';
 import type { UserRole } from '@cip/types';
 
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
 
@@ -96,7 +97,7 @@ export default function AdminUsersPage() {
   if (mePending && !me && !meError) {
     return (
       <>
-        <PageHeader crumbs={[{ label: 'Admin' }, { label: 'Users' }]} title="Users" />
+        <PageHeader {...navPageChrome('/admin/users')} />
         <Typography color="text.secondary" data-testid="users-auth-loading">
           Checking access…
         </Typography>
@@ -107,7 +108,7 @@ export default function AdminUsersPage() {
   if (meError || !isAdmin) {
     return (
       <>
-        <PageHeader crumbs={[{ label: 'Admin' }, { label: 'Users' }]} title="Users" />
+        <PageHeader {...navPageChrome('/admin/users')} />
         <Alert severity="warning" data-testid="users-forbidden">
           Admin role required to manage users.
         </Alert>
@@ -117,7 +118,7 @@ export default function AdminUsersPage() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Admin' }, { label: 'Users' }]} title="Users" />
+      <PageHeader {...navPageChrome('/admin/users')} />
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Add accounts for this tenant. Roles: admin, steward, planner, viewer.
       </Typography>

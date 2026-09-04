@@ -7,17 +7,6 @@ export type NavPageChrome = {
   title: string;
 };
 
-/**
- * Group crumb links to a real hub page when the group has one.
- * Master Data and Admin have no hub — group crumb stays a label.
- */
-const GROUP_HOME_HREF: Record<string, string> = {
-  overview: '/brief',
-  'channel-intelligence': '/stock',
-  'commercial-planning': '/commercial-planner',
-  'data-imports': '/admin/imports',
-};
-
 function normalizeSearch(search: string | undefined): string {
   if (!search) return '';
   return search.startsWith('?') ? search : `?${search}`;
@@ -67,6 +56,29 @@ export function matchNavLeaf(pathname: string, search = ''): { group: NavGroup; 
   return best ? { group: best.group, item: best.item } : null;
 }
 
+/**
+ * Domain that owns the current location. Exact leaf match first (query-aware); otherwise the
+ * domain whose home path or a leaf path is the longest prefix of the pathname (e.g. bare `/stock`
+ * with no lens, nested case routes). Null when nothing in the IA owns the route.
+ */
+export function activeNavGroup(pathname: string, search = ''): NavGroup | null {
+  const exact = matchNavLeaf(pathname, search);
+  if (exact) return exact.group;
+  let best: { group: NavGroup; len: number } | null = null;
+  const consider = (group: NavGroup, href: string | undefined) => {
+    if (!href) return;
+    const path = hrefPath(href);
+    if (pathname === path || (path !== '/' && pathname.startsWith(`${path}/`))) {
+      if (!best || path.length > best.len) best = { group, len: path.length };
+    }
+  };
+  for (const group of navGroups) {
+    consider(group, group.href);
+    for (const item of group.items) consider(group, item.href);
+  }
+  return best ? (best as { group: NavGroup }).group : null;
+}
+
 export function navPageChrome(
   pathname: string,
   opts?: {
@@ -85,7 +97,7 @@ export function navPageChrome(
   }
 
   const itemPath = hrefPath(match.item.href);
-  const groupHome = GROUP_HOME_HREF[match.group.id];
+  const groupHome = match.group.href;
   const currentIsGroupHome = Boolean(groupHome && match.item.href === groupHome && extra.length === 0);
 
   const groupCrumb: PageCrumb = { label: match.group.label };

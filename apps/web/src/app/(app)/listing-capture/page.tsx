@@ -15,7 +15,8 @@ import {
 } from '@mui/material';
 import type { ColDef } from 'ag-grid-community';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useRef, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { PageHeader } from '@/components/PageHeader';
@@ -76,9 +77,28 @@ type Observation = {
   cpor_case_price: number | null;
 };
 
+/** URL tab keys — Market & Listings leaves deep-link here (navConfig). Order = Tabs index. */
+const LISTING_CAPTURE_TABS = ['registry', 'proposals', 'observations', 'intelligence'] as const;
+
+function parseListingCaptureTab(raw: string | null | undefined): number {
+  const idx = LISTING_CAPTURE_TABS.indexOf((raw ?? '').toLowerCase() as (typeof LISTING_CAPTURE_TABS)[number]);
+  return idx < 0 ? 0 : idx;
+}
+
 export default function ListingCapturePage() {
   const qc = useQueryClient();
-  const [tab, setTab] = useState(0);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const tab = parseListingCaptureTab(searchParams.get('tab'));
+  const setTab = useCallback(
+    (next: number) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('tab', LISTING_CAPTURE_TABS[next] ?? LISTING_CAPTURE_TABS[0]);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
   const [open, setOpen] = useState(false);
   const [customerId, setCustomerId] = useState('1');
   const [url, setUrl] = useState('');
@@ -296,7 +316,7 @@ export default function ListingCapturePage() {
   return (
     <>
       <PageHeader
-        {...navPageChrome('/listing-capture')}
+        {...navPageChrome('/listing-capture', { search: `?tab=${LISTING_CAPTURE_TABS[tab]}` })}
         actions={
           <Stack direction="row" spacing={1}>
             <Button size="small" variant="outlined" onClick={() => refetch()}>

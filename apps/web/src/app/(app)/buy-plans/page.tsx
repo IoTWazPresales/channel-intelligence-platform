@@ -10,6 +10,7 @@ import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { apiDelete, apiGet, apiPost, HttpConflictError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 import { useUiStore } from '@/stores/uiStore';
@@ -103,7 +104,7 @@ export default function BuyPlansPage() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Buy plans' }]} title="Procurement recommendations" />
+      <PageHeader {...navPageChrome('/lineup')} />
       {(delRow.isError || clearAll.isError) && (
         <Alert
           severity="warning"
@@ -153,8 +154,8 @@ export default function BuyPlansPage() {
           empty={{
             title: 'No buy plans yet',
             description:
-              'The planning engine writes recommendations when underlying facts exist. Add inventory and forecast rows (or use Data imports), then refresh.',
-            primary: { label: 'Inventory', href: '/inventory' },
+              'The planning engine writes recommendations when underlying facts exist. Add inventory and forecast rows (or use Import Center), then refresh.',
+            primary: { label: 'Cover', href: '/stock?lens=cover' },
             secondary: { label: 'Forecast', href: '/forecasts' },
           }}
           toolbar={

@@ -12,6 +12,7 @@ import { DSI_STEWARD_CONFIG, invalidateDsiImportJobStewardQueries } from '@/app/
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { apiDelete, apiGet, apiPost, apiUrl, authHeaders } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
@@ -193,9 +194,9 @@ function AdminMappingsPageContent() {
     return {
       title: 'Mapping queue is empty',
       description:
-        'Nothing is waiting in the legacy EntityMappingQueue. For distributor sales & inventory, after validation use the Mapping queue link from Data & Imports — it includes import_job_id so grouped DSI candidates appear here.',
-      primary: { label: 'Data & imports', href: '/admin/imports' },
-      secondary: { label: 'Getting started', href: '/getting-started' },
+        'Nothing is waiting in the legacy EntityMappingQueue. For distributor sales & inventory, after validation use the Steward queue link from Import Center — it includes import_job_id so grouped DSI candidates appear here.',
+      primary: { label: 'Import Center', href: '/admin/imports' },
+      secondary: { label: 'Attention', href: '/brief' },
     } as const;
   }, [importJobId, dsiFetched, legacyEmpty, dsiRows.length, dsiIsError]);
 
@@ -208,7 +209,7 @@ function AdminMappingsPageContent() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Admin' }, { label: 'Mappings' }]} title="Manual mapping queue" />
+      <PageHeader {...navPageChrome('/admin/mappings')} />
       <Paper sx={{ p: 2 }}>
         {invalidJobIdParam ? (
           <Alert severity="warning" sx={{ mb: 2 }}>

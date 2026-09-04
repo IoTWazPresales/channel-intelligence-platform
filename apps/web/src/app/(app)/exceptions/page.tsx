@@ -9,6 +9,7 @@ import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 import { useUiStore } from '@/stores/uiStore';
@@ -66,7 +67,7 @@ export default function ExceptionsPage() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Exceptions' }]} title="Exceptions inbox" />
+      <PageHeader {...navPageChrome('/brief')} />
       <Paper sx={{ p: 2 }}>
         <ModuleDataSection
           intro={
@@ -85,8 +86,8 @@ export default function ExceptionsPage() {
             title: 'No open exceptions',
             description:
               'Nothing is flagged yet, or the database has no derived exception rows. Load upstream facts (inventory, inbound, mappings) and refresh.',
-            primary: { label: 'Data imports', href: '/admin/imports' },
-            secondary: { label: 'Overview', href: '/dashboard' },
+            primary: { label: 'Import Center', href: '/admin/imports' },
+            secondary: { label: 'Attention', href: '/brief' },
           }}
           toolbar={
             <ModuleGridToolbar

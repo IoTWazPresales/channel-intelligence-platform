@@ -842,7 +842,7 @@ function AdminDistributorsPageContent() {
               : 'Use Add distributor above. Distributor master import is not currently ready.',
             primary: hasDistributorMasterImport
               ? { label: 'Import distributor master', href: '/admin/imports?template=distributor_master' }
-              : { label: 'Getting started', href: '/getting-started' },
+              : { label: 'Import Center', href: '/admin/imports' },
             secondary: hasDistributorInventoryImport
               ? { label: 'Import distributor inventory', href: '/admin/imports?template=distributor_inventory' }
               : undefined,
@@ -1415,8 +1415,8 @@ function AdminDistributorsPageContent() {
             isEmpty={(sellout ?? []).length === 0}
             empty={{
               title: 'No sell-out rows',
-              description: 'Load sales facts via Data imports or upstream connectors when available.',
-              primary: { label: 'Data & imports', href: '/admin/imports' },
+              description: 'Load sales facts via Import Center or upstream connectors when available.',
+              primary: { label: 'Import Center', href: '/admin/imports' },
             }}
             toolbar={
               <ModuleGridToolbar
@@ -1451,7 +1451,7 @@ function AdminDistributorsPageContent() {
             empty={{
               title: 'No inbound rows',
               description: 'Inbound shipment facts appear when purchase-order or ASN data is loaded.',
-              primary: { label: 'Data & imports', href: '/admin/imports' },
+              primary: { label: 'Import Center', href: '/admin/imports' },
             }}
             toolbar={
               <ModuleGridToolbar

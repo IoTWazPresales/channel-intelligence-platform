@@ -23,6 +23,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
 
@@ -112,9 +113,9 @@ export default function SqlViewerPage() {
   if (meError || (me && !allowed)) {
     return (
       <>
-        <PageHeader crumbs={[{ label: 'Admin' }, { label: 'SQL viewer' }]} title="SQL viewer" />
+        <PageHeader {...navPageChrome('/admin/sql-viewer')} />
         <Alert severity="warning" data-testid="sql-viewer-forbidden">
-          Admin role required. Raw SQL is not available to planners or viewers — use Report builder for
+          Admin role required. Raw SQL is not available to planners or viewers — use Reports for
           governed metrics.
         </Alert>
       </>
@@ -123,7 +124,7 @@ export default function SqlViewerPage() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Admin' }, { label: 'SQL viewer' }]} title="SQL viewer" />
+      <PageHeader {...navPageChrome('/admin/sql-viewer')} />
       <Alert severity="warning" sx={{ mb: 2 }} data-testid="sql-viewer-warning">
         Admin-only read-only console. Results are <strong>not</strong> governed metrics — prefer Report
         builder for fill rate, WoC, and CPOR numbers. Every query is audited. Timeout 5s · row cap{' '}

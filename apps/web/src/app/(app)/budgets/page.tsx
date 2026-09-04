@@ -10,6 +10,7 @@ import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
@@ -83,10 +84,10 @@ export default function BudgetsPage() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Budgets' }]} title="Budget envelopes" />
+      <PageHeader {...navPageChrome('/budgets')} />
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1, maxWidth: 900 }}>
         Allocations show planned envelopes by owner/category; Health summarizes remaining budget pressure. Both read
-        from curated finance facts—use Data imports or internal finance feeds when available.
+        from curated finance facts—use Import Center or internal finance feeds when available.
       </Typography>
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
         <Tab label="Allocations" />
@@ -103,8 +104,8 @@ export default function BudgetsPage() {
             isEmpty={allocRows.length === 0}
             empty={{
               title: 'No allocations',
-              description: 'Connect finance pipelines or use Data imports when a source exists for allocations.',
-              primary: { label: 'Data imports', href: '/admin/imports' },
+              description: 'Connect finance pipelines or use Import Center when a source exists for allocations.',
+              primary: { label: 'Import Center', href: '/admin/imports' },
               secondary: { label: 'Budget requests', href: '/budget-requests' },
             }}
             toolbar={
@@ -132,8 +133,8 @@ export default function BudgetsPage() {
             empty={{
               title: 'No budget health rows',
               description: 'Health is derived when allocations and actuals exist in the database.',
-              primary: { label: 'Data imports', href: '/admin/imports' },
-              secondary: { label: 'Overview', href: '/dashboard' },
+              primary: { label: 'Import Center', href: '/admin/imports' },
+              secondary: { label: 'Attention', href: '/brief' },
             }}
             toolbar={
               <ModuleGridToolbar

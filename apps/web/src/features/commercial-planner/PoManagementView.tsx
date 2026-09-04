@@ -385,7 +385,7 @@ export function PoManagementView() {
                 data-testid="po-worklist-gaps"
               />
               <Typography variant="caption" color="text.secondary">
-                Reconciliation outcomes live on Plan vs Executed — this page is the operational worklist only.
+                Reconciliation outcomes live on Execution vs plan — this page is the operational worklist only.
               </Typography>
             </Stack>
           </CardContent>
@@ -482,12 +482,12 @@ export function PoManagementView() {
                         color="primary"
                         data-testid={`po-pve-link-${g.year}-${g.quarter}-${g.product_line}`}
                       >
-                        Plan vs Executed outcomes
+                        Execution vs plan outcomes
                       </Button>
                       {highlightCustomerId != null && highlightGroupId === poGroupDomId(g) ? (
                         <Typography variant="caption" color="warning.main">
                           Highlighted customer #{highlightCustomerId} — link or upload work above; reconciliation
-                          outcomes are on Plan vs Executed.
+                          outcomes are on Execution vs plan.
                         </Typography>
                       ) : null}
                     </Stack>
@@ -504,7 +504,7 @@ export function PoManagementView() {
                       <Chip size="small" color="warning" label="Parse incomplete" />
                       <Typography variant="caption" color="text.secondary">
                         Lineup file uploaded for {g.quarter_label} {g.product_line} but lines were not parsed —
-                        re-run parse from Import Centre.
+                        re-run parse from Import Center.
                       </Typography>
                     </Stack>
                   ) : (

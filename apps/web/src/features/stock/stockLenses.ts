@@ -1,9 +1,9 @@
-/** Stock container lens keys — buyer-facing labels per CIP_DESIGN_LANGUAGE v1.1 §5. */
+/** Stock container lens keys — buyer-facing labels aligned to D-0008 nav leaves. */
 export const STOCK_LENSES = [
-  { id: 'movement', label: 'Sell-out' },
-  { id: 'execution', label: 'Fill vs plan' },
+  { id: 'movement', label: 'Movement' },
+  { id: 'execution', label: 'Execution vs plan' },
   { id: 'cover', label: 'Cover' },
-  { id: 'inbound', label: 'Inbound' },
+  { id: 'inbound', label: 'Shipments' },
 ] as const;
 
 export type StockLensId = (typeof STOCK_LENSES)[number]['id'];

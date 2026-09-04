@@ -247,7 +247,7 @@ export function ColumnSelectorModal({
             <Chip size="small" label={`${optionalSelectedCount} optional on`} variant="outlined" />
           </Stack>
           <Typography variant="caption" color="text.secondary" component="span">
-            Commercial planner grid — optional fields and discovered product spec keys. (Workbench columns for uploaded
+            Plans & line economics grid — optional fields and discovered product spec keys. (Workbench columns for uploaded
             lineup rows are on the Current lineup card.)
           </Typography>
         </Stack>

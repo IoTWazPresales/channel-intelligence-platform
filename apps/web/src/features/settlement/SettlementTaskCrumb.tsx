@@ -8,11 +8,11 @@ export function SettlementTaskCrumb() {
   return (
     <Box data-testid="settlement-task-crumb" sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
       <Typography sx={{ fontSize: '11px', letterSpacing: '0.08em', textTransform: 'uppercase', color: alpha(theme.palette.text.primary, 0.45) }}>
-        Settlement
+        Promotions &amp; Funding
       </Typography>
       <Typography sx={{ color: alpha(theme.palette.text.primary, 0.25) }}>/</Typography>
       <Typography sx={{ fontSize: '11px', letterSpacing: '0.08em', textTransform: 'uppercase', color: alpha(theme.palette.text.primary, 0.72) }}>
-        Book
+        Case book
       </Typography>
     </Box>
   );

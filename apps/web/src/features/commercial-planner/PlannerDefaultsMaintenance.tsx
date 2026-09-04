@@ -513,8 +513,8 @@ export function PlannerDefaultsMaintenance() {
           One row per product: <strong>controlled cost / PM bottom</strong> (amount +{' '}
           <code>controlled_cost_currency_code</code>), <strong>VAT rate</strong> (0–1),{' '}
           <strong>FX: plan currency units per 1 controlled-cost currency</strong>, total <strong>reserve %</strong>, and{' '}
-          <strong>campaign/support reserve split</strong> (share of the reserve bucket). These inputs feed Commercial Planner
-          economics. <strong>DAP evidence is not used as controlled cost.</strong> True landed cost (logistics, duties,
+          <strong>campaign/support reserve split</strong> (share of the reserve bucket). These inputs feed Plans & line economics.{' '}
+          <strong>DAP evidence is not used as controlled cost.</strong> True landed cost (logistics, duties,
           freight, etc.) will be handled in a later phase — not in this field.
         </Typography>
         <Alert severity="info" sx={{ mb: 1, py: 0.5 }} data-testid="planner-defaults-sku-economics-disclaimers">

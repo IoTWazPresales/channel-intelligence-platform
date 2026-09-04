@@ -36,12 +36,8 @@ test.describe('In-app navigation', () => {
     });
   });
 
-  test('navigates from getting started to Import Center', async ({ page }) => {
-    await page.goto('/getting-started');
-    await Promise.all([
-      page.waitForURL('**/admin/imports'),
-      page.getByRole('link', { name: 'Admin → Import Center' }).click(),
-    ]);
+  test('Import Center heading is on the live Data & Stewardship route', async ({ page }) => {
+    await page.goto('/admin/imports');
     await expect(page.getByRole('heading', { name: 'Import Center' })).toBeVisible();
   });
 });

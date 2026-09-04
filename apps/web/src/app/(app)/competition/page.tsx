@@ -3,13 +3,15 @@
 import { Box, Button, Paper, Tab, Tabs } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColDef } from 'ag-grid-community';
-import { useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useMemo } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { apiDelete, apiGet, apiPost, apiUrl, authHeaders } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
@@ -30,9 +32,24 @@ type PriceRow = {
   channel: string | null;
 };
 
+/** URL tab keys — Market & Listings leaves deep-link here (navConfig). Order = Tabs index. */
+const COMPETITION_TABS = ['mappings', 'prices'] as const;
+
 export default function CompetitionPage() {
   const qc = useQueryClient();
-  const [tab, setTab] = useState(0);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const tabIdx = COMPETITION_TABS.indexOf((searchParams.get('tab') ?? '').toLowerCase() as (typeof COMPETITION_TABS)[number]);
+  const tab = tabIdx < 0 ? 0 : tabIdx;
+  const setTab = useCallback(
+    (next: number) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('tab', COMPETITION_TABS[next] ?? COMPETITION_TABS[0]);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['competition-mappings'],
@@ -117,7 +134,7 @@ export default function CompetitionPage() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Competition' }]} title="Competitor mapping" />
+      <PageHeader {...navPageChrome('/competition', { search: `?tab=${COMPETITION_TABS[tab]}` })} />
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
         <Tab label="Mappings" />
         <Tab label="Competitor prices" />
@@ -139,9 +156,9 @@ export default function CompetitionPage() {
             isEmpty={rows.length === 0}
             empty={{
               title: 'No competitor mappings',
-              description: 'Mappings appear when competition facts exist. Use Data imports when a competitor feed is wired.',
-              primary: { label: 'Data imports', href: '/admin/imports' },
-              secondary: { label: 'Overview', href: '/dashboard' },
+              description: 'Mappings appear when competition facts exist. Use Import Center when a competitor feed is wired.',
+              primary: { label: 'Import Center', href: '/admin/imports' },
+              secondary: { label: 'Attention', href: '/brief' },
             }}
             toolbar={
               <ModuleGridToolbar
@@ -168,8 +185,8 @@ export default function CompetitionPage() {
             isEmpty={priceRows.length === 0}
             empty={{
               title: 'No competitor prices',
-              description: 'Load competitor price feeds via Data imports when available.',
-              primary: { label: 'Data imports', href: '/admin/imports' },
+              description: 'Load competitor price feeds via Import Center when available.',
+              primary: { label: 'Import Center', href: '/admin/imports' },
             }}
             toolbar={
               <ModuleGridToolbar

@@ -18,6 +18,7 @@ import { useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
 
@@ -137,12 +138,9 @@ export default function CustomerCommercialTermsPage() {
 
   return (
     <>
-      <PageHeader
-        crumbs={[{ label: 'Master Data' }, { label: 'Customer commercial terms' }]}
-        title="Customer commercial terms"
-      />
+      <PageHeader {...navPageChrome('/admin/customer-commercial-terms')} />
       <Alert severity="info" sx={{ mb: 2 }} data-testid="customer-terms-steward-guide">
-        Per-customer default dealer margin and rebate used by Commercial Planner and CPOR funding cases. One row per
+        Per-customer default dealer margin and rebate used by plan-line economics and promotion cases. One row per
         customer — create or update only (no delete). Margin + rebate must stay below 0.92.
       </Alert>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>

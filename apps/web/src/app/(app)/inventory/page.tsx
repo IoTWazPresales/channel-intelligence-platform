@@ -11,6 +11,7 @@ import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
+import { navPageChrome } from '@/features/shell/navPageChrome';
 import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
@@ -125,7 +126,7 @@ export default function InventoryPage() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Inventory' }]} title="Inventory & coverage" />
+      <PageHeader {...navPageChrome('/stock', { search: '?lens=cover' })} />
       <Paper sx={{ p: 2 }}>
         <ModuleDataSection
           intro="Rows are stored in fact_inventory_customer. Unknown SKUs and customer codes create placeholder dimension rows."
@@ -136,9 +137,9 @@ export default function InventoryPage() {
           isEmpty={rows.length === 0}
           empty={{
             title: 'No customer inventory rows',
-            description: 'Use Add row or Paste upload, or use Data & imports for file-based loads.',
-            primary: { label: 'Data & imports', href: '/admin/imports' },
-            secondary: { label: 'Getting started', href: '/getting-started' },
+            description: 'Use Add row or Paste upload, or use Import Center for file-based loads.',
+            primary: { label: 'Import Center', href: '/admin/imports' },
+            secondary: { label: 'Attention', href: '/brief' },
           }}
           toolbar={
             <ModuleGridToolbar

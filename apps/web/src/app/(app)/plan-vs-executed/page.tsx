@@ -1,13 +1,14 @@
 'use client';
 
+import { PlanVsExecutedView } from '@/features/plan-vs-executed/PlanVsExecutedView';
 import { PageHeader } from '@/components/PageHeader';
 import { navPageChrome } from '@/features/shell/navPageChrome';
-import { PlanVsExecutedView } from '@/features/plan-vs-executed/PlanVsExecutedView';
 
+/** Legacy route — middleware redirects to /stock?lens=execution. */
 export default function PlanVsExecutedPage() {
   return (
     <>
-      <PageHeader {...navPageChrome('/plan-vs-executed')} />
+      <PageHeader {...navPageChrome('/stock', { search: '?lens=execution' })} />
       <PlanVsExecutedView />
     </>
   );

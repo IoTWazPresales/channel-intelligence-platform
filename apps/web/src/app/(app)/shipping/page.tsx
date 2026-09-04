@@ -563,7 +563,7 @@ export function InboundShipmentsWorkspace() {
     <>
       <Alert severity="info" sx={{ mb: 2 }}>
         Truth layer from <strong>fact_inbound_shipment</strong> (populated when an inbound import job is applied).
-        Steward raw imports under <strong>Admin → Shipment evidence</strong>.
+        Steward raw imports under <strong>Data & Stewardship → Receipts & POD</strong>.
       </Alert>
       {purchaseOrderId != null && (
         <Alert
@@ -969,7 +969,7 @@ export function InboundShipmentsWorkspace() {
           empty={{
             title: 'No shipment lines match',
             description: 'Adjust filters or run an inbound import apply to populate fact_inbound_shipment.',
-            primary: { label: 'Data imports', href: '/admin/imports?template=inbound_shipments' },
+            primary: { label: 'Import Center', href: '/admin/imports?template=inbound_shipments' },
             secondary: { label: 'Shipment evidence', href: '/admin/shipment-evidence' },
           }}
           toolbar={
@@ -1011,7 +1011,7 @@ export function InboundShipmentsWorkspace() {
 export default function InboundShipmentsPage() {
   return (
     <>
-      <PageHeader {...navPageChrome('/shipping')} />
+      <PageHeader {...navPageChrome('/stock', { search: '?lens=inbound' })} />
       <InboundShipmentsWorkspace />
     </>
   );

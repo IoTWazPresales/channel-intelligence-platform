@@ -4840,7 +4840,7 @@ function AdminImportsPageContent() {
             title: 'No import jobs yet',
             description: 'Complete the guided import above, or use the API directly.',
             primary: { label: 'Mapping queue', href: '/admin/mappings' },
-            secondary: { label: 'Getting started', href: '/getting-started' },
+            secondary: { label: 'Steward queue', href: '/admin/mappings' },
           }}
           toolbar={
             <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center" useFlexGap sx={{ mb: 2 }}>
@@ -4899,9 +4899,9 @@ function AdminImportsPageContent() {
           onConfirm={() => void confirmImportJobBulkDelete()}
         />
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-          Line-up bulk upsert remains on the{' '}
+          Lineup bulk upsert remains on the{' '}
           <Link component={NextLink} href="/lineup">
-            Line-up planning
+            Lineup cases
           </Link>{' '}
           screen; this wizard focuses on constrained file imports.
         </Typography>

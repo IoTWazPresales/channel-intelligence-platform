@@ -317,7 +317,7 @@ export function ReportBuilderView() {
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Pick a governed metric, choose a valid grain, then run. Invalid combinations are refused by the semantic
-          layer — same numbers as Channel Ops / Plan vs Executed / CPOR.
+          layer — same numbers as Stock & Sell-through / Execution vs plan / Case book.
         </Typography>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'flex-start' }}>
           <FormControl sx={{ minWidth: 260 }} size="small">

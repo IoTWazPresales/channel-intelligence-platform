@@ -16,8 +16,8 @@ export default function AdminPoManagementPage() {
         units-primary reconciliation against confirmed lineups; unlinked groups and the gap worklist let you
         upload a covering lineup or dismiss a PO that needs no lineup. <strong>Suggested PO ↔ lineup links</strong>{' '}
         (below coverage) triages CRAD-matched proposals — review and link to raise the linked count.{' '}
-        For the read-only plan-vs-executed scorecard and exception lists, see{' '}
-        <Link href="/plan-vs-executed">Plan vs Executed</Link>.
+        For the read-only execution-vs-plan scorecard and exception lists, see{' '}
+        <Link href="/stock?lens=execution">Execution vs plan</Link>.
       </Alert>
       <PoManagementView />
     </>

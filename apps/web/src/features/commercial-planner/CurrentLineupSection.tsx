@@ -3602,7 +3602,7 @@ export function CurrentLineupSection({
                 Upload current lineup
               </Button>
             ) : (
-              <Tooltip title="Lineup uploads now run through the unified multi-file importer in the Import Centre.">
+              <Tooltip title="Lineup uploads now run through the unified multi-file importer in the Import Center.">
                 <Button
                   size="small"
                   variant="outlined"
@@ -3610,7 +3610,7 @@ export function CurrentLineupSection({
                   href="/admin/imports"
                   data-testid="upload-current-lineup-link"
                 >
-                  Import lineups in Import Centre
+                  Import lineups in Import Center
                 </Button>
               </Tooltip>
             ))}
@@ -3649,7 +3649,7 @@ export function CurrentLineupSection({
               <Typography variant="body2" color="text.secondary" data-testid="lineup-empty-state">
                 {effectivePlanId != null
                   ? 'No lineup cases for this plan. Toggle “Show all (ignore plan)” to browse every uploaded lineup.'
-                  : 'No lineup cases uploaded yet. Upload lineups in the Import Centre.'}
+                  : 'No lineup cases uploaded yet. Upload lineups in the Import Center.'}
               </Typography>
             ) : (
               <Stack spacing={2} data-testid="lineup-case-groups">

@@ -8,7 +8,7 @@ import { navPageChrome } from '@/features/shell/navPageChrome';
 export default function ChannelOperationsPage() {
   return (
     <>
-      <PageHeader {...navPageChrome('/sell-out')} />
+      <PageHeader {...navPageChrome('/stock', { search: '?lens=movement' })} />
       <ChannelOpsStockWorkspace />
     </>
   );

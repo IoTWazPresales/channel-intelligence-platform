@@ -5,7 +5,6 @@ import { alpha, useTheme } from '@mui/material/styles';
 import { useQuery } from '@tanstack/react-query';
 
 import { BriefEmptyState, BriefSignalRow, type BriefSignal } from '@/features/brief/BriefSignalRow';
-import { GlobalBackgroundTasksIndicator } from '@/features/background-tasks/GlobalBackgroundTasksIndicator';
 import { ReadStrip } from '@/features/shell/ReadStrip';
 import { apiGet } from '@/lib/api';
 
@@ -45,7 +44,7 @@ export function BriefPageContent() {
   if (isError) {
     return (
       <Box sx={{ p: 3 }} data-testid="brief-error">
-        <Typography color="error">Could not load Brief signals.</Typography>
+        <Typography color="error">Could not load attention signals.</Typography>
       </Box>
     );
   }
@@ -69,11 +68,10 @@ export function BriefPageContent() {
       >
         <Typography sx={{ fontSize: '12px', color: alpha(theme.palette.text.primary, 0.5) }}>
           <Box component="span" sx={{ color: alpha(theme.palette.text.primary, 0.72), fontWeight: 500 }}>
-            Brief
+            Attention
           </Box>{' '}
-          · attention queue
+          · what needs action now
         </Typography>
-        <GlobalBackgroundTasksIndicator />
       </Box>
       {signals.length > 0 && data?.read ? <ReadStrip text={data.read} /> : null}
       <Box sx={{ flex: 1, overflow: 'auto' }}>

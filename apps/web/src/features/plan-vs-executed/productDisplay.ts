@@ -66,8 +66,9 @@ export function buildPlanVsExecutedHref(opts: {
   productLine?: string | null;
 }): string {
   const p = new URLSearchParams();
+  p.set('lens', 'execution');
   p.set('period_from', opts.periodFrom);
   p.set('period_to', opts.periodTo ?? opts.periodFrom);
   if (opts.productLine) p.set('product_line', opts.productLine);
-  return `/plan-vs-executed?${p.toString()}`;
+  return `/stock?${p.toString()}`;
 }
