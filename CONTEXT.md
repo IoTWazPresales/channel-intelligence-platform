@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-09-05 — **Unit 1 booked FX** on `feat/ns-2-brief-nav-collapse` (hashes after commit): `fx_daily_rate` + proposed columns (`20260905_0021`); Frankfurter ECB USDZAR; proposed vs booked `roe_snapshot`; suggest on create; book at approval; backfill confirm on case book. Clone-tested on `cip_alembic_smoke` then applied to local `cip`. N-0006 not started.
+- 2026-09-05 — **Unit 1 booked FX** on `feat/ns-2-brief-nav-collapse` schema `69033f5` / product `0ce562d`: `fx_daily_rate` + proposed columns (`20260905_0021`); Frankfurter ECB USDZAR; proposed vs booked `roe_snapshot`; suggest on create; book at approval; backfill confirm on case book. Clone-tested on `cip_alembic_smoke` then applied to local `cip`. N-0006 not started.
 
 - 2026-09-05 — **Unit 0 dimensional fidelity** on `feat/ns-2-brief-nav-collapse` `8c6aef8`: lab `RAIL_WIDTH` 252, `WorkbenchCanvas` (px 20 / pt 16 / pb 24), search minWidth 260; FundingChrome wraps every Promotions & Funding lens. Verified at 1280×800 vs `LabShell` / `d-pf-*`. N-0006 not started.
 
