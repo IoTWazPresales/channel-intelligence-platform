@@ -8,9 +8,9 @@ import { Panel } from '@/features/workbench-ui/Panel';
 
 export default function BudgetsPage() {
   return (
-    <>
-      <FundingChrome />
+    <FundingChrome>
       <Panel
+        sx={{ mt: 2 }}
         title={
           <Stack direction="row" spacing={1} alignItems="center">
             <span>Budget ledger — data only</span>
@@ -26,6 +26,6 @@ export default function BudgetsPage() {
           shown rather than a placeholder.
         </Typography>
       </Panel>
-    </>
+    </FundingChrome>
   );
 }

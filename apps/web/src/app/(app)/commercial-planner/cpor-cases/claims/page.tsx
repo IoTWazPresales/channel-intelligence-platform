@@ -71,7 +71,7 @@ export default function CporClaimsPage() {
 
   return (
     <Box data-testid="funding-claims">
-      <FundingChrome />
+      <FundingChrome>
       <Stack spacing={2} sx={{ mt: 2 }}>
         <Alert severity="info" variant="outlined">
           Claim evidence is matched per case. Apply still happens on the settlement workspace — this lens
@@ -149,6 +149,7 @@ export default function CporClaimsPage() {
           Import Center
         </Button>
       </Stack>
+      </FundingChrome>
     </Box>
   );
 }

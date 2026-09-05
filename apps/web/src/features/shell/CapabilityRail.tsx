@@ -32,7 +32,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NAV_STORAGE_GROUP_EXPANDED, railNavGroups, type NavGroup } from '@/features/shell/navConfig';
 import { activeNavGroup } from '@/features/shell/navPageChrome';
 
-export const RAIL_WIDTH = 296;
+export const RAIL_WIDTH = 252;
 
 /** Icons stay out of navConfig so the nav model remains a plain, testable module. */
 export const DOMAIN_ICONS: Record<string, SvgIconComponent> = {

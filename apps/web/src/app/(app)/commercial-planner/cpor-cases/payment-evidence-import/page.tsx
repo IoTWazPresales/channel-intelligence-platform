@@ -153,8 +153,8 @@ export default function CporPaymentEvidenceImportPage() {
   const s = summary?.summary;
 
   return (
-    <>
-      <FundingChrome />
+    <FundingChrome>
+      <Stack spacing={0} sx={{ mt: 2 }}>
       <HeadlineStrip columns={3}>
         <HeadlineFigure
           label="Delivery rate"
@@ -349,6 +349,7 @@ export default function CporPaymentEvidenceImportPage() {
           </>
         ) : null}
       </Stack>
-    </>
+      </Stack>
+    </FundingChrome>
   );
 }

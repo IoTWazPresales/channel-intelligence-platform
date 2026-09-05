@@ -5,9 +5,8 @@ import { CaseBookSurface } from '@/features/promotions-funding/CaseBookSurface';
 
 export default function CporCasesListPage() {
   return (
-    <>
-      <FundingChrome />
+    <FundingChrome>
       <CaseBookSurface />
-    </>
+    </FundingChrome>
   );
 }

@@ -72,8 +72,9 @@ export function PromotionPlannerSurface() {
   if (Number.isFinite(planId) && planId > 0) {
     return (
       <Box data-testid="promotion-planner">
-        <FundingChrome />
-        <PlanWorkspace caseId={planId} onBack={() => setParam('plan', null)} />
+        <FundingChrome>
+          <PlanWorkspace caseId={planId} onBack={() => setParam('plan', null)} />
+        </FundingChrome>
       </Box>
     );
   }
@@ -154,7 +155,7 @@ function PlannerList({
 
   return (
     <Box data-testid="promotion-planner">
-      <FundingChrome />
+      <FundingChrome>
       <Stack spacing={2} sx={{ mt: 2 }}>
         <Alert severity="info" variant="outlined" icon={false} sx={{ '& .MuiAlert-message': { width: '100%' } }}>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ md: 'center' }} justifyContent="space-between">
@@ -423,6 +424,7 @@ function PlannerList({
         onError={(m) => setToast(m)}
       />
       <Snackbar open={!!toast} autoHideDuration={4000} onClose={() => setToast(null)} message={toast} />
+      </FundingChrome>
     </Box>
   );
 }

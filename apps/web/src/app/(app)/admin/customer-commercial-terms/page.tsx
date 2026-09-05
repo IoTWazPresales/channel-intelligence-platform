@@ -137,9 +137,8 @@ export default function CustomerCommercialTermsPage() {
   );
 
   return (
-    <>
-      <FundingChrome />
-      <Alert severity="info" sx={{ mb: 2 }} data-testid="customer-terms-steward-guide">
+    <FundingChrome>
+      <Alert severity="info" sx={{ mt: 2, mb: 2 }} data-testid="customer-terms-steward-guide">
         Customer margin and rebate defaults plus per-SKU assumptions feed the waterfall in the planner
         (dealer price → support per unit). Edited here, applied on the next recompute. SKU assumptions
         live on Commercial planner — this leaf does not invent a second economics editor.
@@ -245,6 +244,6 @@ export default function CustomerCommercialTermsPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </>
+    </FundingChrome>
   );
 }

@@ -196,9 +196,8 @@ function CporHistoricalImportWizard() {
   const stepIndex = STEP_LABELS.findIndex((s) => s.id === step);
 
   return (
-    <>
-      <FundingChrome />
-      <Alert severity="info" sx={{ mb: 2 }}>
+    <FundingChrome>
+      <Alert severity="info" sx={{ mt: 2, mb: 2 }}>
         Upload a customer tracking workbook to learn (or refresh) a mapping profile. Settled Results
         are stored as a frozen snapshot (parity flags only). Unresolved entities block that case only —
         never auto-create masters. Column mapping is driven by the stored profile; steward mapping
@@ -399,7 +398,7 @@ function CporHistoricalImportWizard() {
           ) : null}
         </Stack>
       ) : null}
-    </>
+    </FundingChrome>
   );
 }
 
@@ -407,10 +406,9 @@ function CporHistoricalImportGate() {
   const search = useSearchParams();
   if (search.get('learn') === '1') return <CporHistoricalImportWizard />;
   return (
-    <>
-      <FundingChrome />
+    <FundingChrome>
       <PlanTemplatesSurface />
-    </>
+    </FundingChrome>
   );
 }
 

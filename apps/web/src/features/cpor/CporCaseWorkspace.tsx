@@ -399,7 +399,6 @@ export function CporCaseWorkspace({ caseId, embedded = false, defaultTab = 0 }: 
 
   const workspace = (
     <>
-      {!embedded ? <FundingChrome title={data.case_code} /> : null}
       <Box sx={{ mb: 1.5 }}>
         <LifecycleRail
           stages={[...LIFECYCLE_STAGES]}
@@ -814,5 +813,5 @@ export function CporCaseWorkspace({ caseId, embedded = false, defaultTab = 0 }: 
     return <Box data-testid="cpor-case-workspace-embedded">{workspace}</Box>;
   }
 
-  return workspace;
+  return <FundingChrome title={data.case_code}>{workspace}</FundingChrome>;
 }

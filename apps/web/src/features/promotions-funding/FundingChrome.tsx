@@ -10,7 +10,9 @@ import { countPlanning } from '@/features/promotions-funding/lifecycle';
 import type { CporCasesPage } from '@/features/promotions-funding/types';
 import { apiGet } from '@/lib/api';
 import { DomainHeader } from '@/features/workbench-ui/DomainHeader';
+import { WorkbenchCanvas } from '@/features/workbench-ui/WorkbenchCanvas';
 import { LensTabs } from '@/features/workbench-ui/controls';
+import type { ReactNode } from 'react';
 
 export const FUNDING_TITLE = 'Promotions & Funding';
 
@@ -57,9 +59,11 @@ type BriefMeta = {
 export function FundingChrome({
   counts,
   title,
+  children,
 }: {
   counts?: Partial<Record<FundingLens, number>>;
   title?: string;
+  children?: ReactNode;
 }) {
   const pathname = usePathname() || '/';
   const router = useRouter();
@@ -111,7 +115,7 @@ export function FundingChrome({
   };
 
   return (
-    <>
+    <WorkbenchCanvas>
       <DomainHeader
         crumbs={
           title
@@ -150,7 +154,8 @@ export function FundingChrome({
         ariaLabel="Promotions & Funding lenses"
         lenses={LENSES.map((l) => ({ value: l.value, label: l.label, count: tabCounts[l.value] }))}
       />
-    </>
+      {children}
+    </WorkbenchCanvas>
   );
 }
 

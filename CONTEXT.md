@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-09-05 — **Unit 0 dimensional fidelity** on `feat/ns-2-brief-nav-collapse`: lab `RAIL_WIDTH` 252, `WorkbenchCanvas` (px 20 / pt 16 / pb 24), search minWidth 260; FundingChrome wraps every Promotions & Funding lens. Verified at 1280×800 vs `LabShell` / `d-pf-*`. N-0006 not started.
+
 - 2026-09-05 — **CPOR pending-report overlay** on `feat/ns-2-brief-nav-collapse` `436db58`: Payments lens exact Case ID match + Latest Comment + pending counts; chrome Import payment / CN; case-book USD/ZAR paid caption. Did not write claim lines or `fact_budget_*`. D-0009 ledger still uncommitted.
 
 - 2026-09-05 — **Promotions & Funding close-out committed** on `feat/ns-2-brief-nav-collapse` `5e3eb5a`: `CaseBookSurface` extracted and mounted; settlement book read + tests; remaining funding lenses. Closed against the design lab — do not re-audit. N-0006 not started. D-0009 ledger still uncommitted at this pin.
