@@ -4,7 +4,7 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `7b3fadb` (Unit 0 commit follows)
+**Last content pin:** `8c6aef8`
 
 **Alembic (code):** `20260902_0020` (N-0006 FX enforcement)
 
