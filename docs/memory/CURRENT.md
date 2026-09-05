@@ -4,7 +4,7 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `0ce562d`
+**Last content pin:** `f8e1399`
 
 **Alembic (code):** `20260905_0021` (fx_daily_rate + cpor_case proposed-rate columns)
 
