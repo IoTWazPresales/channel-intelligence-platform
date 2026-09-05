@@ -110,6 +110,7 @@ from app.models.cpor import (
     CporCaseLine,
     CporClaimEvidenceLine,
 )
+from app.models.fx_rate import FxDailyRate
 from app.models.cpor_historical import (
     CporHistoricalMappingProfile,
     ImportCporHistoricalStagingLine,
@@ -222,6 +223,7 @@ __all__ = [
     "CporCaseLine",
     "CporCaseEvent",
     "CporClaimEvidenceLine",
+    "FxDailyRate",
     "CporHistoricalMappingProfile",
     "ImportCporHistoricalStagingLine",
     "ImportCporHistoricalTokenSurrogate",
