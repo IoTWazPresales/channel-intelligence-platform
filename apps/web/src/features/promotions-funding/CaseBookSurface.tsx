@@ -260,7 +260,9 @@ export function CaseBookSurface() {
           <Typography variant="body2">
             <b>The Case book is the settlement half of the same lifecycle.</b> Cases here were authored
             or approved in the Promotion planner; owed, paid and blocked describe what is still open
-            after the window — not a second object.
+            after the window — not a second object. Pending payment/CN disputes (Latest Comment) live
+            on the Payments lens. This pending report does not populate claim lines, so ageing stays
+            blocked.
           </Typography>
           <Box sx={{ minWidth: { md: 520 } }}>
             <LifecycleRail
@@ -292,7 +294,7 @@ export function CaseBookSurface() {
           value={fmtCompact(book?.settled_amount, ccy)}
           compact
           severity="good"
-          caption="Payment evidence with status paid/processed/closed — not the settled-status cohort"
+          caption="Same-currency payment evidence only (paid/processed/closed). USD pending-report rows do not pay this ZAR book — R0 is expected until FX is declared."
         />
         <HeadlineFigure
           label="Outstanding"

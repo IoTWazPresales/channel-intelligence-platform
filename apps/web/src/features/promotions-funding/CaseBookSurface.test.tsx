@@ -136,7 +136,7 @@ describe('CaseBookSurface', () => {
     expect(screen.getByText(/Open book total/i)).toBeInTheDocument();
     expect(screen.getByText(/non-settled, non-cancelled/i)).toBeInTheDocument();
     expect(screen.getByText('Paid on the open book')).toBeInTheDocument();
-    expect(screen.getByText(/not the settled-status cohort/i)).toBeInTheDocument();
+    expect(screen.getByText(/USD pending-report rows do not pay this ZAR book/i)).toBeInTheDocument();
     expect(screen.getByText(/Negative line ttl_support/i)).toBeInTheDocument();
     expect(screen.getByText(/excludes settled and negative-support/i)).toBeInTheDocument();
     expect(screen.getByText(/FX blocked · 1/)).toBeInTheDocument();

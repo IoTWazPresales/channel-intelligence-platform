@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
+import { PaymentEvidenceOverlayPanel } from '@/features/promotions-funding/PaymentEvidenceOverlay';
 import { fmtPct } from '@/features/promotions-funding/format';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
@@ -174,6 +175,7 @@ export default function CporPaymentEvidenceImportPage() {
           caption="Template-driven export is not built"
         />
       </HeadlineStrip>
+      <PaymentEvidenceOverlayPanel />
       <Alert severity="info" sx={{ mb: 2 }}>
         Payment evidence links settled value to cases. Delivery rate = result ÷ estimate per case
         (portfolio figure on the domain header — not recomputed here). Generic payment evidence —

@@ -173,6 +173,10 @@ def parse_payment_workbook(data: bytes, profile: dict[str, Any] | None = None) -
                 continue
 
             credit_note_id = _cell_str(get("credit_note_id"))
+            deduction_no = _cell_str(get("deduction_no"))
+            cn_status_raw = _cell_str(get("cn_status_raw"))
+            cn_closed_date = _as_date(get("cn_closed_date"))
+            latest_comment = _cell_str(get("latest_comment"))
             payment_status_raw = _cell_str(get("payment_status_raw"))
             amount = _as_decimal(get("amount"))
             currency = _cell_str(get("currency_code")) or "ZAR"
@@ -188,6 +192,14 @@ def parse_payment_workbook(data: bytes, profile: dict[str, Any] | None = None) -
             flags_json: dict[str, Any] = {}
             if owed_file is not None:
                 flags_json["owed_amount_file"] = float(owed_file)
+            if deduction_no:
+                flags_json["deduction_no"] = deduction_no
+            if cn_status_raw:
+                flags_json["cn_status_raw"] = cn_status_raw
+            if cn_closed_date is not None:
+                flags_json["cn_closed_date"] = cn_closed_date.isoformat()
+            if latest_comment:
+                flags_json["latest_comment"] = latest_comment
 
             raw_obj = {
                 str(headers[j]): (None if raw[j] is None else str(raw[j]) if not isinstance(raw[j], (int, float, date, datetime, Decimal)) else raw[j])

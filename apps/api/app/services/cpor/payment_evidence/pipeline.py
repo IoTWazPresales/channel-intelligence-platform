@@ -106,6 +106,20 @@ def ensure_default_payment_profile(db: Session) -> CporPaymentMappingProfile:
     return row
 
 
+def refresh_default_payment_profile_maps(db: Session) -> CporPaymentMappingProfile:
+    """Bring stored asus_cpor_pending_report_v1 maps in line with code defaults (next parse)."""
+    row = ensure_default_payment_profile(db)
+    d = asus_pending_report_profile_dict()
+    row.column_map_json = d["column_map_json"]
+    row.sheet_roles_json = d["sheet_roles_json"]
+    row.value_maps_json = d["value_maps_json"]
+    row.header_row_index = int(d["header_row_index"])
+    row.display_name = d["display_name"]
+    row.notes = d.get("notes")
+    db.flush()
+    return row
+
+
 def _profile_for_job(db: Session, job: ImportJob) -> dict[str, Any]:
     meta = dict(job.staged_metadata or {})
     profile_code = (meta.get("cpor_payment_profile_code") or "").strip()
@@ -138,7 +152,7 @@ def _profile_for_job(db: Session, job: ImportJob) -> dict[str, Any]:
 
 
 def process_cpor_payment_evidence_import(db: Session, job: ImportJob, data: bytes) -> dict[str, Any]:
-    ensure_default_payment_profile(db)
+    refresh_default_payment_profile_maps(db)
     profile = _profile_for_job(db, job)
     file_hash = hashlib.sha256(data).hexdigest()
     result = parse_payment_workbook(data, profile=profile)

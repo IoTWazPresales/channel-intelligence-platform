@@ -126,8 +126,8 @@ export function FundingChrome({
             <Button variant="outlined" size="small" component={NextLink} href="/reports">
               Open in Reports
             </Button>
-            <Button variant="outlined" size="small" component={NextLink} href="/admin/imports">
-              Import claims / payments
+            <Button variant="outlined" size="small" component={NextLink} href="/commercial-planner/cpor-cases/payment-evidence-import">
+              Import payment / CN
             </Button>
             <Button
               variant="contained"

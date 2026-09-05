@@ -245,6 +245,9 @@ def payment_job_summary(db: Session, import_job_id: int) -> dict[str, Any]:
             )
         ).all()
     )
+    file_codes = {ln.external_case_code for ln in lines if ln.external_case_code}
+    cip_codes = {c for c in db.scalars(select(CporCase.case_code)).all() if c}
+    matched = file_codes & cip_codes
     return {
         "row_count": len(lines),
         "linked_case_count": sum(1 for ln in lines if ln.linked_case_id is not None),
@@ -258,8 +261,13 @@ def payment_job_summary(db: Session, import_job_id: int) -> dict[str, Any]:
         "distributor_unresolved_count": sum(
             1 for ln in lines if ln.distributor_token and ln.resolved_distributor_id is None
         ),
-        "distinct_case_codes": len({ln.external_case_code for ln in lines}),
+        "distinct_case_codes": len(file_codes),
         "amount_sum": float(
             sum((ln.amount or 0) for ln in lines)  # type: ignore[arg-type]
         ),
+        "cip_case_count": len(cip_codes),
+        "matched_cip_case_count": len(matched),
+        "unmatched_cip_case_count": len(cip_codes - file_codes),
+        "unmatched_file_case_count": len(file_codes - cip_codes),
+        "match_rule": "exact case_code == Case ID",
     }

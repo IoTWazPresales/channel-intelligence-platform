@@ -14,6 +14,13 @@ from app.core.security import get_current_user
 from app.db.session_sync import SessionLocal
 from app.models.cpor_payment import CporPaymentEvidence, CporPaymentMappingProfile
 from app.models.ingestion import ImportJob
+from app.services.cpor.payment_evidence.overlay_read import (
+    build_payment_evidence_overlay,
+    cn_closed_date_from_raw,
+    cn_status_from_raw,
+    deduction_no_from_raw,
+    latest_comment_from_raw,
+)
 from app.services.cpor.payment_evidence.pipeline import (
     apply_cpor_payment_evidence_job,
     ensure_default_payment_profile,
@@ -86,6 +93,15 @@ def list_profiles(
             for r in rows
         ]
     }
+
+
+@router.get("/payment-evidence/overlay")
+def payment_evidence_overlay(
+    _user: Annotated[dict, Depends(get_current_user)] = None,
+    db: Session = Depends(_sync_db),
+) -> dict[str, Any]:
+    """Applied-evidence overlay: exact Case ID match + pending Latest Comment. Read-only."""
+    return build_payment_evidence_overlay(db)
 
 
 @router.get("/payment-evidence/jobs/{job_id}/summary")
@@ -253,6 +269,10 @@ def list_case_payment_evidence(
             "distributor_token": r.distributor_token,
             "description": r.description,
             "case_id": r.case_id,
+            "latest_comment": latest_comment_from_raw(r.raw_source_row),
+            "deduction_no": deduction_no_from_raw(r.raw_source_row),
+            "cn_status": cn_status_from_raw(r.raw_source_row),
+            "cn_closed_date": cn_closed_date_from_raw(r.raw_source_row),
         }
 
     return {"case_id": case_id, "items": [_row(r) for r in rows], "total": len(rows)}
