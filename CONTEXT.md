@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-09-05 — **Promotions & Funding close-out committed** on `feat/ns-2-brief-nav-collapse` `5e3eb5a`: `CaseBookSurface` extracted and mounted; settlement book read + tests; remaining funding lenses. Closed against the design lab — do not re-audit. N-0006 not started. D-0009 ledger still uncommitted at this pin.
+
 - 2026-09-04 — **Promotions & Funding fidelity + coherence** on `feat/ns-2-brief-nav-collapse` `96e35b7`: domain chrome (H1/description/subtitle/actions), nav width, seed tenant chip, CONSULT-checked number classes ((i) header/rail/book, (ii) review-queue filter + mixed-denominator 391%→257%, (iii) R0 drafts), grouped Needs a decision, remaining lenses (claims cards, payments, templates, terms). `@cip/web` 112/592. Programme ledger / N-0006 / D-0009 `.eif/` / `sleep4.py` untouched.
 
 - 2026-09-04 — **Promotions & Funding production migration** on `feat/ns-2-brief-nav-collapse` `4fd05c4`: lab experience on real `cpor_case` data; I1/I3/I4/I5 closed in funding; I2 is lab Market only. `@cip/web` 111/589. Programme ledger / N-0006 / D-0009 `.eif/` untouched.
