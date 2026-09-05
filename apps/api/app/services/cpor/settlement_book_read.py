@@ -9,8 +9,23 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.cpor import CporCase
 from app.models.dimensions import DimCustomer
+from app.services.cpor.evidence_basis import (
+    CLAIM_EVIDENCED,
+    NONE,
+    SOURCE_ATTESTED,
+    empty_basis_money,
+    load_evidence_basis_by_case,
+)
 from app.services.cpor.payment_recon import INELIGIBLE_CASE_STATUSES, load_payment_recon_by_case_id
 from app.services.cpor.settle_readiness import build_settle_readiness, settle_fx_blocked
+
+
+def _empty_basis_breakdown() -> dict[str, dict[str, Any]]:
+    return {
+        CLAIM_EVIDENCED: empty_basis_money(),
+        SOURCE_ATTESTED: empty_basis_money(),
+        NONE: empty_basis_money(),
+    }
 
 
 def _f(v: Any) -> float:
@@ -68,6 +83,12 @@ def build_settlement_book_read_model(session: Session) -> dict[str, Any]:
             "shape_segments": {"settled_pct": 0.0, "outstanding_pct": 0.0, "blocked_pct": 0.0},
             "read_line": "No open settlement cases in book.",
             "concentration": [],
+            "by_evidence_basis": _empty_basis_breakdown(),
+            "evidence_basis_note": (
+                "Open-book totals mix claim_evidenced, source_attested, and none. "
+                "by_evidence_basis is a labeled partition of the same owed/paid/outstanding; "
+                "it does not change book_total."
+            ),
         }
 
     customer_ids = {int(c.customer_id) for c in cases if c.customer_id is not None}
@@ -85,6 +106,7 @@ def build_settlement_book_read_model(session: Session) -> dict[str, Any]:
         cust_map[int(r[0])] = type("Cust", (), {"id": r[0], "code": r[1], "name": r[2]})()
 
     recon_by = load_payment_recon_by_case_id(session, cases, customers=cust_map)
+    basis_by = load_evidence_basis_by_case(session, cases)
 
     book_total = 0.0
     settled_amount = 0.0
@@ -92,6 +114,7 @@ def build_settlement_book_read_model(session: Session) -> dict[str, Any]:
     blocked_amount = 0.0
     open_case_count = 0
     concentration: list[dict[str, Any]] = []
+    by_basis = _empty_basis_breakdown()
 
     for case in cases:
         status = str(case.status or "").lower()
@@ -121,6 +144,13 @@ def build_settlement_book_read_model(session: Session) -> dict[str, Any]:
         if fx_blocked and outstanding > 0:
             blocked_amount += outstanding
 
+        basis = basis_by.get(int(case.id), NONE)
+        bucket = by_basis.setdefault(basis, empty_basis_money())
+        bucket["case_count"] += 1
+        bucket["owed"] += owed
+        bucket["paid"] += paid
+        bucket["outstanding"] += outstanding
+
         if outstanding > 0:
             cust = cust_map.get(int(case.customer_id)) if case.customer_id else None
             concentration.append(
@@ -131,6 +161,7 @@ def build_settlement_book_read_model(session: Session) -> dict[str, Any]:
                     "customer_name": getattr(cust, "name", None),
                     "outstanding_amount": round(outstanding, 2),
                     "fx_blocked": fx_blocked,
+                    "evidence_basis": basis,
                 }
             )
 
@@ -169,4 +200,17 @@ def build_settlement_book_read_model(session: Session) -> dict[str, Any]:
         },
         "read_line": read_line,
         "concentration": concentration,
+        "by_evidence_basis": {
+            k: {
+                "case_count": int(v["case_count"]),
+                "owed": round(v["owed"], 2),
+                "paid": round(v["paid"], 2),
+                "outstanding": round(v["outstanding"], 2),
+            }
+            for k, v in by_basis.items()
+        },
+        "evidence_basis_note": (
+            "Open-book totals mix claim_evidenced, source_attested, and none. "
+            "by_evidence_basis partitions the same owed/paid/outstanding; book_total is unchanged."
+        ),
     }

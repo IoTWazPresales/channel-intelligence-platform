@@ -5,6 +5,7 @@ import { alpha, useTheme } from '@mui/material/styles';
 import Link from 'next/link';
 
 import { formatLocalMoney } from '@/features/cpor/fxDisplay';
+import { evidenceBasisLabel } from '@/features/promotions-funding/evidenceBasis';
 import { SettlementPortfolioRead } from '@/features/settlement/SettlementPortfolioRead';
 import { SettlementShapeBar } from '@/features/settlement/SettlementShapeBar';
 import { useSettlementBook } from '@/features/settlement/useSettlementBook';
@@ -37,6 +38,14 @@ export function SettlementBookRead() {
           {loading ? 'Loading book…' : data?.read_line ?? (isFetching ? 'Refreshing book…' : '—')}
         </Typography>
       </Stack>
+      {data?.by_evidence_basis ? (
+        <Typography variant="caption" color="text.secondary" data-testid="settlement-book-evidence-mix">
+          {data.evidence_basis_note ?? 'Open-book totals mix evidence bases.'} Claim{' '}
+          {data.by_evidence_basis.claim_evidenced?.case_count ?? 0} · attested{' '}
+          {data.by_evidence_basis.source_attested?.case_count ?? 0} · none{' '}
+          {data.by_evidence_basis.none?.case_count ?? 0}.
+        </Typography>
+      ) : null}
       {seg ? (
         <SettlementShapeBar
           settledPct={seg.settled_pct}
@@ -58,6 +67,7 @@ export function SettlementBookRead() {
               {' · '}
               {formatLocalMoney(row.outstanding_amount, ccy)}
               {row.fx_blocked ? ' · FX blocked' : ''}
+              {row.evidence_basis ? ` · ${evidenceBasisLabel(row.evidence_basis)}` : ''}
             </Typography>
           ))}
         </Stack>

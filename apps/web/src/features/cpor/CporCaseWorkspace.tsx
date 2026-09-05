@@ -28,6 +28,7 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { CporFxAnchorPanel } from '@/features/cpor/CporFxAnchorPanel';
 import { CporSettleReadinessRow } from '@/features/cpor/CporSettleReadinessRow';
+import { evidenceBasisLabel } from '@/features/promotions-funding/evidenceBasis';
 import {
   formatGridMoney,
   formatLocalMoney,
@@ -92,6 +93,7 @@ export type CaseDetail = {
   ttl_support_usd: number | null;
   outstanding_amount?: number | null;
   settle_readiness?: SettleReadiness;
+  evidence_basis?: 'claim_evidenced' | 'source_attested' | 'none' | null;
   needs_reapproval?: boolean;
 };
 
@@ -442,6 +444,20 @@ export function CporCaseWorkspace({ caseId, embedded = false, defaultTab = 0 }: 
           <Chip label="needs reapproval (over budget)" color="error" size="small" data-testid="cpor-needs-reapproval" />
         ) : null}
         {data.missing_roe ? <Chip label="missing_roe" color="warning" size="small" /> : null}
+        {data.evidence_basis ? (
+          <Chip
+            label={evidenceBasisLabel(data.evidence_basis)}
+            size="small"
+            color={
+              data.evidence_basis === 'claim_evidenced'
+                ? 'success'
+                : data.evidence_basis === 'source_attested'
+                  ? 'warning'
+                  : 'default'
+            }
+            data-testid="cpor-evidence-basis"
+          />
+        ) : null}
         {(data.flags ?? []).slice(0, 6).map((f) => (
           <Chip key={f} label={f} size="small" variant="outlined" />
         ))}

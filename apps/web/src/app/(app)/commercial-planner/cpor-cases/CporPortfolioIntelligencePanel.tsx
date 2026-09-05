@@ -12,6 +12,8 @@ export type PortfolioIntelligence = {
   cases_in_scope: number;
   lines_included: number;
   lines_excluded_voided: number;
+  evidence_basis_mix?: { claim_evidenced?: number; source_attested?: number; none?: number };
+  evidence_basis_note?: string;
   totals: {
     support_usd: number;
     support_zar: number;
@@ -20,6 +22,13 @@ export type PortfolioIntelligence = {
     delivery_rate: number | null;
     support_per_unit_sold_usd: number | null;
     support_per_unit_sold_zar: number | null;
+  };
+  claim_evidenced_only?: {
+    cases_in_scope: number;
+    lines_included: number;
+    delivery_rate: number | null;
+    support_usd: number;
+    support_zar: number;
   };
   by_customer: Array<{
     customer_id: number;
@@ -88,6 +97,9 @@ export function CporPortfolioIntelligencePanel() {
       <Typography variant="caption" color="text.secondary">
         Compute USD · display ZAR at each case FX · voided excluded · no claim-rate (no distinct
         owed vs computed support; paid is payment recon — separate)
+        {data?.evidence_basis_mix
+          ? ` · mixed ${data.evidence_basis_mix.claim_evidenced ?? 0} claim / ${data.evidence_basis_mix.source_attested ?? 0} attested / ${data.evidence_basis_mix.none ?? 0} none`
+          : ''}
       </Typography>
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} useFlexGap flexWrap="wrap">
         <Paper variant="outlined" sx={{ p: 2, flex: '1 1 180px' }}>
@@ -109,6 +121,12 @@ export function CporPortfolioIntelligencePanel() {
               ? '—'
               : `result ${t?.result_qty?.toLocaleString() ?? '—'} / est ${t?.estimate_qty?.toLocaleString() ?? '—'}`}
           </Typography>
+          {data?.claim_evidenced_only ? (
+            <Typography variant="caption" color="text.secondary" display="block" data-testid="cpor-delivery-claim-only">
+              Claim-evidenced only: {fmtPct(data.claim_evidenced_only.delivery_rate)} ·{' '}
+              {data.claim_evidenced_only.cases_in_scope} cases
+            </Typography>
+          ) : null}
         </Paper>
         <Paper variant="outlined" sx={{ p: 2, flex: '1 1 180px' }}>
           <Typography variant="overline" color="text.secondary">
@@ -229,6 +247,7 @@ type NormsPayload = {
   window_source?: string;
   env_override_active?: boolean;
   tenant_profile_default?: number;
+  attested_unmatched_file?: { case_count: number; amount_by_currency?: Record<string, number> };
   by_customer: Array<{
     customer_id: number;
     customer_code: string | null;
@@ -265,6 +284,9 @@ function CporSupportNormsSection() {
         {data?.anchor_quarter ? ` · anchor ${data.anchor_quarter}` : ''}
         {data?.window_source
           ? ` · source ${data.window_source}${data.env_override_active ? ' (env override)' : ''}`
+          : ''}
+        {data?.attested_unmatched_file
+          ? ` · attested unmatched file ${data.attested_unmatched_file.case_count} Case IDs (CN/payment, not ttl_support)`
           : ''}
       </Typography>
       {isLoading ? (

@@ -56,6 +56,6 @@ describe('PaymentEvidenceOverlayPanel', () => {
     expect(screen.getByTestId('cpor-payment-overlay')).toBeInTheDocument();
     expect(screen.getByText(/overclaim 75 units/i)).toBeInTheDocument();
     expect(screen.getByTestId('cpor-payment-paid-note')).toHaveTextContent(/does not move R0 paid/i);
-    expect(screen.getByText(/claim ageing and uplift stay/i)).toBeInTheDocument();
+    expect(screen.getByText(/historical source attestation/i)).toBeInTheDocument();
   });
 });

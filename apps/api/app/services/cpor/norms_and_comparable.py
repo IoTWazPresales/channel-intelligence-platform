@@ -24,6 +24,12 @@ from app.services.commercial_tenant_profile import (
     SUPPORT_NORMS_TRAILING_QUARTERS as TENANT_NORMS_DEFAULT,
     support_norms_trailing_quarters,
 )
+from app.services.cpor.evidence_basis import (
+    SOURCE_ATTESTED,
+    evidence_basis_counts,
+    load_evidence_basis_by_case,
+    unmatched_file_evidence_rows,
+)
 from app.services.cpor.pivot import _line_ttl_support_usd, is_voided_line
 from app.services.cpor.portfolio_intelligence import _line_ttl_support_zar
 
@@ -82,6 +88,24 @@ def trailing_quarter_labels(latest: str, n: int) -> list[str]:
         q = ((cur - 1) % 4) + 1
         out.append(f"{year}Q{q}")
     return out
+
+
+def _attested_unmatched_payload(session: Session) -> dict[str, Any]:
+    rows = unmatched_file_evidence_rows(session, limit=500)
+    attested = [r for r in rows if r.get("evidence_basis") == SOURCE_ATTESTED]
+    amount_by: dict[str, float] = {}
+    for row in attested:
+        ccy = (row.get("currency_code") or "(blank)").strip() or "(blank)"
+        if row.get("amount") is not None:
+            amount_by[ccy] = amount_by.get(ccy, 0.0) + float(row["amount"])
+    return {
+        "case_count": len(attested),
+        "amount_by_currency": {k: round(v, 2) for k, v in sorted(amount_by.items())},
+        "note": (
+            "Pending-report CN/payment amounts for Case IDs with no cpor_case. "
+            "Not mixed into support-%-of-SRP or ttl_support norms."
+        ),
+    }
 
 
 def _load_cases(session: Session) -> list[CporCase]:
@@ -178,6 +202,12 @@ def build_support_norms(
             "by_customer": [],
             "currency_compute": "USD",
             "currency_display_secondary": "ZAR",
+            "evidence_basis_mix": evidence_basis_counts(load_evidence_basis_by_case(session, cases)),
+            "attested_unmatched_file": _attested_unmatched_payload(session),
+            "evidence_basis_note": (
+                "Absolute/% norms use CIP case lines only. Attested unmatched file amounts "
+                "are listed separately and are not ttl_support."
+            ),
             **provenance,
         }
 
@@ -267,6 +297,12 @@ def build_support_norms(
             f"(trailing {n} from {latest})"
         ),
         **provenance,
+        "evidence_basis_mix": evidence_basis_counts(load_evidence_basis_by_case(session, cases)),
+        "attested_unmatched_file": _attested_unmatched_payload(session),
+        "evidence_basis_note": (
+            "Absolute/% norms use CIP case lines only. Attested unmatched file amounts "
+            "are listed separately and are not ttl_support."
+        ),
     }
 
 
@@ -278,6 +314,7 @@ def build_comparable_cases(
 ) -> dict[str, Any]:
     """A2-05 — ranked comparable cases (never filtered to empty)."""
     cases = _load_cases(session)
+    basis_by = load_evidence_basis_by_case(session, cases)
     seed = next((c for c in cases if int(c.id) == int(case_id)), None)
     if seed is None:
         # May be superseded — try load directly
@@ -397,12 +434,56 @@ def build_comparable_cases(
                     "volume_similarity": round(vol, 4),
                 },
                 "score": round(composite, 4),
+                "evidence_basis": basis_by.get(int(case.id), "none"),
+                "source": "cpor_case",
             }
         )
 
     ranked.sort(key=lambda r: (-r["score"], r["case_code"] or ""))
     lim = max(1, min(int(limit), 200))
     seed_code, seed_name = cust_meta.get(int(seed.customer_id), (None, None))
+    seed_code_s = (seed_code or "").strip()
+    seed_name_s = (seed_name or "").strip()
+    seed_promo = (seed.promotion_type or "").strip()
+    file_ranked: list[dict[str, Any]] = []
+    for row in unmatched_file_evidence_rows(session, limit=80):
+        if row.get("evidence_basis") != SOURCE_ATTESTED:
+            continue
+        token = (row.get("customer_token") or "").strip()
+        same_customer = 1 if token and (token == seed_code_s or token == seed_name_s) else 0
+        promo_raw = (row.get("promotion_type_raw") or "").strip()
+        same_promo = 1 if promo_raw and promo_raw == seed_promo else 0
+        composite = same_customer * 1_000 + same_promo * 100 - 1_000_000_000
+        code = row["external_case_code"]
+        file_ranked.append(
+            {
+                "case_id": None,
+                "external_case_code": code,
+                "case_code": code,
+                "customer_id": None,
+                "customer_code": row.get("customer_token"),
+                "customer_name": None,
+                "promotion_type": row.get("promotion_type_raw"),
+                "status": row.get("payment_status"),
+                "window_start": row.get("window_start"),
+                "window_end": row.get("window_end"),
+                "quarter": None,
+                "estimate_qty": 0.0,
+                "bus": [],
+                "evidence_basis": SOURCE_ATTESTED,
+                "source": "cpor_payment_evidence",
+                "rank_axes": {
+                    "same_customer": bool(same_customer),
+                    "bu_overlap_ratio": 0.0,
+                    "same_promotion_type": bool(same_promo),
+                    "quarter_proximity": 0.0,
+                    "volume_similarity": 0.0,
+                },
+                "score": round(composite, 4),
+            }
+        )
+    file_ranked.sort(key=lambda r: (-r["score"], r["case_code"] or ""))
+    combined = ranked + file_ranked
     return {
         "case_id": int(seed.id),
         "case_code": seed.case_code,
@@ -416,6 +497,12 @@ def build_comparable_cases(
             "bus": sorted(seed_f["bus"]),
         },
         "rank_order": ["customer", "bu", "promotion_type", "quarter_proximity", "volume"],
-        "total_candidates": len(ranked),
-        "items": ranked[:lim],
+        "file_evidence_rank_note": (
+            "Source-attested unmatched pending-report Case IDs rank below all CIP cases. "
+            "Customer/promo match is exact token equality only."
+        ),
+        "total_candidates": len(combined),
+        "cip_candidates": len(ranked),
+        "attested_file_candidates": len(file_ranked),
+        "items": combined[:lim],
     }

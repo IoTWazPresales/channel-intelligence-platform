@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.models.cpor import CporCase
 from app.models.cpor_payment import CporPaymentEvidence
+from app.services.cpor.evidence_basis import summarize_unmatched_file
 from app.services.cpor.payment_evidence.profile_defaults import normalize_header
 
 PENDING_PAYMENT_STATUSES = frozenset({"to_be_applied", "to_be_clarified", "processed"})
@@ -101,6 +102,7 @@ def build_payment_evidence_overlay(session: Session) -> dict[str, Any]:
         )
 
     pending.sort(key=lambda x: (x["payment_status"] or "", x["external_case_code"] or ""))
+    unmatched_summary = summarize_unmatched_file(rows, cip_set, limit=200)
     cip_n = len(cip_set)
     return {
         "row_count": len(rows),
@@ -108,7 +110,13 @@ def build_payment_evidence_overlay(session: Session) -> dict[str, Any]:
         "cip_case_count": cip_n,
         "matched_cip_case_count": len(matched),
         "unmatched_cip_case_count": len(unmatched_cip),
-        "unmatched_file_case_count": len(unmatched_file),
+        "unmatched_file_case_count": unmatched_summary["unmatched_file_case_count"],
+        "unmatched_file_attested_count": unmatched_summary["unmatched_file_attested_count"],
+        "unmatched_file_attested_amount_by_currency": unmatched_summary[
+            "unmatched_file_attested_amount_by_currency"
+        ],
+        "unmatched_file_amount_note": unmatched_summary["unmatched_file_amount_note"],
+        "unmatched_file_rows": unmatched_summary["unmatched_file_rows"],
         "match_rate": round(len(matched) / cip_n, 4) if cip_n else None,
         "linked_row_count": linked_rows,
         "unlinked_row_count": len(rows) - linked_rows,
@@ -124,5 +132,9 @@ def build_payment_evidence_overlay(session: Session) -> dict[str, Any]:
         "paid_note": (
             "Paid on the ZAR open book only sums linked evidence in the case currency. "
             "This ASUS pending report is almost all USD, so it does not move R0 paid / R6.0m outstanding."
+        ),
+        "unmatched_cip_note": (
+            "CIP case_codes with no exact Case ID in this pending report — created in CIP and "
+            "never submitted, or cancelled upstream. Observation only; not acted on."
         ),
     }

@@ -160,7 +160,9 @@ describe('CporCaseDetailPage FX/readiness (case 312 shape)', () => {
     expect(screen.getByTestId('cpor-case-readiness-assumptions')).toHaveTextContent(
       '2 assumptions open',
     );
-    expect(screen.getByTestId('cpor-case-readiness-evidence')).toHaveTextContent('0 evidence rows');
+    expect(screen.getByTestId('cpor-case-readiness-evidence')).toHaveTextContent(
+      'No claim files · not source-attested',
+    );
   });
 
   it('withholds USD anchor when API marks missing_roe for zero ROE', async () => {

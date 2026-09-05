@@ -36,6 +36,7 @@ export type CporCaseListRow = {
   payment_evidence_count?: number;
   last_claim_sale_date?: string | null;
   last_payment_date?: string | null;
+  evidence_basis?: 'claim_evidenced' | 'source_attested' | 'none' | null;
   allowed_next?: string[];
   flags?: string[];
 };
@@ -47,6 +48,7 @@ export type CporCasesPage = {
   page_size: number;
   status_counts?: Record<string, number>;
   review_queue_count?: number;
+  evidence_basis_counts?: Partial<Record<'claim_evidenced' | 'source_attested' | 'none', number>>;
 };
 
 export type CporCaseLine = {
@@ -99,6 +101,7 @@ export type CporCaseDetail = {
   ttl_support_zar: number | null;
   ttl_support_usd: number | null;
   created_by?: string | null;
+  evidence_basis?: 'claim_evidenced' | 'source_attested' | 'none' | null;
 };
 
 export type SupportBiasRead = {

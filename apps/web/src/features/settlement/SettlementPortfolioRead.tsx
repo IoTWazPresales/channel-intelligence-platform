@@ -9,6 +9,8 @@ import { apiGet } from '@/lib/api';
 type PortfolioIntelligence = {
   cases_in_scope: number;
   lines_included: number;
+  evidence_basis_mix?: { claim_evidenced?: number; source_attested?: number; none?: number };
+  evidence_basis_note?: string;
   totals: {
     support_usd: number;
     support_zar: number;
@@ -81,6 +83,9 @@ export function SettlementPortfolioRead() {
     <Stack spacing={0.75} data-testid="settlement-portfolio-read" sx={{ mt: 1.5 }}>
       <Typography variant="caption" color="text.secondary">
         Portfolio · {isLoading ? '…' : `${data?.cases_in_scope ?? 0} cases / ${data?.lines_included ?? 0} lines`}
+        {data?.evidence_basis_mix
+          ? ` · mixed ${data.evidence_basis_mix.claim_evidenced ?? 0} claim / ${data.evidence_basis_mix.source_attested ?? 0} attested / ${data.evidence_basis_mix.none ?? 0} none`
+          : ''}
       </Typography>
       <Stack direction="row" spacing={2} useFlexGap flexWrap="wrap">
         {tiles.map((tile) => (

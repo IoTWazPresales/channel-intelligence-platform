@@ -102,7 +102,19 @@ describe('buildSettleReadinessChips', () => {
       claim_evidence_count: 0,
     });
     expect(chips.find((c) => c.key === 'evidence')?.tone).toBe('fail');
-    expect(chips.find((c) => c.key === 'evidence')?.label).toBe('0 evidence rows');
+    expect(chips.find((c) => c.key === 'evidence')?.label).toBe('No claim files · not source-attested');
+  });
+
+  it('labels source-attested as weaker evidence, not zero claim rows', () => {
+    const chips = buildSettleReadinessChips({
+      fx_declared: true,
+      roe_snapshot: 18,
+      open_assumption_count: 0,
+      claim_evidence_count: 0,
+      evidence_basis: 'source_attested',
+    });
+    expect(chips.find((c) => c.key === 'evidence')?.tone).toBe('open');
+    expect(chips.find((c) => c.key === 'evidence')?.label).toMatch(/Source attested/i);
   });
 
   it('marks assumptions open when count > 0', () => {

@@ -22,7 +22,11 @@ def _line(**kwargs):
     return SimpleNamespace(**defaults)
 
 
-def test_portfolio_usd_and_zar_and_delivery_and_spu() -> None:
+def test_portfolio_usd_and_zar_and_delivery_and_spu(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.services.cpor.portfolio_intelligence.load_evidence_basis_by_case",
+        lambda session, cases, **k: {int(c.id): "none" for c in cases},
+    )
     case = SimpleNamespace(
         id=1,
         customer_id=7,
@@ -55,6 +59,8 @@ def test_portfolio_usd_and_zar_and_delivery_and_spu() -> None:
     assert out["lines_included"] == 2
     assert out["lines_excluded_voided"] == 1
     assert out["totals"]["support_usd"] == 15.0
+    assert out["evidence_basis_mix"]["none"] == 1
+    assert out["claim_evidenced_only"]["lines_included"] == 0
     assert out["totals"]["support_zar"] == 270.0
     assert abs(out["totals"]["delivery_rate"] - (13 / 15)) < 1e-9
     assert abs(out["totals"]["support_per_unit_sold_usd"] - (15 / 13)) < 1e-9

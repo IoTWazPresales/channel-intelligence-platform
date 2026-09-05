@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import NextLink from 'next/link';
 
 import { apiGet } from '@/lib/api';
+import { evidenceBasisLabel } from '@/features/promotions-funding/evidenceBasis';
 
 type RankAxes = {
   same_customer: boolean;
@@ -18,15 +19,19 @@ type ComparablePayload = {
   case_id: number;
   total_candidates: number;
   rank_order: string[];
+  file_evidence_rank_note?: string;
   items: Array<{
-    case_id: number;
+    case_id: number | null;
     case_code: string;
+    external_case_code?: string;
     customer_code: string | null;
     customer_name: string | null;
     promotion_type: string;
     quarter: string | null;
     estimate_qty: number;
     bus?: string[];
+    evidence_basis?: string;
+    source?: string;
     rank_axes: RankAxes;
   }>;
 };
@@ -73,25 +78,35 @@ export function CporComparableCasesPanel({ caseId }: { caseId: number }) {
       <Typography variant="caption" color="text.secondary">
         Ranked (never filtered): customer → BU → promo → quarter proximity → volume
         {data ? ` · ${data.total_candidates} candidates` : ''}
+        {data?.file_evidence_rank_note ? ` · ${data.file_evidence_rank_note}` : ''}
       </Typography>
       {isLoading ? (
         <Typography variant="body2">Loading…</Typography>
       ) : (
         <Stack spacing={0.5}>
-          {(data?.items ?? []).map((row, i) => (
-            <Typography key={row.case_id} variant="body2" data-testid={`cpor-comparable-${row.case_id}`}>
+          {(data?.items ?? []).map((row, i) => {
+            const key = row.case_id != null ? String(row.case_id) : `file-${row.case_code}`;
+            return (
+            <Typography key={key} variant="body2" data-testid={`cpor-comparable-${key}`}>
               {i + 1}.{' '}
-              <MuiLink component={NextLink} href={`/commercial-planner/cpor-cases/${row.case_id}`}>
-                {row.case_code}
-              </MuiLink>{' '}
+              {row.case_id != null ? (
+                <MuiLink component={NextLink} href={`/commercial-planner/cpor-cases/${row.case_id}`}>
+                  {row.case_code}
+                </MuiLink>
+              ) : (
+                <span>{row.case_code}</span>
+              )}{' '}
               · {row.customer_code ?? '—'} · {row.promotion_type} · {row.quarter ?? '—'} · est{' '}
               {row.estimate_qty.toLocaleString()}
               <Typography component="span" variant="caption" color="text.secondary" sx={{ display: 'block', pl: 2 }}>
                 {formatMatchingAxes(row.rank_axes)}
                 {row.bus?.length ? ` · BUs: ${row.bus.join(', ')}` : ''}
+                {row.evidence_basis ? ` · ${evidenceBasisLabel(row.evidence_basis)}` : ''}
+                {row.source === 'cpor_payment_evidence' ? ' · unmatched file (no CIP case)' : ''}
               </Typography>
             </Typography>
-          ))}
+            );
+          })}
           {!data?.items?.length ? (
             <Typography variant="body2" color="text.secondary">
               No other cases to rank.

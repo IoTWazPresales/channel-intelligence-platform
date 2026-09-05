@@ -9,6 +9,7 @@ export type SettleReadiness = {
   fx_basis_line?: string | null;
   open_assumption_count: number;
   claim_evidence_count: number;
+  evidence_basis?: 'claim_evidenced' | 'source_attested' | 'none' | null;
 };
 
 export type FxMoneyDisplay = {
@@ -105,14 +106,23 @@ export function buildSettleReadinessChips(readiness: SettleReadiness): Readiness
         };
 
   const evidenceCount = readiness.claim_evidence_count;
-  const evidenceChip: ReadinessChip =
-    evidenceCount > 0
-      ? {
-          key: 'evidence',
-          tone: 'pass',
-          label: `${evidenceCount} evidence row${evidenceCount === 1 ? '' : 's'}`,
-        }
-      : { key: 'evidence', tone: 'fail', label: '0 evidence rows' };
+  const basis = readiness.evidence_basis;
+  let evidenceChip: ReadinessChip;
+  if (basis === 'claim_evidenced' || evidenceCount > 0) {
+    evidenceChip = {
+      key: 'evidence',
+      tone: 'pass',
+      label: `${evidenceCount} claim line${evidenceCount === 1 ? '' : 's'}`,
+    };
+  } else if (basis === 'source_attested') {
+    evidenceChip = {
+      key: 'evidence',
+      tone: 'open',
+      label: 'Source attested (closed/paid) — no claim files',
+    };
+  } else {
+    evidenceChip = { key: 'evidence', tone: 'fail', label: 'No claim files · not source-attested' };
+  }
 
   return [fxChip, assumptionsChip, evidenceChip];
 }

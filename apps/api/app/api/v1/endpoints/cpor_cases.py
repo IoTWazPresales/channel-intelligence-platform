@@ -42,6 +42,15 @@ from app.services.cpor.payment_recon import load_payment_recon_by_case_id
 from app.services.cpor.promo_load_recon import build_promo_load_recon
 from app.services.cpor.promotion_type_vocab import CPOR_CASE_STATUS_SET, CPOR_PROMOTION_TYPE_SET
 from app.services.cpor.recompute import recompute_case, recompute_case_line
+from app.services.cpor.evidence_basis import (
+    CLAIM_EVIDENCED,
+    EVIDENCE_BASES,
+    NONE as EVIDENCE_NONE,
+    SOURCE_ATTESTED,
+    evidence_basis_counts,
+    load_evidence_basis_by_case,
+    load_source_attested_case_codes,
+)
 from app.services.cpor.fx_rate import (
     SOURCE_OPERATOR,
     apply_create_fx,
@@ -465,6 +474,7 @@ def list_cases(
     q: str | None = Query(default=None),
     page: int | None = Query(default=None, ge=1),
     page_size: int | None = Query(default=None, ge=1, le=500),
+    evidence_basis: str | None = Query(default=None),
     user: dict = Depends(get_current_user),
 ):
     """List CPOR cases.
@@ -494,6 +504,30 @@ def list_cases(
                 | (DimCustomer.name.ilike(needle))
             )
 
+        if evidence_basis:
+            basis = evidence_basis.strip().lower()
+            if basis not in EVIDENCE_BASES:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"evidence_basis must be one of: {sorted(EVIDENCE_BASES)}",
+                )
+            claim_sub = select(CporClaimEvidenceLine.case_id).distinct()
+            attested = load_source_attested_case_codes(session)
+            if basis == CLAIM_EVIDENCED:
+                stmt = stmt.where(CporCase.id.in_(claim_sub))
+            elif basis == SOURCE_ATTESTED:
+                if attested:
+                    stmt = stmt.where(
+                        CporCase.case_code.in_(sorted(attested)),
+                        ~CporCase.id.in_(claim_sub),
+                    )
+                else:
+                    stmt = stmt.where(CporCase.id == -1)
+            else:
+                stmt = stmt.where(~CporCase.id.in_(claim_sub))
+                if attested:
+                    stmt = stmt.where(~CporCase.case_code.in_(sorted(attested)))
+
         paginate = page is not None and page_size is not None
         if paginate:
             count_stmt = select(func.count()).select_from(stmt.order_by(None).subquery())
@@ -507,6 +541,7 @@ def list_cases(
         cust_map = {cust.id: cust for _, cust in rows}
         recon_by = load_payment_recon_by_case_id(session, cases, customers=cust_map)
         readiness_by = load_settle_readiness_by_case_id(session, cases)
+        basis_by = load_evidence_basis_by_case(session, cases)
         line_agg = _case_line_aggregates(session, [c.id for c in cases])
         claim_sale_by = _last_claim_sale_by_case_id(session, [c.id for c in cases])
         status_counts = _status_counts(session, user)
@@ -534,10 +569,14 @@ def list_cases(
             row["last_payment_date"] = recon.get("last_payment_date")
             row["latest_payment_status"] = recon.get("latest_payment_status")
             row["credit_note_ids"] = recon.get("credit_note_ids") or []
-            row["settle_readiness"] = readiness_by.get(
-                case.id,
-                build_settle_readiness(case, claim_row_count=0, open_assumption_count=0),
-            )
+            row["settle_readiness"] = {
+                **(readiness_by.get(
+                    case.id,
+                    build_settle_readiness(case, claim_row_count=0, open_assumption_count=0),
+                )),
+                "evidence_basis": basis_by.get(int(case.id), EVIDENCE_NONE),
+            }
+            row["evidence_basis"] = basis_by.get(int(case.id), EVIDENCE_NONE)
             sale = claim_sale_by.get(case.id)
             row["last_claim_sale_date"] = sale.isoformat() if sale is not None else None
             out.append(row)
@@ -550,6 +589,7 @@ def list_cases(
                 "page_size": page_size,
                 "status_counts": status_counts,
                 "review_queue_count": review_queue_count,
+                "evidence_basis_counts": evidence_basis_counts(basis_by),
             }
         return out
 
@@ -631,10 +671,13 @@ def get_case(case_id: int, user: dict = Depends(get_current_user)):
             if count_open_assumptions_from_line_flags(lj.get("flags") or []) > 0
         )
         out = _case_json(case, customer=cust, lines=line_jsons, include_lines=True)
+        basis = load_evidence_basis_by_case(session, [case]).get(int(case.id), EVIDENCE_NONE)
+        out["evidence_basis"] = basis
         out["settle_readiness"] = build_settle_readiness(
             case,
             claim_row_count=claim_count,
             open_assumption_count=open_assumptions,
+            evidence_basis=basis,
         )
         return out
 
@@ -703,10 +746,13 @@ def patch_case(
             if count_open_assumptions_from_line_flags(lj.get("flags") or []) > 0
         )
         out = _case_json(case, customer=cust, lines=line_jsons, include_lines=True)
+        basis = load_evidence_basis_by_case(session, [case]).get(int(case.id), EVIDENCE_NONE)
+        out["evidence_basis"] = basis
         out["settle_readiness"] = build_settle_readiness(
             case,
             claim_row_count=claim_count,
             open_assumption_count=open_assumptions,
+            evidence_basis=basis,
         )
         if recompute_report:
             out["recompute"] = recompute_report

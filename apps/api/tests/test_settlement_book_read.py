@@ -15,6 +15,7 @@ def test_settlement_book_empty_cases():
     assert out["open_case_count"] == 0
     assert out["shape_segments"]["settled_pct"] == 0.0
     assert "No open settlement cases" in out["read_line"]
+    assert out["by_evidence_basis"]["none"]["case_count"] == 0
 
 
 def test_shape_segments_cap_blocked_so_bar_cannot_exceed_book():

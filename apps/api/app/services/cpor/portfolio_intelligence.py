@@ -15,6 +15,11 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.cpor import CporCase, CporCaseLine
 from app.models.dimensions import DimCustomer, DimProduct
+from app.services.cpor.evidence_basis import (
+    CLAIM_EVIDENCED,
+    evidence_basis_counts,
+    load_evidence_basis_by_case,
+)
 from app.services.cpor.pivot import _line_ttl_support_usd, is_voided_line
 
 
@@ -98,10 +103,19 @@ def build_portfolio_intelligence(session: Session) -> dict[str, Any]:
     tot_res = 0.0
     lines_included = 0
     lines_excluded_voided = 0
+    claim_usd = 0.0
+    claim_zar = 0.0
+    claim_est = 0.0
+    claim_res = 0.0
+    claim_lines = 0
+
+    basis_by = load_evidence_basis_by_case(session, cases)
+    mix = evidence_basis_counts(basis_by)
 
     for case in cases:
         promo = (case.promotion_type or "").strip() or "(unknown)"
         cid = int(case.customer_id)
+        is_claim = basis_by.get(int(case.id)) == CLAIM_EVIDENCED
         for line in case.lines or []:
             if is_voided_line(line):
                 lines_excluded_voided += 1
@@ -125,6 +139,12 @@ def build_portfolio_intelligence(session: Session) -> dict[str, Any]:
             tot_est += est
             tot_res += res
             lines_included += 1
+            if is_claim:
+                claim_usd += usd_v
+                claim_zar += zar_v
+                claim_est += est
+                claim_res += res
+                claim_lines += 1
 
             bu = bu_by_product.get(int(line.product_id), "(unassigned)") if line.product_id else "(unassigned)"
 
@@ -202,6 +222,10 @@ def build_portfolio_intelligence(session: Session) -> dict[str, Any]:
 
     incremental = build_portfolio_incremental_summary(session)
 
+    claim_delivery = (claim_res / claim_est) if claim_est > 0 else None
+    claim_spu_usd = (claim_usd / claim_res) if claim_res > 0 else None
+    claim_spu_zar = (claim_zar / claim_res) if claim_res > 0 else None
+
     return {
         "currency_compute": "USD",
         "currency_display_secondary": "ZAR",
@@ -212,6 +236,12 @@ def build_portfolio_intelligence(session: Session) -> dict[str, Any]:
         "cases_in_scope": len(cases),
         "lines_included": lines_included,
         "lines_excluded_voided": lines_excluded_voided,
+        "evidence_basis_mix": mix,
+        "evidence_basis_note": (
+            "Headline totals mix all CIP cases. claim_evidenced_only is the same formulas "
+            "restricted to cases with cpor_claim_evidence_line rows. Source-attested history "
+            "is not in these support/delivery figures (those cases often have no result_qty)."
+        ),
         "totals": {
             "support_usd": round(tot_usd, 4),
             "support_zar": round(tot_zar, 4),
@@ -220,6 +250,17 @@ def build_portfolio_intelligence(session: Session) -> dict[str, Any]:
             "delivery_rate": delivery_rate,
             "support_per_unit_sold_usd": support_per_unit_usd,
             "support_per_unit_sold_zar": support_per_unit_zar,
+        },
+        "claim_evidenced_only": {
+            "cases_in_scope": mix.get(CLAIM_EVIDENCED, 0),
+            "lines_included": claim_lines,
+            "support_usd": round(claim_usd, 4),
+            "support_zar": round(claim_zar, 4),
+            "estimate_qty": round(claim_est, 4),
+            "result_qty": round(claim_res, 4),
+            "delivery_rate": claim_delivery,
+            "support_per_unit_sold_usd": claim_spu_usd,
+            "support_per_unit_sold_zar": claim_spu_zar,
         },
         "incremental_unit_cost": incremental,
         "by_customer": customers_out,
@@ -239,7 +280,23 @@ def _empty_payload(*, cases_in_scope: int, lines_included: int) -> dict[str, Any
         "cases_in_scope": cases_in_scope,
         "lines_included": lines_included,
         "lines_excluded_voided": 0,
+        "evidence_basis_mix": {"claim_evidenced": 0, "source_attested": 0, "none": 0},
+        "evidence_basis_note": (
+            "Headline totals mix all CIP cases. claim_evidenced_only is the same formulas "
+            "restricted to cases with cpor_claim_evidence_line rows."
+        ),
         "totals": {
+            "support_usd": 0.0,
+            "support_zar": 0.0,
+            "estimate_qty": 0.0,
+            "result_qty": 0.0,
+            "delivery_rate": None,
+            "support_per_unit_sold_usd": None,
+            "support_per_unit_sold_zar": None,
+        },
+        "claim_evidenced_only": {
+            "cases_in_scope": 0,
+            "lines_included": 0,
             "support_usd": 0.0,
             "support_zar": 0.0,
             "estimate_qty": 0.0,

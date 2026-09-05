@@ -61,10 +61,12 @@ def build_settle_readiness(
     *,
     claim_row_count: int,
     open_assumption_count: int,
+    evidence_basis: str | None = None,
 ) -> dict[str, Any]:
     declared = fx_declared(case)
     roe = float(case.roe_snapshot) if declared else None
     mode_ok = fx_mode_valid(case)
+    basis = evidence_basis
     return {
         "fx_declared": declared,
         "roe_snapshot": roe,
@@ -74,6 +76,7 @@ def build_settle_readiness(
         "fx_basis_line": build_fx_basis_line(case),
         "open_assumption_count": int(open_assumption_count),
         "claim_evidence_count": int(claim_row_count),
+        "evidence_basis": basis,
     }
 
 

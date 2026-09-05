@@ -10,6 +10,7 @@ import { useMemo } from 'react';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { fmtCompact, fmtInt } from '@/features/promotions-funding/format';
+import { evidenceBasisLabel } from '@/features/promotions-funding/evidenceBasis';
 import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
 import { STAGE_LABEL, stageTone, type PlanStage } from '@/features/promotions-funding/lifecycle';
 import type { CporCaseListRow, CporCasesPage } from '@/features/promotions-funding/types';
@@ -52,6 +53,12 @@ export default function CporClaimsPage() {
         valueFormatter: (p) => fmtInt(p.value as number),
       },
       {
+        colId: 'evidence_basis',
+        headerName: 'Evidence basis',
+        width: 150,
+        valueGetter: (p) => evidenceBasisLabel(p.data?.evidence_basis),
+      },
+      {
         field: 'ttl_support_zar',
         headerName: 'Support',
         type: 'rightAligned',
@@ -76,7 +83,8 @@ export default function CporClaimsPage() {
         <Alert severity="info" variant="outlined">
           Claim evidence is matched per case. Apply still happens on the settlement workspace — this lens
           lists cases in the settlement half of the same lifecycle so you can see who is waiting on
-          evidence. Import Center stewards the file; nothing is invented here.
+          evidence. Source-attested closed/paid pending-report matches are evidence too — weaker than
+          claim files, never mixed without a label. Import Center stewards the file; nothing is invented here.
         </Alert>
         <ModuleDataSection
           isLoading={isLoading}

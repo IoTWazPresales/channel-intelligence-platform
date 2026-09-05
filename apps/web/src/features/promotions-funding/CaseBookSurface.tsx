@@ -22,6 +22,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { fmtCompact, fmtInt } from '@/features/promotions-funding/format';
+import { evidenceBasisLabel, isEvidenceBasis, type EvidenceBasis } from '@/features/promotions-funding/evidenceBasis';
 import {
   LIFECYCLE_STAGES,
   STAGE_LABEL,
@@ -43,6 +44,11 @@ type SettlementBook = {
   outstanding_amount?: number;
   blocked_amount?: number;
   currency_code?: string;
+  by_evidence_basis?: Record<
+    string,
+    { case_count?: number; owed?: number; paid?: number; outstanding?: number }
+  >;
+  evidence_basis_note?: string;
 };
 
 type BookFilter = 'proposed' | 'ended' | 'settled' | 'blocked' | 'draft' | null;
@@ -82,6 +88,36 @@ function ageDays(row: CporCaseListRow): number | null {
   return Math.max(0, Math.floor((Date.now() - sale) / 86_400_000));
 }
 
+function windowEndAgeDays(row: CporCaseListRow): number | null {
+  if (!row.window_end) return null;
+  const end = Date.parse(row.window_end);
+  if (!Number.isFinite(end)) return null;
+  return Math.max(0, Math.floor((Date.now() - end) / 86_400_000));
+}
+
+function bucketOutstanding(
+  items: CporCaseListRow[],
+  daysOf: (row: CporCaseListRow) => number | null,
+): Array<{ bucket: string; value: number }> {
+  const buckets = [
+    { bucket: '0–14d', value: 0 },
+    { bucket: '15–30d', value: 0 },
+    { bucket: '31–60d', value: 0 },
+    { bucket: '60d+', value: 0 },
+  ];
+  for (const r of items) {
+    if (r.status === 'settled') continue;
+    const d = daysOf(r);
+    if (d == null) continue;
+    const v = Number(r.outstanding_amount) || 0;
+    if (d <= 14) buckets[0].value += v;
+    else if (d <= 30) buckets[1].value += v;
+    else if (d <= 60) buckets[2].value += v;
+    else buckets[3].value += v;
+  }
+  return buckets;
+}
+
 export function CaseBookSurface() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'), { noSsr: true });
@@ -99,6 +135,8 @@ export function CaseBookSurface() {
         ? statusParam
         : null;
   const selectedParam = search.get('case');
+  const evidenceParam = search.get('evidence');
+  const evidenceFilter: EvidenceBasis | null = isEvidenceBasis(evidenceParam) ? evidenceParam : null;
   const [toastAction, setToastAction] = useState<string | null>(null);
   const [backfillItems, setBackfillItems] = useState<FxBackfillSuggestion[] | null>(null);
 
@@ -139,34 +177,25 @@ export function CaseBookSurface() {
   );
 
   const rows = useMemo(() => {
-    if (filter === 'blocked') return fxBlockedPositive;
-    if (filter) return allItems.filter((r) => r.status === filter);
-    return allItems;
-  }, [allItems, filter, fxBlockedPositive]);
+    let next = allItems;
+    if (filter === 'blocked') next = fxBlockedPositive;
+    else if (filter) next = allItems.filter((r) => r.status === filter);
+    if (evidenceFilter) next = next.filter((r) => r.evidence_basis === evidenceFilter);
+    return next;
+  }, [allItems, filter, fxBlockedPositive, evidenceFilter]);
 
   const selectedId = selectedParam && /^\d+$/.test(selectedParam) ? Number(selectedParam) : null;
   const selected = allItems.find((r) => r.id === selectedId) ?? rows.find((r) => r.id === selectedId) ?? null;
 
-  const ageing = useMemo(() => {
-    const buckets = [
-      { bucket: '0–14d', value: 0 },
-      { bucket: '15–30d', value: 0 },
-      { bucket: '31–60d', value: 0 },
-      { bucket: '60d+', value: 0 },
-    ];
-    for (const r of allItems) {
-      if (r.status === 'settled') continue;
-      const d = ageDays(r);
-      if (d == null) continue;
-      const v = Number(r.outstanding_amount) || 0;
-      if (d <= 14) buckets[0].value += v;
-      else if (d <= 30) buckets[1].value += v;
-      else if (d <= 60) buckets[2].value += v;
-      else buckets[3].value += v;
-    }
-    return buckets;
-  }, [allItems]);
+  const ageingClaim = useMemo(() => bucketOutstanding(allItems, ageDays), [allItems]);
+  const ageingWindow = useMemo(() => bucketOutstanding(allItems, windowEndAgeDays), [allItems]);
   const hasClaimAge = allItems.some((r) => r.last_claim_sale_date);
+  const ageing = hasClaimAge ? ageingClaim : ageingWindow;
+  const evidenceCounts = data?.evidence_basis_counts ?? {
+    claim_evidenced: allItems.filter((r) => r.evidence_basis === 'claim_evidenced').length,
+    source_attested: allItems.filter((r) => r.evidence_basis === 'source_attested').length,
+    none: allItems.filter((r) => (r.evidence_basis ?? 'none') === 'none').length,
+  };
 
   const loadFxSuggestions = useMutation({
     mutationFn: () =>
@@ -234,11 +263,20 @@ export function CaseBookSurface() {
       },
       {
         colId: 'age',
-        headerName: 'Age',
+        headerName: hasClaimAge ? 'Age (claim sale)' : 'Age (window end)',
         type: 'rightAligned',
-        width: 80,
-        valueGetter: (p) => ageDays(p.data as CporCaseListRow),
+        width: 110,
+        valueGetter: (p) =>
+          hasClaimAge
+            ? ageDays(p.data as CporCaseListRow)
+            : windowEndAgeDays(p.data as CporCaseListRow),
         valueFormatter: (p) => (p.value == null ? '—' : `${p.value}d`),
+      },
+      {
+        colId: 'evidence_basis',
+        headerName: 'Evidence',
+        width: 140,
+        valueGetter: (p) => evidenceBasisLabel((p.data as CporCaseListRow | undefined)?.evidence_basis),
       },
       {
         field: 'status',
@@ -257,7 +295,7 @@ export function CaseBookSurface() {
         valueGetter: (p) => fxBlockedReason(p.data as CporCaseListRow) ?? '',
       },
     ],
-    [ccy],
+    [ccy, hasClaimAge],
   );
 
   const chips = (
@@ -274,6 +312,20 @@ export function CaseBookSurface() {
     active: filter === key,
     onToggle: () => setParams({ status: filter === key ? null : key, case: null }),
     tone: tone as 'danger' | 'warning' | 'success' | 'default',
+  }));
+
+  const evidenceChips = (
+    [
+      ['claim_evidenced', 'Claim evidenced', evidenceCounts.claim_evidenced ?? 0],
+      ['source_attested', 'Source attested', evidenceCounts.source_attested ?? 0],
+      ['none', 'No evidence', evidenceCounts.none ?? 0],
+    ] as const
+  ).map(([key, label, n]) => ({
+    key,
+    label: `${label} · ${n}`,
+    active: evidenceFilter === key,
+    onToggle: () => setParams({ evidence: evidenceFilter === key ? null : key, case: null }),
+    tone: key === 'none' ? ('default' as const) : key === 'source_attested' ? ('warning' as const) : ('success' as const),
   }));
 
   const evidenceRow = (label: string, ok: boolean) => (
@@ -296,8 +348,8 @@ export function CaseBookSurface() {
             <b>The Case book is the settlement half of the same lifecycle.</b> Cases here were authored
             or approved in the Promotion planner; owed, paid and blocked describe what is still open
             after the window — not a second object. Pending payment/CN disputes (Latest Comment) live
-            on the Payments lens. This pending report does not populate claim lines, so ageing stays
-            blocked.
+            on the Payments lens. Claim-sale ageing is used when claim lines exist; otherwise outstanding
+            is aged from window end (a different clock — labeled).
           </Typography>
           <Box sx={{ minWidth: { md: 520 } }}>
             <LifecycleRail
@@ -322,7 +374,7 @@ export function CaseBookSurface() {
           label="Open book total"
           value={fmtCompact(book?.book_total, ccy)}
           compact
-          caption={`${book?.open_case_count ?? '—'} non-settled, non-cancelled cases (draft + ended). Owed = Σ line ttl_support.`}
+          caption={`${book?.open_case_count ?? '—'} non-settled, non-cancelled cases (draft + ended). Owed = Σ line ttl_support. Mix: claim ${book?.by_evidence_basis?.claim_evidenced?.case_count ?? 0} · attested ${book?.by_evidence_basis?.source_attested?.case_count ?? 0} · none ${book?.by_evidence_basis?.none?.case_count ?? 0}.`}
         />
         <HeadlineFigure
           label="Paid on the open book"
@@ -358,24 +410,24 @@ export function CaseBookSurface() {
       </HeadlineStrip>
 
       <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: '2fr 3fr' } }}>
-        <Panel title="Outstanding by age" subtitle="Unsettled value by days since claim sale_date — not window end">
-          {hasClaimAge ? (
-            <Stack spacing={0.25}>
-              {ageing.map((b) => (
-                <PanelRow
-                  key={b.bucket}
-                  severity={b.bucket === '60d+' ? 'danger' : b.bucket === '31–60d' ? 'warning' : 'neutral'}
-                  primary={b.bucket}
-                  figure={fmtCompact(b.value, ccy)}
-                />
-              ))}
-            </Stack>
-          ) : (
-            <Typography variant="body2" color="text.secondary">
-              No <code>cpor_claim_evidence_line</code> rows on this database. Ageing is not estimated
-              from window end.
-            </Typography>
-          )}
+        <Panel
+          title="Outstanding by age"
+          subtitle={
+            hasClaimAge
+              ? 'Unsettled value by days since claim sale_date — not window end'
+              : 'Unsettled value by days since window end. Claim-sale ageing stays available when claim lines exist — not estimated as sale_date.'
+          }
+        >
+          <Stack spacing={0.25} data-testid="case-book-ageing">
+            {ageing.map((b) => (
+              <PanelRow
+                key={b.bucket}
+                severity={b.bucket === '60d+' ? 'danger' : b.bucket === '31–60d' ? 'warning' : 'neutral'}
+                primary={b.bucket}
+                figure={fmtCompact(b.value, ccy)}
+              />
+            ))}
+          </Stack>
         </Panel>
         <Panel title="Blocked cases — reasons" subtitle="FX settle refuses until ROE and mode are declared" flush>
           <Stack spacing={0.25} sx={{ px: 1, pb: 1 }}>
@@ -450,9 +502,9 @@ export function CaseBookSurface() {
       </Box>
 
       <ScopeBar
-        chips={chips}
+        chips={[...chips, ...evidenceChips]}
         summary={`${rows.length} of ${data?.total ?? rows.length} cases`}
-        onClear={() => setParams({ status: null, case: null })}
+        onClear={() => setParams({ status: null, evidence: null, case: null })}
       />
 
       <ModuleDataSection

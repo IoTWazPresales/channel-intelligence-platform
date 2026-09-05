@@ -23,7 +23,13 @@ export type SettlementBookRead = {
     customer_name: string | null;
     outstanding_amount: number;
     fx_blocked: boolean;
+    evidence_basis?: string;
   }>;
+  by_evidence_basis?: Record<
+    string,
+    { case_count: number; owed: number; paid: number; outstanding: number }
+  >;
+  evidence_basis_note?: string;
 };
 
 export function SettlementRegimeStrip() {

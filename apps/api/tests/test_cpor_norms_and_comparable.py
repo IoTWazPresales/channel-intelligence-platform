@@ -41,7 +41,15 @@ def _line(**kwargs):
     return SimpleNamespace(**defaults)
 
 
-def test_norms_absolute_and_pct() -> None:
+def test_norms_absolute_and_pct(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.services.cpor.norms_and_comparable.load_evidence_basis_by_case",
+        lambda session, cases, **k: {int(c.id): "none" for c in cases},
+    )
+    monkeypatch.setattr(
+        "app.services.cpor.norms_and_comparable.unmatched_file_evidence_rows",
+        lambda session, **k: [],
+    )
     case = SimpleNamespace(
         id=1,
         customer_id=7,
@@ -67,9 +75,28 @@ def test_norms_absolute_and_pct() -> None:
     assert cust["absolute_support_usd_total"] == 30.0
     assert cust["quarters_present"] == 2
     assert abs(cust["support_pct_of_srp_avg"] - 0.15) < 1e-9  # (0.1 + 0.2) / 2
+    assert out["attested_unmatched_file"]["case_count"] == 0
 
 
-def test_comparable_ranks_same_customer_first() -> None:
+def test_comparable_ranks_same_customer_first(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.services.cpor.norms_and_comparable.load_evidence_basis_by_case",
+        lambda session, cases, **k: {int(c.id): "none" for c in cases},
+    )
+    monkeypatch.setattr(
+        "app.services.cpor.norms_and_comparable.unmatched_file_evidence_rows",
+        lambda session, **k: [
+            {
+                "external_case_code": "CFILE1",
+                "customer_token": "Alpha",
+                "promotion_type_raw": "Sell out PP",
+                "payment_status": "paid",
+                "evidence_basis": "source_attested",
+                "window_start": None,
+                "window_end": None,
+            }
+        ],
+    )
     seed = SimpleNamespace(
         id=10,
         case_code="C1",
@@ -116,3 +143,6 @@ def test_comparable_ranks_same_customer_first() -> None:
     assert out["items"][0]["case_id"] == 11
     assert out["items"][0]["rank_axes"]["same_customer"] is True
     assert out["items"][1]["case_id"] == 12
+    file_item = next(r for r in out["items"] if r["case_id"] is None)
+    assert file_item["case_code"] == "CFILE1"
+    assert file_item["evidence_basis"] == "source_attested"

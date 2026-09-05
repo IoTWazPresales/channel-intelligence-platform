@@ -49,6 +49,7 @@ type SettlementBook = {
 
 type PortfolioIntel = {
   totals?: { delivery_rate?: number | null };
+  evidence_basis_mix?: { claim_evidenced?: number; source_attested?: number; none?: number };
 };
 
 type BriefMeta = {
@@ -103,7 +104,7 @@ export function FundingChrome({
     `${liveN} live`,
     `${endedN} ended`,
     bookAmt != null ? `book ${fmtCompact(bookAmt, settlement?.currency_code)}` : null,
-    delivery != null ? `delivery rate ${fmtPct(delivery)}` : null,
+    delivery != null ? `delivery rate ${fmtPct(delivery)} (mixed evidence)` : null,
   ]
     .filter(Boolean)
     .join(' · ');
