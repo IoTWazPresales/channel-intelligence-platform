@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-09-05 — **CPOR pending-report overlay** on `feat/ns-2-brief-nav-collapse` `436db58`: Payments lens exact Case ID match + Latest Comment + pending counts; chrome Import payment / CN; case-book USD/ZAR paid caption. Did not write claim lines or `fact_budget_*`. D-0009 ledger still uncommitted.
+
 - 2026-09-05 — **Promotions & Funding close-out committed** on `feat/ns-2-brief-nav-collapse` `5e3eb5a`: `CaseBookSurface` extracted and mounted; settlement book read + tests; remaining funding lenses. Closed against the design lab — do not re-audit. N-0006 not started. D-0009 ledger still uncommitted at this pin.
 
 - 2026-09-04 — **Promotions & Funding fidelity + coherence** on `feat/ns-2-brief-nav-collapse` `96e35b7`: domain chrome (H1/description/subtitle/actions), nav width, seed tenant chip, CONSULT-checked number classes ((i) header/rail/book, (ii) review-queue filter + mixed-denominator 391%→257%, (iii) R0 drafts), grouped Needs a decision, remaining lenses (claims cards, payments, templates, terms). `@cip/web` 112/592. Programme ledger / N-0006 / D-0009 `.eif/` / `sleep4.py` untouched.
