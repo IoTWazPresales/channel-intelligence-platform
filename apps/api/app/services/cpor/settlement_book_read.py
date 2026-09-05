@@ -22,6 +22,29 @@ def _f(v: Any) -> float:
         return 0.0
 
 
+def shape_segment_pcts(
+    *,
+    book_total: float,
+    settled_amount: float,
+    outstanding_amount: float,
+    blocked_amount: float,
+) -> dict[str, float]:
+    """Partition the book: paid | unblocked outstanding | FX-blocked outstanding.
+
+    Blocked is a subset of outstanding, never a third addend. When some open cases have
+    negative ttl_support, blocked (positive outstanding only) can exceed book_total;
+    the bar still cannot exceed the track — blocked is capped at max(outstanding, 0).
+    """
+    denom = book_total if book_total > 0 else 1.0
+    blocked_capped = min(max(blocked_amount, 0.0), max(outstanding_amount, 0.0))
+    unblocked = max(0.0, max(outstanding_amount, 0.0) - blocked_capped)
+    return {
+        "settled_pct": round((settled_amount / denom) * 100, 1),
+        "outstanding_pct": round((unblocked / denom) * 100, 1),
+        "blocked_pct": round((blocked_capped / denom) * 100, 1),
+    }
+
+
 def build_settlement_book_read_model(session: Session) -> dict[str, Any]:
     """Aggregate book-level owed / paid / outstanding / blocked for Settlement grammar-1."""
     cases = list(
@@ -114,10 +137,15 @@ def build_settlement_book_read_model(session: Session) -> dict[str, Any]:
     concentration.sort(key=lambda r: r["outstanding_amount"], reverse=True)
     concentration = concentration[:8]
 
-    denom = book_total if book_total > 0 else 1.0
-    settled_pct = round((settled_amount / denom) * 100, 1)
-    outstanding_pct = round((outstanding_amount / denom) * 100, 1)
-    blocked_pct = round((blocked_amount / denom) * 100, 1)
+    segs = shape_segment_pcts(
+        book_total=book_total,
+        settled_amount=settled_amount,
+        outstanding_amount=outstanding_amount,
+        blocked_amount=blocked_amount,
+    )
+    settled_pct = segs["settled_pct"]
+    outstanding_pct = segs["outstanding_pct"]
+    blocked_pct = segs["blocked_pct"]
 
     read_line = (
         f"{open_case_count} open cases · R {outstanding_amount:,.0f} outstanding"

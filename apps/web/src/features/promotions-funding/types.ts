@@ -24,6 +24,11 @@ export type CporCaseListRow = {
   settle_readiness?: SettleReadiness;
   outstanding_amount?: number | null;
   owed_amount?: number | null;
+  paid_amount_sum?: number | null;
+  payment_evidence_count?: number;
+  last_claim_sale_date?: string | null;
+  last_payment_date?: string | null;
+  allowed_next?: string[];
   flags?: string[];
 };
 

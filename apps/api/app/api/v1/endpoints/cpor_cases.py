@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.security import get_current_user
 from app.core.tenant_scope import tenant_id_from_user, where_tenant
 from app.db.session_sync import SessionLocal
-from app.models.cpor import CporCase, CporCaseEvent, CporCaseLine
+from app.models.cpor import CporCase, CporCaseEvent, CporCaseLine, CporClaimEvidenceLine
 from app.models.dimensions import DimCustomer, DimProduct
 from app.services.cpor.claim_evidence_apply import apply_claim_evidence_to_case
 from app.services.cpor.cost_suggestion import (
@@ -248,6 +248,18 @@ def _cost_suggestion_json(sug: CostSuggestion) -> dict[str, Any]:
         "evidence": sug.evidence,
         "flags": sug.flags,
     }
+
+
+def _last_claim_sale_by_case_id(session: Session, case_ids: list[int]) -> dict[int, date]:
+    """Max claim sale_date per case — ageing is days since claim, never window_end."""
+    if not case_ids:
+        return {}
+    rows = session.execute(
+        select(CporClaimEvidenceLine.case_id, func.max(CporClaimEvidenceLine.sale_date))
+        .where(CporClaimEvidenceLine.case_id.in_(case_ids))
+        .group_by(CporClaimEvidenceLine.case_id)
+    ).all()
+    return {int(cid): d for cid, d in rows if d is not None}
 
 
 def _case_line_aggregates(session: Session, case_ids: list[int]) -> dict[int, dict[str, Any]]:
@@ -484,6 +496,7 @@ def list_cases(
         recon_by = load_payment_recon_by_case_id(session, cases, customers=cust_map)
         readiness_by = load_settle_readiness_by_case_id(session, cases)
         line_agg = _case_line_aggregates(session, [c.id for c in cases])
+        claim_sale_by = _last_claim_sale_by_case_id(session, [c.id for c in cases])
         status_counts = _status_counts(session, user)
         review_queue_count = _review_queue_count(session, user)
 
@@ -513,6 +526,8 @@ def list_cases(
                 case.id,
                 build_settle_readiness(case, claim_row_count=0, open_assumption_count=0),
             )
+            sale = claim_sale_by.get(case.id)
+            row["last_claim_sale_date"] = sale.isoformat() if sale is not None else None
             out.append(row)
 
         if paginate:

@@ -22,7 +22,7 @@ export default function CporClaimsPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'), { noSsr: true });
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['cpor', 'cases', 'claims'],
-    queryFn: ({ signal }) => apiGet<CporCasesPage>('/api/v1/cpor/cases?page=1&page_size=200', { signal }),
+    queryFn: ({ signal }) => apiGet<CporCasesPage>('/api/v1/cpor/cases?page=1&page_size=500', { signal }),
   });
 
   const rows = useMemo(() => {
@@ -74,7 +74,7 @@ export default function CporClaimsPage() {
       <FundingChrome />
       <Stack spacing={2} sx={{ mt: 2 }}>
         <Alert severity="info" variant="outlined">
-          Claim evidence is matched per case. Apply still happens on the settlement desk — this lens
+          Claim evidence is matched per case. Apply still happens on the settlement workspace — this lens
           lists cases in the settlement half of the same lifecycle so you can see who is waiting on
           evidence. Import Center stewards the file; nothing is invented here.
         </Alert>

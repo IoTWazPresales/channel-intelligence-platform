@@ -17,6 +17,7 @@ import {
   Snackbar,
   Stack,
   TextField,
+  Tooltip,
   Typography,
   useMediaQuery,
 } from '@mui/material';
@@ -74,6 +75,7 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
   const [toast, setToast] = useState<string | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectComment, setRejectComment] = useState('');
+  const [exportOpen, setExportOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [product, setProduct] = useState<ProductPick | null>(null);
   const [srp, setSrp] = useState('13999');
@@ -304,7 +306,7 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
             size="small"
             variant="outlined"
             startIcon={<FileDownloadOutlinedIcon />}
-            onClick={() => exportCase.mutate()}
+            onClick={() => setExportOpen(true)}
             disabled={exportCase.isPending}
             data-testid="plan-export"
           >
@@ -328,7 +330,7 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
             ),
           )}
           <Button size="small" variant="text" component={NextLink} href={`/commercial-planner/cpor-cases/${caseId}`}>
-            Settlement desk
+            Settlement workspace
           </Button>
         </Stack>
       </Stack>
@@ -349,9 +351,16 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
           <TextField size="small" label="Promotion type" value={data.promotion_type} disabled />
           <TextField size="small" label="Window start" value={data.window_start ?? ''} disabled />
           <TextField size="small" label="Window end" value={data.window_end ?? ''} disabled />
+          <TextField
+            size="small"
+            label="Export template"
+            value="Frozen 32-column XLSX"
+            disabled
+            helperText="Template-driven customer layout is not built"
+          />
         </Box>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-          Header fields are editable only in draft or rejected — the same rule as the settlement desk.
+          Header fields are editable only in draft or rejected — the same rule as the settlement workspace.
         </Typography>
       </Panel>
 
@@ -399,11 +408,20 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
             : 'Read-only at this stage. Click a row for the evidence behind it. Line edits are draft or rejected only.'
         }
         actions={
-          editable ? (
-            <Button size="small" variant="outlined" onClick={() => setAddOpen(true)} data-testid="plan-add-line">
-              Add line
-            </Button>
-          ) : undefined
+          <Stack direction="row" spacing={1}>
+            <Tooltip title="CIP suggested quantity is not derived — cover and forecast are not joined onto the line" arrow>
+              <span>
+                <Button size="small" variant="text" disabled data-testid="plan-use-cip-qty">
+                  Use CIP quantities
+                </Button>
+              </span>
+            </Tooltip>
+            {editable ? (
+              <Button size="small" variant="outlined" onClick={() => setAddOpen(true)} data-testid="plan-add-line">
+                Add line
+              </Button>
+            ) : null}
+          </Stack>
         }
         flush
       >
@@ -523,8 +541,19 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
             ) : null}
           </Stack>
         </Panel>
-        <CapabilityLedger items={PLANNER_CAPABILITIES.slice(0, 5)} title="What works on this screen" />
+        <Panel title="Export target" subtitle="The plan leaves CIP as a versioned workbook recorded on the case">
+          <Stack spacing={1} sx={{ px: 1.5, pb: 1.5 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              Frozen 32-column XLSX
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Template-driven export is not built. Export downloads the one layout compiled in code —
+              not the customer&apos;s promotion-plan format, even when an import profile exists.
+            </Typography>
+          </Stack>
+        </Panel>
       </Box>
+      <CapabilityLedger items={PLANNER_CAPABILITIES.slice(0, 5)} title="What works on this screen" />
 
       <LineEvidencePanel line={line} caseCode={data.case_code} currency={ccy} caseId={caseId} onClose={() => setSelectedLine(null)} />
 
@@ -552,6 +581,37 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
             onClick={() => transition.mutate({ action: 'reject', comment: rejectComment.trim() })}
           >
             Reject
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={exportOpen} onClose={() => setExportOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Export {data.case_code}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 0.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              This records a versioned XLSX on the case so later approvals refer to an exact file.
+              The layout is one frozen 32-column tuple in code.
+            </Typography>
+            <Alert severity="warning" variant="outlined">
+              Template-driven export is not built. This is not the customer&apos;s promotion-plan
+              workbook layout. The import side of a mapping profile already exists; export does not
+              consume it.
+            </Alert>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setExportOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            disabled={exportCase.isPending}
+            onClick={() => {
+              setExportOpen(false);
+              exportCase.mutate();
+            }}
+            data-testid="plan-export-confirm"
+          >
+            Export XLSX
           </Button>
         </DialogActions>
       </Dialog>

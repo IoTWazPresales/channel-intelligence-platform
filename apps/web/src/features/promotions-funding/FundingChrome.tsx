@@ -42,6 +42,7 @@ export function fundingLensFromPath(pathname: string): FundingLens {
 type SettlementBook = {
   book_total?: number;
   currency_code?: string;
+  open_case_count?: number;
 };
 
 type PortfolioIntel = {
@@ -96,7 +97,7 @@ export function FundingChrome({
     period || null,
     `${planningN} plans in planning (draft / proposed / approved)`,
     `${liveN} live`,
-    `${endedN} ended, in settlement`,
+    `${endedN} ended`,
     bookAmt != null ? `book ${fmtCompact(bookAmt, settlement?.currency_code)}` : null,
     delivery != null ? `delivery rate ${fmtPct(delivery)}` : null,
   ]
@@ -105,7 +106,7 @@ export function FundingChrome({
 
   const tabCounts: Partial<Record<FundingLens, number>> = {
     planner: planningN,
-    book: listPage?.total,
+    book: settlement?.open_case_count ?? listPage?.total,
     ...counts,
   };
 

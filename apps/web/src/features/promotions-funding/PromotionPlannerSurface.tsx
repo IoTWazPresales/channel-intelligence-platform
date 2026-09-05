@@ -114,7 +114,7 @@ function PlannerList({
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['cpor', 'cases', 'planner', stageFilter],
     queryFn: ({ signal }) => {
-      const sp = new URLSearchParams({ page: '1', page_size: '200' });
+      const sp = new URLSearchParams({ page: '1', page_size: '500' });
       if (stageFilter) sp.set('status', stageFilter);
       return apiGet<CporCasesPage>(`/api/v1/cpor/cases?${sp.toString()}`, { signal });
     },
@@ -129,7 +129,7 @@ function PlannerList({
   const { data: endedPage } = useQuery({
     queryKey: ['cpor', 'cases', 'planner', 'ended'],
     queryFn: ({ signal }) =>
-      apiGet<CporCasesPage>('/api/v1/cpor/cases?page=1&page_size=200&status=ended', { signal }),
+      apiGet<CporCasesPage>('/api/v1/cpor/cases?page=1&page_size=500&status=ended', { signal }),
   });
 
   const { data: bias } = useQuery({
@@ -380,9 +380,18 @@ function PlannerList({
                 !(endedPage?.items ?? []).some((p) => p.needs_reapproval) &&
                 !(endedPage?.items ?? []).some((p) => (p.settle_readiness?.claim_evidence_count ?? 0) === 0) ? (
                   <Typography variant="body2" color="text.secondary" sx={{ px: 1.5, py: 1 }}>
-                    Nothing waiting on you.
+                    Nothing waiting on you. Live-but-not-at-promo-price is not listed — listings are not
+                    joined onto case lines.
                   </Typography>
-                ) : null}
+                ) : (
+                  <PanelRow
+                    severity="neutral"
+                    primary="Live listing vs promo price is not on this list"
+                    secondary="Cover / listings / competitors are not joined to cpor_case_line — open Market & Listings"
+                    figure="Market › Activation"
+                    onClick={() => router.push('/listing-capture?tab=intelligence')}
+                  />
+                )}
               </Stack>
             </Panel>
             <CapabilityLedger items={PLANNER_CAPABILITIES} />
@@ -475,6 +484,30 @@ function PlanGrid({ rows, onOpen }: { rows: CporCaseListRow[]; onOpen: (id: numb
         type: 'rightAligned',
         width: 120,
         valueFormatter: (p) => fmtCompact(p.value as number | null, p.data?.currency_code),
+      },
+      {
+        colId: 'on_shelf',
+        headerName: 'On shelf',
+        width: 110,
+        valueGetter: () => null,
+        valueFormatter: () => '—',
+        tooltipValueGetter: () => 'Listing activation is not joined onto cpor_case_line',
+      },
+      {
+        colId: 'export_template',
+        headerName: 'Export template',
+        minWidth: 160,
+        flex: 1,
+        valueGetter: () => null,
+        valueFormatter: () => '—',
+        tooltipValueGetter: () => 'Template-driven export is not built — frozen 32-column XLSX only',
+      },
+      {
+        field: 'flags',
+        headerName: 'Flags',
+        minWidth: 180,
+        flex: 1.2,
+        valueFormatter: (p) => ((p.value as string[]) ?? []).join(' · ') || '—',
       },
     ],
     [],

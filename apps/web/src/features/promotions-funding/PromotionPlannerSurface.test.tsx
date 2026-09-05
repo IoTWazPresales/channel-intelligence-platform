@@ -50,7 +50,7 @@ const listPayload = {
   ],
   total: 1,
   page: 1,
-  page_size: 200,
+  page_size: 500,
   status_counts: { proposed: 1, draft: 0, approved: 0, active: 0, ended: 0, settled: 0 },
   review_queue_count: 1,
 };

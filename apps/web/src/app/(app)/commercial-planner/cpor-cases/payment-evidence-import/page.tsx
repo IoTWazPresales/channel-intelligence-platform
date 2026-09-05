@@ -15,6 +15,8 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
+import { fmtPct } from '@/features/promotions-funding/format';
+import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { apiGet, apiPost, apiPostFormData, safeDisplayError } from '@/lib/api';
 
@@ -72,6 +74,15 @@ export default function CporPaymentEvidenceImportPage() {
       }),
   });
   const sourceId = sources?.[0]?.id ?? null;
+
+  const { data: portfolio } = useQuery({
+    queryKey: ['cpor', 'intelligence', 'portfolio'],
+    queryFn: ({ signal }) =>
+      apiGet<{ totals?: { delivery_rate?: number | null } }>('/api/v1/cpor/intelligence/portfolio', {
+        signal,
+      }),
+    staleTime: 60_000,
+  });
 
   const { data: summary, refetch: refetchSummary } = useQuery({
     queryKey: ['cpor', 'payment', 'summary', jobId],
@@ -143,6 +154,26 @@ export default function CporPaymentEvidenceImportPage() {
   return (
     <>
       <FundingChrome />
+      <HeadlineStrip columns={3}>
+        <HeadlineFigure
+          label="Delivery rate"
+          value={fmtPct(portfolio?.totals?.delivery_rate ?? null)}
+          compact
+          caption="Portfolio result qty ÷ estimate qty on non-superseded cases — not paid ÷ owed"
+        />
+        <HeadlineFigure
+          label="This lens"
+          value="Import"
+          compact
+          caption="Payment / credit-note evidence matched to cases. Delivery rate is not recomputed here."
+        />
+        <HeadlineFigure
+          label="Export"
+          value="—"
+          compact
+          caption="Template-driven export is not built"
+        />
+      </HeadlineStrip>
       <Alert severity="info" sx={{ mb: 2 }}>
         Payment evidence links settled value to cases. Delivery rate = result ÷ estimate per case
         (portfolio figure on the domain header — not recomputed here). Generic payment evidence —
