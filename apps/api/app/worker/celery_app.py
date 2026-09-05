@@ -56,6 +56,11 @@ def build_beat_schedule() -> dict:
             "task": "reports.run_due_schedules",
             "schedule": schedule(run_every=float(report_schedule_poll_interval_seconds())),
         },
+        # Booked FX: ECB daily ZAR/USD via Frankfurter. API lifespan poller covers Windows-without-beat.
+        "cpor-fetch-daily-fx-rate": {
+            "task": "cpor.fetch_daily_fx_rate",
+            "schedule": crontab(hour=6, minute=30),
+        },
     }
 
 

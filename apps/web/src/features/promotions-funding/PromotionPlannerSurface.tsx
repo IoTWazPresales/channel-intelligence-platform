@@ -542,11 +542,28 @@ function CreateCaseDialog({
   const [promoType, setPromoType] = useState('Sell out PP');
   const [windowStart, setWindowStart] = useState('');
   const [windowEnd, setWindowEnd] = useState('');
+  const [fxRate, setFxRate] = useState('');
   const { data: types } = useQuery({
     queryKey: ['cpor', 'promotion-types'],
     queryFn: ({ signal }) => apiGet<PromoTypes>('/api/v1/cpor/meta/promotion-types', { signal }),
     enabled: open,
   });
+  const { data: fxToday } = useQuery({
+    queryKey: ['cpor', 'fx', 'today'],
+    queryFn: ({ signal }) =>
+      apiGet<{
+        rate: number | null;
+        source: string;
+        is_fallback: boolean;
+        fetch_failed: boolean;
+        rate_date: string | null;
+      }>('/api/v1/cpor/fx/rates/today', { signal }),
+    enabled: open,
+  });
+  useEffect(() => {
+    if (!open) return;
+    if (fxToday?.rate != null) setFxRate(String(fxToday.rate));
+  }, [open, fxToday?.rate]);
   const create = useMutation({
     mutationFn: () =>
       apiPost<{ id: number }>('/api/v1/cpor/cases', {
@@ -554,6 +571,8 @@ function CreateCaseDialog({
         promotion_type: promoType,
         window_start: windowStart,
         window_end: windowEnd,
+        fx_mode: 'booked',
+        fx_proposed_rate: fxRate.trim() ? Number(fxRate) : null,
       }),
     onSuccess: (row) => onCreated(row.id),
     onError: (e) => onError(e instanceof Error ? e.message : String(e)),
@@ -586,6 +605,20 @@ function CreateCaseDialog({
           </TextField>
           <TextField size="small" type="date" label="Window start" InputLabelProps={{ shrink: true }} value={windowStart} onChange={(e) => setWindowStart(e.target.value)} fullWidth />
           <TextField size="small" type="date" label="Window end" InputLabelProps={{ shrink: true }} value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} fullWidth />
+          <TextField
+            size="small"
+            type="number"
+            label="Suggested ZAR per USD"
+            value={fxRate}
+            onChange={(e) => setFxRate(e.target.value)}
+            fullWidth
+            helperText={
+              fxToday?.fetch_failed
+                ? `Fetch failed — last known ${fxToday.source}${fxToday.is_fallback ? ' (fallback)' : ''}`
+                : `Booked mode. Rate is suggested now and books at approval.${fxToday?.rate_date ? ` Source date ${fxToday.rate_date}.` : ''}`
+            }
+            inputProps={{ 'data-testid': 'create-case-fx-rate', step: '0.01' }}
+          />
         </Stack>
       </DialogContent>
       <DialogActions>

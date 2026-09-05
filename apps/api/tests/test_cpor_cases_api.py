@@ -87,7 +87,8 @@ def test_create_case_mocked():
         SL.return_value.__exit__.return_value = None
         with patch("app.api.v1.endpoints.cpor_cases.CporCase", return_value=case):
             with patch("app.api.v1.endpoints.cpor_cases._record_event"):
-                r = client.post(
+                with patch("app.api.v1.endpoints.cpor_cases.apply_create_fx"):
+                    r = client.post(
                     "/api/v1/cpor/cases",
                     json={
                         "customer_id": 1,

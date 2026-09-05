@@ -11,6 +11,11 @@ export function CporFxAnchorPanel({
   localAmount,
   usdAmount,
   localLabel = 'Case support',
+  proposedRate,
+  proposedSource,
+  proposedAt,
+  bookedAt,
+  bookedBy,
 }: {
   currencyCode?: string | null;
   roeSnapshot?: number | null;
@@ -18,6 +23,11 @@ export function CporFxAnchorPanel({
   localAmount?: number | null;
   usdAmount?: number | null;
   localLabel?: string;
+  proposedRate?: number | null;
+  proposedSource?: string | null;
+  proposedAt?: string | null;
+  bookedAt?: string | null;
+  bookedBy?: string | null;
 }) {
   const fx = buildFxMoneyDisplay({
     currencyCode,
@@ -68,7 +78,7 @@ export function CporFxAnchorPanel({
       {fx.fxUndeclared ? (
         <Alert severity="warning" sx={{ mt: 1, py: 0 }} data-testid="cpor-fx-undeclared">
           FX undeclared — USD totals are not shown as case truth until a case rate of exchange is
-          recorded.
+          booked at approval.
         </Alert>
       ) : fx.usdBasisLine ? (
         <Typography
@@ -82,8 +92,20 @@ export function CporFxAnchorPanel({
         >
           {fx.usdBasisLine}
           <Typography component="span" sx={{ color: 'text.disabled', ml: 0.5 }}>
-            (declared case terms)
+            (booked case terms{bookedBy ? ` · ${bookedBy}` : ''}
+            {bookedAt ? ` · ${bookedAt}` : ''})
           </Typography>
+        </Typography>
+      ) : null}
+      {proposedRate != null && proposedRate > 0 ? (
+        <Typography
+          data-testid="cpor-fx-proposed"
+          sx={{ mt: 0.75, fontSize: '11.5px', color: 'text.secondary' }}
+        >
+          Proposed ZAR {proposedRate.toFixed(2)}/USD
+          {proposedSource ? ` · ${proposedSource}` : ''}
+          {proposedAt ? ` · ${proposedAt}` : ''}
+          {fx.fxUndeclared ? ' — not booked' : ' — retained after booking'}
         </Typography>
       ) : null}
     </Box>

@@ -10,6 +10,7 @@ from app.api.v1.endpoints import (
     channel_ops,
     commercial_planner,
     cpor_cases,
+    cpor_fx,
     cpor_exports,
     cpor_historical_import,
     cpor_payment_evidence,
@@ -87,6 +88,7 @@ if commercial_planner_enabled():
     api_router.include_router(po_management.router, prefix="/po-management", tags=["po-management"])
     api_router.include_router(plan_vs_executed.router, prefix="/plan-vs-executed", tags=["plan-vs-executed"])
     api_router.include_router(cpor_cases.router, prefix="/cpor", tags=["cpor"])
+    api_router.include_router(cpor_fx.router, prefix="/cpor", tags=["cpor"])
     api_router.include_router(cpor_exports.router, prefix="/cpor", tags=["cpor"])
     api_router.include_router(cpor_historical_import.router, prefix="/cpor", tags=["cpor"])
     api_router.include_router(cpor_payment_evidence.router, prefix="/cpor", tags=["cpor"])

@@ -23,6 +23,7 @@ def test_interactive_tasks_route_to_interactive_queue() -> None:
 def test_batch_tasks_route_to_batch_queue() -> None:
     assert queue_for_task("imports.process_job") == CELERY_QUEUE_BATCH
     assert queue_for_task("imports.reap_stale_running_jobs") == CELERY_QUEUE_BATCH
+    assert queue_for_task("cpor.fetch_daily_fx_rate") == CELERY_QUEUE_BATCH
 
 
 def test_worker_queue_subscription_interactive_first() -> None:

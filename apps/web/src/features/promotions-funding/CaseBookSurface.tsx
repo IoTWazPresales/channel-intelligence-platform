@@ -47,6 +47,17 @@ type SettlementBook = {
 
 type BookFilter = 'proposed' | 'ended' | 'settled' | 'blocked' | 'draft' | null;
 
+type FxBackfillSuggestion = {
+  case_id: number;
+  case_code: string;
+  status: string;
+  suggested_rate: number | null;
+  suggested_rate_date: string | null;
+  source: string;
+  is_fallback: boolean;
+  will_book_on_confirm: boolean;
+};
+
 function fxBlockedReason(row: CporCaseListRow): string | undefined {
   const r = row.settle_readiness;
   if (!r || r.fx_settle_allowed !== false) return undefined;
@@ -89,6 +100,7 @@ export function CaseBookSurface() {
         : null;
   const selectedParam = search.get('case');
   const [toastAction, setToastAction] = useState<string | null>(null);
+  const [backfillItems, setBackfillItems] = useState<FxBackfillSuggestion[] | null>(null);
 
   const setParams = useCallback(
     (patch: Record<string, string | null>) => {
@@ -155,6 +167,29 @@ export function CaseBookSurface() {
     return buckets;
   }, [allItems]);
   const hasClaimAge = allItems.some((r) => r.last_claim_sale_date);
+
+  const loadFxSuggestions = useMutation({
+    mutationFn: () =>
+      apiGet<{ items: FxBackfillSuggestion[]; count: number }>('/api/v1/cpor/fx/backfill-suggestions'),
+    onSuccess: (payload) => setBackfillItems(payload.items),
+  });
+
+  const confirmFxBackfill = useMutation({
+    mutationFn: () =>
+      apiPost<{ confirmed: number; booked: number }>('/api/v1/cpor/fx/backfill-confirm', {
+        items: (backfillItems ?? [])
+          .filter((row) => row.suggested_rate != null)
+          .map((row) => ({ case_id: row.case_id, rate: row.suggested_rate })),
+      }),
+    onSuccess: async (payload) => {
+      setToastAction(
+        `Confirmed ${payload.confirmed} rate(s); booked ${payload.booked} already-approved case(s)`,
+      );
+      setBackfillItems(null);
+      await qc.invalidateQueries({ queryKey: ['cpor', 'cases'] });
+      await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', 'book'] });
+    },
+  });
 
   const transition = useMutation({
     mutationFn: (payload: { id: number; action: string; comment?: string }) =>
@@ -344,6 +379,47 @@ export function CaseBookSurface() {
         </Panel>
         <Panel title="Blocked cases — reasons" subtitle="FX settle refuses until ROE and mode are declared" flush>
           <Stack spacing={0.25} sx={{ px: 1, pb: 1 }}>
+            <Stack direction="row" spacing={1} sx={{ px: 1, pt: 1, pb: 0.5 }} flexWrap="wrap" useFlexGap>
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={loadFxSuggestions.isPending}
+                onClick={() => loadFxSuggestions.mutate()}
+                data-testid="fx-backfill-suggest"
+              >
+                {loadFxSuggestions.isPending ? 'Loading suggestions…' : 'Suggest rates from window start'}
+              </Button>
+              {backfillItems && backfillItems.length > 0 ? (
+                <Button
+                  size="small"
+                  variant="contained"
+                  disabled={confirmFxBackfill.isPending}
+                  onClick={() => confirmFxBackfill.mutate()}
+                  data-testid="fx-backfill-confirm"
+                >
+                  Confirm {backfillItems.filter((r) => r.suggested_rate != null).length} suggestion
+                  {backfillItems.filter((r) => r.suggested_rate != null).length === 1 ? '' : 's'}
+                </Button>
+              ) : null}
+            </Stack>
+            {backfillItems && backfillItems.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ px: 1.5, py: 0.5 }}>
+                No FX-blocked cases need a suggestion.
+              </Typography>
+            ) : null}
+            {backfillItems
+              ?.filter((row) => row.suggested_rate != null)
+              .slice(0, 8)
+              .map((row) => (
+                <PanelRow
+                  key={`sug-${row.case_id}`}
+                  severity="warning"
+                  primary={`${row.case_code} · ${row.suggested_rate?.toFixed(2)} ZAR/USD`}
+                  secondary={`${row.source}${row.is_fallback ? ' (fallback)' : ''} · ${row.suggested_rate_date ?? 'no date'} · ${
+                    row.will_book_on_confirm ? 'confirm books (already approved)' : 'confirm proposes only'
+                  }`}
+                />
+              ))}
             {negativeSupport.map((c) => (
               <PanelRow
                 key={`neg-${c.id}`}

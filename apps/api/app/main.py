@@ -24,9 +24,11 @@ async def lifespan(app: FastAPI):
         )
     from app.services.mailbox_ingest_runner import spawn_mailbox_ingest_poller
     from app.services.report_schedule_runner import spawn_report_schedule_poller
+    from app.services.cpor.fx_rate_poller import spawn_fx_rate_poller
 
     spawn_report_schedule_poller()
     spawn_mailbox_ingest_poller()
+    spawn_fx_rate_poller()
     if s.cip_shipping_mailer_smtp_check:
         from app.services.shipping_digest.smtp_check import smtp_login_check
 

@@ -76,6 +76,13 @@ export type CaseDetail = {
   currency_code?: string;
   roe_snapshot: number | null;
   fx_mode?: string | null;
+  fx_proposed_rate?: number | null;
+  fx_proposed_at?: string | null;
+  fx_proposed_by?: string | null;
+  fx_proposed_source?: string | null;
+  fx_declared_at?: string | null;
+  fx_declared_by?: string | null;
+  fx_booked?: boolean;
   last_comment: string | null;
   allowed_next: string[];
   lines: LineRow[];
@@ -153,6 +160,9 @@ export function CporCaseWorkspace({ caseId, embedded = false, defaultTab = 0 }: 
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectComment, setRejectComment] = useState('');
   const [settleConfirmOpen, setSettleConfirmOpen] = useState(false);
+  const [approveOpen, setApproveOpen] = useState(false);
+  const [approveRate, setApproveRate] = useState('');
+  const [proposedEdit, setProposedEdit] = useState('');
   const [lineOpen, setLineOpen] = useState(false);
   const [product, setProduct] = useState<ProductPick | null>(null);
   const [srp, setSrp] = useState('13999');
@@ -223,11 +233,16 @@ export function CporCaseWorkspace({ caseId, embedded = false, defaultTab = 0 }: 
   });
 
   const transition = useMutation({
-    mutationFn: (payload: { action: string; comment?: string; confirm_over_budget_reapproval?: boolean }) =>
-      apiPost(`/api/v1/cpor/cases/${caseId}/transition`, payload),
+    mutationFn: (payload: {
+      action: string;
+      comment?: string;
+      confirm_over_budget_reapproval?: boolean;
+      fx_rate?: number | null;
+    }) => apiPost(`/api/v1/cpor/cases/${caseId}/transition`, payload),
     onSuccess: async (_result, variables) => {
       setRejectOpen(false);
       setSettleConfirmOpen(false);
+      setApproveOpen(false);
       await qc.invalidateQueries({ queryKey: ['cpor', 'case', caseId] });
       if (variables.action === 'settle') {
         await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', 'book'] });
@@ -288,6 +303,14 @@ export function CporCaseWorkspace({ caseId, embedded = false, defaultTab = 0 }: 
 
   const patchFxMode = useMutation({
     mutationFn: (fx_mode: 'booked' | 'floating') => apiPatch(`/api/v1/cpor/cases/${caseId}`, { fx_mode }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['cpor', 'case', caseId] });
+      await refetch();
+    },
+  });
+
+  const patchProposed = useMutation({
+    mutationFn: (fx_proposed_rate: number) => apiPatch(`/api/v1/cpor/cases/${caseId}`, { fx_proposed_rate }),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['cpor', 'case', caseId] });
       await refetch();
@@ -438,25 +461,46 @@ export function CporCaseWorkspace({ caseId, embedded = false, defaultTab = 0 }: 
           ) : null}
         </Box>
       ) : null}
-      {!data.missing_roe ? (
-        <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} flexWrap="wrap" useFlexGap>
-          <Typography variant="body2" color="text.secondary" sx={{ alignSelf: 'center' }}>
-            FX mode:
-          </Typography>
-          {(['booked', 'floating'] as const).map((mode) => (
-            <Button
-              key={mode}
+      <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} flexWrap="wrap" useFlexGap>
+        <Typography variant="body2" color="text.secondary" sx={{ alignSelf: 'center' }}>
+          FX mode:
+        </Typography>
+        {(['booked', 'floating'] as const).map((mode) => (
+          <Button
+            key={mode}
+            size="small"
+            variant={data.fx_mode === mode ? 'contained' : 'outlined'}
+            disabled={patchFxMode.isPending || (data.status !== 'draft' && data.status !== 'rejected')}
+            onClick={() => patchFxMode.mutate(mode)}
+            data-testid={`cpor-fx-mode-${mode}`}
+          >
+            {mode}
+          </Button>
+        ))}
+        {data.status === 'draft' || data.status === 'rejected' ? (
+          <>
+            <TextField
               size="small"
-              variant={data.fx_mode === mode ? 'contained' : 'outlined'}
-              disabled={patchFxMode.isPending}
-              onClick={() => patchFxMode.mutate(mode)}
-              data-testid={`cpor-fx-mode-${mode}`}
+              label="Proposed ZAR/USD"
+              value={proposedEdit || (data.fx_proposed_rate != null ? String(data.fx_proposed_rate) : '')}
+              onChange={(e) => setProposedEdit(e.target.value)}
+              sx={{ width: 160 }}
+              inputProps={{ 'data-testid': 'cpor-fx-proposed-edit', step: '0.01' }}
+            />
+            <Button
+              size="small"
+              variant="outlined"
+              disabled={patchProposed.isPending || !Number(proposedEdit || data.fx_proposed_rate)}
+              onClick={() =>
+                patchProposed.mutate(Number(proposedEdit || data.fx_proposed_rate))
+              }
+              data-testid="cpor-fx-proposed-save"
             >
-              {mode}
+              Save proposed
             </Button>
-          ))}
-        </Stack>
-      ) : null}
+          </>
+        ) : null}
+      </Stack>
       {data.needs_reapproval ? (
         <Alert severity="warning" sx={{ mb: 1 }} data-testid="cpor-reapproval-banner">
           Money ceiling exceeded or reapproval required. Approve with over-budget confirmation, or reduce
@@ -476,6 +520,11 @@ export function CporCaseWorkspace({ caseId, embedded = false, defaultTab = 0 }: 
         localAmount={data.ttl_support_zar}
         usdAmount={data.ttl_support_usd}
         localLabel="Approved case support"
+        proposedRate={data.fx_proposed_rate}
+        proposedSource={data.fx_proposed_source}
+        proposedAt={data.fx_proposed_at}
+        bookedAt={data.fx_declared_at}
+        bookedBy={data.fx_declared_by}
       />
       <CporComparableCasesPanel caseId={caseId} />
       <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap">
@@ -489,8 +538,11 @@ export function CporCaseWorkspace({ caseId, embedded = false, defaultTab = 0 }: 
             onClick={() => {
               if (action === 'reject') setRejectOpen(true);
               else if (action === 'settle') setSettleConfirmOpen(true);
-              else if (action === 'approve' && data.needs_reapproval) {
-                transition.mutate({ action: 'approve', confirm_over_budget_reapproval: true });
+              else if (action === 'approve') {
+                setApproveRate(
+                  String(data.fx_proposed_rate ?? data.roe_snapshot ?? ''),
+                );
+                setApproveOpen(true);
               } else transition.mutate({ action });
             }}
             data-testid={`cpor-action-${action}`}
@@ -732,6 +784,50 @@ export function CporCaseWorkspace({ caseId, embedded = false, defaultTab = 0 }: 
         claimRowCount={settlement?.claim_row_count ?? data.settle_readiness?.claim_evidence_count ?? 0}
         unresolvedProductCount={settlement?.unresolved_products?.length ?? 0}
       />
+
+      <Dialog
+        open={approveOpen}
+        onClose={() => !transition.isPending && setApproveOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Approve and book FX rate</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 1.5 }}>
+            The rate books at approval (default mode: booked). Proposed history is kept. Override
+            here if the fetched suggestion is wrong.
+          </Typography>
+          <TextField
+            size="small"
+            type="number"
+            label="Booked ZAR per USD"
+            value={approveRate}
+            onChange={(e) => setApproveRate(e.target.value)}
+            fullWidth
+            helperText={data.needs_reapproval ? 'Over-budget reapproval will be confirmed with this rate.' : undefined}
+            inputProps={{ 'data-testid': 'cpor-approve-fx-rate', step: '0.01' }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setApproveOpen(false)} disabled={transition.isPending}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            disabled={transition.isPending}
+            onClick={() =>
+              transition.mutate({
+                action: 'approve',
+                confirm_over_budget_reapproval: Boolean(data.needs_reapproval),
+                fx_rate: approveRate.trim() ? Number(approveRate) : null,
+              })
+            }
+            data-testid="cpor-approve-fx-confirm"
+          >
+            {data.needs_reapproval ? 'Reapprove and book' : 'Approve and book'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={rejectOpen} onClose={() => setRejectOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle>Reject case</DialogTitle>

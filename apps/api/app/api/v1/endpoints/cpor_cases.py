@@ -42,6 +42,13 @@ from app.services.cpor.payment_recon import load_payment_recon_by_case_id
 from app.services.cpor.promo_load_recon import build_promo_load_recon
 from app.services.cpor.promotion_type_vocab import CPOR_CASE_STATUS_SET, CPOR_PROMOTION_TYPE_SET
 from app.services.cpor.recompute import recompute_case, recompute_case_line
+from app.services.cpor.fx_rate import (
+    SOURCE_OPERATOR,
+    apply_create_fx,
+    book_on_approve,
+    fx_fields_json,
+    set_proposed,
+)
 from app.services.cpor.settle_readiness import (
     build_settle_readiness,
     case_missing_roe,
@@ -231,6 +238,7 @@ def _case_json(
         "ttl_support_usd": ttl_usd,
         "missing_roe": case_missing_roe(case),
         "origin": getattr(case, "origin", None) or "native",
+        **fx_fields_json(case),
     }
     if include_lines and lines is not None:
         out["lines"] = lines
@@ -378,6 +386,8 @@ class CaseCreate(BaseModel):
     case_code: str | None = None
     case_name: str | None = None
     roe_snapshot: float | None = None
+    fx_proposed_rate: float | None = None
+    fx_mode: str | None = None
     currency_code: str = "ZAR"
     channel: str = "reseller"
     notes: str | None = None
@@ -389,6 +399,7 @@ class CasePatch(BaseModel):
     window_start: date | None = None
     window_end: date | None = None
     roe_snapshot: float | None = None
+    fx_proposed_rate: float | None = None
     fx_mode: str | None = None
     currency_code: str | None = None
     notes: str | None = None
@@ -433,6 +444,7 @@ class TransitionBody(BaseModel):
     action: str
     comment: str | None = None
     confirm_over_budget_reapproval: bool = False
+    fx_rate: float | None = None
 
 
 class LayerSplitBody(BaseModel):
@@ -555,6 +567,9 @@ def create_case(
         )
     if body.window_end < body.window_start:
         raise HTTPException(status_code=400, detail="window_end must be >= window_start")
+    fx_mode = (body.fx_mode or "booked").strip().lower() or "booked"
+    if fx_mode not in FX_MODES:
+        raise HTTPException(status_code=400, detail=f"fx_mode must be one of: {sorted(FX_MODES)}")
     with SessionLocal() as session:
         cust = session.get(DimCustomer, body.customer_id)
         if not cust:
@@ -572,6 +587,7 @@ def create_case(
             window_end=body.window_end,
             status="draft",
             roe_snapshot=body.roe_snapshot,
+            fx_mode=fx_mode,
             currency_code=body.currency_code or "ZAR",
             channel=body.channel or "reseller",
             notes=body.notes,
@@ -585,6 +601,13 @@ def create_case(
         except IntegrityError:
             session.rollback()
             raise HTTPException(status_code=409, detail="case_code already exists")
+        apply_create_fx(
+            session,
+            case,
+            actor=actor,
+            proposed_override=body.fx_proposed_rate,
+            explicit_roe=body.roe_snapshot,
+        )
         _record_event(
             session, case_id=case.id, event_type="created", actor=actor, payload={"case_code": code}, user=user
         )
@@ -640,6 +663,16 @@ def patch_case(
             if mode is not None and mode not in FX_MODES:
                 raise HTTPException(status_code=400, detail=f"fx_mode must be one of: {sorted(FX_MODES)}")
             data["fx_mode"] = mode
+        if "fx_proposed_rate" in data:
+            proposed_val = data.pop("fx_proposed_rate")
+            if proposed_val is not None and not set_proposed(
+                case, float(proposed_val), actor, source=SOURCE_OPERATOR
+            ):
+                raise HTTPException(status_code=400, detail="fx_proposed_rate must be a positive number")
+        if "roe_snapshot" in data and not fx_declared(case):
+            roe_val = data.pop("roe_snapshot")
+            if roe_val is not None and not set_proposed(case, float(roe_val), actor, source=SOURCE_OPERATOR):
+                raise HTTPException(status_code=400, detail="roe_snapshot must be a positive number")
         roe_changed = "roe_snapshot" in data
         fx_mode_changed = "fx_mode" in data
         for k, v in data.items():
@@ -1094,6 +1127,7 @@ def transition_case(
             case.decided_by = actor
             case.last_comment = None
             case.needs_reapproval = False
+            book_on_approve(case, actor=actor, override=body.fx_rate)
             drifts = _run_drift_check(session, case, actor, user)
         elif action == "reject":
             case.status = "rejected"
@@ -1149,6 +1183,8 @@ def transition_case(
                 "drifts": drifts,
                 "confirm_over_budget_reapproval": body.confirm_over_budget_reapproval,
                 "needs_reapproval": bool(case.needs_reapproval),
+                "fx_rate": body.fx_rate,
+                "roe_snapshot": float(case.roe_snapshot) if case.roe_snapshot is not None else None,
             },
             user=user,
         )
