@@ -6,7 +6,7 @@ programme:
   charter:
     status: accepted
     by: eif
-    at: '2026-09-06T18:36:20Z'
+    at: '2026-09-06T20:37:20Z'
     workstreams:
     - Full-platform UI/UX redesign
     - Shell & primitive convergence
@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 327
-  log_sha256: c51a4ad35104ead74276eecfa4a401e59d0d0d4e44af5559fa2e6083e66199a5
+  snapshot_revision: 329
+  log_sha256: 77ce99d5e6e1390d1e8324a09ba0b9903f562ab59e48616a3f2f5f3236a25c89
   acceptance_policy:
     milestone: operator
     root: operator
@@ -1111,9 +1111,9 @@ nodes:
     title: NS-6 Actions container (was Response)
     class: redesign
     origin: decomposition
-    status: blocked
+    status: rejected
     stage: null
-    revision: 6
+    revision: 8
     lease: null
     depends_on:
     - N-0008
@@ -1201,12 +1201,7 @@ nodes:
         rationale: null
     verification: {}
     evidence: []
-    blockers:
-    - id: BL-0001
-      type: dependency
-      ref: N-0013
-      opened: '2026-09-06T18:36:20Z'
-      note: Blocked pending N-0013 operator architecture approval
+    blockers: []
     conservation_tags: []
     fingerprint: null
     stage_note: '2026-09-02 reconciliation into post-N-0013 programme: this node is the ''Actions container'', not the Promotion
@@ -1217,7 +1212,10 @@ nodes:
     debug_iterations: 0
     split_into: null
     deferred: null
-    rejected: null
+    rejected:
+      decision: D-0009
+      note: D-0009 abolished the Actions work-container. N-0010 identity was that container (title NS-6 Actions; ACs cite
+        FROZEN v1.1 grammar 4 / Response). Attention is not rechartered in this recording.
     preservation: {}
     target_artifact_class: high_fidelity
     design_artifact_class: null
@@ -1320,7 +1318,7 @@ nodes:
     - id: BL-0002
       type: dependency
       ref: N-0013
-      opened: '2026-09-06T18:36:20Z'
+      opened: '2026-09-06T20:37:20Z'
       note: Blocked pending N-0013 operator architecture approval
     conservation_tags: []
     fingerprint: null
