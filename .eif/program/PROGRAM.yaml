@@ -6,7 +6,7 @@ programme:
   charter:
     status: accepted
     by: eif
-    at: '2026-09-06T23:13:26Z'
+    at: '2026-09-06T23:19:18Z'
     workstreams:
     - Full-platform UI/UX redesign
     - Shell & primitive convergence
@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 376
-  log_sha256: c4f2ed34ea9e5145a02b63ec60f55e64b8a4d725e01959521832f5d60caec162
+  snapshot_revision: 381
+  log_sha256: 244f50e62b8dd973ec65e88b562bc9ed06fc92c08de510029dceb7c3e26343df
   acceptance_policy:
     milestone: operator
     root: operator
@@ -2414,6 +2414,138 @@ nodes:
     target_artifact_class: high_fidelity
     design_artifact_class: high_fidelity
     implementation_run: NS7_EXEC_20260906
+    implementation_actor: gov-001
+  N-0018:
+    id: N-0018
+    parent: null
+    title: NS-8 Supply & Inbound from design-lab
+    class: redesign
+    origin: decomposition
+    status: in_progress
+    stage: implement
+    revision: 4
+    lease:
+      run: NS9_SUPPLY_20260907
+      acquired_at: '2026-09-06T23:18:44Z'
+      heartbeat_at: '2026-09-06T23:18:44Z'
+      expires_at: '2026-09-07T03:18:44Z'
+    depends_on:
+    - N-0013
+    - N-0007
+    facets:
+    - design_experience
+    - ui
+    risk: R3
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - 'Governing design input: D-0008 Supply & Inbound as implemented in apps/web/src/design-lab/surfaces/DomainOverviewSurface.tsx
+      SupplySurface (and labNav leaves at /design-lab/supply). Do not cite a frozen design-language version or grammar number.'
+    - Production mounts that lab chrome; relocate existing inbound shipments workspace, shipment-evidence, and PO management
+      — do not delete.
+    - Coverage-map every production Supply & Inbound route COVERED / PARTIAL / UNCOVERED; migrate COVERED and PARTIAL; record
+      UNCOVERED. Lab SOURCE is primary; a comparison naming no source file is not a comparison.
+    - 'NUMBER RULE on every headline figure: print current_database() first; classify (i) label (ii) computation (iii) real
+      signal. Never change a number to make two surfaces agree.'
+    - Browser-verify 1280x800 vs lab. Supply is not a named DIRECTION 390px workflow — 1280 only unless a named workflow is
+      on a surface you touch.
+    - Keep Partly built and Planned markers. D-0002 mapping-queue disposition untouched.
+    - 'target_artifact_class: high_fidelity'
+    - Independent GOV-008 vs this node's implementation_run
+    baseline_ref: BLN-0001
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      design_artifact_class:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_divergence:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_signatures:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered_comparison:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_sameness_review:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_interaction_spec:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_state_coverage:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_identity_tokens:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_execution_decisions:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation:
+      customer_account_sell_out_gap: brief signal unchanged; not Supply & Inbound
+      pipeline_fill_pct: stock regime strip unchanged; not Supply & Inbound
+      response_container_badge: spine response badge unchanged until Administration/Overview
+      stock_cover_movement_execution: Stock lenses other than inbound stay as shipped; not this node
+      inbound_shipments_workspace: existing InboundShipmentsWorkspace relocated under Supply, not deleted
+      shipment_evidence: /admin/shipment-evidence remains the Receipts & POD leaf (partial honesty kept)
+      po_management: /admin/po-management remains reachable; not deleted
+      import_column_mapping: CanonicalColumnMappingPanel remains desktop-first
+      d0002: mapping-queue disposition untouched
+    target_artifact_class: high_fidelity
+    design_artifact_class: null
+    implementation_run: NS9_SUPPLY_20260907
     implementation_actor: gov-001
 decisions:
   D-0001:
