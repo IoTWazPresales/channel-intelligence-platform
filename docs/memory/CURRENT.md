@@ -4,7 +4,7 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `92f2d24` (Movement ISO-Monday week keys) — N-0011 product pin pending this commit
+**Last content pin:** `edef697` (N-0011 Data & Stewardship chrome)
 
 **Alembic (code):** `20260906_0022` (`cpor_case.intelligence_exclude`)
 
