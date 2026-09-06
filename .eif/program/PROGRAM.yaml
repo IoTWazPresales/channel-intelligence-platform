@@ -6,7 +6,7 @@ programme:
   charter:
     status: accepted
     by: eif
-    at: '2026-09-06T18:13:34Z'
+    at: '2026-09-06T18:17:33Z'
     workstreams:
     - Full-platform UI/UX redesign
     - Shell & primitive convergence
@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 321
-  log_sha256: f7f657865e71d1ef3221f793927020884cbabbf8069e326a46f224c6fe1156f6
+  snapshot_revision: 322
+  log_sha256: e525e09c4143914553994ce042338026550da70d3c7c839a61038c9675e2cbba
   acceptance_policy:
     milestone: operator
     root: operator
@@ -1205,7 +1205,7 @@ nodes:
     - id: BL-0001
       type: dependency
       ref: N-0013
-      opened: '2026-09-06T18:13:34Z'
+      opened: '2026-09-06T18:17:33Z'
       note: Blocked pending N-0013 operator architecture approval
     conservation_tags: []
     fingerprint: null
@@ -1320,7 +1320,7 @@ nodes:
     - id: BL-0002
       type: dependency
       ref: N-0013
-      opened: '2026-09-06T18:13:34Z'
+      opened: '2026-09-06T18:17:33Z'
       note: Blocked pending N-0013 operator architecture approval
     conservation_tags: []
     fingerprint: null
@@ -2059,6 +2059,112 @@ nodes:
       charter_note: Cover 31712df and Movement 21a11d1 shipped ahead of a covering node (BACKLOG-171 instance 4).
       complete_note: 'Cover and Movement migrated. Execution vs plan is not in this node. Independence unrecoverable: no GOV-008
         of this node.'
+  N-0017:
+    id: N-0017
+    parent: null
+    title: Stock & Sell-through Execution vs plan from design-lab
+    class: redesign
+    origin: decomposition
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on: []
+    facets:
+    - design_experience
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - Lab PairedBars Execution chrome on production /stock execution lens
+    - relocate PlanVsExecutedView, do not delete
+    - numbers from cip with NUMBER RULE
+    - Partly built and Planned markers kept
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      design_artifact_class:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_divergence:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_signatures:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered_comparison:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_sameness_review:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_interaction_spec:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_state_coverage:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_identity_tokens:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_execution_decisions:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
 decisions:
   D-0001:
     id: D-0001
