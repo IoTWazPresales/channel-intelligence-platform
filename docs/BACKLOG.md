@@ -2459,4 +2459,21 @@ Exact engine invariants (do not complete around them):
 | **Regression traps** | Do not invent `caveat.resolve` / `already_shipped` in CIP. Do not reopen N-0013. Do not lease N-0006 to `stage implement` as a bookkeeping trick. Do not rewrite PROGRAM_LOG. Do not mix this into a CIP product commit. |
 | **Behavior to retain** | Append-only log; independence (pass run ≠ implement run or different actor); R3 referent gate. |
 | **Out of scope** | CIP product source; D-0002/D-0009; I1–I5; stdin guard patch (BACKLOG-165). |
-| **TRIGGER** | Operator authorises an EIF-repo session. This is item 1 on that session. | |
+| **TRIGGER** | Operator authorises an EIF-repo session. This is item 1 on that session. |
+
+---
+
+## BACKLOG-173 — Guard NO_PROGRESS fingerprint degrades to None and then bricks observation tools
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-06. Record only. Do **not** fix in CIP. `.cursor/hooks/` is control-plane, EIF scope. |
+| **Effort** | Medium (EIF / CIP-owned hook guard fingerprint) |
+| **Source** | Two CIP sessions on `feat/ns-2-brief-nav-collapse` (Market MIGRATE / `MarketSurface.tsx`) ended after the guard correctly stopped a write loop with `NO_PROGRESS`, then returned `NO_PROGRESS: repeated mutating action None xN` on subsequent Reads, Greps, copies and shell for the rest of the session. |
+| **Idea** | `NO_PROGRESS` is the right stop for a repeated *mutating* action. After that stop, the fingerprint degraded to `None` and persisted, so ordinary observation tools were classified as the same mutating action. Reads are not mutating actions. The `None` fingerprint must not survive onto observation/read/grep/copy/shell after the write loop has already been halted. |
+| **Why it matters / deferrable** | Two sessions were bricked with uncommitted Market work left in the tree. Deferrable: the write-loop stop itself is correct; only the post-stop observation false-positive is the defect. Do not weaken `NO_PROGRESS` on actual repeated writes. |
+| **What the work is** | In the EIF/control-plane hook (`eif_guard` / progress fingerprint), keep `NO_PROGRESS` on repeated mutating actions; reset or ignore the fingerprint for observation tools (Read, Grep, Glob, copy, non-mutating shell). Do not treat `None` as a stable mutating-action identity. |
+| **Regression traps** | Do not disable `NO_PROGRESS` for writes. Do not set observation `failClosed:false`. Do not edit `C:\AI\engineering-intelligence-framework` from a CIP product session. Do not mix this into a product commit. |
+| **Behavior to retain** | Write-loop stop after repeated mutating action; crash vs policy labels; `CONTROL_PLANE_PROTECTED` on hook source. |
+| **Out of scope** | CIP product source; Market MIGRATE; programme N-0006; BACKLOG-171 event-model work except as the same EIF repair session. |
+| **TRIGGER** | Next EIF repair session. | |
