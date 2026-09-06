@@ -1,14 +1,16 @@
-/** Stock container lens keys — buyer-facing labels aligned to D-0008 nav leaves. */
+/** Stock container lens keys — buyer-facing labels aligned to lab StockSurface + Supply inbound. */
 export const STOCK_LENSES = [
-  { id: 'movement', label: 'Movement' },
-  { id: 'execution', label: 'Execution vs plan' },
   { id: 'cover', label: 'Cover' },
+  { id: 'movement', label: 'Movement' },
+  { id: 'sellthrough', label: 'Sell-through' },
+  { id: 'execution', label: 'Execution vs plan' },
+  { id: 'forecast', label: 'Forecasts' },
   { id: 'inbound', label: 'Shipments' },
 ] as const;
 
 export type StockLensId = (typeof STOCK_LENSES)[number]['id'];
 
-export const DEFAULT_STOCK_LENS: StockLensId = 'movement';
+export const DEFAULT_STOCK_LENS: StockLensId = 'cover';
 
 export function parseStockLens(raw: string | null | undefined): StockLensId {
   const v = (raw || '').trim().toLowerCase();

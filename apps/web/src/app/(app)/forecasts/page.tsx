@@ -11,8 +11,7 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
-import { PageHeader } from '@/components/PageHeader';
-import { navPageChrome } from '@/features/shell/navPageChrome';
+import { StockChrome } from '@/features/stock/StockChrome';
 import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
@@ -205,9 +204,8 @@ export default function ForecastsPage() {
   const busy = bulk.isPending || addOne.isPending || delRow.isPending || clearAll.isPending || computeHistory.isPending;
 
   return (
-    <>
-      <PageHeader {...navPageChrome('/forecasts', { title: 'Demand Forecast' })} />
-      <Paper sx={{ p: 2 }}>
+    <StockChrome>
+      <Paper sx={{ p: 2, mt: 2 }}>
         {computeMsg ? (
           <Alert
             severity={computeHistory.isError ? 'error' : 'success'}
@@ -326,6 +324,6 @@ export default function ForecastsPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </>
+    </StockChrome>
   );
 }

@@ -15,8 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
-import { PageHeader } from '@/components/PageHeader';
-import { navPageChrome } from '@/features/shell/navPageChrome';
+import { StockChrome } from '@/features/stock/StockChrome';
 import { apiGet } from '@/lib/api';
 
 type IntelRow = {
@@ -104,18 +103,11 @@ export default function ChannelIntelligencePage() {
   );
 
   return (
-    <>
-      <PageHeader
-        {...navPageChrome('/channel-intelligence')}
-        actions={
-          <Button size="small" variant="outlined" onClick={() => refetch()}>
-            Refresh
-          </Button>
-        }
-      />
-      <Alert severity="info" sx={{ mb: 2 }}>
-        Read-only over customer sell-through. Elasticity and competitor pricing are out of scope.
-        Grain policy: {data?.grain_policy ?? '…'}. Sparse CST → insufficient_data (never false aged flags).
+    <StockChrome>
+      <Alert severity="info" variant="outlined" sx={{ mt: 2, mb: 2 }}>
+        Retailer sell-through and customer inventory from retailer files. Elasticity and competitor
+        pricing are out of scope. Grain policy: {data?.grain_policy ?? '…'}. Sparse CST →
+        insufficient_data (never false aged flags).
       </Alert>
       <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap">
         <TextField
@@ -141,6 +133,9 @@ export default function ChannelIntelligencePage() {
         />
         <Chip size="small" label={`rows: ${data?.total ?? '…'}`} />
         {data?.data_unavailable ? <Chip size="small" color="warning" label="data unavailable" /> : null}
+        <Button size="small" variant="outlined" onClick={() => refetch()}>
+          Refresh
+        </Button>
       </Stack>
       {isError ? <Alert severity="error">{String((error as Error)?.message)}</Alert> : null}
       {isLoading ? (
@@ -179,6 +174,6 @@ export default function ChannelIntelligencePage() {
           ) : null}
         </Box>
       </Drawer>
-    </>
+    </StockChrome>
   );
 }

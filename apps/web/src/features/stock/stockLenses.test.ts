@@ -5,12 +5,14 @@ import { DEFAULT_STOCK_LENS, parseStockLens, stockLensLabel, wocBucket } from '@
 describe('stockLenses', () => {
   it('defaults unknown lens to movement', () => {
     expect(parseStockLens(null)).toBe(DEFAULT_STOCK_LENS);
-    expect(parseStockLens('bogus')).toBe('movement');
+    expect(parseStockLens('bogus')).toBe('cover');
   });
 
   it('parses valid lenses', () => {
     expect(parseStockLens('cover')).toBe('cover');
     expect(parseStockLens('EXECUTION')).toBe('execution');
+    expect(parseStockLens('inbound')).toBe('inbound');
+    expect(parseStockLens('sellthrough')).toBe('sellthrough');
   });
 
   it('returns buyer-facing labels', () => {
