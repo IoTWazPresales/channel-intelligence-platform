@@ -22,7 +22,7 @@
 - **Programme:** PRG-20260831T145514; `verify` ok rev **295**; `frontier` is **only N-0006**. Do not start N-0006 (BACKLOG-170). Do not reopen N-0013, D-0008 or D-0009. Container migration is **not** a lawful new node this session (BACKLOG-171 instance 4); product work continues under accepted D-0008.
 - **D-0009 accepted:** Actions fold into Attention. Ledger still uncommitted.
 - **D-0002** remains the open decision.
-- **Next:** Stock Movement lens (lab 4 headlines + SOH-vs-sell-out TrendChart + family CategoryBars). Relocate Channel Ops nested tabs rather than deleting them.
+- **Next:** Stock Execution vs plan (lab PairedBars chrome; relocate PlanVsExecutedView, do not delete). Then sell-through/forecast polish, then Unit D Supply.
 
 **Programme frontier:** N-0006 only. Do not manufacture a path. BACKLOG-171 instance (4): no covering node for this wave.
 

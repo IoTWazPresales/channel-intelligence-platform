@@ -6,8 +6,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect } from 'react';
 
 import { PlanVsExecutedView } from '@/features/plan-vs-executed/PlanVsExecutedView';
-import { ChannelOpsStockWorkspace } from '@/features/stock/ChannelOpsStockWorkspace';
 import { CoverLensView } from '@/features/stock/CoverLensView';
+import { MovementLensView } from '@/features/stock/MovementLensView';
 import { StockChrome } from '@/features/stock/StockChrome';
 import { parseStockLens, type StockLensId } from '@/features/stock/stockLenses';
 
@@ -28,7 +28,7 @@ function StockLensBody({ lens }: { lens: StockLensId }) {
   if (lens === 'movement') {
     return (
       <Box sx={{ px: { xs: 1, md: 2 }, pb: 2 }}>
-        <ChannelOpsStockWorkspace />
+        <MovementLensView />
       </Box>
     );
   }

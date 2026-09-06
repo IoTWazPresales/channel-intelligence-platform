@@ -136,6 +136,157 @@ async def channel_ops_weekly_series(
     return {"weeks": weeks, "points": points}
 
 
+def _iso_week_label(value: date) -> str:
+    return f"W{value.isocalendar().week:02d}"
+
+
+@router.get("/movement-lens")
+async def channel_ops_movement_lens(
+    db: AsyncSession = Depends(get_db),
+    user: dict | None = Depends(get_optional_current_user),
+    weeks: int = Query(13, ge=4, le=52),
+) -> dict[str, Any]:
+    """Stock · Movement headlines and charts from sell-out tape + current derived SOH."""
+    from app.core.tenant_scope import tenant_id_from_user
+
+    tid = tenant_id_from_user(user if isinstance(user, dict) else None)
+    so_max = await db.scalar(
+        select(func.max(FactSalesSellout.transaction_date)).where(FactSalesSellout.tenant_id == tid)
+    )
+    in_date = func.coalesce(FactInboundShipment.ship_confirm_date, FactInboundShipment.pod_date)
+    in_max = await db.scalar(select(func.max(in_date)).where(FactInboundShipment.tenant_id == tid))
+
+    if so_max is None and in_max is None:
+        return {
+            "data_unavailable": True,
+            "headlines": {
+                "sell_out_week": None,
+                "sell_out_units": None,
+                "sell_out_wow_pct": None,
+                "shipped_week": None,
+                "shipped_units": None,
+                "soh": 0.0,
+                "families_growing": 0,
+                "families_total": 0,
+            },
+            "sell_out_weekly": [],
+            "family_week": [],
+        }
+
+    soh = 0.0
+    obs = await latest_woc_observations(db, tenant_id=tid)
+    for r in obs:
+        soh += float(r.derived_stock or 0)
+
+    sell_out_weekly: list[dict[str, Any]] = []
+    sell_out_week = None
+    sell_out_units = None
+    sell_out_wow_pct = None
+    if so_max is not None:
+        start = so_max - timedelta(days=weeks * 7)
+        so_week = func.date_trunc("week", FactSalesSellout.transaction_date)
+        so_rows = (
+            await db.execute(
+                select(so_week.label("wk"), func.coalesce(func.sum(FactSalesSellout.units), 0))
+                .where(FactSalesSellout.tenant_id == tid)
+                .where(FactSalesSellout.transaction_date >= start)
+                .where(FactSalesSellout.transaction_date <= so_max)
+                .group_by(so_week)
+                .order_by(so_week)
+            )
+        ).all()
+        sell_map: dict[date, float] = {}
+        for r in so_rows:
+            wk = r.wk.date() if hasattr(r.wk, "date") else r.wk
+            sell_map[wk] = float(r[1] or 0)
+        cursor = (so_max - timedelta(days=so_max.weekday())) - timedelta(days=7 * (weeks - 1))
+        end_monday = so_max - timedelta(days=so_max.weekday())
+        while cursor <= end_monday:
+            sell_out_weekly.append(
+                {"week": _iso_week_label(cursor), "week_start": cursor.isoformat(), "sellOut": sell_map.get(cursor, 0.0)}
+            )
+            cursor += timedelta(days=7)
+        if sell_out_weekly:
+            sell_out_week = sell_out_weekly[-1]["week"]
+            sell_out_units = sell_out_weekly[-1]["sellOut"]
+            if len(sell_out_weekly) >= 2 and sell_out_weekly[-2]["sellOut"]:
+                prev = float(sell_out_weekly[-2]["sellOut"])
+                sell_out_wow_pct = round((float(sell_out_units) - prev) / prev * 100, 1)
+
+    shipped_week = None
+    shipped_units = None
+    if in_max is not None:
+        ship_monday = in_max - timedelta(days=in_max.weekday())
+        shipped_units_val = await db.scalar(
+            select(func.coalesce(func.sum(FactInboundShipment.quantity), 0)).where(
+                FactInboundShipment.tenant_id == tid,
+                in_date.is_not(None),
+                in_date >= ship_monday,
+                in_date < ship_monday + timedelta(days=7),
+            )
+        )
+        shipped_week = _iso_week_label(ship_monday)
+        shipped_units = float(shipped_units_val or 0)
+
+    family_week: list[dict[str, Any]] = []
+    families_growing = 0
+    if so_max is not None:
+        family_col = func.coalesce(
+            func.nullif(DimProduct.product_line, ""),
+            func.nullif(DimProduct.category, ""),
+            "Unclassified",
+        )
+        so_week = func.date_trunc("week", FactSalesSellout.transaction_date)
+        end_monday = so_max - timedelta(days=so_max.weekday())
+        prev_monday = end_monday - timedelta(days=7)
+        fam_rows = (
+            await db.execute(
+                select(family_col.label("family"), so_week.label("wk"), func.coalesce(func.sum(FactSalesSellout.units), 0))
+                .join(DimProduct, FactSalesSellout.product_id == DimProduct.id)
+                .where(FactSalesSellout.tenant_id == tid)
+                .where(FactSalesSellout.transaction_date >= prev_monday)
+                .where(FactSalesSellout.transaction_date < end_monday + timedelta(days=7))
+                .group_by(family_col, so_week)
+            )
+        ).all()
+        this_map: dict[str, float] = {}
+        prev_map: dict[str, float] = {}
+        for r in fam_rows:
+            wk = r.wk.date() if hasattr(r.wk, "date") else r.wk
+            fam = str(r.family or "Unclassified")
+            units = float(r[2] or 0)
+            if wk == end_monday:
+                this_map[fam] = units
+            else:
+                prev_map[fam] = units
+        names = sorted(set(this_map) | set(prev_map), key=lambda n: -this_map.get(n, 0.0))
+        for fam in names:
+            curr = this_map.get(fam, 0.0)
+            prev = prev_map.get(fam, 0.0)
+            wow = ((curr - prev) / prev) if prev else None
+            if curr > prev:
+                families_growing += 1
+            family_week.append({"family": fam, "units": curr, "wow": wow})
+
+    return {
+        "data_unavailable": False,
+        "headlines": {
+            "sell_out_week": sell_out_week,
+            "sell_out_units": sell_out_units,
+            "sell_out_wow_pct": sell_out_wow_pct,
+            "shipped_week": shipped_week,
+            "shipped_units": shipped_units,
+            "soh": round(soh, 1),
+            "families_growing": families_growing,
+            "families_total": len(family_week),
+        },
+        "sell_out_weekly": sell_out_weekly,
+        "family_week": family_week,
+        "sell_out_through": so_max.isoformat() if so_max else None,
+        "shipped_through": in_max.isoformat() if in_max else None,
+    }
+
+
 def _wants_live_woc(woc_source: str | None, recompute: str | None) -> bool:
     if str(woc_source or "").strip().lower() == "live":
         return True
