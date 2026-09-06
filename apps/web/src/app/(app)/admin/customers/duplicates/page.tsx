@@ -4,8 +4,7 @@ import { Suspense, useCallback, useEffect } from 'react';
 import { Alert, Tab, Tabs, Typography } from '@mui/material';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
-import { PageHeader } from '@/components/PageHeader';
-import { navPageChrome } from '@/features/shell/navPageChrome';
+import { DataChrome } from '@/features/data-stewardship/DataChrome';
 
 import { AliasScopeConflictsSection } from './AliasScopeConflictsSection';
 import { NameSimilarityMergeSection } from './NameSimilarityMergeSection';
@@ -73,11 +72,6 @@ function AdminCustomerDuplicatesPageContent() {
 
   return (
     <>
-      <PageHeader
-        {...navPageChrome('/admin/customers/duplicates', {
-          search: searchParams.toString() ? `?${searchParams.toString()}` : '',
-        })}
-      />
       <Tabs value={activeTab} onChange={(_e, v) => setTab(v)} sx={{ mb: 2 }} aria-label="Customer duplicate views">
         <Tab value="alias_scope" label="Alias-scope conflicts (merge)" />
         <Tab value="name_similarity" label="Name similarity (full merge)" />
@@ -104,8 +98,10 @@ function AdminCustomerDuplicatesPageContent() {
 
 export default function AdminCustomerDuplicatesPage() {
   return (
-    <Suspense fallback={<Typography color="text.secondary">Loading duplicate groups…</Typography>}>
-      <AdminCustomerDuplicatesPageContent />
-    </Suspense>
+    <DataChrome>
+      <Suspense fallback={<Typography color="text.secondary">Loading duplicate groups…</Typography>}>
+        <AdminCustomerDuplicatesPageContent />
+      </Suspense>
+    </DataChrome>
   );
 }

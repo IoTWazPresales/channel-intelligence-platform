@@ -19,8 +19,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
-import { PageHeader } from '@/components/PageHeader';
-import { navPageChrome } from '@/features/shell/navPageChrome';
+import { DataChrome } from '@/features/data-stewardship/DataChrome';
 import { apiGet, safeDisplayError } from '@/lib/api';
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
 
@@ -70,16 +69,14 @@ export default function StewardAuditPage() {
 
   if (meError || (me && !allowed)) {
     return (
-      <>
-        <PageHeader {...navPageChrome('/admin/steward-audit')} />
+      <DataChrome>
         <Alert severity="warning">Admin or steward role required.</Alert>
-      </>
+      </DataChrome>
     );
   }
 
   return (
-    <>
-      <PageHeader {...navPageChrome('/admin/steward-audit')} />
+    <DataChrome>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Append-only log of steward resolve / map / ignore / provisional / bulk decisions (DSI first).
       </Typography>
@@ -151,6 +148,6 @@ export default function StewardAuditPage() {
           </Table>
         )}
       </Paper>
-    </>
+    </DataChrome>
   );
 }

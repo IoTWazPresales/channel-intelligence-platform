@@ -13,6 +13,8 @@ const apiGetMock = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(searchString),
+  usePathname: () => '/admin/mappings',
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -24,6 +26,14 @@ vi.mock('@/lib/api', () => ({
 
 vi.mock('@/components/PageHeader', () => ({
   PageHeader: ({ title }: { title: string }) => <div>{title}</div>,
+}));
+
+vi.mock('@/features/data-stewardship/DataChrome', () => ({
+  DataChrome: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
+vi.mock('@/features/data-stewardship/StewardQueueOverview', () => ({
+  StewardQueueOverview: () => null,
 }));
 
 vi.mock('@/components/ModuleDataSection', () => ({

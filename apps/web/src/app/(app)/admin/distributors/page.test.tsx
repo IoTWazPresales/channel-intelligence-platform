@@ -75,6 +75,10 @@ vi.mock('@/components/PageHeader', () => ({
   PageHeader: ({ title }: { title: string }) => <div>{title}</div>,
 }));
 
+vi.mock('@/features/data-stewardship/DataChrome', () => ({
+  DataChrome: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
 vi.mock('@/components/ModuleDataSection', () => ({
   ModuleDataSection: ({ children, isEmpty, empty }: any) =>
     isEmpty ? (
@@ -181,8 +185,7 @@ describe('AdminDistributorsPage phase1', () => {
 
   it('loads master-first distributors page and keeps transitional tabs visible', async () => {
     renderPage();
-    expect(await screen.findByText('Distributors')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Distributor master' })).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: 'Distributor master' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Transitional: sell-out mapping' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Transitional: inbound mapping' })).toBeInTheDocument();
   });

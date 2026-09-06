@@ -48,8 +48,6 @@ import {
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
-import { PageHeader } from '@/components/PageHeader';
-import { navPageChrome } from '@/features/shell/navPageChrome';
 import { ShipmentEntityStewardPanel } from '@/app/(app)/admin/shipment-evidence/ShipmentEntityStewardPanel';
 import {
   CanonicalColumnMappingPanel,
@@ -91,6 +89,9 @@ import {
 } from '@/app/(app)/admin/shipment-evidence/shipmentImportWizardRouting';
 
 import { useImportJobProgressQuery } from '@/features/background-tasks/useImportJobProgressQuery';
+import { DataChrome } from '@/features/data-stewardship/DataChrome';
+import { ImportCenterOverview } from '@/features/data-stewardship/ImportCenterOverview';
+import { ImportJobCards } from '@/features/data-stewardship/ImportJobCards';
 
 import { CstImportJobResolutionSection } from './CstImportJobResolutionSection';
 import { DsiImportJobResolutionSection } from './DsiImportJobResolutionSection';
@@ -516,6 +517,7 @@ function AdminImportsPageContent() {
   const qc = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const jobStatusFilter = searchParams.get('jobStatus');
   const [activeStep, setActiveStep] = useState(0);
   const [unifiedLineupOpen, setUnifiedLineupOpen] = useState(false);
   const [bulkLineupBackfillOpen, setBulkLineupBackfillOpen] = useState(false);
@@ -2490,7 +2492,11 @@ function AdminImportsPageContent() {
     [showArchivedImportJobs],
   );
 
-  const jobsList = jobs ?? [];
+  const jobsList = useMemo(() => {
+    const all = jobs ?? [];
+    if (!jobStatusFilter) return all;
+    return all.filter((j) => j.status === jobStatusFilter);
+  }, [jobs, jobStatusFilter]);
 
   useEffect(() => {
     if (jobsBulkSelectionMode !== 'selecting') {
@@ -2745,13 +2751,20 @@ function AdminImportsPageContent() {
     );
   }, []);
 
+  // Lab Import Center puts job cards immediately after ScopeBar. The guided wizard is the
+  // relocated desktop authoring surface — keep it mounted. CSS (not isMobile) hides it when
+  // idle at md-down so SSR classNames match. Reveal when a start card, ?job=, or in-progress
+  // step engages it. Column mapping stays the desktop-first panel (not cards).
+  const wizardEngaged =
+    Boolean(searchParams.get('template')) ||
+    jobIdParam != null ||
+    selectedSlug != null ||
+    lastJobId != null ||
+    activeStep > 0;
+
   return (
     <>
-      <PageHeader
-        {...navPageChrome('/admin/imports', {
-          search: searchParams.toString() ? `?${searchParams.toString()}` : '',
-        })}
-      />
+      <ImportCenterOverview />
       <UnifiedLineupImportDialog
         open={unifiedLineupOpen}
         onClose={() => setUnifiedLineupOpen(false)}
@@ -2787,6 +2800,10 @@ function AdminImportsPageContent() {
         open={bulkLineupBackfillOpen}
         onClose={() => setBulkLineupBackfillOpen(false)}
       />
+      <Box
+        data-testid="guided-import-wizard"
+        sx={{ display: wizardEngaged ? 'block' : { xs: 'none', md: 'block' } }}
+      >
       <Alert severity="info" sx={{ mb: 2 }}>
         <strong>Guided import:</strong> pick an <strong>import type</strong> first (what the file means), then a{' '}
         <strong>data provider</strong> (which feed or instance). Product Master uses a{' '}
@@ -4824,6 +4841,7 @@ function AdminImportsPageContent() {
           </Stack>
         ) : null}
       </Paper>
+      </Box>
 
       <Paper sx={{ p: 2 }}>
         <Typography variant="subtitle1" fontWeight={600} gutterBottom>
@@ -4838,7 +4856,7 @@ function AdminImportsPageContent() {
           isEmpty={jobsList.length === 0}
           empty={{
             title: 'No import jobs yet',
-            description: 'Complete the guided import above, or use the API directly.',
+            description: 'Start an import from the cards above, or use the API directly.',
             primary: { label: 'Mapping queue', href: '/admin/mappings' },
             secondary: { label: 'Steward queue', href: '/admin/mappings' },
           }}
@@ -4879,13 +4897,18 @@ function AdminImportsPageContent() {
             </Stack>
           }
         >
-          <EnterpriseDataGrid
-            key={jobsBulkSelectionMode === 'selecting' ? 'jobs-bulk' : 'jobs-normal'}
-            rowData={jobsList}
-            columnDefs={colDefs}
-            height={420}
-            gridOptions={jobsGridOptions}
-          />
+          <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+            <ImportJobCards rows={jobsList} />
+          </Box>
+          <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+            <EnterpriseDataGrid
+              key={jobsBulkSelectionMode === 'selecting' ? 'jobs-bulk' : 'jobs-normal'}
+              rowData={jobsList}
+              columnDefs={colDefs}
+              height={420}
+              gridOptions={jobsGridOptions}
+            />
+          </Box>
         </ModuleDataSection>
         <ImportJobBulkDeleteImpactDialog
           open={importJobBulkDeleteOpen}
@@ -4912,8 +4935,10 @@ function AdminImportsPageContent() {
 
 export default function AdminImportsPage() {
   return (
-    <Suspense fallback={<Typography color="text.secondary">Loading imports workspace…</Typography>}>
-      <AdminImportsPageContent />
-    </Suspense>
+    <DataChrome>
+      <Suspense fallback={<Typography color="text.secondary">Loading imports workspace…</Typography>}>
+        <AdminImportsPageContent />
+      </Suspense>
+    </DataChrome>
   );
 }

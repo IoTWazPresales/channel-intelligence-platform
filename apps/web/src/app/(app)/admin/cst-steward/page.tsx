@@ -21,8 +21,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
-import { PageHeader } from '@/components/PageHeader';
-import { navPageChrome } from '@/features/shell/navPageChrome';
+import { DataChrome } from '@/features/data-stewardship/DataChrome';
 import { OPS_LIST_GRID_PAGINATION } from '@/features/shell/opsListGridPagination';
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
 
@@ -172,8 +171,7 @@ export default function CstStewardPage() {
   );
 
   return (
-    <>
-      <PageHeader {...navPageChrome('/admin/cst-steward')} />
+    <DataChrome>
       <Alert severity="info" sx={{ mb: 2 }} data-testid="cst-steward-guide">
         Key-account flag, report cadence / feed profile, expected-report worklist, and article-alias confirm. FLAG ≠
         BLOCK — unconfirmed aliases never auto-resolve. Slot advance is steward/dev triggered here; beat job is
@@ -327,6 +325,6 @@ export default function CstStewardPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </>
+    </DataChrome>
   );
 }

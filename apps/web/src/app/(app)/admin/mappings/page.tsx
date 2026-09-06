@@ -11,8 +11,8 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { DSI_STEWARD_CONFIG, invalidateDsiImportJobStewardQueries } from '@/app/(app)/admin/imports/dsi';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
-import { PageHeader } from '@/components/PageHeader';
-import { navPageChrome } from '@/features/shell/navPageChrome';
+import { DataChrome } from '@/features/data-stewardship/DataChrome';
+import { StewardQueueOverview } from '@/features/data-stewardship/StewardQueueOverview';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { apiDelete, apiGet, apiPost, apiUrl, authHeaders } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
@@ -209,7 +209,7 @@ function AdminMappingsPageContent() {
 
   return (
     <>
-      <PageHeader {...navPageChrome('/admin/mappings')} />
+      <StewardQueueOverview />
       <Paper sx={{ p: 2 }}>
         {invalidJobIdParam ? (
           <Alert severity="warning" sx={{ mb: 2 }}>
@@ -322,16 +322,18 @@ function AdminMappingsPageContent() {
 
 export default function AdminMappingsPage() {
   return (
-    <Suspense
-      fallback={
-        <Box sx={{ p: 2 }}>
-          <Typography variant="body2" color="text.secondary">
-            Loading mappings…
-          </Typography>
-        </Box>
-      }
-    >
-      <AdminMappingsPageContent />
-    </Suspense>
+    <DataChrome>
+      <Suspense
+        fallback={
+          <Box sx={{ p: 2 }}>
+            <Typography variant="body2" color="text.secondary">
+              Loading mappings…
+            </Typography>
+          </Box>
+        }
+      >
+        <AdminMappingsPageContent />
+      </Suspense>
+    </DataChrome>
   );
 }

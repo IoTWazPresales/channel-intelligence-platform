@@ -127,6 +127,19 @@ const mockRouterReplace = vi.fn();
 vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(searchString),
   useRouter: () => ({ replace: mockRouterReplace, push: vi.fn() }),
+  usePathname: () => '/admin/imports',
+}));
+
+vi.mock('@/features/data-stewardship/DataChrome', () => ({
+  DataChrome: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
+vi.mock('@/features/data-stewardship/ImportCenterOverview', () => ({
+  ImportCenterOverview: () => <div>Import Center</div>,
+}));
+
+vi.mock('@/features/data-stewardship/ImportJobCards', () => ({
+  ImportJobCards: () => <div>job cards</div>,
 }));
 
 vi.mock('@/components/PageHeader', () => ({

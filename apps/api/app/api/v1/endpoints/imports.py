@@ -44,6 +44,7 @@ from app.services.imports.shipment_field_mapping import (
 )
 from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.ingestion import ImportJob, ImportRowResult, ImportTemplate, RawFileMetadata, SourceDefinition
+from app.services.imports.stewardship_summary import stewardship_summary
 from app.storage.local import get_storage_backend
 from app.services.imports.import_background_slots import (
     SLOT_CST_BULK,
@@ -389,6 +390,15 @@ async def list_jobs(
         "offset": offset,
         "has_more": offset + len(items) < total,
     }
+
+
+@router.get("/stewardship-summary")
+async def get_stewardship_summary(
+    db: AsyncSession = Depends(get_db),
+    user: dict | None = Depends(get_optional_current_user),
+):
+    """Headline grains for Data & Stewardship. Read-only; prints database identity in the payload."""
+    return await stewardship_summary(db, user)
 
 
 @router.post("/jobs/bulk-delete-preview")

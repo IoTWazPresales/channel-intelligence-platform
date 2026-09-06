@@ -304,6 +304,7 @@ export const navGroups: NavGroup[] = [
         roles: STEWARD_PLUS,
         what: 'Cross-job manual mapping queue for tokens awaiting resolution (legacy queue; disposition deferred, D-0002).',
       },
+      { label: 'Master data', href: '/admin/masters', roles: STEWARD_PLUS, what: 'Identity anchors: products, customers, distributors, stores.' },
       { label: 'Products', href: '/admin/products', roles: STEWARD_PLUS, what: 'Product master: records, SKU economics, provisional enrichment.' },
       { label: 'Product catalogue gaps', href: '/admin/product-master-gaps', roles: STEWARD_PLUS, what: 'Unmatched product tokens from imports awaiting catalogue decisions.' },
       { label: 'Customers', href: '/admin/customers', roles: STEWARD_PLUS, what: 'Customer / dealer master with groups, strategic flags and commercial terms.' },

@@ -3,8 +3,7 @@
 import { Alert, Tab, Tabs } from '@mui/material';
 import { useState } from 'react';
 
-import { PageHeader } from '@/components/PageHeader';
-import { navPageChrome } from '@/features/shell/navPageChrome';
+import { DataChrome } from '@/features/data-stewardship/DataChrome';
 import {
   CatalogDimensionGridPanel,
   type CatalogDimensionGridConfig,
@@ -40,8 +39,7 @@ export default function AdminChannelsRegionsPage() {
   const [tab, setTab] = useState(0);
 
   return (
-    <>
-      <PageHeader {...navPageChrome('/admin/channels-regions')} />
+    <DataChrome>
       <Alert severity="info" sx={{ mb: 2 }}>
         Govern channel and region dimensions used across product defaults, customer classification, and import
         mapping. Use bulk actions to preview reference blockers before deleting multiple rows.
@@ -52,6 +50,6 @@ export default function AdminChannelsRegionsPage() {
       </Tabs>
       {tab === 0 ? <CatalogDimensionGridPanel config={CHANNEL_CONFIG} /> : null}
       {tab === 1 ? <CatalogDimensionGridPanel config={REGION_CONFIG} /> : null}
-    </>
+    </DataChrome>
   );
 }

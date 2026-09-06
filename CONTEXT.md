@@ -16,7 +16,9 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-09-06 — **Movement week keys** on `feat/ns-2-brief-nav-collapse`: ISO-Monday grain replaces `date_trunc('week')` timestamptz Sunday lookups. cip SQL + live API + browser: W24 sell-out **1119** (was 0), W23 **2095**, families **1 of 8** (was 0 of 8). Nested Sell-out by week still ~1119. Evidence `.eif/audit/NS7_MOVEMENT_20260906/`.
+- 2026-09-06 — **Data & Stewardship chrome** on `feat/ns-2-brief-nav-collapse` (N-0011 implement, not complete): D-0008 lab chrome on Import Center / steward queue / masters / audit. NUMBER RULE `cip`: 88/12/0/47/17 headlines; tab 102; products 18177. Browser 1280×800 + 390×844 import status. Wizard relocated, CSS-hidden idle at xs. D-0002 untouched. GOV-008 pending.
+
+- 2026-09-06 — **Movement week keys** on `feat/ns-2-brief-nav-collapse` `92f2d24`: ISO-Monday grain replaces `date_trunc('week')` timestamptz Sunday lookups. cip SQL + live API + browser: W24 sell-out **1119** (was 0), W23 **2095**, families **1 of 8** (was 0 of 8). Nested Sell-out by week still ~1119. Evidence `.eif/audit/NS7_MOVEMENT_20260906/`.
 
 - 2026-09-06 — **Housekeeping** on `feat/ns-2-brief-nav-collapse`: N-0017 **complete** (independent GOV-008 `NS7_GOV008_20260906`/`gov-008`, impl `NS7_EXEC_20260906`, review `9285d68`, ledger `fe6aca9`). N-0010 **rejected** (D-0009) `0ce51ba`. N-0011 **ready** (BL-0002 closed; inspect: intent survives). Mobile evidence `b28a7a3`. BACKLOG-174–177 EIF-R1–R4 `89a5c3e`. D-0002 untouched. Frontier N-0011 — do not start.
 

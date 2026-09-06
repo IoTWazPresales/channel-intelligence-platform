@@ -31,8 +31,7 @@ import {
 } from '@/components/bulkTable/MasterBulkDeleteImpactDialog';
 import type { BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
 import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
-import { PageHeader } from '@/components/PageHeader';
-import { navPageChrome } from '@/features/shell/navPageChrome';
+import { DataChrome } from '@/features/data-stewardship/DataChrome';
 import { CustomerCommercialTermsPanel } from '@/features/admin/CustomerCommercialTermsPanel';
 import { CustomerBulkPromoteDialog } from '@/features/admin/CustomerBulkPromoteDialog';
 import { CustomerDispositionDialog } from '@/features/admin/CustomerDispositionDialog';
@@ -827,7 +826,6 @@ function AdminCustomersPageContent() {
 
   return (
     <>
-      <PageHeader {...navPageChrome('/admin/customers')} />
       <Alert severity="info" sx={{ mb: 2 }}>
         Customer account master is governed here. For bulk updates use Import Center; use this table for operational
         maintenance, filters, and classification edits.
@@ -1697,8 +1695,10 @@ function AdminCustomersPageContent() {
 
 export default function AdminCustomersPage() {
   return (
-    <Suspense fallback={<Typography color="text.secondary">Loading customers workspace…</Typography>}>
-      <AdminCustomersPageContent />
-    </Suspense>
+    <DataChrome>
+      <Suspense fallback={<Typography color="text.secondary">Loading customers workspace…</Typography>}>
+        <AdminCustomersPageContent />
+      </Suspense>
+    </DataChrome>
   );
 }

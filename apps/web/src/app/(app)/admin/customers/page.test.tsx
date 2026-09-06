@@ -71,6 +71,10 @@ vi.mock('@/components/PageHeader', () => ({
   PageHeader: ({ title }: { title: string }) => <div>{title}</div>,
 }));
 
+vi.mock('@/features/data-stewardship/DataChrome', () => ({
+  DataChrome: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
 vi.mock('@/components/ModuleDataSection', () => ({
   ModuleDataSection: ({ children, isEmpty, empty }: any) =>
     isEmpty ? (
