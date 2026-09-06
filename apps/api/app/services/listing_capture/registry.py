@@ -136,11 +136,11 @@ def import_listings_csv(
 def list_proposals(session: Session, *, status: str = "proposed") -> list[dict[str, Any]]:
     from app.services.listing_capture.auto_finder import enrich_proposal_with_suggested_url
 
-    rows = list(
-        session.scalars(
-            select(CstListingSeed).where(CstListingSeed.status == status).order_by(CstListingSeed.id)
-        ).all()
-    )
+    q = (status or "proposed").strip().lower()
+    stmt = select(CstListingSeed).order_by(CstListingSeed.id)
+    if q not in {"all", "*"}:
+        stmt = stmt.where(CstListingSeed.status == q)
+    rows = list(session.scalars(stmt).all())
     labels = product_labels(session, [r.product_id for r in rows])
     out: list[dict[str, Any]] = []
     for r in rows:
@@ -156,6 +156,7 @@ def list_proposals(session: Session, *, status: str = "proposed") -> list[dict[s
                     "product_sku": sku,
                     "product_name": name,
                     "status": r.status,
+                    "source": "CST feed",
                     "import_job_id": r.import_job_id,
                 }
             )

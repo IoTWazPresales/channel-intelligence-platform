@@ -63,6 +63,7 @@ type Proposal = {
   product_name?: string | null;
   status: string;
   suggested_url?: string | null;
+  source?: string | null;
 };
 
 type IntelligenceRow = {
@@ -145,6 +146,27 @@ const SOURCE_LABEL: Record<string, string> = {
   auto_finder: 'Auto-finder',
 };
 
+function fmtFetched(value: unknown): string {
+  if (value == null || value === '') return '—';
+  const raw = String(value);
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return raw;
+  return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function approvalLabel(status: string): string {
+  if (status === 'approved') return 'Approved';
+  if (status === 'pending') return 'Pending';
+  if (status === 'rejected') return 'Rejected';
+  return status;
+}
+
+function approvalTone(status: string): 'success' | 'warning' | 'neutral' {
+  if (status === 'approved') return 'success';
+  if (status === 'pending') return 'warning';
+  return 'neutral';
+}
+
 function listingTone(s: string): 'success' | 'warning' | 'danger' | 'neutral' {
   if (s === 'active') return 'success';
   if (s === 'out_of_stock') return 'warning';
@@ -216,7 +238,8 @@ export function MarketSurface() {
   });
   const { data: proposals } = useQuery({
     queryKey: ['listing-capture', 'proposals'],
-    queryFn: ({ signal }) => apiGet<{ items: Proposal[] }>('/api/v1/listing-capture/proposals', { signal }),
+    queryFn: ({ signal }) =>
+      apiGet<{ items: Proposal[] }>('/api/v1/listing-capture/proposals?status=all', { signal }),
   });
   const { data: observations } = useQuery({
     queryKey: ['listing-capture', 'observations'],
@@ -390,6 +413,7 @@ export function MarketSurface() {
       apiPost(`/api/v1/listing-capture/proposals/${confirmSeed!.id}/confirm`, { url: confirmUrl }),
     onSuccess: async () => {
       setConfirmSeed(null);
+      setToast('Listing added to the registry and scheduled for its first fetch.');
       await qc.invalidateQueries({ queryKey: ['listing-capture'] });
     },
   });
@@ -505,16 +529,59 @@ export function MarketSurface() {
         valueGetter: (p) => p.data?.intel?.span_days,
         valueFormatter: (p) => (p.value == null ? '—' : `${p.value} d`),
       },
-      { field: 'source', headerName: 'Source', width: 130 },
-      { field: 'marketplace', headerName: 'Marketplace', width: 120 },
+      {
+        field: 'source',
+        headerName: 'Source',
+        width: 130,
+        valueFormatter: (p) => SOURCE_LABEL[String(p.value)] ?? String(p.value ?? ''),
+      },
+      {
+        headerName: 'Fetched',
+        width: 130,
+        valueGetter: (p) => p.data?.intel?.last_fetched ?? null,
+        valueFormatter: (p) => fmtFetched(p.value),
+      },
     ],
     [],
   );
 
   const mappingCols = useMemo<ColDef<MapRow>[]>(
     () => [
-      { field: 'internal_sku', headerName: 'Our product', minWidth: 160, flex: 1, pinned: 'left' },
-      { field: 'competitor_sku', headerName: 'Competing product', minWidth: 180, flex: 1.2 },
+      {
+        field: 'internal_sku',
+        headerName: 'Our product',
+        minWidth: 200,
+        flex: 1.3,
+        pinned: 'left',
+        cellRenderer: (p: { data?: MapRow }) =>
+          p.data ? (
+            <Box sx={{ lineHeight: 1.2 }}>
+              <Typography variant="body2" noWrap>
+                {p.data.product_name ?? p.data.internal_sku ?? '—'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {p.data.internal_sku}
+              </Typography>
+            </Box>
+          ) : null,
+      },
+      {
+        field: 'competitor_sku',
+        headerName: 'Competing product',
+        minWidth: 220,
+        flex: 1.5,
+        cellRenderer: (p: { data?: MapRow }) =>
+          p.data ? (
+            <Box sx={{ lineHeight: 1.2 }}>
+              <Typography variant="body2" noWrap>
+                {p.data.competitor_name ?? p.data.competitor_sku ?? '—'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {[p.data.competitor_brand, p.data.competitor_sku].filter(Boolean).join(' · ')}
+              </Typography>
+            </Box>
+          ) : null,
+      },
       {
         field: 'score',
         headerName: 'Match score',
@@ -534,10 +601,37 @@ export function MarketSurface() {
             </Stack>
           ) : null,
       },
-      { field: 'approval_status', headerName: 'Approval', width: 120 },
+      {
+        field: 'approval_status',
+        headerName: 'Approval',
+        width: 120,
+        cellRenderer: (p: { data?: MapRow }) =>
+          p.data ? (
+            <StatusChip
+              label={approvalLabel(p.data.approval_status)}
+              tone={approvalTone(p.data.approval_status)}
+            />
+          ) : null,
+      },
+      {
+        headerName: 'Competitor prices',
+        type: 'rightAligned',
+        width: 150,
+        valueGetter: (p) => {
+          const sku = p.data?.competitor_sku;
+          if (!sku) return 0;
+          return (prices ?? []).filter((row) => row.competitor_sku === sku).length;
+        },
+        valueFormatter: (p) => (p.value ? String(p.value) : 'none observed'),
+      },
+      {
+        headerName: 'Competitor listing',
+        width: 170,
+        valueGetter: () => 'Not monitored (planned)',
+      },
       { field: 'explanation', headerName: 'Why (stored)', flex: 1.4, minWidth: 240 },
     ],
-    [],
+    [prices],
   );
 
   const mapping = (mappings ?? []).find((m) => m.id === selectedMapping) ?? null;
@@ -678,6 +772,7 @@ export function MarketSurface() {
                           <TableCell align="right">First</TableCell>
                           <TableCell align="right">Latest</TableCell>
                           <TableCell align="right">Δ</TableCell>
+                          <TableCell>Promotion covering</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -713,6 +808,11 @@ export function MarketSurface() {
                                 >
                                   {d < 0 ? '−' : '+'}
                                   {fmtMoney(Math.abs(d))}
+                                </TableCell>
+                                <TableCell>
+                                  {l.intel?.case_id
+                                    ? `Case ${l.intel.case_id} · ${ACTIVATION_LABEL[l.intel.activation_status ?? ''] ?? l.intel.activation_status}`
+                                    : 'none — a customer price move, not a promotion'}
                                 </TableCell>
                               </TableRow>
                             );
@@ -808,7 +908,7 @@ export function MarketSurface() {
                 <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ minWidth: 280 }}>
                   <EntitySearchAutocomplete<CustomerPick>
                     label="Customer"
-                    value={null}
+                    value={customerPick}
                     onChange={(v) => setParams({ customer: v ? String(v.id) : null })}
                     fetchOptions={async (q, signal) => {
                       const page = await apiGet<CustomerList>(
@@ -821,7 +921,7 @@ export function MarketSurface() {
                   />
                   <EntitySearchAutocomplete<ProductPick>
                     label="Product"
-                    value={null}
+                    value={productPick}
                     onChange={(v) => setParams({ product: v ? String(v.id) : null })}
                     fetchOptions={async (q, signal) => {
                       const page = await apiGet<{ items?: ProductPick[] }>(
@@ -884,6 +984,7 @@ export function MarketSurface() {
                   <Table size="small" sx={{ '& td, & th': { py: 0.7 } }}>
                     <TableHead>
                       <TableRow>
+                        <TableCell>Case</TableCell>
                         <TableCell>Listing</TableCell>
                         <TableCell align="right">Case SRP</TableCell>
                         <TableCell align="right">Observed</TableCell>
@@ -892,7 +993,7 @@ export function MarketSurface() {
                     </TableHead>
                     <TableBody>
                       {gridRows
-                        .filter((l) => l.intel?.activation_status)
+                        .filter((l) => l.intel?.case_id)
                         .map((l) => (
                           <TableRow
                             key={l.id}
@@ -901,9 +1002,14 @@ export function MarketSurface() {
                             onClick={() => setSelectedListing(l.id)}
                           >
                             <TableCell>
-                              <Typography variant="body2">listing {l.id}</Typography>
+                              <Typography variant="body2">Case {l.intel?.case_id}</Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2">
+                                {l.product_name ?? (l.product_id ? `product ${l.product_id}` : `listing ${l.id}`)}
+                              </Typography>
                               <Typography variant="caption" color="text.secondary">
-                                {l.customer_name ?? l.customer_id} · {l.marketplace}
+                                {l.customer_name ?? l.customer_id} · {l.intel?.last_promo_badge ? `badge “${l.intel.last_promo_badge}”` : 'no badge'}
                               </Typography>
                             </TableCell>
                             <TableCell align="right">{fmtMoney(l.intel?.case_price)}</TableCell>
@@ -980,43 +1086,71 @@ export function MarketSurface() {
                       <TableCell>Customer</TableCell>
                       <TableCell>Feed id</TableCell>
                       <TableCell>Suggested URL</TableCell>
-                      <TableCell>Product</TableCell>
+                      <TableCell>Product match</TableCell>
+                      <TableCell>Source</TableCell>
                       <TableCell align="right">Decision</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {(proposals?.items ?? []).map((p) => (
-                      <TableRow key={p.id} hover>
-                        <TableCell>{customerName.get(p.customer_id) ?? p.customer_id}</TableCell>
-                        <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{p.external_id}</TableCell>
-                        <TableCell>
-                          {p.suggested_url ?? (
-                            <Typography variant="caption" color="warning.main">
-                              none — paste a URL
+                    {(proposals?.items ?? []).map((p) => {
+                      const waiting = p.status === 'proposed' || !p.status || p.status === 'pending';
+                      const matchLabel = [p.product_sku, p.product_name].filter(Boolean).join(' · ');
+                      return (
+                        <TableRow key={p.id} hover sx={{ opacity: waiting ? 1 : 0.55 }}>
+                          <TableCell>{customerName.get(p.customer_id) ?? p.customer_id}</TableCell>
+                          <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{p.external_id}</TableCell>
+                          <TableCell>
+                            {p.suggested_url ?? (
+                              <Typography variant="caption" color="warning.main">
+                                none — paste a URL
+                              </Typography>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {matchLabel || p.product_id ? (
+                              matchLabel || `product ${p.product_id}`
+                            ) : (
+                              <Typography variant="caption" color="warning.main">
+                                unresolved token
+                              </Typography>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="caption" color="text.secondary">
+                              {p.source?.trim() || `CST feed (${p.marketplace})`}
                             </Typography>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {p.product_id ?? (
-                            <Typography variant="caption" color="warning.main">
-                              unresolved token
-                            </Typography>
-                          )}
-                        </TableCell>
-                        <TableCell align="right">
-                          <Button
-                            size="small"
-                            variant="contained"
-                            onClick={() => {
-                              setConfirmSeed(p);
-                              setConfirmUrl(p.suggested_url?.trim() || '');
-                            }}
-                          >
-                            Confirm
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                          <TableCell align="right">
+                            {waiting ? (
+                              <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                                <Button
+                                  size="small"
+                                  disabled={rejectProposal.isPending}
+                                  onClick={() => rejectProposal.mutate(p.id)}
+                                >
+                                  Reject
+                                </Button>
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  onClick={() => {
+                                    setConfirmSeed(p);
+                                    setConfirmUrl(p.suggested_url?.trim() || '');
+                                  }}
+                                >
+                                  Confirm
+                                </Button>
+                              </Stack>
+                            ) : (
+                              <StatusChip
+                                label={p.status === 'confirmed' ? 'Added' : 'Rejected'}
+                                tone={p.status === 'confirmed' ? 'success' : 'neutral'}
+                              />
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </Box>
@@ -1278,7 +1412,7 @@ export function MarketSurface() {
               items={[
                 { k: 'URL', v: <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>{selected.url}</Typography> },
                 { k: 'Marketplace', v: selected.marketplace },
-                { k: 'Source', v: selected.source },
+                { k: 'Source', v: SOURCE_LABEL[selected.source] ?? selected.source },
                 {
                   k: 'Observations',
                   v: `${selected.intel?.observation_count ?? 0} over ${selected.intel?.span_days ?? 0} days${(selected.intel?.span_days ?? 0) < 14 ? ' — below 14-day readiness' : ''}`,
@@ -1398,6 +1532,14 @@ export function MarketSurface() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={!!toast}
+        autoHideDuration={4000}
+        onClose={() => setToast(null)}
+        message={toast}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
     </Box>
   );
 }
