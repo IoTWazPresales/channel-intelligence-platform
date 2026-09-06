@@ -6,7 +6,7 @@ programme:
   charter:
     status: accepted
     by: eif
-    at: '2026-09-06T18:17:33Z'
+    at: '2026-09-06T18:36:20Z'
     workstreams:
     - Full-platform UI/UX redesign
     - Shell & primitive convergence
@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 322
-  log_sha256: e525e09c4143914553994ce042338026550da70d3c7c839a61038c9675e2cbba
+  snapshot_revision: 327
+  log_sha256: c51a4ad35104ead74276eecfa4a401e59d0d0d4e44af5559fa2e6083e66199a5
   acceptance_policy:
     milestone: operator
     root: operator
@@ -1205,7 +1205,7 @@ nodes:
     - id: BL-0001
       type: dependency
       ref: N-0013
-      opened: '2026-09-06T18:17:33Z'
+      opened: '2026-09-06T18:36:20Z'
       note: Blocked pending N-0013 operator architecture approval
     conservation_tags: []
     fingerprint: null
@@ -1320,7 +1320,7 @@ nodes:
     - id: BL-0002
       type: dependency
       ref: N-0013
-      opened: '2026-09-06T18:17:33Z'
+      opened: '2026-09-06T18:36:20Z'
       note: Blocked pending N-0013 operator architecture approval
     conservation_tags: []
     fingerprint: null
@@ -2065,10 +2065,14 @@ nodes:
     title: Stock & Sell-through Execution vs plan from design-lab
     class: redesign
     origin: decomposition
-    status: proposed
-    stage: null
-    revision: 0
-    lease: null
+    status: in_progress
+    stage: implement
+    revision: 4
+    lease:
+      run: NS7_EXEC_20260906
+      acquired_at: '2026-09-06T18:23:29Z'
+      heartbeat_at: '2026-09-06T18:36:20Z'
+      expires_at: '2026-09-06T19:36:20Z'
     depends_on: []
     facets:
     - design_experience
@@ -2082,7 +2086,7 @@ nodes:
     - relocate PlanVsExecutedView, do not delete
     - numbers from cip with NUMBER RULE
     - Partly built and Planned markers kept
-    baseline_ref: null
+    baseline_ref: BLN-0001
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
@@ -2162,9 +2166,25 @@ nodes:
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      dashboard_exceptions: redirect_to_brief
+      role_gated_nav: spineNav_role_filters
+      commercial_planner: settlement_response_containers
+      steward_imports: steward_container
+      background_tasks: brief_mode_appbar
+      settings_signout: spine_footer_slim_header
+      plan_vs_executed_workspace: PlanVsExecutedView relocated below lab Execution strip; not deleted
+      plan_vs_executed_route: /plan-vs-executed page retained
+      stock_cover_lens: CoverLensView unchanged
+      stock_movement_lens: MovementLensView unchanged
+      stock_inbound_lens: /stock?lens=inbound still Supply InboundShipmentsWorkspace
+      customer_account_sell_out_gap: brief signal unchanged; not this Execution lens
+      pipeline_fill_pct: stock regime strip unchanged; not this Execution lens
+      response_container_badge: spine response badge unchanged until a later Administration/Overview node
     target_artifact_class: null
     design_artifact_class: null
+    implementation_run: NS7_EXEC_20260906
+    implementation_actor: gov-001
 decisions:
   D-0001:
     id: D-0001
