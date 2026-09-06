@@ -13,7 +13,7 @@
 
 ## Ready leaves
 
-- **N-0006** NS-1b FX mode and blocked-settle enforcement (feature, R3, stage=None)
+_No ready unblocked leaves._
 
 ## In progress / leased
 
@@ -22,4 +22,3 @@ _none_
 ## Decision queue
 
 - **D-0002** scope=N-0013: Mapping queue UI: RESTORE under Imports (recommended) vs RETIRE UI — operator choice
-- **D-0009** scope=N-0010: PROPOSED 2026-09-02: N-0010 disposition. N-0010 ('NS-6 Actions container', blocked) is not the Promotion Planner and its acceptance criteria cite rejected design input (CIP_DESIGN_LANGUAGE.md FROZEN v1.1 / container Response). Recommend: retire that framing; after D-0008 acceptance charter (a) Promotions & Funding surface (B4 planner becomes the authoring surface of a draft case; from-scratch entry + entity pickers; retire /promotions scaffold notice), (b) Market & Listings surface (re-home /listing-capture + /competition under honest status; wire score_competitor_candidate behind 'Propose candidates'; promo_not_activated Brief signal; fix market.py readiness claim), (c) promotion-plan template profile (map once; same profile parses + renders; RESELLER_HEADERS removed; round-trip diff = 0); (d) keep 'ranked commercial actions' only as a slimmed re-chartered planned node if it retains product value. ACs must forbid hard-coded template law and fabricated uplift/elasticity/causality/impact/confidence. Operator decision required; no nodes chartered by this run. Evidence: .eif/audit/NS_REDESIGN_R3_20260902/commercial/COMMERCIAL_DIRECTION.md §5.
