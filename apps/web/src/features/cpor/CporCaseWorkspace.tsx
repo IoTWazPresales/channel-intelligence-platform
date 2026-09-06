@@ -335,21 +335,31 @@ export function CporCaseWorkspace({ caseId, embedded = false, defaultTab = 0 }: 
         valueFormatter: (p) => (p.value == null ? '' : Number(p.value).toFixed(2)),
       },
       {
+        field: 'estimate_qty',
+        headerName: 'Est. units',
+        width: 110,
+        valueFormatter: (p) => (p.value == null ? '—' : Number(p.value).toFixed(0)),
+      },
+      {
         field: 'support_unit',
         headerName: 'Support/u',
-        width: 100,
+        width: 130,
+        headerTooltip: 'Support per unit (local). Ttl (local) = Support/u × Est. units, stored as ttl_support.',
         valueFormatter: (p) => (p.value == null ? '' : Number(p.value).toFixed(2)),
       },
       {
         field: 'ttl_support',
         headerName: 'Ttl (local)',
-        width: 120,
+        width: 130,
+        headerTooltip: 'Stored ttl_support = support_unit × estimate_qty. Est. units is required to derive this.',
         valueFormatter: (p) =>
           formatLocalMoney(p.value as number | null, data?.currency_code ?? 'ZAR'),
       },
       {
         headerName: 'Flags',
         width: 160,
+        headerTooltip:
+          'Derived from line evidence flags. Historical-import lines typically have none — the column is populated, not empty by bug.',
         valueGetter: (p) => (p.data?.flags ?? []).join(', '),
       },
     ],
