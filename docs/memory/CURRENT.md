@@ -14,7 +14,7 @@
 
 ## On feat/ns-2-brief-nav-collapse
 
-- **Programme:** PRG-20260831T145514. **N-0011 complete** (impl `NS8_DATA_20260906` / gov-001, product `edef697`, independent GOV-008 `NS8_GOV008_20260906` / gov-008, review `37c6286`, VERIFIED_WITH_LIMITATIONS). **N-0017 complete**. **N-0010 rejected**. **Do not start N-0006. Do not reopen N-0013.** Next container: Supply & Inbound (charter before implement).
+- **Programme:** PRG-20260831T145514. **N-0011 complete**. **N-0018 in_progress** implement (lease `NS9_SUPPLY_20260907` / gov-001, charter `331cd76`). **N-0017 complete**. **N-0010 rejected**. **Do not start N-0006. Do not reopen N-0013.**
 - **Product (Data & Stewardship):** Lab chrome on `/admin/imports|mappings|masters|steward-audit`. NUMBER RULE on `cip`: jobs last 7d **88**, failed 7d **12** / all **38**, pending 7d **0** / all **64**, completed 7d **47**, templates **17**, tab **102**, products **18177**, customers **5196**, distributors **101**, stores **0** UNCOVERED. 1280×800 + 390×844 import status. Idle wizard CSS-hidden at xs. 390 bottom-nav third item is **Promotions** (funding domain `short`), not the word Funding.
 - **Product (Stock Movement / Execution / Cover):** as previously pinned. Cover-breach lookup is a named 390 workflow verified 1280-only this wave.
 - **API:** `:8001`. `GET /api/v1/imports/stewardship-summary` read-only.
@@ -22,7 +22,7 @@
 
 **Mobile:** DIRECTION §6 desktop-primary with named 390px workflows. Data import status verified 390×844. Do not retrofit 390 onto already-shipped surfaces.
 
-**Next:** Charter Supply & Inbound from lab `SupplySurface` (`DomainOverviewSurface.tsx`) + `/design-lab/supply`. Production: `/stock?lens=inbound`, `/admin/shipment-evidence`, `/admin/po-management`. D-0002 untouched. EIF-R1–R4 parked BACKLOG-174–177.
+**Next:** N-0018 Supply & Inbound — lab `SupplySurface` in `DomainOverviewSurface.tsx` + `/design-lab/supply`. Production `/stock?lens=inbound`, `/admin/shipment-evidence` (Partly built), `/admin/po-management`. 1280×800 (not a named 390 workflow). D-0002 untouched.
 
 **Design language:** FROZEN v1.1 is **demoted**. Production follows implemented design-lab React.
 

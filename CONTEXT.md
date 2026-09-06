@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-09-07 — **N-0018 chartered** on `feat/ns-2-brief-nav-collapse` `331cd76`: Supply & Inbound from design-lab `SupplySurface`; implement lease `NS9_SUPPLY_20260907`. N-0011 complete.
+
 - 2026-09-07 — **N-0011 complete** on `feat/ns-2-brief-nav-collapse`: product `edef697`, independent GOV-008 `37c6286` (`NS8_GOV008_20260906` / gov-008, anchored on `NS8_DATA_20260906`). VERIFIED_WITH_LIMITATIONS. 390 bottom-nav third item is Promotions, not “Funding”. D-0002 untouched. Next: Supply & Inbound.
 
 - 2026-09-06 — **Data & Stewardship chrome** on `feat/ns-2-brief-nav-collapse` `edef697` (N-0011 implement, not complete): D-0008 lab chrome on Import Center / steward queue / masters / audit. NUMBER RULE `cip`: 88/12/0/47/17 headlines; tab 102; products 18177. Browser 1280×800 + 390×844 import status. Wizard relocated, CSS-hidden idle at xs. D-0002 untouched. GOV-008 pending.
