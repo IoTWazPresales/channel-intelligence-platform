@@ -13,7 +13,7 @@
 
 ## Ready leaves
 
-_No ready unblocked leaves._
+- **N-0017** Stock & Sell-through Execution vs plan from design-lab (redesign, R2, stage=None)
 
 ## In progress / leased
 
