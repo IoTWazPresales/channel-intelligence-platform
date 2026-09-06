@@ -6,7 +6,7 @@ programme:
   charter:
     status: accepted
     by: eif
-    at: '2026-09-03T19:38:19Z'
+    at: '2026-09-06T18:13:34Z'
     workstreams:
     - Full-platform UI/UX redesign
     - Shell & primitive convergence
@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 294
-  log_sha256: fadde41e8f873a1385d6ce26bf49b5ac6a706def86ff75592b8d1122743c842a
+  snapshot_revision: 321
+  log_sha256: f7f657865e71d1ef3221f793927020884cbabbf8069e326a46f224c6fe1156f6
   acceptance_policy:
     milestone: operator
     root: operator
@@ -408,10 +408,10 @@ nodes:
     parent: null
     title: NS-1b FX mode and blocked-settle enforcement
     class: feature
-    origin: decomposition
-    status: proposed
+    origin: retroactive
+    status: complete
     stage: null
-    revision: 2
+    revision: 3
     lease: null
     depends_on:
     - N-0012
@@ -441,6 +441,25 @@ nodes:
     preservation: {}
     target_artifact_class: null
     design_artifact_class: null
+    retroactive:
+      chartered: true
+      completed: true
+      independence_disclaimed: false
+      independence_unrecoverable: true
+      as_of: null
+      evidence:
+      - EV-NS1B-92F8EDB
+      - EV-NS1B-736B089
+      recording_runs:
+      - NS6_RETRO_20260906
+      disclaimed_pass_runs: []
+      disclaimed_impl_runs: []
+      chartered_seq: null
+      completed_seq: 311
+      disclaimed_seq: null
+      complete_note: NS-1b FX mode / fx_settle_allowed shipped in product commits 92f8edb and 736b089 ahead of this node.
+        This recording run is not the implementer and does not stamp implementation_run. R3 referent/rendered independence
+        cannot be satisfied after the fact.
   N-0007:
     id: N-0007
     parent: null
@@ -1186,7 +1205,7 @@ nodes:
     - id: BL-0001
       type: dependency
       ref: N-0013
-      opened: '2026-09-03T19:38:19Z'
+      opened: '2026-09-06T18:13:34Z'
       note: Blocked pending N-0013 operator architecture approval
     conservation_tags: []
     fingerprint: null
@@ -1301,7 +1320,7 @@ nodes:
     - id: BL-0002
       type: dependency
       ref: N-0013
-      opened: '2026-09-03T19:38:19Z'
+      opened: '2026-09-06T18:13:34Z'
       note: Blocked pending N-0013 operator architecture approval
     conservation_tags: []
     fingerprint: null
@@ -1363,7 +1382,7 @@ nodes:
     origin: decomposition
     status: complete
     stage: null
-    revision: 105
+    revision: 107
     lease: null
     depends_on: []
     facets:
@@ -1645,6 +1664,401 @@ nodes:
     design_artifact_class: high_fidelity
     implementation_run: NS6_N0013_IMPL_BOUNDARY_20260903
     implementation_actor: agent
+    retroactive:
+      chartered: false
+      completed: false
+      independence_disclaimed: true
+      independence_unrecoverable: false
+      as_of: null
+      evidence:
+      - EV-GOV008-REVIEW
+      - EV-N0013-SYNTHETIC-SCRIPT
+      recording_runs:
+      - NS6_RETRO_20260906
+      disclaimed_pass_runs:
+      - NS6_GOV008_R3_20260903
+      disclaimed_impl_runs:
+      - NS6_N0013_IMPL_BOUNDARY_20260903
+      chartered_seq: null
+      completed_seq: null
+      disclaimed_seq: 309
+      disclaim_reason: Independence was constructed, not earned. Synthetic implementation_run NS6_N0013_IMPL_BOUNDARY_20260903
+        stays in the log so that GOV-008 pass provenance could evaluate a discovery node whose implement stage was not the
+        product change. This disclaimer records that construction; it does not rewrite seq 274–294.
+  N-0014:
+    id: N-0014
+    parent: null
+    title: Promotions & Funding production migration from design-lab
+    class: redesign
+    origin: retroactive
+    status: complete
+    stage: null
+    revision: 2
+    lease: null
+    depends_on: []
+    facets:
+    - design_experience
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - Lab Promotions & Funding desktop experience on production cpor_case paths
+    - Partly built / Planned markers retained
+    - no invented design language
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      design_artifact_class:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_divergence:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_signatures:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered_comparison:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_sameness_review:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_interaction_spec:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_state_coverage:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_identity_tokens:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_execution_decisions:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    retroactive:
+      chartered: true
+      completed: true
+      independence_disclaimed: false
+      independence_unrecoverable: true
+      as_of: null
+      evidence:
+      - EV-PF-4FD05C4
+      - EV-PF-5E3EB5A
+      - EV-PF-8C6AEF8
+      - EV-PF-96E35B7
+      recording_runs:
+      - NS6_RETRO_20260906
+      disclaimed_pass_runs: []
+      disclaimed_impl_runs: []
+      chartered_seq: 313
+      completed_seq: 314
+      disclaimed_seq: null
+      charter_note: Shipped on feat/ns-2-brief-nav-collapse ahead of a covering node (BACKLOG-171 instance 4).
+      complete_note: 'Close-out commit 5e3eb5a against the design lab. Independence unrecoverable: no GOV-008 of this node.'
+  N-0015:
+    id: N-0015
+    parent: null
+    title: Market & Listings production migration from design-lab
+    class: redesign
+    origin: retroactive
+    status: complete
+    stage: null
+    revision: 2
+    lease: null
+    depends_on: []
+    facets:
+    - design_experience
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - Lab Market & Listings chrome on /listing-capture and /competition
+    - planned leaves stay Planned
+    - leftover /market stub is not this container
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      design_artifact_class:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_divergence:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_signatures:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered_comparison:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_sameness_review:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_interaction_spec:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_state_coverage:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_identity_tokens:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_execution_decisions:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    retroactive:
+      chartered: true
+      completed: true
+      independence_disclaimed: false
+      independence_unrecoverable: true
+      as_of: null
+      evidence:
+      - EV-MKT-A853A4E
+      - EV-MKT-82013B3
+      recording_runs:
+      - NS6_RETRO_20260906
+      disclaimed_pass_runs: []
+      disclaimed_impl_runs: []
+      chartered_seq: 316
+      completed_seq: 317
+      disclaimed_seq: null
+      charter_note: Shipped on feat/ns-2-brief-nav-collapse ahead of a covering node (BACKLOG-171 instance 4).
+      complete_note: 'Chrome + remaining MIGRATE landed (a853a4e, 82013b3). Independence unrecoverable: no GOV-008 of this
+        node. /market stub deferred separately.'
+  N-0016:
+    id: N-0016
+    parent: null
+    title: Stock & Sell-through Cover and Movement lenses from design-lab
+    class: redesign
+    origin: retroactive
+    status: complete
+    stage: null
+    revision: 2
+    lease: null
+    depends_on: []
+    facets:
+    - design_experience
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - Lab Cover and Movement structure on production /stock with numbers from cip
+    - Execution vs plan is a later node
+    - relocate rather than delete Channel Ops
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      design_artifact_class:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_divergence:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_signatures:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered_comparison:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_sameness_review:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_interaction_spec:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_state_coverage:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_identity_tokens:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      design_execution_decisions:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    retroactive:
+      chartered: true
+      completed: true
+      independence_disclaimed: false
+      independence_unrecoverable: true
+      as_of: null
+      evidence:
+      - EV-STK-EB37AD5
+      - EV-STK-31712DF
+      - EV-STK-21A11D1
+      recording_runs:
+      - NS6_RETRO_20260906
+      disclaimed_pass_runs: []
+      disclaimed_impl_runs: []
+      chartered_seq: 319
+      completed_seq: 320
+      disclaimed_seq: null
+      charter_note: Cover 31712df and Movement 21a11d1 shipped ahead of a covering node (BACKLOG-171 instance 4).
+      complete_note: 'Cover and Movement migrated. Execution vs plan is not in this node. Independence unrecoverable: no GOV-008
+        of this node.'
 decisions:
   D-0001:
     id: D-0001
@@ -1732,20 +2146,110 @@ decisions:
   D-0009:
     id: D-0009
     scope: N-0010
-    statement: 'PROPOSED 2026-09-02: N-0010 disposition. N-0010 (''NS-6 Actions container'', blocked) is not the Promotion
-      Planner and its acceptance criteria cite rejected design input (CIP_DESIGN_LANGUAGE.md FROZEN v1.1 / container Response).
-      Recommend: retire that framing; after D-0008 acceptance charter (a) Promotions & Funding surface (B4 planner becomes
-      the authoring surface of a draft case; from-scratch entry + entity pickers; retire /promotions scaffold notice), (b)
-      Market & Listings surface (re-home /listing-capture + /competition under honest status; wire score_competitor_candidate
-      behind ''Propose candidates''; promo_not_activated Brief signal; fix market.py readiness claim), (c) promotion-plan
-      template profile (map once; same profile parses + renders; RESELLER_HEADERS removed; round-trip diff = 0); (d) keep
-      ''ranked commercial actions'' only as a slimmed re-chartered planned node if it retains product value. ACs must forbid
-      hard-coded template law and fabricated uplift/elasticity/causality/impact/confidence. Operator decision required; no
-      nodes chartered by this run. Evidence: .eif/audit/NS_REDESIGN_R3_20260902/commercial/COMMERCIAL_DIRECTION.md §5.'
-    origin: agent
-    status: proposed
+    statement: 'RESOLVED 2026-09-04: the rejected N-0010 ''Actions / ranked commercial actions'' framing folds into Attention
+      as a cross-domain surfacing and routing layer. N-0010 does not survive as its own work container. Binding terms: (1)
+      Attention surfaces and routes; work completion happens in the owning domain, never from Overview; no approve/resolve/edit
+      of any entity from Attention. (2) Items are DERIVED; they clear when the underlying condition clears (work done, or
+      a justification recorded against the entity in its own domain); no dismiss and no snooze. (3) Assignment is a property
+      of the entity, not the queue; Attention shows and filters by owner (mine / my domain / all) and does not reassign; filtering
+      is the superuser mechanism; no separate notification system. (4) Signals group by shared entity using the existing entity
+      graph, not inference; multiple symptoms of the same CPOR case, lineup or customer render as one situation; cross-entity
+      clustering is future work. (5) Two signal classes: CONDITION (wrong now) and PROJECTION (will be wrong unless acted
+      on by a computed date; value decays past that date). (6) Signal history is retained from the start; projections need
+      learnt cycle times from our own history; items persist with lifecycle appeared/changed/resolved/expired and are not
+      recomputed and discarded on each read. (7) The reasoning is the payload: every item shows the evidence chain, not only
+      the conclusion. (8) Audit covers the system as well as people: record what the platform asserted, when, and from what
+      evidence. Scope: domain modules are not redesigned; Attention composes from existing platform capability and must reuse
+      existing projection inputs (transit history, cover, lineup planning, cycle times) rather than reimplement them; permitted
+      domain touches are deep-link route targets with filters preserved, and a justification-recording affordance where a
+      domain has none; a missing projection input is a separate slice — report and stop. The 2026-09-02 proposal to charter
+      Promotions & Funding / Market & Listings / template-profile nodes as N-0010''s split, and to keep ranked commercial
+      actions as a slimmed re-chartered planned node, is not accepted. Those surfaces remain D-0008 domain architecture. No
+      nodes chartered by this recording. Evidence: .eif/audit/NS6_D0009_20260904/OPERATOR_DECISION.md.'
+    origin: operator
+    status: accepted
     supersedes: null
-evidence: {}
+evidence:
+  EV-GOV008-REVIEW:
+    id: EV-GOV008-REVIEW
+    provenance: implementation-observation
+    path: .eif/audit/NS6_GOV008_R3_20260903/independent-rendered-review.md
+    tree_hash: null
+    note: GOV-008 review plus 2026-09-04 addendum. Records synthetic implementation_run NS6_N0013_IMPL_BOUNDARY_20260903 and
+      CONSULT cli session evidence (claude-opus-4-8, sdk-cli, 2026-09-02T16:49:43Z and 2026-09-02T21:34:04Z). Session logs
+      live outside the repo.
+  EV-N0013-SYNTHETIC-SCRIPT:
+    id: EV-N0013-SYNTHETIC-SCRIPT
+    provenance: implementation-observation
+    path: .eif/audit/NS6_GOV008_R3_20260903/complete_n0013.py
+    tree_hash: null
+    note: Script that stamped synthetic implement so independence gates could evaluate.
+  EV-NS1B-92F8EDB:
+    id: EV-NS1B-92F8EDB
+    provenance: implementation-observation
+    path: null
+    tree_hash: 92f8edb21cd907e59bb406eecac674e486b3708b
+    note: 'cpor: NS-1b FX mode columns, blocked-settle enforcement, and case declare UI'
+  EV-NS1B-736B089:
+    id: EV-NS1B-736B089
+    provenance: implementation-observation
+    path: null
+    tree_hash: 736b08977958c0af8e94c23559e292a2d80d2c20
+    note: 'feat(cpor): declare booked FX mode and find cases by entity'
+  EV-PF-4FD05C4:
+    id: EV-PF-4FD05C4
+    provenance: implementation-observation
+    path: null
+    tree_hash: 4fd05c4e223cf09ded897365cca3a8521850b3c2
+    note: 'promotions: migrate funding lab onto production cpor_case paths'
+  EV-PF-5E3EB5A:
+    id: EV-PF-5E3EB5A
+    provenance: implementation-observation
+    path: null
+    tree_hash: 5e3eb5ad9dfebba0590d61738cfbb20feb05fd2b
+    note: 'feat(web): close out Promotions & Funding against the design lab'
+  EV-PF-8C6AEF8:
+    id: EV-PF-8C6AEF8
+    provenance: implementation-observation
+    path: null
+    tree_hash: 8c6aef8cf8cbcdee5c0863598c2ce2f66df6121a
+    note: 'feat(web): migrate lab desktop dimensions into shared funding chrome'
+  EV-PF-96E35B7:
+    id: EV-PF-96E35B7
+    provenance: implementation-observation
+    path: null
+    tree_hash: 96e35b72d372691fe0d12eb59e45b0ef168a7e85
+    note: 'promotions: restore domain chrome, number scope, remaining funding lenses'
+  EV-MKT-A853A4E:
+    id: EV-MKT-A853A4E
+    provenance: implementation-observation
+    path: null
+    tree_hash: a853a4e5dd5b3a11061c58ced8e2ab82d642edd7
+    note: 'market: mount Market & Listings chrome on listing-capture and competition'
+  EV-MKT-82013B3:
+    id: EV-MKT-82013B3
+    provenance: implementation-observation
+    path: null
+    tree_hash: 82013b38c44af4982699482c64e4a96641c3c758
+    note: 'market: land remaining Market MIGRATE (proposals Source cell, reject, snackbar)'
+  EV-STK-EB37AD5:
+    id: EV-STK-EB37AD5
+    provenance: implementation-observation
+    path: null
+    tree_hash: eb37ad530f91991b2ee62688b49573a33581268e
+    note: 'stock: mount lab DomainHeader and five Stock lenses on production routes'
+  EV-STK-31712DF:
+    id: EV-STK-31712DF
+    provenance: implementation-observation
+    path: null
+    tree_hash: 31712dff3dfb1c050d3aa216310e023fa533887c
+    note: 'stock: migrate Cover lens to lab headlines and pair grid'
+  EV-STK-21A11D1:
+    id: EV-STK-21A11D1
+    provenance: implementation-observation
+    path: null
+    tree_hash: 21a11d13000e098317f658d9e0c1583645068731
+    note: 'stock: migrate Movement lens to lab headlines and relocate Channel Ops'
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -1765,6 +2269,31 @@ baselines:
     path: .eif/audit/NS2_CONTINUE_20260831/implementation-baseline.md
     observed_behavior: Pre-NS-2 MUI drawer shell with grouped navConfig; landing redirected to /dashboard; no /brief route
       or spine.
+caveats:
+  consult_model_logged:
+    key: consult_model_logged
+    prior_seq: 287
+    resolved_seq: 310
+    resolution: 'Seq 287 node.quality/design_divergence remains UNVERIFIED in the append-only log. Later GOV-008 addendum
+      (2026-09-04) resolves the consult model from Claude Code CLI session logs: model claude-opus-4-8, entrypoint sdk-cli,
+      2026-09-02T16:49:43Z (IA) and 2026-09-02T21:34:04Z (commercial). Logs are outside the repo and are not durable.'
+    evidence:
+    - EV-GOV008-REVIEW
+    status: resolved
+    node: N-0013
+    provenance: asserted
+    unverified_open: true
+    run: NS6_RETRO_20260906
+    actor: gov-001
+deferred_findings:
+- seq: 321
+  code: DOES_NOT_FIT
+  note: apps/web/src/app/(app)/market/page.tsx remains a static JSON stub. Market & Listings production container is /listing-capture
+    and /competition (MarketSurface), not /market. Do not treat the stub as the container; do not delete it in this recording.
+  node: N-0015
+  run: NS6_RETRO_20260906
+  actor: gov-001
+  status: deferred
 ids:
   node: 5
   decision: 0
