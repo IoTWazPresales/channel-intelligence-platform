@@ -5,8 +5,8 @@ import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect } from 'react';
 
-import { PlanVsExecutedView } from '@/features/plan-vs-executed/PlanVsExecutedView';
 import { CoverLensView } from '@/features/stock/CoverLensView';
+import { ExecutionLensView } from '@/features/stock/ExecutionLensView';
 import { MovementLensView } from '@/features/stock/MovementLensView';
 import { StockChrome } from '@/features/stock/StockChrome';
 import { parseStockLens, type StockLensId } from '@/features/stock/stockLenses';
@@ -20,7 +20,7 @@ function StockLensBody({ lens }: { lens: StockLensId }) {
   if (lens === 'execution') {
     return (
       <Box data-testid="stock-execution-lens" sx={{ px: { xs: 1, md: 0 } }}>
-        <PlanVsExecutedView />
+        <ExecutionLensView />
       </Box>
     );
   }

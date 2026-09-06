@@ -1,41 +1,31 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-09-06 (Stock Cover lens migrated from design-lab)
+**Last updated:** 2026-09-06 (Stock Execution vs plan lab chrome)
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `31712df`
+**Last content pin:** `bdc77a4` (N-0017 charter). Execution product not yet in that pin.
 
 **Alembic (code):** `20260906_0022` (`cpor_case.intelligence_exclude`)
 
-**Alembic on cip:** `20260906_0022` (clone-tested on `cip_alembic_smoke`, then applied; `current_database=cip`)
+**Alembic on cip:** `20260906_0022`
 
 ## On feat/ns-2-brief-nav-collapse
 
-- **Product (Stock chrome):** DomainHeader + five lab lenses on `/stock`, `/channel-intelligence`, `/forecasts`. Default lens is cover. `/stock?lens=inbound` stays Supply.
-- **Product (Stock Cover):** Lab Cover structure on `CoverLensView` (headlines, 6-bucket histogram, sell-out vs shipped, ScopeBar, pair grid, context panel). Numbers from `weeks_of_cover_observation` on cip — not lab fixtures. I2 / BACKLOG-164 closed earlier this wave (stored score + explanation). `/market` stub untouched.
-- **Product (Unit 5):** Seven explicit fixture/smoke cases flagged `intelligence_exclude` (not deleted). Default lists, chips, ageing, comparables, norms, portfolio, settlement book, brief open-case counts and incremental-cost summary are commercial-only (304 cases). Reversible Test data chip + workspace switch. Do not ILIKE `%test%`.
-- **Product (Units 2–4):** `evidence_basis` derived; booked FX mode declaration; case find filters; Est. units on settlement lines. N-0006 not started.
-- **Product (Unit 1):** Booked FX lifecycle extends declared `roe_snapshot`. Daily USDZAR from Frankfurter (ECB); last-known fallback never blocks a case.
-- **Product (Unit 0):** Promotions & Funding desktop dimensions migrated from design-lab source at 1280×800.
-- **I1–I5:** I1/I3/I4/I5 remain closed. **I2 closed** (BACKLOG-164): stored score + explanation, no factor panel.
-- **Programme:** PRG-20260831T145514; `verify` ok rev **295**; `frontier` is **only N-0006**. Do not start N-0006 (BACKLOG-170). Do not reopen N-0013, D-0008 or D-0009. Container migration is **not** a lawful new node this session (BACKLOG-171 instance 4); product work continues under accepted D-0008.
-- **D-0009 accepted:** Actions fold into Attention. Ledger still uncommitted.
+- **Product (Stock Execution):** Lab PairedBars chrome on `/stock?lens=execution` (`ExecutionLensView`). `PlanVsExecutedView` relocated below, not deleted. `/plan-vs-executed` still redirects to this lens. Headlines use `scorecard.planned_units` / `shipped_units_in_plan` and customer rollup under 70% — not lab P09. Nav Partly built / Planned labels untouched.
+- **Product (Stock Cover / Movement):** Unchanged this unit. Cover: `weeks_of_cover_observation` on cip. Movement: movement-lens + Channel Ops nested below.
+- **Product (Stock chrome):** DomainHeader + lenses on `/stock`, `/channel-intelligence`, `/forecasts`. Default lens cover. `/stock?lens=inbound` stays Supply.
+- **Product (Unit 5):** Seven fixture cases `intelligence_exclude`. Commercial-only lists. Do not ILIKE `%test%`.
+- **Product (Units 0–4):** Funding dimensions, booked FX, evidence_basis, settlement Est. units.
+- **I1–I5:** I1/I3/I4/I5 remain closed. **I2 closed** (BACKLOG-164).
+- **Programme:** PRG-20260831T145514. UNIT 1 retroactive recording: N-0006 complete with no `implementation_run`. N-0014–16 complete. `verify` expected non-ok (independence/gates). **Do not start N-0006. Do not reopen N-0013 / D-0008 / D-0009.**
+- **N-0017:** chartered then leased; stage **implement**; run `NS7_EXEC_20260906`; BLN-0001 attached. **Not complete** — no GOV-008 this session.
 - **D-0002** remains the open decision.
-- **Next:** Stock Execution vs plan (lab PairedBars chrome; relocate PlanVsExecutedView, do not delete). Then sell-through/forecast polish, then Unit D Supply.
 
-**Programme frontier:** N-0006 only. Do not manufacture a path. BACKLOG-171 instance (4): no covering node for this wave.
+**Next:** Do not complete N-0017 without GOV-008. Local API `/api/v1/*` 500s so Execution figures are not rendered in the browser (Python NUMBER RULE on `cip` did run). Then sell-through/forecast polish, then Unit D Supply. Do not start those until Execution product is committed.
 
-**Design language:** FROZEN v1.1 is **demoted**. Production funding follows the implemented design-lab React, including lab-specified dimensions.
+**Design language:** FROZEN v1.1 is **demoted**. Production follows implemented design-lab React.
 
-**Deferred:** BACKLOG-173 (EIF NO_PROGRESS fingerprint on reads). Budget ledger writer not chartered. Floating FX re-rate after approval is not implemented (mode exists; booked is the norm). CIP cases absent from the pending report (47) observed, not acted on. C23C16234 not auto-flagged.
+**Deferred:** BACKLOG-173 (EIF NO_PROGRESS fingerprint). Budget ledger writer not chartered. Floating FX re-rate after approval not implemented. CIP cases absent from pending report (47) observed. C23C16234 not auto-flagged. Leftover `/market` stub (finding.defer on N-0015).
 
-**Env:** local Windows. Web `:3000` + API `:8001`. Local API currently 500s on `/api/v1/*` including `/auth/me` — Cover UI empty in browser; SQL via sync engine on `cip` still works.
-
-**Programme frontier:** N-0006 only. Do not manufacture a path. BACKLOG-171 instance (4): no covering node for this wave.
-
-**Design language:** FROZEN v1.1 is **demoted**. Production funding follows the implemented design-lab React, including lab-specified dimensions.
-
-**Deferred:** BACKLOG-164 I2-only until Market mapping. Budget ledger writer not chartered. Floating FX re-rate after approval is not implemented (mode exists; booked is the norm). CIP cases absent from the pending report (47) observed, not acted on. C23C16234 not auto-flagged.
-
-**Env:** local Windows. Web `:3000` + API `:8001`.
+**Env:** local Windows. Web `:3000` + API `:8001`. API currently 500s on `/api/v1/*` including `/auth/me` and `/plan-vs-executed`. Sync/async engine on `cip` still works (`current_database()=cip`).
