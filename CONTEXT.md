@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-09-06 — **API 500 + 1280×800 lens browser** on `feat/ns-2-brief-nav-collapse` `3008c83`: 500 **predates this branch** (Next `/api/v1` proxy uncaught `fetch` + FastAPI down; proxy on main since `0403713`/`af32bf7`). Proxy now 502 when upstream refused. Browser at 1280×800 vs `cip` SQL: Cover match (64121 / 27.0w / 453 / 44 / 333); Execution match (26Q3 32509 / 6586 20% / under70 10); Movement **delta** lab W24 sell-out **0** vs proven SQL **1119** (nested Channel Ops chart still ~1119). N-0017 not complete.
+
 - 2026-09-06 — **Stock Execution vs plan** on `feat/ns-2-brief-nav-collapse` `6317040`: lab strip (plan units / in-plan shipped % / customers under 70%) + PairedBars; `PlanVsExecutedView` relocated below. NUMBER RULE on `cip` (`current_database()=cip`): default_period **26Q3** (not P09), planned **32509**, shipped_in_plan **6586** (20%), customers under 70% **10**. Browser: Execution tab + relocated workspace + `/plan-vs-executed` redirect; API `/api/v1/*` 500 so figures not rendered. N-0017 implement, not complete.
 
 - 2026-09-06 — **Stock Movement lens**: lab 4 headlines + sell-out trend + family bars; Channel Ops nested tabs relocated below, not deleted. SQL on `cip`: sell-out W24 1119 (vs W23 2095), shipped W35 1477, SOH 64121.2 (cover tape, not weekly series), families growing WoW 1 of 8 (NR). No weekly SOH series — not drawn.
