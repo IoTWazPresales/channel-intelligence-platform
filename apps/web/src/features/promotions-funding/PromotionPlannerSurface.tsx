@@ -31,8 +31,7 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { PLANNER_CAPABILITIES } from '@/features/promotions-funding/capabilities';
-import { fmtCompact, fmtInt, fmtPct } from '@/features/promotions-funding/format';
-import { evidenceBasisLabel, isEvidenceBasis, type EvidenceBasis } from '@/features/promotions-funding/evidenceBasis';
+import { fmtCompact, fmtInt } from '@/features/promotions-funding/format';
 import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
 import {
   countPlanning,
@@ -59,8 +58,6 @@ export function PromotionPlannerSurface() {
   const search = useSearchParams();
   const planId = Number(search.get('plan') || '');
   const stageFilter = (search.get('stage') as PlanStage | null) || null;
-  const evidenceRaw = search.get('evidence');
-  const evidenceFilter: EvidenceBasis | null = isEvidenceBasis(evidenceRaw) ? evidenceRaw : null;
   const setParam = useCallback(
     (k: string, v: string | null) => {
       const next = new URLSearchParams(search.toString());
@@ -85,7 +82,6 @@ export function PromotionPlannerSurface() {
   return (
     <PlannerList
       stageFilter={stageFilter}
-      evidenceFilter={evidenceFilter}
       newRequested={search.get('new') === '1'}
       setParam={setParam}
       onOpen={(id) => setParam('plan', String(id))}
@@ -95,13 +91,11 @@ export function PromotionPlannerSurface() {
 
 function PlannerList({
   stageFilter,
-  evidenceFilter,
   newRequested,
   setParam,
   onOpen,
 }: {
   stageFilter: PlanStage | null;
-  evidenceFilter: EvidenceBasis | null;
   newRequested: boolean;
   setParam: (k: string, v: string | null) => void;
   onOpen: (id: number) => void;
@@ -143,29 +137,15 @@ function PlannerList({
     queryKey: ['cpor', 'support-bias', 'planner'],
     queryFn: ({ signal }) => apiGet<SupportBiasRead>('/api/v1/cpor/intelligence/support-bias', { signal }),
   });
-  const { data: portfolio } = useQuery({
-    queryKey: ['cpor', 'intelligence', 'portfolio'],
-    queryFn: ({ signal }) =>
-      apiGet<{
-        totals?: { delivery_rate?: number | null };
-        evidence_basis_mix?: { claim_evidenced?: number; source_attested?: number; none?: number };
-        claim_evidenced_only?: { delivery_rate?: number | null; cases_in_scope?: number };
-      }>('/api/v1/cpor/intelligence/portfolio', { signal }),
-    staleTime: 60_000,
-  });
 
   const counts = data?.status_counts ?? {};
   const rowsAll = data?.items ?? [];
-  const rows = evidenceFilter ? rowsAll.filter((r) => r.evidence_basis === evidenceFilter) : rowsAll;
-  const evidenceCounts = data?.evidence_basis_counts ?? {
-    claim_evidenced: rowsAll.filter((r) => r.evidence_basis === 'claim_evidenced').length,
-    source_attested: rowsAll.filter((r) => r.evidence_basis === 'source_attested').length,
-    none: rowsAll.filter((r) => (r.evidence_basis ?? 'none') === 'none').length,
-  };
+  const rows = rowsAll;
   const planningN = countPlanning(counts);
   const liveN = counts.active ?? 0;
   const proposedN = counts.proposed ?? 0;
   const reviewN = data?.review_queue_count ?? proposedN;
+  const bookN = Object.values(counts).reduce((n, v) => n + (Number(v) || 0), 0);
   const plannedUsd = bias?.totals?.planned_usd ?? null;
   const drawnUsd = bias?.totals?.actual_usd ?? null;
   const budgetPct =
@@ -203,7 +183,7 @@ function PlannerList({
             value={planningN}
             unit="plans"
             compact
-            caption={`${fmtCompact(inPlanningSupport)} support on this page`}
+            caption={`${fmtCompact(inPlanningSupport)} support in draft / proposed / approved / rejected`}
             onClick={() => setParam('stage', 'proposed')}
           />
           <HeadlineFigure
@@ -234,14 +214,10 @@ function PlannerList({
             severity={budgetPct != null && budgetPct > 85 ? 'warn' : 'neutral'}
           />
           <HeadlineFigure
-            label="Delivery rate"
-            value={portfolio?.totals?.delivery_rate == null ? '—' : fmtPct(portfolio.totals.delivery_rate)}
+            label="Uplift / effectiveness"
+            value="—"
             compact
-            caption={
-              portfolio?.totals?.delivery_rate == null
-                ? 'result ÷ estimate on CIP case lines. Uplift stays blocked until ≥5 claim-evidenced settled cases.'
-                : `result ÷ estimate · mixed evidence (${portfolio.evidence_basis_mix?.claim_evidenced ?? 0} claim / ${portfolio.evidence_basis_mix?.source_attested ?? 0} attested / ${portfolio.evidence_basis_mix?.none ?? 0} none). Claim-only ${portfolio.claim_evidenced_only?.delivery_rate == null ? '—' : fmtPct(portfolio.claim_evidenced_only.delivery_rate)}. Uplift not derived.`
-            }
+            caption="Not derived until ≥5 settled cases with claim evidence — never estimated"
           />
         </HeadlineStrip>
 
@@ -255,44 +231,22 @@ function PlannerList({
         >
           <Stack spacing={2} sx={{ minWidth: 0 }}>
             <ScopeBar
-              chips={[
-                ...LIFECYCLE_STAGES.map((s) => ({
-                  key: s,
-                  label: `${STAGE_LABEL[s]} · ${counts[s] ?? 0}`,
-                  active: stageFilter === s,
-                  onToggle: () => setParam('stage', stageFilter === s ? null : s),
-                  tone: (s === 'active' ? 'success' : s === 'proposed' ? 'warning' : 'default') as
-                    | 'success'
-                    | 'warning'
-                    | 'default',
-                })),
-                {
-                  key: 'claim_evidenced',
-                  label: `Claim evidenced · ${evidenceCounts.claim_evidenced ?? 0}`,
-                  active: evidenceFilter === 'claim_evidenced',
-                  onToggle: () => setParam('evidence', evidenceFilter === 'claim_evidenced' ? null : 'claim_evidenced'),
-                  tone: 'success' as const,
-                },
-                {
-                  key: 'source_attested',
-                  label: `Source attested · ${evidenceCounts.source_attested ?? 0}`,
-                  active: evidenceFilter === 'source_attested',
-                  onToggle: () => setParam('evidence', evidenceFilter === 'source_attested' ? null : 'source_attested'),
-                  tone: 'warning' as const,
-                },
-                {
-                  key: 'none',
-                  label: `No evidence · ${evidenceCounts.none ?? 0}`,
-                  active: evidenceFilter === 'none',
-                  onToggle: () => setParam('evidence', evidenceFilter === 'none' ? null : 'none'),
-                  tone: 'default' as const,
-                },
-              ]}
-              summary={`${rows.length} of ${data?.total ?? rows.length} plans`}
-              onClear={() => {
-                setParam('stage', null);
-                setParam('evidence', null);
-              }}
+              chips={LIFECYCLE_STAGES.map((s) => ({
+                key: s,
+                label: `${STAGE_LABEL[s]} · ${counts[s] ?? 0}`,
+                active: stageFilter === s,
+                onToggle: () => setParam('stage', stageFilter === s ? null : s),
+                tone: (s === 'active' ? 'success' : s === 'proposed' ? 'warning' : 'default') as
+                  | 'success'
+                  | 'warning'
+                  | 'default',
+              }))}
+              summary={
+                stageFilter
+                  ? `${rows.length} of ${counts[stageFilter] ?? 0} ${STAGE_LABEL[stageFilter]} cases · ${bookN} in the book · ${planningN} in planning`
+                  : `${rows.length} of ${bookN} cases (all stages) · ${planningN} in planning`
+              }
+              onClear={() => setParam('stage', null)}
               trailing={
                 <Stack direction="row" spacing={1}>
                   <Tooltip title="Partly built: the proposal still needs a seed case id. Attention will surface this gap; it is not a separate work container." arrow>
@@ -526,12 +480,6 @@ function PlanGrid({ rows, onOpen }: { rows: CporCaseListRow[]; onOpen: (id: numb
         headerName: 'Origin',
         width: 150,
         valueFormatter: (p) => ORIGIN_LABEL[String(p.value ?? 'native')] ?? String(p.value ?? ''),
-      },
-      {
-        colId: 'evidence_basis',
-        headerName: 'Evidence',
-        width: 140,
-        valueGetter: (p) => evidenceBasisLabel((p.data as CporCaseListRow | undefined)?.evidence_basis),
       },
       { field: 'line_count', headerName: 'Lines', type: 'rightAligned', width: 80 },
       {
