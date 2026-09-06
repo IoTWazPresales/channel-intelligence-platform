@@ -13,7 +13,7 @@
 
 ## Ready leaves
 
-_No ready unblocked leaves._
+- **N-0011** NS-7 Data container (was Steward) (redesign, R3, stage=None)
 
 ## In progress / leased
 
