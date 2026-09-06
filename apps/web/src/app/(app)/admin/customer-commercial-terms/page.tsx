@@ -14,11 +14,13 @@ import {
 } from '@mui/material';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import NextLink from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
+import { FundingPointerLens } from '@/features/promotions-funding/FundingPointerLens';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
 
@@ -41,7 +43,7 @@ function pctLabel(v: number): string {
   return `${(Number(v) * 100).toFixed(2)}%`;
 }
 
-export default function CustomerCommercialTermsPage() {
+function CustomerTermsEditor() {
   const qc = useQueryClient();
   const [filter, setFilter] = useState('');
   const [dlg, setDlg] = useState<'add' | 'edit' | null>(null);
@@ -138,7 +140,15 @@ export default function CustomerCommercialTermsPage() {
 
   return (
     <FundingChrome>
-      <Alert severity="info" sx={{ mt: 2, mb: 2 }} data-testid="customer-terms-steward-guide">
+      <Button
+        size="small"
+        component={NextLink}
+        href="/admin/customer-commercial-terms"
+        sx={{ mt: 2, mb: 1 }}
+      >
+        Back to Terms lens
+      </Button>
+      <Alert severity="info" sx={{ mb: 2 }} data-testid="customer-terms-steward-guide">
         Customer margin and rebate defaults plus per-SKU assumptions feed the waterfall in the planner
         (dealer price → support per unit). Edited here, applied on the next recompute. SKU assumptions
         live on Commercial planner — this leaf does not invent a second economics editor.
@@ -245,5 +255,32 @@ export default function CustomerCommercialTermsPage() {
         </DialogActions>
       </Dialog>
     </FundingChrome>
+  );
+}
+
+function TermsLensGate() {
+  const search = useSearchParams();
+  if (search.get('edit') === '1') return <CustomerTermsEditor />;
+  return (
+    <FundingChrome>
+      <FundingPointerLens
+        testId="funding-terms"
+        title="Terms & assumptions"
+        description="Customer margin and rebate defaults plus per-SKU assumptions feed the waterfall in the planner (dealer price → support per unit). Edited on the customer master, applied on the next recompute."
+        primary={{ label: 'Open customer masters', href: '/admin/customers' }}
+        secondary={{
+          label: 'All-customer terms list',
+          href: '/admin/customer-commercial-terms?edit=1',
+        }}
+      />
+    </FundingChrome>
+  );
+}
+
+export default function CustomerCommercialTermsPage() {
+  return (
+    <Suspense fallback={null}>
+      <TermsLensGate />
+    </Suspense>
   );
 }

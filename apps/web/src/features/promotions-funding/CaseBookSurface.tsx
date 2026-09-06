@@ -22,6 +22,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { fmtCompact, fmtInt } from '@/features/promotions-funding/format';
+import { PaymentEvidenceOverlayPanel } from '@/features/promotions-funding/PaymentEvidenceOverlay';
 import { evidenceBasisLabel, isEvidenceBasis, type EvidenceBasis } from '@/features/promotions-funding/evidenceBasis';
 import {
   LIFECYCLE_STAGES,
@@ -347,9 +348,9 @@ export function CaseBookSurface() {
           <Typography variant="body2">
             <b>The Case book is the settlement half of the same lifecycle.</b> Cases here were authored
             or approved in the Promotion planner; owed, paid and blocked describe what is still open
-            after the window — not a second object. Pending payment/CN disputes (Latest Comment) live
-            on the Payments lens. Claim-sale ageing is used when claim lines exist; otherwise outstanding
-            is aged from window end (a different clock — labeled).
+            after the window — not a second object. Pending payment/CN disputes (Latest Comment) and
+            unmatched file Case IDs are listed below. Claim-sale ageing is used when claim lines exist;
+            otherwise outstanding is aged from window end (a different clock — labeled).
           </Typography>
           <Box sx={{ minWidth: { md: 520 } }}>
             <LifecycleRail
@@ -408,6 +409,8 @@ export function CaseBookSurface() {
           onClick={() => setParams({ status: 'proposed' })}
         />
       </HeadlineStrip>
+
+      <PaymentEvidenceOverlayPanel />
 
       <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: '2fr 3fr' } }}>
         <Panel

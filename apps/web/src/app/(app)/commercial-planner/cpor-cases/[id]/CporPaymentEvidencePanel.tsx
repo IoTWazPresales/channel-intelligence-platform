@@ -166,8 +166,8 @@ export function CporPaymentEvidencePanel({ caseId }: { caseId: number }) {
       {isError ? <Alert severity="error">{String((error as Error).message)}</Alert> : null}
       {!isLoading && (data?.total ?? 0) === 0 ? (
         <Alert severity="info">
-          No payment / CN evidence for this case. Import via{' '}
-          <strong>Import payment / CN</strong> on the cases list.
+          No payment / CN evidence for this case. Import via Import Center
+          (cpor_payment_evidence) or the payment import wizard.
         </Alert>
       ) : (
         <EnterpriseDataGrid

@@ -12,12 +12,11 @@ import {
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
-import { PaymentEvidenceOverlayPanel } from '@/features/promotions-funding/PaymentEvidenceOverlay';
-import { fmtPct } from '@/features/promotions-funding/format';
-import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
+import { FundingPointerLens } from '@/features/promotions-funding/FundingPointerLens';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { apiGet, apiPost, apiPostFormData, safeDisplayError } from '@/lib/api';
 
@@ -48,7 +47,7 @@ type Candidate = {
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
 type DistributorPick = { id: number; distributor_code: string; distributor_name: string };
 
-export default function CporPaymentEvidenceImportPage() {
+function PaymentEvidenceImportWizard() {
   const qc = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
   const [jobId, setJobId] = useState<number | null>(null);
@@ -75,15 +74,6 @@ export default function CporPaymentEvidenceImportPage() {
       }),
   });
   const sourceId = sources?.[0]?.id ?? null;
-
-  const { data: portfolio } = useQuery({
-    queryKey: ['cpor', 'intelligence', 'portfolio'],
-    queryFn: ({ signal }) =>
-      apiGet<{ totals?: { delivery_rate?: number | null } }>('/api/v1/cpor/intelligence/portfolio', {
-        signal,
-      }),
-    staleTime: 60_000,
-  });
 
   const { data: summary, refetch: refetchSummary } = useQuery({
     queryKey: ['cpor', 'payment', 'summary', jobId],
@@ -155,27 +145,15 @@ export default function CporPaymentEvidenceImportPage() {
   return (
     <FundingChrome>
       <Stack spacing={0} sx={{ mt: 2 }}>
-      <HeadlineStrip columns={3}>
-        <HeadlineFigure
-          label="Delivery rate"
-          value={fmtPct(portfolio?.totals?.delivery_rate ?? null)}
-          compact
-          caption="Portfolio result qty ÷ estimate qty on non-superseded cases — not paid ÷ owed"
-        />
-        <HeadlineFigure
-          label="This lens"
-          value="Import"
-          compact
-          caption="Payment / credit-note evidence matched to cases. Delivery rate is not recomputed here."
-        />
-        <HeadlineFigure
-          label="Export"
-          value="—"
-          compact
-          caption="Template-driven export is not built"
-        />
-      </HeadlineStrip>
-      <PaymentEvidenceOverlayPanel />
+      <Button
+        size="small"
+        variant="text"
+        component={Link}
+        href="/commercial-planner/cpor-cases/payment-evidence-import"
+        sx={{ mb: 1, alignSelf: 'flex-start' }}
+      >
+        Back to Payments lens
+      </Button>
       <Alert severity="info" sx={{ mb: 2 }}>
         Payment evidence links settled value to cases. Delivery rate = result ÷ estimate per case
         (portfolio figure on the domain header — not recomputed here). Generic payment evidence —
@@ -351,5 +329,32 @@ export default function CporPaymentEvidenceImportPage() {
       </Stack>
       </Stack>
     </FundingChrome>
+  );
+}
+
+function PaymentsLensGate() {
+  const search = useSearchParams();
+  if (search.get('import') === '1') return <PaymentEvidenceImportWizard />;
+  return (
+    <FundingChrome>
+      <FundingPointerLens
+        testId="funding-payments"
+        title="Payment evidence and delivery rate"
+        description="Payment evidence links settled value to cases. Delivery rate = result ÷ estimate per case (shown on the domain header). File match rates and unmatched Case IDs live on the Case book. Steward the workbook in Import Center."
+        primary={{ label: 'Open Import Center', href: '/admin/imports?template=cpor_payment_evidence' }}
+        secondary={{
+          label: 'Payment import wizard',
+          href: '/commercial-planner/cpor-cases/payment-evidence-import?import=1',
+        }}
+      />
+    </FundingChrome>
+  );
+}
+
+export default function CporPaymentEvidenceImportPage() {
+  return (
+    <Suspense fallback={null}>
+      <PaymentsLensGate />
+    </Suspense>
   );
 }
