@@ -124,7 +124,20 @@ async function proxy(request: NextRequest, pathSegments: string[] | undefined) {
     init.duplex = 'half';
   }
 
-  const res = await fetch(url, init);
+  let res: Response;
+  try {
+    res = await fetch(url, init);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'upstream fetch failed';
+    return NextResponse.json(
+      {
+        detail: 'API upstream unreachable',
+        upstream: upstreamOrigin(),
+        error: message,
+      },
+      { status: 502 },
+    );
+  }
   const out = new Headers(res.headers);
   HOP_BY_HOP.forEach((h) => out.delete(h));
 
