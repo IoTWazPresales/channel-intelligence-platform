@@ -150,8 +150,10 @@ export function CaseBookSurface() {
   const selectedParam = search.get('case');
   const evidenceParam = search.get('evidence');
   const evidenceFilter: EvidenceBasis | null = isEvidenceBasis(evidenceParam) ? evidenceParam : null;
+  const testDataOnly = search.get('test_data') === 'only';
   const scope = caseScopeFromSearch(search);
   const hasEntityScope = caseScopeIsActive(scope);
+  const hasGridScope = hasEntityScope || testDataOnly;
   const [toastAction, setToastAction] = useState<string | null>(null);
   const [backfillItems, setBackfillItems] = useState<FxBackfillSuggestion[] | null>(null);
   const [declareModeOpen, setDeclareModeOpen] = useState(false);
@@ -175,10 +177,11 @@ export function CaseBookSurface() {
   });
 
   const { data: scopedPage, isLoading: scopedLoading } = useQuery({
-    queryKey: ['cpor', 'cases', 'book', 'scoped', scope],
-    enabled: hasEntityScope,
+    queryKey: ['cpor', 'cases', 'book', 'scoped', scope, testDataOnly],
+    enabled: hasGridScope,
     queryFn: ({ signal }) => {
       const sp = new URLSearchParams({ page: '1', page_size: '500' });
+      if (testDataOnly) sp.set('test_data', 'only');
       caseScopeToQuery(scope).forEach((v, k) => sp.set(k, v));
       return apiGet<CporCasesPage>(`/api/v1/cpor/cases?${sp.toString()}`, { signal });
     },
@@ -206,7 +209,7 @@ export function CaseBookSurface() {
   );
   const missingRateRows = allItems.filter((r) => r.settle_readiness?.fx_declared === false);
 
-  const scopedItems = hasEntityScope ? (scopedPage?.items ?? []) : allItems;
+  const scopedItems = hasGridScope ? (scopedPage?.items ?? []) : allItems;
   const rows = useMemo(() => {
     let next = scopedItems;
     if (filter === 'blocked') {
@@ -221,7 +224,15 @@ export function CaseBookSurface() {
   }, [scopedItems, filter, evidenceFilter]);
 
   const selectedId = selectedParam && /^\d+$/.test(selectedParam) ? Number(selectedParam) : null;
-  const selected = allItems.find((r) => r.id === selectedId) ?? rows.find((r) => r.id === selectedId) ?? null;
+  const { data: selectedDetail } = useQuery({
+    queryKey: ['cpor', 'case', selectedId, 'book-drawer'],
+    enabled: selectedId != null,
+    queryFn: ({ signal }) => apiGet<CporCaseListRow>(`/api/v1/cpor/cases/${selectedId}`, { signal }),
+  });
+  const selected =
+    allItems.find((r) => r.id === selectedId) ??
+    rows.find((r) => r.id === selectedId) ??
+    (selectedDetail && selectedId != null && selectedDetail.id === selectedId ? selectedDetail : null);
 
   const ageingClaim = useMemo(() => bucketOutstanding(allItems, ageDays), [allItems]);
   const ageingWindow = useMemo(() => bucketOutstanding(allItems, windowEndAgeDays), [allItems]);
@@ -585,15 +596,27 @@ export function CaseBookSurface() {
       </Box>
 
       <ScopeBar
-        chips={[...chips, ...evidenceChips]}
-        summary={`${rows.length} of ${hasEntityScope ? (scopedPage?.total ?? rows.length) : (data?.total ?? rows.length)} cases${hasEntityScope ? ' in this find' : ''}`}
-        onClear={() => setParams({ status: null, evidence: null, case: null, ...caseScopeClearPatch() })}
-        clearAvailable={hasEntityScope}
+        chips={[
+          ...chips,
+          ...evidenceChips,
+          {
+            key: 'test_data',
+            label: `Test data · ${data?.test_data_count ?? 0}`,
+            active: testDataOnly,
+            onToggle: () => setParams({ test_data: testDataOnly ? null : 'only', case: null }),
+            tone: 'warning' as const,
+          },
+        ]}
+        summary={`${rows.length} of ${hasGridScope ? (scopedPage?.total ?? rows.length) : (data?.total ?? rows.length)} cases${hasGridScope ? ' in this find' : ''}`}
+        onClear={() =>
+          setParams({ status: null, evidence: null, case: null, test_data: null, ...caseScopeClearPatch() })
+        }
+        clearAvailable={hasGridScope}
         filters={<CaseScopeFilters scope={scope} onPatch={setParams} />}
       />
 
       <ModuleDataSection
-        isLoading={isLoading || (hasEntityScope && scopedLoading)}
+        isLoading={isLoading || (hasGridScope && scopedLoading)}
         isError={isError}
         error={error as Error | null}
         onRetry={() => void refetch()}
@@ -603,7 +626,7 @@ export function CaseBookSurface() {
           description: 'Clear the status chips or find filters, or import claim / payment evidence from the domain actions.',
           primary: {
             label: 'Clear scope',
-            onClick: () => setParams({ status: null, evidence: null, ...caseScopeClearPatch() }),
+            onClick: () => setParams({ status: null, evidence: null, test_data: null, ...caseScopeClearPatch() }),
           },
         }}
       >

@@ -12,6 +12,7 @@ import {
   DialogTitle,
   FormControlLabel,
   Stack,
+  Switch,
   Tab,
   Tabs,
   TextField,
@@ -94,6 +95,7 @@ export type CaseDetail = {
   outstanding_amount?: number | null;
   settle_readiness?: SettleReadiness;
   evidence_basis?: 'claim_evidenced' | 'source_attested' | 'none' | null;
+  intelligence_exclude?: boolean;
   needs_reapproval?: boolean;
 };
 
@@ -319,6 +321,17 @@ export function CporCaseWorkspace({ caseId, embedded = false, defaultTab = 0 }: 
     },
   });
 
+  const patchIntelligenceExclude = useMutation({
+    mutationFn: (exclude: boolean) =>
+      apiPost(`/api/v1/cpor/cases/${caseId}/intelligence-exclude`, { exclude, confirm: true }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['cpor', 'case', caseId] });
+      await qc.invalidateQueries({ queryKey: ['cpor', 'cases'] });
+      await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', 'book'] });
+      await refetch();
+    },
+  });
+
   const lineCols = useMemo<ColDef<LineRow>[]>(
     () => [
       { field: 'product_sku', headerName: 'SKU', width: 120 },
@@ -454,6 +467,23 @@ export function CporCaseWorkspace({ caseId, embedded = false, defaultTab = 0 }: 
           <Chip label="needs reapproval (over budget)" color="error" size="small" data-testid="cpor-needs-reapproval" />
         ) : null}
         {data.missing_roe ? <Chip label="missing_roe" color="warning" size="small" /> : null}
+        <FormControlLabel
+          sx={{ ml: 0.5 }}
+          control={
+            <Switch
+              size="small"
+              checked={Boolean(data.intelligence_exclude)}
+              disabled={patchIntelligenceExclude.isPending}
+              onChange={(e) => patchIntelligenceExclude.mutate(e.target.checked)}
+              slotProps={{ input: { 'data-testid': 'cpor-intelligence-exclude' } }}
+            />
+          }
+          label={
+            <Typography variant="caption">
+              Exclude from intelligence (comparables, norms, book totals)
+            </Typography>
+          }
+        />
         {data.evidence_basis ? (
           <Chip
             label={evidenceBasisLabel(data.evidence_basis)}

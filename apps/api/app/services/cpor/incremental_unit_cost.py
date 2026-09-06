@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.models.cpor import CporCase, CporCaseLine
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.services.commercial_tenant_profile import incremental_baseline_config
+from app.services.cpor.intelligence_scope import where_commercial_intelligence
 
 
 def _case_window_days(case: CporCase) -> int:
@@ -213,6 +214,7 @@ def build_portfolio_incremental_summary(session: Session, *, tenant_id: str = "d
         session.scalars(
             select(CporCase)
             .where(CporCase.superseded_by_case_id.is_(None))
+            .where(where_commercial_intelligence())
             .order_by(CporCase.id.desc())
             .limit(200)
         ).all()

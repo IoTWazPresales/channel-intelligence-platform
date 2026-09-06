@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.cpor import CporCase, CporCaseLine
 from app.models.dimensions import DimCustomer, DimProduct
+from app.services.cpor.intelligence_scope import where_commercial_intelligence
 from app.services.cpor.evidence_basis import (
     CLAIM_EVIDENCED,
     evidence_basis_counts,
@@ -38,6 +39,7 @@ def build_portfolio_intelligence(session: Session) -> dict[str, Any]:
         session.scalars(
             select(CporCase)
             .where(CporCase.superseded_by_case_id.is_(None))
+            .where(where_commercial_intelligence())
             .options(joinedload(CporCase.lines))
         ).unique().all()
     )

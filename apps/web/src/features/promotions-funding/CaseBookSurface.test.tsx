@@ -105,6 +105,7 @@ const listPayload = {
   page: 1,
   page_size: 500,
   status_counts: { ended: 2, proposed: 0, settled: 210, draft: 3 },
+  test_data_count: 7,
 };
 
 const bookPayload = {
@@ -147,5 +148,6 @@ describe('CaseBookSurface', () => {
     expect(screen.getByTestId('fx-declare-mode')).toHaveTextContent(/Declare booked FX mode · 3/);
     expect(screen.getByText(/No cases are missing a rate/i)).toBeInTheDocument();
     expect(screen.queryByTestId('fx-backfill-suggest')).toBeNull();
+    expect(screen.getByText(/Test data · 7/)).toBeInTheDocument();
   });
 });

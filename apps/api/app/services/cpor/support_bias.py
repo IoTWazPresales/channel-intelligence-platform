@@ -26,6 +26,7 @@ from app.services.commercial_planner.calculator import (
     CommercialCalcInputs,
     compute_line_economics,
 )
+from app.services.cpor.intelligence_scope import where_commercial_intelligence
 from app.services.cpor.pivot import _line_ttl_support_usd, is_voided_line
 
 DEFAULT_CUSTOMER_MARGIN = 0.12
@@ -148,6 +149,8 @@ def build_support_bias(
     )
     if case_id is not None:
         q = q.where(CporCase.id == int(case_id))
+    else:
+        q = q.where(where_commercial_intelligence())
     if customer_id is not None:
         q = q.where(CporCase.customer_id == int(customer_id))
     cases = list(session.scalars(q).unique().all())

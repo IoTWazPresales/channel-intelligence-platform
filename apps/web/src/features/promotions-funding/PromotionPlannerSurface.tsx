@@ -65,6 +65,7 @@ export function PromotionPlannerSurface() {
   const search = useSearchParams();
   const planId = Number(search.get('plan') || '');
   const stageFilter = (search.get('stage') as PlanStage | null) || null;
+  const testDataOnly = search.get('test_data') === 'only';
   const scope = caseScopeFromSearch(search);
   const setParams = useCallback(
     (patch: Record<string, string | null>) => {
@@ -94,6 +95,7 @@ export function PromotionPlannerSurface() {
     <PlannerList
       stageFilter={stageFilter}
       scope={scope}
+      testDataOnly={testDataOnly}
       newRequested={search.get('new') === '1'}
       setParam={setParam}
       setParams={setParams}
@@ -105,6 +107,7 @@ export function PromotionPlannerSurface() {
 function PlannerList({
   stageFilter,
   scope,
+  testDataOnly,
   newRequested,
   setParam,
   setParams,
@@ -112,6 +115,7 @@ function PlannerList({
 }: {
   stageFilter: PlanStage | null;
   scope: ReturnType<typeof caseScopeFromSearch>;
+  testDataOnly: boolean;
   newRequested: boolean;
   setParam: (k: string, v: string | null) => void;
   setParams: (patch: Record<string, string | null>) => void;
@@ -130,10 +134,11 @@ function PlannerList({
   }, [newRequested]);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['cpor', 'cases', 'planner', stageFilter, scope],
+    queryKey: ['cpor', 'cases', 'planner', stageFilter, scope, testDataOnly],
     queryFn: ({ signal }) => {
       const sp = new URLSearchParams({ page: '1', page_size: '500' });
       if (stageFilter) sp.set('status', stageFilter);
+      if (testDataOnly) sp.set('test_data', 'only');
       caseScopeToQuery(scope).forEach((v, k) => sp.set(k, v));
       return apiGet<CporCasesPage>(`/api/v1/cpor/cases?${sp.toString()}`, { signal });
     },
@@ -249,25 +254,36 @@ function PlannerList({
         >
           <Stack spacing={2} sx={{ minWidth: 0 }}>
             <ScopeBar
-              chips={LIFECYCLE_STAGES.map((s) => ({
-                key: s,
-                label: `${STAGE_LABEL[s]} · ${counts[s] ?? 0}`,
-                active: stageFilter === s,
-                onToggle: () => setParam('stage', stageFilter === s ? null : s),
-                tone: (s === 'active' ? 'success' : s === 'proposed' ? 'warning' : 'default') as
-                  | 'success'
-                  | 'warning'
-                  | 'default',
-              }))}
+              chips={[
+                ...LIFECYCLE_STAGES.map((s) => ({
+                  key: s,
+                  label: `${STAGE_LABEL[s]} · ${counts[s] ?? 0}`,
+                  active: stageFilter === s,
+                  onToggle: () => setParam('stage', stageFilter === s ? null : s),
+                  tone: (s === 'active' ? 'success' : s === 'proposed' ? 'warning' : 'default') as
+                    | 'success'
+                    | 'warning'
+                    | 'default',
+                })),
+                {
+                  key: 'test_data',
+                  label: `Test data · ${data?.test_data_count ?? 0}`,
+                  active: testDataOnly,
+                  onToggle: () => setParam('test_data', testDataOnly ? null : 'only'),
+                  tone: 'warning' as const,
+                },
+              ]}
               summary={
-                caseScopeIsActive(scope)
-                  ? `${rows.length} matching${stageFilter ? ` ${STAGE_LABEL[stageFilter]}` : ''} · ${bookN} in the book · ${planningN} in planning`
-                  : stageFilter
-                    ? `${rows.length} of ${counts[stageFilter] ?? 0} ${STAGE_LABEL[stageFilter]} cases · ${bookN} in the book · ${planningN} in planning`
-                    : `${rows.length} of ${bookN} cases (all stages) · ${planningN} in planning`
+                testDataOnly
+                  ? `${rows.length} test-data cases · commercial book ${bookN} · ${planningN} in planning`
+                  : caseScopeIsActive(scope)
+                    ? `${rows.length} matching${stageFilter ? ` ${STAGE_LABEL[stageFilter]}` : ''} · ${bookN} in the book · ${planningN} in planning`
+                    : stageFilter
+                      ? `${rows.length} of ${counts[stageFilter] ?? 0} ${STAGE_LABEL[stageFilter]} cases · ${bookN} in the book · ${planningN} in planning`
+                      : `${rows.length} of ${bookN} cases (all stages) · ${planningN} in planning`
               }
-              onClear={() => setParams({ stage: null, ...caseScopeClearPatch() })}
-              clearAvailable={caseScopeIsActive(scope)}
+              onClear={() => setParams({ stage: null, test_data: null, ...caseScopeClearPatch() })}
+              clearAvailable={caseScopeIsActive(scope) || testDataOnly}
               filters={<CaseScopeFilters scope={scope} onPatch={setParams} />}
               trailing={
                 <Stack direction="row" spacing={1}>

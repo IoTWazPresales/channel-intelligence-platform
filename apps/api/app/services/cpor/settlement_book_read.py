@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.cpor import CporCase
 from app.models.dimensions import DimCustomer
+from app.services.cpor.intelligence_scope import where_commercial_intelligence
 from app.services.cpor.evidence_basis import (
     CLAIM_EVIDENCED,
     NONE,
@@ -66,6 +67,7 @@ def build_settlement_book_read_model(session: Session) -> dict[str, Any]:
         session.scalars(
             select(CporCase)
             .where(CporCase.superseded_by_case_id.is_(None))
+            .where(where_commercial_intelligence())
             .options(joinedload(CporCase.lines))
         )
         .unique()

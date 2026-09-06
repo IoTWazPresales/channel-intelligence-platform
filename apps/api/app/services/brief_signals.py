@@ -16,6 +16,7 @@ from app.models.facts import FactInboundShipment, FactInventoryReconciliation
 from app.models.ingestion import ImportJob
 from app.services.channel_ops_config import REPLENISHMENT_WOC_THRESHOLD_WEEKS
 from app.services.channel_ops_derived_stock import replenishment_flag_v1, weeks_of_cover_or_none
+from app.services.cpor.intelligence_scope import where_commercial_intelligence
 from app.services.cpor.promotion_type_vocab import CPOR_CASE_STATUS_SET
 from app.services.cpor.settle_readiness import case_missing_roe
 from app.services.woc_observation_read import latest_woc_observations, observations_to_stock_vel
@@ -123,6 +124,7 @@ async def _settlement_aggregates(db: AsyncSession, user: dict | None) -> dict[st
         select(CporCase)
         .where(CporCase.status.in_(_OPEN_CPOR_STATUSES))
         .where(where_tenant(CporCase.tenant_id, user))
+        .where(where_commercial_intelligence())
     )
     cases = (await db.execute(open_q)).scalars().all()
     fx_blocked = [c for c in cases if case_missing_roe(c)]
@@ -134,6 +136,7 @@ async def _settlement_aggregates(db: AsyncSession, user: dict | None) -> dict[st
             .join(CporCase, CporCase.id == CporCaseLine.case_id)
             .where(CporCase.status.in_(_OPEN_CPOR_STATUSES))
             .where(where_tenant(CporCase.tenant_id, user))
+            .where(where_commercial_intelligence())
             .where(or_(CporCaseLine.cost_basis.is_(None), CporCaseLine.cost_source.is_(None)))
         )
     ).scalar()

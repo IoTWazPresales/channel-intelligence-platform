@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.cpor import CporCase
 from app.models.dimensions import DimCustomer, DimProduct
+from app.services.cpor.intelligence_scope import where_commercial_intelligence
 from app.services.commercial_tenant_profile import (
     SUPPORT_NORMS_TRAILING_QUARTERS as TENANT_NORMS_DEFAULT,
     support_norms_trailing_quarters,
@@ -113,6 +114,7 @@ def _load_cases(session: Session) -> list[CporCase]:
         session.scalars(
             select(CporCase)
             .where(CporCase.superseded_by_case_id.is_(None))
+            .where(where_commercial_intelligence())
             .options(joinedload(CporCase.lines))
         )
         .unique()

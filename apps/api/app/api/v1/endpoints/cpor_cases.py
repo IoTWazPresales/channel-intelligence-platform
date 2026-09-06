@@ -51,6 +51,10 @@ from app.services.cpor.evidence_basis import (
     load_evidence_basis_by_case,
     load_source_attested_case_codes,
 )
+from app.services.cpor.intelligence_scope import (
+    where_commercial_intelligence,
+    where_test_data_only,
+)
 from app.services.cpor.fx_rate import (
     SOURCE_OPERATOR,
     apply_create_fx,
@@ -241,6 +245,7 @@ def _case_json(
         "decided_at": case.decided_at.isoformat() if case.decided_at else None,
         "decided_by": case.decided_by,
         "needs_reapproval": bool(getattr(case, "needs_reapproval", False)),
+        "intelligence_exclude": bool(getattr(case, "intelligence_exclude", False)),
         "superseded_by_case_id": case.superseded_by_case_id,
         "allowed_next": allowed_next(case.status),
         "ttl_support_zar": ttl_zar,
@@ -313,9 +318,22 @@ def _status_counts(session: Session, user: dict) -> dict[str, int]:
     rows = session.execute(
         select(CporCase.status, func.count())
         .where(where_tenant(CporCase.tenant_id, user))
+        .where(where_commercial_intelligence())
         .group_by(CporCase.status)
     ).all()
     return {str(status): int(n) for status, n in rows}
+
+
+def _test_data_count(session: Session, user: dict) -> int:
+    return int(
+        session.scalar(
+            select(func.count())
+            .select_from(CporCase)
+            .where(where_tenant(CporCase.tenant_id, user))
+            .where(where_test_data_only())
+        )
+        or 0
+    )
 
 
 def _review_queue_count(session: Session, user: dict) -> int:
@@ -325,6 +343,7 @@ def _review_queue_count(session: Session, user: dict) -> int:
             select(func.count())
             .select_from(CporCase)
             .where(where_tenant(CporCase.tenant_id, user))
+            .where(where_commercial_intelligence())
             .where(CporCase.superseded_by_case_id.is_(None))
             .where(or_(CporCase.status == "proposed", CporCase.needs_reapproval.is_(True)))
         )
@@ -464,6 +483,11 @@ class LayerSplitBody(BaseModel):
     )
 
 
+class IntelligenceExcludeBody(BaseModel):
+    exclude: bool
+    confirm: bool = False
+
+
 # --- case CRUD ---------------------------------------------------------------
 
 
@@ -476,6 +500,10 @@ def list_cases(
     business_unit: str | None = Query(default=None, alias="bu"),
     window_from: date | None = Query(default=None),
     window_to: date | None = Query(default=None),
+    test_data: str | None = Query(
+        default=None,
+        description="commercial (default) | only | all — fixture cases flagged intelligence_exclude",
+    ),
     q: str | None = Query(default=None),
     page: int | None = Query(default=None, ge=1),
     page_size: int | None = Query(default=None, ge=1, le=500),
@@ -494,6 +522,13 @@ def list_cases(
             .where(where_tenant(CporCase.tenant_id, user))
             .order_by(CporCase.id.desc())
         )
+        mode = (test_data or "commercial").strip().lower()
+        if mode not in {"commercial", "only", "all"}:
+            raise HTTPException(status_code=400, detail="test_data must be commercial, only, or all")
+        if mode == "commercial":
+            stmt = stmt.where(where_commercial_intelligence())
+        elif mode == "only":
+            stmt = stmt.where(where_test_data_only())
         if status:
             if status not in CPOR_CASE_STATUS_SET:
                 raise HTTPException(status_code=400, detail=f"Unknown status={status}")
@@ -587,6 +622,7 @@ def list_cases(
         line_agg = _case_line_aggregates(session, [c.id for c in cases])
         claim_sale_by = _last_claim_sale_by_case_id(session, [c.id for c in cases])
         status_counts = _status_counts(session, user)
+        test_data_count = _test_data_count(session, user)
         review_queue_count = _review_queue_count(session, user)
 
         out = []
@@ -630,6 +666,7 @@ def list_cases(
                 "page": page,
                 "page_size": page_size,
                 "status_counts": status_counts,
+                "test_data_count": test_data_count,
                 "review_queue_count": review_queue_count,
                 "evidence_basis_counts": evidence_basis_counts(basis_by),
             }
@@ -799,6 +836,39 @@ def patch_case(
         if recompute_report:
             out["recompute"] = recompute_report
         return out
+
+
+@router.post("/cases/{case_id}/intelligence-exclude")
+def set_intelligence_exclude(
+    case_id: int,
+    body: IntelligenceExcludeBody,
+    user: dict = Depends(get_current_user),
+):
+    """Toggle intelligence exclusion. Never blocks settle. Requires confirm=true."""
+    if not body.confirm:
+        raise HTTPException(
+            status_code=400,
+            detail="confirm=true is required — intelligence exclusion is never silent",
+        )
+    actor = _actor(user)
+    with SessionLocal() as session:
+        case = _load_case(session, case_id, user)
+        case.intelligence_exclude = bool(body.exclude)
+        session.add(case)
+        _record_event(
+            session,
+            case_id=case.id,
+            event_type="intelligence_exclude",
+            actor=actor,
+            payload={"exclude": bool(body.exclude)},
+            user=user,
+        )
+        session.commit()
+        return {
+            "id": case.id,
+            "case_code": case.case_code,
+            "intelligence_exclude": bool(case.intelligence_exclude),
+        }
 
 
 # --- lines -------------------------------------------------------------------

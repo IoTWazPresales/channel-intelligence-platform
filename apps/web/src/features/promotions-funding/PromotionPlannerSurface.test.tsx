@@ -52,6 +52,7 @@ const listPayload = {
   page: 1,
   page_size: 500,
   status_counts: { proposed: 1, draft: 0, approved: 0, active: 0, ended: 0, settled: 0 },
+  test_data_count: 7,
   review_queue_count: 1,
 };
 
@@ -91,5 +92,6 @@ describe('PromotionPlannerSurface', () => {
     expect(screen.getByTestId('planner-grid')).not.toHaveTextContent('R486k');
     expect(screen.getByRole('button', { name: /Propose a plan/i })).toBeInTheDocument();
     expect(screen.getByTestId('planner-new')).toBeInTheDocument();
+    expect(screen.getByText(/Test data · 7/)).toBeInTheDocument();
   });
 });

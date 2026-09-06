@@ -20,6 +20,7 @@ from app.services.cpor.fx_rate import (
     ensure_rate_for_date,
     ensure_today_rate,
 )
+from app.services.cpor.intelligence_scope import where_commercial_intelligence
 from app.services.cpor.settle_readiness import FX_MODES, case_missing_roe, fx_declared, fx_mode_valid
 
 router = APIRouter()
@@ -46,7 +47,9 @@ def _actor(user: dict) -> str:
 
 def _tenant_cases(session, user: dict):
     return session.scalars(
-        select(CporCase).where(where_tenant(CporCase.tenant_id, user))
+        select(CporCase)
+        .where(where_tenant(CporCase.tenant_id, user))
+        .where(where_commercial_intelligence())
     ).all()
 
 
@@ -180,6 +183,8 @@ def fx_declare_mode(
         )
         if body.case_ids:
             stmt = stmt.where(CporCase.id.in_(body.case_ids))
+        else:
+            stmt = stmt.where(where_commercial_intelligence())
         cases = session.scalars(stmt).all()
         declared_ids: list[int] = []
         skipped = 0
