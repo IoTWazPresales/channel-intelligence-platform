@@ -4,7 +4,7 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `bdc77a4` (N-0017 charter). Execution product not yet in that pin.
+**Last content pin:** `6317040` (Execution vs plan lab chrome)
 
 **Alembic (code):** `20260906_0022` (`cpor_case.intelligence_exclude`)
 

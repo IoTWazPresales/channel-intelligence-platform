@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-09-06 — **Stock Execution vs plan** on `feat/ns-2-brief-nav-collapse`: lab strip (plan units / in-plan shipped % / customers under 70%) + PairedBars; `PlanVsExecutedView` relocated below. NUMBER RULE on `cip` (`current_database()=cip`): default_period **26Q3** (not P09), planned **32509**, shipped_in_plan **6586** (20%), customers under 70% **10**. Browser: Execution tab + relocated workspace + `/plan-vs-executed` redirect; API `/api/v1/*` 500 so figures not rendered. N-0017 implement, not complete.
+- 2026-09-06 — **Stock Execution vs plan** on `feat/ns-2-brief-nav-collapse` `6317040`: lab strip (plan units / in-plan shipped % / customers under 70%) + PairedBars; `PlanVsExecutedView` relocated below. NUMBER RULE on `cip` (`current_database()=cip`): default_period **26Q3** (not P09), planned **32509**, shipped_in_plan **6586** (20%), customers under 70% **10**. Browser: Execution tab + relocated workspace + `/plan-vs-executed` redirect; API `/api/v1/*` 500 so figures not rendered. N-0017 implement, not complete.
 
 - 2026-09-06 — **Stock Movement lens**: lab 4 headlines + sell-out trend + family bars; Channel Ops nested tabs relocated below, not deleted. SQL on `cip`: sell-out W24 1119 (vs W23 2095), shipped W35 1477, SOH 64121.2 (cover tape, not weekly series), families growing WoW 1 of 8 (NR). No weekly SOH series — not drawn.
 
