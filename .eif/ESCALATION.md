@@ -2,7 +2,5 @@
 
 # Escalation / decision queue
 
-- blocker **BL-0001** on N-0010 type=dependency ref=N-0013 Blocked pending N-0013 operator architecture approval
-- blocker **BL-0002** on N-0011 type=dependency ref=N-0013 Blocked pending N-0013 operator architecture approval
 - decision **D-0002** scope=N-0013: Mapping queue UI: RESTORE under Imports (recommended) vs RETIRE UI — operator choice
 - deferred **DOES_NOT_FIT** seq=321 node=N-0015: apps/web/src/app/(app)/market/page.tsx remains a static JSON stub. Market & Listings production container is /listing-capture and /competition (MarketSurface), not /market. Do not treat the stub as the container; do not delete it in this recording.

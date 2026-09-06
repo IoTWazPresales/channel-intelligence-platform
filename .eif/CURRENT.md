@@ -17,7 +17,7 @@
 
 ## In progress / leased
 
-- **N-0017** Stock & Sell-through Execution vs plan from design-lab stage=implement run=NS7_EXEC_20260906 expires=2026-09-06T19:36:20Z note=
+_none_
 
 ## Decision queue
 

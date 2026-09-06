@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 330
+**Snapshot revision:** 349
 
 ## Outcome (verbatim)
 
@@ -38,4 +38,4 @@ _none_
 | N-0014 | Promotions & Funding production migration from design-lab | redesign | complete | complete | yes | yes |
 | N-0015 | Market & Listings production migration from design-lab | redesign | complete | complete | yes | yes |
 | N-0016 | Stock & Sell-through Cover and Movement lenses from design-lab | redesign | complete | complete | yes | yes |
-| N-0017 | Stock & Sell-through Execution vs plan from design-lab | redesign | in_progress | in_progress | yes |  |
+| N-0017 | Stock & Sell-through Execution vs plan from design-lab | redesign | complete | complete | yes |  |
