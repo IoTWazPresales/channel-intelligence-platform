@@ -34,6 +34,7 @@ import type { CporCaseListRow, CporCasesPage } from '@/features/promotions-fundi
 import { apiGet, apiPost } from '@/lib/api';
 import { EntityContextPanel, KeyValueList } from '@/features/workbench-ui/EntityContextPanel';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
+import { CategoryBars } from '@/features/workbench-ui/charts';
 import { LifecycleRail } from '@/features/workbench-ui/LifecycleRail';
 import { Panel, PanelRow } from '@/features/workbench-ui/Panel';
 import { ScopeBar, StatusChip } from '@/features/workbench-ui/controls';
@@ -421,16 +422,22 @@ export function CaseBookSurface() {
               : 'Unsettled value by days since window end. Claim-sale ageing stays available when claim lines exist — not estimated as sale_date.'
           }
         >
-          <Stack spacing={0.25} data-testid="case-book-ageing">
-            {ageing.map((b) => (
-              <PanelRow
-                key={b.bucket}
-                severity={b.bucket === '60d+' ? 'danger' : b.bucket === '31–60d' ? 'warning' : 'neutral'}
-                primary={b.bucket}
-                figure={fmtCompact(b.value, ccy)}
-              />
-            ))}
-          </Stack>
+          <Box data-testid="case-book-ageing">
+            <CategoryBars
+              data={ageing}
+              x="bucket"
+              y="value"
+              height={170}
+              format={(v) => fmtCompact(v, ccy)}
+              colorBy={(r) =>
+                String(r.bucket) === '60d+'
+                  ? theme.palette.error.main
+                  : String(r.bucket) === '31–60d'
+                    ? theme.palette.warning.main
+                    : theme.palette.primary.main
+              }
+            />
+          </Box>
         </Panel>
         <Panel title="Blocked cases — reasons" subtitle="FX settle refuses until ROE and mode are declared" flush>
           <Stack spacing={0.25} sx={{ px: 1, pb: 1 }}>
