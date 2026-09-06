@@ -13,11 +13,11 @@
 
 ## Ready leaves
 
-- **N-0017** Stock & Sell-through Execution vs plan from design-lab (redesign, R2, stage=None)
+_No ready unblocked leaves._
 
 ## In progress / leased
 
-_none_
+- **N-0017** Stock & Sell-through Execution vs plan from design-lab stage=implement run=NS7_EXEC_20260906 expires=2026-09-06T19:36:20Z note=
 
 ## Decision queue
 
