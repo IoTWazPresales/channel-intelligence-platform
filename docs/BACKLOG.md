@@ -2477,3 +2477,71 @@ Exact engine invariants (do not complete around them):
 | **Behavior to retain** | Write-loop stop after repeated mutating action; crash vs policy labels; `CONTROL_PLANE_PROTECTED` on hook source. |
 | **Out of scope** | CIP product source; Market MIGRATE; programme N-0006; BACKLOG-171 event-model work except as the same EIF repair session. |
 | **TRIGGER** | Next EIF repair session. | |
+
+---
+
+## BACKLOG-174 — EIF-R1 verification semantics (structural vs live vs assurance debt)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-06. Record only. Do **not** fix in this CIP product session. |
+| **Effort** | Medium (EIF programme `verify` / health reporting) |
+| **Source** | Operator 2026-09-06: `program.py verify` stays `ok:false` because five nodes are lawfully retroactive or independence-disclaimed (N-0006, N-0013, N-0014–16). |
+| **Idea** | `verify` currently collapses structural integrity, live failures, and acknowledged assurance debt into one red bit. After lawful retroactive completes and independence disclaimers, that bit stays red forever and hides new failures. |
+| **Why it matters / deferrable** | Operators cannot tell a new gate break from recorded debt. Deferrable: the five nodes are already honestly labelled; product work must not stop. Do not interrupt in-flight CIP units to repair EIF. |
+| **What the work is** | Report separately: (1) structural integrity of the log/views, (2) live/actionable failures on non-terminal or newly completed nodes, (3) acknowledged assurance debt (retroactive / `independence_unrecoverable` / disclaimed GOV-008). `verify` overall may stay non-ok when live failures exist; debt must not be the only reason. |
+| **Regression traps** | Do not relabel retroactive completes as independent. Do not stamp synthetic `implementation_run` to green `verify`. Do not weaken independence gates. Do not edit `C:\AI\engineering-intelligence-framework` from a CIP product session. D-0002 stays untouched. |
+| **Behavior to retain** | Retroactive/disclaimed nodes remain visible; `independence.py` provenance rules; host `program.py` only. |
+| **Out of scope** | CIP product source; chartering nodes; reopening N-0006 / N-0013 / N-0014–16. |
+| **TRIGGER** | Next EIF repair session. Sequenced before EIF-R4. |
+
+---
+
+## BACKLOG-175 — EIF-R2 durable run continuity
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-06. Record only. Do **not** fix here. |
+| **Effort** | Large (EIF runtime persistence) |
+| **Source** | Operator 2026-09-06: losing a Cursor conversation mid-flight currently loses in-flight reasoning and artifact state; recovery depended on a surviving `.jsonl` transcript. |
+| **Idea** | Every meaningful programme transition should persist current node, stage, constraints, files touched, completed and outstanding checks, evidence refs, findings, last safe commit and next action — independent of chat memory. |
+| **Why it matters / deferrable** | Mid-flight conversation loss already cost a recovery from transcript archaeology. Deferrable while a human operator can re-orient from CURRENT + PROGRAM_LOG; not deferrable forever. |
+| **What the work is** | Durable run-state artifact (project-local, not chat) updated on stage/lease/quality/verification/status transitions and on material implement checkpoints. Recovery must restore next action without re-deriving from a transcript. |
+| **Regression traps** | Do not treat chat / CONTEXT changelog as the run store. Do not persist secrets, credentials, or customer PII. Do not require the EIF git repo to be writable from CIP. |
+| **Behavior to retain** | PROGRAM_LOG as event source of truth; CURRENT for product pin; host `program.py`. |
+| **Out of scope** | CIP product features; fixing verify semantics (EIF-R1) except as a consumer of persisted checks. |
+| **TRIGGER** | Next EIF repair session after EIF-R1 is scoped. Depends on R1 so debt vs live checks can be persisted distinctly. |
+
+---
+
+## BACKLOG-176 — EIF-R3 contract staleness against accepted superseding decisions
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-06. Record only. Do **not** fix here. |
+| **Effort** | Medium (EIF programme verify / health) |
+| **Source** | Operator 2026-09-06: accepted superseding decisions do not flag contradictory criteria on non-terminal nodes. N-0010 and N-0011 sat stale for days. |
+| **Idea** | When a decision is accepted that supersedes a node's framing or governing design input, non-terminal nodes whose title/ACs still cite the abolished object should surface as stale — not wait for an operator to notice. |
+| **Why it matters / deferrable** | N-0010 still claimed Actions after D-0009; N-0011 still cited FROZEN v1.1 Steward after D-0008 kept Data & Stewardship. `verify` did not flag it. Deferrable: this session records the cases; the engine still will not invent nodes (EIF-R4). |
+| **What the work is** | Detect accepted decisions that name/supersede a node or a governing design input; flag contradictory non-terminal criteria (title, AC lines, stage notes) as contract staleness distinct from live quality failures (EIF-R1). Do not auto-reject or auto-patch. |
+| **Regression traps** | A stale contract is not the same as obsolete work (N-0011). Do not auto-reject. Do not auto-recharter. D-0002 stays proposed/deferred until Warren accepts. |
+| **Behavior to retain** | Decisions as first-class ledger objects; node.patch / node.status remain human/agent events. |
+| **Out of scope** | Implementing Attention; patching N-0011 in the parking session; EIF-R4 orchestrator. |
+| **TRIGGER** | Next EIF repair session. Depends on EIF-R1 (staleness is a named report class, not a forever-red verify). |
+
+---
+
+## BACKLOG-177 — EIF-R4 autonomous decomposition (operator is not the scheduler)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-06. Record only. Do **not** fix here. Sequenced last. |
+| **Effort** | Large (EIF orchestrator layer) |
+| **Source** | Operator 2026-09-06: the engine correctly does not invent nodes, but the operator should not be the scheduler. |
+| **Idea** | An orchestrator layer should turn accepted objectives into **proposed** lawful nodes that the engine then validates. The engine stays the validator; it does not mint work from chat. |
+| **Why it matters / deferrable** | Frontier currently empties or stalls when remaining work is unchartered (Attention, Data & Stewardship remainder, Design Language v2). Deferrable until R1–R3 exist: a scheduler on a permanently red verify with silent stale contracts would propose junk. |
+| **What the work is** | Given accepted decisions + remaining non-terminal/stale nodes + CURRENT next, propose candidate `node.add` payloads (title, class, facets, risk, depends_on, ACs including `target_artifact_class`) for operator/agent confirmation. Engine validates; nothing auto-charters. |
+| **Regression traps** | Engine must still refuse to invent nodes. Do not auto-`node.add`. Do not charter Attention in a CIP product session. D-0002 untouched. Depends on R1–R3. |
+| **Behavior to retain** | `h_node_add` lawfulness; no parallel frontier paths without a node; host `program.py`. |
+| **Out of scope** | CIP product implementation; EIF-R1/R2/R3 themselves. |
+| **TRIGGER** | After EIF-R1, EIF-R2 and EIF-R3 are accepted or explicitly waived. | |
