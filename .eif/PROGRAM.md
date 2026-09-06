@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 327
+**Snapshot revision:** 329
 
 ## Outcome (verbatim)
 
@@ -31,7 +31,7 @@ _none_
 | N-0007 | NS-3 Stock merge — Sell-out, Fill vs plan, Cover and Inbound | redesign | complete | complete | yes |  |
 | N-0008 | NS-4 CPOR Settlement — queue and case redesign | redesign | complete | complete | yes |  |
 | N-0009 | NS-5 Lineup plan origination | redesign | complete | complete | yes |  |
-| N-0010 | NS-6 Actions container (was Response) | redesign | blocked | blocked | yes |  |
+| N-0010 | NS-6 Actions container (was Response) | redesign | rejected | rejected | yes |  |
 | N-0011 | NS-7 Data container (was Steward) | redesign | blocked | blocked | yes |  |
 | N-0012 | NS-1a FX display honesty (no migration) | feature | complete | complete | yes |  |
 | N-0013 | Full-platform IA architecture and buyer vocabulary approval | discovery | complete | complete | yes | yes |
