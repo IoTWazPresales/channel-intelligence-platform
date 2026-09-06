@@ -4,7 +4,7 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** Cover lens + Stock chrome on `feat/ns-2-brief-nav-collapse` (hash on CONTEXT changelog after commit)
+**Last content pin:** `31712df`
 
 **Alembic (code):** `20260906_0022` (`cpor_case.intelligence_exclude`)
 
