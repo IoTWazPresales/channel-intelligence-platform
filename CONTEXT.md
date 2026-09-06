@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-09-06 — **Stock Cover lens** on `feat/ns-2-brief-nav-collapse`: lab Cover structure (5 headlines, 6-bucket histogram, sell-out vs shipped, ScopeBar, named pair grid, context panel). SQL on `cip`: SOH 64121.2, network cover 27.0w, under-2w 453, 2–4w 44, over-8w 333 (`>8`); histogram 8w+ 335 (`≥8`). Browser chrome at 1280×800; API `/api/v1/*` 500 so figures not rendered. Movement/execution still PARTIAL.
+
 - 2026-09-06 — **Unit 5 intelligence-exclude** on `feat/ns-2-brief-nav-collapse` schema `acba3cd` / product `fa2b345`: `cpor_case.intelligence_exclude` (`20260906_0022`) clone-tested on `cip_alembic_smoke` then applied to local `cip`. Seven explicit fixture codes flagged, not deleted. Commercial book 304 / draft 0; comparables on settled 309 no longer list C26C00004 or C23C16018. N-0006 not started.
 
 - 2026-09-06 — **Unit 1 programme** on `feat/ns-2-brief-nav-collapse` HEAD `32af42f`: `program.py verify` ok rev 295; frontier only N-0006. Container migration not chartered (`h_node_add` would mint a parallel frontier path; complete still needs synthetic implement stamp). BACKLOG-171 instance (4). N-0006 not started; N-0013/D-0008/D-0009 not reopened. Product work continues under accepted D-0008.

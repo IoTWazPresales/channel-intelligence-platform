@@ -238,3 +238,18 @@ async def test_movements_returns_400_when_distributor_id_missing() -> None:
     with pytest.raises(HTTPException) as exc:
         await co.channel_ops_movements(db, distributor_id=None)
     assert exc.value.status_code == 400
+
+
+def test_lab_woc_bucket_and_cover_status_match_design_lab() -> None:
+    assert co._lab_woc_bucket(None) is None
+    assert co._lab_woc_bucket(0.4) == "<1w"
+    assert co._lab_woc_bucket(1.5) == "1–2w"
+    assert co._lab_woc_bucket(3) == "2–4w"
+    assert co._lab_woc_bucket(5) == "4–6w"
+    assert co._lab_woc_bucket(7) == "6–8w"
+    assert co._lab_woc_bucket(8) == "8w+"
+    assert co._cover_pair_status(1.9) == "breach"
+    assert co._cover_pair_status(2) == "watch"
+    assert co._cover_pair_status(8) == "ok"
+    assert co._cover_pair_status(8.1) == "excess"
+    assert co._cover_pair_status(None) is None

@@ -30,7 +30,7 @@ from app.core.tenant_scope import where_tenant
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.fact_customer_velocity import FactCustomerVelocity
 from app.models.fact_dsi_forecast import FactDsiForecast
-from app.models.facts import FactInventoryReconciliation, FactSalesSellout
+from app.models.facts import FactInboundShipment, FactInventoryReconciliation, FactSalesSellout
 from app.services.channel_ops_config import REPLENISHMENT_WOC_THRESHOLD_WEEKS
 from app.services.channel_ops_derived_stock import (
     derived_stock_by_dist_product,
@@ -679,6 +679,9 @@ async def channel_ops_forecasts(
     return {"items": items, "total": len(items)}
 
 
+LAB_WOC_BUCKETS = ("<1w", "1–2w", "2–4w", "4–6w", "6–8w", "8w+")
+
+
 def _woc_histogram_bucket(weeks: float | None) -> str | None:
     if weeks is None:
         return None
@@ -693,6 +696,129 @@ def _woc_histogram_bucket(weeks: float | None) -> str | None:
     return "gte13"
 
 
+def _lab_woc_bucket(weeks: float | None) -> str | None:
+    """Six-bucket histogram from design-lab Cover (8w+ is ≥8)."""
+    if weeks is None:
+        return None
+    if weeks < 1:
+        return "<1w"
+    if weeks < 2:
+        return "1–2w"
+    if weeks < 4:
+        return "2–4w"
+    if weeks < 6:
+        return "4–6w"
+    if weeks < 8:
+        return "6–8w"
+    return "8w+"
+
+
+def _cover_pair_status(weeks: float | None) -> str | None:
+    """Lab status bands: <2 breach, 2–4 watch, >8 excess, else ok. Null WOC is unbanded."""
+    if weeks is None:
+        return None
+    if weeks < 2:
+        return "breach"
+    if weeks < 4:
+        return "watch"
+    if weeks > 8:
+        return "excess"
+    return "ok"
+
+
+def _empty_cover_distribution() -> dict[str, Any]:
+    return {
+        "data_unavailable": True,
+        "pair_count": 0,
+        "under_4w": 0,
+        "mean_woc": None,
+        "buckets": {"lt2": 0, "2to4": 0, "4to8": 0, "8to13": 0, "gte13": 0},
+        "lab_buckets": [{"bucket": b, "pairs": 0} for b in LAB_WOC_BUCKETS],
+        "headlines": {
+            "soh": 0.0,
+            "network_cover": None,
+            "pairs": 0,
+            "with_woc": 0,
+            "distributor_count": 0,
+            "breach": 0,
+            "watch": 0,
+            "excess": 0,
+        },
+        "items": [],
+        "cover_as_of_date": None,
+        "weekly_flow": {"points": [], "sell_out_through": None, "shipped_through": None},
+        "scopes": {"distributors": [], "families": []},
+    }
+
+
+def _week_monday(value: Any) -> date | None:
+    if value is None:
+        return None
+    if hasattr(value, "date"):
+        value = value.date()
+    if isinstance(value, date):
+        return value
+    return None
+
+
+async def _cover_weekly_flow(db: AsyncSession, tid: str, weeks: int = 13) -> dict[str, Any]:
+    """Last N ISO weeks of sell-out units vs inbound quantity, anchored at the later tape date."""
+    so_max = await db.scalar(
+        select(func.max(FactSalesSellout.transaction_date)).where(FactSalesSellout.tenant_id == tid)
+    )
+    in_date = func.coalesce(FactInboundShipment.ship_confirm_date, FactInboundShipment.pod_date)
+    in_max = await db.scalar(select(func.max(in_date)).where(FactInboundShipment.tenant_id == tid))
+    dates = [d for d in (so_max, in_max) if d is not None]
+    empty = {"points": [], "sell_out_through": so_max.isoformat() if so_max else None, "shipped_through": in_max.isoformat() if in_max else None}
+    if not dates:
+        return empty
+    end = max(dates)
+    start = end - timedelta(days=weeks * 7)
+
+    so_week = func.date_trunc("week", FactSalesSellout.transaction_date)
+    so_rows = (
+        await db.execute(
+            select(so_week.label("wk"), func.coalesce(func.sum(FactSalesSellout.units), 0))
+            .where(FactSalesSellout.tenant_id == tid)
+            .where(FactSalesSellout.transaction_date >= start)
+            .where(FactSalesSellout.transaction_date <= end)
+            .group_by(so_week)
+        )
+    ).all()
+    in_week = func.date_trunc("week", in_date)
+    in_rows = (
+        await db.execute(
+            select(in_week.label("wk"), func.coalesce(func.sum(FactInboundShipment.quantity), 0))
+            .where(FactInboundShipment.tenant_id == tid)
+            .where(in_date.is_not(None))
+            .where(in_date >= start)
+            .where(in_date <= end)
+            .group_by(in_week)
+        )
+    ).all()
+
+    sell = {_week_monday(r.wk): float(r[1] or 0) for r in so_rows}
+    ship = {_week_monday(r.wk): float(r[1] or 0) for r in in_rows}
+    cursor = start - timedelta(days=start.weekday())
+    points: list[dict[str, Any]] = []
+    while cursor <= end:
+        iso = cursor.isocalendar()
+        points.append(
+            {
+                "week": f"W{iso.week:02d}",
+                "week_start": cursor.isoformat(),
+                "sellOut": sell.get(cursor, 0.0),
+                "shipped": ship.get(cursor, 0.0),
+            }
+        )
+        cursor += timedelta(days=7)
+    return {
+        "points": points,
+        "sell_out_through": so_max.isoformat() if so_max else None,
+        "shipped_through": in_max.isoformat() if in_max else None,
+    }
+
+
 @router.get("/cover-distribution")
 async def channel_ops_cover_distribution(
     db: AsyncSession = Depends(get_db),
@@ -704,35 +830,112 @@ async def channel_ops_cover_distribution(
     tid = tenant_id_from_user(user if isinstance(user, dict) else None)
     obs = await latest_woc_observations(db, tenant_id=tid)
     if not obs:
-        return {
-            "data_unavailable": True,
-            "pair_count": 0,
-            "under_4w": 0,
-            "mean_woc": None,
-            "buckets": {"lt2": 0, "2to4": 0, "4to8": 0, "8to13": 0, "gte13": 0},
-            "items": [],
-            "cover_as_of_date": None,
-        }
+        return _empty_cover_distribution()
+
+    dist_ids = {r.distributor_id for r in obs}
+    prod_ids = {r.product_id for r in obs}
+    dist_map: dict[int, tuple[str, str]] = {}
+    prod_map: dict[int, tuple[str, str, str]] = {}
+    if dist_ids:
+        dist_rows = (
+            await db.execute(
+                select(DimDistributor.id, DimDistributor.code, DimDistributor.name).where(
+                    DimDistributor.id.in_(dist_ids)
+                )
+            )
+        ).all()
+        dist_map = {int(r.id): (str(r.code or ""), str(r.name or "")) for r in dist_rows}
+    if prod_ids:
+        prod_rows = (
+            await db.execute(
+                select(
+                    DimProduct.id,
+                    DimProduct.sku,
+                    DimProduct.name,
+                    DimProduct.product_line,
+                    DimProduct.category,
+                ).where(DimProduct.id.in_(prod_ids))
+            )
+        ).all()
+        for r in prod_rows:
+            family = (r.product_line or r.category or "Unclassified").strip() or "Unclassified"
+            prod_map[int(r.id)] = (str(r.sku or ""), str(r.name or ""), family)
+
+    inbound_open: dict[tuple[int, int], float] = {}
+    open_rows = (
+        await db.execute(
+            select(
+                FactInboundShipment.distributor_id,
+                FactInboundShipment.product_id,
+                func.coalesce(func.sum(FactInboundShipment.quantity), 0),
+            )
+            .where(FactInboundShipment.tenant_id == tid)
+            .where(FactInboundShipment.pod_date.is_(None))
+            .where(FactInboundShipment.distributor_id.is_not(None))
+            .where(FactInboundShipment.product_id.is_not(None))
+            .group_by(FactInboundShipment.distributor_id, FactInboundShipment.product_id)
+        )
+    ).all()
+    for r in open_rows:
+        inbound_open[(int(r.distributor_id), int(r.product_id))] = float(r[2] or 0)
+
+    weekly_flow = await _cover_weekly_flow(db, tid)
 
     buckets: dict[str, int] = {"lt2": 0, "2to4": 0, "4to8": 0, "8to13": 0, "gte13": 0}
+    lab_counts = {b: 0 for b in LAB_WOC_BUCKETS}
     woc_values: list[float] = []
     items: list[dict[str, Any]] = []
     max_cover_date: date | None = None
+    soh_total = 0.0
+    vel_total = 0.0
+    breach = watch = excess = 0
+    dist_pair_counts: dict[int, int] = {}
+    family_pair_counts: dict[str, int] = {}
+    today = date.today()
 
     for r in obs:
         bucket = _woc_histogram_bucket(r.weeks_of_cover)
         if bucket:
             buckets[bucket] += 1
+        lab_b = _lab_woc_bucket(r.weeks_of_cover)
+        if lab_b:
+            lab_counts[lab_b] += 1
+        status = _cover_pair_status(r.weeks_of_cover)
+        if status == "breach":
+            breach += 1
+        elif status == "watch":
+            watch += 1
+        elif status == "excess":
+            excess += 1
         if r.weeks_of_cover is not None:
             woc_values.append(float(r.weeks_of_cover))
         if max_cover_date is None or r.cover_as_of_date > max_cover_date:
             max_cover_date = r.cover_as_of_date
+        soh_total += float(r.derived_stock or 0)
+        if r.weekly_velocity is not None:
+            vel_total += float(r.weekly_velocity)
+        d_code, d_name = dist_map.get(r.distributor_id, ("", f"Distributor {r.distributor_id}"))
+        sku, p_name, family = prod_map.get(r.product_id, ("", f"Product {r.product_id}", "Unclassified"))
+        dist_pair_counts[r.distributor_id] = dist_pair_counts.get(r.distributor_id, 0) + 1
+        family_pair_counts[family] = family_pair_counts.get(family, 0) + 1
+        vintage_days = max(0, (today - r.cover_as_of_date).days)
         items.append(
             {
+                "id": f"{r.distributor_id}-{r.product_id}",
                 "distributor_id": r.distributor_id,
+                "distributor_code": d_code,
+                "distributor_name": d_name or d_code or f"Distributor {r.distributor_id}",
                 "product_id": r.product_id,
+                "sku": sku,
+                "product_name": p_name or sku or f"Product {r.product_id}",
+                "family": family,
                 "weeks_of_cover": r.weeks_of_cover,
                 "derived_stock": r.derived_stock,
+                "weekly_velocity": r.weekly_velocity,
+                "inbound_open": inbound_open.get((r.distributor_id, r.product_id), 0.0),
+                "vintage_days": vintage_days,
+                "status": status,
+                "lab_bucket": lab_b,
                 "replenishment_flag": r.replenishment_flag,
                 "cover_as_of_date": r.cover_as_of_date.isoformat(),
             }
@@ -741,6 +944,19 @@ async def channel_ops_cover_distribution(
     pair_count = len(obs)
     under_4w = buckets["lt2"] + buckets["2to4"]
     mean_woc = round(sum(woc_values) / len(woc_values), 1) if woc_values else None
+    network_cover = round(soh_total / vel_total, 1) if vel_total else None
+    scopes_distributors = [
+        {
+            "id": did,
+            "code": dist_map.get(did, ("", ""))[0] or str(did),
+            "name": dist_map.get(did, ("", f"Distributor {did}"))[1] or dist_map.get(did, ("", ""))[0],
+            "pairs": n,
+        }
+        for did, n in sorted(dist_pair_counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    ]
+    scopes_families = [
+        {"family": fam, "pairs": n} for fam, n in sorted(family_pair_counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    ]
 
     return {
         "data_unavailable": False,
@@ -748,6 +964,19 @@ async def channel_ops_cover_distribution(
         "under_4w": under_4w,
         "mean_woc": mean_woc,
         "buckets": buckets,
+        "lab_buckets": [{"bucket": b, "pairs": lab_counts[b]} for b in LAB_WOC_BUCKETS],
+        "headlines": {
+            "soh": round(soh_total, 1),
+            "network_cover": network_cover,
+            "pairs": pair_count,
+            "with_woc": len(woc_values),
+            "distributor_count": len(dist_pair_counts),
+            "breach": breach,
+            "watch": watch,
+            "excess": excess,
+        },
         "items": items,
         "cover_as_of_date": max_cover_date.isoformat() if max_cover_date else None,
+        "weekly_flow": weekly_flow,
+        "scopes": {"distributors": scopes_distributors, "families": scopes_families},
     }

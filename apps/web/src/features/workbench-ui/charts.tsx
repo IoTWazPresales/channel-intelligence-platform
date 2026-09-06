@@ -65,6 +65,7 @@ export function CategoryBars({
   format,
   horizontal = false,
   compact = false,
+  onRowClick,
 }: {
   data: Record<string, unknown>[];
   x: string;
@@ -75,6 +76,7 @@ export function CategoryBars({
   horizontal?: boolean;
   /** Narrow containers (dashboard widgets): angle category labels so they never collide. */
   compact?: boolean;
+  onRowClick?: (row: Record<string, unknown>) => void;
 }) {
   const c = useChartTheme();
   const fmt = format ?? ((v: number) => v.toLocaleString('en-ZA'));
@@ -101,7 +103,18 @@ export function CategoryBars({
           <YAxis tick={{ fill: c.axis, fontSize: 11 }} tickFormatter={fmt} axisLine={false} tickLine={false} width={56} />
         )}
         <Tooltip {...c.tooltip} formatter={(v) => fmt(Number(v))} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-        <Bar isAnimationActive={false} dataKey={y} radius={[3, 3, 0, 0]} fill={c.primary} maxBarSize={44}>
+        <Bar
+          isAnimationActive={false}
+          dataKey={y}
+          radius={[3, 3, 0, 0]}
+          fill={c.primary}
+          maxBarSize={44}
+          cursor={onRowClick ? 'pointer' : undefined}
+          onClick={onRowClick ? (state) => {
+            const payload = (state as { payload?: Record<string, unknown> }).payload;
+            if (payload) onRowClick(payload);
+          } : undefined}
+        >
           {colorBy ? data.map((row, i) => <Cell key={i} fill={colorBy(row)} />) : null}
         </Bar>
       </BarChart>
