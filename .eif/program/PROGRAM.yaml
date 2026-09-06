@@ -6,7 +6,7 @@ programme:
   charter:
     status: accepted
     by: eif
-    at: '2026-09-06T20:41:29Z'
+    at: '2026-09-06T20:46:11Z'
     workstreams:
     - Full-platform UI/UX redesign
     - Shell & primitive convergence
@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 330
-  log_sha256: 42c39646750a3584c3cb6c11523e793a338f205fbe4f36c41277affc23b509b8
+  snapshot_revision: 349
+  log_sha256: c04fda9a38769a2ad4f6620f95adc971f931ef58ab0c0bff5aa5acaea5f219bc
   acceptance_policy:
     milestone: operator
     root: operator
@@ -2058,14 +2058,10 @@ nodes:
     title: Stock & Sell-through Execution vs plan from design-lab
     class: redesign
     origin: decomposition
-    status: in_progress
-    stage: implement
-    revision: 4
-    lease:
-      run: NS7_EXEC_20260906
-      acquired_at: '2026-09-06T18:23:29Z'
-      heartbeat_at: '2026-09-06T18:36:20Z'
-      expires_at: '2026-09-06T19:36:20Z'
+    status: complete
+    stage: null
+    revision: 23
+    lease: null
     depends_on: []
     facets:
     - design_experience
@@ -2073,12 +2069,13 @@ nodes:
     risk: R2
     touches_existing: true
     acceptance: operator
-    acceptance_state: pending
+    acceptance_state: accepted
     acceptance_criteria:
     - Lab PairedBars Execution chrome on production /stock execution lens
     - relocate PlanVsExecutedView, do not delete
     - numbers from cip with NUMBER RULE
     - Partly built and Planned markers kept
+    - 'target_artifact_class: high_fidelity'
     baseline_ref: BLN-0001
     parity_source: []
     parity_matrix: {}
@@ -2086,70 +2083,172 @@ nodes:
     quality:
       design_artifact_class:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          class: high_fidelity
+          path: .eif/audit/NS7_GOV008_20260906/independent-rendered-review.md
         rationale: null
+        pass_run: NS7_GOV008_20260906
+        pass_actor: gov-008
       design_divergence:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          benchmark: apps/web/src/design-lab/surfaces/StockSurface.tsx ExecutionLens
+          decision: cip_number_rule_not_lab_p09
+          path: .eif/audit/NS7_GOV008_20260906/independent-rendered-review.md
         rationale: null
+        pass_run: NS7_GOV008_20260906
+        pass_actor: gov-008
       design_signatures:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          signatures:
+          - headline_strip_3
+          - paired_bars_plan_shipped
+          - customers_under_70
+          - relocated_plan_vs_executed
+          path: .eif/audit/NS7_GOV008_20260906/independent-rendered-review.md
         rationale: null
+        pass_run: NS7_GOV008_20260906
+        pass_actor: gov-008
       rendered_comparison:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          artifact_class: high_fidelity
+          class: high_fidelity
+          path: .eif/audit/NS7_GOV008_20260906/independent-rendered-review.md
+          product_url: http://localhost:3000/stock?lens=execution
+          lab_url: http://localhost:3000/design-lab/stock?lens=execution
+          viewport: 1280x800
+          comparison_verdict: parity_with_number_rule_substitution
         rationale: null
+        pass_run: NS7_GOV008_20260906
+        pass_actor: gov-008
       design_sameness_review:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          visual_vocabulary_challenge: 'Challenged whether production is the same instrument as lab Execution or a headline
+            strip glued onto the old workspace with an unreadable chart. Grammar matches (HeadlineStrip 3 + PairedBars Plan/Shipped).
+            Live cardinality crowds the x-axis; NUMBER RULE P09→26Q3 and relocated workspace are charter, not a fail. Path:
+            .eif/audit/NS7_GOV008_20260906/independent-rendered-review.md'
+          path: .eif/audit/NS7_GOV008_20260906/independent-rendered-review.md
+          decision: retain_lab_chrome_with_cip_numbers
         rationale: null
+        pass_run: NS7_GOV008_20260906
+        pass_actor: gov-008
       design_interaction_spec:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          interactions:
+          - lens_tabs_execution
+          - plan_vs_executed_redirect
+          - relocated_workspace_filters
+          path: .eif/audit/NS7_GOV008_20260906/independent-rendered-review.md
         rationale: null
+        pass_run: NS7_GOV008_20260906
+        pass_actor: gov-008
       design_state_coverage:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          states:
+          - populated
+          - loading
+          - unavailable
+          path: .eif/audit/NS7_GOV008_20260906/independent-rendered-review.md
         rationale: null
+        pass_run: NS7_GOV008_20260906
+        pass_actor: gov-008
       design_identity_tokens:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          tokens:
+            direction_name: workbench-ui stock execution HeadlineStrip+PairedBars
+            strip: HeadlineStrip columns=3
+            chart: PairedBars Plan/Shipped
+          path: .eif/audit/NS7_GOV008_20260906/independent-rendered-review.md
         rationale: null
+        pass_run: NS7_GOV008_20260906
+        pass_actor: gov-008
       design_execution_decisions:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          responsive_decision:
+            status: applicable
+            rationale: Verified at 1280x800. Mobile 390 not in N-0017 AC.
+            evidence: .eif/audit/NS7_GOV008_20260906/independent-rendered-review.md
+          visualisation_decision:
+            status: applicable
+            rationale: Lab PairedBars mounted; headlines carry NUMBER RULE; live cardinality crowds x-axis.
+            evidence: .eif/audit/NS7_GOV008_20260906/independent-rendered-review.md
+          consequential_action_decision:
+            status: applicable
+            rationale: Strip is read-only; consequential UI is lens change plus relocated PlanVsExecutedView.
+            evidence: .eif/audit/NS7_GOV008_20260906/independent-rendered-review.md
         rationale: null
+        pass_run: NS7_GOV008_20260906
+        pass_actor: gov-008
       ux:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/NS7_GOV008_20260906/independent-rendered-review.md
+          summary: Operator can read plan vs in-plan shipped and under-70 count at 1280x800.
         rationale: null
+        pass_run: NS7_GOV008_20260906
+        pass_actor: gov-008
       a11y:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/NS7_GOV008_20260906/independent-rendered-review.md
+          summary: Warn uses colour plus left border; lens tablist; keyboard not exercised this session.
         rationale: null
+        pass_run: NS7_GOV008_20260906
+        pass_actor: gov-008
       rendered:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence: &id006
+          path: .eif/audit/NS7_GOV008_20260906/independent-rendered-review.md
+          url: http://localhost:3000/stock?lens=execution
+          viewports:
+          - desktop_1280
         rationale: null
+        pass_run: NS7_GOV008_20260906
+        pass_actor: gov-008
       content:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/NS7_GOV008_20260906/independent-rendered-review.md
+          summary: 26Q3 not P09; in-plan shipped caption; Partly built / Planned retained on directory.
         rationale: null
-    verification: {}
+        pass_run: NS7_GOV008_20260906
+        pass_actor: gov-008
+    verification:
+      rendered:
+        state: pass
+        pass_run: NS7_GOV008_20260906
+        pass_actor: gov-008
+        evidence: *id006
+        path: null
+      referent:
+        state: pass
+        pass_run: NS7_GOV008_20260906
+        pass_actor: gov-008
+        evidence:
+          path: .eif/audit/NS7_GOV008_20260906/independent-rendered-review.md
+          lab: apps/web/src/design-lab/surfaces/StockSurface.tsx ExecutionLens
+          product: apps/web/src/features/stock/ExecutionLensView.tsx
+        path: null
     evidence: []
     blockers: []
     conservation_tags: []
@@ -2174,8 +2273,8 @@ nodes:
       customer_account_sell_out_gap: brief signal unchanged; not this Execution lens
       pipeline_fill_pct: stock regime strip unchanged; not this Execution lens
       response_container_badge: spine response badge unchanged until a later Administration/Overview node
-    target_artifact_class: null
-    design_artifact_class: null
+    target_artifact_class: high_fidelity
+    design_artifact_class: high_fidelity
     implementation_run: NS7_EXEC_20260906
     implementation_actor: gov-001
 decisions:
