@@ -51,6 +51,11 @@ class CporCase(Base, TimestampMixin):
     decided_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
     # Q-001 / BACKLOG-095 — money ceiling exceeded → must reapprove before approve/export
     needs_reapproval: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Visible, reversible: exclude from comparables / norms / book totals / rankings.
+    # Never blocks settle or steward. Default false.
+    intelligence_exclude: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="false"
+    )
 
     superseded_by_case_id: Mapped[int | None] = mapped_column(
         ForeignKey("cpor_case.id", ondelete="SET NULL"),
