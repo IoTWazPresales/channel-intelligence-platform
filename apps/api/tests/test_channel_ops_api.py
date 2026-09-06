@@ -253,3 +253,14 @@ def test_lab_woc_bucket_and_cover_status_match_design_lab() -> None:
     assert co._cover_pair_status(8) == "ok"
     assert co._cover_pair_status(8.1) == "excess"
     assert co._cover_pair_status(None) is None
+
+
+def test_week_monday_normalizes_sast_date_trunc_timestamptz() -> None:
+    """date_trunc('week') in Africa/Johannesburg is Monday 00:00 SAST = Sunday 22:00 UTC."""
+    from datetime import datetime, timezone
+
+    wk = datetime(2026, 6, 7, 22, 0, tzinfo=timezone.utc)
+    assert co._week_monday(wk) == date(2026, 6, 8)
+    assert co._week_monday(date(2026, 6, 8)) == date(2026, 6, 8)
+    assert co._week_monday(date(2026, 6, 12)) == date(2026, 6, 8)
+    assert co._week_monday(None) is None

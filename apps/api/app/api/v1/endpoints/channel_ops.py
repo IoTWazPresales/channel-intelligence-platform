@@ -16,11 +16,11 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import desc, func, select
+from sqlalchemy import Date, Integer, cast, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.inspection import inspect as sa_inspect
 
@@ -117,7 +117,7 @@ async def channel_ops_weekly_series(
     """Sell-out units by ISO week (last N weeks) for overview charts."""
     end = date.today()
     start = end - timedelta(days=weeks * 7)
-    week_col = func.date_trunc("week", FactSalesSellout.transaction_date)
+    week_col = _iso_week_start_expr(FactSalesSellout.transaction_date)
     q = (
         select(week_col.label("week_start"), func.sum(FactSalesSellout.units).label("units"))
         .where(FactSalesSellout.transaction_date >= start)
@@ -129,15 +129,37 @@ async def channel_ops_weekly_series(
     rows = (await db.execute(q)).all()
     points: list[dict[str, Any]] = []
     for r in rows:
-        ws = r.week_start
-        if hasattr(ws, "date"):
-            ws = ws.date()
-        points.append({"week_start": ws.isoformat() if isinstance(ws, date) else str(ws)[:10], "units": float(r.units or 0)})
+        ws = _week_monday(r.week_start)
+        if ws is None:
+            continue
+        points.append({"week_start": ws.isoformat(), "units": float(r.units or 0)})
     return {"weeks": weeks, "points": points}
 
 
 def _iso_week_label(value: date) -> str:
     return f"W{value.isocalendar().week:02d}"
+
+
+# CIP sessions run Africa/Johannesburg (UTC+2, no DST). date_trunc('week', date)
+# is promoted to timestamptz at Monday 00:00 local = Sunday 22:00 UTC; Python
+# `.date()` then yields Sunday and Monday-keyed lookups miss (Movement W24 → 0).
+_SAST = timezone(timedelta(hours=2))
+
+
+def _iso_week_start_expr(column: Any):
+    """Monday of the ISO week as `date` — do not use date_trunc('week') here."""
+    as_date = cast(column, Date)
+    return as_date - (cast(func.extract("isodow", as_date), Integer) - 1)
+
+
+def _week_monday(value: Any) -> date | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        value = value.astimezone(_SAST).date() if value.tzinfo is not None else value.date()
+    if isinstance(value, date):
+        return value - timedelta(days=value.weekday())
+    return None
 
 
 @router.get("/movement-lens")
@@ -184,7 +206,7 @@ async def channel_ops_movement_lens(
     sell_out_wow_pct = None
     if so_max is not None:
         start = so_max - timedelta(days=weeks * 7)
-        so_week = func.date_trunc("week", FactSalesSellout.transaction_date)
+        so_week = _iso_week_start_expr(FactSalesSellout.transaction_date)
         so_rows = (
             await db.execute(
                 select(so_week.label("wk"), func.coalesce(func.sum(FactSalesSellout.units), 0))
@@ -197,7 +219,9 @@ async def channel_ops_movement_lens(
         ).all()
         sell_map: dict[date, float] = {}
         for r in so_rows:
-            wk = r.wk.date() if hasattr(r.wk, "date") else r.wk
+            wk = _week_monday(r.wk)
+            if wk is None:
+                continue
             sell_map[wk] = float(r[1] or 0)
         cursor = (so_max - timedelta(days=so_max.weekday())) - timedelta(days=7 * (weeks - 1))
         end_monday = so_max - timedelta(days=so_max.weekday())
@@ -236,7 +260,7 @@ async def channel_ops_movement_lens(
             func.nullif(DimProduct.category, ""),
             "Unclassified",
         )
-        so_week = func.date_trunc("week", FactSalesSellout.transaction_date)
+        so_week = _iso_week_start_expr(FactSalesSellout.transaction_date)
         end_monday = so_max - timedelta(days=so_max.weekday())
         prev_monday = end_monday - timedelta(days=7)
         fam_rows = (
@@ -252,7 +276,7 @@ async def channel_ops_movement_lens(
         this_map: dict[str, float] = {}
         prev_map: dict[str, float] = {}
         for r in fam_rows:
-            wk = r.wk.date() if hasattr(r.wk, "date") else r.wk
+            wk = _week_monday(r.wk)
             fam = str(r.family or "Unclassified")
             units = float(r[2] or 0)
             if wk == end_monday:
@@ -902,16 +926,6 @@ def _empty_cover_distribution() -> dict[str, Any]:
     }
 
 
-def _week_monday(value: Any) -> date | None:
-    if value is None:
-        return None
-    if hasattr(value, "date"):
-        value = value.date()
-    if isinstance(value, date):
-        return value
-    return None
-
-
 async def _cover_weekly_flow(db: AsyncSession, tid: str, weeks: int = 13) -> dict[str, Any]:
     """Last N ISO weeks of sell-out units vs inbound quantity, anchored at the later tape date."""
     so_max = await db.scalar(
@@ -926,7 +940,7 @@ async def _cover_weekly_flow(db: AsyncSession, tid: str, weeks: int = 13) -> dic
     end = max(dates)
     start = end - timedelta(days=weeks * 7)
 
-    so_week = func.date_trunc("week", FactSalesSellout.transaction_date)
+    so_week = _iso_week_start_expr(FactSalesSellout.transaction_date)
     so_rows = (
         await db.execute(
             select(so_week.label("wk"), func.coalesce(func.sum(FactSalesSellout.units), 0))
@@ -936,7 +950,7 @@ async def _cover_weekly_flow(db: AsyncSession, tid: str, weeks: int = 13) -> dic
             .group_by(so_week)
         )
     ).all()
-    in_week = func.date_trunc("week", in_date)
+    in_week = _iso_week_start_expr(in_date)
     in_rows = (
         await db.execute(
             select(in_week.label("wk"), func.coalesce(func.sum(FactInboundShipment.quantity), 0))

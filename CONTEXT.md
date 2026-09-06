@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-09-06 — **Movement week keys** on `feat/ns-2-brief-nav-collapse`: ISO-Monday grain replaces `date_trunc('week')` timestamptz Sunday lookups. cip SQL + live API + browser: W24 sell-out **1119** (was 0), W23 **2095**, families **1 of 8** (was 0 of 8). Nested Sell-out by week still ~1119. Evidence `.eif/audit/NS7_MOVEMENT_20260906/`.
+
 - 2026-09-06 — **Housekeeping** on `feat/ns-2-brief-nav-collapse`: N-0017 **complete** (independent GOV-008 `NS7_GOV008_20260906`/`gov-008`, impl `NS7_EXEC_20260906`, review `9285d68`, ledger `fe6aca9`). N-0010 **rejected** (D-0009) `0ce51ba`. N-0011 **ready** (BL-0002 closed; inspect: intent survives). Mobile evidence `b28a7a3`. BACKLOG-174–177 EIF-R1–R4 `89a5c3e`. D-0002 untouched. Frontier N-0011 — do not start.
 
 - 2026-09-06 — **API 500 + 1280×800 lens browser** on `feat/ns-2-brief-nav-collapse` `3008c83`: 500 **predates this branch** (Next `/api/v1` proxy uncaught `fetch` + FastAPI down; proxy on main since `0403713`/`af32bf7`). Proxy now 502 when upstream refused. Browser at 1280×800 vs `cip` SQL: Cover match (64121 / 27.0w / 453 / 44 / 333); Execution match (26Q3 32509 / 6586 20% / under70 10); Movement **delta** lab W24 sell-out **0** vs proven SQL **1119** (nested Channel Ops chart still ~1119). N-0017 not complete.
