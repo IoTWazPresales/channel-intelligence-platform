@@ -1,10 +1,10 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-09-05 (Units 2–4 evidence_basis)
+**Last updated:** 2026-09-06 (Unit 1 programme; container migration continues without a leased node)
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `f8e1399`
+**Last content pin:** `32af42f`
 
 **Alembic (code):** `20260905_0021` (fx_daily_rate + cpor_case proposed-rate columns)
 
@@ -16,12 +16,12 @@
 - **Product (Unit 1):** Booked FX lifecycle extends declared `roe_snapshot`. Daily USDZAR from Frankfurter (ECB); last-known fallback never blocks a case. Proposed rate is separate history; booking at approval does not overwrite it.
 - **Product (Unit 0):** Promotions & Funding desktop dimensions migrated from design-lab source at 1280×800. Shared: `RAIL_WIDTH` 252 (`LabShell`), `WorkbenchCanvas` inset px 2.5 / pt 2 / pb 3, search `minWidth` 260.
 - **I1–I5:** I1/I3/I4/I5 remain closed. **I2** still lab Market only (BACKLOG-164).
-- **Programme:** PRG-20260831T145514; `frontier` is **only N-0006**. Do not start N-0006 (BACKLOG-170). Do not reopen N-0013 or D-0008.
+- **Programme:** PRG-20260831T145514; `verify` ok rev **295**; `frontier` is **only N-0006**. Do not start N-0006 (BACKLOG-170). Do not reopen N-0013, D-0008 or D-0009. Container migration is **not** a lawful new node this session (BACKLOG-171 instance 4); product work continues under accepted D-0008.
 - **D-0009 accepted:** Actions fold into Attention. Ledger still uncommitted.
 - **D-0002** remains the open decision.
 - **Next:** Unit 5 next D-0008 container (frontier is N-0006 only — do not start it).
 
-**Programme frontier:** N-0006 only. Do not manufacture a path.
+**Programme frontier:** N-0006 only. Do not manufacture a path. BACKLOG-171 instance (4): no covering node for this wave.
 
 **Design language:** FROZEN v1.1 is **demoted**. Production funding follows the implemented design-lab React, including lab-specified dimensions.
 

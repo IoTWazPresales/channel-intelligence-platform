@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-09-06 — **Unit 1 programme** on `feat/ns-2-brief-nav-collapse` HEAD `32af42f`: `program.py verify` ok rev 295; frontier only N-0006. Container migration not chartered (`h_node_add` would mint a parallel frontier path; complete still needs synthetic implement stamp). BACKLOG-171 instance (4). N-0006 not started; N-0013/D-0008/D-0009 not reopened. Product work continues under accepted D-0008.
+
 - 2026-09-05 — **Units 2–4 evidence_basis** on `feat/ns-2-brief-nav-collapse` `f8e1399`: derived claim_evidenced | source_attested | none; settlement/portfolio mix labeled (book_total unchanged); unmatched pending Case IDs queryable on Payments + comparables; window-end ageing fills the case-book panel. N-0006 not started.
 
 - 2026-09-05 — **Unit 1 booked FX** on `feat/ns-2-brief-nav-collapse` schema `69033f5` / product `0ce562d`: `fx_daily_rate` + proposed columns (`20260905_0021`); Frankfurter ECB USDZAR; proposed vs booked `roe_snapshot`; suggest on create; book at approval; backfill confirm on case book. Clone-tested on `cip_alembic_smoke` then applied to local `cip`. N-0006 not started.
