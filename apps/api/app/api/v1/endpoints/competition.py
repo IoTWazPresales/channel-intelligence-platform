@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
-from app.models.dimensions import DimCompetitorProduct, DimProduct
+from app.models.dimensions import DimCompetitorBrand, DimCompetitorProduct, DimProduct
 from app.models.facts import FactCompetitorMapping, FactCompetitorPrice
 
 router = APIRouter()
@@ -23,11 +23,16 @@ async def list_mappings(db: AsyncSession = Depends(get_db)):
     for m in rows:
         prod = await db.get(DimProduct, m.product_id)
         comp = await db.get(DimCompetitorProduct, m.competitor_product_id)
+        brand = await db.get(DimCompetitorBrand, comp.brand_id) if comp else None
         out.append(
             {
                 "id": m.id,
+                "product_id": m.product_id,
                 "internal_sku": prod.sku if prod else None,
+                "product_name": prod.name if prod else None,
                 "competitor_sku": comp.sku if comp else None,
+                "competitor_name": comp.name if comp else None,
+                "competitor_brand": brand.name if brand else None,
                 "score": float(m.score),
                 "explanation": m.explanation,
                 "approval_status": m.approval_status,

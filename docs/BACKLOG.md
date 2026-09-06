@@ -2305,7 +2305,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **I1/I3/I4/I5 closed** on production Promotions & Funding (2026-09-04, `feat/ns-2-brief-nav-collapse`). **I2 still parked.** |
+| **Status / parked** | **Closed** · 2026-09-06 (`feat/ns-2-brief-nav-collapse`). Market competition lens shows the stored `fact_competitor_mapping.score` + `explanation`. No Why-this-score factor panel (factors are not stored). Lab 0.810-vs-0.781 is a fixture artefact and is not reproduced. |
 | **Effort** | Small (Market mapping panel honesty) |
 | **Source** | `.eif/audit/NS6_GOV008_R3_20260903/independent-rendered-review.md` §4 I1–I5; `d-market-mapping-panel.png` |
 | **Idea** | **I2:** mapping score **0.81** vs factor copy **0.781**. Production `/competition` shows score + explanation string only — no factor panel — so the 0.810-vs-0.781 lie is **lab fixture/copy**, not reproduced on production today. When Market & Listings / mapping is migrated, do not invent a Why-this-score panel that repeats the arithmetic lie. |

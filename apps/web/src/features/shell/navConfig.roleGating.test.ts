@@ -106,9 +106,9 @@ describe('nav role gating (D-0008 capability domains)', () => {
     const dirHrefs = directory.flatMap((g) => g.items.map((i) => i.href));
     const railHrefs = rail.flatMap((g) => g.items.map((i) => i.href));
     expect(dirHrefs).toContain('/budgets');
-    expect(dirHrefs).toContain('/competition');
+    expect(dirHrefs).toContain('/competition?tab=competitor-listings');
     expect(railHrefs).not.toContain('/budgets');
-    expect(railHrefs).not.toContain('/competition');
+    expect(railHrefs).not.toContain('/competition?tab=competitor-listings');
     for (const g of rail) {
       for (const item of g.items) {
         expect(inRail(item)).toBe(true);

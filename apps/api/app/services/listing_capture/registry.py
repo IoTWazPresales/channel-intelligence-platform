@@ -141,20 +141,26 @@ def list_proposals(session: Session, *, status: str = "proposed") -> list[dict[s
             select(CstListingSeed).where(CstListingSeed.status == status).order_by(CstListingSeed.id)
         ).all()
     )
-    return [
-        enrich_proposal_with_suggested_url(
-            {
-                "id": r.id,
-                "customer_id": r.customer_id,
-                "marketplace": r.marketplace,
-                "external_id": r.external_id,
-                "product_id": r.product_id,
-                "status": r.status,
-                "import_job_id": r.import_job_id,
-            }
+    labels = product_labels(session, [r.product_id for r in rows])
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        sku, name = labels.get(int(r.product_id), (None, None)) if r.product_id is not None else (None, None)
+        out.append(
+            enrich_proposal_with_suggested_url(
+                {
+                    "id": r.id,
+                    "customer_id": r.customer_id,
+                    "marketplace": r.marketplace,
+                    "external_id": r.external_id,
+                    "product_id": r.product_id,
+                    "product_sku": sku,
+                    "product_name": name,
+                    "status": r.status,
+                    "import_job_id": r.import_job_id,
+                }
+            )
         )
-        for r in rows
-    ]
+    return out
 
 
 def confirm_proposal(
@@ -381,11 +387,29 @@ def scheduler_should_run(session: Session, *, schedule_enabled: bool | None = No
     return {"enabled": enabled, "listing_count": int(n), "should_run": run}
 
 
-def listing_to_dict(row: CustomerListing) -> dict[str, Any]:
+def product_labels(session: Session, product_ids: list[int | None]) -> dict[int, tuple[str | None, str | None]]:
+    wanted = {int(i) for i in product_ids if i is not None}
+    if not wanted:
+        return {}
+    rows = list(session.scalars(select(DimProduct).where(DimProduct.id.in_(wanted))).all())
+    return {int(p.id): (p.sku, p.name) for p in rows}
+
+
+def listing_to_dict(
+    row: CustomerListing,
+    *,
+    products: dict[int, tuple[str | None, str | None]] | None = None,
+) -> dict[str, Any]:
+    sku: str | None = None
+    name: str | None = None
+    if row.product_id is not None and products:
+        sku, name = products.get(int(row.product_id), (None, None))
     return {
         "id": row.id,
         "customer_id": row.customer_id,
         "product_id": row.product_id,
+        "product_sku": sku,
+        "product_name": name,
         "url": row.url,
         "marketplace": row.marketplace,
         "status": row.status,

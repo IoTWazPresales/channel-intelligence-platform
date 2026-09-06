@@ -57,7 +57,9 @@ def build_listing_intelligence(session: Session) -> dict[str, Any]:
         ready = bool(span_days is not None and span_days >= MIN_SPAN_DAYS and len(obs) >= 2)
         first_price = float(priced[0].extracted_price) if priced else None
         last_price = float(priced[-1].extracted_price) if priced else None
-        act = _activation(obs[-1] if obs else None)
+        last_obs = obs[-1] if obs else None
+        act = _activation(last_obs)
+        last_fetched = getattr(last_obs, "fetched_at", None) if last_obs is not None else None
         row = {
             "listing_id": int(listing.id),
             "customer_id": int(listing.customer_id),
@@ -75,6 +77,10 @@ def build_listing_intelligence(session: Session) -> dict[str, Any]:
             "activation_status": act.get("status"),
             "activation_message": act.get("message"),
             "case_price": act.get("case_price"),
+            "case_id": act.get("case_id"),
+            "last_availability": getattr(last_obs, "extracted_availability", None) if last_obs else None,
+            "last_promo_badge": getattr(last_obs, "extracted_promo_badge", None) if last_obs else None,
+            "last_fetched": last_fetched.isoformat() if last_fetched is not None else None,
             "worklist": bool(ready and act.get("status") == "not_activated"),
         }
         items.append(row)

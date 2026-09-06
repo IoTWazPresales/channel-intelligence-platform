@@ -22,6 +22,7 @@ from app.services.listing_capture.registry import (
     list_recent_observations,
     listing_to_dict,
     observation_to_dict,
+    product_labels,
     poll_active_listings,
     reject_proposal,
     reparse_observation,
@@ -90,8 +91,9 @@ def list_listings(
         total = len(rows)
         start = (page - 1) * page_size
         page_rows = rows[start : start + page_size]
+        products = product_labels(session, [r.product_id for r in page_rows])
         return {
-            "items": [listing_to_dict(r) for r in page_rows],
+            "items": [listing_to_dict(r, products=products) for r in page_rows],
             "total": total,
             "page": page,
             "page_size": page_size,
@@ -119,7 +121,7 @@ def post_listing(
             )
             session.commit()
             session.refresh(row)
-            return listing_to_dict(row)
+            return listing_to_dict(row, products=product_labels(session, [row.product_id]))
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except Exception as exc:
@@ -142,7 +144,7 @@ def patch_status(
             set_listing_status(session, row, status=body.status)
             session.commit()
             session.refresh(row)
-            return listing_to_dict(row)
+            return listing_to_dict(row, products=product_labels(session, [row.product_id]))
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -208,7 +210,7 @@ def post_confirm_proposal(
             )
             session.commit()
             session.refresh(listing)
-            return listing_to_dict(listing)
+            return listing_to_dict(listing, products=product_labels(session, [listing.product_id]))
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
