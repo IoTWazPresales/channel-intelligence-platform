@@ -73,6 +73,9 @@ const case312Payload = {
   settle_readiness: {
     fx_declared: true,
     roe_snapshot: 18.78,
+    fx_mode: null,
+    fx_mode_declared: false,
+    fx_settle_allowed: false,
     open_assumption_count: 2,
     claim_evidence_count: 0,
   },
@@ -156,7 +159,7 @@ describe('CporCaseDetailPage FX/readiness (case 312 shape)', () => {
     expect(screen.getByTestId('cpor-fx-anchor')).toBeInTheDocument();
     expect(screen.getByTestId('cpor-fx-anchor-local')).toHaveTextContent(/^R 0[.,]00$/);
     expect(screen.getByTestId('cpor-case-readiness-row')).toBeInTheDocument();
-    expect(screen.getByTestId('cpor-case-readiness-fx')).toHaveTextContent(/FX declared · 18\.78/);
+    expect(screen.getByTestId('cpor-case-readiness-fx')).toHaveTextContent(/FX rate 18\.78 · mode not declared/);
     expect(screen.getByTestId('cpor-case-readiness-assumptions')).toHaveTextContent(
       '2 assumptions open',
     );

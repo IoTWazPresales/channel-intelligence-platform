@@ -1,12 +1,13 @@
-"""Daily FX quotes and FX-blocked backfill suggestions — booked-rate lifecycle."""
+"""Daily FX quotes, missing-rate suggestions, and operator-confirmed FX mode declaration."""
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.core.security import get_current_user
 from app.core.tenant_scope import tenant_id_from_user, where_tenant
@@ -15,10 +16,11 @@ from app.models.cpor import CporCase
 from app.services.cpor.fx_rate import (
     SOURCE_OPERATOR,
     confirm_backfill_suggestion,
+    declare_fx_mode,
     ensure_rate_for_date,
     ensure_today_rate,
 )
-from app.services.cpor.settle_readiness import settle_fx_blocked
+from app.services.cpor.settle_readiness import FX_MODES, case_missing_roe, fx_declared, fx_mode_valid
 
 router = APIRouter()
 
@@ -32,8 +34,20 @@ class BackfillConfirmBody(BaseModel):
     items: list[BackfillItem] = Field(..., min_length=1)
 
 
+class DeclareModeBody(BaseModel):
+    confirm: bool = False
+    mode: str = "booked"
+    case_ids: list[int] | None = None
+
+
 def _actor(user: dict) -> str:
     return str(user.get("display_name") or user.get("id") or "unknown")
+
+
+def _tenant_cases(session, user: dict):
+    return session.scalars(
+        select(CporCase).where(where_tenant(CporCase.tenant_id, user))
+    ).all()
 
 
 @router.get("/fx/rates/today")
@@ -56,14 +70,19 @@ def fx_rate_fetch(user: dict = Depends(get_current_user)) -> dict[str, Any]:
 
 @router.get("/fx/backfill-suggestions")
 def fx_backfill_suggestions(user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    """Suggest rates only for cases that genuinely lack a positive ROE snapshot.
+
+    Cases that already have a rate and are blocked because fx_mode is missing
+    are counted, not suggested — use POST /fx/declare-mode for those.
+    """
+    _ = tenant_id_from_user(user)
     with SessionLocal() as session:
-        cases = session.scalars(
-            where_tenant(select(CporCase), CporCase, tenant_id_from_user(user))
-        ).all()
-        blocked = [c for c in cases if settle_fx_blocked(c)]
+        cases = _tenant_cases(session, user)
+        missing_rate = [c for c in cases if case_missing_roe(c)]
+        rate_no_mode = [c for c in cases if fx_declared(c) and not fx_mode_valid(c)]
         by_date: dict = {}
         items: list[dict[str, Any]] = []
-        for case in blocked:
+        for case in missing_rate:
             window = case.window_start
             if window not in by_date:
                 by_date[window] = ensure_rate_for_date(session, window)
@@ -88,7 +107,12 @@ def fx_backfill_suggestions(user: dict = Depends(get_current_user)) -> dict[str,
                 }
             )
         session.commit()
-        return {"items": items, "count": len(items)}
+        return {
+            "items": items,
+            "count": len(items),
+            "missing_rate_count": len(missing_rate),
+            "rate_no_mode_count": len(rate_no_mode),
+        }
 
 
 @router.post("/fx/backfill-confirm")
@@ -105,6 +129,9 @@ def fx_backfill_confirm(
                 user
             ):
                 results.append({"case_id": item.case_id, "ok": False, "reason": "not_found"})
+                continue
+            if not case_missing_roe(case):
+                results.append({"case_id": case.id, "ok": False, "reason": "already_declared"})
                 continue
             rate = item.rate
             source = SOURCE_OPERATOR
@@ -125,3 +152,51 @@ def fx_backfill_confirm(
         confirmed = sum(1 for r in results if r.get("ok"))
         booked = sum(1 for r in results if r.get("booked"))
         return {"results": results, "confirmed": confirmed, "booked": booked}
+
+
+@router.post("/fx/declare-mode")
+def fx_declare_mode(
+    body: DeclareModeBody,
+    user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Bulk-set fx_mode. Never auto. Never writes roe_snapshot."""
+    if not body.confirm:
+        raise HTTPException(
+            status_code=400,
+            detail="confirm=true is required — FX mode is never auto-declared",
+        )
+    mode = (body.mode or "").strip().lower()
+    if mode not in FX_MODES:
+        raise HTTPException(status_code=400, detail=f"fx_mode must be one of: {sorted(FX_MODES)}")
+    actor = _actor(user)
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as session:
+        stmt = (
+            select(CporCase)
+            .where(where_tenant(CporCase.tenant_id, user))
+            .where(CporCase.roe_snapshot.is_not(None))
+            .where(CporCase.roe_snapshot > 0)
+            .where(or_(CporCase.fx_mode.is_(None), CporCase.fx_mode.notin_(list(FX_MODES))))
+        )
+        if body.case_ids:
+            stmt = stmt.where(CporCase.id.in_(body.case_ids))
+        cases = session.scalars(stmt).all()
+        declared_ids: list[int] = []
+        skipped = 0
+        failed: list[dict[str, Any]] = []
+        for case in cases:
+            out = declare_fx_mode(case, mode, actor, now=now)
+            if out.get("ok") and not out.get("skipped"):
+                declared_ids.append(int(case.id))
+            elif out.get("skipped"):
+                skipped += 1
+            else:
+                failed.append({"case_id": case.id, "reason": out.get("reason")})
+        session.commit()
+        return {
+            "declared": len(declared_ids),
+            "skipped": skipped,
+            "failed": failed,
+            "mode": mode,
+            "case_ids": declared_ids,
+        }

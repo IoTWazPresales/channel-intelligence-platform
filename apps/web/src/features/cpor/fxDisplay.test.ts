@@ -117,6 +117,35 @@ describe('buildSettleReadinessChips', () => {
     expect(chips.find((c) => c.key === 'evidence')?.label).toMatch(/Source attested/i);
   });
 
+  it('labels FX rate-without-mode as mode not declared', () => {
+    const chips = buildSettleReadinessChips({
+      fx_declared: true,
+      roe_snapshot: 16.5,
+      fx_mode: null,
+      fx_mode_declared: false,
+      fx_settle_allowed: false,
+      open_assumption_count: 0,
+      claim_evidence_count: 1,
+    });
+    expect(chips.find((c) => c.key === 'fx')?.label).toBe('FX rate 16.50 · mode not declared');
+    expect(chips.find((c) => c.key === 'fx')?.tone).toBe('open');
+  });
+
+  it('keeps FX declared when mode is booked', () => {
+    const chips = buildSettleReadinessChips({
+      fx_declared: true,
+      roe_snapshot: 18.78,
+      fx_mode: 'booked',
+      fx_mode_declared: true,
+      fx_settle_allowed: true,
+      fx_basis_line: 'FX basis: booked · ROE ZAR 18.78/USD',
+      open_assumption_count: 0,
+      claim_evidence_count: 1,
+    });
+    expect(chips.find((c) => c.key === 'fx')?.label).toMatch(/booked/);
+    expect(chips.find((c) => c.key === 'fx')?.tone).toBe('pass');
+  });
+
   it('marks assumptions open when count > 0', () => {
     const chips = buildSettleReadinessChips({
       fx_declared: false,

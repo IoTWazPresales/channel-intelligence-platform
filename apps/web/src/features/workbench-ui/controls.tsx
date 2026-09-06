@@ -75,6 +75,8 @@ export function ScopeBar({
   summary,
   onClear,
   trailing,
+  filters,
+  clearAvailable,
 }: {
   chips: ScopeChip[];
   savedViews?: string[];
@@ -83,8 +85,10 @@ export function ScopeBar({
   summary?: ReactNode;
   onClear?: () => void;
   trailing?: ReactNode;
+  filters?: ReactNode;
+  clearAvailable?: boolean;
 }) {
-  const anyActive = chips.some((c) => c.active);
+  const anyActive = chips.some((c) => c.active) || Boolean(clearAvailable);
   return (
     <Box
       role="toolbar"
@@ -137,6 +141,7 @@ export function ScopeBar({
           }
         />
       ))}
+      {filters}
       <Box sx={{ flex: 1 }} />
       {summary ? (
         <Typography variant="caption" color="text.secondary" sx={{ fontVariantNumeric: 'tabular-nums' }}>

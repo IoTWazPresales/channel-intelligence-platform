@@ -13,6 +13,10 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/commercial-planner/cpor-cases',
 }));
 
+vi.mock('@/features/commercial-planner/EntitySearchAutocomplete', () => ({
+  EntitySearchAutocomplete: () => null,
+}));
+
 vi.mock('@/components/EnterpriseDataGrid', () => ({
   EnterpriseDataGrid: ({ rowData }: { rowData: { case_code: string }[] }) => (
     <div data-testid="case-book-grid">{rowData.map((r) => r.case_code).join(',')}</div>
@@ -140,5 +144,8 @@ describe('CaseBookSurface', () => {
     expect(screen.getByText(/Negative line ttl_support/i)).toBeInTheDocument();
     expect(screen.getByText(/excludes settled and negative-support/i)).toBeInTheDocument();
     expect(screen.getByText(/FX blocked · 1/)).toBeInTheDocument();
+    expect(screen.getByTestId('fx-declare-mode')).toHaveTextContent(/Declare booked FX mode · 3/);
+    expect(screen.getByText(/No cases are missing a rate/i)).toBeInTheDocument();
+    expect(screen.queryByTestId('fx-backfill-suggest')).toBeNull();
   });
 });

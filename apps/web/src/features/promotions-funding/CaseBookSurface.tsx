@@ -10,6 +10,10 @@ import {
   Card,
   CardActionArea,
   CardContent,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Stack,
   Typography,
   useMediaQuery,
@@ -23,6 +27,13 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { fmtCompact, fmtInt } from '@/features/promotions-funding/format';
 import { PaymentEvidenceOverlayPanel } from '@/features/promotions-funding/PaymentEvidenceOverlay';
+import { CaseScopeFilters } from '@/features/promotions-funding/CaseScopeFilters';
+import {
+  caseScopeClearPatch,
+  caseScopeFromSearch,
+  caseScopeIsActive,
+  caseScopeToQuery,
+} from '@/features/promotions-funding/caseScope';
 import { evidenceBasisLabel, isEvidenceBasis, type EvidenceBasis } from '@/features/promotions-funding/evidenceBasis';
 import {
   LIFECYCLE_STAGES,
@@ -139,8 +150,11 @@ export function CaseBookSurface() {
   const selectedParam = search.get('case');
   const evidenceParam = search.get('evidence');
   const evidenceFilter: EvidenceBasis | null = isEvidenceBasis(evidenceParam) ? evidenceParam : null;
+  const scope = caseScopeFromSearch(search);
+  const hasEntityScope = caseScopeIsActive(scope);
   const [toastAction, setToastAction] = useState<string | null>(null);
   const [backfillItems, setBackfillItems] = useState<FxBackfillSuggestion[] | null>(null);
+  const [declareModeOpen, setDeclareModeOpen] = useState(false);
 
   const setParams = useCallback(
     (patch: Record<string, string | null>) => {
@@ -160,6 +174,16 @@ export function CaseBookSurface() {
       apiGet<CporCasesPage>('/api/v1/cpor/cases?page=1&page_size=500', { signal }),
   });
 
+  const { data: scopedPage, isLoading: scopedLoading } = useQuery({
+    queryKey: ['cpor', 'cases', 'book', 'scoped', scope],
+    enabled: hasEntityScope,
+    queryFn: ({ signal }) => {
+      const sp = new URLSearchParams({ page: '1', page_size: '500' });
+      caseScopeToQuery(scope).forEach((v, k) => sp.set(k, v));
+      return apiGet<CporCasesPage>(`/api/v1/cpor/cases?${sp.toString()}`, { signal });
+    },
+  });
+
   const { data: book } = useQuery({
     queryKey: ['cpor', 'settlement', 'book'],
     queryFn: ({ signal }) => apiGet<SettlementBook>('/api/v1/cpor/settlement/book', { signal }),
@@ -177,14 +201,24 @@ export function CaseBookSurface() {
   const negativeSupport = allItems.filter(
     (r) => isOpenBookStatus(r.status) && (Number(r.outstanding_amount) || 0) < -0.005,
   );
+  const rateNoModeRows = allItems.filter(
+    (r) => Boolean(r.settle_readiness?.fx_declared) && r.settle_readiness?.fx_mode_declared === false,
+  );
+  const missingRateRows = allItems.filter((r) => r.settle_readiness?.fx_declared === false);
 
+  const scopedItems = hasEntityScope ? (scopedPage?.items ?? []) : allItems;
   const rows = useMemo(() => {
-    let next = allItems;
-    if (filter === 'blocked') next = fxBlockedPositive;
-    else if (filter) next = allItems.filter((r) => r.status === filter);
+    let next = scopedItems;
+    if (filter === 'blocked') {
+      next = next.filter(
+        (r) => isFxBlocked(r) && isOpenBookStatus(r.status) && (Number(r.outstanding_amount) || 0) > 0,
+      );
+    } else if (filter) {
+      next = next.filter((r) => r.status === filter);
+    }
     if (evidenceFilter) next = next.filter((r) => r.evidence_basis === evidenceFilter);
     return next;
-  }, [allItems, filter, fxBlockedPositive, evidenceFilter]);
+  }, [scopedItems, filter, evidenceFilter]);
 
   const selectedId = selectedParam && /^\d+$/.test(selectedParam) ? Number(selectedParam) : null;
   const selected = allItems.find((r) => r.id === selectedId) ?? rows.find((r) => r.id === selectedId) ?? null;
@@ -201,8 +235,27 @@ export function CaseBookSurface() {
 
   const loadFxSuggestions = useMutation({
     mutationFn: () =>
-      apiGet<{ items: FxBackfillSuggestion[]; count: number }>('/api/v1/cpor/fx/backfill-suggestions'),
+      apiGet<{
+        items: FxBackfillSuggestion[];
+        count: number;
+        missing_rate_count?: number;
+        rate_no_mode_count?: number;
+      }>('/api/v1/cpor/fx/backfill-suggestions'),
     onSuccess: (payload) => setBackfillItems(payload.items),
+  });
+
+  const declareBookedMode = useMutation({
+    mutationFn: () =>
+      apiPost<{ declared: number; mode: string }>('/api/v1/cpor/fx/declare-mode', {
+        confirm: true,
+        mode: 'booked',
+      }),
+    onSuccess: async (payload) => {
+      setDeclareModeOpen(false);
+      setToastAction(`Declared booked FX mode on ${payload.declared} case(s). Rates were not changed.`);
+      await qc.invalidateQueries({ queryKey: ['cpor', 'cases'] });
+      await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', 'book'] });
+    },
   });
 
   const confirmFxBackfill = useMutation({
@@ -442,15 +495,29 @@ export function CaseBookSurface() {
         <Panel title="Blocked cases — reasons" subtitle="FX settle refuses until ROE and mode are declared" flush>
           <Stack spacing={0.25} sx={{ px: 1, pb: 1 }}>
             <Stack direction="row" spacing={1} sx={{ px: 1, pt: 1, pb: 0.5 }} flexWrap="wrap" useFlexGap>
-              <Button
-                size="small"
-                variant="outlined"
-                disabled={loadFxSuggestions.isPending}
-                onClick={() => loadFxSuggestions.mutate()}
-                data-testid="fx-backfill-suggest"
-              >
-                {loadFxSuggestions.isPending ? 'Loading suggestions…' : 'Suggest rates from window start'}
-              </Button>
+              {rateNoModeRows.length > 0 ? (
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={() => setDeclareModeOpen(true)}
+                  data-testid="fx-declare-mode"
+                >
+                  Declare booked FX mode · {rateNoModeRows.length}
+                </Button>
+              ) : null}
+              {missingRateRows.length > 0 ? (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  disabled={loadFxSuggestions.isPending}
+                  onClick={() => loadFxSuggestions.mutate()}
+                  data-testid="fx-backfill-suggest"
+                >
+                  {loadFxSuggestions.isPending
+                    ? 'Loading suggestions…'
+                    : `Suggest rates for ${missingRateRows.length} case${missingRateRows.length === 1 ? '' : 's'} missing a rate`}
+                </Button>
+              ) : null}
               {backfillItems && backfillItems.length > 0 ? (
                 <Button
                   size="small"
@@ -464,9 +531,15 @@ export function CaseBookSurface() {
                 </Button>
               ) : null}
             </Stack>
-            {backfillItems && backfillItems.length === 0 ? (
+            {missingRateRows.length === 0 ? (
               <Typography variant="body2" color="text.secondary" sx={{ px: 1.5, py: 0.5 }}>
-                No FX-blocked cases need a suggestion.
+                No cases are missing a rate. Rate suggestion is not offered. {rateNoModeRows.length} case
+                {rateNoModeRows.length === 1 ? '' : 's'} have a rate and need booked or floating mode.
+              </Typography>
+            ) : null}
+            {backfillItems && backfillItems.length === 0 && missingRateRows.length > 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ px: 1.5, py: 0.5 }}>
+                No missing-rate cases received a window-start suggestion.
               </Typography>
             ) : null}
             {backfillItems
@@ -513,20 +586,25 @@ export function CaseBookSurface() {
 
       <ScopeBar
         chips={[...chips, ...evidenceChips]}
-        summary={`${rows.length} of ${data?.total ?? rows.length} cases`}
-        onClear={() => setParams({ status: null, evidence: null, case: null })}
+        summary={`${rows.length} of ${hasEntityScope ? (scopedPage?.total ?? rows.length) : (data?.total ?? rows.length)} cases${hasEntityScope ? ' in this find' : ''}`}
+        onClear={() => setParams({ status: null, evidence: null, case: null, ...caseScopeClearPatch() })}
+        clearAvailable={hasEntityScope}
+        filters={<CaseScopeFilters scope={scope} onPatch={setParams} />}
       />
 
       <ModuleDataSection
-        isLoading={isLoading}
+        isLoading={isLoading || (hasEntityScope && scopedLoading)}
         isError={isError}
         error={error as Error | null}
         onRetry={() => void refetch()}
         isEmpty={rows.length === 0}
         empty={{
           title: 'No cases in this scope',
-          description: 'Clear the status chips, or import claim / payment evidence from the domain actions.',
-          primary: { label: 'Clear scope', onClick: () => setParams({ status: null }) },
+          description: 'Clear the status chips or find filters, or import claim / payment evidence from the domain actions.',
+          primary: {
+            label: 'Clear scope',
+            onClick: () => setParams({ status: null, evidence: null, ...caseScopeClearPatch() }),
+          },
         }}
       >
         {isMobile ? (
@@ -741,6 +819,35 @@ export function CaseBookSurface() {
           </Stack>
         ) : null}
       </EntityContextPanel>
+      <Dialog
+        open={declareModeOpen}
+        onClose={() => !declareBookedMode.isPending && setDeclareModeOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Declare booked FX mode</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            This sets <code>fx_mode = booked</code> on {rateNoModeRows.length} case
+            {rateNoModeRows.length === 1 ? '' : 's'} that already have a positive rate and no valid
+            mode. It does not change <code>roe_snapshot</code>. It does not run unless you confirm.
+            Booked is the settled default; floating remains available on a single case.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeclareModeOpen(false)} disabled={declareBookedMode.isPending}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => declareBookedMode.mutate()}
+            disabled={declareBookedMode.isPending || rateNoModeRows.length === 0}
+            data-testid="fx-declare-mode-confirm"
+          >
+            {declareBookedMode.isPending ? 'Declaring…' : `Confirm booked on ${rateNoModeRows.length}`}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 }

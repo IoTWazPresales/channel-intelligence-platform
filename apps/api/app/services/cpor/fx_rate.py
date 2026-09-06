@@ -317,6 +317,32 @@ def book_on_approve(
     return rate
 
 
+def declare_fx_mode(
+    case: CporCase,
+    mode: str,
+    actor: str,
+    *,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Set fx_mode only. Never writes roe_snapshot. Never infers a rate.
+
+    Operator-confirmed path only — callers must require confirm=true at the HTTP boundary.
+    """
+    chosen = (mode or "").strip().lower()
+    if chosen not in FX_MODES:
+        return {"ok": False, "reason": "invalid_mode"}
+    if not fx_declared(case):
+        return {"ok": False, "reason": "rate_missing"}
+    stamp = now or _now()
+    already = fx_mode_valid(case) and str(case.fx_mode) == chosen
+    if already:
+        return {"ok": True, "skipped": True, "mode": chosen}
+    case.fx_mode = chosen
+    case.fx_declared_at = stamp
+    case.fx_declared_by = actor
+    return {"ok": True, "skipped": False, "mode": chosen}
+
+
 def confirm_backfill_suggestion(
     case: CporCase,
     rate: float,

@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import func, or_, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -471,6 +471,11 @@ class LayerSplitBody(BaseModel):
 def list_cases(
     status: str | None = Query(default=None),
     customer_id: int | None = Query(default=None),
+    distributor_id: int | None = Query(default=None),
+    product_id: int | None = Query(default=None),
+    business_unit: str | None = Query(default=None, alias="bu"),
+    window_from: date | None = Query(default=None),
+    window_to: date | None = Query(default=None),
     q: str | None = Query(default=None),
     page: int | None = Query(default=None, ge=1),
     page_size: int | None = Query(default=None, ge=1, le=500),
@@ -495,6 +500,43 @@ def list_cases(
             stmt = stmt.where(CporCase.status == status)
         if customer_id is not None:
             stmt = stmt.where(CporCase.customer_id == customer_id)
+        if distributor_id is not None:
+            stmt = stmt.where(
+                exists(
+                    select(CporCaseLine.id).where(
+                        CporCaseLine.case_id == CporCase.id,
+                        CporCaseLine.distributor_id == distributor_id,
+                    )
+                )
+            )
+        if product_id is not None:
+            stmt = stmt.where(
+                exists(
+                    select(CporCaseLine.id).where(
+                        CporCaseLine.case_id == CporCase.id,
+                        CporCaseLine.product_id == product_id,
+                    )
+                )
+            )
+        if business_unit and business_unit.strip():
+            bu_needle = f"%{business_unit.strip()}%"
+            stmt = stmt.where(
+                exists(
+                    select(CporCaseLine.id)
+                    .join(DimProduct, DimProduct.id == CporCaseLine.product_id)
+                    .where(
+                        CporCaseLine.case_id == CporCase.id,
+                        or_(
+                            DimProduct.business_unit.ilike(bu_needle),
+                            DimProduct.product_line.ilike(bu_needle),
+                        ),
+                    )
+                )
+            )
+        if window_from is not None:
+            stmt = stmt.where(CporCase.window_start >= window_from)
+        if window_to is not None:
+            stmt = stmt.where(CporCase.window_start <= window_to)
         if q and q.strip():
             needle = f"%{q.strip()}%"
             stmt = stmt.where(

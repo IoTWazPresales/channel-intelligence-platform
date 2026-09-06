@@ -14,6 +14,7 @@ from app.services.cpor.fx_rate import (
     book_on_approve,
     book_rate,
     confirm_backfill_suggestion,
+    declare_fx_mode,
     parse_frankfurter_payload,
     set_proposed,
 )
@@ -192,3 +193,40 @@ def test_fx_today_endpoint_mocked():
     assert body["source"] == "frankfurter.ecb"
     assert body["is_fallback"] is False
     session.commit.assert_called_once()
+
+
+def test_declare_fx_mode_does_not_touch_rate():
+    case = _case(roe_snapshot=16.5, fx_mode=None, fx_declared_at=None, fx_declared_by="import")
+    out = declare_fx_mode(case, "booked", "warren")
+    assert out["ok"] is True
+    assert out["skipped"] is False
+    assert case.fx_mode == "booked"
+    assert float(case.roe_snapshot) == 16.5
+    assert case.fx_declared_by == "warren"
+
+
+def test_declare_fx_mode_refuses_without_rate():
+    case = _case(roe_snapshot=None, fx_mode=None)
+    out = declare_fx_mode(case, "booked", "warren")
+    assert out["ok"] is False
+    assert out["reason"] == "rate_missing"
+    assert case.fx_mode is None
+
+
+def test_declare_fx_mode_skips_when_already_booked():
+    case = _case(roe_snapshot=18.0, fx_mode="booked")
+    out = declare_fx_mode(case, "booked", "warren")
+    assert out["ok"] is True
+    assert out["skipped"] is True
+    assert case.fx_declared_by is None
+
+
+def test_declare_mode_endpoint_requires_confirm():
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    client = TestClient(app)
+    r = client.post("/api/v1/cpor/fx/declare-mode", json={"confirm": False, "mode": "booked"})
+    assert r.status_code == 400
+    assert "never auto" in r.json()["detail"]

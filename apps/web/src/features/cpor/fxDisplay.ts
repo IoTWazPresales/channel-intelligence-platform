@@ -85,15 +85,26 @@ export type ReadinessChip = {
 };
 
 export function buildSettleReadinessChips(readiness: SettleReadiness): ReadinessChip[] {
-  const fxChip: ReadinessChip = readiness.fx_declared
-    ? {
-        key: 'fx',
-        tone: readiness.fx_settle_allowed === false ? 'open' : 'pass',
-        label:
-          readiness.fx_basis_line ??
-          `FX declared · ${readiness.roe_snapshot?.toFixed(2) ?? '—'}${readiness.fx_mode ? ` · ${readiness.fx_mode}` : ''}`,
-      }
-    : { key: 'fx', tone: 'fail', label: 'FX undeclared' };
+  const modeMissing =
+    readiness.fx_declared &&
+    (readiness.fx_settle_allowed === false ||
+      readiness.fx_mode_declared === false ||
+      !readiness.fx_mode);
+  let fxChip: ReadinessChip;
+  if (!readiness.fx_declared) {
+    fxChip = { key: 'fx', tone: 'fail', label: 'FX undeclared' };
+  } else if (modeMissing) {
+    const roe = readiness.roe_snapshot != null ? readiness.roe_snapshot.toFixed(2) : '—';
+    fxChip = { key: 'fx', tone: 'open', label: `FX rate ${roe} · mode not declared` };
+  } else {
+    fxChip = {
+      key: 'fx',
+      tone: 'pass',
+      label:
+        readiness.fx_basis_line ??
+        `FX declared · ${readiness.roe_snapshot?.toFixed(2) ?? '—'}${readiness.fx_mode ? ` · ${readiness.fx_mode}` : ''}`,
+    };
+  }
 
   const assumptionCount = readiness.open_assumption_count;
   const assumptionsChip: ReadinessChip =

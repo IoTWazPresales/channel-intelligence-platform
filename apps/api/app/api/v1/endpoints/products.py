@@ -89,6 +89,7 @@ async def list_products(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=200),
     q: str | None = Query(default=None, description="Global search over product identity fields"),
+    product_id: int | None = Query(default=None, ge=1, description="When set, return at most this product id"),
     is_active: bool | None = Query(default=None),
     category: str | None = Query(default=None),
     lifecycle_status: str | None = Query(default=None),
@@ -146,6 +147,8 @@ async def list_products(
                 DimProduct.series_name.ilike(needle),
             )
         )
+    if product_id is not None:
+        filters.append(DimProduct.id == int(product_id))
     if is_active is not None:
         filters.append(DimProduct.is_active.is_(is_active))
     if category and category.strip():

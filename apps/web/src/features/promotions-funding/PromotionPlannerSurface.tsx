@@ -30,6 +30,13 @@ import { PromoPlanBuilderPanel } from '@/app/(app)/promotions/PromoPlanBuilderPa
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
+import { CaseScopeFilters } from '@/features/promotions-funding/CaseScopeFilters';
+import {
+  caseScopeClearPatch,
+  caseScopeFromSearch,
+  caseScopeIsActive,
+  caseScopeToQuery,
+} from '@/features/promotions-funding/caseScope';
 import { PLANNER_CAPABILITIES } from '@/features/promotions-funding/capabilities';
 import { fmtCompact, fmtInt } from '@/features/promotions-funding/format';
 import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
@@ -58,15 +65,19 @@ export function PromotionPlannerSurface() {
   const search = useSearchParams();
   const planId = Number(search.get('plan') || '');
   const stageFilter = (search.get('stage') as PlanStage | null) || null;
-  const setParam = useCallback(
-    (k: string, v: string | null) => {
+  const scope = caseScopeFromSearch(search);
+  const setParams = useCallback(
+    (patch: Record<string, string | null>) => {
       const next = new URLSearchParams(search.toString());
-      if (v === null || v === '') next.delete(k);
-      else next.set(k, v);
+      Object.entries(patch).forEach(([k, v]) => (v == null || v === '' ? next.delete(k) : next.set(k, v)));
       const qs = next.toString();
       router.replace(qs ? `/promotions?${qs}` : '/promotions', { scroll: false });
     },
     [router, search],
+  );
+  const setParam = useCallback(
+    (k: string, v: string | null) => setParams({ [k]: v }),
+    [setParams],
   );
 
   if (Number.isFinite(planId) && planId > 0) {
@@ -82,8 +93,10 @@ export function PromotionPlannerSurface() {
   return (
     <PlannerList
       stageFilter={stageFilter}
+      scope={scope}
       newRequested={search.get('new') === '1'}
       setParam={setParam}
+      setParams={setParams}
       onOpen={(id) => setParam('plan', String(id))}
     />
   );
@@ -91,13 +104,17 @@ export function PromotionPlannerSurface() {
 
 function PlannerList({
   stageFilter,
+  scope,
   newRequested,
   setParam,
+  setParams,
   onOpen,
 }: {
   stageFilter: PlanStage | null;
+  scope: ReturnType<typeof caseScopeFromSearch>;
   newRequested: boolean;
   setParam: (k: string, v: string | null) => void;
+  setParams: (patch: Record<string, string | null>) => void;
   onOpen: (id: number) => void;
 }) {
   const theme = useTheme();
@@ -113,10 +130,11 @@ function PlannerList({
   }, [newRequested]);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['cpor', 'cases', 'planner', stageFilter],
+    queryKey: ['cpor', 'cases', 'planner', stageFilter, scope],
     queryFn: ({ signal }) => {
       const sp = new URLSearchParams({ page: '1', page_size: '500' });
       if (stageFilter) sp.set('status', stageFilter);
+      caseScopeToQuery(scope).forEach((v, k) => sp.set(k, v));
       return apiGet<CporCasesPage>(`/api/v1/cpor/cases?${sp.toString()}`, { signal });
     },
   });
@@ -242,11 +260,15 @@ function PlannerList({
                   | 'default',
               }))}
               summary={
-                stageFilter
-                  ? `${rows.length} of ${counts[stageFilter] ?? 0} ${STAGE_LABEL[stageFilter]} cases · ${bookN} in the book · ${planningN} in planning`
-                  : `${rows.length} of ${bookN} cases (all stages) · ${planningN} in planning`
+                caseScopeIsActive(scope)
+                  ? `${rows.length} matching${stageFilter ? ` ${STAGE_LABEL[stageFilter]}` : ''} · ${bookN} in the book · ${planningN} in planning`
+                  : stageFilter
+                    ? `${rows.length} of ${counts[stageFilter] ?? 0} ${STAGE_LABEL[stageFilter]} cases · ${bookN} in the book · ${planningN} in planning`
+                    : `${rows.length} of ${bookN} cases (all stages) · ${planningN} in planning`
               }
-              onClear={() => setParam('stage', null)}
+              onClear={() => setParams({ stage: null, ...caseScopeClearPatch() })}
+              clearAvailable={caseScopeIsActive(scope)}
+              filters={<CaseScopeFilters scope={scope} onPatch={setParams} />}
               trailing={
                 <Stack direction="row" spacing={1}>
                   <Tooltip title="Partly built: the proposal still needs a seed case id. Attention will surface this gap; it is not a separate work container." arrow>
