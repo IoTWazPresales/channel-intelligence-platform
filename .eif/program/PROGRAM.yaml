@@ -6,7 +6,7 @@ programme:
   charter:
     status: accepted
     by: eif
-    at: '2026-09-06T22:06:25Z'
+    at: '2026-09-06T23:13:26Z'
     workstreams:
     - Full-platform UI/UX redesign
     - Shell & primitive convergence
@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 357
-  log_sha256: 88b20ad33bda06f7b374a580ab14ec30f31443533d37969239cba84c6d62aea6
+  snapshot_revision: 376
+  log_sha256: c4f2ed34ea9e5145a02b63ec60f55e64b8a4d725e01959521832f5d60caec162
   acceptance_policy:
     milestone: operator
     root: operator
@@ -1225,14 +1225,10 @@ nodes:
     title: NS-7 Data & Stewardship from design-lab
     class: redesign
     origin: decomposition
-    status: in_progress
-    stage: implement
-    revision: 8
-    lease:
-      run: NS8_DATA_20260906
-      acquired_at: '2026-09-06T21:55:42Z'
-      heartbeat_at: '2026-09-06T21:55:42Z'
-      expires_at: '2026-09-07T01:55:42Z'
+    status: complete
+    stage: null
+    revision: 26
+    lease: null
     depends_on:
     - N-0004
     - N-0013
@@ -1263,70 +1259,186 @@ nodes:
     quality:
       design_artifact_class:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          class: high_fidelity
+          path: .eif/audit/NS8_GOV008_20260906/independent-rendered-review.md
         rationale: null
+        pass_run: NS8_GOV008_20260906
+        pass_actor: gov-008
       design_divergence:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          benchmark: apps/web/src/design-lab/surfaces/DataSurface.tsx
+          decision: cip_number_rule_not_lab_fixtures
+          path: .eif/audit/NS8_GOV008_20260906/independent-rendered-review.md
         rationale: null
+        pass_run: NS8_GOV008_20260906
+        pass_actor: gov-008
       design_signatures:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          signatures:
+          - domain_header
+          - lens_tabs_4
+          - headline_strip_5
+          - start_import_cards_6
+          - scope_bar
+          - import_job_cards_390
+          - relocated_wizard
+          path: .eif/audit/NS8_GOV008_20260906/independent-rendered-review.md
         rationale: null
+        pass_run: NS8_GOV008_20260906
+        pass_actor: gov-008
       rendered_comparison:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          artifact_class: high_fidelity
+          class: high_fidelity
+          path: .eif/audit/NS8_GOV008_20260906/independent-rendered-review.md
+          product_url: http://localhost:3000/admin/imports
+          lab_url: http://localhost:3000/design-lab/data?tab=imports
+          viewport: 1280x800
+          comparison_verdict: parity_with_number_rule_substitution
         rationale: null
+        pass_run: NS8_GOV008_20260906
+        pass_actor: gov-008
       design_sameness_review:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          visual_vocabulary_challenge: 'Challenged whether production is the same Data & Stewardship instrument as DataSurface.tsx
+            or a header strip glued onto the old wizard with a legacy mapping-queue leaf pretending to be the lab cross-job
+            steward. Chrome grammar matches (DomainHeader + four LensTabs + HeadlineStrip 5 + six start cards + ScopeBar).
+            NUMBER RULE substitutes cip 88/12/0/47/17 for lab 8/1/2/4/19. Relocated wizard and PARTIAL steward (D-0002) are
+            charter, not a fail. Stores UNCOVERED is labelled. Path: .eif/audit/NS8_GOV008_20260906/independent-rendered-review.md'
+          path: .eif/audit/NS8_GOV008_20260906/independent-rendered-review.md
+          decision: retain_lab_chrome_with_cip_numbers
         rationale: null
+        pass_run: NS8_GOV008_20260906
+        pass_actor: gov-008
       design_interaction_spec:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          interactions:
+          - lens_tabs_four_routes
+          - start_card_template_deep_link
+          - scope_bar_jobStatus
+          - import_job_cards_390
+          - relocated_wizard
+          path: .eif/audit/NS8_GOV008_20260906/independent-rendered-review.md
         rationale: null
+        pass_run: NS8_GOV008_20260906
+        pass_actor: gov-008
       design_state_coverage:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          states:
+          - populated
+          - uncovered_stores
+          - legacy_queue_empty
+          - wizard_idle_hidden_xs
+          - wizard_engaged_template
+          path: .eif/audit/NS8_GOV008_20260906/independent-rendered-review.md
         rationale: null
+        pass_run: NS8_GOV008_20260906
+        pass_actor: gov-008
       design_identity_tokens:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          tokens:
+            direction_name: workbench-ui Data & Stewardship DomainHeader+LensTabs+HeadlineStrip
+            strip: HeadlineStrip columns=5
+            start: six import-type cards
+            scope: ScopeBar
+            mobile: import-job-cards
+          path: .eif/audit/NS8_GOV008_20260906/independent-rendered-review.md
         rationale: null
+        pass_run: NS8_GOV008_20260906
+        pass_actor: gov-008
       design_execution_decisions:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          responsive_decision:
+            status: applicable
+            rationale: Verified 1280x800 vs lab and 390x844 import status. Idle wizard CSS-hidden at xs; job cards remain.
+              Viewport via Playwright setViewportSize.
+            evidence: .eif/audit/NS8_GOV008_20260906/independent-rendered-review.md
+          visualisation_decision:
+            status: applicable
+            rationale: Lab HeadlineStrip + start-card grid + ScopeBar mounted. Live cip grains; lab fixtures not copied. Masters
+              duplicate figure is em-dash.
+            evidence: .eif/audit/NS8_GOV008_20260906/independent-rendered-review.md
+          consequential_action_decision:
+            status: applicable
+            rationale: Strip/scope are filters and navigation. Writes remain the relocated wizard and per-job steward. Cross-job
+              accept/reject not on this leaf. D-0002 untouched.
+            evidence: .eif/audit/NS8_GOV008_20260906/independent-rendered-review.md
         rationale: null
+        pass_run: NS8_GOV008_20260906
+        pass_actor: gov-008
       ux:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/NS8_GOV008_20260906/independent-rendered-review.md
+          summary: Operator can read import status at 1280 and 390 without a desktop wall; four lenses reachable.
         rationale: null
+        pass_run: NS8_GOV008_20260906
+        pass_actor: gov-008
       a11y:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/NS8_GOV008_20260906/independent-rendered-review.md
+          summary: Lens tablist; HeadlineFigure severity channels; StatusChip on 390 cards. Keyboard not exercised.
         rationale: null
+        pass_run: NS8_GOV008_20260906
+        pass_actor: gov-008
       rendered:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence: &id005
+          path: .eif/audit/NS8_GOV008_20260906/independent-rendered-review.md
+          url: http://localhost:3000/admin/imports
+          viewports:
+          - desktop_1280
+          - mobile_390
         rationale: null
+        pass_run: NS8_GOV008_20260906
+        pass_actor: gov-008
       content:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/NS8_GOV008_20260906/independent-rendered-review.md
+          summary: Jobs in last 7 days not this week; Partly built / Planned retained; D-0002 copy; UNCOVERED stores.
         rationale: null
-    verification: {}
+        pass_run: NS8_GOV008_20260906
+        pass_actor: gov-008
+    verification:
+      rendered:
+        state: pass
+        pass_run: NS8_GOV008_20260906
+        pass_actor: gov-008
+        evidence: *id005
+        path: null
+      referent:
+        state: pass
+        pass_run: NS8_GOV008_20260906
+        pass_actor: gov-008
+        evidence:
+          path: .eif/audit/NS8_GOV008_20260906/independent-rendered-review.md
+          lab: apps/web/src/design-lab/surfaces/DataSurface.tsx
+          product: apps/web/src/features/data-stewardship/DataChrome.tsx
+        path: null
     evidence: []
     blockers: []
     conservation_tags: []
@@ -1348,7 +1460,7 @@ nodes:
         deleted
       import_column_mapping: CanonicalColumnMappingPanel remains desktop-first (not card-transformed)
     target_artifact_class: high_fidelity
-    design_artifact_class: null
+    design_artifact_class: high_fidelity
     implementation_run: NS8_DATA_20260906
     implementation_actor: gov-001
   N-0012:
@@ -1581,7 +1693,7 @@ nodes:
       rendered:
         required: true
         state: pass
-        evidence: &id005
+        evidence: &id006
           path: .eif/audit/NS6_GOV008_R3_20260903/independent-rendered-review.md
           url: http://localhost:3000/design-lab
           viewports:
@@ -1649,7 +1761,7 @@ nodes:
     verification:
       rendered:
         state: pass
-        evidence: *id005
+        evidence: *id006
         path: .eif/audit/NS6_GOV008_R3_20260903/independent-rendered-review.md
         pass_run: NS6_GOV008_R3_20260903
         pass_actor: gov-008
@@ -2242,7 +2354,7 @@ nodes:
       rendered:
         required: true
         state: pass
-        evidence: &id006
+        evidence: &id007
           path: .eif/audit/NS7_GOV008_20260906/independent-rendered-review.md
           url: http://localhost:3000/stock?lens=execution
           viewports:
@@ -2264,7 +2376,7 @@ nodes:
         state: pass
         pass_run: NS7_GOV008_20260906
         pass_actor: gov-008
-        evidence: *id006
+        evidence: *id007
         path: null
       referent:
         state: pass
