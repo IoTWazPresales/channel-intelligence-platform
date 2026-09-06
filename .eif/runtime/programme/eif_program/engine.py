@@ -12,8 +12,10 @@ from .clock import iso, now, parse_iso
 from .design_artifacts import design_experience_ok, materialize_artifact_classes
 from .errors import ProgramError
 from .facets import resolve_facets
+from .findings import HANDLERS as FINDING_HANDLERS
 from .independence import independence_issues, independence_ok
 from .journeys import journeys_gate_ok, required_journey_ids
+from .retroactive import HANDLERS as RETRO_HANDLERS, node_is_retroactive, tree_support
 
 NODE_CLASSES = {
     'feature', 'redesign', 'refactor', 'discovery', 'inception', 'skeleton',
@@ -77,6 +79,8 @@ def empty_state() -> dict:
         'decisions': {},
         'evidence': {},
         'baselines': {},
+        'caveats': {},
+        'deferred_findings': [],
         'ids': {'node': 0, 'decision': 0, 'blocker': 0, 'evidence': 0, 'baseline': 0},
     }
 
@@ -172,6 +176,11 @@ def rebuild_quality(node: dict) -> None:
 
 def stamp_implementation_boundary(node: dict, run: str, actor: str) -> None:
     """Record implementation run/actor from the first node.stage -> implement only."""
+    if (node.get('retroactive') or {}).get('completed'):
+        raise ProgramError(
+            'RETROACTIVE_COMPLETE',
+            'cannot stamp implementation_run on a retroactively completed node',
+        )
     if not node.get('implementation_run') and run:
         node['implementation_run'] = run
         node['implementation_actor'] = actor or None
@@ -379,16 +388,27 @@ def apply_event(state: dict, event: dict, *, replay: bool = False) -> dict:
         'evidence.add': h_evidence_add,
         'baseline.add': h_baseline_add,
     }
+    handlers.update(RETRO_HANDLERS)
+    handlers.update(FINDING_HANDLERS)
     fn = handlers.get(et)
     if not fn:
         raise ProgramError('UNKNOWN_EVENT', et)
     _REPLAY_AWARE = {
+        'programme.status',
         'node.patch', 'node.lease.acquire', 'node.lease.heartbeat', 'node.lease.release',
         'node.lease.reclaim', 'node.stage', 'node.status', 'node.quality',
         'node.verification', 'node.blocker.open', 'node.blocker.close', 'node.baseline',
         'node.stage_note', 'node.debug', 'node.accept',
+        'node.retroactive_charter', 'node.retroactive_complete',
+        'node.independence.disclaim', 'caveat.resolve', 'finding.defer',
     }
-    if et in _REPLAY_AWARE:
+    _SEQ_AWARE = {
+        'node.retroactive_charter', 'node.retroactive_complete',
+        'node.independence.disclaim', 'caveat.resolve', 'finding.defer',
+    }
+    if et in _SEQ_AWARE:
+        fn(s, payload, run, actor=actor, replay=replay, seq=event.get('seq'))
+    elif et in _REPLAY_AWARE:
         fn(s, payload, run, actor=actor, replay=replay)
     else:
         fn(s, payload, run, actor=actor)
@@ -426,7 +446,7 @@ def h_charter(s, p, run, actor=''):
         ch['root_interpretation'] = p['root_interpretation']
 
 
-def h_prog_status(s, p, run, actor=''):
+def h_prog_status(s, p, run, actor='', replay=False):
     st = p.get('status')
     if st not in {'active', 'suspended', 'complete'}:
         raise ProgramError('PROGRAMME_STATUS', str(st))
@@ -434,6 +454,16 @@ def h_prog_status(s, p, run, actor=''):
         roots = [i for i, n in s['nodes'].items() if not n.get('parent')]
         if not roots or any(effective_status(s, r) != 'complete' for r in roots):
             raise ProgramError('ROOT_NOT_DERIVED_COMPLETE', 'root is not derived-complete')
+        if not replay:
+            impure = [r for r in roots if tree_support(s, r) != 'clean']
+            if impure and not p.get('acknowledge_impure_tree'):
+                raise ProgramError(
+                    'ROOT_IMPURE',
+                    f'roots {impure} rest on retroactive or gates-invalid descendants; '
+                    'pass acknowledge_impure_tree to record an impure programme complete',
+                )
+        if p.get('acknowledge_impure_tree'):
+            s['programme']['completion_annotation'] = 'impure_tree'
     s['programme']['status'] = st
 
 
@@ -914,6 +944,7 @@ def conservation_gaps(state: dict) -> list[str]:
 def completion_account(state: dict) -> dict:
     rows = []
     for nid, n in sorted(state['nodes'].items()):
+        retro = n.get('retroactive') or {}
         rows.append({
             'id': nid,
             'title': n.get('title'),
@@ -923,13 +954,19 @@ def completion_account(state: dict) -> dict:
             'leaf': is_leaf(state, nid),
             'gates_valid': gates_ok(state, nid),
             'independence_issues': independence_issues(n),
+            'retroactive': node_is_retroactive(n),
+            'independence_disclaimed': bool(retro.get('independence_disclaimed')),
+            'tree_support': tree_support(state, nid),
         })
     roots = [i for i, n in state['nodes'].items() if not n.get('parent')]
     return {
         'roots': {r: effective_status(state, r) for r in roots},
+        'root_support': {r: tree_support(state, r) for r in roots},
         'nodes': rows,
         'conservation_gaps': conservation_gaps(state),
         'open_decisions': [d['id'] for d in state['decisions'].values() if d.get('status') == 'proposed'],
+        'caveats': list((state.get('caveats') or {}).values()),
+        'deferred_findings': list(state.get('deferred_findings') or []),
     }
 
 

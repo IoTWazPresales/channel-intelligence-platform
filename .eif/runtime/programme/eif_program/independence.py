@@ -35,6 +35,30 @@ def verification_requires_independence(node: dict, kind: str) -> bool:
     return False
 
 
+def node_requires_independence(node: dict) -> bool:
+    """True when this node's class/facets/risk create an independence burden."""
+    for dim in INDEPENDENT_QUALITY_DIMS:
+        if quality_dim_requires_independence(node, dim):
+            return True
+    for kind in ('referent', 'rendered'):
+        if verification_requires_independence(node, kind):
+            return True
+    return False
+
+
+def _disclaimed_impl_runs(node: dict) -> set[str]:
+    retro = node.get('retroactive') or {}
+    return {str(x) for x in (retro.get('disclaimed_impl_runs') or []) if x}
+
+
+def _tainted_pass_runs(node: dict) -> set[str]:
+    retro = node.get('retroactive') or {}
+    out: set[str] = set()
+    for key in ('recording_runs', 'disclaimed_pass_runs'):
+        out.update(str(x) for x in (retro.get(key) or []) if x)
+    return out
+
+
 def implementation_provenance_required(node: dict) -> bool:
     """True when any independence-required gate has a completed pass state."""
     for dim, rec in (node.get('quality') or {}).items():
@@ -52,8 +76,14 @@ def implementation_provenance_required(node: dict) -> bool:
 
 
 def _impl_run(node: dict) -> str | None:
+    """Trusted implementation run, or None if missing or independence-disclaimed."""
     run = node.get('implementation_run')
-    return str(run) if run else None
+    if not run:
+        return None
+    run = str(run)
+    if run in _disclaimed_impl_runs(node):
+        return None
+    return run
 
 
 def implementation_provenance_issue(node: dict) -> str | None:
@@ -62,6 +92,12 @@ def implementation_provenance_issue(node: dict) -> str | None:
     if _impl_run(node):
         return None
     nid = node.get('id') or '?'
+    recorded = node.get('implementation_run')
+    if recorded and str(recorded) in _disclaimed_impl_runs(node):
+        return (
+            f'IMPLEMENTATION_PROVENANCE_REQUIRED: {nid} implementation_run {recorded} is '
+            f'independence-disclaimed and cannot anchor review'
+        )
     return (
         f'IMPLEMENTATION_PROVENANCE_REQUIRED: {nid} requires implementation_run from '
         f'node.stage -> implement before independent gates can be evaluated'
@@ -69,6 +105,8 @@ def implementation_provenance_issue(node: dict) -> str | None:
 
 
 def _pass_provenance_ok(node: dict, pass_run: str | None, pass_actor: str | None) -> bool:
+    if pass_run and str(pass_run) in _tainted_pass_runs(node):
+        return False
     impl_run = _impl_run(node)
     if not impl_run or not pass_run:
         return False

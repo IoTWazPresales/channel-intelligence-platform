@@ -6,6 +6,7 @@ from pathlib import Path
 from eiflib import write_utf8
 
 from .engine import completion_account, conservation_gaps, effective_status, frontier, is_leaf
+from .retroactive import node_is_retroactive
 from .runtime_paths import control_command
 
 BANNER = (
@@ -50,13 +51,14 @@ def program_md(state: dict) -> str:
         '',
         '## Nodes',
         '',
-        '| ID | Title | Class | Recorded | Effective | Leaf |',
-        '|---|---|---|---|---|---|',
+        '| ID | Title | Class | Recorded | Effective | Leaf | Retro |',
+        '|---|---|---|---|---|---|---|',
     ]
     for nid, n in sorted(state['nodes'].items()):
+        retro = 'yes' if node_is_retroactive(n) else ''
         lines.append(
             f"| {nid} | {n.get('title')} | {n.get('class')} | {n.get('status')} | "
-            f"{effective_status(state, nid)} | {'yes' if is_leaf(state, nid) else 'no'} |"
+            f"{effective_status(state, nid)} | {'yes' if is_leaf(state, nid) else 'no'} | {retro} |"
         )
     return '\n'.join(lines) + '\n'
 
@@ -84,7 +86,8 @@ def current_md(state: dict) -> str:
         lines.append('_No ready unblocked leaves._')
     for nid in fr:
         n = state['nodes'][nid]
-        lines.append(f"- **{nid}** {n.get('title')} ({n.get('class')}, {n.get('risk')}, stage={n.get('stage')})")
+        mark = ' RETROACTIVE' if node_is_retroactive(n) else ''
+        lines.append(f"- **{nid}** {n.get('title')} ({n.get('class')}, {n.get('risk')}, stage={n.get('stage')}){mark}")
     leased = [n for n in state['nodes'].values() if n.get('lease')]
     lines += ['', '## In progress / leased', '']
     if not leased:
@@ -115,7 +118,11 @@ def roadmap_md(state: dict) -> str:
 def _tree(state, nid, lines, depth):
     n = state['nodes'][nid]
     pad = '  ' * depth
-    lines.append(f"{pad}- {nid} **{n.get('title')}** `{n.get('status')}`/`{effective_status(state, nid)}` ({n.get('class')})")
+    mark = ' RETROACTIVE' if node_is_retroactive(n) else ''
+    lines.append(
+        f"{pad}- {nid} **{n.get('title')}** `{n.get('status')}`/`{effective_status(state, nid)}` "
+        f"({n.get('class')}){mark}"
+    )
     for c in sorted(x for x, nn in state['nodes'].items() if nn.get('parent') == nid):
         _tree(state, c, lines, depth + 1)
 
@@ -127,13 +134,18 @@ def escalation_md(state: dict) -> str:
         for b in n.get('blockers') or []:
             blockers.append((n['id'], b))
     decisions = [d for d in state['decisions'].values() if d.get('status') == 'proposed']
-    if not blockers and not decisions:
-        lines.append('_No open blockers or proposed decisions._')
+    findings = list(state.get('deferred_findings') or [])
+    if not blockers and not decisions and not findings:
+        lines.append('_No open blockers, proposed decisions, or deferred findings._')
         return '\n'.join(lines) + '\n'
     for nid, b in blockers:
         lines.append(f"- blocker **{b.get('id')}** on {nid} type={b.get('type')} ref={b.get('ref')} {b.get('note') or ''}")
     for d in decisions:
         lines.append(f"- decision **{d['id']}** scope={d.get('scope')}: {d.get('statement')}")
+    for f in findings:
+        lines.append(
+            f"- deferred **{f.get('code')}** seq={f.get('seq')} node={f.get('node') or '-'}: {f.get('note')}"
+        )
     return '\n'.join(lines) + '\n'
 
 

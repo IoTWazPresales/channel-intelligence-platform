@@ -178,6 +178,25 @@ class ProgramStore:
                     f"seq {ev.get('seq')}: journey verification event missing frozen required_ids"
                 )
         issues.extend(journey_verification_issues(log_state, snapshot=snap))
+        events_by_seq = {}
+        for line in self.read_log_text().splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            ev = json.loads(line)
+            try:
+                events_by_seq[int(ev.get('seq') or 0)] = ev
+            except (TypeError, ValueError):
+                continue
+        for key, cav in sorted((log_state.get('caveats') or {}).items()):
+            prior = cav.get('prior_seq')
+            try:
+                prior_i = int(prior)
+            except (TypeError, ValueError):
+                issues.append(f'caveat {key}: prior_seq {prior!r} is not an integer')
+                continue
+            if prior_i not in events_by_seq:
+                issues.append(f'caveat {key}: prior_seq {prior_i} not in log')
         for nid, node in sorted(log_state['nodes'].items()):
             if node.get('status') != 'complete' or not is_leaf(log_state, nid):
                 continue
