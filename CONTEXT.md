@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-09-07 — **N-0018 Supply & Inbound implement** on `feat/ns-2-brief-nav-collapse` `9e93c77`: lab DomainOverview chrome on `/supply`; relocate inbound workspace to `/supply/shipments`; wrap shipment-evidence + PO management. NUMBER RULE `cip`: 1964 open / 770 past ETA / 0 POD this ISO week / 14% PO linked/observed / 118024 pipeline units. Browser 1280×800. BACKLOG-178/179 UNCOVERED. GOV-008 pending. D-0002 untouched.
+
 - 2026-09-07 — **N-0018 chartered** on `feat/ns-2-brief-nav-collapse` `331cd76`: Supply & Inbound from design-lab `SupplySurface`; implement lease `NS9_SUPPLY_20260907`. N-0011 complete.
 
 - 2026-09-07 — **N-0011 complete** on `feat/ns-2-brief-nav-collapse`: product `edef697`, independent GOV-008 `37c6286` (`NS8_GOV008_20260906` / gov-008, anchored on `NS8_DATA_20260906`). VERIFIED_WITH_LIMITATIONS. 390 bottom-nav third item is Promotions, not “Funding”. D-0002 untouched. Next: Supply & Inbound.

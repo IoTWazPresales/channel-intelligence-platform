@@ -2544,4 +2544,38 @@ Exact engine invariants (do not complete around them):
 | **Regression traps** | Engine must still refuse to invent nodes. Do not auto-`node.add`. Do not charter Attention in a CIP product session. D-0002 untouched. Depends on R1–R3. |
 | **Behavior to retain** | `h_node_add` lawfulness; no parallel frontier paths without a node; host `program.py`. |
 | **Out of scope** | CIP product implementation; EIF-R1/R2/R3 themselves. |
-| **TRIGGER** | After EIF-R1, EIF-R2 and EIF-R3 are accepted or explicitly waived. | |
+| **TRIGGER** | After EIF-R1, EIF-R2 and EIF-R3 are accepted or explicitly waived. |
+
+---
+
+## BACKLOG-178 — Inbound "Arrived" as a stored lifecycle state
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-07 · N-0018 coverage UNCOVERED |
+| **Effort** | Medium (domain + schema + steward, if ever chartered) |
+| **Source** | Lab `SupplySurface` / `shipmentLifecycle` fixture state `Arrived` (296). Production `fact_inbound_shipment.line_state` on cip is only `shipped` / `open_order`; lifecycle analog is pipeline / shipped / landed. |
+| **Idea** | A real arrived-not-received state (dock/ASN without POD) distinct from shipped and from unreceived-past-ETA. |
+| **Why it matters / deferrable** | Lab draws Arrived as a fifth (actually third of five) bar. Inventing it from status/ETA would mislabel. Deferrable until Shipping owns an arrived observation. |
+| **What the work is** | Define the business event, persist it (approved migration), then draw it as a **disjoint** bucket. Do not infer Arrived from ETA alone. |
+| **Regression traps** | Do not add Arrived as a fourth/fifth **overlapping** bar. Do not auto-create master records. No Alembic without approval. |
+| **Behavior to retain** | `lifecycle_bucket` in `inbound_lineup_quarter.py`: POD → landed, `open_order` → pipeline, `shipped` → shipped. |
+| **Out of scope** | N-0018 chrome; changing DSI resolution; BACKLOG-066. |
+| **TRIGGER** | Shipping/steward work that introduces an arrived observation on facts or evidence; **or** Warren asks to persist Arrived. |
+
+---
+
+## BACKLOG-179 — Plan-unit PO coverage by distributor
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-07 · N-0018 coverage UNCOVERED |
+| **Effort** | Medium (plan × PO attribution) |
+| **Source** | Lab `poCoverage` fixture: share of **P09 plan units** covered by POs per distributor + `backlogUnits`. Production `po_management.coverage` is observed POs vs linked to an active lineup case (322/2308 on cip), grouped by quarter × product line — not plan units, not by distributor. |
+| **Idea** | Compute plan-unit coverage % and backlog units per distributor from lineup plan lines vs PO-linked facts. |
+| **Why it matters / deferrable** | Lab ProportionBar is the wrong grain if labelled as plan-unit coverage. N-0018 draws linked/observed with an honest caption instead. Deferrable until Planning/Supply jointly own plan-unit coverage. |
+| **Regression traps** | DAP ≠ controlled cost ≠ landed. Do not store calculated coverage as a fact. NUMBER RULE: print `current_database()` first. Do not relabel 322/2308 as 79%. |
+| **Behavior to retain** | PO management coverage = observed vs linked; N-0018 overview captions say “not plan units”. |
+| **Out of scope** | Inventing distributor % from lab fixtures; BACKLOG-066. |
+| **TRIGGER** | Planning or Supply work that needs plan-unit PO coverage; **or** Warren asks to match the lab P09-units grain. |
+
