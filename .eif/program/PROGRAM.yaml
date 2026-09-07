@@ -6,7 +6,7 @@ programme:
   charter:
     status: accepted
     by: eif
-    at: '2026-09-06T23:19:18Z'
+    at: '2026-09-07T11:28:11Z'
     workstreams:
     - Full-platform UI/UX redesign
     - Shell & primitive convergence
@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 381
-  log_sha256: 244f50e62b8dd973ec65e88b562bc9ed06fc92c08de510029dceb7c3e26343df
+  snapshot_revision: 384
+  log_sha256: 9c1238a9fa6bb1081ba7da70e50a967671e4bb6159f45e4a9e616357dbcd5517
   acceptance_policy:
     milestone: operator
     root: operator
@@ -2423,12 +2423,12 @@ nodes:
     origin: decomposition
     status: in_progress
     stage: implement
-    revision: 4
+    revision: 5
     lease:
       run: NS9_SUPPLY_20260907
-      acquired_at: '2026-09-06T23:18:44Z'
-      heartbeat_at: '2026-09-06T23:18:44Z'
-      expires_at: '2026-09-07T03:18:44Z'
+      acquired_at: '2026-09-07T10:08:09Z'
+      heartbeat_at: '2026-09-07T11:15:22Z'
+      expires_at: '2026-09-07T15:15:22Z'
     depends_on:
     - N-0013
     - N-0007
@@ -2738,6 +2738,12 @@ evidence:
     path: null
     tree_hash: 21a11d13000e098317f658d9e0c1583645068731
     note: 'stock: migrate Movement lens to lab headlines and relocate Channel Ops'
+  EV-N0018-COVERAGE:
+    id: EV-N0018-COVERAGE
+    provenance: implementation-observation
+    path: docs/design/N0018_SUPPLY_INBOUND_COVERAGE.md
+    tree_hash: 9e93c77
+    note: N-0018 implement coverage map + 1280 browser vs lab. Product 9e93c77. Independent GOV-008 not recorded.
 baselines:
   BLN-0001:
     id: BLN-0001
