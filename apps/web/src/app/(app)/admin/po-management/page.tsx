@@ -3,14 +3,12 @@
 import { Alert } from '@mui/material';
 import Link from 'next/link';
 
-import { PageHeader } from '@/components/PageHeader';
-import { navPageChrome } from '@/features/shell/navPageChrome';
+import { SupplyChrome } from '@/features/supply-inbound/SupplyChrome';
 import { PoManagementView } from '@/features/commercial-planner/PoManagementView';
 
 export default function AdminPoManagementPage() {
   return (
-    <>
-      <PageHeader {...navPageChrome('/admin/po-management')} />
+    <SupplyChrome>
       <Alert severity="info" sx={{ mb: 2 }}>
         Observed purchase orders are derived from <strong>shipment evidence</strong>. Linked groups show
         units-primary reconciliation against confirmed lineups; unlinked groups and the gap worklist let you
@@ -20,6 +18,6 @@ export default function AdminPoManagementPage() {
         <Link href="/stock?lens=execution">Execution vs plan</Link>.
       </Alert>
       <PoManagementView />
-    </>
+    </SupplyChrome>
   );
 }

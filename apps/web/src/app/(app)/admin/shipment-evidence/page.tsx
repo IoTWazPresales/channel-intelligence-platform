@@ -25,8 +25,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
-import { PageHeader } from '@/components/PageHeader';
-import { navPageChrome } from '@/features/shell/navPageChrome';
+import { SupplyChrome } from '@/features/supply-inbound/SupplyChrome';
 import { apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 import { fetchDsiImportPipelineProgress } from '@/features/background-tasks/fetchImportJobProgress';
@@ -460,8 +459,8 @@ export default function ShipmentEvidenceAdminPage() {
   const importApplied = trackedImportJob?.stage === 'loaded';
 
   return (
-    <Box sx={{ p: 2 }}>
-      <PageHeader {...navPageChrome('/admin/shipment-evidence')} />
+    <SupplyChrome>
+    <Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
         Canonical lines from shipment / open-order imports (report auto-detect). Upload via Import Center using
         template &quot;Shipment / order evidence&quot;.
@@ -812,5 +811,6 @@ export default function ShipmentEvidenceAdminPage() {
         </DialogContent>
       </Dialog>
     </Box>
+    </SupplyChrome>
   );
 }

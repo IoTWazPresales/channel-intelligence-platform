@@ -1,0 +1,31 @@
+export type SupplyOverview = {
+  database: string;
+  tenant_id: string;
+  data_unavailable: boolean;
+  open_lines: number;
+  open_units: number;
+  eta_past_no_pod_lines: number;
+  oldest_eta_past: string | null;
+  oldest_days_past_eta: number | null;
+  landed_pod_iso_week: number;
+  pipeline_lines: number;
+  pipeline_units: number;
+  shipped_lines: number;
+  shipped_units: number;
+  landed_lines: number;
+  landed_units: number;
+  overdue_commercial_lines: number;
+  po_observed: number;
+  po_linked: number;
+  po_coverage_ratio: number | null;
+  po_data_unavailable: boolean;
+  lifecycle: { state: string; count: number; units: number }[];
+  po_by_distributor: {
+    distributor: string;
+    observed_pos: number;
+    linked_pos: number;
+    covered: number;
+  }[];
+  labels: Record<string, string>;
+  captions: Record<string, string>;
+};

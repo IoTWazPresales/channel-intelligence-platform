@@ -24,8 +24,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
-import { PageHeader } from '@/components/PageHeader';
-import { navPageChrome } from '@/features/shell/navPageChrome';
 import { apiGet } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
@@ -1009,10 +1007,5 @@ export function InboundShipmentsWorkspace() {
 }
 
 export default function InboundShipmentsPage() {
-  return (
-    <>
-      <PageHeader {...navPageChrome('/stock', { search: '?lens=inbound' })} />
-      <InboundShipmentsWorkspace />
-    </>
-  );
+  return <InboundShipmentsWorkspace />;
 }

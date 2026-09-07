@@ -120,7 +120,7 @@ export default function DashboardPage() {
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mb: 2 }} useFlexGap flexWrap="wrap">
             <Chip component={NextLink} href="/commercial-planner/cpor-cases" label="Case book" clickable />
             <Chip component={NextLink} href="/stock?lens=movement" label="Movement" clickable />
-            <Chip component={NextLink} href="/stock?lens=inbound" label="Shipments" clickable />
+            <Chip component={NextLink} href="/supply/shipments" label="Shipments" clickable />
             <Chip component={NextLink} href="/admin/imports" label="Import Center" clickable />
             <Chip component={NextLink} href="/admin/ops" label="Operations" clickable />
             <Chip component={NextLink} href="/brief" label="Attention" clickable />

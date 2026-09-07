@@ -1,7 +1,6 @@
 'use client';
 
 import { Box } from '@mui/material';
-import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect } from 'react';
 
@@ -10,11 +9,6 @@ import { ExecutionLensView } from '@/features/stock/ExecutionLensView';
 import { MovementLensView } from '@/features/stock/MovementLensView';
 import { StockChrome } from '@/features/stock/StockChrome';
 import { parseStockLens, type StockLensId } from '@/features/stock/stockLenses';
-
-const InboundShipmentsWorkspace = dynamic(
-  () => import('@/app/(app)/shipping/page').then((m) => m.InboundShipmentsWorkspace),
-  { ssr: false, loading: () => <Box sx={{ p: 3 }}>Loading inbound…</Box> },
-);
 
 function StockLensBody({ lens }: { lens: StockLensId }) {
   if (lens === 'execution') {
@@ -32,13 +26,6 @@ function StockLensBody({ lens }: { lens: StockLensId }) {
       </Box>
     );
   }
-  if (lens === 'inbound') {
-    return (
-      <Box data-testid="stock-inbound-lens" sx={{ px: { xs: 1, md: 2 } }}>
-        <InboundShipmentsWorkspace />
-      </Box>
-    );
-  }
   return null;
 }
 
@@ -50,12 +37,18 @@ function StockContainerInner() {
   useEffect(() => {
     if (lens === 'sellthrough') router.replace('/channel-intelligence');
     if (lens === 'forecast') router.replace('/forecasts');
-  }, [lens, router]);
+    if (lens === 'inbound') {
+      const next = new URLSearchParams(searchParams.toString());
+      next.delete('lens');
+      const qs = next.toString();
+      router.replace(qs ? `/supply/shipments?${qs}` : '/supply/shipments');
+    }
+  }, [lens, router, searchParams]);
 
   if (lens === 'inbound') {
     return (
-      <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }} data-testid="stock-container">
-        <StockLensBody lens={lens} />
+      <Box sx={{ p: 3 }} data-testid="stock-container">
+        Opening shipments…
       </Box>
     );
   }

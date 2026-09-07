@@ -116,7 +116,7 @@ export default function GettingStartedPage() {
                     Movement
                   </Link>
                   ,{' '}
-                  <Link component={NextLink} href="/stock?lens=inbound" fontWeight={600}>
+                  <Link component={NextLink} href="/supply/shipments" fontWeight={600}>
                     Shipments
                   </Link>
                   ,{' '}

@@ -6,7 +6,7 @@ const RETIRED_TO_BRIEF = ['/dashboard', '/exceptions', '/getting-started'];
 const STOCK_LEGACY_REDIRECTS: Record<string, string> = {
   '/sell-out': '/stock?lens=movement',
   '/plan-vs-executed': '/stock?lens=execution',
-  '/shipping': '/stock?lens=inbound',
+  '/shipping': '/supply/shipments',
   '/inventory': '/stock?lens=cover',
 };
 
@@ -43,9 +43,15 @@ export function middleware(request: NextRequest) {
     url.pathname = lineupTarget;
     return NextResponse.redirect(url);
   }
+  if (pathname === '/stock' && request.nextUrl.searchParams.get('lens') === 'inbound') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/supply/shipments';
+    url.searchParams.delete('lens');
+    return NextResponse.redirect(url);
+  }
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/', '/dashboard', '/exceptions', '/getting-started', '/sell-out', '/plan-vs-executed', '/shipping', '/inventory', '/buy-plans'],
+  matcher: ['/', '/dashboard', '/exceptions', '/getting-started', '/sell-out', '/plan-vs-executed', '/shipping', '/inventory', '/buy-plans', '/stock'],
 };

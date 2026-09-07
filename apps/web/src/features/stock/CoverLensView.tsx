@@ -461,7 +461,7 @@ export function CoverLensView() {
           selected
             ? [
                 { label: 'Plan lines for this product', href: `/lineup?product=${selected.product_id}`, hint: 'Planning › Lineup cases' },
-                { label: 'Open inbound shipments', href: `/stock?lens=inbound`, hint: 'Supply & Inbound › Shipments' },
+                { label: 'Open inbound shipments', href: `/supply/shipments`, hint: 'Supply & Inbound › Shipments' },
                 { label: 'Promotion cases on this SKU', href: '/commercial-planner/cpor-cases', hint: 'Promotions & Funding › Case book' },
                 { label: 'Retail listings & shelf price', href: '/listing-capture?tab=registry', hint: 'Market & Listings › Monitored listings' },
                 { label: 'Competitor products', href: '/competition?tab=mappings', hint: 'Market & Listings › Competitor mappings' },

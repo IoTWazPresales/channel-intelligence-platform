@@ -164,10 +164,10 @@ export const navGroups: NavGroup[] = [
     id: 'supply',
     label: 'Supply & Inbound',
     short: 'Supply',
-    href: '/stock?lens=inbound',
+    href: '/supply',
     what: 'Inbound shipments through their lifecycle, receipt and proof-of-delivery evidence, PO coverage.',
     items: [
-      { label: 'Shipments', href: '/stock?lens=inbound', roles: ALL, what: 'Shipment lifecycle: planned, shipped, arrived, received; ageing past ETA.' },
+      { label: 'Shipments', href: '/supply/shipments', roles: ALL, what: 'Shipment lifecycle: pipeline, shipped, landed (POD); ageing past ETA. Arrived is not a stored state.' },
       {
         label: 'Receipts & POD',
         href: '/admin/shipment-evidence',

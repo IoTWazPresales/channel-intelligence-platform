@@ -1,4 +1,4 @@
-/** Stock container lens keys — buyer-facing labels aligned to lab StockSurface + Supply inbound. */
+/** Stock container lens keys — buyer-facing labels aligned to lab StockSurface. `inbound` still parses so `/stock?lens=inbound` can redirect to `/supply/shipments`. */
 export const STOCK_LENSES = [
   { id: 'cover', label: 'Cover' },
   { id: 'movement', label: 'Movement' },

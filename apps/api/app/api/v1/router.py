@@ -52,6 +52,7 @@ from app.api.v1.endpoints import (
     shipping_mailer,
     sql_viewer,
     steward_audit,
+    supply,
 )
 
 api_router = APIRouter()
@@ -77,6 +78,7 @@ api_router.include_router(listing_capture.router, prefix="/listing-capture", tag
 api_router.include_router(inbound_shipments.router, prefix="/inbound-shipments", tags=["inbound-shipments"])
 api_router.include_router(shipment_evidence.router, prefix="/shipment-evidence", tags=["shipment-evidence"])
 api_router.include_router(shipping.router, prefix="/shipping", tags=["shipping"])
+api_router.include_router(supply.router, prefix="/supply", tags=["supply"])
 api_router.include_router(
     shipping_mailer.router, prefix="/shipping-mailer", tags=["shipping-mailer"]
 )

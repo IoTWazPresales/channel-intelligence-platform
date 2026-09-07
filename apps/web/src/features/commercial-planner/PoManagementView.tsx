@@ -191,7 +191,7 @@ export function PoManagementView() {
   const viewShipmentsForPo = (poId: number, label: string | null) => {
     const params = new URLSearchParams({ purchase_order_id: String(poId) });
     if (label) params.set('po_label', label);
-    router.push(`/shipping?${params.toString()}`);
+    router.push(`/supply/shipments?${params.toString()}`);
   };
 
   const coverage = coverageQ.data;

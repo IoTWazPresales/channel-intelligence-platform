@@ -102,13 +102,14 @@ describe('navPageChrome (D-0008)', () => {
     expect(chrome.crumbs[1]).toEqual({ label: 'Products' });
   });
 
-  it('matches inbound shipments on the stock lens, not a retired /shipping route', () => {
-    const chrome = navPageChrome('/stock', { search: '?lens=inbound' });
+  it('matches inbound shipments on the supply domain, not a retired /shipping or stock-lens route', () => {
+    const chrome = navPageChrome('/supply/shipments');
     expect(chrome.title).toBe('Shipments');
     expect(chrome.crumbs).toEqual([
-      { label: 'Supply & Inbound' },
+      { label: 'Supply & Inbound', href: '/supply' },
       { label: 'Shipments' },
     ]);
     expect(matchNavLeaf('/shipping')).toBeNull();
+    expect(matchNavLeaf('/stock', '?lens=inbound')).toBeNull();
   });
 });

@@ -1,6 +1,7 @@
 'use client';
 
 import { Box, Paper, Stack, Typography } from '@mui/material';
+import NextLink from 'next/link';
 import type { ReactNode } from 'react';
 
 /**
@@ -54,22 +55,25 @@ export function PanelRow({
   secondary,
   figure,
   onClick,
+  href,
   severity,
 }: {
   primary: ReactNode;
   secondary?: ReactNode;
   figure?: ReactNode;
   onClick?: () => void;
+  href?: string;
   severity?: 'danger' | 'warning' | 'info' | 'neutral';
 }) {
   const color =
     severity === 'danger' ? 'error.main' : severity === 'warning' ? 'warning.main' : severity === 'info' ? 'primary.main' : 'divider';
-  return (
+  const interactive = Boolean(href || onClick);
+  const row = (
     <Box
-      onClick={onClick}
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      onKeyDown={onClick ? (e) => (e.key === 'Enter' || e.key === ' ') && onClick() : undefined}
+      onClick={href ? undefined : onClick}
+      role={href ? undefined : onClick ? 'button' : undefined}
+      tabIndex={href ? undefined : onClick ? 0 : undefined}
+      onKeyDown={href || !onClick ? undefined : (e) => (e.key === 'Enter' || e.key === ' ') && onClick()}
       sx={{
         display: 'flex',
         alignItems: 'center',
@@ -79,17 +83,17 @@ export function PanelRow({
         borderLeft: '3px solid',
         borderColor: color,
         borderRadius: 1,
-        cursor: onClick ? 'pointer' : 'default',
-        '&:hover': onClick ? { bgcolor: 'action.hover' } : undefined,
+        cursor: interactive ? 'pointer' : 'default',
+        '&:hover': interactive ? { bgcolor: 'action.hover' } : undefined,
         '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 1 },
       }}
     >
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography variant="body2" sx={{ fontWeight: 500 }} noWrap>
+        <Typography variant="body2" component="div" sx={{ fontWeight: 500 }} noWrap>
           {primary}
         </Typography>
         {secondary ? (
-          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+          <Typography variant="caption" component="div" color="text.secondary" noWrap sx={{ display: 'block' }}>
             {secondary}
           </Typography>
         ) : null}
@@ -101,4 +105,12 @@ export function PanelRow({
       ) : null}
     </Box>
   );
+  if (href) {
+    return (
+      <Box component={NextLink} href={href} sx={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
+        {row}
+      </Box>
+    );
+  }
+  return row;
 }

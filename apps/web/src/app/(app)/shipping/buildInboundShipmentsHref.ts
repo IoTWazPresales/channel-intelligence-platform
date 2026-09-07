@@ -9,5 +9,5 @@ export function buildInboundShipmentsHref(opts: {
   if (opts.customerId != null) p.set('customer_id', String(opts.customerId));
   if (opts.planBusinessUnit) p.set('plan_business_unit', opts.planBusinessUnit);
   const qs = p.toString();
-  return `/shipping?${qs}`;
+  return `/supply/shipments?${qs}`;
 }
