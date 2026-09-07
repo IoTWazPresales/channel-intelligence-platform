@@ -68,119 +68,6 @@ LOOPBACK_HOSTS = {'localhost','127.0.0.1','::1','0.0.0.0','[::1]'}
 NETWORK_CLASSES = frozenset({'loopback','public_read'})
 
 
-HOOK_STDIN_MAX_BYTES = 1_048_576
-# Brief retry after an empty or incomplete read. Cursor on Windows sometimes
-# delivers a zero-byte first read or closes the pipe mid-object. Failing on
-# that first short read mislabels a transport failure as a policy deny.
-HOOK_STDIN_RETRY_SEC = 0.25
-HOOK_STDIN_RETRY_SLEEP = 0.02
-OBSERVATION_TOOLS = frozenset({'Read', 'Grep', 'Glob'})
-PATH_REQUIRED_TOOLS = frozenset({'Read', 'Write', 'Delete'})
-
-
-def _hook_bytes_complete_json(raw: bytes) -> bool:
-    """True when raw bytes contain at least one complete JSON value.
-
-    Cursor may hold the hook pipe open after writing the payload. A complete
-    object is a finished payload; waiting for EOF is the silent-kill path.
-    """
-    if not raw or not raw.strip():
-        return False
-    if raw.startswith((b'\xff\xfe', b'\xfe\xff')):
-        try:
-            text = raw.decode('utf-16')
-        except UnicodeDecodeError:
-            return False
-    else:
-        try:
-            text = raw.decode('utf-8-sig')
-        except UnicodeDecodeError:
-            try:
-                text = raw.decode('utf-16')
-            except UnicodeDecodeError:
-                return False
-    text = text.strip()
-    if not text:
-        return False
-    try:
-        json.JSONDecoder().raw_decode(text)
-        return True
-    except json.JSONDecodeError:
-        return False
-
-
-def _read_hook_stdin_chunks(read_chunk) -> bytes:
-    chunks: list[bytes] = []
-    total = 0
-    idle_started = None
-    while True:
-        try:
-            chunk = read_chunk()
-        except InterruptedError:
-            continue
-        except OSError:
-            break
-        if chunk:
-            idle_started = None
-            chunks.append(chunk)
-            total += len(chunk)
-            joined = b''.join(chunks)
-            if _hook_bytes_complete_json(joined):
-                return joined
-            if total >= HOOK_STDIN_MAX_BYTES:
-                raise TimeoutError(
-                    'hook stdin exceeded max bytes without a complete JSON object; fail-closed'
-                )
-            continue
-        joined = b''.join(chunks)
-        if _hook_bytes_complete_json(joined):
-            return joined
-        now = time.monotonic()
-        if idle_started is None:
-            idle_started = now
-        if (now - idle_started) >= HOOK_STDIN_RETRY_SEC:
-            return joined
-        time.sleep(HOOK_STDIN_RETRY_SLEEP)
-    return b''.join(chunks)
-
-
-def read_hook_stdin_eof() -> bytes:
-    """Read the Cursor hook pipe until a complete JSON value or EOF.
-
-    Windows anonymous pipes return the first available chunk from a single
-    os.read / FileIO.read. Stopping there is payload-size-dependent truncation
-    and surfaces as HOOK_INPUT_INVALID (JSONDecodeError). Loop across chunks,
-    but treat a complete JSON object as finished — do not wait for EOF.
-
-    A first empty read is not immediately EOF: retry briefly (HOOK_STDIN_RETRY_SEC)
-    so a zero-byte race or mid-object close can still complete. Remaining empty
-    or truncated input is HOOK_INPUT_INVALID (crash), never a policy code.
-
-    The decision watchdog must already be armed. A held-open pipe that never
-    delivers a complete object is HOOK_TIMEOUT, never a silent host kill.
-    """
-    fd = None
-    try:
-        fd = sys.stdin.fileno()
-    except Exception:
-        fd = None
-    if fd is None:
-        buf = getattr(sys.stdin, 'buffer', None)
-        if buf is None:
-            try:
-                return (sys.stdin.read() or '').encode('utf-8')
-            except Exception:
-                return b''
-        return _read_hook_stdin_chunks(lambda: buf.read(65536))
-    if os.name == 'nt':
-        try:
-            import msvcrt
-            msvcrt.setmode(fd, os.O_BINARY)
-        except Exception:
-            pass
-    return _read_hook_stdin_chunks(lambda: os.read(fd, 65536))
-
-
 def parse_cursor_hook_stdin(raw: bytes) -> dict:
     """Parse Cursor command-hook JSON from raw stdin bytes.
 
@@ -204,47 +91,18 @@ def parse_cursor_hook_stdin(raw: bytes) -> dict:
         raise ValueError('empty Cursor hook stdin')
     return json.loads(text)
 
-# Crash / launcher / emit failures must be distinguishable from policy denials.
-# Cursor failClosed treats empty/invalid stdout as a mute block with no rule name.
-# deny() prefixes agent_message with EIF_GUARD_CRASH: or EIF_GUARD_POLICY: and
-# sets eif_guard_class. PROGRAMME_GIT_STAGE is not a reason code in this tree.
-# CONSULT 2026-09-04 (claude-opus CLI, sdk-cli): beforeReadFile failClosed must
-# stay true. failClosed:false would allow SENSITIVE_READ / SECRET_IN_READ /
-# FOREIGN_READ / OUT_OF_OBSERVATION_SCOPE into model context on hook crash.
-# Verdict FAILCLOSED_BEFORE_READ: keep_true. Residual not acceptable.
-# CONSULT 2026-09-04 (claude-opus CLI): unparseable/path-less observation stdin
-# is OBSERVATION_TRANSPORT: deny_crash. Cursor still holds the real path; empty
-# payload is missing evidence, not evidence of no target. allow_crash is only
-# lawful after the launcher passes event name out of band (argv/hooks.json).
-
+# Crash / launcher / emit failures must be distinguishable from policy denials
+# such as OUT_OF_CHANGE_SCOPE. Cursor failClosed treats empty/invalid stdout as a
+# mute block ("hook returned no output") with no rule name.
 CRASH_REASON_CODES = frozenset({
     'HOOK_INTERNAL_ERROR', 'HOOK_LAUNCHER_ERROR', 'HOOK_INPUT_INVALID',
     'HOOK_TIMEOUT', 'HOOK_EMIT_FAILURE',
-})
-# Live policy deny() / shell_decision / mcp_decision reason_code values in this file.
-POLICY_REASON_CODES = frozenset({
-    'ACTION_ARTIFACT_WRITE', 'ACTION_DELETE', 'ACTION_DEPENDENCY',
-    'ACTION_DESTRUCTIVE_DATA', 'ACTION_FORCE_VCS', 'ACTION_IDENTITY_MUTATION',
-    'ACTION_INFRASTRUCTURE', 'ACTION_NETWORK', 'ACTION_REMOTE_PUSH', 'ACTION_WRITE',
-    'BOOTSTRAP', 'BOOTSTRAP_MCP', 'BROWSER_INTERACT_ORIGIN', 'BROWSER_OBSERVE_ONLY',
-    'BROWSER_PUBLIC_MUTATE', 'BROWSER_UNSAFE', 'BUDGET', 'CONTROL_PLANE_PROTECTED',
-    'FOREIGN_PATH', 'FOREIGN_READ', 'IDENTITY_MCP', 'IDENTITY_SHELL', 'IDENTITY_TOOL',
-    'MCP_DENY', 'MCP_DESTRUCTIVE', 'MCP_NOT_GRANTED', 'MCP_POLICY_REQUIRED',
-    'NETWORK_DESTINATION', 'OUT_OF_CHANGE_SCOPE', 'OUT_OF_OBSERVATION_SCOPE',
-    'POLICY_INTEGRITY', 'POST_EDIT_SECRET', 'PROTECTED_PATH', 'SECRET_IN_READ',
-    'SECRET_PREWRITE', 'SENSITIVE_READ', 'SENSITIVE_TOOL_READ', 'SHELL_DENY',
-    'SHELL_POLICY_REQUIRED',
-})
-OBSERVATION_EVENTS = frozenset({
-    'beforeReadFile', 'afterFileEdit', 'afterMCPExecution', 'postToolUse',
-    'sessionStart', 'stop', 'subagentStart', 'subagentStop',
 })
 WATCHDOG_DEFAULT_SEC = 8.0
 _EMITTED = False
 _EMIT_RC = 1
 _EMIT_LOCK = threading.Lock()
 _DONE = threading.Event()
-_WATCHDOG_ARMED = False
 
 
 def _project_root() -> Path:
@@ -360,29 +218,14 @@ def out(permission='allow', message=None, extra=None):
 
 
 def deny(code, message):
-    crash = code in CRASH_REASON_CODES
-    klass = 'crash' if crash else 'policy'
-    prefix = 'EIF_GUARD_CRASH' if crash else 'EIF_GUARD_POLICY'
-    return out(
-        'deny',
-        f'{prefix}: {code}: {message}',
-        extra={'reason_code': code, 'eif_guard_class': klass},
-    )
+    return out('deny', f'{code}: {message}', extra={'reason_code': code})
 
 
 def _arm_watchdog():
-    """Self-deny before the host runtime kills the hook with empty stdout.
-
-    Must run before stdin is read. A held-open pipe never reaches EOF, so
-    arming after the read made the host kill mute (no HOOK_TIMEOUT).
-    """
-    global _WATCHDOG_ARMED
-    if _WATCHDOG_ARMED:
-        return
+    """Self-deny before the host runtime kills the hook with empty stdout."""
     sec = watchdog_sec()
     if sec <= 0:
         return
-    _WATCHDOG_ARMED = True
 
     def run():
         if _DONE.wait(sec):
@@ -405,50 +248,18 @@ def normalized_remote(s):
     return s.lower().rstrip('/')
 
 def git(root: Path, *args):
-    env=os.environ.copy()
-    env['GIT_OPTIONAL_LOCKS']='0'
-    try:
-        return subprocess.check_output(
-            ['git','-C',str(root),*args],
-            text=True, stderr=subprocess.DEVNULL, timeout=1.5, env=env,
-        ).strip()
-    except Exception:
-        return ''
-
-# Per-process cache: a same-repo repository_anchor must not spawn a second trio
-# of git subprocesses. Quiet-path identity was six calls / ~1.5s on this project.
-_GIT_SNAP = {}
-
-def git_snapshot(root: Path):
-    """Return (toplevel, remotes_text, root_commit_text). At most 3 git calls per repo per process."""
-    try:
-        key=str(Path(root).resolve())
-    except Exception:
-        key=str(root)
-    hit=_GIT_SNAP.get(key)
-    if hit is not None:
-        return hit
-    toplevel=git(root,'rev-parse','--show-toplevel')
-    remotes=git(root,'remote','-v')
-    rootc=git(root,'rev-list','--max-parents=0','HEAD')
-    snap=(toplevel, remotes, rootc)
-    _GIT_SNAP[key]=snap
-    if toplevel:
-        try:
-            _GIT_SNAP.setdefault(str(Path(toplevel).resolve()), snap)
-        except Exception:
-            pass
-    return snap
+    try: return subprocess.check_output(['git','-C',str(root),*args],text=True,stderr=subprocess.DEVNULL,timeout=3).strip()
+    except Exception: return ''
 
 def observed_remotes(root: Path):
     vals=[]
-    for line in git_snapshot(root)[1].splitlines():
+    for line in git(root,'remote','-v').splitlines():
         p=line.split()
         if len(p)>=2: vals.append(normalized_remote(p[1]))
     return sorted(set(vals))
 
 def root_commit(root: Path):
-    rows=git_snapshot(root)[2].splitlines()
+    rows=git(root,'rev-list','--max-parents=0','HEAD').splitlines()
     return rows[0] if len(rows)==1 else ''
 
 def policy_path(root: Path):
@@ -535,43 +346,8 @@ def matches(rel, patterns):
 def tool_path(inp):
     if not isinstance(inp,dict): return None
     for k in ['file_path','path','target_file','target_path','directory','cwd']:
-        v=inp.get(k)
-        if isinstance(v,str) and v.strip(): return v
+        if isinstance(inp.get(k),str): return inp[k]
     return None
-
-def hook_target_identifiable(data):
-    """Return (ok, why). False is a transport/schema failure, never a policy deny.
-
-    Grep/Glob may omit path (workspace search). Read/Write/Delete and
-    beforeReadFile require a path. Unparseable input never reaches here.
-    """
-    if not isinstance(data, dict):
-        return False, 'hook JSON is not an object'
-    event = data.get('hook_event_name')
-    if not isinstance(event, str) or not event.strip():
-        return False, 'hook JSON has no hook_event_name'
-    if event == 'beforeReadFile':
-        path = data.get('file_path')
-        if not isinstance(path, str) or not path.strip():
-            return False, 'beforeReadFile has no file_path'
-        return True, ''
-    if event == 'preToolUse':
-        tool = str(data.get('tool_name') or '').strip()
-        if not tool:
-            return False, 'preToolUse has no tool_name'
-        inp = data.get('tool_input') if isinstance(data.get('tool_input'), dict) else {}
-        if tool in PATH_REQUIRED_TOOLS and not tool_path(inp):
-            return False, f'{tool} has no identifiable path'
-        return True, ''
-    if event == 'beforeShellExecution':
-        if 'command' not in data:
-            return False, 'beforeShellExecution has no command'
-        return True, ''
-    if event == 'beforeMCPExecution':
-        if not str(data.get('tool_name') or '').strip():
-            return False, 'beforeMCPExecution has no tool_name'
-        return True, ''
-    return True, ''
 
 def strings(obj):
     if isinstance(obj,str): yield obj
@@ -620,14 +396,13 @@ def identity_ok(root: Path, policy):
     if exp_rem and observed!=exp_rem:
         return False,f'IDENTITY_MISMATCH: remote set expected {exp_rem}, observed {observed}'
     if exp_vcs:
-        actual=Path(git_snapshot(root)[0] or root).resolve()
+        actual=Path(git(root,'rev-parse','--show-toplevel') or root).resolve()
         if str(actual)!=str(Path(exp_vcs).resolve()):
             return False,f'IDENTITY_MISMATCH: vcs root expected {exp_vcs}, observed {actual}'
     for anchor in ident.get('repository_anchors') or []:
         ar=Path(anchor.get('allowed_root') or '').resolve()
         if not ar.exists(): return False,f'IDENTITY_MISMATCH: declared repository root missing: {ar}'
-        # Same-repo duplicate of the primary identity block: reuse snapshot (0 extra git).
-        arv=git_snapshot(ar)[0]
+        arv=git(ar,'rev-parse','--show-toplevel')
         arr=root_commit(ar)
         arem=observed_remotes(ar)
         ev=anchor.get('expected_vcs_root') or ''; er=anchor.get('root_commit') or ''
@@ -742,6 +517,7 @@ def _mutating_fingerprint(data):
     target_path, directory, cwd. Blank strings are skipped so an empty
     preferred key does not hide a real fallback path. None does not
     become the literal 'None'. Separators use a single-backslash replace.
+    If no path can be resolved, return None: the call is not a repeat.
     """
     tool=str(data.get('tool_name') or '')
     if tool not in MUTATING_TOOLS:
@@ -753,6 +529,8 @@ def _mutating_fingerprint(data):
         if isinstance(v,str) and v.strip():
             path=v
             break
+    if not path:
+        return None
     return f'{tool}:{path.replace("\\","/").lower()}'
 
 
@@ -805,7 +583,7 @@ def budget_ok(root: Path, data, policy):
             state['last_mut_fp']=fp
     ok,msg=_persist_budget(p, state)
     if not ok: return False,msg,None
-    if repeat_limit and int(state.get('repeat_mut') or 0)>int(repeat_limit):
+    if fp and repeat_limit and int(state.get('repeat_mut') or 0)>int(repeat_limit):
         return False,f'NO_PROGRESS: repeated mutating action {fp} x{state["repeat_mut"]}',None
     if max_calls and state['tool_calls']>int(max_calls):
         return False,f'BUDGET_EXHAUSTED: tool calls {state["tool_calls"]}>{max_calls} in execution burst {state.get("burst_id")}',None
@@ -984,6 +762,138 @@ def _path_candidates(cmd: str):
     return found
 
 PROGRAMME_ENTRY_REL = '.eif/runtime/programme/program.py'
+PROGRAMME_LEDGER_FILES = frozenset({'PROGRAM.yaml', 'PROGRAM_LOG.ndjson'})
+GIT_INVOCATION = re.compile(r'\bgit(?:\s+-C\s+\S+|\s+-c\s+\S+)*\s+', re.I)
+GIT_WORKTREE_PROGRAMME = re.compile(
+    r'\bgit(?:\s+-C\s+\S+|\s+-c\s+\S+)*\s+(?:restore\b|checkout\s+--|rm\b|clean\b|stash\b)',
+    re.I,
+)
+GIT_RESET = re.compile(r'\bgit(?:\s+-C\s+\S+|\s+-c\s+\S+)*\s+reset\b', re.I)
+GIT_ADD_BROAD_TOKENS = frozenset({'.', '-A', '--all', '-u', '--update', ':', '*'})
+
+def _normalize_shell_rel(raw):
+    rel=str(raw or '').replace('\\','/')
+    while rel.startswith('./'):
+        rel=rel[2:]
+    return rel
+
+def programme_ledger_rels(policy):
+    sr=str((policy or {}).get('state_root') or '.eif').replace('\\','/').strip('/') or '.eif'
+    return {f'{sr}/program/{name}' for name in PROGRAMME_LEDGER_FILES}
+
+def is_programme_ledger_rel(rel, policy):
+    if not rel:
+        return False
+    return _normalize_shell_rel(rel) in programme_ledger_rels(policy)
+
+def _git_subcommand_tokens(cmd):
+    m=GIT_INVOCATION.search(cmd)
+    if not m:
+        return None, []
+    rest=cmd[m.end():].strip()
+    if not rest:
+        return None, []
+    parts=re.split(r'\s+', rest)
+    return parts[0].lower(), parts[1:]
+
+def _git_add_explicit_paths(cmd):
+    sub, tokens=_git_subcommand_tokens(cmd)
+    if sub!='add':
+        return None
+    paths=[]; after_dd=False
+    for tok in tokens:
+        if tok=='--':
+            after_dd=True
+            continue
+        if not after_dd and tok.startswith('-'):
+            continue
+        paths.append(_normalize_shell_rel(tok))
+    return paths
+
+def _git_add_is_broad(cmd):
+    sub, tokens=_git_subcommand_tokens(cmd)
+    if sub!='add':
+        return False
+    for tok in tokens:
+        if tok in GIT_ADD_BROAD_TOKENS:
+            return True
+        if tok.startswith('-') and tok in {'-p', '--patch', '-N', '--intent-to-add'}:
+            return True
+    return False
+
+def _git_add_is_programme_ledger_only(cmd, policy):
+    paths=_git_add_explicit_paths(cmd)
+    if not paths:
+        return False
+    rels=programme_ledger_rels(policy)
+    return all(p in rels for p in paths)
+
+def _git_add_programme_consequence(cmd, policy):
+    paths=_git_add_explicit_paths(cmd)
+    if paths is None:
+        return None
+    if _git_add_is_broad(cmd):
+        return _shell_result(
+            False, 'PROGRAMME_GIT_STAGE',
+            'git add with broad path selectors is denied; stage programme ledger files explicitly',
+        )
+    if not paths:
+        return None
+    rels=programme_ledger_rels(policy)
+    ledger=[p for p in paths if p in rels]
+    if not ledger:
+        return None
+    if all(p in rels for p in paths):
+        return None
+    return _shell_result(
+        False, 'PROGRAMME_GIT_STAGE',
+        'git add mixing programme ledger with other paths is denied; stage ledger files explicitly',
+    )
+
+def _command_touches_programme_paths(cmd, policy):
+    norm=cmd.replace('\\', '/')
+    sr=str((policy or {}).get('state_root') or '.eif').replace('\\','/').strip('/') or '.eif'
+    prog_prefix=f'{sr}/program'
+    if prog_prefix in norm:
+        return True
+    for cand in _path_candidates(cmd):
+        rel=_normalize_shell_rel(cand)
+        if is_programme_ledger_rel(rel, policy) or matches(rel, [f'{prog_prefix}/**', prog_prefix]):
+            return True
+    return False
+
+def _git_programme_worktree_deny(cmd, policy):
+    norm=cmd.replace('\\', '/')
+    if not GIT_INVOCATION.search(norm):
+        return None
+    if not (GIT_WORKTREE_PROGRAMME.search(norm) or GIT_RESET.search(norm)):
+        return None
+    if _command_touches_programme_paths(cmd, policy):
+        return _shell_result(
+            False, 'PROGRAMME_GIT_WORKTREE',
+            'git command would mutate protected programme ledger in the worktree',
+        )
+    return None
+
+def _git_branch_switch_note(cmd):
+    """Branch switch rewrites tracked files without naming them; surface the consequence."""
+    sub, tokens=_git_subcommand_tokens(cmd)
+    if sub not in {'checkout', 'switch'} or not tokens:
+        return None
+    i=0
+    while i < len(tokens) and tokens[i].startswith('-'):
+        if tokens[i]=='--':
+            return None
+        i+=1
+    if i >= len(tokens) or tokens[i]=='--':
+        return None
+    target=tokens[i]
+    if '/' in target or target.startswith('.') or target.startswith('-'):
+        return None
+    return (
+        'git branch switch may rewrite tracked programme ledger files when they differ between '
+        'branches; run programme verify after switching'
+    )
 
 def _programme_runtime_shell_invoke(cmd: str) -> bool:
     """True when shell is invoking the installed programme entry point (read/execute, not mutate)."""
@@ -998,13 +908,28 @@ def shell_path_consequence(cmd, policy):
     """Defense-in-depth only. Does not contain arbitrary child processes."""
     if _programme_runtime_shell_invoke(cmd):
         return None
+    for m in REDIRECT_TARGET.finditer(cmd):
+        rel=_normalize_shell_rel(m.group(1).strip('\'"'))
+        if is_programme_ledger_rel(rel, policy):
+            return _shell_result(
+                False, 'PROGRAMME_PATH_PROTECTED',
+                'shell redirection to programme ledger path is denied',
+            )
+    add_hit=_git_add_programme_consequence(cmd, policy)
+    if add_hit:
+        return add_hit
+    wt_hit=_git_programme_worktree_deny(cmd, policy)
+    if wt_hit:
+        return wt_hit
+    staging_only=_git_add_is_programme_ledger_only(cmd, policy)
+    ledger_rels=programme_ledger_rels(policy) if staging_only else set()
     roots=[Path(x) for x in (policy.get('allowed_roots') or []) if x]
     protected=policy.get('protected_paths') or []
     base=roots[0] if roots else None
     for cand in _path_candidates(cmd):
-        rel=cand.replace('\\','/')
-        while rel.startswith('./'):
-            rel=rel[2:]
+        rel=_normalize_shell_rel(cand)
+        if staging_only and rel in ledger_rels:
+            continue
         if control_plane(rel, policy) or any(s in rel for s in ('.cursor/eif-runtime-policy.json','.cursor/hooks','.eif/AUTONOMY_POLICY.md','.eif/RUNTIME_CAPABILITIES.md')):
             return _shell_result(False,'CONTROL_PLANE_PROTECTED','shell text names a control-plane path; defense-in-depth deny (not process containment)')
         if matches(rel, protected):
@@ -1029,6 +954,12 @@ def shell_decision(cmd, sandbox, policy):
     del sandbox
     if IDENTITY_MUTATION.search(cmd) and not action_allowed(policy,'identity_mutation'):
         return _shell_result(False,'ACTION_IDENTITY_MUTATION','git remote identity mutation is not granted')
+    prog_git=_git_programme_worktree_deny(cmd, policy)
+    if prog_git:
+        return prog_git
+    add_git=_git_add_programme_consequence(cmd, policy)
+    if add_git:
+        return add_git
     if FORCE_VCS.search(cmd) and not action_allowed(policy,'force_vcs'):
         return _shell_result(False,'ACTION_FORCE_VCS','force/history-rewriting VCS operation is not granted')
     if REMOTE_PUSH.search(cmd) and not action_allowed(policy,'remote_push'):
@@ -1053,7 +984,10 @@ def shell_decision(cmd, sandbox, policy):
     sh=policy.get('shell') or {}; mode=str(sh.get('mode') or 'deny').lower()
     if mode=='deny': return _shell_result(False,'SHELL_DENY','shell execution disabled by policy')
     if mode=='workspace':
-        return _shell_result(True,'SHELL_WORKSPACE','ordinary workspace shell; not process containment')
+        branch_note=_git_branch_switch_note(cmd)
+        extra={'programme_branch_switch': True} if branch_note else {}
+        msg=branch_note or 'ordinary workspace shell; not process containment'
+        return _shell_result(True,'SHELL_WORKSPACE',msg,extra)
     return _shell_result(False,'SHELL_DENY','shell execution disabled by policy')
 
 MCP_URL_KEYS = {
@@ -1312,25 +1246,11 @@ def mcp_decision(data, policy, root=None, roots=None):
         record_browser_origin(root, data, dests, policy, roots)
     return True,'MCP_ALLOW','granted MCP tool'
 
-def main(raw=None):
+def main():
     try:
-        if raw is None:
-            _arm_watchdog()
-            raw = read_hook_stdin_eof()
-        data = parse_cursor_hook_stdin(raw)
-    except TimeoutError as e:
-        root=_project_root()
-        audit(root, {}, 'deny', 'HOOK_TIMEOUT', extra={'eif_guard_class': 'crash'})
-        return deny('HOOK_TIMEOUT', str(e) or 'unbounded hook stdin; fail-closed')
+        data = parse_cursor_hook_stdin(sys.stdin.buffer.read())
     except Exception as e:
-        root=_project_root()
-        audit(root, {}, 'deny', 'HOOK_INPUT_INVALID', extra={'eif_guard_class': 'crash'})
         return deny('HOOK_INPUT_INVALID', f'cannot parse Cursor hook input: {type(e).__name__}: {e}')
-    ok_target, why_target = hook_target_identifiable(data)
-    if not ok_target:
-        root=select_root(data)
-        audit(root, data, 'deny', 'HOOK_INPUT_INVALID', extra={'eif_guard_class': 'crash'})
-        return deny('HOOK_INPUT_INVALID', why_target)
     event=data.get('hook_event_name','')
     root=select_root(data)
     state,policy,pp,pmsg=load_policy(root)
@@ -1338,8 +1258,9 @@ def main(raw=None):
     # sessionStart is context only on Cursor; it is never used as a blocking boundary.
     if event=='sessionStart':
         if state=='OK':
-            text=(f'EIF runtime policy loaded for {policy.get("project_id","<unset>")}. '
-                  f'Blocking identity is re-checked at actionable hooks; sessionStart does not spawn git.')
+            ok,msg=identity_ok(root,policy)
+            text=(f'EIF runtime policy loaded for {policy.get("project_id","<unset>")}; '
+                  f'identity preflight: {msg}. Blocking identity is re-checked at actionable hooks.')
             return out(extra={'additional_context':text})
         return out(extra={'additional_context':f'EIF runtime policy state: {state}. {pmsg}. Do not treat sessionStart as a blocking control.'})
 
@@ -1365,9 +1286,9 @@ def main(raw=None):
             audit(root,data,'deny','FOREIGN_READ')
             return deny('FOREIGN_READ','read target resolves outside all declared project roots')
         if state=='OK':
-            # beforeReadFile is observation. Do not spawn git-identity here
-            # (duplicate same-repo anchors were six subprocesses / ~1.5s). Blocking
-            # identity is re-checked at beforeShellExecution / preToolUse / beforeMCPExecution.
+            ok,msg=identity_ok(root,policy)
+            if not ok:
+                audit(root,data,'deny','IDENTITY_READ',rel); return deny('IDENTITY_READ',msg)
             scopes=observation_scopes(policy)
             if scopes and not matches(rel,scopes):
                 audit(root,data,'deny','OUT_OF_OBSERVATION_SCOPE',rel); return deny('OUT_OF_OBSERVATION_SCOPE',f'read target outside accepted observation scope: {rel}')
@@ -1401,7 +1322,10 @@ def main(raw=None):
         if not ok: audit(root,data,'deny','IDENTITY_SHELL'); return deny('IDENTITY_SHELL',msg)
         good,code,msg,extra=shell_decision(str(data.get('command') or ''),bool(data.get('sandbox')),policy)
         audit(root,data,'allow' if good else 'deny',code, extra=extra)
-        return out() if good else deny(code,msg)
+        if good:
+            note=msg if msg and msg!='ordinary workspace shell; not process containment' else None
+            return out(message=note, extra=extra or None)
+        return deny(code,msg)
 
     if event=='beforeMCPExecution':
         if state!='OK': audit(root,data,'deny','MCP_POLICY_REQUIRED'); return deny('MCP_POLICY_REQUIRED','accepted runtime policy required before MCP execution')
@@ -1427,19 +1351,14 @@ def main(raw=None):
             if tool.startswith('MCP:'): audit(root,data,'deny','BOOTSTRAP_MCP'); return deny('BOOTSTRAP_MCP','MCP disabled during bootstrap')
             return out()
 
-        # Extract path before identity so a deny cannot audit path:null when a
-        # target existed. Observation tools skip git-identity (beforeReadFile
-        # already does); concurrent Read/Grep bursts were IDENTITY_TOOL/path:null
-        # when identity_ok flaked under hook-process git contention.
-        path=tool_path(inp); rr,rel=resolve_path(path,roots) if path else (None,None)
-        if tool not in OBSERVATION_TOOLS:
-            ok,msg=identity_ok(root,policy)
-            if not ok:
-                audit(root,data,'deny','IDENTITY_TOOL',rel); return deny('IDENTITY_TOOL',msg)
+        ok,msg=identity_ok(root,policy)
+        if not ok:
+            audit(root,data,'deny','IDENTITY_TOOL'); return deny('IDENTITY_TOOL',msg)
         bok,bmsg,bextra=budget_ok(root,data,policy)
-        if not bok: audit(root,data,'deny','BUDGET',rel); return deny('BUDGET',bmsg)
+        if not bok: audit(root,data,'deny','BUDGET'); return deny('BUDGET',bmsg)
 
         # Generic path-bound tools: reads/writes cannot escape declared roots, including symlink escapes.
+        path=tool_path(inp); rr,rel=resolve_path(path,roots) if path else (None,None)
         if path and not rr:
             audit(root,data,'deny','FOREIGN_PATH'); return deny('FOREIGN_PATH','tool target resolves outside all declared project roots')
 
@@ -1467,7 +1386,7 @@ def main(raw=None):
                     if has_secret(st):
                         audit(root,data,'deny','SECRET_PREWRITE',rel); return deny('SECRET_PREWRITE','high-confidence secret-like literal blocked before file write')
 
-        if tool in OBSERVATION_TOOLS and path:
+        if tool in {'Read','Grep'} and path:
             scopes=observation_scopes(policy)
             if scopes and not matches(rel,scopes):
                 audit(root,data,'deny','OUT_OF_OBSERVATION_SCOPE',rel); return deny('OUT_OF_OBSERVATION_SCOPE',f'read/search outside accepted observation scope: {rel}')
@@ -1494,20 +1413,8 @@ def main(raw=None):
 
 if __name__=='__main__':
     _arm_watchdog()
-    raw=b''
     try:
-        raw=read_hook_stdin_eof()
-    except TimeoutError as e:
-        rc=deny('HOOK_TIMEOUT', str(e) or 'unbounded hook stdin; fail-closed')
-        raise SystemExit(0 if rc is None else rc)
-    except Exception as e:
-        try:
-            rc=deny('HOOK_INPUT_INVALID', f'cannot read Cursor hook stdin: {type(e).__name__}: {e}')
-        except Exception:
-            rc=0
-        raise SystemExit(0 if rc is None else rc)
-    try:
-        rc=main(raw)
+        rc=main()
     except BrokenPipeError:
         rc=deny('HOOK_INTERNAL_ERROR', 'BrokenPipeError while producing a decision')
     except Exception as e:
@@ -1515,12 +1422,12 @@ if __name__=='__main__':
             rc=deny('HOOK_INTERNAL_ERROR', f'{type(e).__name__}: {e}')
         except Exception:
             fallback=(
-                '{"permission":"deny","reason_code":"HOOK_EMIT_FAILURE","eif_guard_class":"crash",'
-                '"user_message":"EIF_GUARD_CRASH: HOOK_EMIT_FAILURE: unrecoverable guard crash",'
-                '"agent_message":"EIF_GUARD_CRASH: HOOK_EMIT_FAILURE: unrecoverable guard crash"}\n'
+                '{"permission":"deny","reason_code":"HOOK_EMIT_FAILURE",'
+                '"user_message":"HOOK_EMIT_FAILURE: unrecoverable guard crash",'
+                '"agent_message":"HOOK_EMIT_FAILURE: unrecoverable guard crash"}\n'
             ).encode('ascii')
             wrote=_write_stdout_bytes(fallback)
-            write_operator_log('HOOK_EMIT_FAILURE', f'{type(e).__name__}: {e}', extra={'stdout_wrote': wrote, 'eif_guard_class': 'crash'})
+            write_operator_log('HOOK_EMIT_FAILURE', f'{type(e).__name__}: {e}', extra={'stdout_wrote': wrote})
             rc=0 if wrote else 1
     try:
         raise SystemExit(0 if rc is None else rc)
