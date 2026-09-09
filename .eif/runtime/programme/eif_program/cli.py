@@ -26,9 +26,23 @@ def store_from(args) -> ProgramStore:
     return ProgramStore(Path(args.project), run=args.run or '')
 
 
+def request_id(args, suffix=''):
+    key = getattr(args, 'request_id', None)
+    return f'{key}{suffix}' if key else None
+
+
+def mutation_views(st, state):
+    """A generated-view failure cannot undo the authoritative event commit."""
+    try:
+        write_views(st.project, state)
+    except OSError as exc:
+        print(f'WARNING DERIVED_STATE_WARNING: ledger committed at rev {state["programme"]["snapshot_revision"]}; '
+              f'generated view refresh failed: {exc}; run views after restoring storage', file=sys.stderr)
+
+
 def cmd_init(args):
     st = store_from(args)
-    if st.exists() and not args.force:
+    if st.exists() and not args.force and not request_id(args):
         raise ProgramError('ALREADY_EXISTS', str(st.dir))
     nouns = [x.strip() for x in (args.nouns or '').split(',') if x.strip()]
     state = st.append('programme.init', {
@@ -37,14 +51,14 @@ def cmd_init(args):
         'identity_form': args.identity_form,
         'project_id': getattr(args, 'project_id', None),
         'debug_budget': args.debug_budget,
-    }, actor=args.actor)
+    }, actor=args.actor, request_id=request_id(args, ':init'))
     if args.charter in {'accepted', 'auto'}:
         state = st.append('programme.charter', {
             'status': args.charter,
             'workstreams': [x.strip() for x in (args.workstreams or '').split(',') if x.strip()],
             'root_interpretation': args.interpretation,
-        }, actor=args.actor)
-    write_views(st.project, state)
+        }, actor=args.actor, request_id=request_id(args, ':charter'))
+    mutation_views(st, state)
     print(state['programme']['id'], 'rev', state['programme']['snapshot_revision'])
     return 0
 
@@ -68,8 +82,8 @@ def cmd_add_node(args):
         'fingerprint': args.fingerprint,
         'acceptance': args.acceptance,
     }
-    state = st.append('node.add', payload, actor=args.actor)
-    write_views(st.project, state)
+    state = st.append('node.add', payload, actor=args.actor, request_id=request_id(args))
+    mutation_views(st, state)
     nid = payload['id'] or max(state['nodes'])
     print(nid, 'rev', state['nodes'][nid if nid in state['nodes'] else list(state['nodes'])[-1]]['revision'])
     return 0
@@ -78,8 +92,8 @@ def cmd_add_node(args):
 def cmd_event(args):
     st = store_from(args)
     payload = json.loads(args.payload) if args.payload else {}
-    state = st.append(args.type, payload, actor=args.actor)
-    write_views(st.project, state)
+    state = st.append(args.type, payload, actor=args.actor, request_id=request_id(args))
+    mutation_views(st, state)
     print('rev', state['programme']['snapshot_revision'])
     return 0
 
@@ -154,14 +168,21 @@ def cmd_health(args):
     acc = completion_account(state)
     expired = [nid for nid, n in state['nodes'].items() if n.get('lease') and not live_lease(n)]
     print('mode programme')
-    print('integrity', 'ok' if integrity.get('ok') else 'FAIL')
-    if integrity.get('issues'):
-        print('integrity_issues', '; '.join(integrity['issues']))
-    print('open_decisions', len(acc.get('open_decisions') or acc.get('open_decisions') or []))
-    print('conservation_gaps', acc.get('conservation_gaps') or acc.get('conservation_gaps'))
+    print('integrity', 'ok' if integrity.get('integrity_ok') else 'FAIL')
+    if integrity.get('integrity_issues'):
+        print('integrity_issues', '; '.join(integrity['integrity_issues']))
+    debt = integrity.get('gate_debt') or []
+    unacknowledged = [d for d in debt if not d['acknowledged']]
+    print('gates', 'ok' if integrity.get('gates_ok') else 'DEBT')
+    print('acknowledged_gate_debt', len(debt) - len(unacknowledged))
+    print('unacknowledged_gate_debt', len(unacknowledged))
+    if integrity.get('gate_issues'):
+        print('gate_issues', '; '.join(integrity['gate_issues']))
+    print('open_decisions', len(acc.get('open_decisions') or []))
+    print('conservation_gaps', acc.get('conservation_gaps') or [])
     print('frontier', frontier(state))
     print('expired_leases', expired or '-')
-    return 0 if integrity.get('ok') else 2
+    return 0 if integrity.get('integrity_ok') and not unacknowledged else 2
 
 
 def cmd_task_check(args):
@@ -246,6 +267,7 @@ def build_parser():
     p.add_argument('--project', default='.')
     p.add_argument('--run', default='')
     p.add_argument('--actor', default='gov-001')
+    p.add_argument('--request-id', default=None, help='stable unique id for a retried mutation; reuse with the same --run and input')
     sp = p.add_subparsers(dest='cmd', required=True)
 
     s = sp.add_parser('init')
@@ -329,7 +351,10 @@ def main(argv=None):
     args = build_parser().parse_args(argv)
     project = Path(args.project).resolve()
     from eif_program.runtime_paths import manifest_path  # noqa: WPS433
-    if manifest_path(project).is_file():
+    # Framework source/task fixtures have no installed runtime. A deleted host
+    # manifest must never become permission to skip installed-runtime checks.
+    installed_runtime = project / '.eif/runtime/programme'
+    if manifest_path(project).is_file() or installed_runtime.exists() or '.eif/runtime/programme' in Path(__file__).resolve().as_posix():
         from eif_program.runtime_integrity import verify_runtime  # noqa: WPS433
         ok, msg = verify_runtime(project)
         if not ok:

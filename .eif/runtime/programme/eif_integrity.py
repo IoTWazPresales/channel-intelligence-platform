@@ -1,18 +1,10 @@
-#!/usr/bin/env python3
-from __future__ import annotations
-import sys
-sys.dont_write_bytecode = True
-# Built-in sys/string operations must run before any stdlib import: otherwise
-# unverified runtime/hashlib.py could execute before the manifest is checked.
-_ENTRY_BOOT_DIR = __file__.replace(chr(92), '/').rsplit('/', 1)[0].rstrip('/').casefold()
-sys.path[:] = [item for item in sys.path if item not in ('', '.') and
-               item.replace(chr(92), '/').rstrip('/').casefold() != _ENTRY_BOOT_DIR]
 """Stdlib-only delivered-runtime checks and cooperative reader/upgrade lock.
 
 The local manifest detects drift, not an attacker replacing code plus manifest.
 Callers bootstrap-check this helper before importing it. The installed programme
 entry embeds this code so no application import precedes the integrity check.
 """
+from __future__ import annotations
 
 from contextlib import contextmanager
 import hashlib
@@ -153,25 +145,3 @@ def runtime_lock(project, *, exclusive=False, timeout=2.0):
                 release()
         finally:
             handle.close()
-
-
-import sys
-sys.dont_write_bytecode = True
-_EXPECTED_FILES = ('.eif/runtime/programme/eif_constants.py', '.eif/runtime/programme/eif_integrity.py', '.eif/runtime/programme/eif_program/__init__.py', '.eif/runtime/programme/eif_program/cli.py', '.eif/runtime/programme/eif_program/clock.py', '.eif/runtime/programme/eif_program/design_artifacts.py', '.eif/runtime/programme/eif_program/engine.py', '.eif/runtime/programme/eif_program/errors.py', '.eif/runtime/programme/eif_program/facet_map.yaml', '.eif/runtime/programme/eif_program/facets.py', '.eif/runtime/programme/eif_program/findings.py', '.eif/runtime/programme/eif_program/independence.py', '.eif/runtime/programme/eif_program/journeys.py', '.eif/runtime/programme/eif_program/migrate.py', '.eif/runtime/programme/eif_program/retroactive.py', '.eif/runtime/programme/eif_program/runtime_integrity.py', '.eif/runtime/programme/eif_program/runtime_paths.py', '.eif/runtime/programme/eif_program/store.py', '.eif/runtime/programme/eif_program/views.py', '.eif/runtime/programme/eif_reason_codes.py', '.eif/runtime/programme/eiflib.py', '.eif/runtime/programme/program.py')
-_RUNTIME = Path(__file__).resolve().parent
-_PROJECT = _RUNTIME.parents[2]
-if __name__ == '__main__':
-    try:
-        with runtime_lock(_PROJECT):
-            ok, message = verify_manifest(_PROJECT, '.eif/runtime/programme/manifest.json', _EXPECTED_FILES,
-                kind='programme-runtime-manifest', runtime_root='.eif/runtime/programme',
-                control_interface='python .eif/runtime/programme/program.py')
-            if not ok:
-                print('ERROR RUNTIME_INTEGRITY: ' + message, file=sys.stderr)
-                raise SystemExit(2)
-            sys.path.insert(0, str(_RUNTIME))
-            from eif_program.cli import main
-            raise SystemExit(main())
-    except (OSError, ValueError) as error:
-        print('ERROR RUNTIME_INTEGRITY: ' + str(error), file=sys.stderr)
-        raise SystemExit(2)

@@ -177,10 +177,6 @@ def work_item_md(state: dict, node: dict | None) -> str:
 
 def health_md(state: dict) -> str:
     acc = completion_account(state)
-    stale = []
-    for n in state['nodes'].values():
-        if n.get('baseline_ref') and n.get('status') not in TERMINAL_LOCAL:
-            pass
     lines = [
         '# Programme health',
         '',
@@ -190,6 +186,3 @@ def health_md(state: dict) -> str:
         '',
     ]
     return '\n'.join(lines)
-
-
-TERMINAL_LOCAL = {'complete', 'deferred', 'rejected', 'split'}

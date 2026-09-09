@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from .errors import ProgramError
+from eif_reason_codes import is_reason_code
 
 EVENT_TYPES = ('finding.defer',)
 
@@ -10,9 +11,12 @@ def h_finding_defer(s, p, run, actor='', replay=False, seq=None):
     note = p.get('note') or p.get('finding')
     if not str(note or '').strip():
         raise ProgramError('FINDING_NOTE', 'finding.defer requires note')
+    code = str(p.get('code') or p.get('kind') or 'DOES_NOT_FIT')
+    if not replay and not is_reason_code(code):
+        raise ProgramError('UNKNOWN_REASON_CODE', f'unregistered finding code: {code}')
     rec = {
         'seq': seq,
-        'code': str(p.get('code') or p.get('kind') or 'DOES_NOT_FIT'),
+        'code': code,
         'note': str(note).strip(),
         'node': p.get('node'),
         'run': run,

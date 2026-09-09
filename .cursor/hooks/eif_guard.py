@@ -24,16 +24,23 @@ Security model:
   behaviour, not an agent-aimed grant.
 """
 from __future__ import annotations
-import fnmatch, hashlib, json, os, re, subprocess, sys, threading, time
+import sys
+# Do not execute a host-side stdlib shadow module before verifying the hooks.
+# sys is built in; no filesystem-backed imports are needed for this bootstrap.
+_bootstrap_dir = __file__.replace('\\', '/').rsplit('/', 1)[0].rstrip('/').casefold()
+sys.path[:] = [entry for entry in sys.path if entry not in {'', '.'}
+               and entry.replace('\\', '/').rstrip('/').casefold() != _bootstrap_dir]
+import codecs, fnmatch, hashlib, json, math, os, re, subprocess, sys, threading, time, types
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 CONTROL_PLANE_DEFAULTS = [
-    '.cursor/eif-runtime-policy.json', '.cursor/hooks.json', '.cursor/hooks/**',
+    '.cursor/eif-runtime-policy.json', '.cursor/eif-runtime-manifest.json', '.cursor/hooks.json', '.cursor/hooks/**',
     '.cursor/rules/eif-core.mdc', '.cursor/rules/eif-project-adapter.mdc',
     '.cursor/permissions.json', '.eif/PROJECT_MANIFEST.md', '.eif/AUTONOMY_POLICY.md', '.eif/ENVIRONMENT_POLICY.md', '.eif/RUNTIME_CAPABILITIES.md',
     '.eif/runtime-events.jsonl', '.eif/runtime-budget/**', '.eif/program/**', '.eif/runtime/programme/**', '.eif/upgrade-work/**',
     '.eif/hook-guard.log', '.eif/hook-guard.json',
+    '.eif/runtime-session/**', '.eif/runtime-upgrade.lock', '.eif/upgrade-history/**',
 ]
 BOOTSTRAP_SHELL = [
     r'^pwd\s*$',
@@ -68,117 +75,57 @@ LOOPBACK_HOSTS = {'localhost','127.0.0.1','::1','0.0.0.0','[::1]'}
 NETWORK_CLASSES = frozenset({'loopback','public_read'})
 
 
-HOOK_STDIN_MAX_BYTES = 1_048_576
-# Brief retry after an empty or incomplete read. Cursor on Windows sometimes
-# delivers a zero-byte first read or closes the pipe mid-object. Failing on
-# that first short read mislabels a transport failure as a policy deny.
-HOOK_STDIN_RETRY_SEC = 0.25
-HOOK_STDIN_RETRY_SLEEP = 0.02
-OBSERVATION_TOOLS = frozenset({'Read', 'Grep', 'Glob'})
-PATH_REQUIRED_TOOLS = frozenset({'Read', 'Write', 'Delete'})
+MAX_HOOK_INPUT_BYTES = 16 * 1024 * 1024
 
 
-def _hook_bytes_complete_json(raw: bytes) -> bool:
-    """True when raw bytes contain at least one complete JSON value.
+def read_cursor_hook_stdin(stream) -> bytes:
+    """Read one JSON frame or EOF, never infer completeness from a quiet pipe.
 
-    Cursor may hold the hook pipe open after writing the payload. A complete
-    object is a finished payload; waiting for EOF is the silent-kill path.
+    read1 performs one underlying pipe read rather than waiting to fill a buffer.
+    Framing uses ASCII structural characters (decoded UTF-16 when BOM-marked).
+    The complete bytes still go through strict JSON and encoding validation.
+    An empty/incomplete pipe held open is inherently undecidable without a
+    deadline; the existing watchdog handles that case, not frame completion.
     """
-    if not raw or not raw.strip():
-        return False
-    if raw.startswith((b'\xff\xfe', b'\xfe\xff')):
-        try:
-            text = raw.decode('utf-16')
-        except UnicodeDecodeError:
-            return False
-    else:
-        try:
-            text = raw.decode('utf-8-sig')
-        except UnicodeDecodeError:
-            try:
-                text = raw.decode('utf-16')
-            except UnicodeDecodeError:
-                return False
-    text = text.strip()
-    if not text:
-        return False
-    try:
-        json.JSONDecoder().raw_decode(text)
-        return True
-    except json.JSONDecodeError:
-        return False
-
-
-def _read_hook_stdin_chunks(read_chunk) -> bytes:
-    chunks: list[bytes] = []
-    total = 0
-    idle_started = None
+    raw = bytearray()
+    decoder = None
+    depth = 0
+    started = False
+    quoted = False
+    escaped = False
+    read = getattr(stream, 'read1', stream.read)
     while True:
-        try:
-            chunk = read_chunk()
-        except InterruptedError:
-            continue
-        except OSError:
-            break
-        if chunk:
-            idle_started = None
-            chunks.append(chunk)
-            total += len(chunk)
-            joined = b''.join(chunks)
-            if _hook_bytes_complete_json(joined):
-                return joined
-            if total >= HOOK_STDIN_MAX_BYTES:
-                raise TimeoutError(
-                    'hook stdin exceeded max bytes without a complete JSON object; fail-closed'
-                )
-            continue
-        joined = b''.join(chunks)
-        if _hook_bytes_complete_json(joined):
-            return joined
-        now = time.monotonic()
-        if idle_started is None:
-            idle_started = now
-        if (now - idle_started) >= HOOK_STDIN_RETRY_SEC:
-            return joined
-        time.sleep(HOOK_STDIN_RETRY_SLEEP)
-    return b''.join(chunks)
-
-
-def read_hook_stdin_eof() -> bytes:
-    """Read the Cursor hook pipe until a complete JSON value or EOF.
-
-    Windows anonymous pipes return the first available chunk from a single
-    os.read / FileIO.read. Stopping there is payload-size-dependent truncation
-    and surfaces as HOOK_INPUT_INVALID (JSONDecodeError). Loop across chunks,
-    but treat a complete JSON object as finished — do not wait for EOF.
-
-    A first empty read is not immediately EOF: retry briefly (HOOK_STDIN_RETRY_SEC)
-    so a zero-byte race or mid-object close can still complete. Remaining empty
-    or truncated input is HOOK_INPUT_INVALID (crash), never a policy code.
-
-    The decision watchdog must already be armed. A held-open pipe that never
-    delivers a complete object is HOOK_TIMEOUT, never a silent host kill.
-    """
-    fd = None
-    try:
-        fd = sys.stdin.fileno()
-    except Exception:
-        fd = None
-    if fd is None:
-        buf = getattr(sys.stdin, 'buffer', None)
-        if buf is None:
-            try:
-                return (sys.stdin.read() or '').encode('utf-8')
-            except Exception:
-                return b''
-        return _read_hook_stdin_chunks(lambda: buf.read(65536))
-    if os.name == 'nt':
-        try:
-            import msvcrt
-            msvcrt.setmode(fd, os.O_BINARY)
-        except Exception:
-            pass
-    return _read_hook_stdin_chunks(lambda: os.read(fd, 65536))
+        chunk = read(min(65536, MAX_HOOK_INPUT_BYTES + 1 - len(raw)))
+        if not chunk:
+            return bytes(raw)
+        raw.extend(chunk)
+        if len(raw) > MAX_HOOK_INPUT_BYTES:
+            raise ValueError(f'Cursor hook input exceeds {MAX_HOOK_INPUT_BYTES} bytes')
+        if decoder is None:
+            if len(raw) < 2:
+                continue
+            encoding = 'utf-16' if raw[:2] in (b'\xff\xfe', b'\xfe\xff') else 'latin1'
+            decoder = codecs.getincrementaldecoder(encoding)()
+            text = decoder.decode(bytes(raw))
+        else:
+            text = decoder.decode(chunk)
+        for char in text:
+            if quoted:
+                if escaped:
+                    escaped = False
+                elif char == '\\':
+                    escaped = True
+                elif char == '"':
+                    quoted = False
+            elif char == '"':
+                quoted = True
+            elif char in '{[':
+                started = True
+                depth += 1
+            elif char in '}]' and started:
+                depth -= 1
+                if depth == 0:
+                    return bytes(raw)
 
 
 def parse_cursor_hook_stdin(raw: bytes) -> dict:
@@ -198,53 +145,111 @@ def parse_cursor_hook_stdin(raw: bytes) -> dict:
         try:
             text = raw.decode('utf-8-sig')
         except UnicodeDecodeError:
-            text = raw.decode('utf-16')
+            # Legacy Windows PowerShell pipes can use cp1252. Never interpret
+            # arbitrary single-byte input as unmarked UTF-16 or replace bytes.
+            text = raw.decode('cp1252')
     text = text.strip()
     if not text:
         raise ValueError('empty Cursor hook stdin')
-    return json.loads(text)
+    data = json.loads(text)
+    if not isinstance(data, dict):
+        raise ValueError('Cursor hook input must be a JSON object')
+    return data
 
-# Crash / launcher / emit failures must be distinguishable from policy denials.
-# Cursor failClosed treats empty/invalid stdout as a mute block with no rule name.
-# deny() prefixes agent_message with EIF_GUARD_CRASH: or EIF_GUARD_POLICY: and
-# sets eif_guard_class. PROGRAMME_GIT_STAGE is not a reason code in this tree.
-# CONSULT 2026-09-04 (claude-opus CLI, sdk-cli): beforeReadFile failClosed must
-# stay true. failClosed:false would allow SENSITIVE_READ / SECRET_IN_READ /
-# FOREIGN_READ / OUT_OF_OBSERVATION_SCOPE into model context on hook crash.
-# Verdict FAILCLOSED_BEFORE_READ: keep_true. Residual not acceptable.
-# CONSULT 2026-09-04 (claude-opus CLI): unparseable/path-less observation stdin
-# is OBSERVATION_TRANSPORT: deny_crash. Cursor still holds the real path; empty
-# payload is missing evidence, not evidence of no target. allow_crash is only
-# lawful after the launcher passes event name out of band (argv/hooks.json).
-
+# Crash / launcher / emit failures must be distinguishable from policy denials
+# such as OUT_OF_CHANGE_SCOPE. Cursor failClosed treats empty/invalid stdout as a
+# mute block ("hook returned no output") with no rule name.
 CRASH_REASON_CODES = frozenset({
     'HOOK_INTERNAL_ERROR', 'HOOK_LAUNCHER_ERROR', 'HOOK_INPUT_INVALID',
-    'HOOK_TIMEOUT', 'HOOK_EMIT_FAILURE',
-})
-# Live policy deny() / shell_decision / mcp_decision reason_code values in this file.
-POLICY_REASON_CODES = frozenset({
-    'ACTION_ARTIFACT_WRITE', 'ACTION_DELETE', 'ACTION_DEPENDENCY',
-    'ACTION_DESTRUCTIVE_DATA', 'ACTION_FORCE_VCS', 'ACTION_IDENTITY_MUTATION',
-    'ACTION_INFRASTRUCTURE', 'ACTION_NETWORK', 'ACTION_REMOTE_PUSH', 'ACTION_WRITE',
-    'BOOTSTRAP', 'BOOTSTRAP_MCP', 'BROWSER_INTERACT_ORIGIN', 'BROWSER_OBSERVE_ONLY',
-    'BROWSER_PUBLIC_MUTATE', 'BROWSER_UNSAFE', 'BUDGET', 'CONTROL_PLANE_PROTECTED',
-    'FOREIGN_PATH', 'FOREIGN_READ', 'IDENTITY_MCP', 'IDENTITY_SHELL', 'IDENTITY_TOOL',
-    'MCP_DENY', 'MCP_DESTRUCTIVE', 'MCP_NOT_GRANTED', 'MCP_POLICY_REQUIRED',
-    'NETWORK_DESTINATION', 'OUT_OF_CHANGE_SCOPE', 'OUT_OF_OBSERVATION_SCOPE',
-    'POLICY_INTEGRITY', 'POST_EDIT_SECRET', 'PROTECTED_PATH', 'SECRET_IN_READ',
-    'SECRET_PREWRITE', 'SENSITIVE_READ', 'SENSITIVE_TOOL_READ', 'SHELL_DENY',
-    'SHELL_POLICY_REQUIRED',
-})
-OBSERVATION_EVENTS = frozenset({
-    'beforeReadFile', 'afterFileEdit', 'afterMCPExecution', 'postToolUse',
-    'sessionStart', 'stop', 'subagentStart', 'subagentStop',
+    'HOOK_TIMEOUT', 'HOOK_EMIT_FAILURE', 'HOOK_LOG_FAILURE',
+    'UNKNOWN_REASON_CODE', 'BUDGET_STATE_FAILURE', 'SESSION_STATE_FAILURE',
+    'SESSION_GIT_FAILURE', 'IDENTITY_GIT_FAILURE', 'RUNTIME_INTEGRITY', 'RUNTIME_LOCK_FAILURE',
 })
 WATCHDOG_DEFAULT_SEC = 8.0
 _EMITTED = False
 _EMIT_RC = 1
 _EMIT_LOCK = threading.Lock()
 _DONE = threading.Event()
-_WATCHDOG_ARMED = False
+_READ_ONLY = False
+_DECISION_CODE = None
+_AUDIT_ERROR = None
+_STARTED = time.perf_counter()
+_ACTIVE_DATA = None
+_ACTIVE_ROOT = None
+_SUPPORT_READY = False
+_READ_WARNING = None
+_TIMINGS = {}
+_GIT_CACHE = {}
+_RUNTIME_LOCK = None
+_DEADLINE = None
+
+
+def remaining_timeout(limit=2.0):
+    """Reserve response time within the single invocation watchdog deadline."""
+    if _DEADLINE is None:
+        return limit
+    remaining = _DEADLINE - time.perf_counter() - 0.1
+    if remaining <= 0:
+        raise GuardFault('HOOK_TIMEOUT', 'invocation deadline exhausted before starting another operation')
+    return min(limit, remaining)
+
+
+class GuardFault(RuntimeError):
+    def __init__(self, code, message):
+        self.code = code
+        super().__init__(message)
+
+
+def support(name):
+    """Load only shipped helpers; production calls follow integrity verification."""
+    if name not in {'eif_reason_codes', 'eif_state', 'eif_session'}:
+        raise ValueError('unknown guard helper')
+    directory = Path(__file__).resolve().parent
+    if str(directory) not in sys.path:
+        sys.path.insert(0, str(directory))
+    if name == 'eif_session':
+        support('eif_state')
+    if name not in sys.modules:
+        raw = (directory / (name + '.py')).read_bytes()
+        module = types.ModuleType(name)
+        module.__file__ = str(directory / (name + '.py'))
+        sys.modules[name] = module
+        try:
+            exec(compile(raw, module.__file__, 'exec'), module.__dict__)
+        except Exception:
+            sys.modules.pop(name, None)
+            raise
+    return sys.modules[name]
+
+
+def verified_runtime(root):
+    """Hash helper bytes before execution, then lock and verify full inventory."""
+    hook_dir = Path(__file__).resolve().parent
+    source_root = hook_dir.parents[3]
+    reference = (hook_dir == source_root / 'runtime/cursor/.cursor/hooks'
+                 and (source_root / 'tools/compile_cursor.py').is_file())
+    manifest_path = root / '.cursor/eif-runtime-manifest.json'
+    raw = (hook_dir / 'eif_integrity.py').read_bytes()
+    if not reference:
+        manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+        files = manifest.get('files') if isinstance(manifest, dict) else None
+        expected = files.get('.cursor/hooks/eif_integrity.py') if isinstance(files, dict) else None
+        if hashlib.sha256(raw).hexdigest() != expected:
+            raise ValueError('hook integrity helper missing or digest mismatch')
+    module = types.ModuleType('eif_integrity_bootstrap')
+    module.__file__ = str(hook_dir / 'eif_integrity.py')
+    exec(compile(raw, module.__file__, 'exec'), module.__dict__)
+    lock = module.runtime_lock(root, timeout=remaining_timeout())
+    lock.__enter__()
+    try:
+        if not reference:
+            ok, message = module.verify_hook_runtime(root)
+            if not ok:
+                raise ValueError(message)
+    except Exception:
+        lock.__exit__(*sys.exc_info())
+        raise
+    return lock
 
 
 def _project_root() -> Path:
@@ -258,7 +263,7 @@ def _project_root() -> Path:
 
 
 def _operator_log_path() -> Path:
-    return _project_root() / '.eif' / 'hook-guard.log'
+    return (_ACTIVE_ROOT or _project_root()) / '.eif' / 'hook-guard.log'
 
 
 def watchdog_sec() -> float:
@@ -266,12 +271,13 @@ def watchdog_sec() -> float:
 
     Host config (no EIF release): `.eif/hook-guard.json` `watchdog_sec`.
     Session/test override: environment variable `EIF_HOOK_WATCHDOG_SEC`.
-    `<= 0` disables the watchdog. This is not Cursor's `hooks.json` `timeout`.
+    Invalid, nonpositive and over-budget values use the safe 8-second default.
     """
     raw = os.environ.get('EIF_HOOK_WATCHDOG_SEC')
     if raw not in (None, ''):
         try:
-            return float(raw)
+            value = float(raw)
+            return value if math.isfinite(value) and 0 < value <= WATCHDOG_DEFAULT_SEC else WATCHDOG_DEFAULT_SEC
         except ValueError:
             pass
     cfg = _project_root() / '.eif' / 'hook-guard.json'
@@ -279,13 +285,14 @@ def watchdog_sec() -> float:
         if cfg.is_file():
             data = json.loads(cfg.read_text(encoding='utf-8'))
             if isinstance(data, dict) and 'watchdog_sec' in data:
-                return float(data['watchdog_sec'])
+                value = float(data['watchdog_sec'])
+                return value if math.isfinite(value) and 0 < value <= WATCHDOG_DEFAULT_SEC else WATCHDOG_DEFAULT_SEC
     except Exception:
         pass
     return WATCHDOG_DEFAULT_SEC
 
 
-def write_operator_log(code, message, extra=None):
+def _append_operator_log(code, message, extra=None):
     """Append a line an operator can open in the editor; no CLI required."""
     try:
         p = _operator_log_path()
@@ -297,50 +304,128 @@ def write_operator_log(code, message, extra=None):
                     rec[k] = v
         with p.open('a', encoding='utf-8') as f:
             f.write(json.dumps(rec, ensure_ascii=True, separators=(',', ':')) + '\n')
-    except Exception:
-        pass
-
-
-def _write_stdout_bytes(data: bytes) -> bool:
-    try:
-        os.write(sys.stdout.fileno(), data)
-        return True
-    except Exception:
-        pass
-    try:
-        buf = getattr(sys.stdout, 'buffer', None)
-        if buf is not None:
-            buf.write(data)
-            buf.flush()
-            return True
-    except Exception:
-        pass
-    try:
-        sys.stdout.write(data.decode('ascii'))
-        sys.stdout.flush()
+            f.flush()
         return True
     except Exception:
         return False
 
 
+def write_operator_log(code, message, extra=None):
+    """Bound sink latency so a stalled filesystem cannot lock out the watchdog.
+
+    A timed-out append may finish later; the decision reports unconfirmed log
+    delivery and emits its diagnostic on stderr. It never invents log success.
+    """
+    result = []
+    done = threading.Event()
+    def append():
+        try:
+            result.append(_append_operator_log(code, message, extra))
+        finally:
+            done.set()
+    threading.Thread(target=append, daemon=True, name='eif-log-writer').start()
+    return bool(done.wait(0.25) and result and result[0])
+
+
+def _write_stdout_bytes(data: bytes) -> bool:
+    try:
+        fd = sys.stdout.fileno()
+    except Exception:
+        try:
+            sys.stdout.write(data.decode('ascii'))
+            sys.stdout.flush()
+            return True
+        except Exception:
+            return False
+    offset = 0
+    try:
+        while offset < len(data):
+            written = os.write(fd, data[offset:])
+            if written <= 0:
+                return False
+            offset += written
+        return True
+    except Exception:
+        # Never restart the JSON after a partial write: that corrupts stdout.
+        return False
+
+
+def _stderr_log(record):
+    try:
+        sys.stderr.write(json.dumps(record, ensure_ascii=True, separators=(',', ':')) + '\n')
+        sys.stderr.flush()
+    except Exception:
+        pass
+
+
 def out(permission='allow', message=None, extra=None):
     """Emit one ASCII JSON decision on stdout.
 
-    A successful permission JSON is exit 0 so failClosed does not treat an EIF
-    deny/allow as a hook crash. A failed stdout write is HOOK_EMIT_FAILURE:
-    log it and return non-zero. Mute exit-0 with empty stdout is the original bug.
+    Allows and handled harness faults return JSON with exit 0. Policy denials
+    use Cursor's explicit block exit 2 and repeat diagnostics on stderr.
+    A failed stdout write is HOOK_EMIT_FAILURE with exit 1.
     """
     global _EMITTED, _EMIT_RC
     obj = {'permission': permission}
     if extra:
         obj.update(extra)
+    if permission == 'allow' and _READ_ONLY and _READ_WARNING:
+        obj.update(_READ_WARNING)
     if message:
         obj.setdefault('user_message', message)
         obj.setdefault('agent_message', message)
-    raw = (json.dumps(obj, ensure_ascii=True, separators=(',', ':')) + '\n').encode('ascii')
-    with _EMIT_LOCK:
+    obj.setdefault('reason_code', _DECISION_CODE or 'HOOK_ALLOW')
+    reason = obj['reason_code']
+    if reason not in CRASH_REASON_CODES and not support('eif_reason_codes').is_reason_code(reason):
+        obj['original_reason_code'] = str(reason)
+        reason = obj['reason_code'] = 'UNKNOWN_REASON_CODE'
+        permission = obj['permission'] = 'deny'
+        message = f'Unknown EIF reason code rejected: {obj["original_reason_code"]}'
+    kind = 'harness_fault' if reason in CRASH_REASON_CODES else 'policy'
+    obj['decision_kind'] = kind
+    if kind == 'harness_fault':
+        obj['agent_message'] = (
+            f'EIF harness fault in bookkeeping; read policy checks completed and the read is allowed. {message or reason}'
+            if permission == 'allow' and _READ_ONLY else
+            f'EIF harness fault; authorization could not be completed. {message or reason}')
+    if _SUPPORT_READY and _ACTIVE_DATA and permission == 'deny' and reason != 'HOOK_TIMEOUT':
+        try:
+            support('eif_session').record_block(_ACTIVE_ROOT, _ACTIVE_DATA, reason)
+        except Exception as exc:
+            obj['original_reason_code'] = reason
+            reason = obj['reason_code'] = 'SESSION_STATE_FAILURE'
+            kind = obj['decision_kind'] = 'harness_fault'
+            obj['agent_message'] = f'EIF harness fault: cannot persist blocked-action cursor: {type(exc).__name__}; action remains blocked.'
+    if not _EMIT_LOCK.acquire(timeout=0.25):
+        _stderr_log({'reason_code': 'HOOK_EMIT_FAILURE', 'decision_kind': 'harness_fault',
+                     'message': 'decision sink stalled; launcher must report delivery failure'})
+        write_operator_log('HOOK_EMIT_FAILURE', 'decision sink stalled')
+        return 1
+    try:
         if _EMITTED:
             return _EMIT_RC
+        logged = write_operator_log(reason, message or reason, extra={
+            'permission': permission, 'decision_kind': kind,
+            'elapsed_ms': round((time.perf_counter() - _STARTED) * 1000, 3),
+            'timings_ms': _TIMINGS,
+        })
+        if not logged or _AUDIT_ERROR:
+            # Only a fully evaluated, allowed read can survive a telemetry fault.
+            # No parser, identity, policy-integrity or scope failure reaches this.
+            if permission == 'allow' and not _READ_ONLY:
+                obj['permission'] = 'deny'
+            obj['decision_kind'] = 'harness_fault'
+            obj['original_reason_code'] = reason
+            obj['reason_code'] = 'HOOK_LOG_FAILURE'
+            obj['log_written'] = bool(logged)
+            obj['user_message'] = 'HOOK_LOG_FAILURE: guard logging failed; see hook stderr'
+            obj['agent_message'] = (
+                'EIF harness fault: guard logging failed. Read policy checks completed; read allowed.'
+                if obj['permission'] == 'allow' else
+                'EIF harness fault: guard logging failed. Action remains blocked; repair the guard before retrying.'
+            )
+            _stderr_log(obj)
+        raw = (json.dumps(obj, ensure_ascii=True, separators=(',', ':')) + '\n').encode('ascii')
         wrote = _write_stdout_bytes(raw)
         _EMITTED = True
         _DONE.set()
@@ -351,38 +436,28 @@ def out(permission='allow', message=None, extra=None):
                 extra={'permission': permission, 'reason_code': obj.get('reason_code')},
             )
             _EMIT_RC = 1
+            _stderr_log({'reason_code': 'HOOK_EMIT_FAILURE', 'decision_kind': 'harness_fault'})
             return 1
-        _EMIT_RC = 0
-    reason = obj.get('reason_code')
-    if permission == 'deny' and reason in CRASH_REASON_CODES:
-        write_operator_log(reason, message or '', extra={'permission': permission, 'stdout_wrote': True})
-    return 0
+        # Cursor consumes JSON on 0; 2 is its explicit policy-block exit.
+        # Handled harness faults use 0 plus structured fault JSON, never a mute
+        # interpreter exit. Transport failure alone returns 1.
+        _EMIT_RC = 2 if obj['permission'] == 'deny' and obj['decision_kind'] == 'policy' else 0
+        if _EMIT_RC == 2:
+            _stderr_log(obj)
+    finally:
+        _EMIT_LOCK.release()
+    return _EMIT_RC
 
 
 def deny(code, message):
-    crash = code in CRASH_REASON_CODES
-    klass = 'crash' if crash else 'policy'
-    prefix = 'EIF_GUARD_CRASH' if crash else 'EIF_GUARD_POLICY'
-    return out(
-        'deny',
-        f'{prefix}: {code}: {message}',
-        extra={'reason_code': code, 'eif_guard_class': klass},
-    )
+    return out('deny', f'{code}: {message}', extra={'reason_code': code})
 
 
 def _arm_watchdog():
-    """Self-deny before the host runtime kills the hook with empty stdout.
-
-    Must run before stdin is read. A held-open pipe never reaches EOF, so
-    arming after the read made the host kill mute (no HOOK_TIMEOUT).
-    """
-    global _WATCHDOG_ARMED
-    if _WATCHDOG_ARMED:
-        return
+    """Self-deny before the host runtime kills the hook with empty stdout."""
+    global _DEADLINE
     sec = watchdog_sec()
-    if sec <= 0:
-        return
-    _WATCHDOG_ARMED = True
+    _DEADLINE = time.perf_counter() + sec
 
     def run():
         if _DONE.wait(sec):
@@ -405,50 +480,31 @@ def normalized_remote(s):
     return s.lower().rstrip('/')
 
 def git(root: Path, *args):
-    env=os.environ.copy()
-    env['GIT_OPTIONAL_LOCKS']='0'
+    key = (str(root.resolve()), args)
+    if key in _GIT_CACHE:
+        return _GIT_CACHE[key]
+    started = time.perf_counter()
     try:
-        return subprocess.check_output(
-            ['git','-C',str(root),*args],
-            text=True, stderr=subprocess.DEVNULL, timeout=1.5, env=env,
-        ).strip()
-    except Exception:
-        return ''
-
-# Per-process cache: a same-repo repository_anchor must not spawn a second trio
-# of git subprocesses. Quiet-path identity was six calls / ~1.5s on this project.
-_GIT_SNAP = {}
-
-def git_snapshot(root: Path):
-    """Return (toplevel, remotes_text, root_commit_text). At most 3 git calls per repo per process."""
-    try:
-        key=str(Path(root).resolve())
-    except Exception:
-        key=str(root)
-    hit=_GIT_SNAP.get(key)
-    if hit is not None:
-        return hit
-    toplevel=git(root,'rev-parse','--show-toplevel')
-    remotes=git(root,'remote','-v')
-    rootc=git(root,'rev-list','--max-parents=0','HEAD')
-    snap=(toplevel, remotes, rootc)
-    _GIT_SNAP[key]=snap
-    if toplevel:
-        try:
-            _GIT_SNAP.setdefault(str(Path(toplevel).resolve()), snap)
-        except Exception:
-            pass
-    return snap
+        result = subprocess.run(['git', '--no-optional-locks', '-C', str(root), *args],
+                                capture_output=True, encoding='utf-8', timeout=remaining_timeout())
+        if result.returncode:
+            raise GuardFault('IDENTITY_GIT_FAILURE', f'git {args[0]} exited {result.returncode}: {result.stderr.strip()[:200]}')
+        _GIT_CACHE[key] = result.stdout.strip()
+        return _GIT_CACHE[key]
+    except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
+        raise GuardFault('IDENTITY_GIT_FAILURE', f'{type(exc).__name__}: {exc}') from exc
+    finally:
+        _TIMINGS['git'] = round(_TIMINGS.get('git', 0) + (time.perf_counter() - started) * 1000, 3)
 
 def observed_remotes(root: Path):
     vals=[]
-    for line in git_snapshot(root)[1].splitlines():
+    for line in git(root,'remote','-v').splitlines():
         p=line.split()
         if len(p)>=2: vals.append(normalized_remote(p[1]))
     return sorted(set(vals))
 
 def root_commit(root: Path):
-    rows=git_snapshot(root)[2].splitlines()
+    rows=git(root,'rev-list','--max-parents=0','HEAD').splitlines()
     return rows[0] if len(rows)==1 else ''
 
 def policy_path(root: Path):
@@ -460,25 +516,45 @@ def policy_path(root: Path):
 def load_policy(root: Path):
     p=policy_path(root)
     if not p.exists(): return 'MISSING',None,p,'runtime policy absent'
-    try: pol=json.loads(p.read_text())
+    try: pol=json.loads(p.read_text(encoding='utf-8-sig'))
     except Exception as e: return 'MALFORMED',None,p,f'cannot parse runtime policy: {e}'
     try:
+        if not isinstance(pol, dict):
+            raise ValueError('runtime policy must be an object')
+        for key in ('identity', 'action_classes', 'budgets', 'mcp'):
+            if key in pol and not isinstance(pol[key], dict):
+                raise ValueError(f'policy.{key} must be an object')
+        for key in ('allowed_roots', 'control_plane_paths', 'protected_paths', 'sensitive_read_paths',
+                    'observation_scopes', 'change_scopes', 'path_scopes', 'artifact_scopes'):
+            if key in pol and (not isinstance(pol[key], list) or any(not isinstance(x, str) or not x.strip() for x in pol[key])):
+                raise ValueError(f'policy.{key} must be a list of nonempty strings')
+        if pol.get('state_root', '.eif') != '.eif':
+            raise ValueError('only .eif state_root is supported')
+        sources = pol.get('sources')
+        if not isinstance(sources, dict) or not {'manifest', 'autonomy_policy'}.issubset(sources):
+            raise ValueError('policy source inventory requires manifest and autonomy')
+        if (root / '.eif/ENVIRONMENT_POLICY.md').exists() and 'environment_policy' not in sources:
+            raise ValueError('existing environment policy is absent from source inventory')
         normalize_shell_policy(pol.get('shell') or {'mode':'deny'})
         normalize_network_policy(pol.get('network') or {})
     except ValueError as e:
         return 'INVALID',pol,p,str(e)
     # Derived-source integrity. Runtime policy cannot remain valid after its accepted sources drift.
-    for item in (pol.get('sources') or {}).values():
-        if not isinstance(item,dict): continue
+    for item in sources.values():
+        if not isinstance(item,dict): return 'INVALID',pol,p,'policy source entry must be an object'
         rel=item.get('path'); expected=item.get('sha256')
-        if not rel or not expected: continue
+        if not isinstance(rel,str) or not rel or not isinstance(expected,str) or not re.fullmatch('[0-9a-fA-F]{64}',expected):
+            return 'INVALID',pol,p,'policy source requires path and SHA-256'
         src=(root/rel).resolve()
         try:
             src.relative_to(root.resolve())
         except Exception:
             return 'INVALID',pol,p,f'source path escapes project: {rel}'
         if not src.exists(): return 'INVALID',pol,p,f'policy source missing: {rel}'
-        if sha256(src)!=expected: return 'INVALID',pol,p,f'policy source hash mismatch: {rel}; recompile accepted policy'
+        try:
+            if sha256(src).lower()!=expected.lower(): return 'INVALID',pol,p,f'policy source hash mismatch: {rel}; recompile accepted policy'
+        except OSError as exc:
+            return 'INVALID',pol,p,f'cannot read policy source {rel}: {type(exc).__name__}'
     return 'OK',pol,p,'ok'
 
 def declared_roots(data, policy, root):
@@ -534,44 +610,23 @@ def matches(rel, patterns):
 
 def tool_path(inp):
     if not isinstance(inp,dict): return None
-    for k in ['file_path','path','target_file','target_path','directory','cwd']:
-        v=inp.get(k)
-        if isinstance(v,str) and v.strip(): return v
+    for k in ['file_path','path','target_file','target_path','directory']:
+        if isinstance(inp.get(k),str) and inp[k].strip(): return inp[k]
     return None
 
-def hook_target_identifiable(data):
-    """Return (ok, why). False is a transport/schema failure, never a policy deny.
 
-    Grep/Glob may omit path (workspace search). Read/Write/Delete and
-    beforeReadFile require a path. Unparseable input never reaches here.
-    """
-    if not isinstance(data, dict):
-        return False, 'hook JSON is not an object'
-    event = data.get('hook_event_name')
-    if not isinstance(event, str) or not event.strip():
-        return False, 'hook JSON has no hook_event_name'
-    if event == 'beforeReadFile':
-        path = data.get('file_path')
-        if not isinstance(path, str) or not path.strip():
-            return False, 'beforeReadFile has no file_path'
-        return True, ''
-    if event == 'preToolUse':
-        tool = str(data.get('tool_name') or '').strip()
-        if not tool:
-            return False, 'preToolUse has no tool_name'
-        inp = data.get('tool_input') if isinstance(data.get('tool_input'), dict) else {}
-        if tool in PATH_REQUIRED_TOOLS and not tool_path(inp):
-            return False, f'{tool} has no identifiable path'
-        return True, ''
-    if event == 'beforeShellExecution':
-        if 'command' not in data:
-            return False, 'beforeShellExecution has no command'
-        return True, ''
-    if event == 'beforeMCPExecution':
-        if not str(data.get('tool_name') or '').strip():
-            return False, 'beforeMCPExecution has no tool_name'
-        return True, ''
-    return True, ''
+def validate_tool_paths(inp):
+    """Aliases may identify one target; contradictory/malformed aliases cannot."""
+    values = []
+    for key in ('file_path', 'path', 'target_file', 'target_path', 'directory'):
+        if key not in inp:
+            continue
+        value = inp[key]
+        if not isinstance(value, str) or not value.strip():
+            raise GuardFault('HOOK_INPUT_INVALID', f'{key} must be a nonempty path string')
+        values.append(value)
+    if len(set(values)) > 1:
+        raise GuardFault('HOOK_INPUT_INVALID', 'conflicting path aliases; supply one unambiguous target')
 
 def strings(obj):
     if isinstance(obj,str): yield obj
@@ -613,25 +668,24 @@ def identity_ok(root: Path, policy):
     exp_vcs=ident.get('expected_vcs_root') or ''
     if not exp_root and not exp_rem and not exp_vcs:
         return False,'IDENTITY_UNVERIFIED: no intrinsic project anchor declared'
-    observed_root=root_commit(root)
+    observed_root=root_commit(root) if exp_root else ''
     if exp_root and observed_root!=exp_root:
         return False,f'IDENTITY_MISMATCH: root commit expected {exp_root}, observed {observed_root or "<none>"}'
-    observed=observed_remotes(root)
+    observed=observed_remotes(root) if exp_rem else []
     if exp_rem and observed!=exp_rem:
         return False,f'IDENTITY_MISMATCH: remote set expected {exp_rem}, observed {observed}'
     if exp_vcs:
-        actual=Path(git_snapshot(root)[0] or root).resolve()
+        actual=Path(git(root,'rev-parse','--show-toplevel')).resolve()
         if str(actual)!=str(Path(exp_vcs).resolve()):
             return False,f'IDENTITY_MISMATCH: vcs root expected {exp_vcs}, observed {actual}'
     for anchor in ident.get('repository_anchors') or []:
         ar=Path(anchor.get('allowed_root') or '').resolve()
         if not ar.exists(): return False,f'IDENTITY_MISMATCH: declared repository root missing: {ar}'
-        # Same-repo duplicate of the primary identity block: reuse snapshot (0 extra git).
-        arv=git_snapshot(ar)[0]
-        arr=root_commit(ar)
-        arem=observed_remotes(ar)
         ev=anchor.get('expected_vcs_root') or ''; er=anchor.get('root_commit') or ''
         erm=sorted(set(normalized_remote(x) for x in anchor.get('expected_remotes',[]) if x))
+        arv=git(ar,'rev-parse','--show-toplevel') if ev else ''
+        arr=root_commit(ar) if er else ''
+        arem=observed_remotes(ar) if erm else []
         if ev and (not arv or str(Path(arv).resolve())!=str(Path(ev).resolve())):
             return False,f'IDENTITY_MISMATCH: repository {ar} vcs root expected {ev}, observed {arv or "<none>"}'
         if er and arr!=er: return False,f'IDENTITY_MISMATCH: repository {ar} root commit expected {er}, observed {arr or "<none>"}'
@@ -682,6 +736,8 @@ def artifact_write_allowed(rel, policy):
     return True
 
 def audit(root: Path, data, decision, code, rel=None, extra=None):
+    global _DECISION_CODE, _AUDIT_ERROR
+    _DECISION_CODE = code
     try:
         state=root/'.eif'; state.mkdir(exist_ok=True)
         p=state/'runtime-events.jsonl'
@@ -702,7 +758,8 @@ def audit(root: Path, data, decision, code, rel=None, extra=None):
         pid=extract_probe_id(probe_marker_blob(data), str(rel or ''))
         if pid: rec['probe_id']=pid
         with p.open('a', encoding='utf-8') as f: f.write(json.dumps(rec,separators=(',',':'))+'\n')
-    except Exception: pass
+    except Exception as exc:
+        _AUDIT_ERROR = type(exc).__name__
 
 PROGRESS_EVENTS = frozenset({'node.stage', 'evidence.add', 'node.accept', 'node.status'})
 WRAP_CHECKPOINT_EVENTS = frozenset({'node.stage_note'})
@@ -710,14 +767,14 @@ MUTATING_TOOLS = frozenset({'Write', 'Delete'})
 
 def _budget_dir(root: Path, policy) -> Path:
     sr=str((policy or {}).get('state_root') or '.eif').replace('\\','/').strip('/') or '.eif'
-    return root/sr/'runtime-budget'
+    return support('eif_state').contained(root, Path(sr)/'runtime-budget')
 
 def _programme_log_path(root: Path, policy) -> Path:
     sr=str((policy or {}).get('state_root') or '.eif').replace('\\','/').strip('/') or '.eif'
     return root/sr/'program'/'PROGRAM_LOG.ndjson'
 
 def _programme_progress(root: Path, policy, after_seq: int):
-    """Return (head_seq, new_event_types). Never fail-closed on a missing/unreadable log."""
+    """Missing log means no programme; unreadable/malformed progress is a fault."""
     path=_programme_log_path(root, policy)
     if not path.is_file():
         return after_seq, set()
@@ -731,8 +788,8 @@ def _programme_progress(root: Path, policy, after_seq: int):
             if seq>head: head=seq
             if seq>after_seq:
                 kinds.add(str(ev.get('event') or ''))
-    except Exception:
-        return after_seq, set()
+    except Exception as exc:
+        raise ValueError(f'cannot read programme progress: {type(exc).__name__}') from exc
     return head, kinds
 
 def _mutating_fingerprint(data):
@@ -742,6 +799,7 @@ def _mutating_fingerprint(data):
     target_path, directory, cwd. Blank strings are skipped so an empty
     preferred key does not hide a real fallback path. None does not
     become the literal 'None'. Separators use a single-backslash replace.
+    If no path can be resolved, return None: the call is not a repeat.
     """
     tool=str(data.get('tool_name') or '')
     if tool not in MUTATING_TOOLS:
@@ -753,17 +811,35 @@ def _mutating_fingerprint(data):
         if isinstance(v,str) and v.strip():
             path=v
             break
+    if not path:
+        return None
     return f'{tool}:{path.replace("\\","/").lower()}'
 
 
 def _persist_budget(path: Path, state):
     try:
-        path.write_text(json.dumps(state), encoding='utf-8')
+        support('eif_state').atomic_json(path, state)
         return True,''
     except Exception:
-        return False,'BUDGET_GUARD_FAILURE: cannot persist runtime budget state'
+        return False,'BUDGET_STATE_FAILURE: cannot persist runtime budget state'
 
 def budget_ok(root: Path, data, policy):
+    if data.get('hook_event_name') != 'preToolUse':
+        return True, '', None
+    try:
+        conv = str(data.get('conversation_id') or 'unknown')
+        # Preserve existing ordinary IDs; hash unsafe names instead of colliding
+        # after character substitution/truncation or accepting dot traversal.
+        if not re.fullmatch(r'[A-Za-z0-9_-][A-Za-z0-9_.-]{0,119}', conv):
+            conv = hashlib.sha256(conv.encode('utf-8')).hexdigest()
+        directory = _budget_dir(root, policy)
+        with support('eif_state').file_lock(directory / (conv + '.lock')):
+            return _budget_ok_locked(root, data, policy, directory / (conv + '.json'))
+    except Exception as exc:
+        return False, f'BUDGET_STATE_FAILURE: {type(exc).__name__}: {exc}', None
+
+
+def _budget_ok_locked(root: Path, data, policy, p):
     """Burst tool-call cap is fail-closed. Session wall-clock is wrap-up, not a permanent deny."""
     if data.get('hook_event_name')!='preToolUse': return True,'',None
     b=policy.get('budgets') or {}
@@ -774,15 +850,22 @@ def budget_ok(root: Path, data, policy):
     wrap_ratio=float(b.get('wrap_up_ratio') or 0.85)
     if not max_calls and not max_minutes and not repeat_limit:
         return True,'',None
-    conv=re.sub(r'[^A-Za-z0-9_.-]','_',str(data.get('conversation_id') or 'unknown'))[:120]
-    d=_budget_dir(root, policy); d.mkdir(parents=True, exist_ok=True); p=d/f'{conv}.json'
     now=time.time()
     state={'session_first_ts':now,'burst_first_ts':now,'burst_id':1,'tool_calls':0,
            'wrap_up_signaled':False,'last_progress_seq':0,'last_mut_fp':'','repeat_mut':0}
-    try:
-        if p.exists(): state.update(json.loads(p.read_text(encoding='utf-8')))
-    except Exception:
-        pass
+    if p.exists():
+        saved = json.loads(p.read_text(encoding='utf-8'))
+        if not isinstance(saved, dict) or not set(state).issubset(saved):
+            raise ValueError('budget state is incomplete; preserve and repair it')
+        for key in ('burst_id', 'tool_calls', 'last_progress_seq', 'repeat_mut'):
+            if type(saved[key]) is not int or saved[key] < 0:
+                raise ValueError(f'invalid budget {key}')
+        for key in ('session_first_ts', 'burst_first_ts'):
+            if not isinstance(saved[key], (int, float)) or not math.isfinite(saved[key]):
+                raise ValueError(f'invalid budget {key}')
+        if not isinstance(saved['last_mut_fp'], str) or type(saved['wrap_up_signaled']) is not bool:
+            raise ValueError('invalid budget fingerprint/wrap state')
+        state.update(saved)
     head, kinds=_programme_progress(root, policy, int(state.get('last_progress_seq') or 0))
     renewed=False
     if head>int(state.get('last_progress_seq') or 0):
@@ -805,9 +888,11 @@ def budget_ok(root: Path, data, policy):
             state['last_mut_fp']=fp
     ok,msg=_persist_budget(p, state)
     if not ok: return False,msg,None
-    if repeat_limit and int(state.get('repeat_mut') or 0)>int(repeat_limit):
+    if fp and repeat_limit and int(state.get('repeat_mut') or 0)>int(repeat_limit):
         return False,f'NO_PROGRESS: repeated mutating action {fp} x{state["repeat_mut"]}',None
     if max_calls and state['tool_calls']>int(max_calls):
+        if support('eif_session').recovery_action(data):
+            return True, '', {'additional_context': 'BUDGET_READ_RECOVERY: execution burst exhausted; policy-checked reads and closure/recovery operations remain available.'}
         return False,f'BUDGET_EXHAUSTED: tool calls {state["tool_calls"]}>{max_calls} in execution burst {state.get("burst_id")}',None
     extra=None
     session_min=(now-float(state.get('session_first_ts') or now))/60.0
@@ -984,27 +1069,178 @@ def _path_candidates(cmd: str):
     return found
 
 PROGRAMME_ENTRY_REL = '.eif/runtime/programme/program.py'
+PROGRAMME_LEDGER_FILES = frozenset({'PROGRAM.yaml', 'PROGRAM_LOG.ndjson'})
+GIT_INVOCATION = re.compile(r'\bgit(?:\s+-C\s+\S+|\s+-c\s+\S+)*\s+', re.I)
+GIT_WORKTREE_PROGRAMME = re.compile(
+    r'\bgit(?:\s+-C\s+\S+|\s+-c\s+\S+)*\s+(?:restore\b|checkout\s+--|rm\b|clean\b|stash\b)',
+    re.I,
+)
+GIT_RESET = re.compile(r'\bgit(?:\s+-C\s+\S+|\s+-c\s+\S+)*\s+reset\b', re.I)
+GIT_ADD_BROAD_TOKENS = frozenset({'.', '-A', '--all', '-u', '--update', ':', '*'})
+
+def _normalize_shell_rel(raw):
+    rel=str(raw or '').replace('\\','/')
+    while rel.startswith('./'):
+        rel=rel[2:]
+    return rel
+
+def programme_ledger_rels(policy):
+    sr=str((policy or {}).get('state_root') or '.eif').replace('\\','/').strip('/') or '.eif'
+    return {f'{sr}/program/{name}' for name in PROGRAMME_LEDGER_FILES}
+
+def is_programme_ledger_rel(rel, policy):
+    if not rel:
+        return False
+    return _normalize_shell_rel(rel) in programme_ledger_rels(policy)
+
+def _git_subcommand_tokens(cmd):
+    m=GIT_INVOCATION.search(cmd)
+    if not m:
+        return None, []
+    rest=cmd[m.end():].strip()
+    if not rest:
+        return None, []
+    parts=re.split(r'\s+', rest)
+    return parts[0].lower(), parts[1:]
+
+def _git_add_explicit_paths(cmd):
+    sub, tokens=_git_subcommand_tokens(cmd)
+    if sub!='add':
+        return None
+    paths=[]; after_dd=False
+    for tok in tokens:
+        if tok=='--':
+            after_dd=True
+            continue
+        if not after_dd and tok.startswith('-'):
+            continue
+        paths.append(_normalize_shell_rel(tok))
+    return paths
+
+def _git_add_is_broad(cmd):
+    sub, tokens=_git_subcommand_tokens(cmd)
+    if sub!='add':
+        return False
+    for tok in tokens:
+        if tok in GIT_ADD_BROAD_TOKENS:
+            return True
+        if tok.startswith('-') and tok in {'-p', '--patch', '-N', '--intent-to-add'}:
+            return True
+    return False
+
+def _git_add_is_programme_ledger_only(cmd, policy):
+    paths=_git_add_explicit_paths(cmd)
+    if not paths:
+        return False
+    rels=programme_ledger_rels(policy)
+    return all(p in rels for p in paths)
+
+def _git_add_programme_consequence(cmd, policy):
+    paths=_git_add_explicit_paths(cmd)
+    if paths is None:
+        return None
+    if _git_add_is_broad(cmd):
+        return _shell_result(
+            False, 'PROGRAMME_GIT_STAGE',
+            'git add with broad path selectors is denied; stage programme ledger files explicitly',
+        )
+    if not paths:
+        return None
+    rels=programme_ledger_rels(policy)
+    ledger=[p for p in paths if p in rels]
+    if not ledger:
+        return None
+    if all(p in rels for p in paths):
+        return None
+    return _shell_result(
+        False, 'PROGRAMME_GIT_STAGE',
+        'git add mixing programme ledger with other paths is denied; stage ledger files explicitly',
+    )
+
+def _command_touches_programme_paths(cmd, policy):
+    norm=cmd.replace('\\', '/')
+    sr=str((policy or {}).get('state_root') or '.eif').replace('\\','/').strip('/') or '.eif'
+    prog_prefix=f'{sr}/program'
+    if prog_prefix in norm:
+        return True
+    for cand in _path_candidates(cmd):
+        rel=_normalize_shell_rel(cand)
+        if is_programme_ledger_rel(rel, policy) or matches(rel, [f'{prog_prefix}/**', prog_prefix]):
+            return True
+    return False
+
+def _git_programme_worktree_deny(cmd, policy):
+    norm=cmd.replace('\\', '/')
+    if not GIT_INVOCATION.search(norm):
+        return None
+    if not (GIT_WORKTREE_PROGRAMME.search(norm) or GIT_RESET.search(norm)):
+        return None
+    if _command_touches_programme_paths(cmd, policy):
+        return _shell_result(
+            False, 'PROGRAMME_GIT_WORKTREE',
+            'git command would mutate protected programme ledger in the worktree',
+        )
+    return None
+
+def _git_branch_switch_note(cmd):
+    """Branch switch rewrites tracked files without naming them; surface the consequence."""
+    sub, tokens=_git_subcommand_tokens(cmd)
+    if sub not in {'checkout', 'switch'} or not tokens:
+        return None
+    i=0
+    while i < len(tokens) and tokens[i].startswith('-'):
+        if tokens[i]=='--':
+            return None
+        i+=1
+    if i >= len(tokens) or tokens[i]=='--':
+        return None
+    target=tokens[i]
+    if '/' in target or target.startswith('.') or target.startswith('-'):
+        return None
+    return (
+        'git branch switch may rewrite tracked programme ledger files when they differ between '
+        'branches; run programme verify after switching'
+    )
 
 def _programme_runtime_shell_invoke(cmd: str) -> bool:
     """True when shell is invoking the installed programme entry point (read/execute, not mutate)."""
     norm = cmd.replace('\\', '/')
-    return bool(re.search(
-        r'python(?:3)?\s+(?:["\'])?(?:\./)?\.eif/runtime/programme/program\.py(?:\s|["\']|$)',
+    # A substring must not exempt the rest of a compound command or redirect.
+    if re.search(r'[;&|<>`\r\n]|\$\(', norm):
+        return False
+    return bool(re.fullmatch(
+        r'\s*python(?:3)?\s+(?:-B\s+)?(?:["\'])?(?:\./)?\.eif/runtime/programme/program\.py(?:["\'])?(?:\s+[^\r\n]*)?\s*',
         norm,
         re.I,
     ))
 
 def shell_path_consequence(cmd, policy):
     """Defense-in-depth only. Does not contain arbitrary child processes."""
-    if _programme_runtime_shell_invoke(cmd):
-        return None
+    programme_invoke = _programme_runtime_shell_invoke(cmd)
+    for m in REDIRECT_TARGET.finditer(cmd):
+        rel=_normalize_shell_rel(m.group(1).strip('\'"'))
+        if is_programme_ledger_rel(rel, policy):
+            return _shell_result(
+                False, 'PROGRAMME_PATH_PROTECTED',
+                'shell redirection to programme ledger path is denied',
+            )
+    add_hit=_git_add_programme_consequence(cmd, policy)
+    if add_hit:
+        return add_hit
+    wt_hit=_git_programme_worktree_deny(cmd, policy)
+    if wt_hit:
+        return wt_hit
+    staging_only=_git_add_is_programme_ledger_only(cmd, policy)
+    ledger_rels=programme_ledger_rels(policy) if staging_only else set()
     roots=[Path(x) for x in (policy.get('allowed_roots') or []) if x]
     protected=policy.get('protected_paths') or []
     base=roots[0] if roots else None
     for cand in _path_candidates(cmd):
-        rel=cand.replace('\\','/')
-        while rel.startswith('./'):
-            rel=rel[2:]
+        rel=_normalize_shell_rel(cand)
+        if programme_invoke and rel == PROGRAMME_ENTRY_REL:
+            continue
+        if staging_only and rel in ledger_rels:
+            continue
         if control_plane(rel, policy) or any(s in rel for s in ('.cursor/eif-runtime-policy.json','.cursor/hooks','.eif/AUTONOMY_POLICY.md','.eif/RUNTIME_CAPABILITIES.md')):
             return _shell_result(False,'CONTROL_PLANE_PROTECTED','shell text names a control-plane path; defense-in-depth deny (not process containment)')
         if matches(rel, protected):
@@ -1029,6 +1265,12 @@ def shell_decision(cmd, sandbox, policy):
     del sandbox
     if IDENTITY_MUTATION.search(cmd) and not action_allowed(policy,'identity_mutation'):
         return _shell_result(False,'ACTION_IDENTITY_MUTATION','git remote identity mutation is not granted')
+    prog_git=_git_programme_worktree_deny(cmd, policy)
+    if prog_git:
+        return prog_git
+    add_git=_git_add_programme_consequence(cmd, policy)
+    if add_git:
+        return add_git
     if FORCE_VCS.search(cmd) and not action_allowed(policy,'force_vcs'):
         return _shell_result(False,'ACTION_FORCE_VCS','force/history-rewriting VCS operation is not granted')
     if REMOTE_PUSH.search(cmd) and not action_allowed(policy,'remote_push'):
@@ -1053,7 +1295,10 @@ def shell_decision(cmd, sandbox, policy):
     sh=policy.get('shell') or {}; mode=str(sh.get('mode') or 'deny').lower()
     if mode=='deny': return _shell_result(False,'SHELL_DENY','shell execution disabled by policy')
     if mode=='workspace':
-        return _shell_result(True,'SHELL_WORKSPACE','ordinary workspace shell; not process containment')
+        branch_note=_git_branch_switch_note(cmd)
+        extra={'programme_branch_switch': True} if branch_note else {}
+        msg=branch_note or 'ordinary workspace shell; not process containment'
+        return _shell_result(True,'SHELL_WORKSPACE',msg,extra)
     return _shell_result(False,'SHELL_DENY','shell execution disabled by policy')
 
 MCP_URL_KEYS = {
@@ -1312,44 +1557,113 @@ def mcp_decision(data, policy, root=None, roots=None):
         record_browser_origin(root, data, dests, policy, roots)
     return True,'MCP_ALLOW','granted MCP tool'
 
-def main(raw=None):
+def main():
+    global _RUNTIME_LOCK
     try:
-        if raw is None:
-            _arm_watchdog()
-            raw = read_hook_stdin_eof()
-        data = parse_cursor_hook_stdin(raw)
-    except TimeoutError as e:
-        root=_project_root()
-        audit(root, {}, 'deny', 'HOOK_TIMEOUT', extra={'eif_guard_class': 'crash'})
-        return deny('HOOK_TIMEOUT', str(e) or 'unbounded hook stdin; fail-closed')
+        try:
+            return _main()
+        except GuardFault as exc:
+            return deny(exc.code, str(exc))
+    finally:
+        if _RUNTIME_LOCK is not None:
+            _RUNTIME_LOCK.__exit__(None, None, None)
+            _RUNTIME_LOCK = None
+
+
+def _main():
+    global _READ_ONLY, _ACTIVE_ROOT, _ACTIVE_DATA, _SUPPORT_READY, _RUNTIME_LOCK, _READ_WARNING
+    started = time.perf_counter()
+    try:
+        data = parse_cursor_hook_stdin(read_cursor_hook_stdin(sys.stdin.buffer))
     except Exception as e:
-        root=_project_root()
-        audit(root, {}, 'deny', 'HOOK_INPUT_INVALID', extra={'eif_guard_class': 'crash'})
         return deny('HOOK_INPUT_INVALID', f'cannot parse Cursor hook input: {type(e).__name__}: {e}')
-    ok_target, why_target = hook_target_identifiable(data)
-    if not ok_target:
-        root=select_root(data)
-        audit(root, data, 'deny', 'HOOK_INPUT_INVALID', extra={'eif_guard_class': 'crash'})
-        return deny('HOOK_INPUT_INVALID', why_target)
+    _TIMINGS['input'] = round((time.perf_counter() - started) * 1000, 3)
     event=data.get('hook_event_name','')
+    if not isinstance(event, str) or not event:
+        return deny('HOOK_INPUT_INVALID', 'hook_event_name must be a nonempty string')
+    if event == 'preToolUse' and (not isinstance(data.get('tool_name'), str) or not isinstance(data.get('tool_input'), dict)):
+        return deny('HOOK_INPUT_INVALID', 'preToolUse requires tool_name and object tool_input')
+    if event == 'preToolUse' and data.get('tool_name') in {'Read', 'Write', 'Delete', 'ReadLints', 'Grep', 'Glob', 'List'}:
+        validate_tool_paths(data['tool_input'])
+    if event == 'beforeReadFile' and (not isinstance(data.get('file_path'), str) or not data['file_path'].strip()):
+        return deny('HOOK_INPUT_INVALID', 'Read has no identifiable path')
+    if event == 'preToolUse' and data.get('tool_name') in {'Read', 'Write', 'Delete'}:
+        if not tool_path(data.get('tool_input')):
+            return deny('HOOK_INPUT_INVALID', f'{data["tool_name"]} has no identifiable path')
+    _READ_ONLY = event == 'beforeReadFile' or (
+        event == 'preToolUse' and data.get('tool_name') in {'Read', 'ReadLints', 'Grep', 'Glob', 'List'}
+    )
     root=select_root(data)
+    _ACTIVE_ROOT, _ACTIVE_DATA = root, data
+    started = time.perf_counter()
+    try:
+        _RUNTIME_LOCK = verified_runtime(root)
+    except TimeoutError as exc:
+        return deny('RUNTIME_LOCK_FAILURE', str(exc))
+    except Exception as exc:
+        return deny('RUNTIME_INTEGRITY', f'{type(exc).__name__}: {exc}')
+    _SUPPORT_READY = True
+    support('eif_state').DEADLINE = _DEADLINE
+    _TIMINGS['integrity'] = round((time.perf_counter() - started) * 1000, 3)
+    started = time.perf_counter()
     state,policy,pp,pmsg=load_policy(root)
+    _TIMINGS['policy'] = round((time.perf_counter() - started) * 1000, 3)
+
+    if state in {'MALFORMED', 'INVALID'}:
+        audit(root, data, 'deny', 'POLICY_INTEGRITY')
+        return deny('POLICY_INTEGRITY', pmsg)
 
     # sessionStart is context only on Cursor; it is never used as a blocking boundary.
     if event=='sessionStart':
         if state=='OK':
-            text=(f'EIF runtime policy loaded for {policy.get("project_id","<unset>")}. '
-                  f'Blocking identity is re-checked at actionable hooks; sessionStart does not spawn git.')
+            ok,msg=identity_ok(root,policy)
+            closed, code, closure = support('eif_session').boundary(root, data)
+            text=(f'EIF runtime policy loaded for {policy.get("project_id","<unset>")}; '
+                  f'identity preflight: {msg}; {code}: {closure}. '
+                  'Pending retry and closure are enforced at actionable hooks; lifecycle replies cannot prevent forced closure.')
+            audit(root, data, 'allow', 'SESSION_READY' if ok and closed else code)
             return out(extra={'additional_context':text})
         return out(extra={'additional_context':f'EIF runtime policy state: {state}. {pmsg}. Do not treat sessionStart as a blocking control.'})
 
     # Observation only. Used to harvest the current page URL after click/navigation.
     # Cannot block the just-completed tool; subsequent interact uses the updated origin.
     if event in {'afterMCPExecution','postToolUse'}:
+        support('eif_session').record_success(root, data)
         if state=='OK' and policy:
             note_observed_browser_page(root, data, policy, declared_roots(data,policy,root), after=True)
         audit(root,data,'allow','MCP_AFTER' if event=='afterMCPExecution' else 'POST_TOOL')
         return out()
+
+    if event == 'postToolUseFailure':
+        # An ordinary failed test is not a guard block. Cursor identifies a
+        # permission denial separately; our own harness faults are saved pre-emit.
+        if data.get('failure_type') == 'permission_denied':
+            support('eif_session').record_block(root, data, 'TOOL_PERMISSION_DENIED')
+        audit(root, data, 'allow', 'POST_TOOL_FAILURE')
+        return out()
+
+    if event in {'stop', 'sessionEnd'}:
+        closed, code, message = support('eif_session').boundary(root, data)
+        pending = support('eif_session').pending(root)
+        if pending:
+            message += f'; retry blocked {pending[0][2]["tool"]} first (fingerprint={pending[0][2]["fingerprint"]})'
+        audit(root, data, 'allow', code)
+        extra = {'additional_context': f'{code}: {message}'}
+        if event == 'stop' and (not closed or pending):
+            extra['followup_message'] = f'EIF closure pending. {message}. Use only policy-permitted recovery; do not claim the session is closed.'
+        return out(extra=extra)
+
+    if event in {'preToolUse', 'beforeShellExecution', 'beforeMCPExecution', 'beforeReadFile', 'subagentStart'}:
+        try:
+            ready, code, message = support('eif_session').pre_check(root, data)
+        except Exception as exc:
+            ready, code, message = False, 'SESSION_STATE_FAILURE', f'{type(exc).__name__}: {exc}'
+        if not ready:
+            if code == 'SESSION_STATE_FAILURE' and _READ_ONLY:
+                _READ_WARNING = {'reason_code': code, 'additional_context': message + '; session bookkeeping needs repair. Read permission checks still apply.'}
+            else:
+                audit(root, data, 'deny', code)
+                return deny(code, message)
 
     # Malformed/invalid installed policy is different from cold-start absence.
     if state in {'MALFORMED','INVALID'}:
@@ -1365,9 +1679,9 @@ def main(raw=None):
             audit(root,data,'deny','FOREIGN_READ')
             return deny('FOREIGN_READ','read target resolves outside all declared project roots')
         if state=='OK':
-            # beforeReadFile is observation. Do not spawn git-identity here
-            # (duplicate same-repo anchors were six subprocesses / ~1.5s). Blocking
-            # identity is re-checked at beforeShellExecution / preToolUse / beforeMCPExecution.
+            ok,msg=identity_ok(root,policy)
+            if not ok:
+                audit(root,data,'deny','IDENTITY_READ',rel); return deny('IDENTITY_READ',msg)
             scopes=observation_scopes(policy)
             if scopes and not matches(rel,scopes):
                 audit(root,data,'deny','OUT_OF_OBSERVATION_SCOPE',rel); return deny('OUT_OF_OBSERVATION_SCOPE',f'read target outside accepted observation scope: {rel}')
@@ -1401,7 +1715,10 @@ def main(raw=None):
         if not ok: audit(root,data,'deny','IDENTITY_SHELL'); return deny('IDENTITY_SHELL',msg)
         good,code,msg,extra=shell_decision(str(data.get('command') or ''),bool(data.get('sandbox')),policy)
         audit(root,data,'allow' if good else 'deny',code, extra=extra)
-        return out() if good else deny(code,msg)
+        if good:
+            note=msg if msg and msg!='ordinary workspace shell; not process containment' else None
+            return out(message=note, extra=extra or None)
+        return deny(code,msg)
 
     if event=='beforeMCPExecution':
         if state!='OK': audit(root,data,'deny','MCP_POLICY_REQUIRED'); return deny('MCP_POLICY_REQUIRED','accepted runtime policy required before MCP execution')
@@ -1412,6 +1729,11 @@ def main(raw=None):
 
     if event=='preToolUse':
         tool=str(data.get('tool_name') or ''); inp=data.get('tool_input') or {}
+        supported = {'Read', 'ReadLints', 'Grep', 'Glob', 'List', 'Write', 'Delete', 'Shell',
+                     'Fetch', 'WebFetch', 'WebSearch', 'ListMcpResources', 'FetchMcpResource'}
+        if tool not in supported and not tool.startswith('MCP:'):
+            audit(root, data, 'deny', 'TOOL_UNSUPPORTED')
+            return deny('TOOL_UNSUPPORTED', f'No verified permission adapter for {tool}; opaque side effects cannot be authorised.')
         # Cold start: no project state-changing action. Only manifest bootstrap write is tolerated.
         if state=='MISSING':
             if tool=='Shell':
@@ -1427,19 +1749,22 @@ def main(raw=None):
             if tool.startswith('MCP:'): audit(root,data,'deny','BOOTSTRAP_MCP'); return deny('BOOTSTRAP_MCP','MCP disabled during bootstrap')
             return out()
 
-        # Extract path before identity so a deny cannot audit path:null when a
-        # target existed. Observation tools skip git-identity (beforeReadFile
-        # already does); concurrent Read/Grep bursts were IDENTITY_TOOL/path:null
-        # when identity_ok flaked under hook-process git contention.
-        path=tool_path(inp); rr,rel=resolve_path(path,roots) if path else (None,None)
-        if tool not in OBSERVATION_TOOLS:
-            ok,msg=identity_ok(root,policy)
-            if not ok:
-                audit(root,data,'deny','IDENTITY_TOOL',rel); return deny('IDENTITY_TOOL',msg)
+        ok,msg=identity_ok(root,policy)
+        if not ok:
+            audit(root,data,'deny','IDENTITY_TOOL'); return deny('IDENTITY_TOOL',msg)
         bok,bmsg,bextra=budget_ok(root,data,policy)
-        if not bok: audit(root,data,'deny','BUDGET',rel); return deny('BUDGET',bmsg)
+        if not bok:
+            code = bmsg.split(':', 1)[0]
+            if code == 'BUDGET_STATE_FAILURE' and _READ_ONLY:
+                # Defer emission until identity, source integrity, scope and
+                # sensitive-path checks below have authorised this read.
+                bextra = {'reason_code': code, 'additional_context': bmsg + '; read policy checks completed; repair budget state before mutations.'}
+            else:
+                audit(root,data,'deny',code)
+                return deny(code,bmsg)
 
         # Generic path-bound tools: reads/writes cannot escape declared roots, including symlink escapes.
+        path=tool_path(inp); rr,rel=resolve_path(path,roots) if path else (None,None)
         if path and not rr:
             audit(root,data,'deny','FOREIGN_PATH'); return deny('FOREIGN_PATH','tool target resolves outside all declared project roots')
 
@@ -1467,7 +1792,7 @@ def main(raw=None):
                     if has_secret(st):
                         audit(root,data,'deny','SECRET_PREWRITE',rel); return deny('SECRET_PREWRITE','high-confidence secret-like literal blocked before file write')
 
-        if tool in OBSERVATION_TOOLS and path:
+        if tool in {'Read','ReadLints','Grep','Glob','List'} and path:
             scopes=observation_scopes(policy)
             if scopes and not matches(rel,scopes):
                 audit(root,data,'deny','OUT_OF_OBSERVATION_SCOPE',rel); return deny('OUT_OF_OBSERVATION_SCOPE',f'read/search outside accepted observation scope: {rel}')
@@ -1485,42 +1810,52 @@ def main(raw=None):
             d=dict(data); d['tool_name']=tool.removeprefix('MCP:')
             good,code,why=mcp_decision(d,policy,root,roots)
             if not good: audit(root,data,'deny',code); return deny(code,why)
+        if tool in {'Fetch', 'WebFetch'}:
+            url = inp.get('url')
+            if not isinstance(url, str) or not url:
+                return deny('HOOK_INPUT_INVALID', 'Fetch requires its destination URL')
+            good, code, why = network_destination_allowed(url, policy, roots)
+            if not good:
+                audit(root, data, 'deny', code)
+                return deny(code, why)
+        if tool == 'WebSearch' and 'public_read' not in network_classes(policy):
+            audit(root, data, 'deny', 'ACTION_NETWORK')
+            return deny('ACTION_NETWORK', 'WebSearch requires the public_read research class')
+        if tool in {'ListMcpResources', 'FetchMcpResource'}:
+            if inp.get('download_path'):
+                audit(root, data, 'deny', 'TOOL_UNSUPPORTED')
+                return deny('TOOL_UNSUPPORTED', 'MCP resource download needs a verified file-write adapter; inspect the resource without download_path.')
+            good, code, why = mcp_decision(data, policy, root, roots)
+            if not good:
+                audit(root, data, 'deny', code)
+                return deny(code, why)
 
-        audit(root,data,'allow','TOOL_OK',rel); return out(extra=bextra)
+        audit(root,data,'allow',(bextra or {}).get('reason_code', 'TOOL_OK'),rel)
+        return out(extra=bextra)
 
     # stop/subagent/workspace lifecycle are audit surfaces, not blocking budgets unless separately proven.
     audit(root,data,'allow','EVENT_OBSERVED')
     return out()
 
 if __name__=='__main__':
-    _arm_watchdog()
-    raw=b''
     try:
-        raw=read_hook_stdin_eof()
-    except TimeoutError as e:
-        rc=deny('HOOK_TIMEOUT', str(e) or 'unbounded hook stdin; fail-closed')
-        raise SystemExit(0 if rc is None else rc)
-    except Exception as e:
-        try:
-            rc=deny('HOOK_INPUT_INVALID', f'cannot read Cursor hook stdin: {type(e).__name__}: {e}')
-        except Exception:
-            rc=0
-        raise SystemExit(0 if rc is None else rc)
-    try:
-        rc=main(raw)
+        _arm_watchdog()
+        rc=main()
     except BrokenPipeError:
         rc=deny('HOOK_INTERNAL_ERROR', 'BrokenPipeError while producing a decision')
+    except GuardFault as e:
+        rc=deny(e.code, str(e))
     except Exception as e:
         try:
             rc=deny('HOOK_INTERNAL_ERROR', f'{type(e).__name__}: {e}')
         except Exception:
             fallback=(
-                '{"permission":"deny","reason_code":"HOOK_EMIT_FAILURE","eif_guard_class":"crash",'
-                '"user_message":"EIF_GUARD_CRASH: HOOK_EMIT_FAILURE: unrecoverable guard crash",'
-                '"agent_message":"EIF_GUARD_CRASH: HOOK_EMIT_FAILURE: unrecoverable guard crash"}\n'
+                '{"permission":"deny","reason_code":"HOOK_EMIT_FAILURE",'
+                '"user_message":"HOOK_EMIT_FAILURE: unrecoverable guard crash",'
+                '"agent_message":"HOOK_EMIT_FAILURE: unrecoverable guard crash"}\n'
             ).encode('ascii')
             wrote=_write_stdout_bytes(fallback)
-            write_operator_log('HOOK_EMIT_FAILURE', f'{type(e).__name__}: {e}', extra={'stdout_wrote': wrote, 'eif_guard_class': 'crash'})
+            write_operator_log('HOOK_EMIT_FAILURE', f'{type(e).__name__}: {e}', extra={'stdout_wrote': wrote})
             rc=0 if wrote else 1
     try:
         raise SystemExit(0 if rc is None else rc)

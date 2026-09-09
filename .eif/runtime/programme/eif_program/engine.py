@@ -360,6 +360,11 @@ def apply_event(state: dict, event: dict, *, replay: bool = False) -> dict:
     if et == 'programme.init' and not payload.get('id'):
         ts = event.get('ts') or iso()
         payload['id'] = f"PRG-{str(ts).replace('-', '').replace(':', '')[:15]}"
+    # Event time, not replay time, supplies omitted recorded timestamps. Keep
+    # this local to the reducer so old ledger bytes remain untouched.
+    timestamp_defaults = {'programme.charter': 'at', 'node.blocker.open': 'opened'}
+    if et in timestamp_defaults and event.get('ts') and not payload.get(timestamp_defaults[et]):
+        payload[timestamp_defaults[et]] = event['ts']
     run = event.get('run') or ''
     actor = event.get('actor') or ''
     handlers = {
@@ -394,6 +399,7 @@ def apply_event(state: dict, event: dict, *, replay: bool = False) -> dict:
     if not fn:
         raise ProgramError('UNKNOWN_EVENT', et)
     _REPLAY_AWARE = {
+        'node.add', 'decision.add', 'evidence.add', 'baseline.add',
         'programme.status',
         'node.patch', 'node.lease.acquire', 'node.lease.heartbeat', 'node.lease.release',
         'node.lease.reclaim', 'node.stage', 'node.status', 'node.quality',
@@ -477,7 +483,20 @@ def h_identity(s, p, run, actor=''):
         ident['root_commit'] = p['root_commit']
 
 
-def h_node_add(s, p, run, actor=''):
+def validate_node_fields(p: dict) -> None:
+    if 'risk' in p and (not isinstance(p['risk'], str) or p['risk'] not in {'R0', 'R1', 'R2', 'R3', 'R4'}):
+        raise ProgramError('NODE_RISK', 'risk must be one of R0, R1, R2, R3, R4')
+    if 'class' in p and (not isinstance(p['class'], str) or p['class'] not in NODE_CLASSES):
+        raise ProgramError('NODE_CLASS', str(p['class']))
+    if p.get('acceptance') is not None and (not isinstance(p['acceptance'], str) or p['acceptance'] not in {'auto', 'operator'}):
+        raise ProgramError('NODE_ACCEPTANCE', 'acceptance must be auto or operator')
+
+
+def h_node_add(s, p, run, actor='', replay=False):
+    if not replay:
+        validate_node_fields(p)
+        if (p.get('status') or 'proposed') not in STATUSES:
+            raise ProgramError('STATUS', str(p['status']))
     nid = p.get('id') or next_id(s, 'node', 'N')
     if nid in s['nodes']:
         raise ProgramError('NODE_EXISTS', nid)
@@ -546,10 +565,21 @@ def h_node_add(s, p, run, actor=''):
     rebuild_quality(node)
     materialize_artifact_classes(node)
     s['nodes'][nid] = node
+    if not replay:
+        jrec = node.get('verification', {}).get('journeys')
+        if jrec is not None:
+            required = required_journey_ids(s.get('journeys_catalog') or [], node_class=cls, facets=node['facets'])
+            if jrec.get('required_ids') is not None and sorted(set(jrec['required_ids'])) != required:
+                raise ProgramError('JOURNEYS_REQUIREMENTS', 'initial journey requirements must match catalogue selection')
+            jrec['required_ids'] = required
+        if node['status'] == 'complete' and not gates_ok(s, nid):
+            raise ProgramError('QUALITY_GATE', f'{nid} initial complete requires the same gates as node.status complete')
 
 
 def h_node_patch(s, p, run, actor='', replay=False):
     node = mutable_node(s, p, run, replay=replay)
+    if not replay:
+        validate_node_fields(p)
     allowed = {
         'title', 'facets', 'risk', 'depends_on', 'acceptance_criteria', 'touches_existing',
         'conservation_tags', 'parity_source', 'parity_matrix', 'parity_retire_decisions',
@@ -736,7 +766,15 @@ def h_verification(s, p, run, actor='', replay=False):
     if kind not in {'referent', 'rendered', 'behavioral', 'journeys'}:
         raise ProgramError('VERIFY_KIND', str(kind))
     if kind == 'journeys':
-        if p.get('required_ids') is not None:
+        if not replay:
+            prior = (node.get('verification') or {}).get('journeys') or {}
+            frozen = prior.get('required_ids')
+            required = sorted({str(x) for x in frozen}) if frozen is not None else required_journey_ids(
+                s.get('journeys_catalog') or [], node_class=node.get('class'), facets=node.get('facets'))
+            if p.get('required_ids') is not None and sorted({str(x) for x in p['required_ids']}) != required:
+                raise ProgramError('JOURNEYS_REQUIREMENTS', 'required_ids must match the frozen set or initial catalogue selection')
+            p['required_ids'] = required
+        elif p.get('required_ids') is not None:
             required = sorted({str(x) for x in (p.get('required_ids') or [])})
         else:
             catalog = s.get('journeys_catalog') or []
@@ -841,8 +879,28 @@ def h_accept(s, p, run, actor='', replay=False):
     bump(node)
 
 
-def h_decision_add(s, p, run, actor=''):
-    did = p.get('id') or next_id(s, 'decision', 'D')
+def record_id(s, p, kind, prefix, collection, replay):
+    if replay and p.get('_allocated_id'):
+        s['ids'][kind] = max(int(s['ids'].get(kind) or 0), int(p['_allocated_counter']))
+        return p['_allocated_id']
+    ident = p.get('id') or next_id(s, kind, prefix)
+    if not replay:
+        while not p.get('id') and ident in s[collection]:
+            ident = next_id(s, kind, prefix)
+        if ident in s[collection]:
+            raise ProgramError('RECORD_EXISTS', f'{collection} id {ident} already exists; append a new id')
+        # Freeze allocation separately from caller input so new collision-safe
+        # allocation replays exactly, while old collision history keeps its meaning.
+        p.pop('_allocated_id', None)
+        p.pop('_allocated_counter', None)
+        if not p.get('id'):
+            p['_allocated_id'] = ident
+            p['_allocated_counter'] = s['ids'][kind]
+    return ident
+
+
+def h_decision_add(s, p, run, actor='', replay=False):
+    did = record_id(s, p, 'decision', 'D', 'decisions', replay)
     scope = p.get('scope')
     if scope and scope not in s['nodes']:
         raise ProgramError('SCOPE_UNKNOWN', str(scope))
@@ -866,8 +924,8 @@ def h_decision_status(s, p, run, actor=''):
     s['decisions'][did]['status'] = st
 
 
-def h_evidence_add(s, p, run, actor=''):
-    eid = p.get('id') or next_id(s, 'evidence', 'EV')
+def h_evidence_add(s, p, run, actor='', replay=False):
+    eid = record_id(s, p, 'evidence', 'EV', 'evidence', replay)
     s['evidence'][eid] = {
         'id': eid,
         'provenance': p.get('provenance') or 'implementation-observation',
@@ -877,8 +935,8 @@ def h_evidence_add(s, p, run, actor=''):
     }
 
 
-def h_baseline_add(s, p, run, actor=''):
-    bid = p.get('id') or next_id(s, 'baseline', 'BLN')
+def h_baseline_add(s, p, run, actor='', replay=False):
+    bid = record_id(s, p, 'baseline', 'BLN', 'baselines', replay)
     s['baselines'][bid] = {
         'id': bid,
         'provenance': p.get('provenance') or 'implementation-observation',
@@ -902,7 +960,7 @@ def frontier(state: dict) -> list[str]:
         if node.get('blockers'):
             continue
         deps = node.get('depends_on') or []
-        if any(effective_status(state, d) not in TERMINAL for d in deps if d in state['nodes']):
+        if any(d not in state['nodes'] or effective_status(state, d) not in TERMINAL for d in deps):
             continue
         anc = node.get('parent')
         blocked_anc = False

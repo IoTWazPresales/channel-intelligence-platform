@@ -19,11 +19,11 @@
     ".eif/audit/**"
   ],
   "budgets": {
-    "debug_iterations": 10,
+    "debug_iterations": 30,
     "debug_iterations_role": "advisory",
     "repeat_mutating_limit": 12,
-    "tool_calls": 500,
-    "wall_clock_minutes": 120,
+    "tool_calls": 3000,
+    "wall_clock_minutes": 720,
     "wall_clock_role": "advisory_wrap_up",
     "wrap_up_ratio": 0.85
   },
@@ -52,7 +52,10 @@
     ".eif/runtime/programme/**",
     ".eif/upgrade-work/**",
     ".eif/hook-guard.log",
-    ".eif/hook-guard.json"
+    ".eif/hook-guard.json",
+    ".cursor/eif-runtime-manifest.json",
+    ".eif/runtime-upgrade.lock",
+    ".eif/upgrade-history/**"
   ],
   "derived": true,
   "framework_version": "0.4.0-draft",
@@ -133,7 +136,11 @@
   "sources": {
     "autonomy_policy": {
       "path": ".eif/AUTONOMY_POLICY.md",
-      "sha256": "849f91330c6031a1980f138f9c648cf7707e7bc85a966a753b60f47120999581"
+      "sha256": "bad537c97f0cf420cbdcb0203b3525758aa16dd90998771c16e19e08b01dd630"
+    },
+    "environment_policy": {
+      "path": ".eif/ENVIRONMENT_POLICY.md",
+      "sha256": "8202535e3b52d65e9e7209c07c5bf1ce64cbfa094fa89c8fa43f549108d2e815"
     },
     "manifest": {
       "path": ".eif/PROJECT_MANIFEST.md",

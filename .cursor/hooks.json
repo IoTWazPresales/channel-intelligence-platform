@@ -15,6 +15,13 @@
         "failClosed": false
       }
     ],
+    "postToolUseFailure": [
+      {
+        "command": ".cursor/hooks/eif_guard.cmd",
+        "timeout": 10,
+        "failClosed": false
+      }
+    ],
     "beforeShellExecution": [
       {
         "command": ".cursor/hooks/eif_guard.cmd",
@@ -72,6 +79,13 @@
       }
     ],
     "sessionStart": [
+      {
+        "command": ".cursor/hooks/eif_guard.cmd",
+        "timeout": 10,
+        "failClosed": false
+      }
+    ],
+    "sessionEnd": [
       {
         "command": ".cursor/hooks/eif_guard.cmd",
         "timeout": 10,
