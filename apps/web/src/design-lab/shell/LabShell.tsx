@@ -29,7 +29,7 @@ import {
   Typography,
   useMediaQuery,
 } from '@mui/material';
-import { alpha, useTheme } from '@mui/material/styles';
+import { alpha, useTheme, type Theme } from '@mui/material/styles';
 import NextLink from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
@@ -40,6 +40,10 @@ import { CommandPalette } from './CommandPalette';
 import { domainForPath, labDomains, visibleDomains, visibleLeaves, type LabDomain, type Role } from './labNav';
 
 export const RAIL_WIDTH = 252;
+
+/** Opaque-safe hover lift for the raised domain header (bgcolor stays solid so a pinned header never shows leaves through). */
+const raisedHoverOverlay = (t: Theme) =>
+  `linear-gradient(${alpha(t.palette.common.white, 0.05)}, ${alpha(t.palette.common.white, 0.05)})`;
 
 /** Fixture role switcher — demonstrates role → visibility/defaults without persona modes. */
 function useLabRole(): [Role, (r: Role) => void] {
@@ -110,7 +114,23 @@ function Rail({ role, onNavigate }: { role: Role; onNavigate?: () => void }) {
                 sx={{
                   borderRadius: 1.5,
                   py: 0.75,
-                  '&.Mui-selected': { bgcolor: (t) => alpha(t.palette.primary.main, 0.14), '&:hover': { bgcolor: (t) => alpha(t.palette.primary.main, 0.18) } },
+                  // Sticky within its own group Box: the header holds parent context while
+                  // long domains scroll, and is pushed out by the next domain.
+                  position: 'sticky',
+                  top: 0,
+                  zIndex: 2,
+                  ...(expanded
+                    ? {
+                        // Raised, fully opaque surface so the open group reads as a container
+                        // and leaves never bleed through the pinned header.
+                        bgcolor: 'background.paper',
+                        '&:hover': { bgcolor: 'background.paper', backgroundImage: raisedHoverOverlay },
+                        '&.Mui-selected': {
+                          bgcolor: 'background.paper',
+                          '&:hover': { bgcolor: 'background.paper', backgroundImage: raisedHoverOverlay },
+                        },
+                      }
+                    : { '&.Mui-selected': { bgcolor: 'transparent' } }),
                 }}
               >
                 <ListItemIcon sx={{ minWidth: 34, color: isActive ? 'primary.main' : 'text.secondary' }}>
@@ -132,7 +152,7 @@ function Rail({ role, onNavigate }: { role: Role; onNavigate?: () => void }) {
                 </IconButton>
               </ListItemButton>
               <Collapse in={expanded} unmountOnExit>
-                <List dense disablePadding sx={{ ml: 4.25, borderLeft: '1px solid', borderColor: 'divider', mb: 0.5 }}>
+                <List dense disablePadding sx={{ ml: 4.25, mb: 0.5 }}>
                   {leaves.map((l) => {
                     const on = leafIsActive(l.href, pathname, searchStr);
                     return (
@@ -142,7 +162,25 @@ function Rail({ role, onNavigate }: { role: Role; onNavigate?: () => void }) {
                         href={l.href}
                         onClick={onNavigate}
                         selected={on}
-                        sx={{ py: 0.4, pl: 1.5, borderRadius: '0 8px 8px 0', ml: '-1px', borderLeft: on ? '2px solid' : '2px solid transparent', borderLeftColor: on ? 'primary.main' : 'transparent' }}
+                        sx={{
+                          py: 0.4,
+                          pl: 1.5,
+                          borderRadius: 1,
+                          position: 'relative',
+                          // Short rounded bar left of the label: position and shape carry the
+                          // active state, not colour alone.
+                          '&::before': {
+                            content: '""',
+                            position: 'absolute',
+                            left: '2px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            width: '3px',
+                            height: '15px',
+                            borderRadius: '2px',
+                            bgcolor: on ? 'primary.main' : 'transparent',
+                          },
+                        }}
                       >
                         <ListItemText primary={l.label} primaryTypographyProps={{ variant: 'body2', color: on ? 'text.primary' : 'text.secondary', fontWeight: on ? 600 : 400 }} />
                       </ListItemButton>
