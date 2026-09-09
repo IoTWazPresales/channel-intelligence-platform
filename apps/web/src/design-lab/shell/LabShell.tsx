@@ -167,6 +167,14 @@ function Rail({ role, onNavigate }: { role: Role; onNavigate?: () => void }) {
                           pl: 1.5,
                           borderRadius: 1,
                           position: 'relative',
+                          // Selection on a leaf is carried by the ::before bar plus text weight
+                          // alone. The Mui-selected fill is dropped: it tripled the signal and
+                          // its tone sat too close to the expanded header's raised surface,
+                          // merging parent and child into one block. Hover feedback is kept.
+                          '&.Mui-selected': {
+                            bgcolor: 'transparent',
+                            '&:hover': { bgcolor: 'action.hover' },
+                          },
                           // Short rounded bar left of the label: position and shape carry the
                           // active state, not colour alone.
                           '&::before': {
