@@ -5,7 +5,7 @@
     ".eif/runtime/programme/eif_constants.py": "4be30556664b4474daf6a7303ecf9ded7c6c3078d42ced50af3304aaed4985fc",
     ".eif/runtime/programme/eif_integrity.py": "1ba6629252eeef5df5d5fb89ab94fd588bed29a1f0e5ece0413bdb4b1ec9d877",
     ".eif/runtime/programme/eif_program/__init__.py": "78b3417e3ff764955f7c9e0f378db7e712d7c6afcd22fab8b388efb888fe838a",
-    ".eif/runtime/programme/eif_program/cli.py": "f579d6ca7dd67e58d5cd1c221fb8b9bcc5f6a25ff9ee4105442b0d3825245c82",
+    ".eif/runtime/programme/eif_program/cli.py": "918188f80178b555571f71bb006c5a3f9ebbb8fa73d13d69b017734dd4e7fa38",
     ".eif/runtime/programme/eif_program/clock.py": "c0923ad5dfc5552283d3cfab98f9ed681dbcd257a8c3592f9c60d88bd427299f",
     ".eif/runtime/programme/eif_program/design_artifacts.py": "5779dabc17314178a4d456b8095246d31cd79cf61f9bb8a152b67642aff527d9",
     ".eif/runtime/programme/eif_program/engine.py": "cdf487cbfa50a2ecdb7bd788944c4c57544a1a0d16063eb6e4cae52b02b49d10",
@@ -21,7 +21,7 @@
     ".eif/runtime/programme/eif_program/runtime_paths.py": "83214934456260f9c6a00d557c4c18c84ea118cbeed4261a605db11eecdb2ae0",
     ".eif/runtime/programme/eif_program/store.py": "4ab1a047b7fc59967410fe6f6519dd18df12384fbec0bf8a3849a2bb084b48c1",
     ".eif/runtime/programme/eif_program/views.py": "e602dc91acc816f87963ceb5b37bcce2a4a5860631800e9b648c3db59c19d6a6",
-    ".eif/runtime/programme/eif_reason_codes.py": "68b2f808bae553fc63178a36377a508e2034eb004f226cb265440ab8b0e437a0",
+    ".eif/runtime/programme/eif_reason_codes.py": "3917f0021a3b04b18729d3123bd30f160ee85857e795cf0e11cb50ba7b3607cb",
     ".eif/runtime/programme/eiflib.py": "0324706a7a78199d283033f1a9ceb91f66e76fbd063078806ee66aaf2c89d3fc",
     ".eif/runtime/programme/program.py": "5cc52dba88295f826daf428b0b984231f48337aa0e73e02c43ad35fbee721bb0"
   },

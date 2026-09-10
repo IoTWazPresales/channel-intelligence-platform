@@ -94,7 +94,18 @@ def cmd_add_node(args):
 
 def cmd_event(args):
     st = store_from(args)
-    payload = json.loads(args.payload) if args.payload else {}
+    payload_file = getattr(args, 'payload_file', None)  # programmatic callers predate the flag
+    try:
+        if payload_file:
+            raw = (sys.stdin.buffer.read().decode('utf-8-sig') if payload_file == '-'
+                   else Path(payload_file).read_text(encoding='utf-8-sig'))
+        else:
+            raw = args.payload or '{}'
+        payload = json.loads(raw)
+        if not isinstance(payload, dict):
+            raise ValueError('event payload must be a JSON object')
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise ProgramError('PAYLOAD_JSON', f'{exc}; use --payload-file <UTF-8 JSON file> or --payload-file - for stdin; shell-stripped JSON cannot be repaired safely') from exc
     state = st.append(args.type, payload, actor=args.actor, request_id=request_id(args))
     mutation_views(st, state)
     print('rev', state['programme']['snapshot_revision'])
@@ -307,7 +318,9 @@ def build_parser():
 
     s = sp.add_parser('event')
     s.add_argument('type')
-    s.add_argument('--payload', default='{}')
+    inputs = s.add_mutually_exclusive_group()
+    inputs.add_argument('--payload', help='inline JSON object; prefer --payload-file on Windows')
+    inputs.add_argument('--payload-file', help='UTF-8 JSON object file (BOM accepted), or - for UTF-8 stdin')
     s.set_defaults(func=cmd_event)
 
     for name, fn in [

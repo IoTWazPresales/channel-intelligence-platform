@@ -1521,6 +1521,10 @@ def browser_interact_origin_ok(root, data, policy):
         return False,'BROWSER_INTERACT_ORIGIN','in-page interaction requires a current loopback/local-fixture page; public_read is not a UI-mutate grant'
     return True,'',''
 
+CURSOR_REVIEW_TOOLS = ('rename_chat', 'browser_navigate', 'browser_tabs', 'browser_snapshot',
+                      'browser_take_screenshot', 'browser_console_messages', 'browser_network_requests')
+
+
 def mcp_decision(data, policy, root=None, roots=None):
     m=policy.get('mcp') or {}
     if m.get('mode','none')!='allowlist' or not (m.get('tools') or []):
@@ -1538,6 +1542,17 @@ def mcp_decision(data, policy, root=None, roots=None):
         matched=e; break
     if not matched:
         return False,'MCP_NOT_GRANTED',f'MCP tool {tool or "<unknown>"} is not in the granted set'
+    inp = mcp_tool_input_object(data)
+    if inp in (None, ''):
+        inp = {}
+    if tool in CURSOR_REVIEW_TOOLS:
+        # MCP output files are not file-tool writes with verified confinement.
+        if not isinstance(inp, dict):
+            return False,'MCP_OUTPUT_PATH','review MCP input must be a JSON object so output paths can be checked'
+        if any(inp.get(key) for key in ('filename', 'file_path', 'path', 'download_path')):
+            return False,'MCP_OUTPUT_PATH','review MCP output must return through the tool; save evidence with scoped file tools'
+        if tool == 'browser_tabs' and inp.get('action', 'list') != 'list' and browser_mode(policy) != 'interact':
+            return False,'BROWSER_OBSERVE_ONLY','browser observation grants tab listing only'
     if DESTRUCTIVE_INPUT.search(tool_input) and not action_allowed(policy,'destructive_data'):
         return False,'MCP_DESTRUCTIVE','MCP payload appears destructive and is not granted'
     dests=destination_urls_from_mcp(data)
@@ -1665,8 +1680,10 @@ def presentation_action(root, data, policy, scope):
             return False
         return shell_decision(cmd, False, policy)[0]
     name = tool.removeprefix('MCP:')
-    if name in {'browser_snapshot', 'browser_take_screenshot', 'browser_console_messages', 'browser_network_requests'}:
+    if name in CURSOR_REVIEW_TOOLS:
         if isinstance(inp, dict) and any(inp.get(key) for key in ('filename', 'file_path', 'path', 'download_path')):
+            return False
+        if name == 'browser_tabs' and (not isinstance(inp, dict) or inp.get('action', 'list') != 'list'):
             return False
         request = dict(data, tool_name=name)
         return mcp_decision(request, policy, root, roots)[0]
@@ -1777,11 +1794,10 @@ def _main():
         return out()
 
     if event == 'postToolUseFailure':
-        # An ordinary failed test is not a guard block. Cursor identifies a
-        # permission denial separately; our own harness faults are saved pre-emit.
-        if data.get('failure_type') == 'permission_denied':
-            support('eif_session').record_block(root, data, 'TOOL_PERMISSION_DENIED')
-        audit(root, data, 'allow', 'POST_TOOL_FAILURE')
+        # Native permission_denied has no trusted initiator/decision provenance.
+        # Original guard denials persist pre-emit; callbacks only add evidence.
+        audit(root, data, 'allow', 'POST_TOOL_FAILURE', extra={
+            'failure_type': data.get('failure_type'), 'retry_admission': 'none; callback is audit-only'})
         return out()
 
     if event in {'stop', 'sessionEnd'}:

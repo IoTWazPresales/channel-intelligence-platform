@@ -29,6 +29,7 @@ FOREIGN_PATH FOREIGN_READ OUT_OF_OBSERVATION_SCOPE OUT_OF_CHANGE_SCOPE
 CONTROL_PLANE_PROTECTED PROTECTED_PATH PROGRAMME_PATH_PROTECTED
 PROGRAMME_GIT_WORKTREE PROGRAMME_GIT_STAGE SENSITIVE_READ SENSITIVE_TOOL_READ
 SECRET_IN_READ SECRET_PREWRITE TOOL_UNSUPPORTED
+MCP_DENY MCP_NOT_GRANTED MCP_OUTPUT_PATH BROWSER_OBSERVE_ONLY
 '''.split())
 VERIFY_COMMAND = (r'\s*python(?:3)?\s+-B\s+\.cursor/hooks/eif_guard\.py\s+'
                   r'--verify-closure\s+[0-9a-f]{64}\s+[0-9a-f]{32}\s*')
@@ -117,18 +118,16 @@ def record_block(root, data, code):
     # Never replace the original cursor with our own retry/closure rejection.
     if code.startswith('SESSION_'):
         return
+    # A native callback carries neither a trusted initiator nor proof of a
+    # delivered guard decision. Audit it in the guard; never manufacture debt.
+    # Actual retryable guard denials already persist their original reason.
+    # Permanent refusals add nothing; existing legacy debt is never removed.
+    if code == 'TOOL_PERMISSION_DENIED' or code in NON_RETRYABLE_CODES:
+        return
     path = state_path(root, data)
     with file_lock(path.with_suffix('.lock')):
         state = read_state(path)
         fp = fingerprint(data)
-        if code in NON_RETRYABLE_CODES:
-            # Retain correlation for Cursor's later, less specific native
-            # permission_denied post event. Never silently remove legacy debt.
-            state.setdefault('non_retryable_denials', {})[fp] = {'reason_code': code, 'at': int(time.time())}
-            atomic_json(path, state)
-            return
-        if code == 'TOOL_PERMISSION_DENIED' and fp in state.get('non_retryable_denials', {}):
-            return
         if not any(item['fingerprint'] == fp for item in state['retry']):
             state['retry'].append({'fingerprint': fp, 'tool': action(data)[0],
                                    'reason_code': code, 'at': int(time.time())})
