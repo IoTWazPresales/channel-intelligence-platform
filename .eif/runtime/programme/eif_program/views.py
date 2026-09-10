@@ -51,14 +51,15 @@ def program_md(state: dict) -> str:
         '',
         '## Nodes',
         '',
-        '| ID | Title | Class | Recorded | Effective | Leaf | Retro |',
-        '|---|---|---|---|---|---|---|',
+        '| ID | Title | Class | Recorded | Effective | Leaf | Retro | Execution |',
+        '|---|---|---|---|---|---|---|---|',
     ]
     for nid, n in sorted(state['nodes'].items()):
         retro = 'yes' if node_is_retroactive(n) else ''
         lines.append(
             f"| {nid} | {n.get('title')} | {n.get('class')} | {n.get('status')} | "
-            f"{effective_status(state, nid)} | {'yes' if is_leaf(state, nid) else 'no'} | {retro} |"
+            f"{effective_status(state, nid)} | {'yes' if is_leaf(state, nid) else 'no'} | {retro} | "
+            f"{'UNGUARDED presentation' if n.get('risk_class') == 'presentation' else 'full loop'} |"
         )
     return '\n'.join(lines) + '\n'
 
@@ -161,6 +162,9 @@ def work_item_md(state: dict, node: dict | None) -> str:
         f"**Stage:** {node.get('stage')}  ",
         f"**Revision:** {node.get('revision')}  ",
         f"**Risk:** {node.get('risk')}  ",
+        f"**Execution risk class:** {node.get('risk_class', 'full')}  ",
+        f"**Execution:** {'UNGUARDED' if node.get('risk_class') == 'presentation' else 'full loop'}  ",
+        f"**Execution charter:** {(node.get('execution_charter') or {}).get('statement', '_unset_')}  ",
         f"**Facets:** {', '.join(node.get('facets') or []) or '_none_'}",
         '',
         '## Acceptance criteria',

@@ -41,6 +41,7 @@ CONTROL_PLANE_DEFAULTS = [
     '.eif/runtime-events.jsonl', '.eif/runtime-budget/**', '.eif/program/**', '.eif/runtime/programme/**', '.eif/upgrade-work/**',
     '.eif/hook-guard.log', '.eif/hook-guard.json',
     '.eif/runtime-session/**', '.eif/runtime-upgrade.lock', '.eif/upgrade-history/**',
+    '.eif/node-scope.json', '.eif/node-scope.lock',
 ]
 BOOTSTRAP_SHELL = [
     r'^pwd\s*$',
@@ -408,11 +409,13 @@ def out(permission='allow', message=None, extra=None):
             'permission': permission, 'decision_kind': kind,
             'elapsed_ms': round((time.perf_counter() - _STARTED) * 1000, 3),
             'timings_ms': _TIMINGS,
+            **{key: obj[key] for key in ('enforcement', 'node', 'risk_class') if key in obj},
         })
         if not logged or _AUDIT_ERROR:
-            # Only a fully evaluated, allowed read can survive a telemetry fault.
-            # No parser, identity, policy-integrity or scope failure reaches this.
-            if permission == 'allow' and not _READ_ONLY:
+            # Validated presentation admission is deliberately nonblocking on
+            # telemetry failure. Full-loop mutations retain their old behavior.
+            unguarded = obj.get('enforcement') == 'UNGUARDED' and reason == 'PRESENTATION_UNGUARDED'
+            if permission == 'allow' and not _READ_ONLY and not unguarded:
                 obj['permission'] = 'deny'
             obj['decision_kind'] = 'harness_fault'
             obj['original_reason_code'] = reason
@@ -420,6 +423,8 @@ def out(permission='allow', message=None, extra=None):
             obj['log_written'] = bool(logged)
             obj['user_message'] = 'HOOK_LOG_FAILURE: guard logging failed; see hook stderr'
             obj['agent_message'] = (
+                'UNGUARDED presentation action allowed; audit delivery failed. No gate or successful execution claimed.'
+                if unguarded else
                 'EIF harness fault: guard logging failed. Read policy checks completed; read allowed.'
                 if obj['permission'] == 'allow' else
                 'EIF harness fault: guard logging failed. Action remains blocked; repair the guard before retrying.'
@@ -1217,6 +1222,7 @@ def _programme_runtime_shell_invoke(cmd: str) -> bool:
 def shell_path_consequence(cmd, policy):
     """Defense-in-depth only. Does not contain arbitrary child processes."""
     programme_invoke = _programme_runtime_shell_invoke(cmd)
+    closure_invoke = support('eif_session').verifier_command(cmd)
     for m in REDIRECT_TARGET.finditer(cmd):
         rel=_normalize_shell_rel(m.group(1).strip('\'"'))
         if is_programme_ledger_rel(rel, policy):
@@ -1238,6 +1244,8 @@ def shell_path_consequence(cmd, policy):
     for cand in _path_candidates(cmd):
         rel=_normalize_shell_rel(cand)
         if programme_invoke and rel == PROGRAMME_ENTRY_REL:
+            continue
+        if closure_invoke and rel == '.cursor/hooks/eif_guard.py':
             continue
         if staging_only and rel in ledger_rels:
             continue
@@ -1557,6 +1565,129 @@ def mcp_decision(data, policy, root=None, roots=None):
         record_browser_origin(root, data, dests, policy, roots)
     return True,'MCP_ALLOW','granted MCP tool'
 
+def presentation_profile(root):
+    """Protected operator projection; payload flags cannot select this mode.
+
+    No Git, session state, reducer replay, budget or network on this path.
+    Invalid/stale projections grant nothing; the full policy route remains.
+    """
+    path = support('eif_state').contained(root, '.eif/node-scope.json')
+    if not path.is_file():
+        return None
+    try:
+        scope = json.loads(path.read_text(encoding='utf-8'))
+        if (scope.get('version') != 1 or scope.get('mode') != 'presentation'
+                or scope.get('root') != str(root.resolve()) or not re.fullmatch(r'N-[0-9]+', scope.get('node', ''))):
+            return None
+        for key, rel in [('policy_sha256', '.cursor/eif-runtime-policy.json'),
+                         ('runtime_sha256', '.cursor/eif-runtime-manifest.json')]:
+            if scope.get(key) != hashlib.sha256((root / rel).read_bytes()).hexdigest():
+                return None
+        charter = scope.get('charter')
+        if (not isinstance(charter, dict) or charter.get('effects') != ['presentation']
+                or not isinstance(charter.get('statement'), str) or not charter['statement'].strip()
+                or not isinstance(charter.get('change_paths'), list) or not charter['change_paths']
+                or not isinstance(charter.get('commands'), list)):
+            return None
+        for pattern in charter['change_paths']:
+            if (not isinstance(pattern, str) or not pattern or pattern.startswith(('/', '*', '?', '['))
+                    or (pattern.startswith('.') and not pattern.startswith('.eif/audit/'))
+                    or re.search(r'[\\:\x00-\x1f]', pattern) or any(p in {'', '.', '..'} for p in pattern.split('/'))):
+                return None
+        if any(not isinstance(cmd, str) for cmd in charter['commands']):
+            return None
+        # Bind the accepted ledger prefix, then inspect only later event headers
+        # for revocation. Ordinary evidence/stage updates do not expire a charter.
+        ledger = support('eif_state').contained(root, '.eif/program/PROGRAM_LOG.ndjson').read_bytes()
+        count = scope.get('ledger_bytes')
+        if (type(count) is not int or count <= 0 or len(ledger) < count
+                or hashlib.sha256(ledger[:count]).hexdigest() != scope.get('ledger_sha256')):
+            return None
+        seq = scope.get('ledger_seq')
+        if type(seq) is not int:
+            return None
+        for line in ledger[count:].splitlines():
+            entry = json.loads(line)
+            seq += 1
+            if entry.get('seq') != seq:
+                return None
+            payload = entry.get('payload') or {}
+            if entry.get('event') == 'programme.status' and payload.get('status', payload.get('to')) != 'active':
+                return None
+            if (payload.get('node') or payload.get('id')) != scope['node']:
+                continue
+            if entry.get('event') == 'node.patch' and any(key in payload for key in
+                    ('risk_class', 'execution_charter', 'risk', 'class', 'facets', 'title', 'acceptance_criteria')):
+                return None
+            if entry.get('event') in {'node.retroactive_complete', 'node.independence.disclaim'}:
+                return None
+            if entry.get('event') == 'node.status' and (payload.get('to') or payload.get('status')) in {'complete', 'split', 'rejected', 'deferred'}:
+                return None
+        return scope
+    except (OSError, ValueError, TypeError, AttributeError):
+        return None
+
+
+def presentation_action(root, data, policy, scope):
+    event = data.get('hook_event_name')
+    if event in {'sessionStart', 'stop', 'sessionEnd'}:
+        return True
+    tool, inp = support('eif_session').action(data)
+    if event == 'afterFileEdit':
+        tool, inp = 'Write', {'file_path': data.get('file_path')}
+    roots = declared_roots(data, policy, root)
+    if tool in {'Read', 'ReadLints', 'Grep', 'Glob', 'List', 'Write'} and isinstance(inp, dict):
+        path = tool_path(inp)
+        rr, rel = resolve_path(path, roots) if path else (root, '')
+        if not rr or Path(rr).resolve() != root.resolve():
+            return False
+        if tool == 'Write':
+            if (not path or control_plane(rel, policy) or matches(rel, policy.get('protected_paths') or [])
+                    or not matches(rel, scope['charter']['change_paths'])):
+                return False
+        elif observation_scopes(policy) and not matches(rel or '**', observation_scopes(policy)):
+            return False
+        if matches(rel, policy.get('sensitive_read_paths') or []) or any(has_secret(value) for value in strings(inp)):
+            return False
+        if event == 'beforeReadFile' and has_secret(str(data.get('content') or '')):
+            return False
+        return True
+    if tool == 'Shell' and isinstance(inp, dict):
+        cmd = inp.get('command', '')
+        if cmd not in scope['charter']['commands'] or Path(inp.get('cwd') or root).resolve() != root.resolve():
+            return False
+        # Even an explicitly listed destructive/migration/remote command keeps
+        # the full workflow. Shell children remain operator-trusted, not jailed.
+        if (re.search(r'[;&|<>`\r\n]|\$\(', cmd)
+                or re.search(r'\b(?:rm|del|erase|rmdir|remove-item|move-item|mv|unlink|migrat\w*|prisma|knex|alembic)\b', cmd, re.I)
+                or any(pattern.search(cmd) for pattern in (FORCE_VCS, REMOTE_PUSH, DESTRUCTIVE_INPUT,
+                       IDENTITY_MUTATION, INFRASTRUCTURE, GIT_CLONE, GLOBAL_OR_PUBLISH))):
+            return False
+        return shell_decision(cmd, False, policy)[0]
+    name = tool.removeprefix('MCP:')
+    if name in {'browser_snapshot', 'browser_take_screenshot', 'browser_console_messages', 'browser_network_requests'}:
+        if isinstance(inp, dict) and any(inp.get(key) for key in ('filename', 'file_path', 'path', 'download_path')):
+            return False
+        request = dict(data, tool_name=name)
+        return mcp_decision(request, policy, root, roots)[0]
+    return False  # Delete, unknown tools and MCP mutations retain full admission.
+
+
+def presentation_audit(root, data, extra):
+    """Bound the advisory event sink; it cannot turn charter work into a gate."""
+    global _AUDIT_ERROR, _DECISION_CODE
+    _DECISION_CODE = 'PRESENTATION_UNGUARDED'
+    done = threading.Event()
+    def record():
+        try:
+            audit(root, data, 'allow', 'PRESENTATION_UNGUARDED', extra=extra)
+        finally:
+            done.set()
+    threading.Thread(target=record, daemon=True, name='eif-presentation-audit').start()
+    if not done.wait(0.1):
+        _AUDIT_ERROR = 'presentation audit delivery unconfirmed'
+
+
 def main():
     global _RUNTIME_LOCK
     try:
@@ -1613,11 +1744,22 @@ def _main():
         audit(root, data, 'deny', 'POLICY_INTEGRITY')
         return deny('POLICY_INTEGRITY', pmsg)
 
+    scope = presentation_profile(root) if state == 'OK' else None
+    if scope and presentation_action(root, data, policy, scope):
+        # The normal runtime/policy integrity checks above remain mandatory.
+        # No success is fabricated and no full-loop session debt is changed.
+        extra = {'enforcement': 'UNGUARDED', 'node': scope['node'],
+                 'risk_class': 'presentation', 'charter': scope['charter']['statement']}
+        presentation_audit(root, data, extra)
+        return out(message='UNGUARDED presentation charter; workflow gates not enforced', extra=extra)
+
     # sessionStart is context only on Cursor; it is never used as a blocking boundary.
     if event=='sessionStart':
         if state=='OK':
             ok,msg=identity_ok(root,policy)
+            started = time.perf_counter()
             closed, code, closure = support('eif_session').boundary(root, data)
+            _TIMINGS['session'] = round((time.perf_counter() - started) * 1000, 3)
             text=(f'EIF runtime policy loaded for {policy.get("project_id","<unset>")}; '
                   f'identity preflight: {msg}; {code}: {closure}. '
                   'Pending retry and closure are enforced at actionable hooks; lifecycle replies cannot prevent forced closure.')
@@ -1643,8 +1785,10 @@ def _main():
         return out()
 
     if event in {'stop', 'sessionEnd'}:
+        started = time.perf_counter()
         closed, code, message = support('eif_session').boundary(root, data)
         pending = support('eif_session').pending(root)
+        _TIMINGS['session'] = round((time.perf_counter() - started) * 1000, 3)
         if pending:
             message += f'; retry blocked {pending[0][2]["tool"]} first (fingerprint={pending[0][2]["fingerprint"]})'
         audit(root, data, 'allow', code)
@@ -1653,11 +1797,24 @@ def _main():
             extra['followup_message'] = f'EIF closure pending. {message}. Use only policy-permitted recovery; do not claim the session is closed.'
         return out(extra=extra)
 
+    # Unconditional control-plane file denials precede workflow obligations.
+    # This can only reject; no session name, probe flag, or permission bypass is
+    # introduced. It keeps a protected-Write health proof meaningful even while
+    # unrelated work is gated. Normal admission still runs every check below.
+    if state == 'OK' and event == 'preToolUse' and data.get('tool_name') in {'Write', 'Delete'}:
+        path = tool_path(data.get('tool_input'))
+        rr, rel = resolve_path(path, declared_roots(data, policy, root)) if path else (None, None)
+        if rr and control_plane(rel, policy):
+            audit(root, data, 'deny', 'CONTROL_PLANE_PROTECTED', rel)
+            return deny('CONTROL_PLANE_PROTECTED', f'agent may not directly modify generated/accepted control-plane path {rel}')
+
     if event in {'preToolUse', 'beforeShellExecution', 'beforeMCPExecution', 'beforeReadFile', 'subagentStart'}:
+        started = time.perf_counter()
         try:
             ready, code, message = support('eif_session').pre_check(root, data)
         except Exception as exc:
             ready, code, message = False, 'SESSION_STATE_FAILURE', f'{type(exc).__name__}: {exc}'
+        _TIMINGS['session'] = round((time.perf_counter() - started) * 1000, 3)
         if not ready:
             if code == 'SESSION_STATE_FAILURE' and _READ_ONLY:
                 _READ_WARNING = {'reason_code': code, 'additional_context': message + '; session bookkeeping needs repair. Read permission checks still apply.'}
@@ -1836,6 +1993,47 @@ def _main():
     # stop/subagent/workspace lifecycle are audit surfaces, not blocking budgets unless separately proven.
     audit(root,data,'allow','EVENT_OBSERVED')
     return out()
+
+def verify_closure_cli(arguments):
+    """Installed, explicit off-hook command; no hook watchdog or stdin read."""
+    global _ACTIVE_ROOT, _ACTIVE_DATA
+    root = Path(__file__).resolve().parents[2]
+    _ACTIVE_ROOT = root
+    _ACTIVE_DATA = {'hook_event_name': 'closureVerify', 'cwd': str(root)}
+    lock = None
+    try:
+        if len(arguments) != 2 or not re.fullmatch('[0-9a-f]{64}', arguments[0]) or not re.fullmatch('[0-9a-f]{32}', arguments[1]):
+            raise ValueError('expected a session key and closure request identifier')
+        lock = verified_runtime(root)
+        state, policy, _, message = load_policy(root)
+        if state != 'OK':
+            result = False, 'POLICY_INTEGRITY', 'An accepted, valid project policy is required.'
+        else:
+            ok, message = identity_ok(root, policy)
+            result = (support('eif_session').verify_request(root, *arguments) if ok else
+                      (False, 'IDENTITY_MISMATCH', message))
+    except Exception as exc:
+        result = False, 'SESSION_STATE_FAILURE', f'Verifier could not complete: {type(exc).__name__}; inspect runtime integrity and local state.'
+    finally:
+        if lock is not None:
+            lock.__exit__(None, None, None)
+    ok, code, message = result
+    payload = dict(ok=ok, reason_code=code, decision_kind='harness_fault' if code in CRASH_REASON_CODES else 'policy', message=message)
+    logged = write_operator_log(code, message, extra={'closure_verified': ok,
+                                'decision_kind': payload['decision_kind'],
+                                'elapsed_ms': round((time.perf_counter() - _STARTED) * 1000, 3)})
+    if not logged:
+        payload['log_delivery'] = 'unconfirmed'
+        _stderr_log({'reason_code': 'HOOK_LOG_FAILURE', 'decision_kind': 'harness_fault',
+                     'message': 'Closure verifier log delivery unconfirmed; inspect its receipt and JSON result.'})
+    wrote = _write_stdout_bytes((json.dumps(payload, ensure_ascii=True) + '\n').encode('ascii'))
+    return 0 if ok and wrote else 1
+
+
+if __name__=='__main__' and len(sys.argv) > 1:
+    if sys.argv[1] != '--verify-closure':
+        raise SystemExit('Only --verify-closure is supported outside hook mode')
+    raise SystemExit(verify_closure_cli(sys.argv[2:]))
 
 if __name__=='__main__':
     try:

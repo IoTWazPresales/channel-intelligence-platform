@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import re
 from datetime import timedelta
 from typing import Any
 
@@ -335,6 +336,7 @@ def mutable_node(
     *,
     allow_expired=False,
     replay: bool = False,
+    reclassify_presentation: bool = False,
 ) -> dict:
     nid = payload.get('node') or payload.get('id')
     if nid not in state['nodes']:
@@ -342,7 +344,7 @@ def mutable_node(
     node = state['nodes'][nid]
     assert_revision(node, payload.get('expected_revision'))
     assert_scope(state, nid, payload.get('decision'))
-    if not replay:
+    if not replay and node.get('risk_class', 'full') != 'presentation' and not reclassify_presentation:
         assert_lease_owner(node, run, allow_expired=allow_expired)
     return node
 
@@ -484,12 +486,34 @@ def h_identity(s, p, run, actor=''):
 
 
 def validate_node_fields(p: dict) -> None:
+    if 'risk_class' in p and p['risk_class'] not in ('full', 'presentation'):
+        raise ProgramError('NODE_RISK_CLASS', 'risk_class must be full or presentation')
     if 'risk' in p and (not isinstance(p['risk'], str) or p['risk'] not in {'R0', 'R1', 'R2', 'R3', 'R4'}):
         raise ProgramError('NODE_RISK', 'risk must be one of R0, R1, R2, R3, R4')
     if 'class' in p and (not isinstance(p['class'], str) or p['class'] not in NODE_CLASSES):
         raise ProgramError('NODE_CLASS', str(p['class']))
     if p.get('acceptance') is not None and (not isinstance(p['acceptance'], str) or p['acceptance'] not in {'auto', 'operator'}):
         raise ProgramError('NODE_ACCEPTANCE', 'acceptance must be auto or operator')
+
+
+def validate_execution_class(node):
+    if node.get('risk_class', 'full') != 'presentation':
+        return
+    charter = node.get('execution_charter')
+    if (not isinstance(charter, dict) or set(charter) != {'statement', 'change_paths', 'commands', 'effects'}
+            or not isinstance(charter.get('statement'), str) or not charter['statement'].strip()
+            or charter.get('effects') != ['presentation']):
+        raise ProgramError('NODE_CHARTER', 'presentation requires an explicit charter with effects=[presentation]; mixed/data/semantic/migration work uses full')
+    paths, commands = charter.get('change_paths'), charter.get('commands')
+    if not isinstance(paths, list) or not paths or not isinstance(commands, list):
+        raise ProgramError('NODE_CHARTER', 'charter requires change_paths and a commands list')
+    for path in paths:
+        if (not isinstance(path, str) or not path or path.startswith(('/', '*', '?', '['))
+                or (path.startswith('.') and not path.startswith('.eif/audit/'))
+                or re.search(r'[\\:\x00-\x1f]', path) or any(p in {'', '.', '..'} for p in path.split('/'))):
+            raise ProgramError('NODE_CHARTER', 'change_paths must be bounded project-relative patterns')
+    if any(not isinstance(cmd, str) or not cmd.strip() or '\n' in cmd or '\r' in cmd for cmd in commands):
+        raise ProgramError('NODE_CHARTER', 'commands must be exact single-line strings')
 
 
 def h_node_add(s, p, run, actor='', replay=False):
@@ -564,6 +588,14 @@ def h_node_add(s, p, run, actor='', replay=False):
     }
     rebuild_quality(node)
     materialize_artifact_classes(node)
+    # Omitted fields in historical events remain omitted, preserving snapshots.
+    if 'risk_class' in p:
+        node['risk_class'] = p['risk_class']
+    if 'execution_charter' in p:
+        node['execution_charter'] = copy.deepcopy(p['execution_charter'])
+    validate_execution_class(node)
+    if not replay and node.get('risk_class') == 'presentation' and node['status'] == 'complete':
+        raise ProgramError('PRESENTATION_RECORDING', 'use node.retroactive_complete for unguarded presentation work')
     s['nodes'][nid] = node
     if not replay:
         jrec = node.get('verification', {}).get('journeys')
@@ -577,19 +609,21 @@ def h_node_add(s, p, run, actor='', replay=False):
 
 
 def h_node_patch(s, p, run, actor='', replay=False):
-    node = mutable_node(s, p, run, replay=replay)
+    node = mutable_node(s, p, run, replay=replay, reclassify_presentation=p.get('risk_class') == 'presentation')
     if not replay:
         validate_node_fields(p)
     allowed = {
         'title', 'facets', 'risk', 'depends_on', 'acceptance_criteria', 'touches_existing',
         'conservation_tags', 'parity_source', 'parity_matrix', 'parity_retire_decisions',
         'preservation', 'baseline_ref', 'class', 'acceptance', 'design_artifact_class',
+        'risk_class', 'execution_charter',
     }
     for k, v in p.items():
         if k in allowed:
             node[k] = v
     if 'acceptance' in p and p['acceptance'] == 'auto':
         node['acceptance_state'] = 'not_required'
+    validate_execution_class(node)
     if any(k in p for k in ('facets', 'class', 'title', 'risk', 'acceptance_criteria')):
         node['facets'] = resolve_facets(
             class_=node.get('class'),
@@ -675,6 +709,13 @@ def h_stage(s, p, run, actor='', replay=False):
         dest = None
     if dest is not None and dest not in STAGE_ORDER:
         raise ProgramError('STAGE', str(dest))
+    if node.get('risk_class') == 'presentation':
+        # Stages are an operator work note here, never implementation provenance.
+        node['stage'] = dest
+        node['stage_note'] = p.get('stage_note') or 'UNGUARDED: charter execution; no independent implementation boundary'
+        node['status'] = 'in_progress'
+        bump(node)
+        return
     cur = node.get('stage')
     leaving_discovery = (cur in {None, 'discovery'} or dest not in {None, 'discovery'}) and dest not in {None, 'discovery'}
     if needs_baseline(node) and leaving_discovery:
@@ -710,6 +751,8 @@ def h_status(s, p, run, actor='', replay=False):
     if dest not in STATUSES:
         raise ProgramError('STATUS', str(dest))
     if dest == 'complete':
+        if not replay and node.get('risk_class') == 'presentation':
+            raise ProgramError('PRESENTATION_RECORDING', 'use node.retroactive_complete with evidence; normal gate completion is not claimed')
         if not is_leaf(s, node['id']):
             raise ProgramError('DERIVED_COMPLETE', 'non-leaf complete is derived; do not assert it')
         if not gates_ok(s, node['id']):
@@ -1013,6 +1056,8 @@ def completion_account(state: dict) -> dict:
             'gates_valid': gates_ok(state, nid),
             'independence_issues': independence_issues(n),
             'retroactive': node_is_retroactive(n),
+            'risk_class': n.get('risk_class', 'full'),
+            'execution': 'UNGUARDED' if n.get('risk_class') == 'presentation' else 'full loop',
             'independence_disclaimed': bool(retro.get('independence_disclaimed')),
             'tree_support': tree_support(state, nid),
         })

@@ -74,6 +74,7 @@ def cmd_add_node(args):
         'status': args.status,
         'facets': [x.strip() for x in (args.facets or '').split(',') if x.strip()],
         'risk': args.risk,
+        'risk_class': args.risk_class,
         'touches_existing': args.touches_existing,
         'depends_on': [x.strip() for x in (args.depends_on or '').split(',') if x.strip()],
         'acceptance_criteria': [x.strip() for x in (args.criteria or '').split(';') if x.strip()],
@@ -82,6 +83,8 @@ def cmd_add_node(args):
         'fingerprint': args.fingerprint,
         'acceptance': args.acceptance,
     }
+    if args.execution_charter:
+        payload['execution_charter'] = json.loads(Path(args.execution_charter).read_text(encoding='utf-8-sig'))
     state = st.append('node.add', payload, actor=args.actor, request_id=request_id(args))
     mutation_views(st, state)
     nid = payload['id'] or max(state['nodes'])
@@ -291,6 +294,8 @@ def build_parser():
     s.add_argument('--status', default='proposed')
     s.add_argument('--facets', default='')
     s.add_argument('--risk', default='R1')
+    s.add_argument('--risk-class', choices=['full', 'presentation'], default='full')
+    s.add_argument('--execution-charter', help='JSON charter file required for presentation class')
     s.add_argument('--touches-existing', action='store_true')
     s.add_argument('--depends-on', default='')
     s.add_argument('--criteria', default='')
