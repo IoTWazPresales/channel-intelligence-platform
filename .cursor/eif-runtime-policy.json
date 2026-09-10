@@ -84,7 +84,31 @@
     "tools": [
       {
         "server_pattern": "*",
-        "tool_pattern": "browser_*"
+        "tool_pattern": "rename_chat"
+      },
+      {
+        "server_pattern": "*",
+        "tool_pattern": "browser_navigate"
+      },
+      {
+        "server_pattern": "*",
+        "tool_pattern": "browser_tabs"
+      },
+      {
+        "server_pattern": "*",
+        "tool_pattern": "browser_snapshot"
+      },
+      {
+        "server_pattern": "*",
+        "tool_pattern": "browser_take_screenshot"
+      },
+      {
+        "server_pattern": "*",
+        "tool_pattern": "browser_console_messages"
+      },
+      {
+        "server_pattern": "*",
+        "tool_pattern": "browser_network_requests"
       }
     ]
   },
@@ -136,7 +160,7 @@
   "sources": {
     "autonomy_policy": {
       "path": ".eif/AUTONOMY_POLICY.md",
-      "sha256": "bad537c97f0cf420cbdcb0203b3525758aa16dd90998771c16e19e08b01dd630"
+      "sha256": "d2a417cd9009bd9494a0e15f1aa9798589607d8cfba52e2b0720cd40a36adf57"
     },
     "environment_policy": {
       "path": ".eif/ENVIRONMENT_POLICY.md",
