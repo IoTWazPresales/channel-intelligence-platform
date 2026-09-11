@@ -40,6 +40,8 @@ shell:
 mcp:
   profile: cursor-review
   browser: interact
+  tools:
+    - browser_*
 network:
   classes:
   - loopback

@@ -84,6 +84,10 @@
     "tools": [
       {
         "server_pattern": "*",
+        "tool_pattern": "browser_*"
+      },
+      {
+        "server_pattern": "*",
         "tool_pattern": "rename_chat"
       },
       {
@@ -160,7 +164,7 @@
   "sources": {
     "autonomy_policy": {
       "path": ".eif/AUTONOMY_POLICY.md",
-      "sha256": "d2a417cd9009bd9494a0e15f1aa9798589607d8cfba52e2b0720cd40a36adf57"
+      "sha256": "e169cbea7c397d7b39edeaeb9993c535f7972d75e3b9d28134b13cd7e137899a"
     },
     "environment_policy": {
       "path": ".eif/ENVIRONMENT_POLICY.md",
