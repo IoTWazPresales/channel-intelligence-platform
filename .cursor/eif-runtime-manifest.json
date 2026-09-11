@@ -3,14 +3,14 @@
   "files": {
     ".cursor/hooks.json": "d7d7c183e44342e4674a83e969a1d79400b3af2763fa1a352239afc2f7a58167",
     ".cursor/hooks/eif_guard.cmd": "4273bdc9f1d98737f467dd905a931cfa12fd376e8f53bb9610a707d83cadc580",
-    ".cursor/hooks/eif_guard.py": "accea2adbec4ac77f6dd1a9a791df07e3f967df9c3a0b8a11d93bbbfd0144777",
+    ".cursor/hooks/eif_guard.py": "ded18b65c369582695bb9a70d51f39d27dfcfe6c4312612ac24d455ac7961e7a",
     ".cursor/hooks/eif_guard.sh": "228ed8d88af7362332b562f5a7f1c96d851d545b8ffc69195d83d99799f5df60",
     ".cursor/hooks/eif_guard_crash.json": "00d7f2cdaee97215a9d7a6ccd3a12cf352cc34bd7418be4f2a1410e6e1099a4f",
     ".cursor/hooks/eif_guard_failclosed.json": "b8a84d7b95a7da709f8f26449c96ef636d7796ff82bc7416af70d9b8bfe522f4",
     ".cursor/hooks/eif_integrity.py": "1ba6629252eeef5df5d5fb89ab94fd588bed29a1f0e5ece0413bdb4b1ec9d877",
     ".cursor/hooks/eif_reason_codes.py": "3917f0021a3b04b18729d3123bd30f160ee85857e795cf0e11cb50ba7b3607cb",
     ".cursor/hooks/eif_session.py": "de8191204090ea024323201b2a03645685a0d0d9dfc435398138d5fa114c0370",
-    ".cursor/hooks/eif_state.py": "0487306056928e9c951d7ac72c1d866e36a20586cd94254a067e423ae5472167"
+    ".cursor/hooks/eif_state.py": "4b164c8107196571002341ebe56b0c81839c773427103bcda6b70c5c8bfa4b6a"
   },
   "product_version": "0.7.0-draft"
 }

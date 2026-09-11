@@ -72,6 +72,10 @@ URL_IN_TEXT = re.compile(r'https?://[^\s\'"\\]+', re.I)
 REDIRECT_TARGET = re.compile(r'(?:^|[\s;|&])(?:>>?|2>>?)\s*([^\s;|&]+)')
 QUOTED_PATH = re.compile(r'''['"]([^'"]+)['"]''')
 ABS_PATH = re.compile(r'(?:[A-Za-z]:[\\/][^\s;|&"\']+|/(?:etc|tmp|Users|home|var|private)[^\s;|&"\']*)')
+# Network URLs are destinations governed by network classes, not filesystem
+# paths; a scheme is never a drive letter. file: URLs stay in the path scan.
+NETWORK_URL = re.compile(r'(?<![A-Za-z0-9+.-])(?!file:)[A-Za-z][A-Za-z0-9+.-]+://[^\s\'"`;|&<>]*', re.I)
+NULL_DEVICES = frozenset({'/dev/null', '/dev/stdout', '/dev/stderr', 'nul', '$null'})
 LOOPBACK_HOSTS = {'localhost','127.0.0.1','::1','0.0.0.0','[::1]'}
 NETWORK_CLASSES = frozenset({'loopback','public_read'})
 
@@ -149,7 +153,9 @@ def parse_cursor_hook_stdin(raw: bytes) -> dict:
             # Legacy Windows PowerShell pipes can use cp1252. Never interpret
             # arbitrary single-byte input as unmarked UTF-16 or replace bytes.
             text = raw.decode('cp1252')
-    text = text.strip()
+    # A UTF-8 console code page makes the PowerShell pipe add its own BOM
+    # ahead of the codec's; a BOM is never JSON content.
+    text = text.strip().lstrip('﻿ \t\r\n')
     if not text:
         raise ValueError('empty Cursor hook stdin')
     data = json.loads(text)
@@ -677,7 +683,74 @@ def extract_probe_id(*parts):
 
 def has_secret(text): return any(p.search(text or '') for p in SECRET_PATTERNS)
 
+IDENTITY_CACHE_REL = '.eif/runtime-budget/identity-verified.json'
+GIT_REPO_ENV = ('GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR')
+
+def _repo_state(repo: Path):
+    """File-only inputs that fix identity facts, or None to verify with git.
+
+    A commit id fixes its whole history (so the root commit), config fixes
+    the remotes, and a checkout with its own .git is its own top level.
+    """
+    try:
+        if any(os.environ.get(name) for name in GIT_REPO_ENV):
+            return None
+        repo = repo.resolve()
+        gitdir = repo / '.git'
+        if gitdir.is_file():
+            text = gitdir.read_text(encoding='utf-8').strip()
+            if not text.startswith('gitdir:'):
+                return None
+            gitdir = (repo / text[7:].strip()).resolve()
+        common = gitdir
+        if (gitdir / 'commondir').is_file():
+            common = (gitdir / (gitdir / 'commondir').read_text(encoding='utf-8').strip()).resolve()
+        sha = (gitdir / 'HEAD').read_text(encoding='utf-8').strip()
+        if sha.startswith('ref: '):
+            ref = sha[5:].strip()
+            loose = common / ref
+            sha = loose.read_text(encoding='utf-8').strip() if loose.is_file() else ''
+            if not sha and (common / 'packed-refs').is_file():
+                for line in (common / 'packed-refs').read_text(encoding='utf-8').splitlines():
+                    parts = line.split()
+                    if len(parts) == 2 and parts[1] == ref:
+                        sha = parts[0]
+                        break
+        if not re.fullmatch(r'[0-9a-f]{40}(?:[0-9a-f]{24})?', sha):
+            return None
+        config = (common / 'config').stat()
+        return [str(repo), sha, config.st_mtime_ns, config.st_size]
+    except (OSError, UnicodeError, ValueError):
+        return None
+
+def _identity_cache_key(root: Path, policy):
+    ident = policy.get('identity') or {}
+    repos = [root] + [Path(a.get('allowed_root') or '') for a in ident.get('repository_anchors') or []]
+    states = [_repo_state(repo) for repo in repos]
+    if any(state is None for state in states):
+        return None
+    return hashlib.sha256(json.dumps([ident, states], sort_keys=True, default=str).encode('utf-8')).hexdigest()
+
 def identity_ok(root: Path, policy):
+    """Reuse a verified identity until HEAD, git config, checkout path or the
+    declared identity changes. Any unreadable input re-verifies with git."""
+    key = _identity_cache_key(root, policy)
+    state = support('eif_state')
+    try:
+        path = state.contained(root, IDENTITY_CACHE_REL)
+        if key and json.loads(path.read_text(encoding='utf-8')).get('key') == key:
+            return True, 'identity anchors matched'
+    except (OSError, UnicodeError, ValueError, AttributeError):
+        pass
+    ok, msg = _identity_check(root, policy)
+    if ok and key:
+        try:
+            state.atomic_json(state.contained(root, IDENTITY_CACHE_REL), {'version': 1, 'key': key})
+        except (OSError, ValueError):
+            pass  # Reuse is an optimisation; verification already completed.
+    return ok, msg
+
+def _identity_check(root: Path, policy):
     ident=policy.get('identity') or {}
     exp_root=ident.get('root_commit') or ''
     exp_rem=sorted(set(normalized_remote(x) for x in ident.get('expected_remotes',[]) if x))
@@ -1230,6 +1303,14 @@ def _programme_runtime_shell_invoke(cmd: str) -> bool:
         re.I,
     ))
 
+def _rooted_head_exists(cand, base):
+    head = cand.lstrip('/').split('/', 1)[0]
+    anchor = Path(base.anchor) if base is not None and base.anchor else Path('/')
+    try:
+        return not head or (anchor / head).exists()
+    except OSError:
+        return True
+
 def shell_path_consequence(cmd, policy):
     """Defense-in-depth only. Does not contain arbitrary child processes."""
     programme_invoke = _programme_runtime_shell_invoke(cmd)
@@ -1252,7 +1333,16 @@ def shell_path_consequence(cmd, policy):
     roots=[Path(x) for x in (policy.get('allowed_roots') or []) if x]
     protected=policy.get('protected_paths') or []
     base=roots[0] if roots else None
-    for cand in _path_candidates(cmd):
+    scan=NETWORK_URL.sub(' ', cmd)
+    redirects={m.group(1).strip('\'"') for m in REDIRECT_TARGET.finditer(scan)}
+    for cand in _path_candidates(scan):
+        if cand.lower() in NULL_DEVICES:
+            continue
+        # "/api/x" on its own is a route or pattern unless its top-level
+        # directory exists; write redirects and known system roots stay strict.
+        if (cand.startswith('/') and not cand.startswith('//') and cand not in redirects
+                and not ABS_PATH.match(cand) and not _rooted_head_exists(cand, base)):
+            continue
         rel=_normalize_shell_rel(cand)
         if programme_invoke and rel == PROGRAMME_ENTRY_REL:
             continue

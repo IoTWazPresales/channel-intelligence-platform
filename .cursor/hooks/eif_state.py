@@ -69,6 +69,24 @@ def file_lock(path, timeout=2.0):
                 fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
 
+def _replace(source, target):
+    """Windows refuses replacement while another handle holds the target
+    (a concurrent reader, indexer or antivirus). Retry that briefly, within
+    the invocation deadline; a persistent refusal still raises."""
+    budget = 0.5 if DEADLINE is None else min(0.5, DEADLINE - time.perf_counter() - 0.1)
+    deadline = time.perf_counter() + max(0.0, budget)
+    delay = 0.005
+    while True:
+        try:
+            os.replace(source, target)
+            return
+        except PermissionError:
+            if time.perf_counter() + delay > deadline:
+                raise
+            time.sleep(delay)
+            delay = min(delay * 2, 0.05)
+
+
 def atomic_json(path, state):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -79,7 +97,7 @@ def atomic_json(path, state):
             stream.write('\n')
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temporary, path)
+        _replace(temporary, path)
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
