@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-09-12 — **N-0018 implementer validate** on `feat/ns-2-brief-nav-collapse`: hub loading/`data_unavailable` states; vitest 4/4 supply; NUMBER RULE `cip` 1964 open / **873** past ETA / 0 POD this ISO week / 14% PO / 118024 pipeline. Browser journey (chrome + relocated leaves + redirects). Independent GOV-008 not recorded. D-0002 untouched.
+- 2026-09-12 — **N-0018 implementer validate** on `feat/ns-2-brief-nav-collapse` `2a59ce0`: hub loading/`data_unavailable` states; vitest 4/4 supply; NUMBER RULE `cip` 1964 open / **873** past ETA / 0 POD this ISO week / 14% PO / 118024 pipeline. Browser journey (chrome + relocated leaves + redirects). Independent GOV-008 not recorded. D-0002 untouched.
 
 - 2026-09-07 — **N-0018 Supply & Inbound implement** on `feat/ns-2-brief-nav-collapse` `9e93c77`: lab DomainOverview chrome on `/supply`; relocate inbound workspace to `/supply/shipments`; wrap shipment-evidence + PO management. NUMBER RULE `cip`: 1964 open / 770 past ETA / 0 POD this ISO week / 14% PO linked/observed / 118024 pipeline units. Browser 1280×800. BACKLOG-178/179 UNCOVERED. GOV-008 pending. D-0002 untouched.
 

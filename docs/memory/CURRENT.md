@@ -4,7 +4,7 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `9e93c77` (N-0018 Supply chrome; this session's product/docs commit hash goes on CONTEXT changelog)
+**Last content pin:** `2a59ce0` (N-0018 implementer validate)
 
 **Last ledger pin:** programme snapshot rev **388** (N-0018 stage validate)
 
