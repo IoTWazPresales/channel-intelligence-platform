@@ -1,0 +1,10 @@
+{
+  "dim": "design_artifact_class",
+  "state": "pass",
+  "evidence": {
+    "class": "high_fidelity",
+    "path": ".eif/audit/gov-008-n0018.md"
+  },
+  "node": "N-0018",
+  "expected_revision": 9
+}

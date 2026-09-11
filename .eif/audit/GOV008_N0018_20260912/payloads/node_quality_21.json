@@ -1,0 +1,10 @@
+{
+  "dim": "content",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/gov-008-n0018.md",
+    "summary": "Partly built Receipts retained; captions refuse plan-unit and Arrived fiction; D-0002 copy on mappings."
+  },
+  "node": "N-0018",
+  "expected_revision": 21
+}

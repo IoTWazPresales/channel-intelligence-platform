@@ -1,0 +1,10 @@
+{
+  "dim": "ux",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/gov-008-n0018.md",
+    "summary": "Operator can read inbound status at 1280 and open relocated shipments/receipts/PO leaves."
+  },
+  "node": "N-0018",
+  "expected_revision": 18
+}

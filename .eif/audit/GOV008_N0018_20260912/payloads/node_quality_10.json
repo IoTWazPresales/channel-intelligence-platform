@@ -1,0 +1,11 @@
+{
+  "dim": "design_divergence",
+  "state": "pass",
+  "evidence": {
+    "benchmark": "apps/web/src/design-lab/surfaces/DomainOverviewSurface.tsx",
+    "decision": "cip_number_rule_not_lab_fixtures",
+    "path": ".eif/audit/gov-008-n0018.md"
+  },
+  "node": "N-0018",
+  "expected_revision": 10
+}

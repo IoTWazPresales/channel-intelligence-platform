@@ -1,0 +1,17 @@
+{
+  "dim": "design_state_coverage",
+  "state": "pass",
+  "evidence": {
+    "states": [
+      "populated_cip",
+      "loading_overview",
+      "data_unavailable_unit",
+      "receipts_partial",
+      "arrived_uncovered",
+      "plan_unit_po_uncovered"
+    ],
+    "path": ".eif/audit/gov-008-n0018.md"
+  },
+  "node": "N-0018",
+  "expected_revision": 15
+}

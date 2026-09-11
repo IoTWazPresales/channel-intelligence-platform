@@ -1,0 +1,11 @@
+{
+  "kind": "referent",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/gov-008-n0018.md",
+    "lab": "apps/web/src/design-lab/surfaces/DomainOverviewSurface.tsx",
+    "product": "apps/web/src/features/supply-inbound/SupplyChrome.tsx"
+  },
+  "node": "N-0018",
+  "expected_revision": 23
+}

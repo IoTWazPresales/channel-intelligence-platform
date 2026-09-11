@@ -1,0 +1,16 @@
+{
+  "dim": "design_interaction_spec",
+  "state": "pass",
+  "evidence": {
+    "interactions": [
+      "open_shipments_figure_to_supply_shipments",
+      "lens_tabs_shipments_receipts_po",
+      "workflow_hrefs",
+      "stock_inbound_redirect",
+      "shipping_redirect"
+    ],
+    "path": ".eif/audit/gov-008-n0018.md"
+  },
+  "node": "N-0018",
+  "expected_revision": 14
+}

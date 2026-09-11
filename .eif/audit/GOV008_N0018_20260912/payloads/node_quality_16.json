@@ -1,0 +1,16 @@
+{
+  "dim": "design_identity_tokens",
+  "state": "pass",
+  "evidence": {
+    "tokens": {
+      "direction_name": "workbench-ui Supply & Inbound DomainHeader+HeadlineStrip+LensTabs",
+      "strip": "HeadlineStrip columns=5",
+      "lifecycle": "three disjoint CategoryBars",
+      "po": "ProportionBar linked/observed not plan units",
+      "honesty": "Partly built Receipts & POD"
+    },
+    "path": ".eif/audit/gov-008-n0018.md"
+  },
+  "node": "N-0018",
+  "expected_revision": 16
+}

@@ -1,0 +1,23 @@
+{
+  "dim": "design_execution_decisions",
+  "state": "pass",
+  "evidence": {
+    "responsive_decision": {
+      "status": "applicable",
+      "rationale": "Verified 1280x800 vs lab. Supply is not a named DIRECTION 390px workflow. Viewport via Playwright setViewportSize (browser_resize). cursor-ide-browser has no browser_resize tool.",
+      "evidence": ".eif/audit/gov-008-n0018.md"
+    },
+    "visualisation_decision": {
+      "status": "applicable",
+      "rationale": "Lab HeadlineStrip + lifecycle + PO bars mounted. Live cip grains; lab fixtures not copied. Three disjoint lifecycle bars; Arrived not invented.",
+      "evidence": ".eif/audit/gov-008-n0018.md"
+    },
+    "consequential_action_decision": {
+      "status": "applicable",
+      "rationale": "Headline clicks and lens tabs navigate. Writes remain relocated inbound workspace, evidence steward, and PO management. D-0002 untouched.",
+      "evidence": ".eif/audit/gov-008-n0018.md"
+    }
+  },
+  "node": "N-0018",
+  "expected_revision": 17
+}

@@ -1,0 +1,15 @@
+{
+  "dim": "rendered_comparison",
+  "state": "pass",
+  "evidence": {
+    "artifact_class": "high_fidelity",
+    "class": "high_fidelity",
+    "path": ".eif/audit/gov-008-n0018.md",
+    "product_url": "http://localhost:3000/supply",
+    "lab_url": "http://localhost:3000/design-lab/supply",
+    "viewport": "1280x800",
+    "comparison_verdict": "parity_with_number_rule_substitution"
+  },
+  "node": "N-0018",
+  "expected_revision": 12
+}

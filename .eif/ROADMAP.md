@@ -19,4 +19,4 @@
 - N-0015 **Market & Listings production migration from design-lab** `complete`/`complete` (redesign) RETROACTIVE
 - N-0016 **Stock & Sell-through Cover and Movement lenses from design-lab** `complete`/`complete` (redesign) RETROACTIVE
 - N-0017 **Stock & Sell-through Execution vs plan from design-lab** `complete`/`complete` (redesign)
-- N-0018 **NS-8 Supply & Inbound from design-lab** `in_progress`/`in_progress` (redesign)
+- N-0018 **NS-8 Supply & Inbound from design-lab** `complete`/`complete` (redesign)

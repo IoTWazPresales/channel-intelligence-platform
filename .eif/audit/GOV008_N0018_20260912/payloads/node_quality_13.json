@@ -1,0 +1,11 @@
+{
+  "dim": "design_sameness_review",
+  "state": "pass",
+  "evidence": {
+    "visual_vocabulary_challenge": "Challenged whether production is the same Supply & Inbound instrument as DomainOverviewSurface.tsx SupplySurface or a header glued onto the old shipping module with lab Arrived/79% dropped. Chrome grammar matches (DomainHeader + HeadlineStrip 5 + CategoryBars + ProportionBar + attention + workflows). NUMBER RULE substitutes cip 1964/873/0/14%/118024 for lab 684/1714/312/79%/16050. Relocated inbound workspace and PARTIAL receipts are charter. Arrived and plan-unit PO% are UNCOVERED (BACKLOG-178/179), not faked. Path: .eif/audit/gov-008-n0018.md",
+    "path": ".eif/audit/gov-008-n0018.md",
+    "decision": "retain_lab_chrome_with_cip_numbers"
+  },
+  "node": "N-0018",
+  "expected_revision": 13
+}

@@ -1,0 +1,20 @@
+{
+  "dim": "design_signatures",
+  "state": "pass",
+  "evidence": {
+    "signatures": [
+      "domain_header",
+      "headline_strip_5",
+      "lifecycle_category_bars_three_disjoint",
+      "po_proportion_bars_linked_observed",
+      "attention_eta_past",
+      "workflow_panel_rows",
+      "partly_built_receipts",
+      "lens_tabs_on_leaves",
+      "relocated_inbound_workspace"
+    ],
+    "path": ".eif/audit/gov-008-n0018.md"
+  },
+  "node": "N-0018",
+  "expected_revision": 11
+}

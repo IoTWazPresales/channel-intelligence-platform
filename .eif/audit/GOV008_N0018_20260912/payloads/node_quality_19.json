@@ -1,0 +1,10 @@
+{
+  "dim": "a11y",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/gov-008-n0018.md",
+    "summary": "Lens tablist on leaves; HeadlineFigure buttons; Partly built named. Keyboard not exercised."
+  },
+  "node": "N-0018",
+  "expected_revision": 19
+}

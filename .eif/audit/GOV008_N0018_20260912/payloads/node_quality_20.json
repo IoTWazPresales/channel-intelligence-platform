@@ -1,0 +1,13 @@
+{
+  "dim": "rendered",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/gov-008-n0018.md",
+    "url": "http://localhost:3000/supply",
+    "viewports": [
+      "desktop_1280"
+    ]
+  },
+  "node": "N-0018",
+  "expected_revision": 20
+}
