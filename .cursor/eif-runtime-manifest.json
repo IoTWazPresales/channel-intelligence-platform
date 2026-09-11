@@ -2,7 +2,7 @@
   "eif": "hook-runtime-manifest",
   "files": {
     ".cursor/hooks.json": "d7d7c183e44342e4674a83e969a1d79400b3af2763fa1a352239afc2f7a58167",
-    ".cursor/hooks/eif_guard.cmd": "4273bdc9f1d98737f467dd905a931cfa12fd376e8f53bb9610a707d83cadc580",
+    ".cursor/hooks/eif_guard.cmd": "8c520b30ff2488d2f46d3df4c592fef1359609fb72a6321b31fabee903084d88",
     ".cursor/hooks/eif_guard.py": "ded18b65c369582695bb9a70d51f39d27dfcfe6c4312612ac24d455ac7961e7a",
     ".cursor/hooks/eif_guard.sh": "228ed8d88af7362332b562f5a7f1c96d851d545b8ffc69195d83d99799f5df60",
     ".cursor/hooks/eif_guard_crash.json": "00d7f2cdaee97215a9d7a6ccd3a12cf352cc34bd7418be4f2a1410e6e1099a4f",

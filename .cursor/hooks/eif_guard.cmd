@@ -36,14 +36,15 @@ set "EIF_PYTHON_ARGS="
 :prepare_capture
 set "EIF_TRIES=0"
 :allocate_capture
+REM Launches started together share one clock-seeded %RANDOM% sequence. The
+REM directory is used only by the launch whose mkdir created it; a lost claim
+REM takes the next name, so each round admits at least one more launch.
 set /a EIF_TRIES+=1 >nul
-if %EIF_TRIES% GTR 3 goto :capture_failed
+if %EIF_TRIES% GTR 64 goto :capture_failed
 set "EIF_CAPTURE_DIR=%EIF_ROOT%\.eif\runtime\hook-launcher\%RANDOM%-%RANDOM%-%RANDOM%"
-if exist "%EIF_CAPTURE_DIR%" goto :allocate_capture
 mkdir "%EIF_CAPTURE_DIR%" >nul 2>&1
-if errorlevel 1 goto :capture_failed
+if errorlevel 1 goto :allocate_capture
 set "EIF_CAPTURE=%EIF_CAPTURE_DIR%\response.json"
-set "EIF_VALIDATION=%EIF_CAPTURE_DIR%\validated"
 call %EIF_PYTHON% %EIF_PYTHON_ARGS% -u -X utf8 "%SCRIPT%" >"%EIF_CAPTURE%"
 set "EIF_RC=%ERRORLEVEL%"
 if "%EIF_RC%"=="0" goto :validate_response
@@ -53,12 +54,19 @@ goto :python_failed
 :validate_response
 REM Exact marker proves validation ran; an empty/malformed shim cannot validate
 REM itself merely by returning exit zero. Input pipe is never read twice.
+REM Validation only reads the captured response, so it may repeat. Each attempt
+REM writes a fresh marker: a scanner can briefly hold a just-written file.
+set "EIF_VTRIES=0"
+:validate_attempt
+set /a EIF_VTRIES+=1 >nul
+if %EIF_VTRIES% GTR 3 goto :python_failed
+set "EIF_VALIDATION=%EIF_CAPTURE_DIR%\validated-%EIF_VTRIES%"
 call %EIF_PYTHON% %EIF_PYTHON_ARGS% -u -X utf8 -I -B -c "import json,sys; d=json.load(open(sys.argv[1],encoding='utf-8')); valid=isinstance(d,dict) and d.get('permission') in ('allow','deny') and d.get('decision_kind') in ('policy','harness_fault') and isinstance(d.get('reason_code'),str) and bool(d['reason_code']) and ((int(sys.argv[2])==2)==(d['permission']=='deny' and d['decision_kind']=='policy')); json.dumps(d,allow_nan=False); print('EIF_VALID' if valid else 'INVALID',end='')" "%EIF_CAPTURE%" "%EIF_RC%" <nul >"%EIF_VALIDATION%" 2>nul
-if errorlevel 1 goto :python_failed
-for %%I in ("%EIF_VALIDATION%") do if not "%%~zI"=="9" goto :python_failed
+if errorlevel 1 goto :validate_attempt
+for %%I in ("%EIF_VALIDATION%") do if not "%%~zI"=="9" goto :validate_attempt
 set "EIF_VALIDATED="
 set /p "EIF_VALIDATED=" <"%EIF_VALIDATION%"
-if not "%EIF_VALIDATED%"=="EIF_VALID" goto :python_failed
+if not "%EIF_VALIDATED%"=="EIF_VALID" goto :validate_attempt
 type "%EIF_CAPTURE%"
 if errorlevel 1 goto :delivery_failed
 call :cleanup
@@ -80,7 +88,7 @@ exit /b 1
 
 :cleanup
 if not defined EIF_CAPTURE_DIR goto :eof
-del /q "%EIF_CAPTURE_DIR%\response.json" "%EIF_CAPTURE_DIR%\validated" >nul 2>&1
+del /q "%EIF_CAPTURE_DIR%\response.json" "%EIF_CAPTURE_DIR%\validated-*" >nul 2>&1
 rd "%EIF_CAPTURE_DIR%" >nul 2>&1
 goto :eof
 
