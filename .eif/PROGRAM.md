@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 385
+**Snapshot revision:** 388
 
 ## Outcome (verbatim)
 
@@ -20,23 +20,23 @@ _none_
 
 ## Nodes
 
-| ID | Title | Class | Recorded | Effective | Leaf | Retro |
-|---|---|---|---|---|---|---|
-| N-0001 | Product/engineering outcomes | feature | rejected | rejected | yes |  |
-| N-0002 | Outcome 1 | feature | rejected | rejected | yes |  |
-| N-0003 | Dependencies / decision deadlines | feature | rejected | rejected | yes |  |
-| N-0004 | NS-2 Brief and six-container nav collapse | redesign | complete | complete | yes |  |
-| N-0005 | TEST criteria probe | discovery | rejected | rejected | yes |  |
-| N-0006 | NS-1b FX mode and blocked-settle enforcement | feature | complete | complete | yes | yes |
-| N-0007 | NS-3 Stock merge — Sell-out, Fill vs plan, Cover and Inbound | redesign | complete | complete | yes |  |
-| N-0008 | NS-4 CPOR Settlement — queue and case redesign | redesign | complete | complete | yes |  |
-| N-0009 | NS-5 Lineup plan origination | redesign | complete | complete | yes |  |
-| N-0010 | NS-6 Actions container (was Response) | redesign | rejected | rejected | yes |  |
-| N-0011 | NS-7 Data & Stewardship from design-lab | redesign | complete | complete | yes |  |
-| N-0012 | NS-1a FX display honesty (no migration) | feature | complete | complete | yes |  |
-| N-0013 | Full-platform IA architecture and buyer vocabulary approval | discovery | complete | complete | yes | yes |
-| N-0014 | Promotions & Funding production migration from design-lab | redesign | complete | complete | yes | yes |
-| N-0015 | Market & Listings production migration from design-lab | redesign | complete | complete | yes | yes |
-| N-0016 | Stock & Sell-through Cover and Movement lenses from design-lab | redesign | complete | complete | yes | yes |
-| N-0017 | Stock & Sell-through Execution vs plan from design-lab | redesign | complete | complete | yes |  |
-| N-0018 | NS-8 Supply & Inbound from design-lab | redesign | in_progress | in_progress | yes |  |
+| ID | Title | Class | Recorded | Effective | Leaf | Retro | Execution |
+|---|---|---|---|---|---|---|---|
+| N-0001 | Product/engineering outcomes | feature | rejected | rejected | yes |  | full loop |
+| N-0002 | Outcome 1 | feature | rejected | rejected | yes |  | full loop |
+| N-0003 | Dependencies / decision deadlines | feature | rejected | rejected | yes |  | full loop |
+| N-0004 | NS-2 Brief and six-container nav collapse | redesign | complete | complete | yes |  | full loop |
+| N-0005 | TEST criteria probe | discovery | rejected | rejected | yes |  | full loop |
+| N-0006 | NS-1b FX mode and blocked-settle enforcement | feature | complete | complete | yes | yes | full loop |
+| N-0007 | NS-3 Stock merge — Sell-out, Fill vs plan, Cover and Inbound | redesign | complete | complete | yes |  | full loop |
+| N-0008 | NS-4 CPOR Settlement — queue and case redesign | redesign | complete | complete | yes |  | full loop |
+| N-0009 | NS-5 Lineup plan origination | redesign | complete | complete | yes |  | full loop |
+| N-0010 | NS-6 Actions container (was Response) | redesign | rejected | rejected | yes |  | full loop |
+| N-0011 | NS-7 Data & Stewardship from design-lab | redesign | complete | complete | yes |  | full loop |
+| N-0012 | NS-1a FX display honesty (no migration) | feature | complete | complete | yes |  | full loop |
+| N-0013 | Full-platform IA architecture and buyer vocabulary approval | discovery | complete | complete | yes | yes | full loop |
+| N-0014 | Promotions & Funding production migration from design-lab | redesign | complete | complete | yes | yes | full loop |
+| N-0015 | Market & Listings production migration from design-lab | redesign | complete | complete | yes | yes | full loop |
+| N-0016 | Stock & Sell-through Cover and Movement lenses from design-lab | redesign | complete | complete | yes | yes | full loop |
+| N-0017 | Stock & Sell-through Execution vs plan from design-lab | redesign | complete | complete | yes |  | full loop |
+| N-0018 | NS-8 Supply & Inbound from design-lab | redesign | in_progress | in_progress | yes |  | full loop |

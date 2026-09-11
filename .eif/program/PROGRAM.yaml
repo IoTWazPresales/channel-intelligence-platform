@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 385
-  log_sha256: 98aa68a9944626ff09dea1a11c420006ea3a320837607e7885b6347110dc0927
+  snapshot_revision: 388
+  log_sha256: 3914ee82c89bd851873d34997101e89d9c2c9b8dcd155ecf54a60eeff455279a
   acceptance_policy:
     milestone: operator
     root: operator
@@ -2422,13 +2422,13 @@ nodes:
     class: redesign
     origin: decomposition
     status: in_progress
-    stage: implement
-    revision: 5
+    stage: validate
+    revision: 7
     lease:
       run: NS9_SUPPLY_20260907
-      acquired_at: '2026-09-07T10:08:09Z'
-      heartbeat_at: '2026-09-07T11:15:22Z'
-      expires_at: '2026-09-07T15:15:22Z'
+      acquired_at: '2026-09-11T22:39:50Z'
+      heartbeat_at: '2026-09-11T22:39:50Z'
+      expires_at: '2026-09-12T02:39:50Z'
     depends_on:
     - N-0013
     - N-0007
@@ -2528,7 +2528,8 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: 'Implementer validate: empty states, vitest 4/4, cip NUMBER RULE 2026-09-12, browser journey. Independent
+      GOV-008 not recorded.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -2751,6 +2752,13 @@ evidence:
     tree_hash: 8a33f27
     note: N-0018 docs pin 8a33f27 (coverage map, BACKLOG-178/179, CURRENT/CONTEXT). Product remains 9e93c77. Independent GOV-008
       not recorded.
+  EV-N0018-VALIDATE:
+    id: EV-N0018-VALIDATE
+    provenance: implementation-observation
+    path: .eif/audit/NS9_SUPPLY_20260907/RESULTS.md
+    tree_hash: null
+    note: 'N-0018 implementer validate: empty states, vitest 4/4, cip NUMBER RULE 2026-09-12 (1964/873/0/14%/118024), browser
+      journey. Independent GOV-008 not recorded.'
 baselines:
   BLN-0001:
     id: BLN-0001

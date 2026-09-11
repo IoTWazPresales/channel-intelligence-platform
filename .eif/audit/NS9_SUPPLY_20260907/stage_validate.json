@@ -1,0 +1,6 @@
+{
+  "node": "N-0018",
+  "expected_revision": 6,
+  "to": "validate",
+  "stage_note": "Implementer validate: empty states, vitest 4/4, cip NUMBER RULE 2026-09-12, browser journey. Independent GOV-008 not recorded."
+}

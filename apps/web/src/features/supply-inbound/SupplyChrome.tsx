@@ -36,9 +36,10 @@ export function SupplyChrome({ children }: { children?: ReactNode }) {
   const summary = ready ? summaryData : undefined;
   const leaf = SUPPLY_LEAVES.find((l) => l.value === lens);
 
-  const meta = summary
-    ? `${fmtInt(summary.open_lines)} open · ${fmtInt(summary.eta_past_no_pod_lines)} past ETA`
-    : undefined;
+  const meta =
+    summary && !summary.data_unavailable
+      ? `${fmtInt(summary.open_lines)} open · ${fmtInt(summary.eta_past_no_pod_lines)} past ETA`
+      : undefined;
 
   return (
     <WorkbenchCanvas>

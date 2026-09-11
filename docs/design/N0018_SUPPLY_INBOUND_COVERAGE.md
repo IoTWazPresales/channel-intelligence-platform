@@ -65,3 +65,10 @@ Production `/supply` (cip class iii): Open **1 964** · Unreceived **770** oldes
 | `/shipping` | **VERIFIED** → `/supply/shipments` |
 | 390 named workflow | not required (DIRECTION §6) |
 
+---
+
+## Re-measure 2026-09-12 (implementer validate)
+
+`current_database()=cip`. Same grains. Unreceived past ETA moved with the calendar: **873** / oldest **128d**. Open **1964**, POD this ISO week **0**, PO **322/2308**, pipeline units **118024**, lifecycle 1635 / 329 / 13065. Live `/supply` matched the API (Open 1 964 · Unreceived 873 · PO 14%). Do not write 873 back onto the 2026-09-07 row.
+
+

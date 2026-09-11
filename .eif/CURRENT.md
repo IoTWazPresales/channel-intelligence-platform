@@ -17,7 +17,7 @@ _No ready unblocked leaves._
 
 ## In progress / leased
 
-- **N-0018** NS-8 Supply & Inbound from design-lab stage=implement run=NS9_SUPPLY_20260907 expires=2026-09-07T15:15:22Z note=
+- **N-0018** NS-8 Supply & Inbound from design-lab stage=validate run=NS9_SUPPLY_20260907 expires=2026-09-12T02:39:50Z note=Implementer validate: empty states, vitest 4/4, cip NUMBER RULE 2026-09-12, browser journey. Independent GOV-008 not recorded.
 
 ## Decision queue
 

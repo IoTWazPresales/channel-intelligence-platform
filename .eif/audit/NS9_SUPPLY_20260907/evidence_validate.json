@@ -1,0 +1,6 @@
+{
+  "id": "EV-N0018-VALIDATE",
+  "provenance": "implementation-observation",
+  "path": ".eif/audit/NS9_SUPPLY_20260907/RESULTS.md",
+  "note": "N-0018 implementer validate: empty states, vitest 4/4, cip NUMBER RULE 2026-09-12 (1964/873/0/14%/118024), browser journey. Independent GOV-008 not recorded."
+}

@@ -5,9 +5,12 @@
 **Title:** NS-8 Supply & Inbound from design-lab  
 **Class:** redesign  
 **Status:** in_progress  
-**Stage:** implement  
-**Revision:** 5  
+**Stage:** validate  
+**Revision:** 7  
 **Risk:** R3  
+**Execution risk class:** full  
+**Execution:** full loop  
+**Execution charter:** _unset_  
 **Facets:** design_experience, ui
 
 ## Acceptance criteria
@@ -23,5 +26,5 @@
 
 ## Stage note
 
-_none_
+Implementer validate: empty states, vitest 4/4, cip NUMBER RULE 2026-09-12, browser journey. Independent GOV-008 not recorded.
 
