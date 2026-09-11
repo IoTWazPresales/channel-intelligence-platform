@@ -178,6 +178,7 @@ _STARTED = time.perf_counter()
 _ACTIVE_DATA = None
 _ACTIVE_ROOT = None
 _SUPPORT_READY = False
+_OUTSIDE_BOUNDARY = False
 _READ_WARNING = None
 _TIMINGS = {}
 _GIT_CACHE = {}
@@ -389,9 +390,10 @@ def out(permission='allow', message=None, extra=None):
             f'EIF harness fault in bookkeeping; read policy checks completed and the read is allowed. {message or reason}'
             if permission == 'allow' and _READ_ONLY else
             f'EIF harness fault; authorization could not be completed. {message or reason}')
+    retry_admitted = False
     if _SUPPORT_READY and _ACTIVE_DATA and permission == 'deny' and reason != 'HOOK_TIMEOUT':
         try:
-            support('eif_session').record_block(_ACTIVE_ROOT, _ACTIVE_DATA, reason)
+            retry_admitted = support('eif_session').record_block(_ACTIVE_ROOT, _ACTIVE_DATA, reason, _OUTSIDE_BOUNDARY)
         except Exception as exc:
             obj['original_reason_code'] = reason
             reason = obj['reason_code'] = 'SESSION_STATE_FAILURE'
@@ -409,6 +411,7 @@ def out(permission='allow', message=None, extra=None):
             'permission': permission, 'decision_kind': kind,
             'elapsed_ms': round((time.perf_counter() - _STARTED) * 1000, 3),
             'timings_ms': _TIMINGS,
+            **({'retry_admitted': bool(retry_admitted)} if permission == 'deny' else {}),
             **{key: obj[key] for key in ('enforcement', 'node', 'risk_class') if key in obj},
         })
         if not logged or _AUDIT_ERROR:
@@ -618,6 +621,14 @@ def tool_path(inp):
     for k in ['file_path','path','target_file','target_path','directory']:
         if isinstance(inp.get(k),str) and inp[k].strip(): return inp[k]
     return None
+
+
+def target_outside_roots(data, roots):
+    """A path-bound request aimed outside every declared root; never a grant."""
+    event = data.get('hook_event_name')
+    path = (data.get('file_path') if event == 'beforeReadFile' else
+            tool_path(data.get('tool_input')) if event == 'preToolUse' else None)
+    return isinstance(path, str) and bool(path.strip()) and resolve_path(path, roots)[0] is None
 
 
 def validate_tool_paths(inp):
@@ -1719,7 +1730,7 @@ def main():
 
 
 def _main():
-    global _READ_ONLY, _ACTIVE_ROOT, _ACTIVE_DATA, _SUPPORT_READY, _RUNTIME_LOCK, _READ_WARNING
+    global _READ_ONLY, _ACTIVE_ROOT, _ACTIVE_DATA, _SUPPORT_READY, _RUNTIME_LOCK, _READ_WARNING, _OUTSIDE_BOUNDARY
     started = time.perf_counter()
     try:
         data = parse_cursor_hook_stdin(read_cursor_hook_stdin(sys.stdin.buffer))
@@ -1756,6 +1767,11 @@ def _main():
     started = time.perf_counter()
     state,policy,pp,pmsg=load_policy(root)
     _TIMINGS['policy'] = round((time.perf_counter() - started) * 1000, 3)
+    # Retry admission only. Checked before identity/budget so a fault there
+    # cannot turn a permanently foreign target into debt; untrusted policy
+    # keeps the prior admission.
+    if state in {'OK', 'MISSING'}:
+        _OUTSIDE_BOUNDARY = target_outside_roots(data, declared_roots(data, policy, root))
 
     if state in {'MALFORMED', 'INVALID'}:
         audit(root, data, 'deny', 'POLICY_INTEGRITY')

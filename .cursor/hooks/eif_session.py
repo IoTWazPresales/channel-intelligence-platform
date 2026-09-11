@@ -31,6 +31,9 @@ PROGRAMME_GIT_WORKTREE PROGRAMME_GIT_STAGE SENSITIVE_READ SENSITIVE_TOOL_READ
 SECRET_IN_READ SECRET_PREWRITE TOOL_UNSUPPORTED
 MCP_DENY MCP_NOT_GRANTED MCP_OUTPUT_PATH BROWSER_OBSERVE_ONLY
 '''.split())
+# Only an agent tool request can be retried and cleared by its matching success.
+# Callbacks, notifications and lifecycle events carry no retryable action.
+REQUEST_EVENTS = frozenset({'preToolUse', 'beforeShellExecution', 'beforeMCPExecution', 'beforeReadFile'})
 VERIFY_COMMAND = (r'\s*python(?:3)?\s+-B\s+\.cursor/hooks/eif_guard\.py\s+'
                   r'--verify-closure\s+[0-9a-f]{64}\s+[0-9a-f]{32}\s*')
 
@@ -114,16 +117,30 @@ def recovery_action(data):
         command))
 
 
-def record_block(root, data, code):
+def retry_admissible(data, code, outside_boundary=False):
+    """Admit debt only for a refusal that retrying the same request could clear.
+
+    Adapter and tooling operations fall out structurally, not by name: they
+    arrive as non-request events, as permanent refusals, or aimed outside the
+    declared project roots. A target outside those roots can never become
+    permissible in-session, whichever check (identity, timeout, boundary)
+    refused it first. Denial and audit are unaffected.
+    """
     # Never replace the original cursor with our own retry/closure rejection.
     if code.startswith('SESSION_'):
-        return
+        return False
     # A native callback carries neither a trusted initiator nor proof of a
-    # delivered guard decision. Audit it in the guard; never manufacture debt.
-    # Actual retryable guard denials already persist their original reason.
-    # Permanent refusals add nothing; existing legacy debt is never removed.
-    if code == 'TOOL_PERMISSION_DENIED' or code in NON_RETRYABLE_CODES:
-        return
+    # delivered guard decision. Actual retryable guard denials persist their
+    # original reason pre-emit.
+    if code == 'TOOL_PERMISSION_DENIED' or code in NON_RETRYABLE_CODES or outside_boundary:
+        return False
+    return data.get('hook_event_name') in REQUEST_EVENTS
+
+
+def record_block(root, data, code, outside_boundary=False):
+    # Existing legacy debt is never removed here, only never added.
+    if not retry_admissible(data, code, outside_boundary):
+        return False
     path = state_path(root, data)
     with file_lock(path.with_suffix('.lock')):
         state = read_state(path)
@@ -132,6 +149,7 @@ def record_block(root, data, code):
             state['retry'].append({'fingerprint': fp, 'tool': action(data)[0],
                                    'reason_code': code, 'at': int(time.time())})
         atomic_json(path, state)
+    return True
 
 
 def pending(root):
