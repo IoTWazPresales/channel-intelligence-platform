@@ -10,3 +10,4 @@
 {"ts":"2026-09-11T22:39:50Z","kind":"programme.event","event":"node.lease.acquire","seq":386}
 {"ts":"2026-09-11T23:06:14Z","kind":"programme.event","event":"evidence.add","seq":387}
 {"ts":"2026-09-11T23:07:03Z","kind":"programme.event","event":"node.stage","seq":388}
+{"ts":"2026-09-11T23:41:52Z","kind":"programme.event","event":"node.lease.release","seq":389}
