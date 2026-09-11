@@ -500,7 +500,7 @@ def git(root: Path, *args):
     started = time.perf_counter()
     try:
         result = subprocess.run(['git', '--no-optional-locks', '-C', str(root), *args],
-                                capture_output=True, encoding='utf-8', timeout=remaining_timeout())
+                                capture_output=True, encoding='utf-8', timeout=remaining_timeout(6.0))
         if result.returncode:
             raise GuardFault('IDENTITY_GIT_FAILURE', f'git {args[0]} exited {result.returncode}: {result.stderr.strip()[:200]}')
         _GIT_CACHE[key] = result.stdout.strip()
@@ -724,31 +724,77 @@ def _repo_state(repo: Path):
         return None
 
 def _identity_cache_key(root: Path, policy):
+    """Key over everything but HEAD, plus each repository's HEAD commit id."""
     ident = policy.get('identity') or {}
     repos = [root] + [Path(a.get('allowed_root') or '') for a in ident.get('repository_anchors') or []]
     states = [_repo_state(repo) for repo in repos]
     if any(state is None for state in states):
+        return None, None, None
+    stable = [[state[0], state[2], state[3]] for state in states]
+    key = hashlib.sha256(json.dumps([ident, stable], sort_keys=True, default=str).encode('utf-8')).hexdigest()
+    return key, [state[1] for state in states], [state[0] for state in states]
+
+def _identity_reusable(cached, key, heads, repos):
+    if not isinstance(cached, dict) or cached.get('version') != 2 or cached.get('key') != key:
+        return False
+    before = cached.get('heads')
+    if not isinstance(before, list) or len(before) != len(heads):
+        return False
+    for repo, old, new in zip(repos, before, heads):
+        if old == new:
+            continue
+        # A commit id fixes its history, so HEAD's root commit changes only if
+        # the new commits bring in another root. Walk just old..new.
+        try:
+            if git(Path(repo), 'rev-list', '--max-parents=0', f'{old}..{new}'):
+                return False
+        except GuardFault:
+            return False  # Rewritten or pruned history: verify in full.
+    return True
+
+def _read_identity_cache(path):
+    try:
+        return json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, UnicodeError, ValueError):
         return None
-    return hashlib.sha256(json.dumps([ident, states], sort_keys=True, default=str).encode('utf-8')).hexdigest()
 
 def identity_ok(root: Path, policy):
-    """Reuse a verified identity until HEAD, git config, checkout path or the
-    declared identity changes. Any unreadable input re-verifies with git."""
-    key = _identity_cache_key(root, policy)
+    """Reuse a verified identity while the declared identity, checkout path and
+    git config are unchanged and no new root commit has appeared since the
+    verified HEAD. Concurrent cold hooks verify once. Unreadable inputs
+    re-verify with git; failures are never stored."""
+    key, heads, repos = _identity_cache_key(root, policy)
+    if not key:
+        return _identity_check(root, policy)
     state = support('eif_state')
+    path = state.contained(root, IDENTITY_CACHE_REL)
+    cached = _read_identity_cache(path)
+    if _identity_reusable(cached, key, heads, repos):
+        if cached.get('heads') != heads:
+            _store_identity(state, path, key, heads)
+        return True, 'identity anchors matched'
     try:
-        path = state.contained(root, IDENTITY_CACHE_REL)
-        if key and json.loads(path.read_text(encoding='utf-8')).get('key') == key:
+        lock = state.file_lock(path.with_suffix('.lock'), timeout=6.0)
+        lock.__enter__()
+    except (OSError, TimeoutError):
+        lock = None  # Verify without waiting; reuse is an optimisation.
+    try:
+        cached = _read_identity_cache(path)
+        if lock is not None and _identity_reusable(cached, key, heads, repos):
             return True, 'identity anchors matched'
-    except (OSError, UnicodeError, ValueError, AttributeError):
-        pass
-    ok, msg = _identity_check(root, policy)
-    if ok and key:
-        try:
-            state.atomic_json(state.contained(root, IDENTITY_CACHE_REL), {'version': 1, 'key': key})
-        except (OSError, ValueError):
-            pass  # Reuse is an optimisation; verification already completed.
-    return ok, msg
+        ok, msg = _identity_check(root, policy)
+        if ok:
+            _store_identity(state, path, key, heads)
+        return ok, msg
+    finally:
+        if lock is not None:
+            lock.__exit__(None, None, None)
+
+def _store_identity(state, path, key, heads):
+    try:
+        state.atomic_json(path, {'version': 2, 'key': key, 'heads': heads})
+    except (OSError, ValueError):
+        pass  # Reuse is an optimisation; verification already completed.
 
 def _identity_check(root: Path, policy):
     ident=policy.get('identity') or {}
