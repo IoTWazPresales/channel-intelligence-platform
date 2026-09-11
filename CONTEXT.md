@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-09-12 — **N-0018 complete** on `feat/ns-2-brief-nav-collapse`: independent GOV-008 `GOV008_N0018_20260912` / gov-008 vs impl `NS9_SUPPLY_20260907` (`9e93c77`/`2a59ce0`). Programme rev **406**. Evidence `.eif/audit/gov-008-n0018.md`. vitest 4/4; cip NUMBER RULE 1964/873/0/14%/118024; browser 1280 vs lab; Open-shipments click and inbound/`/shipping` redirects **VERIFIED**. D-0002 untouched. Frontier empty.
+- 2026-09-12 — **N-0018 complete** on `feat/ns-2-brief-nav-collapse` `b5111dd`: independent GOV-008 `GOV008_N0018_20260912` / gov-008 vs impl `NS9_SUPPLY_20260907` (`9e93c77`/`2a59ce0`). Programme rev **406**. Evidence `.eif/audit/gov-008-n0018.md`. vitest 4/4; cip NUMBER RULE 1964/873/0/14%/118024; browser 1280 vs lab; Open-shipments click and inbound/`/shipping` redirects **VERIFIED**. D-0002 untouched. Frontier empty.
 
 - 2026-09-12 — **N-0018 implementer validate** on `feat/ns-2-brief-nav-collapse` `2a59ce0`: hub loading/`data_unavailable` states; vitest 4/4 supply; NUMBER RULE `cip` 1964 open / **873** past ETA / 0 POD this ISO week / 14% PO / 118024 pipeline. Browser journey (chrome + relocated leaves + redirects). Independent GOV-008 not recorded. D-0002 untouched.
 
