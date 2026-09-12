@@ -16,8 +16,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 
 import { ModuleDataSection } from '@/components/ModuleDataSection';
-import { PageHeader } from '@/components/PageHeader';
-import { navPageChrome } from '@/features/shell/navPageChrome';
+import { OverviewChrome } from '@/features/overview/OverviewChrome';
 import { apiGet, safeDisplayError } from '@/lib/api';
 
 type Delivery = {
@@ -98,8 +97,7 @@ export default function ReportInboxPage() {
   });
 
   return (
-    <>
-      <PageHeader {...navPageChrome('/inbox')} />
+    <OverviewChrome>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 720 }}>
         Scheduled and manual deliveries land here with data vintage on the face. Missing-data alerts are
         intentional — empty sources are intelligence, not silence.
@@ -211,6 +209,6 @@ export default function ReportInboxPage() {
           <Button onClick={() => setPreviewId(null)}>Close</Button>
         </DialogActions>
       </Dialog>
-    </>
+    </OverviewChrome>
   );
 }

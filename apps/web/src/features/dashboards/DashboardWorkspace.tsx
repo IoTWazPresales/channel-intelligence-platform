@@ -67,7 +67,7 @@ function savePaletteOrder(keys: string[]) {
   window.localStorage.setItem(PALETTE_ORDER_KEY, JSON.stringify(keys));
 }
 
-export function DashboardWorkspace() {
+export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?: boolean }) {
   const qc = useQueryClient();
   const listQ = useQuery({
     queryKey: ['dashboards'],
@@ -219,16 +219,21 @@ export function DashboardWorkspace() {
     }
   };
 
+  const newButton = (
+    <Button size="small" variant="contained" onClick={() => setCreateOpen(true)} data-testid="dashboard-create">
+      New
+    </Button>
+  );
+
   return (
     <>
-      <PageHeader
-        {...navPageChrome('/dashboards')}
-        actions={
-          <Button size="small" variant="contained" onClick={() => setCreateOpen(true)} data-testid="dashboard-create">
-            New
-          </Button>
-        }
-      />
+      {hidePageHeader ? (
+        <Stack direction="row" justifyContent="flex-end" sx={{ mb: 1 }}>
+          {newButton}
+        </Stack>
+      ) : (
+        <PageHeader {...navPageChrome('/dashboards')} actions={newButton} />
+      )}
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 760 }}>
         Governed metric canvas — one widget is one metric. Formula and data vintage sit on every face. Schedules still live
         on the <Link href="/reports">report builder</Link> after Promote.
