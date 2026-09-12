@@ -13,11 +13,13 @@
 
 ## Ready leaves
 
-_No ready unblocked leaves._
+- **N-0020** Planning production migration from design-lab (redesign, R3, stage=None)
+- **N-0021** Administration production migration from design-lab (redesign, R2, stage=None)
+- **N-0022** Stock & Sell-through Sell-through and Forecasts lenses from design-lab (redesign, R2, stage=None)
 
 ## In progress / leased
 
-_none_
+- **N-0019** Overview production migration from design-lab stage=implement run=NS10_OVERVIEW_20260912 expires=2026-09-12T12:29:07Z note=
 
 ## Decision queue
 
