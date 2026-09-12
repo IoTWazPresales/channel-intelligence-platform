@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 414
-  log_sha256: c99e2cbeec166710ff544abd1af1660d01779645689e5a6e662d32e98a860e08
+  snapshot_revision: 416
+  log_sha256: c6c360007b1ddefc88c578a6867052164e2639018b1ab8b98763d739de95f2d1
   acceptance_policy:
     milestone: operator
     root: operator
@@ -2669,13 +2669,9 @@ nodes:
     class: redesign
     origin: decomposition
     status: in_progress
-    stage: implement
-    revision: 3
-    lease:
-      run: NS10_OVERVIEW_20260912
-      acquired_at: '2026-09-12T08:29:07Z'
-      heartbeat_at: '2026-09-12T08:29:07Z'
-      expires_at: '2026-09-12T12:29:07Z'
+    stage: validate
+    revision: 5
+    lease: null
     depends_on:
     - N-0013
     - N-0004
@@ -2777,7 +2773,8 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: 'Implementer validate: Overview hub on /brief; dashboards/reports/inbox wrapped; vitest; cip NUMBER RULE 2026-09-12;
+      browser 1280 two-column + 390 Attention-first. Independent GOV-008 not recorded.'
     debug_iterations: 0
     split_into: null
     deferred: null
