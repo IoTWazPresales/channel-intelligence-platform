@@ -4,7 +4,7 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `2a59ce0` (N-0018 implementer validate; product `9e93c77`) — N-0019 product not yet pinned
+**Last content pin:** `c1b4311` (N-0019 Overview hub + coverage; ledger `60ee43c`)
 
 **Last ledger pin:** programme snapshot includes N-0019–N-0022 adds (log seq **410**) and N-0019 lease/baseline/implement (seq **413**, node revision **3**, stage **implement**)
 
