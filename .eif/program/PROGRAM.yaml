@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 413
-  log_sha256: 9c0b49bb634bf304388ba91b1dadb3a74be948cc7242f395d00af7a94c27d637
+  snapshot_revision: 414
+  log_sha256: c99e2cbeec166710ff544abd1af1660d01779645689e5a6e662d32e98a860e08
   acceptance_policy:
     milestone: operator
     root: operator
@@ -3363,6 +3363,14 @@ evidence:
     tree_hash: null
     note: 'N-0018 implementer validate: empty states, vitest 4/4, cip NUMBER RULE 2026-09-12 (1964/873/0/14%/118024), browser
       journey. Independent GOV-008 not recorded.'
+  EV-N0019-VALIDATE:
+    id: EV-N0019-VALIDATE
+    provenance: implementation-observation
+    path: docs/design/N0019_OVERVIEW_COVERAGE.md
+    tree_hash: null
+    note: 'N-0019 implementer validate: Overview hub on /brief; dashboards/reports/inbox wrapped; vitest overviewPaths+OverviewHub;
+      cip NUMBER RULE 2026-09-12 (current_database=cip; 3 dashboards/6 widgets/3 saved reports; 3 brief signals); browser
+      1280 two-column 312px + 390 Attention-first. Independent GOV-008 not recorded.'
 baselines:
   BLN-0001:
     id: BLN-0001
