@@ -19,7 +19,7 @@
 
 ## In progress / leased
 
-- **N-0019** Overview production migration from design-lab stage=implement run=NS10_OVERVIEW_20260912 expires=2026-09-12T12:29:07Z note=
+_none_
 
 ## Decision queue
 
