@@ -4,9 +4,9 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `fec7d0e` (N-0021 Administration; N-0020 `ce88549` / ledger `ff8a97c`). N-0022 product commit follows in this pass.
+**Last content pin:** `712d9d8` (N-0022 leftover stock leaves; N-0021 `fec7d0e`; N-0020 `ce88549` / ledger `ff8a97c`)
 
-**Last ledger pin:** N-0020 validate + lease release (seq **423**). N-0021 engine closed seq **427–429**; N-0022 engine close follows. Ledger `git add` of programme paths denied `CONTROL_PLANE_PROTECTED`.
+**Last ledger pin:** N-0020 validate + lease release (seq **423**). N-0021 engine seq **427–429**. N-0022 engine seq **433–435** (evidence.add / validate / lease.release). Ledger `git add` of programme paths denied `CONTROL_PLANE_PROTECTED`.
 
 **Alembic (code):** `20260906_0022` (`cpor_case.intelligence_exclude`)
 
