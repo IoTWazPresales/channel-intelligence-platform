@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-09-13 — **N-0023 BACKLOG-181 rail port** on `feat/ns-2-brief-nav-collapse` (programme rev **528**, run `NS11_RAIL_20260913`): production `CapabilityRail` matches LabShell raised header / sticky / no guide rail / 3px leaf bar. Collapsed-active: no fill, primary icon + weight 600. **D-0010 proposed** Option A keep expansion (Data 13 vs 4 tabs). vitest 4. Playwright 1280 + 390 drawer. Independent GOV-008 not recorded. D-0002 / N-0006 / N-0013 untouched. No cip writes.
+
 - 2026-09-13 — **GOV-008 N-0019–N-0022 complete** on `feat/ns-2-brief-nav-collapse` `819354e` (reviewer HEAD at start `cc51e6a`, programme rev **503**): run `GOV008_N0019_N0022_20260913` / actor `gov-008` vs impl NS10_OVERVIEW / PLANNING / ADMIN / STOCK_LEAVES. Verdicts **VERIFIED**. Evidence `docs/design/gov-008-n0019-n0022.md`. Playwright 1280 + N-0019 Attention 390. NUMBER RULE cip this session: signals 45/110/1964; planning 29/273982/20%/2703/0; admin 2/0/1/0 (failed 24h live); leftover W37 CST 0 / W40 / trailing 0 of 8. D-0002 / nav IA / BACKLOG-181 untouched.
 
 - 2026-09-13 — **N-0022 Stock leftover leaves implement** on `feat/ns-2-brief-nav-collapse` `712d9d8`: ThinLens honesty on `/channel-intelligence` `/forecasts`; relocated `/channel-intelligence/workspace` `/forecasts/workspace`; cip NUMBER RULE W37 CST 0 / latest W40 / trailing sell-out 0 of 8 / latest W24; Playwright 1280 vs lab StockSurface. Cover/Movement/Execution untouched. Independent GOV-008 not recorded. D-0002 / nav IA untouched. Do not run GOV-008 in this session.

@@ -2579,3 +2579,19 @@ Exact engine invariants (do not complete around them):
 | **Out of scope** | Inventing distributor % from lab fixtures; BACKLOG-066. |
 | **TRIGGER** | Planning or Supply work that needs plan-unit PO coverage; **or** Warren asks to match the lab P09-units grain. |
 
+---
+
+## BACKLOG-181 — Port LabShell rail treatment into production CapabilityRail
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Token port done in N-0023** · 2026-09-13. IA (rail expand vs tabs) is **D-0010 proposed**, not this entry. |
+| **Effort** | Small (visual port) · IA is a separate decision |
+| **Source** | Lab `LabShell.tsx` `1f434e4` / `130189e` (2026-09-09). Deliberately not ported while D-0008 containers were still verified against the old shell. CURRENT 2026-09-13: that reason no longer holds. |
+| **Idea** | Production `CapabilityRail.tsx` was the old LabShell. Port: raised expanded header, sticky group header, no guide rail, active leaf = 3px bar + weight. Collapsed-active: no fill, primary icon + weight 600. |
+| **Why it matters / deferrable** | Was deferrable until all eight D-0008 domains landed. Trigger fired after N-0019–N-0022 GOV-008. |
+| **What the work is** | Faithful port of current LabShell rail tokens into `CapabilityRail`. Do not change nav hrefs/labels/order. Do not implement D-0010 until Warren accepts. |
+| **Regression traps** | Do not restore selected fill. Do not put the 3px bar on the domain header. Do not drop `NAV_STORAGE_GROUP_EXPANDED`. D-0002 / N-0006 / N-0013 untouched. |
+| **Behavior to retain** | RAIL_WIDTH 252, role gating, leafIsActive, chevron aria-label, badges, directory footer, production testids, label wrap. |
+| **Out of scope** | D-0002, N-0006, N-0013, Design Language v2 beyond the rail, collapsing the rail to domains-only. |
+| **TRIGGER** | ~~All eight D-0008 domains migrated and reviewed~~ — fired 2026-09-13 (N-0023). Remaining: operator accept/reject **D-0010**. |
