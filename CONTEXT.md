@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-09-13 — **N-0022 Stock leftover leaves implement** on `feat/ns-2-brief-nav-collapse`: ThinLens honesty on `/channel-intelligence` `/forecasts`; relocated `/channel-intelligence/workspace` `/forecasts/workspace`; cip NUMBER RULE W37 CST 0 / latest W40 / trailing sell-out 0 of 8 / latest W24; Playwright 1280 vs lab StockSurface. Cover/Movement/Execution untouched. Independent GOV-008 not recorded. D-0002 / nav IA untouched. Do not run GOV-008 in this session.
+
 - 2026-09-13 — **N-0021 Administration implement** on `feat/ns-2-brief-nav-collapse` `fec7d0e`: hub `/admin/users` + relocated `/admin/users/list` + wrapped `/admin/ops` `/admin/sql-viewer` `/settings`; cip NUMBER RULE 2/0/0/0 (pending 64 not running); Playwright 1280 vs lab AdminSurface; audit log planned honesty. Engine seq **427–429** (evidence.add / validate / lease.release). Ledger git add denied `CONTROL_PLANE_PROTECTED`. Independent GOV-008 not recorded. D-0002 / nav IA untouched. Do not run GOV-008 in this session.
 
 - 2026-09-13 — **N-0020 Planning implement** on `feat/ns-2-brief-nav-collapse` `ce88549` (ledger `ff8a97c`): hub `/lineup` + relocated `/lineup/cases` + wrapped `/commercial-planner` `/roadmap`; cip NUMBER RULE 29/2703/273982/20%/2703/0; Playwright 1280 vs lab PlanningSurface. Independent GOV-008 not recorded. D-0002 / nav IA untouched. Do not run GOV-008 in this session.

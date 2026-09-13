@@ -9,6 +9,8 @@ describe('stockLensFromLocation', () => {
     expect(stockLensFromLocation('/stock', new URLSearchParams('lens=movement'))).toBe('movement');
     expect(stockLensFromLocation('/stock', new URLSearchParams('lens=execution'))).toBe('execution');
     expect(stockLensFromLocation('/channel-intelligence', new URLSearchParams())).toBe('sellthrough');
+    expect(stockLensFromLocation('/channel-intelligence/workspace', new URLSearchParams())).toBe('sellthrough');
     expect(stockLensFromLocation('/forecasts', new URLSearchParams())).toBe('forecast');
+    expect(stockLensFromLocation('/forecasts/workspace', new URLSearchParams())).toBe('forecast');
   });
 });

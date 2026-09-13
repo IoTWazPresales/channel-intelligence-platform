@@ -4,12 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
-import ForecastsPage from './page';
+import ChannelIntelligencePage from './page';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
-  usePathname: () => '/forecasts',
+  usePathname: () => '/channel-intelligence',
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -17,31 +17,29 @@ vi.mock('@/lib/api', () => ({
     if (url.includes('/stock/leaves-honesty')) {
       return {
         data_unavailable: false,
-        forecast: {
-          title: 'Forecasts need 8 weeks of applied sell-out',
-          body: '0 of 8 weeks',
+        sellthrough: {
+          title: 'Retailer sell-through for W37 not yet imported',
+          body: 'cip CST grain',
         },
       };
     }
-    return [];
+    return {};
   }),
-  apiPost: vi.fn(),
-  apiDelete: vi.fn(),
 }));
 
-describe('Forecasts landing', () => {
+describe('ChannelIntelligence landing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('mounts ThinLens honesty instead of the forecast grid', async () => {
+  it('mounts ThinLens honesty instead of the CST grid', async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     renderWithProviders(
       <QueryClientProvider client={qc}>
-        <ForecastsPage />
+        <ChannelIntelligencePage />
       </QueryClientProvider>,
     );
-    expect(await screen.findByTestId('forecast-honesty')).toBeInTheDocument();
-    expect(screen.queryByTestId('forecast-compute-from-history')).not.toBeInTheDocument();
+    expect(await screen.findByTestId('sellthrough-honesty')).toBeInTheDocument();
+    expect(screen.queryByTestId('channel-intelligence-workspace')).not.toBeInTheDocument();
   });
 });

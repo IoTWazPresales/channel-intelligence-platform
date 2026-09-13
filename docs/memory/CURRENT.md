@@ -1,12 +1,12 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-09-13 (N-0021 implementer product + Playwright browser; engine close in this pass)
+**Last updated:** 2026-09-13 (N-0022 implementer product + Playwright browser; engine close in this pass)
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `fec7d0e` (N-0021 Administration hub + coverage; N-0020 `ce88549` / ledger `ff8a97c`)
+**Last content pin:** `fec7d0e` (N-0021 Administration; N-0020 `ce88549` / ledger `ff8a97c`). N-0022 product commit follows in this pass.
 
-**Last ledger pin:** N-0020 validate + lease release (seq **423**). N-0021 engine closed seq **427–429** (validate + lease.release); ledger files still uncommitted (`CONTROL_PLANE_PROTECTED` on `git add` of programme paths).
+**Last ledger pin:** N-0020 validate + lease release (seq **423**). N-0021 engine closed seq **427–429**; N-0022 engine close follows. Ledger `git add` of programme paths denied `CONTROL_PLANE_PROTECTED`.
 
 **Alembic (code):** `20260906_0022` (`cpor_case.intelligence_exclude`)
 
@@ -14,17 +14,17 @@
 
 ## On feat/ns-2-brief-nav-collapse
 
-- **Programme:** PRG-20260831T145514. **N-0018 complete**. **N-0019** and **N-0020** implementer validate (GOV-008 pending). **N-0021** implementer in this pass. **Do not start N-0006. Do not reopen N-0013.** Independent GOV-008 for N-0019–N-0022 is a later session, different run/actor.
-- **Product (Planning):** Lab `PlanningSurface` DomainOverview composition on `/lineup`. N-0009 `LineupContainer` relocated to `/lineup/cases`. `/commercial-planner` and `/roadmap` wrapped in `PlanningChrome`. LensTabs on leaves only. `navConfig.ts` Planning hrefs/labels unchanged. Coverage `docs/design/N0020_PLANNING_COVERAGE.md`.
-- **Product (Administration):** Lab `AdminSurface` DomainOverview composition on `/admin/users`. Users & roles workspace relocated to `/admin/users/list`. `/admin/ops`, `/admin/sql-viewer`, `/settings` wrapped in `AdminChrome`. LensTabs on leaves only. Platform audit log stays planned honesty (not wired as a live leaf to `/admin/steward-audit`). `navConfig.ts` Administration hrefs/labels unchanged. Coverage `docs/design/N0021_ADMIN_COVERAGE.md`.
-- **NUMBER RULE** Planning `cip` 2026-09-12 (`current_database()=cip` first): cases **29** / lines **2703** / plan units **273982** / shipped vs plan **20%** (6586/32509 on 26Q3) / lines not ready **2703** / economics flagged **0** (0 planner lines). Lab fixtures not copied.
-- **NUMBER RULE** Administration `cip` 2026-09-13 (`current_database()=cip` first): users **2** (1 admin · 0 steward · 0 planner · 1 viewer) / jobs running **0** (64 pending are queued, not running) / failed 24h **0** (44 failed still open — different grain) / audited SQL 7d **0** (8 all-time). Lab fixtures 14 / 2 / 1 / 38 not copied.
-- **Browser VERIFIED:** Playwright 1280×800 `/lineup` vs `/design-lab/planning` two-column; workflow href `/lineup/cases`; relocated assortment workspace; `/commercial-planner` DomainHeader + workspace; `/roadmap` DomainHeader + empty substrate. Administration `/admin/users` vs `/design-lab/admin` two-column; workflow href `/admin/users/list`; relocated `users-workspace`; ops / SQL viewer / settings DomainHeader + workspace. `browser_cdp` not used.
+- **Programme:** PRG-20260831T145514. **N-0018 complete**. **N-0019–N-0022** implementer validate (GOV-008 pending). **Do not start N-0006. Do not reopen N-0013.** Independent GOV-008 for N-0019–N-0022 is a later session, different run/actor.
+- **Product (Planning / Admin):** unchanged this node. Coverage `docs/design/N0020_PLANNING_COVERAGE.md`, `docs/design/N0021_ADMIN_COVERAGE.md`.
+- **Product (Stock leftover leaves):** Lab ThinLens on `/channel-intelligence` and `/forecasts`. CST grid relocated to `/channel-intelligence/workspace`. Forecast grid + compute-from-history relocated to `/forecasts/workspace`. Cover / Movement / Execution untouched. `navConfig.ts` Stock hrefs/labels unchanged. Coverage `docs/design/N0022_STOCK_LEAVES_COVERAGE.md`.
+- **NUMBER RULE** Administration `cip` 2026-09-13: users **2** / running **0** (64 pending not running) / failed 24h **0** / SQL 7d **0**.
+- **NUMBER RULE** Stock leftover `cip` 2026-09-13 (`current_database()=cip` first): current week **W37**; CST this week **0**; latest CST **W40** 2026-09-28 (Computer Mania · Game, not TechMart); sell-out trailing 8 **0 of 8**; latest sell-out **W24** 2026-06-12; forecast rows **38625** on relocated workspace only.
+- **Browser VERIFIED:** Playwright 1280×800. Admin hub vs lab (prior). Stock: lab W36 ThinLens vs production W37 honesty; workspace CST grid; `/forecasts` honesty without compute CTA; `/forecasts/workspace` compute CTA; `/stock?lens=cover` Network cover. `browser_cdp` not used.
 - **D-0002** remains the open decision (untouched). Live `/admin/mappings` still the deferred legacy queue leaf.
 
-**Mobile:** DIRECTION §6 desktop-primary with named 390px workflows. Planning and Administration are **not** named — 1280 only.
+**Mobile:** DIRECTION §6 desktop-primary with named 390px workflows. Planning, Administration, and these leftover stock leaves are **not** named — 1280 only.
 
-**Next:** 1) N-0022 Stock leftover leaves (Sell-through + Forecasts). 2) Independent GOV-008 vs N-0019–N-0022 (different actor/run). Do not self-complete N-0021.
+**Next:** Independent GOV-008 vs N-0019–N-0022 (different actor/run). Operator: commit programme ledger (`CONTROL_PLANE_PROTECTED` on `git add` of those paths). Do not self-complete these nodes.
 
 **Design language:** FROZEN v1.1 is **demoted**. Production follows implemented design-lab React. Judge composition, not LabShell rail (BACKLOG-181).
 
