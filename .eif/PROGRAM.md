@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 503
+**Snapshot revision:** 528
 
 ## Outcome (verbatim)
 
@@ -44,3 +44,4 @@ _none_
 | N-0020 | Planning production migration from design-lab | redesign | complete | complete | yes |  | full loop |
 | N-0021 | Administration production migration from design-lab | redesign | complete | complete | yes |  | full loop |
 | N-0022 | Stock & Sell-through Sell-through and Forecasts lenses from design-lab | redesign | complete | complete | yes |  | full loop |
+| N-0023 | Port BACKLOG-181 LabShell rail treatment into production | redesign | in_progress | in_progress | yes |  | full loop |
