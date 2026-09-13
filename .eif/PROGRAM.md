@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 423
+**Snapshot revision:** 435
 
 ## Outcome (verbatim)
 
@@ -42,5 +42,5 @@ _none_
 | N-0018 | NS-8 Supply & Inbound from design-lab | redesign | complete | complete | yes |  | full loop |
 | N-0019 | Overview production migration from design-lab | redesign | in_progress | in_progress | yes |  | full loop |
 | N-0020 | Planning production migration from design-lab | redesign | in_progress | in_progress | yes |  | full loop |
-| N-0021 | Administration production migration from design-lab | redesign | ready | ready | yes |  | full loop |
-| N-0022 | Stock & Sell-through Sell-through and Forecasts lenses from design-lab | redesign | ready | ready | yes |  | full loop |
+| N-0021 | Administration production migration from design-lab | redesign | in_progress | in_progress | yes |  | full loop |
+| N-0022 | Stock & Sell-through Sell-through and Forecasts lenses from design-lab | redesign | in_progress | in_progress | yes |  | full loop |

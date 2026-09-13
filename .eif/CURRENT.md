@@ -13,8 +13,7 @@
 
 ## Ready leaves
 
-- **N-0021** Administration production migration from design-lab (redesign, R2, stage=None)
-- **N-0022** Stock & Sell-through Sell-through and Forecasts lenses from design-lab (redesign, R2, stage=None)
+_No ready unblocked leaves._
 
 ## In progress / leased
 
