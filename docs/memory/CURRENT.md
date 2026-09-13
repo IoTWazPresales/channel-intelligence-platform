@@ -4,9 +4,9 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `c1b4311` (N-0019 Overview hub + coverage; ledger `60ee43c`) — N-0020 product not yet pinned
+**Last content pin:** `ce88549` (N-0020 Planning hub + coverage; ledger `ff8a97c`)
 
-**Last ledger pin:** N-0019 validate + lease release (seq **416**). N-0020 leased/baselined/implement + reclaim seq **420** (stage **implement**) until close events land.
+**Last ledger pin:** N-0020 validate + lease release (seq **423**).
 
 **Alembic (code):** `20260906_0022` (`cpor_case.intelligence_exclude`)
 
@@ -22,7 +22,7 @@
 
 **Mobile:** DIRECTION §6 desktop-primary with named 390px workflows. Planning is **not** named — 1280 only.
 
-**Next:** 1) N-0020 `evidence.add` + `node.stage` validate + `lease.release`. 2) N-0021 Administration then N-0022 Stock leftover leaves. 3) Independent GOV-008 vs N-0019–N-0022 (different actor/run). Do not self-complete N-0020.
+**Next:** 1) N-0021 Administration then N-0022 Stock leftover leaves. 2) Independent GOV-008 vs N-0019–N-0022 (different actor/run). Do not self-complete N-0020.
 
 **Design language:** FROZEN v1.1 is **demoted**. Production follows implemented design-lab React. Judge composition, not LabShell rail (BACKLOG-181).
 
