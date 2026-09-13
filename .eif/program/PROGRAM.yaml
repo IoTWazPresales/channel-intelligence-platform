@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 528
-  log_sha256: d8f80ff70c45563f0fbdc97953f4966d74cf5845a365ac5c02f44a3f839451e1
+  snapshot_revision: 530
+  log_sha256: 3c55b3625182b041ad9cfccdce76c028e59c1318e4de139a2d3af16a1573359e
   acceptance_policy:
     milestone: operator
     root: operator
@@ -3964,7 +3964,7 @@ decisions:
       Option C (remove matching tabs) not recommended. Collapsed-active domain: no fill, no 3px bar, primary icon + weight
       600. Evidence: .eif/audit/NS11_RAIL_20260913/D0010_RAIL_VS_TABS.md. D-0002 untouched. Operator accepts A/B/C or rejects.'
     origin: agent
-    status: proposed
+    status: accepted
     supersedes: null
 evidence:
   EV-GOV008-REVIEW:
@@ -4109,6 +4109,15 @@ evidence:
     path: .eif/audit/NS11_RAIL_20260913/implementer-evidence.md
     tree_hash: null
     note: N-0023 LabShell rail port + D-0010 proposed; Playwright 1280/390; no browser_cdp; no cip writes
+  EV-D0010-ACCEPT:
+    id: EV-D0010-ACCEPT
+    provenance: operator-acceptance
+    path: .eif/audit/NS11_RAIL_20260913/D0010_OPERATOR_ACCEPTANCE.md
+    tree_hash: null
+    note: 'ACCEPTED 2026-09-13 Option A: keep rail expansion. The two controls are not one destination set — Overview has
+      no tabs, Data has 13 rail leaves against 4 grouped tabs with products/customers/duplicates/CST rail-only, and Funding''s
+      tabs include a substrate leaf the rail omits. Only Stock is a true duplicate, which is a Stock-level question not an
+      IA one. No IA change implemented. Evidence: .eif/audit/NS11_RAIL_20260913/D0010_OPERATOR_ACCEPTANCE.md'
 baselines:
   BLN-0001:
     id: BLN-0001
