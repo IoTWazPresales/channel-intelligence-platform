@@ -1,12 +1,12 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-09-13 (N-0022 implementer product + Playwright browser; engine close in this pass)
+**Last updated:** 2026-09-13 (independent GOV-008 N-0019–N-0022)
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `712d9d8` (N-0022 leftover stock leaves; N-0021 `fec7d0e`; N-0020 `ce88549` / ledger `ff8a97c`)
+**Last content pin:** `712d9d8` (N-0022 leftover stock leaves; N-0021 `fec7d0e`; N-0020 `ce88549`; N-0019 mount `c1b4311` / docs pin `e8bcdeb`)
 
-**Last ledger pin:** N-0020 validate + lease release (seq **423**). N-0021 engine seq **427–429**. N-0022 engine seq **433–435** (evidence.add / validate / lease.release). Ledger `git add` of programme paths denied `CONTROL_PLANE_PROTECTED`.
+**Last ledger pin:** programme rev **503**. GOV-008 run `GOV008_N0019_N0022_20260913` / actor `gov-008`. N-0019–N-0022 **complete**.
 
 **Alembic (code):** `20260906_0022` (`cpor_case.intelligence_exclude`)
 
@@ -14,17 +14,14 @@
 
 ## On feat/ns-2-brief-nav-collapse
 
-- **Programme:** PRG-20260831T145514. **N-0018 complete**. **N-0019–N-0022** implementer validate (GOV-008 pending). **Do not start N-0006. Do not reopen N-0013.** Independent GOV-008 for N-0019–N-0022 is a later session, different run/actor.
-- **Product (Planning / Admin):** unchanged this node. Coverage `docs/design/N0020_PLANNING_COVERAGE.md`, `docs/design/N0021_ADMIN_COVERAGE.md`.
-- **Product (Stock leftover leaves):** Lab ThinLens on `/channel-intelligence` and `/forecasts`. CST grid relocated to `/channel-intelligence/workspace`. Forecast grid + compute-from-history relocated to `/forecasts/workspace`. Cover / Movement / Execution untouched. `navConfig.ts` Stock hrefs/labels unchanged. Coverage `docs/design/N0022_STOCK_LEAVES_COVERAGE.md`.
-- **NUMBER RULE** Administration `cip` 2026-09-13: users **2** / running **0** (64 pending not running) / failed 24h **0** / SQL 7d **0**.
-- **NUMBER RULE** Stock leftover `cip` 2026-09-13 (`current_database()=cip` first): current week **W37**; CST this week **0**; latest CST **W40** 2026-09-28 (Computer Mania · Game, not TechMart); sell-out trailing 8 **0 of 8**; latest sell-out **W24** 2026-06-12; forecast rows **38625** on relocated workspace only.
-- **Browser VERIFIED:** Playwright 1280×800. Admin hub vs lab (prior). Stock: lab W36 ThinLens vs production W37 honesty; workspace CST grid; `/forecasts` honesty without compute CTA; `/forecasts/workspace` compute CTA; `/stock?lens=cover` Network cover. `browser_cdp` not used.
+- **Programme:** PRG-20260831T145514. **N-0018–N-0022 complete.** Do not reopen N-0013. D-0002 remains open.
+- **GOV-008:** independent review `docs/design/gov-008-n0019-n0022.md`. Verdicts all **VERIFIED** (limitations non-blocking). Playwright MCP 1280×800; N-0019 Attention also 390×844. `browser_cdp` not used. NUMBER RULE `current_database()=cip` first.
+- **NUMBER RULE this session:** Overview signals **45 / 110 / 1964**; Planning **29 / 273982 / 20% / 2703 / 0**; Admin **2 / 0 / 1 / 0** (failed 24h live grain; open failed **45**); leftover stock W37 CST **0**, latest W40 Computer Mania · Game, trailing sell-out **0 of 8**, latest W24, forecast rows **38625**.
 - **D-0002** remains the open decision (untouched). Live `/admin/mappings` still the deferred legacy queue leaf.
 
-**Mobile:** DIRECTION §6 desktop-primary with named 390px workflows. Planning, Administration, and these leftover stock leaves are **not** named — 1280 only.
+**Mobile:** DIRECTION §6 desktop-primary with named 390px workflows. Attention triage is named (N-0019). Planning, Administration, leftover stock leaves are not — 1280 only.
 
-**Next:** Independent GOV-008 vs N-0019–N-0022 (different actor/run). Operator: commit programme ledger (`CONTROL_PLANE_PROTECTED` on `git add` of those paths). Do not self-complete these nodes.
+**Next:** D-0002 disposition when Warren chooses. Pin-as-widget on Overview remains UNCOVERED. `/dashboard` legacy UNCOVERED. Do not treat BACKLOG-181 LabShell as a defect of these nodes.
 
 **Design language:** FROZEN v1.1 is **demoted**. Production follows implemented design-lab React. Judge composition, not LabShell rail (BACKLOG-181).
 
