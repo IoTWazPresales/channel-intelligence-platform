@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 503
-  log_sha256: 054ba6f8ce3b4c4d7d790d8a0f47b9d09a6a4e5c5301541c5d257e2e1598ecb3
+  snapshot_revision: 528
+  log_sha256: d8f80ff70c45563f0fbdc97953f4966d74cf5845a365ac5c02f44a3f839451e1
   acceptance_policy:
     milestone: operator
     root: operator
@@ -3603,6 +3603,247 @@ nodes:
     design_artifact_class: high_fidelity
     implementation_run: NS10_STOCK_LEAVES_20260913
     implementation_actor: gov-001
+  N-0023:
+    id: N-0023
+    parent: null
+    title: Port BACKLOG-181 LabShell rail treatment into production
+    class: redesign
+    origin: decomposition
+    status: in_progress
+    stage: validate
+    revision: 21
+    lease: null
+    depends_on:
+    - N-0013
+    - N-0022
+    facets:
+    - design_experience
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - 'Governing visual input: LabShell rail as implemented in apps/web/src/design-lab/shell/LabShell.tsx (commits 1f434e4,
+      130189e). Production apps/web/src/features/shell/CapabilityRail.tsx is the old LabShell; port the current lab treatment.
+      Do not cite a frozen design-language version or grammar number.'
+    - 'Port: raised opaque surface on the expanded domain header; sticky group header inside the scrolling list; nested guide
+      rail removed (indent kept); active leaf carried by a 3px rounded bar plus text weight, not a Mui-selected fill.'
+    - Collapsed-active domain (active but manually collapsed) treatment is decided and recorded. Do not leave it implicit.
+    - D-0010 (rail expand vs in-page LensTabs) is chartered with source and render evidence. Operator accepts or rejects before
+      any IA change. This node does not collapse the rail, remove tabs, or change navGroups hrefs/labels/order.
+    - Preserve RAIL_WIDTH 252, role gating, leafIsActive, expand/collapse IconButton and aria-label, badges, directory footer,
+      localStorage group-expanded state, production testids, and label wrap. D-0002 mapping-queue disposition untouched. N-0006
+      and N-0013 not reopened.
+    - Browser-verify 1280x800 vs lab rail. Rail also appears in the md-down Drawer — verify 390x844 drawer. Do not use browser_cdp.
+      NUMBER RULE does not apply (no headline figures).
+    - 'target_artifact_class: high_fidelity'
+    - Independent GOV-008 vs this node's implementation_run
+    baseline_ref: BLN-0001
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      design_artifact_class:
+        required: true
+        state: pass
+        evidence:
+          class: high_fidelity
+          path: .eif/audit/NS11_RAIL_20260913/implementer-evidence.md
+        rationale: null
+        pass_run: NS11_RAIL_20260913
+        pass_actor: gov-001
+      design_divergence:
+        required: true
+        state: pass
+        evidence:
+          benchmark: apps/web/src/design-lab/shell/LabShell.tsx Rail
+          decision: port_lab_tokens_keep_production_badges_persist_footer
+          path: .eif/audit/NS11_RAIL_20260913/implementer-evidence.md
+        rationale: null
+        pass_run: NS11_RAIL_20260913
+        pass_actor: gov-001
+      design_signatures:
+        required: true
+        state: pass
+        evidence:
+          signatures:
+          - raised_expanded_header_background_paper
+          - sticky_group_header
+          - no_guide_rail
+          - leaf_3px_bar_plus_weight
+          - collapsed_active_no_fill
+          path: .eif/audit/NS11_RAIL_20260913/implementer-evidence.md
+        rationale: null
+        pass_run: NS11_RAIL_20260913
+        pass_actor: gov-001
+      rendered_comparison:
+        required: true
+        state: pass
+        evidence:
+          artifact_class: high_fidelity
+          class: high_fidelity
+          path: .eif/audit/NS11_RAIL_20260913/implementer-evidence.md
+          product_url: http://localhost:3000/stock?lens=cover
+          lab_url: http://localhost:3000/design-lab/stock?lens=cover
+          viewport: 1280x800
+          drawer_viewport: 390x844
+          comparison_verdict: lab_rail_tokens_ported
+        rationale: null
+        pass_run: NS11_RAIL_20260913
+        pass_actor: gov-001
+      design_sameness_review:
+        required: true
+        state: pass
+        evidence:
+          visual_vocabulary_challenge: 'Challenged whether CapabilityRail was still the old selected-fill instrument. After
+            port it is the same rail treatment as LabShell (raised paper, sticky, 3px bar, no guide rail). Remaining deltas
+            are production-only and chartered: badges, localStorage persist, session footer, testids, label wrap. D-0010 IA
+            is proposed, not implemented. Path: .eif/audit/NS11_RAIL_20260913/implementer-evidence.md'
+          path: .eif/audit/NS11_RAIL_20260913/implementer-evidence.md
+          decision: retain_lab_rail_tokens
+        rationale: null
+        pass_run: NS11_RAIL_20260913
+        pass_actor: gov-001
+      design_interaction_spec:
+        required: true
+        state: pass
+        evidence:
+          interactions:
+          - domain_header_navigates
+          - chevron_expand_collapse_without_navigate
+          - leaf_bar_marks_active
+          - collapsed_active_icon_weight_only
+          path: .eif/audit/NS11_RAIL_20260913/implementer-evidence.md
+        rationale: null
+        pass_run: NS11_RAIL_20260913
+        pass_actor: gov-001
+      design_state_coverage:
+        required: true
+        state: pass
+        evidence:
+          states:
+          - expanded_active
+          - collapsed_active
+          - collapsed_inactive
+          - mobile_drawer
+          path: .eif/audit/NS11_RAIL_20260913/implementer-evidence.md
+        rationale: null
+        pass_run: NS11_RAIL_20260913
+        pass_actor: gov-001
+      design_identity_tokens:
+        required: true
+        state: pass
+        evidence:
+          tokens:
+            direction_name: LabShell rail after 130189e
+            leaf_bar: 3x15 r=2 primary
+            expanded_header: background.paper sticky z=2
+            collapsed_active: transparent + primary icon + weight 600
+          path: .eif/audit/NS11_RAIL_20260913/implementer-evidence.md
+        rationale: null
+        pass_run: NS11_RAIL_20260913
+        pass_actor: gov-001
+      design_execution_decisions:
+        required: true
+        state: pass
+        evidence:
+          responsive_decision:
+            status: applicable
+            rationale: 1280 aside and 390 drawer both measured; same tokens.
+            evidence: .eif/audit/NS11_RAIL_20260913/implementer-evidence.md
+          visualisation_decision:
+            status: applicable
+            rationale: No charts. Selection is bar+weight, not fill.
+            evidence: .eif/audit/NS11_RAIL_20260913/implementer-evidence.md
+          consequential_action_decision:
+            status: applicable
+            rationale: Rail still navigates; chevron still expands. D-0010 IA not implemented.
+            evidence: .eif/audit/NS11_RAIL_20260913/implementer-evidence.md
+        rationale: null
+        pass_run: NS11_RAIL_20260913
+        pass_actor: gov-001
+      ux:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/NS11_RAIL_20260913/implementer-evidence.md
+          summary: Active leaf is bar+weight; expanded group reads as a container; collapsed-active is weaker by design.
+        rationale: null
+        pass_run: NS11_RAIL_20260913
+        pass_actor: gov-001
+      a11y:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/NS11_RAIL_20260913/implementer-evidence.md
+          summary: Chevron aria-label expand/collapse retained; selected still on ListItemButton; colour is not the only leaf
+            signal (bar+weight). Keyboard not a full pass this session.
+        rationale: null
+        pass_run: NS11_RAIL_20260913
+        pass_actor: gov-001
+      rendered:
+        required: true
+        state: pass
+        evidence: &id013
+          path: .eif/audit/NS11_RAIL_20260913/implementer-evidence.md
+          url: http://localhost:3000/stock?lens=cover
+          viewports:
+          - desktop_1280
+          - drawer_390
+        rationale: null
+        pass_run: NS11_RAIL_20260913
+        pass_actor: gov-001
+      content:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/NS11_RAIL_20260913/D0010_RAIL_VS_TABS.md
+          summary: No label/href/order change. D-0010 proposed Option A keep expansion.
+        rationale: null
+        pass_run: NS11_RAIL_20260913
+        pass_actor: gov-001
+    verification:
+      rendered:
+        state: pass
+        pass_run: NS11_RAIL_20260913
+        pass_actor: gov-001
+        evidence: *id013
+        path: null
+      referent:
+        state: pass
+        pass_run: NS11_RAIL_20260913
+        pass_actor: gov-001
+        evidence:
+          path: .eif/audit/NS11_RAIL_20260913/implementer-evidence.md
+          lab: apps/web/src/design-lab/shell/LabShell.tsx
+          product: apps/web/src/features/shell/CapabilityRail.tsx
+        path: null
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: 'Implementer validate: LabShell rail tokens ported; collapsed-active recorded; D-0010 proposed Option A; vitest
+      4; Playwright 1280+390. Independent GOV-008 not recorded.'
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation:
+      customer_account_sell_out_gap: brief signal unchanged; not rail chrome
+      pipeline_fill_pct: stock Cover regime strip unchanged; not rail chrome
+      response_container_badge: unchanged this node
+      rail_width: RAIL_WIDTH remains 252
+      nav_groups: navConfig ids, labels, hrefs, order, role gates, leaf status vocabulary unchanged
+      rail_expand_state: NAV_STORAGE_GROUP_EXPANDED localStorage contract unchanged
+      lens_tabs: in-page LensTabs unchanged until D-0010 is accepted
+      d0002: mapping-queue disposition untouched
+      n0006: not reopened
+      n0013: not reopened
+    target_artifact_class: high_fidelity
+    design_artifact_class: high_fidelity
+    implementation_run: NS11_RAIL_20260913
+    implementation_actor: gov-001
 decisions:
   D-0001:
     id: D-0001
@@ -3712,6 +3953,18 @@ decisions:
       nodes chartered by this recording. Evidence: .eif/audit/NS6_D0009_20260904/OPERATOR_DECISION.md.'
     origin: operator
     status: accepted
+    supersedes: null
+  D-0010:
+    id: D-0010
+    scope: N-0023
+    statement: 'PROPOSED 2026-09-13: rail expansion vs in-page LensTabs. The two controls do not share one destination set
+      (Data 13 rail leaves vs 4 grouped tabs; Funding/Market tabs include substrate/planned; Overview has no tabs; Planning/Admin
+      rail hrefs point at hubs while tabs point at relocated workspaces). Recommended Option A: keep rail expansion; N-0023
+      ports LabShell tokens only. Option B (domains-only rail) needs a later node after hubs/Overview/Data catalogs are unified.
+      Option C (remove matching tabs) not recommended. Collapsed-active domain: no fill, no 3px bar, primary icon + weight
+      600. Evidence: .eif/audit/NS11_RAIL_20260913/D0010_RAIL_VS_TABS.md. D-0002 untouched. Operator accepts A/B/C or rejects.'
+    origin: agent
+    status: proposed
     supersedes: null
 evidence:
   EV-GOV008-REVIEW:
@@ -3850,6 +4103,12 @@ evidence:
       pytest tests/test_stock_leaves_honesty.py 4 passed; cip NUMBER RULE 2026-09-13 (current_database=cip; W37 CST 0; latest
       CST W40; sell-out trailing 0 of 8; latest sell-out W24); Playwright 1280 vs lab StockSurface ThinLens. Independent GOV-008
       not recorded.'
+  EV-N0023-IMPL:
+    id: EV-N0023-IMPL
+    provenance: implementation-observation
+    path: .eif/audit/NS11_RAIL_20260913/implementer-evidence.md
+    tree_hash: null
+    note: N-0023 LabShell rail port + D-0010 proposed; Playwright 1280/390; no browser_cdp; no cip writes
 baselines:
   BLN-0001:
     id: BLN-0001
