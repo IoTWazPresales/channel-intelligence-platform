@@ -24,7 +24,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import { alpha, type Theme } from '@mui/material/styles';
 import NextLink from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -33,6 +33,10 @@ import { NAV_STORAGE_GROUP_EXPANDED, railNavGroups, type NavGroup } from '@/feat
 import { activeNavGroup } from '@/features/shell/navPageChrome';
 
 export const RAIL_WIDTH = 252;
+
+/** Opaque-safe hover lift for the raised domain header (bgcolor stays solid so a pinned header never shows leaves through). */
+const raisedHoverOverlay = (t: Theme) =>
+  `linear-gradient(${alpha(t.palette.common.white, 0.05)}, ${alpha(t.palette.common.white, 0.05)})`;
 
 /** Icons stay out of navConfig so the nav model remains a plain, testable module. */
 export const DOMAIN_ICONS: Record<string, SvgIconComponent> = {
@@ -178,10 +182,29 @@ export function CapabilityRail({
                 sx={{
                   borderRadius: 1.5,
                   py: 0.75,
-                  '&.Mui-selected': {
-                    bgcolor: (t) => alpha(t.palette.primary.main, 0.14),
-                    '&:hover': { bgcolor: (t) => alpha(t.palette.primary.main, 0.18) },
-                  },
+                  // Sticky within its own group Box: the header holds parent context while
+                  // long domains scroll, and is pushed out by the next domain.
+                  position: 'sticky',
+                  top: 0,
+                  zIndex: 2,
+                  ...(expanded
+                    ? {
+                        // Raised, fully opaque surface so the open group reads as a container
+                        // and leaves never bleed through the pinned header.
+                        bgcolor: 'background.paper',
+                        '&:hover': { bgcolor: 'background.paper', backgroundImage: raisedHoverOverlay },
+                        '&.Mui-selected': {
+                          bgcolor: 'background.paper',
+                          '&:hover': { bgcolor: 'background.paper', backgroundImage: raisedHoverOverlay },
+                        },
+                      }
+                    : {
+                        // Collapsed-active: no fill, no 3px bar. The bar is leaf language;
+                        // the raised paper surface is expanded-group language. Location is
+                        // carried by primary icon colour + label weight 600 only (LabShell
+                        // after 130189e). Hover may show action.hover; that is not selected fill.
+                        '&.Mui-selected': { bgcolor: 'transparent' },
+                      }),
                 }}
               >
                 <ListItemIcon sx={{ minWidth: 34, color: isActive ? 'primary.main' : 'text.secondary' }}>
@@ -219,7 +242,7 @@ export function CapabilityRail({
                 </IconButton>
               </ListItemButton>
               <Collapse in={expanded} unmountOnExit>
-                <List dense disablePadding sx={{ ml: 4.25, borderLeft: '1px solid', borderColor: 'divider', mb: 0.5 }}>
+                <List dense disablePadding sx={{ ml: 4.25, mb: 0.5 }}>
                   {d.items.map((l) => {
                     const on = leafIsActive(l.href, pathname, searchStr);
                     return (
@@ -232,11 +255,29 @@ export function CapabilityRail({
                         sx={{
                           py: 0.4,
                           pl: 1.5,
-                          borderRadius: '0 8px 8px 0',
-                          ml: '-1px',
-                          borderLeft: '2px solid',
-                          borderLeftColor: on ? 'primary.main' : 'transparent',
-                          gap: 0.75,
+                          borderRadius: 1,
+                          position: 'relative',
+                          // Selection on a leaf is carried by the ::before bar plus text weight
+                          // alone. The Mui-selected fill is dropped: it tripled the signal and
+                          // its tone sat too close to the expanded header's raised surface,
+                          // merging parent and child into one block. Hover feedback is kept.
+                          '&.Mui-selected': {
+                            bgcolor: 'transparent',
+                            '&:hover': { bgcolor: 'action.hover' },
+                          },
+                          // Short rounded bar left of the label: position and shape carry the
+                          // active state, not colour alone.
+                          '&::before': {
+                            content: '""',
+                            position: 'absolute',
+                            left: '2px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            width: '3px',
+                            height: '15px',
+                            borderRadius: '2px',
+                            bgcolor: on ? 'primary.main' : 'transparent',
+                          },
                         }}
                       >
                         <ListItemText
