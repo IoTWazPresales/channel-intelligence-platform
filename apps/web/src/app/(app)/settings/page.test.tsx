@@ -4,6 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { roleState } = vi.hoisted(() => ({ roleState: { current: 'admin' } }));
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => '/settings',
+}));
+
 vi.mock('@/features/shell/useCurrentUser', () => ({
   useCurrentUser: () => ({ data: { id: 'u1', role: roleState.current } }),
 }));

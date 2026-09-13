@@ -16,6 +16,8 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-09-13 — **N-0021 Administration implement** on `feat/ns-2-brief-nav-collapse`: hub `/admin/users` + relocated `/admin/users/list` + wrapped `/admin/ops` `/admin/sql-viewer` `/settings`; cip NUMBER RULE 2/0/0/0 (pending 64 not running); Playwright 1280 vs lab AdminSurface; audit log planned honesty. Independent GOV-008 not recorded. D-0002 / nav IA untouched. Do not run GOV-008 in this session.
+
 - 2026-09-13 — **N-0020 Planning implement** on `feat/ns-2-brief-nav-collapse` `ce88549` (ledger `ff8a97c`): hub `/lineup` + relocated `/lineup/cases` + wrapped `/commercial-planner` `/roadmap`; cip NUMBER RULE 29/2703/273982/20%/2703/0; Playwright 1280 vs lab PlanningSurface. Independent GOV-008 not recorded. D-0002 / nav IA untouched. Do not run GOV-008 in this session.
 
 - 2026-09-12 — **N-0019 Overview implement** on `feat/ns-2-brief-nav-collapse` `c1b4311` (ledger `60ee43c`): chartered N-0019–N-0022 (`NS10_D0008_REMAINDER_20260912`); hub `/brief` + wrapped `/dashboards` `/reports` `/inbox`; cip NUMBER RULE 3/6/3 dashboards/widgets/reports + 3 brief signals; browser 1280 two-column 312px + 390 Attention-first. Engine `stage` validate + lease.release **SKIPPED** (`CONTROL_PLANE_PROTECTED` on `program.py`, retried once). Independent GOV-008 not recorded. D-0002 / nav IA untouched. Do not start N-0020.

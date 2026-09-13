@@ -16,8 +16,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import NextLink from 'next/link';
 
-import { PageHeader } from '@/components/PageHeader';
-import { navPageChrome } from '@/features/shell/navPageChrome';
+import { AdminChrome } from '@/features/administration/AdminChrome';
 import { apiGet, safeDisplayError } from '@/lib/api';
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
 
@@ -65,10 +64,9 @@ export default function AdminOpsPage() {
 
   if (meError || (me && !allowed)) {
     return (
-      <>
-        <PageHeader {...navPageChrome('/admin/ops')} />
+      <AdminChrome>
         <Alert severity="warning">Admin or steward role required.</Alert>
-      </>
+      </AdminChrome>
     );
   }
 
@@ -76,8 +74,7 @@ export default function AdminOpsPage() {
   const readyOk = overview.data?.readiness?.status === 'ready';
 
   return (
-    <>
-      <PageHeader {...navPageChrome('/admin/ops')} />
+    <AdminChrome>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 720 }}>
         Local multi-user readiness: API readiness, failed import jobs, and links to steward audit. Backup / restore
         runbooks live in <code>docs/BACKUP_AND_DR.md</code>.
@@ -170,6 +167,6 @@ export default function AdminOpsPage() {
           </TableBody>
         </Table>
       </Paper>
-    </>
+    </AdminChrome>
   );
 }
