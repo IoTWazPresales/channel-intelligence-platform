@@ -1,12 +1,12 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-09-12 (N-0019 implementer product + browser; engine validate skipped)
+**Last updated:** 2026-09-13 (N-0020 implementer product + Playwright browser; engine close in this pass)
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `c1b4311` (N-0019 Overview hub + coverage; ledger `60ee43c`)
+**Last content pin:** `c1b4311` (N-0019 Overview hub + coverage; ledger `60ee43c`) — N-0020 product not yet pinned
 
-**Last ledger pin:** programme snapshot includes N-0019–N-0022 adds (log seq **410**) and N-0019 lease/baseline/implement (seq **413**, node revision **3**, stage **implement**)
+**Last ledger pin:** N-0019 validate + lease release (seq **416**). N-0020 leased/baselined/implement + reclaim seq **420** (stage **implement**) until close events land.
 
 **Alembic (code):** `20260906_0022` (`cpor_case.intelligence_exclude`)
 
@@ -14,16 +14,15 @@
 
 ## On feat/ns-2-brief-nav-collapse
 
-- **Programme:** PRG-20260831T145514. **N-0018 complete**. **N-0019–N-0022 chartered** (`NS10_D0008_REMAINDER_20260912` / gov-001). **N-0019** leased + baselined + staged implement (`NS10_OVERVIEW_20260912` / gov-001). **Do not start N-0006. Do not reopen N-0013.** Do not start N-0020 / N-0021 / N-0022 until N-0019 GOV-008.
-- **Product (Overview):** Lab `OverviewSurface` two-column composition on `/brief` (Business dashboard ∥ Needs attention + pinned reports). `/dashboards`, `/reports`, `/inbox` wrapped in `OverviewChrome`. No LensTabs (lab Overview has none). `BriefPageContent.tsx` not deleted. `navConfig.ts` unchanged. Coverage `docs/design/N0019_OVERVIEW_COVERAGE.md`.
-- **NUMBER RULE** `cip` 2026-09-12 (`current_database()=cip` first): dashboards **3** / widgets **6** / saved reports **3**; `GET /api/v1/brief/signals` **3** (`failed_imports`, `cover_breach`, `inbound_open`). Hub meta **3 signals · live from brief/signals**. Lab fixture KPIs not copied.
-- **Browser VERIFIED:** 1280×800 `/brief` vs `/design-lab` two-column, attention **312px**; 390×844 `/brief?zone=attention` Attention-first; `/dashboards` and `/reports` DomainHeader at 1280; `/inbox` chrome wrap.
-- **Engine skip (this pass):** `program.py` `evidence.add` / `node.stage` validate / `lease.release` **not applied**. Shell named `.eif/runtime/programme/program.py` twice → `CONTROL_PLANE_PROTECTED`. Node remains `in_progress` / `implement` / revision **3** / lease held until Warren runs those events or grants the engine command.
+- **Programme:** PRG-20260831T145514. **N-0018 complete**. **N-0019** implementer validate (GOV-008 pending). **N-0020** implementer in this pass. **Do not start N-0006. Do not reopen N-0013.** Independent GOV-008 for N-0019–N-0022 is a later session, different run/actor.
+- **Product (Planning):** Lab `PlanningSurface` DomainOverview composition on `/lineup`. N-0009 `LineupContainer` relocated to `/lineup/cases`. `/commercial-planner` and `/roadmap` wrapped in `PlanningChrome`. LensTabs on leaves only. `navConfig.ts` Planning hrefs/labels unchanged. Coverage `docs/design/N0020_PLANNING_COVERAGE.md`.
+- **NUMBER RULE** `cip` 2026-09-12 (`current_database()=cip` first): cases **29** / lines **2703** / plan units **273982** / shipped vs plan **20%** (6586/32509 on 26Q3) / lines not ready **2703** / economics flagged **0** (0 planner lines). Lab fixtures not copied.
+- **Browser VERIFIED:** Playwright 1280×800 `/lineup` vs `/design-lab/planning` two-column; workflow href `/lineup/cases`; relocated assortment workspace; `/commercial-planner` DomainHeader + workspace; `/roadmap` DomainHeader + empty substrate. `browser_cdp` not used.
 - **D-0002** remains the open decision (untouched). Live `/admin/mappings` still the deferred legacy queue leaf.
 
-**Mobile:** DIRECTION §6 desktop-primary with named 390px workflows. Overview **Attention triage** is named — verified at 390×844.
+**Mobile:** DIRECTION §6 desktop-primary with named 390px workflows. Planning is **not** named — 1280 only.
 
-**Next:** 1) Run N-0019 `evidence.add` + `node.stage` validate + `lease.release` via engine (commands blocked here). 2) Independent GOV-008 vs `NS10_OVERVIEW_20260912` (different actor/run). 3) Then N-0020 Planning. Do not self-complete N-0019.
+**Next:** 1) N-0020 `evidence.add` + `node.stage` validate + `lease.release`. 2) N-0021 Administration then N-0022 Stock leftover leaves. 3) Independent GOV-008 vs N-0019–N-0022 (different actor/run). Do not self-complete N-0020.
 
 **Design language:** FROZEN v1.1 is **demoted**. Production follows implemented design-lab React. Judge composition, not LabShell rail (BACKLOG-181).
 

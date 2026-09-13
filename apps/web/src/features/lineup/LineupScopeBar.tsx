@@ -24,7 +24,7 @@ export function LineupScopeBar({ scope, onScopeChange }: Props) {
       if (approval === 'pending') params.set('approval', 'pending');
       else params.delete('approval');
       const q = params.toString();
-      router.replace(q ? `/lineup?${q}` : '/lineup', { scroll: false });
+      router.replace(q ? `/lineup/cases?${q}` : '/lineup/cases', { scroll: false });
       onScopeChange({ approval });
     },
     [onScopeChange, router, searchParams],

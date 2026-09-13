@@ -9,8 +9,7 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
-import { PageHeader } from '@/components/PageHeader';
-import { navPageChrome } from '@/features/shell/navPageChrome';
+import { PlanningChrome } from '@/features/planning/PlanningChrome';
 import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
@@ -54,8 +53,7 @@ export default function RoadmapPage() {
   const rows = data ?? [];
 
   return (
-    <>
-      <PageHeader {...navPageChrome('/roadmap')} />
+    <PlanningChrome>
       <Paper sx={{ p: 2 }}>
         <ModuleDataSection
           intro={
@@ -74,7 +72,7 @@ export default function RoadmapPage() {
             title: 'No roadmap rows',
             description: 'Roadmap facts load when product strategy data is available through your ingestion pipelines.',
             primary: { label: 'Import Center', href: '/admin/imports' },
-            secondary: { label: 'Lineup cases', href: '/lineup' },
+            secondary: { label: 'Lineup cases', href: '/lineup/cases' },
           }}
           toolbar={
             <ModuleGridToolbar
@@ -91,6 +89,6 @@ export default function RoadmapPage() {
           <EnterpriseDataGrid rowData={rows} columnDefs={colDefs} />
         </ModuleDataSection>
       </Paper>
-    </>
+    </PlanningChrome>
   );
 }

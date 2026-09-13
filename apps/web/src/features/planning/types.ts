@@ -1,0 +1,33 @@
+export type PlanningOverview = {
+  database: string;
+  tenant_id: string;
+  data_unavailable: boolean;
+  cases: number;
+  lines: number;
+  plan_units: number;
+  period_labels: string[];
+  readiness_missing: number;
+  readiness_ok: number;
+  readiness: {
+    sku_assumptions_ok: number;
+    customer_terms_ok: number;
+    distributor_attribution_ok: number;
+    cost_basis_ok: number;
+    sku_assumptions_ratio: number | null;
+    customer_terms_ratio: number | null;
+    distributor_attribution_ratio: number | null;
+    cost_basis_ratio: number | null;
+  };
+  economics_flagged: number;
+  economics_ok: number;
+  plan_lines: number;
+  fill_rate: number | null;
+  fill_rate_pct: number | null;
+  execution_period: string | null;
+  execution_unavailable: boolean;
+  shipped_units_in_plan: number | null;
+  planned_units_execution: number | null;
+  by_customer: { customer: string; customer_id: number | null; plan: number; shipped: number }[];
+  labels: Record<string, string>;
+  captions: Record<string, string>;
+};

@@ -1,12 +1,12 @@
 'use client';
 
+import { LineupContainer } from '@/features/lineup/LineupContainer';
 import { PlanningChrome } from '@/features/planning/PlanningChrome';
-import { PlanningOverview } from '@/features/planning/PlanningOverview';
 
-export default function PlanningPage() {
+export default function LineupCasesPage() {
   return (
     <PlanningChrome>
-      <PlanningOverview />
+      <LineupContainer />
     </PlanningChrome>
   );
 }

@@ -37,8 +37,7 @@ import { useCallback, useEffect, useMemo, useState, type InputHTMLAttributes } f
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
-import { PageHeader } from '@/components/PageHeader';
-import { navPageChrome } from '@/features/shell/navPageChrome';
+import { PlanningChrome } from '@/features/planning/PlanningChrome';
 import { AddProductSetDialog } from '@/features/commercial-planner/AddProductSetDialog';
 import { IntelligentAddDialog } from '@/features/commercial-planner/IntelligentAddDialog';
 import { ColumnSelectorModal, type ColumnMetadata } from '@/features/commercial-planner/ColumnSelectorModal';
@@ -3461,8 +3460,7 @@ export default function CommercialPlannerPage() {
   );
 
   return (
-    <>
-      <PageHeader {...navPageChrome('/commercial-planner')} />
+    <PlanningChrome>
       <Box sx={{ mb: 2 }} data-testid="commercial-planner-workflow-guide">
         <Button
           size="small"
@@ -3644,6 +3642,6 @@ export default function CommercialPlannerPage() {
           new Set((lines ?? []).map((l) => `${l.customer_id}|${l.distributor_id}|${l.product_id}`))
         }
       />
-    </>
+    </PlanningChrome>
   );
 }

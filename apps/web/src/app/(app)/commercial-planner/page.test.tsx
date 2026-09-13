@@ -182,6 +182,11 @@ const mockState = vi.hoisted(() => {
   };
 });
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  usePathname: () => '/commercial-planner',
+  useSearchParams: () => new URLSearchParams(),
+}));
 vi.mock('@/components/PageHeader', () => ({
   PageHeader: ({ title }: { title: string }) => <div>{title}</div>,
 }));
@@ -314,7 +319,8 @@ describe('CommercialPlannerPage', () => {
 
   it('loads planner workspace and summary', async () => {
     renderPage();
-    expect(await screen.findByText('Plans & line economics')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Planning' })).toBeInTheDocument();
+    expect(screen.getAllByText('Plans & line economics').length).toBeGreaterThanOrEqual(1);
     const summaryPanel = await screen.findByTestId('plan-summary-panel');
     await waitFor(() => {
       expect(summaryPanel).not.toHaveTextContent('Loading plan…');

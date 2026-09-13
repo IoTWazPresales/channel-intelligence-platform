@@ -11,7 +11,7 @@ const STOCK_LEGACY_REDIRECTS: Record<string, string> = {
 };
 
 const LINEUP_LEGACY_REDIRECTS: Record<string, string> = {
-  '/buy-plans': '/lineup',
+  '/buy-plans': '/lineup/cases',
 };
 
 export function middleware(request: NextRequest) {

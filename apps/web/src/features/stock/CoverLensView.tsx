@@ -460,7 +460,7 @@ export function CoverLensView() {
         related={
           selected
             ? [
-                { label: 'Plan lines for this product', href: `/lineup?product=${selected.product_id}`, hint: 'Planning › Lineup cases' },
+                { label: 'Plan lines for this product', href: `/lineup/cases?product=${selected.product_id}`, hint: 'Planning › Lineup cases' },
                 { label: 'Open inbound shipments', href: `/supply/shipments`, hint: 'Supply & Inbound › Shipments' },
                 { label: 'Promotion cases on this SKU', href: '/commercial-planner/cpor-cases', hint: 'Promotions & Funding › Case book' },
                 { label: 'Retail listings & shelf price', href: '/listing-capture?tab=registry', hint: 'Market & Listings › Monitored listings' },
