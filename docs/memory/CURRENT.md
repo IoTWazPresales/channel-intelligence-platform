@@ -4,9 +4,9 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `ce88549` (N-0020 Planning hub + coverage; ledger `ff8a97c`)
+**Last content pin:** `fec7d0e` (N-0021 Administration hub + coverage; N-0020 `ce88549` / ledger `ff8a97c`)
 
-**Last ledger pin:** N-0020 validate + lease release (seq **423**). N-0021 engine close follows in this pass.
+**Last ledger pin:** N-0020 validate + lease release (seq **423**). N-0021 engine closed seq **427–429** (validate + lease.release); ledger files still uncommitted (`CONTROL_PLANE_PROTECTED` on `git add` of programme paths).
 
 **Alembic (code):** `20260906_0022` (`cpor_case.intelligence_exclude`)
 
