@@ -22,4 +22,3 @@ _none_
 ## Decision queue
 
 - **D-0002** scope=N-0013: Mapping queue UI: RESTORE under Imports (recommended) vs RETIRE UI — operator choice
-- **D-0010** scope=N-0023: PROPOSED 2026-09-13: rail expansion vs in-page LensTabs. The two controls do not share one destination set (Data 13 rail leaves vs 4 grouped tabs; Funding/Market tabs include substrate/planned; Overview has no tabs; Planning/Admin rail hrefs point at hubs while tabs point at relocated workspaces). Recommended Option A: keep rail expansion; N-0023 ports LabShell tokens only. Option B (domains-only rail) needs a later node after hubs/Overview/Data catalogs are unified. Option C (remove matching tabs) not recommended. Collapsed-active domain: no fill, no 3px bar, primary icon + weight 600. Evidence: .eif/audit/NS11_RAIL_20260913/D0010_RAIL_VS_TABS.md. D-0002 untouched. Operator accepts A/B/C or rejects.

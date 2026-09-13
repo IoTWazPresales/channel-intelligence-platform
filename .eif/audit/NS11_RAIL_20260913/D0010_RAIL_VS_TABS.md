@@ -1,8 +1,9 @@
 # D-0010 — Rail expansion vs in-page LensTabs
 
-**Status:** proposed. Operator accepts or rejects before any IA implementation.
-**Scope:** N-0023. Does not implement the IA half.
-**Out of scope:** D-0002, N-0006, N-0013 reopen, Design Language v2 beyond the rail.
+**Status:** accepted 2026-09-13 (Option A — keep rail expansion). Actor: operator. Ledger rev **530**, run `NS11_D0010_ACCEPT_20260913`.
+**Scope:** N-0023. No IA implementation authorised.
+**Out of scope:** D-0002, N-0006, N-0013 reopen, Design Language v2 beyond the rail, collapsing the rail, removing tabs, changing nav hrefs/labels/order.
+**Acceptance:** `.eif/audit/NS11_RAIL_20260913/D0010_OPERATOR_ACCEPTANCE.md`
 
 ## Question
 
@@ -81,4 +82,6 @@ Production persists every expanded group; lab opens only the active domain. That
 
 ## Operator action
 
-Reply **accept A**, **accept B** (charter a later node), **accept C**, or **reject / amend**.
+**Accepted Option A** (2026-09-13). Operator reasoning: the two controls are not one destination set — Overview has no tabs, Data has 13 rail leaves against 4 grouped tabs with products/customers/duplicates/CST rail-only, and Funding's tabs include a substrate leaf the rail omits. Only Stock is a true duplicate, which is a Stock-level question not an IA one. No IA change implemented.
+
+Options B and C are not accepted. Stock tab/rail duplication is not resolved here. Changing production's persist-every-group default remains unchartered (N-0023 preserved `NAV_STORAGE_GROUP_EXPANDED`).
