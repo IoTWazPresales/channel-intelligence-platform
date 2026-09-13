@@ -4,7 +4,7 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `6a2e912` (N-0023 CapabilityRail port; ledger `7bdb718`; views `f09ebdb`)
+**Last content pin:** `c9ec19f` (D-0010 Option A docs; ledger `abaf04b`; N-0023 product `6a2e912`)
 
 **Last ledger pin:** `abaf04b` programme rev **530**. Run `NS11_D0010_ACCEPT_20260913` / actor `operator` (seq 529–530). N-0023 **in_progress** at **validate** (lease released). Independent GOV-008 not recorded.
 
