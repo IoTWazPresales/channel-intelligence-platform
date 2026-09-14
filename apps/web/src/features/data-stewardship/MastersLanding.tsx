@@ -125,7 +125,8 @@ export function MastersLanding() {
           })}
         </Box>
         <Typography variant="body2" color="text.secondary">
-          Relocated, not deleted: product catalogue gaps, customer/distributor duplicates, channels & regions, CST steward.
+          Products, customers, duplicates, catalogue gaps, CST steward, and channels &amp; regions stay
+          reachable from Also in this area on every Data page. Stores has no production grid — UNCOVERED.
         </Typography>
       </Stack>
     </DataChrome>

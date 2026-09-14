@@ -1,0 +1,10 @@
+{
+  "dim": "content",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS13_START_WORK_20260914/implementer-evidence.md",
+    "summary": "Start work verbs name existing jobs. Attention copy unchanged. Data also-here names rail-only leaves."
+  },
+  "node": "N-0025",
+  "expected_revision": 15
+}

@@ -110,3 +110,5 @@ def test_load_groups_by_site() -> None:
     assert out["items"][0]["site_label"] == "Store A"
     assert out["items"][0]["data_state"] == "ok"
     assert out["items"][0]["velocity_4wk"] == 5.0
+    assert out["items"][0]["customer_name"] is None
+    assert out["items"][0]["product_name"] is None

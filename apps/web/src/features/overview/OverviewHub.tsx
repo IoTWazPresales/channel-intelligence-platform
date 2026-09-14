@@ -9,6 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import type { BriefSignal } from '@/features/brief/BriefSignalRow';
 import { DashboardWidgetCard } from '@/features/dashboards/DashboardWidgetCard';
 import type { CatalogResponse, Dashboard } from '@/features/dashboards/types';
+import { StartWorkPanel } from '@/features/overview/StartWorkPanel';
 import { Panel, PanelRow } from '@/features/workbench-ui/Panel';
 import { apiGet } from '@/lib/api';
 
@@ -85,7 +86,7 @@ export function OverviewHub() {
       subtitle={
         active
           ? `${active.name} · ${widgets.length} widget${widgets.length === 1 ? '' : 's'} over governed metrics · live query, not lab fixtures`
-          : 'No tenant dashboard yet — create one on the dashboard leaf. Lab fixture widgets are not copied.'
+          : 'Editor lives on the Business dashboard leaf. Lab fixture widgets are not copied.'
       }
       actions={
         <Button size="small" variant="outlined" component={NextLink} href="/dashboards" data-testid="overview-edit-dashboard">
@@ -99,14 +100,17 @@ export function OverviewHub() {
           <Typography color="text.secondary" variant="body2">
             Dashboards are not available right now. The editor at /dashboards is still reachable.
           </Typography>
-        ) : !active ? (
-          <Typography color="text.secondary" variant="body2">
-            No dashboards yet. Open Business dashboard to create one — this hub does not invent fixture KPIs.
-          </Typography>
-        ) : widgets.length === 0 ? (
-          <Typography color="text.secondary" variant="body2">
-            {active.name} has no widgets yet. Add them on /dashboards.
-          </Typography>
+        ) : !active || widgets.length === 0 ? (
+          <PanelRow
+            severity="neutral"
+            primary="Open Business dashboard"
+            secondary={
+              !active
+                ? 'No tenant dashboard yet. This hub does not invent fixture KPIs.'
+                : `${active.name} has no widgets yet.`
+            }
+            href="/dashboards"
+          />
         ) : (
           <Stack spacing={1.5}>
             {widgets.map((w) => (
@@ -217,28 +221,32 @@ export function OverviewHub() {
     </Stack>
   );
 
+  const start = <StartWorkPanel />;
+
   return (
     <Box data-testid="overview-surface">
-      <Box
-        sx={{
-          display: 'grid',
-          gap: 2,
-          gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1fr) 312px' },
-          alignItems: 'start',
-        }}
-      >
-        {attentionFirst ? (
-          <>
+      {attentionFirst ? (
+        <Stack spacing={2}>
+          {start}
+          {attention}
+          {dashboard}
+        </Stack>
+      ) : (
+        <Stack spacing={2}>
+          <Box
+            sx={{
+              display: 'grid',
+              gap: 2,
+              gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1.1fr) minmax(380px, 0.9fr)' },
+              alignItems: 'start',
+            }}
+          >
+            {start}
             {attention}
-            {dashboard}
-          </>
-        ) : (
-          <>
-            {dashboard}
-            {attention}
-          </>
-        )}
-      </Box>
+          </Box>
+          {dashboard}
+        </Stack>
+      )}
     </Box>
   );
 }

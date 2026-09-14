@@ -1,0 +1,18 @@
+{
+  "node": "N-0025",
+  "expected_revision": 1,
+  "baseline_ref": "BLN-0001",
+  "preservation": {
+    "customer_account_sell_out_gap": "brief sell_out_gap grain unchanged",
+    "pipeline_fill_pct": "inbound_open pipeline_fill_pct documentation unchanged",
+    "response_container_badge": "unchanged this node",
+    "rail_expand_state": "NAV_STORAGE_GROUP_EXPANDED localStorage contract unchanged",
+    "d0010": "Option A accepted; rail expansion and LensTabs kept; Data still four grouped tabs",
+    "d0002": "mapping-queue disposition untouched; steward-queue verb uses existing /admin/mappings",
+    "n0006": "not reopened",
+    "n0013": "not reopened",
+    "backlog_181": "rail tokens untouched",
+    "movement_execution_workspaces": "not unwound",
+    "attention_exceptions_only": "Overview Needs attention remains blotter-only; verbs live on Start work"
+  }
+}

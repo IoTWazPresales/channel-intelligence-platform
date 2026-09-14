@@ -12,11 +12,9 @@ import {
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { Suspense, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useState } from 'react';
 
 import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
-import { FundingPointerLens } from '@/features/promotions-funding/FundingPointerLens';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { apiGet, apiPost, apiPostFormData, safeDisplayError } from '@/lib/api';
 
@@ -332,29 +330,6 @@ function PaymentEvidenceImportWizard() {
   );
 }
 
-function PaymentsLensGate() {
-  const search = useSearchParams();
-  if (search.get('import') === '1') return <PaymentEvidenceImportWizard />;
-  return (
-    <FundingChrome>
-      <FundingPointerLens
-        testId="funding-payments"
-        title="Payment evidence and delivery rate"
-        description="Payment evidence links settled value to cases. Delivery rate = result ÷ estimate per case (shown on the domain header). File match rates and unmatched Case IDs live on the Case book. Steward the workbook in Import Center."
-        primary={{ label: 'Open Import Center', href: '/admin/imports?template=cpor_payment_evidence' }}
-        secondary={{
-          label: 'Payment import wizard',
-          href: '/commercial-planner/cpor-cases/payment-evidence-import?import=1',
-        }}
-      />
-    </FundingChrome>
-  );
-}
-
 export default function CporPaymentEvidenceImportPage() {
-  return (
-    <Suspense fallback={null}>
-      <PaymentsLensGate />
-    </Suspense>
-  );
+  return <PaymentEvidenceImportWizard />;
 }

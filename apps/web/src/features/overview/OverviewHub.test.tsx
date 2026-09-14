@@ -28,6 +28,16 @@ vi.mock('@/features/dashboards/DashboardWidgetCard', () => ({
   DashboardWidgetCard: ({ widget }: { widget: { title: string } }) => <div>{widget.title}</div>,
 }));
 
+vi.mock('@/features/overview/StartWorkPanel', () => ({
+  StartWorkPanel: () => (
+    <div data-testid="start-work">
+      <a href="/admin/imports?unified=1" data-testid="start-work-create-lineup">
+        Create a lineup
+      </a>
+    </div>
+  ),
+}));
+
 vi.mock('@tanstack/react-query', () => ({
   useQuery: ({ queryKey }: { queryKey: string[] }) => {
     if (queryKey[0] === 'brief') return queryByKey.brief;
@@ -86,12 +96,14 @@ describe('OverviewHub', () => {
     queryByKey.reports = { isLoading: false, isError: false, data: { items: [], count: 0 } };
   });
 
-  it('composes dashboard and attention zones from live payloads, not lab fixtures', () => {
+  it('composes start work in prime, attention exceptions, and a compact dashboard link', () => {
     renderHub();
     expect(screen.getByTestId('overview-surface')).toBeInTheDocument();
+    expect(screen.getByTestId('start-work')).toBeInTheDocument();
+    expect(screen.getByTestId('start-work-create-lineup')).toHaveAttribute('href', '/admin/imports?unified=1');
     expect(screen.getByTestId('dashboard-zone')).toBeInTheDocument();
     expect(screen.getByTestId('attention-zone')).toBeInTheDocument();
-    expect(screen.getByText(/No dashboards yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/Open Business dashboard/i)).toBeInTheDocument();
     expect(screen.queryByText(/lab fixture/i)).not.toBeNull();
     expect(screen.getByText('Cover breaches')).toBeInTheDocument();
     expect(screen.getByText('Imports applied')).toBeInTheDocument();

@@ -1,12 +1,15 @@
 'use client';
 
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
-import { Button } from '@mui/material';
+import { Button, Stack, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import NextLink from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { ReactNode } from 'react';
 
+import { dataAlsoHereItems } from '@/features/data-stewardship/dataAlsoHere';
+import { matchNavLeaf } from '@/features/shell/navPageChrome';
+import { useCurrentUser } from '@/features/shell/useCurrentUser';
 import { DomainHeader } from '@/features/workbench-ui/DomainHeader';
 import { WorkbenchCanvas } from '@/features/workbench-ui/WorkbenchCanvas';
 import { LensTabs } from '@/features/workbench-ui/controls';
@@ -46,8 +49,18 @@ export function DataChrome({
   children?: ReactNode;
 }) {
   const pathname = usePathname() || '/admin/imports';
+  const searchParams = useSearchParams();
+  const searchStr = searchParams?.toString() ? `?${searchParams.toString()}` : '';
   const router = useRouter();
   const lens = dataLensFromPath(pathname);
+  const { data: me } = useCurrentUser();
+  const role = me?.role ? String(me.role) : null;
+  const match = matchNavLeaf(pathname, searchStr);
+  const leafLabel =
+    title ??
+    (match?.group.id === 'data' && match.item.href !== '/admin/imports' ? match.item.label : undefined);
+  const tabHrefs = LENSES.map((l) => l.href);
+  const alsoHere = dataAlsoHereItems(role, tabHrefs);
   const ready = useClientReady();
   const { data: summaryData } = useQuery({
     queryKey: ['imports', 'stewardship-summary'],
@@ -76,8 +89,8 @@ export function DataChrome({
     <WorkbenchCanvas>
       <DomainHeader
         crumbs={
-          title
-            ? [{ label: DATA_TITLE, href: '/admin/imports' }, { label: title }]
+          leafLabel
+            ? [{ label: DATA_TITLE, href: '/admin/imports' }, { label: leafLabel }]
             : [{ label: DATA_TITLE }]
         }
         title={DATA_TITLE}
@@ -105,6 +118,37 @@ export function DataChrome({
         ariaLabel="Data & Stewardship"
         lenses={LENSES.map((l) => ({ value: l.value, label: l.label, count: tabCounts[l.value] }))}
       />
+      {alsoHere.length ? (
+        <Stack
+          direction="row"
+          spacing={0.75}
+          flexWrap="wrap"
+          useFlexGap
+          alignItems="center"
+          sx={{ mt: 1, mb: 0.5 }}
+          data-testid="data-also-here"
+        >
+          <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>
+            Also in this area
+          </Typography>
+          {alsoHere.map((l) => {
+            const active = match?.item.href === l.href;
+            return (
+              <Button
+                key={`${l.href}-${l.label}`}
+                size="small"
+                variant={active ? 'contained' : 'outlined'}
+                component={NextLink}
+                href={l.href}
+                sx={{ textTransform: 'none', py: 0.25 }}
+                data-testid={`data-also-here-${l.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+              >
+                {l.label}
+              </Button>
+            );
+          })}
+        </Stack>
+      ) : null}
       {children}
     </WorkbenchCanvas>
   );

@@ -1,0 +1,8 @@
+{
+  "id": "EV-N0025-IMPL",
+  "provenance": "implementation-observation",
+  "path": ".eif/audit/NS13_START_WORK_20260914/implementer-evidence.md",
+  "note": "N-0025 Start work + remaining obstruct findings; Playwright MCP; no browser_cdp; no cip writes",
+  "node": "N-0025",
+  "expected_revision": 3
+}

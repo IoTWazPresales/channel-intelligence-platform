@@ -1,0 +1,27 @@
+{
+  "id": "N-0025",
+  "title": "Make actionable work reachable: one Start work surface plus remaining obstruct findings",
+  "class": "redesign",
+  "origin": "decomposition",
+  "status": "ready",
+  "facets": ["design_experience", "ui"],
+  "risk": "R2",
+  "touches_existing": true,
+  "acceptance": "auto",
+  "depends_on": ["N-0019", "N-0024"],
+  "target_artifact_class": "high_fidelity",
+  "design_artifact_class": "high_fidelity",
+  "acceptance_criteria": [
+    "Enumerate from source, before product land, every existing entry point for: create a lineup, import sell-through (CST), import a shipping file, settle a case, work the steward queue. Surfaces: CommandPalette, capability directory, hub Workflows, headline figures, page header buttons, Import Center start cards. Record which of those five jobs can be completed end to end from which start, and where each breaks. Label VERIFIED or ASSERTED. Origin: 2026-09-13 discovery on this branch (eleven obstruct findings; N-0024 closed the five wrong-destination ones).",
+    "One Start work surface on Overview (/brief). Role-gated verbs. Every verb routes into the screen that already does the work. Do not build a parallel workflow or a second creator. Do not duplicate Attention. Attention stays exceptions-only. A clean week still shows Start work.",
+    "Close remaining obstruct findings or record why not this node. At minimum: Claims/Payments/Terms empty pointer defaults; Data in-page tabs hiding Products, Customers, duplicates, CST and gaps; Sell-through filtering by numeric ids instead of names; empty Business dashboard holding prime position on Overview while attention text clips at 312px. Do not invent a Stores grid, pin-as-widget, SKU-assumptions editor, or SettlementContainer mount.",
+    "Payments and Terms default to the existing wizard/editor (no ?import=1 / ?edit=1 gate). Claims does not grow a second importer; it routes to Import Center cpor_claim_evidence and the Case book.",
+    "Data: keep the four grouped LensTabs (D-0010 Option A). Rail-only destinations are listed in-page on Data chrome. Child pages crumb the named leaf.",
+    "Sell-through workspace: operator filters and grid show customer/product names. API filter remains id after a name pick. Read-model names are display-only joins, not stored facts.",
+    "Overview composition: Start work occupies prime. Empty Business dashboard does not. Attention remains exceptions-only and is not clipped at 312px.",
+    "Browser-verify with Playwright MCP at 1280x800; confirm Start work at 390. Do not use browser_cdp. NUMBER RULE does not apply.",
+    "Do not restructure navigation. Do not remove rail expansion or tabs. Do not unwind relocated workspaces under Movement and Execution. Do not touch D-0002, N-0006, N-0013, or BACKLOG-181. Do not consolidate column pickers or grid chrome. Do not cite a frozen design-language version or grammar number.",
+    "target_artifact_class: high_fidelity",
+    "Independent GOV-008 vs this node's implementation_run is a later session under a different run and actor. Do not complete this node in the implementation run."
+  ]
+}

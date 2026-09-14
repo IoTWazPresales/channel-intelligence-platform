@@ -15,6 +15,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.dimensions import DimCustomer, DimProduct
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.services.channel_ops_derived_stock import VELOCITY_NEAR_ZERO, weeks_of_cover_or_none
 
@@ -253,6 +254,60 @@ def _site_key(site_label: str | None) -> str | None:
     return s or None
 
 
+def _result_rows(result: Any) -> list[Any]:
+    all_fn = getattr(result, "all", None)
+    if callable(all_fn):
+        got = all_fn()
+        if isinstance(got, (list, tuple)):
+            return list(got)
+        return []
+    if isinstance(result, (list, tuple)):
+        return list(result)
+    return []
+
+
+def _attach_display_names(session: Session, items: list[dict[str, Any]]) -> None:
+    """Join dim names for display. Does not change stored CST facts or filter keys."""
+    for it in items:
+        it.setdefault("customer_code", None)
+        it.setdefault("customer_name", None)
+        it.setdefault("product_sku", None)
+        it.setdefault("product_name", None)
+        it.setdefault("sales_model_name", None)
+    if not items:
+        return
+    cids = sorted({int(i["customer_id"]) for i in items})
+    pids = sorted({int(i["product_id"]) for i in items})
+    cust: dict[int, tuple[str, str]] = {}
+    prod: dict[int, tuple[str, str, str | None]] = {}
+    try:
+        for row in _result_rows(
+            session.execute(select(DimCustomer.id, DimCustomer.code, DimCustomer.name).where(DimCustomer.id.in_(cids)))
+        ):
+            cust[int(row.id)] = (str(row.code), str(row.name))
+        for row in _result_rows(
+            session.execute(
+                select(DimProduct.id, DimProduct.sku, DimProduct.name, DimProduct.sales_model_name).where(
+                    DimProduct.id.in_(pids)
+                )
+            )
+        ):
+            prod[int(row.id)] = (
+                str(row.sku),
+                str(row.name),
+                str(row.sales_model_name) if row.sales_model_name else None,
+            )
+    except (TypeError, AttributeError):
+        return
+    for it in items:
+        c = cust.get(int(it["customer_id"]))
+        p = prod.get(int(it["product_id"]))
+        if c:
+            it["customer_code"], it["customer_name"] = c
+        if p:
+            it["product_sku"], it["product_name"], it["sales_model_name"] = p
+
+
 def load_cst_read_model(
     session: Session,
     *,
@@ -315,6 +370,7 @@ def load_cst_read_model(
     total = len(items)
     start = max(0, (page - 1) * page_size)
     page_items = items[start : start + page_size]
+    _attach_display_names(session, page_items)
 
     return {
         "items": page_items,

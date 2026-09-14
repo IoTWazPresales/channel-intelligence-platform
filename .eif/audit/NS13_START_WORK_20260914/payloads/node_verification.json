@@ -1,0 +1,10 @@
+{
+  "kind": "referent",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS13_START_WORK_20260914/implementer-evidence.md",
+    "product": "startWork.ts + named leaf defaults + dataAlsoHere + cst display names"
+  },
+  "node": "N-0025",
+  "expected_revision": 17
+}

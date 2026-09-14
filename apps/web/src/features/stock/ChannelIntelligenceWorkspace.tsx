@@ -12,14 +12,23 @@ import {
 } from '@mui/material';
 import type { ColDef } from 'ag-grid-community';
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { apiGet } from '@/lib/api';
+
+type CustomerPick = { id: number; customer_code: string; customer_name: string };
+type ProductPick = { id: number; sku: string; name: string; sales_model_name?: string | null };
 
 type IntelRow = {
   customer_id: number;
   product_id: number;
+  customer_code?: string | null;
+  customer_name?: string | null;
+  product_sku?: string | null;
+  product_name?: string | null;
+  sales_model_name?: string | null;
   site_label: string | null;
   data_state: string;
   reason: string | null;
@@ -44,28 +53,71 @@ type IntelResponse = {
   thresholds?: Record<string, unknown>;
 };
 
+function customerLabel(row: Pick<IntelRow, 'customer_id' | 'customer_code' | 'customer_name'>): string {
+  if (row.customer_name) {
+    return row.customer_code ? `${row.customer_name} (${row.customer_code})` : row.customer_name;
+  }
+  return `Customer ${row.customer_id}`;
+}
+
+function productLabel(row: Pick<IntelRow, 'product_id' | 'product_sku' | 'product_name' | 'sales_model_name'>): string {
+  const name = row.sales_model_name || row.product_name;
+  if (name) {
+    return row.product_sku ? `${name} (${row.product_sku})` : name;
+  }
+  return `Product ${row.product_id}`;
+}
+
 export function ChannelIntelligenceWorkspace() {
-  const [customerId, setCustomerId] = useState('');
-  const [productId, setProductId] = useState('');
+  const [customer, setCustomer] = useState<CustomerPick | null>(null);
+  const [product, setProduct] = useState<ProductPick | null>(null);
   const [site, setSite] = useState('');
   const [selected, setSelected] = useState<IntelRow | null>(null);
 
   const params = new URLSearchParams();
-  if (customerId.trim()) params.set('customer_id', customerId.trim());
-  if (productId.trim()) params.set('product_id', productId.trim());
+  if (customer) params.set('customer_id', String(customer.id));
+  if (product) params.set('product_id', String(product.id));
   if (site.trim()) params.set('site_label', site.trim());
   params.set('page_size', '200');
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['channel-intelligence', customerId, productId, site],
+    queryKey: ['channel-intelligence', customer?.id ?? '', product?.id ?? '', site],
     queryFn: ({ signal }) =>
       apiGet<IntelResponse>(`/api/v1/channel-intelligence?${params.toString()}`, { signal }),
   });
 
+  const fetchCustomers = useCallback(async (query: string, signal: AbortSignal) => {
+    const q = query.trim();
+    const res = await apiGet<{ items: CustomerPick[] }>(
+      `/api/v1/customers?page=1&page_size=25${q ? `&q=${encodeURIComponent(q)}` : ''}`,
+      { signal },
+    );
+    return res.items ?? [];
+  }, []);
+
+  const fetchProducts = useCallback(async (query: string, signal: AbortSignal) => {
+    const q = query.trim();
+    const res = await apiGet<{ items: ProductPick[] }>(
+      `/api/v1/products?page=1&page_size=25${q ? `&q=${encodeURIComponent(q)}` : ''}`,
+      { signal },
+    );
+    return res.items ?? [];
+  }, []);
+
   const cols = useMemo<ColDef<IntelRow>[]>(
     () => [
-      { field: 'customer_id', headerName: 'Customer', width: 100 },
-      { field: 'product_id', headerName: 'Product', width: 100 },
+      {
+        headerName: 'Customer',
+        flex: 1,
+        minWidth: 180,
+        valueGetter: (p) => (p.data ? customerLabel(p.data) : ''),
+      },
+      {
+        headerName: 'Product',
+        flex: 1.2,
+        minWidth: 200,
+        valueGetter: (p) => (p.data ? productLabel(p.data) : ''),
+      },
       { field: 'site_label', headerName: 'Site', flex: 1, minWidth: 120 },
       { field: 'data_state', headerName: 'State', width: 140 },
       {
@@ -108,21 +160,30 @@ export function ChannelIntelligenceWorkspace() {
         pricing are out of scope. Grain policy: {data?.grain_policy ?? '…'}. Sparse CST →
         insufficient_data (never false aged flags).
       </Alert>
-      <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap">
-        <TextField
-          size="small"
-          label="Customer id"
-          value={customerId}
-          onChange={(e) => setCustomerId(e.target.value)}
-          sx={{ width: 140 }}
-        />
-        <TextField
-          size="small"
-          label="Product id"
-          value={productId}
-          onChange={(e) => setProductId(e.target.value)}
-          sx={{ width: 140 }}
-        />
+      <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
+        <Box sx={{ minWidth: 220 }} data-testid="sellthrough-customer-filter">
+          <EntitySearchAutocomplete<CustomerPick>
+            label="Customer"
+            value={customer}
+            onChange={setCustomer}
+            getOptionLabel={(o) =>
+              o.customer_name ? `${o.customer_code} — ${o.customer_name}` : o.customer_code
+            }
+            fetchOptions={fetchCustomers}
+          />
+        </Box>
+        <Box sx={{ minWidth: 220 }} data-testid="sellthrough-product-filter">
+          <EntitySearchAutocomplete<ProductPick>
+            label="Product"
+            value={product}
+            onChange={setProduct}
+            getOptionLabel={(o) => {
+              const name = o.sales_model_name || o.name;
+              return name ? `${o.sku} — ${name}` : o.sku;
+            }}
+            fetchOptions={fetchProducts}
+          />
+        </Box>
         <TextField
           size="small"
           label="Site label"
@@ -153,23 +214,29 @@ export function ChannelIntelligenceWorkspace() {
       )}
       <Drawer anchor="right" open={!!selected} onClose={() => setSelected(null)}>
         <Box sx={{ width: 360, p: 2 }}>
-          <Typography variant="h6" sx={{ mb: 1 }}>
-            Factors
+          <Typography variant="h6" sx={{ mb: 0.5 }}>
+            {selected ? customerLabel(selected) : 'Factors'}
           </Typography>
           {selected ? (
-            <pre style={{ fontSize: 12, whiteSpace: 'pre-wrap' }}>
-              {JSON.stringify(
-                {
-                  data_state: selected.data_state,
-                  reason: selected.reason,
-                  weeks_of_cover_reason: selected.weeks_of_cover_reason,
-                  aged_factors: selected.aged_factors,
-                  factors: selected.factors,
-                },
-                null,
-                2,
-              )}
-            </pre>
+            <>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                {productLabel(selected)}
+                {selected.site_label ? ` · ${selected.site_label}` : ''}
+              </Typography>
+              <pre style={{ fontSize: 12, whiteSpace: 'pre-wrap' }}>
+                {JSON.stringify(
+                  {
+                    data_state: selected.data_state,
+                    reason: selected.reason,
+                    weeks_of_cover_reason: selected.weeks_of_cover_reason,
+                    aged_factors: selected.aged_factors,
+                    factors: selected.factors,
+                  },
+                  null,
+                  2,
+                )}
+              </pre>
+            </>
           ) : null}
         </Box>
       </Drawer>
