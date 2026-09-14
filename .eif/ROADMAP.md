@@ -26,3 +26,4 @@
 - N-0022 **Stock & Sell-through Sell-through and Forecasts lenses from design-lab** `complete`/`complete` (redesign)
 - N-0023 **Port BACKLOG-181 LabShell rail treatment into production** `complete`/`complete` (redesign)
 - N-0024 **Fix label-versus-destination mismatches in nav, brief signals, hub Workflows, and headline figures** `complete`/`complete` (redesign)
+- N-0025 **Make actionable work reachable: one Start work surface plus remaining obstruct findings** `in_progress`/`in_progress` (redesign)
