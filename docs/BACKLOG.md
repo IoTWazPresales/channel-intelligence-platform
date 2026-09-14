@@ -2595,3 +2595,20 @@ Exact engine invariants (do not complete around them):
 | **Behavior to retain** | RAIL_WIDTH 252, role gating, leafIsActive, chevron aria-label, badges, directory footer, production testids, label wrap. |
 | **Out of scope** | D-0002, N-0006, N-0013, Design Language v2 beyond the rail, collapsing the rail to domains-only. |
 | **TRIGGER** | ~~All eight D-0008 domains migrated and reviewed~~ — fired 2026-09-13 (N-0023). ~~Operator accept/reject D-0010~~ — accepted Option A 2026-09-13. |
+
+---
+
+## BACKLOG-182 — Payments leaf “Back to Payments lens” same-URL leftover
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-14 · N-0025 GOV-008 residual |
+| **Effort** | Trivial (delete or retarget one link) |
+| **Source** | GOV-008 `GOV008_N0025_20260914` independent review. Product `04695c1` dropped `?import=1` so `/commercial-planner/cpor-cases/payment-evidence-import` **is** the wizard. `apps/web/src/app/(app)/commercial-planner/cpor-cases/payment-evidence-import/page.tsx` still renders `Back to Payments lens` with `href` equal to that same URL. Click is a no-op. |
+| **Idea** | Remove the leftover lens chrome, or retarget it to Case book (`/commercial-planner/cpor-cases`) if a back path is still wanted. The named leaf must remain the wizard. |
+| **Why it matters / deferrable** | Operators who still remember a Payments “lens” vs wizard will think they missed a click. Not a restored empty pointer; AC4 of N-0025 still holds. Deferrable because the job (upload payment evidence) is on the page. Do not mix into N-0025 remediation (reviewer/implementer split). |
+| **What the work is** | Delete the same-URL `Button`/`Link`, or point it at Case book. Do not reintroduce `?import=1`. |
+| **Regression traps** | Do not restore the empty pointer default. Do not invent a second Payments importer. D-0008 Funding chrome stays. |
+| **Behavior to retain** | Payments named leaf = `PaymentEvidenceImportWizard`. Choose workbook / Upload & validate. `Back to cases` already exists. |
+| **Out of scope** | D-0002, N-0025 complete(), Movement/Execution, column pickers. |
+| **TRIGGER** | Next Funding/Payments chrome pass; **or** Node 3 Start-work surface work if it already opens this file; **or** Warren asks to clean residual N-0025 chrome. |
