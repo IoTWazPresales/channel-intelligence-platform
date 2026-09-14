@@ -30,7 +30,7 @@ export default function GettingStartedPage() {
       <PageHeader {...navPageChrome('/brief', { extraCrumbs: [{ label: 'Onboarding' }] })} />
       <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 720 }}>
         Sign in with your CIP account (session auth). Admins create users under{' '}
-        <Link component={NextLink} href="/admin/users" fontWeight={600}>
+        <Link component={NextLink} href="/admin/users/list" fontWeight={600}>
           Administration → Users & roles
         </Link>
         . Nav is role-gated (admin / steward / planner / viewer). After login you land on{' '}
@@ -124,7 +124,7 @@ export default function GettingStartedPage() {
                     Forecasts
                   </Link>
                   , or{' '}
-                  <Link component={NextLink} href="/lineup" fontWeight={600}>
+                  <Link component={NextLink} href="/lineup/cases" fontWeight={600}>
                     Lineup cases
                   </Link>
                   .

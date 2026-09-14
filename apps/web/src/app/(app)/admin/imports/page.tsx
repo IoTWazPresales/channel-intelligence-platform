@@ -4923,7 +4923,7 @@ function AdminImportsPageContent() {
         />
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
           Lineup bulk upsert remains on the{' '}
-          <Link component={NextLink} href="/lineup">
+          <Link component={NextLink} href="/lineup/cases">
             Lineup cases
           </Link>{' '}
           screen; this wizard focuses on constrained file imports.

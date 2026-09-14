@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { coverPairStatus, coverStatusLabel, coverStatusTone, fmtCoverInt } from './coverStatus';
+import { coverPairStatus, coverRowMatchesStatus, coverStatusLabel, coverStatusTone, fmtCoverInt } from './coverStatus';
 
 describe('coverPairStatus', () => {
   it('matches the lab Cover bands', () => {
@@ -26,5 +26,16 @@ describe('coverPairStatus', () => {
   it('formats integers in en-ZA', () => {
     expect(fmtCoverInt(64121.2)).toBe((64121).toLocaleString('en-ZA'));
     expect(fmtCoverInt(null)).toBe('—');
+  });
+
+  it('under4w filter is the union of breach and watch', () => {
+    expect(coverRowMatchesStatus('breach', 'under4w')).toBe(true);
+    expect(coverRowMatchesStatus('watch', 'under4w')).toBe(true);
+    expect(coverRowMatchesStatus('ok', 'under4w')).toBe(false);
+    expect(coverRowMatchesStatus('excess', 'under4w')).toBe(false);
+    expect(coverRowMatchesStatus(null, 'under4w')).toBe(false);
+    expect(coverRowMatchesStatus('breach', 'breach')).toBe(true);
+    expect(coverRowMatchesStatus('watch', 'breach')).toBe(false);
+    expect(coverRowMatchesStatus('breach', null)).toBe(true);
   });
 });

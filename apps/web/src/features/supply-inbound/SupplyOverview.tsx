@@ -56,7 +56,7 @@ export function SupplyOverview() {
             compact
             severity="bad"
             caption={data?.captions.eta_past_no_pod_lines}
-            onClick={() => router.push('/admin/shipment-evidence')}
+            onClick={() => router.push('/supply/shipments')}
           />
           <HeadlineFigure
             label={data?.labels.landed_pod_iso_week ?? 'Received this week'}
@@ -155,7 +155,7 @@ export function SupplyOverview() {
                           }`
                         : data?.captions.eta_past_no_pod_lines
                     }
-                    href="/admin/shipment-evidence"
+                    href="/supply/shipments"
                   />
                 ) : (
                   <Typography variant="body2" color="text.secondary" sx={{ px: 1.5, py: 1 }}>

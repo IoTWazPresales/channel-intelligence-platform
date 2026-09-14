@@ -1249,7 +1249,7 @@ export function MarketSurface() {
                       primary="Planning lineup"
                       secondary="Competing product visible beside each ranked SKU"
                       figure="Planning"
-                      onClick={() => router.push('/lineup')}
+                      onClick={() => router.push('/lineup/cases')}
                     />
                     <PanelRow
                       severity="neutral"

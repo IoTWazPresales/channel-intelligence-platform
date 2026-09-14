@@ -30,12 +30,20 @@ describe('nav role gating (D-0008 capability domains)', () => {
       'Data & Stewardship',
       'Administration',
     ]);
-    expect(hrefs).toContain('/admin/users');
+    expect(hrefs).toContain('/admin/users/list');
     expect(hrefs).toContain('/admin/sql-viewer');
     expect(hrefs).toContain('/admin/steward-audit');
     expect(hrefs).toContain('/admin/ops');
     expect(hrefs).toContain('/commercial-planner');
     expect(hrefs).toContain('/admin/imports');
+  });
+
+  it('rail Lineup cases and Users & roles point at relocated workspaces, not domain hubs', () => {
+    const hrefs = hrefsFor('admin');
+    expect(hrefs).toContain('/lineup/cases');
+    expect(hrefs).not.toContain('/lineup');
+    expect(hrefs).toContain('/admin/users/list');
+    expect(hrefs).not.toContain('/admin/users');
   });
 
   it('viewer sees overview and market evidence, not admin or planner writes', () => {
@@ -48,11 +56,11 @@ describe('nav role gating (D-0008 capability domains)', () => {
     expect(hrefs).toContain('/listing-capture?tab=registry');
     expect(hrefs).not.toContain('/dashboard');
     expect(hrefs).not.toContain('/sell-out');
-    expect(hrefs).not.toContain('/admin/users');
+    expect(hrefs).not.toContain('/admin/users/list');
     expect(hrefs).not.toContain('/admin/sql-viewer');
     expect(hrefs).not.toContain('/admin/imports');
     expect(hrefs).not.toContain('/commercial-planner');
-    expect(hrefs).not.toContain('/lineup');
+    expect(hrefs).not.toContain('/lineup/cases');
     expect(labelsFor('viewer')).not.toContain('Administration');
     expect(labelsFor('viewer')).not.toContain('Data & Stewardship');
     expect(labelsFor('viewer')).not.toContain('Planning');
@@ -63,8 +71,8 @@ describe('nav role gating (D-0008 capability domains)', () => {
     const hrefs = hrefsFor('planner');
     expect(hrefs).toContain('/commercial-planner');
     expect(hrefs).toContain('/commercial-planner/cpor-cases');
-    expect(hrefs).toContain('/lineup');
-    expect(hrefs).not.toContain('/admin/users');
+    expect(hrefs).toContain('/lineup/cases');
+    expect(hrefs).not.toContain('/admin/users/list');
     expect(hrefs).not.toContain('/admin/sql-viewer');
     expect(hrefs).not.toContain('/admin/imports');
     expect(labelsFor('planner')).toContain('Promotions & Funding');
@@ -81,7 +89,7 @@ describe('nav role gating (D-0008 capability domains)', () => {
     expect(hrefs).toContain('/admin/mappings');
     expect(hrefs).not.toContain('/admin/sql-viewer');
     expect(hrefs).not.toContain('/commercial-planner');
-    expect(hrefs).not.toContain('/admin/users');
+    expect(hrefs).not.toContain('/admin/users/list');
     expect(labelsFor('steward')).toContain('Data & Stewardship');
     expect(labelsFor('steward')).not.toContain('Planning');
     expect(labelsFor('steward')).not.toContain('Promotions & Funding');

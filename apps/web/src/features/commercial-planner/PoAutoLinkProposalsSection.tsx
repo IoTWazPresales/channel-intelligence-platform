@@ -686,7 +686,7 @@ function CaseFileChips({ proposal }: { proposal: PoAutoLinkProposal }) {
         size="small"
         variant="outlined"
         component={Link}
-        href="/lineup"
+        href="/lineup/cases"
         clickable
         label={`Case ${proposal.case_id}`}
         data-testid="po-auto-link-case-id-chip"

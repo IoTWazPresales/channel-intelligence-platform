@@ -59,7 +59,7 @@ export function PlanningOverview() {
             value={data ? fmtInt(data.cases) : '—'}
             compact
             caption={data?.captions.cases}
-            onClick={() => router.push('/commercial-planner')}
+            onClick={() => router.push('/lineup/cases')}
           />
           <HeadlineFigure
             label={data?.labels.plan_units ?? 'Plan units'}

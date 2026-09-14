@@ -112,4 +112,11 @@ describe('navPageChrome (D-0008)', () => {
     expect(matchNavLeaf('/shipping')).toBeNull();
     expect(matchNavLeaf('/stock', '?lens=inbound')).toBeNull();
   });
+
+  it('matches Lineup cases and Users & roles workspaces, not the domain hubs', () => {
+    expect(matchNavLeaf('/lineup/cases')?.item.label).toBe('Lineup cases');
+    expect(matchNavLeaf('/lineup')).toBeNull();
+    expect(matchNavLeaf('/admin/users/list')?.item.label).toBe('Users & roles');
+    expect(matchNavLeaf('/admin/users')).toBeNull();
+  });
 });

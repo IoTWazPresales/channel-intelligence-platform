@@ -199,7 +199,7 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
                 meta=f"{failed_open} jobs",
                 meta_hot=True,
                 action_label="Open steward queue",
-                action_href="/admin/imports?status=failed",
+                action_href="/admin/mappings",
                 suggested=True,
                 figures={"count": failed_open, "dsi_vintage": dsi_date},
             )
@@ -216,7 +216,7 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
                 meta="book-wide",
                 meta_hot=False,
                 action_label="Open Stock · Cover",
-                action_href="/sell-out",
+                action_href="/stock?lens=cover",
                 figures={"book_wide": True},
             )
         )
@@ -266,7 +266,7 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
                 meta=f"{cover['pairs_below_threshold']} pairs",
                 meta_hot=cover["pairs_below_threshold"] > 0,
                 action_label="Open Stock · Cover",
-                action_href="/sell-out",
+                action_href="/stock?lens=cover&status=under4w",
                 figures=cover,
             )
         )
@@ -281,8 +281,8 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
                 detail="pipeline fill % requires line-grain read model",
                 meta=f"{inbound_open} shipments",
                 meta_hot=True,
-                action_label="Open Stock · Inbound",
-                action_href="/shipping",
+                action_label="Open Supply · Shipments",
+                action_href="/supply/shipments",
                 figures={"open_shipments": inbound_open, "pipeline_fill_pct": None},
             )
         )

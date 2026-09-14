@@ -17,7 +17,9 @@ import { Panel, PanelRow } from '@/features/workbench-ui/Panel';
 import { apiGet } from '@/lib/api';
 
 import {
+  COVER_UNDER_4W_FILTER,
   coverPairStatus,
+  coverRowMatchesStatus,
   coverStatusLabel,
   coverStatusTone,
   fmtCoverInt,
@@ -114,7 +116,7 @@ export function CoverLensView() {
     () =>
       items.filter((r) => {
         const st = r.status ?? coverPairStatus(r.weeks_of_cover);
-        if (status && st !== status) return false;
+        if (!coverRowMatchesStatus(st, status)) return false;
         if (distributor && String(r.distributor_id) !== distributor) return false;
         if (family && r.family !== family) return false;
         if (product && String(r.product_id) !== product) return false;
@@ -214,6 +216,13 @@ export function CoverLensView() {
   };
 
   const chips = [
+    {
+      key: COVER_UNDER_4W_FILTER,
+      label: `Under 4w · ${data?.under_4w ?? (headlines?.breach ?? 0) + (headlines?.watch ?? 0)}`,
+      active: status === COVER_UNDER_4W_FILTER,
+      onToggle: () => setStatus(status === COVER_UNDER_4W_FILTER ? null : COVER_UNDER_4W_FILTER),
+      tone: 'danger' as const,
+    },
     {
       key: 'breach',
       label: `Under 2w · ${headlines?.breach ?? 0}`,

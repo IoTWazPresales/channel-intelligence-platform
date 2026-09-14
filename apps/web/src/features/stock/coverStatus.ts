@@ -2,6 +2,9 @@
 
 export type CoverPairStatus = 'breach' | 'watch' | 'ok' | 'excess';
 
+/** Query/filter key: union of under-2w (breach) and 2–4w (watch). Not a pair status. */
+export const COVER_UNDER_4W_FILTER = 'under4w';
+
 export function coverPairStatus(weeks: number | null | undefined): CoverPairStatus | null {
   if (weeks == null || Number.isNaN(weeks)) return null;
   if (weeks < 2) return 'breach';
@@ -26,6 +29,16 @@ export function coverStatusTone(
   if (status === 'excess') return 'info';
   if (status === 'ok') return 'success';
   return 'neutral';
+}
+
+/** True when a pair belongs in the Cover status chip / ?status= filter. */
+export function coverRowMatchesStatus(
+  pairStatus: CoverPairStatus | null | undefined,
+  filter: string | null | undefined,
+): boolean {
+  if (!filter) return true;
+  if (filter === COVER_UNDER_4W_FILTER) return pairStatus === 'breach' || pairStatus === 'watch';
+  return pairStatus === filter;
 }
 
 export function fmtCoverInt(v: number | null | undefined): string {

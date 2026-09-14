@@ -185,7 +185,7 @@ export const navGroups: NavGroup[] = [
     href: '/lineup',
     what: 'Lineup cases and plan lines per customer, readiness, line economics, PO reconciliation and rankings.',
     items: [
-      { label: 'Lineup cases', href: '/lineup', roles: PLANNER_PLUS, what: 'Customer lineup per period: assortment, pending approval, net requirement.' },
+      { label: 'Lineup cases', href: '/lineup/cases', roles: PLANNER_PLUS, what: 'Customer lineup per period: assortment, pending approval, net requirement.' },
       {
         label: 'Plans & line economics',
         href: '/commercial-planner',
@@ -323,7 +323,7 @@ export const navGroups: NavGroup[] = [
     href: '/admin/users',
     what: 'Users and roles, background operations, audited SQL access, settings.',
     items: [
-      { label: 'Users & roles', href: '/admin/users', roles: ADMIN_ONLY, what: 'admin · steward · planner · viewer.' },
+      { label: 'Users & roles', href: '/admin/users/list', roles: ADMIN_ONLY, what: 'admin · steward · planner · viewer.' },
       { label: 'Operations', href: '/admin/ops', roles: ADMIN_STEWARD, what: 'Background jobs, retries, activity feed, monitoring.' },
       { label: 'SQL viewer', href: '/admin/sql-viewer', roles: ADMIN_ONLY, what: 'Read-only, audited SQL.' },
       { label: 'Settings', href: '/settings', roles: ADMIN_ONLY, what: 'Tenant, semantic catalog overlay, mailer.' },

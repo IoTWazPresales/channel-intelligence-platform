@@ -104,6 +104,10 @@ describe('SupplyOverview', () => {
     expect(screen.getByTestId('lifecycle-bars')).toBeInTheDocument();
     expect(screen.getByTestId('proportion-bar')).toBeInTheDocument();
     expect(screen.getByText('770 Inbound shipments unreceived past ETA')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Inbound shipments unreceived past ETA/ })).toHaveAttribute(
+      'href',
+      '/supply/shipments',
+    );
     expect(screen.getByText('Shipments')).toBeInTheDocument();
     expect(screen.getByText('Receipts & POD')).toBeInTheDocument();
     expect(screen.getByTestId('capability-status-partial')).toBeInTheDocument();
