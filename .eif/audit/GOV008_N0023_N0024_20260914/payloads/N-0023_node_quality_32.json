@@ -1,0 +1,10 @@
+{
+  "dim": "a11y",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+    "summary": "Chevron aria-label expand/collapse retained; colour is not the only leaf signal (bar+weight). Keyboard not a full pass."
+  },
+  "node": "N-0023",
+  "expected_revision": 32
+}

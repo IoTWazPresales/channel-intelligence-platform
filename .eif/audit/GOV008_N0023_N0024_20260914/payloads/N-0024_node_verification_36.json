@@ -1,0 +1,10 @@
+{
+  "kind": "referent",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+    "product": "navConfig + brief_signals + hub figures"
+  },
+  "node": "N-0024",
+  "expected_revision": 36
+}

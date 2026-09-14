@@ -1,0 +1,15 @@
+{
+  "dim": "design_state_coverage",
+  "state": "pass",
+  "evidence": {
+    "states": [
+      "expanded_active",
+      "collapsed_active",
+      "sticky_pin_during_scroll",
+      "mobile_drawer_390"
+    ],
+    "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+  },
+  "node": "N-0023",
+  "expected_revision": 28
+}

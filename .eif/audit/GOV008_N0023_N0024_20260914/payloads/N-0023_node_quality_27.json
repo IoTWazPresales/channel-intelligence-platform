@@ -1,0 +1,16 @@
+{
+  "dim": "design_interaction_spec",
+  "state": "pass",
+  "evidence": {
+    "interactions": [
+      "domain_header_navigates",
+      "chevron_expand_collapse_without_navigate",
+      "leaf_bar_marks_active",
+      "collapsed_active_icon_weight_only_after_blur",
+      "sticky_pin_during_data_scroll"
+    ],
+    "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+  },
+  "node": "N-0023",
+  "expected_revision": 27
+}

@@ -1,0 +1,23 @@
+{
+  "dim": "design_execution_decisions",
+  "state": "pass",
+  "evidence": {
+    "responsive_decision": {
+      "status": "not_applicable",
+      "rationale": "Destination URLs; not a 390 named workflow this node.",
+      "evidence": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+    },
+    "visualisation_decision": {
+      "status": "applicable",
+      "rationale": "Cover under-4w is a real filled filter chip, not a relabel.",
+      "evidence": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+    },
+    "consequential_action_decision": {
+      "status": "applicable",
+      "rationale": "Clicks land on the named job. No nav restructure. D-0010 Option A kept.",
+      "evidence": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+    }
+  },
+  "node": "N-0024",
+  "expected_revision": 37
+}

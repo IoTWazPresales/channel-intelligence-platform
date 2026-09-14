@@ -1,0 +1,10 @@
+{
+  "dim": "content",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+    "summary": "No label/href/order change this node. D-0010 Option A already accepted on ledger."
+  },
+  "node": "N-0023",
+  "expected_revision": 34
+}

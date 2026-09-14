@@ -1,0 +1,23 @@
+{
+  "dim": "design_execution_decisions",
+  "state": "pass",
+  "evidence": {
+    "responsive_decision": {
+      "status": "applicable",
+      "rationale": "Verified 1280x800 vs lab and 390x844 drawer. Same tokens.",
+      "evidence": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+    },
+    "visualisation_decision": {
+      "status": "applicable",
+      "rationale": "No charts. Selection is bar+weight, not fill.",
+      "evidence": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+    },
+    "consequential_action_decision": {
+      "status": "applicable",
+      "rationale": "Rail still navigates; chevron still expands. D-0010 Option A kept.",
+      "evidence": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+    }
+  },
+  "node": "N-0023",
+  "expected_revision": 30
+}

@@ -1,0 +1,16 @@
+{
+  "dim": "design_state_coverage",
+  "state": "pass",
+  "evidence": {
+    "states": [
+      "attention_blotter",
+      "planning_hub",
+      "admin_hub",
+      "supply_hub",
+      "cover_filtered"
+    ],
+    "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+  },
+  "node": "N-0024",
+  "expected_revision": 28
+}

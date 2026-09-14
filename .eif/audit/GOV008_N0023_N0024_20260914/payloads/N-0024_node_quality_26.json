@@ -1,0 +1,11 @@
+{
+  "dim": "design_sameness_review",
+  "state": "pass",
+  "evidence": {
+    "visual_vocabulary_challenge": "Challenged whether five named fixes were the whole mismatch class. Independent enum of rail leaves, brief hrefs, hub Workflows, and headline figures. No additional live mismatch of the Lineup-cases-to-hub class. Getting-started is retired to /brief. Market Planning lineup and PO chip source-only. Path: .eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+    "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+    "decision": "align_href_to_label"
+  },
+  "node": "N-0024",
+  "expected_revision": 26
+}

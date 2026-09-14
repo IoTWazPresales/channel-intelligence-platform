@@ -1,0 +1,11 @@
+{
+  "kind": "referent",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+    "lab": "apps/web/src/design-lab/shell/LabShell.tsx",
+    "product": "apps/web/src/features/shell/CapabilityRail.tsx"
+  },
+  "node": "N-0023",
+  "expected_revision": 36
+}

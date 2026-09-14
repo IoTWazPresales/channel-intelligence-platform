@@ -1,0 +1,15 @@
+{
+  "kind": "rendered",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+    "url": "http://localhost:3000/stock?lens=cover",
+    "viewports": [
+      "desktop_1280",
+      "drawer_390"
+    ],
+    "sticky_pin": "verified_data_group_scroll"
+  },
+  "node": "N-0023",
+  "expected_revision": 35
+}

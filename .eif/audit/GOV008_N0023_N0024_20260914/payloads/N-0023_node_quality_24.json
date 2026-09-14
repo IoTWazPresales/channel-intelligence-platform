@@ -1,0 +1,17 @@
+{
+  "dim": "design_signatures",
+  "state": "pass",
+  "evidence": {
+    "signatures": [
+      "raised_expanded_header_background_paper",
+      "sticky_group_header",
+      "sticky_pin_during_scroll_data_group",
+      "no_guide_rail",
+      "leaf_3px_bar_plus_weight",
+      "collapsed_active_no_fill_after_blur"
+    ],
+    "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+  },
+  "node": "N-0023",
+  "expected_revision": 24
+}

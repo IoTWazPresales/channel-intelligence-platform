@@ -1,0 +1,17 @@
+{
+  "dim": "design_signatures",
+  "state": "pass",
+  "evidence": {
+    "signatures": [
+      "rail_lineup_cases_to_workspace",
+      "rail_users_to_list",
+      "cover_breach_to_cover_under4w",
+      "failed_imports_to_steward_queue",
+      "inbound_to_supply_shipments",
+      "systematic_enum_rail_brief_workflows_figures"
+    ],
+    "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+  },
+  "node": "N-0024",
+  "expected_revision": 24
+}

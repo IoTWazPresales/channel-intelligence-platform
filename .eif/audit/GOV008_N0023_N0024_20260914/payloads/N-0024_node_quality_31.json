@@ -1,0 +1,10 @@
+{
+  "dim": "ux",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+    "summary": "A labelled control opens the job it names. Cover under-4w chip is the union filter. Some same-class links were source-only this session."
+  },
+  "node": "N-0024",
+  "expected_revision": 31
+}

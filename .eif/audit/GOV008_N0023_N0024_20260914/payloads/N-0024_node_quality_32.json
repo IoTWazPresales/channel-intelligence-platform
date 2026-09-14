@@ -1,0 +1,10 @@
+{
+  "dim": "a11y",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+    "summary": "Workflows and attention rows remain real links. Headline figures remain buttons. Keyboard full pass not this session."
+  },
+  "node": "N-0024",
+  "expected_revision": 32
+}

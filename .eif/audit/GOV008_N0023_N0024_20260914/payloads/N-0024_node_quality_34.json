@@ -1,0 +1,10 @@
+{
+  "dim": "content",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+    "summary": "Inbound action_label Open Supply · Shipments. Failed-imports steward-queue label unchanged. Under 4w chip filled after cover-breach click."
+  },
+  "node": "N-0024",
+  "expected_revision": 34
+}

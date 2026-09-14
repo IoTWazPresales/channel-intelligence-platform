@@ -1,0 +1,11 @@
+{
+  "dim": "design_divergence",
+  "state": "pass",
+  "evidence": {
+    "benchmark": "control label names the job the href must open",
+    "decision": "fix_href_keep_ia_add_under4w_filter",
+    "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+  },
+  "node": "N-0024",
+  "expected_revision": 23
+}

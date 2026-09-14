@@ -1,0 +1,13 @@
+{
+  "dim": "design_identity_tokens",
+  "state": "pass",
+  "evidence": {
+    "tokens": {
+      "direction_name": "label equals destination",
+      "under4w": "union of breach and watch chips"
+    },
+    "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+  },
+  "node": "N-0024",
+  "expected_revision": 29
+}

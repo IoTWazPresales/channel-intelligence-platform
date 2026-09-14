@@ -1,0 +1,11 @@
+{
+  "dim": "design_divergence",
+  "state": "pass",
+  "evidence": {
+    "benchmark": "apps/web/src/design-lab/shell/LabShell.tsx Rail",
+    "decision": "port_lab_tokens_keep_production_badges_persist_footer",
+    "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+  },
+  "node": "N-0023",
+  "expected_revision": 23
+}

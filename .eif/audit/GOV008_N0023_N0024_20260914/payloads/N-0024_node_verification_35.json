@@ -1,0 +1,17 @@
+{
+  "kind": "rendered",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+    "url": "http://localhost:3000/brief",
+    "clicks": [
+      "/lineup/cases",
+      "/admin/users/list",
+      "/admin/mappings",
+      "/stock?lens=cover&status=under4w",
+      "/supply/shipments"
+    ]
+  },
+  "node": "N-0024",
+  "expected_revision": 35
+}

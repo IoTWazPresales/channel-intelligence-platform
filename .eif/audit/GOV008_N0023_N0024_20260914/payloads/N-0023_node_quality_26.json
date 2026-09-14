@@ -1,0 +1,11 @@
+{
+  "dim": "design_sameness_review",
+  "state": "pass",
+  "evidence": {
+    "visual_vocabulary_challenge": "Challenged whether production CapabilityRail is still the old selected-fill instrument. Independent 1280 measure matches LabShell: raised paper header, 3x15 r=2 bar, transparent leaf fill, 34px indent, no guide rail. Sticky pin-during-scroll verified by expanding all groups and scrolling Data. Path: .eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+    "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+    "decision": "retain_lab_rail_tokens"
+  },
+  "node": "N-0023",
+  "expected_revision": 26
+}

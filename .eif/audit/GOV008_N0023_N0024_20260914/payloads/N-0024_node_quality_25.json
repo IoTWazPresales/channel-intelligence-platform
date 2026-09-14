@@ -1,0 +1,14 @@
+{
+  "dim": "rendered_comparison",
+  "state": "pass",
+  "evidence": {
+    "artifact_class": "high_fidelity",
+    "class": "high_fidelity",
+    "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+    "product_url": "http://localhost:3000/brief",
+    "viewport": "1280x800",
+    "comparison_verdict": "label_matches_final_url_limitations_non_live_controls"
+  },
+  "node": "N-0024",
+  "expected_revision": 25
+}

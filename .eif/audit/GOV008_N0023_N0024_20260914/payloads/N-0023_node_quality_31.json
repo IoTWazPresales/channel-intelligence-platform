@@ -1,0 +1,10 @@
+{
+  "dim": "ux",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+    "summary": "Active leaf is bar+weight; expanded group reads as a container; collapsed-active is weaker after blur; Data header pins while leaves scroll under."
+  },
+  "node": "N-0023",
+  "expected_revision": 31
+}

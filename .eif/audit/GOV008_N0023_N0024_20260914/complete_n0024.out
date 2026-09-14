@@ -1,0 +1,887 @@
+
+id=PRG-20260831T145514 status=active charter=accepted rev=587
+roots {"N-0001": "rejected", "N-0002": "rejected", "N-0003": "rejected", "N-0004": "complete", "N-0005": "rejected", "N-0006": "complete", "N-0007": "complete", "N-0008": "complete", "N-0009": "complete", "N-0010": "rejected", "N-0011": "complete", "N-0012": "complete", "N-0013": "complete", "N-0014": "complete", "N-0015": "complete", "N-0016": "complete", "N-0017": "complete", "N-0018": "complete", "N-0019": "complete", "N-0020": "complete", "N-0021": "complete", "N-0022": "complete", "N-0023": "complete", "N-0024": "in_progress"}
+conservation_gaps -
+frontier -
+{
+  "id": "N-0024",
+  "parent": null,
+  "title": "Fix label-versus-destination mismatches in nav, brief signals, hub Workflows, and headline figures",
+  "class": "redesign",
+  "origin": "decomposition",
+  "status": "in_progress",
+  "stage": "validate",
+  "revision": 37,
+  "lease": {
+    "run": "GOV008_N0023_N0024_20260914",
+    "acquired_at": "2026-09-14T09:57:36Z",
+    "heartbeat_at": "2026-09-14T09:57:36Z",
+    "expires_at": "2026-09-14T13:57:36Z"
+  },
+  "depends_on": [
+    "N-0019",
+    "N-0020",
+    "N-0021"
+  ],
+  "facets": [
+    "design_experience",
+    "ui"
+  ],
+  "risk": "R2",
+  "touches_existing": true,
+  "acceptance": "auto",
+  "acceptance_state": "not_required",
+  "acceptance_criteria": [
+    "Systematic enumeration of label-versus-destination mismatches across (1) navConfig rail leaves, (2) brief/signals action_label vs action_href (Attention on /brief and Overview hub), (3) hub Workflows PanelRow hrefs, (4) headline-figure click targets. Record every instance in implementer evidence. Origin: 2026-09-13 discovery on this branch (D-0010 rail vs tabs plus live brief signals). Do not limit the node to named cases.",
+    "Cover-breach attention title grain is under 4 weeks of cover. Destination must be the Cover lens with a real under-4w filter (union of existing under-2w and 2-4w chips), not /sell-out and not Movement. soh_recon_not_run labelled Open Stock \u00b7 Cover must also open Cover (lens only).",
+    "Failed-imports signal keeps the steward-queue label; href must open the steward queue (/admin/mappings), not Import Center failed jobs.",
+    "Inbound-open signal label corrected to Supply; href is /supply/shipments with no /shipping redirect hop.",
+    "Lineup cases: rail leaf, Planning hub headline figure, and Workflows row all open /lineup/cases. Users & roles rail opens /admin/users/list, not the Administration hub. Any other enumerated mismatch of the same class is fixed in this node.",
+    "Every fix is verified by rendering the source surface, clicking the control, and confirming the final URL. Playwright MCP only. Do not use browser_cdp. NUMBER RULE does not apply (destinations, not headline values).",
+    "Do not restructure navigation. Do not remove rail expansion or tabs \u2014 D-0010 Option A is accepted. Do not unwind relocated workspaces under Movement and Execution. Do not touch D-0002, N-0006, N-0013, or BACKLOG-181. Do not consolidate column pickers or grid chrome. Do not cite a frozen design-language version or grammar number.",
+    "target_artifact_class: high_fidelity",
+    "Independent GOV-008 vs this node's implementation_run is a later session under a different run and actor. Do not complete this node in the implementation run."
+  ],
+  "baseline_ref": "BLN-0001",
+  "parity_source": [],
+  "parity_matrix": {},
+  "parity_retire_decisions": {},
+  "quality": {
+    "design_artifact_class": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "class": "high_fidelity",
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "design_divergence": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "benchmark": "control label names the job the href must open",
+        "decision": "fix_href_keep_ia_add_under4w_filter",
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "design_signatures": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "signatures": [
+          "rail_lineup_cases_to_workspace",
+          "rail_users_to_list",
+          "cover_breach_to_cover_under4w",
+          "failed_imports_to_steward_queue",
+          "inbound_to_supply_shipments",
+          "systematic_enum_rail_brief_workflows_figures"
+        ],
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "rendered_comparison": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "artifact_class": "high_fidelity",
+        "class": "high_fidelity",
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "product_url": "http://localhost:3000/brief",
+        "viewport": "1280x800",
+        "comparison_verdict": "label_matches_final_url_limitations_non_live_controls"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "design_sameness_review": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "visual_vocabulary_challenge": "Challenged whether five named fixes were the whole mismatch class. Independent enum of rail leaves, brief hrefs, hub Workflows, and headline figures. No additional live mismatch of the Lineup-cases-to-hub class. Getting-started is retired to /brief. Market Planning lineup and PO chip source-only. Path: .eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "decision": "align_href_to_label"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "design_interaction_spec": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "interactions": [
+          "click_rail_leaf",
+          "click_hub_figure",
+          "click_workflows_row",
+          "click_attention_signal",
+          "cover_under4w_chip"
+        ],
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "design_state_coverage": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "states": [
+          "attention_blotter",
+          "planning_hub",
+          "admin_hub",
+          "supply_hub",
+          "cover_filtered"
+        ],
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "design_identity_tokens": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "tokens": {
+          "direction_name": "label equals destination",
+          "under4w": "union of breach and watch chips"
+        },
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "design_execution_decisions": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "responsive_decision": {
+          "status": "na",
+          "rationale": "Destination URLs; not a 390 named workflow this node.",
+          "evidence": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+        },
+        "visualisation_decision": {
+          "status": "applicable",
+          "rationale": "Cover under-4w is a real filled filter chip, not a relabel.",
+          "evidence": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+        },
+        "consequential_action_decision": {
+          "status": "applicable",
+          "rationale": "Clicks land on the named job. No nav restructure. D-0010 Option A kept.",
+          "evidence": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+        }
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "ux": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "summary": "A labelled control opens the job it names. Cover under-4w chip is the union filter. Some same-class links were source-only this session."
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "a11y": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "summary": "Workflows and attention rows remain real links. Headline figures remain buttons. Keyboard full pass not this session."
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "rendered": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "url": "http://localhost:3000/brief",
+        "clicks": [
+          "/lineup/cases",
+          "/admin/users/list",
+          "/admin/mappings",
+          "/stock?lens=cover&status=under4w",
+          "/supply/shipments"
+        ]
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "content": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "summary": "Inbound action_label Open Supply \u00b7 Shipments. Failed-imports steward-queue label unchanged. Under 4w chip filled after cover-breach click."
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    }
+  },
+  "verification": {
+    "rendered": {
+      "state": "pass",
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008",
+      "evidence": {
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "url": "http://localhost:3000/brief",
+        "clicks": [
+          "/lineup/cases",
+          "/admin/users/list",
+          "/admin/mappings",
+          "/stock?lens=cover&status=under4w",
+          "/supply/shipments"
+        ]
+      },
+      "path": null
+    },
+    "referent": {
+      "state": "pass",
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008",
+      "evidence": {
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "product": "navConfig + brief_signals + hub figures"
+      },
+      "path": null
+    }
+  },
+  "evidence": [],
+  "blockers": [],
+  "conservation_tags": [],
+  "fingerprint": null,
+  "stage_note": "Implementer validate: enumeration + Playwright clicks for named destinations; under-4w Cover chip; inbound to Supply shipments. Independent GOV-008 not recorded. Do not complete.",
+  "debug_iterations": 0,
+  "split_into": null,
+  "deferred": null,
+  "rejected": null,
+  "preservation": {
+    "customer_account_sell_out_gap": "brief sell_out_gap signal grain unchanged; href not this noun",
+    "pipeline_fill_pct": "inbound_open still documents pipeline_fill_pct null; destination only",
+    "response_container_badge": "unchanged this node",
+    "rail_expand_state": "NAV_STORAGE_GROUP_EXPANDED localStorage contract unchanged",
+    "d0010": "Option A accepted; rail expansion and LensTabs kept",
+    "d0002": "mapping-queue disposition untouched; failed_imports href uses existing /admin/mappings",
+    "n0006": "not reopened",
+    "n0013": "not reopened",
+    "backlog_181": "rail tokens untouched",
+    "movement_execution_workspaces": "not unwound"
+  },
+  "target_artifact_class": "high_fidelity",
+  "design_artifact_class": "high_fidelity",
+  "implementation_run": "NS12_NAV_DEST_20260913",
+  "implementation_actor": "gov-001"
+}
+
+rev 588
+
+id=PRG-20260831T145514 status=active charter=accepted rev=588
+roots {"N-0001": "rejected", "N-0002": "rejected", "N-0003": "rejected", "N-0004": "complete", "N-0005": "rejected", "N-0006": "complete", "N-0007": "complete", "N-0008": "complete", "N-0009": "complete", "N-0010": "rejected", "N-0011": "complete", "N-0012": "complete", "N-0013": "complete", "N-0014": "complete", "N-0015": "complete", "N-0016": "complete", "N-0017": "complete", "N-0018": "complete", "N-0019": "complete", "N-0020": "complete", "N-0021": "complete", "N-0022": "complete", "N-0023": "complete", "N-0024": "in_progress"}
+conservation_gaps -
+frontier -
+{
+  "id": "N-0024",
+  "parent": null,
+  "title": "Fix label-versus-destination mismatches in nav, brief signals, hub Workflows, and headline figures",
+  "class": "redesign",
+  "origin": "decomposition",
+  "status": "in_progress",
+  "stage": "validate",
+  "revision": 38,
+  "lease": {
+    "run": "GOV008_N0023_N0024_20260914",
+    "acquired_at": "2026-09-14T09:57:36Z",
+    "heartbeat_at": "2026-09-14T09:57:36Z",
+    "expires_at": "2026-09-14T13:57:36Z"
+  },
+  "depends_on": [
+    "N-0019",
+    "N-0020",
+    "N-0021"
+  ],
+  "facets": [
+    "design_experience",
+    "ui"
+  ],
+  "risk": "R2",
+  "touches_existing": true,
+  "acceptance": "auto",
+  "acceptance_state": "not_required",
+  "acceptance_criteria": [
+    "Systematic enumeration of label-versus-destination mismatches across (1) navConfig rail leaves, (2) brief/signals action_label vs action_href (Attention on /brief and Overview hub), (3) hub Workflows PanelRow hrefs, (4) headline-figure click targets. Record every instance in implementer evidence. Origin: 2026-09-13 discovery on this branch (D-0010 rail vs tabs plus live brief signals). Do not limit the node to named cases.",
+    "Cover-breach attention title grain is under 4 weeks of cover. Destination must be the Cover lens with a real under-4w filter (union of existing under-2w and 2-4w chips), not /sell-out and not Movement. soh_recon_not_run labelled Open Stock \u00b7 Cover must also open Cover (lens only).",
+    "Failed-imports signal keeps the steward-queue label; href must open the steward queue (/admin/mappings), not Import Center failed jobs.",
+    "Inbound-open signal label corrected to Supply; href is /supply/shipments with no /shipping redirect hop.",
+    "Lineup cases: rail leaf, Planning hub headline figure, and Workflows row all open /lineup/cases. Users & roles rail opens /admin/users/list, not the Administration hub. Any other enumerated mismatch of the same class is fixed in this node.",
+    "Every fix is verified by rendering the source surface, clicking the control, and confirming the final URL. Playwright MCP only. Do not use browser_cdp. NUMBER RULE does not apply (destinations, not headline values).",
+    "Do not restructure navigation. Do not remove rail expansion or tabs \u2014 D-0010 Option A is accepted. Do not unwind relocated workspaces under Movement and Execution. Do not touch D-0002, N-0006, N-0013, or BACKLOG-181. Do not consolidate column pickers or grid chrome. Do not cite a frozen design-language version or grammar number.",
+    "target_artifact_class: high_fidelity",
+    "Independent GOV-008 vs this node's implementation_run is a later session under a different run and actor. Do not complete this node in the implementation run."
+  ],
+  "baseline_ref": "BLN-0001",
+  "parity_source": [],
+  "parity_matrix": {},
+  "parity_retire_decisions": {},
+  "quality": {
+    "design_artifact_class": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "class": "high_fidelity",
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "design_divergence": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "benchmark": "control label names the job the href must open",
+        "decision": "fix_href_keep_ia_add_under4w_filter",
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "design_signatures": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "signatures": [
+          "rail_lineup_cases_to_workspace",
+          "rail_users_to_list",
+          "cover_breach_to_cover_under4w",
+          "failed_imports_to_steward_queue",
+          "inbound_to_supply_shipments",
+          "systematic_enum_rail_brief_workflows_figures"
+        ],
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "rendered_comparison": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "artifact_class": "high_fidelity",
+        "class": "high_fidelity",
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "product_url": "http://localhost:3000/brief",
+        "viewport": "1280x800",
+        "comparison_verdict": "label_matches_final_url_limitations_non_live_controls"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "design_sameness_review": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "visual_vocabulary_challenge": "Challenged whether five named fixes were the whole mismatch class. Independent enum of rail leaves, brief hrefs, hub Workflows, and headline figures. No additional live mismatch of the Lineup-cases-to-hub class. Getting-started is retired to /brief. Market Planning lineup and PO chip source-only. Path: .eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "decision": "align_href_to_label"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "design_interaction_spec": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "interactions": [
+          "click_rail_leaf",
+          "click_hub_figure",
+          "click_workflows_row",
+          "click_attention_signal",
+          "cover_under4w_chip"
+        ],
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "design_state_coverage": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "states": [
+          "attention_blotter",
+          "planning_hub",
+          "admin_hub",
+          "supply_hub",
+          "cover_filtered"
+        ],
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "design_identity_tokens": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "tokens": {
+          "direction_name": "label equals destination",
+          "under4w": "union of breach and watch chips"
+        },
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "design_execution_decisions": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "responsive_decision": {
+          "status": "not_applicable",
+          "rationale": "Destination URLs; not a 390 named workflow this node.",
+          "evidence": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+        },
+        "visualisation_decision": {
+          "status": "applicable",
+          "rationale": "Cover under-4w is a real filled filter chip, not a relabel.",
+          "evidence": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+        },
+        "consequential_action_decision": {
+          "status": "applicable",
+          "rationale": "Clicks land on the named job. No nav restructure. D-0010 Option A kept.",
+          "evidence": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+        }
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "ux": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "summary": "A labelled control opens the job it names. Cover under-4w chip is the union filter. Some same-class links were source-only this session."
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "a11y": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "summary": "Workflows and attention rows remain real links. Headline figures remain buttons. Keyboard full pass not this session."
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "rendered": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "url": "http://localhost:3000/brief",
+        "clicks": [
+          "/lineup/cases",
+          "/admin/users/list",
+          "/admin/mappings",
+          "/stock?lens=cover&status=under4w",
+          "/supply/shipments"
+        ]
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "content": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "summary": "Inbound action_label Open Supply \u00b7 Shipments. Failed-imports steward-queue label unchanged. Under 4w chip filled after cover-breach click."
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    }
+  },
+  "verification": {
+    "rendered": {
+      "state": "pass",
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008",
+      "evidence": {
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "url": "http://localhost:3000/brief",
+        "clicks": [
+          "/lineup/cases",
+          "/admin/users/list",
+          "/admin/mappings",
+          "/stock?lens=cover&status=under4w",
+          "/supply/shipments"
+        ]
+      },
+      "path": null
+    },
+    "referent": {
+      "state": "pass",
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008",
+      "evidence": {
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "product": "navConfig + brief_signals + hub figures"
+      },
+      "path": null
+    }
+  },
+  "evidence": [],
+  "blockers": [],
+  "conservation_tags": [],
+  "fingerprint": null,
+  "stage_note": "Implementer validate: enumeration + Playwright clicks for named destinations; under-4w Cover chip; inbound to Supply shipments. Independent GOV-008 not recorded. Do not complete.",
+  "debug_iterations": 0,
+  "split_into": null,
+  "deferred": null,
+  "rejected": null,
+  "preservation": {
+    "customer_account_sell_out_gap": "brief sell_out_gap signal grain unchanged; href not this noun",
+    "pipeline_fill_pct": "inbound_open still documents pipeline_fill_pct null; destination only",
+    "response_container_badge": "unchanged this node",
+    "rail_expand_state": "NAV_STORAGE_GROUP_EXPANDED localStorage contract unchanged",
+    "d0010": "Option A accepted; rail expansion and LensTabs kept",
+    "d0002": "mapping-queue disposition untouched; failed_imports href uses existing /admin/mappings",
+    "n0006": "not reopened",
+    "n0013": "not reopened",
+    "backlog_181": "rail tokens untouched",
+    "movement_execution_workspaces": "not unwound"
+  },
+  "target_artifact_class": "high_fidelity",
+  "design_artifact_class": "high_fidelity",
+  "implementation_run": "NS12_NAV_DEST_20260913",
+  "implementation_actor": "gov-001"
+}
+
+rev 589
+
+id=PRG-20260831T145514 status=active charter=accepted rev=589
+roots {"N-0001": "rejected", "N-0002": "rejected", "N-0003": "rejected", "N-0004": "complete", "N-0005": "rejected", "N-0006": "complete", "N-0007": "complete", "N-0008": "complete", "N-0009": "complete", "N-0010": "rejected", "N-0011": "complete", "N-0012": "complete", "N-0013": "complete", "N-0014": "complete", "N-0015": "complete", "N-0016": "complete", "N-0017": "complete", "N-0018": "complete", "N-0019": "complete", "N-0020": "complete", "N-0021": "complete", "N-0022": "complete", "N-0023": "complete", "N-0024": "complete"}
+conservation_gaps -
+frontier -
+{
+  "id": "N-0024",
+  "parent": null,
+  "title": "Fix label-versus-destination mismatches in nav, brief signals, hub Workflows, and headline figures",
+  "class": "redesign",
+  "origin": "decomposition",
+  "status": "complete",
+  "stage": null,
+  "revision": 39,
+  "lease": null,
+  "depends_on": [
+    "N-0019",
+    "N-0020",
+    "N-0021"
+  ],
+  "facets": [
+    "design_experience",
+    "ui"
+  ],
+  "risk": "R2",
+  "touches_existing": true,
+  "acceptance": "auto",
+  "acceptance_state": "not_required",
+  "acceptance_criteria": [
+    "Systematic enumeration of label-versus-destination mismatches across (1) navConfig rail leaves, (2) brief/signals action_label vs action_href (Attention on /brief and Overview hub), (3) hub Workflows PanelRow hrefs, (4) headline-figure click targets. Record every instance in implementer evidence. Origin: 2026-09-13 discovery on this branch (D-0010 rail vs tabs plus live brief signals). Do not limit the node to named cases.",
+    "Cover-breach attention title grain is under 4 weeks of cover. Destination must be the Cover lens with a real under-4w filter (union of existing under-2w and 2-4w chips), not /sell-out and not Movement. soh_recon_not_run labelled Open Stock \u00b7 Cover must also open Cover (lens only).",
+    "Failed-imports signal keeps the steward-queue label; href must open the steward queue (/admin/mappings), not Import Center failed jobs.",
+    "Inbound-open signal label corrected to Supply; href is /supply/shipments with no /shipping redirect hop.",
+    "Lineup cases: rail leaf, Planning hub headline figure, and Workflows row all open /lineup/cases. Users & roles rail opens /admin/users/list, not the Administration hub. Any other enumerated mismatch of the same class is fixed in this node.",
+    "Every fix is verified by rendering the source surface, clicking the control, and confirming the final URL. Playwright MCP only. Do not use browser_cdp. NUMBER RULE does not apply (destinations, not headline values).",
+    "Do not restructure navigation. Do not remove rail expansion or tabs \u2014 D-0010 Option A is accepted. Do not unwind relocated workspaces under Movement and Execution. Do not touch D-0002, N-0006, N-0013, or BACKLOG-181. Do not consolidate column pickers or grid chrome. Do not cite a frozen design-language version or grammar number.",
+    "target_artifact_class: high_fidelity",
+    "Independent GOV-008 vs this node's implementation_run is a later session under a different run and actor. Do not complete this node in the implementation run."
+  ],
+  "baseline_ref": "BLN-0001",
+  "parity_source": [],
+  "parity_matrix": {},
+  "parity_retire_decisions": {},
+  "quality": {
+    "design_artifact_class": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "class": "high_fidelity",
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "design_divergence": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "benchmark": "control label names the job the href must open",
+        "decision": "fix_href_keep_ia_add_under4w_filter",
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "design_signatures": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "signatures": [
+          "rail_lineup_cases_to_workspace",
+          "rail_users_to_list",
+          "cover_breach_to_cover_under4w",
+          "failed_imports_to_steward_queue",
+          "inbound_to_supply_shipments",
+          "systematic_enum_rail_brief_workflows_figures"
+        ],
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "rendered_comparison": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "artifact_class": "high_fidelity",
+        "class": "high_fidelity",
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "product_url": "http://localhost:3000/brief",
+        "viewport": "1280x800",
+        "comparison_verdict": "label_matches_final_url_limitations_non_live_controls"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "design_sameness_review": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "visual_vocabulary_challenge": "Challenged whether five named fixes were the whole mismatch class. Independent enum of rail leaves, brief hrefs, hub Workflows, and headline figures. No additional live mismatch of the Lineup-cases-to-hub class. Getting-started is retired to /brief. Market Planning lineup and PO chip source-only. Path: .eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "decision": "align_href_to_label"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "design_interaction_spec": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "interactions": [
+          "click_rail_leaf",
+          "click_hub_figure",
+          "click_workflows_row",
+          "click_attention_signal",
+          "cover_under4w_chip"
+        ],
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "design_state_coverage": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "states": [
+          "attention_blotter",
+          "planning_hub",
+          "admin_hub",
+          "supply_hub",
+          "cover_filtered"
+        ],
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "design_identity_tokens": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "tokens": {
+          "direction_name": "label equals destination",
+          "under4w": "union of breach and watch chips"
+        },
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "design_execution_decisions": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "responsive_decision": {
+          "status": "not_applicable",
+          "rationale": "Destination URLs; not a 390 named workflow this node.",
+          "evidence": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+        },
+        "visualisation_decision": {
+          "status": "applicable",
+          "rationale": "Cover under-4w is a real filled filter chip, not a relabel.",
+          "evidence": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+        },
+        "consequential_action_decision": {
+          "status": "applicable",
+          "rationale": "Clicks land on the named job. No nav restructure. D-0010 Option A kept.",
+          "evidence": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+        }
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "ux": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "summary": "A labelled control opens the job it names. Cover under-4w chip is the union filter. Some same-class links were source-only this session."
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "a11y": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "summary": "Workflows and attention rows remain real links. Headline figures remain buttons. Keyboard full pass not this session."
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "rendered": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "url": "http://localhost:3000/brief",
+        "clicks": [
+          "/lineup/cases",
+          "/admin/users/list",
+          "/admin/mappings",
+          "/stock?lens=cover&status=under4w",
+          "/supply/shipments"
+        ]
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    },
+    "content": {
+      "required": true,
+      "state": "pass",
+      "evidence": {
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "summary": "Inbound action_label Open Supply \u00b7 Shipments. Failed-imports steward-queue label unchanged. Under 4w chip filled after cover-breach click."
+      },
+      "rationale": null,
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008"
+    }
+  },
+  "verification": {
+    "rendered": {
+      "state": "pass",
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008",
+      "evidence": {
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "url": "http://localhost:3000/brief",
+        "clicks": [
+          "/lineup/cases",
+          "/admin/users/list",
+          "/admin/mappings",
+          "/stock?lens=cover&status=under4w",
+          "/supply/shipments"
+        ]
+      },
+      "path": null
+    },
+    "referent": {
+      "state": "pass",
+      "pass_run": "GOV008_N0023_N0024_20260914",
+      "pass_actor": "gov-008",
+      "evidence": {
+        "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md",
+        "product": "navConfig + brief_signals + hub figures"
+      },
+      "path": null
+    }
+  },
+  "evidence": [],
+  "blockers": [],
+  "conservation_tags": [],
+  "fingerprint": null,
+  "stage_note": "Implementer validate: enumeration + Playwright clicks for named destinations; under-4w Cover chip; inbound to Supply shipments. Independent GOV-008 not recorded. Do not complete.",
+  "debug_iterations": 0,
+  "split_into": null,
+  "deferred": null,
+  "rejected": null,
+  "preservation": {
+    "customer_account_sell_out_gap": "brief sell_out_gap signal grain unchanged; href not this noun",
+    "pipeline_fill_pct": "inbound_open still documents pipeline_fill_pct null; destination only",
+    "response_container_badge": "unchanged this node",
+    "rail_expand_state": "NAV_STORAGE_GROUP_EXPANDED localStorage contract unchanged",
+    "d0010": "Option A accepted; rail expansion and LensTabs kept",
+    "d0002": "mapping-queue disposition untouched; failed_imports href uses existing /admin/mappings",
+    "n0006": "not reopened",
+    "n0013": "not reopened",
+    "backlog_181": "rail tokens untouched",
+    "movement_execution_workspaces": "not unwound"
+  },
+  "target_artifact_class": "high_fidelity",
+  "design_artifact_class": "high_fidelity",
+  "implementation_run": "NS12_NAV_DEST_20260913",
+  "implementation_actor": "gov-001"
+}

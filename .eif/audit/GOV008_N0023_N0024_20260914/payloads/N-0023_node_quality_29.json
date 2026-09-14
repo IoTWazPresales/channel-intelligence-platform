@@ -1,0 +1,15 @@
+{
+  "dim": "design_identity_tokens",
+  "state": "pass",
+  "evidence": {
+    "tokens": {
+      "direction_name": "LabShell rail after 130189e",
+      "leaf_bar": "3x15 r=2 primary",
+      "expanded_header": "background.paper sticky z=2",
+      "collapsed_active": "transparent after blur + primary icon + weight 600"
+    },
+    "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+  },
+  "node": "N-0023",
+  "expected_revision": 29
+}

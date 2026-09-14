@@ -1,0 +1,16 @@
+{
+  "dim": "design_interaction_spec",
+  "state": "pass",
+  "evidence": {
+    "interactions": [
+      "click_rail_leaf",
+      "click_hub_figure",
+      "click_workflows_row",
+      "click_attention_signal",
+      "cover_under4w_chip"
+    ],
+    "path": ".eif/audit/GOV008_N0023_N0024_20260914/independent-rendered-review.md"
+  },
+  "node": "N-0024",
+  "expected_revision": 27
+}
