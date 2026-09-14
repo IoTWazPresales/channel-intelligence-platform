@@ -4,7 +4,7 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last ledger pin:** `47602ff` (programme snapshot **613**). Last views pin: `a7a9b6b`. Run `NS13_START_WORK_20260914` / actor `gov-001`.
+**Last content pin:** `04695c1` (N-0025 product/docs). Last ledger pin: `47602ff` (programme snapshot **613**). Last views pin: `a7a9b6b`. Run `NS13_START_WORK_20260914` / actor `gov-001`.
 
 **Alembic (code):** `20260906_0022` (`cpor_case.intelligence_exclude`)
 
