@@ -1,0 +1,10 @@
+{
+  "kind": "referent",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS12_NAV_DEST_20260913/implementer-evidence.md",
+    "product": "navConfig + brief_signals + hub figures"
+  },
+  "node": "N-0024",
+  "expected_revision": 17
+}

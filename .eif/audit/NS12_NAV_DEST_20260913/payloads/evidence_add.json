@@ -1,0 +1,8 @@
+{
+  "id": "EV-N0024-IMPL",
+  "provenance": "implementation-observation",
+  "path": ".eif/audit/NS12_NAV_DEST_20260913/implementer-evidence.md",
+  "note": "N-0024 label vs destination; Playwright clicks; no browser_cdp; no cip writes",
+  "node": "N-0024",
+  "expected_revision": 3
+}

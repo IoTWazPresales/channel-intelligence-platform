@@ -1,0 +1,17 @@
+{
+  "node": "N-0024",
+  "expected_revision": 1,
+  "baseline_ref": "BLN-0001",
+  "preservation": {
+    "customer_account_sell_out_gap": "brief sell_out_gap signal grain unchanged; href not this noun",
+    "pipeline_fill_pct": "inbound_open still documents pipeline_fill_pct null; destination only",
+    "response_container_badge": "unchanged this node",
+    "rail_expand_state": "NAV_STORAGE_GROUP_EXPANDED localStorage contract unchanged",
+    "d0010": "Option A accepted; rail expansion and LensTabs kept",
+    "d0002": "mapping-queue disposition untouched; failed_imports href uses existing /admin/mappings",
+    "n0006": "not reopened",
+    "n0013": "not reopened",
+    "backlog_181": "rail tokens untouched",
+    "movement_execution_workspaces": "not unwound"
+  }
+}

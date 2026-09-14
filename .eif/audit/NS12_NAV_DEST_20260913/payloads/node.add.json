@@ -1,0 +1,25 @@
+{
+  "id": "N-0024",
+  "title": "Fix label-versus-destination mismatches in nav, brief signals, hub Workflows, and headline figures",
+  "class": "redesign",
+  "origin": "decomposition",
+  "status": "ready",
+  "facets": ["design_experience", "ui"],
+  "risk": "R2",
+  "touches_existing": true,
+  "acceptance": "auto",
+  "depends_on": ["N-0019", "N-0020", "N-0021"],
+  "target_artifact_class": "high_fidelity",
+  "design_artifact_class": "high_fidelity",
+  "acceptance_criteria": [
+    "Systematic enumeration of label-versus-destination mismatches across (1) navConfig rail leaves, (2) brief/signals action_label vs action_href (Attention on /brief and Overview hub), (3) hub Workflows PanelRow hrefs, (4) headline-figure click targets. Record every instance in implementer evidence. Origin: 2026-09-13 discovery on this branch (D-0010 rail vs tabs plus live brief signals). Do not limit the node to named cases.",
+    "Cover-breach attention title grain is under 4 weeks of cover. Destination must be the Cover lens with a real under-4w filter (union of existing under-2w and 2-4w chips), not /sell-out and not Movement. soh_recon_not_run labelled Open Stock · Cover must also open Cover (lens only).",
+    "Failed-imports signal keeps the steward-queue label; href must open the steward queue (/admin/mappings), not Import Center failed jobs.",
+    "Inbound-open signal label corrected to Supply; href is /supply/shipments with no /shipping redirect hop.",
+    "Lineup cases: rail leaf, Planning hub headline figure, and Workflows row all open /lineup/cases. Users & roles rail opens /admin/users/list, not the Administration hub. Any other enumerated mismatch of the same class is fixed in this node.",
+    "Every fix is verified by rendering the source surface, clicking the control, and confirming the final URL. Playwright MCP only. Do not use browser_cdp. NUMBER RULE does not apply (destinations, not headline values).",
+    "Do not restructure navigation. Do not remove rail expansion or tabs — D-0010 Option A is accepted. Do not unwind relocated workspaces under Movement and Execution. Do not touch D-0002, N-0006, N-0013, or BACKLOG-181. Do not consolidate column pickers or grid chrome. Do not cite a frozen design-language version or grammar number.",
+    "target_artifact_class: high_fidelity",
+    "Independent GOV-008 vs this node's implementation_run is a later session under a different run and actor. Do not complete this node in the implementation run."
+  ]
+}

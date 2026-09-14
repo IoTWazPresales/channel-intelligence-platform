@@ -1,0 +1,10 @@
+{
+  "dim": "content",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS12_NAV_DEST_20260913/implementer-evidence.md",
+    "summary": "Inbound action_label Open Supply \u00b7 Shipments. Failed-imports steward-queue label unchanged. Under 4w chip added."
+  },
+  "node": "N-0024",
+  "expected_revision": 15
+}
