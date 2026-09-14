@@ -25,3 +25,4 @@
 - N-0021 **Administration production migration from design-lab** `complete`/`complete` (redesign)
 - N-0022 **Stock & Sell-through Sell-through and Forecasts lenses from design-lab** `complete`/`complete` (redesign)
 - N-0023 **Port BACKLOG-181 LabShell rail treatment into production** `in_progress`/`in_progress` (redesign)
+- N-0024 **Fix label-versus-destination mismatches in nav, brief signals, hub Workflows, and headline figures** `in_progress`/`in_progress` (redesign)
