@@ -1,0 +1,18 @@
+{
+  "kind": "rendered",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0025_20260914/independent-rendered-review.md",
+    "url": "http://localhost:3000/brief",
+    "verdict": "VERIFIED_WITH_LIMITATIONS",
+    "clicks": [
+      "/admin/imports?template=customer_sell_through",
+      "/commercial-planner/cpor-cases/46",
+      "/admin/mappings",
+      "/admin/imports?unified=1",
+      "/admin/imports?template=inbound_shipments"
+    ]
+  },
+  "node": "N-0025",
+  "expected_revision": 35
+}

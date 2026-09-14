@@ -1,0 +1,24 @@
+{
+  "dim": "rendered",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0025_20260914/independent-rendered-review.md",
+    "url": "http://localhost:3000/brief",
+    "clicks": [
+      "/admin/imports?template=customer_sell_through",
+      "/commercial-planner/cpor-cases",
+      "/commercial-planner/cpor-cases/46",
+      "/admin/mappings",
+      "/admin/imports?unified=1",
+      "/admin/imports?template=inbound_shipments",
+      "/commercial-planner/cpor-cases/payment-evidence-import",
+      "/admin/customer-commercial-terms",
+      "/commercial-planner/cpor-cases/claims",
+      "/admin/imports?template=cpor_claim_evidence",
+      "/admin/products",
+      "/channel-intelligence/workspace"
+    ]
+  },
+  "node": "N-0025",
+  "expected_revision": 33
+}

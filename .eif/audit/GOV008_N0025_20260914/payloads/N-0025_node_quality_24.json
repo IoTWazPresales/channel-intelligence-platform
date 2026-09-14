@@ -1,0 +1,20 @@
+{
+  "dim": "design_signatures",
+  "state": "pass",
+  "evidence": {
+    "signatures": [
+      "overview_start_work_prime",
+      "attention_exceptions_only",
+      "empty_dashboard_compact_below",
+      "payments_terms_named_leaf_is_the_work",
+      "claims_rows_to_import_center_and_case_book",
+      "data_also_here_strip",
+      "sell_through_names_not_ids",
+      "viewer_no_start_verbs",
+      "steward_queue_empty_legacy"
+    ],
+    "path": ".eif/audit/GOV008_N0025_20260914/independent-rendered-review.md"
+  },
+  "node": "N-0025",
+  "expected_revision": 24
+}

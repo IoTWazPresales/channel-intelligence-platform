@@ -1,0 +1,11 @@
+{
+  "kind": "referent",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0025_20260914/independent-rendered-review.md",
+    "product": "startWork.ts + named leaf defaults + dataAlsoHere + cst display names",
+    "verdict": "VERIFIED_WITH_LIMITATIONS"
+  },
+  "node": "N-0025",
+  "expected_revision": 36
+}

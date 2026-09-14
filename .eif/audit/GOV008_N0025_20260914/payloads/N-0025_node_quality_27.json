@@ -1,0 +1,23 @@
+{
+  "dim": "design_interaction_spec",
+  "state": "pass",
+  "evidence": {
+    "interactions": [
+      "click_start_work_create_lineup",
+      "click_start_work_import_cst_to_choose_file",
+      "click_start_work_import_shipping",
+      "click_start_work_settle_to_confirm_dialog",
+      "click_start_work_steward_queue_empty",
+      "open_payments_wizard_default",
+      "click_payments_back_to_lens_noop",
+      "open_terms_editor_default",
+      "click_claims_import_row",
+      "open_data_also_here_products",
+      "open_sell_through_workspace_names",
+      "login_viewer_no_verbs"
+    ],
+    "path": ".eif/audit/GOV008_N0025_20260914/independent-rendered-review.md"
+  },
+  "node": "N-0025",
+  "expected_revision": 27
+}

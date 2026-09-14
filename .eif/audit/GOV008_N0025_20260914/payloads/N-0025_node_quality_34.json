@@ -1,0 +1,10 @@
+{
+  "dim": "content",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0025_20260914/independent-rendered-review.md",
+    "summary": "Start work verbs name existing jobs. Viewer copy: nothing this role can start. Steward queue copy admits per-job work stays on the import job."
+  },
+  "node": "N-0025",
+  "expected_revision": 34
+}

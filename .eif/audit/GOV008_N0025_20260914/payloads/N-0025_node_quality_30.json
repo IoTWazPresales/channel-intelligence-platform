@@ -1,0 +1,23 @@
+{
+  "dim": "design_execution_decisions",
+  "state": "pass",
+  "evidence": {
+    "responsive_decision": {
+      "status": "applicable",
+      "rationale": "Named 390 workflow: Start work remains first, above Attention.",
+      "evidence": ".eif/audit/GOV008_N0025_20260914/independent-rendered-review.md"
+    },
+    "visualisation_decision": {
+      "status": "applicable",
+      "rationale": "Attention column 431px at 1280; production grid not lab 312px.",
+      "evidence": ".eif/audit/GOV008_N0025_20260914/independent-rendered-review.md"
+    },
+    "consequential_action_decision": {
+      "status": "applicable",
+      "rationale": "Clicked verbs open existing job screens. Settle reached Confirm settlement. Steward queue cannot complete 2814 per-job candidates (D-0002). No complete() this review.",
+      "evidence": ".eif/audit/GOV008_N0025_20260914/independent-rendered-review.md"
+    }
+  },
+  "node": "N-0025",
+  "expected_revision": 30
+}

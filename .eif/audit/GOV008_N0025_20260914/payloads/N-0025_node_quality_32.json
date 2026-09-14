@@ -1,0 +1,10 @@
+{
+  "dim": "a11y",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0025_20260914/independent-rendered-review.md",
+    "summary": "Start work rows are real links. Viewer empty state is text. Keyboard/axe full pass not this session."
+  },
+  "node": "N-0025",
+  "expected_revision": 32
+}

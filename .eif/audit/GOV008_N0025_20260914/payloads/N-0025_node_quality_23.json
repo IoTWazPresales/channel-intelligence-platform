@@ -1,0 +1,12 @@
+{
+  "dim": "design_divergence",
+  "state": "pass",
+  "evidence": {
+    "benchmark": "actionable work reachable from Overview without stuffing Attention",
+    "decision": "start_work_panel_plus_named_leaf_defaults",
+    "path": ".eif/audit/GOV008_N0025_20260914/independent-rendered-review.md",
+    "verdict": "VERIFIED_WITH_LIMITATIONS"
+  },
+  "node": "N-0025",
+  "expected_revision": 23
+}

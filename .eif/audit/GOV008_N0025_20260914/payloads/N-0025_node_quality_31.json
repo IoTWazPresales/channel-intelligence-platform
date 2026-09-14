@@ -1,0 +1,10 @@
+{
+  "dim": "ux",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0025_20260914/independent-rendered-review.md",
+    "summary": "Start work begins four of five named jobs on existing screens. Viewer has no verbs (live). Steward queue is an empty legacy leaf. Payments wizard is the named leaf; Back to Payments lens is a same-URL leftover."
+  },
+  "node": "N-0025",
+  "expected_revision": 31
+}

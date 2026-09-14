@@ -1,0 +1,14 @@
+{
+  "dim": "design_identity_tokens",
+  "state": "pass",
+  "evidence": {
+    "tokens": {
+      "direction_name": "start work from overview",
+      "attention": "exceptions only",
+      "verdict": "VERIFIED_WITH_LIMITATIONS"
+    },
+    "path": ".eif/audit/GOV008_N0025_20260914/independent-rendered-review.md"
+  },
+  "node": "N-0025",
+  "expected_revision": 29
+}

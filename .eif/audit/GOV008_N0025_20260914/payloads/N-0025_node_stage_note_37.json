@@ -1,0 +1,5 @@
+{
+  "stage_note": "GOV-008 VERIFIED_WITH_LIMITATIONS. Independent clicks: CST to Choose file, settle to Confirm settlement dialog, steward queue empty (2814 per-job, D-0002). Viewer live: no verbs. Planner live UNVERIFIED (no tenant user). Payments Back to Payments lens is same-URL residual. Do not complete. Do not remediate in this run.",
+  "node": "N-0025",
+  "expected_revision": 37
+}

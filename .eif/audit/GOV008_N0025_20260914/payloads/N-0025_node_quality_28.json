@@ -1,0 +1,24 @@
+{
+  "dim": "design_state_coverage",
+  "state": "pass",
+  "evidence": {
+    "states": [
+      "overview_start_work_admin",
+      "overview_start_work_viewer_empty",
+      "empty_dashboard_compact",
+      "attention_431px",
+      "overview_390",
+      "cst_wizard_upload_step",
+      "settle_confirm_dialog",
+      "mappings_empty_legacy",
+      "payments_wizard",
+      "terms_editor",
+      "claims_rows",
+      "data_also_here",
+      "sell_through_named_filters"
+    ],
+    "path": ".eif/audit/GOV008_N0025_20260914/independent-rendered-review.md"
+  },
+  "node": "N-0025",
+  "expected_revision": 28
+}
