@@ -4,7 +4,7 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** N-0024 product/docs commit this session — hash on CONTEXT after commit. Evidence `31a7155`; views `0d608de`.
+**Last content pin:** `10d2a64` (N-0024 product/docs). Evidence `31a7155`; views `0d608de`.
 
 **Last ledger pin:** `abaf04b` D-0010. Local programme snapshot **554**, run `NS12_NAV_DEST_20260913` / actor `gov-001`. `PROGRAM.yaml` / `PROGRAM_LOG.ndjson` remain dirty (`CONTROL_PLANE_PROTECTED` on `git add`).
 
