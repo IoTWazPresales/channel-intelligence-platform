@@ -408,33 +408,6 @@ export function CaseBookSurface() {
 
   return (
     <Stack spacing={2} sx={{ mt: 2 }} data-testid="funding-case-book">
-      <Alert severity="info" variant="outlined" icon={false} sx={{ '& .MuiAlert-message': { width: '100%' } }}>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ md: 'center' }} justifyContent="space-between">
-          <Typography variant="body2">
-            <b>The Case book is the settlement half of the same lifecycle.</b> Cases here were authored
-            or approved in the Promotion planner; owed, paid and blocked describe what is still open
-            after the window — not a second object. Pending payment/CN disputes (Latest Comment) and
-            unmatched file Case IDs are listed below. Claim-sale ageing is used when claim lines exist;
-            otherwise outstanding is aged from window end (a different clock — labeled).
-          </Typography>
-          <Box sx={{ minWidth: { md: 520 } }}>
-            <LifecycleRail
-              stages={[...LIFECYCLE_STAGES]}
-              labels={STAGE_LABEL}
-              counts={counts}
-              dense
-              onSelect={(s) => {
-                if (s === 'ended' || s === 'settled') {
-                  setParams({ status: filter === s ? null : s, case: null });
-                } else {
-                  router.push(`/promotions?stage=${s}`);
-                }
-              }}
-            />
-          </Box>
-        </Stack>
-      </Alert>
-
       <HeadlineStrip columns={5}>
         <HeadlineFigure
           label="Open book total"
@@ -474,6 +447,111 @@ export function CaseBookSurface() {
           onClick={() => setParams({ status: 'proposed' })}
         />
       </HeadlineStrip>
+
+      <Stack spacing={1} data-testid="case-book-lifecycle">
+        <Typography variant="caption" color="text.secondary">
+          Settlement half of the same lifecycle — not a second object. Pending disputes and unmatched
+          Case IDs are below the grid.
+        </Typography>
+        <Box sx={{ minWidth: { md: 520 } }}>
+          <LifecycleRail
+            stages={[...LIFECYCLE_STAGES]}
+            labels={STAGE_LABEL}
+            counts={counts}
+            dense
+            onSelect={(s) => {
+              if (s === 'ended' || s === 'settled') {
+                setParams({ status: filter === s ? null : s, case: null });
+              } else {
+                router.push(`/promotions?stage=${s}`);
+              }
+            }}
+          />
+        </Box>
+      </Stack>
+
+      <ScopeBar
+        chips={[
+          ...chips,
+          ...evidenceChips,
+          {
+            key: 'test_data',
+            label: `Test data · ${data?.test_data_count ?? 0}`,
+            active: testDataOnly,
+            onToggle: () => setParams({ test_data: testDataOnly ? null : 'only', case: null }),
+            tone: 'warning' as const,
+          },
+        ]}
+        summary={`${rows.length} of ${hasGridScope ? (scopedPage?.total ?? rows.length) : (data?.total ?? rows.length)} cases${hasGridScope ? ' in this find' : ''}`}
+        onClear={() =>
+          setParams({ status: null, evidence: null, case: null, test_data: null, ...caseScopeClearPatch() })
+        }
+        clearAvailable={hasGridScope}
+        filters={<CaseScopeFilters scope={scope} onPatch={setParams} />}
+      />
+
+      <ModuleDataSection
+        isLoading={isLoading || (hasGridScope && scopedLoading)}
+        isError={isError}
+        error={error as Error | null}
+        onRetry={() => void refetch()}
+        isEmpty={rows.length === 0}
+        empty={{
+          title: 'No cases in this scope',
+          description: 'Clear the status chips or find filters, or import claim / payment evidence from the domain actions.',
+          primary: {
+            label: 'Clear scope',
+            onClick: () => setParams({ status: null, evidence: null, test_data: null, ...caseScopeClearPatch() }),
+          },
+        }}
+      >
+        {isMobile ? (
+          <Stack spacing={1} data-testid="funding-record-cards">
+            {rows.map((c) => (
+              <Card key={c.id} variant="outlined" sx={{ boxShadow: 'none' }}>
+                <CardActionArea onClick={() => setParams({ case: String(c.id) })}>
+                  <CardContent sx={{ py: 1.25, '&:last-child': { pb: 1.25 } }}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {c.customer_name} · {c.case_code}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+                          {c.promotion_type}
+                        </Typography>
+                      </Box>
+                      <StatusChip label={STAGE_LABEL[c.status as PlanStage] ?? c.status} tone={stageTone(c.status)} />
+                    </Stack>
+                    <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
+                      <Typography variant="caption">
+                        Owed <b>{fmtCompact(c.owed_amount, c.currency_code)}</b>
+                      </Typography>
+                      <Typography variant="caption">
+                        Outstanding <b>{fmtCompact(c.outstanding_amount, c.currency_code)}</b>
+                      </Typography>
+                    </Stack>
+                    {fxBlockedReason(c) ? (
+                      <Typography variant="caption" color="error.main" sx={{ display: 'block', mt: 0.5 }}>
+                        {fxBlockedReason(c)}
+                      </Typography>
+                    ) : null}
+                  </CardContent>
+                </CardActionArea>
+              </Card>
+            ))}
+          </Stack>
+        ) : (
+          <EnterpriseDataGrid<CporCaseListRow>
+            rowData={rows}
+            columnDefs={columnDefs}
+            height={420}
+            gridOptions={{
+              onRowClicked: (e: RowClickedEvent<CporCaseListRow>) => e.data && setParams({ case: String(e.data.id) }),
+              getRowId: (p) => String(p.data.id),
+            }}
+          />
+        )}
+      </ModuleDataSection>
 
       <PaymentEvidenceOverlayPanel />
 
@@ -594,89 +672,6 @@ export function CaseBookSurface() {
           </Stack>
         </Panel>
       </Box>
-
-      <ScopeBar
-        chips={[
-          ...chips,
-          ...evidenceChips,
-          {
-            key: 'test_data',
-            label: `Test data · ${data?.test_data_count ?? 0}`,
-            active: testDataOnly,
-            onToggle: () => setParams({ test_data: testDataOnly ? null : 'only', case: null }),
-            tone: 'warning' as const,
-          },
-        ]}
-        summary={`${rows.length} of ${hasGridScope ? (scopedPage?.total ?? rows.length) : (data?.total ?? rows.length)} cases${hasGridScope ? ' in this find' : ''}`}
-        onClear={() =>
-          setParams({ status: null, evidence: null, case: null, test_data: null, ...caseScopeClearPatch() })
-        }
-        clearAvailable={hasGridScope}
-        filters={<CaseScopeFilters scope={scope} onPatch={setParams} />}
-      />
-
-      <ModuleDataSection
-        isLoading={isLoading || (hasGridScope && scopedLoading)}
-        isError={isError}
-        error={error as Error | null}
-        onRetry={() => void refetch()}
-        isEmpty={rows.length === 0}
-        empty={{
-          title: 'No cases in this scope',
-          description: 'Clear the status chips or find filters, or import claim / payment evidence from the domain actions.',
-          primary: {
-            label: 'Clear scope',
-            onClick: () => setParams({ status: null, evidence: null, test_data: null, ...caseScopeClearPatch() }),
-          },
-        }}
-      >
-        {isMobile ? (
-          <Stack spacing={1} data-testid="funding-record-cards">
-            {rows.map((c) => (
-              <Card key={c.id} variant="outlined" sx={{ boxShadow: 'none' }}>
-                <CardActionArea onClick={() => setParams({ case: String(c.id) })}>
-                  <CardContent sx={{ py: 1.25, '&:last-child': { pb: 1.25 } }}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {c.customer_name} · {c.case_code}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
-                          {c.promotion_type}
-                        </Typography>
-                      </Box>
-                      <StatusChip label={STAGE_LABEL[c.status as PlanStage] ?? c.status} tone={stageTone(c.status)} />
-                    </Stack>
-                    <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
-                      <Typography variant="caption">
-                        Owed <b>{fmtCompact(c.owed_amount, c.currency_code)}</b>
-                      </Typography>
-                      <Typography variant="caption">
-                        Outstanding <b>{fmtCompact(c.outstanding_amount, c.currency_code)}</b>
-                      </Typography>
-                    </Stack>
-                    {fxBlockedReason(c) ? (
-                      <Typography variant="caption" color="error.main" sx={{ display: 'block', mt: 0.5 }}>
-                        {fxBlockedReason(c)}
-                      </Typography>
-                    ) : null}
-                  </CardContent>
-                </CardActionArea>
-              </Card>
-            ))}
-          </Stack>
-        ) : (
-          <EnterpriseDataGrid<CporCaseListRow>
-            rowData={rows}
-            columnDefs={columnDefs}
-            height={420}
-            gridOptions={{
-              onRowClicked: (e: RowClickedEvent<CporCaseListRow>) => e.data && setParams({ case: String(e.data.id) }),
-              getRowId: (p) => String(p.data.id),
-            }}
-          />
-        )}
-      </ModuleDataSection>
 
       {toastAction ? (
         <Alert severity="success" onClose={() => setToastAction(null)}>

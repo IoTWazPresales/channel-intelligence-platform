@@ -49,6 +49,16 @@ export type PaymentEvidenceOverlay = {
   match_rule: string;
 };
 
+export function paymentEvidenceRowHref(row: {
+  case_id: number | null;
+  external_case_code: string;
+}): string {
+  if (row.case_id != null) {
+    return `/commercial-planner/cpor-cases?case=${row.case_id}`;
+  }
+  return `/commercial-planner/cpor-cases/payment-evidence-import?code=${encodeURIComponent(row.external_case_code)}`;
+}
+
 export function PaymentEvidenceOverlayPanel() {
   const { data, isError, error } = useQuery({
     queryKey: ['cpor', 'payment', 'overlay'],
@@ -117,6 +127,7 @@ export function PaymentEvidenceOverlayPanel() {
                 primary={`${r.external_case_code} · ${r.payment_status ?? 'blank'}`}
                 secondary={r.latest_comment ?? ''}
                 figure={r.case_id != null ? 'linked' : 'unlinked'}
+                href={paymentEvidenceRowHref(r)}
               />
             ))}
           </Stack>
@@ -150,6 +161,7 @@ export function PaymentEvidenceOverlayPanel() {
                   primary={`${r.external_case_code} · ${evidenceBasisLabel(r.evidence_basis)}`}
                   secondary={`${r.customer_token ?? '—'} · ${r.payment_status ?? 'blank'}`}
                   figure={fmtCompact(r.amount, r.currency_code ?? 'USD')}
+                  href={paymentEvidenceRowHref(r)}
                 />
               ))}
           </Stack>

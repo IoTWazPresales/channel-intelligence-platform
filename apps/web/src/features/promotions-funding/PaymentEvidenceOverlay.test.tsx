@@ -32,6 +32,18 @@ vi.mock('@/lib/api', () => ({
         ],
         unmatched_cip_sample: ['BATCH0-SMOKE-001'],
         unmatched_file_sample: ['C19A50693'],
+        unmatched_file_rows: [
+          {
+            id: 88,
+            external_case_code: 'C19A50693',
+            case_id: null,
+            payment_status: 'closed',
+            amount: 1200,
+            currency_code: 'USD',
+            customer_token: 'HIST-CUST',
+            evidence_basis: 'source_attested',
+          },
+        ],
         paid_note:
           'Paid on the ZAR open book only sums linked evidence in the case currency. This ASUS pending report is almost all USD, so it does not move R0 paid / R6.0m outstanding.',
         not_claim_evidence: true,
@@ -57,5 +69,15 @@ describe('PaymentEvidenceOverlayPanel', () => {
     expect(screen.getByText(/overclaim 75 units/i)).toBeInTheDocument();
     expect(screen.getByTestId('cpor-payment-paid-note')).toHaveTextContent(/does not move R0 paid/i);
     expect(screen.getByText(/historical source attestation/i)).toBeInTheDocument();
+    const unmatched = screen.getByRole('link', { name: /C19A50693/i });
+    expect(unmatched).toHaveAttribute(
+      'href',
+      '/commercial-planner/cpor-cases/payment-evidence-import?code=C19A50693',
+    );
+    const pending = screen.getByRole('link', { name: /C25659655/i });
+    expect(pending).toHaveAttribute(
+      'href',
+      '/commercial-planner/cpor-cases/payment-evidence-import?code=C25659655',
+    );
   });
 });

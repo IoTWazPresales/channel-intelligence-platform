@@ -149,5 +149,9 @@ describe('CaseBookSurface', () => {
     expect(screen.getByText(/No cases are missing a rate/i)).toBeInTheDocument();
     expect(screen.queryByTestId('fx-backfill-suggest')).toBeNull();
     expect(screen.getByText(/Test data · 7/)).toBeInTheDocument();
+    const grid = screen.getByTestId('case-book-grid');
+    const overlay = screen.getByTestId('cpor-payment-overlay');
+    expect(grid.compareDocumentPosition(overlay) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByTestId('case-book-lifecycle')).toBeInTheDocument();
   });
 });

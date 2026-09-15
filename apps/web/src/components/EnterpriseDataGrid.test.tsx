@@ -44,4 +44,14 @@ describe('EnterpriseDataGrid', () => {
     );
     expect(getByTestId('ag-grid-mock').getAttribute('data-has-row-selection')).toBe('yes');
   });
+
+  it('enables community cell text selection on every grid', () => {
+    const cols: ColDef<Row>[] = [{ field: 'sku', headerName: 'SKU' }];
+    renderWithProviders(
+      <EnterpriseDataGrid<Row> rowData={[{ id: 1, sku: 'A' }]} columnDefs={cols} height={200} />,
+    );
+    const props = (globalThis as unknown as { __agGridLastProps?: Record<string, unknown> }).__agGridLastProps;
+    expect(props?.enableCellTextSelection).toBe(true);
+    expect(props?.ensureDomOrder).toBe(true);
+  });
 });

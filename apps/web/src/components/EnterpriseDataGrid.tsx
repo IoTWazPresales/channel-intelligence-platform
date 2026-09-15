@@ -51,6 +51,9 @@ function EnterpriseDataGridInner<T>(
     []
   );
 
+  const { rowSelection, onRowClicked, ...restGridOptions } = gridOptions ?? {};
+  const clickableRows = typeof onRowClicked === 'function';
+
   const shellSx = useMemo(
     () => ({
       // `&&` bumps specificity so MUI-driven variables win over ag-theme-material defaults
@@ -73,6 +76,7 @@ function EnterpriseDataGridInner<T>(
           },
         '& .ag-row': {
           backgroundColor: `${theme.palette.background.paper} !important`,
+          cursor: clickableRows ? 'pointer' : 'default',
         },
         '& .ag-cell': {
           display: 'flex',
@@ -89,11 +93,10 @@ function EnterpriseDataGridInner<T>(
         },
       },
     }),
-    [agVars, theme, height, isDark]
+    [agVars, theme, height, isDark, clickableRows]
   );
 
   const gridClass = isDark ? 'ag-theme-material-dark' : 'ag-theme-material';
-  const { rowSelection, ...restGridOptions } = gridOptions ?? {};
   const agGridInstanceKey = `${pathname ?? '_'}_${rowSelection ? 'bulk-select' : 'normal'}`;
 
   return (
@@ -108,6 +111,9 @@ function EnterpriseDataGridInner<T>(
         headerHeight={theme.density === 'compact' ? 36 : 42}
         rowHeight={theme.density === 'compact' ? 34 : 42}
         {...restGridOptions}
+        enableCellTextSelection
+        ensureDomOrder
+        onRowClicked={onRowClicked}
         rowSelection={rowSelection}
         theme="legacy"
       />
