@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 631
-  log_sha256: 32dc75ba2224c71a132dd69f8fd81dc1b1d79818dc3010c3450ef980ee0174c2
+  snapshot_revision: 655
+  log_sha256: 653425f80be6f5320810fbb0b18c2eaac4daa3b302e82154069edf0a334ebd4b
   acceptance_policy:
     milestone: operator
     root: operator
@@ -4378,6 +4378,248 @@ nodes:
     design_artifact_class: high_fidelity
     implementation_run: NS13_START_WORK_20260914
     implementation_actor: gov-001
+  N-0026:
+    id: N-0026
+    parent: null
+    title: Propose a promotion plan from customer and period on the Promotion Planner
+    class: feature
+    origin: decomposition
+    status: in_progress
+    stage: validate
+    revision: 22
+    lease: null
+    depends_on:
+    - N-0013
+    facets:
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - 'Cite D-0008 (accepted commercial amendment of N-0013): Promotion Planner authors cpor_case / cpor_case_line; CIP-proposed
+      plans use evidence that exists. Do not reopen N-0013. Competition is product-vs-SKU, not customer-vs-customer.'
+    - 'Reconcile against source before product land. Evidence: .eif/audit/NS14_PROMO_PLAN_20260914/RECONCILE.md. Label VERIFIED
+      or ASSERTED. Print current_database() first; read-only on cip.'
+    - 'Compose and create a draft case from customer_id + period_label without a seed case id. Primary product set: active
+      commercial_lineup_line for that customer and period. Fallback: that customer’s historical cpor_case_line only. Reuse
+      intake-weighted MAC, fact_demand_forecast volume, and the existing cover-weeks resolver. Write via the existing case/line
+      path with origin proposed_by_cip. Do not create a parallel planner object.'
+    - 'UNCOVERED (do not substitute a weaker signal): fact_competitor_price empty; listing/competitor not joined to lines;
+      weeks_of_cover_observation not used as target cover; uplift (zero claim evidence); other customers’ cases as proposal
+      analogues.'
+    - Promotion Planner headline strip uses planner-actionable live grains. Do not display support_bias actual/planned as
+      a percent (the 257% figure mixes a ratio the caption mislabels). NUMBER RULE on every figure.
+    - Start work verb 'Create promotion plan' (admin and planner) opens /promotions?propose=1, which opens the existing propose
+      workbench with customer + period. Do not invent a second creator. Empty New plan remains.
+    - 'Browser-verify with Playwright MCP at 1280x800: Start work verb and propose compose (read-only). Do not confirm a create
+      that writes cip. No browser_cdp. Do not run GOV-008. Do not complete this node. Do not remediate N-0025. D-0002, N-0006,
+      N-0013, D-0010, BACKLOG-181, Movement/Execution untouched. Do not cite a frozen design-language version or grammar number.'
+    baseline_ref: BLN-0001
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      ux:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+          summary: Create promotion plan opens the existing propose dialog. Customer+period compose 40 lineup lines. Create
+            draft not confirmed.
+        rationale: null
+        pass_run: NS14_PROMO_PLAN_20260914
+        pass_actor: gov-001
+      a11y:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+          summary: Start work is a real link. Propose controls are labelled. Keyboard/axe full pass not this session.
+        rationale: null
+        pass_run: NS14_PROMO_PLAN_20260914
+        pass_actor: gov-001
+      rendered:
+        required: true
+        state: pass
+        evidence: &id016
+          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+          url: http://localhost:3000/brief
+          clicks:
+          - /promotions?propose=1
+          compose:
+            customer_id: 18
+            period_label: 2026Q2
+            lines: 40
+            product_set_source: commercial_lineup_line
+            same_customer_comparables: 10
+            create_draft_clicked: false
+        rationale: null
+        pass_run: NS14_PROMO_PLAN_20260914
+        pass_actor: gov-001
+      content:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+          summary: Verb is Create promotion plan. Strip captions refuse the 257% ratio. Product-set source commercial_lineup_line
+            named in the dialog.
+        rationale: null
+        pass_run: NS14_PROMO_PLAN_20260914
+        pass_actor: gov-001
+      design_artifact_class:
+        required: false
+        state: pass
+        evidence:
+          class: high_fidelity
+          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+        rationale: null
+        pass_run: NS14_PROMO_PLAN_20260914
+        pass_actor: gov-001
+      design_divergence:
+        required: false
+        state: pass
+        evidence:
+          benchmark: propose a cpor_case from customer and period on Promotion Planner
+          decision: customer_period_compose_on_existing_planner
+          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+        rationale: null
+        pass_run: NS14_PROMO_PLAN_20260914
+        pass_actor: gov-001
+      design_signatures:
+        required: false
+        state: pass
+        evidence:
+          signatures:
+          - create_promotion_plan_start_work
+          - propose_dialog_customer_period
+          - headline_no_percent_bias
+          - same_customer_comparables_only
+          - origin_proposed_by_cip
+          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+        rationale: null
+        pass_run: NS14_PROMO_PLAN_20260914
+        pass_actor: gov-001
+      rendered_comparison:
+        required: false
+        state: pass
+        evidence:
+          artifact_class: high_fidelity
+          class: high_fidelity
+          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+          product_url: http://localhost:3000/promotions?propose=1
+          viewport: 1280x800
+          comparison_verdict: start_work_opens_existing_propose_workbench
+        rationale: null
+        pass_run: NS14_PROMO_PLAN_20260914
+        pass_actor: gov-001
+      design_sameness_review:
+        required: false
+        state: pass
+        evidence:
+          visual_vocabulary_challenge: 'Challenged a second creator and a 257% budget-reservation percent. Propose stays on
+            Promotion Planner. Strip shows counts and USD, not a ratio. Path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md'
+          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+          decision: one_propose_workbench_on_planner
+        rationale: null
+        pass_run: NS14_PROMO_PLAN_20260914
+        pass_actor: gov-001
+      design_interaction_spec:
+        required: false
+        state: pass
+        evidence:
+          interactions:
+          - click_start_work_create_promotion_plan
+          - select_customer_and_period
+          - propose_from_evidence_compose
+          - do_not_confirm_create_draft
+          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+        rationale: null
+        pass_run: NS14_PROMO_PLAN_20260914
+        pass_actor: gov-001
+      design_state_coverage:
+        required: false
+        state: pass
+        evidence:
+          states:
+          - overview_create_promotion_plan
+          - propose_dialog_empty
+          - propose_dialog_40_lineup_lines
+          - planner_strip_usd_not_percent
+          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+        rationale: null
+        pass_run: NS14_PROMO_PLAN_20260914
+        pass_actor: gov-001
+      design_identity_tokens:
+        required: false
+        state: pass
+        evidence:
+          tokens:
+            direction_name: create promotion plan
+            object: cpor_case
+          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+        rationale: null
+        pass_run: NS14_PROMO_PLAN_20260914
+        pass_actor: gov-001
+      design_execution_decisions:
+        required: false
+        state: pass
+        evidence:
+          responsive_decision:
+            status: applicable
+            rationale: 'Named 1280 workflow: Start work verb to propose dialog.'
+            evidence: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+          visualisation_decision:
+            status: applicable
+            rationale: Strip uses case counts and USD; does not show actual/planned as a percent.
+            evidence: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+          consequential_action_decision:
+            status: applicable
+            rationale: Compose is GET. Create draft not confirmed (cip write). Existing case/line path.
+            evidence: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+        rationale: null
+        pass_run: NS14_PROMO_PLAN_20260914
+        pass_actor: gov-001
+    verification:
+      rendered:
+        state: pass
+        pass_run: NS14_PROMO_PLAN_20260914
+        pass_actor: gov-001
+        evidence: *id016
+        path: null
+      referent:
+        state: pass
+        pass_run: NS14_PROMO_PLAN_20260914
+        pass_actor: gov-001
+        evidence:
+          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+          product: promo_plan_builder.py + PromoPlanBuilderPanel + startWork create-promo-plan
+        path: null
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: 'Implementer validate: customer+period compose on Promotion Planner (40 commercial_lineup_line rows, Computer
+      Mania 2026Q2). Start work Create promotion plan. No 257% on the strip. Create draft not confirmed. Independent GOV-008
+      not recorded. Do not complete.'
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation:
+      d0008: accepted commercial amendment; Promotion Planner authors cpor_case
+      n0013: not reopened
+      d0002: mapping-queue disposition untouched
+      n0006: not reopened
+      d0010: Option A untouched
+      n0025: not remediated; Start work verb added only
+      backlog_181: rail tokens untouched
+      movement_execution_workspaces: not unwound
+      product_competition_only: proposal must not rank other customers’ cases
+    target_artifact_class: null
+    design_artifact_class: high_fidelity
+    implementation_run: NS14_PROMO_PLAN_20260914
+    implementation_actor: gov-001
 decisions:
   D-0001:
     id: D-0001
@@ -4664,6 +4906,12 @@ evidence:
     path: .eif/audit/NS13_START_WORK_20260914/implementer-evidence.md
     tree_hash: null
     note: N-0025 Start work + remaining obstruct findings; Playwright MCP; no browser_cdp; no cip writes
+  EV-N0026-IMPL:
+    id: EV-N0026-IMPL
+    provenance: implementation-observation
+    path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+    tree_hash: null
+    note: N-0026 propose from customer+period; Playwright 1280 compose 40 lineup lines; no cip write; no GOV-008
 baselines:
   BLN-0001:
     id: BLN-0001
