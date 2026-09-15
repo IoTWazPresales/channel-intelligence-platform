@@ -2751,5 +2751,113 @@ Exact engine invariants (do not complete around them):
 | **Out of scope** | N-0028 Start work cards; Node C Case book. |
 | **TRIGGER** | Operator asks to create a lineup without uploading a file, **or** CurrentLineupSection empty-draft is used as a daily path. |
 
+---
+
+## BACKLOG-191 — Design the settlement workspace at `/cpor-cases/<id>`
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-15 · N-0029 UNCOVERED |
+| **Effort** | Large |
+| **Source** | N-0029 recon `.eif/audit/NS17_GRID_CASEBOOK_20260915/RECONCILE.md`. `cpor-cases/[id]/page.tsx` mounts `CporCaseWorkspace`. Lab book lens uses `EntityContextPanel` only. |
+| **Resume-context** | There is no lab settlement-desk composition to migrate. Design the desk, then implement. Case book drawer (`?case=`) stays the list-side inspect. Do not treat N-0029 grid-first as the desk. |
+| **Idea** | Give `/commercial-planner/cpor-cases/<id>` a designed Promotions & Funding composition instead of the pre-lab `CporCaseWorkspace` stack. |
+| **Why it matters / deferrable** | Start work “Settle a case” still completes on this desk. Deferrable because the book + drawer already inspect a case without opening the desk; N-0029 did not invent a lab clone. |
+| **What the work is** | Independent design against live settle/claim/payment panels; then a coherent land. Do not copy `CporCaseWorkspace` into design-lab as a fake migrate. |
+| **Regression traps** | Exact Case ID only. Do not auto-create `cpor_case` from unmatched payment tokens. FLAG ≠ BLOCK. Do not reopen N-0013 / D-0008. |
+| **Behavior to retain** | Case book list + drawer; payment-evidence import steward. |
+| **Out of scope** | D-0002; Movement/Execution; N-0025 remediation. |
+| **TRIGGER** | Operator opens `/cpor-cases/<id>` as the daily settle job and asks for the same composition as Case book / Promotion Planner. |
+
+---
+
+## BACKLOG-192 — One column picker for every `EnterpriseDataGrid` host
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-15 · N-0029 enumerated, not implemented |
+| **Effort** | Medium |
+| **Source** | N-0029 recon. `MasterColumnPickerDialog` (masters + CST aliases) vs `ColumnSelectorModal` (commercial-planner). |
+| **Resume-context** | Grid widget is already one file. Picker is host chrome. Do not fold commercial-planner groups into admin master groups without a mapping. |
+| **Idea** | One picker contract mounted by hosts that need column show/hide, instead of two dialogs. |
+| **Why it matters / deferrable** | Operators learn two pickers. Deferrable because each picker works on its surface; N-0029 landed clipboard in the wrapper instead. |
+| **What the work is** | Extract a generic picker or adapt one implementation; migrate the other. |
+| **Regression traps** | Do not drop bulk-select on masters. Do not put planner-only columns on product master. |
+| **Behavior to retain** | `MasterDataGridShell` URL paging; commercial-planner localStorage column keys. |
+| **Out of scope** | AG Grid Enterprise. |
+| **TRIGGER** | Next change to either picker, **or** operator asks for the same column UI on Case book / lineup. |
+
+---
+
+## BACKLOG-193 — AG Grid range selection and Excel export
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-15 · N-0029 UNCOVERED |
+| **Effort** | Medium + license |
+| **Source** | N-0029 recon. `EnterpriseDataGrid` registers `AllCommunityModule` only. No `ag-grid-enterprise` in `apps/web`. |
+| **Resume-context** | Community clipboard is native cell text selection (N-0029). Range and Excel need the Enterprise module and a license. |
+| **Idea** | If operators need Excel/range copy, add the Enterprise module in one wrapper — not per grid. |
+| **Why it matters / deferrable** | Name “EnterpriseDataGrid” already implies it. Deferrable because text selection covers copy-from-cell without a license change. |
+| **What the work is** | License decision; register Enterprise modules in `EnterpriseDataGrid` only; do not import `AgGridReact` elsewhere. |
+| **Regression traps** | Do not add a second AgGrid wrapper. Do not enable range selection in a way that blocks row-click stewards. |
+| **Behavior to retain** | Community grids keep working if license is declined. |
+| **Out of scope** | Unifying column pickers (BACKLOG-192). |
+| **TRIGGER** | Operator requires Excel export or cell-range copy, **or** an AG Grid Enterprise license is accepted. |
+
+---
+
+## BACKLOG-194 — Lineup plan-grid ApprovalBadge leftover
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-15 · N-0028 routed; N-0029 did not take consumer renderers |
+| **Effort** | Small |
+| **Source** | `LineupPlanGrid.tsx` `ApprovalBadge` IBM Plex Mono / hex colours. N-0029 recon. |
+| **Resume-context** | N-0028 replaced Lineup cases chrome with HeadlineStrip/ScopeBar. Badge is a cell renderer, not `EnterpriseDataGrid`. Use `StatusChip`. |
+| **Idea** | Replace the leftover N-0009 approval badge with the same chip the rest of Promotions/Planning uses. |
+| **Why it matters / deferrable** | Visual leftover on an otherwise migrated leaf. Deferrable because approval still works. |
+| **What the work is** | Swap `ApprovalBadge` for `StatusChip`; keep approve/reject actions. |
+| **Regression traps** | Do not revive hardcoded 26Q3 chips. Do not treat pending as blocked. |
+| **Behavior to retain** | PATCH approval_status; pending ScopeBar filter. |
+| **Out of scope** | Movement/Execution; Cover `?product=` (BACKLOG-189). |
+| **TRIGGER** | Next LineupPlanGrid visual change, **or** operator flags the badge as off-composition. |
+
+---
+
+## BACKLOG-195 — Explanatory chrome above the working grid on Import Center and Market
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-15 · N-0029 enumerated Case book only |
+| **Effort** | Medium per surface |
+| **Source** | N-0029 recon chrome-below-fold table. Case book was the coherent subset. |
+| **Resume-context** | Same rule as Case book: HeadlineStrip + ScopeBar + grid first; essays/overlays below. Do not copy a second Alert-first pattern. |
+| **Idea** | Push working tables above the fold on Import Center and Market listings where explanatory panels currently sit first. |
+| **Why it matters / deferrable** | Same failure class as Case book. Deferrable because those surfaces already complete their jobs; N-0029 closed the named Case book instance. |
+| **What the work is** | Per surface: list chrome vs working content; reorder without dropping required figures. |
+| **Regression traps** | Do not hide FLAG diagnostics. Do not auto-apply stewards. |
+| **Behavior to retain** | Existing import/market engines. |
+| **Out of scope** | Settlement desk (BACKLOG-191). |
+| **TRIGGER** | Operator reports Import Center or Market listings hide the grid below explanatory chrome. |
+
+---
+
+## BACKLOG-196 — Payment-evidence import consumes `?code=`
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-15 · N-0029 landed the href; page does not read it |
+| **Effort** | Small |
+| **Source** | N-0029 Playwright: click unmatched `C19A50693` → `/commercial-planner/cpor-cases/payment-evidence-import?code=C19A50693`. Page has no `useSearchParams`. |
+| **Resume-context** | Href is `paymentEvidenceRowHref`. Do not mint `cpor_case`. Exact Case ID only. Filter or highlight the existing candidate/token list. |
+| **Idea** | Honour `?code=` on the payment-evidence steward so the unmatched Case book click lands on that token. |
+| **Why it matters / deferrable** | Click already reaches the right steward. Deferrable because the job can be finished by searching on that page. |
+| **What the work is** | Read `code` from the URL; scope the candidate list or pre-fill search. |
+| **Regression traps** | No fuzzy match. No auto-create. FLAG ≠ BLOCK. |
+| **Behavior to retain** | Profile-driven payment evidence import; unmatched stays reviewable. |
+| **Out of scope** | Settlement workspace; D-0002. |
+| **TRIGGER** | Operator clicks an unmatched Case ID and expects that code selected on the import steward. |
+
 
 
