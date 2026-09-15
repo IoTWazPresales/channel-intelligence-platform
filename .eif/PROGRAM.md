@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 678
+**Snapshot revision:** 701
 
 ## Outcome (verbatim)
 
@@ -49,3 +49,4 @@ _none_
 | N-0025 | Make actionable work reachable: one Start work surface plus remaining obstruct findings | redesign | in_progress | in_progress | yes |  | full loop |
 | N-0026 | Propose a promotion plan from customer and period on the Promotion Planner | feature | in_progress | in_progress | yes |  | full loop |
 | N-0027 | Steward queue grouped by failure type, routing into existing engines | feature | in_progress | in_progress | yes |  | full loop |
+| N-0028 | Start work cards and Lineup cases on the lab composition | feature | in_progress | in_progress | yes |  | full loop |
