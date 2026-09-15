@@ -1,0 +1,10 @@
+{
+  "dim": "ux",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "summary": "GOV-008: HEAD Start work is outlined Import Center cards. Live dirty tree wraps Panel/PanelRow (FAIL vs no-wrapper AC). Lineup cases HeadlineStrip+ScopeBar+grid 7309/1647 SQL-backed. Do not complete."
+  },
+  "node": "N-0028",
+  "expected_revision": 31
+}

@@ -1,0 +1,14 @@
+{
+  "dim": "design_signatures",
+  "state": "pass",
+  "evidence": {
+    "signatures": [
+      "head_outlined_cards",
+      "live_panel_wrapper",
+      "lineup_headline_scope_grid"
+    ],
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md"
+  },
+  "node": "N-0028",
+  "expected_revision": 24
+}

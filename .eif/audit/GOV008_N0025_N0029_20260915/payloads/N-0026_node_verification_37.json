@@ -1,0 +1,11 @@
+{
+  "kind": "referent",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "product": "promo_plan_builder.py + propose dialog",
+    "verdict": "VERIFIED"
+  },
+  "node": "N-0026",
+  "expected_revision": 37
+}

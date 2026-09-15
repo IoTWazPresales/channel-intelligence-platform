@@ -1,0 +1,15 @@
+{
+  "dim": "design_state_coverage",
+  "state": "pass",
+  "evidence": {
+    "states": [
+      "admin_start_work",
+      "viewer_empty",
+      "overview_390",
+      "cst_choose_file"
+    ],
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md"
+  },
+  "node": "N-0025",
+  "expected_revision": 46
+}

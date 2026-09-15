@@ -1,0 +1,23 @@
+{
+  "dim": "design_execution_decisions",
+  "state": "pass",
+  "evidence": {
+    "responsive_decision": {
+      "status": "applicable",
+      "rationale": "Playwright 1280x800; N-0025 also 390x844.",
+      "evidence": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md"
+    },
+    "visualisation_decision": {
+      "status": "applicable",
+      "rationale": "NUMBER RULE on cip; no figure rewritten to match UI.",
+      "evidence": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md"
+    },
+    "consequential_action_decision": {
+      "status": "applicable",
+      "rationale": "No cip writes. Create draft / Apply / upload not confirmed.",
+      "evidence": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md"
+    }
+  },
+  "node": "N-0028",
+  "expected_revision": 30
+}

@@ -1,0 +1,11 @@
+{
+  "dim": "design_sameness_review",
+  "state": "pass",
+  "evidence": {
+    "visual_vocabulary_challenge": "Challenged stuffing verbs into Attention. Independent live clicks opened existing screens. Steward queue is no longer an empty legacy leaf on the running tree. Path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "decision": "VERIFIED_WITH_LIMITATIONS"
+  },
+  "node": "N-0025",
+  "expected_revision": 44
+}

@@ -1,0 +1,13 @@
+{
+  "dim": "design_interaction_spec",
+  "state": "pass",
+  "evidence": {
+    "interactions": [
+      "click_import_a_lineup",
+      "open_lineup_cases"
+    ],
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md"
+  },
+  "node": "N-0028",
+  "expected_revision": 27
+}

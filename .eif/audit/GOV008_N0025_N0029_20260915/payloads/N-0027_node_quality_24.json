@@ -1,0 +1,14 @@
+{
+  "dim": "design_signatures",
+  "state": "pass",
+  "evidence": {
+    "signatures": [
+      "group_by_entity_type",
+      "failed_imports_to_import_center",
+      "live_click_resolve_workspace_dirty_tree"
+    ],
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md"
+  },
+  "node": "N-0027",
+  "expected_revision": 24
+}

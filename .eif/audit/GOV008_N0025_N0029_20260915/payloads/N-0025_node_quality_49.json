@@ -1,0 +1,10 @@
+{
+  "dim": "ux",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "summary": "GOV-008 this run: Start work on /brief routes existing jobs; viewer live has no verbs; steward queue lists work (prior empty-leaf leftover closed). Planner live UNVERIFIED (no tenant user). Payments Back to Payments lens leftover. Dirty tree not this node."
+  },
+  "node": "N-0025",
+  "expected_revision": 49
+}

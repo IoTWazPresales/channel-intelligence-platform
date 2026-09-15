@@ -1,0 +1,17 @@
+{
+  "dim": "design_signatures",
+  "state": "pass",
+  "evidence": {
+    "signatures": [
+      "overview_start_work_prime",
+      "viewer_no_start_verbs",
+      "cst_choose_file_after_provider",
+      "steward_queue_lists_work",
+      "payments_wizard_default",
+      "terms_editor_default"
+    ],
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md"
+  },
+  "node": "N-0025",
+  "expected_revision": 42
+}

@@ -1,0 +1,14 @@
+{
+  "dim": "rendered",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "url": "http://localhost:3000/promotions?propose=1",
+    "verdict": "VERIFIED",
+    "clicks": [
+      "/promotions?propose=1"
+    ]
+  },
+  "node": "N-0026",
+  "expected_revision": 34
+}

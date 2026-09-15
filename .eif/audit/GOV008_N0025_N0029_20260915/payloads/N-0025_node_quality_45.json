@@ -1,0 +1,18 @@
+{
+  "dim": "design_interaction_spec",
+  "state": "pass",
+  "evidence": {
+    "interactions": [
+      "click_import_a_lineup",
+      "click_import_sell_through_to_choose_file",
+      "click_import_shipping",
+      "click_settle_to_case_book",
+      "click_steward_queue",
+      "login_viewer_no_verbs",
+      "overview_390"
+    ],
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md"
+  },
+  "node": "N-0025",
+  "expected_revision": 45
+}

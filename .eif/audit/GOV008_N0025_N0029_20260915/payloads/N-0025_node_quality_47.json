@@ -1,0 +1,13 @@
+{
+  "dim": "design_identity_tokens",
+  "state": "pass",
+  "evidence": {
+    "tokens": {
+      "verdict": "VERIFIED_WITH_LIMITATIONS",
+      "node": "N-0025"
+    },
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md"
+  },
+  "node": "N-0025",
+  "expected_revision": 47
+}

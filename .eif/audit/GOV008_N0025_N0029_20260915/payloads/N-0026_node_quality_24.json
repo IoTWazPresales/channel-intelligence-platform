@@ -1,0 +1,12 @@
+{
+  "dim": "design_divergence",
+  "state": "pass",
+  "evidence": {
+    "benchmark": "N-0026",
+    "decision": "VERIFIED",
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "verdict": "VERIFIED"
+  },
+  "node": "N-0026",
+  "expected_revision": 24
+}

@@ -1,0 +1,11 @@
+{
+  "dim": "design_sameness_review",
+  "state": "pass",
+  "evidence": {
+    "visual_vocabulary_challenge": "Challenged lab Alert-first Case book order. Product grid is above the fold. Unfiltered ?code= landing is not an acceptable follow-through. Path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "decision": "VERIFIED_WITH_LIMITATIONS"
+  },
+  "node": "N-0029",
+  "expected_revision": 26
+}

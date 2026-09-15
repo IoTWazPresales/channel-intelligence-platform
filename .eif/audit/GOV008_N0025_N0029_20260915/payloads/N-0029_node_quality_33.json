@@ -1,0 +1,14 @@
+{
+  "dim": "rendered",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "url": "http://localhost:3000/commercial-planner/cpor-cases",
+    "verdict": "VERIFIED_WITH_LIMITATIONS",
+    "clicks": [
+      "/commercial-planner/cpor-cases/payment-evidence-import?code=C19A50693"
+    ]
+  },
+  "node": "N-0029",
+  "expected_revision": 33
+}

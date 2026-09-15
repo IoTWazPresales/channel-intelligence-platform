@@ -1,0 +1,5 @@
+{
+  "stage_note": "GOV-008 this run: Start work on /brief routes existing jobs; viewer live has no verbs; steward queue lists work (prior empty-leaf leftover closed). Planner live UNVERIFIED (no tenant user). Payments Back to Payments lens leftover. Dirty tree not this node. Complete.",
+  "node": "N-0025",
+  "expected_revision": 56
+}

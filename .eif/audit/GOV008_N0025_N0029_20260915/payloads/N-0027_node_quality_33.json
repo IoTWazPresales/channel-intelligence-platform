@@ -1,0 +1,15 @@
+{
+  "dim": "rendered",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "url": "http://localhost:3000/admin/mappings",
+    "verdict": "VERIFIED_WITH_LIMITATIONS",
+    "clicks": [
+      "/admin/mappings?workspace=resolve&job=96",
+      "/admin/imports?jobStatus=failed"
+    ]
+  },
+  "node": "N-0027",
+  "expected_revision": 33
+}

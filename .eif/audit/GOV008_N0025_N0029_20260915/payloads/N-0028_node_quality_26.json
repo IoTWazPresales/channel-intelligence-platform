@@ -1,0 +1,11 @@
+{
+  "dim": "design_sameness_review",
+  "state": "pass",
+  "evidence": {
+    "visual_vocabulary_challenge": "Challenged a Panel wrapper around Start work. HEAD has cards; running tree does not. Lineup leaf uses HeadlineStrip + ScopeBar. Path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "decision": "VERIFIED_WITH_LIMITATIONS"
+  },
+  "node": "N-0028",
+  "expected_revision": 26
+}

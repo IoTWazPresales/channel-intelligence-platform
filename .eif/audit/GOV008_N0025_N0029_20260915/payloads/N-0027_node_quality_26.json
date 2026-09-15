@@ -1,0 +1,11 @@
+{
+  "dim": "design_sameness_review",
+  "state": "pass",
+  "evidence": {
+    "visual_vocabulary_challenge": "Challenged hardcoded Customer/Product/Distributor sections. Live chips follow SQL entity_type. Chartered job-engine href is HEAD; running tree diverged. Path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "decision": "VERIFIED_WITH_LIMITATIONS"
+  },
+  "node": "N-0027",
+  "expected_revision": 26
+}

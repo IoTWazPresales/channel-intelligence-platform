@@ -1,0 +1,10 @@
+{
+  "dim": "ux",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "summary": "GOV-008: Case book strip/rail/scope/grid above the fold; overlay/ageing below. Unmatched C19A50693 is a link to payment-evidence-import?code=; page does not read code (unfiltered wizard). AgGridReact only in EnterpriseDataGrid. Do not complete."
+  },
+  "node": "N-0029",
+  "expected_revision": 31
+}

@@ -1,0 +1,15 @@
+{
+  "dim": "design_signatures",
+  "state": "pass",
+  "evidence": {
+    "signatures": [
+      "create_promotion_plan_start_work",
+      "customer_period_compose",
+      "headline_no_percent_bias",
+      "same_customer_comparables_only"
+    ],
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md"
+  },
+  "node": "N-0026",
+  "expected_revision": 25
+}

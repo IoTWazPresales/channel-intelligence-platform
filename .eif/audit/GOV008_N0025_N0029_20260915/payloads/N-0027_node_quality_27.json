@@ -1,0 +1,14 @@
+{
+  "dim": "design_interaction_spec",
+  "state": "pass",
+  "evidence": {
+    "interactions": [
+      "open_queue_without_job",
+      "click_row",
+      "click_failed_imports"
+    ],
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md"
+  },
+  "node": "N-0027",
+  "expected_revision": 27
+}

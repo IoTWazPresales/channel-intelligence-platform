@@ -1,0 +1,15 @@
+{
+  "kind": "rendered",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "url": "http://localhost:3000/brief",
+    "verdict": "VERIFIED_WITH_LIMITATIONS",
+    "clicks": [
+      "/admin/imports?unified=1",
+      "/lineup/cases"
+    ]
+  },
+  "node": "N-0028",
+  "expected_revision": 35
+}

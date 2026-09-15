@@ -1,0 +1,13 @@
+{
+  "dim": "design_interaction_spec",
+  "state": "pass",
+  "evidence": {
+    "interactions": [
+      "open_case_book",
+      "click_unmatched_c19a50693"
+    ],
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md"
+  },
+  "node": "N-0029",
+  "expected_revision": 27
+}

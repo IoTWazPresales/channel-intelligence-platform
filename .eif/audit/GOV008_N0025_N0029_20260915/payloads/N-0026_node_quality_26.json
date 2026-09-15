@@ -1,0 +1,14 @@
+{
+  "dim": "rendered_comparison",
+  "state": "pass",
+  "evidence": {
+    "artifact_class": "high_fidelity",
+    "class": "high_fidelity",
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "product_url": "http://localhost:3000/promotions?propose=1",
+    "viewport": "1280x800",
+    "comparison_verdict": "compose_returns_real_lineup_lines_no_257"
+  },
+  "node": "N-0026",
+  "expected_revision": 26
+}
