@@ -44,6 +44,7 @@ from app.services.imports.shipment_field_mapping import (
 )
 from app.models.historical_lineup import HistoricalLineupImportHeader, HistoricalLineupImportLine
 from app.models.ingestion import ImportJob, ImportRowResult, ImportTemplate, RawFileMetadata, SourceDefinition
+from app.services.imports.steward_queue import DEFAULT_ITEM_LIMIT, MAX_ITEM_LIMIT, steward_failure_queue
 from app.services.imports.stewardship_summary import stewardship_summary
 from app.storage.local import get_storage_backend
 from app.services.imports.import_background_slots import (
@@ -399,6 +400,22 @@ async def get_stewardship_summary(
 ):
     """Headline grains for Data & Stewardship. Read-only; prints database identity in the payload."""
     return await stewardship_summary(db, user)
+
+
+@router.get("/steward-queue")
+async def get_steward_failure_queue(
+    entity_type: str | None = None,
+    limit: int = DEFAULT_ITEM_LIMIT,
+    db: AsyncSession = Depends(get_db),
+    user: dict | None = Depends(get_optional_current_user),
+):
+    """Cross-job needs_review candidates grouped by entity_type. Read-only; no resolver."""
+    if limit < 1 or limit > MAX_ITEM_LIMIT:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "invalid_limit", "message": f"limit must be 1..{MAX_ITEM_LIMIT}"},
+        )
+    return await steward_failure_queue(db, user, entity_type=entity_type, limit=limit)
 
 
 @router.post("/jobs/bulk-delete-preview")

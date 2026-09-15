@@ -73,14 +73,14 @@ export function DataChrome({
     summary == null ? undefined : (summary.failed_all ?? 0) + (summary.pending_all ?? 0);
   const tabCounts: Partial<Record<DataLens, number>> = {
     imports: failedPlusPending,
-    steward: summary?.legacy_queue_open,
+    steward: summary?.candidates_needs_review,
     ...counts,
   };
 
   const meta = summary
     ? [
         `${summary.jobs_last_7d} jobs in last 7 days`,
-        `${summary.legacy_queue_open} legacy queue rows`,
+        `${summary.candidates_needs_review} candidates need review`,
         `${summary.products} products`,
       ].join(' · ')
     : undefined;

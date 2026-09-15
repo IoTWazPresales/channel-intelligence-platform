@@ -24,6 +24,7 @@ from app.services.woc_observation_read import latest_woc_observations, observati
 _FRESH_STATUSES = ("completed", "completed_with_errors")
 _STALE_HOURS = 168
 _DSI_TEMPLATE = "distributor_sales_inventory"
+FAILED_IMPORTS_HREF = "/admin/imports?jobStatus=failed"
 _OPEN_CPOR_STATUSES = tuple(s for s in CPOR_CASE_STATUS_SET if s not in {"settled", "cancelled", "rejected"})
 
 
@@ -187,7 +188,7 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
 
     if failed_open > 0:
         dsi_date = dsi["completed_at"] if dsi else None
-        detail = "steward queue"
+        detail = "unarchived import_job.status = failed"
         if dsi_date:
             detail += f"; latest batch DSI {dsi_date}"
         signals.append(
@@ -198,8 +199,8 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
                 detail=detail,
                 meta=f"{failed_open} jobs",
                 meta_hot=True,
-                action_label="Open steward queue",
-                action_href="/admin/mappings",
+                action_label="Open failed imports",
+                action_href=FAILED_IMPORTS_HREF,
                 suggested=True,
                 figures={"count": failed_open, "dsi_vintage": dsi_date},
             )

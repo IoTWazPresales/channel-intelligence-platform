@@ -27,3 +27,41 @@ export type StewardshipSummary = {
   labels: Record<string, string>;
   captions: Record<string, string>;
 };
+
+export type StewardQueueGroup = {
+  entity_type: string;
+  label: string;
+  candidate_count: number;
+  job_count: number;
+  row_count: number;
+  covered: boolean;
+};
+
+export type StewardQueueItem = {
+  id: number;
+  entity_type: string;
+  label: string;
+  normalized_key: string;
+  row_count: number;
+  total_units: number | null;
+  status: string;
+  import_job_id: number;
+  template_slug: string | null;
+  file_name: string | null;
+  job_status: string | null;
+  steward_href: string | null;
+  covered: boolean;
+};
+
+export type StewardFailureQueueResponse = {
+  database: string;
+  tenant_id: string;
+  open_status: string;
+  groups: StewardQueueGroup[];
+  items: StewardQueueItem[];
+  total_candidates: number;
+  distinct_jobs: number;
+  returned: number;
+  truncated: boolean;
+  entity_type_filter: string | null;
+};
