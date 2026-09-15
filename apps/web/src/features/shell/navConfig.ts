@@ -213,7 +213,7 @@ export const navGroups: NavGroup[] = [
         href: '/promotions',
         roles: PLANNER_PLUS,
         status: 'partial',
-        what: 'Author and review promotion cases (the same cpor_case as the Case book): lines, waterfall, budget check, export. Propose-from-customer still needs a seed case id.',
+        what: 'Author and review promotion cases (the same cpor_case as the Case book): lines, waterfall, budget check, export. Propose from customer and period on this surface.',
       },
       {
         label: 'Case book',

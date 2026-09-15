@@ -5,7 +5,7 @@ export const PLANNER_CAPABILITIES: CapabilityItem[] = [
   {
     label: 'Propose a plan from history, cover, forecast and MAC',
     state: 'partial',
-    note: 'Draft exists (B4) but needs a seed case id; no proposal from customer + period alone.',
+    note: 'Compose from customer and period (lineup, then that customer’s history). Seed case id remains optional. Competitor prices, listing joins, and observed cover-as-target are not inputs.',
   },
   {
     label: 'Create and edit plans manually (lines, layers, parameters)',

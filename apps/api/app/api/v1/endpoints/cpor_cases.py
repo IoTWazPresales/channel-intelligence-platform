@@ -1458,7 +1458,7 @@ def cpor_payment_recon(
 
 @router.get("/intelligence/promo-plan-draft")
 def cpor_promo_plan_draft(
-    seed_case_id: int = Query(..., ge=1),
+    seed_case_id: int | None = Query(default=None, ge=1),
     product_id: int | None = Query(default=None),
     customer_id: int | None = Query(default=None),
     planned_support_usd: float | None = Query(default=None, ge=0),
@@ -1467,19 +1467,22 @@ def cpor_promo_plan_draft(
     horizon_weeks: int = Query(default=13, ge=1, le=52),
     comparable_limit: int = Query(default=10, ge=1, le=50),
 ) -> dict[str, Any]:
-    """B4 — draft promo plan: per-line A2 + B1 + intake-weighted MAC + B2 budget check."""
+    """Compose a promo plan: seed case (B4) or customer_id + period_label."""
     with SessionLocal() as session:
-        return build_promo_plan_draft(
-            session,
-            seed_case_id=seed_case_id,
-            product_id=product_id,
-            customer_id=customer_id,
-            planned_support_usd=planned_support_usd,
-            planned_revenue_usd=planned_revenue_usd,
-            period_label=period_label,
-            horizon_weeks=horizon_weeks,
-            comparable_limit=comparable_limit,
-        )
+        try:
+            return build_promo_plan_draft(
+                session,
+                seed_case_id=seed_case_id,
+                product_id=product_id,
+                customer_id=customer_id,
+                planned_support_usd=planned_support_usd,
+                planned_revenue_usd=planned_revenue_usd,
+                period_label=period_label,
+                horizon_weeks=horizon_weeks,
+                comparable_limit=comparable_limit,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 class PromoPlanDraftLineSpec(BaseModel):
@@ -1493,7 +1496,7 @@ class PromoPlanDraftLineSpec(BaseModel):
 
 
 class PromoPlanRecomputeBody(BaseModel):
-    seed_case_id: int = Field(ge=1)
+    seed_case_id: int | None = Field(default=None, ge=1)
     product_id: int | None = None
     customer_id: int | None = None
     planned_support_usd: float | None = Field(default=None, ge=0)
@@ -1511,18 +1514,21 @@ def cpor_promo_plan_recompute(
 ) -> dict[str, Any]:
     """Recompute per-line suggestions for the given identities. Dirty merge is client-owned (D-052)."""
     with SessionLocal() as session:
-        return build_promo_plan_draft(
-            session,
-            seed_case_id=body.seed_case_id,
-            product_id=body.product_id,
-            customer_id=body.customer_id,
-            planned_support_usd=body.planned_support_usd,
-            planned_revenue_usd=body.planned_revenue_usd,
-            period_label=body.period_label,
-            horizon_weeks=body.horizon_weeks,
-            comparable_limit=body.comparable_limit,
-            line_specs=[row.model_dump() for row in body.lines] if body.lines else None,
-        )
+        try:
+            return build_promo_plan_draft(
+                session,
+                seed_case_id=body.seed_case_id,
+                product_id=body.product_id,
+                customer_id=body.customer_id,
+                planned_support_usd=body.planned_support_usd,
+                planned_revenue_usd=body.planned_revenue_usd,
+                period_label=body.period_label,
+                horizon_weeks=body.horizon_weeks,
+                comparable_limit=body.comparable_limit,
+                line_specs=[row.model_dump() for row in body.lines] if body.lines else None,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 class PromoPlanCreateLineBody(BaseModel):
@@ -1539,7 +1545,9 @@ class PromoPlanCreateLineBody(BaseModel):
 
 
 class PromoPlanCreateFromDraftBody(BaseModel):
-    seed_case_id: int = Field(ge=1)
+    seed_case_id: int | None = Field(default=None, ge=1)
+    customer_id: int | None = None
+    promotion_type: str | None = None
     product_id: int | None = None
     period_label: str | None = None
     planned_support_usd: float | None = Field(default=None, ge=0)
@@ -1579,6 +1587,9 @@ def cpor_promo_plan_create_case(
             return create_case_from_promo_draft(
                 session,
                 seed_case_id=body.seed_case_id,
+                customer_id=body.customer_id,
+                promotion_type=body.promotion_type,
+                tenant_id=tenant_id_from_user(user),
                 product_id=body.product_id,
                 period_label=body.period_label,
                 planned_support_usd=body.planned_support_usd,
@@ -1596,7 +1607,7 @@ def cpor_promo_plan_create_case(
         except ValueError as exc:
             msg = str(exc)
             code = 400
-            if msg.startswith("seed_case_not_found"):
+            if msg.startswith("seed_case_not_found") or msg.startswith("customer_not_found"):
                 code = 404
             raise HTTPException(status_code=code, detail=msg) from exc
 

@@ -17,6 +17,7 @@ import type { CellValueChangedEvent, ColDef, ICellRendererParams } from 'ag-grid
 import { useCallback, useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { apiGet, apiPost } from '@/lib/api';
 
 import {
@@ -94,7 +95,10 @@ function MacExplainCell(params: ICellRendererParams<PlannerRow>) {
   );
 }
 
+type CustomerPick = { id: number; customer_code: string; customer_name: string };
+
 export function PromoPlanBuilderPanel() {
+  const [customer, setCustomer] = useState<CustomerPick | null>(null);
   const [seedCaseId, setSeedCaseId] = useState('');
   const [periodLabel, setPeriodLabel] = useState('2026Q2');
   const [addProductId, setAddProductId] = useState('');
@@ -102,6 +106,7 @@ export function PromoPlanBuilderPanel() {
   const [rows, setRows] = useState<PlannerRow[]>([]);
   const [budgetCheck, setBudgetCheck] = useState<DraftPayload['budget_check']>();
   const [comparableCount, setComparableCount] = useState(0);
+  const [productSetSource, setProductSetSource] = useState<string | null>(null);
   const [createMsg, setCreateMsg] = useState<string | null>(null);
   const [createIsError, setCreateIsError] = useState(false);
   const [draftLoading, setDraftLoading] = useState(false);
@@ -110,39 +115,50 @@ export function PromoPlanBuilderPanel() {
     const incoming = payload.lines ?? [];
     setBudgetCheck(payload.budget_check);
     setComparableCount(payload.comparables?.count ?? 0);
+    setProductSetSource((payload as { product_set_source?: string | null }).product_set_source ?? null);
     setRows((prev) => (mode === 'merge' ? mergePromoPlanSuggestions(prev, incoming) : hydratePlannerRows(incoming)));
   }, []);
 
+  const canCompose = Boolean(customer?.id) || /^\d+$/.test(seedCaseId);
+
   const loadDraft = useCallback(
     async (mode: 'replace' | 'merge', extra?: PlannerRow[]) => {
-      if (!/^\d+$/.test(seedCaseId)) return;
+      if (!canCompose) return;
       setDraftLoading(true);
       try {
         const working = extra ?? rows;
+        const period = periodLabel.trim() || null;
         let payload: DraftPayload;
+        const body: Record<string, unknown> = {
+          period_label: period,
+        };
+        if (/^\d+$/.test(seedCaseId)) body.seed_case_id = Number(seedCaseId);
+        if (customer?.id) body.customer_id = customer.id;
         if (mode === 'merge' || (extra && extra.length)) {
           payload = await apiPost<DraftPayload>('/api/v1/cpor/intelligence/promo-plan-draft/recompute', {
-            seed_case_id: Number(seedCaseId),
-            period_label: periodLabel.trim() || null,
+            ...body,
             lines: toRecomputeSpecs(working),
           });
         } else {
-          payload = await apiGet<DraftPayload>(
-            `/api/v1/cpor/intelligence/promo-plan-draft?seed_case_id=${encodeURIComponent(seedCaseId)}&period_label=${encodeURIComponent(periodLabel)}`,
-          );
+          const sp = new URLSearchParams();
+          if (typeof body.seed_case_id === 'number') sp.set('seed_case_id', String(body.seed_case_id));
+          if (typeof body.customer_id === 'number') sp.set('customer_id', String(body.customer_id));
+          if (period) sp.set('period_label', period);
+          payload = await apiGet<DraftPayload>(`/api/v1/cpor/intelligence/promo-plan-draft?${sp.toString()}`);
         }
         applyDraft(payload, mode);
       } finally {
         setDraftLoading(false);
       }
     },
-    [applyDraft, periodLabel, rows, seedCaseId],
+    [applyDraft, canCompose, customer, periodLabel, rows, seedCaseId],
   );
 
   const createFromDraft = useMutation({
     mutationFn: () =>
       apiPost<Record<string, unknown>>('/api/v1/cpor/intelligence/promo-plan-draft/create-case', {
-        seed_case_id: Number(seedCaseId),
+        ...( /^\d+$/.test(seedCaseId) ? { seed_case_id: Number(seedCaseId) } : {}),
+        ...(customer?.id ? { customer_id: customer.id } : {}),
         period_label: periodLabel.trim() || null,
         confirm_over_budget: true,
         lines: toCreateLines(rows),
@@ -270,32 +286,52 @@ export function PromoPlanBuilderPanel() {
       }}
     >
       <Typography variant="subtitle1" sx={{ mb: 1 }}>
-        Promo plan builder (B4)
+        Create promotion plan
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        Pick a customer and period. Lines come from that customer’s lineup for the period, or from that
+        customer’s own history — not from other customers. Listing and competitor prices are not joined here.
       </Typography>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }} flexWrap="wrap" useFlexGap>
+        <Box sx={{ minWidth: 280, flex: 1 }}>
+          <EntitySearchAutocomplete<CustomerPick>
+            label="Customer"
+            value={customer}
+            onChange={setCustomer}
+            getOptionLabel={(o) => `${o.customer_code} — ${o.customer_name}`}
+            fetchOptions={async (query, signal) => {
+              const needle = query.trim();
+              const res = await apiGet<{ items: CustomerPick[] }>(
+                `/api/v1/customers?page=1&page_size=25${needle ? `&q=${encodeURIComponent(needle)}` : ''}`,
+                { signal },
+              );
+              return res.items ?? [];
+            }}
+          />
+        </Box>
         <TextField
           size="small"
-          label="Seed CPOR case id"
-          value={seedCaseId}
-          onChange={(e) => setSeedCaseId(e.target.value)}
-          inputProps={{ 'data-testid': 'b4-seed-case-id' }}
-          sx={{ width: 180 }}
-        />
-        <TextField
-          size="small"
-          label="Period label"
+          label="Period"
           value={periodLabel}
           onChange={(e) => setPeriodLabel(e.target.value)}
           inputProps={{ 'data-testid': 'b4-period-label' }}
           sx={{ width: 140 }}
         />
+        <TextField
+          size="small"
+          label="Seed case id (optional)"
+          value={seedCaseId}
+          onChange={(e) => setSeedCaseId(e.target.value)}
+          inputProps={{ 'data-testid': 'b4-seed-case-id' }}
+          sx={{ width: 180 }}
+        />
         <Button
           size="small"
           data-testid="b4-build-draft"
           onClick={() => void loadDraft('replace')}
-          disabled={!/^\d+$/.test(seedCaseId) || draftLoading}
+          disabled={!canCompose || draftLoading || !periodLabel.trim()}
         >
-          {draftLoading ? 'Building…' : 'Build draft'}
+          {draftLoading ? 'Building…' : 'Propose from evidence'}
         </Button>
         <Button
           size="small"
@@ -309,7 +345,7 @@ export function PromoPlanBuilderPanel() {
           size="small"
           variant="contained"
           data-testid="b4-create-case"
-          disabled={rows.length === 0 || createFromDraft.isPending || !/^\d+$/.test(seedCaseId)}
+          disabled={rows.length === 0 || createFromDraft.isPending || !canCompose}
           onClick={() => {
             const over = Boolean(budgetCheck?.over_budget_warn);
             if (
@@ -406,12 +442,11 @@ export function PromoPlanBuilderPanel() {
       {rows.length > 0 ? (
         <>
           <Typography variant="body2" component="div" data-testid="b4-draft-summary" sx={{ mb: 1 }}>
-            Lines: {rows.length} · comparables: {comparableCount} · budget status{' '}
-            {String(budgetCheck?.tracks?.money?.status ?? '—')} · reserved{' '}
-            {String(budgetCheck?.tracks?.money?.planned_reservation_usd ?? 0)} · drawn{' '}
-            {String(budgetCheck?.tracks?.money?.drawn_cpor_usd ?? 0)} · reservation ={' '}
-            {String(budgetCheck?.reservation_source ?? 'derived_from_profit')}
-            {budgetCheck?.planned_from_lineup_derived ? ' (lineup-derived)' : ''} · dirty cells survive Refresh
+            Lines: {rows.length} · source: {productSetSource ?? '—'} · same-customer comparables:{' '}
+            {comparableCount} · budget status {String(budgetCheck?.tracks?.money?.status ?? '—')} ·
+            planned reservation USD {String(budgetCheck?.tracks?.money?.planned_reservation_usd ?? 0)} · drawn
+            USD {String(budgetCheck?.tracks?.money?.drawn_cpor_usd ?? 0)} · reservation source{' '}
+            {String(budgetCheck?.reservation_source ?? 'derived_from_profit')} · dirty cells survive Refresh
           </Typography>
           <EnterpriseDataGrid
             rowData={rows}
@@ -431,8 +466,9 @@ export function PromoPlanBuilderPanel() {
         </>
       ) : (
         <Typography variant="caption" color="text.secondary">
-          Enter a seed case id to compose per-line history units, intake-weighted MAC, and cover. Edits stick across
-          Refresh; Reset restores the suggestion.
+          Pick a customer and period, then propose from evidence. Lineup for that customer and period is the
+          product set; same-customer history is the fallback. Optional seed case id still works. Edits stick
+          across Refresh; Reset restores the suggestion.
         </Typography>
       )}
     </Box>

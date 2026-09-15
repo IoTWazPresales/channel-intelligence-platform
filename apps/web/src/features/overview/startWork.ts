@@ -29,6 +29,13 @@ export const START_VERBS: StartVerb[] = [
     roles: PLANNER_PLUS,
   },
   {
+    id: 'create-promo-plan',
+    label: 'Create promotion plan',
+    href: '/promotions?propose=1',
+    what: 'Propose lines from a customer and period on Promotion Planner.',
+    roles: PLANNER_PLUS,
+  },
+  {
     id: 'import-sell-through',
     label: 'Import sell-through',
     href: '/admin/imports?template=customer_sell_through',

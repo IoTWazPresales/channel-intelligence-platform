@@ -15,9 +15,9 @@ describe('startVerbsForRole', () => {
     expect(ids).toEqual(['create-lineup', 'import-sell-through', 'import-shipping', 'steward-queue']);
   });
 
-  it('planner can open cases and settle, not Import Center', () => {
+  it('planner can open cases, create a promotion plan, and settle, not Import Center', () => {
     const ids = startVerbsForRole('planner').map((v) => v.id);
-    expect(ids).toEqual(['open-lineup', 'settle-case']);
+    expect(ids).toEqual(['open-lineup', 'create-promo-plan', 'settle-case']);
   });
 
   it('viewer has no start verbs', () => {
@@ -36,6 +36,7 @@ describe('startVerbsForRole', () => {
     expect(START_VERBS.find((v) => v.id === 'import-shipping')?.href).toBe(
       '/admin/imports?template=inbound_shipments',
     );
+    expect(START_VERBS.find((v) => v.id === 'create-promo-plan')?.href).toBe('/promotions?propose=1');
     expect(START_VERBS.find((v) => v.id === 'settle-case')?.href).toBe('/commercial-planner/cpor-cases');
     expect(START_VERBS.find((v) => v.id === 'steward-queue')?.href).toBe('/admin/mappings');
   });

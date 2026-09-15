@@ -337,3 +337,114 @@ def test_create_case_from_promo_draft_carries_edits_and_skips_cover_persist(monk
     assert planner["cover_not_persisted_to_customer_term"] is True
     assert out["lines"][0]["cost_source"] == COST_SOURCE_MANUAL
     assert out["lines"][1]["cost_source"] == COST_SOURCE_INTAKE_WEIGHTED
+    from app.models.cpor import CporCase
+
+    created_case = next(o for o in added if isinstance(o, CporCase))
+    assert created_case.origin == "proposed_by_cip"
+
+
+def test_window_from_period_label_quarter_bounds():
+    from datetime import date
+
+    from app.services.cpor.promo_plan_builder import window_from_period_label
+
+    assert window_from_period_label("2026Q2") == (date(2026, 4, 1), date(2026, 6, 30))
+    assert window_from_period_label("2026 Q2") == (date(2026, 4, 1), date(2026, 6, 30))
+    assert window_from_period_label("26Q2") == (date(2026, 4, 1), date(2026, 6, 30))
+
+
+def test_build_promo_plan_draft_requires_seed_or_customer_period():
+    import pytest
+
+    with pytest.raises(ValueError, match="missing_seed_or_customer_period"):
+        build_promo_plan_draft(MagicMock())
+
+
+def test_build_promo_plan_draft_from_customer_period_same_customer_only(monkeypatch):
+    import app.services.cpor.promo_plan_builder as mod
+    from app.services.cpor.promo_plan_builder import PRODUCT_SET_LINEUP
+
+    class FakeSession:
+        def execute(self, *_a, **_k):
+            class R:
+                def scalar(self):
+                    return 0
+
+                def one(self):
+                    return (0, 0)
+
+                def all(self):
+                    return []
+
+            return R()
+
+        def get(self, model, key):
+            name = getattr(model, "__name__", str(model))
+            if name == "DimProduct":
+                return SimpleNamespace(id=int(key), sku="SKU", name="Name")
+            return None
+
+        def scalars(self, *_a, **_k):
+            return MagicMock(all=MagicMock(return_value=[]))
+
+    monkeypatch.setattr(
+        mod,
+        "product_specs_for_customer_period",
+        lambda *_a, **_k: (
+            [
+                {
+                    "seed_line_id": None,
+                    "product_id": 81,
+                    "distributor_id": None,
+                    "srp": 2699.0,
+                    "estimate_qty": 10,
+                    "pod_quarter": "2026Q2",
+                    "cover_override": None,
+                }
+            ],
+            PRODUCT_SET_LINEUP,
+        ),
+    )
+    monkeypatch.setattr(
+        mod,
+        "build_same_customer_comparables",
+        lambda *_a, **_k: {
+            "items": [{"case_id": 309, "customer_id": 18, "estimate_qty": 40, "score": 1}],
+            "error": None,
+            "same_customer_only": True,
+        },
+    )
+    monkeypatch.setattr(
+        mod,
+        "derive_planned_reservation_sync",
+        lambda *_a, **_k: {
+            "planned_reservation_usd": 0,
+            "planned_revenue_usd": 0,
+            "planned_line_count": 0,
+            "sku_assumption_count": 0,
+            "skipped_missing_sku": 0,
+            "skipped_missing_srp": 0,
+            "reservation_source": "derived_from_profit",
+            "from_lineup_derived": False,
+        },
+    )
+    monkeypatch.setattr(
+        mod,
+        "_forecast_volume_sync",
+        lambda *_a, **_k: {"horizon_weeks": 13, "forecast_units": 12, "source": "fact_demand_forecast"},
+    )
+    monkeypatch.setattr(mod, "suggest_intake_weighted_mac", lambda *_a, **_k: SimpleNamespace(cost_basis=10.0, cost_source="intake_weighted", evidence={}, flags=[]))
+    monkeypatch.setattr(mod, "resolve_target_cover_weeks_sync", lambda *_a, **_k: (4.0, "tenant_default"))
+    monkeypatch.setattr(mod, "build_comparable_cases", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("seed comparable path must not run")))
+
+    out = build_promo_plan_draft(FakeSession(), customer_id=18, period_label="2026Q2")
+    assert out["seed_case_id"] is None
+    assert out["product_set_source"] == PRODUCT_SET_LINEUP
+    assert out["customer_id"] == 18
+    assert out["window_start"] == "2026-04-01"
+    assert out["window_end"] == "2026-06-30"
+    assert out["comparables"]["same_customer_only"] is True
+    assert out["lines"][0]["product_id"] == 81
+    assert all(t["customer_id"] == 18 for t in out["comparables"]["top"])
+    assert "cross_customer_analogue" in out["uncovered"]
+

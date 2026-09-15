@@ -90,7 +90,7 @@ describe('PromotionPlannerSurface', () => {
       expect(screen.getByTestId('planner-grid')).toHaveTextContent('CPR-26-1204');
     });
     expect(screen.getByTestId('planner-grid')).not.toHaveTextContent('R486k');
-    expect(screen.getByRole('button', { name: /Propose a plan/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Create promotion plan/i })).toBeInTheDocument();
     expect(screen.getByTestId('planner-new')).toBeInTheDocument();
     expect(screen.getByText(/Test data · 7/)).toBeInTheDocument();
   });

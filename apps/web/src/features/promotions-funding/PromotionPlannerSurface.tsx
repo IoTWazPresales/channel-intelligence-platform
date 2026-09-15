@@ -97,6 +97,7 @@ export function PromotionPlannerSurface() {
       scope={scope}
       testDataOnly={testDataOnly}
       newRequested={search.get('new') === '1'}
+      proposeRequested={search.get('propose') === '1'}
       setParam={setParam}
       setParams={setParams}
       onOpen={(id) => setParam('plan', String(id))}
@@ -109,6 +110,7 @@ function PlannerList({
   scope,
   testDataOnly,
   newRequested,
+  proposeRequested,
   setParam,
   setParams,
   onOpen,
@@ -117,6 +119,7 @@ function PlannerList({
   scope: ReturnType<typeof caseScopeFromSearch>;
   testDataOnly: boolean;
   newRequested: boolean;
+  proposeRequested: boolean;
   setParam: (k: string, v: string | null) => void;
   setParams: (patch: Record<string, string | null>) => void;
   onOpen: (id: number) => void;
@@ -132,6 +135,9 @@ function PlannerList({
   useEffect(() => {
     if (newRequested) setCreateOpen(true);
   }, [newRequested]);
+  useEffect(() => {
+    if (proposeRequested) setProposeOpen(true);
+  }, [proposeRequested]);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['cpor', 'cases', 'planner', stageFilter, scope, testDataOnly],
@@ -164,15 +170,14 @@ function PlannerList({
   const counts = data?.status_counts ?? {};
   const rowsAll = data?.items ?? [];
   const rows = rowsAll;
-  const planningN = countPlanning(counts);
-  const liveN = counts.active ?? 0;
+  const draftsN = counts.draft ?? 0;
+  const endedN = counts.ended ?? 0;
+  const settledN = counts.settled ?? 0;
   const proposedN = counts.proposed ?? 0;
-  const reviewN = data?.review_queue_count ?? proposedN;
+  const planningN = countPlanning(counts);
   const bookN = Object.values(counts).reduce((n, v) => n + (Number(v) || 0), 0);
   const plannedUsd = bias?.totals?.planned_usd ?? null;
   const drawnUsd = bias?.totals?.actual_usd ?? null;
-  const budgetPct =
-    plannedUsd && plannedUsd > 0 && drawnUsd != null ? Math.round((drawnUsd / plannedUsd) * 100) : null;
 
   const inPlanningSupport = rowsAll
     .filter((r) => ['draft', 'proposed', 'approved', 'rejected'].includes(r.status))
@@ -202,45 +207,40 @@ function PlannerList({
 
         <HeadlineStrip columns={5}>
           <HeadlineFigure
-            label="In planning"
-            value={planningN}
+            label="Drafts to finish"
+            value={draftsN}
             unit="plans"
             compact
             caption={`${fmtCompact(inPlanningSupport)} support in draft / proposed / approved / rejected`}
-            onClick={() => setParam('stage', 'proposed')}
+            onClick={() => setParam('stage', 'draft')}
           />
           <HeadlineFigure
-            label="Live now"
-            value={liveN}
-            unit="plans"
-            compact
-            onClick={() => setParam('stage', 'active')}
-          />
-          <HeadlineFigure
-            label="Awaiting your review"
-            value={reviewN}
+            label="Ended"
+            value={endedN}
             unit="cases"
             compact
-            severity={reviewN ? 'warn' : 'neutral'}
-            caption="Proposed, or flagged for reapproval — not ended cases waiting on claims"
-            onClick={() => setParam('stage', 'proposed')}
+            caption="In the book — settle from the case desk, not from this strip"
+            onClick={() => setParam('stage', 'ended')}
           />
           <HeadlineFigure
-            label="Budget reservation used"
-            value={budgetPct == null ? '—' : `${budgetPct}%`}
+            label="Settled book"
+            value={settledN}
+            unit="cases"
             compact
-            caption={
-              plannedUsd == null
-                ? 'No lineup-derived reservation in scope'
-                : `${fmtCompact(drawnUsd, 'USD')} of ${fmtCompact(plannedUsd, 'USD')} · lineup-derived on SKU-economics lines`
-            }
-            severity={budgetPct != null && budgetPct > 85 ? 'warn' : 'neutral'}
+            caption="Same-customer history for proposals — not a live work queue"
+            onClick={() => setParam('stage', 'settled')}
           />
           <HeadlineFigure
-            label="Uplift / effectiveness"
-            value="—"
+            label="Planned reserve"
+            value={plannedUsd == null ? '—' : fmtCompact(plannedUsd, 'USD')}
             compact
-            caption="Not derived until ≥5 settled cases with claim evidence — never estimated"
+            caption="SKU-economics case lines only. Not lineup reservation. Not a percent."
+          />
+          <HeadlineFigure
+            label="Actual support"
+            value={drawnUsd == null ? '—' : fmtCompact(drawnUsd, 'USD')}
+            compact
+            caption="Same SKU-economics lines as planned reserve. Do not divide these two figures."
           />
         </HeadlineStrip>
 
@@ -287,7 +287,7 @@ function PlannerList({
               filters={<CaseScopeFilters scope={scope} onPatch={setParams} />}
               trailing={
                 <Stack direction="row" spacing={1}>
-                  <Tooltip title="Partly built: the proposal still needs a seed case id. Attention will surface this gap; it is not a separate work container." arrow>
+                  <Tooltip title="Propose lines from a customer and period. Uses that customer’s lineup or their own history — never other customers." arrow>
                     <span>
                       <Button
                         size="small"
@@ -296,7 +296,7 @@ function PlannerList({
                         onClick={() => setProposeOpen(true)}
                         data-testid="planner-propose"
                       >
-                        Propose a plan
+                        Create promotion plan
                       </Button>
                     </span>
                   </Tooltip>
@@ -447,13 +447,28 @@ function PlannerList({
         </Box>
       </Stack>
 
-      <Dialog open={proposeOpen} onClose={() => setProposeOpen(false)} maxWidth="lg" fullWidth>
-        <DialogTitle>Propose a plan</DialogTitle>
+      <Dialog
+        open={proposeOpen}
+        onClose={() => {
+          setProposeOpen(false);
+          if (proposeRequested) setParam('propose', null);
+        }}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>Create promotion plan</DialogTitle>
         <DialogContent>
           <PromoPlanBuilderPanel />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setProposeOpen(false)}>Close</Button>
+          <Button
+            onClick={() => {
+              setProposeOpen(false);
+              if (proposeRequested) setParam('propose', null);
+            }}
+          >
+            Close
+          </Button>
         </DialogActions>
       </Dialog>
 
