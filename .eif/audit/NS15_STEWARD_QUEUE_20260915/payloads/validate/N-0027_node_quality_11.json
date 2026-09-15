@@ -1,0 +1,23 @@
+{
+  "dim": "design_execution_decisions",
+  "state": "pass",
+  "evidence": {
+    "responsive_decision": {
+      "status": "applicable",
+      "rationale": "Named 1280 workflow: mappings leaf to existing job steward; brief failed_imports to Import Center.",
+      "evidence": ".eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md"
+    },
+    "visualisation_decision": {
+      "status": "applicable",
+      "rationale": "Headline strip is counts (candidates, types, jobs, uncovered). Grouping is SQL GROUP BY.",
+      "evidence": ".eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md"
+    },
+    "consequential_action_decision": {
+      "status": "applicable",
+      "rationale": "Queue does not accept/reject. Steward hrefs are GET navigation. No cip write.",
+      "evidence": ".eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md"
+    }
+  },
+  "node": "N-0027",
+  "expected_revision": 11
+}

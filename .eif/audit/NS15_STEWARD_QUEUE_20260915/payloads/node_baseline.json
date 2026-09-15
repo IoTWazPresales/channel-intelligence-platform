@@ -1,0 +1,19 @@
+{
+  "node": "N-0027",
+  "expected_revision": 1,
+  "baseline_ref": "BLN-0001",
+  "preservation": {
+    "d0008": "accepted; Steward queue is the Data & Stewardship cross-job leaf",
+    "d0006": "D-0002 deferred; entity_mapping_queue not restored or retired",
+    "n0011_approve_reject": "STEWARD_QUEUE_APPROVE_REJECT stays deferred",
+    "n0013": "not reopened",
+    "d0002": "mapping-queue disposition untouched",
+    "n0006": "not reopened",
+    "d0010": "Option A untouched",
+    "n0025": "not remediated",
+    "n0026": "not re-audited",
+    "backlog_181": "rail tokens untouched",
+    "movement_execution_workspaces": "not unwound",
+    "resolution_rules": "no weak joins; no auto-create; FLAG != BLOCK"
+  }
+}

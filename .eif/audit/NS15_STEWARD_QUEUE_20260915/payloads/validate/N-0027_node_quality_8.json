@@ -1,0 +1,15 @@
+{
+  "dim": "design_interaction_spec",
+  "state": "pass",
+  "evidence": {
+    "interactions": [
+      "open_steward_queue_leaf",
+      "filter_by_entity_type_chip",
+      "open_existing_cst_steward_from_row",
+      "open_failed_imports_from_brief"
+    ],
+    "path": ".eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md"
+  },
+  "node": "N-0027",
+  "expected_revision": 8
+}

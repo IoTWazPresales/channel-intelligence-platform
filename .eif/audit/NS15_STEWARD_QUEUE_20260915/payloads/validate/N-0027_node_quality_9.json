@@ -1,0 +1,16 @@
+{
+  "dim": "design_state_coverage",
+  "state": "pass",
+  "evidence": {
+    "states": [
+      "queue_2814_open_candidates",
+      "type_chips_from_groups",
+      "legacy_mapping_queue_empty",
+      "brief_47_failed_imports",
+      "import_center_failed_filter"
+    ],
+    "path": ".eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md"
+  },
+  "node": "N-0027",
+  "expected_revision": 9
+}

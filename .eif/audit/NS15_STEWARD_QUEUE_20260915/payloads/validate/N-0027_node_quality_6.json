@@ -1,0 +1,14 @@
+{
+  "dim": "rendered_comparison",
+  "state": "pass",
+  "evidence": {
+    "artifact_class": "high_fidelity",
+    "class": "high_fidelity",
+    "path": ".eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md",
+    "product_url": "http://localhost:3000/admin/mappings",
+    "viewport": "1280x800",
+    "comparison_verdict": "queue_lists_needs_review_and_opens_existing_engine"
+  },
+  "node": "N-0027",
+  "expected_revision": 6
+}

@@ -1,0 +1,11 @@
+{
+  "dim": "design_divergence",
+  "state": "pass",
+  "evidence": {
+    "benchmark": "cross-job steward queue grouped by failure type routing into existing engines",
+    "decision": "group_by_entity_type_route_to_job_engines",
+    "path": ".eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md"
+  },
+  "node": "N-0027",
+  "expected_revision": 4
+}

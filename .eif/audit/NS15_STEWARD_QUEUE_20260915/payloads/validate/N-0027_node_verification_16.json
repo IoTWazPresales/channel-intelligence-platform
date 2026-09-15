@@ -1,0 +1,17 @@
+{
+  "kind": "rendered",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md",
+    "url": "http://localhost:3000/admin/mappings",
+    "clicks": [
+      "/admin/imports?job=900",
+      "/admin/imports?jobStatus=failed"
+    ],
+    "open_candidates": 2814,
+    "failed_imports": 47,
+    "failed_imports_href": "/admin/imports?jobStatus=failed"
+  },
+  "node": "N-0027",
+  "expected_revision": 16
+}

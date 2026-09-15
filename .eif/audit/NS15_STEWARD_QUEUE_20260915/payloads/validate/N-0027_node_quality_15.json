@@ -1,0 +1,10 @@
+{
+  "dim": "content",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md",
+    "summary": "Copy: grouped by failure type stored on each candidate, not by import job. Job is provenance. Legacy entity_mapping_queue is D-0002."
+  },
+  "node": "N-0027",
+  "expected_revision": 15
+}

@@ -1,0 +1,14 @@
+{
+  "dim": "design_identity_tokens",
+  "state": "pass",
+  "evidence": {
+    "tokens": {
+      "direction_name": "steward queue",
+      "object": "import_entity_mapping_candidate",
+      "group_key": "entity_type"
+    },
+    "path": ".eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md"
+  },
+  "node": "N-0027",
+  "expected_revision": 10
+}

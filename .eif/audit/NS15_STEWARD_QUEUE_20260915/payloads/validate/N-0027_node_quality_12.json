@@ -1,0 +1,10 @@
+{
+  "dim": "ux",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md",
+    "summary": "Steward queue lists needs_review by entity_type. Steward opens existing job engine. failed_imports opens Import Center failed filter."
+  },
+  "node": "N-0027",
+  "expected_revision": 12
+}

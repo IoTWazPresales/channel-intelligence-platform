@@ -1,0 +1,10 @@
+{
+  "dim": "a11y",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md",
+    "summary": "Steward is a real link. Failure-type chips are buttons. Keyboard/axe full pass not this session."
+  },
+  "node": "N-0027",
+  "expected_revision": 13
+}

@@ -1,0 +1,5 @@
+{
+  "stage_note": "Implementer validate: steward queue GROUP BY entity_type lists 2814 needs_review on cip. Steward click opened /admin/imports?job=900. failed_imports opened Import Center jobStatus=failed (47). BACKLOG-187/188 for re-resolution and non-candidate types. Independent GOV-008 not recorded. Do not complete.",
+  "node": "N-0027",
+  "expected_revision": 19
+}

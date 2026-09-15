@@ -1,0 +1,16 @@
+{
+  "dim": "design_signatures",
+  "state": "pass",
+  "evidence": {
+    "signatures": [
+      "steward_queue_group_by_entity_type",
+      "job_as_row_provenance",
+      "route_to_existing_dsi_cst_shipment_engines",
+      "failed_imports_to_import_center_failed_filter",
+      "uncovered_types_listed_not_invented"
+    ],
+    "path": ".eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md"
+  },
+  "node": "N-0027",
+  "expected_revision": 5
+}

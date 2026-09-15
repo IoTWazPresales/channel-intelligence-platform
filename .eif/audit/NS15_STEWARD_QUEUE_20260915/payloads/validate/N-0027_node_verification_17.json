@@ -1,0 +1,10 @@
+{
+  "kind": "referent",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md",
+    "product": "steward_queue.py + StewardFailureQueue + brief_signals failed_imports href"
+  },
+  "node": "N-0027",
+  "expected_revision": 17
+}
