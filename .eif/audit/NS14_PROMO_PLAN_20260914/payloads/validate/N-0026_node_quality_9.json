@@ -1,0 +1,15 @@
+{
+  "dim": "design_interaction_spec",
+  "state": "pass",
+  "evidence": {
+    "interactions": [
+      "click_start_work_create_promotion_plan",
+      "select_customer_and_period",
+      "propose_from_evidence_compose",
+      "do_not_confirm_create_draft"
+    ],
+    "path": ".eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md"
+  },
+  "node": "N-0026",
+  "expected_revision": 9
+}

@@ -1,0 +1,10 @@
+{
+  "kind": "referent",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md",
+    "product": "promo_plan_builder.py + PromoPlanBuilderPanel + startWork create-promo-plan"
+  },
+  "node": "N-0026",
+  "expected_revision": 18
+}

@@ -1,0 +1,10 @@
+{
+  "dim": "ux",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md",
+    "summary": "Create promotion plan opens the existing propose dialog. Customer+period compose 40 lineup lines. Create draft not confirmed."
+  },
+  "node": "N-0026",
+  "expected_revision": 13
+}

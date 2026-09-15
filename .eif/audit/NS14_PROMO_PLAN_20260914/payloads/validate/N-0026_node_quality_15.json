@@ -1,0 +1,13 @@
+{
+  "dim": "rendered",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md",
+    "url": "http://localhost:3000/promotions?propose=1",
+    "viewports": [
+      "1280x800"
+    ]
+  },
+  "node": "N-0026",
+  "expected_revision": 15
+}

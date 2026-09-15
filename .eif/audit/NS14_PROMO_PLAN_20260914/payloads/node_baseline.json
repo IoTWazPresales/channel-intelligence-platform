@@ -1,0 +1,16 @@
+{
+  "node": "N-0026",
+  "expected_revision": 1,
+  "baseline_ref": "BLN-0001",
+  "preservation": {
+    "d0008": "accepted commercial amendment; Promotion Planner authors cpor_case",
+    "n0013": "not reopened",
+    "d0002": "mapping-queue disposition untouched",
+    "n0006": "not reopened",
+    "d0010": "Option A untouched",
+    "n0025": "not remediated; Start work verb added only",
+    "backlog_181": "rail tokens untouched",
+    "movement_execution_workspaces": "not unwound",
+    "product_competition_only": "proposal must not rank other customers\u2019 cases"
+  }
+}

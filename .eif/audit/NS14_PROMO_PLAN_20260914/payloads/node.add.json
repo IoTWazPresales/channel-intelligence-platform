@@ -1,0 +1,23 @@
+{
+  "id": "N-0026",
+  "title": "Propose a promotion plan from customer and period on the Promotion Planner",
+  "class": "feature",
+  "origin": "decomposition",
+  "status": "ready",
+  "facets": ["ui"],
+  "risk": "R2",
+  "touches_existing": true,
+  "acceptance": "auto",
+  "depends_on": ["N-0013"],
+  "target_artifact_class": "high_fidelity",
+  "design_artifact_class": "high_fidelity",
+  "acceptance_criteria": [
+    "Cite D-0008 (accepted commercial amendment of N-0013): Promotion Planner authors cpor_case / cpor_case_line; CIP-proposed plans use evidence that exists. Do not reopen N-0013. Competition is product-vs-SKU, not customer-vs-customer.",
+    "Reconcile against source before product land. Evidence: .eif/audit/NS14_PROMO_PLAN_20260914/RECONCILE.md. Label VERIFIED or ASSERTED. Print current_database() first; read-only on cip.",
+    "Compose and create a draft case from customer_id + period_label without a seed case id. Primary product set: active commercial_lineup_line for that customer and period. Fallback: that customer’s historical cpor_case_line only. Reuse intake-weighted MAC, fact_demand_forecast volume, and the existing cover-weeks resolver. Write via the existing case/line path with origin proposed_by_cip. Do not create a parallel planner object.",
+    "UNCOVERED (do not substitute a weaker signal): fact_competitor_price empty; listing/competitor not joined to lines; weeks_of_cover_observation not used as target cover; uplift (zero claim evidence); other customers’ cases as proposal analogues.",
+    "Promotion Planner headline strip uses planner-actionable live grains. Do not display support_bias actual/planned as a percent (the 257% figure mixes a ratio the caption mislabels). NUMBER RULE on every figure.",
+    "Start work verb 'Create promotion plan' (admin and planner) opens /promotions?propose=1, which opens the existing propose workbench with customer + period. Do not invent a second creator. Empty New plan remains.",
+    "Browser-verify with Playwright MCP at 1280x800: Start work verb and propose compose (read-only). Do not confirm a create that writes cip. No browser_cdp. Do not run GOV-008. Do not complete this node. Do not remediate N-0025. D-0002, N-0006, N-0013, D-0010, BACKLOG-181, Movement/Execution untouched. Do not cite a frozen design-language version or grammar number."
+  ]
+}

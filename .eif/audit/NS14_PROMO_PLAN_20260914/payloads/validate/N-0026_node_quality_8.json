@@ -1,0 +1,11 @@
+{
+  "dim": "design_sameness_review",
+  "state": "pass",
+  "evidence": {
+    "visual_vocabulary_challenge": "Challenged a second creator and a 257% budget-reservation percent. Propose stays on Promotion Planner. Strip shows counts and USD, not a ratio. Path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md",
+    "path": ".eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md",
+    "decision": "one_propose_workbench_on_planner"
+  },
+  "node": "N-0026",
+  "expected_revision": 8
+}

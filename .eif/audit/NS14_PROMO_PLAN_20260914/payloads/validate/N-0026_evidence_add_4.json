@@ -1,0 +1,8 @@
+{
+  "id": "EV-N0026-IMPL",
+  "provenance": "implementation-observation",
+  "path": ".eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md",
+  "note": "N-0026 propose from customer+period; Playwright 1280 compose 40 lineup lines; no cip write; no GOV-008",
+  "node": "N-0026",
+  "expected_revision": 4
+}

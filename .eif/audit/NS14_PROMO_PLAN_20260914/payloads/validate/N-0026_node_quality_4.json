@@ -1,0 +1,10 @@
+{
+  "dim": "design_artifact_class",
+  "state": "pass",
+  "evidence": {
+    "class": "high_fidelity",
+    "path": ".eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md"
+  },
+  "node": "N-0026",
+  "expected_revision": 4
+}

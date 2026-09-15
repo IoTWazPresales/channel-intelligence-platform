@@ -1,0 +1,11 @@
+{
+  "dim": "design_divergence",
+  "state": "pass",
+  "evidence": {
+    "benchmark": "propose a cpor_case from customer and period on Promotion Planner",
+    "decision": "customer_period_compose_on_existing_planner",
+    "path": ".eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md"
+  },
+  "node": "N-0026",
+  "expected_revision": 5
+}

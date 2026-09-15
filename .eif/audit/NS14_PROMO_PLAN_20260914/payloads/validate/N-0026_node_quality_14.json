@@ -1,0 +1,10 @@
+{
+  "dim": "a11y",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md",
+    "summary": "Start work is a real link. Propose controls are labelled. Keyboard/axe full pass not this session."
+  },
+  "node": "N-0026",
+  "expected_revision": 14
+}

@@ -1,0 +1,13 @@
+{
+  "dim": "design_identity_tokens",
+  "state": "pass",
+  "evidence": {
+    "tokens": {
+      "direction_name": "create promotion plan",
+      "object": "cpor_case"
+    },
+    "path": ".eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md"
+  },
+  "node": "N-0026",
+  "expected_revision": 11
+}

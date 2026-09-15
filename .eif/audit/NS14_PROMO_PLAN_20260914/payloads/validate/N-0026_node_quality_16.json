@@ -1,0 +1,10 @@
+{
+  "dim": "content",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md",
+    "summary": "Verb is Create promotion plan. Strip captions refuse the 257% ratio. Product-set source commercial_lineup_line named in the dialog."
+  },
+  "node": "N-0026",
+  "expected_revision": 16
+}

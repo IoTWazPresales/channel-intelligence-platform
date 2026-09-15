@@ -1,0 +1,21 @@
+{
+  "kind": "rendered",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md",
+    "url": "http://localhost:3000/brief",
+    "clicks": [
+      "/promotions?propose=1"
+    ],
+    "compose": {
+      "customer_id": 18,
+      "period_label": "2026Q2",
+      "lines": 40,
+      "product_set_source": "commercial_lineup_line",
+      "same_customer_comparables": 10,
+      "create_draft_clicked": false
+    }
+  },
+  "node": "N-0026",
+  "expected_revision": 17
+}

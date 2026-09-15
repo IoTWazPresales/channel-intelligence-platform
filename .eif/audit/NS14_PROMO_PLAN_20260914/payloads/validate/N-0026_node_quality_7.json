@@ -1,0 +1,14 @@
+{
+  "dim": "rendered_comparison",
+  "state": "pass",
+  "evidence": {
+    "artifact_class": "high_fidelity",
+    "class": "high_fidelity",
+    "path": ".eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md",
+    "product_url": "http://localhost:3000/promotions?propose=1",
+    "viewport": "1280x800",
+    "comparison_verdict": "start_work_opens_existing_propose_workbench"
+  },
+  "node": "N-0026",
+  "expected_revision": 7
+}

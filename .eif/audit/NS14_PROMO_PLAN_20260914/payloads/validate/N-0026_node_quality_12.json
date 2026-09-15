@@ -1,0 +1,23 @@
+{
+  "dim": "design_execution_decisions",
+  "state": "pass",
+  "evidence": {
+    "responsive_decision": {
+      "status": "applicable",
+      "rationale": "Named 1280 workflow: Start work verb to propose dialog.",
+      "evidence": ".eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md"
+    },
+    "visualisation_decision": {
+      "status": "applicable",
+      "rationale": "Strip uses case counts and USD; does not show actual/planned as a percent.",
+      "evidence": ".eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md"
+    },
+    "consequential_action_decision": {
+      "status": "applicable",
+      "rationale": "Compose is GET. Create draft not confirmed (cip write). Existing case/line path.",
+      "evidence": ".eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md"
+    }
+  },
+  "node": "N-0026",
+  "expected_revision": 12
+}

@@ -1,0 +1,15 @@
+{
+  "dim": "design_state_coverage",
+  "state": "pass",
+  "evidence": {
+    "states": [
+      "overview_create_promotion_plan",
+      "propose_dialog_empty",
+      "propose_dialog_40_lineup_lines",
+      "planner_strip_usd_not_percent"
+    ],
+    "path": ".eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md"
+  },
+  "node": "N-0026",
+  "expected_revision": 10
+}
