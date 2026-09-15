@@ -2612,3 +2612,72 @@ Exact engine invariants (do not complete around them):
 | **Behavior to retain** | Payments named leaf = `PaymentEvidenceImportWizard`. Choose workbook / Upload & validate. `Back to cases` already exists. |
 | **Out of scope** | D-0002, N-0025 complete(), Movement/Execution, column pickers. |
 | **TRIGGER** | Next Funding/Payments chrome pass; **or** Node 3 Start-work surface work if it already opens this file; **or** Warren asks to clean residual N-0025 chrome. |
+
+---
+
+## BACKLOG-183 — Listing and competitor evidence joined onto promotion plan lines
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-14 · N-0026 UNCOVERED |
+| **Effort** | Medium (join + grain + honesty when empty) |
+| **Source** | D-0008; `.eif/audit/NS14_PROMO_PLAN_20260914/RECONCILE.md`. Live `cip`: `fact_competitor_price` 0 rows; `customer_listing` 218 rows on 3 customers; `listing_observation` 168. |
+| **Idea** | Show listing activation and competitor-SKU prices on each `cpor_case_line` without inventing facts. Product competition only. |
+| **Why it matters / deferrable** | Planners cannot see whether the proposed SKU is listed or undercut. Deferrable because N-0026 will not substitute empty competitor prices or a 3-customer listing set as the plan seed. |
+| **What the work is** | Join existing listing/observation rows by customer+product onto the planner line. Ingest competitor prices before using them. Honest empty states. |
+| **Regression traps** | Do not treat listing presence as a resolution join. Do not compare customers. DAP ≠ competitor shelf price ≠ controlled cost. |
+| **Behavior to retain** | Related → Market remains the leaf for listings until joined. |
+| **Out of scope** | Customer-versus-customer ranking. N-0013 reopen. |
+| **TRIGGER** | `fact_competitor_price` has rows, **or** listing coverage is tenant-wide, **or** Warren asks to join Market onto the planner line. |
+
+---
+
+## BACKLOG-184 — Observed weeks-of-cover as promotion proposal input
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-14 · N-0026 UNCOVERED |
+| **Effort** | Medium (grain: distributor×product week vs customer-term target) |
+| **Source** | `.eif/audit/NS14_PROMO_PLAN_20260914/RECONCILE.md`. `weeks_of_cover_observation` 194349 rows; `commercial_customer_term.target_cover_weeks` all null (11 terms). |
+| **Idea** | Use observed cover/SOH as a proposal constraint or flag, distinct from target cover weeks. |
+| **Why it matters / deferrable** | Target cover today is tenant default. Observed cover exists but is a different grain. N-0026 refused to substitute it. |
+| **What the work is** | Define the customer×SKU cover series the planner should read; FLAG ≠ BLOCK; do not store calculated SOH as a fact. |
+| **Regression traps** | Do not write observed WoC into `commercial_customer_term`. Do not skip MAC bucket A (on-hand already in intake blend). |
+| **Behavior to retain** | `resolve_target_cover_weeks_sync` term → tenant default. Intake-weighted MAC unchanged. |
+| **Out of scope** | Fabricating target cover from observed cover. |
+| **TRIGGER** | Cover-policy work that defines customer×SKU observed cover for CPOR, **or** Warren asks to surface WoC on propose. |
+
+---
+
+## BACKLOG-185 — Uplift / effectiveness from settled claim evidence
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-14 · N-0026 UNCOVERED (capability already planned) |
+| **Effort** | Large (derivation + ≥5 settled-with-claims gate) |
+| **Source** | `PLANNER_CAPABILITIES` uplift row; live `cpor_claim_evidence_line` count 0. |
+| **Idea** | Derive uplift only from settled cases with claim evidence — never estimate. |
+| **Why it matters / deferrable** | Headline previously showed a dash; N-0026 removed it from the strip rather than inventing a number. Still a real capability gap. |
+| **What the work is** | Claim evidence ingest to the point that ≥5 settled cases qualify; then a derived metric with NUMBER RULE captions. |
+| **Regression traps** | Never estimate elasticity. Do not mix unmatched file amounts into ttl_support. |
+| **Behavior to retain** | Capability ledger “planned / not derived until ≥5…”. |
+| **Out of scope** | Changing settlement semantics. |
+| **TRIGGER** | `cpor_claim_evidence_line` populated on ≥5 settled commercial cases, **or** Warren asks to restore an uplift figure. |
+
+---
+
+## BACKLOG-186 — A2-05 comparable ranking still includes other customers
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-14 · N-0026 scoped around it |
+| **Effort** | Small (filter) to Medium (explainability) |
+| **Source** | `build_comparable_cases` in `norms_and_comparable.py`. N-0026 proposal path uses `build_same_customer_comparables` instead. |
+| **Idea** | Decide whether the seed-case intelligence view should also stop ranking other customers’ cases, given D-0008 product-competition semantics. |
+| **Why it matters / deferrable** | Proposal no longer uses that ranking. The seed-case A2-05 surface still does. Changing it is a separate intelligence-contract decision. |
+| **What the work is** | Either document that A2-05 same-customer-first-but-not-only is accepted for the seed view, or filter to same customer after operator decision. |
+| **Regression traps** | Do not silently empty the comparable list. Ranked never filtered to empty was A2-05’s original rule. |
+| **Behavior to retain** | N-0026 propose path remains same-customer only. |
+| **Out of scope** | Using other customers as a proposal analogue. |
+| **TRIGGER** | Operator decides A2-05 seed-view ranking must match product-competition-only, **or** a planner complains that seed-case comparables show other customers. |
+
