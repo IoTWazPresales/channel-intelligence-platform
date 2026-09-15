@@ -1,0 +1,10 @@
+{
+  "kind": "referent",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md",
+    "product": "EnterpriseDataGrid text selection + CaseBookSurface grid-first + PaymentEvidenceOverlay href"
+  },
+  "node": "N-0029",
+  "expected_revision": 17
+}

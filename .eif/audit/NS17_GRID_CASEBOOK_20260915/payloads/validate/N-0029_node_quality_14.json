@@ -1,0 +1,13 @@
+{
+  "dim": "rendered",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md",
+    "url": "http://localhost:3000/commercial-planner/cpor-cases",
+    "viewports": [
+      "1280x800"
+    ]
+  },
+  "node": "N-0029",
+  "expected_revision": 14
+}

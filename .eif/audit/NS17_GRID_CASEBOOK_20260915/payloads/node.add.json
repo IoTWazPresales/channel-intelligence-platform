@@ -1,0 +1,23 @@
+{
+  "id": "N-0029",
+  "title": "Grid community clipboard in one wrapper, Case book working content first",
+  "class": "feature",
+  "origin": "decomposition",
+  "status": "ready",
+  "facets": ["ui"],
+  "risk": "R2",
+  "touches_existing": true,
+  "acceptance": "auto",
+  "depends_on": ["N-0027", "N-0028"],
+  "target_artifact_class": "high_fidelity",
+  "design_artifact_class": "high_fidelity",
+  "acceptance_criteria": [
+    "Cite D-0008 (accepted): Case book is the settlement half of the one cpor_case lifecycle; lab FundingSurface book lens is the composition referent, not a second object. Cite N-0027 StewardFailureQueue grid as in-scope consumer. Do not revert N-0028 Start work / Lineup cases. Do not remediate N-0025. Do not reopen N-0013.",
+    "Reconcile against source before product land. Evidence: .eif/audit/NS17_GRID_CASEBOOK_20260915/RECONCILE.md. Label VERIFIED or ASSERTED. Print current_database() first if SQL is used; read-only on cip.",
+    "AgGridReact is only imported from EnterpriseDataGrid (community AllCommunityModule). Convergence lands only there: enableCellTextSelection + ensureDomOrder; pointer cursor when onRowClicked is supplied. Do not add range selection or Excel export (Enterprise module absent). Do not unify MasterColumnPickerDialog and ColumnSelectorModal.",
+    "Case book: HeadlineStrip then ScopeBar then the case grid are the working content. PaymentEvidenceOverlay and ageing/blocked panels sit below the grid. The lifecycle Alert is a caption, not a full-width block above the fold. LifecycleRail stays reachable. Keep EntityContextPanel drawer; do not mount CporCaseWorkspace on the book.",
+    "Unmatched historical Case ID PanelRows (and pending Latest Comment rows in the same overlay) are clickable via existing PanelRow href/onClick. Linked case_id opens Case book ?case= drawer. Unlinked tokens open /commercial-planner/cpor-cases/payment-evidence-import?code=. Exact Case ID only; do not mint cpor_case; FLAG ≠ BLOCK.",
+    "UNCOVERED this node: settlement workspace /cpor-cases/<id> (no lab render — needs design, not migrate); dual column pickers; AG Grid Enterprise range/Excel; LineupPlanGrid ApprovalBadge leftover; Import Center/Market chrome-below-fold; D-0002 legacy mapping grid.",
+    "Browser-verify with Playwright MCP at 1280x800: /commercial-planner/cpor-cases shows strip+scope+grid before overlay; unmatched Case ID row is a link; do not complete settlement desk. No browser_cdp. No writes to cip. Do not run GOV-008. Do not complete this node. D-0002, N-0006, N-0013, D-0010, BACKLOG-181, Movement/Execution, N-0025 remediation untouched. Do not cite a frozen design-language version or grammar number."
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "dim": "design_sameness_review",
+  "state": "pass",
+  "evidence": {
+    "visual_vocabulary_challenge": "Challenged copying lab Alert-first Case book order because product overlay pushed the working grid below the fold. Path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md",
+    "path": ".eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md",
+    "decision": "strip_scope_grid_then_overlay"
+  },
+  "node": "N-0029",
+  "expected_revision": 7
+}

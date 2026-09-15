@@ -1,0 +1,10 @@
+{
+  "dim": "a11y",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md",
+    "summary": "Unmatched rows are real links. Grid text selection is native. Keyboard/axe full pass not this session."
+  },
+  "node": "N-0029",
+  "expected_revision": 13
+}

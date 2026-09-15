@@ -1,0 +1,23 @@
+{
+  "dim": "design_execution_decisions",
+  "state": "pass",
+  "evidence": {
+    "responsive_decision": {
+      "status": "applicable",
+      "rationale": "Named 1280: Case book strip, scope, grid, overlay order.",
+      "evidence": ".eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md"
+    },
+    "visualisation_decision": {
+      "status": "applicable",
+      "rationale": "Live open book R4.4m / 74 ended; overlay after grid.",
+      "evidence": ".eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md"
+    },
+    "consequential_action_decision": {
+      "status": "applicable",
+      "rationale": "Unmatched click is GET to existing steward. No cip write. No mint cpor_case.",
+      "evidence": ".eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md"
+    }
+  },
+  "node": "N-0029",
+  "expected_revision": 11
+}

@@ -1,0 +1,10 @@
+{
+  "dim": "content",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md",
+    "summary": "Caption names settlement half. Unmatched copy still says not minted as cpor_case."
+  },
+  "node": "N-0029",
+  "expected_revision": 15
+}

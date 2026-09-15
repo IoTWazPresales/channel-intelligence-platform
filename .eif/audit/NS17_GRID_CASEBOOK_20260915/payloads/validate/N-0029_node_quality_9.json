@@ -1,0 +1,14 @@
+{
+  "dim": "design_state_coverage",
+  "state": "pass",
+  "evidence": {
+    "states": [
+      "case_book_304_rows",
+      "unmatched_c19a50693_link",
+      "settlement_desk_not_opened"
+    ],
+    "path": ".eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md"
+  },
+  "node": "N-0029",
+  "expected_revision": 9
+}

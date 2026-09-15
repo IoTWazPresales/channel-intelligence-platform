@@ -1,0 +1,15 @@
+{
+  "kind": "rendered",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md",
+    "url": "http://localhost:3000/commercial-planner/cpor-cases",
+    "clicks": [
+      "/commercial-planner/cpor-cases/payment-evidence-import?code=C19A50693"
+    ],
+    "open_book": "R4.4m",
+    "ended": 74
+  },
+  "node": "N-0029",
+  "expected_revision": 16
+}

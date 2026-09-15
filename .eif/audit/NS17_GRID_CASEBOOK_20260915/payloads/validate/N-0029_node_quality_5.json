@@ -1,0 +1,15 @@
+{
+  "dim": "design_signatures",
+  "state": "pass",
+  "evidence": {
+    "signatures": [
+      "enable_cell_text_selection",
+      "case_book_strip_scope_grid_first",
+      "unmatched_case_id_panelrow_href",
+      "settlement_workspace_uncovered"
+    ],
+    "path": ".eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md"
+  },
+  "node": "N-0029",
+  "expected_revision": 5
+}

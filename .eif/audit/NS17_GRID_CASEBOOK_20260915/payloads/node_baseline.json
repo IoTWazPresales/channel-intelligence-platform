@@ -1,0 +1,19 @@
+{
+  "node": "N-0029",
+  "expected_revision": 1,
+  "baseline_ref": "BLN-0001",
+  "preservation": {
+    "d0008": "accepted; Case book is settlement half of one cpor_case lifecycle",
+    "n0027": "StewardFailureQueue grid remains a consumer of EnterpriseDataGrid",
+    "n0028": "Start work cards and Lineup cases composition not reverted",
+    "n0025": "GOV-008 leftovers not remediated",
+    "n0026": "Create promotion plan verb not re-audited",
+    "n0013": "not reopened",
+    "d0002": "mapping-queue disposition untouched",
+    "n0006": "not reopened",
+    "d0010": "Option A untouched",
+    "backlog_181": "rail tokens untouched",
+    "movement_execution_workspaces": "not unwound",
+    "settlement_workspace": "UNCOVERED \u2014 no lab render; not designed in this node"
+  }
+}

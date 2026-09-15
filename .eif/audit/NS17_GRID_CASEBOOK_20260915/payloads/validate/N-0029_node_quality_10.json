@@ -1,0 +1,13 @@
+{
+  "dim": "design_identity_tokens",
+  "state": "pass",
+  "evidence": {
+    "tokens": {
+      "direction_name": "case book",
+      "object": "cpor_case"
+    },
+    "path": ".eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md"
+  },
+  "node": "N-0029",
+  "expected_revision": 10
+}
