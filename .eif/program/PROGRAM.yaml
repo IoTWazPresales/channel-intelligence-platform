@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 701
-  log_sha256: 51a08cb85e6291e065aeec53c718fd1b3941c366fe353d77f8d3178903b99d2b
+  snapshot_revision: 724
+  log_sha256: c78f3de5fa94abceaf925aab606689ce429fddb1458d7fffffac5935bf8265bf
   acceptance_policy:
     milestone: operator
     root: operator
@@ -5111,6 +5111,245 @@ nodes:
     design_artifact_class: high_fidelity
     implementation_run: NS16_START_LINEUP_20260915
     implementation_actor: gov-001
+  N-0029:
+    id: N-0029
+    parent: null
+    title: Grid community clipboard in one wrapper, Case book working content first
+    class: feature
+    origin: decomposition
+    status: in_progress
+    stage: validate
+    revision: 21
+    lease: null
+    depends_on:
+    - N-0027
+    - N-0028
+    facets:
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - 'Cite D-0008 (accepted): Case book is the settlement half of the one cpor_case lifecycle; lab FundingSurface book lens
+      is the composition referent, not a second object. Cite N-0027 StewardFailureQueue grid as in-scope consumer. Do not
+      revert N-0028 Start work / Lineup cases. Do not remediate N-0025. Do not reopen N-0013.'
+    - 'Reconcile against source before product land. Evidence: .eif/audit/NS17_GRID_CASEBOOK_20260915/RECONCILE.md. Label
+      VERIFIED or ASSERTED. Print current_database() first if SQL is used; read-only on cip.'
+    - 'AgGridReact is only imported from EnterpriseDataGrid (community AllCommunityModule). Convergence lands only there:
+      enableCellTextSelection + ensureDomOrder; pointer cursor when onRowClicked is supplied. Do not add range selection or
+      Excel export (Enterprise module absent). Do not unify MasterColumnPickerDialog and ColumnSelectorModal.'
+    - 'Case book: HeadlineStrip then ScopeBar then the case grid are the working content. PaymentEvidenceOverlay and ageing/blocked
+      panels sit below the grid. The lifecycle Alert is a caption, not a full-width block above the fold. LifecycleRail stays
+      reachable. Keep EntityContextPanel drawer; do not mount CporCaseWorkspace on the book.'
+    - Unmatched historical Case ID PanelRows (and pending Latest Comment rows in the same overlay) are clickable via existing
+      PanelRow href/onClick. Linked case_id opens Case book ?case= drawer. Unlinked tokens open /commercial-planner/cpor-cases/payment-evidence-import?code=.
+      Exact Case ID only; do not mint cpor_case; FLAG ≠ BLOCK.
+    - 'UNCOVERED this node: settlement workspace /cpor-cases/<id> (no lab render — needs design, not migrate); dual column
+      pickers; AG Grid Enterprise range/Excel; LineupPlanGrid ApprovalBadge leftover; Import Center/Market chrome-below-fold;
+      D-0002 legacy mapping grid.'
+    - 'Browser-verify with Playwright MCP at 1280x800: /commercial-planner/cpor-cases shows strip+scope+grid before overlay;
+      unmatched Case ID row is a link; do not complete settlement desk. No browser_cdp. No writes to cip. Do not run GOV-008.
+      Do not complete this node. D-0002, N-0006, N-0013, D-0010, BACKLOG-181, Movement/Execution, N-0025 remediation untouched.
+      Do not cite a frozen design-language version or grammar number.'
+    baseline_ref: BLN-0001
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      ux:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+          summary: Case book working grid is above overlay. Unmatched Case IDs are links into payment-evidence import.
+        rationale: null
+        pass_run: NS17_GRID_CASEBOOK_20260915
+        pass_actor: gov-001
+      a11y:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+          summary: Unmatched rows are real links. Grid text selection is native. Keyboard/axe full pass not this session.
+        rationale: null
+        pass_run: NS17_GRID_CASEBOOK_20260915
+        pass_actor: gov-001
+      rendered:
+        required: true
+        state: pass
+        evidence: &id019
+          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+          url: http://localhost:3000/commercial-planner/cpor-cases
+          clicks:
+          - /commercial-planner/cpor-cases/payment-evidence-import?code=C19A50693
+          open_book: R4.4m
+          ended: 74
+        rationale: null
+        pass_run: NS17_GRID_CASEBOOK_20260915
+        pass_actor: gov-001
+      content:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+          summary: Caption names settlement half. Unmatched copy still says not minted as cpor_case.
+        rationale: null
+        pass_run: NS17_GRID_CASEBOOK_20260915
+        pass_actor: gov-001
+      design_artifact_class:
+        required: false
+        state: pass
+        evidence:
+          class: high_fidelity
+          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+        rationale: null
+        pass_run: NS17_GRID_CASEBOOK_20260915
+        pass_actor: gov-001
+      design_divergence:
+        required: false
+        state: pass
+        evidence:
+          benchmark: Case book working grid before overlay; community clipboard in one wrapper
+          decision: enterprise_datagrid_text_select_casebook_grid_first
+          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+        rationale: null
+        pass_run: NS17_GRID_CASEBOOK_20260915
+        pass_actor: gov-001
+      design_signatures:
+        required: false
+        state: pass
+        evidence:
+          signatures:
+          - enable_cell_text_selection
+          - case_book_strip_scope_grid_first
+          - unmatched_case_id_panelrow_href
+          - settlement_workspace_uncovered
+          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+        rationale: null
+        pass_run: NS17_GRID_CASEBOOK_20260915
+        pass_actor: gov-001
+      rendered_comparison:
+        required: false
+        state: pass
+        evidence:
+          artifact_class: high_fidelity
+          class: high_fidelity
+          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+          product_url: http://localhost:3000/commercial-planner/cpor-cases
+          viewport: 1280x800
+          comparison_verdict: grid_before_overlay_unmatched_rows_are_links
+        rationale: null
+        pass_run: NS17_GRID_CASEBOOK_20260915
+        pass_actor: gov-001
+      design_sameness_review:
+        required: false
+        state: pass
+        evidence:
+          visual_vocabulary_challenge: 'Challenged copying lab Alert-first Case book order because product overlay pushed
+            the working grid below the fold. Path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md'
+          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+          decision: strip_scope_grid_then_overlay
+        rationale: null
+        pass_run: NS17_GRID_CASEBOOK_20260915
+        pass_actor: gov-001
+      design_interaction_spec:
+        required: false
+        state: pass
+        evidence:
+          interactions:
+          - open_case_book
+          - click_unmatched_historical_case_id
+          - land_payment_evidence_import
+          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+        rationale: null
+        pass_run: NS17_GRID_CASEBOOK_20260915
+        pass_actor: gov-001
+      design_state_coverage:
+        required: false
+        state: pass
+        evidence:
+          states:
+          - case_book_304_rows
+          - unmatched_c19a50693_link
+          - settlement_desk_not_opened
+          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+        rationale: null
+        pass_run: NS17_GRID_CASEBOOK_20260915
+        pass_actor: gov-001
+      design_identity_tokens:
+        required: false
+        state: pass
+        evidence:
+          tokens:
+            direction_name: case book
+            object: cpor_case
+          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+        rationale: null
+        pass_run: NS17_GRID_CASEBOOK_20260915
+        pass_actor: gov-001
+      design_execution_decisions:
+        required: false
+        state: pass
+        evidence:
+          responsive_decision:
+            status: applicable
+            rationale: 'Named 1280: Case book strip, scope, grid, overlay order.'
+            evidence: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+          visualisation_decision:
+            status: applicable
+            rationale: Live open book R4.4m / 74 ended; overlay after grid.
+            evidence: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+          consequential_action_decision:
+            status: applicable
+            rationale: Unmatched click is GET to existing steward. No cip write. No mint cpor_case.
+            evidence: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+        rationale: null
+        pass_run: NS17_GRID_CASEBOOK_20260915
+        pass_actor: gov-001
+    verification:
+      rendered:
+        state: pass
+        pass_run: NS17_GRID_CASEBOOK_20260915
+        pass_actor: gov-001
+        evidence: *id019
+        path: null
+      referent:
+        state: pass
+        pass_run: NS17_GRID_CASEBOOK_20260915
+        pass_actor: gov-001
+        evidence:
+          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+          product: EnterpriseDataGrid text selection + CaseBookSurface grid-first + PaymentEvidenceOverlay href
+        path: null
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: 'Implementer validate: Case book strip/scope/grid before overlay; unmatched C19A50693 opened payment-evidence-import?code=.
+      EnterpriseDataGrid enableCellTextSelection. Settlement workspace UNCOVERED. BACKLOG-191–196. Independent GOV-008 not
+      recorded. Do not complete.'
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation:
+      d0008: accepted; Case book is settlement half of one cpor_case lifecycle
+      n0027: StewardFailureQueue grid remains a consumer of EnterpriseDataGrid
+      n0028: Start work cards and Lineup cases composition not reverted
+      n0025: GOV-008 leftovers not remediated
+      n0026: Create promotion plan verb not re-audited
+      n0013: not reopened
+      d0002: mapping-queue disposition untouched
+      n0006: not reopened
+      d0010: Option A untouched
+      backlog_181: rail tokens untouched
+      movement_execution_workspaces: not unwound
+      settlement_workspace: UNCOVERED — no lab render; not designed in this node
+    target_artifact_class: null
+    design_artifact_class: high_fidelity
+    implementation_run: NS17_GRID_CASEBOOK_20260915
+    implementation_actor: gov-001
 decisions:
   D-0001:
     id: D-0001
@@ -5416,6 +5655,12 @@ evidence:
     path: .eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md
     tree_hash: null
     note: N-0028 Start work cards + Lineup cases HeadlineStrip; Playwright 1280; no cip write; no GOV-008
+  EV-N0029-IMPL:
+    id: EV-N0029-IMPL
+    provenance: implementation-observation
+    path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+    tree_hash: null
+    note: N-0029 EnterpriseDataGrid text selection + Case book grid-first; Playwright 1280; no cip write; no GOV-008
 baselines:
   BLN-0001:
     id: BLN-0001
