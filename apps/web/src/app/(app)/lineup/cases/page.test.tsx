@@ -45,9 +45,9 @@ describe('LineupCasesPage', () => {
       </QueryClientProvider>,
     );
     expect(await screen.findByTestId('lineup-container')).toBeInTheDocument();
-    expect(screen.getByTestId('lineup-regime-strip')).toBeInTheDocument();
+    expect(screen.getByTestId('lineup-cases-strip')).toBeInTheDocument();
     expect(screen.getByTestId('lineup-scope-bar')).toBeInTheDocument();
-    expect(screen.getByTestId('lineup-read-strip')).toBeInTheDocument();
-    expect(screen.getByTestId('lineup-trend-instrument')).toBeInTheDocument();
+    expect(screen.queryByTestId('lineup-trend-instrument')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('lineup-task-crumb')).not.toBeInTheDocument();
   });
 });

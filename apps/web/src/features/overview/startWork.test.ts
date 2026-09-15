@@ -30,6 +30,7 @@ describe('startVerbsForRole', () => {
       expect(v.href.includes('zone=attention')).toBe(false);
     }
     expect(START_VERBS.find((v) => v.id === 'create-lineup')?.href).toBe('/admin/imports?unified=1');
+    expect(START_VERBS.find((v) => v.id === 'create-lineup')?.label).toBe('Import a lineup');
     expect(START_VERBS.find((v) => v.id === 'import-sell-through')?.href).toBe(
       '/admin/imports?template=customer_sell_through',
     );
@@ -39,5 +40,6 @@ describe('startVerbsForRole', () => {
     expect(START_VERBS.find((v) => v.id === 'create-promo-plan')?.href).toBe('/promotions?propose=1');
     expect(START_VERBS.find((v) => v.id === 'settle-case')?.href).toBe('/commercial-planner/cpor-cases');
     expect(START_VERBS.find((v) => v.id === 'steward-queue')?.href).toBe('/admin/mappings');
+    expect(START_VERBS.find((v) => v.id === 'steward-queue')?.what).toMatch(/failure type/);
   });
 });

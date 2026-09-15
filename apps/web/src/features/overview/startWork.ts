@@ -16,7 +16,7 @@ export type StartVerb = {
 export const START_VERBS: StartVerb[] = [
   {
     id: 'create-lineup',
-    label: 'Create a lineup',
+    label: 'Import a lineup',
     href: '/admin/imports?unified=1',
     what: 'Upload lineup files in Import Center. Each file becomes a case.',
     roles: STEWARD_PLUS,
@@ -60,7 +60,7 @@ export const START_VERBS: StartVerb[] = [
     id: 'steward-queue',
     label: 'Work the steward queue',
     href: '/admin/mappings',
-    what: 'Legacy mapping queue. Per-job stewarding stays on the import job.',
+    what: 'Open candidates grouped by failure type. Resolve in the existing job steward.',
     roles: STEWARD_PLUS,
   },
 ];

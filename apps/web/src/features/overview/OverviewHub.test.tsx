@@ -32,7 +32,7 @@ vi.mock('@/features/overview/StartWorkPanel', () => ({
   StartWorkPanel: () => (
     <div data-testid="start-work">
       <a href="/admin/imports?unified=1" data-testid="start-work-create-lineup">
-        Create a lineup
+        Import a lineup
       </a>
     </div>
   ),

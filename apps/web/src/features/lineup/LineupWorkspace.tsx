@@ -1,7 +1,6 @@
 'use client';
 
 import { Box } from '@mui/material';
-import { alpha, useTheme } from '@mui/material/styles';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 
@@ -14,7 +13,6 @@ import { apiGet } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
 export function LineupWorkspace() {
-  const theme = useTheme();
   const searchParams = useSearchParams();
   const pendingOnly = parseLineupApprovalFilter(searchParams?.get('approval')) === 'pending';
 
@@ -39,7 +37,7 @@ export function LineupWorkspace() {
           primary: { label: 'Steward imports', href: '/admin/imports' },
         }}
       >
-        <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, bgcolor: alpha(theme.palette.common.black, 0.12) }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
           <LineupPlanGrid rows={rows} pendingOnly={pendingOnly} />
           <LineupPlanActionBar />
         </Box>
