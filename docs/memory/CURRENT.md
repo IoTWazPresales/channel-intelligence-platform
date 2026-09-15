@@ -4,7 +4,7 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `fc15436` (N-0029 product). Last ledger pin: `247034a` (pre-review snapshot **724**; this run’s `PROGRAM.yaml` add was `CONTROL_PLANE_PROTECTED`). Last evidence pin: `52c006e`. Last views pin: `ad24c3e`. Run `GOV008_N0025_N0029_20260915` / actor `gov-008`.
+**Last content pin:** `fc15436` (N-0029 product). Last ledger pin: `247034a` (pre-review snapshot **724**; this run’s `PROGRAM.yaml` add was `CONTROL_PLANE_PROTECTED`). Last evidence pin: `52c006e`. Last views pin: `ad24c3e`. Last docs pin: `57969c1`. Run `GOV008_N0025_N0029_20260915` / actor `gov-008`.
 
 **Alembic (code):** `20260906_0022` (`cpor_case.intelligence_exclude`)
 

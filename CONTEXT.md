@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-09-15 — **GOV-008 N-0025–N-0029** on `feat/ns-2-brief-nav-collapse` `cca127f` (evidence `52c006e`, views `ad24c3e`, run `GOV008_N0025_N0029_20260915` / actor `gov-008` vs impl NS13–NS17). N-0025 **VERIFIED_WITH_LIMITATIONS complete**. N-0026 **VERIFIED complete**. N-0027–N-0029 **VERIFIED_WITH_LIMITATIONS** not complete (dirty resolve href; live Panel wrapper vs HEAD cards; payment-evidence `?code=` unread). Evidence `.eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md`. Ledger `PROGRAM.yaml` add `CONTROL_PLANE_PROTECTED`. No cip writes. Product dirt not staged.
+- 2026-09-15 — **GOV-008 N-0025–N-0029** on `feat/ns-2-brief-nav-collapse` `cca127f` (evidence `52c006e`, views `ad24c3e`, docs `57969c1`, run `GOV008_N0025_N0029_20260915` / actor `gov-008` vs impl NS13–NS17). N-0025 **VERIFIED_WITH_LIMITATIONS complete**. N-0026 **VERIFIED complete**. N-0027–N-0029 **VERIFIED_WITH_LIMITATIONS** not complete (dirty resolve href; live Panel wrapper vs HEAD cards; payment-evidence `?code=` unread). Evidence `.eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md`. Ledger `PROGRAM.yaml` add `CONTROL_PLANE_PROTECTED`. No cip writes. Product dirt not staged.
 
 - 2026-09-15 — **Steward queue resolve + alias memory + grid clip** on `feat/ns-2-brief-nav-collapse` (uncommitted): queue click stays on Steward leaf `?workspace=resolve` (Customers tab + drawer for token `841765` job 553 live); hides 130 already-aliased distributor/customer tokens (cip 2684 open). Start work uses Panel rows. `EnterpriseDataGrid` overflow clip. Not a programme node close. D-0002 / N-0025 remediation untouched.
 
