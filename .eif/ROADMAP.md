@@ -27,3 +27,4 @@
 - N-0023 **Port BACKLOG-181 LabShell rail treatment into production** `complete`/`complete` (redesign)
 - N-0024 **Fix label-versus-destination mismatches in nav, brief signals, hub Workflows, and headline figures** `complete`/`complete` (redesign)
 - N-0025 **Make actionable work reachable: one Start work surface plus remaining obstruct findings** `in_progress`/`in_progress` (redesign)
+- N-0026 **Propose a promotion plan from customer and period on the Promotion Planner** `in_progress`/`in_progress` (feature)

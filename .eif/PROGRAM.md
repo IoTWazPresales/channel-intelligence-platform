@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 631
+**Snapshot revision:** 655
 
 ## Outcome (verbatim)
 
@@ -47,3 +47,4 @@ _none_
 | N-0023 | Port BACKLOG-181 LabShell rail treatment into production | redesign | complete | complete | yes |  | full loop |
 | N-0024 | Fix label-versus-destination mismatches in nav, brief signals, hub Workflows, and headline figures | redesign | complete | complete | yes |  | full loop |
 | N-0025 | Make actionable work reachable: one Start work surface plus remaining obstruct findings | redesign | in_progress | in_progress | yes |  | full loop |
+| N-0026 | Propose a promotion plan from customer and period on the Promotion Planner | feature | in_progress | in_progress | yes |  | full loop |
