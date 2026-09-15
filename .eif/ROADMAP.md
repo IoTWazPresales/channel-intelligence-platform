@@ -30,3 +30,4 @@
 - N-0026 **Propose a promotion plan from customer and period on the Promotion Planner** `in_progress`/`in_progress` (feature)
 - N-0027 **Steward queue grouped by failure type, routing into existing engines** `in_progress`/`in_progress` (feature)
 - N-0028 **Start work cards and Lineup cases on the lab composition** `in_progress`/`in_progress` (feature)
+- N-0029 **Grid community clipboard in one wrapper, Case book working content first** `in_progress`/`in_progress` (feature)
