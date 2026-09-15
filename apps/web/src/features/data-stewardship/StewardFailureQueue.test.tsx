@@ -104,8 +104,9 @@ const payload = {
       template_slug: 'distributor_inventory',
       file_name: 'w35.xlsx',
       job_status: 'completed_with_errors',
-      steward_href: '/admin/imports?job=43',
+      steward_href: '/admin/mappings?workspace=resolve&job=43&entity_type=product_identifier&token=sku-a&candidate=11',
       covered: true,
+      memory_state: 'unknown',
     },
     {
       id: 12,
@@ -125,6 +126,8 @@ const payload = {
   ],
   total_candidates: 3,
   distinct_jobs: 2,
+  remembered_count: 0,
+  include_remembered: false,
   returned: 2,
   truncated: false,
   entity_type_filter: null,
@@ -155,7 +158,10 @@ describe('StewardFailureQueue', () => {
     );
     expect(screen.getByTestId('steward-failure-chips').querySelector('[data-chip="brand_new_token"]')).toBeTruthy();
     expect(screen.queryByText('Customer')).not.toBeInTheDocument();
-    expect(screen.getByTestId('steward-queue-open-11')).toHaveAttribute('href', '/admin/imports?job=43');
+    expect(screen.getByTestId('steward-queue-open-11')).toHaveAttribute(
+      'href',
+      '/admin/mappings?workspace=resolve&job=43&entity_type=product_identifier&token=sku-a&candidate=11'
+    );
     expect(screen.getByTestId('steward-row-12')).toHaveTextContent('UNCOVERED');
     expect(screen.getByTestId('steward-row-11')).toHaveTextContent('43');
   });

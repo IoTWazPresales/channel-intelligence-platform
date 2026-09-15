@@ -22,6 +22,8 @@ class DsiMappingCandidatesListParams(BaseModel):
     possible_duplicates_only: bool = False
     duplicate_unresolved_only: bool = False
     status: DsiCandidateStatusFilter = "open"
+    normalized_key: str | None = None
+    candidate_id: int | None = Field(default=None, ge=1)
 
 
 class DsiMappingCandidateItem(BaseModel):

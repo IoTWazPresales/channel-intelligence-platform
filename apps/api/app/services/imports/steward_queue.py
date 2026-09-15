@@ -4,61 +4,112 @@ Grouping is SQL ``GROUP BY entity_type`` — not hardcoded Customer/Product/Dist
 sections. Known types may carry a label and an href into an existing job-scoped
 engine. Unknown types still appear; missing href is UNCOVERED.
 
+Click-through stays on the Steward queue leaf (``/admin/mappings?workspace=resolve``)
+with job + entity type + token. It does not open the Import Center wizard.
+
+Default list hides distributor/customer tokens that already have exactly one
+approved source-token alias (alias memory). Conflicts stay visible. Product/CST
+tokens are not classified as remembered here.
+
 Tenant identity uses ``tenant_id_from_user`` (config), never a queue constant.
 """
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlencode
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.tenant_scope import tenant_id_from_user
 
-# Config: resolution path for types that already have an engine. Not UI sections.
-# Adding a future importer's type to the queue surface does not require a change here;
-# adding a click-through does (one registry row).
+# Config: label + coverage for types that already have an engine. Not UI sections.
+# Click-through is built in ``resolution_href`` (steward leaf, not Import Center).
 STEWARD_QUEUE_RESOLUTION: dict[str, dict[str, str]] = {
-    "product_identifier": {
-        "label": "DSI product identifier",
-        "href_template": "/admin/imports?job={import_job_id}",
-    },
-    "customer_dealer_token": {
-        "label": "DSI customer / dealer token",
-        "href_template": "/admin/imports?job={import_job_id}",
-    },
-    "distributor_token": {
-        "label": "DSI distributor token",
-        "href_template": "/admin/imports?job={import_job_id}",
-    },
-    "cst_product_token": {
-        "label": "CST product token",
-        "href_template": "/admin/imports?job={import_job_id}",
-    },
-    "cst_location_token": {
-        "label": "CST location token",
-        "href_template": "/admin/imports?job={import_job_id}",
-    },
-    "shipment_distributor": {
-        "label": "Shipment distributor",
-        "href_template": "/admin/shipment-evidence?importJobId={import_job_id}",
-    },
-    "shipment_customer_token": {
-        "label": "Shipment customer token",
-        "href_template": "/admin/shipment-evidence?importJobId={import_job_id}",
-    },
+    "product_identifier": {"label": "DSI product identifier"},
+    "customer_dealer_token": {"label": "DSI customer / dealer token"},
+    "distributor_token": {"label": "DSI distributor token"},
+    "cst_product_token": {"label": "CST product token"},
+    "cst_location_token": {"label": "CST location token"},
+    "shipment_distributor": {"label": "Shipment distributor"},
+    "shipment_customer_token": {"label": "Shipment customer token"},
 }
 
 OPEN_CANDIDATE_STATUS = "needs_review"
 DEFAULT_ITEM_LIMIT = 2000
 MAX_ITEM_LIMIT = 5000
 
+# Correlated alias counts: unique dim id = remembered; several dim ids = conflict.
+_OPEN_CANDIDATES_FROM = """
+FROM import_entity_mapping_candidate c
+JOIN import_job j ON j.id = c.import_job_id
+LEFT JOIN LATERAL (
+  SELECT
+    CASE
+      WHEN c.entity_type IN ('distributor_token', 'shipment_distributor') THEN (
+        SELECT count(DISTINCT a.distributor_id)::int
+        FROM distributor_source_token_alias a
+        WHERE a.status = 'approved'
+          AND a.normalized_token = c.normalized_key
+          AND (
+            a.source_definition_id IS NULL
+            OR c.source_definition_id IS NULL
+            OR a.source_definition_id = c.source_definition_id
+          )
+      )
+      WHEN c.entity_type IN ('customer_dealer_token', 'shipment_customer_token') THEN (
+        SELECT count(DISTINCT a.customer_id)::int
+        FROM customer_source_token_alias a
+        WHERE a.status = 'approved'
+          AND a.normalized_token = c.normalized_key
+          AND (
+            a.source_definition_id IS NULL
+            OR c.source_definition_id IS NULL
+            OR a.source_definition_id = c.source_definition_id
+          )
+      )
+      ELSE 0
+    END AS alias_dim_count
+) mem ON true
+"""
 
-def resolution_href(entity_type: str, import_job_id: int) -> str | None:
+_MEMORY_STATE_EXPR = """
+CASE
+  WHEN coalesce(mem.alias_dim_count, 0) = 1 THEN 'remembered'
+  WHEN coalesce(mem.alias_dim_count, 0) > 1 THEN 'conflict'
+  ELSE 'unknown'
+END
+"""
+
+
+def memory_state_from_alias_count(n: int) -> str:
+    if n == 1:
+        return "remembered"
+    if n > 1:
+        return "conflict"
+    return "unknown"
+
+
+def resolution_href(
+    entity_type: str,
+    import_job_id: int,
+    *,
+    normalized_key: str | None = None,
+    candidate_id: int | None = None,
+) -> str | None:
     spec = STEWARD_QUEUE_RESOLUTION.get(entity_type)
     if not spec:
         return None
-    return spec["href_template"].format(import_job_id=int(import_job_id))
+    params: dict[str, str] = {
+        "workspace": "resolve",
+        "job": str(int(import_job_id)),
+        "entity_type": entity_type,
+    }
+    if normalized_key:
+        params["token"] = str(normalized_key)
+    if candidate_id is not None:
+        params["candidate"] = str(int(candidate_id))
+    return "/admin/mappings?" + urlencode(params)
 
 
 def resolution_label(entity_type: str) -> str:
@@ -83,9 +134,12 @@ def decorate_group(entity_type: str, candidate_count: int, job_count: int, row_c
 def decorate_item(row: dict[str, Any]) -> dict[str, Any]:
     et = str(row["entity_type"])
     job_id = int(row["import_job_id"])
-    href = resolution_href(et, job_id)
+    token = row.get("normalized_key")
+    cand_id = int(row["id"])
+    href = resolution_href(et, job_id, normalized_key=str(token) if token else None, candidate_id=cand_id)
+    memory_state = str(row.get("memory_state") or "unknown")
     return {
-        "id": int(row["id"]),
+        "id": cand_id,
         "entity_type": et,
         "label": resolution_label(et),
         "normalized_key": row["normalized_key"],
@@ -98,6 +152,7 @@ def decorate_item(row: dict[str, Any]) -> dict[str, Any]:
         "job_status": row["job_status"],
         "steward_href": href,
         "covered": href is not None,
+        "memory_state": memory_state,
     }
 
 
@@ -107,30 +162,45 @@ async def steward_failure_queue(
     *,
     entity_type: str | None = None,
     limit: int = DEFAULT_ITEM_LIMIT,
+    include_remembered: bool = False,
 ) -> dict[str, Any]:
     tenant = tenant_id_from_user(user)
     dbname = (await db.execute(text("SELECT current_database()"))).scalar()
     lim = max(1, min(int(limit), MAX_ITEM_LIMIT))
     et_filter = (entity_type or "").strip() or None
+    show_remembered = bool(include_remembered)
+
+    base_where = """
+      c.status = :open_status
+      AND j.tenant_id = :tenant
+      AND (CAST(:entity_type AS VARCHAR) IS NULL OR c.entity_type = CAST(:entity_type AS VARCHAR))
+    """
+    visible_where = base_where + (
+        "" if show_remembered else f" AND {_MEMORY_STATE_EXPR} <> 'remembered'"
+    )
+
+    shared = {
+        "open_status": OPEN_CANDIDATE_STATUS,
+        "tenant": tenant,
+        "entity_type": et_filter,
+    }
 
     groups_rows = (
         await db.execute(
             text(
-                """
+                f"""
                 SELECT
                   c.entity_type,
                   count(1) AS candidate_count,
                   count(DISTINCT c.import_job_id) AS job_count,
                   coalesce(sum(c.row_count), 0) AS row_count
-                FROM import_entity_mapping_candidate c
-                JOIN import_job j ON j.id = c.import_job_id
-                WHERE c.status = :open_status
-                  AND j.tenant_id = :tenant
+                {_OPEN_CANDIDATES_FROM}
+                WHERE {visible_where}
                 GROUP BY c.entity_type
                 ORDER BY count(1) DESC, c.entity_type
                 """
             ),
-            {"open_status": OPEN_CANDIDATE_STATUS, "tenant": tenant},
+            shared,
         )
     ).mappings().all()
 
@@ -148,15 +218,30 @@ async def steward_failure_queue(
         (
             await db.execute(
                 text(
-                    """
+                    f"""
                     SELECT count(DISTINCT c.import_job_id)
-                    FROM import_entity_mapping_candidate c
-                    JOIN import_job j ON j.id = c.import_job_id
-                    WHERE c.status = :open_status
-                      AND j.tenant_id = :tenant
+                    {_OPEN_CANDIDATES_FROM}
+                    WHERE {visible_where}
                     """
                 ),
-                {"open_status": OPEN_CANDIDATE_STATUS, "tenant": tenant},
+                shared,
+            )
+        ).scalar()
+        or 0
+    )
+
+    remembered_count = int(
+        (
+            await db.execute(
+                text(
+                    f"""
+                    SELECT count(1)
+                    {_OPEN_CANDIDATES_FROM}
+                    WHERE {base_where}
+                      AND {_MEMORY_STATE_EXPR} = 'remembered'
+                    """
+                ),
+                shared,
             )
         ).scalar()
         or 0
@@ -165,7 +250,7 @@ async def steward_failure_queue(
     items_rows = (
         await db.execute(
             text(
-                """
+                f"""
                 SELECT
                   c.id,
                   c.entity_type,
@@ -176,22 +261,15 @@ async def steward_failure_queue(
                   c.import_job_id,
                   j.template_slug,
                   j.file_name,
-                  j.status AS job_status
-                FROM import_entity_mapping_candidate c
-                JOIN import_job j ON j.id = c.import_job_id
-                WHERE c.status = :open_status
-                  AND j.tenant_id = :tenant
-                  AND (CAST(:entity_type AS VARCHAR) IS NULL OR c.entity_type = CAST(:entity_type AS VARCHAR))
+                  j.status AS job_status,
+                  {_MEMORY_STATE_EXPR} AS memory_state
+                {_OPEN_CANDIDATES_FROM}
+                WHERE {visible_where}
                 ORDER BY c.row_count DESC, c.id
                 LIMIT :lim
                 """
             ),
-            {
-                "open_status": OPEN_CANDIDATE_STATUS,
-                "tenant": tenant,
-                "entity_type": et_filter,
-                "lim": lim,
-            },
+            {**shared, "lim": lim},
         )
     ).mappings().all()
 
@@ -205,6 +283,8 @@ async def steward_failure_queue(
         "items": items,
         "total_candidates": total_candidates,
         "distinct_jobs": distinct_jobs,
+        "remembered_count": remembered_count,
+        "include_remembered": show_remembered,
         "returned": len(items),
         "truncated": len(items) >= lim and total_candidates > len(items),
         "entity_type_filter": et_filter,

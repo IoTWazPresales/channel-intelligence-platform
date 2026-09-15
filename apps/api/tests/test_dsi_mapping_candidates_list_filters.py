@@ -26,3 +26,10 @@ def test_possible_duplicates_only_matches_unresolved_and_excludes_reviewed() -> 
     assert "possible_duplicate_of" in possible_sql
     assert "duplicate_review" in possible_sql
     assert possible_sql == unresolved_sql
+
+
+def test_normalized_key_and_candidate_id_filters_compile() -> None:
+    key_sql = _compile_where(DsiMappingCandidatesListParams(normalized_key="acme-store"))
+    assert "acme-store" in key_sql
+    id_sql = _compile_where(DsiMappingCandidatesListParams(candidate_id=42))
+    assert "42" in id_sql

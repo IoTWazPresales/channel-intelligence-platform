@@ -110,21 +110,26 @@ export function ShipmentImportJobResolutionSection({
   shipmentPipelineRunning = false,
   onInvalidate: onInvalidateProp,
   onAsyncPipelineStarted,
+  initialTab,
+  initialSearch,
 }: {
   importJobId: number | null;
   shipmentPipelineRunning?: boolean;
   onInvalidate?: () => void;
   onAsyncPipelineStarted?: (args: { importJobId: number; taskId?: string | null }) => void;
+  initialTab?: ShipmentEntityTabId;
+  initialSearch?: string;
 }) {
   const qc = useQueryClient();
-  const [activeTab, setActiveTab] = useState<ShipmentEntityTabId>('distributor');
-  const [visitedTabs, setVisitedTabs] = useState<Set<ShipmentEntityTabId>>(() => new Set(['distributor']));
+  const startTab = initialTab ?? 'distributor';
+  const [activeTab, setActiveTab] = useState<ShipmentEntityTabId>(startTab);
+  const [visitedTabs, setVisitedTabs] = useState<Set<ShipmentEntityTabId>>(() => new Set([startTab]));
   const [filtersByTab, setFiltersByTab] = useState(() => ({
     distributor: defaultShipmentStewardFiltersForTab('distributor'),
     customer: defaultShipmentStewardFiltersForTab('customer'),
   }));
-  const [searchInput, setSearchInput] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [searchInput, setSearchInput] = useState(initialSearch ?? '');
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch?.trim() ?? '');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [bulkMode, setBulkMode] = useState<BulkTableSelectionMode>('normal');
   const [bulkProvNamesById, setBulkProvNamesById] = useState<Record<number, string>>({});
@@ -132,6 +137,7 @@ export function ShipmentImportJobResolutionSection({
   const [detailCandidate, setDetailCandidate] = useState<ShipmentMappingCandidateRow | null>(null);
   const [rowActionPendingId, setRowActionPendingId] = useState<number | null>(null);
   const workspaceToolbarRef = useRef<HTMLDivElement | null>(null);
+  const shipmentFocusAppliedRef = useRef(false);
 
   const tabbedMode = importJobId != null;
   const activeFilters = filtersByTab[activeTab];
@@ -273,6 +279,16 @@ export function ShipmentImportJobResolutionSection({
       ),
     [candidates, activeFilters, plan.planByCandidateId, debouncedSearch]
   );
+
+  useEffect(() => {
+    if (shipmentFocusAppliedRef.current) return;
+    const needle = (initialSearch || '').trim();
+    if (!needle) return;
+    const row = filteredCandidates.find((r) => (r.normalized_key || '').trim() === needle);
+    if (!row) return;
+    setDetailCandidate(row);
+    shipmentFocusAppliedRef.current = true;
+  }, [filteredCandidates, initialSearch]);
 
   const clientQueueFilterActive = candidatesPage.clientQueueFilterActive;
   const filteredPageCount = Math.max(

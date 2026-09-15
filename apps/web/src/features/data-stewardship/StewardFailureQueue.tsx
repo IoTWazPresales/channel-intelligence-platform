@@ -18,16 +18,26 @@ import { toQueryError } from '@/lib/queryError';
 import type { StewardFailureQueueResponse, StewardQueueItem } from './types';
 import { useClientReady } from './useClientReady';
 
+function memoryLabel(state: StewardQueueItem['memory_state']): string {
+  if (state === 'remembered') return 'Already mapped';
+  if (state === 'conflict') return 'Alias conflict';
+  return 'Needs mapping';
+}
+
 export function StewardFailureQueue() {
   const router = useRouter();
   const search = useSearchParams();
   const entityType = search.get('entity_type');
+  const includeRemembered = search.get('include_remembered') === '1';
   const ready = useClientReady();
-  const qs = entityType ? `?entity_type=${encodeURIComponent(entityType)}` : '';
+  const qs = new URLSearchParams();
+  if (entityType) qs.set('entity_type', entityType);
+  if (includeRemembered) qs.set('include_remembered', 'true');
+  const query = qs.toString();
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['imports', 'steward-queue', entityType],
+    queryKey: ['imports', 'steward-queue', entityType, includeRemembered],
     queryFn: ({ signal }) =>
-      apiGet<StewardFailureQueueResponse>(`/api/v1/imports/steward-queue${qs}`, { signal }),
+      apiGet<StewardFailureQueueResponse>(`/api/v1/imports/steward-queue${query ? `?${query}` : ''}`, { signal }),
   });
   const payload = ready ? data : undefined;
 
@@ -39,6 +49,14 @@ export function StewardFailureQueue() {
     router.replace(out ? `/admin/mappings?${out}` : '/admin/mappings', { scroll: false });
   };
 
+  const setIncludeRemembered = (next: boolean) => {
+    const params = new URLSearchParams(search.toString());
+    if (next) params.set('include_remembered', '1');
+    else params.delete('include_remembered');
+    const out = params.toString();
+    router.replace(out ? `/admin/mappings?${out}` : '/admin/mappings', { scroll: false });
+  };
+
   const chips = (payload?.groups ?? []).map((g) => ({
     key: g.entity_type,
     label: `${g.label} · ${g.candidate_count}`,
@@ -46,6 +64,15 @@ export function StewardFailureQueue() {
     onToggle: () => setEntity(entityType === g.entity_type ? null : g.entity_type),
     tone: g.covered ? ('default' as const) : ('warning' as const),
   }));
+  if ((payload?.remembered_count ?? 0) > 0) {
+    chips.push({
+      key: 'include_remembered',
+      label: `Already mapped · ${payload?.remembered_count}`,
+      active: includeRemembered,
+      onToggle: () => setIncludeRemembered(!includeRemembered),
+      tone: 'warning' as const,
+    });
+  }
 
   const uncovered = (payload?.groups ?? []).filter((g) => !g.covered).length;
 
@@ -53,14 +80,21 @@ export function StewardFailureQueue() {
     () => [
       { field: 'entity_type', headerName: 'Failure type', minWidth: 180, flex: 1, valueGetter: (p) => p.data?.label ?? p.data?.entity_type },
       { field: 'normalized_key', headerName: 'Token', minWidth: 200, flex: 1.4 },
+      {
+        field: 'memory_state',
+        headerName: 'Memory',
+        minWidth: 140,
+        width: 150,
+        valueGetter: (p) => memoryLabel(p.data?.memory_state),
+      },
       { field: 'row_count', headerName: 'Rows', type: 'rightAligned', width: 90 },
       { field: 'import_job_id', headerName: 'Job', width: 90 },
       { field: 'template_slug', headerName: 'Importer', minWidth: 160, flex: 1 },
       { field: 'file_name', headerName: 'File', minWidth: 180, flex: 1.2 },
-      { field: 'job_status', headerName: 'Job status', width: 160 },
+      { field: 'job_status', headerName: 'Job status', width: 140 },
       {
         headerName: 'Open',
-        width: 140,
+        width: 120,
         cellRenderer: (p: { data?: StewardQueueItem }) => {
           const href = p.data?.steward_href;
           if (!href) {
@@ -95,23 +129,23 @@ export function StewardFailureQueue() {
           value={payload?.total_candidates ?? '—'}
           compact
           severity={payload?.total_candidates ? 'warn' : 'good'}
-          caption="needs_review across jobs"
+          caption={includeRemembered ? 'including already-mapped tokens' : 'unknown or conflicting — not alias memory'}
         />
         <HeadlineFigure label="Failure types" value={payload?.groups.length ?? '—'} compact caption="GROUP BY entity_type" />
         <HeadlineFigure label="Jobs with work" value={payload?.distinct_jobs ?? '—'} compact />
         <HeadlineFigure
-          label="Uncovered types"
-          value={uncovered}
+          label="Already mapped"
+          value={payload?.remembered_count ?? '—'}
           compact
-          severity={uncovered ? 'warn' : 'good'}
-          caption="no existing engine href"
+          severity={payload?.remembered_count ? 'info' : 'good'}
+          caption="approved alias exists — hidden unless shown"
         />
         </HeadlineStrip>
       </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 1.5 }} data-testid="steward-failure-queue-copy">
-        Grouped by the failure type stored on each candidate, not by import job. Job is provenance. Resolve in the
-        existing steward — this leaf does not accept or reject. Legacy <code>entity_mapping_queue</code> is D-0002
-        (untouched) and is not this list.
+        Click a row to open that token in the existing job steward, on this Steward queue leaf — not Import Center.
+        Distributor and customer tokens with exactly one approved alias are hidden; they are already in memory.
+        Conflicts stay. Legacy <code>entity_mapping_queue</code> is D-0002 (untouched).
       </Typography>
       <ScopeBar
         chips={chips}
@@ -120,7 +154,10 @@ export function StewardFailureQueue() {
             ? `${payload.returned} of ${entityType ? payload.items.length : payload.total_candidates} candidates`
             : undefined
         }
-        onClear={() => setEntity(null)}
+        onClear={() => {
+          setEntity(null);
+          setIncludeRemembered(false);
+        }}
       />
       <ModuleDataSection
         isLoading={isLoading || !ready}
@@ -130,7 +167,9 @@ export function StewardFailureQueue() {
         isEmpty={!isLoading && ready && (payload?.items.length ?? 0) === 0}
         empty={{
           title: 'No open steward candidates',
-          description: 'Nothing in needs_review on import_entity_mapping_candidate for this tenant.',
+          description: includeRemembered
+            ? 'Nothing in needs_review for this tenant.'
+            : 'Nothing unknown to map. Already-mapped tokens are hidden; show them from the chip if a job is still blocked.',
           primary: { label: 'Import Center', href: '/admin/imports' },
         }}
         toolbar={<ModuleGridToolbar onRefresh={() => void refetch()} importsHref="/admin/imports" />}

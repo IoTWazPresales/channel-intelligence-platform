@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { BulkSelectionToolbar, type BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
 
 import type { PlanApplyFeedback } from '@/app/(app)/admin/imports/dsi/dsiSteward.types';
@@ -62,7 +63,7 @@ import {
 } from '@/app/(app)/admin/imports/dsi';
 import { DsiCustomerSearchFields } from '@/app/(app)/admin/imports/dsi/DsiCustomerSearchFields';
 import { useDsiStewardBulkBusy } from '@/app/(app)/admin/imports/dsi/useDsiStewardBulkBusy';
-import { safeDisplayError } from '@/lib/api';
+import { apiGet, safeDisplayError } from '@/lib/api';
 
 import {
   buildDuplicateClusterIndex,
@@ -85,6 +86,9 @@ export function DsiImportJobResolutionSection({
   dsiPipelineRunning = false,
   onAsyncPipelineStarted,
   validateSummary = null,
+  initialTab,
+  focusNormalizedKey,
+  focusCandidateId,
 }: {
   importJobId: number;
   /** Test / story override — skips paginated fetch when provided. */
@@ -97,11 +101,15 @@ export function DsiImportJobResolutionSection({
   onAsyncPipelineStarted?: (args: { importJobId: number; taskId?: string | null }) => void;
   /** Latest distributor_si_summary for blocker empty-state copy. */
   validateSummary?: DistributorSiSummary | null;
+  initialTab?: DsiEntityTabId;
+  focusNormalizedKey?: string;
+  focusCandidateId?: number;
 }) {
   const tabbedMode = candidatesOverride == null;
+  const startTab = initialTab ?? 'distributor';
 
-  const [activeTab, setActiveTab] = useState<DsiEntityTabId>('distributor');
-  const [visitedTabs, setVisitedTabs] = useState<Set<DsiEntityTabId>>(() => new Set(['distributor']));
+  const [activeTab, setActiveTab] = useState<DsiEntityTabId>(startTab);
+  const [visitedTabs, setVisitedTabs] = useState<Set<DsiEntityTabId>>(() => new Set([startTab]));
   const [filtersByTab, setFiltersByTab] = useState<Record<DsiEntityTabId, DsiStewardCandidateFilterState>>(() => ({
     distributor: defaultDsiStewardFiltersForTab('distributor'),
     customer: defaultDsiStewardFiltersForTab('customer'),
@@ -160,7 +168,14 @@ export function DsiImportJobResolutionSection({
     candidatesErrorOverride ?? (candidatesPage.query.isError ? candidatesPage.query.error : null);
   const candidatesTotal = candidatesOverride != null ? candidates.length : candidatesPage.total;
 
+  const focusAppliedRef = useRef(false);
+  const dsiClearInitRef = useRef(true);
+
   useEffect(() => {
+    if (dsiClearInitRef.current) {
+      dsiClearInitRef.current = false;
+      return;
+    }
     setSelectedIds([]);
     setDetailCandidate(null);
     selectionAnchorIdRef.current = null;
@@ -171,6 +186,36 @@ export function DsiImportJobResolutionSection({
     candidatesPage.pageSize,
     candidatesPage.skip,
   ]);
+  const focusQuery = useQuery({
+    queryKey: ['dsi-focus-candidate', importJobId, focusNormalizedKey, focusCandidateId, startTab],
+    queryFn: ({ signal }) => {
+      const q = new URLSearchParams();
+      q.set('limit', '5');
+      q.set('status', 'all');
+      if (startTab === 'customer') q.set('entity', 'customer');
+      else if (startTab === 'product') q.set('entity', 'product');
+      else if (startTab === 'distributor') q.set('entity', 'distributor');
+      if (focusNormalizedKey) q.set('normalized_key', focusNormalizedKey);
+      if (focusCandidateId != null) q.set('candidate_id', String(focusCandidateId));
+      return apiGet<{ items: DsiCandidateRow[] }>(
+        `/api/v1/mappings/import-jobs/${importJobId}/distributor-si-candidates?${q.toString()}`,
+        { signal }
+      );
+    },
+    enabled: tabbedMode && importJobId > 0 && Boolean(focusNormalizedKey || focusCandidateId),
+  });
+
+  useEffect(() => {
+    if (focusAppliedRef.current) return;
+    const items = focusQuery.data?.items ?? [];
+    const row =
+      (focusCandidateId != null ? items.find((c) => c.id === focusCandidateId) : undefined) ??
+      (focusNormalizedKey ? items.find((c) => c.normalized_key === focusNormalizedKey) : undefined) ??
+      items[0];
+    if (!row) return;
+    setDetailCandidate(row);
+    focusAppliedRef.current = true;
+  }, [focusQuery.data, focusCandidateId, focusNormalizedKey]);
 
   const plan = useDsiResolutionPlan({
     importJobId,

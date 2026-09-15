@@ -51,6 +51,7 @@ export type StewardQueueItem = {
   job_status: string | null;
   steward_href: string | null;
   covered: boolean;
+  memory_state?: 'unknown' | 'remembered' | 'conflict';
 };
 
 export type StewardFailureQueueResponse = {
@@ -61,6 +62,8 @@ export type StewardFailureQueueResponse = {
   items: StewardQueueItem[];
   total_candidates: number;
   distinct_jobs: number;
+  remembered_count?: number;
+  include_remembered?: boolean;
   returned: number;
   truncated: boolean;
   entity_type_filter: string | null;

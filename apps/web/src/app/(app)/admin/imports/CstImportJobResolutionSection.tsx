@@ -14,7 +14,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { BulkTableSelectionMode } from '@/components/bulkTable/BulkSelectionToolbar';
 import { BulkSelectionToolbar } from '@/components/bulkTable/BulkSelectionToolbar';
@@ -170,17 +170,24 @@ function ConfidenceBandCell({ score }: { score: number | null | undefined }) {
 export function CstImportJobResolutionSection({
   importJobId,
   onInvalidate: onInvalidateProp,
+  initialTab,
+  initialSearch,
+  focusNormalizedKey,
 }: {
   importJobId: number;
   onInvalidate?: () => void;
+  initialTab?: CstEntityTabId;
+  initialSearch?: string;
+  focusNormalizedKey?: string;
 }) {
   const qc = useQueryClient();
-  const [activeTab, setActiveTab] = useState<CstEntityTabId>('product');
+  const startTab = initialTab ?? 'product';
+  const [activeTab, setActiveTab] = useState<CstEntityTabId>(startTab);
   const [activeFilters, setActiveFilters] = useState<StewardCandidateFilterState>(() =>
-    defaultCstFiltersForTab('product')
+    defaultCstFiltersForTab(startTab)
   );
-  const [searchInput, setSearchInput] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [searchInput, setSearchInput] = useState(initialSearch ?? '');
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch?.trim() ?? '');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [bulkMode, setBulkMode] = useState<BulkTableSelectionMode>('normal');
   const [detailCandidate, setDetailCandidate] = useState<CstStewardRow | null>(null);
@@ -190,6 +197,8 @@ export function CstImportJobResolutionSection({
   } | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [planApplySummary, setPlanApplySummary] = useState<StewardPlanApplyFeedback | null>(null);
+  const cstFocusAppliedRef = useRef(false);
+  const cstTabInitRef = useRef(true);
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 300);
@@ -274,6 +283,16 @@ export function CstImportJobResolutionSection({
     [stewardRows, debouncedSearch]
   );
 
+  useEffect(() => {
+    if (cstFocusAppliedRef.current) return;
+    const needle = (focusNormalizedKey || initialSearch || '').trim();
+    if (!needle) return;
+    const row = filteredRows.find((r) => r.normalized_key === needle || r.token === needle);
+    if (!row) return;
+    setDetailCandidate(row);
+    cstFocusAppliedRef.current = true;
+  }, [filteredRows, focusNormalizedKey, initialSearch]);
+
   const plan = useStewardResolutionPlan({
     importJobId,
     candidates: filteredRows,
@@ -314,13 +333,19 @@ export function CstImportJobResolutionSection({
   };
 
   useEffect(() => {
+    if (cstTabInitRef.current) {
+      cstTabInitRef.current = false;
+      return;
+    }
     setDetailCandidate(null);
     setSelectedIds([]);
     setBulkMode('normal');
-    setSearchInput('');
-    setDebouncedSearch('');
+    if (!initialSearch) {
+      setSearchInput('');
+      setDebouncedSearch('');
+    }
     setActiveFilters(defaultCstFiltersForTab(activeTab));
-  }, [importJobId, activeTab]);
+  }, [importJobId, activeTab, initialSearch]);
 
   useEffect(() => {
     setDetailCandidate(null);

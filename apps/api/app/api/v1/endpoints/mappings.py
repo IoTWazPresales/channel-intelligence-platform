@@ -185,6 +185,8 @@ async def list_distributor_si_mapping_candidates(
     possible_duplicates_only: bool = False,
     duplicate_unresolved_only: bool = False,
     status: str = "open",
+    normalized_key: str | None = None,
+    candidate_id: int | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     """Paginated aggregated DSI mapping candidates for an import job (default limit 100, max 1000)."""
@@ -201,6 +203,8 @@ async def list_distributor_si_mapping_candidates(
         possible_duplicates_only=possible_duplicates_only,
         duplicate_unresolved_only=duplicate_unresolved_only,
         status=status,  # type: ignore[arg-type]
+        normalized_key=normalized_key,
+        candidate_id=candidate_id,
     )
 
     def _work(sess: Session) -> dict:

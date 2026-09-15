@@ -11,6 +11,7 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { DataChrome } from '@/features/data-stewardship/DataChrome';
 import { StewardFailureQueue } from '@/features/data-stewardship/StewardFailureQueue';
+import { StewardResolveWorkspace } from '@/features/data-stewardship/StewardResolveWorkspace';
 import { apiDelete, apiGet, apiPost, apiUrl, authHeaders } from '@/lib/api';
 
 type LegacyRow = {
@@ -40,6 +41,7 @@ function parseImportJobId(raw: string | null): { jobId: number | null; invalid: 
 function AdminMappingsPageContent() {
   const searchParams = useSearchParams();
   const importJobIdParam = searchParams.get('import_job_id');
+  const resolveWorkspace = searchParams.get('workspace') === 'resolve';
   const { jobId: importJobId, invalid: invalidJobIdParam } = useMemo(
     () => parseImportJobId(importJobIdParam),
     [importJobIdParam]
@@ -108,13 +110,13 @@ function AdminMappingsPageContent() {
           Query parameter <code>import_job_id</code> must be a positive integer. Remove it or fix the URL.
         </Alert>
       ) : null}
-      {importJobId != null ? (
+      {importJobId != null && !resolveWorkspace ? (
         <Alert severity="info" sx={{ mb: 2 }} data-testid="dsi-job-filter-banner">
           <Typography variant="body2">
             Old job filter <strong>#{importJobId}</strong> — stewarding is on the import workspace, not this queue.{' '}
             <Button
               component={Link}
-              href={`/admin/imports?job=${importJobId}`}
+              href={`/admin/mappings?workspace=resolve&job=${importJobId}`}
               size="small"
               variant="contained"
               sx={{ ml: 1 }}
@@ -128,7 +130,8 @@ function AdminMappingsPageContent() {
           </Typography>
         </Alert>
       ) : null}
-      <StewardFailureQueue />
+      {resolveWorkspace ? <StewardResolveWorkspace /> : <StewardFailureQueue />}
+      {resolveWorkspace ? null : (
       <Paper sx={{ p: 2, mt: 3 }} data-testid="legacy-mapping-queue">
         <Typography variant="subtitle2" fontWeight={600} gutterBottom>
           Legacy mapping queue (EntityMappingQueue) — D-0002 untouched
@@ -161,6 +164,7 @@ function AdminMappingsPageContent() {
           </Stack>
         )}
       </Paper>
+      )}
     </>
   );
 }

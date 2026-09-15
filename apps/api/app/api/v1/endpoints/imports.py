@@ -406,6 +406,7 @@ async def get_stewardship_summary(
 async def get_steward_failure_queue(
     entity_type: str | None = None,
     limit: int = DEFAULT_ITEM_LIMIT,
+    include_remembered: bool = False,
     db: AsyncSession = Depends(get_db),
     user: dict | None = Depends(get_optional_current_user),
 ):
@@ -415,7 +416,13 @@ async def get_steward_failure_queue(
             status_code=400,
             detail={"error": "invalid_limit", "message": f"limit must be 1..{MAX_ITEM_LIMIT}"},
         )
-    return await steward_failure_queue(db, user, entity_type=entity_type, limit=limit)
+    return await steward_failure_queue(
+        db,
+        user,
+        entity_type=entity_type,
+        limit=limit,
+        include_remembered=include_remembered,
+    )
 
 
 @router.post("/jobs/bulk-delete-preview")

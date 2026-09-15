@@ -92,6 +92,12 @@ def _apply_list_filters(q, params: DsiMappingCandidatesListParams):
             ImportEntityMappingCandidate.context["duplicate_review"]["decision"].astext.is_(None),
         )
 
+    if params.normalized_key:
+        q = q.where(ImportEntityMappingCandidate.normalized_key == params.normalized_key)
+
+    if params.candidate_id is not None:
+        q = q.where(ImportEntityMappingCandidate.id == params.candidate_id)
+
     return q
 
 

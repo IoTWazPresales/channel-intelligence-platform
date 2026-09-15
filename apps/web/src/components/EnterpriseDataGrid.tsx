@@ -47,6 +47,11 @@ function EnterpriseDataGridInner<T>(
       filter: true,
       resizable: true,
       floatingFilter: false,
+      tooltipValueGetter: (p) => {
+        const v = p.valueFormatted ?? p.value;
+        if (v == null || v === '') return undefined;
+        return String(v);
+      },
     }),
     []
   );
@@ -81,9 +86,14 @@ function EnterpriseDataGridInner<T>(
         '& .ag-cell': {
           display: 'flex',
           alignItems: 'center',
+          overflow: 'hidden',
+          minWidth: 0,
         },
-        '& .ag-cell-value': {
-          width: '100%',
+        '& .ag-cell-wrapper, & .ag-cell-value': {
+          minWidth: 0,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
         },
         '& .ag-row-odd': {
           backgroundColor: `${isDark ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.025)'} !important`,
