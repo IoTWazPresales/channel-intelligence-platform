@@ -2681,3 +2681,38 @@ Exact engine invariants (do not complete around them):
 | **Out of scope** | Using other customers as a proposal analogue. |
 | **TRIGGER** | Operator decides A2-05 seed-view ranking must match product-competition-only, **or** a planner complains that seed-case comparables show other customers. |
 
+---
+
+## BACKLOG-187 — Replay unresolved facts after a catalogue-gap apply (DSI source_key)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-15 · N-0027 CANDIDATE, not implemented |
+| **Effort** | Large |
+| **Source** | `product_master_gap_resolve.py` (BACKLOG-072); N-0027 recon `.eif/audit/NS15_STEWARD_QUEUE_20260915/RECONCILE.md`. DSI facts FLAG only because `source_key` includes `product_id`. |
+| **Idea** | After a steward maps a product token (or catalogue-gap apply), re-resolve open DSI/CST/shipment rows and facts with lifecycle, idempotency, and provenance — not a silent UPDATE of immutable sell-out keys. |
+| **Why it matters / deferrable** | Cross-job `needs_review` already lists the tokens. Scan/preview/apply exists for evidence + staging. Fact repoint is a different contract (source_key). Deferrable until an operator asks to clear leftover sell-out after a master import. |
+| **What the work is** | Design DSI fact identity without embedding unresolved product_id, or an explicit reprocess job that writes a new source_key generation. Keep exact-tier match only; no auto-create. |
+| **Regression traps** | Never fuzzy-join. Never auto-create dim_product. Sell-out facts are transaction-immutable except resolution FKs — `source_key` including product_id makes that unsafe today. FLAG ≠ BLOCK. |
+| **Behavior to retain** | Catalogue-gaps worklist; steward-initiated provisionals; per-job engines. |
+| **Out of scope** | N-0027 queue listing; D-0002; inventing a new entity_type. |
+| **TRIGGER** | Operator asks to replay unresolved DSI facts after a product-master or catalogue-gap apply, **or** a `source_key` redesign that does not embed unresolved product_id is accepted. |
+
+---
+
+## BACKLOG-188 — Steward-queue coverage for non-candidate failure types
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-15 · N-0027 enumerated, not invented |
+| **Effort** | Medium per type |
+| **Source** | N-0027 recon. Failure types that are not `import_entity_mapping_candidate.entity_type`. |
+| **Idea** | If those failures should appear on the cross-job Steward queue, give each a stored type and an existing engine href — do not hardcode new queue sections. Until then they stay on their current surfaces. |
+| **Why it matters / deferrable** | DSI geo tokens, lineup `unknown_*` (FLAG), payment unmatched Case IDs / customer_unresolved, shipment `product_resolution_status` (already on catalogue gaps + evidence). Each has a path; none is a candidate row. Historical unmatched Case IDs belong with Case book (later node). |
+| **What the work is** | Per type: either register a writer into `import_entity_mapping_candidate` with a real resolver, or keep the dedicated surface and document it. |
+| **Regression traps** | Do not invent a parallel resolver. Do not turn FLAG lineup unknown_customer into a BLOCK. Do not restore `entity_mapping_queue` (D-0002). |
+| **Behavior to retain** | N-0027 GROUP BY entity_type queue; catalogue-gaps worklist; job-scoped DSI/CST/shipment engines. |
+| **Out of scope** | Cross-job accept/reject on the queue (N-0011 STEWARD_QUEUE_APPROVE_REJECT). |
+| **TRIGGER** | Operator asks a named non-candidate failure type to appear on the Steward queue leaf, **or** a new importer writes a new `entity_type` that needs an href registry row. |
+
+
