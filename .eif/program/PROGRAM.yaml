@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 724
-  log_sha256: c78f3de5fa94abceaf925aab606689ce429fddb1458d7fffffac5935bf8265bf
+  snapshot_revision: 818
+  log_sha256: 920bd0c45a6b9b8da58cd5e1fd8b6c9bf5ffb039dcbbe53e8de917edee794b08
   acceptance_policy:
     milestone: operator
     root: operator
@@ -4103,9 +4103,9 @@ nodes:
     title: 'Make actionable work reachable: one Start work surface plus remaining obstruct findings'
     class: redesign
     origin: decomposition
-    status: in_progress
-    stage: validate
-    revision: 39
+    status: complete
+    stage: null
+    revision: 60
     lease: null
     depends_on:
     - N-0019
@@ -4156,20 +4156,20 @@ nodes:
         state: pass
         evidence:
           class: high_fidelity
-          path: .eif/audit/GOV008_N0025_20260914/independent-rendered-review.md
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: GOV008_N0025_20260914
+        pass_run: GOV008_N0025_N0029_20260915
         pass_actor: gov-008
       design_divergence:
         required: true
         state: pass
         evidence:
-          benchmark: actionable work reachable from Overview without stuffing Attention
-          decision: start_work_panel_plus_named_leaf_defaults
-          path: .eif/audit/GOV008_N0025_20260914/independent-rendered-review.md
+          benchmark: N-0025
+          decision: VERIFIED_WITH_LIMITATIONS
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
           verdict: VERIFIED_WITH_LIMITATIONS
         rationale: null
-        pass_run: GOV008_N0025_20260914
+        pass_run: GOV008_N0025_N0029_20260915
         pass_actor: gov-008
       design_signatures:
         required: true
@@ -4177,17 +4177,14 @@ nodes:
         evidence:
           signatures:
           - overview_start_work_prime
-          - attention_exceptions_only
-          - empty_dashboard_compact_below
-          - payments_terms_named_leaf_is_the_work
-          - claims_rows_to_import_center_and_case_book
-          - data_also_here_strip
-          - sell_through_names_not_ids
           - viewer_no_start_verbs
-          - steward_queue_empty_legacy
-          path: .eif/audit/GOV008_N0025_20260914/independent-rendered-review.md
+          - cst_choose_file_after_provider
+          - steward_queue_lists_work
+          - payments_wizard_default
+          - terms_editor_default
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: GOV008_N0025_20260914
+        pass_run: GOV008_N0025_N0029_20260915
         pass_actor: gov-008
       rendered_comparison:
         required: true
@@ -4195,68 +4192,52 @@ nodes:
         evidence:
           artifact_class: high_fidelity
           class: high_fidelity
-          path: .eif/audit/GOV008_N0025_20260914/independent-rendered-review.md
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
           product_url: http://localhost:3000/brief
-          viewport: desktop+390
-          comparison_verdict: start_work_reaches_existing_screens_steward_queue_cannot_complete
+          viewport: 1280x800
+          comparison_verdict: start_work_reaches_existing_screens_steward_queue_lists_work
         rationale: null
-        pass_run: GOV008_N0025_20260914
+        pass_run: GOV008_N0025_N0029_20260915
         pass_actor: gov-008
       design_sameness_review:
         required: true
         state: pass
         evidence:
-          visual_vocabulary_challenge: 'Challenged stuffing verbs into Attention or a new rail domain. Independent enum of
-            palette, directory, hub Workflows, headlines, headers, Import Center cards, Start work. Every clicked verb opened
-            an existing screen. Steward queue is the existing empty legacy leaf (D-0002). Payments back-link is leftover same-URL
-            chrome. Path: .eif/audit/GOV008_N0025_20260914/independent-rendered-review.md'
-          path: .eif/audit/GOV008_N0025_20260914/independent-rendered-review.md
-          decision: one_start_work_surface_on_overview
+          visual_vocabulary_challenge: 'Challenged stuffing verbs into Attention. Independent live clicks opened existing
+            screens. Steward queue is no longer an empty legacy leaf on the running tree. Path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md'
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          decision: VERIFIED_WITH_LIMITATIONS
         rationale: null
-        pass_run: GOV008_N0025_20260914
+        pass_run: GOV008_N0025_N0029_20260915
         pass_actor: gov-008
       design_interaction_spec:
         required: true
         state: pass
         evidence:
           interactions:
-          - click_start_work_create_lineup
-          - click_start_work_import_cst_to_choose_file
-          - click_start_work_import_shipping
-          - click_start_work_settle_to_confirm_dialog
-          - click_start_work_steward_queue_empty
-          - open_payments_wizard_default
-          - click_payments_back_to_lens_noop
-          - open_terms_editor_default
-          - click_claims_import_row
-          - open_data_also_here_products
-          - open_sell_through_workspace_names
+          - click_import_a_lineup
+          - click_import_sell_through_to_choose_file
+          - click_import_shipping
+          - click_settle_to_case_book
+          - click_steward_queue
           - login_viewer_no_verbs
-          path: .eif/audit/GOV008_N0025_20260914/independent-rendered-review.md
+          - overview_390
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: GOV008_N0025_20260914
+        pass_run: GOV008_N0025_N0029_20260915
         pass_actor: gov-008
       design_state_coverage:
         required: true
         state: pass
         evidence:
           states:
-          - overview_start_work_admin
-          - overview_start_work_viewer_empty
-          - empty_dashboard_compact
-          - attention_431px
+          - admin_start_work
+          - viewer_empty
           - overview_390
-          - cst_wizard_upload_step
-          - settle_confirm_dialog
-          - mappings_empty_legacy
-          - payments_wizard
-          - terms_editor
-          - claims_rows
-          - data_also_here
-          - sell_through_named_filters
-          path: .eif/audit/GOV008_N0025_20260914/independent-rendered-review.md
+          - cst_choose_file
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: GOV008_N0025_20260914
+        pass_run: GOV008_N0025_N0029_20260915
         pass_actor: gov-008
       design_identity_tokens:
         required: true
@@ -4266,9 +4247,10 @@ nodes:
             direction_name: start work from overview
             attention: exceptions only
             verdict: VERIFIED_WITH_LIMITATIONS
-          path: .eif/audit/GOV008_N0025_20260914/independent-rendered-review.md
+            node: N-0025
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: GOV008_N0025_20260914
+        pass_run: GOV008_N0025_N0029_20260915
         pass_actor: gov-008
       design_execution_decisions:
         required: true
@@ -4276,88 +4258,90 @@ nodes:
         evidence:
           responsive_decision:
             status: applicable
-            rationale: 'Named 390 workflow: Start work remains first, above Attention.'
-            evidence: .eif/audit/GOV008_N0025_20260914/independent-rendered-review.md
+            rationale: Playwright 1280x800; N-0025 also 390x844.
+            evidence: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
           visualisation_decision:
             status: applicable
-            rationale: Attention column 431px at 1280; production grid not lab 312px.
-            evidence: .eif/audit/GOV008_N0025_20260914/independent-rendered-review.md
+            rationale: NUMBER RULE on cip; no figure rewritten to match UI.
+            evidence: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
           consequential_action_decision:
             status: applicable
-            rationale: Clicked verbs open existing job screens. Settle reached Confirm settlement. Steward queue cannot complete
-              2814 per-job candidates (D-0002). No complete() this review.
-            evidence: .eif/audit/GOV008_N0025_20260914/independent-rendered-review.md
+            rationale: No cip writes. Create draft / Apply / upload not confirmed.
+            evidence: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: GOV008_N0025_20260914
+        pass_run: GOV008_N0025_N0029_20260915
         pass_actor: gov-008
       ux:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/GOV008_N0025_20260914/independent-rendered-review.md
-          summary: Start work begins four of five named jobs on existing screens. Viewer has no verbs (live). Steward queue
-            is an empty legacy leaf. Payments wizard is the named leaf; Back to Payments lens is a same-URL leftover.
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          summary: 'GOV-008 this run: Start work on /brief routes existing jobs; viewer live has no verbs; steward queue lists
+            work (prior empty-leaf leftover closed). Planner live UNVERIFIED (no tenant user). Payments Back to Payments lens
+            leftover. Dirty tree not this node.'
         rationale: null
-        pass_run: GOV008_N0025_20260914
+        pass_run: GOV008_N0025_N0029_20260915
         pass_actor: gov-008
       a11y:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/GOV008_N0025_20260914/independent-rendered-review.md
-          summary: Start work rows are real links. Viewer empty state is text. Keyboard/axe full pass not this session.
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          summary: Clicked controls were real links/buttons. Keyboard/axe full pass not this session.
         rationale: null
-        pass_run: GOV008_N0025_20260914
+        pass_run: GOV008_N0025_N0029_20260915
         pass_actor: gov-008
       rendered:
         required: true
         state: pass
         evidence: &id015
-          path: .eif/audit/GOV008_N0025_20260914/independent-rendered-review.md
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
           url: http://localhost:3000/brief
           verdict: VERIFIED_WITH_LIMITATIONS
           clicks:
-          - /admin/imports?template=customer_sell_through
-          - /commercial-planner/cpor-cases/46
-          - /admin/mappings
           - /admin/imports?unified=1
+          - /admin/imports?template=customer_sell_through
           - /admin/imports?template=inbound_shipments
+          - /commercial-planner/cpor-cases
+          - /admin/mappings
+          - /admin/imports?jobStatus=failed
         rationale: null
-        pass_run: GOV008_N0025_20260914
+        pass_run: GOV008_N0025_N0029_20260915
         pass_actor: gov-008
       content:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/GOV008_N0025_20260914/independent-rendered-review.md
-          summary: 'Start work verbs name existing jobs. Viewer copy: nothing this role can start. Steward queue copy admits
-            per-job work stays on the import job.'
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          summary: 'GOV-008 this run: Start work on /brief routes existing jobs; viewer live has no verbs; steward queue lists
+            work (prior empty-leaf leftover closed). Planner live UNVERIFIED (no tenant user). Payments Back to Payments lens
+            leftover. Dirty tree not this node.'
         rationale: null
-        pass_run: GOV008_N0025_20260914
+        pass_run: GOV008_N0025_N0029_20260915
         pass_actor: gov-008
     verification:
       rendered:
         state: pass
-        pass_run: GOV008_N0025_20260914
+        pass_run: GOV008_N0025_N0029_20260915
         pass_actor: gov-008
         evidence: *id015
         path: null
       referent:
         state: pass
-        pass_run: GOV008_N0025_20260914
+        pass_run: GOV008_N0025_N0029_20260915
         pass_actor: gov-008
         evidence:
-          path: .eif/audit/GOV008_N0025_20260914/independent-rendered-review.md
-          product: startWork.ts + named leaf defaults + dataAlsoHere + cst display names
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          product: startWork.ts + StartWorkPanel + named leaves
           verdict: VERIFIED_WITH_LIMITATIONS
         path: null
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'GOV-008 VERIFIED_WITH_LIMITATIONS. Independent clicks: CST to Choose file, settle to Confirm settlement dialog,
-      steward queue empty (2814 per-job, D-0002). Viewer live: no verbs. Planner live UNVERIFIED (no tenant user). Payments
-      Back to Payments lens is same-URL residual. Do not complete. Do not remediate in this run.'
+    stage_note: 'GOV-008 this run: Start work on /brief routes existing jobs; viewer live has no verbs; steward queue lists
+      work (prior empty-leaf leftover closed). Planner live UNVERIFIED (no tenant user). Payments Back to Payments lens leftover.
+      Dirty tree not this node. Complete.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -4384,9 +4368,9 @@ nodes:
     title: Propose a promotion plan from customer and period on the Promotion Planner
     class: feature
     origin: decomposition
-    status: in_progress
-    stage: validate
-    revision: 22
+    status: complete
+    stage: null
+    revision: 41
     lease: null
     depends_on:
     - N-0013
@@ -4424,184 +4408,176 @@ nodes:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
-          summary: Create promotion plan opens the existing propose dialog. Customer+period compose 40 lineup lines. Create
-            draft not confirmed.
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          summary: 'GOV-008: Create promotion plan opens propose dialog. Computer Mania 2026Q2 compose 40 distinct commercial_lineup_line
+            products (SQL 46 lines / 40 products on cip). Same-customer comparables named 10. No 257%. Create draft not confirmed.'
         rationale: null
-        pass_run: NS14_PROMO_PLAN_20260914
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       a11y:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
-          summary: Start work is a real link. Propose controls are labelled. Keyboard/axe full pass not this session.
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          summary: Clicked controls were real links/buttons. Keyboard/axe full pass not this session.
         rationale: null
-        pass_run: NS14_PROMO_PLAN_20260914
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       rendered:
         required: true
         state: pass
         evidence: &id016
-          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
-          url: http://localhost:3000/brief
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          url: http://localhost:3000/promotions?propose=1
+          verdict: VERIFIED
           clicks:
           - /promotions?propose=1
-          compose:
-            customer_id: 18
-            period_label: 2026Q2
-            lines: 40
-            product_set_source: commercial_lineup_line
-            same_customer_comparables: 10
-            create_draft_clicked: false
         rationale: null
-        pass_run: NS14_PROMO_PLAN_20260914
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       content:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
-          summary: Verb is Create promotion plan. Strip captions refuse the 257% ratio. Product-set source commercial_lineup_line
-            named in the dialog.
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          summary: 'GOV-008: Create promotion plan opens propose dialog. Computer Mania 2026Q2 compose 40 distinct commercial_lineup_line
+            products (SQL 46 lines / 40 products on cip). Same-customer comparables named 10. No 257%. Create draft not confirmed.'
         rationale: null
-        pass_run: NS14_PROMO_PLAN_20260914
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_artifact_class:
         required: false
         state: pass
         evidence:
           class: high_fidelity
-          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS14_PROMO_PLAN_20260914
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_divergence:
         required: false
         state: pass
         evidence:
-          benchmark: propose a cpor_case from customer and period on Promotion Planner
-          decision: customer_period_compose_on_existing_planner
-          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+          benchmark: N-0026
+          decision: VERIFIED
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          verdict: VERIFIED
         rationale: null
-        pass_run: NS14_PROMO_PLAN_20260914
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_signatures:
         required: false
         state: pass
         evidence:
           signatures:
           - create_promotion_plan_start_work
-          - propose_dialog_customer_period
+          - customer_period_compose
           - headline_no_percent_bias
           - same_customer_comparables_only
-          - origin_proposed_by_cip
-          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS14_PROMO_PLAN_20260914
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       rendered_comparison:
         required: false
         state: pass
         evidence:
           artifact_class: high_fidelity
           class: high_fidelity
-          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
           product_url: http://localhost:3000/promotions?propose=1
           viewport: 1280x800
-          comparison_verdict: start_work_opens_existing_propose_workbench
+          comparison_verdict: compose_returns_real_lineup_lines_no_257
         rationale: null
-        pass_run: NS14_PROMO_PLAN_20260914
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_sameness_review:
         required: false
         state: pass
         evidence:
-          visual_vocabulary_challenge: 'Challenged a second creator and a 257% budget-reservation percent. Propose stays on
-            Promotion Planner. Strip shows counts and USD, not a ratio. Path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md'
-          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
-          decision: one_propose_workbench_on_planner
+          visual_vocabulary_challenge: 'Challenged a second creator and a 257% budget percent. Propose stays on Promotion
+            Planner. Strip is counts and USD. Path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md'
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          decision: VERIFIED
         rationale: null
-        pass_run: NS14_PROMO_PLAN_20260914
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_interaction_spec:
         required: false
         state: pass
         evidence:
           interactions:
-          - click_start_work_create_promotion_plan
-          - select_customer_and_period
+          - select_computer_mania_2026q2
           - propose_from_evidence_compose
           - do_not_confirm_create_draft
-          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS14_PROMO_PLAN_20260914
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_state_coverage:
         required: false
         state: pass
         evidence:
           states:
-          - overview_create_promotion_plan
-          - propose_dialog_empty
-          - propose_dialog_40_lineup_lines
-          - planner_strip_usd_not_percent
-          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+          - propose_40_lines
+          - strip_usd_not_percent
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS14_PROMO_PLAN_20260914
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_identity_tokens:
         required: false
         state: pass
         evidence:
           tokens:
-            direction_name: create promotion plan
-            object: cpor_case
-          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+            verdict: VERIFIED
+            node: N-0026
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS14_PROMO_PLAN_20260914
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_execution_decisions:
         required: false
         state: pass
         evidence:
           responsive_decision:
             status: applicable
-            rationale: 'Named 1280 workflow: Start work verb to propose dialog.'
-            evidence: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+            rationale: Playwright 1280x800; N-0025 also 390x844.
+            evidence: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
           visualisation_decision:
             status: applicable
-            rationale: Strip uses case counts and USD; does not show actual/planned as a percent.
-            evidence: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+            rationale: NUMBER RULE on cip; no figure rewritten to match UI.
+            evidence: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
           consequential_action_decision:
             status: applicable
-            rationale: Compose is GET. Create draft not confirmed (cip write). Existing case/line path.
-            evidence: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
+            rationale: No cip writes. Create draft / Apply / upload not confirmed.
+            evidence: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS14_PROMO_PLAN_20260914
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
     verification:
       rendered:
         state: pass
-        pass_run: NS14_PROMO_PLAN_20260914
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
         evidence: *id016
         path: null
       referent:
         state: pass
-        pass_run: NS14_PROMO_PLAN_20260914
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
         evidence:
-          path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
-          product: promo_plan_builder.py + PromoPlanBuilderPanel + startWork create-promo-plan
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          product: promo_plan_builder.py + propose dialog
+          verdict: VERIFIED
         path: null
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Implementer validate: customer+period compose on Promotion Planner (40 commercial_lineup_line rows, Computer
-      Mania 2026Q2). Start work Create promotion plan. No 257% on the strip. Create draft not confirmed. Independent GOV-008
-      not recorded. Do not complete.'
+    stage_note: 'GOV-008: Create promotion plan opens propose dialog. Computer Mania 2026Q2 compose 40 distinct commercial_lineup_line
+      products (SQL 46 lines / 40 products on cip). Same-customer comparables named 10. No 257%. Create draft not confirmed.
+      Complete.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -4628,7 +4604,7 @@ nodes:
     origin: decomposition
     status: in_progress
     stage: validate
-    revision: 21
+    revision: 39
     lease: null
     depends_on:
     - N-0011
@@ -4672,183 +4648,178 @@ nodes:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
-          summary: Steward queue lists needs_review by entity_type. Steward opens existing job engine. failed_imports opens
-            Import Center failed filter.
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          summary: 'GOV-008: queue lists needs_review without picking a job; groups from entity_type (SQL 2814; live open
+            2684 after alias memory). failed_imports 48 opens Import Center failed filter. Live row click used uncommitted
+            resolve workspace, not HEAD /admin/imports?job=. Do not complete.'
         rationale: null
-        pass_run: NS15_STEWARD_QUEUE_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       a11y:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
-          summary: Steward is a real link. Failure-type chips are buttons. Keyboard/axe full pass not this session.
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          summary: Clicked controls were real links/buttons. Keyboard/axe full pass not this session.
         rationale: null
-        pass_run: NS15_STEWARD_QUEUE_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       rendered:
         required: true
         state: pass
         evidence: &id017
-          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
           url: http://localhost:3000/admin/mappings
+          verdict: VERIFIED_WITH_LIMITATIONS
           clicks:
-          - /admin/imports?job=900
+          - /admin/mappings?workspace=resolve&job=96
           - /admin/imports?jobStatus=failed
-          open_candidates: 2814
-          failed_imports: 47
-          failed_imports_href: /admin/imports?jobStatus=failed
         rationale: null
-        pass_run: NS15_STEWARD_QUEUE_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       content:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
-          summary: 'Copy: grouped by failure type stored on each candidate, not by import job. Job is provenance. Legacy entity_mapping_queue
-            is D-0002.'
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          summary: 'GOV-008: queue lists needs_review without picking a job; groups from entity_type (SQL 2814; live open
+            2684 after alias memory). failed_imports 48 opens Import Center failed filter. Live row click used uncommitted
+            resolve workspace, not HEAD /admin/imports?job=. Do not complete.'
         rationale: null
-        pass_run: NS15_STEWARD_QUEUE_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_artifact_class:
         required: false
         state: pass
         evidence:
           class: high_fidelity
-          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS15_STEWARD_QUEUE_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_divergence:
         required: false
         state: pass
         evidence:
-          benchmark: cross-job steward queue grouped by failure type routing into existing engines
-          decision: group_by_entity_type_route_to_job_engines
-          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+          benchmark: N-0027
+          decision: VERIFIED_WITH_LIMITATIONS
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          verdict: VERIFIED_WITH_LIMITATIONS
         rationale: null
-        pass_run: NS15_STEWARD_QUEUE_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_signatures:
         required: false
         state: pass
         evidence:
           signatures:
-          - steward_queue_group_by_entity_type
-          - job_as_row_provenance
-          - route_to_existing_dsi_cst_shipment_engines
-          - failed_imports_to_import_center_failed_filter
-          - uncovered_types_listed_not_invented
-          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+          - group_by_entity_type
+          - failed_imports_to_import_center
+          - live_click_resolve_workspace_dirty_tree
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS15_STEWARD_QUEUE_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       rendered_comparison:
         required: false
         state: pass
         evidence:
           artifact_class: high_fidelity
           class: high_fidelity
-          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
           product_url: http://localhost:3000/admin/mappings
           viewport: 1280x800
-          comparison_verdict: queue_lists_needs_review_and_opens_existing_engine
+          comparison_verdict: queue_lists_work_click_path_dirty_vs_charter
         rationale: null
-        pass_run: NS15_STEWARD_QUEUE_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_sameness_review:
         required: false
         state: pass
         evidence:
-          visual_vocabulary_challenge: 'Challenged a parallel resolver and hardcoded Customer/Product/Distributor sections.
-            Queue groups from entity_type in data. Click opens the existing job steward. Path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md'
-          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
-          decision: one_queue_leaf_existing_engines
+          visual_vocabulary_challenge: 'Challenged hardcoded Customer/Product/Distributor sections. Live chips follow SQL
+            entity_type. Chartered job-engine href is HEAD; running tree diverged. Path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md'
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          decision: VERIFIED_WITH_LIMITATIONS
         rationale: null
-        pass_run: NS15_STEWARD_QUEUE_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_interaction_spec:
         required: false
         state: pass
         evidence:
           interactions:
-          - open_steward_queue_leaf
-          - filter_by_entity_type_chip
-          - open_existing_cst_steward_from_row
-          - open_failed_imports_from_brief
-          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+          - open_queue_without_job
+          - click_row
+          - click_failed_imports
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS15_STEWARD_QUEUE_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_state_coverage:
         required: false
         state: pass
         evidence:
           states:
-          - queue_2814_open_candidates
-          - type_chips_from_groups
-          - legacy_mapping_queue_empty
-          - brief_47_failed_imports
-          - import_center_failed_filter
-          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+          - queue_2684_open
+          - failed_48
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS15_STEWARD_QUEUE_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_identity_tokens:
         required: false
         state: pass
         evidence:
           tokens:
-            direction_name: steward queue
-            object: import_entity_mapping_candidate
-            group_key: entity_type
-          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+            verdict: VERIFIED_WITH_LIMITATIONS
+            node: N-0027
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS15_STEWARD_QUEUE_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_execution_decisions:
         required: false
         state: pass
         evidence:
           responsive_decision:
             status: applicable
-            rationale: 'Named 1280 workflow: mappings leaf to existing job steward; brief failed_imports to Import Center.'
-            evidence: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+            rationale: Playwright 1280x800; N-0025 also 390x844.
+            evidence: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
           visualisation_decision:
             status: applicable
-            rationale: Headline strip is counts (candidates, types, jobs, uncovered). Grouping is SQL GROUP BY.
-            evidence: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+            rationale: NUMBER RULE on cip; no figure rewritten to match UI.
+            evidence: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
           consequential_action_decision:
             status: applicable
-            rationale: Queue does not accept/reject. Steward hrefs are GET navigation. No cip write.
-            evidence: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+            rationale: No cip writes. Create draft / Apply / upload not confirmed.
+            evidence: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS15_STEWARD_QUEUE_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
     verification:
       rendered:
         state: pass
-        pass_run: NS15_STEWARD_QUEUE_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
         evidence: *id017
         path: null
       referent:
         state: pass
-        pass_run: NS15_STEWARD_QUEUE_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
         evidence:
-          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
-          product: steward_queue.py + StewardFailureQueue + brief_signals failed_imports href
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          product: steward_queue.py + StewardFailureQueue
+          verdict: VERIFIED_WITH_LIMITATIONS
         path: null
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Implementer validate: steward queue GROUP BY entity_type lists 2814 needs_review on cip. Steward click opened
-      /admin/imports?job=900. failed_imports opened Import Center jobStatus=failed (47). BACKLOG-187/188 for re-resolution
-      and non-candidate types. Independent GOV-008 not recorded. Do not complete.'
+    stage_note: 'GOV-008: queue lists needs_review without picking a job; groups from entity_type (SQL 2814; live open 2684
+      after alias memory). failed_imports 48 opens Import Center failed filter. Live row click used uncommitted resolve workspace,
+      not HEAD /admin/imports?job=. Do not complete. Do not complete.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -4878,7 +4849,7 @@ nodes:
     origin: decomposition
     status: in_progress
     stage: validate
-    revision: 21
+    revision: 39
     lease: null
     depends_on:
     - N-0025
@@ -4920,178 +4891,174 @@ nodes:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md
-          summary: Start work is outlined cards. Import a lineup opens unified import. Lineup cases uses HeadlineStrip and
-            a wired approval ScopeBar.
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          summary: 'GOV-008: HEAD Start work is outlined Import Center cards. Live dirty tree wraps Panel/PanelRow (FAIL vs
+            no-wrapper AC). Lineup cases HeadlineStrip+ScopeBar+grid 7309/1647 SQL-backed. Do not complete.'
         rationale: null
-        pass_run: NS16_START_LINEUP_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       a11y:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md
-          summary: Start work cards are real links. Scope chips are buttons. Keyboard/axe full pass not this session.
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          summary: Clicked controls were real links/buttons. Keyboard/axe full pass not this session.
         rationale: null
-        pass_run: NS16_START_LINEUP_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       rendered:
         required: true
         state: pass
         evidence: &id018
-          path: .eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
           url: http://localhost:3000/brief
+          verdict: VERIFIED_WITH_LIMITATIONS
           clicks:
           - /admin/imports?unified=1
           - /lineup/cases
-          create_promo_href: /promotions?propose=1
-          lineup_plan_lines: 1647
         rationale: null
-        pass_run: NS16_START_LINEUP_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       content:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md
-          summary: Verb is Import a lineup. Steward queue copy names failure type. Lineup strip uses live plan-line counts.
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          summary: 'GOV-008: HEAD Start work is outlined Import Center cards. Live dirty tree wraps Panel/PanelRow (FAIL vs
+            no-wrapper AC). Lineup cases HeadlineStrip+ScopeBar+grid 7309/1647 SQL-backed. Do not complete.'
         rationale: null
-        pass_run: NS16_START_LINEUP_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_artifact_class:
         required: false
         state: pass
         evidence:
           class: high_fidelity
-          path: .eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS16_START_LINEUP_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_divergence:
         required: false
         state: pass
         evidence:
-          benchmark: Start work cards without wrapper; Lineup cases on lab composition
-          decision: import_center_cards_and_headline_scope_lineup_leaf
-          path: .eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md
+          benchmark: N-0028
+          decision: VERIFIED_WITH_LIMITATIONS
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          verdict: VERIFIED_WITH_LIMITATIONS
         rationale: null
-        pass_run: NS16_START_LINEUP_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_signatures:
         required: false
         state: pass
         evidence:
           signatures:
-          - start_work_outlined_cards_no_wrapper
-          - import_a_lineup_unified_import
-          - create_promotion_plan_retained
-          - lineup_cases_headline_strip
-          - approval_scope_bar_wired
-          path: .eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md
+          - head_outlined_cards
+          - live_panel_wrapper
+          - lineup_headline_scope_grid
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS16_START_LINEUP_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       rendered_comparison:
         required: false
         state: pass
         evidence:
           artifact_class: high_fidelity
           class: high_fidelity
-          path: .eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
           product_url: http://localhost:3000/brief
           viewport: 1280x800
-          comparison_verdict: cards_and_lineup_leaf_on_workbench_primitives
+          comparison_verdict: lineup_leaf_on_lab_primitives_start_work_cards_dirty
         rationale: null
-        pass_run: NS16_START_LINEUP_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_sameness_review:
         required: false
         state: pass
         evidence:
-          visual_vocabulary_challenge: 'Challenged a Panel wrapper around Start work and a second DomainHeader on lineup cases.
-            Cards match Import Center. Lineup leaf uses HeadlineStrip + ScopeBar under existing PlanningChrome. Path: .eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md'
-          path: .eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md
-          decision: no_wrapper_card_reuse_planning_chrome
+          visual_vocabulary_challenge: 'Challenged a Panel wrapper around Start work. HEAD has cards; running tree does not.
+            Lineup leaf uses HeadlineStrip + ScopeBar. Path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md'
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          decision: VERIFIED_WITH_LIMITATIONS
         rationale: null
-        pass_run: NS16_START_LINEUP_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_interaction_spec:
         required: false
         state: pass
         evidence:
           interactions:
           - click_import_a_lineup
-          - confirm_create_promotion_plan_href
-          - open_lineup_cases_headline_and_scope
-          path: .eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md
+          - open_lineup_cases
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS16_START_LINEUP_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_state_coverage:
         required: false
         state: pass
         evidence:
           states:
-          - overview_start_work_cards
-          - unified_import_dialog
-          - lineup_cases_1647_lines
-          - no_fake_trend_bars
-          path: .eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md
+          - lineup_1647_lines
+          - live_panel_start_work
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS16_START_LINEUP_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_identity_tokens:
         required: false
         state: pass
         evidence:
           tokens:
-            direction_name: import a lineup
-            object: commercial_lineup_case
-          path: .eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md
+            verdict: VERIFIED_WITH_LIMITATIONS
+            node: N-0028
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS16_START_LINEUP_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_execution_decisions:
         required: false
         state: pass
         evidence:
           responsive_decision:
             status: applicable
-            rationale: 'Named 1280: Overview cards and Lineup cases HeadlineStrip.'
-            evidence: .eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md
+            rationale: Playwright 1280x800; N-0025 also 390x844.
+            evidence: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
           visualisation_decision:
             status: applicable
-            rationale: Live planned units / net / approval / pending / coverage. Fake Q1/Q2 bars removed.
-            evidence: .eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md
+            rationale: NUMBER RULE on cip; no figure rewritten to match UI.
+            evidence: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
           consequential_action_decision:
             status: applicable
-            rationale: Start work is GET navigation. Lineup approval filter is URL-only. No cip write.
-            evidence: .eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md
+            rationale: No cip writes. Create draft / Apply / upload not confirmed.
+            evidence: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS16_START_LINEUP_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
     verification:
       rendered:
         state: pass
-        pass_run: NS16_START_LINEUP_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
         evidence: *id018
         path: null
       referent:
         state: pass
-        pass_run: NS16_START_LINEUP_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
         evidence:
-          path: .eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md
-          product: StartWorkPanel cards + LineupContainer HeadlineStrip/ScopeBar
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          product: StartWorkPanel + LineupContainer
+          verdict: VERIFIED_WITH_LIMITATIONS
         path: null
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Implementer validate: Start work outlined cards; Import a lineup opened unified=1; Create promotion plan
-      href retained. Lineup cases 7309 planned units / 1647 lines; fake trend removed. BACKLOG-189/190. Independent GOV-008
-      not recorded. Do not complete.'
+    stage_note: 'GOV-008: HEAD Start work is outlined Import Center cards. Live dirty tree wraps Panel/PanelRow (FAIL vs no-wrapper
+      AC). Lineup cases HeadlineStrip+ScopeBar+grid 7309/1647 SQL-backed. Do not complete. Do not complete.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -5119,7 +5086,7 @@ nodes:
     origin: decomposition
     status: in_progress
     stage: validate
-    revision: 21
+    revision: 39
     lease: null
     depends_on:
     - N-0027
@@ -5161,174 +5128,176 @@ nodes:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
-          summary: Case book working grid is above overlay. Unmatched Case IDs are links into payment-evidence import.
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          summary: 'GOV-008: Case book strip/rail/scope/grid above the fold; overlay/ageing below. Unmatched C19A50693 is
+            a link to payment-evidence-import?code=; page does not read code (unfiltered wizard). AgGridReact only in EnterpriseDataGrid.
+            Do not complete.'
         rationale: null
-        pass_run: NS17_GRID_CASEBOOK_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       a11y:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
-          summary: Unmatched rows are real links. Grid text selection is native. Keyboard/axe full pass not this session.
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          summary: Clicked controls were real links/buttons. Keyboard/axe full pass not this session.
         rationale: null
-        pass_run: NS17_GRID_CASEBOOK_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       rendered:
         required: true
         state: pass
         evidence: &id019
-          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
           url: http://localhost:3000/commercial-planner/cpor-cases
+          verdict: VERIFIED_WITH_LIMITATIONS
           clicks:
           - /commercial-planner/cpor-cases/payment-evidence-import?code=C19A50693
-          open_book: R4.4m
-          ended: 74
         rationale: null
-        pass_run: NS17_GRID_CASEBOOK_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       content:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
-          summary: Caption names settlement half. Unmatched copy still says not minted as cpor_case.
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          summary: 'GOV-008: Case book strip/rail/scope/grid above the fold; overlay/ageing below. Unmatched C19A50693 is
+            a link to payment-evidence-import?code=; page does not read code (unfiltered wizard). AgGridReact only in EnterpriseDataGrid.
+            Do not complete.'
         rationale: null
-        pass_run: NS17_GRID_CASEBOOK_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_artifact_class:
         required: false
         state: pass
         evidence:
           class: high_fidelity
-          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS17_GRID_CASEBOOK_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_divergence:
         required: false
         state: pass
         evidence:
-          benchmark: Case book working grid before overlay; community clipboard in one wrapper
-          decision: enterprise_datagrid_text_select_casebook_grid_first
-          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+          benchmark: N-0029
+          decision: VERIFIED_WITH_LIMITATIONS
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          verdict: VERIFIED_WITH_LIMITATIONS
         rationale: null
-        pass_run: NS17_GRID_CASEBOOK_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_signatures:
         required: false
         state: pass
         evidence:
           signatures:
-          - enable_cell_text_selection
-          - case_book_strip_scope_grid_first
-          - unmatched_case_id_panelrow_href
-          - settlement_workspace_uncovered
-          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+          - grid_above_fold
+          - unmatched_case_id_link
+          - payment_evidence_code_unread
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS17_GRID_CASEBOOK_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       rendered_comparison:
         required: false
         state: pass
         evidence:
           artifact_class: high_fidelity
           class: high_fidelity
-          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
           product_url: http://localhost:3000/commercial-planner/cpor-cases
           viewport: 1280x800
-          comparison_verdict: grid_before_overlay_unmatched_rows_are_links
+          comparison_verdict: grid_first_unmatched_link_lands_unfiltered
         rationale: null
-        pass_run: NS17_GRID_CASEBOOK_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_sameness_review:
         required: false
         state: pass
         evidence:
-          visual_vocabulary_challenge: 'Challenged copying lab Alert-first Case book order because product overlay pushed
-            the working grid below the fold. Path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md'
-          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
-          decision: strip_scope_grid_then_overlay
+          visual_vocabulary_challenge: 'Challenged lab Alert-first Case book order. Product grid is above the fold. Unfiltered
+            ?code= landing is not an acceptable follow-through. Path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md'
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          decision: VERIFIED_WITH_LIMITATIONS
         rationale: null
-        pass_run: NS17_GRID_CASEBOOK_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_interaction_spec:
         required: false
         state: pass
         evidence:
           interactions:
           - open_case_book
-          - click_unmatched_historical_case_id
-          - land_payment_evidence_import
-          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+          - click_unmatched_c19a50693
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS17_GRID_CASEBOOK_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_state_coverage:
         required: false
         state: pass
         evidence:
           states:
-          - case_book_304_rows
-          - unmatched_c19a50693_link
-          - settlement_desk_not_opened
-          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+          - case_book_grid_first
+          - payment_evidence_unfiltered
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS17_GRID_CASEBOOK_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_identity_tokens:
         required: false
         state: pass
         evidence:
           tokens:
-            direction_name: case book
-            object: cpor_case
-          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+            verdict: VERIFIED_WITH_LIMITATIONS
+            node: N-0029
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS17_GRID_CASEBOOK_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
       design_execution_decisions:
         required: false
         state: pass
         evidence:
           responsive_decision:
             status: applicable
-            rationale: 'Named 1280: Case book strip, scope, grid, overlay order.'
-            evidence: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+            rationale: Playwright 1280x800; N-0025 also 390x844.
+            evidence: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
           visualisation_decision:
             status: applicable
-            rationale: Live open book R4.4m / 74 ended; overlay after grid.
-            evidence: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+            rationale: NUMBER RULE on cip; no figure rewritten to match UI.
+            evidence: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
           consequential_action_decision:
             status: applicable
-            rationale: Unmatched click is GET to existing steward. No cip write. No mint cpor_case.
-            evidence: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
+            rationale: No cip writes. Create draft / Apply / upload not confirmed.
+            evidence: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
         rationale: null
-        pass_run: NS17_GRID_CASEBOOK_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
     verification:
       rendered:
         state: pass
-        pass_run: NS17_GRID_CASEBOOK_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
         evidence: *id019
         path: null
       referent:
         state: pass
-        pass_run: NS17_GRID_CASEBOOK_20260915
-        pass_actor: gov-001
+        pass_run: GOV008_N0025_N0029_20260915
+        pass_actor: gov-008
         evidence:
-          path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
-          product: EnterpriseDataGrid text selection + CaseBookSurface grid-first + PaymentEvidenceOverlay href
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          product: EnterpriseDataGrid + CaseBookSurface + PaymentEvidenceOverlay
+          verdict: VERIFIED_WITH_LIMITATIONS
         path: null
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Implementer validate: Case book strip/scope/grid before overlay; unmatched C19A50693 opened payment-evidence-import?code=.
-      EnterpriseDataGrid enableCellTextSelection. Settlement workspace UNCOVERED. BACKLOG-191–196. Independent GOV-008 not
-      recorded. Do not complete.'
+    stage_note: 'GOV-008: Case book strip/rail/scope/grid above the fold; overlay/ageing below. Unmatched C19A50693 is a link
+      to payment-evidence-import?code=; page does not read code (unfiltered wizard). AgGridReact only in EnterpriseDataGrid.
+      Do not complete. Do not complete.'
     debug_iterations: 0
     split_into: null
     deferred: null
