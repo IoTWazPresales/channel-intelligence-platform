@@ -2715,4 +2715,41 @@ Exact engine invariants (do not complete around them):
 | **Out of scope** | Cross-job accept/reject on the queue (N-0011 STEWARD_QUEUE_APPROVE_REJECT). |
 | **TRIGGER** | Operator asks a named non-candidate failure type to appear on the Steward queue leaf, **or** a new importer writes a new `entity_type` that needs an href registry row. |
 
+---
+
+## BACKLOG-189 — Lineup cases `?product=` from Cover lens
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-15 · N-0028 enumerated, not implemented |
+| **Effort** | Small |
+| **Source** | Cover lens `CoverLensView.tsx` href `/lineup/cases?product=`; N-0028 recon `.eif/audit/NS16_START_LINEUP_20260915/RECONCILE.md`. Lineup code does not read `product`. |
+| **Idea** | Honour `?product=` on Lineup cases so Cover “Plan lines for this product” actually scopes the grid. |
+| **Why it matters / deferrable** | The Cover deep-link claims to start a job and currently dumps the unfiltered grid. Deferrable because the leaf still works without that param; N-0028 wired the approval filter that already existed. |
+| **Resume-context** | Filter `LineupPlanGrid` / `/api/v1/lineup/items` by `product_id`. Do not invent From/To/BU chips. |
+| **What the work is** | Read `product` from search params; pass to items query if the API supports it, or client-filter with a ScopeBar chip that can clear. |
+| **Regression traps** | Do not revive hardcoded 26Q3 / All BUs labels. Do not treat a missing product as empty-all. FLAG ≠ BLOCK. |
+| **Behavior to retain** | Approval ScopeBar; HeadlineStrip live figures; PlanningChrome. |
+| **Out of scope** | Movement/Execution; inventing period/BU filters. |
+| **TRIGGER** | Operator clicks Cover “Plan lines for this product” and expects the lineup grid scoped to that SKU. |
+
+---
+
+## BACKLOG-190 — Lineup authoring workbench besides unified import
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-15 · N-0028 CANDIDATE, not implemented |
+| **Effort** | Large |
+| **Source** | `POST /api/v1/commercial-planner/lineup-cases` in `commercial_planner.py`; CurrentLineupSection create; N-0028 recon. |
+| **Idea** | If planners must author a lineup without a file, build a workbench that completes that job. Today Start work **Import a lineup** is the file path. |
+| **Why it matters / deferrable** | Empty-draft POST creates `commercial_lineup_case` with `source_context=commercial_planner` and zero lines — not a creation workbench. Deferrable while import is how lineups enter. |
+| **Resume-context** | Do not point Start work at the empty POST. Either add lines in the same request or open a real authoring surface. |
+| **What the work is** | Product decision: import-only vs authoring. If authoring, reuse commercial_lineup_line write path with steward rules (no auto-create masters). |
+| **Regression traps** | No auto-create dim_product/customer. Unified import `?unified=1` remains the file path. Do not rename Start work back to “Create a lineup” unless a workbench exists. |
+| **Behavior to retain** | Unified import dialog; lineup cases grid on existing cases. |
+| **Out of scope** | N-0028 Start work cards; Node C Case book. |
+| **TRIGGER** | Operator asks to create a lineup without uploading a file, **or** CurrentLineupSection empty-draft is used as a daily path. |
+
+
 
