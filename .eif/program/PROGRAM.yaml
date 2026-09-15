@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 655
-  log_sha256: 653425f80be6f5320810fbb0b18c2eaac4daa3b302e82154069edf0a334ebd4b
+  snapshot_revision: 678
+  log_sha256: 5ceb63e346ad6b7b902c252d1b80593ce5159be5294c2cc223aa6f9438b288f9
   acceptance_policy:
     milestone: operator
     root: operator
@@ -4620,6 +4620,256 @@ nodes:
     design_artifact_class: high_fidelity
     implementation_run: NS14_PROMO_PLAN_20260914
     implementation_actor: gov-001
+  N-0027:
+    id: N-0027
+    parent: null
+    title: Steward queue grouped by failure type, routing into existing engines
+    class: feature
+    origin: decomposition
+    status: in_progress
+    stage: validate
+    revision: 21
+    lease: null
+    depends_on:
+    - N-0011
+    facets:
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - 'Cite D-0008 (accepted): Data & Stewardship Steward queue is a cross-job leaf; per-job engines remain the resolver.
+      Cite D-0006: D-0002 mapping-queue restore vs retire stays deferred — do not restore or retire entity_mapping_queue.
+      Do not implement STEWARD_QUEUE_APPROVE_REJECT (N-0011 defer).'
+    - 'Reconcile against source before product land. Evidence: .eif/audit/NS15_STEWARD_QUEUE_20260915/RECONCILE.md. Label
+      VERIFIED or ASSERTED. Print current_database() first; read-only on cip.'
+    - Queue lists import_entity_mapping_candidate rows with status needs_review across jobs. Grouping is GROUP BY entity_type
+      from that table (plus a config registry for label/href of known types). Job id, template_slug, and file are provenance
+      on the row. Do not hardcode Customer/Product/Distributor sections on the surface. A new entity_type written by a future
+      importer appears as a group without a queue-surface code change; missing registry href is UNCOVERED, not invented.
+    - 'Click routes into the existing steward: DSI and CST at /admin/imports?job={id}; shipment at /admin/shipment-evidence?importJobId={id}.
+      Do not build a parallel resolver or cross-job accept/reject.'
+    - 'Resolution rules hold: no weak or probabilistic joins; similarity-normalised exact match on a unique key only; ambiguous
+      stays reviewable; no auto-create of masters outside governed steward workflows; FLAG ≠ BLOCK. Tenant conventions (OPEN_CHANNEL,
+      ignore reasons, DEFAULT_TENANT_ID) stay existing config, never new queue constants.'
+    - failed_imports brief signal counts unarchived import_job.status=failed and opens /admin/imports?jobStatus=failed (the
+      Import Center filter that already lists those jobs). It must not open /admin/mappings.
+    - 'UNCOVERED this node (do not invent types or resolvers): DSI geo tokens as entity_type; shipment product_resolution_status
+      as a synthetic candidate; lineup unknown_*; payment unmatched Case IDs / customer_unresolved; historical unmatched Case
+      IDs; master unverified; stubs. Re-resolution after product master (BACKLOG-072 / catalogue gaps) is a CANDIDATE — record
+      BACKLOG, do not implement DSI fact repoint.'
+    - 'Browser-verify with Playwright MCP at 1280x800: steward queue lists live needs_review groups; a row opens the existing
+      engine; failed_imports on /brief opens Import Center failed filter. No browser_cdp. No writes to cip. Do not run GOV-008.
+      Do not complete this node. Do not remediate N-0025. Do not reopen N-0026. D-0002, N-0006, N-0013, D-0010, BACKLOG-181,
+      Movement/Execution untouched. Do not cite a frozen design-language version or grammar number.'
+    baseline_ref: BLN-0001
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      ux:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+          summary: Steward queue lists needs_review by entity_type. Steward opens existing job engine. failed_imports opens
+            Import Center failed filter.
+        rationale: null
+        pass_run: NS15_STEWARD_QUEUE_20260915
+        pass_actor: gov-001
+      a11y:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+          summary: Steward is a real link. Failure-type chips are buttons. Keyboard/axe full pass not this session.
+        rationale: null
+        pass_run: NS15_STEWARD_QUEUE_20260915
+        pass_actor: gov-001
+      rendered:
+        required: true
+        state: pass
+        evidence: &id017
+          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+          url: http://localhost:3000/admin/mappings
+          clicks:
+          - /admin/imports?job=900
+          - /admin/imports?jobStatus=failed
+          open_candidates: 2814
+          failed_imports: 47
+          failed_imports_href: /admin/imports?jobStatus=failed
+        rationale: null
+        pass_run: NS15_STEWARD_QUEUE_20260915
+        pass_actor: gov-001
+      content:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+          summary: 'Copy: grouped by failure type stored on each candidate, not by import job. Job is provenance. Legacy entity_mapping_queue
+            is D-0002.'
+        rationale: null
+        pass_run: NS15_STEWARD_QUEUE_20260915
+        pass_actor: gov-001
+      design_artifact_class:
+        required: false
+        state: pass
+        evidence:
+          class: high_fidelity
+          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+        rationale: null
+        pass_run: NS15_STEWARD_QUEUE_20260915
+        pass_actor: gov-001
+      design_divergence:
+        required: false
+        state: pass
+        evidence:
+          benchmark: cross-job steward queue grouped by failure type routing into existing engines
+          decision: group_by_entity_type_route_to_job_engines
+          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+        rationale: null
+        pass_run: NS15_STEWARD_QUEUE_20260915
+        pass_actor: gov-001
+      design_signatures:
+        required: false
+        state: pass
+        evidence:
+          signatures:
+          - steward_queue_group_by_entity_type
+          - job_as_row_provenance
+          - route_to_existing_dsi_cst_shipment_engines
+          - failed_imports_to_import_center_failed_filter
+          - uncovered_types_listed_not_invented
+          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+        rationale: null
+        pass_run: NS15_STEWARD_QUEUE_20260915
+        pass_actor: gov-001
+      rendered_comparison:
+        required: false
+        state: pass
+        evidence:
+          artifact_class: high_fidelity
+          class: high_fidelity
+          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+          product_url: http://localhost:3000/admin/mappings
+          viewport: 1280x800
+          comparison_verdict: queue_lists_needs_review_and_opens_existing_engine
+        rationale: null
+        pass_run: NS15_STEWARD_QUEUE_20260915
+        pass_actor: gov-001
+      design_sameness_review:
+        required: false
+        state: pass
+        evidence:
+          visual_vocabulary_challenge: 'Challenged a parallel resolver and hardcoded Customer/Product/Distributor sections.
+            Queue groups from entity_type in data. Click opens the existing job steward. Path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md'
+          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+          decision: one_queue_leaf_existing_engines
+        rationale: null
+        pass_run: NS15_STEWARD_QUEUE_20260915
+        pass_actor: gov-001
+      design_interaction_spec:
+        required: false
+        state: pass
+        evidence:
+          interactions:
+          - open_steward_queue_leaf
+          - filter_by_entity_type_chip
+          - open_existing_cst_steward_from_row
+          - open_failed_imports_from_brief
+          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+        rationale: null
+        pass_run: NS15_STEWARD_QUEUE_20260915
+        pass_actor: gov-001
+      design_state_coverage:
+        required: false
+        state: pass
+        evidence:
+          states:
+          - queue_2814_open_candidates
+          - type_chips_from_groups
+          - legacy_mapping_queue_empty
+          - brief_47_failed_imports
+          - import_center_failed_filter
+          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+        rationale: null
+        pass_run: NS15_STEWARD_QUEUE_20260915
+        pass_actor: gov-001
+      design_identity_tokens:
+        required: false
+        state: pass
+        evidence:
+          tokens:
+            direction_name: steward queue
+            object: import_entity_mapping_candidate
+            group_key: entity_type
+          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+        rationale: null
+        pass_run: NS15_STEWARD_QUEUE_20260915
+        pass_actor: gov-001
+      design_execution_decisions:
+        required: false
+        state: pass
+        evidence:
+          responsive_decision:
+            status: applicable
+            rationale: 'Named 1280 workflow: mappings leaf to existing job steward; brief failed_imports to Import Center.'
+            evidence: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+          visualisation_decision:
+            status: applicable
+            rationale: Headline strip is counts (candidates, types, jobs, uncovered). Grouping is SQL GROUP BY.
+            evidence: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+          consequential_action_decision:
+            status: applicable
+            rationale: Queue does not accept/reject. Steward hrefs are GET navigation. No cip write.
+            evidence: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+        rationale: null
+        pass_run: NS15_STEWARD_QUEUE_20260915
+        pass_actor: gov-001
+    verification:
+      rendered:
+        state: pass
+        pass_run: NS15_STEWARD_QUEUE_20260915
+        pass_actor: gov-001
+        evidence: *id017
+        path: null
+      referent:
+        state: pass
+        pass_run: NS15_STEWARD_QUEUE_20260915
+        pass_actor: gov-001
+        evidence:
+          path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+          product: steward_queue.py + StewardFailureQueue + brief_signals failed_imports href
+        path: null
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: 'Implementer validate: steward queue GROUP BY entity_type lists 2814 needs_review on cip. Steward click opened
+      /admin/imports?job=900. failed_imports opened Import Center jobStatus=failed (47). BACKLOG-187/188 for re-resolution
+      and non-candidate types. Independent GOV-008 not recorded. Do not complete.'
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation:
+      d0008: accepted; Steward queue is the Data & Stewardship cross-job leaf
+      d0006: D-0002 deferred; entity_mapping_queue not restored or retired
+      n0011_approve_reject: STEWARD_QUEUE_APPROVE_REJECT stays deferred
+      n0013: not reopened
+      d0002: mapping-queue disposition untouched
+      n0006: not reopened
+      d0010: Option A untouched
+      n0025: not remediated
+      n0026: not re-audited
+      backlog_181: rail tokens untouched
+      movement_execution_workspaces: not unwound
+      resolution_rules: no weak joins; no auto-create; FLAG != BLOCK
+    target_artifact_class: null
+    design_artifact_class: high_fidelity
+    implementation_run: NS15_STEWARD_QUEUE_20260915
+    implementation_actor: gov-001
 decisions:
   D-0001:
     id: D-0001
@@ -4912,6 +5162,13 @@ evidence:
     path: .eif/audit/NS14_PROMO_PLAN_20260914/implementer-evidence.md
     tree_hash: null
     note: N-0026 propose from customer+period; Playwright 1280 compose 40 lineup lines; no cip write; no GOV-008
+  EV-N0027-IMPL:
+    id: EV-N0027-IMPL
+    provenance: implementation-observation
+    path: .eif/audit/NS15_STEWARD_QUEUE_20260915/implementer-evidence.md
+    tree_hash: null
+    note: N-0027 steward queue GROUP BY entity_type; Playwright 1280 job=900 + failed_imports jobStatus=failed; no cip write;
+      no GOV-008
 baselines:
   BLN-0001:
     id: BLN-0001
