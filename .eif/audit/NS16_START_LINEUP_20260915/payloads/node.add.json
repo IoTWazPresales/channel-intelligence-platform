@@ -1,0 +1,23 @@
+{
+  "id": "N-0028",
+  "title": "Start work cards and Lineup cases on the lab composition",
+  "class": "feature",
+  "origin": "decomposition",
+  "status": "ready",
+  "facets": ["ui"],
+  "risk": "R2",
+  "touches_existing": true,
+  "acceptance": "auto",
+  "depends_on": ["N-0025", "N-0026"],
+  "target_artifact_class": "high_fidelity",
+  "design_artifact_class": "high_fidelity",
+  "acceptance_criteria": [
+    "Cite D-0008 (accepted): Overview Start work is a hub verb list; Planning Lineup cases is a Planning leaf under existing PlanningChrome. Cite N-0025 (Start work verbs) and N-0026 (Create promotion plan). Do not revert those verbs. Do not remediate N-0025 GOV-008 leftovers.",
+    "Reconcile against source before product land. Evidence: .eif/audit/NS16_START_LINEUP_20260915/RECONCILE.md. Label VERIFIED or ASSERTED. Print current_database() first if SQL is used; read-only on cip.",
+    "Start work uses the Import Center outlined Card + CardActionArea grid. No Panel or Card wrapper around the set. Heading may be typography. All seven verbs remain: import lineup, open lineup cases, create promotion plan, import sell-through, import shipping, settle a case, work the steward queue.",
+    "Create-lineup href stays /admin/imports?unified=1 (unified import is the creation path). Rename the label to Import a lineup. Do not point Start work at POST /lineup-cases empty draft. Steward-queue copy must describe the N-0027 failure-type queue, not the legacy mapping queue.",
+    "Lineup cases keeps PlanningChrome. Replace inner N-0009 chrome with HeadlineStrip (live planned units, net requirement, approval, pending, coverage) and ScopeBar for the wired approval filter. Keep LineupPlanGrid and LineupPlanActionBar. Remove hardcoded From/To/BU/Customer 26Q3 labels, LineupTrendInstrument fake bars, and the duplicate Lineup crumb.",
+    "UNCOVERED this node: Cover lens ?product= (not read); planner empty-draft create as a workbench; LineupPlanGrid badge tokens (Node C); Case book / settlement (Node C); viewer Start work verbs.",
+    "Browser-verify with Playwright MCP at 1280x800: Overview Start work shows outlined cards; Import a lineup opens unified import; Create promotion plan still /promotions?propose=1; /lineup/cases shows HeadlineStrip + approval ScopeBar + grid, not the old dark crumb/trend. No browser_cdp. No writes to cip. Do not run GOV-008. Do not complete this node. D-0002, N-0006, N-0013, D-0010, BACKLOG-181, Movement/Execution, N-0025 remediation, N-0027 GOV-008 untouched. Do not cite a frozen design-language version or grammar number."
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "kind": "rendered",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md",
+    "url": "http://localhost:3000/brief",
+    "clicks": [
+      "/admin/imports?unified=1",
+      "/lineup/cases"
+    ],
+    "create_promo_href": "/promotions?propose=1",
+    "lineup_plan_lines": 1647
+  },
+  "node": "N-0028",
+  "expected_revision": 16
+}

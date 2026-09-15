@@ -1,0 +1,15 @@
+{
+  "dim": "design_state_coverage",
+  "state": "pass",
+  "evidence": {
+    "states": [
+      "overview_start_work_cards",
+      "unified_import_dialog",
+      "lineup_cases_1647_lines",
+      "no_fake_trend_bars"
+    ],
+    "path": ".eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md"
+  },
+  "node": "N-0028",
+  "expected_revision": 9
+}

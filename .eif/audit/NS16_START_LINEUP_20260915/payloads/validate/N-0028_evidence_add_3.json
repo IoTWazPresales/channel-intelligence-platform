@@ -1,0 +1,8 @@
+{
+  "id": "EV-N0028-IMPL",
+  "provenance": "implementation-observation",
+  "path": ".eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md",
+  "note": "N-0028 Start work cards + Lineup cases HeadlineStrip; Playwright 1280; no cip write; no GOV-008",
+  "node": "N-0028",
+  "expected_revision": 3
+}

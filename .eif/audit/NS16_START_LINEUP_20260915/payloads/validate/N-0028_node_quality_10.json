@@ -1,0 +1,13 @@
+{
+  "dim": "design_identity_tokens",
+  "state": "pass",
+  "evidence": {
+    "tokens": {
+      "direction_name": "import a lineup",
+      "object": "commercial_lineup_case"
+    },
+    "path": ".eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md"
+  },
+  "node": "N-0028",
+  "expected_revision": 10
+}

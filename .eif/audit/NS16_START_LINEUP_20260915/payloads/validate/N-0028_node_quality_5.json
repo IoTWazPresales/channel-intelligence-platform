@@ -1,0 +1,16 @@
+{
+  "dim": "design_signatures",
+  "state": "pass",
+  "evidence": {
+    "signatures": [
+      "start_work_outlined_cards_no_wrapper",
+      "import_a_lineup_unified_import",
+      "create_promotion_plan_retained",
+      "lineup_cases_headline_strip",
+      "approval_scope_bar_wired"
+    ],
+    "path": ".eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md"
+  },
+  "node": "N-0028",
+  "expected_revision": 5
+}

@@ -1,0 +1,23 @@
+{
+  "dim": "design_execution_decisions",
+  "state": "pass",
+  "evidence": {
+    "responsive_decision": {
+      "status": "applicable",
+      "rationale": "Named 1280: Overview cards and Lineup cases HeadlineStrip.",
+      "evidence": ".eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md"
+    },
+    "visualisation_decision": {
+      "status": "applicable",
+      "rationale": "Live planned units / net / approval / pending / coverage. Fake Q1/Q2 bars removed.",
+      "evidence": ".eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md"
+    },
+    "consequential_action_decision": {
+      "status": "applicable",
+      "rationale": "Start work is GET navigation. Lineup approval filter is URL-only. No cip write.",
+      "evidence": ".eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md"
+    }
+  },
+  "node": "N-0028",
+  "expected_revision": 11
+}

@@ -1,0 +1,10 @@
+{
+  "dim": "a11y",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md",
+    "summary": "Start work cards are real links. Scope chips are buttons. Keyboard/axe full pass not this session."
+  },
+  "node": "N-0028",
+  "expected_revision": 13
+}

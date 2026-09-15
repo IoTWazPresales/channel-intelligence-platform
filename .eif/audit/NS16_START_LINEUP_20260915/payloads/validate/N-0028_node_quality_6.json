@@ -1,0 +1,14 @@
+{
+  "dim": "rendered_comparison",
+  "state": "pass",
+  "evidence": {
+    "artifact_class": "high_fidelity",
+    "class": "high_fidelity",
+    "path": ".eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md",
+    "product_url": "http://localhost:3000/brief",
+    "viewport": "1280x800",
+    "comparison_verdict": "cards_and_lineup_leaf_on_workbench_primitives"
+  },
+  "node": "N-0028",
+  "expected_revision": 6
+}

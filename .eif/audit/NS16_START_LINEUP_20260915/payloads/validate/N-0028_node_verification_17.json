@@ -1,0 +1,10 @@
+{
+  "kind": "referent",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md",
+    "product": "StartWorkPanel cards + LineupContainer HeadlineStrip/ScopeBar"
+  },
+  "node": "N-0028",
+  "expected_revision": 17
+}

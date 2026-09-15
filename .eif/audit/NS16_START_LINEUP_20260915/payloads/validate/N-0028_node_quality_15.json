@@ -1,0 +1,10 @@
+{
+  "dim": "content",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md",
+    "summary": "Verb is Import a lineup. Steward queue copy names failure type. Lineup strip uses live plan-line counts."
+  },
+  "node": "N-0028",
+  "expected_revision": 15
+}

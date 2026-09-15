@@ -1,0 +1,10 @@
+{
+  "dim": "ux",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md",
+    "summary": "Start work is outlined cards. Import a lineup opens unified import. Lineup cases uses HeadlineStrip and a wired approval ScopeBar."
+  },
+  "node": "N-0028",
+  "expected_revision": 12
+}

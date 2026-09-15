@@ -1,0 +1,11 @@
+{
+  "dim": "design_sameness_review",
+  "state": "pass",
+  "evidence": {
+    "visual_vocabulary_challenge": "Challenged a Panel wrapper around Start work and a second DomainHeader on lineup cases. Cards match Import Center. Lineup leaf uses HeadlineStrip + ScopeBar under existing PlanningChrome. Path: .eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md",
+    "path": ".eif/audit/NS16_START_LINEUP_20260915/implementer-evidence.md",
+    "decision": "no_wrapper_card_reuse_planning_chrome"
+  },
+  "node": "N-0028",
+  "expected_revision": 7
+}

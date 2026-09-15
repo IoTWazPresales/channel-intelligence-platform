@@ -1,0 +1,17 @@
+{
+  "node": "N-0028",
+  "expected_revision": 1,
+  "baseline_ref": "BLN-0001",
+  "preservation": {
+    "d0008": "accepted; Start work on Overview; Lineup cases is a Planning leaf",
+    "n0025": "Start work verbs retained; GOV-008 leftovers not remediated",
+    "n0026": "Create promotion plan verb retained; not re-audited",
+    "n0027": "steward-queue href stays /admin/mappings; copy updated only",
+    "n0013": "not reopened",
+    "d0002": "mapping-queue disposition untouched",
+    "n0006": "not reopened",
+    "d0010": "Option A untouched",
+    "backlog_181": "rail tokens untouched",
+    "movement_execution_workspaces": "not unwound"
+  }
+}
