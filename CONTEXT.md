@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-09-16 — **GOV-008 N-0027 VERIFIED_WITH_LIMITATIONS** on `feat/ns-2-brief-nav-collapse` (evidence `1d69ab2`, views `224d29c`, run `GOV008_N0027_20260916` / actor `gov-022` vs impl `NS15_STEWARD_QUEUE_20260915` / `gov-001`). Stale batch dims reset then re-passed. Playwright MCP 1280×800; `current_database()=cip` read-only. Queue lists without job picker; GROUP BY entity_type chips; shipment/DSI/CST land `/admin/mappings?workspace=resolve`; brief 51 failed imports → Import Center Failed · 51. Limitation: leftover EntityMappingQueue D-0002 copy vs D-0011. Node **complete**. Evidence `.eif/audit/GOV008_N0027_20260916/independent-rendered-review.md`. Programme snapshot **888**. Authoritative ledger files could not be staged in this shell (CONTROL_PLANE_PROTECTED). N-0028/N-0029 not reviewed.
+- 2026-09-16 — **GOV-008 N-0027 VERIFIED_WITH_LIMITATIONS** on `feat/ns-2-brief-nav-collapse` (evidence `1d69ab2`, views `224d29c`, docs `4122708`, run `GOV008_N0027_20260916` / actor `gov-022` vs impl `NS15_STEWARD_QUEUE_20260915` / `gov-001`). Stale batch dims reset then re-passed. Playwright MCP 1280×800; `current_database()=cip` read-only. Queue lists without job picker; GROUP BY entity_type chips; shipment/DSI/CST land `/admin/mappings?workspace=resolve`; brief 51 failed imports → Import Center Failed · 51. Limitation: leftover EntityMappingQueue D-0002 copy vs D-0011. Node **complete**. Evidence `.eif/audit/GOV008_N0027_20260916/independent-rendered-review.md`. Programme snapshot **888**. Authoritative ledger files could not be staged in this shell (CONTROL_PLANE_PROTECTED). N-0028/N-0029 not reviewed.
 
 
 
