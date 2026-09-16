@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 822
-  log_sha256: d877c09f163e0df699480119b227d342c0e7f26a56e528a1e2b567510fbafb9d
+  snapshot_revision: 824
+  log_sha256: 4161985c82118c3c2a93d853e2a7f15e2686e28c02ac13f0aea0f39d8de776a9
   acceptance_policy:
     milestone: operator
     root: operator
@@ -4848,13 +4848,9 @@ nodes:
     class: feature
     origin: decomposition
     status: in_progress
-    stage: implement
-    revision: 42
-    lease:
-      run: NS18_START_WORK_CARDS_20260916
-      acquired_at: '2026-09-16T09:02:34Z'
-      heartbeat_at: '2026-09-16T10:54:03Z'
-      expires_at: '2026-09-16T14:54:03Z'
+    stage: validate
+    revision: 44
+    lease: null
     depends_on:
     - N-0025
     - N-0026
@@ -5064,8 +5060,10 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'GOV-008: HEAD Start work is outlined Import Center cards. Live dirty tree wraps Panel/PanelRow (FAIL vs no-wrapper
-      AC). Lineup cases HeadlineStrip+ScopeBar+grid 7309/1647 SQL-backed. Do not complete. Do not complete.'
+    stage_note: 'Implementer validate: Start work is StartWorkLaunch + ActionCard strip (not PanelRow). Overview: full-width
+      Start work then dashboard 1fr beside Needs attention 312px; 390 stacks Start work then Attention then dashboard. Independent
+      GOV-008 still required: click actual cards, prove route changes, prove role gating, verify desktop and 390px composition.
+      Do not complete.'
     debug_iterations: 0
     split_into: null
     deferred: null
