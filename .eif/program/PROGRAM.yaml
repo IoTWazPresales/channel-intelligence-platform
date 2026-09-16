@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 824
-  log_sha256: 4161985c82118c3c2a93d853e2a7f15e2686e28c02ac13f0aea0f39d8de776a9
+  snapshot_revision: 842
+  log_sha256: c387ec93415f08cdba4213ed083f9072eab40a008d7c41fdf0eb93720de29bdd
   acceptance_policy:
     milestone: operator
     root: operator
@@ -4604,7 +4604,7 @@ nodes:
     origin: decomposition
     status: in_progress
     stage: validate
-    revision: 39
+    revision: 44
     lease: null
     depends_on:
     - N-0011
@@ -4624,8 +4624,8 @@ nodes:
       from that table (plus a config registry for label/href of known types). Job id, template_slug, and file are provenance
       on the row. Do not hardcode Customer/Product/Distributor sections on the surface. A new entity_type written by a future
       importer appears as a group without a queue-surface code change; missing registry href is UNCOVERED, not invented.
-    - 'Click routes into the existing steward: DSI and CST at /admin/imports?job={id}; shipment at /admin/shipment-evidence?importJobId={id}.
-      Do not build a parallel resolver or cross-job accept/reject.'
+    - 'Click routes into the existing steward: all types including shipment at /admin/mappings?workspace=resolve. Do not build
+      a parallel resolver or cross-job accept/reject.'
     - 'Resolution rules hold: no weak or probabilistic joins; similarity-normalised exact match on a unique key only; ambiguous
       stays reviewable; no auto-create of masters outside governed steward workflows; FLAG ≠ BLOCK. Tenant conventions (OPEN_CHANNEL,
       ignore reasons, DEFAULT_TENANT_ID) stay existing config, never new queue constants.'
@@ -4817,9 +4817,9 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'GOV-008: queue lists needs_review without picking a job; groups from entity_type (SQL 2814; live open 2684
-      after alias memory). failed_imports 48 opens Import Center failed filter. Live row click used uncommitted resolve workspace,
-      not HEAD /admin/imports?job=. Do not complete. Do not complete.'
+    stage_note: 'Operator amended AC4: steward click destination is /admin/mappings?workspace=resolve for all types including
+      shipment (was DSI/CST /admin/imports?job= and shipment /admin/shipment-evidence?importJobId=). D-0006 deferral of D-0002
+      unchanged. No parallel resolver or cross-job accept/reject. Do not complete.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -4849,7 +4849,7 @@ nodes:
     origin: decomposition
     status: in_progress
     stage: validate
-    revision: 44
+    revision: 52
     lease: null
     depends_on:
     - N-0025
@@ -4892,14 +4892,14 @@ nodes:
     quality:
       ux:
         required: true
-        state: pass
+        state: pending
         evidence:
           path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          summary: 'GOV-008: HEAD Start work is outlined Import Center cards. Live dirty tree wraps Panel/PanelRow (FAIL vs
-            no-wrapper AC). Lineup cases HeadlineStrip+ScopeBar+grid 7309/1647 SQL-backed. Do not complete.'
-        rationale: null
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+          stale_pass_run: GOV008_N0025_N0029_20260915
+          stale_summary: Live dirty tree wraps Panel/PanelRow (FAIL vs no-wrapper AC)
+          amended_ac: StartWorkLaunch + ActionCard
+        rationale: GOV-008 ux pass describes a tree that no longer exists against AC now requiring StartWorkLaunch + ActionCard.
+          Fresh review required. Do not complete.
       a11y:
         required: true
         state: pass
@@ -4911,27 +4911,24 @@ nodes:
         pass_actor: gov-008
       rendered:
         required: true
-        state: pass
-        evidence: &id018
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          url: http://localhost:3000/brief
-          verdict: VERIFIED_WITH_LIMITATIONS
-          clicks:
-          - /admin/imports?unified=1
-          - /lineup/cases
-        rationale: null
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
-      content:
-        required: true
-        state: pass
+        state: pending
         evidence:
           path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          summary: 'GOV-008: HEAD Start work is outlined Import Center cards. Live dirty tree wraps Panel/PanelRow (FAIL vs
-            no-wrapper AC). Lineup cases HeadlineStrip+ScopeBar+grid 7309/1647 SQL-backed. Do not complete.'
-        rationale: null
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+          stale_pass_run: GOV008_N0025_N0029_20260915
+          stale_summary: Live dirty tree wraps Panel/PanelRow (FAIL vs no-wrapper AC)
+          amended_ac: StartWorkLaunch + ActionCard
+        rationale: GOV-008 rendered pass describes a tree that no longer exists against AC now requiring StartWorkLaunch +
+          ActionCard. Fresh review required. Do not complete.
+      content:
+        required: true
+        state: pending
+        evidence:
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          stale_pass_run: GOV008_N0025_N0029_20260915
+          stale_summary: Live dirty tree wraps Panel/PanelRow (FAIL vs no-wrapper AC)
+          amended_ac: StartWorkLaunch + ActionCard
+        rationale: GOV-008 content pass describes a tree that no longer exists against AC now requiring StartWorkLaunch +
+          ActionCard. Fresh review required. Do not complete.
       design_artifact_class:
         required: false
         state: pass
@@ -4943,27 +4940,26 @@ nodes:
         pass_actor: gov-008
       design_divergence:
         required: false
-        state: pass
+        state: pending
         evidence:
-          benchmark: N-0028
-          decision: VERIFIED_WITH_LIMITATIONS
           path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          verdict: VERIFIED_WITH_LIMITATIONS
-        rationale: null
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+          stale_pass_run: GOV008_N0025_N0029_20260915
+          stale_verdict: VERIFIED_WITH_LIMITATIONS
+          stale_summary: Live dirty tree wraps Panel/PanelRow (FAIL vs no-wrapper AC)
+        rationale: GOV-008 design_divergence pass describes Panel/PanelRow wrapper against AC now requiring StartWorkLaunch
+          + ActionCard. Fresh review required. Do not complete.
       design_signatures:
         required: false
-        state: pass
+        state: pending
         evidence:
-          signatures:
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          stale_pass_run: GOV008_N0025_N0029_20260915
+          stale_signatures:
           - head_outlined_cards
           - live_panel_wrapper
           - lineup_headline_scope_grid
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-        rationale: null
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+        rationale: GOV-008 design_signatures pass includes live_panel_wrapper against AC now requiring StartWorkLaunch + ActionCard.
+          Fresh review required. Do not complete.
       rendered_comparison:
         required: false
         state: pass
@@ -5045,7 +5041,13 @@ nodes:
         state: pass
         pass_run: GOV008_N0025_N0029_20260915
         pass_actor: gov-008
-        evidence: *id018
+        evidence:
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          url: http://localhost:3000/brief
+          verdict: VERIFIED_WITH_LIMITATIONS
+          clicks:
+          - /admin/imports?unified=1
+          - /lineup/cases
         path: null
       referent:
         state: pass
@@ -5060,9 +5062,10 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Implementer validate: Start work is StartWorkLaunch + ActionCard strip (not PanelRow). Overview: full-width
-      Start work then dashboard 1fr beside Needs attention 312px; 390 stacks Start work then Attention then dashboard. Independent
-      GOV-008 still required: click actual cards, prove route changes, prove role gating, verify desktop and 390px composition.
+    stage_note: 'Quality ux/content/rendered/design_signatures/design_divergence reset to pending via node.quality. GOV008_N0025_N0029_20260915
+      pass evidence describes Panel/PanelRow wrapper (signature live_panel_wrapper) against AC that now requires StartWorkLaunch
+      + ActionCard. Engine path: node.quality state=pending clears pass_run/pass_actor. Fresh review required. Implementer
+      validate remains: Start work is StartWorkLaunch + ActionCard strip (not PanelRow). Independent GOV-008 still required.
       Do not complete.'
     debug_iterations: 0
     split_into: null
@@ -5091,7 +5094,7 @@ nodes:
     origin: decomposition
     status: in_progress
     stage: validate
-    revision: 39
+    revision: 42
     lease: null
     depends_on:
     - N-0027
@@ -5152,7 +5155,7 @@ nodes:
       rendered:
         required: true
         state: pass
-        evidence: &id019
+        evidence: &id018
           path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
           url: http://localhost:3000/commercial-planner/cpor-cases
           verdict: VERIFIED_WITH_LIMITATIONS
@@ -5285,7 +5288,7 @@ nodes:
         state: pass
         pass_run: GOV008_N0025_N0029_20260915
         pass_actor: gov-008
-        evidence: *id019
+        evidence: *id018
         path: null
       referent:
         state: pass
@@ -5300,9 +5303,10 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'GOV-008: Case book strip/rail/scope/grid above the fold; overlay/ageing below. Unmatched C19A50693 is a link
-      to payment-evidence-import?code=; page does not read code (unfiltered wizard). AgGridReact only in EnterpriseDataGrid.
-      Do not complete. Do not complete.'
+    stage_note: 'Limitation payment_evidence_code_unread is superseded by aee82a72 (cpor: honour payment-evidence ?code= exact
+      Case ID; overlay equality on external_case_code only; no mint). Evidence EV-N0029-AEE82A7. BACKLOG-196 marked Done.
+      Acceptance criteria unchanged (criterion 5 already requires exact-only and no mint). design_signatures still lists payment_evidence_code_unread
+      from GOV008_N0025_N0029_20260915 until independent re-review. Do not complete.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -5635,6 +5639,14 @@ evidence:
     path: .eif/audit/NS17_GRID_CASEBOOK_20260915/implementer-evidence.md
     tree_hash: null
     note: N-0029 EnterpriseDataGrid text selection + Case book grid-first; Playwright 1280; no cip write; no GOV-008
+  EV-N0029-AEE82A7:
+    id: EV-N0029-AEE82A7
+    provenance: implementation-observation
+    path: apps/web/src/features/promotions-funding/paymentEvidenceCode.ts
+    tree_hash: aee82a72dd2328a617b836aa60e57680c82ff688
+    note: 'aee82a7 cpor: honour payment-evidence ?code= exact Case ID. Overlay equality on external_case_code only; do not
+      mint a CIP case or fuzzy-match. BACKLOG-196 marked Done. Supersedes N-0029 GOV-008 limitation payment_evidence_code_unread
+      (page does not read ?code=).'
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -5709,6 +5721,17 @@ deferred_findings:
   node: N-0011
   run: NS8_DATA_20260906
   actor: gov-001
+  status: deferred
+- seq: 842
+  code: DOES_NOT_FIT
+  note: 'D-0002 KEEP not filed. Ledger first: D-0002 status=proposed (statement still RESTORE vs RETIRE UI); D-0006 status=accepted
+    defers that choice. Product still writes entity_mapping_queue at apps/api/app/ingestion/pipeline.py:185 (EntityMappingQueue
+    on unmatched product). Restore vs retire is a false premise; KEEP is the operator resolution. Filing KEEP (decision.status
+    accepted, or a new decision superseding D-0002) requires superseding accepted D-0006. N-0027 AC1, kept verbatim this run,
+    also cites that deferral. Stop; do not work around D-0006.'
+  node: N-0027
+  run: NS19_LEDGER_ALIGN_20260916
+  actor: gov-019
   status: deferred
 ids:
   node: 5
