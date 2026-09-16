@@ -1,0 +1,11 @@
+{
+  "node": "N-0027",
+  "expected_revision": 58,
+  "dim": "rendered_comparison",
+  "state": "pending",
+  "evidence": {
+    "stale_pass_run": "GOV008_N0025_N0029_20260915",
+    "reason": "AC4 rewritten; AC1 now cites D-0011. Batch review is stale."
+  },
+  "rationale": "Stale GOV008_N0025_N0029_20260915 optional pass. Fresh independent review required."
+}

@@ -1,0 +1,16 @@
+{
+  "node": "N-0027",
+  "expected_revision": 64,
+  "dim": "ux",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0027_20260916/independent-rendered-review.md",
+    "urls": [
+      "http://localhost:3000/admin/mappings",
+      "http://localhost:3000/admin/mappings?workspace=resolve&job=32&entity_type=shipment_customer_token&token=tbh&candidate=1069",
+      "http://localhost:3000/brief"
+    ],
+    "limitation": "Leftover EntityMappingQueue panel still frames D-0002 restore-vs-retire. Default remembered filter hides shipment_distributor until include_remembered=1."
+  },
+  "rationale": "Cross-job needs_review queue works without a job picker. Chips match SQL GROUP BY entity_type. Four entity types including shipment open existing engines on workspace=resolve. Limitation: D-0011 leftover legacy chrome."
+}

@@ -1,0 +1,12 @@
+{
+  "node": "N-0027",
+  "expected_revision": 57,
+  "dim": "design_signatures",
+  "state": "pending",
+  "evidence": {
+    "stale_pass_run": "GOV008_N0025_N0029_20260915",
+    "stale_signatures": ["group_by_entity_type", "failed_imports_to_import_center", "live_click_resolve_workspace_dirty_tree"],
+    "reason": "AC4 rewritten; AC1 now cites D-0011. Batch review is stale."
+  },
+  "rationale": "Stale GOV008_N0025_N0029_20260915 optional pass including live_click_resolve_workspace_dirty_tree. Fresh independent review required."
+}

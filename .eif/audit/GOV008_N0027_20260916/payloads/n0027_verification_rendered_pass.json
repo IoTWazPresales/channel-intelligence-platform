@@ -1,0 +1,12 @@
+{
+  "node": "N-0027",
+  "expected_revision": 68,
+  "kind": "rendered",
+  "state": "pass",
+  "path": ".eif/audit/GOV008_N0027_20260916/independent-rendered-review.md",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0027_20260916/independent-rendered-review.md",
+    "viewport": "1280x800",
+    "verdict": "VERIFIED_WITH_LIMITATIONS"
+  }
+}

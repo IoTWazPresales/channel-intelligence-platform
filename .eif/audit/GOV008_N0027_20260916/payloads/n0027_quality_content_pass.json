@@ -1,0 +1,11 @@
+{
+  "node": "N-0027",
+  "expected_revision": 66,
+  "dim": "content",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0027_20260916/independent-rendered-review.md",
+    "limitation": "Queue and legacy panel still say D-0002 untouched / restore vs retire is an open operator choice. D-0011 KEEP is not reflected in that copy."
+  },
+  "rationale": "New queue copy correctly says click opens the existing job steward on this leaf, not Import Center. Stale D-0002 copy is a recorded limitation, not a routing failure."
+}

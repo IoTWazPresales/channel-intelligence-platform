@@ -1,0 +1,6 @@
+{
+  "id": "EV-N0027-GOV008-20260916",
+  "provenance": "implementation-observation",
+  "path": ".eif/audit/GOV008_N0027_20260916/independent-rendered-review.md",
+  "note": "Independent GOV-008 of N-0027 only. Playwright MCP 1280x800. current_database=cip read-only. Stale GOV008_N0025_N0029_20260915 dims reset pending under this run before live review. Verdict VERIFIED_WITH_LIMITATIONS (leftover D-0002/D-0011 copy on mappings)."
+}

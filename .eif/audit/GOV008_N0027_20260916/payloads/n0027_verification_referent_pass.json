@@ -1,0 +1,18 @@
+{
+  "node": "N-0027",
+  "expected_revision": 69,
+  "kind": "referent",
+  "state": "pass",
+  "path": ".eif/audit/GOV008_N0027_20260916/independent-rendered-review.md",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0027_20260916/independent-rendered-review.md",
+    "sql": "SELECT current_database(); GROUP BY import_entity_mapping_candidate.entity_type status=needs_review; count unarchived import_job.status=failed",
+    "database": "cip",
+    "source": [
+      "apps/api/app/services/imports/steward_queue.py",
+      "apps/web/src/features/data-stewardship/StewardFailureQueue.tsx",
+      "apps/web/src/features/data-stewardship/StewardResolveWorkspace.tsx",
+      "apps/api/app/services/brief_signals.py"
+    ]
+  }
+}

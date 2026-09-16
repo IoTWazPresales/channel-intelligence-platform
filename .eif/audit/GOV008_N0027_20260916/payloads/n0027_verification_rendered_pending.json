@@ -1,0 +1,12 @@
+{
+  "node": "N-0027",
+  "expected_revision": 49,
+  "kind": "rendered",
+  "state": "pending",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "stale_pass_run": "GOV008_N0025_N0029_20260915",
+    "stale_verdict": "VERIFIED_WITH_LIMITATIONS",
+    "reason": "AC4 rewritten; AC1 now cites D-0011. Batch review is stale."
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "node": "N-0027",
+  "expected_revision": 67,
+  "dim": "rendered",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0027_20260916/independent-rendered-review.md",
+    "viewport": "1280x800",
+    "tool": "Playwright MCP",
+    "no_browser_cdp": true,
+    "screenshots": [
+      ".playwright-mcp/page-2026-09-16T20-42-19-388Z.png",
+      ".playwright-mcp/page-2026-09-16T20-45-28-755Z.png",
+      ".playwright-mcp/page-2026-09-16T20-56-46-315Z.png"
+    ]
+  },
+  "rationale": "Live 1280x800: queue lists needs_review groups; shipment/DSI/CST rows open existing engines on /admin/mappings?workspace=resolve; brief failed_imports opens Import Center failed filter."
+}

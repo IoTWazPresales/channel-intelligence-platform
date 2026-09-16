@@ -1,0 +1,12 @@
+{
+  "node": "N-0027",
+  "expected_revision": 65,
+  "dim": "a11y",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0027_20260916/independent-rendered-review.md",
+    "roles_observed": ["tablist", "grid", "toolbar Scope", "button chips", "link Back to queue"],
+    "limitation": "Pointer-only Playwright. No keyboard-only pass. No screen reader. Contrast not measured."
+  },
+  "rationale": "Queue and resolve leaf expose named controls and a data grid. Not a blocking a11y fail on this surface. Keyboard/SR unverified."
+}
