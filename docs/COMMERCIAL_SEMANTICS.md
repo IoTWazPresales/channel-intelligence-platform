@@ -22,6 +22,12 @@ cite their source module. Defined-but-not-built metrics are marked **SPEC ONLY**
 2. **Extend, never parallel-build.**
 3. **Declare the owner before building** (unit prompt). No owner → halt and ask.
 4. **Read across, don't rebuild across.**
+5. **Steward and mapping resolve in the steward workspace.** Mapping/resolution work
+   completes at `/admin/mappings?workspace=resolve` (all entity types, including
+   shipment). Jumping between application pages to finish a mapping is wrong.
+   Ingest still starts at Import Center. Per-job engines remain the resolver.
+   Locked as `docs/STEWARD_ENGINE_DECISIONS.md` D-066. D-0002 restore-vs-retire
+   remains deferred (D-0006).
 
 A metric mattering to a **phase** means that phase may **consume** it. It does not mean the
 phase's screen owns or renders it.
@@ -61,15 +67,16 @@ Print audit output in the unit report.
 | Line-up planning items CRUD | Line-up Planning | `/lineup` |
 | **Demand forecast** (units, confidence, bands, method, analogue) | Demand Forecast | `/forecasts` |
 | Masters / merges / gaps / channels | Admin masters | `/admin/customers` · `/products` · `/distributors` · … |
+| **Entity mapping / steward resolution** | Steward workspace | `/admin/mappings?workspace=resolve` |
 
 ### Split surfaces (same domain, different job)
 
-| Domain | Ingest / steward | Ops / analytics read |
-|---|---|---|
-| Inbound | Import Center + Shipment Evidence | **Shipping** |
-| DSI | Import Center | **Channel Operations** (`/sell-out`) |
-| CST | Import Center | CST steward · CST channel intelligence |
-| Lineups | Commercial Planner · Line-up Planning · PO Management | **Plan vs Executed** (outcomes only) |
+| Domain | Ingest | Resolve (mapping) | Ops / analytics read |
+|---|---|---|---|
+| Inbound | Import Center (`inbound_shipments`) | `/admin/mappings?workspace=resolve` | **Shipping**; shipment line browse `/admin/shipment-evidence` |
+| DSI | Import Center | `/admin/mappings?workspace=resolve` | **Channel Operations** (`/sell-out`) |
+| CST | Import Center | `/admin/mappings?workspace=resolve` | CST steward ops (`/admin/cst-steward`) · CST channel intelligence |
+| Lineups | Commercial Planner · Line-up Planning · PO Management | `/admin/mappings?workspace=resolve` | **Plan vs Executed** (outcomes only) |
 
 ---
 

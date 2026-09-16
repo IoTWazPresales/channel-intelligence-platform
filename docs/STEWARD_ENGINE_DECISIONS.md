@@ -782,4 +782,18 @@ pruned as shipped) stays for operator-supplied codes. ERP/customer-file codes ar
 **Rejected:** Waiting on an ERP code list before promoting named accounts; mass-renaming
 minted codes when a later scheme arrives.
 
+## D-066 · 2026-09-16 · Steward and mapping resolve inside the steward workspace
+**Locked.** Entity mapping and steward resolution complete inside the steward
+workspace. Operator destination is `/admin/mappings?workspace=resolve` for every
+entity type, including shipment (N-0027 AC4). Jumping between application pages
+(Import Center job wizard, shipment-evidence, CST ops, or any other leaf) to
+finish a mapping is wrong.
+**Origin:** Warren 2026-09-16 (stated twice). Recorded NS20 so future nodes inherit
+the rule instead of re-arguing it per node.
+**Rejected:** Per-importer page-hop as the mapping completion path; building a
+parallel resolver so a queue row can “finish mapping” on another application page.
+**Does not change:** Per-job engines remain the resolver (N-0027 AC1). Ingest still
+starts at Import Center. D-0006 still defers D-0002 restore-vs-retire; this rule
+does not restore or retire `entity_mapping_queue`.
+
 

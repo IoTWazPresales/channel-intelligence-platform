@@ -408,6 +408,9 @@ Cursor must not self-PASS without PASS, waiver, or recorded debt.
 - FLAG ≠ BLOCK where domain requires
 - Never auto-create dims from import evidence
 - Import/steward: `.cursor/rules/import-parity.mdc` at DSI/shipment experience bar
+- Steward/mapping work completes inside the steward workspace
+  (`/admin/mappings?workspace=resolve` for every type, including shipment). Do not
+  jump between application pages to finish a mapping (D-066)
 - Behaviour-changing units ship a `## Verification sequence` (shape in Browser verification
   section above)
 

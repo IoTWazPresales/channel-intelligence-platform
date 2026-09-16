@@ -1,6 +1,6 @@
 # Steward Experience Contract
 
-**Version:** 1.6 · 2026-07-27 · Owner: Warren  
+**Version:** 1.7 · 2026-09-16 · Owner: Warren  
 **Role:** The definition of done for ANY import steward/resolve surface. CONSULT may
 only scope units as subsets of these rows. VERIFY walks these rows — not the unit
 prompt's own checklist. Any row excluded from a unit requires an explicit
@@ -63,6 +63,11 @@ provisional D-005.)
 6. **Engine genericity:** `useStewardResolutionPlan` core must not reference
    region/channel/geo or assume bulk preview. Geo is composed by the consumer (DSI).
    Do not add `bulkStrategy` / capability flags that fossilize S8 gaps in the core.
+7. **Resolution destination (v1.7 / D-066):** mapping and steward work complete
+   inside the steward workspace at `/admin/mappings?workspace=resolve` for every
+   type, including shipment. Jumping between application pages to finish a mapping
+   is wrong. Per-job engines remain the resolver; this is the operator destination,
+   not a second engine.
 
 ## Known gaps (v1.6)
 
