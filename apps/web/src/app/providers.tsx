@@ -1,14 +1,24 @@
 'use client';
 
-import { AppThemeProvider } from '@cip/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactNode, useEffect, useState } from 'react';
 
 import { useUiStore } from '@/stores/uiStore';
+import { CipThemeProvider } from '@/theme/CipThemeProvider';
 
 function ThemeBridge({ children }: { children: ReactNode }) {
   const density = useUiStore((s) => s.density);
-  return <AppThemeProvider density={density}>{children}</AppThemeProvider>;
+  const colorMode = useUiStore((s) => s.colorMode);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  // SSR and the first client paint stay dark so persist() cannot mismatch hydration.
+  return (
+    <CipThemeProvider density={density} mode={mounted ? colorMode : 'dark'}>
+      {children}
+    </CipThemeProvider>
+  );
 }
 
 function QueryLifecycle({ client, children }: { client: QueryClient; children: ReactNode }) {

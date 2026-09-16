@@ -35,8 +35,10 @@ import { activeNavGroup } from '@/features/shell/navPageChrome';
 export const RAIL_WIDTH = 252;
 
 /** Opaque-safe hover lift for the raised domain header (bgcolor stays solid so a pinned header never shows leaves through). */
-const raisedHoverOverlay = (t: Theme) =>
-  `linear-gradient(${alpha(t.palette.common.white, 0.05)}, ${alpha(t.palette.common.white, 0.05)})`;
+const raisedHoverOverlay = (t: Theme) => {
+  const lift = alpha(t.palette.mode === 'dark' ? t.palette.common.white : t.palette.common.black, t.palette.mode === 'dark' ? 0.05 : 0.04);
+  return `linear-gradient(${lift}, ${lift})`;
+};
 
 /** Icons stay out of navConfig so the nav model remains a plain, testable module. */
 export const DOMAIN_ICONS: Record<string, SvgIconComponent> = {

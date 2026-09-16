@@ -84,6 +84,7 @@ export default function SettingsPage() {
     getApiBase() ||
     'Same-origin /api/… (rewritten to FastAPI in next dev when NEXT_PUBLIC_API_URL is unset)';
   const density = useUiStore((s) => s.density);
+  const colorMode = useUiStore((s) => s.colorMode);
   const qc = useQueryClient();
   const [wipeOpen, setWipeOpen] = useState(false);
   const [wipePhrase, setWipePhrase] = useState('');
@@ -196,6 +197,15 @@ export default function SettingsPage() {
         <Stack direction="row" spacing={1} alignItems="center">
           <Typography variant="body2" color="text.secondary">
             Current: <strong>{density}</strong> — toggle from the toolbar (compact rows icon).
+          </Typography>
+        </Stack>
+        <Divider sx={{ my: 3 }} />
+        <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+          Appearance
+        </Typography>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Typography variant="body2" color="text.secondary" data-testid="settings-color-mode">
+            Current: <strong>{colorMode}</strong> — toggle from the toolbar (sun / moon icon). Preference is kept in this browser.
           </Typography>
         </Stack>
 

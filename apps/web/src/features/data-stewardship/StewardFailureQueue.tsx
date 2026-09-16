@@ -137,7 +137,7 @@ export function StewardFailureQueue() {
           label="Already mapped"
           value={payload?.remembered_count ?? '—'}
           compact
-          severity={payload?.remembered_count ? 'info' : 'good'}
+          severity={payload?.remembered_count ? 'neutral' : 'good'}
           caption="approved alias exists — hidden unless shown"
         />
         </HeadlineStrip>

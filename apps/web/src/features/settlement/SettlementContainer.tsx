@@ -1,7 +1,7 @@
 'use client';
 
 import { Box } from '@mui/material';
-import { alpha, useTheme } from '@mui/material/styles';
+import { useTheme } from '@mui/material/styles';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState, type ReactNode } from 'react';
@@ -22,7 +22,7 @@ type Props = {
 
 function SettlementContainerInner({ queue }: Props) {
   const theme = useTheme();
-  const line = alpha(theme.palette.common.white, 0.12);
+  const line = theme.palette.divider;
   const searchParams = useSearchParams();
   const qc = useQueryClient();
   const caseParam = searchParams.get('case');
@@ -55,7 +55,7 @@ function SettlementContainerInner({ queue }: Props) {
         <SettlementRegimeStrip />
       </Box>
       <SettlementScopeBar scope={scope} onScopeChange={(next) => setScope((s) => ({ ...s, ...next }))} />
-      <Box sx={{ px: 2.75, py: 1.5, borderBottom: `1px solid ${line}`, bgcolor: '#1a1d23' }}>
+      <Box sx={{ px: 2.75, py: 1.5, borderBottom: `1px solid ${line}`, bgcolor: 'background.paper' }}>
         <SettlementBookRead />
       </Box>
       <Box

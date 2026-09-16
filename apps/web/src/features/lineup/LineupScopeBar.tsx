@@ -14,7 +14,7 @@ type Props = {
 
 export function LineupScopeBar({ scope, onScopeChange }: Props) {
   const theme = useTheme();
-  const line = alpha(theme.palette.common.white, 0.12);
+  const line = theme.palette.divider;
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -42,7 +42,7 @@ export function LineupScopeBar({ scope, onScopeChange }: Props) {
         px: 2.75,
         py: 1.25,
         borderBottom: `1px solid ${line}`,
-        bgcolor: '#1a1d23',
+        bgcolor: 'background.paper',
         position: 'sticky',
         top: 0,
         zIndex: 3,
@@ -61,8 +61,9 @@ export function LineupScopeBar({ scope, onScopeChange }: Props) {
               px: 1.25,
               py: 0.625,
               borderRadius: '4px',
-              border: `1px solid ${alpha(theme.palette.common.white, 0.2)}`,
-              bgcolor: '#1e2229',
+              border: '1px solid',
+              borderColor: 'divider',
+              bgcolor: 'background.default',
               minWidth: 96,
             }}
           >
@@ -81,8 +82,9 @@ export function LineupScopeBar({ scope, onScopeChange }: Props) {
             px: 1.25,
             py: 0.625,
             borderRadius: '4px',
-            border: `1px solid ${alpha(theme.palette.common.white, 0.2)}`,
-            bgcolor: '#1e2229',
+            border: '1px solid',
+            borderColor: 'divider',
+            bgcolor: 'background.default',
             minWidth: 96,
           }}
         >
@@ -93,9 +95,9 @@ export function LineupScopeBar({ scope, onScopeChange }: Props) {
         size="small"
         sx={{
           fontWeight: 600,
-          color: '#bfe8f8',
-          bgcolor: alpha('#3db8e8', 0.16),
-          border: `1px solid ${alpha('#3db8e8', 0.55)}`,
+          color: 'primary.main',
+          bgcolor: alpha(theme.palette.primary.main, 0.16),
+          border: `1px solid ${alpha(theme.palette.primary.main, 0.55)}`,
           px: 2,
           py: 0.75,
           textTransform: 'none',
@@ -118,8 +120,8 @@ export function LineupScopeBar({ scope, onScopeChange }: Props) {
           sx={{
             minWidth: 170,
             fontSize: '12px',
-            color: '#3db8e8',
-            '.MuiOutlinedInput-notchedOutline': { borderColor: alpha('#3db8e8', 0.35) },
+            color: 'primary.main',
+            '.MuiOutlinedInput-notchedOutline': { borderColor: alpha(theme.palette.primary.main, 0.35) },
           }}
         >
           <MenuItem value="all">Lineup · 26Q3</MenuItem>

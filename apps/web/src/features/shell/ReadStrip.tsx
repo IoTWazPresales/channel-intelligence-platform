@@ -5,7 +5,7 @@ import { alpha, useTheme } from '@mui/material/styles';
 
 export function ReadStrip({ text }: { text: string }) {
   const theme = useTheme();
-  const line = alpha(theme.palette.common.white, 0.12);
+  const line = theme.palette.divider;
 
   const parts = text.split(/(\*\*[^*]+\*\*)/g).map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) {
@@ -25,7 +25,7 @@ export function ReadStrip({ text }: { text: string }) {
         px: 2.75,
         py: 1.75,
         borderBottom: `1px solid ${line}`,
-        bgcolor: '#1a1d23',
+        bgcolor: 'background.paper',
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.25 }}>
@@ -36,8 +36,9 @@ export function ReadStrip({ text }: { text: string }) {
             fontSize: '9px',
             letterSpacing: '0.12em',
             textTransform: 'uppercase',
-            color: '#3db8e8',
-            border: '1px solid rgba(61,184,232,0.35)',
+            color: 'primary.main',
+            border: '1px solid',
+            borderColor: alpha(theme.palette.primary.main, 0.35),
             borderRadius: '3px',
             px: 0.75,
             py: 0.25,

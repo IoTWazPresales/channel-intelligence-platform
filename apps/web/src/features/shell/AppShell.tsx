@@ -2,6 +2,8 @@
 
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
+import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
+import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 import NotificationsNoneOutlinedIcon from '@mui/icons-material/NotificationsNoneOutlined';
 import SearchIcon from '@mui/icons-material/Search';
@@ -58,7 +60,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
   const searchStr = searchParams.toString();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const { density, setDensity } = useUiStore((s) => s);
+  const { density, setDensity, colorMode, setColorMode } = useUiStore((s) => s);
   const { data: me, isError: meError } = useCurrentUser();
   const invalidateMe = useInvalidateCurrentUser();
   const qc = useQueryClient();
@@ -245,6 +247,16 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
               aria-label="Toggle table density"
             >
               <ViewCompactOutlinedIcon />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title={colorMode === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}>
+            <IconButton
+              color="inherit"
+              onClick={() => setColorMode(colorMode === 'dark' ? 'light' : 'dark')}
+              aria-label={colorMode === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+              data-testid="topbar-color-mode"
+            >
+              {colorMode === 'dark' ? <LightModeOutlinedIcon /> : <DarkModeOutlinedIcon />}
             </IconButton>
           </Tooltip>
           {roleMayAccess(role, ['admin']) ? (

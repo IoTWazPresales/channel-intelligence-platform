@@ -55,8 +55,8 @@ export function LineupPlanActionBar() {
         gap: 2,
         px: 2.75,
         py: 1.25,
-        borderTop: `1px solid ${alpha(theme.palette.common.white, 0.12)}`,
-        bgcolor: '#1a1d23',
+        borderTop: `1px solid ${theme.palette.divider}`,
+        bgcolor: 'background.paper',
         flexWrap: 'wrap',
       }}
     >
@@ -77,7 +77,7 @@ export function LineupPlanActionBar() {
           data-testid="lineup-net-calc"
           disabled={isFetching}
           onClick={() => void refetchNetReq()}
-          sx={{ textTransform: 'none', borderColor: alpha(theme.palette.common.white, 0.2), color: alpha(theme.palette.text.primary, 0.75) }}
+          sx={{ textTransform: 'none', borderColor: 'divider', color: 'text.secondary' }}
           variant="outlined"
         >
           Calc
@@ -87,7 +87,7 @@ export function LineupPlanActionBar() {
           component="a"
           href={`/api/v1/lineup/net-requirement/export.xlsx?limit=200&apply_bias=true&period_start=${encodeURIComponent(applyPeriodStart)}&period_label=${encodeURIComponent(applyPeriodLabel)}`}
           data-testid="lineup-net-export"
-          sx={{ textTransform: 'none', borderColor: alpha(theme.palette.common.white, 0.2), color: alpha(theme.palette.text.primary, 0.75) }}
+          sx={{ textTransform: 'none', borderColor: 'divider', color: 'text.secondary' }}
           variant="outlined"
         >
           Export
@@ -105,11 +105,11 @@ export function LineupPlanActionBar() {
           sx={{
             textTransform: 'none',
             fontWeight: 600,
-            color: '#bfe8f8',
-            bgcolor: alpha('#3db8e8', 0.16),
-            border: `1px solid ${alpha('#3db8e8', 0.55)}`,
+            color: 'primary.main',
+            bgcolor: alpha(theme.palette.primary.main, 0.16),
+            border: `1px solid ${alpha(theme.palette.primary.main, 0.55)}`,
             boxShadow: 'none',
-            '&:hover': { bgcolor: alpha('#3db8e8', 0.22), boxShadow: 'none' },
+            '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.22), boxShadow: 'none' },
           }}
         >
           {applyNetReq.isPending ? 'Applying…' : 'Apply'}

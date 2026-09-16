@@ -23,9 +23,17 @@ function buFromRow(row: LineupPlanRow): string {
 }
 
 function ApprovalBadge({ status }: { status: string }) {
+  const theme = useTheme();
   const isOk = status === 'approved';
   const isPending = isPendingApproval(status);
   const isRejected = status === 'rejected';
+  const tone = isOk
+    ? theme.palette.success.main
+    : isPending
+      ? theme.palette.warning.main
+      : isRejected
+        ? theme.palette.error.main
+        : theme.palette.text.secondary;
   return (
     <Box
       component="span"
@@ -37,11 +45,9 @@ function ApprovalBadge({ status }: { status: string }) {
         py: 0.25,
         borderRadius: '3px',
         ml: 0.75,
-        color: isOk ? '#9dceb4' : isPending ? '#e8d4a8' : isRejected ? '#e8b4b4' : alpha('#fff', 0.5),
-        border: `1px solid ${
-          isOk ? alpha('#3d9b6a', 0.4) : isPending ? alpha('#d4a15a', 0.4) : isRejected ? alpha('#c45c5c', 0.4) : alpha('#fff', 0.2)
-        }`,
-        bgcolor: isOk ? alpha('#3d9b6a', 0.14) : isPending ? alpha('#d4a15a', 0.13) : isRejected ? alpha('#c45c5c', 0.14) : 'transparent',
+        color: tone,
+        border: `1px solid ${alpha(tone, 0.4)}`,
+        bgcolor: isOk || isPending || isRejected ? alpha(tone, 0.14) : 'transparent',
       }}
     >
       {approvalBadgeLabel(status)}
@@ -128,8 +134,8 @@ export function LineupPlanGrid({ rows, pendingOnly }: Props) {
                   py: 0.5,
                   px: 1,
                   minWidth: 0,
-                  color: '#9dceb4',
-                  borderColor: alpha('#3d9b6a', 0.4),
+                  color: 'success.main',
+                  borderColor: alpha(theme.palette.success.main, 0.4),
                 }}
                 variant="outlined"
               >
@@ -144,8 +150,8 @@ export function LineupPlanGrid({ rows, pendingOnly }: Props) {
                   py: 0.5,
                   px: 1,
                   minWidth: 0,
-                  color: '#e8b4b4',
-                  borderColor: alpha('#c45c5c', 0.4),
+                  color: 'error.main',
+                  borderColor: alpha(theme.palette.error.main, 0.4),
                 }}
                 variant="outlined"
               >
@@ -156,7 +162,7 @@ export function LineupPlanGrid({ rows, pendingOnly }: Props) {
         },
       },
     ],
-    [onApprove, onReject],
+    [onApprove, onReject, theme],
   );
 
   const gridOptions: GridOptions<LineupPlanRow> = useMemo(
@@ -196,7 +202,7 @@ export function LineupPlanGrid({ rows, pendingOnly }: Props) {
           '& .lineup-bu-cell': { fontFamily: '"IBM Plex Mono", monospace', fontSize: '11px' },
           '& .lineup-planned-edit': {
             cursor: 'text',
-            '& .ag-cell-value': { borderBottom: `1px dashed ${alpha('#3db8e8', 0.45)}` },
+            '& .ag-cell-value': { borderBottom: `1px dashed ${alpha(theme.palette.primary.main, 0.45)}` },
           },
         }}
       >
@@ -209,7 +215,7 @@ export function LineupPlanGrid({ rows, pendingOnly }: Props) {
           gap: 2.25,
           px: 2.75,
           py: 1,
-          borderTop: `1px solid ${alpha(theme.palette.common.white, 0.12)}`,
+          borderTop: `1px solid ${theme.palette.divider}`,
           fontFamily: '"IBM Plex Mono", monospace',
           fontSize: '11px',
           color: alpha(theme.palette.text.primary, 0.45),

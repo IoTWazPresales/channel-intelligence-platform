@@ -18,16 +18,15 @@ export type BriefSignal = {
   data_unavailable?: boolean;
 };
 
-const SEVERITY_COLOR = {
-  stop: '#c45c5c',
-  warn: '#d4a15a',
-  ok: '#3d9b6a',
-} as const;
-
 export function BriefSignalRow({ signal }: { signal: BriefSignal }) {
   const theme = useTheme();
-  const line = alpha(theme.palette.common.white, 0.12);
-  const tickColor = SEVERITY_COLOR[signal.severity] ?? SEVERITY_COLOR.warn;
+  const line = theme.palette.divider;
+  const tickColor =
+    signal.severity === 'stop'
+      ? theme.palette.error.main
+      : signal.severity === 'ok'
+        ? theme.palette.success.main
+        : theme.palette.warning.main;
 
   return (
     <Box
@@ -41,7 +40,7 @@ export function BriefSignalRow({ signal }: { signal: BriefSignal }) {
         py: 1.5,
         borderBottom: `1px solid ${line}`,
         opacity: signal.data_unavailable ? 0.65 : 1,
-        '&:hover': { bgcolor: alpha(theme.palette.common.white, 0.03) },
+        '&:hover': { bgcolor: 'action.hover' },
       }}
     >
       <Box sx={{ width: 8, height: 8, borderRadius: '2px', bgcolor: tickColor, ml: 0.75 }} />
@@ -55,7 +54,7 @@ export function BriefSignalRow({ signal }: { signal: BriefSignal }) {
         sx={{
           fontFamily: '"IBM Plex Mono", monospace',
           fontSize: '10.5px',
-          color: signal.meta_hot ? '#e8d4a8' : alpha(theme.palette.text.primary, 0.5),
+          color: signal.meta_hot ? 'warning.main' : alpha(theme.palette.text.primary, 0.5),
           textAlign: 'right',
         }}
       >
@@ -75,10 +74,10 @@ export function BriefSignalRow({ signal }: { signal: BriefSignal }) {
             whiteSpace: 'nowrap',
             ...(signal.suggested
               ? {
-                  bgcolor: 'rgba(61, 184, 232, 0.16)',
-                  borderColor: 'rgba(61, 184, 232, 0.55)',
-                  color: '#bfe8f8',
-                  '&:hover': { bgcolor: 'rgba(61, 184, 232, 0.22)' },
+                  bgcolor: alpha(theme.palette.primary.main, 0.16),
+                  borderColor: alpha(theme.palette.primary.main, 0.55),
+                  color: 'primary.main',
+                  '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.22) },
                 }
               : {}),
           }}
@@ -96,9 +95,10 @@ export function BriefSignalRow({ signal }: { signal: BriefSignal }) {
               fontSize: '8px',
               letterSpacing: '0.08em',
               textTransform: 'uppercase',
-              color: '#3db8e8',
-              bgcolor: '#14161a',
-              border: '1px solid rgba(61,184,232,0.45)',
+              color: 'primary.main',
+              bgcolor: 'background.default',
+              border: '1px solid',
+              borderColor: alpha(theme.palette.primary.main, 0.45),
               borderRadius: '3px',
               px: 0.625,
               py: 0.125,

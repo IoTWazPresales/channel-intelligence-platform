@@ -34,7 +34,7 @@ const STATE_OPTIONS: { value: SettlementStateFilter; label: string }[] = [
 
 export function SettlementScopeBar({ scope, onScopeChange }: Props) {
   const theme = useTheme();
-  const line = alpha(theme.palette.common.white, 0.12);
+  const line = theme.palette.divider;
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: book } = useSettlementBook();
@@ -72,7 +72,7 @@ export function SettlementScopeBar({ scope, onScopeChange }: Props) {
         px: 2.75,
         py: 1.25,
         borderBottom: `1px solid ${line}`,
-        bgcolor: '#1a1d23',
+        bgcolor: 'background.paper',
         position: 'sticky',
         top: 0,
         zIndex: 3,
@@ -103,8 +103,9 @@ export function SettlementScopeBar({ scope, onScopeChange }: Props) {
                 px: 1.25,
                 py: 0.625,
                 borderRadius: '4px',
-                border: `1px dashed ${alpha(theme.palette.common.white, 0.14)}`,
-                bgcolor: alpha('#1e2229', 0.65),
+                border: '1px dashed',
+                borderColor: 'divider',
+                bgcolor: 'action.hover',
                 minWidth: 96,
                 color: alpha(theme.palette.text.primary, 0.45),
                 cursor: 'not-allowed',
@@ -138,8 +139,8 @@ export function SettlementScopeBar({ scope, onScopeChange }: Props) {
           sx={{
             minWidth: 120,
             fontSize: '12px',
-            bgcolor: '#1e2229',
-            '.MuiOutlinedInput-notchedOutline': { borderColor: alpha(theme.palette.common.white, 0.2) },
+            bgcolor: 'background.default',
+            '.MuiOutlinedInput-notchedOutline': { borderColor: 'divider' },
           }}
         >
           {STATE_OPTIONS.map((opt) => (
@@ -158,8 +159,9 @@ export function SettlementScopeBar({ scope, onScopeChange }: Props) {
             sx={{
               fontWeight: 600,
               color: alpha(theme.palette.text.primary, 0.4),
-              bgcolor: alpha(theme.palette.common.white, 0.04),
-              border: `1px dashed ${alpha(theme.palette.common.white, 0.18)}`,
+              bgcolor: 'action.hover',
+              border: '1px dashed',
+              borderColor: 'divider',
               px: 2,
               py: 0.75,
               textTransform: 'none',
@@ -209,8 +211,8 @@ export function SettlementScopeBar({ scope, onScopeChange }: Props) {
           sx={{
             minWidth: 170,
             fontSize: '12px',
-            color: '#3db8e8',
-            '.MuiOutlinedInput-notchedOutline': { borderColor: alpha('#3db8e8', 0.35) },
+            color: 'primary.main',
+            '.MuiOutlinedInput-notchedOutline': { borderColor: alpha(theme.palette.primary.main, 0.35) },
           }}
         >
           <MenuItem value="desk">
