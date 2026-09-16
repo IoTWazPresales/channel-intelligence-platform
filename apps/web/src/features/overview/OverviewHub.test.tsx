@@ -109,5 +109,6 @@ describe('OverviewHub', () => {
     expect(screen.getByText('Imports applied')).toBeInTheDocument();
     expect(screen.getByTestId('overview-edit-dashboard')).toHaveAttribute('href', '/dashboards');
     expect(screen.getByTestId('overview-all-reports')).toHaveAttribute('href', '/reports');
+    expect(screen.getByTestId('overview-body')).toBeInTheDocument();
   });
 });

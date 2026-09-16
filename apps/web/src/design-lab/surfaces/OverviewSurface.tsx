@@ -30,6 +30,9 @@ import NextLink from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
+import { StartWorkLaunch } from '@/features/overview/StartWorkLaunch';
+import type { StartVerb } from '@/features/overview/startWork';
+
 import { defaultWidgets, governedMetrics, savedReports, type Widget } from '../fixtures/dashboard';
 import { fmtCurrency, fmtInt, tenant } from '../fixtures/entities';
 import { ageingBuckets, fundingBook } from '../fixtures/funding';
@@ -40,6 +43,21 @@ import { DomainHeader } from '../primitives/DomainHeader';
 import { HeadlineFigure } from '../primitives/HeadlineFigure';
 import { Panel, PanelRow } from '../primitives/Panel';
 import type { Role } from '../shell/labNav';
+
+/** Lab analogs of production Start work destinations — stay inside the design lab. */
+const LAB_START_HREF: Record<string, string> = {
+  'create-lineup': '/design-lab/data?tab=imports',
+  'open-lineup': '/design-lab/planning?lens=cases',
+  'create-promo-plan': '/design-lab/funding?lens=planner',
+  'import-sell-through': '/design-lab/data?tab=imports',
+  'import-shipping': '/design-lab/supply?lens=shipments',
+  'settle-case': '/design-lab/funding',
+  'steward-queue': '/design-lab/data?tab=steward',
+};
+
+function labStartHref(verb: StartVerb): string {
+  return LAB_START_HREF[verb.id] ?? verb.href;
+}
 
 function useRole(): Role {
   const [role, setRole] = useState<Role>('planner');
@@ -210,6 +228,7 @@ export function OverviewSurface() {
   const [widgets, setWidgets] = useState<Widget[]>(defaultWidgets.planner);
   useEffect(() => setWidgets(defaultWidgets[role]), [role]);
   const attentionFirst = isMobile && search.get('zone') === 'attention';
+  const start = <StartWorkLaunch role={role} layout="strip" hrefFor={labStartHref} />;
 
   const urgent = useMemo(() => signals.filter((s) => s.severity !== 'info'), []);
   const informational = useMemo(() => signals.filter((s) => s.severity === 'info'), []);
@@ -316,6 +335,25 @@ export function OverviewSurface() {
     </Stack>
   );
 
+  const body = (
+    <Box
+      data-testid="overview-body"
+      sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1fr) 312px' }, alignItems: 'start' }}
+    >
+      {attentionFirst ? (
+        <>
+          {attention}
+          {dashboard}
+        </>
+      ) : (
+        <>
+          {dashboard}
+          {attention}
+        </>
+      )}
+    </Box>
+  );
+
   return (
     <Box data-testid="overview-surface">
       <DomainHeader
@@ -323,19 +361,17 @@ export function OverviewSurface() {
         description="Your configurable view of the business, alongside what needs attention right now. Every figure drills into the workflow that owns it."
         meta={`${tenant.period} · data as at 09:20 today · sell-out through W36 for 3 of 4 distributors`}
       />
-      <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1fr) 312px' }, alignItems: 'start' }}>
-        {attentionFirst ? (
+      <Stack spacing={2}>
+        {start}
+        {isMobile ? (
           <>
             {attention}
             {dashboard}
           </>
         ) : (
-          <>
-            {dashboard}
-            {attention}
-          </>
+          body
         )}
-      </Box>
+      </Stack>
       <AddWidgetDialog
         open={adding}
         onClose={() => setAdding(false)}

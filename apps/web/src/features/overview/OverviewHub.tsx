@@ -222,31 +222,32 @@ export function OverviewHub() {
   );
 
   const start = <StartWorkPanel />;
+  const stackAttention = isMobile || attentionFirst;
 
   return (
     <Box data-testid="overview-surface">
-      {attentionFirst ? (
-        <Stack spacing={2}>
-          {start}
-          {attention}
-          {dashboard}
-        </Stack>
-      ) : (
-        <Stack spacing={2}>
+      <Stack spacing={2}>
+        {start}
+        {stackAttention ? (
+          <>
+            {attention}
+            {dashboard}
+          </>
+        ) : (
           <Box
+            data-testid="overview-body"
             sx={{
               display: 'grid',
               gap: 2,
-              gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1.1fr) minmax(380px, 0.9fr)' },
+              gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1fr) 312px' },
               alignItems: 'start',
             }}
           >
-            {start}
+            {dashboard}
             {attention}
           </Box>
-          {dashboard}
-        </Stack>
-      )}
+        )}
+      </Stack>
     </Box>
   );
 }
