@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-09-15 — **BACKLOG-196 + steward UX charter** on `feat/ns-2-brief-nav-collapse` `4d9079b` (steward resolve workspace + Panel Start work pushed). Payment-evidence-import reads `?code=` exact Case ID; overlay `?code=` returns `focus_rows`; no mint; no fuzzy. Live: unmatched `C19A50693` → 1 applied unlinked row. Operator kept workspace and Panel (amend N-0027/N-0028 ACs next programme session). N-0027–N-0029 still `in_progress`/`validate`. D-0002 / N-0006 / N-0013 untouched.
+- 2026-09-15 — **BACKLOG-196 + steward UX charter** on `feat/ns-2-brief-nav-collapse` `aee82a7` (steward UX `4d9079b`). Payment-evidence-import reads `?code=` exact Case ID; overlay `?code=` returns `focus_rows`; no mint; no fuzzy. Live: unmatched `C19A50693` → 1 applied unlinked row. Operator kept workspace and Panel (amend N-0027/N-0028 ACs next programme session). N-0027–N-0029 still `in_progress`/`validate`. D-0002 / N-0006 / N-0013 untouched.
 
 
 - 2026-09-15 — **Steward queue resolve + alias memory + grid clip** on `feat/ns-2-brief-nav-collapse` (uncommitted): queue click stays on Steward leaf `?workspace=resolve` (Customers tab + drawer for token `841765` job 553 live); hides 130 already-aliased distributor/customer tokens (cip 2684 open). Start work uses Panel rows. `EnterpriseDataGrid` overflow clip. Not a programme node close. D-0002 / N-0025 remediation untouched.

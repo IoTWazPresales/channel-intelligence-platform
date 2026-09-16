@@ -4,7 +4,7 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `4d9079b` (steward resolve workspace + Panel Start work). Last ledger pin: `2dbce4a` (GOV-008 N-0025/N-0026 complete). Last evidence pin: `52c006e`. Last views pin: `ad24c3e`. Last docs pin: `57969c1`.
+**Last content pin:** `aee82a7` (BACKLOG-196). Steward UX pin: `4d9079b`. Last ledger pin: `2dbce4a` (GOV-008 N-0025/N-0026 complete). Last evidence pin: `52c006e`. Last views pin: `ad24c3e`. Last docs pin: `57969c1`.
 
 **Alembic (code):** `20260906_0022` (`cpor_case.intelligence_exclude`)
 
