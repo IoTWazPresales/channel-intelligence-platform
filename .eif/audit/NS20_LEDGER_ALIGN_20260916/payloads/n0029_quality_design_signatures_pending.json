@@ -1,0 +1,14 @@
+{
+  "node": "N-0029",
+  "expected_revision": 43,
+  "dim": "design_signatures",
+  "state": "pending",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "stale_pass_run": "GOV008_N0025_N0029_20260915",
+    "stale_signatures": ["grid_above_fold", "unmatched_case_id_link", "payment_evidence_code_unread"],
+    "superseded_signature": "payment_evidence_code_unread",
+    "superseded_by": "aee82a72"
+  },
+  "rationale": "GOV-008 design_signatures still lists payment_evidence_code_unread, superseded by aee82a7 (exact Case ID overlay equality; no mint). Fresh review required. Do not complete."
+}

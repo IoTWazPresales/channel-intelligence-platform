@@ -1,0 +1,5 @@
+{
+  "node": "N-0029",
+  "expected_revision": 44,
+  "note": "NS20 reset quality.design_signatures to pending via node.quality. Signature payment_evidence_code_unread is superseded by aee82a72 (EV-N0029-AEE82A7). Pass provenance from GOV008_N0025_N0029_20260915 cleared. Fresh independent GOV-008 required. Do not complete."
+}

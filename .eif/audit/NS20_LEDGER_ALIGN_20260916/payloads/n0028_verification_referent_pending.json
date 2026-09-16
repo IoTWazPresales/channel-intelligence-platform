@@ -1,0 +1,13 @@
+{
+  "node": "N-0028",
+  "expected_revision": 54,
+  "kind": "referent",
+  "state": "pending",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "stale_pass_run": "GOV008_N0025_N0029_20260915",
+    "stale_product": "StartWorkPanel + LineupContainer",
+    "stale_verdict": "VERIFIED_WITH_LIMITATIONS",
+    "amended_ac": "StartWorkLaunch + ActionCard"
+  }
+}

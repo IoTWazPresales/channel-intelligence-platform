@@ -1,0 +1,5 @@
+{
+  "node": "N-0028",
+  "expected_revision": 55,
+  "note": "NS20 reset verification.rendered and verification.referent to pending via node.verification (engine path exists; pass_run/pass_actor cleared). Both still described GOV008_N0025_N0029_20260915 Panel/PanelRow / StartWorkPanel against AC requiring StartWorkLaunch + ActionCard. quality.design_signatures and quality.design_divergence already pending from NS19 (live_panel_wrapper retained only as stale_signatures evidence, not as a live pass). Fresh independent GOV-008 required. Do not complete."
+}
