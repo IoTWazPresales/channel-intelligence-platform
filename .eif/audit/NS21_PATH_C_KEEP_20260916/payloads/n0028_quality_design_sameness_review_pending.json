@@ -1,0 +1,14 @@
+{
+  "node": "N-0028",
+  "expected_revision": 59,
+  "dim": "design_sameness_review",
+  "state": "pending",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "stale_pass_run": "GOV008_N0025_N0029_20260915",
+    "stale_product": "Panel/PanelRow tree",
+    "stale_decision": "VERIFIED_WITH_LIMITATIONS",
+    "amended_ac": "StartWorkLaunch + ActionCard"
+  },
+  "rationale": "Optional quality.design_sameness_review still passing from GOV008_N0025_N0029_20260915, challenging a Panel wrapper against an AC that no longer exists. Fresh independent GOV-008 required. Do not complete."
+}

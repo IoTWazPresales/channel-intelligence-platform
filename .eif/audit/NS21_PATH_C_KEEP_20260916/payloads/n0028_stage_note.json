@@ -1,0 +1,5 @@
+{
+  "node": "N-0028",
+  "expected_revision": 61,
+  "note": "NS21 finished the NS20 stale-evidence sweep. Reset quality.rendered_comparison, quality.design_sameness_review, and quality.design_state_coverage to pending via node.quality (engine accepted optional dims; pass_run/pass_actor cleared). All three still described GOV008_N0025_N0029_20260915 Panel/PanelRow tree (design_state_coverage still contained live_panel_start_work) against AC requiring StartWorkLaunch + ActionCard. Ignore that GOV-008 batch entirely. Fresh independent GOV-008 required: one node per review; click actual Start work ActionCards and assert URL change; prove role gating from those clicks; render 1280x800 and 390x844 on a clean tree. Direct navigation to destination URLs is not proof. Do not complete."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "D-0011",
+  "scope": "N-0013",
+  "origin": "operator",
+  "status": "accepted",
+  "supersedes": ["D-0006", "D-0002"],
+  "statement": "KEEP 2026-09-16 (path C): the mapping capability was never removed. entity_mapping_queue is still written by the live pipeline at apps/api/app/ingestion/pipeline.py:185 (EntityMappingQueue on unmatched product) and carries resolution state ImportRowResult does not. \"Restore vs retire the mapping-queue UI\" is therefore a void premise. KEEP: the queue stays. It is pipeline state, not a UI to restore or retire. Destination is governed by D-066: mapping and steward work finishes at /admin/mappings?workspace=resolve for every type including shipment. Per-job engines remain the resolver. Supersedes D-0006 (accepted deferral of D-0002) and D-0002 (RESTORE vs RETIRE proposed)."
+}

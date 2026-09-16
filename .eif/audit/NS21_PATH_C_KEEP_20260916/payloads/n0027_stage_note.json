@@ -1,0 +1,5 @@
+{
+  "node": "N-0027",
+  "expected_revision": 46,
+  "note": "NS21 path C: D-0011 KEEP filed (supersedes D-0006 and D-0002). AC1 rewritten only: mapping capability remains; destination is the steward workspace per D-066; entity_mapping_queue is pipeline state, not a UI to restore or retire. AC4 and remaining criteria verbatim. Node stays in_progress/validate. Do not complete."
+}

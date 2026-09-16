@@ -1,0 +1,14 @@
+{
+  "node": "N-0028",
+  "expected_revision": 58,
+  "dim": "rendered_comparison",
+  "state": "pending",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "stale_pass_run": "GOV008_N0025_N0029_20260915",
+    "stale_verdict": "lineup_leaf_on_lab_primitives_start_work_cards_dirty",
+    "stale_product": "Panel/PanelRow tree",
+    "amended_ac": "StartWorkLaunch + ActionCard"
+  },
+  "rationale": "Optional quality.rendered_comparison still passing from GOV008_N0025_N0029_20260915 against a Panel/PanelRow tree and an AC that no longer exists. Fresh independent GOV-008 required. Do not complete."
+}

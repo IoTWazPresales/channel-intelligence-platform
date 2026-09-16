@@ -1,0 +1,13 @@
+{
+  "node": "N-0028",
+  "expected_revision": 60,
+  "dim": "design_state_coverage",
+  "state": "pending",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "stale_pass_run": "GOV008_N0025_N0029_20260915",
+    "stale_states": ["lineup_1647_lines", "live_panel_start_work"],
+    "amended_ac": "StartWorkLaunch + ActionCard"
+  },
+  "rationale": "Optional quality.design_state_coverage still passing from GOV008_N0025_N0029_20260915 and still contains live_panel_start_work against an AC that no longer exists. Fresh independent GOV-008 required. Do not complete."
+}
