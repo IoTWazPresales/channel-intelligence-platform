@@ -12,7 +12,11 @@ import {
   type LineupPlanRow,
   type NetRequirementResponse,
 } from '@/features/lineup/lineupTypes';
-import { parseLineupApprovalFilter } from '@/features/lineup/lineupViews';
+import {
+  filterLineupRowsByExactProductId,
+  parseExactLineupProductId,
+  parseLineupApprovalFilter,
+} from '@/features/lineup/lineupViews';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
 import { ScopeBar } from '@/features/workbench-ui/controls';
 import { apiGet } from '@/lib/api';
@@ -21,6 +25,7 @@ function LineupContainerInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const approval = parseLineupApprovalFilter(searchParams?.get('approval'));
+  const productId = parseExactLineupProductId(searchParams?.get('product'));
 
   const { data: items } = useQuery({
     queryKey: ['lineup-items'],
@@ -47,6 +52,7 @@ function LineupContainerInner() {
   });
 
   const rows = items ?? [];
+  const scopedRows = productId == null ? rows : filterLineupRowsByExactProductId(rows, productId);
   const plannedUnits = rows.reduce((s, r) => s + (Number(r.planned_volume_units) || 0), 0);
   const decided = rows.filter((r) => r.approval_status === 'approved' || r.approval_status === 'rejected');
   const approved = rows.filter((r) => r.approval_status === 'approved').length;
@@ -61,13 +67,39 @@ function LineupContainerInner() {
       ? null
       : Math.round((pve.scorecard.fill_rate ?? 0) * 100);
 
-  const setApproval = (next: 'all' | 'pending') => {
+  const setQuery = (mutate: (params: URLSearchParams) => void) => {
     const params = new URLSearchParams(searchParams?.toString() ?? '');
-    if (next === 'pending') params.set('approval', 'pending');
-    else params.delete('approval');
+    mutate(params);
     const q = params.toString();
     router.replace(q ? `/lineup/cases?${q}` : '/lineup/cases', { scroll: false });
   };
+
+  const setApproval = (next: 'all' | 'pending') => {
+    setQuery((params) => {
+      if (next === 'pending') params.set('approval', 'pending');
+      else params.delete('approval');
+    });
+  };
+
+  const clearProduct = () => {
+    setQuery((params) => {
+      params.delete('product');
+    });
+  };
+
+  const clearScope = () => {
+    setQuery((params) => {
+      params.delete('approval');
+      params.delete('product');
+    });
+  };
+
+  const productChipLabel = (() => {
+    if (productId == null) return null;
+    const hit = rows.find((r) => r.product_id === productId);
+    const sku = hit?.sku?.trim();
+    return sku ? `Product · ${sku}` : `Product · ${productId}`;
+  })();
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, gap: 1.5, pt: 1.5 }} data-testid="lineup-container">
@@ -112,8 +144,8 @@ function LineupContainerInner() {
             {
               key: 'all',
               label: 'All lines',
-              active: approval === 'all',
-              onToggle: () => setApproval('all'),
+              active: approval === 'all' && productId == null,
+              onToggle: () => clearScope(),
             },
             {
               key: 'pending',
@@ -122,9 +154,24 @@ function LineupContainerInner() {
               onToggle: () => setApproval(approval === 'pending' ? 'all' : 'pending'),
               tone: 'warning',
             },
+            ...(productChipLabel
+              ? [
+                  {
+                    key: 'product',
+                    label: productChipLabel,
+                    active: true,
+                    onToggle: clearProduct,
+                  },
+                ]
+              : []),
           ]}
-          summary={`${rows.length} plan lines`}
-          onClear={() => setApproval('all')}
+          summary={
+            productId == null
+              ? `${rows.length} plan lines`
+              : `${scopedRows.length} of ${rows.length} plan lines`
+          }
+          onClear={clearScope}
+          clearAvailable={productId != null || approval === 'pending'}
         />
       </Box>
       <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>

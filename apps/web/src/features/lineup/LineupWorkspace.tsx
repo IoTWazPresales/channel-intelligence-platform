@@ -7,7 +7,11 @@ import { useSearchParams } from 'next/navigation';
 import { LineupPlanActionBar } from '@/features/lineup/LineupPlanActionBar';
 import { LineupPlanGrid } from '@/features/lineup/LineupPlanGrid';
 import { type LineupPlanRow } from '@/features/lineup/lineupTypes';
-import { parseLineupApprovalFilter } from '@/features/lineup/lineupViews';
+import {
+  filterLineupRowsByExactProductId,
+  parseExactLineupProductId,
+  parseLineupApprovalFilter,
+} from '@/features/lineup/lineupViews';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { apiGet } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
@@ -15,6 +19,7 @@ import { toQueryError } from '@/lib/queryError';
 export function LineupWorkspace() {
   const searchParams = useSearchParams();
   const pendingOnly = parseLineupApprovalFilter(searchParams?.get('approval')) === 'pending';
+  const productId = parseExactLineupProductId(searchParams?.get('product'));
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['lineup-items'],
@@ -22,6 +27,7 @@ export function LineupWorkspace() {
   });
 
   const rows = data ?? [];
+  const scoped = productId == null ? rows : filterLineupRowsByExactProductId(rows, productId);
 
   return (
     <Box data-testid="lineup-workspace" sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
@@ -38,7 +44,7 @@ export function LineupWorkspace() {
         }}
       >
         <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-          <LineupPlanGrid rows={rows} pendingOnly={pendingOnly} />
+          <LineupPlanGrid rows={scoped} pendingOnly={pendingOnly} />
           <LineupPlanActionBar />
         </Box>
       </ModuleDataSection>

@@ -7,9 +7,20 @@ import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
 import LineupCasesPage from './page';
 
+import React from 'react';
+import { screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { renderWithProviders } from '@/test-utils/renderWithProviders';
+
+import LineupCasesPage from './page';
+
+let searchString = '';
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(searchString),
   usePathname: () => '/lineup/cases',
 }));
 
@@ -34,6 +45,7 @@ vi.mock('@/lib/api', () => ({
 
 describe('LineupCasesPage', () => {
   beforeEach(() => {
+    searchString = '';
     apiGetMock.mockClear();
   });
 
@@ -49,5 +61,17 @@ describe('LineupCasesPage', () => {
     expect(screen.getByTestId('lineup-scope-bar')).toBeInTheDocument();
     expect(screen.queryByTestId('lineup-trend-instrument')).not.toBeInTheDocument();
     expect(screen.queryByTestId('lineup-task-crumb')).not.toBeInTheDocument();
+  });
+
+  it('honours Cover ?product= as an exact product_id chip', async () => {
+    searchString = 'product=42';
+    const qc = new QueryClient();
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <LineupCasesPage />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText('Product · 42')).toBeInTheDocument();
+    expect(await screen.findByText('0 of 0 plan lines')).toBeInTheDocument();
   });
 });
