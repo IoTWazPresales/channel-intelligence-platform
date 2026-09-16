@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 842
-  log_sha256: c387ec93415f08cdba4213ed083f9072eab40a008d7c41fdf0eb93720de29bdd
+  snapshot_revision: 851
+  log_sha256: 23b2df55a20cd2fa3d798bbd94448cc9a2a65eda146e66cf1776c404fc177864
   acceptance_policy:
     milestone: operator
     root: operator
@@ -4849,7 +4849,7 @@ nodes:
     origin: decomposition
     status: in_progress
     stage: validate
-    revision: 52
+    revision: 57
     lease: null
     depends_on:
     - N-0025
@@ -5038,35 +5038,32 @@ nodes:
         pass_actor: gov-008
     verification:
       rendered:
-        state: pass
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+        state: pending
         evidence:
           path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          url: http://localhost:3000/brief
-          verdict: VERIFIED_WITH_LIMITATIONS
-          clicks:
-          - /admin/imports?unified=1
-          - /lineup/cases
+          stale_pass_run: GOV008_N0025_N0029_20260915
+          stale_product: StartWorkPanel + LineupContainer
+          stale_verdict: VERIFIED_WITH_LIMITATIONS
+          amended_ac: StartWorkLaunch + ActionCard
         path: null
       referent:
-        state: pass
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+        state: pending
         evidence:
           path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          product: StartWorkPanel + LineupContainer
-          verdict: VERIFIED_WITH_LIMITATIONS
+          stale_pass_run: GOV008_N0025_N0029_20260915
+          stale_product: StartWorkPanel + LineupContainer
+          stale_verdict: VERIFIED_WITH_LIMITATIONS
+          amended_ac: StartWorkLaunch + ActionCard
         path: null
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Quality ux/content/rendered/design_signatures/design_divergence reset to pending via node.quality. GOV008_N0025_N0029_20260915
-      pass evidence describes Panel/PanelRow wrapper (signature live_panel_wrapper) against AC that now requires StartWorkLaunch
-      + ActionCard. Engine path: node.quality state=pending clears pass_run/pass_actor. Fresh review required. Implementer
-      validate remains: Start work is StartWorkLaunch + ActionCard strip (not PanelRow). Independent GOV-008 still required.
-      Do not complete.'
+    stage_note: NS20 reset verification.rendered and verification.referent to pending via node.verification (engine path exists;
+      pass_run/pass_actor cleared). Both still described GOV008_N0025_N0029_20260915 Panel/PanelRow / StartWorkPanel against
+      AC requiring StartWorkLaunch + ActionCard. quality.design_signatures and quality.design_divergence already pending from
+      NS19 (live_panel_wrapper retained only as stale_signatures evidence, not as a live pass). Fresh independent GOV-008
+      required. Do not complete.
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -5094,7 +5091,7 @@ nodes:
     origin: decomposition
     status: in_progress
     stage: validate
-    revision: 42
+    revision: 46
     lease: null
     depends_on:
     - N-0027
@@ -5197,16 +5194,18 @@ nodes:
         pass_actor: gov-008
       design_signatures:
         required: false
-        state: pass
+        state: pending
         evidence:
-          signatures:
+          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
+          stale_pass_run: GOV008_N0025_N0029_20260915
+          stale_signatures:
           - grid_above_fold
           - unmatched_case_id_link
           - payment_evidence_code_unread
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-        rationale: null
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+          superseded_signature: payment_evidence_code_unread
+          superseded_by: aee82a72
+        rationale: GOV-008 design_signatures still lists payment_evidence_code_unread, superseded by aee82a7 (exact Case ID
+          overlay equality; no mint). Fresh review required. Do not complete.
       rendered_comparison:
         required: false
         state: pass
@@ -5303,10 +5302,9 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Limitation payment_evidence_code_unread is superseded by aee82a72 (cpor: honour payment-evidence ?code= exact
-      Case ID; overlay equality on external_case_code only; no mint). Evidence EV-N0029-AEE82A7. BACKLOG-196 marked Done.
-      Acceptance criteria unchanged (criterion 5 already requires exact-only and no mint). design_signatures still lists payment_evidence_code_unread
-      from GOV008_N0025_N0029_20260915 until independent re-review. Do not complete.'
+    stage_note: NS20 reset quality.design_signatures to pending via node.quality. Signature payment_evidence_code_unread is
+      superseded by aee82a72 (EV-N0029-AEE82A7). Pass provenance from GOV008_N0025_N0029_20260915 cleared. Fresh independent
+      GOV-008 required. Do not complete.
     debug_iterations: 0
     split_into: null
     deferred: null
