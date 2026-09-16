@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 842
+**Snapshot revision:** 851
 
 ## Outcome (verbatim)
 
