@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 864
-  log_sha256: b3a0824da50494fa701c5cec63a492f0cdf3d4755f3470c1a8c3111cd54ea5c2
+  snapshot_revision: 888
+  log_sha256: 716883242c2b69c7502e9e7acbccdd91907d2ad70804e5772d9dedb4906d6a05
   acceptance_policy:
     milestone: operator
     root: operator
@@ -4602,9 +4602,9 @@ nodes:
     title: Steward queue grouped by failure type, routing into existing engines
     class: feature
     origin: decomposition
-    status: in_progress
-    stage: validate
-    revision: 48
+    status: complete
+    stage: null
+    revision: 71
     lease: null
     depends_on:
     - N-0011
@@ -4648,171 +4648,145 @@ nodes:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          summary: 'GOV-008: queue lists needs_review without picking a job; groups from entity_type (SQL 2814; live open
-            2684 after alias memory). failed_imports 48 opens Import Center failed filter. Live row click used uncommitted
-            resolve workspace, not HEAD /admin/imports?job=. Do not complete.'
-        rationale: null
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+          path: .eif/audit/GOV008_N0027_20260916/independent-rendered-review.md
+          urls:
+          - http://localhost:3000/admin/mappings
+          - http://localhost:3000/admin/mappings?workspace=resolve&job=32&entity_type=shipment_customer_token&token=tbh&candidate=1069
+          - http://localhost:3000/brief
+          limitation: Leftover EntityMappingQueue panel still frames D-0002 restore-vs-retire. Default remembered filter hides
+            shipment_distributor until include_remembered=1.
+        rationale: 'Cross-job needs_review queue works without a job picker. Chips match SQL GROUP BY entity_type. Four entity
+          types including shipment open existing engines on workspace=resolve. Limitation: D-0011 leftover legacy chrome.'
+        pass_run: GOV008_N0027_20260916
+        pass_actor: gov-022
       a11y:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          summary: Clicked controls were real links/buttons. Keyboard/axe full pass not this session.
-        rationale: null
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+          path: .eif/audit/GOV008_N0027_20260916/independent-rendered-review.md
+          roles_observed:
+          - tablist
+          - grid
+          - toolbar Scope
+          - button chips
+          - link Back to queue
+          limitation: Pointer-only Playwright. No keyboard-only pass. No screen reader. Contrast not measured.
+        rationale: Queue and resolve leaf expose named controls and a data grid. Not a blocking a11y fail on this surface.
+          Keyboard/SR unverified.
+        pass_run: GOV008_N0027_20260916
+        pass_actor: gov-022
       rendered:
         required: true
         state: pass
         evidence: &id017
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          url: http://localhost:3000/admin/mappings
+          path: .eif/audit/GOV008_N0027_20260916/independent-rendered-review.md
+          viewport: 1280x800
           verdict: VERIFIED_WITH_LIMITATIONS
-          clicks:
-          - /admin/mappings?workspace=resolve&job=96
-          - /admin/imports?jobStatus=failed
-        rationale: null
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+        rationale: 'Live 1280x800: queue lists needs_review groups; shipment/DSI/CST rows open existing engines on /admin/mappings?workspace=resolve;
+          brief failed_imports opens Import Center failed filter.'
+        pass_run: GOV008_N0027_20260916
+        pass_actor: gov-022
       content:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          summary: 'GOV-008: queue lists needs_review without picking a job; groups from entity_type (SQL 2814; live open
-            2684 after alias memory). failed_imports 48 opens Import Center failed filter. Live row click used uncommitted
-            resolve workspace, not HEAD /admin/imports?job=. Do not complete.'
-        rationale: null
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+          path: .eif/audit/GOV008_N0027_20260916/independent-rendered-review.md
+          limitation: Queue and legacy panel still say D-0002 untouched / restore vs retire is an open operator choice. D-0011
+            KEEP is not reflected in that copy.
+        rationale: New queue copy correctly says click opens the existing job steward on this leaf, not Import Center. Stale
+          D-0002 copy is a recorded limitation, not a routing failure.
+        pass_run: GOV008_N0027_20260916
+        pass_actor: gov-022
       design_artifact_class:
         required: false
-        state: pass
+        state: pending
         evidence:
-          class: high_fidelity
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-        rationale: null
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+          stale_pass_run: GOV008_N0025_N0029_20260915
+          reason: AC4 rewritten; AC1 now cites D-0011. Batch review is stale.
+        rationale: Stale GOV008_N0025_N0029_20260915 optional pass. Fresh independent review required.
       design_divergence:
         required: false
-        state: pass
+        state: pending
         evidence:
-          benchmark: N-0027
-          decision: VERIFIED_WITH_LIMITATIONS
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          verdict: VERIFIED_WITH_LIMITATIONS
-        rationale: null
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+          stale_pass_run: GOV008_N0025_N0029_20260915
+          reason: AC4 rewritten; AC1 now cites D-0011. Batch review is stale.
+        rationale: Stale GOV008_N0025_N0029_20260915 optional pass. Fresh independent review required.
       design_signatures:
         required: false
-        state: pass
+        state: pending
         evidence:
-          signatures:
+          stale_pass_run: GOV008_N0025_N0029_20260915
+          stale_signatures:
           - group_by_entity_type
           - failed_imports_to_import_center
           - live_click_resolve_workspace_dirty_tree
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-        rationale: null
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+          reason: AC4 rewritten; AC1 now cites D-0011. Batch review is stale.
+        rationale: Stale GOV008_N0025_N0029_20260915 optional pass including live_click_resolve_workspace_dirty_tree. Fresh
+          independent review required.
       rendered_comparison:
         required: false
-        state: pass
+        state: pending
         evidence:
-          artifact_class: high_fidelity
-          class: high_fidelity
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          product_url: http://localhost:3000/admin/mappings
-          viewport: 1280x800
-          comparison_verdict: queue_lists_work_click_path_dirty_vs_charter
-        rationale: null
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+          stale_pass_run: GOV008_N0025_N0029_20260915
+          reason: AC4 rewritten; AC1 now cites D-0011. Batch review is stale.
+        rationale: Stale GOV008_N0025_N0029_20260915 optional pass. Fresh independent review required.
       design_sameness_review:
         required: false
-        state: pass
+        state: pending
         evidence:
-          visual_vocabulary_challenge: 'Challenged hardcoded Customer/Product/Distributor sections. Live chips follow SQL
-            entity_type. Chartered job-engine href is HEAD; running tree diverged. Path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md'
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          decision: VERIFIED_WITH_LIMITATIONS
-        rationale: null
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+          stale_pass_run: GOV008_N0025_N0029_20260915
+          reason: AC4 rewritten; AC1 now cites D-0011. Batch review is stale.
+        rationale: Stale GOV008_N0025_N0029_20260915 optional pass. Fresh independent review required.
       design_interaction_spec:
         required: false
-        state: pass
+        state: pending
         evidence:
-          interactions:
-          - open_queue_without_job
-          - click_row
-          - click_failed_imports
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-        rationale: null
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+          stale_pass_run: GOV008_N0025_N0029_20260915
+          reason: AC4 rewritten; AC1 now cites D-0011. Batch review is stale.
+        rationale: Stale GOV008_N0025_N0029_20260915 optional pass. Fresh independent review required.
       design_state_coverage:
         required: false
-        state: pass
+        state: pending
         evidence:
-          states:
-          - queue_2684_open
-          - failed_48
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-        rationale: null
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+          stale_pass_run: GOV008_N0025_N0029_20260915
+          reason: AC4 rewritten; AC1 now cites D-0011. Batch review is stale.
+        rationale: Stale GOV008_N0025_N0029_20260915 optional pass. Fresh independent review required.
       design_identity_tokens:
         required: false
-        state: pass
+        state: pending
         evidence:
-          tokens:
-            verdict: VERIFIED_WITH_LIMITATIONS
-            node: N-0027
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-        rationale: null
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+          stale_pass_run: GOV008_N0025_N0029_20260915
+          reason: AC4 rewritten; AC1 now cites D-0011. Batch review is stale.
+        rationale: Stale GOV008_N0025_N0029_20260915 optional pass. Fresh independent review required.
       design_execution_decisions:
         required: false
-        state: pass
+        state: pending
         evidence:
-          responsive_decision:
-            status: applicable
-            rationale: Playwright 1280x800; N-0025 also 390x844.
-            evidence: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          visualisation_decision:
-            status: applicable
-            rationale: NUMBER RULE on cip; no figure rewritten to match UI.
-            evidence: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          consequential_action_decision:
-            status: applicable
-            rationale: No cip writes. Create draft / Apply / upload not confirmed.
-            evidence: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-        rationale: null
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+          stale_pass_run: GOV008_N0025_N0029_20260915
+          reason: AC4 rewritten; AC1 now cites D-0011. Batch review is stale.
+        rationale: Stale GOV008_N0025_N0029_20260915 optional pass. Fresh independent review required.
     verification:
       rendered:
         state: pass
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
         evidence: *id017
-        path: null
+        path: .eif/audit/GOV008_N0027_20260916/independent-rendered-review.md
+        pass_run: GOV008_N0027_20260916
+        pass_actor: gov-022
       referent:
         state: pass
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
         evidence:
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          product: steward_queue.py + StewardFailureQueue
-          verdict: VERIFIED_WITH_LIMITATIONS
-        path: null
+          path: .eif/audit/GOV008_N0027_20260916/independent-rendered-review.md
+          sql: SELECT current_database(); GROUP BY import_entity_mapping_candidate.entity_type status=needs_review; count
+            unarchived import_job.status=failed
+          database: cip
+          source:
+          - apps/api/app/services/imports/steward_queue.py
+          - apps/web/src/features/data-stewardship/StewardFailureQueue.tsx
+          - apps/web/src/features/data-stewardship/StewardResolveWorkspace.tsx
+          - apps/api/app/services/brief_signals.py
+        path: .eif/audit/GOV008_N0027_20260916/independent-rendered-review.md
+        pass_run: GOV008_N0027_20260916
+        pass_actor: gov-022
     evidence: []
     blockers: []
     conservation_tags: []
@@ -5659,6 +5633,14 @@ evidence:
     note: 'aee82a7 cpor: honour payment-evidence ?code= exact Case ID. Overlay equality on external_case_code only; do not
       mint a CIP case or fuzzy-match. BACKLOG-196 marked Done. Supersedes N-0029 GOV-008 limitation payment_evidence_code_unread
       (page does not read ?code=).'
+  EV-N0027-GOV008-20260916:
+    id: EV-N0027-GOV008-20260916
+    provenance: implementation-observation
+    path: .eif/audit/GOV008_N0027_20260916/independent-rendered-review.md
+    tree_hash: null
+    note: Independent GOV-008 of N-0027 only. Playwright MCP 1280x800. current_database=cip read-only. Stale GOV008_N0025_N0029_20260915
+      dims reset pending under this run before live review. Verdict VERIFIED_WITH_LIMITATIONS (leftover D-0002/D-0011 copy
+      on mappings).
 baselines:
   BLN-0001:
     id: BLN-0001
