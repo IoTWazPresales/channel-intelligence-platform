@@ -138,3 +138,51 @@ def build_payment_evidence_overlay(session: Session) -> dict[str, Any]:
             "never submitted, or cancelled upstream. Observation only; not acted on."
         ),
     }
+
+
+def exact_case_code(raw: str | None) -> str | None:
+    """Trim only. Empty after trim is not a Case ID. Never case-fold or substring-match."""
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    return text or None
+
+
+def evidence_rows_matching_exact_code(rows: list[Any], code: str | None) -> list[Any]:
+    exact = exact_case_code(code)
+    if exact is None:
+        return []
+    return [row for row in rows if getattr(row, "external_case_code", None) == exact]
+
+
+def serialize_payment_evidence_focus_row(row: Any) -> dict[str, Any]:
+    amount = getattr(row, "amount", None)
+    return {
+        "id": getattr(row, "id", None),
+        "external_case_code": getattr(row, "external_case_code", None),
+        "case_id": getattr(row, "case_id", None),
+        "payment_status": getattr(row, "payment_status", None),
+        "amount": float(amount) if amount is not None else None,
+        "currency_code": getattr(row, "currency_code", None),
+        "customer_token": getattr(row, "customer_token", None),
+        "latest_comment": latest_comment_from_raw(getattr(row, "raw_source_row", None)),
+        "minted": False,
+    }
+
+
+def lookup_payment_evidence_by_exact_code(session: Session, code: str | None) -> dict[str, Any]:
+    """ORM equality on external_case_code. Does not insert cpor_case."""
+    exact = exact_case_code(code)
+    if exact is None:
+        return {"code": None, "rows": [], "match_count": 0, "minted": False}
+    rows = list(
+        session.scalars(
+            select(CporPaymentEvidence).where(CporPaymentEvidence.external_case_code == exact)
+        ).all()
+    )
+    return {
+        "code": exact,
+        "rows": [serialize_payment_evidence_focus_row(r) for r in rows],
+        "match_count": len(rows),
+        "minted": False,
+    }

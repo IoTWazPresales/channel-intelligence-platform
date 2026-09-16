@@ -2847,7 +2847,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-15 · N-0029 landed the href; page does not read it |
+| **Status / parked** | **Done** · 2026-09-15 · page reads `?code=`; overlay `?code=` exact `external_case_code`; no mint |
 | **Effort** | Small |
 | **Source** | N-0029 Playwright: click unmatched `C19A50693` → `/commercial-planner/cpor-cases/payment-evidence-import?code=C19A50693`. Page has no `useSearchParams`. |
 | **Resume-context** | Href is `paymentEvidenceRowHref`. Do not mint `cpor_case`. Exact Case ID only. Filter or highlight the existing candidate/token list. |

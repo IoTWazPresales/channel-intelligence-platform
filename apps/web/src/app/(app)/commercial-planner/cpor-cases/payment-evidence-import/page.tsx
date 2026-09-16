@@ -12,10 +12,16 @@ import {
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 
 import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
+import { fmtCompact } from '@/features/promotions-funding/format';
+import {
+  filterTokensByExactCaseCode,
+  parseExactPaymentEvidenceCode,
+} from '@/features/promotions-funding/paymentEvidenceCode';
 import { apiGet, apiPost, apiPostFormData, safeDisplayError } from '@/lib/api';
 
 type Source = { id: number; code: string; name: string };
@@ -42,17 +48,34 @@ type Candidate = {
   create_shell_case?: boolean;
   resolved_customer_id?: number | null;
 };
+type FocusRow = {
+  id: number;
+  external_case_code: string;
+  case_id: number | null;
+  payment_status: string | null;
+  amount: number | null;
+  currency_code: string | null;
+  customer_token: string | null;
+  latest_comment?: string | null;
+  minted?: boolean;
+};
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
 type DistributorPick = { id: number; distributor_code: string; distributor_name: string };
 
 function PaymentEvidenceImportWizard() {
   const qc = useQueryClient();
+  const search = useSearchParams();
+  const focusCode = parseExactPaymentEvidenceCode(search.get('code'));
   const [file, setFile] = useState<File | null>(null);
   const [jobId, setJobId] = useState<number | null>(null);
   const [entityTab, setEntityTab] = useState<'customer' | 'distributor' | 'case'>('customer');
   const [mapToken, setMapToken] = useState<Candidate | null>(null);
   const [mapTarget, setMapTarget] = useState<CustomerPick | DistributorPick | null>(null);
   const [shellAlso, setShellAlso] = useState(false);
+
+  useEffect(() => {
+    if (focusCode) setEntityTab('case');
+  }, [focusCode]);
 
   const { data: profiles } = useQuery({
     queryKey: ['cpor', 'payment', 'profiles'],
@@ -89,6 +112,40 @@ function PaymentEvidenceImportWizard() {
         { signal },
       ),
   });
+
+  const {
+    data: overlayFocus,
+    isFetched: overlayFetched,
+    isError: overlayError,
+  } = useQuery({
+    queryKey: ['cpor', 'payment', 'overlay', 'focus', focusCode],
+    enabled: focusCode != null,
+    queryFn: ({ signal }) =>
+      apiGet<{
+        focus_code?: string;
+        focus_rows?: FocusRow[];
+        focus_match_count?: number;
+        focus_minted?: boolean;
+      }>(`/api/v1/cpor/payment-evidence/overlay?code=${encodeURIComponent(focusCode ?? '')}`, {
+        signal,
+      }),
+  });
+
+  const focusRows = overlayFocus?.focus_rows ?? [];
+  const focusStatus = !focusCode
+    ? 'idle'
+    : overlayError
+      ? 'error'
+      : !overlayFetched
+        ? 'loading'
+        : focusRows.length
+          ? 'matched'
+          : 'miss';
+  const visibleCandidates = useMemo(() => {
+    const items = candidates?.items ?? [];
+    if (!focusCode) return items.slice(0, 40);
+    return filterTokensByExactCaseCode(items, focusCode).slice(0, 40);
+  }, [candidates, focusCode]);
 
   const upload = useMutation({
     mutationFn: async () => {
@@ -166,6 +223,39 @@ function PaymentEvidenceImportWizard() {
         Template-driven export is not built.
       </Alert>
 
+      {focusCode ? (
+        <Alert
+          severity={focusStatus === 'matched' ? 'info' : focusStatus === 'loading' ? 'info' : 'warning'}
+          data-testid="cpor-payment-code-focus"
+          sx={{ mb: 2 }}
+        >
+          Case ID <strong>{focusCode}</strong> — exact match only. This page does not mint a CIP
+          case.
+          {focusStatus === 'loading'
+            ? ' Loading applied evidence…'
+            : focusStatus === 'error'
+              ? ' Could not load applied evidence for this Case ID.'
+              : focusStatus === 'miss'
+                ? ' No applied payment-evidence row has this Case ID.'
+                : ` ${focusRows.length} applied evidence row(s).`}
+        </Alert>
+      ) : null}
+      {focusRows.map((r) => (
+        <Stack
+          key={r.id}
+          spacing={0.25}
+          data-testid="cpor-payment-code-match"
+          sx={{ mb: 2, p: 1.5, border: '1px solid', borderColor: 'primary.main', borderRadius: 1 }}
+        >
+          <Typography variant="subtitle2">{r.external_case_code}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            {r.customer_token ?? '—'} · {r.payment_status ?? 'blank'} ·{' '}
+            {fmtCompact(r.amount, r.currency_code ?? 'USD')}
+            {r.case_id == null ? ' · unlinked' : ` · linked case ${r.case_id}`}
+          </Typography>
+        </Stack>
+      ))}
+
       <Stack spacing={2} sx={{ maxWidth: 960 }}>
         <Stack direction="row" spacing={1} alignItems="center">
           <Button variant="outlined" component="label" data-testid="cpor-payment-file">
@@ -215,13 +305,25 @@ function PaymentEvidenceImportWizard() {
               <Tab value="case" label="Unlinked cases" />
             </Tabs>
             <Stack spacing={1}>
-              {(candidates?.items ?? []).slice(0, 40).map((c) => (
+              {visibleCandidates.map((c) => (
                 <Stack
                   key={c.token}
                   direction="row"
                   spacing={1}
                   alignItems="center"
-                  sx={{ borderBottom: '1px solid', borderColor: 'divider', py: 0.5 }}
+                  data-testid={
+                    focusCode && c.token === focusCode
+                      ? 'cpor-payment-candidate-match'
+                      : 'cpor-payment-candidate'
+                  }
+                  sx={{
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                    py: 0.5,
+                    ...(focusCode && c.token === focusCode
+                      ? { bgcolor: 'action.selected', px: 1, borderRadius: 0.5 }
+                      : {}),
+                  }}
                 >
                   <Typography sx={{ flex: 1 }} variant="body2">
                     <strong>{c.token}</strong> · {c.row_count} rows
@@ -233,9 +335,11 @@ function PaymentEvidenceImportWizard() {
                   </Button>
                 </Stack>
               ))}
-              {(candidates?.items?.length ?? 0) === 0 ? (
+              {(visibleCandidates.length ?? 0) === 0 ? (
                 <Typography variant="body2" color="text.secondary">
-                  No unresolved {entityTab} tokens.
+                  {focusCode
+                    ? `No exact token ${focusCode} in this job.`
+                    : `No unresolved ${entityTab} tokens.`}
                 </Typography>
               ) : null}
             </Stack>
@@ -331,5 +435,9 @@ function PaymentEvidenceImportWizard() {
 }
 
 export default function CporPaymentEvidenceImportPage() {
-  return <PaymentEvidenceImportWizard />;
+  return (
+    <Suspense fallback={<Typography sx={{ p: 2 }}>Loading payment evidence…</Typography>}>
+      <PaymentEvidenceImportWizard />
+    </Suspense>
+  );
 }

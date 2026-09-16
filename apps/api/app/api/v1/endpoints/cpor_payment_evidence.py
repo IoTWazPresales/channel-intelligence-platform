@@ -19,7 +19,9 @@ from app.services.cpor.payment_evidence.overlay_read import (
     cn_closed_date_from_raw,
     cn_status_from_raw,
     deduction_no_from_raw,
+    exact_case_code,
     latest_comment_from_raw,
+    lookup_payment_evidence_by_exact_code,
 )
 from app.services.cpor.payment_evidence.pipeline import (
     apply_cpor_payment_evidence_job,
@@ -97,11 +99,20 @@ def list_profiles(
 
 @router.get("/payment-evidence/overlay")
 def payment_evidence_overlay(
+    code: Annotated[str | None, Query(max_length=64)] = None,
     _user: Annotated[dict, Depends(get_current_user)] = None,
     db: Session = Depends(_sync_db),
 ) -> dict[str, Any]:
     """Applied-evidence overlay: exact Case ID match + pending Latest Comment. Read-only."""
-    return build_payment_evidence_overlay(db)
+    out = build_payment_evidence_overlay(db)
+    exact = exact_case_code(code)
+    if exact is not None:
+        focus = lookup_payment_evidence_by_exact_code(db, exact)
+        out["focus_code"] = focus["code"]
+        out["focus_rows"] = focus["rows"]
+        out["focus_match_count"] = focus["match_count"]
+        out["focus_minted"] = False
+    return out
 
 
 @router.get("/payment-evidence/jobs/{job_id}/summary")
