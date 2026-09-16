@@ -21,4 +21,4 @@ _none_
 
 ## Decision queue
 
-- **D-0002** scope=N-0013: Mapping queue UI: RESTORE under Imports (recommended) vs RETIRE UI — operator choice
+_empty_
