@@ -1,0 +1,5 @@
+{
+  "node": "N-0028",
+  "expected_revision": 50,
+  "note": "Quality ux/content/rendered/design_signatures/design_divergence reset to pending via node.quality. GOV008_N0025_N0029_20260915 pass evidence describes Panel/PanelRow wrapper (signature live_panel_wrapper) against AC that now requires StartWorkLaunch + ActionCard. Engine path: node.quality state=pending clears pass_run/pass_actor. Fresh review required. Implementer validate remains: Start work is StartWorkLaunch + ActionCard strip (not PanelRow). Independent GOV-008 still required. Do not complete."
+}

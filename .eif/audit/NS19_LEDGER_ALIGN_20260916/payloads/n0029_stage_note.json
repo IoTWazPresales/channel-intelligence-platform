@@ -1,0 +1,5 @@
+{
+  "node": "N-0029",
+  "expected_revision": 40,
+  "note": "Limitation payment_evidence_code_unread is superseded by aee82a72 (cpor: honour payment-evidence ?code= exact Case ID; overlay equality on external_case_code only; no mint). Evidence EV-N0029-AEE82A7. BACKLOG-196 marked Done. Acceptance criteria unchanged (criterion 5 already requires exact-only and no mint). design_signatures still lists payment_evidence_code_unread from GOV008_N0025_N0029_20260915 until independent re-review. Do not complete."
+}

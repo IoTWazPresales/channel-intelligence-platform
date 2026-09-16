@@ -1,0 +1,7 @@
+{
+  "id": "EV-N0029-AEE82A7",
+  "provenance": "implementation-observation",
+  "path": "apps/web/src/features/promotions-funding/paymentEvidenceCode.ts",
+  "tree_hash": "aee82a72dd2328a617b836aa60e57680c82ff688",
+  "note": "aee82a7 cpor: honour payment-evidence ?code= exact Case ID. Overlay equality on external_case_code only; do not mint a CIP case or fuzzy-match. BACKLOG-196 marked Done. Supersedes N-0029 GOV-008 limitation payment_evidence_code_unread (page does not read ?code=)."
+}

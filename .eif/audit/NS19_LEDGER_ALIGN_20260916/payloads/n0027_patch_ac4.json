@@ -1,0 +1,14 @@
+{
+  "node": "N-0027",
+  "expected_revision": 40,
+  "acceptance_criteria": [
+    "Cite D-0008 (accepted): Data & Stewardship Steward queue is a cross-job leaf; per-job engines remain the resolver. Cite D-0006: D-0002 mapping-queue restore vs retire stays deferred — do not restore or retire entity_mapping_queue. Do not implement STEWARD_QUEUE_APPROVE_REJECT (N-0011 defer).",
+    "Reconcile against source before product land. Evidence: .eif/audit/NS15_STEWARD_QUEUE_20260915/RECONCILE.md. Label VERIFIED or ASSERTED. Print current_database() first; read-only on cip.",
+    "Queue lists import_entity_mapping_candidate rows with status needs_review across jobs. Grouping is GROUP BY entity_type from that table (plus a config registry for label/href of known types). Job id, template_slug, and file are provenance on the row. Do not hardcode Customer/Product/Distributor sections on the surface. A new entity_type written by a future importer appears as a group without a queue-surface code change; missing registry href is UNCOVERED, not invented.",
+    "Click routes into the existing steward: all types including shipment at /admin/mappings?workspace=resolve. Do not build a parallel resolver or cross-job accept/reject.",
+    "Resolution rules hold: no weak or probabilistic joins; similarity-normalised exact match on a unique key only; ambiguous stays reviewable; no auto-create of masters outside governed steward workflows; FLAG ≠ BLOCK. Tenant conventions (OPEN_CHANNEL, ignore reasons, DEFAULT_TENANT_ID) stay existing config, never new queue constants.",
+    "failed_imports brief signal counts unarchived import_job.status=failed and opens /admin/imports?jobStatus=failed (the Import Center filter that already lists those jobs). It must not open /admin/mappings.",
+    "UNCOVERED this node (do not invent types or resolvers): DSI geo tokens as entity_type; shipment product_resolution_status as a synthetic candidate; lineup unknown_*; payment unmatched Case IDs / customer_unresolved; historical unmatched Case IDs; master unverified; stubs. Re-resolution after product master (BACKLOG-072 / catalogue gaps) is a CANDIDATE — record BACKLOG, do not implement DSI fact repoint.",
+    "Browser-verify with Playwright MCP at 1280x800: steward queue lists live needs_review groups; a row opens the existing engine; failed_imports on /brief opens Import Center failed filter. No browser_cdp. No writes to cip. Do not run GOV-008. Do not complete this node. Do not remediate N-0025. Do not reopen N-0026. D-0002, N-0006, N-0013, D-0010, BACKLOG-181, Movement/Execution untouched. Do not cite a frozen design-language version or grammar number."
+  ]
+}

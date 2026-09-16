@@ -1,0 +1,5 @@
+{
+  "node": "N-0027",
+  "expected_revision": 41,
+  "note": "Operator amended AC4: steward click destination is /admin/mappings?workspace=resolve for all types including shipment (was DSI/CST /admin/imports?job= and shipment /admin/shipment-evidence?importJobId=). D-0006 deferral of D-0002 unchanged. No parallel resolver or cross-job accept/reject. Do not complete."
+}

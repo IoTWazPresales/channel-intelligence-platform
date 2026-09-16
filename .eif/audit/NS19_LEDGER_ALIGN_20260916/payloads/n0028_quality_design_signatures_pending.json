@@ -1,0 +1,12 @@
+{
+  "node": "N-0028",
+  "expected_revision": 48,
+  "dim": "design_signatures",
+  "state": "pending",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "stale_pass_run": "GOV008_N0025_N0029_20260915",
+    "stale_signatures": ["head_outlined_cards", "live_panel_wrapper", "lineup_headline_scope_grid"]
+  },
+  "rationale": "GOV-008 design_signatures pass includes live_panel_wrapper against AC now requiring StartWorkLaunch + ActionCard. Fresh review required. Do not complete."
+}

@@ -1,0 +1,5 @@
+{
+  "code": "DOES_NOT_FIT",
+  "node": "N-0027",
+  "note": "D-0002 KEEP not filed. Ledger first: D-0002 status=proposed (statement still RESTORE vs RETIRE UI); D-0006 status=accepted defers that choice. Product still writes entity_mapping_queue at apps/api/app/ingestion/pipeline.py:185 (EntityMappingQueue on unmatched product). Restore vs retire is a false premise; KEEP is the operator resolution. Filing KEEP (decision.status accepted, or a new decision superseding D-0002) requires superseding accepted D-0006. N-0027 AC1, kept verbatim this run, also cites that deferral. Stop; do not work around D-0006."
+}

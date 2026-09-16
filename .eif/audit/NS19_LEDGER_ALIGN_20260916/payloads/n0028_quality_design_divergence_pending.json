@@ -1,0 +1,13 @@
+{
+  "node": "N-0028",
+  "expected_revision": 49,
+  "dim": "design_divergence",
+  "state": "pending",
+  "evidence": {
+    "path": ".eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md",
+    "stale_pass_run": "GOV008_N0025_N0029_20260915",
+    "stale_verdict": "VERIFIED_WITH_LIMITATIONS",
+    "stale_summary": "Live dirty tree wraps Panel/PanelRow (FAIL vs no-wrapper AC)"
+  },
+  "rationale": "GOV-008 design_divergence pass describes Panel/PanelRow wrapper against AC now requiring StartWorkLaunch + ActionCard. Fresh review required. Do not complete."
+}
