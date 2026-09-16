@@ -1,0 +1,6 @@
+{
+  "node": "N-0028",
+  "expected_revision": 42,
+  "to": "validate",
+  "stage_note": "Implementer validate: Start work is StartWorkLaunch + ActionCard strip (not PanelRow). Overview: full-width Start work then dashboard 1fr beside Needs attention 312px; 390 stacks Start work then Attention then dashboard. Independent GOV-008 still required: click actual cards, prove route changes, prove role gating, verify desktop and 390px composition. Do not complete."
+}
