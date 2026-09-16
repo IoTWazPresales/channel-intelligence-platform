@@ -4,7 +4,7 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `21d9182` (Start work ActionCard launch strip). Prior pins: BACKLOG-196 `aee82a7`; steward UX `4d9079b`. NS19 ledger `d872fb5` / views `e15be60` / payloads `6d00da8`. NS20 ledger `87e9788` / views `43ec48a` / payloads `1127b93`; programme snapshot **851** (run `NS20_LEDGER_ALIGN_20260916` / actor `gov-020`). Docs commit still this session.
+**Last content pin:** `21d9182` (Start work ActionCard launch strip). Prior pins: BACKLOG-196 `aee82a7`; steward UX `4d9079b`. NS19 ledger `d872fb5` / views `e15be60` / payloads `6d00da8`. NS20 ledger `87e9788` / views `43ec48a` / payloads `1127b93` / docs `ea34cc8`; programme snapshot **851** (run `NS20_LEDGER_ALIGN_20260916` / actor `gov-020`).
 
 **Alembic (code):** `20260906_0022` (`cpor_case.intelligence_exclude`)
 
