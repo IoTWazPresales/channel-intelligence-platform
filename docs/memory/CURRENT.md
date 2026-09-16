@@ -4,7 +4,7 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `21d9182` (Start work ActionCard launch strip). Recon ledger pin: `2e8263d`. Payloads pin: `b6b0ac9`. Views pin: `5cc44c8`. Validate/lease ledger is recorded locally (programme snapshot 824) and still needs a host commit of the two programme-ledger files. Prior pins: BACKLOG-196 `aee82a7`; steward UX `4d9079b`.
+**Last content pin:** `21d9182` (Start work ActionCard launch strip). Recon ledger pin: `2e8263d`. Payloads pin: `b6b0ac9`. Views pin: `5cc44c8`. Docs pin: `2812220`. Validate/lease ledger is recorded locally (programme snapshot 824) and still needs a host commit of the two programme-ledger files. Prior pins: BACKLOG-196 `aee82a7`; steward UX `4d9079b`.
 
 **Alembic (code):** `20260906_0022` (`cpor_case.intelligence_exclude`)
 
