@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 864
+**Snapshot revision:** 888
 
 ## Outcome (verbatim)
 
@@ -48,6 +48,6 @@ _none_
 | N-0024 | Fix label-versus-destination mismatches in nav, brief signals, hub Workflows, and headline figures | redesign | complete | complete | yes |  | full loop |
 | N-0025 | Make actionable work reachable: one Start work surface plus remaining obstruct findings | redesign | complete | complete | yes |  | full loop |
 | N-0026 | Propose a promotion plan from customer and period on the Promotion Planner | feature | complete | complete | yes |  | full loop |
-| N-0027 | Steward queue grouped by failure type, routing into existing engines | feature | in_progress | in_progress | yes |  | full loop |
+| N-0027 | Steward queue grouped by failure type, routing into existing engines | feature | complete | complete | yes |  | full loop |
 | N-0028 | Start work cards and Lineup cases on the lab composition | feature | in_progress | in_progress | yes |  | full loop |
 | N-0029 | Grid community clipboard in one wrapper, Case book working content first | feature | in_progress | in_progress | yes |  | full loop |
