@@ -1,22 +1,11 @@
 'use client';
 
-import {
-  Alert,
-  Autocomplete,
-  Box,
-  Paper,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
-  TextField,
-  Typography,
-} from '@mui/material';
+import { Alert, Autocomplete, Box, Paper, TextField, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
+import type { ColDef } from 'ag-grid-community';
 import { useMemo, useState } from 'react';
 
+import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { apiGet } from '@/lib/api';
 
 import { depthAtLeast, type IntelDepth } from './intelDepth';
@@ -71,6 +60,39 @@ export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
     return [...map.entries()].map(([productId, v]) => ({ productId, ...v }));
   }, [data?.items, depth]);
 
+  const movementCols = useMemo<ColDef<MovementRow>[]>(
+    () => [
+      { field: 'ship_date', headerName: 'Ship date', minWidth: 120, valueFormatter: (p) => p.value ?? '—' },
+      { field: 'product_name', headerName: 'Product', flex: 1, minWidth: 140, valueFormatter: (p) => p.value ?? '—' },
+      { field: 'sku', headerName: 'SKU', minWidth: 110, valueFormatter: (p) => p.value ?? '—' },
+      { field: 'order_no', headerName: 'Order no', minWidth: 120, valueFormatter: (p) => p.value ?? '—' },
+      { field: 'delivery_no', headerName: 'Delivery no', minWidth: 120, valueFormatter: (p) => p.value ?? '—' },
+      {
+        field: 'units_shipped',
+        headerName: 'Units',
+        type: 'numericColumn',
+        minWidth: 90,
+        valueFormatter: (p) => (p.value != null ? Number(p.value).toLocaleString() : '—'),
+      },
+      { field: 'line_state', headerName: 'Status', minWidth: 110 },
+    ],
+    [],
+  );
+  const totalCols = useMemo<ColDef<{ productId: number; sku: string; name: string; inbound: number }>[]>(
+    () => [
+      { field: 'sku', headerName: 'SKU', minWidth: 110 },
+      { field: 'name', headerName: 'Product', flex: 1, minWidth: 160 },
+      {
+        field: 'inbound',
+        headerName: 'Inbound units',
+        type: 'numericColumn',
+        minWidth: 130,
+        valueFormatter: (p) => Number(p.value ?? 0).toLocaleString(),
+      },
+    ],
+    [],
+  );
+
   return (
     <Box>
       <Autocomplete
@@ -101,34 +123,7 @@ export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
                   No shipment evidence lines for this distributor.
                 </Typography>
               ) : (
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Ship date</TableCell>
-                      <TableCell>Product</TableCell>
-                      <TableCell>SKU</TableCell>
-                      <TableCell>Order no</TableCell>
-                      <TableCell>Delivery no</TableCell>
-                      <TableCell align="right">Units</TableCell>
-                      <TableCell>Status</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {data?.items.map((r, i) => (
-                      <TableRow key={`${r.order_no}-${i}`}>
-                        <TableCell>{r.ship_date ?? '—'}</TableCell>
-                        <TableCell>{r.product_name ?? '—'}</TableCell>
-                        <TableCell>{r.sku ?? '—'}</TableCell>
-                        <TableCell>{r.order_no ?? '—'}</TableCell>
-                        <TableCell>{r.delivery_no ?? '—'}</TableCell>
-                        <TableCell align="right">
-                          {r.units_shipped != null ? r.units_shipped.toLocaleString() : '—'}
-                        </TableCell>
-                        <TableCell>{r.line_state}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <EnterpriseDataGrid rowData={data?.items ?? []} columnDefs={movementCols} height={420} />
               )}
             </Box>
           </Paper>
@@ -137,24 +132,7 @@ export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
               <Typography variant="subtitle2" gutterBottom>
                 Inbound totals by product (filtered page)
               </Typography>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>SKU</TableCell>
-                    <TableCell>Product</TableCell>
-                    <TableCell align="right">Inbound units</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {productTotals.map((r) => (
-                    <TableRow key={r.productId}>
-                      <TableCell>{r.sku}</TableCell>
-                      <TableCell>{r.name}</TableCell>
-                      <TableCell align="right">{r.inbound.toLocaleString()}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <EnterpriseDataGrid rowData={productTotals} columnDefs={totalCols} height={280} />
             </Paper>
           )}
         </>

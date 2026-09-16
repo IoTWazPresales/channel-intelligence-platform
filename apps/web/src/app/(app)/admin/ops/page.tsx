@@ -6,15 +6,14 @@ import {
   Link,
   Paper,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
+import type { ColDef } from 'ag-grid-community';
 import NextLink from 'next/link';
+import { useMemo } from 'react';
+
+import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 
 import { AdminChrome } from '@/features/administration/AdminChrome';
 import { apiGet, safeDisplayError } from '@/lib/api';
@@ -62,6 +61,27 @@ export default function AdminOpsPage() {
     refetchInterval: 30_000,
   });
 
+  const failedJobCols = useMemo<ColDef<FailedJob>[]>(
+    () => [
+      {
+        field: 'id',
+        headerName: 'Job',
+        minWidth: 90,
+        cellRenderer: (p: { data?: FailedJob }) =>
+          p.data ? (
+            <Link component={NextLink} href={`/admin/imports?jobId=${p.data.id}`}>
+              #{p.data.id}
+            </Link>
+          ) : null,
+      },
+      { field: 'template_slug', headerName: 'Template', minWidth: 160, valueFormatter: (p) => p.value ?? '—' },
+      { field: 'stage', headerName: 'Stage', minWidth: 110 },
+      { field: 'file_name', headerName: 'File', flex: 1, minWidth: 160 },
+      { field: 'error_summary', headerName: 'Error', flex: 1.4, minWidth: 200, valueFormatter: (p) => p.value ?? '—' },
+    ],
+    [],
+  );
+
   if (meError || (me && !allowed)) {
     return (
       <AdminChrome>
@@ -72,6 +92,7 @@ export default function AdminOpsPage() {
 
   const counts = overview.data?.counts;
   const readyOk = overview.data?.readiness?.status === 'ready';
+  const failedJobs = overview.data?.failed_jobs ?? [];
 
   return (
     <AdminChrome>
@@ -133,39 +154,12 @@ export default function AdminOpsPage() {
         <Typography variant="subtitle1" fontWeight={600} gutterBottom>
           Failed import jobs
         </Typography>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Job</TableCell>
-              <TableCell>Template</TableCell>
-              <TableCell>Stage</TableCell>
-              <TableCell>File</TableCell>
-              <TableCell>Error</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {(overview.data?.failed_jobs ?? []).map((j) => (
-              <TableRow key={j.id}>
-                <TableCell>
-                  <Link component={NextLink} href={`/admin/imports?jobId=${j.id}`}>
-                    #{j.id}
-                  </Link>
-                </TableCell>
-                <TableCell>{j.template_slug ?? '—'}</TableCell>
-                <TableCell>{j.stage}</TableCell>
-                <TableCell>{j.file_name}</TableCell>
-                <TableCell sx={{ maxWidth: 360 }}>{j.error_summary ?? '—'}</TableCell>
-              </TableRow>
-            ))}
-            {!overview.isLoading && (overview.data?.failed_jobs?.length ?? 0) === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5}>
-                  <Typography color="text.secondary">No open failed jobs for this tenant.</Typography>
-                </TableCell>
-              </TableRow>
-            ) : null}
-          </TableBody>
-        </Table>
+        <EnterpriseDataGrid
+          rowData={failedJobs}
+          columnDefs={failedJobCols}
+          height={360}
+          gridOptions={{ overlayNoRowsTemplate: 'No open failed jobs for this tenant.' }}
+        />
       </Paper>
     </AdminChrome>
   );

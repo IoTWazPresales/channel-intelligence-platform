@@ -10,18 +10,15 @@ import {
   Paper,
   Select,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   TextField,
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useCallback, useMemo, useState } from 'react';
 import type { UserRole } from '@cip/types';
+import type { ColDef } from 'ag-grid-community';
 
+import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
 
@@ -90,6 +87,51 @@ export function UsersWorkspace() {
     setFormOk(null);
     createMutation.mutate();
   }
+
+  const resetPassword = useCallback((u: ListedUser) => {
+    const next = window.prompt(`New password for ${u.email} (min 8 chars)`);
+    if (!next || next.length < 8) {
+      if (next != null) setFormError('Password must be at least 8 characters');
+      return;
+    }
+    setFormError(null);
+    setFormOk(null);
+    apiPost(`/api/v1/auth/users/${u.id}/set-password`, {
+      new_password: next,
+      revoke_sessions: true,
+    })
+      .then(() => {
+        setFormOk(`Password reset for ${u.email}`);
+      })
+      .catch((err) => setFormError(safeDisplayError(err)));
+  }, []);
+
+  const userColDefs = useMemo<ColDef<ListedUser>[]>(
+    () => [
+      { field: 'email', headerName: 'Email', flex: 1, minWidth: 180 },
+      { field: 'display_name', headerName: 'Name', flex: 1, minWidth: 140 },
+      { field: 'role', headerName: 'Role', minWidth: 110 },
+      {
+        field: 'is_active',
+        headerName: 'Active',
+        minWidth: 90,
+        valueFormatter: (p) => (p.value ? 'yes' : 'no'),
+      },
+      {
+        headerName: 'Actions',
+        minWidth: 150,
+        sortable: false,
+        filter: false,
+        cellRenderer: (p: { data?: ListedUser }) =>
+          p.data ? (
+            <Button size="small" data-testid={`users-reset-password-${p.data.id}`} onClick={() => resetPassword(p.data!)}>
+              Reset password
+            </Button>
+          ) : null,
+      },
+    ],
+    [resetPassword],
+  );
 
   if (mePending && !me && !meError) {
     return (
@@ -192,57 +234,12 @@ export function UsersWorkspace() {
         {usersQuery.isError ? (
           <Alert severity="error">{safeDisplayError(usersQuery.error)}</Alert>
         ) : (
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Email</TableCell>
-                <TableCell>Name</TableCell>
-                <TableCell>Role</TableCell>
-                <TableCell>Active</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {(usersQuery.data?.users ?? []).map((u) => (
-                <TableRow key={u.id}>
-                  <TableCell>{u.email}</TableCell>
-                  <TableCell>{u.display_name}</TableCell>
-                  <TableCell>{u.role}</TableCell>
-                  <TableCell>{u.is_active ? 'yes' : 'no'}</TableCell>
-                  <TableCell align="right">
-                    <Button
-                      size="small"
-                      data-testid={`users-reset-password-${u.id}`}
-                      onClick={() => {
-                        const next = window.prompt(`New password for ${u.email} (min 8 chars)`);
-                        if (!next || next.length < 8) {
-                          if (next != null) setFormError('Password must be at least 8 characters');
-                          return;
-                        }
-                        setFormError(null);
-                        setFormOk(null);
-                        apiPost(`/api/v1/auth/users/${u.id}/set-password`, {
-                          new_password: next,
-                          revoke_sessions: true,
-                        })
-                          .then(() => {
-                            setFormOk(`Password reset for ${u.email}`);
-                          })
-                          .catch((err) => setFormError(safeDisplayError(err)));
-                      }}
-                    >
-                      Reset password
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {!usersQuery.isLoading && (usersQuery.data?.users?.length ?? 0) === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5}>No users yet.</TableCell>
-                </TableRow>
-              ) : null}
-            </TableBody>
-          </Table>
+          <EnterpriseDataGrid
+            rowData={usersQuery.data?.users ?? []}
+            columnDefs={userColDefs}
+            height={360}
+            gridOptions={{ overlayNoRowsTemplate: 'No users yet.' }}
+          />
         )}
       </Paper>
     </Box>

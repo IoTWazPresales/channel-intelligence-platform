@@ -8,16 +8,14 @@ import {
   Paper,
   Select,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   TextField,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
+import type { ColDef } from 'ag-grid-community';
 import { useMemo, useState } from 'react';
+
+import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 
 import { DataChrome } from '@/features/data-stewardship/DataChrome';
 import { apiGet, safeDisplayError } from '@/lib/api';
@@ -66,6 +64,38 @@ export default function StewardAuditPage() {
   });
 
   const rows = useMemo(() => query.data?.events ?? [], [query.data]);
+  const auditCols = useMemo<ColDef<AuditEvent>[]>(
+    () => [
+      {
+        field: 'created_at',
+        headerName: 'When',
+        minWidth: 160,
+        valueFormatter: (p) => (p.value ? String(p.value).replace('T', ' ').slice(0, 19) : '—'),
+      },
+      { field: 'actor', headerName: 'Actor', minWidth: 120 },
+      { field: 'action', headerName: 'Action', minWidth: 120 },
+      { field: 'importer', headerName: 'Importer', minWidth: 110 },
+      {
+        headerName: 'Entity',
+        minWidth: 180,
+        flex: 1,
+        valueGetter: (p) => [p.data?.entity_type, p.data?.entity_token].filter(Boolean).join(': ') || '—',
+      },
+      {
+        field: 'import_job_id',
+        headerName: 'Job',
+        minWidth: 80,
+        valueFormatter: (p) => p.value ?? '—',
+      },
+      {
+        headerName: 'Target',
+        minWidth: 140,
+        valueGetter: (p) =>
+          p.data?.target_dim && p.data.target_id != null ? `${p.data.target_dim}#${p.data.target_id}` : '—',
+      },
+    ],
+    [],
+  );
 
   if (meError || (me && !allowed)) {
     return (
@@ -111,41 +141,12 @@ export default function StewardAuditPage() {
         {query.isError ? (
           <Alert severity="error">{safeDisplayError(query.error)}</Alert>
         ) : (
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>When</TableCell>
-                <TableCell>Actor</TableCell>
-                <TableCell>Action</TableCell>
-                <TableCell>Importer</TableCell>
-                <TableCell>Entity</TableCell>
-                <TableCell>Job</TableCell>
-                <TableCell>Target</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {rows.map((e) => (
-                <TableRow key={e.id}>
-                  <TableCell>{e.created_at ? e.created_at.replace('T', ' ').slice(0, 19) : '—'}</TableCell>
-                  <TableCell>{e.actor}</TableCell>
-                  <TableCell>{e.action}</TableCell>
-                  <TableCell>{e.importer}</TableCell>
-                  <TableCell>
-                    {[e.entity_type, e.entity_token].filter(Boolean).join(': ') || '—'}
-                  </TableCell>
-                  <TableCell>{e.import_job_id ?? '—'}</TableCell>
-                  <TableCell>
-                    {e.target_dim && e.target_id != null ? `${e.target_dim}#${e.target_id}` : '—'}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {!query.isLoading && rows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7}>No steward audit events yet.</TableCell>
-                </TableRow>
-              ) : null}
-            </TableBody>
-          </Table>
+          <EnterpriseDataGrid
+            rowData={rows}
+            columnDefs={auditCols}
+            height={480}
+            gridOptions={{ overlayNoRowsTemplate: 'No steward audit events yet.' }}
+          />
         )}
       </Paper>
     </DataChrome>

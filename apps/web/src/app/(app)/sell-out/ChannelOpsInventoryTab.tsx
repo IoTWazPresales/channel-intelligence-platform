@@ -1,23 +1,12 @@
 'use client';
 
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import {
-  Alert,
-  Autocomplete,
-  Box,
-  Paper,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
-  TextField,
-  Typography,
-} from '@mui/material';
+import { Alert, Autocomplete, Box, Paper, Stack, TextField, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import type { ColDef } from 'ag-grid-community';
+import { useMemo, useState } from 'react';
 
+import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { apiGet } from '@/lib/api';
 
 import { depthAtLeast, type IntelDepth } from './intelDepth';
@@ -65,6 +54,97 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
     enabled: distId != null,
   });
 
+  const operational = depthAtLeast(depth, 'operational');
+  const strategic = depthAtLeast(depth, 'strategic');
+  const invCols = useMemo<ColDef<InvRow>[]>(() => {
+    const cols: ColDef<InvRow>[] = [
+      { field: 'product_name', headerName: 'Product', flex: 1, minWidth: 160 },
+      { field: 'sku', headerName: 'SKU', minWidth: 120 },
+      {
+        field: 'reported_soh',
+        headerName: 'Reported SOH',
+        type: 'numericColumn',
+        minWidth: 120,
+        valueFormatter: (p) => (p.value != null ? Number(p.value).toLocaleString() : '—'),
+      },
+      {
+        headerName: 'Derived stock',
+        type: 'numericColumn',
+        minWidth: 120,
+        valueGetter: (p) => p.data?.derived_stock ?? p.data?.reported_soh,
+        valueFormatter: (p) => (p.value != null ? Number(p.value).toLocaleString() : '—'),
+      },
+    ];
+    if (operational) {
+      cols.push(
+        {
+          field: 'calculated_soh',
+          headerName: 'Calculated SOH',
+          type: 'numericColumn',
+          minWidth: 130,
+          valueFormatter: (p) => (p.value != null ? Number(p.value).toLocaleString() : '—'),
+        },
+        {
+          field: 'variance_units',
+          headerName: 'Variance',
+          type: 'numericColumn',
+          minWidth: 110,
+          valueFormatter: (p) => (p.value != null ? Number(p.value).toLocaleString() : '—'),
+        },
+        { field: 'reconciliation_status', headerName: 'Recon status', minWidth: 130, valueFormatter: (p) => p.value ?? '—' },
+      );
+    }
+    if (strategic) {
+      cols.push(
+        {
+          field: 'velocity_52wk',
+          headerName: 'Velocity 52wk',
+          type: 'numericColumn',
+          minWidth: 120,
+          valueFormatter: (p) => (p.value != null ? Number(p.value).toFixed(2) : '—'),
+        },
+        {
+          field: 'weeks_of_cover',
+          headerName: 'Weeks of cover',
+          type: 'numericColumn',
+          minWidth: 130,
+          valueFormatter: (p) => (p.value != null ? Number(p.value).toFixed(1) : 'n/a'),
+        },
+        {
+          field: 'demand_forecast_units_13w',
+          headerName: 'Demand fcst 13w',
+          type: 'numericColumn',
+          minWidth: 140,
+          cellRenderer: (p: { data?: InvRow }) => (
+            <span data-testid="channel-ops-demand-forecast">
+              {p.data?.demand_forecast_units_13w != null
+                ? p.data.demand_forecast_units_13w.toLocaleString(undefined, { maximumFractionDigits: 2 })
+                : '—'}
+            </span>
+          ),
+        },
+        {
+          headerName: 'Replenish',
+          minWidth: 100,
+          sortable: false,
+          filter: false,
+          cellRenderer: (p: { data?: InvRow }) =>
+            p.data?.replenishment_flag || p.data?.reorder_signal ? (
+              <WarningAmberIcon
+                color="warning"
+                fontSize="small"
+                titleAccess={`Below ${p.data.replenishment_threshold_weeks ?? 4}w cover — replenishment flag`}
+                data-testid="channel-ops-replenish-row"
+              />
+            ) : (
+              '—'
+            ),
+        },
+      );
+    }
+    return cols;
+  }, [operational, strategic]);
+
   return (
     <Box>
       <Stack direction="row" spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
@@ -99,83 +179,11 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
                   No distributor inventory rows for this selection.
                 </Typography>
               ) : (
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Product</TableCell>
-                      <TableCell>SKU</TableCell>
-                      <TableCell align="right">Reported SOH</TableCell>
-                      <TableCell align="right">Derived stock</TableCell>
-                      {depthAtLeast(depth, 'operational') && (
-                        <>
-                          <TableCell align="right">Calculated SOH</TableCell>
-                          <TableCell align="right">Variance</TableCell>
-                          <TableCell>Recon status</TableCell>
-                        </>
-                      )}
-                      {depthAtLeast(depth, 'strategic') && (
-                        <>
-                          <TableCell align="right">Velocity 52wk</TableCell>
-                          <TableCell align="right">Weeks of cover</TableCell>
-                          <TableCell align="right">Demand fcst 13w</TableCell>
-                          <TableCell>Replenish</TableCell>
-                        </>
-                      )}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {(data?.items ?? []).map((r) => (
-                      <TableRow key={r.product_id}>
-                        <TableCell>{r.product_name}</TableCell>
-                        <TableCell>{r.sku}</TableCell>
-                        <TableCell align="right">{r.reported_soh.toLocaleString()}</TableCell>
-                        <TableCell align="right">
-                          {(r.derived_stock ?? r.reported_soh).toLocaleString()}
-                        </TableCell>
-                        {depthAtLeast(depth, 'operational') && (
-                          <>
-                            <TableCell align="right">
-                              {r.calculated_soh != null ? r.calculated_soh.toLocaleString() : '—'}
-                            </TableCell>
-                            <TableCell align="right">
-                              {r.variance_units != null ? r.variance_units.toLocaleString() : '—'}
-                            </TableCell>
-                            <TableCell>{r.reconciliation_status ?? '—'}</TableCell>
-                          </>
-                        )}
-                        {depthAtLeast(depth, 'strategic') && (
-                          <>
-                            <TableCell align="right">
-                              {r.velocity_52wk != null ? r.velocity_52wk.toFixed(2) : '—'}
-                            </TableCell>
-                            <TableCell align="right">
-                              {r.weeks_of_cover != null ? r.weeks_of_cover.toFixed(1) : 'n/a'}
-                            </TableCell>
-                            <TableCell align="right" data-testid="channel-ops-demand-forecast">
-                              {r.demand_forecast_units_13w != null
-                                ? r.demand_forecast_units_13w.toLocaleString(undefined, {
-                                    maximumFractionDigits: 2,
-                                  })
-                                : '—'}
-                            </TableCell>
-                            <TableCell>
-                              {r.replenishment_flag ?? r.reorder_signal ? (
-                                <WarningAmberIcon
-                                  color="warning"
-                                  fontSize="small"
-                                  titleAccess={`Below ${r.replenishment_threshold_weeks ?? 4}w cover — replenishment flag`}
-                                  data-testid="channel-ops-replenish-row"
-                                />
-                              ) : (
-                                '—'
-                              )}
-                            </TableCell>
-                          </>
-                        )}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <EnterpriseDataGrid
+                  rowData={data?.items ?? []}
+                  columnDefs={invCols}
+                  height={480}
+                />
               )}
             </Box>
           </Paper>

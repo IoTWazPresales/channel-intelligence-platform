@@ -7,17 +7,14 @@ import {
   Chip,
   Paper,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   TextField,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
+import type { ColDef } from 'ag-grid-community';
 import { useMemo, useState } from 'react';
 
+import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { apiGet } from '@/lib/api';
 
 import { depthAtLeast, type IntelDepth } from './intelDepth';
@@ -148,6 +145,90 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
     enabled: smartPreset === 'zero_sellout_products',
   });
 
+  const operational = depthAtLeast(depth, 'operational');
+  const zeroCols = useMemo<ColDef<ZeroProduct>[]>(
+    () => [
+      { field: 'sku', headerName: 'SKU', minWidth: 120 },
+      { field: 'name', headerName: 'Name', flex: 1, minWidth: 180 },
+    ],
+    [],
+  );
+  const channelCols = useMemo<ColDef<ChannelSelloutLine>[]>(() => {
+    const cols: ColDef<ChannelSelloutLine>[] = [
+      { field: 'date', headerName: 'Date', minWidth: 110 },
+      { field: 'sku', headerName: 'SKU', minWidth: 110 },
+      { field: 'customer_name', headerName: 'Customer', flex: 1, minWidth: 140 },
+      { field: 'distributor_name', headerName: 'Distributor', minWidth: 140, valueFormatter: (p) => p.value ?? '—' },
+      {
+        field: 'units',
+        headerName: 'Units',
+        type: 'numericColumn',
+        minWidth: 90,
+        valueFormatter: (p) => Number(p.value ?? 0).toLocaleString(),
+      },
+      {
+        field: 'revenue',
+        headerName: 'Revenue',
+        type: 'numericColumn',
+        minWidth: 110,
+        valueFormatter: (p) => Number(p.value ?? 0).toLocaleString(),
+      },
+    ];
+    if (operational) {
+      cols.push(
+        {
+          field: 'prior_period_units',
+          headerName: 'Prior period qty',
+          type: 'numericColumn',
+          minWidth: 130,
+          valueFormatter: (p) => (p.value != null ? Number(p.value).toLocaleString() : '—'),
+        },
+        {
+          headerName: 'Change %',
+          type: 'numericColumn',
+          minWidth: 100,
+          valueGetter: (p) => {
+            const cur = p.data?.units;
+            const prior = p.data?.prior_period_units;
+            if (cur == null || prior == null || prior <= 0) return null;
+            return ((cur - prior) / prior) * 100;
+          },
+          valueFormatter: (p) => (p.value != null ? `${Number(p.value).toFixed(1)}%` : '—'),
+        },
+      );
+    }
+    return cols;
+  }, [operational]);
+  const factCols = useMemo<ColDef<SelloutLine>[]>(
+    () => [
+      { field: 'period_start', headerName: 'Period', minWidth: 110 },
+      { field: 'product_sku', headerName: 'SKU', minWidth: 110 },
+      {
+        headerName: 'Customer',
+        flex: 1,
+        minWidth: 160,
+        valueGetter: (p) =>
+          p.data ? `${p.data.customer_name ?? ''} (${p.data.customer_code ?? ''})` : '—',
+      },
+      { field: 'distributor_code', headerName: 'Distributor', minWidth: 130, valueFormatter: (p) => p.value ?? '—' },
+      {
+        field: 'units',
+        headerName: 'Units',
+        type: 'numericColumn',
+        minWidth: 90,
+        valueFormatter: (p) => Number(p.value ?? 0).toLocaleString(),
+      },
+      {
+        field: 'revenue',
+        headerName: 'Revenue',
+        type: 'numericColumn',
+        minWidth: 110,
+        valueFormatter: (p) => Number(p.value ?? 0).toLocaleString(),
+      },
+    ],
+    [],
+  );
+
   return (
     <>
       <Alert severity="info" sx={{ mb: 2 }}>
@@ -257,22 +338,7 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
                 No zero-sell-out products in lookback window.
               </Typography>
             ) : (
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>SKU</TableCell>
-                    <TableCell>Name</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {(zeroProducts?.items ?? []).map((p) => (
-                    <TableRow key={p.product_id}>
-                      <TableCell>{p.sku}</TableCell>
-                      <TableCell>{p.name}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <EnterpriseDataGrid rowData={zeroProducts?.items ?? []} columnDefs={zeroCols} height={360} />
             )}
           </Box>
         </Paper>
@@ -296,77 +362,17 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
                 No sell-out rows match the current filters.
               </Typography>
             ) : lines?.channel ? (
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Date</TableCell>
-                    <TableCell>SKU</TableCell>
-                    <TableCell>Customer</TableCell>
-                    <TableCell>Distributor</TableCell>
-                    <TableCell align="right">Units</TableCell>
-                    <TableCell align="right">Revenue</TableCell>
-                    {depthAtLeast(depth, 'operational') && (
-                      <>
-                        <TableCell align="right">Prior period qty</TableCell>
-                        <TableCell align="right">Change %</TableCell>
-                      </>
-                    )}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {(lines.items as ChannelSelloutLine[]).map((r, i) => {
-                    const chg =
-                      r.prior_period_units != null && r.prior_period_units > 0
-                        ? ((r.units - r.prior_period_units) / r.prior_period_units) * 100
-                        : null;
-                    return (
-                      <TableRow key={`${r.date}-${r.sku}-${i}`}>
-                        <TableCell>{r.date}</TableCell>
-                        <TableCell>{r.sku}</TableCell>
-                        <TableCell>{r.customer_name}</TableCell>
-                        <TableCell>{r.distributor_name ?? '—'}</TableCell>
-                        <TableCell align="right">{r.units.toLocaleString()}</TableCell>
-                        <TableCell align="right">{r.revenue.toLocaleString()}</TableCell>
-                        {depthAtLeast(depth, 'operational') && (
-                          <>
-                            <TableCell align="right">
-                              {r.prior_period_units != null ? r.prior_period_units.toLocaleString() : '—'}
-                            </TableCell>
-                            <TableCell align="right">{chg != null ? `${chg.toFixed(1)}%` : '—'}</TableCell>
-                          </>
-                        )}
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+              <EnterpriseDataGrid
+                rowData={lines.items as ChannelSelloutLine[]}
+                columnDefs={channelCols}
+                height={420}
+              />
             ) : (
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Period</TableCell>
-                    <TableCell>SKU</TableCell>
-                    <TableCell>Customer</TableCell>
-                    <TableCell>Distributor</TableCell>
-                    <TableCell align="right">Units</TableCell>
-                    <TableCell align="right">Revenue</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {(lines?.items as SelloutLine[]).map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell>{r.period_start}</TableCell>
-                      <TableCell>{r.product_sku}</TableCell>
-                      <TableCell>
-                        {r.customer_name} ({r.customer_code})
-                      </TableCell>
-                      <TableCell>{r.distributor_code ?? '—'}</TableCell>
-                      <TableCell align="right">{r.units.toLocaleString()}</TableCell>
-                      <TableCell align="right">{r.revenue.toLocaleString()}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <EnterpriseDataGrid
+                rowData={lines?.items as SelloutLine[]}
+                columnDefs={factCols}
+                height={420}
+              />
             )}
           </Box>
         </Paper>
