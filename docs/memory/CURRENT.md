@@ -1,10 +1,10 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-09-16 (NS20 ledger-align: N-0028 verification reset, D-066)
+**Last updated:** 2026-09-16 (NS21 path C KEEP: D-0011, N-0027 AC1, N-0028 optional quality)
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** `21d9182` (Start work ActionCard launch strip). Prior pins: BACKLOG-196 `aee82a7`; steward UX `4d9079b`. NS19 ledger `d872fb5` / views `e15be60` / payloads `6d00da8`. NS20 ledger `87e9788` / views `43ec48a` / payloads `1127b93` / docs `ea34cc8`; programme snapshot **851** (run `NS20_LEDGER_ALIGN_20260916` / actor `gov-020`).
+**Last content pin:** `21d9182` (Start work ActionCard launch strip). Prior pins: BACKLOG-196 `aee82a7`; steward UX `4d9079b`. NS20 ledger `87e9788` / views `43ec48a` / payloads `1127b93` / docs `ea34cc8`. NS21 ledger `8433ef4` / views `c42cd17` / payloads `7417f68`; programme snapshot **864** (run `NS21_PATH_C_KEEP_20260916` / actor `gov-021`).
 
 **Alembic (code):** `20260906_0022` (`cpor_case.intelligence_exclude`)
 
@@ -12,8 +12,9 @@
 
 ## On feat/ns-2-brief-nav-collapse
 
-- **NS20 (this session, ledger/docs only):** N-0028 `verification.rendered` and `verification.referent` reset to **pending** via `node.verification` (cleared GOV008_N0025_N0029_20260915 pass provenance). quality.design_signatures / design_divergence already pending from NS19 (`live_panel_wrapper` retained only as stale_signatures). N-0029 `quality.design_signatures` reset to **pending** (`payment_evidence_code_unread` superseded by `aee82a7`). Nodes stay `in_progress` / `validate`. Leases released. Do not complete. Do not run GOV-008.
-- **D-066 locked:** steward and mapping resolve inside `/admin/mappings?workspace=resolve`. Do not page-hop. D-0002 remains proposed; D-0006 remains accepted (deferral). Do not supersede D-0006.
+- **NS21 (this session, ledger/docs only):** D-0011 KEEP (path C) accepted; supersedes D-0006 and D-0002. N-0027 AC1 rewritten only (rev **48**). N-0028 `quality.rendered_comparison` / `quality.design_sameness_review` / `quality.design_state_coverage` reset to **pending** via `node.quality` (engine accepted optional dims). Nodes stay `in_progress` / `validate`. Leases released. Do not complete. Do not run GOV-008. Handover: `docs/design/gov-008-n0027-n0029-handover.md`.
+- **D-066 locked:** steward and mapping resolve inside `/admin/mappings?workspace=resolve`. Do not page-hop. D-0011 KEEP: `entity_mapping_queue` is pipeline state, not a UI to restore or retire.
+- **NS20:** N-0028 `verification.rendered` / `verification.referent` reset pending. N-0029 `quality.design_signatures` reset pending.
 - **NS18 / N-0028 (committed `21d9182`):** Overview Start work is `StartWorkLaunch` + `ActionCard`. Steward-queue href stays `/admin/mappings`.
 - **Operator UX (committed `4d9079b`):** Steward queue opens the resolve workspace on the Steward leaf. Queue hides distributor/customer tokens with exactly one approved alias.
 - **BACKLOG-196:** payment-evidence-import reads `?code=` (trim only, exact Case ID). Does not mint `cpor_case`.
@@ -22,7 +23,7 @@
 
 **Mobile:** DIRECTION §6 desktop-primary with named 390px workflows. N-0025 Start work VERIFIED at 390×844. N-0028 390 composition is implemented; independent GOV-008 not recorded after AC/tree change.
 
-**Next:** Independent GOV-008 of N-0027–N-0029 after Warren decides D-0002 re-frame (do not supersede D-0006 in a GOV-008 session). Do not complete those nodes in an implementation chat.
+**Next:** Independent GOV-008 of N-0027–N-0029, **one node per review**, per `docs/design/gov-008-n0027-n0029-handover.md`. Ignore `GOV008_N0025_N0029_20260915`. Do not complete those nodes in an implementation chat.
 
 **Design language:** Production follows implemented design-lab React. Do not cite a frozen design-language version or grammar number.
 

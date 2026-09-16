@@ -793,7 +793,20 @@ the rule instead of re-arguing it per node.
 **Rejected:** Per-importer page-hop as the mapping completion path; building a
 parallel resolver so a queue row can “finish mapping” on another application page.
 **Does not change:** Per-job engines remain the resolver (N-0027 AC1). Ingest still
-starts at Import Center. D-0006 still defers D-0002 restore-vs-retire; this rule
-does not restore or retire `entity_mapping_queue`.
+starts at Import Center. Programme **D-0011** (path C KEEP, 2026-09-16) supersedes
+D-0006 and D-0002: `entity_mapping_queue` stays as pipeline state, not a UI to
+restore or retire.
+
+## Programme D-0011 · 2026-09-16 · KEEP entity_mapping_queue (path C)
+**Locked.** The mapping capability was never removed. The live pipeline still
+writes `entity_mapping_queue` at `apps/api/app/ingestion/pipeline.py:185`
+(`EntityMappingQueue` on unmatched product); that row carries resolution state
+`ImportRowResult` does not. "Restore vs retire the mapping-queue UI" is a void
+premise. KEEP: the queue stays. It is pipeline state. Destination remains D-066
+(`/admin/mappings?workspace=resolve` for every type including shipment).
+**Origin:** Warren 2026-09-16, path C. Programme ledger D-0011 accepted;
+supersedes D-0006 and D-0002.
+**Rejected:** Restore-vs-retire as a live choice; treating the queue as a UI to
+bring back or delete.
 
 

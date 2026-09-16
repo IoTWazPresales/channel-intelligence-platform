@@ -26,8 +26,9 @@ cite their source module. Defined-but-not-built metrics are marked **SPEC ONLY**
    completes at `/admin/mappings?workspace=resolve` (all entity types, including
    shipment). Jumping between application pages to finish a mapping is wrong.
    Ingest still starts at Import Center. Per-job engines remain the resolver.
-   Locked as `docs/STEWARD_ENGINE_DECISIONS.md` D-066. D-0002 restore-vs-retire
-   remains deferred (D-0006).
+   Locked as `docs/STEWARD_ENGINE_DECISIONS.md` D-066. Programme D-0011 KEEP:
+   `entity_mapping_queue` is pipeline state, not a UI to restore or retire
+   (supersedes D-0006 / D-0002).
 
 A metric mattering to a **phase** means that phase may **consume** it. It does not mean the
 phase's screen owns or renders it.
