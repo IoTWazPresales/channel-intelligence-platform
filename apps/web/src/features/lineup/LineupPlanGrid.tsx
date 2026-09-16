@@ -13,6 +13,7 @@ import {
   isPendingApproval,
   type LineupPlanRow,
 } from '@/features/lineup/lineupTypes';
+import { StatusChip } from '@/features/workbench-ui/controls';
 import { apiPatch } from '@/lib/api';
 
 function buFromRow(row: LineupPlanRow): string {
@@ -22,37 +23,11 @@ function buFromRow(row: LineupPlanRow): string {
   return row.channel_code ?? '—';
 }
 
-function ApprovalBadge({ status }: { status: string }) {
-  const theme = useTheme();
-  const isOk = status === 'approved';
-  const isPending = isPendingApproval(status);
-  const isRejected = status === 'rejected';
-  const tone = isOk
-    ? theme.palette.success.main
-    : isPending
-      ? theme.palette.warning.main
-      : isRejected
-        ? theme.palette.error.main
-        : theme.palette.text.secondary;
-  return (
-    <Box
-      component="span"
-      sx={{
-        display: 'inline-block',
-        fontFamily: '"IBM Plex Mono", monospace',
-        fontSize: '9.5px',
-        px: 0.75,
-        py: 0.25,
-        borderRadius: '3px',
-        ml: 0.75,
-        color: tone,
-        border: `1px solid ${alpha(tone, 0.4)}`,
-        bgcolor: isOk || isPending || isRejected ? alpha(tone, 0.14) : 'transparent',
-      }}
-    >
-      {approvalBadgeLabel(status)}
-    </Box>
-  );
+function approvalTone(status: string): 'success' | 'warning' | 'danger' | 'neutral' {
+  if (status === 'approved') return 'success';
+  if (isPendingApproval(status)) return 'warning';
+  if (status === 'rejected') return 'danger';
+  return 'neutral';
 }
 
 type Props = {
@@ -115,7 +90,9 @@ export function LineupPlanGrid({ rows, pendingOnly }: Props) {
         headerName: 'Approval',
         minWidth: 130,
         cellRenderer: (p: { data?: LineupPlanRow }) =>
-          p.data ? <ApprovalBadge status={p.data.approval_status} /> : null,
+          p.data ? (
+            <StatusChip label={approvalBadgeLabel(p.data.approval_status)} tone={approvalTone(p.data.approval_status)} />
+          ) : null,
       },
       {
         headerName: '',
