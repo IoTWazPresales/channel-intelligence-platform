@@ -200,15 +200,6 @@ function PaymentEvidenceImportWizard() {
   return (
     <FundingChrome>
       <Stack spacing={0} sx={{ mt: 2 }}>
-      <Button
-        size="small"
-        variant="text"
-        component={Link}
-        href="/commercial-planner/cpor-cases/payment-evidence-import"
-        sx={{ mb: 1, alignSelf: 'flex-start' }}
-      >
-        Back to Payments lens
-      </Button>
       <Alert severity="info" sx={{ mb: 2 }}>
         Payment evidence links settled value to cases. Delivery rate = result ÷ estimate per case
         (portfolio figure on the domain header — not recomputed here). Generic payment evidence —
