@@ -718,6 +718,7 @@ export function MarketSurface() {
 
             <Box
               sx={{
+                order: 2,
                 display: 'grid',
                 gap: 2,
                 gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 3fr) minmax(300px, 2fr)' },
@@ -871,6 +872,7 @@ export function MarketSurface() {
               </Stack>
             </Box>
 
+            <Box sx={{ order: 1 }}>
             <ScopeBar
               chips={[
                 {
@@ -961,6 +963,7 @@ export function MarketSurface() {
                 }}
               />
             </ModuleDataSection>
+            </Box>
           </Stack>
         ) : null}
 

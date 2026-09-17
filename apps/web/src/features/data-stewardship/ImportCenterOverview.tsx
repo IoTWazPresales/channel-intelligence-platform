@@ -23,6 +23,37 @@ const START_CARDS: { label: string; slug: string; href: string }[] = [
   { label: 'Product master', slug: 'product_master', href: '/admin/imports?template=product_master' },
 ];
 
+export function ImportStartPanel() {
+  return (
+    <Panel
+      title="Start an import"
+      subtitle="Upload → parse → map → validate → steward → apply → derive. Same guided wizard for every type — column mapping stays desktop-first."
+      actions={
+        <Button variant="contained" size="small" component={NextLink} href="/admin/imports">
+          New import
+        </Button>
+      }
+    >
+      <Box sx={{ display: 'grid', gap: 1, gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(6, 1fr)' } }}>
+        {START_CARDS.map((c) => (
+          <Card key={c.slug} variant="outlined" sx={{ boxShadow: 'none' }}>
+            <CardActionArea component={NextLink} href={c.href} sx={{ height: '100%' }}>
+              <CardContent sx={{ py: 1.25, '&:last-child': { pb: 1.25 } }}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  {c.label}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {c.slug}
+                </Typography>
+              </CardContent>
+            </CardActionArea>
+          </Card>
+        ))}
+      </Box>
+    </Panel>
+  );
+}
+
 export function ImportCenterOverview() {
   const router = useRouter();
   const search = useSearchParams();
@@ -113,32 +144,6 @@ export function ImportCenterOverview() {
           caption={data?.captions.templates_enabled}
         />
       </HeadlineStrip>
-      <Panel
-        title="Start an import"
-        subtitle="Upload → parse → map → validate → steward → apply → derive. Same guided wizard for every type — column mapping stays desktop-first."
-        actions={
-          <Button variant="contained" size="small" component={NextLink} href="/admin/imports">
-            New import
-          </Button>
-        }
-      >
-        <Box sx={{ display: 'grid', gap: 1, gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(6, 1fr)' } }}>
-          {START_CARDS.map((c) => (
-            <Card key={c.slug} variant="outlined" sx={{ boxShadow: 'none' }}>
-              <CardActionArea component={NextLink} href={c.href} sx={{ height: '100%' }}>
-                <CardContent sx={{ py: 1.25, '&:last-child': { pb: 1.25 } }}>
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {c.label}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {c.slug}
-                  </Typography>
-                </CardContent>
-              </CardActionArea>
-            </Card>
-          ))}
-        </Box>
-      </Panel>
       <ScopeBar
         chips={chips}
         summary={data ? `${data.jobs_unarchived} unarchived jobs (grid shows latest 100)` : undefined}

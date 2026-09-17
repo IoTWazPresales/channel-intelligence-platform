@@ -90,7 +90,7 @@ import {
 
 import { useImportJobProgressQuery } from '@/features/background-tasks/useImportJobProgressQuery';
 import { DataChrome } from '@/features/data-stewardship/DataChrome';
-import { ImportCenterOverview } from '@/features/data-stewardship/ImportCenterOverview';
+import { ImportCenterOverview, ImportStartPanel } from '@/features/data-stewardship/ImportCenterOverview';
 import { ImportJobCards } from '@/features/data-stewardship/ImportJobCards';
 
 import { CstImportJobResolutionSection } from './CstImportJobResolutionSection';
@@ -2800,9 +2800,10 @@ function AdminImportsPageContent() {
         open={bulkLineupBackfillOpen}
         onClose={() => setBulkLineupBackfillOpen(false)}
       />
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }} data-testid="import-center-body">
       <Box
         data-testid="guided-import-wizard"
-        sx={{ display: wizardEngaged ? 'block' : { xs: 'none', md: 'block' } }}
+        sx={{ display: wizardEngaged ? 'block' : { xs: 'none', md: 'block' }, order: wizardEngaged ? 0 : 1 }}
       >
       <Alert severity="info" sx={{ mb: 2 }}>
         <strong>Guided import:</strong> pick an <strong>import type</strong> first (what the file means), then a{' '}
@@ -4843,7 +4844,7 @@ function AdminImportsPageContent() {
       </Paper>
       </Box>
 
-      <Paper sx={{ p: 2 }}>
+      <Paper sx={{ p: 2, order: wizardEngaged ? 1 : 0 }} data-testid="import-jobs-panel">
         <Typography variant="subtitle1" fontWeight={600} gutterBottom>
           Import jobs
         </Typography>
@@ -4856,7 +4857,7 @@ function AdminImportsPageContent() {
           isEmpty={jobsList.length === 0}
           empty={{
             title: 'No import jobs yet',
-            description: 'Start an import from the cards above, or use the API directly.',
+            description: 'Start an import from the cards below, or use the API directly.',
             primary: { label: 'Mapping queue', href: '/admin/mappings' },
             secondary: { label: 'Steward queue', href: '/admin/mappings' },
           }}
@@ -4929,6 +4930,10 @@ function AdminImportsPageContent() {
           screen; this wizard focuses on constrained file imports.
         </Typography>
       </Paper>
+      <Box sx={{ order: 2 }}>
+        <ImportStartPanel />
+      </Box>
+      </Box>
     </>
   );
 }

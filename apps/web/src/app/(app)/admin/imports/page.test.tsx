@@ -136,6 +136,7 @@ vi.mock('@/features/data-stewardship/DataChrome', () => ({
 
 vi.mock('@/features/data-stewardship/ImportCenterOverview', () => ({
   ImportCenterOverview: () => <div>Import Center</div>,
+  ImportStartPanel: () => <div>Start an import</div>,
 }));
 
 vi.mock('@/features/data-stewardship/ImportJobCards', () => ({
