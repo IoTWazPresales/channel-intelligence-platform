@@ -134,10 +134,11 @@ function AdminMappingsPageContent() {
       {resolveWorkspace ? null : (
       <Paper sx={{ p: 2, mt: 3 }} data-testid="legacy-mapping-queue">
         <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-          Legacy mapping queue (EntityMappingQueue) — D-0002 untouched
+          Mapping queue — pipeline state
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-          Restore vs retire of this table is still an open operator choice. It is not the steward queue above.
+          Unresolved entity tokens wait here as pipeline state. This is not a restore-or-retire control. Resolve them in
+          the resolve workspace.
         </Typography>
         {legacyLoading ? (
           <Typography variant="body2" color="text.secondary">
