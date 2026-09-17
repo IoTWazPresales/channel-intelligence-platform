@@ -2865,7 +2865,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-17 · overnight FOUND; do not fix copy in that session |
+| **Status / parked** | **Done** · 2026-09-18 · mappings queue copy aligned to D-0011 (`39f457d`) |
 | **Effort** | Trivial (copy) once design says the leftover chrome stays or goes |
 | **Source** | `apps/web/src/app/(app)/admin/mappings/page.tsx` EntityMappingQueue chrome (~135–140). GOV-008 N-0027 limitation. D-0011 KEEP: `entity_mapping_queue` is pipeline state, not a UI to restore or retire. |
 | **Idea** | Replace leftover D-0002 “Restore vs retire / open operator choice” wording so the resolve workspace matches D-0011. |
