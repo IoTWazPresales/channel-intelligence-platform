@@ -230,12 +230,45 @@ def support(name):
     return sys.modules[name]
 
 
+def framework_runtime_locator(hook_dir):
+    """Find the framework root by marker file, not by a hard-coded parent depth.
+
+    Host installs live at {project}/.cursor/hooks (three parents to the project,
+    IndexError at parents[3] on a drive-root host). The reviewed checkout lives
+    at runtime/cursor/.cursor/hooks. A fixed parents[N] is correct in only one
+    of those layouts and silently wrong in the other.
+    """
+    hook_dir = Path(hook_dir).resolve()
+    source_root = None
+    for candidate in hook_dir.parents:
+        if (candidate / 'tools' / 'compile_cursor.py').is_file():
+            source_root = candidate
+            break
+    reference = (
+        source_root is not None
+        and hook_dir == source_root / 'runtime' / 'cursor' / '.cursor' / 'hooks'
+    )
+    return source_root, reference
+
+
+def host_project_root(hook_dir):
+    """Walk to the EIF host delivery contract, not .git.
+
+    Hosts receive `.cursor/eif-runtime-manifest.json` from write_hook_manifest
+    (HOOK_MANIFEST_REL). verified_runtime already requires that file on a host
+    copy. .git is not EIF-specific and can be a parent worktree or decoy.
+    """
+    hook_dir = Path(hook_dir).resolve()
+    for candidate in hook_dir.parents:
+        if (candidate / '.cursor' / 'eif-runtime-manifest.json').is_file():
+            return candidate
+    return None
+
+
 def verified_runtime(root):
     """Hash helper bytes before execution, then lock and verify full inventory."""
     hook_dir = Path(__file__).resolve().parent
-    source_root = hook_dir.parents[3]
-    reference = (hook_dir == source_root / 'runtime/cursor/.cursor/hooks'
-                 and (source_root / 'tools/compile_cursor.py').is_file())
+    source_root, reference = framework_runtime_locator(hook_dir)
     manifest_path = root / '.cursor/eif-runtime-manifest.json'
     raw = (hook_dir / 'eif_integrity.py').read_bytes()
     if not reference:
@@ -264,10 +297,14 @@ def _project_root() -> Path:
     env = os.environ.get('CURSOR_PROJECT_DIR') or os.environ.get('CLAUDE_PROJECT_DIR')
     if env:
         return Path(env)
-    try:
-        return Path(__file__).resolve().parent.parent.parent
-    except Exception:
-        return Path.cwd()
+    hook_dir = Path(__file__).resolve().parent
+    source_root, reference = framework_runtime_locator(hook_dir)
+    if reference:
+        return source_root
+    host = host_project_root(hook_dir)
+    if host is not None:
+        return host
+    return Path.cwd()
 
 
 def _operator_log_path() -> Path:
