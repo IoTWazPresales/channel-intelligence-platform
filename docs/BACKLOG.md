@@ -2775,7 +2775,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-15 · N-0029 enumerated, not implemented |
+| **Status / parked** | **Done** · 2026-09-18 · `ColumnPickerDialog` size md/wide (`7656f67`) |
 | **Effort** | Medium |
 | **Source** | N-0029 recon. `MasterColumnPickerDialog` (masters + CST aliases) vs `ColumnSelectorModal` (commercial-planner). |
 | **Resume-context** | Grid widget is already one file. Picker is host chrome. Do not fold commercial-planner groups into admin master groups without a mapping. |
