@@ -2877,5 +2877,24 @@ Exact engine invariants (do not complete around them):
 | **Out of scope** | N-0028/N-0029 GOV-008; action-card restyle; settlement desk. |
 | **TRIGGER** | Next mappings/steward copy pass, **or** operator flags restore-vs-retire as contradictory to D-0011. |
 
+---
+
+## BACKLOG-198 — Per-product-line PM column sets vs live `catalog_product`
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-18 · item 4 stopped after read-only checks |
+| **Effort** | Medium+; likely a catalogue-model decision before code |
+| **Source** | `apps/api/app/models/product_catalog.py`; `pm_commit_catalog.py`; `dim_product.product_line` counts on `cip` 2026-09-18. |
+| **Resume-context** | `product_line` grain is real (NB/NX/PF/NR/PT/LM/XB/…; 10 null). `catalog_product` is live: 18157 rows, all linked to `dim_product`, 1 `product_catalog` (`default_master`), 1 `source_definition` (`product_catalog_default`). EAV values are 0. Nesting line column sets under `source_definition.column_mapping_memory` would sit beside this parallel catalogue. |
+| **Idea** | Each product line carries its own ingested column set and import template without contaminating other lines. |
+| **Why it matters / deferrable** | Motherboard vs laptop files need different columns. Deferred because building on `product_line` without deciding what `catalog_product` is would fork catalogue truth. |
+| **What the work is** | Warren decides whether line column sets overlay `column_mapping_memory`, or reuse/replace `product_catalog` / `CatalogProduct`. Then nest extra PM columns per line on the existing `suggest_pm_mapping` mapper. FLAG duplicate EAN on `import_job.staged_metadata`. No unique index on ean. Resolution stays global. No BU entitlements. |
+| **Regression traps** | FLAG ≠ BLOCK. Do not unique-index ean. Do not scope resolvers by line. Do not collapse dim_product running-change “duplicates”. No migration in a session that forbids it. |
+| **Behavior to retain** | Global product resolution order item/material → EAN/UPC → sales model. Steward-initiated master create. |
+| **Out of scope** | Visibility scoping by business unit; unique ean; second mapper. |
+| **TRIGGER** | Warren answers whether `catalog_product` stays the catalogue, is retired, or is unrelated to per-line column sets. |
+
+
 
 
