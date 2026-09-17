@@ -19,11 +19,11 @@ describe('StartWorkLaunch', () => {
     renderLaunch('admin');
     expect(screen.getByTestId('start-work-cards').querySelectorAll('a')).toHaveLength(7);
     expect(screen.getByRole('link', { name: /Import a lineup/i })).toHaveAttribute('href', '/admin/imports?unified=1');
-    expect(screen.getByRole('link', { name: /Create promotion plan/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Propose a promotion/i })).toHaveAttribute(
       'href',
       '/promotions?propose=1',
     );
-    expect(screen.getByRole('link', { name: /Work the steward queue/i })).toHaveAttribute('href', '/admin/mappings');
+    expect(screen.getByRole('link', { name: /Resolve unmatched tokens/i })).toHaveAttribute('href', '/admin/mappings');
     expect(screen.getAllByText('Plan').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Data').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Funding')).toBeInTheDocument();
@@ -45,6 +45,6 @@ describe('StartWorkLaunch', () => {
       'href',
       '/design-lab/create-lineup',
     );
-    expect(screen.queryByRole('link', { name: /Settle a case/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Settle a funding case/i })).not.toBeInTheDocument();
   });
 });

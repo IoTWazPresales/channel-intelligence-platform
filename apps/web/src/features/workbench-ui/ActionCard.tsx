@@ -1,14 +1,15 @@
 'use client';
 
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
-import { Box, Typography } from '@mui/material';
+import { Box, Card, Typography } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import NextLink from 'next/link';
 import type { ReactNode } from 'react';
 
 /**
  * Start-a-job tile: title, short explanation, whole-card action.
- * Distinct from PanelRow (exception blotter) and from Import Center type-picker Cards.
+ * Surface matches Import Center type-picker Cards (outlined, paper, no shadow).
+ * Do not wrap a set of these in Panel or Card — N-0028 forbids a chrome wrapper around the strip.
  */
 export function ActionCard({
   href,
@@ -17,6 +18,7 @@ export function ActionCard({
   description,
   actionLabel = 'Open',
   testId,
+  icon,
 }: {
   href: string;
   eyebrow?: ReactNode;
@@ -24,12 +26,14 @@ export function ActionCard({
   description?: ReactNode;
   actionLabel?: string;
   testId?: string;
+  icon?: ReactNode;
 }) {
   const theme = useTheme();
   return (
-    <Box
+    <Card
       component={NextLink}
       href={href}
+      variant="outlined"
       data-testid={testId}
       sx={{
         display: 'flex',
@@ -41,10 +45,8 @@ export function ActionCard({
         py: 1.25,
         textDecoration: 'none',
         color: 'inherit',
-        border: '1px solid',
-        borderColor: 'divider',
-        borderRadius: 1.5,
-        bgcolor: 'transparent',
+        boxShadow: 'none',
+        bgcolor: 'background.paper',
         transition: 'border-color 120ms, background-color 120ms',
         '&:hover': {
           borderColor: 'primary.main',
@@ -60,25 +62,45 @@ export function ActionCard({
         },
       }}
     >
-      {eyebrow ? (
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{
-            display: 'block',
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-            fontSize: 10,
-            lineHeight: 1.2,
-            mb: 0.5,
-          }}
-        >
-          {eyebrow}
-        </Typography>
-      ) : null}
-      <Typography component="div" sx={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3 }}>
-        {title}
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+        {icon ? (
+          <Box
+            aria-hidden
+            sx={{
+              color: 'primary.main',
+              display: 'flex',
+              mt: 0.15,
+              flexShrink: 0,
+            }}
+          >
+            {icon}
+          </Box>
+        ) : null}
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          {eyebrow ? (
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{
+                display: 'block',
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                fontSize: 10,
+                lineHeight: 1.2,
+                mb: 0.5,
+              }}
+            >
+              {eyebrow}
+            </Typography>
+          ) : null}
+          <Typography
+            component="div"
+            sx={{ fontSize: 16, fontWeight: 700, lineHeight: 1.3, letterSpacing: '-0.01em' }}
+          >
+            {title}
+          </Typography>
+        </Box>
+      </Box>
       {description ? (
         <Typography
           variant="caption"
@@ -86,11 +108,11 @@ export function ActionCard({
           component="div"
           sx={{
             display: '-webkit-box',
-            WebkitLineClamp: 2,
+            WebkitLineClamp: 3,
             WebkitBoxOrient: 'vertical',
             overflow: 'hidden',
-            mt: 0.5,
-            lineHeight: 1.35,
+            mt: 0.75,
+            lineHeight: 1.4,
             flex: 1,
           }}
         >
@@ -121,6 +143,6 @@ export function ActionCard({
         </Typography>
         <ArrowForwardIosIcon sx={{ fontSize: 10 }} />
       </Box>
-    </Box>
+    </Card>
   );
 }

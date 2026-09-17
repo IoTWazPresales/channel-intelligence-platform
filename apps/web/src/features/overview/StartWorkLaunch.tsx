@@ -1,9 +1,27 @@
 'use client';
 
+import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
+import ListAltOutlinedIcon from '@mui/icons-material/ListAltOutlined';
+import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
+import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
+import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
+import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
+import ViewQuiltOutlinedIcon from '@mui/icons-material/ViewQuiltOutlined';
 import { Box, Typography } from '@mui/material';
+import type { ReactNode } from 'react';
 
 import { START_GROUP_LABEL, startVerbsForRole, type StartVerb } from '@/features/overview/startWork';
 import { ActionCard } from '@/features/workbench-ui/ActionCard';
+
+const START_ICONS: Record<string, ReactNode> = {
+  'create-lineup': <ViewQuiltOutlinedIcon fontSize="small" />,
+  'open-lineup': <ListAltOutlinedIcon fontSize="small" />,
+  'create-promo-plan': <LocalOfferOutlinedIcon fontSize="small" />,
+  'import-sell-through': <StorefrontOutlinedIcon fontSize="small" />,
+  'import-shipping': <LocalShippingOutlinedIcon fontSize="small" />,
+  'steward-queue': <AccountTreeOutlinedIcon fontSize="small" />,
+  'settle-case': <ReceiptLongOutlinedIcon fontSize="small" />,
+};
 
 export function StartWorkLaunch({
   role,
@@ -51,6 +69,7 @@ export function StartWorkLaunch({
               title={<span data-testid={`start-work-${v.id}`}>{v.label}</span>}
               description={v.what}
               actionLabel="Start"
+              icon={START_ICONS[v.id]}
             />
           ))}
         </Box>
