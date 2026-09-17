@@ -2602,7 +2602,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-14 · N-0025 GOV-008 residual |
+| **Status / parked** | **Done** · 2026-09-17 · overnight: removed same-URL leftover; `Back to cases` remains |
 | **Effort** | Trivial (delete or retarget one link) |
 | **Source** | GOV-008 `GOV008_N0025_20260914` independent review. Product `04695c1` dropped `?import=1` so `/commercial-planner/cpor-cases/payment-evidence-import` **is** the wizard. `apps/web/src/app/(app)/commercial-planner/cpor-cases/payment-evidence-import/page.tsx` still renders `Back to Payments lens` with `href` equal to that same URL. Click is a no-op. |
 | **Idea** | Remove the leftover lens chrome, or retarget it to Case book (`/commercial-planner/cpor-cases`) if a back path is still wanted. The named leaf must remain the wizard. |
@@ -2721,7 +2721,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-15 · N-0028 enumerated, not implemented |
+| **Status / parked** | **Done** · 2026-09-17 · overnight: `/lineup/cases` reads `?product=` exact integer `product_id` (`3abad04`) |
 | **Effort** | Small |
 | **Source** | Cover lens `CoverLensView.tsx` href `/lineup/cases?product=`; N-0028 recon `.eif/audit/NS16_START_LINEUP_20260915/RECONCILE.md`. Lineup code does not read `product`. |
 | **Idea** | Honour `?product=` on Lineup cases so Cover “Plan lines for this product” actually scopes the grid. |
@@ -2811,7 +2811,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-15 · N-0028 routed; N-0029 did not take consumer renderers |
+| **Status / parked** | **Done** · 2026-09-17 · overnight: `ApprovalBadge` → workbench-ui `StatusChip` (`b6e38fe`) |
 | **Effort** | Small |
 | **Source** | `LineupPlanGrid.tsx` `ApprovalBadge` IBM Plex Mono / hex colours. N-0029 recon. |
 | **Resume-context** | N-0028 replaced Lineup cases chrome with HeadlineStrip/ScopeBar. Badge is a cell renderer, not `EnterpriseDataGrid`. Use `StatusChip`. |
@@ -2829,7 +2829,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-15 · N-0029 enumerated Case book only |
+| **Status / parked** | **Done** · 2026-09-17 · overnight: Import Center jobs + Market grid via flex `order` (`b5f7e13`) |
 | **Effort** | Medium per surface |
 | **Source** | N-0029 recon chrome-below-fold table. Case book was the coherent subset. |
 | **Resume-context** | Same rule as Case book: HeadlineStrip + ScopeBar + grid first; essays/overlays below. Do not copy a second Alert-first pattern. |
@@ -2858,6 +2858,24 @@ Exact engine invariants (do not complete around them):
 | **Behavior to retain** | Profile-driven payment evidence import; unmatched stays reviewable. |
 | **Out of scope** | Settlement workspace; D-0002. |
 | **TRIGGER** | Operator clicks an unmatched Case ID and expects that code selected on the import steward. |
+
+---
+
+## BACKLOG-197 — Steward leftover “restore vs retire” copy vs D-0011 KEEP
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-09-17 · overnight FOUND; do not fix copy in that session |
+| **Effort** | Trivial (copy) once design says the leftover chrome stays or goes |
+| **Source** | `apps/web/src/app/(app)/admin/mappings/page.tsx` EntityMappingQueue chrome (~135–140). GOV-008 N-0027 limitation. D-0011 KEEP: `entity_mapping_queue` is pipeline state, not a UI to restore or retire. |
+| **Idea** | Replace leftover D-0002 “Restore vs retire / open operator choice” wording so the resolve workspace matches D-0011. |
+| **Why it matters / deferrable** | Operators can still resolve on `/admin/mappings?workspace=resolve`. Copy is stale, not a second write path. Overnight brief: leftover steward copy → BACKLOG only. |
+| **Resume-context** | Edit the mappings page chrome only. Do not reopen D-0002. Do not page-hop (D-066). |
+| **What the work is** | Align the paragraph with D-0011 KEEP. Drop restore/retire framing. |
+| **Regression traps** | Do not hide the queue. Do not restore a retire/restore action. FLAG ≠ BLOCK. |
+| **Behavior to retain** | Resolve workspace; queue as pipeline state; grouped entity chips. |
+| **Out of scope** | N-0028/N-0029 GOV-008; action-card restyle; settlement desk. |
+| **TRIGGER** | Next mappings/steward copy pass, **or** operator flags restore-vs-retire as contradictory to D-0011. |
 
 
 
