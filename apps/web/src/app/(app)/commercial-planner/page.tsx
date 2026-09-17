@@ -40,7 +40,7 @@ import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PlanningChrome } from '@/features/planning/PlanningChrome';
 import { AddProductSetDialog } from '@/features/commercial-planner/AddProductSetDialog';
 import { IntelligentAddDialog } from '@/features/commercial-planner/IntelligentAddDialog';
-import { ColumnSelectorModal, type ColumnMetadata } from '@/features/commercial-planner/ColumnSelectorModal';
+import { ColumnPickerDialog, type ColumnMetadata } from '@/features/workbench-ui/ColumnPickerDialog';
 import { CommercialDataMap } from '@/features/commercial-planner/CommercialDataMap';
 import { CurrentLineupSection } from '@/features/commercial-planner/CurrentLineupSection';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
@@ -3549,7 +3549,8 @@ export default function CommercialPlannerPage() {
       </div>
 
       {/* Column selector modal (replaces Popover) */}
-      <ColumnSelectorModal
+      <ColumnPickerDialog
+        size="wide"
         open={columnSelectorOpen}
         onClose={() => setColumnSelectorOpen(false)}
         lines={lines ?? []}

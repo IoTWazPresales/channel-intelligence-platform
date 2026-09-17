@@ -31,9 +31,9 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import {
-  MasterColumnPickerDialog,
+  ColumnPickerDialog,
   type MasterColumnPickerGroup,
-} from '@/components/masterGrid/MasterColumnPickerDialog';
+} from '@/features/workbench-ui/ColumnPickerDialog';
 
 export type MasterGridUrlState = {
   page: number;
@@ -482,7 +482,8 @@ export function MasterDataGridShell<TRow extends { id: number }>({
         </ModuleDataSection>
       </Paper>
 
-      <MasterColumnPickerDialog
+      <ColumnPickerDialog
+        size="md"
         open={columnsOpen}
         onClose={() => setColumnsOpen(false)}
         title={columnPickerTitle}

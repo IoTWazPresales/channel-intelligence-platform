@@ -30,9 +30,9 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import {
-  MasterColumnPickerDialog,
+  ColumnPickerDialog,
   type MasterColumnPickerGroup,
-} from '@/components/masterGrid/MasterColumnPickerDialog';
+} from '@/features/workbench-ui/ColumnPickerDialog';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { OPS_LIST_GRID_PAGINATION } from '@/features/shell/opsListGridPagination';
 import { apiGet, apiPatch, apiPost, apiPostFormData } from '@/lib/api';
@@ -649,7 +649,8 @@ export function CstArticleAliasesSection() {
         />
       </ModuleDataSection>
 
-      <MasterColumnPickerDialog
+      <ColumnPickerDialog
+        size="md"
         open={columnsOpen}
         onClose={() => setColumnsOpen(false)}
         title="Article alias columns"

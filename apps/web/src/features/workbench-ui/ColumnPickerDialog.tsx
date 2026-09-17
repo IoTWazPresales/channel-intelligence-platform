@@ -1,0 +1,603 @@
+'use client';
+
+import SearchIcon from '@mui/icons-material/Search';
+import {
+  Alert,
+  Box,
+  Button,
+  Checkbox,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  FormControlLabel,
+  InputAdornment,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
+import { useMemo, useState } from 'react';
+
+/** Grouped field keys for master grids (products, customers, distributors, CST aliases). */
+export type MasterColumnPickerGroup = {
+  label: string;
+  /** AG Grid colIds / field names */
+  fields: string[];
+};
+
+export type ColumnPickerSize = 'md' | 'wide';
+
+export type ColumnMetadata = {
+  plan_id: number;
+  plan_line_count?: number;
+  total_products: number;
+  catalogue: Record<string, number>;
+  spec_keys: Record<string, number>;
+  coverage_note: string;
+};
+
+type PlanLine = {
+  product_spec_warranty?: string | null;
+  product_spec_os?: string | null;
+  product_spec_colour?: string | null;
+  product_category?: string | null;
+  product_form_factor?: string | null;
+  product_lifecycle_status?: string | null;
+  product_line?: string | null;
+  product_series_name?: string | null;
+  product_business_unit?: string | null;
+};
+
+export type ColumnPickerDialogMdProps = {
+  size: 'md';
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  groups: MasterColumnPickerGroup[];
+  columnLabelByField?: Record<string, string>;
+  visibility: Record<string, boolean>;
+  onToggle: (field: string, visible: boolean) => void;
+  gridReady: boolean;
+  search: string;
+  onSearchChange: (value: string) => void;
+};
+
+export type ColumnPickerDialogWideProps = {
+  size: 'wide';
+  open: boolean;
+  onClose: () => void;
+  lines: PlanLine[];
+  optionalVisible: Record<string, boolean>;
+  onChange: (key: string, visible: boolean) => void;
+  onReset: () => void;
+  onPreset: (name: string) => void;
+  columnMeta?: ColumnMetadata | null;
+  specKeyVisible?: Record<string, boolean>;
+  onSpecKeyToggle?: (key: string, visible: boolean) => void;
+};
+
+export type ColumnPickerDialogProps = ColumnPickerDialogMdProps | ColumnPickerDialogWideProps;
+
+/** Planner host props without the size discriminant (thin wrapper / tests). */
+export type ColumnSelectorModalProps = Omit<ColumnPickerDialogWideProps, 'size'>;
+
+const PRESETS: { name: string; label: string; tooltip: string }[] = [
+  { name: 'planning', label: 'Planning', tooltip: 'Default planning columns' },
+  {
+    name: 'product_spec',
+    label: 'Product / spec',
+    tooltip: 'Optional CPU, Processor, warranty, OS, colour; top discovered spec keys from metadata.',
+  },
+  { name: 'commercial', label: 'Commercial', tooltip: 'Enable effective commercial term columns' },
+  {
+    name: 'economics',
+    label: 'Economics',
+    tooltip: 'Economics output amounts (sell-in, distributor net, GP, reserves) in economics_calc_currency_code',
+  },
+];
+
+type ColumnDef = {
+  key: string;
+  label: string;
+  locked?: boolean;
+  alwaysOn?: boolean;
+  optional?: true;
+  coverageKey?: string;
+  catalogueServerKey?: string;
+};
+
+type GroupDef = {
+  title: string;
+  description?: string;
+  columns: ColumnDef[];
+};
+
+const COLUMN_GROUPS: GroupDef[] = [
+  {
+    title: 'Identity',
+    description: 'Always visible — no toggles.',
+    columns: [
+      { key: 'customer', label: 'Customer', locked: true },
+      { key: 'distributor', label: 'Distributor', locked: true },
+      { key: 'product_sku', label: 'SKU', locked: true },
+      { key: 'product_part_number', label: 'Part #', locked: true },
+      { key: 'product_model_sales_model', label: 'Model / Sales model', locked: true },
+      { key: 'product_name', label: 'Product name', locked: true },
+    ],
+  },
+  {
+    title: 'Product spec (canonical picks)',
+    description: 'Optional columns from structured specs_json (CPU vs Processor when both exist).',
+    columns: [
+      { key: 'product_spec_cpu', label: 'CPU / chipset (spec)', optional: true },
+      { key: 'product_spec_processor', label: 'Processor (spec)', optional: true },
+      { key: 'product_spec_warranty', label: 'Warranty', optional: true },
+      { key: 'product_spec_os', label: 'OS', optional: true },
+      { key: 'product_spec_colour', label: 'Colour', optional: true },
+    ],
+  },
+  {
+    title: 'Product catalogue',
+    columns: [
+      { key: 'product_category', label: 'Category', optional: true, coverageKey: 'category', catalogueServerKey: 'category' },
+      { key: 'product_form_factor', label: 'Form factor', optional: true, coverageKey: 'form_factor', catalogueServerKey: 'form_factor' },
+      { key: 'product_lifecycle_status', label: 'Lifecycle', optional: true, coverageKey: 'lifecycle', catalogueServerKey: 'lifecycle_status' },
+      { key: 'product_line', label: 'Product line', optional: true, coverageKey: 'product_line', catalogueServerKey: 'product_line' },
+      { key: 'product_series_name', label: 'Series', optional: true, coverageKey: 'series', catalogueServerKey: 'series_name' },
+      { key: 'product_business_unit', label: 'Business unit', optional: true, coverageKey: 'bu', catalogueServerKey: 'business_unit' },
+    ],
+  },
+  {
+    title: 'Planning inputs (plan / customer-facing currency)',
+    description: 'List and campaign/event prices are stored in the plan’s currency_code.',
+    columns: [
+      { key: 'target_units', label: 'Units', locked: true },
+      { key: 'target_srp_local', label: 'Customer-facing list price', locked: true },
+      { key: 'promo_srp_local', label: 'Campaign / event price', locked: true },
+      { key: 'promo_mix_pct', label: 'Promo mix %', optional: true },
+    ],
+  },
+  {
+    title: 'SKU economics inputs (effective on line)',
+    description: 'Controlled cost currency and FX bridge (plan per 1 cost ccy) from SKU assumptions or overrides.',
+    columns: [
+      { key: 'effective_customer_margin_pct', label: 'Customer margin % (effective)', optional: true },
+      { key: 'effective_customer_rebate_pct', label: 'Customer rebate % (effective)', optional: true },
+      { key: 'effective_distributor_margin_pct', label: 'Distributor margin % (effective)', optional: true },
+      { key: 'effective_vat_rate_pct', label: 'VAT % (effective)', optional: true },
+      { key: 'effective_fx_plan_currency_per_cost_currency', label: 'FX: plan currency per 1 cost currency (effective)', optional: true },
+      { key: 'effective_reserve_total_pct', label: 'Reserve total % (effective)', optional: true },
+      { key: 'effective_promo_reserve_split_pct', label: 'Promo reserve split % (effective)', optional: true },
+      { key: 'effective_controlled_cost_amount', label: 'Controlled cost / PM bottom (effective; currency per SKU/line)', optional: true },
+    ],
+  },
+  {
+    title: 'Plan-currency bridge (sell-in / disti net estimates)',
+    description:
+      'Optional: estimated OEM/channel sell-in and distributor net expressed in plan / customer-facing currency (derived via FX bridge).',
+    columns: [
+      { key: 'calc_sell_in_price_local', label: 'Estimated OEM/channel sell-in (plan ccy / unit)', optional: true },
+      { key: 'calc_distributor_net_local', label: 'Estimated distributor net (plan ccy / unit)', optional: true },
+    ],
+  },
+  {
+    title: 'Economics output amounts',
+    description:
+      'Persisted calculator amounts use economics_calc_currency_code on each line (often the controlled-cost currency for legacy data — not necessarily plan currency).',
+    columns: [
+      { key: 'calc_oem_sell_in_amount', label: 'OEM/channel sell-in (economics ccy / unit)', optional: true },
+      { key: 'calc_internal_gp_amount', label: 'Internal GP (economics ccy, total, after reserves)', optional: true },
+      { key: 'calc_distributor_net_amount', label: 'Distributor net (economics ccy / unit)', optional: true },
+      { key: 'calc_campaign_support_reserve_amount', label: 'Campaign support reserve (economics ccy)', optional: true },
+      { key: 'calc_non_campaign_reserve_amount', label: 'Non-campaign reserve (economics ccy)', optional: true },
+    ],
+  },
+  {
+    title: 'Issues / status',
+    description: 'Always visible.',
+    columns: [{ key: 'issues', label: 'Issues', locked: true }],
+  },
+];
+
+function MasterSizedPicker({
+  open,
+  onClose,
+  title,
+  groups,
+  columnLabelByField,
+  visibility,
+  onToggle,
+  gridReady,
+  search,
+  onSearchChange,
+}: ColumnPickerDialogMdProps) {
+  const query = search.trim().toLowerCase();
+  const blocks = groups
+    .map((group) => ({
+      label: group.label,
+      options: group.fields
+        .map((field) => ({
+          id: field,
+          label: columnLabelByField?.[field] ?? field,
+        }))
+        .filter(
+          (opt) =>
+            !query ||
+            opt.label.toLowerCase().includes(query) ||
+            opt.id.toLowerCase().includes(query)
+        ),
+    }))
+    .filter((group) => group.options.length > 0);
+
+  return (
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" data-testid="master-column-picker">
+      <DialogTitle>{title}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+          <TextField
+            size="small"
+            label="Search columns"
+            placeholder="Find by label or field key"
+            value={search}
+            onChange={(e) => onSearchChange(e.target.value)}
+            data-testid="master-column-picker-search"
+          />
+          {!gridReady ? (
+            <Alert severity="info">Grid is still initializing. Column toggles become available in a moment.</Alert>
+          ) : null}
+          {blocks.map((group) => (
+            <Paper key={group.label} variant="outlined" sx={{ p: 1.25 }}>
+              <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                {group.label}
+              </Typography>
+              <Stack>
+                {group.options.map((opt) => (
+                  <FormControlLabel
+                    key={opt.id}
+                    control={
+                      <Checkbox
+                        checked={visibility[opt.id] ?? false}
+                        onChange={(e) => onToggle(opt.id, e.target.checked)}
+                        disabled={!gridReady}
+                        data-testid={`master-column-toggle-${opt.id}`}
+                      />
+                    }
+                    label={opt.label}
+                  />
+                ))}
+              </Stack>
+            </Paper>
+          ))}
+          {!blocks.length ? (
+            <Typography variant="body2" color="text.secondary">
+              No columns match the current search.
+            </Typography>
+          ) : null}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Done</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function WideSizedPicker({
+  open,
+  onClose,
+  lines,
+  optionalVisible,
+  onChange,
+  onReset,
+  onPreset,
+  columnMeta,
+  specKeyVisible = {},
+  onSpecKeyToggle,
+}: ColumnPickerDialogWideProps) {
+  const [search, setSearch] = useState('');
+
+  const catalogueCoverage = useMemo(
+    () => ({
+      category: lines.filter((l) => l.product_category?.trim()).length,
+      form_factor: lines.filter((l) => l.product_form_factor?.trim()).length,
+      lifecycle: lines.filter((l) => l.product_lifecycle_status?.trim()).length,
+      product_line: lines.filter((l) => l.product_line?.trim()).length,
+      series: lines.filter((l) => l.product_series_name?.trim()).length,
+      bu: lines.filter((l) => l.product_business_unit?.trim()).length,
+      total: lines.length,
+    }),
+    [lines]
+  );
+
+  const needle = search.trim().toLowerCase();
+
+  const discoveredSpecEntries = useMemo(() => {
+    const keys = columnMeta?.spec_keys ? Object.keys(columnMeta.spec_keys) : [];
+    return keys
+      .map((k) => ({ key: k, count: columnMeta!.spec_keys[k] ?? 0 }))
+      .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+  }, [columnMeta]);
+
+  const filteredDiscovered = useMemo(() => {
+    if (!needle) return discoveredSpecEntries;
+    return discoveredSpecEntries.filter(
+      (e) => e.key.toLowerCase().includes(needle) || `${e.count}`.includes(needle)
+    );
+  }, [discoveredSpecEntries, needle]);
+
+  const filteredGroups = useMemo(() => {
+    if (!needle) return COLUMN_GROUPS;
+    return COLUMN_GROUPS.map((g) => ({
+      ...g,
+      columns: g.columns.filter((c) => c.label.toLowerCase().includes(needle) || c.key.toLowerCase().includes(needle)),
+    })).filter((g) => g.columns.length > 0);
+  }, [needle]);
+
+  const totalForCoverage = columnMeta ? columnMeta.total_products : lines.length;
+
+  const optionalSelectedCount =
+    Object.values(optionalVisible).filter(Boolean).length +
+    Object.values(specKeyVisible).filter(Boolean).length;
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth={false}
+      aria-labelledby="col-selector-title"
+      PaperProps={{ sx: { width: '90vw', maxWidth: 1200, maxHeight: '85vh', m: 2, display: 'flex', flexDirection: 'column' } }}
+    >
+      <DialogTitle id="col-selector-title" sx={{ pb: 1 }}>
+        <Stack spacing={0.25}>
+          <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap" useFlexGap>
+            <span>Planner line columns</span>
+            <Chip size="small" label={`${optionalSelectedCount} optional on`} variant="outlined" />
+          </Stack>
+          <Typography variant="caption" color="text.secondary" component="span">
+            Plans & line economics grid — optional fields and discovered product spec keys. (Workbench columns for uploaded
+            lineup rows are on the Current lineup card.)
+          </Typography>
+        </Stack>
+      </DialogTitle>
+      <Box sx={{ px: 3, pb: 1, position: 'sticky', top: 0, bgcolor: 'background.paper', zIndex: 1 }}>
+        <TextField
+          size="small"
+          fullWidth
+          placeholder="Search columns and discovered spec keys…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            },
+          }}
+        />
+      </Box>
+      <DialogContent dividers sx={{ overflowY: 'auto', flex: 1 }}>
+        {!needle && (
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+              View presets
+            </Typography>
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              {PRESETS.map((p) => (
+                <Chip
+                  key={p.name}
+                  label={p.label}
+                  size="small"
+                  variant="outlined"
+                  onClick={() => onPreset(p.name)}
+                  title={p.tooltip}
+                  sx={{ cursor: 'pointer' }}
+                />
+              ))}
+            </Stack>
+            <Alert severity="info" sx={{ mt: 1.5, py: 0.75 }} data-testid="column-selector-evidence-note">
+              <Typography variant="caption" component="div">
+                <strong>Lineup / import evidence</strong> (DAP, Rand landed style columns, actual DAP, disti-reported
+                cost) is shown in the lineup workbench and line detail panel — <strong>not</strong> as optional grid
+                columns. It is commercial sell-in / acquisition <strong>evidence only</strong>, never PM bottom or{' '}
+                <code>controlled_cost_amount</code>.
+              </Typography>
+            </Alert>
+          </Box>
+        )}
+
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+          {columnMeta
+            ? `Coverage from server: ${columnMeta.total_products} distinct product(s) in plan${
+                columnMeta.plan_line_count != null ? `, ${columnMeta.plan_line_count} planner line(s)` : ''
+              }. Locked columns cannot be hidden.`
+            : 'Coverage counts are based on current plan lines. Locked columns cannot be hidden.'}
+        </Typography>
+
+        {onSpecKeyToggle && discoveredSpecEntries.length > 0 && (
+          <Box
+            sx={{ mb: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}
+            data-testid="column-selector-discovered-specs"
+          >
+            <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+              Discovered spec JSON keys
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+              From server metadata for this plan. Toggle to add as optional grid columns (0/N keys stay off by
+              default).
+            </Typography>
+            {filteredDiscovered.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                No keys match this search.
+              </Typography>
+            ) : (
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
+                  gap: 0.5,
+                }}
+              >
+                {filteredDiscovered.map((e) => {
+                  const total = columnMeta?.total_products ?? lines.length;
+                  const coverageLabel = total > 0 ? `${e.count} / ${total} products` : null;
+                  const checked = specKeyVisible[e.key] ?? false;
+                  return (
+                    <FormControlLabel
+                      key={e.key}
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={checked}
+                          onChange={() => onSpecKeyToggle(e.key, !checked)}
+                          data-testid={`col-spec-toggle-${e.key}`}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body2" component="span">
+                            {e.key}
+                          </Typography>
+                          {coverageLabel && (
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                              {coverageLabel}
+                              {e.count === 0 ? ' — not found in selected products' : ''}
+                            </Typography>
+                          )}
+                        </Box>
+                      }
+                      sx={{ m: 0, alignItems: 'flex-start' }}
+                    />
+                  );
+                })}
+              </Box>
+            )}
+          </Box>
+        )}
+
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' },
+            gap: 2,
+            alignItems: 'start',
+          }}
+        >
+          {filteredGroups.map((group, gi) => (
+            <Box key={group.title} sx={{ mb: 2 }}>
+              {gi > 0 && <Divider sx={{ mb: 1.5 }} />}
+              <Typography variant="subtitle2" sx={{ mb: 0.25 }}>
+                {group.title}
+              </Typography>
+              {group.description && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+                  {group.description}
+                </Typography>
+              )}
+              <Stack spacing={0.25}>
+                {group.columns.map((col) => {
+                  let coverageCount: number | undefined;
+
+                  if (col.catalogueServerKey && col.coverageKey) {
+                    if (columnMeta) {
+                      coverageCount = columnMeta.catalogue[col.catalogueServerKey] ?? 0;
+                    } else {
+                      coverageCount = (catalogueCoverage as Record<string, number>)[col.coverageKey];
+                    }
+                  } else if (col.coverageKey && !col.catalogueServerKey) {
+                    coverageCount = (catalogueCoverage as Record<string, number>)[col.coverageKey];
+                  }
+
+                  const coverageLabel =
+                    coverageCount != null && totalForCoverage > 0
+                      ? `${coverageCount} / ${totalForCoverage} populated`
+                      : null;
+
+                  if (col.locked) {
+                    return (
+                      <Box key={col.key} sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 0.5, py: 0.25 }}>
+                        <Checkbox size="small" checked disabled sx={{ p: 0 }} />
+                        <Typography variant="body2" color="text.secondary">
+                          {col.label}
+                        </Typography>
+                        <Chip label="Locked" size="small" sx={{ fontSize: '0.65rem', height: 18 }} />
+                      </Box>
+                    );
+                  }
+
+                  if (col.alwaysOn) {
+                    return (
+                      <Box key={col.key} sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 0.5, py: 0.25 }}>
+                        <Checkbox size="small" checked disabled sx={{ p: 0 }} />
+                        <Typography variant="body2">{col.label}</Typography>
+                        <Chip label="Always on" size="small" color="info" sx={{ fontSize: '0.65rem', height: 18 }} />
+                        {coverageLabel && (
+                          <Typography variant="caption" color="text.secondary">
+                            {coverageLabel}
+                          </Typography>
+                        )}
+                      </Box>
+                    );
+                  }
+
+                  return (
+                    <FormControlLabel
+                      key={col.key}
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={optionalVisible[col.key] ?? false}
+                          onChange={() => onChange(col.key, !(optionalVisible[col.key] ?? false))}
+                          data-testid={`col-toggle-${col.key}`}
+                        />
+                      }
+                      label={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body2">{col.label}</Typography>
+                          {coverageLabel && (
+                            <Typography variant="caption" color="text.secondary">
+                              {coverageLabel}
+                            </Typography>
+                          )}
+                        </Box>
+                      }
+                      sx={{ m: 0, px: 0.5 }}
+                    />
+                  );
+                })}
+              </Stack>
+            </Box>
+          ))}
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button
+          size="small"
+          onClick={() => {
+            onReset();
+            onClose();
+          }}
+          data-testid="col-reset-defaults"
+        >
+          Reset to defaults
+        </Button>
+        <Box flex={1} />
+        <Button size="small" variant="contained" onClick={onClose}>
+          Done
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+export function ColumnPickerDialog(props: ColumnPickerDialogProps) {
+  if (props.size === 'wide') {
+    return <WideSizedPicker {...props} />;
+  }
+  return <MasterSizedPicker {...props} />;
+}

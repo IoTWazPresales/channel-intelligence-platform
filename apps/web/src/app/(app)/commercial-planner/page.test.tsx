@@ -1697,7 +1697,7 @@ describe('roundPlannerUnits', () => {
 
 // ─── V3 tests: Column selector modal ─────────────────────────────────────────
 
-vi.mock('@/features/commercial-planner/ColumnSelectorModal', () => {
+vi.mock('@/features/workbench-ui/ColumnPickerDialog', () => {
   const OPTIONAL_FIELDS = [
     'product_spec_warranty',
     'product_spec_os',
@@ -1722,7 +1722,7 @@ vi.mock('@/features/commercial-planner/ColumnSelectorModal', () => {
     'calc_non_campaign_reserve_amount',
   ];
   return {
-    ColumnSelectorModal: ({
+    ColumnPickerDialog: ({
       open,
       onClose,
       onReset,
