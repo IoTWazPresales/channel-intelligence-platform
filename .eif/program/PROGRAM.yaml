@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 888
-  log_sha256: 716883242c2b69c7502e9e7acbccdd91907d2ad70804e5772d9dedb4906d6a05
+  snapshot_revision: 889
+  log_sha256: adc91d50183d9b956ae2c07ccb084b8aa1082f22516ffead4cc1a8f77cf7df74
   acceptance_policy:
     milestone: operator
     root: operator
@@ -5641,6 +5641,14 @@ evidence:
     note: Independent GOV-008 of N-0027 only. Playwright MCP 1280x800. current_database=cip read-only. Stale GOV008_N0025_N0029_20260915
       dims reset pending under this run before live review. Verdict VERIFIED_WITH_LIMITATIONS (leftover D-0002/D-0011 copy
       on mappings).
+  EV-INV-CATALOGUE-SETTLEMENT-20260918:
+    id: EV-INV-CATALOGUE-SETTLEMENT-20260918
+    provenance: implementation-observation
+    path: docs/EXTERNAL_API_OUTBOUND.md
+    tree_hash: null
+    note: Investigate/scope/design only. No GOV-008. No node complete. Catalogue EAV gated pm_write_legacy_eav=False. Settlement
+      lab A/B at /design-lab/funding?lens=settle. Outbound+inbound specs. StewardQueueOverview D-0011 copy 3f101a9. cpor_case
+      has no paid/closed. Playwright MCP absent this session.
 baselines:
   BLN-0001:
     id: BLN-0001
