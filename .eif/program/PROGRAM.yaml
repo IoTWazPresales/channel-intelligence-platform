@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 889
-  log_sha256: adc91d50183d9b956ae2c07ccb084b8aa1082f22516ffead4cc1a8f77cf7df74
+  snapshot_revision: 890
+  log_sha256: a6d809493eb5573a4a832efeb0d8740aa02b8df5a3e14467f089c2325ce9c105
   acceptance_policy:
     milestone: operator
     root: operator
@@ -5649,6 +5649,13 @@ evidence:
     note: Investigate/scope/design only. No GOV-008. No node complete. Catalogue EAV gated pm_write_legacy_eav=False. Settlement
       lab A/B at /design-lab/funding?lens=settle. Outbound+inbound specs. StewardQueueOverview D-0011 copy 3f101a9. cpor_case
       has no paid/closed. Playwright MCP absent this session.
+  EV-SETTLEMENT-DESK-RESUME-20260918:
+    id: EV-SETTLEMENT-DESK-RESUME-20260918
+    provenance: implementation-observation
+    path: apps/api/app/services/cpor/settlement_desk.py
+    tree_hash: null
+    note: Resume settlement desk from uncommitted salvage. Actor desk-resume-001. No GOV-008. No node complete. Keep salvaged
+      CIP qty product-grain CST and customer qty result_qty mapping.
 baselines:
   BLN-0001:
     id: BLN-0001
