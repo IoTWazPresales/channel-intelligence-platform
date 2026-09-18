@@ -63,7 +63,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-20 |
+| **Status / parked** | **Partial** · 2026-09-18 · stub resolves `admin@local`; settle stamps `decided_by`; historical apply stamps `apply_actor`. Ken/PM/Wayne role mapping still Warren's. |
 | **Effort** | Medium |
 | **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` §2 / §9.2. Warren: CPOR routers have no authentication or role enforcement. |
 | **Idea** | Stamp a real actor on every CPOR write (null actor is a defect, §7). Enforce: KAM proposes/amends/owns terms; PM amends **pre-approval only**; Ken compiles/settles and must not touch MAC/terms; MDM+Wayne approve; Wayne re-approves. |
@@ -131,7 +131,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-20 |
+| **Status / parked** | **Partial** · 2026-09-18 · settlement surfaces show name primary (CIP-minted code subordinate via `SHOW_CUSTOMER_CODE`). Do **not** bulk-promote the 14 unverified TMP rows or repoint 216 merged losers. Mint scheme still parked. |
 | **Effort** | Medium (approved settings table / mint path) |
 | **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` §9.5 / D-065. Warren: named accounts still carry TMP-CUST; promote works but is unused because no code scheme exists; CIP will mint its own, updatable later. |
 | **Idea** | Mint CIP-owned codes on promote (research already in `docs/design/BACKLOG-061-U2a_customer_code_mint_research.md`). BACKLOG-061 promote **map** was pruned as shipped — operator-supplied `new_code`. Mint was never built. ERP/customer-file codes are an optional later mapping, not a blocker. |
@@ -2757,7 +2757,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-15 · N-0029 UNCOVERED. **Lab A/B exist 2026-09-18** (`daf0503`); production route still `CporCaseWorkspace`. |
+| **Status / parked** | **Done (desk A)** · 2026-09-18 · production `/commercial-planner/cpor-cases/[id]` mounts `SettlementDeskLive`. Lab A uses the same composition. Paid/closed still not on `cpor_case`. |
 | **Effort** | Large |
 | **Source** | N-0029 recon `.eif/audit/NS17_GRID_CASEBOOK_20260915/RECONCILE.md`. `cpor-cases/[id]/page.tsx` mounts `CporCaseWorkspace`. Lab: `/design-lab/funding?lens=settle` (`alt=a` Ken’s next-action desk, `alt=b` two-tape corroboration). |
 | **Resume-context** | Warren chooses A or B, then implement on `/commercial-planner/cpor-cases/[id]` only. Case book drawer (`?case=`) stays the list-side inspect. Do not treat N-0029 grid-first as the desk. Paid/closed is not on `cpor_case` today — migration required, not run. |
@@ -2883,7 +2883,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-18 · item 4 stopped after read-only checks |
+| **Status / parked** | **Partial** · 2026-09-18 · per-line maps nest in `source_definition.column_mapping_memory.mapping_profile.by_product_line`. Duplicate EAN FLAG on `import_job.staged_metadata`. Whether sellable grain is five or sixteen is still Warren's. |
 | **Effort** | Medium+; likely a catalogue-model decision before code |
 | **Source** | `apps/api/app/models/product_catalog.py`; `pm_commit_catalog.py`; `dim_product.product_line` counts on `cip` 2026-09-18. |
 | **Resume-context** | `product_line` grain is real (NB/NX/PF/NR/PT/LM/XB/…; 10 null). `business_unit` is a different axis (CONSUMER/COMMERCIAL/PHONE/DISPLAY/Gaming & Workspace Gear). `catalog_product` is live: 18157 rows, all linked to `dim_product`, 1 `product_catalog` (`default_master`), 1 `source_definition` (`product_catalog_default`). 192 `attribute_definition` rows are leftover staged-column defs; EAV values 0 because `pm_write_legacy_eav` default False. Recommendation (not implemented): nest per-line maps in `column_mapping_memory`; keep specs in `specs_json`; do not revive EAV for column sets. Catalogue axis is source/feed, not product line. |
