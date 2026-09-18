@@ -2757,10 +2757,10 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-15 · N-0029 UNCOVERED |
+| **Status / parked** | **Parked** · 2026-09-15 · N-0029 UNCOVERED. **Lab A/B exist 2026-09-18** (`daf0503`); production route still `CporCaseWorkspace`. |
 | **Effort** | Large |
-| **Source** | N-0029 recon `.eif/audit/NS17_GRID_CASEBOOK_20260915/RECONCILE.md`. `cpor-cases/[id]/page.tsx` mounts `CporCaseWorkspace`. Lab book lens uses `EntityContextPanel` only. |
-| **Resume-context** | There is no lab settlement-desk composition to migrate. Design the desk, then implement. Case book drawer (`?case=`) stays the list-side inspect. Do not treat N-0029 grid-first as the desk. |
+| **Source** | N-0029 recon `.eif/audit/NS17_GRID_CASEBOOK_20260915/RECONCILE.md`. `cpor-cases/[id]/page.tsx` mounts `CporCaseWorkspace`. Lab: `/design-lab/funding?lens=settle` (`alt=a` Ken’s next-action desk, `alt=b` two-tape corroboration). |
+| **Resume-context** | Warren chooses A or B, then implement on `/commercial-planner/cpor-cases/[id]` only. Case book drawer (`?case=`) stays the list-side inspect. Do not treat N-0029 grid-first as the desk. Paid/closed is not on `cpor_case` today — migration required, not run. |
 | **Idea** | Give `/commercial-planner/cpor-cases/<id>` a designed Promotions & Funding composition instead of the pre-lab `CporCaseWorkspace` stack. |
 | **Why it matters / deferrable** | Start work “Settle a case” still completes on this desk. Deferrable because the book + drawer already inspect a case without opening the desk; N-0029 did not invent a lab clone. |
 | **What the work is** | Independent design against live settle/claim/payment panels; then a coherent land. Do not copy `CporCaseWorkspace` into design-lab as a fake migrate. |
@@ -2865,12 +2865,12 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Done** · 2026-09-18 · mappings queue copy aligned to D-0011 (`39f457d`) |
+| **Status / parked** | **Done** · 2026-09-18 · mappings queue copy `39f457d`; StewardQueueOverview second instance `3f101a9` |
 | **Effort** | Trivial (copy) once design says the leftover chrome stays or goes |
 | **Source** | `apps/web/src/app/(app)/admin/mappings/page.tsx` EntityMappingQueue chrome (~135–140). GOV-008 N-0027 limitation. D-0011 KEEP: `entity_mapping_queue` is pipeline state, not a UI to restore or retire. |
 | **Idea** | Replace leftover D-0002 “Restore vs retire / open operator choice” wording so the resolve workspace matches D-0011. |
 | **Why it matters / deferrable** | Operators can still resolve on `/admin/mappings?workspace=resolve`. Copy is stale, not a second write path. Overnight brief: leftover steward copy → BACKLOG only. |
-| **Resume-context** | Edit the mappings page chrome only. Do not reopen D-0002. Do not page-hop (D-066). |
+| **Resume-context** | Mappings page chrome aligned. StewardQueueOverview was a second leftover of the same D-0002 sentence; now the same D-0011 paragraph. Do not reopen D-0002. Do not page-hop (D-066). |
 | **What the work is** | Align the paragraph with D-0011 KEEP. Drop restore/retire framing. |
 | **Regression traps** | Do not hide the queue. Do not restore a retire/restore action. FLAG ≠ BLOCK. |
 | **Behavior to retain** | Resolve workspace; queue as pipeline state; grouped entity chips. |
@@ -2886,7 +2886,7 @@ Exact engine invariants (do not complete around them):
 | **Status / parked** | **Parked** · 2026-09-18 · item 4 stopped after read-only checks |
 | **Effort** | Medium+; likely a catalogue-model decision before code |
 | **Source** | `apps/api/app/models/product_catalog.py`; `pm_commit_catalog.py`; `dim_product.product_line` counts on `cip` 2026-09-18. |
-| **Resume-context** | `product_line` grain is real (NB/NX/PF/NR/PT/LM/XB/…; 10 null). `catalog_product` is live: 18157 rows, all linked to `dim_product`, 1 `product_catalog` (`default_master`), 1 `source_definition` (`product_catalog_default`). EAV values are 0. Nesting line column sets under `source_definition.column_mapping_memory` would sit beside this parallel catalogue. |
+| **Resume-context** | `product_line` grain is real (NB/NX/PF/NR/PT/LM/XB/…; 10 null). `business_unit` is a different axis (CONSUMER/COMMERCIAL/PHONE/DISPLAY/Gaming & Workspace Gear). `catalog_product` is live: 18157 rows, all linked to `dim_product`, 1 `product_catalog` (`default_master`), 1 `source_definition` (`product_catalog_default`). 192 `attribute_definition` rows are leftover staged-column defs; EAV values 0 because `pm_write_legacy_eav` default False. Recommendation (not implemented): nest per-line maps in `column_mapping_memory`; keep specs in `specs_json`; do not revive EAV for column sets. Catalogue axis is source/feed, not product line. |
 | **Idea** | Each product line carries its own ingested column set and import template without contaminating other lines. |
 | **Why it matters / deferrable** | Motherboard vs laptop files need different columns. Deferred because building on `product_line` without deciding what `catalog_product` is would fork catalogue truth. |
 | **What the work is** | Warren decides whether line column sets overlay `column_mapping_memory`, or reuse/replace `product_catalog` / `CatalogProduct`. Then nest extra PM columns per line on the existing `suggest_pm_mapping` mapper. FLAG duplicate EAN on `import_job.staged_metadata`. No unique index on ean. Resolution stays global. No BU entitlements. |

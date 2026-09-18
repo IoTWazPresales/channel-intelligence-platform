@@ -1,0 +1,6 @@
+{
+  "id": "EV-INV-CATALOGUE-SETTLEMENT-20260918",
+  "provenance": "implementation-observation",
+  "path": "docs/EXTERNAL_API_OUTBOUND.md",
+  "note": "Investigate/scope/design only. No GOV-008. No node complete. Catalogue EAV gated pm_write_legacy_eav=False. Settlement lab A/B at /design-lab/funding?lens=settle. Outbound+inbound specs. StewardQueueOverview D-0011 copy 3f101a9. cpor_case has no paid/closed. Playwright MCP absent this session."
+}
