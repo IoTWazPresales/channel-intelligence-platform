@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-09-18 — **Investigate/scope/design** on `feat/ns-2-brief-nav-collapse` (never main, no GOV-008, no node complete). StewardQueueOverview D-0011 copy `3f101a9`. Settlement lab A/B `daf0503` at `/design-lab/funding?lens=settle`. Specs `docs/EXTERNAL_API_OUTBOUND.md` + `docs/EXTERNAL_API_INBOUND.md`. Catalogue: EAV gated `pm_write_legacy_eav=False`; `cpor_case` has no paid/closed. HTTP API `:8001` 200, web `:3000` 200. Playwright MCP absent this session (UNABLE_TO_RENDER). Run `INV_CATALOGUE_SETTLEMENT_SPEC_20260918` / actor `inv-018`. Programme snapshot **889**.
+- 2026-09-18 — **Investigate/scope/design** on `feat/ns-2-brief-nav-collapse` (never main, no GOV-008, no node complete). StewardQueueOverview D-0011 copy `3f101a9`. Settlement lab A/B `daf0503` at `/design-lab/funding?lens=settle`. Specs `docs/EXTERNAL_API_OUTBOUND.md` + `docs/EXTERNAL_API_INBOUND.md` (`49e0836`). Catalogue: EAV gated `pm_write_legacy_eav=False`; `cpor_case` has no paid/closed. HTTP API `:8001` 200, web `:3000` 200. Playwright MCP absent this session (UNABLE_TO_RENDER). Run `INV_CATALOGUE_SETTLEMENT_SPEC_20260918` / actor `inv-018`. Programme snapshot **889** ledger `19f26f8`.
 
 - 2026-09-18 — **Build session** on `feat/ns-2-brief-nav-collapse` (never main, no GOV-008) docs `b18088a`. BACKLOG-192 `ColumnPickerDialog` md/wide `7656f67` (docs `1da81cd`). BACKLOG-197 mappings queue copy `39f457d` (docs `93ece93`). Start work paper/icons/approved copy `d25a927`. Item 4 stopped: `catalog_product` live 18157 rows on `cip` → BACKLOG-198. HTTP: API `:8001` 200, web `:3000` 200. Playwright `/brief` admin Start work → `/admin/imports?unified=1`.
 

@@ -4,7 +4,7 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** StewardQueueOverview D-0011 copy `3f101a9`. Settlement lab A/B `daf0503`. Prior: Start work ActionCard `d25a927`. ColumnPickerDialog `7656f67`. Mappings queue copy `39f457d`. Import Center/Market fold `b5f7e13`; collision counts `57348e8`; Lineup ApprovalBadge `b6e38fe`; Payments leftover `0b45f9a`; Cover `?product=` `3abad04`; grid parity `9e739da`; light theme `2e0c2a2`.
+**Last content pin:** StewardQueueOverview D-0011 copy `3f101a9`. Settlement lab A/B `daf0503`. Specs/docs `49e0836`. Ledger `19f26f8`. Prior: Start work ActionCard `d25a927`. ColumnPickerDialog `7656f67`. Mappings queue copy `39f457d`.
 
 **Alembic (code):** `20260906_0022` (`cpor_case.intelligence_exclude`)
 
