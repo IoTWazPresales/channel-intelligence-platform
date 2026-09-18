@@ -33,9 +33,10 @@ export function StewardQueueOverview() {
         <HeadlineFigure label="Distributor candidates" value={data?.candidates_distributorish ?? '—'} compact />
       </HeadlineStrip>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 2 }}>
-        This leaf is the legacy mapping queue (D-0002 untouched). Per-job stewarding stays inside each import job.
-        Candidate counts are open <code>needs_review</code> rows across jobs — they are not this grid unless you open a
-        job with <code>?import_job_id=</code>. Cross-job accept/reject named by CONSULT is not on this surface.
+        Unresolved entity tokens wait here as pipeline state. This is not a restore-or-retire control. Resolve them in
+        the resolve workspace. Per-job stewarding stays inside each import job. Candidate counts are open{' '}
+        <code>needs_review</code> rows across jobs — they are not this grid unless you open a job with{' '}
+        <code>?import_job_id=</code>. Cross-job accept/reject named by CONSULT is not on this surface.
       </Typography>
     </>
   );
