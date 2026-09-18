@@ -4,7 +4,7 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** Settlement desk product `b1696b0`. Lab A shared mount `afc694f`. Prior: StewardQueueOverview D-0011 copy `3f101a9`. Settlement lab A/B `daf0503`. Specs/docs `49e0836`. Ledger `19f26f8`.
+**Last content pin:** Settlement desk product `b1696b0`. Lab A shared mount `afc694f`. Docs `b7db465`. Prior: StewardQueueOverview D-0011 copy `3f101a9`. Settlement lab A/B `daf0503`. Specs/docs `49e0836`. Ledger `19f26f8`.
 
 **Alembic (code):** `20260906_0022` (`cpor_case.intelligence_exclude`)
 
