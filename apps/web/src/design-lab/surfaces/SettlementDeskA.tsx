@@ -66,6 +66,8 @@ function toView(): SettlementDeskView {
     })),
     canSettle: false,
     fxSettleAllowed: true,
+    fxDeclared: true,
+    roeSnapshot: 18.78,
     allowedNext: [],
   };
 }
