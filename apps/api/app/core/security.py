@@ -62,6 +62,29 @@ def _user_payload(
     }
 
 
+async def _resolve_stub_app_user(db: AsyncSession, x_user_id: str | None) -> dict | None:
+    """Map stub identity onto a real app_user row. Does not create users."""
+    ident = (x_user_id or "").strip()
+    row = None
+    if ident.isdigit():
+        row = await db.scalar(select(AppUser).where(AppUser.id == int(ident), AppUser.is_active.is_(True)))
+    if row is None and ident:
+        row = await db.scalar(select(AppUser).where(AppUser.email == ident, AppUser.is_active.is_(True)))
+    if row is None and not ident:
+        row = await db.scalar(
+            select(AppUser).where(AppUser.email == "admin@local", AppUser.is_active.is_(True))
+        )
+    if row is None:
+        return None
+    return _user_payload(
+        str(row.id),
+        normalize_role(row.role),
+        tenant_id=row.tenant_id,
+        email=row.email,
+        display_name=row.display_name,
+    )
+
+
 async def get_current_user(
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_user_role: str | None = Header(default=None, alias="X-User-Role"),
@@ -106,7 +129,11 @@ async def get_current_user(
             detail="Authentication required",
         )
 
-    # Stub / transition mode: forgeable headers (local only).
+    # Stub / transition mode: resolve a real app_user when possible.
+    # Unmatched X-User-Id (tests) still forges; missing header uses admin@local, never demo-user.
+    resolved = await _resolve_stub_app_user(db, x_user_id)
+    if resolved is not None:
+        return resolved
     return _user_payload(
         x_user_id or "demo-user",
         normalize_role(x_user_role or Role.ADMIN.value),

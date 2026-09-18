@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
-import CporCaseDetailPage from './page';
+import { CporCaseWorkspace } from '@/features/cpor/CporCaseWorkspace';
 
 const case312Payload = {
   id: 312,
@@ -139,12 +139,12 @@ function renderPage() {
   });
   return renderWithProviders(
     <QueryClientProvider client={qc}>
-      <CporCaseDetailPage />
+      <CporCaseWorkspace caseId={312} />
     </QueryClientProvider>,
   );
 }
 
-describe('CporCaseDetailPage FX/readiness (case 312 shape)', () => {
+describe('CporCaseWorkspace FX/readiness (case 312 shape)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

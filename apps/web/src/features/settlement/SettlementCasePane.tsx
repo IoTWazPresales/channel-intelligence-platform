@@ -3,7 +3,7 @@
 import { Box, Typography } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 
-import { CporCaseWorkspace } from '@/features/cpor/CporCaseWorkspace';
+import { SettlementDeskLive } from '@/features/settlement/SettlementDeskLive';
 
 type Props = {
   caseId: number | null;
@@ -41,7 +41,7 @@ export function SettlementCasePane({ caseId }: Props) {
         minHeight: 0,
       }}
     >
-      <CporCaseWorkspace caseId={caseId} embedded defaultTab={4} />
+      <SettlementDeskLive caseId={caseId} embedded />
     </Box>
   );
 }

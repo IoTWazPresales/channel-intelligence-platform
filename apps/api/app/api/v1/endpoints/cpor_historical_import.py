@@ -88,6 +88,20 @@ def _get_job_sync(db: Session, job_id: int) -> ImportJob:
     return job
 
 
+def _actor(user: dict) -> str:
+    email = user.get("email")
+    if isinstance(email, str) and email.strip():
+        return email.strip()
+    name = user.get("display_name")
+    if isinstance(name, str) and name.strip():
+        return name.strip()
+    raw = user.get("id")
+    ident = str(raw).strip() if raw is not None else ""
+    if not ident:
+        raise HTTPException(status_code=500, detail="Authenticated user missing id")
+    return ident
+
+
 def _cpor_resolution_plan_task_id(job: ImportJob) -> str | None:
     meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
     slot = meta.get("cpor_resolution_plan_task")
@@ -421,7 +435,7 @@ def historical_validate(
 def historical_apply(
     job_id: int,
     body: ApplyBody,
-    _user: dict = Depends(get_current_user),
+    user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     if not body.confirm:
         raise HTTPException(
@@ -431,6 +445,7 @@ def historical_apply(
                 "message": "Pass confirm=true to apply historical CPOR cases",
             },
         )
+    actor = _actor(user)
     with SessionLocal() as db:
         job = _get_job_sync(db, job_id)
         if (job.stage or "") not in ("validated", "loaded"):
@@ -446,6 +461,11 @@ def historical_apply(
         from datetime import datetime, timezone
 
         meta = dict(job.staged_metadata or {})
+        hist = dict(meta.get("cpor_historical") or {})
+        hist["apply_actor"] = actor
+        if user.get("email"):
+            hist["apply_actor_email"] = user.get("email")
+        meta["cpor_historical"] = hist
         meta["pipeline_queued_at"] = datetime.now(timezone.utc).isoformat()
         job.staged_metadata = meta
         db.commit()

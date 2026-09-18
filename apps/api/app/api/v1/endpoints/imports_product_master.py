@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
@@ -26,6 +26,7 @@ from app.services.imports.pm_field_catalog import (
     field_definitions_for_api,
     normalize_mapping_decisions,
 )
+from app.services.imports.pm_mapping_memory import PM_PRODUCT_LINES
 from app.services.imports.pm_staging import pm_staged_row_count_from_metadata
 from app.services.imports.product_master_workflow import (
     STATUS_PM_COMMIT_QUEUED,
@@ -81,6 +82,7 @@ class PMColumnMapping(BaseModel):
 
 class PMMappingBody(BaseModel):
     columns: list[PMColumnMapping]
+    product_line: str | None = None
 
 
 @router.post("/jobs")
@@ -137,6 +139,7 @@ async def get_product_master_job_state(
     job_id: int,
     db: AsyncSession = Depends(get_db),
     _user: dict = Depends(require_roles(Role.ADMIN)),
+    product_line: str | None = Query(default=None),
 ):
     try:
         job = await db.scalar(
@@ -153,7 +156,9 @@ async def get_product_master_job_state(
         headers = job.file_headers or []
         suggestions = None
         if headers and job.source:
-            suggestions = suggest_mapping_decisions(headers, job.source, job.inferred_schema)
+            suggestions = suggest_mapping_decisions(
+                headers, job.source, job.inferred_schema, product_line=product_line
+            )
         md_norm = normalize_mapping_decisions(job.mapping_decisions) if job.mapping_decisions else None
         sev_result = await db.execute(
             select(ImportRowResult.severity, func.count(ImportRowResult.id))
@@ -167,6 +172,7 @@ async def get_product_master_job_state(
         logger.warning("product_master job state DB error job_id=%s", job_id, exc_info=exc)
         raise HTTPException(status_code=503, detail=_DB_UNAVAILABLE_DETAIL) from exc
     progress = build_pm_import_progress(job, sev_counts)
+    staged_meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
     return {
         "id": job.id,
         "stage": job.stage,
@@ -185,6 +191,10 @@ async def get_product_master_job_state(
         "staged_row_count": pm_staged_row_count_from_metadata(job.staged_metadata),
         "inferred_schema": inferred_schema_for_state_payload(job.inferred_schema),
         "progress": progress,
+        "product_lines": list(PM_PRODUCT_LINES),
+        "product_line": product_line,
+        "duplicate_ean_flag": bool(staged_meta.get("duplicate_ean_flag")),
+        "duplicate_ean_count": staged_meta.get("duplicate_ean_count") or 0,
     }
 
 
@@ -201,7 +211,7 @@ async def put_product_master_mapping(
     cols = [c.model_dump(exclude_none=False) for c in body.columns]
     try:
         with SessionLocal() as sync_db:
-            save_mapping_sync(sync_db, job_id, cols)
+            save_mapping_sync(sync_db, job_id, cols, product_line=body.product_line)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     await db.refresh(job)

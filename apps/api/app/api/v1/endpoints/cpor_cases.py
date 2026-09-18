@@ -86,6 +86,12 @@ router = APIRouter()
 
 def _actor(user: dict) -> str:
     """Stable non-null identifier from the authenticated user — never a request header."""
+    email = user.get("email")
+    if isinstance(email, str) and email.strip():
+        return email.strip()
+    name = user.get("display_name")
+    if isinstance(name, str) and name.strip():
+        return name.strip()
     raw = user.get("id")
     ident = str(raw).strip() if raw is not None else ""
     if not ident:
@@ -1323,6 +1329,8 @@ def transition_case(
                     },
                 )
             case.status = "settled"
+            case.decided_by = actor
+            case.decided_at = now
         elif action == "cancel":
             case.status = "cancelled"
 

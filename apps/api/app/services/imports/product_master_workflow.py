@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
@@ -45,7 +45,11 @@ from app.services.imports.pm_dataframe_sanitize import (
     scalar_to_clean_str,
     strip_leading_descriptor_rows,
 )
-from app.services.imports.pm_mapping_memory import load_by_header_norm, merge_memory_from_pm_save
+from app.services.imports.pm_mapping_memory import (
+    headers_parity_first,
+    load_by_header_norm,
+    merge_memory_from_pm_save,
+)
 from app.services.imports.pm_suggest_mapping import suggest_pm_mapping
 from app.storage.local import get_storage_backend
 from app.utils.json_safe import to_jsonable
@@ -424,9 +428,12 @@ def suggest_mapping_decisions(
     headers: list[str],
     source: Any,
     inferred_schema: dict[str, Any] | None = None,
+    product_line: str | None = None,
 ) -> dict[str, Any]:
-    mem = load_by_header_norm(source)
-    return suggest_pm_mapping(headers, source, inferred_schema, header_memory=mem)
+    mem = load_by_header_norm(source, product_line=product_line)
+    ordered = headers_parity_first(headers, mem)
+    suggested = suggest_pm_mapping(ordered, source, inferred_schema, header_memory=mem)
+    return {h: suggested[h] for h in headers if h in suggested}
 
 
 def validate_mapping_payload(headers: list[str], columns: list[dict[str, Any]]) -> list[str]:
@@ -540,7 +547,12 @@ def infer_headers_sync(db: Session, job_id: int) -> ImportJob:
     return job
 
 
-def save_mapping_sync(db: Session, job_id: int, columns: list[dict[str, Any]]) -> ImportJob:
+def save_mapping_sync(
+    db: Session,
+    job_id: int,
+    columns: list[dict[str, Any]],
+    product_line: str | None = None,
+) -> ImportJob:
     job = db.get(ImportJob, job_id)
     if not job or job.template_slug != "product_master":
         raise ValueError("invalid job")
@@ -563,7 +575,12 @@ def save_mapping_sync(db: Session, job_id: int, columns: list[dict[str, Any]]) -
     job.validation_passed = None
     job.staged_metadata = None
     job.error_summary = None
-    merge_memory_from_pm_save(db, source_id=job.source_id, mapping_decisions=job.mapping_decisions or {})
+    merge_memory_from_pm_save(
+        db,
+        source_id=job.source_id,
+        mapping_decisions=job.mapping_decisions or {},
+        product_line=product_line,
+    )
     db.commit()
     db.refresh(job)
     return job
@@ -670,6 +687,7 @@ def validate_product_master_sync(db: Session, job_id: int, *, from_worker: bool 
 
     tech_values: list[str] = []
     market_vals: list[str] = []
+    ean_to_tech: dict[str, set[str]] = defaultdict(set)
 
     for idx, row in df.iterrows():
         tid = scalar_to_clean_str(row.get(tech_col)) or ""
@@ -759,6 +777,8 @@ def validate_product_master_sync(db: Session, job_id: int, *, from_worker: bool 
                 continue
         if ean_col:
             ev = scalar_to_clean_str(row.get(ean_col))
+            if ev and tid:
+                ean_to_tech[ev].add(tid)
             if ev and len(ev) > 32:
                 _append_pm_row_result(
                     row_results,
@@ -873,6 +893,17 @@ def validate_product_master_sync(db: Session, job_id: int, *, from_worker: bool 
     _bulk_insert_row_results(db, row_results)
 
     persist_pm_staged_row_count(job, staged_row_count)
+    meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
+    dupes = {ean: sorted(tids) for ean, tids in ean_to_tech.items() if len(tids) > 1}
+    meta["duplicate_ean_flag"] = bool(dupes)
+    if dupes:
+        # FLAG != BLOCK — sample only; never unique-index ean.
+        meta["duplicate_eans"] = {k: v for k, v in list(dupes.items())[:50]}
+        meta["duplicate_ean_count"] = len(dupes)
+    else:
+        meta.pop("duplicate_eans", None)
+        meta.pop("duplicate_ean_count", None)
+    job.staged_metadata = meta
     job.validation_passed = errors == 0
     job.stage = STAGE_PM_VALIDATED
     job.status = "validated" if errors == 0 else "validation_failed"

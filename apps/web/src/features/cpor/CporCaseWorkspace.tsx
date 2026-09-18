@@ -39,6 +39,7 @@ import {
 import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
 import { LIFECYCLE_STAGES, STAGE_LABEL } from '@/features/promotions-funding/lifecycle';
 import { SettlementConfirmDialog } from '@/features/settlement/SettlementConfirmDialog';
+import { customerPrimaryName, customerSecondaryCode } from '@/features/settlement/customerDisplay';
 import { LifecycleRail } from '@/features/workbench-ui/LifecycleRail';
 import { apiGet, apiPatch, apiPost, apiPostFormData } from '@/lib/api';
 
@@ -441,7 +442,8 @@ export function CporCaseWorkspace({ caseId, embedded = false, defaultTab = 0 }: 
   });
 
   const settleReadiness = settlement?.settle_readiness ?? data.settle_readiness;
-  const customerLabel = [data.customer_code, data.customer_name].filter(Boolean).join(' — ');
+  const customerLabel = customerPrimaryName(data.customer_name, data.customer_code);
+  const customerCode = customerSecondaryCode(data.customer_code);
   const periodLabel =
     data.window_start || data.window_end ? `${data.window_start ?? '…'} → ${data.window_end ?? '…'}` : undefined;
 
@@ -564,7 +566,8 @@ export function CporCaseWorkspace({ caseId, embedded = false, defaultTab = 0 }: 
         </Alert>
       ) : null}
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        {data.customer_code} — {data.customer_name} · {data.promotion_type} · {data.window_start} →{' '}
+        {customerLabel}
+        {customerCode ? ` · ${customerCode}` : ''} · {data.promotion_type} · {data.window_start} →{' '}
         {data.window_end}
         {data.currency_code ? ` · ${data.currency_code}` : ''}
         {data.last_comment ? ` · PM: ${data.last_comment}` : ''}

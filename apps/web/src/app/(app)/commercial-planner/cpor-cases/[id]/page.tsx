@@ -2,10 +2,10 @@
 
 import { useParams } from 'next/navigation';
 
-import { CporCaseWorkspace } from '@/features/cpor/CporCaseWorkspace';
+import { SettlementDeskLive } from '@/features/settlement/SettlementDeskLive';
 
 export default function CporCaseDetailPage() {
   const params = useParams<{ id: string }>();
   const caseId = Number(params.id);
-  return <CporCaseWorkspace caseId={caseId} />;
+  return <SettlementDeskLive caseId={caseId} />;
 }

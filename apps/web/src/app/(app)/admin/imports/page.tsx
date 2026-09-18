@@ -276,6 +276,10 @@ type PmJobState = {
   validation_passed: boolean | null;
   error_summary: string | null;
   staged_row_count?: number;
+  product_lines?: string[];
+  product_line?: string | null;
+  duplicate_ean_flag?: boolean;
+  duplicate_ean_count?: number;
   /** Present after infer; includes dtype + first-row samples per column (JSON-safe). */
   inferred_schema?: { row_count: number; columns: InferredColumn[] } | null;
   /** Server-derived progress (counts, rail, phase); refreshed while validate/commit run. */
@@ -538,6 +542,7 @@ function AdminImportsPageContent() {
   const [hlShowApplyConfirm, setHlShowApplyConfirm] = useState(false);
   const [lastApplyJobId, setLastApplyJobId] = useState<number | null>(null);
   const [pmColumns, setPmColumns] = useState<PmColumnDraft[]>([]);
+  const [pmProductLine, setPmProductLine] = useState<string | null>(null);
   const [dsiMapDraft, setDsiMapDraft] = useState<Record<string, string>>({});
   const [dsiNestedMapDraft, setDsiNestedMapDraft] = useState<Record<string, Record<string, string>>>({});
   const [dsiActiveSheetKey, setDsiActiveSheetKey] = useState<string | null>(null);
@@ -2264,7 +2269,10 @@ function AdminImportsPageContent() {
       const res = await fetch(apiUrl(`/api/v1/imports/product-master/jobs/${lastJobId}/mapping`), {
         method: 'PUT',
         headers: authHeaders(),
-        body: JSON.stringify({ columns: pmDraftsToApiColumns(pmColumns) }),
+        body: JSON.stringify({
+          columns: pmDraftsToApiColumns(pmColumns),
+          product_line: pmProductLine,
+        }),
       });
       if (!res.ok) throw new Error(await readFetchError(res));
       return res.json() as Promise<{ id: number; stage: string }>;
@@ -2337,8 +2345,14 @@ function AdminImportsPageContent() {
     isLoading: pmStateLoading,
     error: pmStateErr,
   } = useQuery({
-    queryKey: ['pm-import-state', lastJobId],
-    queryFn: ({ signal }) => apiGet<PmJobState>(`/api/v1/imports/product-master/jobs/${lastJobId}/state`, { signal }),
+    queryKey: ['pm-import-state', lastJobId, pmProductLine],
+    queryFn: ({ signal }) =>
+      apiGet<PmJobState>(
+        `/api/v1/imports/product-master/jobs/${lastJobId}/state${
+          pmProductLine ? `?product_line=${encodeURIComponent(pmProductLine)}` : ''
+        }`,
+        { signal },
+      ),
     enabled: Boolean(isPm && lastJobId != null),
     refetchInterval: (query) => {
       const externalBusy =
@@ -3200,6 +3214,36 @@ function AdminImportsPageContent() {
                 the first non-empty cells per column (up to three).
               </Typography>
             ) : null}
+            {pmJobState?.duplicate_ean_flag ? (
+              <Alert severity="warning" data-testid="pm-duplicate-ean-flag">
+                Duplicate EAN flagged on this import ({pmJobState.duplicate_ean_count ?? 0} values).
+                FLAG only — import is not blocked.
+              </Alert>
+            ) : null}
+            <Stack direction="row" flexWrap="wrap" gap={1} useFlexGap data-testid="pm-product-line-sets">
+              <Chip
+                size="small"
+                label="All lines (source default)"
+                color={pmProductLine == null ? 'primary' : 'default'}
+                variant={pmProductLine == null ? 'filled' : 'outlined'}
+                onClick={() => setPmProductLine(null)}
+              />
+              {(pmJobState.product_lines ?? []).map((line) => (
+                <Chip
+                  key={line}
+                  size="small"
+                  label={line}
+                  color={pmProductLine === line ? 'primary' : 'default'}
+                  variant={pmProductLine === line ? 'filled' : 'outlined'}
+                  onClick={() => setPmProductLine(line)}
+                  data-testid={`pm-product-line-${line}`}
+                />
+              ))}
+            </Stack>
+            <Typography variant="caption" color="text.secondary">
+              Per-line column sets nest under source mapping memory. Parity columns (item/material, EAN/UPC,
+              sales model) always map in that order. Resolution stays global.
+            </Typography>
             <CanonicalColumnMappingPanel
               testIdPrefix="pm"
               fileHeaders={pmJobState.file_headers}

@@ -79,6 +79,8 @@ def run_cpor_historical_apply_sync(
         blocked = 0
         blocked_detail: dict[str, list[str]] = {}
         file_hash = ((job.staged_metadata or {}).get("cpor_historical") or {}).get("file_sha256")
+        if actor is None:
+            actor = ((job.staged_metadata or {}).get("cpor_historical") or {}).get("apply_actor")
 
         _emit("applying_cases", "Applying historical CPOR cases", 0, total)
 

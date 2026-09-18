@@ -140,3 +140,73 @@ def test_merge_memory_updates_in_memory_object() -> None:
     )
     assert src.column_mapping_memory["by_header_norm"]["partner_sku"]["target"] == "market_sku"
     assert src.column_mapping_memory["by_header_norm"]["junk"]["disposition"] == "ignore"
+
+
+def test_merge_memory_nests_product_line_under_mapping_profile() -> None:
+    src = MagicMock()
+    src.id = 1
+    src.column_mapping_memory = {
+        "by_header_norm": {"sku": {"target": "market_sku", "confirmations": 2}},
+        "schema_version": "1",
+    }
+    db = MagicMock()
+    db.get.return_value = src
+    merge_memory_from_pm_save(
+        db,
+        source_id=1,
+        mapping_decisions={"Item": {"target": "technical_product_id"}},
+        product_line="NB",
+    )
+    profile = src.column_mapping_memory["mapping_profile"]["by_product_line"]["NB"]
+    assert profile["by_header_norm"]["item"]["target"] == "technical_product_id"
+    assert src.column_mapping_memory["by_header_norm"]["sku"]["target"] == "market_sku"
+
+
+def test_line_overlay_does_not_drop_source_wide_parity() -> None:
+    class _Tpl:
+        expected_columns: dict = {}
+
+    class _Src:
+        pass
+
+    source = _Src()
+    source.import_template = _Tpl()
+    source.expected_template = None
+    source.column_mapping_memory = {
+        "by_header_norm": {
+            "material": {"target": "technical_product_id", "confirmations": 3},
+            "ean": {"target": "barcode_ean", "confirmations": 3},
+        },
+        "mapping_profile": {
+            "by_product_line": {
+                "NB": {
+                    "by_header_norm": {
+                        "nb_family": {"target": "model_family", "confirmations": 1},
+                    }
+                }
+            }
+        },
+    }
+    from app.services.imports.pm_mapping_memory import load_by_header_norm
+
+    nb = load_by_header_norm(source, product_line="NB")
+    assert nb["material"]["target"] == "technical_product_id"
+    assert nb["ean"]["target"] == "barcode_ean"
+    assert nb["nb_family"]["target"] == "model_family"
+
+
+def test_headers_parity_first_orders_item_ean_sales_model() -> None:
+    from app.services.imports.pm_mapping_memory import headers_parity_first
+
+    mem = {
+        "sales_model": {"target": "market_sku"},
+        "ean_upc": {"target": "barcode_ean"},
+        "item_code": {"target": "technical_product_id"},
+        "colour": {"target": "color"},
+    }
+    ordered = headers_parity_first(
+        ["colour", "sales_model", "ean_upc", "item_code"],
+        mem,
+    )
+    assert ordered[:3] == ["item_code", "ean_upc", "sales_model"]
+    assert ordered[-1] == "colour"
