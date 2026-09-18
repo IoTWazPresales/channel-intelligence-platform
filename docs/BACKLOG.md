@@ -2033,7 +2033,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-30 |
+| **Status / parked** | **Done** · 2026-09-01 (N-0012 complete). The 2026-08-30 Parked stamp was doc drift vs the tree and PROGRAM.yaml. Dual ZAR+USD HQ display (2026-09-19, `8b038a1`) is additional, not a reopen. |
 | **Effort** | Medium |
 | **Source** | `docs/design/IMPLEMENTATION_PLAN.md` NS-1a; `COMMERCIAL_DOMAIN_RULES.md` §1.4; `funding-settlement-r3.html` blocked-FX pattern |
 | **Idea** | FX display honesty on settlement surfaces using **existing columns only** — no silent convert in read/display/aggregate; readiness chips reflect `roe_snapshot` / flags; USD never shown as ZAR. |
@@ -2050,7 +2050,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-30 |
+| **Status / parked** | **Done** · 2026-09-06 (N-0006 complete, retroactive). The 2026-08-30 Parked stamp was doc drift. `fx_mode` / `fx_settle_allowed` shipped (`20260902_0020`); do not re-run that migration. |
 | **Effort** | Medium |
 | **Source** | `docs/design/IMPLEMENTATION_PLAN.md` NS-1b; `COMMERCIAL_DOMAIN_RULES.md` §1.5 |
 | **Idea** | `fx_mode` (`booked` \| `floating`) on `cpor_case`; API refuses settle when FX blocked; settle preview prints FX basis. Own migration gate. |
