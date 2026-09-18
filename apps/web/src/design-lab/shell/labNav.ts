@@ -128,7 +128,7 @@ export const labDomains: LabDomain[] = [
     leaves: [
       { label: 'Promotion planner', href: '/design-lab/funding?lens=planner', what: 'Propose or author a promotion plan per customer and window: lines, waterfall economics, evidence, budget check, export in the customer’s format.', status: 'partial' },
       { label: 'Case book', href: '/design-lab/funding', what: 'Every promotion case across the lifecycle: draft → proposed → approved → live → ended → settled; claimed, settled, outstanding, blocked reasons, ageing.' },
-      { label: 'Settle a case', href: '/design-lab/funding?lens=settle', what: 'One-case settlement desk lab: CIP recon vs customer confirmation, then HQ credit and paid. Two compositions. Production route untouched.', status: 'partial' },
+      { label: 'Settle a case', href: '/design-lab/funding?lens=settle', what: 'One-case settlement desk: composition A is production at /commercial-planner/cpor-cases/[id]. B remains a two-tape study.', status: 'partial' },
       { label: 'Claims evidence', href: '/design-lab/funding?lens=claims', what: 'Imported claim evidence matched to case lines; out-of-window rows flagged.' },
       { label: 'Payments', href: '/design-lab/funding?lens=payments', what: 'Payment evidence and delivery rate (result ÷ estimate).' },
       { label: 'Plan templates', href: '/design-lab/funding?lens=templates', what: 'Customer promotion-plan workbook layouts mapped once to the canonical case model; used to read historical plans and to export new ones.', status: 'partial' },

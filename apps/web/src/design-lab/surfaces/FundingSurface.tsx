@@ -163,7 +163,7 @@ export function FundingSurface() {
                 onToggle: () => setParam('alt', 'b'),
               },
             ]}
-            summary="Lab only — production /commercial-planner/cpor-cases/[id] is untouched. Pick one composition."
+            summary="Lab composition A is the production desk. B remains a two-tape study — not shipped."
           />
           {settleAlt === 'b' ? <SettlementDeskB /> : <SettlementDeskA />}
         </Stack>
