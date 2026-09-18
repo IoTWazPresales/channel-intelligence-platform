@@ -97,6 +97,8 @@ export type SettlementDeskView = {
   evidence: SettlementDeskEvidence[];
   canSettle: boolean;
   fxSettleAllowed: boolean;
+  fxDeclared: boolean;
+  roeSnapshot: number | null;
   fxBasisLine?: string | null;
   allowedNext: string[];
 };

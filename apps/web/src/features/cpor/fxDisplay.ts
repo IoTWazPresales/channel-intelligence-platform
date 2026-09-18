@@ -154,3 +154,41 @@ export function formatGridMoney(
   if (kind === 'usd') return formatUsdMoney(amount);
   return formatLocalMoney(amount, ctx.currencyCode);
 }
+
+/** Display-only USD of a stored local amount at the booked case rate. Never a live quote. */
+export function usdAtBookedRate(
+  localAmount: number | null | undefined,
+  roeSnapshot: number | null | undefined,
+  missingRoe?: boolean,
+): number | null {
+  if (!isFxDeclared(roeSnapshot, missingRoe)) return null;
+  if (localAmount == null || Number.isNaN(localAmount)) return null;
+  const roe = Number(roeSnapshot);
+  if (!Number.isFinite(roe) || roe <= 0) return null;
+  return localAmount / roe;
+}
+
+export function formatDualMoneyLine(
+  localAmount: number | null | undefined,
+  ctx: {
+    currencyCode?: string | null;
+    roeSnapshot?: number | null;
+    missingRoe?: boolean;
+  },
+): { local: string; usdLine: string; booked: boolean } {
+  const local = formatLocalMoney(localAmount, ctx.currencyCode);
+  const booked = isFxDeclared(ctx.roeSnapshot, ctx.missingRoe);
+  if (!booked) {
+    return { local, usdLine: 'unbooked — no USD equivalent', booked: false };
+  }
+  const usd = usdAtBookedRate(localAmount, ctx.roeSnapshot, ctx.missingRoe);
+  if (usd == null) {
+    return { local, usdLine: '—', booked: true };
+  }
+  const roe = Number(ctx.roeSnapshot).toFixed(2);
+  return {
+    local,
+    usdLine: `${formatUsdMoney(usd)} at booked ${roe}`,
+    booked: true,
+  };
+}

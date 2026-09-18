@@ -76,6 +76,8 @@ function view(over: Partial<SettlementDeskView> = {}): SettlementDeskView {
     evidence: [],
     canSettle: false,
     fxSettleAllowed: true,
+    fxDeclared: true,
+    roeSnapshot: 18.78,
     allowedNext: [],
     ...over,
   };
@@ -98,6 +100,24 @@ describe('SettlementDesk', () => {
     expect(screen.getAllByText('Awaiting customer').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Disabled until HQ credit exists — not a status today')).toBeInTheDocument();
     expect(screen.queryByTestId('settlement-desk-fx-blocked')).not.toBeInTheDocument();
+    expect(screen.getByTestId('desk-cip-usd')).toHaveTextContent(/at booked 18\.78/);
+    expect(screen.queryByTestId('settlement-desk-upload')).not.toBeInTheDocument();
+    expect(screen.getByTestId('settlement-desk-primary')).toHaveTextContent('Upload customer report');
+    expect(screen.getByTestId('settlement-desk-next-cta')).toHaveTextContent('Upload customer report');
+  });
+
+  it('renders an honest unbooked USD line instead of a live conversion', () => {
+    renderWithProviders(
+      <SettlementDesk
+        view={view({
+          fxDeclared: false,
+          roeSnapshot: null,
+          cipAmount: 1878,
+        })}
+      />,
+    );
+    expect(screen.getByTestId('desk-cip-usd')).toHaveTextContent('unbooked — no USD equivalent');
+    expect(screen.getByTestId('desk-cip-usd')).not.toHaveTextContent('$');
   });
 
   it('surfaces FX blocked with the existing Alert primitive', () => {

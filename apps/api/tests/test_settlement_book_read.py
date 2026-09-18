@@ -13,6 +13,9 @@ def test_settlement_book_empty_cases():
     out = build_settlement_book_read_model(session)
     assert out["data_unavailable"] is False
     assert out["open_case_count"] == 0
+    assert out["book_total"] == 0.0
+    assert out["book_total_usd_booked"] is None
+    assert out["open_unbooked_count"] == 0
     assert out["shape_segments"]["settled_pct"] == 0.0
     assert "No open settlement cases" in out["read_line"]
     assert out["by_evidence_basis"]["none"]["case_count"] == 0

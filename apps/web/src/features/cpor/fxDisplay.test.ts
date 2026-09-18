@@ -4,9 +4,11 @@ import {
   buildFxMoneyDisplay,
   buildSettleReadinessChips,
   buildUsdBasisLine,
+  formatDualMoneyLine,
   formatGridMoney,
   formatLocalMoney,
   isFxDeclared,
+  usdAtBookedRate,
 } from './fxDisplay';
 
 describe('isFxDeclared', () => {
@@ -90,6 +92,33 @@ describe('formatGridMoney', () => {
 
   it('shows USD with symbol when FX declared', () => {
     expect(formatGridMoney(1234.56, 'usd', { roeSnapshot: 18 })).toMatch(/^\$ /);
+  });
+});
+
+describe('usdAtBookedRate / formatDualMoneyLine', () => {
+  it('does not invent USD when unbooked', () => {
+    expect(usdAtBookedRate(1878, null, true)).toBeNull();
+    expect(formatDualMoneyLine(1878, { currencyCode: 'ZAR', roeSnapshot: null, missingRoe: true })).toEqual({
+      local: formatLocalMoney(1878, 'ZAR'),
+      usdLine: 'unbooked — no USD equivalent',
+      booked: false,
+    });
+  });
+
+  it('pairs stored ZAR with booked-rate USD and does not use a live quote', () => {
+    expect(usdAtBookedRate(1878, 18.78)).toBeCloseTo(100, 6);
+    const dual = formatDualMoneyLine(1878, { currencyCode: 'ZAR', roeSnapshot: 18.78 });
+    expect(dual.booked).toBe(true);
+    expect(dual.local).toMatch(/^R /);
+    expect(dual.usdLine).toMatch(/^\$ /);
+    expect(dual.usdLine).toContain('at booked 18.78');
+  });
+
+  it('does not label a booked case with a null amount as unbooked', () => {
+    const dual = formatDualMoneyLine(null, { currencyCode: 'ZAR', roeSnapshot: 18.78 });
+    expect(dual.booked).toBe(true);
+    expect(dual.local).toBe('—');
+    expect(dual.usdLine).toBe('—');
   });
 });
 

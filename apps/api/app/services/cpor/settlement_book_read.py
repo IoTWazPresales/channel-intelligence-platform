@@ -18,7 +18,7 @@ from app.services.cpor.evidence_basis import (
     load_evidence_basis_by_case,
 )
 from app.services.cpor.payment_recon import INELIGIBLE_CASE_STATUSES, load_payment_recon_by_case_id
-from app.services.cpor.settle_readiness import build_settle_readiness, settle_fx_blocked
+from app.services.cpor.settle_readiness import build_settle_readiness, fx_declared, settle_fx_blocked
 
 
 def _empty_basis_breakdown() -> dict[str, dict[str, Any]]:
@@ -82,6 +82,11 @@ def build_settlement_book_read_model(session: Session) -> dict[str, Any]:
             "settled_amount": 0.0,
             "outstanding_amount": 0.0,
             "blocked_amount": 0.0,
+            "book_total_usd_booked": None,
+            "settled_usd_booked": None,
+            "outstanding_usd_booked": None,
+            "open_booked_count": 0,
+            "open_unbooked_count": 0,
             "shape_segments": {"settled_pct": 0.0, "outstanding_pct": 0.0, "blocked_pct": 0.0},
             "read_line": "No open settlement cases in book.",
             "concentration": [],
@@ -114,6 +119,11 @@ def build_settlement_book_read_model(session: Session) -> dict[str, Any]:
     settled_amount = 0.0
     outstanding_amount = 0.0
     blocked_amount = 0.0
+    book_total_usd_booked = 0.0
+    settled_usd_booked = 0.0
+    outstanding_usd_booked = 0.0
+    open_booked_count = 0
+    open_unbooked_count = 0
     open_case_count = 0
     concentration: list[dict[str, Any]] = []
     by_basis = _empty_basis_breakdown()
@@ -146,6 +156,18 @@ def build_settlement_book_read_model(session: Session) -> dict[str, Any]:
         if fx_blocked and outstanding > 0:
             blocked_amount += outstanding
 
+        case_booked = fx_declared(case)
+        roe = float(case.roe_snapshot) if case_booked else None
+        if case_booked and roe and roe > 0:
+            open_booked_count += 1
+            book_total_usd_booked += owed / roe
+            settled_usd_booked += paid / roe
+            outstanding_usd_booked += outstanding / roe
+            outstanding_usd: float | None = round(outstanding / roe, 2)
+        else:
+            open_unbooked_count += 1
+            outstanding_usd = None
+
         basis = basis_by.get(int(case.id), NONE)
         bucket = by_basis.setdefault(basis, empty_basis_money())
         bucket["case_count"] += 1
@@ -162,7 +184,9 @@ def build_settlement_book_read_model(session: Session) -> dict[str, Any]:
                     "customer_code": getattr(cust, "code", None),
                     "customer_name": getattr(cust, "name", None),
                     "outstanding_amount": round(outstanding, 2),
+                    "outstanding_usd": outstanding_usd,
                     "fx_blocked": fx_blocked,
+                    "fx_declared": case_booked,
                     "evidence_basis": basis,
                 }
             )
@@ -195,6 +219,11 @@ def build_settlement_book_read_model(session: Session) -> dict[str, Any]:
         "settled_amount": round(settled_amount, 2),
         "outstanding_amount": round(outstanding_amount, 2),
         "blocked_amount": round(blocked_amount, 2),
+        "book_total_usd_booked": round(book_total_usd_booked, 2) if open_booked_count else None,
+        "settled_usd_booked": round(settled_usd_booked, 2) if open_booked_count else None,
+        "outstanding_usd_booked": round(outstanding_usd_booked, 2) if open_booked_count else None,
+        "open_booked_count": open_booked_count,
+        "open_unbooked_count": open_unbooked_count,
         "shape_segments": {
             "settled_pct": settled_pct,
             "outstanding_pct": outstanding_pct,

@@ -3,7 +3,7 @@
 import { Box, Typography } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 
-import { formatLocalMoney } from '@/features/cpor/fxDisplay';
+import { DualMoney } from '@/features/cpor/DualMoney';
 import { useSettlementBook } from '@/features/settlement/useSettlementBook';
 
 export type SettlementBookRead = {
@@ -14,6 +14,11 @@ export type SettlementBookRead = {
   settled_amount: number;
   outstanding_amount: number;
   blocked_amount: number;
+  book_total_usd_booked?: number | null;
+  settled_usd_booked?: number | null;
+  outstanding_usd_booked?: number | null;
+  open_booked_count?: number;
+  open_unbooked_count?: number;
   shape_segments: { settled_pct: number; outstanding_pct: number; blocked_pct: number };
   read_line: string;
   concentration: Array<{
@@ -22,7 +27,9 @@ export type SettlementBookRead = {
     customer_code: string | null;
     customer_name: string | null;
     outstanding_amount: number;
+    outstanding_usd?: number | null;
     fx_blocked: boolean;
+    fx_declared?: boolean;
     evidence_basis?: string;
   }>;
   by_evidence_basis?: Record<
@@ -39,11 +46,53 @@ export function SettlementRegimeStrip() {
   const ccy = data?.currency_code ?? 'ZAR';
   const loading = isLoading && !data;
   const tiles = [
-    { label: 'Book total', value: loading ? 'Loading…' : data ? formatLocalMoney(data.book_total, ccy) : '—' },
-    { label: 'Settled', value: loading ? 'Loading…' : data ? formatLocalMoney(data.settled_amount, ccy) : '—' },
+    {
+      label: 'Book total',
+      value: loading ? (
+        'Loading…'
+      ) : data ? (
+        <DualMoney
+          amount={data.book_total}
+          currencyCode={ccy}
+          usdAmount={data.book_total_usd_booked ?? null}
+          missingRoe={data.book_total_usd_booked == null}
+          testId="regime-book-total"
+        />
+      ) : (
+        '—'
+      ),
+    },
+    {
+      label: 'Settled',
+      value: loading ? (
+        'Loading…'
+      ) : data ? (
+        <DualMoney
+          amount={data.settled_amount}
+          currencyCode={ccy}
+          usdAmount={data.settled_usd_booked ?? null}
+          missingRoe={data.settled_usd_booked == null}
+          testId="regime-settled"
+        />
+      ) : (
+        '—'
+      ),
+    },
     {
       label: 'Outstanding',
-      value: loading ? 'Loading…' : data ? formatLocalMoney(data.outstanding_amount, ccy) : '—',
+      value: loading ? (
+        'Loading…'
+      ) : data ? (
+        <DualMoney
+          amount={data.outstanding_amount}
+          currencyCode={ccy}
+          usdAmount={data.outstanding_usd_booked ?? null}
+          missingRoe={data.outstanding_usd_booked == null}
+          testId="regime-outstanding"
+        />
+      ) : (
+        '—'
+      ),
     },
   ];
 

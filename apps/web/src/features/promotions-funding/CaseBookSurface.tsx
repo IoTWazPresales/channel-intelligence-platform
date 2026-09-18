@@ -25,6 +25,8 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
+import { DualMoney } from '@/features/cpor/DualMoney';
+import { formatDualMoneyLine } from '@/features/cpor/fxDisplay';
 import { fmtCompact, fmtInt } from '@/features/promotions-funding/format';
 import { PaymentEvidenceOverlayPanel } from '@/features/promotions-funding/PaymentEvidenceOverlay';
 import { CaseScopeFilters } from '@/features/promotions-funding/CaseScopeFilters';
@@ -56,6 +58,11 @@ type SettlementBook = {
   settled_amount?: number;
   outstanding_amount?: number;
   blocked_amount?: number;
+  book_total_usd_booked?: number | null;
+  settled_usd_booked?: number | null;
+  outstanding_usd_booked?: number | null;
+  open_booked_count?: number;
+  open_unbooked_count?: number;
   currency_code?: string;
   by_evidence_basis?: Record<
     string,
@@ -316,15 +323,33 @@ export function CaseBookSurface() {
         field: 'owed_amount',
         headerName: 'Owed',
         type: 'rightAligned',
-        width: 120,
-        valueFormatter: (p) => fmtCompact(p.value as number | null, p.data?.currency_code ?? ccy),
+        width: 168,
+        wrapText: true,
+        autoHeight: true,
+        valueFormatter: (p) => {
+          const dual = formatDualMoneyLine(p.value as number | null, {
+            currencyCode: p.data?.currency_code ?? ccy,
+            roeSnapshot: p.data?.roe_snapshot,
+            missingRoe: Boolean(p.data?.missing_roe) || p.data?.fx_booked === false,
+          });
+          return `${dual.local} · ${dual.usdLine}`;
+        },
       },
       {
         field: 'outstanding_amount',
         headerName: 'Outstanding',
         type: 'rightAligned',
-        width: 130,
-        valueFormatter: (p) => fmtCompact(p.value as number | null, p.data?.currency_code ?? ccy),
+        width: 180,
+        wrapText: true,
+        autoHeight: true,
+        valueFormatter: (p) => {
+          const dual = formatDualMoneyLine(p.value as number | null, {
+            currencyCode: p.data?.currency_code ?? ccy,
+            roeSnapshot: p.data?.roe_snapshot,
+            missingRoe: Boolean(p.data?.missing_roe) || p.data?.fx_booked === false,
+          });
+          return `${dual.local} · ${dual.usdLine}`;
+        },
         sort: 'desc',
       },
       {
@@ -411,20 +436,49 @@ export function CaseBookSurface() {
       <HeadlineStrip columns={5}>
         <HeadlineFigure
           label="Open book total"
-          value={fmtCompact(book?.book_total, ccy)}
+          value={
+            <DualMoney
+              amount={book?.book_total}
+              currencyCode={ccy}
+              usdAmount={book?.book_total_usd_booked ?? null}
+              usdNote={
+                (book?.open_unbooked_count ?? 0) > 0
+                  ? `Σ ${book?.open_booked_count ?? 0} booked · ${book?.open_unbooked_count} unbooked have no USD`
+                  : 'Σ booked cases'
+              }
+              missingRoe={!book?.book_total_usd_booked}
+              testId="case-book-total"
+            />
+          }
           compact
-          caption={`${book?.open_case_count ?? '—'} non-settled, non-cancelled cases (draft + ended). Owed = Σ line ttl_support. Mix: claim ${book?.by_evidence_basis?.claim_evidenced?.case_count ?? 0} · attested ${book?.by_evidence_basis?.source_attested?.case_count ?? 0} · none ${book?.by_evidence_basis?.none?.case_count ?? 0}.`}
+          caption={`${book?.open_case_count ?? '—'} non-settled, non-cancelled cases (draft + ended). Owed = Σ line ttl_support. Mix: claim ${book?.by_evidence_basis?.claim_evidenced?.case_count ?? 0} · attested ${book?.by_evidence_basis?.source_attested?.case_count ?? 0} · none ${book?.by_evidence_basis?.none?.case_count ?? 0}. USD is per-case booked rates summed — never one FX on the ZAR total.`}
         />
         <HeadlineFigure
           label="Paid on the open book"
-          value={fmtCompact(book?.settled_amount, ccy)}
+          value={
+            <DualMoney
+              amount={book?.settled_amount}
+              currencyCode={ccy}
+              usdAmount={book?.settled_usd_booked ?? null}
+              missingRoe={!book?.settled_usd_booked}
+              testId="case-book-paid"
+            />
+          }
           compact
           severity="good"
           caption="Same-currency payment evidence only (paid/processed/closed). USD pending-report rows do not pay this ZAR book — R0 is expected until FX is declared."
         />
         <HeadlineFigure
           label="Outstanding"
-          value={fmtCompact(book?.outstanding_amount, ccy)}
+          value={
+            <DualMoney
+              amount={book?.outstanding_amount}
+              currencyCode={ccy}
+              usdAmount={book?.outstanding_usd_booked ?? null}
+              missingRoe={!book?.outstanding_usd_booked}
+              testId="case-book-outstanding"
+            />
+          }
           compact
           caption="Owed − paid on the open book"
         />

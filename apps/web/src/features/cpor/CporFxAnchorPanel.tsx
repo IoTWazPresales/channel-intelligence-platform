@@ -78,7 +78,7 @@ export function CporFxAnchorPanel({
       {fx.fxUndeclared ? (
         <Alert severity="warning" sx={{ mt: 1, py: 0 }} data-testid="cpor-fx-undeclared">
           FX undeclared — USD totals are not shown as case truth until a case rate of exchange is
-          booked at approval.
+          booked. The ZAR amount floats until then.
         </Alert>
       ) : fx.usdBasisLine ? (
         <Typography

@@ -5,6 +5,7 @@ import { Alert, Box, Button, Stack, Typography } from '@mui/material';
 import { useMemo, useRef, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { DualMoney } from '@/features/cpor/DualMoney';
 import { formatLocalMoney } from '@/features/cpor/fxDisplay';
 import { ScopeBar, StatusChip } from '@/features/workbench-ui/controls';
 import { DomainHeader } from '@/features/workbench-ui/DomainHeader';
@@ -71,6 +72,15 @@ export function SettlementDesk({
   );
 
   const money = (amount: number | null) => formatMoney(amount, view.currency);
+  const moneyDual = (amount: number | null, testId: string) => (
+    <DualMoney
+      amount={amount}
+      currencyCode={view.currency}
+      roeSnapshot={view.roeSnapshot}
+      missingRoe={!view.fxDeclared}
+      testId={testId}
+    />
+  );
   const paidCaption = 'Not in schema today';
   const customerEmpty = view.claimRowCount === 0;
   const raiseEnabled = view.status === 'settled' && view.hqCreditLineCount > 0 && Boolean(onRaiseHqCredit);
@@ -134,7 +144,11 @@ export function SettlementDesk({
       {
         field: 'corroboration',
         headerName: 'Corroboration',
-        width: 150,
+        minWidth: 168,
+        width: 188,
+        flex: 0.7,
+        wrapText: true,
+        autoHeight: true,
         cellRenderer: (p: { data?: SettlementDeskLine }) =>
           p.data ? (
             <StatusChip
@@ -189,15 +203,17 @@ export function SettlementDesk({
         meta={`Opened ${view.openedOn ?? '—'} · Ended ${view.endedOn ?? '—'} · ${view.currency}${codeMeta}`}
         actions={
           <>
-            <Button
-              variant="outlined"
-              size="small"
-              disabled={!onUploadCustomerReport || uploading}
-              onClick={() => fileRef.current?.click()}
-              data-testid="settlement-desk-upload"
-            >
-              {uploading ? 'Uploading…' : 'Upload customer report'}
-            </Button>
+            {primaryCta.label !== 'Upload customer report' ? (
+              <Button
+                variant="outlined"
+                size="small"
+                disabled={!onUploadCustomerReport || uploading}
+                onClick={() => fileRef.current?.click()}
+                data-testid="settlement-desk-upload"
+              >
+                {uploading ? 'Uploading…' : 'Upload customer report'}
+              </Button>
+            ) : null}
             <Button
               variant="contained"
               size="small"
@@ -237,19 +253,19 @@ export function SettlementDesk({
       <HeadlineStrip columns={5}>
         <HeadlineFigure
           label="CIP reconciled"
-          value={money(view.cipAmount)}
+          value={moneyDual(view.cipAmount, 'desk-cip')}
           compact
           caption="System-owned"
         />
         <HeadlineFigure
           label="Customer report"
-          value={customerEmpty ? '—' : money(view.customerAmount)}
+          value={customerEmpty ? '—' : moneyDual(view.customerAmount, 'desk-customer')}
           compact
           caption="Customer-owned"
         />
         <HeadlineFigure
           label="Agreed (SETTLED)"
-          value={money(view.agreedAmount)}
+          value={moneyDual(view.agreedAmount, 'desk-agreed')}
           compact
           severity={view.status === 'settled' ? 'good' : 'neutral'}
           caption={
@@ -263,7 +279,7 @@ export function SettlementDesk({
         <HeadlineFigure label="Paid" value="R0" compact caption={paidCaption} />
         <HeadlineFigure
           label="In HQ credit pack"
-          value={money(view.hqCreditAmount)}
+          value={moneyDual(view.hqCreditAmount, 'desk-hq-credit')}
           compact
           caption={`${view.hqCreditLineCount} lines`}
         />
@@ -319,7 +335,16 @@ export function SettlementDesk({
         }}
       />
 
-      <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: '2fr 1fr' } }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gap: 2,
+          gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) minmax(240px, 280px)' },
+          alignItems: 'start',
+          minWidth: 0,
+        }}
+      >
+        <Box sx={{ minWidth: 0 }}>
         <EnterpriseDataGrid<SettlementDeskLine>
           rowData={rows}
           columnDefs={columnDefs}
@@ -329,6 +354,7 @@ export function SettlementDesk({
             getRowId: (p) => p.data.id,
           }}
         />
+        </Box>
         <Panel
           title="Next action"
           subtitle="One CTA for the current stage. Finance lag does not change SETTLED."
@@ -354,13 +380,13 @@ export function SettlementDesk({
                     : 'SETTLED — amount locked · actor not stamped on this case'
                   : 'SETTLED — amount locked'
               }
-              figure={money(view.agreedAmount)}
+              figure={moneyDual(view.agreedAmount, 'desk-next-agreed')}
               severity="info"
             />
             <PanelRow
               primary={`Raise credit for ${view.distributorName || 'the named distributor'}`}
               secondary={primaryCta.reason ?? 'Selected match lines only'}
-              figure={money(view.hqCreditAmount)}
+              figure={moneyDual(view.hqCreditAmount, 'desk-next-credit')}
             />
             <PanelRow
               primary="Record payment"
@@ -398,7 +424,11 @@ export function SettlementDesk({
               />
               <HeadlineFigure
                 label="Support / unit"
-                value={selected.supportUnit == null ? '—' : money(selected.supportUnit)}
+                value={
+                  selected.supportUnit == null
+                    ? '—'
+                    : moneyDual(selected.supportUnit, 'desk-line-support')
+                }
                 compact
               />
             </HeadlineStrip>

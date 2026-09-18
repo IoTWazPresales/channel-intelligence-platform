@@ -38,6 +38,7 @@ import {
   caseScopeToQuery,
 } from '@/features/promotions-funding/caseScope';
 import { PLANNER_CAPABILITIES } from '@/features/promotions-funding/capabilities';
+import { formatDualMoneyLine } from '@/features/cpor/fxDisplay';
 import { fmtCompact, fmtInt } from '@/features/promotions-funding/format';
 import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
 import {
@@ -320,7 +321,13 @@ function PlannerList({
             >
               {isMobile ? (
                 <Stack spacing={1} data-testid="planner-record-cards">
-                  {rows.map((p) => (
+                  {rows.map((p) => {
+                    const support = formatDualMoneyLine(p.ttl_support_zar, {
+                      currencyCode: p.currency_code,
+                      roeSnapshot: p.roe_snapshot,
+                      missingRoe: Boolean(p.missing_roe) || p.fx_booked === false,
+                    });
+                    return (
                     <Card key={p.id} variant="outlined" sx={{ boxShadow: 'none' }}>
                       <CardActionArea onClick={() => onOpen(p.id)}>
                         <CardContent sx={{ py: 1.25, '&:last-child': { pb: 1.25 } }}>
@@ -343,13 +350,16 @@ function PlannerList({
                               Units <b>{fmtInt(p.estimate_qty_sum)}</b>
                             </Typography>
                             <Typography variant="caption">
-                              Support <b>{fmtCompact(p.ttl_support_zar, p.currency_code)}</b>
+                              Support <b>{support.local}</b>
+                              {' · '}
+                              {support.usdLine}
                             </Typography>
                           </Stack>
                         </CardContent>
                       </CardActionArea>
                     </Card>
-                  ))}
+                    );
+                  })}
                 </Stack>
               ) : (
                 <PlanGrid rows={rows} onOpen={onOpen} />
@@ -546,8 +556,17 @@ function PlanGrid({ rows, onOpen }: { rows: CporCaseListRow[]; onOpen: (id: numb
         field: 'ttl_support_zar',
         headerName: 'Support',
         type: 'rightAligned',
-        width: 120,
-        valueFormatter: (p) => fmtCompact(p.value as number | null, p.data?.currency_code),
+        width: 180,
+        wrapText: true,
+        autoHeight: true,
+        valueFormatter: (p) => {
+          const dual = formatDualMoneyLine(p.value as number | null, {
+            currencyCode: p.data?.currency_code,
+            roeSnapshot: p.data?.roe_snapshot,
+            missingRoe: Boolean(p.data?.missing_roe) || p.data?.fx_booked === false,
+          });
+          return `${dual.local} · ${dual.usdLine}`;
+        },
       },
       {
         colId: 'on_shelf',
@@ -624,8 +643,12 @@ function CreateCaseDialog({
   });
   useEffect(() => {
     if (!open) return;
+    if (fxToday?.fetch_failed) {
+      setFxRate('');
+      return;
+    }
     if (fxToday?.rate != null) setFxRate(String(fxToday.rate));
-  }, [open, fxToday?.rate]);
+  }, [open, fxToday?.rate, fxToday?.fetch_failed]);
   const create = useMutation({
     mutationFn: () =>
       apiPost<{ id: number }>('/api/v1/cpor/cases', {
@@ -676,8 +699,8 @@ function CreateCaseDialog({
             fullWidth
             helperText={
               fxToday?.fetch_failed
-                ? `Fetch failed — last known ${fxToday.source}${fxToday.is_fallback ? ' (fallback)' : ''}`
-                : `Booked mode. Rate is suggested now and books at approval.${fxToday?.rate_date ? ` Source date ${fxToday.rate_date}.` : ''}`
+                ? 'Fetch failed — this case will be created unbooked and flagged. A typed rate is an operator book, not a silent substitute.'
+                : `This rate books at creation and does not move later.${fxToday?.rate_date ? ` Source date ${fxToday.rate_date}.` : ''}`
             }
             inputProps={{ 'data-testid': 'create-case-fx-rate', step: '0.01' }}
           />

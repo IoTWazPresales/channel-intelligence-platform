@@ -66,6 +66,9 @@ export function SettlementBookRead() {
               {row.customer_code ?? '—'}
               {' · '}
               {formatLocalMoney(row.outstanding_amount, ccy)}
+              {row.outstanding_usd != null
+                ? ` · ${formatLocalMoney(row.outstanding_usd, 'USD')} at booked case rate`
+                : ' · unbooked — no USD equivalent'}
               {row.fx_blocked ? ' · FX blocked' : ''}
               {row.evidence_basis ? ` · ${evidenceBasisLabel(row.evidence_basis)}` : ''}
             </Typography>

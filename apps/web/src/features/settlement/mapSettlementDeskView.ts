@@ -154,6 +154,11 @@ export function mapSettlementDeskView(
     fxSettleAllowed:
       (settlement.settle_readiness?.fx_settle_allowed ?? detail.settle_readiness?.fx_settle_allowed) !==
       false,
+    fxDeclared: Boolean(
+      settlement.settle_readiness?.fx_declared ?? detail.settle_readiness?.fx_declared,
+    ),
+    roeSnapshot:
+      settlement.settle_readiness?.roe_snapshot ?? detail.settle_readiness?.roe_snapshot ?? null,
     fxBasisLine:
       settlement.settle_readiness?.fx_basis_line ?? detail.settle_readiness?.fx_basis_line ?? null,
     allowedNext: detail.allowed_next ?? [],

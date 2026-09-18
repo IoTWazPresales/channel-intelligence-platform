@@ -31,6 +31,7 @@ QUOTE_PAIR = "USDZAR"
 SOURCE_FRANKFURTER = "frankfurter.ecb"
 SOURCE_LAST_KNOWN = "last_known"
 SOURCE_OPERATOR = "operator"
+SOURCE_FETCH_FAILED = "fetch_failed"
 
 FRANKFURTER_LATEST = "https://api.frankfurter.app/latest?from=USD&to=ZAR"
 FRANKFURTER_ON_DATE = "https://api.frankfurter.app/{rate_date}?from=USD&to=ZAR"
@@ -168,44 +169,48 @@ def upsert_daily_rate(
 
 
 def ensure_rate_for_date(session: Session, on_date: date) -> RateQuote:
-    """Fetch and store the ECB rate for ``on_date`` (or last published on/before it).
+    """Fetch the ECB rate for ``on_date``. Persist when the table is writable.
 
-    Never raises. On fetch failure, returns last known and flags fallback.
+    Never raises. HTTP failure returns no rate (FLAG, do not substitute last-known).
+    Persist failure still returns the fetched rate so case create is not blocked.
     """
     try:
         published, rate = fetch_frankfurter(on_date=on_date)
-        row = upsert_daily_rate(
-            session,
-            rate_date=published,
-            rate=rate,
-            source=SOURCE_FRANKFURTER,
-            is_fallback=False,
-        )
-        session.flush()
-        return RateQuote(
-            rate=float(row.rate),
-            rate_date=row.rate_date,
-            source=row.source,
-            is_fallback=False,
-            fetch_failed=False,
-        )
     except (urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError, OSError) as exc:
         logger.warning("fx fetch failed for %s: %s", on_date.isoformat(), exc)
-        known = load_rate_on_or_before(session, on_date)
-        if known is None:
-            return RateQuote(
-                rate=None,
-                rate_date=None,
-                source=SOURCE_LAST_KNOWN,
-                is_fallback=True,
-                fetch_failed=True,
-            )
         return RateQuote(
-            rate=float(known.rate),
-            rate_date=known.rate_date,
-            source=SOURCE_LAST_KNOWN,
+            rate=None,
+            rate_date=None,
+            source=SOURCE_FETCH_FAILED,
             is_fallback=True,
             fetch_failed=True,
+        )
+
+    try:
+        with session.begin_nested():
+            row = upsert_daily_rate(
+                session,
+                rate_date=published,
+                rate=rate,
+                source=SOURCE_FRANKFURTER,
+                is_fallback=False,
+            )
+            session.flush()
+            return RateQuote(
+                rate=float(row.rate),
+                rate_date=row.rate_date,
+                source=row.source,
+                is_fallback=False,
+                fetch_failed=False,
+            )
+    except Exception as exc:
+        logger.warning("fx persist failed for %s: %s", on_date.isoformat(), exc)
+        return RateQuote(
+            rate=rate,
+            rate_date=published,
+            source=SOURCE_FRANKFURTER,
+            is_fallback=False,
+            fetch_failed=False,
         )
 
 
@@ -261,37 +266,51 @@ def apply_create_fx(
     proposed_override: float | None,
     explicit_roe: float | None,
 ) -> RateQuote:
-    """Seed proposed rate on create. Does not declare unless explicit_roe is already on the case."""
-    if not getattr(case, "fx_mode", None):
-        case.fx_mode = "booked"
-    elif case.fx_mode not in FX_MODES:
-        case.fx_mode = "booked"
+    """Seed FX at create. Book when a web rate or operator override is available.
 
+    Fetch failure never blocks: the case is created unbooked and flagged.
+    Last-known is not substituted as if it were today's rate.
+    """
     override = _positive_rate(proposed_override)
     explicit = _positive_rate(explicit_roe)
     suggestion = ensure_today_rate(session)
 
     if override is not None:
         set_proposed(case, override, actor, source=SOURCE_OPERATOR)
-    elif suggestion.rate is not None:
+        book_rate(case, override, actor)
+        return suggestion
+
+    live = (
+        suggestion.rate is not None
+        and not bool(getattr(suggestion, "fetch_failed", False))
+        and not bool(getattr(suggestion, "is_fallback", False))
+    )
+    if live:
         set_proposed(
             case,
-            suggestion.rate,
+            suggestion.rate,  # type: ignore[arg-type]
             actor,
-            source=SOURCE_LAST_KNOWN if suggestion.is_fallback else SOURCE_FRANKFURTER,
+            source=SOURCE_FRANKFURTER,
         )
-
-    if explicit is not None:
-        # Historical / back-compat create-with-ROE: keep declared snapshot, seed proposed if empty.
-        if _positive_rate(getattr(case, "fx_proposed_rate", None)) is None:
-            set_proposed(case, explicit, actor, source=SOURCE_OPERATOR)
-        if fx_mode_valid(case):
-            case.fx_declared_at = _now()
-            case.fx_declared_by = actor
+        book_rate(case, suggestion.rate, actor)  # type: ignore[arg-type]
     else:
+        case.fx_proposed_rate = None
+        case.fx_proposed_at = _now()
+        case.fx_proposed_by = actor
+        case.fx_proposed_source = (
+            SOURCE_FETCH_FAILED
+            if bool(getattr(suggestion, "fetch_failed", False))
+            else SOURCE_LAST_KNOWN
+        )
         case.roe_snapshot = None
         case.fx_declared_at = None
         case.fx_declared_by = None
+        case.fx_mode = None
+
+    if explicit is not None:
+        if _positive_rate(getattr(case, "fx_proposed_rate", None)) is None:
+            set_proposed(case, explicit, actor, source=SOURCE_OPERATOR)
+        book_rate(case, explicit, actor)
 
     return suggestion
 

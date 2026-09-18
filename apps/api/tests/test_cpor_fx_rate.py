@@ -118,27 +118,46 @@ def test_confirm_already_declared_refuses():
     assert float(case.roe_snapshot) == 18.0
 
 
-def test_apply_create_fx_does_not_declare_suggestion():
+def test_apply_create_fx_books_live_web_rate():
     case = _case(fx_mode=None)
     session = MagicMock()
-    quote = SimpleNamespace(rate=18.22, is_fallback=False, source=SOURCE_FRANKFURTER)
+    quote = SimpleNamespace(
+        rate=18.22, is_fallback=False, source=SOURCE_FRANKFURTER, fetch_failed=False
+    )
     with patch("app.services.cpor.fx_rate.ensure_today_rate", return_value=quote):
         apply_create_fx(session, case, actor="warren", proposed_override=None, explicit_roe=None)
     assert case.fx_mode == "booked"
     assert float(case.fx_proposed_rate) == 18.22
-    assert case.roe_snapshot is None
-    assert case.fx_declared_at is None
+    assert float(case.roe_snapshot) == 18.22
+    assert case.fx_declared_by == "warren"
 
 
-def test_apply_create_fx_operator_override_source():
-    case = _case()
+def test_apply_create_fx_operator_override_books():
+    case = _case(fx_mode=None)
     session = MagicMock()
-    quote = SimpleNamespace(rate=18.22, is_fallback=False, source=SOURCE_FRANKFURTER)
+    quote = SimpleNamespace(
+        rate=18.22, is_fallback=False, source=SOURCE_FRANKFURTER, fetch_failed=False
+    )
     with patch("app.services.cpor.fx_rate.ensure_today_rate", return_value=quote):
         apply_create_fx(session, case, actor="warren", proposed_override=18.5, explicit_roe=None)
     assert float(case.fx_proposed_rate) == 18.5
     assert case.fx_proposed_source == SOURCE_OPERATOR
+    assert float(case.roe_snapshot) == 18.5
+    assert case.fx_declared_by == "warren"
+
+
+def test_apply_create_fx_fetch_fail_stays_unbooked_without_last_known():
+    case = _case(fx_mode="booked", roe_snapshot=None)
+    session = MagicMock()
+    quote = SimpleNamespace(
+        rate=18.01, is_fallback=True, source=SOURCE_LAST_KNOWN, fetch_failed=True
+    )
+    with patch("app.services.cpor.fx_rate.ensure_today_rate", return_value=quote):
+        apply_create_fx(session, case, actor="warren", proposed_override=None, explicit_roe=None)
     assert case.roe_snapshot is None
+    assert case.fx_mode is None
+    assert case.fx_proposed_rate is None
+    assert case.fx_proposed_source == "fetch_failed"
 
 
 def test_apply_create_fx_explicit_roe_stays_declared():
