@@ -25,10 +25,12 @@ import { Panel, PanelRow } from '../primitives/Panel';
 import { labDomains } from '../shell/labNav';
 import { PlanTemplatesSurface } from './PlanTemplatesSurface';
 import { PromotionPlannerSurface } from './PromotionPlannerSurface';
+import { SettlementDeskA } from './SettlementDeskA';
+import { SettlementDeskB } from './SettlementDeskB';
 
 const tone = (s: CaseStatus) => (s === 'blocked' ? 'danger' : s === 'evidence_pending' ? 'warning' : s === 'open' ? 'info' : s === 'settled' ? 'success' : 'neutral');
 
-type Lens = 'planner' | 'book' | 'claims' | 'payments' | 'templates' | 'pricing' | 'budgets';
+type Lens = 'planner' | 'book' | 'settle' | 'claims' | 'payments' | 'templates' | 'pricing' | 'budgets';
 
 /** Settlement-side statuses sit in the ended → settled half of the one promotion lifecycle. */
 const stageForCase = (s: CaseStatus): PlanStage => (s === 'settled' ? 'settled' : 'ended');
@@ -39,6 +41,7 @@ export function FundingSurface() {
   const router = useRouter();
   const search = useSearchParams();
   const lens = (search.get('lens') as Lens) || 'book';
+  const settleAlt = search.get('alt') === 'b' ? 'b' : 'a';
   const status = search.get('status') as CaseStatus | null;
   const sku = search.get('sku');
   const setParams = useCallback(
@@ -132,6 +135,7 @@ export function FundingSurface() {
         lenses={[
           { value: 'planner', label: 'Promotion planner', count: (planningCounts.draft ?? 0) + (planningCounts.proposed ?? 0) + (planningCounts.approved ?? 0) },
           { value: 'book', label: 'Case book', count: fundingBook.cases },
+          { value: 'settle', label: 'Settle a case' },
           { value: 'claims', label: 'Claims evidence' },
           { value: 'payments', label: 'Payments' },
           { value: 'templates', label: 'Plan templates' },
@@ -142,6 +146,28 @@ export function FundingSurface() {
 
       {lens === 'planner' ? <PromotionPlannerSurface /> : null}
       {lens === 'templates' ? <PlanTemplatesSurface /> : null}
+      {lens === 'settle' ? (
+        <Stack spacing={1} sx={{ mt: 1 }} data-testid="settlement-desk-lab">
+          <ScopeBar
+            chips={[
+              {
+                key: 'a',
+                label: 'A · Ken’s next-action desk',
+                active: settleAlt === 'a',
+                onToggle: () => setParam('alt', 'a'),
+              },
+              {
+                key: 'b',
+                label: 'B · Two-tape corroboration',
+                active: settleAlt === 'b',
+                onToggle: () => setParam('alt', 'b'),
+              },
+            ]}
+            summary="Lab only — production /commercial-planner/cpor-cases/[id] is untouched. Pick one composition."
+          />
+          {settleAlt === 'b' ? <SettlementDeskB /> : <SettlementDeskA />}
+        </Stack>
+      ) : null}
 
       {lens === 'book' ? (
         <Stack spacing={2} sx={{ mt: 2 }}>
