@@ -38,6 +38,7 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PlanningChrome } from '@/features/planning/PlanningChrome';
+import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { AddProductSetDialog } from '@/features/commercial-planner/AddProductSetDialog';
 import { IntelligentAddDialog } from '@/features/commercial-planner/IntelligentAddDialog';
 import { ColumnPickerDialog, type ColumnMetadata } from '@/features/workbench-ui/ColumnPickerDialog';
@@ -615,6 +616,7 @@ function lineEntitySummary(line: PlanLine | undefined): string {
 
 export default function CommercialPlannerPage() {
   const qc = useQueryClient();
+  const lineIdent = useLineIdentifierPreference();
   const [tab, setTab] = useState(0);
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
   const [addPlanOpen, setAddPlanOpen] = useState(false);
@@ -1298,12 +1300,13 @@ export default function CommercialPlannerPage() {
       },
       {
         colId: 'product_sku_display',
-        headerName: 'SKU',
+        headerName: lineIdent.header,
         minWidth: 100,
         valueGetter: (p) => {
           const d = p.data;
           if (!d) return '';
-          return d.product_sku?.trim() ? d.product_sku : `#${d.product_id}`;
+          const label = lineIdent.value(d.product_sku, d.product_sales_model_name);
+          return label !== '—' ? label : `#${d.product_id}`;
         },
       },
       {
@@ -1676,7 +1679,7 @@ export default function CommercialPlannerPage() {
           ) : null,
       },
     ],
-    [deleteLine, openEditLine, optionalSpecKeyVisible, optionalVisible, planCurrencyLabel, economicsSummaryCcy]
+    [deleteLine, openEditLine, optionalSpecKeyVisible, optionalVisible, planCurrencyLabel, economicsSummaryCcy, lineIdent]
   );
 
   const lineGrid: GridOptions<PlanLine> = useMemo(
@@ -1706,7 +1709,7 @@ export default function CommercialPlannerPage() {
 
       {/* Product / entity identity */}
       <Typography variant="body2" fontWeight={600} sx={{ mb: 0.25 }}>
-        {selectedLine.product_sku ?? '—'}
+        {lineIdent.value(selectedLine.product_sku, selectedLine.product_sales_model_name)}
         {selectedLine.product_name ? ` — ${selectedLine.product_name}` : ''}
       </Typography>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.25 }}>
