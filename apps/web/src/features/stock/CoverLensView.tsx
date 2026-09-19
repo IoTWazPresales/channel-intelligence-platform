@@ -9,6 +9,7 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
+import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { CategoryBars, ProportionBar, TrendChart } from '@/features/workbench-ui/charts';
 import { ScopeBar, StatusChip } from '@/features/workbench-ui/controls';
 import { EntityContextPanel, KeyValueList } from '@/features/workbench-ui/EntityContextPanel';
@@ -33,6 +34,7 @@ type CoverItem = {
   distributor_name: string;
   product_id: number;
   sku: string;
+  sales_model_name?: string | null;
   product_name: string;
   family: string;
   weeks_of_cover: number | null;
@@ -96,6 +98,7 @@ function useParam(key: string) {
 export function CoverLensView() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const lineId = useLineIdentifierPreference();
   const [status, setStatus] = useParam('status');
   const [distributor, setDistributor] = useParam('distributor');
   const [family, setFamily] = useParam('family');
@@ -141,7 +144,7 @@ export function CoverLensView() {
                 {p.data.product_name}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                {p.data.sku} · {p.data.family}
+                {lineId.value(p.data.sku, p.data.sales_model_name)} · {p.data.family}
               </Typography>
             </Box>
           ) : null,
@@ -203,7 +206,7 @@ export function CoverLensView() {
         },
       },
     ],
-    [theme],
+    [theme, lineId],
   );
 
   const clear = () => {
@@ -444,7 +447,7 @@ export function CoverLensView() {
         onClose={() => setSelected(null)}
         kicker="Product"
         title={selected?.product_name ?? ''}
-        subtitle={selected ? `${selected.sku} · ${selected.family}` : undefined}
+        subtitle={selected ? `${lineId.value(selected.sku, selected.sales_model_name)} · ${selected.family}` : undefined}
         figures={
           selected ? (
             <HeadlineStrip columns={3}>
@@ -471,7 +474,7 @@ export function CoverLensView() {
             ? [
                 { label: 'Plan lines for this product', href: `/lineup/cases?product=${selected.product_id}`, hint: 'Planning › Lineup cases' },
                 { label: 'Open inbound shipments', href: `/supply/shipments`, hint: 'Supply & Inbound › Shipments' },
-                { label: 'Promotion cases on this SKU', href: '/commercial-planner/cpor-cases', hint: 'Promotions & Funding › Case book' },
+                { label: 'Promotion cases on this line', href: '/commercial-planner/cpor-cases', hint: 'Promotions & Funding › Case book' },
                 { label: 'Retail listings & shelf price', href: '/listing-capture?tab=registry', hint: 'Market & Listings › Monitored listings' },
                 { label: 'Competitor products', href: '/competition?tab=mappings', hint: 'Market & Listings › Competitor mappings' },
                 { label: 'Product master record', href: `/admin/products`, hint: 'Data & Stewardship › Products' },

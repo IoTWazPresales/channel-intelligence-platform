@@ -7,6 +7,7 @@ import type { ColDef } from 'ag-grid-community';
 import { useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { apiGet } from '@/lib/api';
 
 import { depthAtLeast, type IntelDepth } from './intelDepth';
@@ -18,6 +19,7 @@ type InvRow = {
   distributor_name: string | null;
   product_id: number;
   sku: string | null;
+  sales_model_name: string | null;
   product_name: string | null;
   snapshot_date?: string | null;
   reported_soh: number;
@@ -39,6 +41,7 @@ type InvRow = {
 
 export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
   const [distributorPick, setDistributorPick] = useState<DistHit | null>(null);
+  const lineId = useLineIdentifierPreference();
 
   const { data: filterOptions } = useQuery({
     queryKey: ['sellout-filter-options'],
@@ -59,7 +62,12 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
   const invCols = useMemo<ColDef<InvRow>[]>(() => {
     const cols: ColDef<InvRow>[] = [
       { field: 'product_name', headerName: 'Product', flex: 1, minWidth: 160 },
-      { field: 'sku', headerName: 'SKU', minWidth: 120 },
+      {
+        colId: 'line_identifier',
+        headerName: lineId.header,
+        minWidth: 120,
+        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.sales_model_name),
+      },
       {
         field: 'reported_soh',
         headerName: 'Reported SOH',
@@ -143,7 +151,7 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
       );
     }
     return cols;
-  }, [operational, strategic]);
+  }, [operational, strategic, lineId]);
 
   return (
     <Box>

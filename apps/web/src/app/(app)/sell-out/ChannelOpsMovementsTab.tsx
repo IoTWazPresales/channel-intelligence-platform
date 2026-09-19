@@ -6,6 +6,7 @@ import type { ColDef } from 'ag-grid-community';
 import { useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { apiGet } from '@/lib/api';
 
 import { depthAtLeast, type IntelDepth } from './intelDepth';
@@ -15,6 +16,7 @@ type DistHit = { id: number; distributor_code: string; distributor_name: string 
 type MovementRow = {
   product_id: number | null;
   sku: string | null;
+  sales_model_name: string | null;
   product_name: string | null;
   order_no: string | null;
   delivery_no: string | null;
@@ -24,8 +26,17 @@ type MovementRow = {
   distributor_name: string | null;
 };
 
+type ProductTotal = {
+  productId: number;
+  sku: string;
+  sales_model_name: string;
+  name: string;
+  inbound: number;
+};
+
 export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
   const [distributorPick, setDistributorPick] = useState<DistHit | null>(null);
+  const lineId = useLineIdentifierPreference();
   const distId = distributorPick?.id;
 
   const { data: filterOptions } = useQuery({
@@ -46,25 +57,32 @@ export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
 
   const productTotals = useMemo(() => {
     if (!depthAtLeast(depth, 'strategic') || !data?.items?.length) return [];
-    const map = new Map<number, { sku: string; name: string; inbound: number }>();
+    const map = new Map<number, ProductTotal>();
     for (const r of data.items) {
       if (r.product_id == null) continue;
       const cur = map.get(r.product_id) ?? {
-        sku: r.sku ?? '—',
+        productId: r.product_id,
+        sku: r.sku ?? '',
+        sales_model_name: r.sales_model_name ?? '',
         name: r.product_name ?? '—',
         inbound: 0,
       };
       cur.inbound += r.units_shipped ?? 0;
       map.set(r.product_id, cur);
     }
-    return [...map.entries()].map(([productId, v]) => ({ productId, ...v }));
+    return [...map.values()];
   }, [data?.items, depth]);
 
   const movementCols = useMemo<ColDef<MovementRow>[]>(
     () => [
       { field: 'ship_date', headerName: 'Ship date', minWidth: 120, valueFormatter: (p) => p.value ?? '—' },
       { field: 'product_name', headerName: 'Product', flex: 1, minWidth: 140, valueFormatter: (p) => p.value ?? '—' },
-      { field: 'sku', headerName: 'SKU', minWidth: 110, valueFormatter: (p) => p.value ?? '—' },
+      {
+        colId: 'line_identifier',
+        headerName: lineId.header,
+        minWidth: 110,
+        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.sales_model_name),
+      },
       { field: 'order_no', headerName: 'Order no', minWidth: 120, valueFormatter: (p) => p.value ?? '—' },
       { field: 'delivery_no', headerName: 'Delivery no', minWidth: 120, valueFormatter: (p) => p.value ?? '—' },
       {
@@ -76,11 +94,16 @@ export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
       },
       { field: 'line_state', headerName: 'Status', minWidth: 110 },
     ],
-    [],
+    [lineId],
   );
-  const totalCols = useMemo<ColDef<{ productId: number; sku: string; name: string; inbound: number }>[]>(
+  const totalCols = useMemo<ColDef<ProductTotal>[]>(
     () => [
-      { field: 'sku', headerName: 'SKU', minWidth: 110 },
+      {
+        colId: 'line_identifier',
+        headerName: lineId.header,
+        minWidth: 110,
+        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.sales_model_name),
+      },
       { field: 'name', headerName: 'Product', flex: 1, minWidth: 160 },
       {
         field: 'inbound',
@@ -90,7 +113,7 @@ export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
         valueFormatter: (p) => Number(p.value ?? 0).toLocaleString(),
       },
     ],
-    [],
+    [lineId],
   );
 
   return (
