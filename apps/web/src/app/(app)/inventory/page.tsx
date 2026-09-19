@@ -12,12 +12,14 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { navPageChrome } from '@/features/shell/navPageChrome';
+import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
 type Row = {
   id: number;
   product_sku: string | null;
+  product_sales_model_name: string | null;
   customer_code: string | null;
   on_hand_units: number;
   on_order_units: number;
@@ -57,6 +59,7 @@ function parseInventoryPaste(text: string): InvPasteRow[] {
 
 export default function InventoryPage() {
   const qc = useQueryClient();
+  const lineId = useLineIdentifierPreference();
   const [pasteOpen, setPasteOpen] = useState(false);
   const [paste, setPaste] = useState('');
   const [addOpen, setAddOpen] = useState(false);
@@ -112,14 +115,20 @@ export default function InventoryPage() {
   const colDefs: ColDef<Row>[] = useMemo(() => {
     const busyDel = delRow.isPending || clearAll.isPending;
     return [
-      { field: 'product_sku', headerName: 'SKU', pinned: 'left', minWidth: 140 },
+      {
+        colId: 'line_identifier',
+        headerName: lineId.header,
+        pinned: 'left',
+        minWidth: 140,
+        valueGetter: (p) => lineId.value(p.data?.product_sku, p.data?.product_sales_model_name),
+      },
       { field: 'customer_code', headerName: 'Customer', minWidth: 120 },
       { field: 'on_hand_units', headerName: 'On hand', type: 'numericColumn' },
       { field: 'on_order_units', headerName: 'On order', type: 'numericColumn' },
       { field: 'as_of_date', headerName: 'As of', minWidth: 120 },
       gridDeleteColumn<Row>((id) => void delRow.mutate(id), { busy: busyDel }),
     ];
-  }, [delRow, delRow.isPending, clearAll.isPending]);
+  }, [delRow, delRow.isPending, clearAll.isPending, lineId]);
 
   const rows = data ?? [];
   const busy = bulk.isPending || addOne.isPending || delRow.isPending || clearAll.isPending;

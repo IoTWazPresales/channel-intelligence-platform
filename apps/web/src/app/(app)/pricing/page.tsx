@@ -23,12 +23,14 @@ import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
+import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
 type PriceRow = {
   id: number;
   sku: string | null;
+  sales_model_name: string | null;
   net_price: number;
   list_price: number;
   effective_date: string;
@@ -37,6 +39,7 @@ type PriceRow = {
 type RecRow = {
   id: number;
   sku: string | null;
+  sales_model_name: string | null;
   suggested_state: string;
   explanation_summary: string | null;
   confidence: string | null;
@@ -81,6 +84,7 @@ function parsePricingPaste(text: string): PricingPasteRow[] {
 
 export default function PricingPage() {
   const qc = useQueryClient();
+  const lineId = useLineIdentifierPreference();
   const [tab, setTab] = useState(0);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [paste, setPaste] = useState('');
@@ -167,24 +171,33 @@ export default function PricingPage() {
   const factCols: ColDef<PriceRow>[] = useMemo(() => {
     const busyDel = delFact.isPending || clearFacts.isPending;
     return [
-      { field: 'sku', headerName: 'SKU', pinned: 'left' },
+      {
+        colId: 'line_identifier',
+        headerName: lineId.header,
+        pinned: 'left',
+        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.sales_model_name),
+      },
       { field: 'net_price', headerName: 'Net', type: 'numericColumn' },
       { field: 'list_price', headerName: 'List', type: 'numericColumn' },
       { field: 'effective_date', headerName: 'Effective' },
       gridDeleteColumn<PriceRow>((id) => void delFact.mutate(id), { busy: busyDel }),
     ];
-  }, [delFact, delFact.isPending, clearFacts.isPending]);
+  }, [delFact, delFact.isPending, clearFacts.isPending, lineId]);
 
   const recCols: ColDef<RecRow>[] = useMemo(() => {
     const busyDel = delRec.isPending || clearRecs.isPending;
     return [
-      { field: 'sku', headerName: 'SKU' },
+      {
+        colId: 'line_identifier',
+        headerName: lineId.header,
+        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.sales_model_name),
+      },
       { field: 'suggested_state', headerName: 'State' },
       { field: 'explanation_summary', headerName: 'Explanation', flex: 1, minWidth: 240 },
       { field: 'confidence', headerName: 'Confidence' },
       gridDeleteColumn<RecRow>((id) => void delRec.mutate(id), { busy: busyDel }),
     ];
-  }, [delRec, delRec.isPending, clearRecs.isPending]);
+  }, [delRec, delRec.isPending, clearRecs.isPending, lineId]);
 
   const factRows = facts ?? [];
   const recRows = recs ?? [];

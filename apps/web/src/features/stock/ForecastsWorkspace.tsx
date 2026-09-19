@@ -11,12 +11,14 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
+import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
 type Row = {
   id: number;
   sku: string | null;
+  sales_model_name: string | null;
   period_start: string;
   forecast_units: number;
   confidence_placeholder: string | null;
@@ -77,6 +79,7 @@ function parseForecastPaste(text: string): ForecastPasteRow[] {
 
 export function ForecastsWorkspace() {
   const qc = useQueryClient();
+  const lineId = useLineIdentifierPreference();
   const [pasteOpen, setPasteOpen] = useState(false);
   const [paste, setPaste] = useState('');
   const [addOpen, setAddOpen] = useState(false);
@@ -175,7 +178,12 @@ export function ForecastsWorkspace() {
   const colDefs: ColDef<Row>[] = useMemo(() => {
     const busyDel = delRow.isPending || clearAll.isPending;
     return [
-      { field: 'sku', headerName: 'SKU', pinned: 'left' },
+      {
+        colId: 'line_identifier',
+        headerName: lineId.header,
+        pinned: 'left',
+        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.sales_model_name),
+      },
       { field: 'period_start', headerName: 'Period' },
       { field: 'forecast_units', headerName: 'Units', type: 'numericColumn' },
       { field: 'method', headerName: 'Method' },
@@ -197,7 +205,7 @@ export function ForecastsWorkspace() {
       { field: 'is_override', headerName: 'Override' },
       gridDeleteColumn<Row>((id) => void delRow.mutate(id), { busy: busyDel }),
     ];
-  }, [delRow, delRow.isPending, clearAll.isPending]);
+  }, [delRow, delRow.isPending, clearAll.isPending, lineId]);
 
   const rows = data ?? [];
   const busy = bulk.isPending || addOne.isPending || delRow.isPending || clearAll.isPending || computeHistory.isPending;
