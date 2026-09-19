@@ -10,12 +10,14 @@ import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PlanningChrome } from '@/features/planning/PlanningChrome';
+import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
 type Row = {
   id: number;
   sku: string | null;
+  sales_model_name: string | null;
   lifecycle_phase: string;
   whitespace_flag: boolean;
   overlap_flag: boolean;
@@ -24,6 +26,7 @@ type Row = {
 
 export default function RoadmapPage() {
   const qc = useQueryClient();
+  const lineId = useLineIdentifierPreference();
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['roadmap'],
     queryFn: ({ signal }) => apiGet<Row[]>('/api/v1/roadmap', { signal }),
@@ -41,14 +44,19 @@ export default function RoadmapPage() {
   const colDefs: ColDef<Row>[] = useMemo(() => {
     const busyDel = delRow.isPending || clearAll.isPending;
     return [
-      { field: 'sku', headerName: 'SKU', pinned: 'left' },
+      {
+        colId: 'line_identifier',
+        headerName: lineId.header,
+        pinned: 'left',
+        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.sales_model_name),
+      },
       { field: 'lifecycle_phase', headerName: 'Phase' },
       { field: 'whitespace_flag', headerName: 'Whitespace' },
       { field: 'overlap_flag', headerName: 'Overlap' },
       { field: 'launch_target', headerName: 'Launch target' },
       gridDeleteColumn<Row>((id) => void delRow.mutate(id), { busy: busyDel }),
     ];
-  }, [delRow, delRow.isPending, clearAll.isPending]);
+  }, [delRow, delRow.isPending, clearAll.isPending, lineId]);
 
   const rows = data ?? [];
 

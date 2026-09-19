@@ -11,6 +11,7 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { navPageChrome } from '@/features/shell/navPageChrome';
+import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { apiDelete, apiGet, apiPost, HttpConflictError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 import { useUiStore } from '@/stores/uiStore';
@@ -18,6 +19,7 @@ import { useUiStore } from '@/stores/uiStore';
 type Row = {
   id: number;
   sku: string | null;
+  sales_model_name: string | null;
   recommended_qty: number;
   window_start: string;
   window_end: string;
@@ -28,6 +30,7 @@ type Row = {
 export default function BuyPlansPage() {
   const qc = useQueryClient();
   const openDrawer = useUiStore((s) => s.openDrawer);
+  const lineId = useLineIdentifierPreference();
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['buy-plans'],
     queryFn: ({ signal }) => apiGet<Row[]>('/api/v1/buy-plans', { signal }),
@@ -82,7 +85,12 @@ export default function BuyPlansPage() {
   const colDefs: ColDef<Row>[] = useMemo(() => {
     const busyDel = delRow.isPending || clearAll.isPending;
     return [
-      { field: 'sku', headerName: 'SKU', pinned: 'left' },
+      {
+        colId: 'line_identifier',
+        headerName: lineId.header,
+        pinned: 'left',
+        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.sales_model_name),
+      },
       { field: 'recommended_qty', headerName: 'Buy qty', type: 'numericColumn' },
       { field: 'window_start', headerName: 'Window start' },
       { field: 'window_end', headerName: 'Window end' },
@@ -97,7 +105,7 @@ export default function BuyPlansPage() {
       },
       gridDeleteColumn<Row>((id) => void delRow.mutate(id), { busy: busyDel }),
     ];
-  }, [delRow, delRow.isPending, clearAll.isPending]);
+  }, [delRow, delRow.isPending, clearAll.isPending, lineId]);
 
   const rows = data ?? [];
   const busy = delRow.isPending || clearAll.isPending;
