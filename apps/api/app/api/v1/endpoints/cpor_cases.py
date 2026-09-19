@@ -177,6 +177,7 @@ def _line_json(line: CporCaseLine, product: DimProduct | None = None) -> dict[st
         "case_id": line.case_id,
         "product_id": line.product_id,
         "product_sku": product.sku if product else None,
+        "product_sales_model_name": product.sales_model_name if product else None,
         "product_name": product.name if product else None,
         "product_line": product.product_line if product else None,
         "business_unit": product.business_unit if product else None,

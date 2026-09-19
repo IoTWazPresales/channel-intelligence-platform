@@ -49,6 +49,7 @@ function toView(): SettlementDeskView {
     lines: settleLines.map((l: SettleLine) => ({
       id: l.id,
       sku: l.sku,
+      salesModel: null,
       product: l.product,
       distributor: l.distributor,
       estimateQty: l.estimateQty,

@@ -7,6 +7,7 @@ export type LineupPlanRow = {
   period_label: string | null;
   product_id?: number | null;
   sku: string | null;
+  sales_model_name?: string | null;
   product_name?: string | null;
   planned_volume_units: number;
   approval_status: string;

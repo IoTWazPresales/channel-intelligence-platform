@@ -122,6 +122,7 @@ def _serialize(f: FactDemandForecast, prod: DimProduct | None) -> dict:
     return {
         "id": f.id,
         "sku": prod.sku if prod else None,
+        "sales_model_name": prod.sales_model_name if prod else None,
         "period_start": f.period_start.isoformat(),
         "forecast_units": float(f.forecast_units),
         "confidence_placeholder": f.confidence_level,

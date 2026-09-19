@@ -234,6 +234,7 @@ class TenantCommercialProfileUpdate(BaseModel):
     over_budget_action: str | None = None
     reservation_source: str | None = None
     pm_attribution_mode: str | None = None
+    line_identifier_preference: str | None = None
     lineup_export_net_requirement_sheet: str | None = None
     lineup_export_draft_sheet: str | None = None
     reporting_cadence: str | None = None

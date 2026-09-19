@@ -49,6 +49,7 @@ function view(over: Partial<SettlementDeskView> = {}): SettlementDeskView {
       {
         id: '1',
         sku: '90NB0ZR2-M06MU0',
+        salesModel: null,
         product: 'NB A',
         distributor: 'Pinnacle',
         estimateQty: 10,
@@ -62,6 +63,7 @@ function view(over: Partial<SettlementDeskView> = {}): SettlementDeskView {
       {
         id: '2',
         sku: 'SKU-B',
+        salesModel: null,
         product: 'NB B',
         distributor: 'Pinnacle',
         estimateQty: 4,

@@ -223,6 +223,9 @@ def build_settlement_consolidation(session: Session, case_id: int) -> dict[str, 
                 "product_id": pid,
                 "product_sku": product.sku if product is not None else None,
                 "product_name": product.name if product is not None else None,
+                "product_sales_model_name": (
+                    product.sales_model_name if product is not None else None
+                ),
                 "distributor_id": dist_id,
                 "distributor_name": distributor.name if distributor is not None else None,
                 "estimate_qty": estimate,

@@ -35,6 +35,7 @@ type ConstraintAxis = 'money' | 'support_pct' | 'dual' | 'none';
 type OverBudgetAction = 'require_reapproval' | 'warn' | 'block';
 type ReservationSource = 'derived_from_profit' | 'explicit_column' | 'hybrid';
 type PmAttributionMode = 'business_line' | 'person_field' | 'none';
+type LineIdentifierPreference = 'sku' | 'sales_model';
 
 type LineupExportColumn = { field: string; header: string };
 
@@ -54,6 +55,7 @@ type TenantCommercialProfile = {
   over_budget_action: OverBudgetAction;
   reservation_source: ReservationSource;
   pm_attribution_mode: PmAttributionMode;
+  line_identifier_preference?: LineIdentifierPreference;
   reporting_cadence?: ReportingCadence;
   woc_min_velocity_days?: number;
   lineup_export_sheets?: { net_requirement: string; draft_lineup: string };
@@ -68,6 +70,7 @@ const CONSTRAINT_AXIS_OPTIONS: ConstraintAxis[] = ['money', 'support_pct', 'dual
 const OVER_BUDGET_ACTION_OPTIONS: OverBudgetAction[] = ['require_reapproval', 'warn', 'block'];
 const RESERVATION_SOURCE_OPTIONS: ReservationSource[] = ['derived_from_profit', 'explicit_column', 'hybrid'];
 const PM_ATTRIBUTION_MODE_OPTIONS: PmAttributionMode[] = ['business_line', 'person_field', 'none'];
+const LINE_IDENTIFIER_OPTIONS: LineIdentifierPreference[] = ['sku', 'sales_model'];
 const REPORTING_CADENCE_OPTIONS: ReportingCadence[] = [
   'weekly_monday',
   'weekly_tuesday',
@@ -102,6 +105,8 @@ export default function SettingsPage() {
   const [overBudgetAction, setOverBudgetAction] = useState<OverBudgetAction>('require_reapproval');
   const [reservationSource, setReservationSource] = useState<ReservationSource>('derived_from_profit');
   const [pmAttributionMode, setPmAttributionMode] = useState<PmAttributionMode>('business_line');
+  const [lineIdentifierPreference, setLineIdentifierPreference] =
+    useState<LineIdentifierPreference>('sku');
   const [reportingCadence, setReportingCadence] = useState<ReportingCadence>('weekly_monday');
   const [wocMinVelocityDays, setWocMinVelocityDays] = useState(90);
   const [exportNetReqSheet, setExportNetReqSheet] = useState('NetRequirement');
@@ -116,6 +121,9 @@ export default function SettingsPage() {
     setOverBudgetAction(tenantProfileQuery.data.over_budget_action);
     setReservationSource(tenantProfileQuery.data.reservation_source);
     setPmAttributionMode(tenantProfileQuery.data.pm_attribution_mode);
+    if (tenantProfileQuery.data.line_identifier_preference) {
+      setLineIdentifierPreference(tenantProfileQuery.data.line_identifier_preference);
+    }
     if (tenantProfileQuery.data.reporting_cadence) {
       setReportingCadence(tenantProfileQuery.data.reporting_cadence);
     }
@@ -137,6 +145,7 @@ export default function SettingsPage() {
         over_budget_action: overBudgetAction,
         reservation_source: reservationSource,
         pm_attribution_mode: pmAttributionMode,
+        line_identifier_preference: lineIdentifierPreference,
         reporting_cadence: reportingCadence,
         woc_min_velocity_days: wocMinVelocityDays,
         lineup_export_net_requirement_sheet: exportNetReqSheet.trim() || undefined,
@@ -298,6 +307,24 @@ export default function SettingsPage() {
                 {PM_ATTRIBUTION_MODE_OPTIONS.map((v) => (
                   <MenuItem key={v} value={v}>
                     {v}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth disabled={!isAdmin}>
+              <InputLabel id="tenant-profile-line-identifier-label">Line identifier</InputLabel>
+              <Select
+                labelId="tenant-profile-line-identifier-label"
+                label="Line identifier"
+                value={lineIdentifierPreference}
+                onChange={(ev) =>
+                  setLineIdentifierPreference(ev.target.value as LineIdentifierPreference)
+                }
+                inputProps={{ 'data-testid': 'tenant-profile-line-identifier' }}
+              >
+                {LINE_IDENTIFIER_OPTIONS.map((v) => (
+                  <MenuItem key={v} value={v}>
+                    {v === 'sales_model' ? 'Sales model number' : 'SKU'}
                   </MenuItem>
                 ))}
               </Select>

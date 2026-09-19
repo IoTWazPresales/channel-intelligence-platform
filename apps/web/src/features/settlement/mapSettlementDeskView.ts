@@ -30,6 +30,7 @@ export type SettlementDeskApiLine = {
   line_id: number;
   product_id: number | null;
   product_sku?: string | null;
+  product_sales_model_name?: string | null;
   product_name?: string | null;
   distributor_id?: number | null;
   distributor_name?: string | null;
@@ -78,6 +79,7 @@ export function mapSettlementDeskView(
     return {
       id: String(row.line_id),
       sku: row.product_sku?.trim() || (row.product_id != null ? String(row.product_id) : '—'),
+      salesModel: row.product_sales_model_name?.trim() || null,
       product: row.product_name?.trim() || '—',
       distributor: row.distributor_name?.trim() || '—',
       estimateQty: row.estimate_qty ?? 0,

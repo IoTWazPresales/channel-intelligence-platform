@@ -102,6 +102,7 @@ async def sellout_commercial_lines(
         select(
             FactSalesSellout,
             DimProduct.sku.label("product_sku"),
+            DimProduct.sales_model_name.label("product_sales_model_name"),
             DimProduct.name.label("product_name"),
             DimCustomer.code.label("customer_code"),
             DimCustomer.name.label("customer_name"),
@@ -212,6 +213,7 @@ async def sellout_commercial_lines(
                 "staging_line_id": s.staging_line_id,
                 "product_id": s.product_id,
                 "product_sku": row.product_sku,
+                "product_sales_model_name": row.product_sales_model_name,
                 "product_name": row.product_name,
                 "customer_id": s.customer_id,
                 "customer_code": row.customer_code,
@@ -250,7 +252,7 @@ async def sellout_zero_products(
         .distinct()
     )
     res = await db.execute(
-        select(DimProduct.id, DimProduct.sku, DimProduct.name)
+        select(DimProduct.id, DimProduct.sku, DimProduct.name, DimProduct.sales_model_name)
         .where(DimProduct.is_active.is_(True), where_tenant(DimProduct.tenant_id, user))
         .where(DimProduct.id.not_in(sold_sub))
         .order_by(DimProduct.sku.asc())
@@ -259,7 +261,15 @@ async def sellout_zero_products(
     rows = res.all()
     return {
         "lookback_days": lookback_days,
-        "items": [{"product_id": int(r[0]), "sku": r[1], "name": r[2]} for r in rows],
+        "items": [
+            {
+                "product_id": int(r[0]),
+                "sku": r[1],
+                "name": r[2],
+                "sales_model_name": r[3],
+            }
+            for r in rows
+        ],
     }
 
 
@@ -283,6 +293,7 @@ async def list_sellout(
             {
                 "id": s.id,
                 "product_sku": prod.sku if prod else None,
+                "product_sales_model_name": prod.sales_model_name if prod else None,
                 "customer_code": cust.code if cust else None,
                 "period_start": s.period_start.isoformat(),
                 "units": float(s.units),

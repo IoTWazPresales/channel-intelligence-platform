@@ -52,6 +52,7 @@ export function corroborationTone(
 export type SettlementDeskLine = {
   id: string;
   sku: string;
+  salesModel: string | null;
   product: string;
   distributor: string;
   estimateQty: number;

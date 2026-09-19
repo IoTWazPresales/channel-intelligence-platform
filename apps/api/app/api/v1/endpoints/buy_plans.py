@@ -29,6 +29,7 @@ async def list_buy_plans(db: AsyncSession = Depends(get_db)):
             {
                 "id": b.id,
                 "sku": prod.sku if prod else None,
+                "sales_model_name": prod.sales_model_name if prod else None,
                 "recommended_qty": float(b.recommended_qty),
                 "window_start": b.recommended_window_start.isoformat(),
                 "window_end": b.recommended_window_end.isoformat(),

@@ -613,6 +613,7 @@ def _compose_suggestion_row(
         "seed_line_id": int(seed_line_id) if seed_line_id is not None else None,
         "product_id": pid,
         "product_sku": prod.sku if prod is not None else None,
+        "product_sales_model_name": prod.sales_model_name if prod is not None else None,
         "product_name": prod.name if prod is not None else None,
         "distributor_id": int(did) if did is not None else None,
         "customer_id": int(customer_id) if customer_id is not None else None,

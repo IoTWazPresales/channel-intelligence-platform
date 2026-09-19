@@ -55,6 +55,7 @@ async def list_pricing_facts(db: AsyncSession = Depends(get_db)):
             {
                 "id": p.id,
                 "sku": prod.sku if prod else None,
+                "sales_model_name": prod.sales_model_name if prod else None,
                 "effective_date": p.effective_date.isoformat(),
                 "list_price": float(p.list_price),
                 "net_price": float(p.net_price),
@@ -133,6 +134,7 @@ async def list_pricing_recommendations(db: AsyncSession = Depends(get_db)):
             {
                 "id": r.id,
                 "sku": prod.sku if prod else None,
+                "sales_model_name": prod.sales_model_name if prod else None,
                 "suggested_state": r.suggested_state,
                 "explanation_summary": r.explanation_summary,
                 "explanation_factors": r.explanation_factors,

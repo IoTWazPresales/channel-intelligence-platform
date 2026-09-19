@@ -33,6 +33,7 @@ def test_default_woc_profile_is_weekly_monday_90() -> None:
     assert snap["over_budget_action"] == "require_reapproval"
     assert snap["reservation_source"] == "derived_from_profit"
     assert snap["pm_attribution_mode"] == "business_line"
+    assert snap["line_identifier_preference"] == "sku"
     assert snap["hard_enforce_budget"] is True
     assert "money_ceiling_usd" in snap
     assert snap["support_norms_trailing_quarters"] == 4
@@ -65,3 +66,14 @@ def test_budget_position_payload_uses_profile():
     assert out["tracks"]["money"]["binding"] is True
     assert out["tracks"]["support_pct"]["binding"] is False
     assert out["tracks"]["money"]["status"] == "over"
+
+
+def test_line_identifier_preference_roundtrip(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(profile, "_tenant_profiles_dir", lambda: tmp_path)
+    assert profile.line_identifier_preference("acme") == "sku"
+    saved = profile.save_tenant_profile_overrides(
+        "acme", {"line_identifier_preference": "sales_model"}
+    )
+    assert saved["line_identifier_preference"] == "sales_model"
+    snap = profile.profile_snapshot("acme")
+    assert snap["line_identifier_preference"] == "sales_model"

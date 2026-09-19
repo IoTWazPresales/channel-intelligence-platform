@@ -13,6 +13,7 @@ import {
   isPendingApproval,
   type LineupPlanRow,
 } from '@/features/lineup/lineupTypes';
+import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { StatusChip } from '@/features/workbench-ui/controls';
 import { apiPatch } from '@/lib/api';
 
@@ -39,6 +40,7 @@ export function LineupPlanGrid({ rows, pendingOnly }: Props) {
   const theme = useTheme();
   const qc = useQueryClient();
   const [patchMsg, setPatchMsg] = useState<string | null>(null);
+  const lineId = useLineIdentifierPreference();
 
   const filtered = useMemo(
     () => (pendingOnly ? rows.filter((r) => isPendingApproval(r.approval_status)) : rows),
@@ -68,7 +70,13 @@ export function LineupPlanGrid({ rows, pendingOnly }: Props) {
         minWidth: 140,
         valueGetter: (p) => p.data?.customer_name || p.data?.customer_code || '—',
       },
-      { field: 'sku', headerName: 'SKU', minWidth: 120, cellClass: 'lineup-sku-cell' },
+      {
+        colId: 'line_identifier',
+        headerName: lineId.header,
+        minWidth: 140,
+        cellClass: 'lineup-sku-cell',
+        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.sales_model_name),
+      },
       { field: 'period_label', headerName: 'Period', minWidth: 100 },
       {
         field: 'planned_volume_units',
@@ -139,7 +147,7 @@ export function LineupPlanGrid({ rows, pendingOnly }: Props) {
         },
       },
     ],
-    [onApprove, onReject, theme],
+    [onApprove, onReject, theme, lineId],
   );
 
   const gridOptions: GridOptions<LineupPlanRow> = useMemo(

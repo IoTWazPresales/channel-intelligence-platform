@@ -7,6 +7,7 @@ import { useMemo, useRef, useState } from 'react';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { DualMoney } from '@/features/cpor/DualMoney';
 import { formatLocalMoney } from '@/features/cpor/fxDisplay';
+import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { ScopeBar, StatusChip } from '@/features/workbench-ui/controls';
 import { DomainHeader } from '@/features/workbench-ui/DomainHeader';
 import { EntityContextPanel, KeyValueList } from '@/features/workbench-ui/EntityContextPanel';
@@ -58,6 +59,7 @@ export function SettlementDesk({
   const [disti, setDisti] = useState<string | null>(null);
   const [selected, setSelected] = useState<SettlementDeskLine | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const lineId = useLineIdentifierPreference();
 
   const distributors = useMemo(
     () => Array.from(new Set(view.lines.map((l) => l.distributor).filter(Boolean))),
@@ -117,7 +119,13 @@ export function SettlementDesk({
 
   const columnDefs = useMemo<ColDef<SettlementDeskLine>[]>(
     () => [
-      { field: 'sku', headerName: 'SKU', width: 120, pinned: 'left' },
+      {
+        colId: 'line_identifier',
+        headerName: lineId.header,
+        width: 140,
+        pinned: 'left',
+        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.salesModel),
+      },
       { field: 'product', headerName: 'Product', minWidth: 200, flex: 1.4 },
       { field: 'distributor', headerName: 'Distributor', minWidth: 160, flex: 1 },
       {
@@ -170,7 +178,7 @@ export function SettlementDesk({
         valueFormatter: (p) => (p.value ? 'Yes' : 'No'),
       },
     ],
-    [],
+    [lineId],
   );
 
   const codeMeta = view.customerCode ? ` · ${view.customerCode}` : '';
@@ -411,7 +419,7 @@ export function SettlementDesk({
         open={Boolean(selected)}
         onClose={() => setSelected(null)}
         kicker="Line"
-        title={selected?.sku ?? ''}
+        title={selected ? lineId.value(selected.sku, selected.salesModel) : ''}
         subtitle={selected?.product}
         figures={
           selected ? (
@@ -438,6 +446,8 @@ export function SettlementDesk({
         {selected ? (
           <KeyValueList
             items={[
+              { k: 'SKU', v: selected.sku },
+              { k: 'Sales model', v: selected.salesModel ?? '—' },
               { k: 'Distributor', v: selected.distributor },
               { k: 'Corroboration', v: CORROBORATION_CHIP[selected.corroboration] },
               { k: 'Reason', v: selected.corroborationReason },

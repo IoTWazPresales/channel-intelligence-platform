@@ -207,11 +207,14 @@ def build_promo_load_recon(
             near_units[pid_i] += u
 
     prod_meta = {
-        int(r[0]): (r[1], r[2])
+        int(r[0]): (r[1], r[2], r[3])
         for r in session.execute(
-            select(DimProduct.id, DimProduct.sku, DimProduct.name).where(
-                DimProduct.id.in_(product_ids)
-            )
+            select(
+                DimProduct.id,
+                DimProduct.sku,
+                DimProduct.name,
+                DimProduct.sales_model_name,
+            ).where(DimProduct.id.in_(product_ids))
         ).all()
     }
 
@@ -260,11 +263,12 @@ def build_promo_load_recon(
             price_tol=float(price_tol),
         )
         summary[bucket] = summary.get(bucket, 0) + 1
-        sku, name = prod_meta.get(pid, (None, None))
+        sku, name, sales_model = prod_meta.get(pid, (None, None, None))
         out_lines.append(
             {
                 "product_id": pid,
                 "product_sku": sku,
+                "product_sales_model_name": sales_model,
                 "product_name": name,
                 "estimate_qty": est,
                 "result_qty": res if res else None,

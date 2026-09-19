@@ -62,6 +62,7 @@ async def inventory_customer(
             {
                 "id": inv.id,
                 "product_sku": prod.sku if prod else None,
+                "product_sales_model_name": prod.sales_model_name if prod else None,
                 "product_name": prod.name if prod else None,
                 "customer_code": cust.code if cust else None,
                 "as_of_date": inv.as_of_date.isoformat(),

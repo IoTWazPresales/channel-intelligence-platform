@@ -40,6 +40,7 @@ async def list_inbound(
             {
                 "id": s.id,
                 "product_sku": prod.sku if prod else None,
+                "product_sales_model_name": prod.sales_model_name if prod else None,
                 "eta_date": s.eta_date.isoformat() if s.eta_date else None,
                 "quantity": float(s.quantity) if s.quantity is not None else None,
                 "reference": s.reference,

@@ -26,6 +26,7 @@ async def list_roadmap(db: AsyncSession = Depends(get_db)):
             {
                 "id": r.id,
                 "sku": prod.sku if prod else None,
+                "sales_model_name": prod.sales_model_name if prod else None,
                 "lifecycle_phase": r.lifecycle_phase,
                 "whitespace_flag": r.whitespace_flag,
                 "overlap_flag": r.overlap_flag,

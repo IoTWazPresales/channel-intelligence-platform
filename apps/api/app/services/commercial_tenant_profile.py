@@ -26,11 +26,15 @@ ReservationSource = Literal["derived_from_profit", "explicit_column", "hybrid"]
 # Q-009 — how PM attribution is resolved for volume bias
 PmAttributionMode = Literal["business_line", "person_field", "none"]
 
+# Which product identifier labels a line in reports and workspaces (display only).
+LineIdentifierPreference = Literal["sku", "sales_model"]
+
 # Current-tenant defaults (Warren 2026-08-01). Override later via onboarding.
 CONSTRAINT_AXIS: ConstraintAxis = "money"
 OVER_BUDGET_ACTION: OverBudgetAction = "require_reapproval"
 RESERVATION_SOURCE: ReservationSource = "derived_from_profit"
 PM_ATTRIBUTION_MODE: PmAttributionMode = "business_line"
+LINE_IDENTIFIER_PREFERENCE: LineIdentifierPreference = "sku"
 
 
 def _env_float(name: str) -> float | None:
@@ -146,6 +150,7 @@ TENANT_PROFILE_OVERRIDE_KEYS: tuple[str, ...] = (
     "over_budget_action",
     "reservation_source",
     "pm_attribution_mode",
+    "line_identifier_preference",
     "lineup_export_net_requirement_sheet",
     "lineup_export_draft_sheet",
     "lineup_export_columns",
@@ -166,6 +171,7 @@ _TENANT_PROFILE_VALID_VALUES: dict[str, frozenset[str]] = {
     "over_budget_action": frozenset({"require_reapproval", "warn", "block"}),
     "reservation_source": frozenset({"derived_from_profit", "explicit_column", "hybrid"}),
     "pm_attribution_mode": frozenset({"business_line", "person_field", "none"}),
+    "line_identifier_preference": frozenset({"sku", "sales_model"}),
     "reporting_cadence": frozenset(
         {
             "weekly_monday",
@@ -753,6 +759,7 @@ def profile_snapshot(tenant_id: str = "default") -> dict[str, object]:
         "over_budget_action": overrides.get("over_budget_action", OVER_BUDGET_ACTION),
         "reservation_source": overrides.get("reservation_source", RESERVATION_SOURCE),
         "pm_attribution_mode": overrides.get("pm_attribution_mode", PM_ATTRIBUTION_MODE),
+        "line_identifier_preference": line_identifier_preference(tenant_id),
         "lineup_export_sheets": sheets,
         "lineup_export_columns": lineup_export_columns(tenant_id),
         "incremental_baseline": incremental_baseline_config(tenant_id),
@@ -765,6 +772,15 @@ def profile_snapshot(tenant_id: str = "default") -> dict[str, object]:
         "woc_min_velocity_days": woc_min_velocity_days(tenant_id),
         "reporting_timezone": REPORTING_TIMEZONE,
     }
+
+
+def line_identifier_preference(tenant_id: str = "default") -> str:
+    """Display identifier for a product line. Does not change stored keys or resolution."""
+    overrides = load_tenant_profile_overrides(tenant_id)
+    raw = str(overrides.get("line_identifier_preference") or LINE_IDENTIFIER_PREFERENCE).strip()
+    if raw not in _TENANT_PROFILE_VALID_VALUES["line_identifier_preference"]:
+        return LINE_IDENTIFIER_PREFERENCE
+    return raw
 
 
 def reporting_cadence(tenant_id: str = "default") -> str:
