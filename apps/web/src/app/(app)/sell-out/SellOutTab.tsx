@@ -15,6 +15,7 @@ import type { ColDef } from 'ag-grid-community';
 import { useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { apiGet } from '@/lib/api';
 
 import { depthAtLeast, type IntelDepth } from './intelDepth';
@@ -31,6 +32,7 @@ type SelloutSummary = {
 type SelloutLine = {
   id: number;
   product_sku: string | null;
+  product_sales_model_name: string | null;
   product_name: string | null;
   customer_code: string | null;
   customer_name: string | null;
@@ -47,6 +49,7 @@ type ChannelSelloutLine = {
   customer_name: string | null;
   product_name: string | null;
   sku: string | null;
+  sales_model_name: string | null;
   units: number;
   unit_price: number | null;
   revenue: number;
@@ -58,9 +61,10 @@ type ChannelLinesResponse = { total: number; page: number; page_size: number; it
 
 type DistHit = { id: number; distributor_code: string; distributor_name: string };
 type CustHit = { id: number; customer_code: string; customer_name: string };
-type ZeroProduct = { product_id: number; sku: string; name: string };
+type ZeroProduct = { product_id: number; sku: string; sales_model_name: string | null; name: string };
 
 export function SellOutTab({ depth }: { depth: IntelDepth }) {
+  const lineId = useLineIdentifierPreference();
   const [smartPreset, setSmartPreset] = useState<SmartPresetId>('');
   const [distributorPick, setDistributorPick] = useState<DistHit | null>(null);
   const [customerPick, setCustomerPick] = useState<CustHit | null>(null);
@@ -148,15 +152,25 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
   const operational = depthAtLeast(depth, 'operational');
   const zeroCols = useMemo<ColDef<ZeroProduct>[]>(
     () => [
-      { field: 'sku', headerName: 'SKU', minWidth: 120 },
+      {
+        colId: 'line_identifier',
+        headerName: lineId.header,
+        minWidth: 120,
+        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.sales_model_name),
+      },
       { field: 'name', headerName: 'Name', flex: 1, minWidth: 180 },
     ],
-    [],
+    [lineId],
   );
   const channelCols = useMemo<ColDef<ChannelSelloutLine>[]>(() => {
     const cols: ColDef<ChannelSelloutLine>[] = [
       { field: 'date', headerName: 'Date', minWidth: 110 },
-      { field: 'sku', headerName: 'SKU', minWidth: 110 },
+      {
+        colId: 'line_identifier',
+        headerName: lineId.header,
+        minWidth: 110,
+        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.sales_model_name),
+      },
       { field: 'customer_name', headerName: 'Customer', flex: 1, minWidth: 140 },
       { field: 'distributor_name', headerName: 'Distributor', minWidth: 140, valueFormatter: (p) => p.value ?? '—' },
       {
@@ -198,11 +212,16 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
       );
     }
     return cols;
-  }, [operational]);
+  }, [operational, lineId]);
   const factCols = useMemo<ColDef<SelloutLine>[]>(
     () => [
       { field: 'period_start', headerName: 'Period', minWidth: 110 },
-      { field: 'product_sku', headerName: 'SKU', minWidth: 110 },
+      {
+        colId: 'line_identifier',
+        headerName: lineId.header,
+        minWidth: 110,
+        valueGetter: (p) => lineId.value(p.data?.product_sku, p.data?.product_sales_model_name),
+      },
       {
         headerName: 'Customer',
         flex: 1,
@@ -226,7 +245,7 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
         valueFormatter: (p) => Number(p.value ?? 0).toLocaleString(),
       },
     ],
-    [],
+    [lineId],
   );
 
   return (
