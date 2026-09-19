@@ -18,6 +18,7 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
+import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { apiGet, apiPost } from '@/lib/api';
 
 import {
@@ -98,6 +99,7 @@ function MacExplainCell(params: ICellRendererParams<PlannerRow>) {
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
 
 export function PromoPlanBuilderPanel() {
+  const lineId = useLineIdentifierPreference();
   const [customer, setCustomer] = useState<CustomerPick | null>(null);
   const [seedCaseId, setSeedCaseId] = useState('');
   const [periodLabel, setPeriodLabel] = useState('2026Q2');
@@ -188,7 +190,13 @@ export function PromoPlanBuilderPanel() {
 
   const colDefs: ColDef<PlannerRow>[] = useMemo(
     () => [
-      { field: 'product_sku', headerName: 'SKU', minWidth: 120, editable: false },
+      {
+        colId: 'line_identifier',
+        headerName: lineId.header,
+        minWidth: 120,
+        editable: false,
+        valueGetter: (p) => lineId.value(p.data?.product_sku, p.data?.product_sales_model_name),
+      },
       { field: 'product_name', headerName: 'Product', minWidth: 160, editable: false, flex: 1 },
       {
         field: 'distributor_id',
@@ -275,7 +283,7 @@ export function PromoPlanBuilderPanel() {
         },
       },
     ],
-    [],
+    [lineId],
   );
 
   return (
@@ -395,6 +403,7 @@ export function PromoPlanBuilderPanel() {
               seed_line_id: null,
               product_id: pid,
               product_sku: null,
+              product_sales_model_name: null,
               product_name: null,
               distributor_id: did,
               customer_id: null,

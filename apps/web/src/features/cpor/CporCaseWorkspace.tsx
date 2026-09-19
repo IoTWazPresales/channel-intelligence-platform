@@ -40,6 +40,7 @@ import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
 import { LIFECYCLE_STAGES, STAGE_LABEL } from '@/features/promotions-funding/lifecycle';
 import { SettlementConfirmDialog } from '@/features/settlement/SettlementConfirmDialog';
 import { customerPrimaryName, customerSecondaryCode } from '@/features/settlement/customerDisplay';
+import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { LifecycleRail } from '@/features/workbench-ui/LifecycleRail';
 import { apiGet, apiPatch, apiPost, apiPostFormData } from '@/lib/api';
 
@@ -47,6 +48,7 @@ type LineRow = {
   id: number;
   product_id: number;
   product_sku: string | null;
+  product_sales_model_name: string | null;
   product_name: string | null;
   product_line: string | null;
   distributor_id: number | null;
@@ -161,6 +163,7 @@ type CporCaseWorkspaceProps = {
 
 export function CporCaseWorkspace({ caseId, embedded = false, defaultTab = 0 }: CporCaseWorkspaceProps) {
   const qc = useQueryClient();
+  const lineId = useLineIdentifierPreference();
   const [tab, setTab] = useState(defaultTab);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectComment, setRejectComment] = useState('');
@@ -335,7 +338,12 @@ export function CporCaseWorkspace({ caseId, embedded = false, defaultTab = 0 }: 
 
   const lineCols = useMemo<ColDef<LineRow>[]>(
     () => [
-      { field: 'product_sku', headerName: 'SKU', width: 120 },
+      {
+        colId: 'line_identifier',
+        headerName: lineId.header,
+        width: 120,
+        valueGetter: (p) => lineId.value(p.data?.product_sku, p.data?.product_sales_model_name),
+      },
       { field: 'product_name', headerName: 'Product', flex: 1, minWidth: 160 },
       { field: 'pod_quarter', headerName: 'POD Q', width: 90 },
       { field: 'srp', headerName: 'SRP', width: 100 },
@@ -416,7 +424,7 @@ export function CporCaseWorkspace({ caseId, embedded = false, defaultTab = 0 }: 
         valueGetter: (p) => (p.data?.flags ?? []).join(', '),
       },
     ],
-    [data?.currency_code, data?.missing_roe, data?.roe_snapshot],
+    [data?.currency_code, data?.missing_roe, data?.roe_snapshot, lineId],
   );
 
   if (isLoading) return <Typography sx={{ p: 2 }}>Loading…</Typography>;

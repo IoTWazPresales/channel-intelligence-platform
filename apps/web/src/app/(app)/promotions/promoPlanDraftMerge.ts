@@ -34,6 +34,7 @@ export type SuggestionLine = {
   seed_line_id?: number | null;
   product_id: number;
   product_sku?: string | null;
+  product_sales_model_name?: string | null;
   product_name?: string | null;
   distributor_id?: number | null;
   customer_id?: number | null;
@@ -52,6 +53,7 @@ export type PlannerRow = {
   seed_line_id: number | null;
   product_id: number;
   product_sku: string | null;
+  product_sales_model_name: string | null;
   product_name: string | null;
   distributor_id: number | null;
   customer_id: number | null;
@@ -87,6 +89,7 @@ export function hydratePlannerRows(lines: SuggestionLine[]): PlannerRow[] {
       seed_line_id: line.seed_line_id ?? null,
       product_id: line.product_id,
       product_sku: line.product_sku ?? null,
+      product_sales_model_name: line.product_sales_model_name ?? null,
       product_name: line.product_name ?? null,
       distributor_id: line.distributor_id ?? null,
       customer_id: line.customer_id ?? null,

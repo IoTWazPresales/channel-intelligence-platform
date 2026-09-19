@@ -6,11 +6,13 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { apiGet } from '@/lib/api';
 
 export type PromoLoadLine = {
   product_id: number;
   product_sku: string | null;
+  product_sales_model_name: string | null;
   product_name: string | null;
   estimate_qty: number;
   result_qty: number | null;
@@ -40,6 +42,7 @@ export type PromoLoadPayload = {
 };
 
 export function CporPromoLoadPanel({ caseId }: { caseId: number }) {
+  const lineId = useLineIdentifierPreference();
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['cpor', 'promo-load-recon', caseId],
     queryFn: ({ signal }) =>
@@ -49,7 +52,12 @@ export function CporPromoLoadPanel({ caseId }: { caseId: number }) {
 
   const cols = useMemo<ColDef<PromoLoadLine>[]>(
     () => [
-      { field: 'product_sku', headerName: 'SKU', flex: 1 },
+      {
+        colId: 'line_identifier',
+        headerName: lineId.header,
+        flex: 1,
+        valueGetter: (p) => lineId.value(p.data?.product_sku, p.data?.product_sales_model_name),
+      },
       { field: 'product_name', headerName: 'Product', flex: 1.5 },
       { field: 'estimate_qty', headerName: 'Est qty', width: 100 },
       { field: 'cst_units', headerName: 'CST units', width: 110 },
@@ -57,7 +65,7 @@ export function CporPromoLoadPanel({ caseId }: { caseId: number }) {
       { field: 'cst_unit_sell_price_wtd', headerName: 'CST price', width: 110 },
       { field: 'bucket', headerName: 'Bucket', width: 140 },
     ],
-    [],
+    [lineId],
   );
 
   if (isError) {
@@ -69,7 +77,7 @@ export function CporPromoLoadPanel({ caseId }: { caseId: number }) {
   }
 
   if (isLoading) {
-    return <Typography variant="body2">Loading promo load…</Typography>;
+    return <Typography variant="body2">Loading promo load…</Typography>
   }
 
   if (!data) return null;
