@@ -502,6 +502,7 @@ async def channel_ops_sell_out(
         select(
             FactSalesSellout,
             DimProduct.sku,
+            DimProduct.sales_model_name.label("sales_model_name"),
             DimProduct.name.label("product_name"),
             DimCustomer.name.label("customer_name"),
             DimDistributor.name.label("distributor_name"),
@@ -581,6 +582,7 @@ async def channel_ops_sell_out(
                 "customer_name": row.customer_name,
                 "product_name": row.product_name,
                 "sku": row.sku,
+                "sales_model_name": row.sales_model_name,
                 "units": float(s.units),
                 "unit_price": unit_price,
                 "revenue": float(s.revenue),
@@ -649,17 +651,20 @@ async def channel_ops_inventory(
         }
 
     product_ids = [int(r["product_id"]) for r in derived_rows]
-    product_meta: dict[int, tuple[str | None, str | None]] = {}
+    product_meta: dict[int, tuple[str | None, str | None, str | None]] = {}
     dist_name: str | None = None
     if product_ids:
         prod_rows = (
             await db.execute(
-                select(DimProduct.id, DimProduct.sku, DimProduct.name).where(
-                    DimProduct.id.in_(product_ids)
-                )
+                select(
+                    DimProduct.id,
+                    DimProduct.sku,
+                    DimProduct.name,
+                    DimProduct.sales_model_name,
+                ).where(DimProduct.id.in_(product_ids))
             )
         ).all()
-        product_meta = {int(r[0]): (r[1], r[2]) for r in prod_rows}
+        product_meta = {int(r[0]): (r[1], r[2], r[3]) for r in prod_rows}
         dist_name = await db.scalar(
             select(DimDistributor.name).where(DimDistributor.id == int(distributor_id))
         )
@@ -695,7 +700,7 @@ async def channel_ops_inventory(
     items: list[dict[str, Any]] = []
     for row in derived_rows:
         pid = int(row["product_id"])
-        sku, pname = product_meta.get(pid, (None, None))
+        sku, pname, sales_model = product_meta.get(pid, (None, None, None))
         v52 = velocity_by_product.get(pid)
         derived = float(row["derived_stock"])
         if "weeks_of_cover" in row and not use_live:
@@ -710,6 +715,7 @@ async def channel_ops_inventory(
                 "distributor_name": dist_name,
                 "product_id": pid,
                 "sku": sku,
+                "sales_model_name": sales_model,
                 "product_name": pname,
                 "snapshot_date": row.get("snapshot_date"),
                 "reported_soh": float(row["reported_soh"]),
@@ -767,6 +773,7 @@ async def channel_ops_movements(
         select(
             EV,
             DimProduct.sku,
+            DimProduct.sales_model_name.label("sales_model_name"),
             DimProduct.name.label("product_name"),
             DimDistributor.name.label("distributor_name"),
             ship_date_col.label("ship_date"),
@@ -791,6 +798,7 @@ async def channel_ops_movements(
             {
                 "product_id": line.product_id,
                 "sku": row.sku,
+                "sales_model_name": row.sales_model_name,
                 "product_name": row.product_name,
                 "order_no": line.order_no,
                 "delivery_no": line.delivery_no,
@@ -821,6 +829,7 @@ async def channel_ops_forecasts(
         select(
             FactDsiForecast,
             DimProduct.sku,
+            DimProduct.sales_model_name.label("sales_model_name"),
             DimProduct.name.label("product_name"),
         )
         .join(DimProduct, FactDsiForecast.product_id == DimProduct.id)
@@ -841,6 +850,7 @@ async def channel_ops_forecasts(
             {
                 "product_id": f.product_id,
                 "sku": row.sku,
+                "sales_model_name": row.sales_model_name,
                 "product_name": row.product_name,
                 "forecast_date": f.forecast_date.isoformat(),
                 "forecast_units": float(f.forecast_units),
@@ -1000,7 +1010,7 @@ async def channel_ops_cover_distribution(
     dist_ids = {r.distributor_id for r in obs}
     prod_ids = {r.product_id for r in obs}
     dist_map: dict[int, tuple[str, str]] = {}
-    prod_map: dict[int, tuple[str, str, str]] = {}
+    prod_map: dict[int, tuple[str, str, str, str]] = {}
     if dist_ids:
         dist_rows = (
             await db.execute(
@@ -1017,6 +1027,7 @@ async def channel_ops_cover_distribution(
                     DimProduct.id,
                     DimProduct.sku,
                     DimProduct.name,
+                    DimProduct.sales_model_name,
                     DimProduct.product_line,
                     DimProduct.category,
                 ).where(DimProduct.id.in_(prod_ids))
@@ -1024,7 +1035,12 @@ async def channel_ops_cover_distribution(
         ).all()
         for r in prod_rows:
             family = (r.product_line or r.category or "Unclassified").strip() or "Unclassified"
-            prod_map[int(r.id)] = (str(r.sku or ""), str(r.name or ""), family)
+            prod_map[int(r.id)] = (
+                str(r.sku or ""),
+                str(r.name or ""),
+                family,
+                str(r.sales_model_name or ""),
+            )
 
     inbound_open: dict[tuple[int, int], float] = {}
     open_rows = (
@@ -1080,7 +1096,9 @@ async def channel_ops_cover_distribution(
         if r.weekly_velocity is not None:
             vel_total += float(r.weekly_velocity)
         d_code, d_name = dist_map.get(r.distributor_id, ("", f"Distributor {r.distributor_id}"))
-        sku, p_name, family = prod_map.get(r.product_id, ("", f"Product {r.product_id}", "Unclassified"))
+        sku, p_name, family, sales_model_name = prod_map.get(
+            r.product_id, ("", f"Product {r.product_id}", "Unclassified", "")
+        )
         dist_pair_counts[r.distributor_id] = dist_pair_counts.get(r.distributor_id, 0) + 1
         family_pair_counts[family] = family_pair_counts.get(family, 0) + 1
         vintage_days = max(0, (today - r.cover_as_of_date).days)
@@ -1092,6 +1110,7 @@ async def channel_ops_cover_distribution(
                 "distributor_name": d_name or d_code or f"Distributor {r.distributor_id}",
                 "product_id": r.product_id,
                 "sku": sku,
+                "sales_model_name": sales_model_name,
                 "product_name": p_name or sku or f"Product {r.product_id}",
                 "family": family,
                 "weeks_of_cover": r.weeks_of_cover,
