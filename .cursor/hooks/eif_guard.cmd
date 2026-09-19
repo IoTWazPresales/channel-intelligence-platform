@@ -18,6 +18,8 @@ if not errorlevel 1 goto :select_python
 if not errorlevel 1 goto :select_py
 "%SystemRoot%\System32\where.exe" python3 <nul >nul 2>&1
 if not errorlevel 1 goto :select_python3
+REM Cursor hook PATH is often System32-only; py.exe still lives in %SystemRoot%.
+if exist "%SystemRoot%\py.exe" goto :select_py_root
 call :emit_static HOOK_LAUNCHER_ERROR
 exit /b 0
 
@@ -32,6 +34,10 @@ goto :prepare_capture
 :select_python3
 set "EIF_PYTHON=python3"
 set "EIF_PYTHON_ARGS="
+goto :prepare_capture
+:select_py_root
+set "EIF_PYTHON=%SystemRoot%\py.exe"
+set "EIF_PYTHON_ARGS=-3"
 
 :prepare_capture
 set "EIF_TRIES=0"
