@@ -24,6 +24,8 @@ export type SettlementDeskCase = {
   created_at?: string | null;
   allowed_next?: string[];
   settle_readiness?: SettleReadiness;
+  customer_id?: number | null;
+  superseded_by_case_id?: number | null;
 };
 
 export type SettlementDeskApiLine = {
@@ -164,6 +166,7 @@ export function mapSettlementDeskView(
     fxBasisLine:
       settlement.settle_readiness?.fx_basis_line ?? detail.settle_readiness?.fx_basis_line ?? null,
     allowedNext: detail.allowed_next ?? [],
+    supersededByCaseId: detail.superseded_by_case_id ?? null,
   };
 }
 

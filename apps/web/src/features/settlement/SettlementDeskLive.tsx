@@ -4,6 +4,7 @@ import { Alert, Typography } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { CporCaseSupersedeDialog } from '@/features/cpor/CporCaseSupersedeDialog';
 import { SettlementConfirmDialog } from '@/features/settlement/SettlementConfirmDialog';
 import { apiGet, apiPost, apiPostFormData } from '@/lib/api';
 
@@ -22,6 +23,7 @@ type Props = {
 export function SettlementDeskLive({ caseId, embedded = false }: Props) {
   const qc = useQueryClient();
   const [settleOpen, setSettleOpen] = useState(false);
+  const [supersedeOpen, setSupersedeOpen] = useState(false);
 
   const detailQ = useQuery({
     queryKey: ['cpor', 'case', caseId],
@@ -60,6 +62,15 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
     },
   });
 
+  const restoreSupersession = useMutation({
+    mutationFn: () => apiPost(`/api/v1/cpor/cases/${caseId}/supersede/restore`, { confirm: true }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['cpor', 'case', caseId] });
+      await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', 'book'] });
+      await qc.invalidateQueries({ queryKey: ['cpor', 'cases'] });
+    },
+  });
+
   if (detailQ.isLoading || settlementQ.isLoading) {
     return <Typography sx={{ p: 2 }}>Loading…</Typography>;
   }
@@ -92,6 +103,11 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
           {String((settle.error as Error)?.message)}
         </Alert>
       ) : null}
+      {restoreSupersession.isError ? (
+        <Alert severity="error" sx={{ mb: 1 }}>
+          {String((restoreSupersession.error as Error)?.message)}
+        </Alert>
+      ) : null}
       <SettlementDesk
         view={view}
         embedded={embedded}
@@ -99,6 +115,16 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
         settling={settle.isPending}
         onUploadCustomerReport={(file) => importClaims.mutate(file)}
         onSettle={view.canSettle ? () => setSettleOpen(true) : undefined}
+        onSupersede={() => setSupersedeOpen(true)}
+        onRestoreSupersession={() => restoreSupersession.mutate()}
+        restoringSupersession={restoreSupersession.isPending}
+      />
+      <CporCaseSupersedeDialog
+        open={supersedeOpen}
+        onClose={() => setSupersedeOpen(false)}
+        caseId={caseId}
+        caseCode={view.caseCode}
+        customerId={detailQ.data.customer_id}
       />
       <SettlementConfirmDialog
         open={settleOpen}

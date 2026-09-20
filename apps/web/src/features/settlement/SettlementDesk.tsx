@@ -2,6 +2,7 @@
 
 import type { ColDef } from 'ag-grid-community';
 import { Alert, Box, Button, Stack, Typography } from '@mui/material';
+import Link from 'next/link';
 import { useMemo, useRef, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
@@ -35,6 +36,11 @@ type Props = {
   onUploadCustomerReport?: (file: File) => void;
   onSettle?: () => void;
   onRaiseHqCredit?: () => void;
+  /** BACKLOG-138 — open the supersede preview→confirm dialog. Hidden when absent or already superseded. */
+  onSupersede?: () => void;
+  /** BACKLOG-138 — clear the supersession pointer. Only rendered when the case is superseded. */
+  onRestoreSupersession?: () => void;
+  restoringSupersession?: boolean;
 };
 
 /**
@@ -54,6 +60,9 @@ export function SettlementDesk({
   onUploadCustomerReport,
   onSettle,
   onRaiseHqCredit,
+  onSupersede,
+  onRestoreSupersession,
+  restoringSupersession = false,
 }: Props) {
   const [mismatchOnly, setMismatchOnly] = useState(false);
   const [disti, setDisti] = useState<string | null>(null);
@@ -211,6 +220,17 @@ export function SettlementDesk({
         meta={`Opened ${view.openedOn ?? '—'} · Ended ${view.endedOn ?? '—'} · ${view.currency}${codeMeta}`}
         actions={
           <>
+            {onSupersede && view.supersededByCaseId == null && view.status !== 'settled' ? (
+              <Button
+                variant="outlined"
+                size="small"
+                color="warning"
+                onClick={onSupersede}
+                data-testid="settlement-desk-supersede"
+              >
+                Supersede…
+              </Button>
+            ) : null}
             {primaryCta.label !== 'Upload customer report' ? (
               <Button
                 variant="outlined"
@@ -236,6 +256,33 @@ export function SettlementDesk({
       />
 
       <LifecycleRail stages={[...SETTLE_STAGES]} labels={SETTLE_STAGE_LABEL} current={view.stage} />
+
+      {view.supersededByCaseId != null ? (
+        <Alert
+          severity="info"
+          data-testid="settlement-desk-superseded"
+          action={
+            onRestoreSupersession ? (
+              <Button
+                size="small"
+                color="inherit"
+                disabled={restoringSupersession}
+                onClick={onRestoreSupersession}
+                data-testid="settlement-desk-supersede-restore"
+              >
+                {restoringSupersession ? 'Restoring…' : 'Restore'}
+              </Button>
+            ) : undefined
+          }
+        >
+          Superseded by{' '}
+          <Link href={`/commercial-planner/cpor-cases/${view.supersededByCaseId}`}>
+            case #{view.supersededByCaseId}
+          </Link>
+          . Status unchanged ({view.status}); excluded from the settlement book, owed/paid recon, norms and
+          comparables. Lines, claims and events are kept.
+        </Alert>
+      ) : null}
 
       {!view.fxSettleAllowed ? (
         <Alert severity="warning" data-testid="settlement-desk-fx-blocked">

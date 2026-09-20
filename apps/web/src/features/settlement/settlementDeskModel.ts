@@ -102,6 +102,8 @@ export type SettlementDeskView = {
   roeSnapshot: number | null;
   fxBasisLine?: string | null;
   allowedNext: string[];
+  /** BACKLOG-138 — set when this case has been soft-superseded (pointer, not status). */
+  supersededByCaseId?: number | null;
 };
 
 export function stageFromCaseStatus(status: string, hasCip: boolean): SettleStage {

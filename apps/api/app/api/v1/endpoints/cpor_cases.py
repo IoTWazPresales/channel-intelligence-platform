@@ -16,6 +16,11 @@ from app.core.tenant_scope import tenant_id_from_user, where_tenant
 from app.db.session_sync import SessionLocal
 from app.models.cpor import CporCase, CporCaseEvent, CporCaseLine, CporClaimEvidenceLine
 from app.models.dimensions import DimCustomer, DimProduct
+from app.services.cpor.case_supersession import (
+    preview_case_supersession,
+    restore_case_supersession,
+    supersede_case,
+)
 from app.services.cpor.claim_evidence_apply import apply_claim_evidence_to_case
 from app.services.cpor.cost_suggestion import (
     CostSuggestion,
@@ -495,6 +500,20 @@ class IntelligenceExcludeBody(BaseModel):
     confirm: bool = False
 
 
+class SupersedePreviewBody(BaseModel):
+    winner_case_id: int = Field(ge=1, description="Replacement case that supersedes this one")
+
+
+class SupersedeBody(SupersedePreviewBody):
+    confirm: bool = False
+    reason: str | None = None
+
+
+class SupersedeRestoreBody(BaseModel):
+    confirm: bool = False
+    reason: str | None = None
+
+
 # --- case CRUD ---------------------------------------------------------------
 
 
@@ -876,6 +895,80 @@ def set_intelligence_exclude(
             "case_code": case.case_code,
             "intelligence_exclude": bool(case.intelligence_exclude),
         }
+
+
+# --- supersession (BACKLOG-138) ----------------------------------------------
+
+
+@router.post("/cases/{case_id}/supersede/preview")
+def preview_supersede_case(
+    case_id: int,
+    body: SupersedePreviewBody,
+    user: dict = Depends(get_current_user),
+):
+    """What superseding this case by ``winner_case_id`` would do. No writes."""
+    with SessionLocal() as session:
+        loser = _load_case(session, case_id, user)
+        winner = _load_case(session, int(body.winner_case_id), user)
+        return preview_case_supersession(session, loser=loser, winner=winner)
+
+
+@router.post("/cases/{case_id}/supersede")
+def supersede_case_endpoint(
+    case_id: int,
+    body: SupersedeBody,
+    user: dict = Depends(get_current_user),
+):
+    """Soft-supersede this case by ``winner_case_id``. Requires confirm=true; 409 on blockers."""
+    if not body.confirm:
+        raise HTTPException(status_code=400, detail="confirm=true is required — supersession is never silent")
+    actor = _actor(user)
+    with SessionLocal() as session:
+        loser = _load_case(session, case_id, user)
+        winner = _load_case(session, int(body.winner_case_id), user)
+        preview = preview_case_supersession(session, loser=loser, winner=winner)
+        if preview["blockers"]:
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "supersede_blocked", "message": "Supersession refused", **preview},
+            )
+        result = supersede_case(
+            session,
+            loser=loser,
+            winner=winner,
+            actor=actor,
+            reason=body.reason,
+            actor_trail=_actor_trail(user),
+        )
+        session.commit()
+        session.refresh(loser)
+        cust = session.get(DimCustomer, loser.customer_id)
+        out = _case_json(loser, customer=cust)
+        out["supersession"] = result
+        return out
+
+
+@router.post("/cases/{case_id}/supersede/restore")
+def restore_supersede_case(
+    case_id: int,
+    body: SupersedeRestoreBody,
+    user: dict = Depends(get_current_user),
+):
+    """Clear ``superseded_by_case_id`` (soft reversal). Requires confirm=true."""
+    if not body.confirm:
+        raise HTTPException(status_code=400, detail="confirm=true is required — restore is never silent")
+    actor = _actor(user)
+    with SessionLocal() as session:
+        case = _load_case(session, case_id, user)
+        result = restore_case_supersession(
+            session, case=case, actor=actor, reason=body.reason, actor_trail=_actor_trail(user)
+        )
+        session.commit()
+        session.refresh(case)
+        cust = session.get(DimCustomer, case.customer_id)
+        out = _case_json(case, customer=cust)
+        out["supersession"] = result
+        return out
 
 
 # --- lines -------------------------------------------------------------------
