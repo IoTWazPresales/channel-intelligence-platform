@@ -232,6 +232,7 @@ type LineupCoverageLine = {
   source_row_number: number;
   product_id: number | null;
   product_sku: string | null;
+  product_sales_model_name?: string | null;
   product_name: string | null;
   part_number_raw: string | null;
   model_raw: string | null;
@@ -279,6 +280,7 @@ type LineupEvidenceFields = {
 type LineupProductGap = {
   product_id: number;
   product_sku: string;
+  product_sales_model_name?: string | null;
   product_name: string;
   has_sku_assumption: boolean;
   lineup_evidence: LineupEvidenceFields;
@@ -3065,7 +3067,7 @@ export default function CommercialPlannerPage() {
                     </TableCell>
                     <TableCell>Row</TableCell>
                     <TableCell>Model / product</TableCell>
-                    <TableCell>SKU</TableCell>
+                    <TableCell>{lineIdent.header}</TableCell>
                     <TableCell>Part #</TableCell>
                     <TableCell>Customer</TableCell>
                     <TableCell>Distributor</TableCell>
@@ -3093,7 +3095,7 @@ export default function CommercialPlannerPage() {
                       <TableCell>{coverageLineupProductLabel(row)}</TableCell>
                       <TableCell>
                         <Typography variant="body2" fontFamily="monospace" component="span">
-                          {row.product_sku ?? '—'}
+                          {lineIdent.value(row.product_sku, row.product_sales_model_name ?? row.model_raw)}
                         </Typography>
                       </TableCell>
                       <TableCell>{row.part_number_raw?.trim() || '—'}</TableCell>
@@ -3319,7 +3321,7 @@ export default function CommercialPlannerPage() {
                   <Table size="small" sx={{ minWidth: 700 }}>
                     <TableHead>
                       <TableRow>
-                        <TableCell>SKU</TableCell>
+                        <TableCell>{lineIdent.header}</TableCell>
                         <TableCell>Product</TableCell>
                         <TableCell>SKU assumption</TableCell>
                         <TableCell align="right">DAP evidence (src/local)</TableCell>
@@ -3331,7 +3333,7 @@ export default function CommercialPlannerPage() {
                     <TableBody>
                       {(productGaps ?? []).map((pg) => (
                         <TableRow key={pg.product_id}>
-                          <TableCell>{pg.product_sku}</TableCell>
+                          <TableCell>{lineIdent.value(pg.product_sku, pg.product_sales_model_name)}</TableCell>
                           <TableCell>{pg.product_name}</TableCell>
                           <TableCell>
                             <Chip
@@ -3397,7 +3399,7 @@ export default function CommercialPlannerPage() {
                 <TableHead>
                   <TableRow>
                     <TableCell>Row</TableCell>
-                    <TableCell>Product SKU</TableCell>
+                    <TableCell>{lineIdent.header}</TableCell>
                     <TableCell>Model</TableCell>
                     <TableCell>Part #</TableCell>
                     <TableCell>Base unit</TableCell>
@@ -3418,7 +3420,7 @@ export default function CommercialPlannerPage() {
                   {filteredCoverageLines.map((ln) => (
                     <TableRow key={ln.id}>
                       <TableCell>{ln.source_row_number}</TableCell>
-                      <TableCell>{ln.product_sku ?? '—'}</TableCell>
+                      <TableCell>{lineIdent.value(ln.product_sku, ln.product_sales_model_name ?? ln.model_raw)}</TableCell>
                       <TableCell>{ln.model_raw ?? '—'}</TableCell>
                       <TableCell>{ln.part_number_raw ?? '—'}</TableCell>
                       <TableCell>{ln.base_unit_raw ?? '—'}</TableCell>

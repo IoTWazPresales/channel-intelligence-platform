@@ -33,6 +33,7 @@ import {
 import { MasterDataGridShell } from '@/components/masterGrid/MasterDataGridShell';
 import { DataChrome } from '@/features/data-stewardship/DataChrome';
 import { ProductSkuEconomicsPanel } from '@/features/admin/ProductSkuEconomicsPanel';
+import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { apiDelete, apiDeleteJson, apiGet, apiPatch, apiPost, HttpConflictError, safeDisplayError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
@@ -193,6 +194,7 @@ function parseProductCsv(text: string): {
 
 function AdminProductsPageContent() {
   const qc = useQueryClient();
+  const lineIdent = useLineIdentifierPreference();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -420,7 +422,15 @@ function AdminProductsPageContent() {
 
   const colDefs: ColDef<ProductRow>[] = useMemo(() => {
     const staticCols: ColDef<ProductRow>[] = [
-      { field: 'sku', headerName: 'SKU', pinned: 'left', minWidth: 140, editable: false },
+      {
+        colId: 'line_identifier_display',
+        headerName: lineIdent.header,
+        pinned: 'left',
+        minWidth: 140,
+        editable: false,
+        valueGetter: (p) => lineIdent.value(p.data?.sku, p.data?.sales_model_name),
+      },
+      { field: 'sku', headerName: 'SKU', minWidth: 140, editable: false },
       { field: 'name', headerName: 'Name', flex: 1, minWidth: 180, editable: true },
       { field: 'category', headerName: 'Category', minWidth: 120, editable: true },
       { field: 'part_number', headerName: 'Part number', minWidth: 140, editable: false },
@@ -500,7 +510,7 @@ function AdminProductsPageContent() {
           'Delete this product from the global catalogue? Derived metrics and aliases are removed automatically. If sales, inventory, pricing, lineup, or other core facts still reference this SKU, the delete will be blocked.',
       }),
     ];
-  }, [onDeleteProduct, delProduct.isPending, accumulatedSpecKeys]);
+  }, [onDeleteProduct, delProduct.isPending, accumulatedSpecKeys, lineIdent]);
 
   const columnLabelByField = useMemo(() => {
     const out: Record<string, string> = {};

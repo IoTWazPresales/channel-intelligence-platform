@@ -45,6 +45,7 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { DataChrome } from '@/features/data-stewardship/DataChrome';
 import { DistributorCommercialTermsPanel } from '@/features/admin/DistributorCommercialTermsPanel';
+import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { apiDelete, apiGet, apiPatch, apiPost, HttpConflictError, safeDisplayError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
@@ -108,6 +109,7 @@ type DistributorContactRow = {
 type SelloutRow = {
   id: number;
   product_sku: string | null;
+  product_sales_model_name?: string | null;
   customer_code: string | null;
   period_start: string;
   units: number;
@@ -119,6 +121,7 @@ type SelloutRow = {
 type InboundRow = {
   id: number;
   product_sku: string | null;
+  product_sales_model_name?: string | null;
   eta_date: string;
   quantity: number;
   reference: string | null;
@@ -196,6 +199,7 @@ function TabPanel({ value, index, children }: { value: number; index: number; ch
 
 function AdminDistributorsPageContent() {
   const qc = useQueryClient();
+  const lineIdent = useLineIdentifierPreference();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -725,7 +729,9 @@ function AdminDistributorsPageContent() {
     () => {
       const busyDel = delSell.isPending || clearSell.isPending;
       return [
-        { field: 'product_sku', headerName: 'SKU', minWidth: 130, editable: false },
+        { field: 'product_sku', headerName: lineIdent.header, minWidth: 130, editable: false,
+          valueGetter: (p) => lineIdent.value(p.data?.product_sku, p.data?.product_sales_model_name),
+        },
         { field: 'customer_code', headerName: 'Customer', minWidth: 120, editable: false },
         { field: 'period_start', headerName: 'Period', minWidth: 120, editable: false },
         { field: 'units', headerName: 'Units', type: 'numericColumn', editable: false },
@@ -740,14 +746,16 @@ function AdminDistributorsPageContent() {
         gridDeleteColumn<SelloutRow>((id) => void delSell.mutate(id), { busy: busyDel }),
       ];
     },
-    [distCodes, delSell, delSell.isPending, clearSell.isPending]
+    [distCodes, delSell, delSell.isPending, clearSell.isPending, lineIdent]
   );
 
   const inboundCols: ColDef<InboundRow>[] = useMemo(
     () => {
       const busyDel = delInbound.isPending || clearInbound.isPending;
       return [
-        { field: 'product_sku', headerName: 'SKU', minWidth: 130, editable: false },
+        { field: 'product_sku', headerName: lineIdent.header, minWidth: 130, editable: false,
+          valueGetter: (p) => lineIdent.value(p.data?.product_sku, p.data?.product_sales_model_name),
+        },
         { field: 'eta_date', headerName: 'ETA', minWidth: 120, editable: false },
         { field: 'quantity', headerName: 'Qty', type: 'numericColumn', editable: false },
         { field: 'status', headerName: 'Status', minWidth: 100, editable: false },
@@ -762,7 +770,7 @@ function AdminDistributorsPageContent() {
         gridDeleteColumn<InboundRow>((id) => void delInbound.mutate(id), { busy: busyDel }),
       ];
     },
-    [distCodes, delInbound, delInbound.isPending, clearInbound.isPending]
+    [distCodes, delInbound, delInbound.isPending, clearInbound.isPending, lineIdent]
   );
 
   const sellGrid: GridOptions<SelloutRow> = useMemo(

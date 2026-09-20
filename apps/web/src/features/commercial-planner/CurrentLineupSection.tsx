@@ -50,6 +50,7 @@ import {
   type ReconCustomerSlice,
   type ReconSummary,
 } from './lineupReconciliationDisplay';
+import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 
 function formatHttpErrorDetail(detail: unknown): string {
   if (typeof detail === 'string') return detail;
@@ -1671,6 +1672,7 @@ function CaseLinesDialog({
   caseId: number;
   caseLabel: string;
 }) {
+  const lineIdent = useLineIdentifierPreference();
   const { data, isLoading } = useQuery<CaseLinesResponse>({
     queryKey: ['commercial-lineup-case-lines', caseId],
     queryFn: ({ signal }) =>
@@ -1700,7 +1702,7 @@ function CaseLinesDialog({
                 <TableRow>
                   <TableCell>#</TableCell>
                   <TableCell>Model / product</TableCell>
-                  <TableCell>SKU</TableCell>
+                  <TableCell>{lineIdent.header}</TableCell>
                   <TableCell>Part #</TableCell>
                   <TableCell>Customer</TableCell>
                   <TableCell>Distributor</TableCell>
@@ -1725,7 +1727,7 @@ function CaseLinesDialog({
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" fontFamily="monospace">
-                        {ln.product_sku ?? ln.sku_raw ?? '—'}
+                        {lineIdent.value(ln.product_sku ?? ln.sku_raw, ln.product_sales_model_name ?? ln.model_raw)}
                       </Typography>
                     </TableCell>
                     <TableCell>{ln.product_part_number ?? ln.part_number_raw ?? '—'}</TableCell>
@@ -2863,6 +2865,7 @@ export function CurrentLineupSection({
   allowUpload?: boolean;
 }) {
   const qc = useQueryClient();
+  const lineIdent = useLineIdentifierPreference();
   const [expanded, setExpanded] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [viewLinesCase, setViewLinesCase] = useState<CommercialLineupCase | null>(null);
@@ -3119,7 +3122,7 @@ export function CurrentLineupSection({
       if (colId === 'sku')
         return (
           <Typography variant="body2" fontFamily="monospace">
-            {ln.product_sku ?? ln.sku_raw ?? '—'}
+            {lineIdent.value(ln.product_sku ?? ln.sku_raw, ln.product_sales_model_name ?? ln.model_raw)}
           </Typography>
         );
       if (colId === 'part') return ln.product_part_number ?? ln.part_number_raw ?? '—';
@@ -3269,7 +3272,7 @@ export function CurrentLineupSection({
       }
       return '—';
     },
-    [activeCaseId, patchLineMutation, showSyncWorkbenchCol],
+    [activeCaseId, patchLineMutation, showSyncWorkbenchCol, lineIdent],
   );
 
   // Primitive value for AG Grid sort/filter (cellRenderer below handles rich display). Mirrors the
@@ -3278,7 +3281,7 @@ export function CurrentLineupSection({
     (ln: CommercialLineupLine, colId: string): string | number | null => {
       if (colId === 'num') return ln.source_row_number ?? ln.id;
       if (colId === 'product') return lineupProductLabel(ln);
-      if (colId === 'sku') return ln.product_sku ?? ln.sku_raw ?? '—';
+      if (colId === 'sku') return lineIdent.value(ln.product_sku ?? ln.sku_raw, ln.product_sales_model_name ?? ln.model_raw);
       if (colId === 'part') return ln.product_part_number ?? ln.part_number_raw ?? '—';
       if (colId === 'cust') return lineupCustomerCell(ln);
       if (colId === 'dist') return lineupDistributorCell(ln);
@@ -3327,14 +3330,14 @@ export function CurrentLineupSection({
       if (colId.startsWith('sync:')) return formatSyncFieldForWorkbench(ln, colId.slice(5));
       return '—';
     },
-    [showSyncWorkbenchCol],
+    [showSyncWorkbenchCol, lineIdent],
   );
 
   const wbCanEdit = activeCase?.commercial_status === 'draft_imported';
 
   const wbColumnDefs = useMemo<ColDef[]>(() => {
     return visibleColsFiltered.map((colId) => {
-      const headerName = workbenchColumnLabel(colId, wbMeta);
+      const headerName = colId === 'sku' ? lineIdent.header : workbenchColumnLabel(colId, wbMeta);
       const editableField =
         colId === 'units'
           ? 'quantity_units'
@@ -3364,7 +3367,7 @@ export function CurrentLineupSection({
           p.data ? wbCellContent(p.data, colId, false) : null,
       } satisfies ColDef;
     });
-  }, [visibleColsFiltered, wbMeta, wbCanEdit, wbCellValue, wbCellContent]);
+  }, [visibleColsFiltered, wbMeta, wbCanEdit, wbCellValue, wbCellContent, lineIdent]);
 
   const onWbCellValueChanged = useCallback(
     (e: CellValueChangedEvent) => {
@@ -3966,7 +3969,8 @@ export function CurrentLineupSection({
                     const q = colSelectorSearch.toLowerCase().trim();
                     const cols = q
                       ? group.cols.filter((id) =>
-                          workbenchColumnLabel(id, wbMeta).toLowerCase().includes(q),
+                          workbenchColumnLabel(id, wbMeta).toLowerCase().includes(q) ||
+                            (id === 'sku' && lineIdent.header.toLowerCase().includes(q)),
                         )
                       : group.cols;
                     if (!cols.length) return null;
@@ -4003,7 +4007,7 @@ export function CurrentLineupSection({
                               }
                               label={
                                 <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
-                                  {workbenchColumnLabel(id, wbMeta)}
+                                  {id === 'sku' ? lineIdent.header : workbenchColumnLabel(id, wbMeta)}
                                 </Typography>
                               }
                             />

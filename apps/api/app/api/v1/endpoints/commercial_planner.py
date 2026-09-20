@@ -1845,6 +1845,7 @@ async def get_lineup_coverage(
             HistoricalLineupImportHeader.country_code,
             HistoricalLineupImportHeader.currency_code,
             DimProduct.sku.label("product_sku"),
+            DimProduct.sales_model_name.label("product_sales_model_name"),
             DimProduct.name.label("product_name"),
             HistoricalLineupImportHeader.customer_id.label("header_customer_id"),
             header_customer.code.label("header_customer_code"),
@@ -1872,6 +1873,7 @@ async def get_lineup_coverage(
         country_code,
         currency_code,
         product_sku,
+        product_sales_model_name,
         product_name,
         header_customer_id,
         header_customer_code,
@@ -1890,6 +1892,7 @@ async def get_lineup_coverage(
                 "source_row_number": ln.source_row_number,
                 "product_id": ln.product_id,
                 "product_sku": product_sku,
+                "product_sales_model_name": product_sales_model_name,
                 "product_name": product_name,
                 "part_number_raw": ln.part_number_raw,
                 "model_raw": ln.model_raw,
@@ -1957,6 +1960,7 @@ async def get_lineup_product_gaps(
         select(
             HistoricalLineupImportLine.product_id,
             DimProduct.sku.label("product_sku"),
+            DimProduct.sales_model_name.label("product_sales_model_name"),
             DimProduct.name.label("product_name"),
             func.max(HistoricalLineupImportLine.dap_local).label("dap_local"),
             func.max(HistoricalLineupImportLine.actual_dap_local).label("actual_dap_local"),
@@ -1978,7 +1982,12 @@ async def get_lineup_product_gaps(
             HistoricalLineupImportHeader.import_job_id == job_id,
             HistoricalLineupImportLine.product_id.isnot(None),
         )
-        .group_by(HistoricalLineupImportLine.product_id, DimProduct.sku, DimProduct.name)
+        .group_by(
+            HistoricalLineupImportLine.product_id,
+            DimProduct.sku,
+            DimProduct.sales_model_name,
+            DimProduct.name,
+        )
         .order_by(DimProduct.sku)
     )
     rows = (await db.execute(stmt)).all()
@@ -1999,6 +2008,7 @@ async def get_lineup_product_gaps(
             {
                 "product_id": r.product_id,
                 "product_sku": r.product_sku,
+                "product_sales_model_name": r.product_sales_model_name,
                 "product_name": r.product_name,
                 "has_sku_assumption": r.sku_assumption_id is not None,
                 "lineup_evidence": {
