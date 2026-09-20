@@ -16,6 +16,7 @@ import type { ColDef } from 'ag-grid-community';
 import { useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { ModuleDataSection } from '@/components/ModuleDataSection';
 
 import { DataChrome } from '@/features/data-stewardship/DataChrome';
 import { apiGet, safeDisplayError } from '@/lib/api';
@@ -138,16 +139,23 @@ export default function StewardAuditPage() {
       </Stack>
 
       <Paper sx={{ p: 2 }} data-testid="steward-audit-table">
-        {query.isError ? (
-          <Alert severity="error">{safeDisplayError(query.error)}</Alert>
-        ) : (
-          <EnterpriseDataGrid
-            rowData={rows}
-            columnDefs={auditCols}
-            height={480}
-            gridOptions={{ overlayNoRowsTemplate: 'No steward audit events yet.' }}
-          />
-        )}
+        <ModuleDataSection
+          isLoading={query.isPending}
+          isError={query.isError}
+          error={query.isError ? new Error(safeDisplayError(query.error)) : null}
+          onRetry={() => void query.refetch()}
+          isEmpty={rows.length === 0}
+          empty={{
+            title: 'No steward audit events yet',
+            description:
+              importer || jobId
+                ? 'No steward decisions match the current importer / job filter.'
+                : 'Steward resolve, map, ignore, provisional and bulk decisions appear here once made.',
+            primary: { label: 'Import Center', href: '/admin/imports' },
+          }}
+        >
+          <EnterpriseDataGrid rowData={rows} columnDefs={auditCols} height={480} />
+        </ModuleDataSection>
       </Paper>
     </DataChrome>
   );

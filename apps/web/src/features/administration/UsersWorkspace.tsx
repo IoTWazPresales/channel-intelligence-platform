@@ -19,6 +19,7 @@ import type { UserRole } from '@cip/types';
 import type { ColDef } from 'ag-grid-community';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
 
@@ -231,16 +232,19 @@ export function UsersWorkspace() {
         <Typography variant="subtitle1" fontWeight={600} gutterBottom>
           Tenant users
         </Typography>
-        {usersQuery.isError ? (
-          <Alert severity="error">{safeDisplayError(usersQuery.error)}</Alert>
-        ) : (
-          <EnterpriseDataGrid
-            rowData={usersQuery.data?.users ?? []}
-            columnDefs={userColDefs}
-            height={360}
-            gridOptions={{ overlayNoRowsTemplate: 'No users yet.' }}
-          />
-        )}
+        <ModuleDataSection
+          isLoading={usersQuery.isPending}
+          isError={usersQuery.isError}
+          error={usersQuery.isError ? new Error(safeDisplayError(usersQuery.error)) : null}
+          onRetry={() => void usersQuery.refetch()}
+          isEmpty={(usersQuery.data?.users?.length ?? 0) === 0}
+          empty={{
+            title: 'No users yet',
+            description: 'Create the first tenant user with the form above.',
+          }}
+        >
+          <EnterpriseDataGrid rowData={usersQuery.data?.users ?? []} columnDefs={userColDefs} height={360} />
+        </ModuleDataSection>
       </Paper>
     </Box>
   );

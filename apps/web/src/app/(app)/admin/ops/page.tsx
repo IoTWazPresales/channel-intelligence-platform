@@ -14,6 +14,7 @@ import NextLink from 'next/link';
 import { useMemo } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { ModuleDataSection } from '@/components/ModuleDataSection';
 
 import { AdminChrome } from '@/features/administration/AdminChrome';
 import { apiGet, safeDisplayError } from '@/lib/api';
@@ -154,12 +155,20 @@ export default function AdminOpsPage() {
         <Typography variant="subtitle1" fontWeight={600} gutterBottom>
           Failed import jobs
         </Typography>
-        <EnterpriseDataGrid
-          rowData={failedJobs}
-          columnDefs={failedJobCols}
-          height={360}
-          gridOptions={{ overlayNoRowsTemplate: 'No open failed jobs for this tenant.' }}
-        />
+        <ModuleDataSection
+          isLoading={overview.isPending}
+          isError={overview.isError}
+          error={overview.isError ? new Error(safeDisplayError(overview.error)) : null}
+          onRetry={() => void overview.refetch()}
+          isEmpty={failedJobs.length === 0}
+          empty={{
+            title: 'No open failed jobs for this tenant',
+            description: 'Failed import jobs that still need attention appear here.',
+            primary: { label: 'Import Center', href: '/admin/imports' },
+          }}
+        >
+          <EnterpriseDataGrid rowData={failedJobs} columnDefs={failedJobCols} height={360} />
+        </ModuleDataSection>
       </Paper>
     </AdminChrome>
   );
