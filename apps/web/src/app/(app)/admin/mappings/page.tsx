@@ -8,6 +8,7 @@ import type { ColDef } from 'ag-grid-community';
 import { Suspense, useMemo } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { DataChrome } from '@/features/data-stewardship/DataChrome';
 import { StewardFailureQueue } from '@/features/data-stewardship/StewardFailureQueue';
@@ -140,15 +141,16 @@ function AdminMappingsPageContent() {
           Unresolved entity tokens wait here as pipeline state. This is not a restore-or-retire control. Resolve them in
           the resolve workspace.
         </Typography>
-        {legacyLoading ? (
-          <Typography variant="body2" color="text.secondary">
-            Loading legacy rows…
-          </Typography>
-        ) : legacyRows.length === 0 ? (
-          <Typography variant="body2" color="text.secondary" data-testid="legacy-mapping-queue-empty">
-            No legacy queue rows.
-          </Typography>
-        ) : (
+        <ModuleDataSection
+          isLoading={legacyLoading}
+          loadingLabel="Loading legacy rows…"
+          isEmpty={legacyRows.length === 0}
+          empty={{
+            title: 'No legacy queue rows',
+            description: 'Unresolved entity tokens from older imports appear here as pipeline state.',
+            'data-testid': 'legacy-mapping-queue-empty',
+          }}
+        >
           <Stack spacing={1}>
             <EnterpriseDataGrid rowData={legacyRows} columnDefs={legacyColDefs} height={280} />
             <Button
@@ -163,7 +165,7 @@ function AdminMappingsPageContent() {
               Clear legacy queue
             </Button>
           </Stack>
-        )}
+        </ModuleDataSection>
       </Paper>
       )}
     </>

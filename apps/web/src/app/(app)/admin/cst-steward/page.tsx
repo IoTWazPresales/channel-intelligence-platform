@@ -21,6 +21,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { DataChrome } from '@/features/data-stewardship/DataChrome';
 import { OPS_LIST_GRID_PAGINATION } from '@/features/shell/opsListGridPagination';
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
@@ -195,17 +196,30 @@ export default function CstStewardPage() {
               data-testid="cst-key-filter"
             />
           </Stack>
-          {errAccounts ? <Alert severity="error">{String((accountsError as Error)?.message)}</Alert> : null}
-          <EnterpriseDataGrid
-            rowData={accounts ?? []}
-            columnDefs={accountCols}
-            height={520}
-            gridOptions={{
-              getRowId: (p) => String(p.data!.customer_id),
-              loading: loadingAccounts,
-              ...OPS_LIST_GRID_PAGINATION,
+          <ModuleDataSection
+            isLoading={loadingAccounts}
+            isError={errAccounts}
+            error={errAccounts ? new Error(String((accountsError as Error)?.message)) : null}
+            onRetry={() => void refetchAccounts()}
+            isEmpty={(accounts ?? []).length === 0}
+            empty={{
+              title: filter.trim() ? 'No key accounts match the filter' : 'No key accounts yet',
+              description: filter.trim()
+                ? 'Clear or change the filter to see other customers.'
+                : 'Customers appear here once the customer master has rows; flag key accounts and set their feed profile.',
+              primary: { label: 'Customers', href: '/admin/customers' },
             }}
-          />
+          >
+            <EnterpriseDataGrid
+              rowData={accounts ?? []}
+              columnDefs={accountCols}
+              height={520}
+              gridOptions={{
+                getRowId: (p) => String(p.data!.customer_id),
+                ...OPS_LIST_GRID_PAGINATION,
+              }}
+            />
+          </ModuleDataSection>
         </>
       ) : null}
 
@@ -226,16 +240,25 @@ export default function CstStewardPage() {
             </Button>
           </Stack>
           {advance.isError ? <Alert severity="error">{String((advance.error as Error)?.message)}</Alert> : null}
-          <EnterpriseDataGrid
-            rowData={worklist?.items ?? []}
-            columnDefs={slotCols}
-            height={520}
-            gridOptions={{
-              getRowId: (p) => String(p.data!.id),
-              loading: loadingSlots,
-              ...OPS_LIST_GRID_PAGINATION,
+          <ModuleDataSection
+            isLoading={loadingSlots}
+            onRetry={() => void refetchSlots()}
+            isEmpty={(worklist?.items ?? []).length === 0}
+            empty={{
+              title: 'No due, late or missing report slots',
+              description: 'Every expected customer sell-through report has been received for the current cadence.',
             }}
-          />
+          >
+            <EnterpriseDataGrid
+              rowData={worklist?.items ?? []}
+              columnDefs={slotCols}
+              height={520}
+              gridOptions={{
+                getRowId: (p) => String(p.data!.id),
+                ...OPS_LIST_GRID_PAGINATION,
+              }}
+            />
+          </ModuleDataSection>
         </>
       ) : null}
 

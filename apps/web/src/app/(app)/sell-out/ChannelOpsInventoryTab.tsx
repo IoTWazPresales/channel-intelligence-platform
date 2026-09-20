@@ -1,12 +1,13 @@
 'use client';
 
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import { Alert, Autocomplete, Box, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Autocomplete, Box, Paper, Stack, TextField } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import type { ColDef } from 'ag-grid-community';
 import { useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { apiGet } from '@/lib/api';
 
@@ -173,26 +174,21 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
         </Alert>
       ) : (
         <>
-          {isError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {(error as Error)?.message ?? 'Failed to load inventory.'}
-            </Alert>
-          )}
           <Paper variant="outlined">
             <Box sx={{ p: 2 }}>
-              {isLoading ? (
-                <Typography variant="body2">Loading…</Typography>
-              ) : (data?.items ?? []).length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  No distributor inventory rows for this selection.
-                </Typography>
-              ) : (
-                <EnterpriseDataGrid
-                  rowData={data?.items ?? []}
-                  columnDefs={invCols}
-                  height={480}
-                />
-              )}
+              <ModuleDataSection
+                isLoading={isLoading}
+                isError={isError}
+                error={isError ? new Error((error as Error)?.message ?? 'Failed to load inventory.') : null}
+                isEmpty={(data?.items ?? []).length === 0}
+                empty={{
+                  title: 'No distributor inventory rows for this selection',
+                  description: 'Distributor stock rows appear here once a DSI import has been applied.',
+                  primary: { label: 'Import Center', href: '/admin/imports?template=distributor_inventory' },
+                }}
+              >
+                <EnterpriseDataGrid rowData={data?.items ?? []} columnDefs={invCols} height={480} />
+              </ModuleDataSection>
             </Box>
           </Paper>
         </>

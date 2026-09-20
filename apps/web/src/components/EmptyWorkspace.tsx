@@ -14,16 +14,19 @@ export function EmptyWorkspace({
   description,
   primary,
   secondary,
+  'data-testid': testId,
 }: {
   title: string;
   description: string;
   primary?: EmptyWorkspaceAction;
   secondary?: EmptyWorkspaceAction;
+  'data-testid'?: string;
 }) {
   return (
     <Box
       role="region"
       aria-label={title}
+      data-testid={testId}
       sx={{
         py: 6,
         px: 3,

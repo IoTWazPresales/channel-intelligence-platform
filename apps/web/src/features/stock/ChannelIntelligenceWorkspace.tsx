@@ -15,6 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { apiGet } from '@/lib/api';
 
@@ -197,10 +198,20 @@ export function ChannelIntelligenceWorkspace() {
           Refresh
         </Button>
       </Stack>
-      {isError ? <Alert severity="error">{String((error as Error)?.message)}</Alert> : null}
-      {isLoading ? (
-        <Typography>Loading…</Typography>
-      ) : (
+      <ModuleDataSection
+        isLoading={isLoading}
+        isError={isError}
+        error={isError ? new Error(String((error as Error)?.message)) : null}
+        onRetry={() => void refetch()}
+        isEmpty={(data?.items ?? []).length === 0}
+        empty={{
+          title: data?.data_unavailable ? 'Channel intelligence data unavailable' : 'No channel intelligence rows',
+          description: data?.data_unavailable
+            ? 'The upstream sell-through and stock tables have no rows yet, so no customer × product intelligence can be derived.'
+            : 'Adjust the filters above, or import customer sell-through and stock evidence via the Import Center.',
+          primary: { label: 'Import Center', href: '/admin/imports' },
+        }}
+      >
         <EnterpriseDataGrid
           rowData={data?.items ?? []}
           columnDefs={cols}
@@ -211,7 +222,7 @@ export function ChannelIntelligenceWorkspace() {
             onRowClicked: (e) => setSelected(e.data ?? null),
           }}
         />
-      )}
+      </ModuleDataSection>
       <Drawer anchor="right" open={!!selected} onClose={() => setSelected(null)}>
         <Box sx={{ width: 360, p: 2 }}>
           <Typography variant="h6" sx={{ mb: 0.5 }}>

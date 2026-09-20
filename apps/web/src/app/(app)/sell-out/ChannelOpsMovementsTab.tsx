@@ -6,6 +6,7 @@ import type { ColDef } from 'ag-grid-community';
 import { useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { apiGet } from '@/lib/api';
 
@@ -132,22 +133,21 @@ export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
         <Alert severity="info">Select a distributor to view inbound shipment movements.</Alert>
       ) : (
         <>
-          {isError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {(error as Error)?.message ?? 'Failed to load movements.'}
-            </Alert>
-          )}
           <Paper variant="outlined">
             <Box sx={{ p: 2 }}>
-              {isLoading ? (
-                <Typography variant="body2">Loading…</Typography>
-              ) : (data?.items ?? []).length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  No shipment evidence lines for this distributor.
-                </Typography>
-              ) : (
+              <ModuleDataSection
+                isLoading={isLoading}
+                isError={isError}
+                error={isError ? new Error((error as Error)?.message ?? 'Failed to load movements.') : null}
+                isEmpty={(data?.items ?? []).length === 0}
+                empty={{
+                  title: 'No shipment evidence lines for this distributor',
+                  description: 'Inbound shipment lines appear here once a shipment evidence import has been applied.',
+                  primary: { label: 'Import Center', href: '/admin/imports?template=inbound_shipments' },
+                }}
+              >
                 <EnterpriseDataGrid rowData={data?.items ?? []} columnDefs={movementCols} height={420} />
-              )}
+              </ModuleDataSection>
             </Box>
           </Paper>
           {depthAtLeast(depth, 'strategic') && productTotals.length > 0 && (

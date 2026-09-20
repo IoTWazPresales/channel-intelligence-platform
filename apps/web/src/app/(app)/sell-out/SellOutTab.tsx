@@ -15,6 +15,7 @@ import type { ColDef } from 'ag-grid-community';
 import { useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { apiGet } from '@/lib/api';
 
@@ -350,49 +351,51 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
             <Typography variant="subtitle2" gutterBottom>
               Active products with no sell-out in the last 365 days
             </Typography>
-            {zeroLoading ? (
-              <Typography variant="body2">Loading…</Typography>
-            ) : (zeroProducts?.items ?? []).length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                No zero-sell-out products in lookback window.
-              </Typography>
-            ) : (
+            <ModuleDataSection
+              isLoading={zeroLoading}
+              isEmpty={(zeroProducts?.items ?? []).length === 0}
+              empty={{
+                title: 'No zero-sell-out products',
+                description: 'Every active product has at least one sell-out row in the lookback window.',
+              }}
+            >
               <EnterpriseDataGrid rowData={zeroProducts?.items ?? []} columnDefs={zeroCols} height={360} />
-            )}
+            </ModuleDataSection>
           </Box>
         </Paper>
       ) : (
         <Paper variant="outlined">
           <Box sx={{ p: 2 }}>
-            {linesError && (
-              <Alert severity="error" sx={{ mb: 1 }}>
-                {(linesErr as Error)?.message ?? 'Failed to load sell-out lines.'}
-              </Alert>
-            )}
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
               {lines != null
                 ? `${lines.total.toLocaleString()} matching rows · showing ${lines.items.length}`
                 : null}
             </Typography>
-            {linesLoading ? (
-              <Typography variant="body2">Loading…</Typography>
-            ) : (lines?.items ?? []).length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                No sell-out rows match the current filters.
-              </Typography>
-            ) : lines?.channel ? (
-              <EnterpriseDataGrid
-                rowData={lines.items as ChannelSelloutLine[]}
-                columnDefs={channelCols}
-                height={420}
-              />
-            ) : (
-              <EnterpriseDataGrid
-                rowData={lines?.items as SelloutLine[]}
-                columnDefs={factCols}
-                height={420}
-              />
-            )}
+            <ModuleDataSection
+              isLoading={linesLoading}
+              isError={Boolean(linesError)}
+              error={linesError ? new Error((linesErr as Error)?.message ?? 'Failed to load sell-out lines.') : null}
+              isEmpty={(lines?.items ?? []).length === 0}
+              empty={{
+                title: 'No sell-out rows match',
+                description: 'Adjust the filters above, or import distributor sell-out via the Import Center.',
+                primary: { label: 'Import Center', href: '/admin/imports?template=distributor_inventory' },
+              }}
+            >
+              {lines?.channel ? (
+                <EnterpriseDataGrid
+                  rowData={lines.items as ChannelSelloutLine[]}
+                  columnDefs={channelCols}
+                  height={420}
+                />
+              ) : (
+                <EnterpriseDataGrid
+                  rowData={(lines?.items ?? []) as SelloutLine[]}
+                  columnDefs={factCols}
+                  height={420}
+                />
+              )}
+            </ModuleDataSection>
           </Box>
         </Paper>
       )}

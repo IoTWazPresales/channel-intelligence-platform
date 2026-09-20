@@ -18,6 +18,7 @@ import { useMemo, useState } from 'react';
 import NextLink from 'next/link';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
@@ -165,18 +166,27 @@ function CustomerTermsEditor() {
           Add terms
         </Button>
       </Stack>
-      {isError ? (
-        <Alert severity="error">{String((error as Error)?.message ?? 'Failed to load customer terms')}</Alert>
-      ) : null}
-      <EnterpriseDataGrid
-        rowData={data ?? []}
-        columnDefs={columnDefs}
-        height={560}
-        gridOptions={{
-          getRowId: (p) => String(p.data.id),
-          loading: isLoading,
+      <ModuleDataSection
+        isLoading={isLoading}
+        isError={isError}
+        error={isError ? new Error(String((error as Error)?.message ?? 'Failed to load customer terms')) : null}
+        onRetry={() => void refetch()}
+        isEmpty={(data ?? []).length === 0}
+        empty={{
+          title: 'No customer commercial terms yet',
+          description: 'Margin and rebate assumptions per customer feed planner economics. Add the first set of terms.',
+          primary: { label: 'Add terms', onClick: openAdd },
         }}
-      />
+      >
+        <EnterpriseDataGrid
+          rowData={data ?? []}
+          columnDefs={columnDefs}
+          height={560}
+          gridOptions={{
+            getRowId: (p) => String(p.data.id),
+          }}
+        />
+      </ModuleDataSection>
 
       <Dialog open={dlg != null} onClose={() => !save.isPending && setDlg(null)} fullWidth maxWidth="sm">
         <DialogTitle>{dlg === 'edit' ? 'Edit commercial terms' : 'Create commercial terms'}</DialogTitle>
