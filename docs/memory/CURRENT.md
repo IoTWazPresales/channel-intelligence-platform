@@ -1,10 +1,10 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-09-18 (settlement desk A on production; BACKLOG-140/136/198 partial)
+**Last updated:** 2026-09-20 (settlement desk single CTA + DualMoney on confirm/plan; line-identifier preference rolled out)
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**Last content pin:** Settlement desk product `b1696b0`. Lab A shared mount `afc694f`. Docs `b7db465`. Prior: StewardQueueOverview D-0011 copy `3f101a9`. Settlement lab A/B `daf0503`. Specs/docs `49e0836`. Ledger `19f26f8`.
+**Last content pin:** Settlement desk single CTA + DualMoney follow-ups `b6f6379`. Line-identifier preference finish `8ff8dc6` (series `baaf485`→`8ff8dc6`). FX booked-at-create + DualMoney `8b038a1` (lab parity `f1032e7`). Settlement desk product `b1696b0`. Lab A shared mount `afc694f`. Prior: StewardQueueOverview D-0011 copy `3f101a9`. Settlement lab A/B `daf0503`. Ledger `19f26f8`.
 
 **Alembic (code):** `20260906_0022` (`cpor_case.intelligence_exclude`)
 
@@ -12,6 +12,8 @@
 
 ## On feat/ns-2-brief-nav-collapse
 
+- **2026-09-20 settlement desk follow-ups (never main, no GOV-008, no node complete):** `SettlementDesk.test.tsx` 3/3 green again — wrapped in `QueryClientProvider` + `@/lib/api` mock (CaseBookSurface convention) after `baaf485` added `useLineIdentifierPreference` (useQuery). Desk primary CTA renders **once** (header); Next-action panel dropped its duplicate button, subtitle names the header CTA. `HeadlineStrip` splits >3 columns to `ceil(n/2)` at md and full count at lg (was 5-up from 900px). Corroboration column already `width 188 / wrapText / autoHeight` and panel already `minmax(240,280)` at md at `8ff8dc6` — nothing to change. `SettlementConfirmDialog` outstanding amount → `DualMoney` (booked USD or honest unbooked; falls back to local when readiness not loaded) + new test. `PlanWorkspace` Total support → `DualMoney` (replaces `≈ $… USD` caption). Browser: case 311 desk one CTA; `/promotions?plan=311` `R 1,616,231.52 / $ 97,953.43 at booked 16.50`. **Unbooked-case HTTP render UNABLE** — all 304 `cip` cases have `fx_declared=true` (FX booked at create); covered by vitest only. `SettlementPortfolioRead` (via `SettlementContainer`) and `CporPortfolioIntelligencePanel` are **unmounted** — USD-primary local `fmtUsd/fmtZar`, backend Σ stored per-line `ttl_support_usd` (booked, not live; None→0). Left untouched. Next dev server wedged (2.3 GB, no response) and was restarted.
+- **2026-09-19/20 line-identifier preference (`baaf485`…`8ff8dc6`):** tenant `line_identifier_preference` (`sku` | `sales_model`) via `useLineIdentifierPreference` → `/api/v1/auth/tenant-commercial-profile`; applied on profile, settlement desk, lineup, cover/inventory/movements, sell-out grids, buy-plans/roadmap, forecasts/pricing/inventory, CPOR case/promo plan/promo load, commercial planner, admin + lineup tables. Cover-distribution 4-tuple crash fix `9329e03`.
 - **2026-09-18 settlement desk resume (never main, no GOV-008, no node complete):** Composition A is production at `/commercial-planner/cpor-cases/[id]` (`SettlementDeskLive`). Lab A mounts the same `SettlementDesk`. Salvaged CIP product-grain / customer `result_qty` mapping kept. Case 311 SETTLED, 18 lines, 0 claim-evidence rows, customer qty empty — real signal. Name-primary customer display (`SHOW_CUSTOMER_CODE`). Stub auth resolves `admin@local`; settle stamps `decided_by`; historical apply stamps `apply_actor`. PM per-line maps in `column_mapping_memory.mapping_profile.by_product_line`; duplicate EAN FLAG. HTTP API `:8001` 200, web `:3000` 200. Playwright MCP rendered case 311 (name Takealot, not welded CUST-000012). `browser_resize` **not in catalog** — 390×844 UNABLE. N-0028/N-0029 still `in_progress`/`validate`. Handover `docs/design/gov-008-n0028-n0029-handover.md`.
 - **2026-09-18 investigate/scope/design (never main, no GOV-008, no node complete):** BACKLOG-198 catalogue is live; EAV write is gated off (`pm_write_legacy_eav` default False → `write_attribute_values=False` in `pm_commit_catalog.commit_catalog_and_eav`). `cpor_case` has `ended`/`settled`, **no paid/closed column** — report migration, do not run. Settlement lab compositions at `/design-lab/funding?lens=settle` (`alt=a|b`); production `/commercial-planner/cpor-cases/[id]` untouched. Specs: `docs/EXTERNAL_API_OUTBOUND.md`, `docs/EXTERNAL_API_INBOUND.md`. StewardQueueOverview leftover D-0002 copy aligned to D-0011 (`3f101a9`). Playwright MCP / `cursor-ide-browser` **not in this session’s tool catalog** — 1280×800 and 390×844 renders UNABLE_TO_RENDER; HTTP 200 on both lab URLs is not smoke.
 - **2026-09-18 prior build session:** BACKLOG-192 `ColumnPickerDialog` size md/wide `7656f67`. BACKLOG-197 mappings queue copy `39f457d`. Start work ActionCards paper/icons/approved copy `d25a927`. Item 4 per-line column sets **stopped** → BACKLOG-198.
@@ -23,6 +25,8 @@
 - **D-0010 accepted** Option A: keep rail expansion. Rail and tabs are not one destination set.
 
 **Mobile:** DIRECTION §6 desktop-primary with named 390px workflows. N-0025 Start work VERIFIED at 390×844. This session: Playwright MCP rendered case 311; `browser_resize` not in catalog so 390×844 UNABLE. Do not use `browser_cdp`.
+
+**Known pre-existing (not this session):** `tsc --noEmit` on `@cip/web` fails — `lineup/cases/page.test.tsx` has its import block duplicated (TS2300), plus MUI `slotProps.input` `data-testid` typing in `CporCaseWorkspace`, `SemanticCatalogOverlayPanel`, `ShippingDigestRecipientsPanel`. vitest/eslint unaffected.
 
 **Next:** Independent GOV-008 of N-0028 then N-0029 (one node per session; `docs/design/gov-008-n0028-n0029-handover.md`). Ken/PM/Wayne role mapping (BACKLOG-136 remainder). Whether CIP-minted customer code should appear at all. Whether sellable grain is five or sixteen product lines. Paid/closed is a future migration.
 
