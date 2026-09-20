@@ -28,7 +28,9 @@ import { apiGet } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
 import { buildShippingLinesUrl, type ShippingFilterParams } from './buildShippingLinesUrl';
-import { InboundShipmentsColumnsDialog, type OptionalColumnMeta } from './InboundShipmentsColumnsDialog';
+import { ColumnPickerDialog } from '@/features/workbench-ui/ColumnPickerDialog';
+
+type OptionalColumnMeta = { field: string; label: string };
 import { ShippingCommercialSummary } from './ShippingCommercialSummary';
 import { ShippingLineupQuarterSummary } from './ShippingLineupQuarterSummary';
 import { fmtCellForKey, fmtShortDate } from './shippingGridFormatters';
@@ -166,6 +168,7 @@ export function InboundShipmentsWorkspace() {
   const [limit, setLimit] = useState<number>(50);
 
   const [colDialogOpen, setColDialogOpen] = useState(false);
+  const [colSearch, setColSearch] = useState('');
   const [optionalFields, setOptionalFields] = useState<string[]>([]);
   const [persistReady, setPersistReady] = useState(false);
 
@@ -994,13 +997,34 @@ export function InboundShipmentsWorkspace() {
         </ModuleDataSection>
       </Paper>
 
-      <InboundShipmentsColumnsDialog
+      <ColumnPickerDialog
+        size="md"
+        data-testid="shipping-column-picker"
         open={colDialogOpen}
         onClose={() => setColDialogOpen(false)}
-        optionalFields={optionalFields}
-        onOptionalFieldsChange={setOptionalFields}
-        columnOptions={allowedOptional}
-        columnsLoading={colMetaLoading}
+        title="Additional columns"
+        description="Default columns stay shipping-focused (distributor, product model + SKU, line/cargo state, key dates). Every other column on fact_inbound_shipment can be toggled on below."
+        groups={[
+          {
+            label: 'fact_inbound_shipment fields',
+            fields: allowedOptional.map((c) => c.field),
+            loading: colMetaLoading,
+          },
+        ]}
+        columnLabelByField={Object.fromEntries(allowedOptional.map((c) => [c.field, c.label]))}
+        visibility={Object.fromEntries(optionalFields.map((f) => [f, true]))}
+        onToggle={(field, visible) =>
+          setOptionalFields((prev) => {
+            const s = new Set(prev);
+            if (visible) s.add(field);
+            else s.delete(field);
+            return [...s];
+          })
+        }
+        onReset={() => setOptionalFields([])}
+        gridReady={!colMetaLoading}
+        search={colSearch}
+        onSearchChange={setColSearch}
       />
     </>
   );

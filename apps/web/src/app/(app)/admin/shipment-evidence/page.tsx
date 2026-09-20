@@ -30,10 +30,13 @@ import { apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 import { fetchDsiImportPipelineProgress } from '@/features/background-tasks/fetchImportJobProgress';
 
+import { ColumnPickerDialog } from '@/features/workbench-ui/ColumnPickerDialog';
+
 import {
+  RAW_KEY_PREFIX,
   SHIPMENT_EVIDENCE_OPTIONAL_FIELDS,
-  ShipmentEvidenceColumnsDialog,
-} from './ShipmentEvidenceColumnsDialog';
+  SHIPMENT_EVIDENCE_OPTIONAL_FIELD_SET,
+} from './shipmentEvidenceOptionalFields';
 import { ShipmentEntityStewardPanel } from './ShipmentEntityStewardPanel';
 
 const LS_GRID = 'cip.admin.shipment-evidence.grid.v1';
@@ -167,6 +170,7 @@ export default function ShipmentEvidenceAdminPage() {
   const [search, setSearch] = useState('');
   const [detailId, setDetailId] = useState<number | null>(null);
   const [colDialogOpen, setColDialogOpen] = useState(false);
+  const [colSearch, setColSearch] = useState('');
   const [optionalFields, setOptionalFields] = useState<string[]>([]);
   const [rawKeys, setRawKeys] = useState<string[]>([]);
   const [persistReady, setPersistReady] = useState(false);
@@ -759,17 +763,59 @@ export default function ShipmentEvidenceAdminPage() {
         </ModuleDataSection>
       </Stack>
 
-      <ShipmentEvidenceColumnsDialog
+      <ColumnPickerDialog
+        size="md"
+        data-testid="shipment-evidence-column-dialog"
         open={colDialogOpen}
         onClose={() => setColDialogOpen(false)}
-        optionalFields={optionalFields}
-        onOptionalFieldsChange={setOptionalFields}
-        rawKeys={rawKeys}
-        onRawKeysChange={setRawKeys}
-        catalogJobId={rawCatalogJobId}
-        catalogKeys={catalogKeys}
-        catalogLoading={rawCatalogJobId != null && rawKeysFetching}
-        catalogUnavailableHint={rawCatalogUnavailableHint}
+        title="Additional columns"
+        description="Add optional canonical fields to the grid, and when an import job is in scope, pick columns from the original file (raw JSON keys). Large page sizes with many raw columns increase payload size."
+        groups={[
+          {
+            label: 'Canonical fields',
+            description: 'API-backed columns; values match the evidence line record.',
+            fields: SHIPMENT_EVIDENCE_OPTIONAL_FIELDS.map((c) => c.field),
+          },
+          {
+            label: 'Raw import columns',
+            description: 'Values read from raw_source_row for the catalog job.',
+            fields: rawCatalogJobId == null ? [] : catalogKeys.map((k) => `${RAW_KEY_PREFIX}${k}`),
+            loading: rawCatalogJobId != null && rawKeysFetching,
+            emptyHint:
+              rawCatalogJobId == null
+                ? rawCatalogUnavailableHint
+                : 'No raw keys found for this job (or no rows yet).',
+          },
+        ]}
+        columnLabelByField={{
+          ...Object.fromEntries(SHIPMENT_EVIDENCE_OPTIONAL_FIELDS.map((c) => [c.field, c.label])),
+          ...Object.fromEntries(catalogKeys.map((k) => [`${RAW_KEY_PREFIX}${k}`, k])),
+        }}
+        visibility={{
+          ...Object.fromEntries(optionalFields.map((f) => [f, true])),
+          ...Object.fromEntries(rawKeys.map((k) => [`${RAW_KEY_PREFIX}${k}`, true])),
+        }}
+        onToggle={(id, visible) => {
+          const apply = (prev: string[], key: string) => {
+            const s = new Set(prev);
+            if (visible) s.add(key);
+            else s.delete(key);
+            return [...s];
+          };
+          if (id.startsWith(RAW_KEY_PREFIX)) {
+            setRawKeys((prev) => apply(prev, id.slice(RAW_KEY_PREFIX.length)));
+          } else if (SHIPMENT_EVIDENCE_OPTIONAL_FIELD_SET.has(id)) {
+            setOptionalFields((prev) => apply(prev, id));
+          }
+        }}
+        onReset={() => {
+          setOptionalFields([]);
+          setRawKeys([]);
+          setColSearch('');
+        }}
+        gridReady
+        search={colSearch}
+        onSearchChange={setColSearch}
       />
 
       <Dialog open={detailId != null} onClose={() => setDetailId(null)} maxWidth="md" fullWidth>

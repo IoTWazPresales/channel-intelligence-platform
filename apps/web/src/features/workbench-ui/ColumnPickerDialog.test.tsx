@@ -117,6 +117,43 @@ describe('ColumnPickerDialog size=md', () => {
       'true'
     );
   });
+
+  it('renders description, group captions, loading / empty-hint groups, reset and a host testid', () => {
+    const onReset = vi.fn();
+    render(
+      <ColumnPickerDialog
+        size="md"
+        data-testid="host-column-picker"
+        open
+        onClose={vi.fn()}
+        title="Additional columns"
+        description="Intro copy"
+        groups={[
+          { label: 'Canonical', description: 'API-backed', fields: ['order_no'] },
+          { label: 'Loading group', fields: [], loading: true },
+          { label: 'Empty group', fields: [], emptyHint: 'Pick a job first.' },
+        ]}
+        columnLabelByField={{ order_no: 'Order no.' }}
+        visibility={{ order_no: true }}
+        onToggle={vi.fn()}
+        onReset={onReset}
+        gridReady
+        search=""
+        onSearchChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId('host-column-picker')).toBeInTheDocument();
+    expect(screen.getByText('Intro copy')).toBeInTheDocument();
+    expect(screen.getByText('API-backed')).toBeInTheDocument();
+    expect(screen.getByText('Loading group')).toBeInTheDocument();
+    expect(screen.getByText('Loading column names…')).toBeInTheDocument();
+    expect(screen.getByText('Empty group')).toBeInTheDocument();
+    expect(screen.getByText('Pick a job first.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('host-column-picker-reset'));
+    expect(onReset).toHaveBeenCalled();
+  });
 });
 
 describe('ColumnPickerDialog size=wide', () => {

@@ -26,6 +26,12 @@ export type MasterColumnPickerGroup = {
   label: string;
   /** AG Grid colIds / field names */
   fields: string[];
+  /** Optional one-line caption under the group label. */
+  description?: string;
+  /** Rendered (instead of options) while the group's field list is still loading. */
+  loading?: boolean;
+  /** Rendered (instead of options) when `fields` is empty — e.g. why nothing is available yet. */
+  emptyHint?: string;
 };
 
 export type ColumnPickerSize = 'md' | 'wide';
@@ -56,6 +62,8 @@ export type ColumnPickerDialogMdProps = {
   open: boolean;
   onClose: () => void;
   title: string;
+  /** Optional intro copy under the title. */
+  description?: string;
   groups: MasterColumnPickerGroup[];
   columnLabelByField?: Record<string, string>;
   visibility: Record<string, boolean>;
@@ -63,6 +71,9 @@ export type ColumnPickerDialogMdProps = {
   gridReady: boolean;
   search: string;
   onSearchChange: (value: string) => void;
+  /** When provided, a "Reset all" action is shown in the footer. */
+  onReset?: () => void;
+  'data-testid'?: string;
 };
 
 export type ColumnPickerDialogWideProps = {
@@ -206,6 +217,7 @@ function MasterSizedPicker({
   open,
   onClose,
   title,
+  description,
   groups,
   columnLabelByField,
   visibility,
@@ -213,11 +225,16 @@ function MasterSizedPicker({
   gridReady,
   search,
   onSearchChange,
+  onReset,
+  'data-testid': testId = 'master-column-picker',
 }: ColumnPickerDialogMdProps) {
   const query = search.trim().toLowerCase();
   const blocks = groups
     .map((group) => ({
       label: group.label,
+      description: group.description,
+      loading: group.loading === true,
+      emptyHint: group.fields.length === 0 ? group.emptyHint : undefined,
       options: group.fields
         .map((field) => ({
           id: field,
@@ -230,13 +247,19 @@ function MasterSizedPicker({
             opt.id.toLowerCase().includes(query)
         ),
     }))
-    .filter((group) => group.options.length > 0);
+    // Keep loading / empty-hint groups visible so the operator sees why nothing is listed.
+    .filter((group) => group.options.length > 0 || group.loading || group.emptyHint);
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" data-testid="master-column-picker">
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" data-testid={testId}>
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
         <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+          {description ? (
+            <Typography variant="body2" color="text.secondary">
+              {description}
+            </Typography>
+          ) : null}
           <TextField
             size="small"
             label="Search columns"
@@ -250,9 +273,24 @@ function MasterSizedPicker({
           ) : null}
           {blocks.map((group) => (
             <Paper key={group.label} variant="outlined" sx={{ p: 1.25 }}>
-              <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+              <Typography variant="subtitle2" sx={{ mb: group.description ? 0 : 0.5 }}>
                 {group.label}
               </Typography>
+              {group.description ? (
+                <Typography variant="caption" color="text.secondary" component="p" sx={{ mb: 0.5 }}>
+                  {group.description}
+                </Typography>
+              ) : null}
+              {group.loading ? (
+                <Typography variant="body2" color="text.secondary">
+                  Loading column names…
+                </Typography>
+              ) : null}
+              {!group.loading && group.emptyHint ? (
+                <Alert severity="info" sx={{ py: 0.5 }}>
+                  {group.emptyHint}
+                </Alert>
+              ) : null}
               <Stack>
                 {group.options.map((opt) => (
                   <FormControlLabel
@@ -279,6 +317,14 @@ function MasterSizedPicker({
         </Stack>
       </DialogContent>
       <DialogActions>
+        {onReset ? (
+          <>
+            <Button onClick={onReset} color="inherit" data-testid={`${testId}-reset`}>
+              Reset all
+            </Button>
+            <Box sx={{ flex: 1 }} />
+          </>
+        ) : null}
         <Button onClick={onClose}>Done</Button>
       </DialogActions>
     </Dialog>
