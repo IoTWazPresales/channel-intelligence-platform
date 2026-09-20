@@ -1,10 +1,22 @@
 import { describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactElement } from 'react';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
 import { SettlementDesk } from './SettlementDesk';
 import type { SettlementDeskView } from './settlementDeskModel';
+
+vi.mock('@/lib/api', () => ({
+  apiGet: (url: string) => {
+    if (url.includes('/auth/tenant-commercial-profile')) {
+      return Promise.resolve({ line_identifier_preference: 'sku' });
+    }
+    return Promise.resolve({});
+  },
+  apiPost: vi.fn(),
+}));
 
 vi.mock('@/components/EnterpriseDataGrid', () => ({
   EnterpriseDataGrid: ({ rowData }: { rowData: { sku: string; corroborationReason: string; customerQty: number | null }[] }) => (
@@ -85,9 +97,15 @@ function view(over: Partial<SettlementDeskView> = {}): SettlementDeskView {
   };
 }
 
+/** SettlementDesk reads the tenant line-identifier preference via useQuery. */
+function renderDesk(ui: ReactElement) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return renderWithProviders(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
+}
+
 describe('SettlementDesk', () => {
   it('shows customer name primary, not welded to the CIP-minted code', () => {
-    renderWithProviders(<SettlementDesk view={view()} />);
+    renderDesk(<SettlementDesk view={view()} />);
     expect(screen.getByText(/C26760971 · Takealot/)).toBeInTheDocument();
     expect(screen.queryByText(/CUST-000012 — Takealot/)).not.toBeInTheDocument();
     expect(screen.getByText(/System-owned/)).toBeInTheDocument();
@@ -105,11 +123,13 @@ describe('SettlementDesk', () => {
     expect(screen.getByTestId('desk-cip-usd')).toHaveTextContent(/at booked 18\.78/);
     expect(screen.queryByTestId('settlement-desk-upload')).not.toBeInTheDocument();
     expect(screen.getByTestId('settlement-desk-primary')).toHaveTextContent('Upload customer report');
-    expect(screen.getByTestId('settlement-desk-next-cta')).toHaveTextContent('Upload customer report');
+    expect(screen.getAllByRole('button', { name: 'Upload customer report' })).toHaveLength(1);
+    expect(screen.queryByTestId('settlement-desk-next-cta')).not.toBeInTheDocument();
+    expect(screen.getByText(/One CTA for the current stage/)).toHaveTextContent(/header/);
   });
 
   it('renders an honest unbooked USD line instead of a live conversion', () => {
-    renderWithProviders(
+    renderDesk(
       <SettlementDesk
         view={view({
           fxDeclared: false,
@@ -123,7 +143,7 @@ describe('SettlementDesk', () => {
   });
 
   it('surfaces FX blocked with the existing Alert primitive', () => {
-    renderWithProviders(
+    renderDesk(
       <SettlementDesk
         view={view({
           fxSettleAllowed: false,

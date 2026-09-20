@@ -110,8 +110,14 @@ export function HeadlineFigure({
   );
 }
 
-/** Responsive strip of headline figures; wraps to 2-up at 390px. */
+/**
+ * Responsive strip of headline figures; wraps to 2-up at 390px. Strips wider than three
+ * columns split in half at md so a two-line DualMoney figure is not clipped at ~1024px,
+ * and only reach the full column count at lg.
+ */
 export function HeadlineStrip({ children, columns }: { children: ReactNode; columns?: number }) {
+  const full = columns ? `repeat(${columns}, minmax(0, 1fr))` : 'repeat(auto-fit, minmax(180px, 1fr))';
+  const mid = columns && columns > 3 ? `repeat(${Math.ceil(columns / 2)}, minmax(0, 1fr))` : full;
   return (
     <Box
       sx={{
@@ -119,7 +125,8 @@ export function HeadlineStrip({ children, columns }: { children: ReactNode; colu
         gap: 1.5,
         gridTemplateColumns: {
           xs: 'repeat(2, minmax(0, 1fr))',
-          md: columns ? `repeat(${columns}, minmax(0, 1fr))` : 'repeat(auto-fit, minmax(180px, 1fr))',
+          md: mid,
+          lg: full,
         },
       }}
     >

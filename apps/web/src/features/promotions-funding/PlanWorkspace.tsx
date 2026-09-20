@@ -30,6 +30,7 @@ import { useMemo, useState } from 'react';
 import { CporComparableCasesPanel } from '@/app/(app)/commercial-planner/cpor-cases/[id]/CporComparableCasesPanel';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
+import { DualMoney } from '@/features/cpor/DualMoney';
 import { PLANNER_CAPABILITIES } from '@/features/promotions-funding/capabilities';
 import { fmtCompact, fmtInt, fmtMoney, fmtPct } from '@/features/promotions-funding/format';
 import {
@@ -375,9 +376,17 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
         <HeadlineFigure label="Estimated units" value={fmtInt(units)} compact caption="Sum of line estimate qty" />
         <HeadlineFigure
           label="Total support"
-          value={fmtCompact(support, ccy)}
+          value={
+            <DualMoney
+              amount={support}
+              currencyCode={ccy}
+              roeSnapshot={data.roe_snapshot}
+              missingRoe={data.missing_roe}
+              testId="plan-total-support"
+            />
+          }
           compact
-          caption={data.ttl_support_usd != null ? `≈ ${fmtCompact(data.ttl_support_usd, 'USD')} USD` : 'Sum of line ttl_support'}
+          caption="Sum of line ttl_support"
         />
         <HeadlineFigure
           label="Budget after this plan"

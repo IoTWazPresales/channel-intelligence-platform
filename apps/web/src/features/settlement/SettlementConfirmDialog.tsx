@@ -13,6 +13,7 @@ import {
 import { alpha, useTheme } from '@mui/material/styles';
 
 import { CporSettleReadinessRow } from '@/features/cpor/CporSettleReadinessRow';
+import { DualMoney } from '@/features/cpor/DualMoney';
 import { formatLocalMoney, type SettleReadiness } from '@/features/cpor/fxDisplay';
 
 type Props = {
@@ -75,7 +76,17 @@ export function SettlementConfirmDialog({
             my: 1,
           }}
         >
-          {amountLabel}
+          {settleReadiness ? (
+            <DualMoney
+              amount={outstandingAmount ?? null}
+              currencyCode={currencyCode}
+              roeSnapshot={settleReadiness.roe_snapshot}
+              missingRoe={!settleReadiness.fx_declared}
+              testId="settlement-confirm-amount-dual"
+            />
+          ) : (
+            amountLabel
+          )}
         </Typography>
         {settleReadiness ? (
           <Box sx={{ mb: 1.5 }}>

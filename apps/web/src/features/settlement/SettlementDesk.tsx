@@ -365,18 +365,7 @@ export function SettlementDesk({
         </Box>
         <Panel
           title="Next action"
-          subtitle="One CTA for the current stage. Finance lag does not change SETTLED."
-          actions={
-            <Button
-              size="small"
-              variant="contained"
-              disabled={primaryCta.disabled}
-              onClick={primaryCta.onClick}
-              data-testid="settlement-desk-next-cta"
-            >
-              {primaryCta.label}
-            </Button>
-          }
+          subtitle={`One CTA for the current stage — “${primaryCta.label}” in the header above. Finance lag does not change SETTLED.`}
         >
           <Stack spacing={0.25}>
             <PanelRow
