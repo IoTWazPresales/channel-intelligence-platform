@@ -1061,7 +1061,9 @@ def _budget_ok_locked(root: Path, data, policy, p):
     ok,msg=_persist_budget(p, state)
     if not ok: return False,msg,None
     if fp and repeat_limit and int(state.get('repeat_mut') or 0)>int(repeat_limit):
-        return False,f'NO_PROGRESS: repeated mutating action {fp} x{state["repeat_mut"]}',None
+        return False,(f'NO_PROGRESS: repeated mutating action {fp} x{state["repeat_mut"]}; this path is '
+                      'capped for the rest of this execution burst. Retrying the same action cannot succeed: '
+                      'mutate a different path, or record programme progress to renew the burst.'),None
     if max_calls and state['tool_calls']>int(max_calls):
         if support('eif_session').recovery_action(data):
             return True, '', {'additional_context': 'BUDGET_READ_RECOVERY: execution burst exhausted; policy-checked reads and closure/recovery operations remain available.'}
