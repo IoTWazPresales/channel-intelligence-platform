@@ -7,15 +7,6 @@ import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
 import LineupCasesPage from './page';
 
-import React from 'react';
-import { screen } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { renderWithProviders } from '@/test-utils/renderWithProviders';
-
-import LineupCasesPage from './page';
-
 let searchString = '';
 
 vi.mock('next/navigation', () => ({

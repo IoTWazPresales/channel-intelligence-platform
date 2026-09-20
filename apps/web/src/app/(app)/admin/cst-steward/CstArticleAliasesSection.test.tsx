@@ -48,9 +48,9 @@ const mockState = vi.hoisted(() => ({
     },
   ],
   customers: [{ id: 7, customer_code: 'AMZ', customer_name: 'Amazon' }],
-  apiPatch: vi.fn(async () => ({})),
-  apiPost: vi.fn(async () => ({})),
-  apiPostFormData: vi.fn(async () => ({})),
+  apiPatch: vi.fn(async (..._args: unknown[]) => ({})),
+  apiPost: vi.fn(async (..._args: unknown[]) => ({})),
+  apiPostFormData: vi.fn(async (..._args: unknown[]) => ({})),
 }));
 
 vi.mock('@/components/EnterpriseDataGrid', () => ({
@@ -84,7 +84,7 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
     }, []);
     return (
       <div data-testid="cst-alias-grid-mock">
-        {(columnDefs as Array<{ field?: string; headerName?: string }>)
+        {(columnDefs as Array<{ field?: string; headerName?: string; hide?: boolean }>)
           .filter((c) => c.field && !c.hide)
           .map((c) => (
             <span key={c.field}>{c.headerName}</span>

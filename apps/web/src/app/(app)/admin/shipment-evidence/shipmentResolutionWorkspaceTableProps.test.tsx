@@ -37,6 +37,8 @@ describe('shipmentResolutionWorkspaceTableProps S4 — confidence bands on Plan 
       entity_type: 'customer_dealer_token',
       normalized_key: 'token-a',
       row_count: 2,
+      total_units: null,
+      total_reported_value: null,
       status: 'needs_review',
       match_reason: 'alias',
       confidence_score: 0.95,

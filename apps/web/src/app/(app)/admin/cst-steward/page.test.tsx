@@ -14,6 +14,16 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
   EnterpriseDataGrid: () => <div data-testid="ops-grid-mock" />,
 }));
 
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => new URLSearchParams(''),
+  usePathname: () => '/admin/cst-steward',
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}));
+
+vi.mock('@/features/data-stewardship/DataChrome', () => ({
+  DataChrome: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
 vi.mock('@/lib/api', () => ({
   apiGet: vi.fn(async (url: string) => {
     if (url.startsWith('/api/v1/cst-steward/key-accounts')) return [];

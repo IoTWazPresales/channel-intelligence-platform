@@ -9,6 +9,8 @@ function row(p: Partial<ShipmentMappingCandidateRow> & Pick<ShipmentMappingCandi
     entity_type: 'customer_dealer_token',
     normalized_key: 'acme',
     row_count: 1,
+    total_units: null,
+    total_reported_value: null,
     status: 'needs_review',
     match_reason: null,
     confidence_score: null,

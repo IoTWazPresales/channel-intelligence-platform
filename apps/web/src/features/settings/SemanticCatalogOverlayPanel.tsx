@@ -259,7 +259,11 @@ export function SemanticCatalogOverlayPanel() {
                   <Switch
                     checked={Boolean(hidden[m.key])}
                     onChange={(e) => setHidden((prev) => ({ ...prev, [m.key]: e.target.checked }))}
-                    slotProps={{ input: { 'data-testid': `semantic-overlay-hide-${m.key}` } }}
+                    slotProps={{
+                      input: {
+                        'data-testid': `semantic-overlay-hide-${m.key}`,
+                      } as React.InputHTMLAttributes<HTMLInputElement>,
+                    }}
                   />
                 }
                 label="Hide"

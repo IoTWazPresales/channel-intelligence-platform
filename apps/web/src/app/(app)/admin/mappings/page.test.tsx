@@ -67,7 +67,7 @@ describe('AdminMappingsPage', () => {
     await waitFor(() => expect(screen.getByTestId('legacy-mapping-queue-empty')).toBeInTheDocument());
   });
 
-  it('keeps import_job_id as a deep-link to the existing DSI engine', async () => {
+  it('keeps import_job_id as a deep-link to the resolve workspace (D-066: no page-hop)', async () => {
     searchString = 'import_job_id=501';
     apiGetMock.mockImplementation(async (path: string) => {
       if (path === '/api/v1/mappings/queue') return [];
@@ -75,7 +75,10 @@ describe('AdminMappingsPage', () => {
     });
     renderPage();
     await waitFor(() => expect(screen.getByTestId('dsi-job-filter-banner')).toBeInTheDocument());
-    expect(screen.getByTestId('dsi-open-import-resolution')).toHaveAttribute('href', '/admin/imports?job=501');
+    expect(screen.getByTestId('dsi-open-import-resolution')).toHaveAttribute(
+      'href',
+      '/admin/mappings?workspace=resolve&job=501'
+    );
     expect(screen.getByTestId('steward-failure-queue')).toBeInTheDocument();
   });
 });

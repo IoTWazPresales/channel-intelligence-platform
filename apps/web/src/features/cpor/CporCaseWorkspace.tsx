@@ -485,7 +485,9 @@ export function CporCaseWorkspace({ caseId, embedded = false, defaultTab = 0 }: 
               checked={Boolean(data.intelligence_exclude)}
               disabled={patchIntelligenceExclude.isPending}
               onChange={(e) => patchIntelligenceExclude.mutate(e.target.checked)}
-              slotProps={{ input: { 'data-testid': 'cpor-intelligence-exclude' } }}
+              slotProps={{
+                input: { 'data-testid': 'cpor-intelligence-exclude' } as React.InputHTMLAttributes<HTMLInputElement>,
+              }}
             />
           }
           label={

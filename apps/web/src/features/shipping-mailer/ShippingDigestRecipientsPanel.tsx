@@ -169,10 +169,12 @@ export function ShippingDigestRecipientsPanel() {
                   checked={row.enabled}
                   onChange={(_, checked) => patchMutation.mutate({ id: row.id, enabled: checked })}
                   disabled={patchMutation.isPending}
-                  inputProps={{
-                    'aria-label': `Enable ${row.address}`,
-                    'data-testid': `shipping-mailer-recipients-enabled-${row.id}`,
-                  }}
+                  inputProps={
+                    {
+                      'aria-label': `Enable ${row.address}`,
+                      'data-testid': `shipping-mailer-recipients-enabled-${row.id}`,
+                    } as React.InputHTMLAttributes<HTMLInputElement>
+                  }
                 />
               </TableCell>
               <TableCell>{row.added_by || '—'}</TableCell>
