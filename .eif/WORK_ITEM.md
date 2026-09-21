@@ -5,8 +5,8 @@
 **Title:** Stage 2a: grid height single source, MarketSurface mappings states, LineupScopeBar and market readiness honesty  
 **Class:** feature  
 **Status:** in_progress  
-**Stage:** implement  
-**Revision:** 3  
+**Stage:** validate  
+**Revision:** 9  
 **Risk:** R2  
 **Execution risk class:** full  
 **Execution:** full loop  
@@ -35,5 +35,5 @@
 
 ## Stage note
 
-Implementation boundary for Stage 2a. Baseline at 83ff3c5. Density values untouched in this node.
+Stage 2a implemented and self-verified at 5e70f33. quality.a11y and verification.referent are left for an independent run (R2). Do not complete from the implementation run.
 

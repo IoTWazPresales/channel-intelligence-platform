@@ -17,7 +17,7 @@ _No ready unblocked leaves._
 
 ## In progress / leased
 
-- **N-0031** Stage 2a: grid height single source, MarketSurface mappings states, LineupScopeBar and market readiness honesty stage=implement run=STAGE2A_GRID_PARITY_20260921 expires=2026-09-21T17:52:56Z note=Implementation boundary for Stage 2a. Baseline at 83ff3c5. Density values untouched in this node.
+- **N-0031** Stage 2a: grid height single source, MarketSurface mappings states, LineupScopeBar and market readiness honesty stage=validate run=STAGE2A_GRID_PARITY_20260921 expires=2026-09-21T17:52:56Z note=Stage 2a implemented and self-verified at 5e70f33. quality.a11y and verification.referent are left for an independent run (R2). Do not complete from the implementation run.
 
 ## Decision queue
 
