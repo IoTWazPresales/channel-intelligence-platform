@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 912
-  log_sha256: 3a92920e9fa7e19ec9b493fc303a48a6f936693ffd9f209aa3648019d9809e2b
+  snapshot_revision: 917
+  log_sha256: 8f16ae5d6559abf6d9ea33dccac9b7a164f6714c162c6a04d8f521b75e069689
   acceptance_policy:
     milestone: operator
     root: operator
@@ -5537,6 +5537,85 @@ nodes:
     risk_class: full
     implementation_run: STAGE2_7_CPOR_TABS_20260921
     implementation_actor: stage2b-001
+  N-0033:
+    id: N-0033
+    parent: null
+    title: 'Stage 3.1/3.5: session auth gate on every API route, production web on loopback, Cloudflare quick tunnel for a
+      small pilot'
+    class: feature
+    origin: operator
+    status: in_progress
+    stage: implement
+    revision: 3
+    lease:
+      run: STAGE3_ACCESS_20260921
+      acquired_at: '2026-09-21T16:10:56Z'
+      heartbeat_at: '2026-09-21T16:10:56Z'
+      expires_at: '2026-09-21T20:10:56Z'
+    depends_on: []
+    facets:
+    - ui
+    risk: R3
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - With CIP_AUTH_MODE=session every /api/v1 route except /auth/login answers 401 without a bearer, proven by live enumeration
+      of all sampled GET routes and by tests/test_session_gate.py
+    - Forged X-User-Role and X-User-Id headers are rejected in session mode
+    - Stub mode behaviour is unchanged for local dev and the pytest suite
+    - /login renders and wrong credentials return 401 from the handler, never 404
+    - The web app serves from a production build bound to 127.0.0.1:3000 for the tunnel window
+    - cloudflared installed from the official Cloudflare release with no account, domain, DNS or payment
+    - the quick tunnel fronts only :3000 and :8001 docs are unreachable through it
+    - 'Public URL verified: /login 200, /api/v1/auth/me 401, /api/v1/customers 401, /docs 404'
+    - Passwords are set by Warren, never handled by the agent
+    - Full API suite green after the gate, with any test repairs recorded and attributed
+    - Multi-user test plan handed to Warren
+    - Nothing committed contains .env or credentials
+    - Read-only on cip
+    baseline_ref: BLN-0004
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: 'Implementation in this run: 26a6e1a router-level gate; conftest shim + coverage fixture repairs pending commit;
+      production web on 127.0.0.1:3000; cloudflared 2026.9.1 quick tunnel on http2. Baseline ff118ec.'
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+    implementation_run: STAGE3_ACCESS_20260921
+    implementation_actor: stage3-001
 decisions:
   D-0001:
     id: D-0001
@@ -5969,6 +6048,27 @@ baselines:
     path: .eif/audit/STAGE2_7_CPOR_TABS_20260921/BASELINE.md
     observed_behavior: Desk has no tabs; CporCaseWorkspace is unmounted and holds the five tabs plus FX anchor, readiness
       row, comparables and transitions which the desk lacks. Endpoints exist and do not change.
+  BLN-0004:
+    id: BLN-0004
+    provenance: implementation-observation
+    tree_hash: ff118ec
+    latent_capabilities:
+    - stub mode for local dev and pytest
+    - auth login logout me user CRUD and admin password reset
+    - redirectToLoginOn401 and the /login page
+    - same-origin Next proxy to loopback 8001 with docs only on 8001
+    - ALLOW_DB_WIPE gate on POST dev/database-wipe
+    - endpoint-level require_roles remain additive
+    preservation:
+      stub mode for local dev and pytest: kept
+      auth login logout me user CRUD and admin password reset: kept
+      redirectToLoginOn401 and the /login page: kept
+      same-origin Next proxy to loopback 8001 with docs only on 8001: kept
+      ALLOW_DB_WIPE gate on POST dev/database-wipe: kept
+      endpoint-level require_roles remain additive: kept
+    path: .eif/audit/STAGE3_ACCESS_20260921/BASELINE.md
+    observed_behavior: Stub auth on an empty .env; in session mode 127 of 207 sampled GET routes served data with no token
+      because auth was per endpoint; no external access; cloudflared absent.
 caveats:
   consult_model_logged:
     key: consult_model_logged
@@ -6041,4 +6141,4 @@ ids:
   decision: 0
   blocker: 2
   evidence: 2
-  baseline: 3
+  baseline: 4
