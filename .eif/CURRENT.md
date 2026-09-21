@@ -18,6 +18,7 @@ _No ready unblocked leaves._
 ## In progress / leased
 
 - **N-0031** Stage 2a: grid height single source, MarketSurface mappings states, LineupScopeBar and market readiness honesty stage=validate run=STAGE2A_GRID_PARITY_20260921 expires=2026-09-21T17:52:56Z note=Stage 2a implemented and self-verified at 5e70f33. quality.a11y and verification.referent are left for an independent run (R2). Do not complete from the implementation run.
+- **N-0032** Stage 2.7: five orphaned CPOR case tabs (USD pivot, Events, Exports, Promo load, Payments/recon) mounted on the settlement desk stage=implement run=STAGE2_7_CPOR_TABS_20260921 expires=2026-09-21T18:54:22Z note=Implementation boundary for Stage 2.7 at e264410. CporCaseWorkspace stays; desk lacks FX anchor, readiness row, comparables and transitions.
 
 ## Decision queue
 

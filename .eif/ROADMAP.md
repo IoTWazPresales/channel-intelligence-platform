@@ -33,3 +33,4 @@
 - N-0029 **Grid community clipboard in one wrapper, Case book working content first** `in_progress`/`in_progress` (feature)
 - N-0030 **Backlog audit against the running tree, P1 sign-off discovery, and staged work plan** `in_progress`/`in_progress` (discovery)
 - N-0031 **Stage 2a: grid height single source, MarketSurface mappings states, LineupScopeBar and market readiness honesty** `in_progress`/`in_progress` (feature)
+- N-0032 **Stage 2.7: five orphaned CPOR case tabs (USD pivot, Events, Exports, Promo load, Payments/recon) mounted on the settlement desk** `in_progress`/`in_progress` (feature)

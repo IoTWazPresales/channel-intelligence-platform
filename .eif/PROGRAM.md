@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 907
+**Snapshot revision:** 912
 
 ## Outcome (verbatim)
 
@@ -53,3 +53,4 @@ _none_
 | N-0029 | Grid community clipboard in one wrapper, Case book working content first | feature | in_progress | in_progress | yes |  | full loop |
 | N-0030 | Backlog audit against the running tree, P1 sign-off discovery, and staged work plan | discovery | in_progress | in_progress | yes |  | full loop |
 | N-0031 | Stage 2a: grid height single source, MarketSurface mappings states, LineupScopeBar and market readiness honesty | feature | in_progress | in_progress | yes |  | full loop |
+| N-0032 | Stage 2.7: five orphaned CPOR case tabs (USD pivot, Events, Exports, Promo load, Payments/recon) mounted on the settlement desk | feature | in_progress | in_progress | yes |  | full loop |

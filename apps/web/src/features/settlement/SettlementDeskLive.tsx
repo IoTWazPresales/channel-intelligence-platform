@@ -1,6 +1,6 @@
 'use client';
 
-import { Alert } from '@mui/material';
+import { Alert, Box } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
@@ -9,6 +9,7 @@ import { SettlementConfirmDialog } from '@/features/settlement/SettlementConfirm
 import { apiGet, apiPost, apiPostFormData } from '@/lib/api';
 
 import { ModuleDataSection } from '@/components/ModuleDataSection';
+import { SettlementCaseTabs } from './SettlementCaseTabs';
 import { SettlementDesk } from './SettlementDesk';
 import {
   mapSettlementDeskView,
@@ -142,6 +143,10 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
         onRestoreSupersession={() => restoreSupersession.mutate()}
         restoringSupersession={restoreSupersession.isPending}
       />
+      {/* Stage 2.7 (N-0032): the five case-detail tabs that only the unmounted CporCaseWorkspace had. */}
+      <Box sx={{ mt: 2 }}>
+        <SettlementCaseTabs caseId={caseId} roeSnapshot={view.roeSnapshot} />
+      </Box>
       <CporCaseSupersedeDialog
         open={supersedeOpen}
         onClose={() => setSupersedeOpen(false)}

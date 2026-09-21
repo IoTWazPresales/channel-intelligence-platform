@@ -910,7 +910,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Done** · 2026-08-08 · `feat/a-lane-residual-closeout` |
+| **Status / parked** | **Restored** (2026-09-21 N-0032: promo-load recon is reachable again in production as the Promo load tab on `/commercial-planner/cpor-cases/[id]`; it had been unreachable since Composition A replaced `CporCaseWorkspace`) · **Done** · 2026-08-08 · `feat/a-lane-residual-closeout` |
 | **Effort** | Large (CST/customer-file join × CPOR case window) |
 | **Source** | Warren 2026-08-01 A-lane wrap — automated promo verification path |
 | **Idea** | For a specific CPOR case, reconcile **customer sales / sell-through files** against the case’s promo window and products to check whether the **customer loaded the promotion correctly** (price/units/timing vs approved support). |
@@ -2959,7 +2959,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Decided** (2026-09-21 N-0030 audit: Warren — merge the five orphaned tabs onto the settlement desk; Stage 2.7; restores BACKLOG-093 promo-load recon) · **Open — product call, not a bug** · 2026-09-21 · grid/column parity audit §7.4 |
+| **Status / parked** | **Partial — five tabs restored on the desk; workspace kept** (2026-09-21 N-0032: USD pivot (as a table), Events, Exports, Promo load recon and Payments/recon now mount under the settlement desk via `SettlementCaseTabs`; `CporCaseWorkspace` **stays** because the desk still lacks `CporFxAnchorPanel`, `CporSettleReadinessRow`, `CporComparableCasesPanel` and the lifecycle transition buttons — port those before deleting it) · **Decided** (2026-09-21 N-0030 audit: Warren — merge the five orphaned tabs onto the settlement desk; Stage 2.7; restores BACKLOG-093 promo-load recon) · **Open — product call, not a bug** · 2026-09-21 · grid/column parity audit §7.4 |
 | **Effort** | Trivial to delete; unknown to re-mount |
 | **Source** | `apps/web/src/features/cpor/CporCaseWorkspace.tsx` (2 grids) and its child `app/(app)/commercial-planner/cpor-cases/[id]/CporPaymentEvidencePanel.tsx`. Only remaining referent: `page.fxReadiness.test.tsx`. The `[id]` route renders `SettlementDeskLive`. |
 | **Idea** | Decide whether the CPOR case workspace is dead code to remove or a surface to re-mount. |

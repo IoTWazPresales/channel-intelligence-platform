@@ -27,13 +27,15 @@ import { CporPaymentEvidencePanel } from '@/app/(app)/commercial-planner/cpor-ca
 import { CporPromoLoadPanel } from '@/app/(app)/commercial-planner/cpor-cases/[id]/CporPromoLoadPanel';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
+import { CporEventsPanel } from '@/features/cpor/CporEventsPanel';
+import { CporExportsPanel } from '@/features/cpor/CporExportsPanel';
 import { CporFxAnchorPanel } from '@/features/cpor/CporFxAnchorPanel';
+import { CporUsdPivotPanel } from '@/features/cpor/CporUsdPivotPanel';
 import { CporSettleReadinessRow } from '@/features/cpor/CporSettleReadinessRow';
 import { evidenceBasisLabel } from '@/features/promotions-funding/evidenceBasis';
 import {
   formatGridMoney,
   formatLocalMoney,
-  formatUsdMoney,
   type SettleReadiness,
 } from '@/features/cpor/fxDisplay';
 import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
@@ -102,13 +104,6 @@ export type CaseDetail = {
   needs_reapproval?: boolean;
 };
 
-type Pivot = {
-  cells: Record<string, Record<string, number>>;
-  row_totals: Record<string, number>;
-  col_totals: Record<string, number>;
-  grand_total_usd: number;
-  missing_roe: boolean;
-};
 
 type ProductPick = { id: number; sku: string; name: string };
 
@@ -190,39 +185,6 @@ export function CporCaseWorkspace({ caseId, embedded = false, defaultTab = 0 }: 
     enabled: caseId > 0,
   });
 
-  const { data: pivot } = useQuery({
-    queryKey: ['cpor', 'pivot', caseId],
-    queryFn: ({ signal }) => apiGet<Pivot>(`/api/v1/cpor/cases/${caseId}/pivot`, { signal }),
-    enabled: caseId > 0 && tab === 1,
-  });
-
-  const { data: events } = useQuery({
-    queryKey: ['cpor', 'events', caseId],
-    queryFn: ({ signal }) =>
-      apiGet<{ id: number; event_type: string; actor: string | null; created_at: string | null }[]>(
-        `/api/v1/cpor/cases/${caseId}/events`,
-        { signal },
-      ),
-    enabled: caseId > 0 && tab === 2,
-  });
-
-  const { data: exports, refetch: refetchExports } = useQuery({
-    queryKey: ['cpor', 'exports', caseId],
-    queryFn: ({ signal }) =>
-      apiGet<{
-        exports: {
-          export_version: number;
-          file_name: string | null;
-          checksum_sha256: string | null;
-          actor: string | null;
-          created_at: string | null;
-          is_latest_for_version: boolean;
-          flags_present: string[];
-        }[];
-      }>(`/api/v1/cpor/cases/${caseId}/exports`, { signal }),
-    enabled: caseId > 0 && tab === 3,
-  });
-
   const {
     data: settlement,
     refetch: refetchSettlement,
@@ -231,13 +193,6 @@ export function CporCaseWorkspace({ caseId, embedded = false, defaultTab = 0 }: 
     queryKey: ['cpor', 'settlement', caseId],
     queryFn: ({ signal }) => apiGet<SettlementPayload>(`/api/v1/cpor/cases/${caseId}/settlement`, { signal }),
     enabled: caseId > 0 && tab === 4,
-  });
-
-  const generateExport = useMutation({
-    mutationFn: () => apiPost(`/api/v1/cpor/cases/${caseId}/export`, {}),
-    onSuccess: async () => {
-      await refetchExports();
-    },
   });
 
   const transition = useMutation({
@@ -649,78 +604,11 @@ export function CporCaseWorkspace({ caseId, embedded = false, defaultTab = 0 }: 
         />
       ) : null}
 
-      {tab === 1 ? (
-        <Box>
-          {pivot?.missing_roe ? (
-            <Alert severity="warning" data-testid="cpor-pivot-missing-roe">
-              FX undeclared — USD pivot totals are withheld until a case rate of exchange is recorded.
-            </Alert>
-          ) : null}
-          {pivot && !pivot.missing_roe ? (
-            <Typography variant="subtitle2" sx={{ mt: 1 }} data-testid="cpor-pivot-grand-total">
-              Grand total USD: {formatUsdMoney(pivot.grand_total_usd)}
-              {data.roe_snapshot != null ? (
-                <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-                  at declared case rate ZAR {data.roe_snapshot.toFixed(2)} (declared case terms)
-                </Typography>
-              ) : null}
-            </Typography>
-          ) : null}
-          <pre style={{ fontSize: 12, overflow: 'auto' }}>{JSON.stringify(pivot?.cells ?? {}, null, 2)}</pre>
-        </Box>
-      ) : null}
+      {tab === 1 ? <CporUsdPivotPanel caseId={caseId} roeSnapshot={data.roe_snapshot} /> : null}
 
-      {tab === 2 ? (
-        <Stack spacing={0.5}>
-          {(events ?? []).map((e) => (
-            <Typography key={e.id} variant="body2">
-              {e.created_at} · <strong>{e.event_type}</strong> · {e.actor ?? '—'}
-            </Typography>
-          ))}
-        </Stack>
-      ) : null}
+      {tab === 2 ? <CporEventsPanel caseId={caseId} /> : null}
 
-      {tab === 3 ? (
-        <Stack spacing={1.5}>
-          <Button
-            variant="contained"
-            size="small"
-            disabled={generateExport.isPending}
-            onClick={() => generateExport.mutate()}
-            data-testid="cpor-generate-export"
-            sx={{ alignSelf: 'flex-start' }}
-          >
-            {generateExport.isPending ? 'Generating…' : 'Generate export'}
-          </Button>
-          {generateExport.isError ? (
-            <Alert severity="error">{String((generateExport.error as Error)?.message)}</Alert>
-          ) : null}
-          {(exports?.exports ?? []).length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
-              No exports yet.
-            </Typography>
-          ) : (
-            (exports?.exports ?? []).map((ex, i) => (
-              <Stack key={`${ex.export_version}-${i}`} direction="row" spacing={1} alignItems="center">
-                <Typography variant="body2">
-                  v{ex.export_version} · {ex.created_at} · {ex.actor ?? '—'} · {ex.file_name}
-                  {ex.is_latest_for_version ? ' (latest)' : ''}
-                </Typography>
-                {(ex.flags_present ?? []).map((f) => (
-                  <Chip key={f} size="small" label={f} variant="outlined" />
-                ))}
-                <Button
-                  size="small"
-                  href={`/api/v1/cpor/cases/${caseId}/exports/${ex.export_version}/file`}
-                  target="_blank"
-                >
-                  Download
-                </Button>
-              </Stack>
-            ))
-          )}
-        </Stack>
-      ) : null}
+      {tab === 3 ? <CporExportsPanel caseId={caseId} /> : null}
 
       {tab === 4 ? (
         <Stack spacing={1.5} data-testid="cpor-settlement-panel">
