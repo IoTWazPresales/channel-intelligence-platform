@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 894
-  log_sha256: 733edb75f515203d2166f6669454524dc1832e18fea5e3f0a8d854ae74ab2894
+  snapshot_revision: 895
+  log_sha256: d46f7972b7751adf6681f9213847062cddf6d101a7f971774aac25278a453db4
   acceptance_policy:
     milestone: operator
     root: operator
@@ -5307,8 +5307,8 @@ nodes:
     class: discovery
     origin: operator
     status: in_progress
-    stage: discovery
-    revision: 1
+    stage: validate
+    revision: 2
     lease:
       run: BACKLOG_AUDIT_20260921
       acquired_at: '2026-09-21T13:16:13Z'
@@ -5342,7 +5342,9 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: 'Discovery deliverables written: BACKLOG_AUDIT.md (EV-STK-31712DF) and STAGED_WORK_PLAN.md (EV-STK-EB37AD5).
+      P1 sign-off dissolved by discovery (exited 2026-08-01). Do not complete until Warren reviews the plan and its 7 open
+      decisions. N-0028 and N-0029 untouched: fresh independent GOV-008 required for both.'
     debug_iterations: 0
     split_into: null
     deferred: null

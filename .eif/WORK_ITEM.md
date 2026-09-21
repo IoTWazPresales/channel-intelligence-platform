@@ -5,8 +5,8 @@
 **Title:** Backlog audit against the running tree, P1 sign-off discovery, and staged work plan  
 **Class:** discovery  
 **Status:** in_progress  
-**Stage:** discovery  
-**Revision:** 1  
+**Stage:** validate  
+**Revision:** 2  
 **Risk:** R1  
 **Execution risk class:** full  
 **Execution:** full loop  
@@ -24,5 +24,5 @@
 
 ## Stage note
 
-_none_
+Discovery deliverables written: BACKLOG_AUDIT.md (EV-STK-31712DF) and STAGED_WORK_PLAN.md (EV-STK-EB37AD5). P1 sign-off dissolved by discovery (exited 2026-08-01). Do not complete until Warren reviews the plan and its 7 open decisions. N-0028 and N-0029 untouched: fresh independent GOV-008 required for both.
 

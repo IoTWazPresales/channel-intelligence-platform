@@ -17,7 +17,7 @@ _No ready unblocked leaves._
 
 ## In progress / leased
 
-- **N-0030** Backlog audit against the running tree, P1 sign-off discovery, and staged work plan stage=discovery run=BACKLOG_AUDIT_20260921 expires=2026-09-21T17:16:13Z note=
+- **N-0030** Backlog audit against the running tree, P1 sign-off discovery, and staged work plan stage=validate run=BACKLOG_AUDIT_20260921 expires=2026-09-21T17:16:13Z note=Discovery deliverables written: BACKLOG_AUDIT.md (EV-STK-31712DF) and STAGED_WORK_PLAN.md (EV-STK-EB37AD5). P1 sign-off dissolved by discovery (exited 2026-08-01). Do not complete until Warren reviews the plan and its 7 open decisions. N-0028 and N-0029 untouched: fresh independent GOV-008 required for both.
 
 ## Decision queue
 
