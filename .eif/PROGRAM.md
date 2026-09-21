@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 890
+**Snapshot revision:** 894
 
 ## Outcome (verbatim)
 
@@ -51,3 +51,4 @@ _none_
 | N-0027 | Steward queue grouped by failure type, routing into existing engines | feature | complete | complete | yes |  | full loop |
 | N-0028 | Start work cards and Lineup cases on the lab composition | feature | in_progress | in_progress | yes |  | full loop |
 | N-0029 | Grid community clipboard in one wrapper, Case book working content first | feature | in_progress | in_progress | yes |  | full loop |
+| N-0030 | Backlog audit against the running tree, P1 sign-off discovery, and staged work plan | discovery | in_progress | in_progress | yes |  | full loop |

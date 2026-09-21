@@ -31,3 +31,4 @@
 - N-0027 **Steward queue grouped by failure type, routing into existing engines** `complete`/`complete` (feature)
 - N-0028 **Start work cards and Lineup cases on the lab composition** `in_progress`/`in_progress` (feature)
 - N-0029 **Grid community clipboard in one wrapper, Case book working content first** `in_progress`/`in_progress` (feature)
+- N-0030 **Backlog audit against the running tree, P1 sign-off discovery, and staged work plan** `in_progress`/`in_progress` (discovery)

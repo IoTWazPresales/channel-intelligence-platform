@@ -46,7 +46,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-20 |
+| **Status / parked** | **Measured** (2026-09-21 N-0030 audit: `fact_inventory_customer` **0** rows, `fact_customer_sellthrough` **1,823**; point MAC-check at CST; Stage 4.3) · **Parked** · 2026-08-20 |
 | **Effort** | Medium |
 | **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` §9.1 / D-062. Warren: `fact_inventory_customer` is empty; customer SOH is arriving and not landing. |
 | **Idea** | Customer weekly SOH (actual cost) is the **check** on derived customer MAC, not the input. Evetech has no SOH file. Tree today: CST apply writes `reported_soh` / `unit_cost` / `unit_mac` to **`fact_customer_sellthrough`**. `fact_inventory_customer` has no writer; `/inventory` still names that table. Decide whether the MAC check reads CST facts or a real `fact_inventory_customer` writer is required — then implement **one** landing path. |
@@ -80,7 +80,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-20 |
+| **Status / parked** | **Confirmed open** (2026-09-21 N-0030 audit: no `window_*` columns on `cpor_case_line`; Stage 4.4) · **Parked** · 2026-08-20 |
 | **Effort** | Medium (approved migration) |
 | **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` §3 / §9.3 / D-058. Warren: `cpor_case_line` has no effective window columns. |
 | **Idea** | Each line carries a week-aligned window + fixed rate. Supersession: old line closes end of prior week; new line from new week to case end. Unique grain today `(case_id, product_id, distributor_id, pod_quarter)` cannot hold two living lines for the same SKU. Settlement `_claim_in_window` currently uses **case** dates. |
@@ -97,7 +97,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-20 |
+| **Status / parked** | **Closed — Done** (2026-09-21 N-0030 audit: `services/cpor/case_supersession.py` + supersede/restore endpoints + `CporCaseSupersedeDialog` on the desk; `superseded_by_case_id` set on 0 rows — writer exists, unexercised) · **Parked** · 2026-08-20 |
 | **Effort** | Small–medium |
 | **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` §9.4. Warren: `superseded_by_case_id` is read by three modules and written by none. |
 | **Idea** | Soft-supersede a CPOR case (re-issue / replace) by writing `cpor_case.superseded_by_case_id`. Readers already filter `IS NULL`: serialize, `incremental_unit_cost`, `payment_recon`, `portfolio_intelligence`, `support_bias`, `norms_and_comparable`, `cpor_activation` (seven, not three). Lineup’s column on `commercial_lineup_case` is a **different** writer — do not reuse it. |
@@ -114,7 +114,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-20 |
+| **Status / parked** | **Measured** (2026-09-21 N-0030 audit: **4** disagreeing rows — settled/ended ×2, cancelled/draft, cancelled/ended; Stage 4.2) · **Parked** · 2026-08-20 |
 | **Effort** | Small |
 | **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` §9.6. Warren: status and workflow_status have drifted on ~4 rows. |
 | **Idea** | `cpor_case` has both `status` (lifecycle.py) and `workflow_status` (promo-export-shaped). They can disagree. Count, explain, and either (a) make `workflow_status` a projection of `status` or (b) document two distinct machines and stop writing both from uncoordinated paths. Then repair the drifted rows on a clone, then cip. |
@@ -131,7 +131,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Partial** · 2026-09-18 · settlement surfaces show name primary (CIP-minted code subordinate via `SHOW_CUSTOMER_CODE`). Do **not** bulk-promote the 14 unverified TMP rows or repoint 216 merged losers. Mint scheme still parked. |
+| **Status / parked** | **Updated** (2026-09-21 N-0030 audit: display half **done** — name-only, `SHOW_CUSTOMER_CODE=false` at `492795c`; mint half open; 14 TMP-coded active customers of 4,949 via `dim_customer.code`; Stage 4.5) · **Partial** · 2026-09-18 · settlement surfaces show name primary (CIP-minted code subordinate via `SHOW_CUSTOMER_CODE`). Do **not** bulk-promote the 14 unverified TMP rows or repoint 216 merged losers. Mint scheme still parked. |
 | **Effort** | Medium (approved settings table / mint path) |
 | **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` §9.5 / D-065. Warren: named accounts still carry TMP-CUST; promote works but is unused because no code scheme exists; CIP will mint its own, updatable later. |
 | **Idea** | Mint CIP-owned codes on promote (research already in `docs/design/BACKLOG-061-U2a_customer_code_mint_research.md`). BACKLOG-061 promote **map** was pruned as shipped — operator-supplied `new_code`. Mint was never built. ERP/customer-file codes are an optional later mapping, not a blocker. |
@@ -148,7 +148,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-20 |
+| **Status / parked** | **Confirmed open** (2026-09-21 N-0030 audit: `shipment_evidence.py:203,228` still `require_roles(Role.ADMIN)`; Stage 3.2) · **Parked** · 2026-08-20 |
 | **Effort** | Small (role-matrix consult) then small code |
 | **Source** | RBAC R1c on `feat/rbac-r1-session-actor`: `shipment_evidence.py` previously 403'd unless `X-User-Role: admin`. R1c preserved that intent as `require_roles(Role.ADMIN)`. |
 | **Idea** | Decide whether shipment (and sibling import) steward panels should accept `Role.STEWARD` as well as `Role.ADMIN`. Today a logged-in steward session 403s those routes. |
@@ -165,7 +165,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-20 |
+| **Status / parked** | **Closed — Done** (2026-09-21 N-0030 audit: `tsc --noEmit` on @cip/web exit 0) · **Parked** · 2026-08-20 |
 | **Effort** | Small |
 | **Source** | RBAC R1c unit prompt: typecheck already red on main at `CstArticleAliasesSection.test.tsx` and `SemanticCatalogOverlayPanel.tsx`. |
 | **Idea** | Fix the two typecheck failures so `pnpm` / verify-gate typecheck can actually prove web changes. |
@@ -182,7 +182,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-20 |
+| **Status / parked** | **Measured** (2026-09-21 N-0030 audit: `cip_test` and `cip_merged_leftover_repair` both still exist; `.tmp_lf_rerun.txt` gone; branch `feat/shipping-mailer-recipients` local+remote) · **Parked** · 2026-08-20 |
 | **Effort** | Small (ops) |
 | **Source** | `docs/memory/CURRENT.md` Next on `main` (`cip_merged_leftover_repair` drop pointer) plus R1c/R1d leftovers that had no home after CURRENT Next was replaced: clone DB `cip_test`, untracked `.tmp_lf_rerun.txt`, unmerged `feat/shipping-mailer-recipients`. |
 | **Idea** | One ops sweep to drop or keep, on purpose, leftover local state that is not application code. |
@@ -216,7 +216,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-20 |
+| **Status / parked** | **Confirmed open** (2026-09-21 N-0030 audit: `customer_leftover_repair.py` has zero callers — not wired to import-complete; absorbs 134; Stage 3.7) · **Parked** · 2026-08-20 |
 | **Effort** | Small–medium |
 | **Source** | Warren 2026-08-20 after merge of `fix/merged-customer-resolver-guard`: periodic assertion that no fact/FK still points at a merged loser, checked on import completion. |
 | **Idea** | After each successful import apply/complete, assert leftover row count is zero for every `dim_customer` / `dim_distributor` id that has `merged_into_*` set. Fail loudly (FLAG the job / activity feed) rather than silently re-accumulating loser FKs. Reuse leftover-query logic from `customer_leftover_repair.py` / `repoint_customer_footprint_full` discovery — do not invent a parallel scan. |
@@ -233,7 +233,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-20 |
+| **Status / parked** | **Closed — Done** (2026-09-21 N-0030 audit: alias→merged-customer count measured **0** on cip; recurring assertion folded into BACKLOG-133) · **Parked** · 2026-08-20 |
 | **Effort** | Small |
 | **Source** | Warren 2026-08-20 after leftover repair on cip: verify no `customer_source_token_alias` row still points at a merged loser id. |
 | **Idea** | Post-repair (and periodically) query `customer_source_token_alias.customer_id` against `dim_customer.merged_into_customer_id IS NOT NULL`. Expected count is 0. If any remain, follow the merge chain and repoint the alias to the survivor via the existing alias-write path — do not add a second writer. Same check for distributor aliases if a twin table exists. |
@@ -267,7 +267,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Proven live (current window)** · 2026-08-13 — CPOR job 978 + Takealot poll 24/24. Today vs C26759823: 6 `price_consistent`, 4 `not_activated`; 11 still `no_case_detected` (SKU not on those cases); 3 `no_product_link` (listings 55–57). |
+| **Status / parked** | **Closed — Done** (2026-09-21 N-0030 audit: entry's own TRIGGER fired and closed 2026-08-13; roadmap P5 residual closed) · **Proven live (current window)** · 2026-08-13 — CPOR job 978 + Takealot poll 24/24. Today vs C26759823: 6 `price_consistent`, 4 `not_activated`; 11 still `no_case_detected` (SKU not on those cases); 3 `no_product_link` (listings 55–57). |
 | **Effort** | Medium |
 | **Source** | Warren (2026-08-10): does **not** need multi-week observation history. Live listing price should reflect the CPOR case price for the period; if higher → case not activated by the customer. |
 | **Idea** | On poll: compare `listing_observation.extracted_price` to `cpor_case_line.srp` for customer×product with window covering observation date. Persist result on `parse_flags.cpor_activation` (`no_case_detected` / `not_activated` / `price_consistent` / …). Observations tab on `/listing-capture`. |
@@ -736,7 +736,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-02 |
+| **Status / parked** | **Verify** (2026-09-21 N-0030 audit: half-year fan-out lives in shared `lineup_case_parser.py` / `lineup_half_year_quantity.py`, not only bulk — one unified 1H import smoke closes this; Stage 6.3) · **Parked** · 2026-08-02 |
 | **Effort** | Medium |
 | **Source** | `docs/STATE_AUDIT_2026-08-02.md` §5 Q3; corpus restore preview 2026-08-02 (bulk path fans via `half_year_allocation_half`) |
 | **Idea** | Port bulk’s 1H → Q1+Q2 fan-out (`period_half_split_q*` + `half_year_allocation_half` / `allocation=uniform_half`) into the unified lineup import path so a single 1H workbook does not land as one half-plan case. |
@@ -805,7 +805,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-01 |
+| **Status / parked** | **Confirmed open** (2026-09-21 N-0030 audit: no `uvicorn` in `.github/workflows`) · **Parked** · 2026-08-01 |
 | **Effort** | Medium (CI job wiring + seed/auth for live specs) |
 | **Source** | PR #13 CI — e2e red: Next proxy `ECONNREFUSED :8001`; wipe/products specs need live API (`CIP_E2E_API_URL` / `:8010`) |
 | **Idea** | Run FastAPI in GitHub Actions against already-migrated `cip_test`, point Next proxy + `CIP_E2E_API_URL` at it, enable `wipe-and-products-delete` (and future live specs). |
@@ -1111,7 +1111,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-29 · extracted from `feat/ops-master-grid-shell-parity` per D-021 |
+| **Status / parked** | **Confirmed open** (2026-09-21 N-0030 audit: `alias_seal` absent from tree; consult READY; Stage 4.8) · **Parked** · 2026-07-29 · extracted from `feat/ops-master-grid-shell-parity` per D-021 |
 | **Effort** | Medium–Large |
 | **Source** | D-021 extract; branch tip `customer_merge_alias_seal.py` |
 | **Idea** | On full customer merge, mint approved aliases from loser display names → keeper so future DSI resolution does not re-steward merged tokens. |
@@ -1204,7 +1204,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-18 · **Shipping slice in progress** 2026-08-18 on `feat/mailbox-ingest-shipping` (Graph → `inbound_shipments` after IMAP basic auth disabled on ASUS M365; not DSI batch-propose). DSI/CST retain original “review-queue only / never silent apply” trap until re-consulted. |
+| **Status / parked** | **Updated — Partial** (2026-09-21 N-0030 audit: shipping mailbox slice **live** — `services/mailbox_ingest/*`, `mailbox_ingest_runner.py` registered in `main.py`; DSI batch-propose slice open) · **Parked** · 2026-07-18 · **Shipping slice in progress** 2026-08-18 on `feat/mailbox-ingest-shipping` (Graph → `inbound_shipments` after IMAP basic auth disabled on ASUS M365; not DSI batch-propose). DSI/CST retain original “review-queue only / never silent apply” trap until re-consulted. |
 | **Effort** | Large (mailbox connector + allowlist + activity-feed failures + same propose/batch path) |
 | **Source** | Warren product discussion (2026-07-18): weekly DSI ops speed — email attach → app auto-upload; agree not silly, but premature until unified multi-file batch + mapping autosave + per-file distributor stamps soak-stable. |
 | **Idea** | Inbound mailbox (allowlisted senders) drops attachments into the existing DSI **batch-propose** path: capability merge (one job for all mappable files), mapping memory, file stamps, steward queue. Never silent apply to facts. |
@@ -1222,7 +1222,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-10 |
+| **Status / parked** | **Closed — Done** (2026-09-21 N-0030 audit: `import_job_bulk_delete.py` previews + deletes sellout / distributor-inventory / competitor-price facts by job with storage unlink; confirm shipment/CST/lineup coverage only if ever needed) · **Parked** · 2026-07-10 |
 | **Effort** | Large (per-importer fact contracts + audited purge + UI gate) |
 | **Source** | Warren U-G2 smoke (2026-07-10) + Fable CONSULT: customers blocked from hard-delete by sell-out refs are **test import junk**, not bad production data. Park/exclude makes the master look messy and is the wrong tool (TMP provisional workflow only). Cheap default-hide of dispositioned rows **refused**. |
 | **Idea** | Governed **import-job rollback/purge**: remove the junk **facts** (and related staging) that a test import wrote, so orphaned `dim_customer` / `dim_product` / `dim_distributor` hard-delete unblocks via existing usage guards — without weakening fact immutability for real sell-out. |
@@ -1307,7 +1307,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-06 |
+| **Status / parked** | **Closed — Done** (2026-09-21 N-0030 audit: cases 39/40 no longer exist on cip (36 cases, 7 superseded); workbook now 114/115/116 + 141→117 via supersession; `lineup_duplicate_partition_repair.py` in tree) · **Parked** · 2026-07-06 |
 | **Effort** | Small (steward supersession of duplicate case; disposable-clone proof before apply) |
 | **Source** | `check_lineup_duplicate_ingestion` on cip (2026-07-06): one workbook `Product Lineup/NB/2025/Q1/1. ACZA Q1 2025 Consumer Lineup - Sales.xlsx` parsed into **two** active cases — **#39** (NR) and **#40** (NV) — identical 72-line fingerprint (`source_row_number`, `product_id`, `quantity_units`). Pre-`6b84187` fan-out; forward fix did not repair existing rows. Evidence: identical-BU-pairs audit JSON in `.tmp/`. |
 | **Idea** | Repair via **steward panel** — soft-supersede the duplicate case (`commercial_status=superseded`, `superseded_by_case_id` on keeper), never raw SQL delete. Test on disposable clone before apply on `cip`. |
@@ -1381,7 +1381,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-07-02 |
+| **Status / parked** | **Updated — Partial** (2026-09-21 N-0030 audit: activity-bell pointer at `:332` shipped; dialog still `onClose()` at `:269`, completion panel open; Stage 6.4) · **Parked** · 2026-07-02 |
 | **Effort** | Medium (dialog apply-step state machine + read-only session status endpoint + activity-feed registration fix; optional bell aggregation) |
 | **Source** | Warren session (2026-07-02): first live bulk backfill apply on `cip` — 31 `parse_lineup_case` tasks succeeded in Celery worker, but `BulkLineupBackfillDialog` closed immediately with no success signal; operator had to read worker logs. Chat proposal (same session): layered completion UX vs `UnifiedLineupImportDialog` (stays open with per-file results + bell guidance). Paths: `BulkLineupBackfillDialog.tsx`, `lineup_bulk_backfill_api.py`, `lineup_bulk_backfill_apply.py`, `backgroundTaskRegistry.ts`, `GlobalBackgroundTasksIndicator.tsx`, `PoManagementView.tsx` / `/admin/po-management`. |
 | **Idea** | After bulk backfill **Apply**, steward must see **in-app** progress and a **completion summary** with explicit **next steps** — not silence + dialog close. Minimum: applying/parsing/done phases in dialog (or persistent snackbar), counts (cases created, parses ok/failed, superseded), primary CTA **Link POs** → `/admin/po-management`, secondary **Review lineup cases** → Commercial Planner. Activity bell should show one aggregated session job (`importJobId` = session job) with parse progress; fix current `registerClientBackgroundTask` call missing `importJobId`. Optional read-only `GET …/bulk-backfill/sessions/{id}/status` aggregating `staged_metadata.bulk_lineup_backfill_apply` + child parse outcomes. **No auto-redirect** to PO Management. |
@@ -1398,7 +1398,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Closed — documented, persist kept** · 2026-08-16 — apply/poll/`session_import_job_id` consumers depend on the coordinator `ImportJob`. Stopping persist would break dispatch. Loud docstring on `persist_preview_session`. |
+| **Status / parked** | **Measured** (2026-09-21 N-0030 audit: `shipment_evidence_line` still 50 columns; soak-gated) · **Closed — documented, persist kept** · 2026-08-16 — apply/poll/`session_import_job_id` consumers depend on the coordinator `ImportJob`. Stopping persist would break dispatch. Loud docstring on `persist_preview_session`. |
 | **Effort** | Small (in-memory preview session **or** loud docs + size guard) |
 | **Source** | Step B `persist_preview_session` — writes `ImportJob.staged_metadata` + base64 file manifest; ~60 files may be heavy. |
 | **Idea** | "Preview is read-only" is false against lineup tables but still writes coordinator `ImportJob` rows on live API. Fix: non-persisting preview **or** document loudly + optional manifest externalization. |
@@ -1524,7 +1524,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-06-24 |
+| **Status / parked** | **Confirmed open** (2026-09-21 N-0030 audit: `_load_frames_for_job` has no sheet allowlist; Stage 4.7) · **Parked** · 2026-06-24 |
 | **Effort** | Small–medium (API + web mapping UX); optional phase 2 if BOM tab becomes first-class feed |
 | **Source** | Warren session (2026-06-24): `ACZA Shipped Unshipped 20260623.xlsx` new **BOM Not Ready** tab pollutes shipment column-mapping stage (different columns); research in chat (no code). `apps/api/app/services/imports/shipment_evidence_import.py` (`_load_frames_for_job` — all sheets); `shipment_field_mapping.py` (`_union_frame_headers` — unions headers from every sheet for mapping UI); `shipment_evidence_report_detect.py` (`detect_report_type` — `REPORT_UNKNOWN` skipped at validate); CST precedent: `customer_sell_through_period.py` (`is_summary_sheet_name`); `docs/platform_import_system_truth.md` / BACKLOG-001 area (multi-sheet mapping deferred) |
 | **Idea** | ACZA shipment workbooks can include **non-operational tabs** (e.g. **BOM Not Ready** — BOM / readiness exception queue) alongside **Shipped** and **Unship**. CIP unions **all** sheet headers into one mapping surface but only ingests sheets that pass `detect_report_type`. Operators see confusing extra columns at map time; risk that a tab with Unship-like headers is **misclassified and ingested** as open-order evidence. |
@@ -1640,7 +1640,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-05-31 |
+| **Status / parked** | **Re-homed → Stage 10 / P6** (2026-09-21 N-0030 audit: PIM typed attributes belong with tenant config) · Parked · 2026-05-31 |
 | **Effort** | Very large |
 | **Source** | `docs/PRODUCT_MASTER_PIM_DESIGN_BRIEF.md` (§5 proposed architecture “for debate”; §7 safety: additive, feature-flagged; “not built”); `CONTEXT.md` (May 31 “full PIM/category-template model” in Not done) |
 | **Idea** | Category templates + typed storage (typed EAV or hybrid JSONB) promoted from today’s canonical `dim_product.specs_json` read store. |
@@ -1657,7 +1657,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status** | **Done 2026-08-10** — local `cip` verified `COUNT(*)=0` (`PM_WRITE_LEGACY_EAV` unset/false); restore snapshot `.tmp/pav_backup_backlog010.jsonl` (0 rows); idempotent `TRUNCATE` via ops script. Table schema retained for escape hatch. |
+| **Status** | **Re-homed → Stage 10 / P6** (2026-09-21 N-0030 audit: destructive ~2M-row drop only after 009 and Warren approval) · **Done 2026-08-10** — local `cip` verified `COUNT(*)=0` (`PM_WRITE_LEGACY_EAV` unset/false); restore snapshot `.tmp/pav_backup_backlog010.jsonl` (0 rows); idempotent `TRUNCATE` via ops script. Table schema retained for escape hatch. |
 | **Effort** | Medium (ops) + approval |
 | **Source** | `CONTEXT.md` (May 31 PM EAV: “left in place (dropping … needs explicit approval)”; import audit “still pending: drop existing 2M PAV rows”) |
 | **Idea** | Remove dead write-only PAV data after `specs_json` commit path is proven. |
@@ -1675,7 +1675,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-05-31 |
+| **Status / parked** | **Confirmed open** (2026-09-21 N-0030 audit: `pm_commit_catalog.py:72,294` per-row `db.flush()`) · Parked · 2026-05-31 |
 | **Effort** | Medium |
 | **Source** | `CONTEXT.md` (May 31 “Not done: catalog_product per-row flush → bulk”) |
 | **Idea** | Batch catalog upsert on PM commit like product bulk upsert. |
@@ -1688,7 +1688,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-05-31 |
+| **Status / parked** | **Closed — Done** (2026-09-21 N-0030 audit: P4 CST shipped — `/admin/cst-steward`, `customer_sell_through_apply.py`, 1,823 `fact_customer_sellthrough` rows) · Parked · 2026-05-31 |
 | **Effort** | Large |
 | **Source** | `docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md` (§9 D1, §5 row, §10; `hidden_from_generic_ui`, deferred `mapping_ui` / `steward_surface`); `apps/api/app/services/imports/customer_sell_through.py` (line 96: parser not implemented for some structure types) |
 | **Idea** | Dedicated UI + parsers for customer sell-through (not generic wizard). |
@@ -1700,7 +1700,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · (template seed) |
+| **Status / parked** | **Drop proposed** (2026-09-21 N-0030 audit: still 'intentionally deferred' in `template_definitions.py`; no business request since 2026-05; Warren confirms) · Parked · (template seed) |
 | **Effort** | Medium |
 | **Source** | `apps/api/app/services/imports/template_definitions.py` (line 298: “intentionally deferred; not wired for apply yet”) |
 | **TRIGGER** | Business requests customer classification import apply path. |
@@ -1723,7 +1723,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · (doc) |
+| **Status / parked** | **Drop proposed** (2026-09-21 N-0030 audit: no evidence current dedupe rates are unacceptable; Warren confirms) · Parked · (doc) |
 | **Effort** | Large |
 | **Source** | `docs/DSI_RESOLUTION_PERFORMANCE.md` (lines 3–7: “not implemented … stopped before implementation”) |
 | **Idea** | True embedding similarity vs current `difflib` pairwise job-local scoring. |
@@ -1892,7 +1892,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-07-02 · **re-measured 2026-07-27** (shipping KPI Phase 0) |
+| **Status / parked** | **Confirmed open** (2026-09-21 N-0030 audit: diagnostic exists in `shipment_plan_d_cutover.py`; policy is Warren's; Stage 4.6) · Parked · 2026-07-02 · **re-measured 2026-07-27** (shipping KPI Phase 0) |
 | **Source** | Plan D phase 1 diagnostic (`open_order_shipped_fact_double_count_diagnostic`); Phase 0 `apps/api/.tmp/shipping_kpi_phase0_diag.json` |
 | **Idea** | When order grain graduates to shipped, retire or supersede open-order fact rows — separate from evidence cutover. |
 | **Evidence (cip)** | Plan D: **104** pairs. Phase 0 (looser order_no+product join): **312** pairs, open qty **24,839**, shipped qty **26,750**, open amount **~$18.2M**. Also **109** `status=scheduled` + `line_state=shipped` rows ($5.7M) sit in the scheduled book. |
@@ -1958,7 +1958,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-06-14 |
+| **Status / parked** | **Escalated** (2026-09-21 N-0030 audit: re-measured **2,795** inverted launch/retire windows on cip — was 319; Stage 4.1) · Parked · 2026-06-14 |
 | **Effort** | Large (audit + governed steward corrections + re-validation plan) |
 | **Source** | Session audit: job #40 unique-SKU `inactive_only` anchor analysis (1,965 lines); `apps/api/app/services/imports/distributor_sales_inventory.py` (`_product_eligible_for_dsi_auto`, launch/retire window); `apps/api/app/models/dimensions.py` (`DimProduct.launch_date`, `retired_date`, `lifecycle_status`); shipment SKU-anchor override commit `6c865ea` (identity routed around bad dates) |
 | **Idea** | Audit and correct `dim_product.launch_date` / `retired_date`. Multiple confirmed corruption classes. |
@@ -2067,7 +2067,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-30 |
+| **Status / parked** | **Closed — Superseded** (2026-09-21 N-0030 audit: six-container spine replaced by domain IA, N-0013 / D-0007 / D-0010; delivered as N-0004; no `/brief` route) · **Parked** · 2026-08-30 |
 | **Effort** | Large |
 | **Source** | `docs/design/IMPLEMENTATION_PLAN.md` NS-2; charter P2-4; `brief.html` exemplar |
 | **Idea** | Six-container spine (Brief · Lineup · Stock · Settlement · Response · Steward) + utilities; grammar 3 Brief replaces Dashboard/Control tower; retired routes redirect. |
@@ -2084,7 +2084,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-30 |
+| **Status / parked** | **Closed — Superseded** (2026-09-21 N-0030 audit: N-0013 IA; delivered as N-0007; no `/stock` container route) · **Parked** · 2026-08-30 |
 | **Effort** | Large (may split 3a Inbound / 3b Cover+Movement) |
 | **Source** | `docs/design/IMPLEMENTATION_PLAN.md` NS-3; `stock-cover.html`, `stock-inbound.html` |
 | **Idea** | One Stock container, grammar 2: lenses Sell-out · Fill vs plan · Cover · Inbound; absorb `/sell-out`, `/plan-vs-executed`, `/shipping`, `/admin/po-management`, CST/forecast context chips. |
@@ -2101,7 +2101,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-30 |
+| **Status / parked** | **Closed — Superseded** (2026-09-21 N-0030 audit: N-0013 IA; delivered as N-0008) · **Parked** · 2026-08-30 |
 | **Effort** | Large |
 | **Source** | `docs/design/IMPLEMENTATION_PLAN.md` NS-4; `funding-settlement-r3.html` |
 | **Idea** | Grammar 1 queue+case 56/44; book Read + shape bars; case anchor panel; preview-confirm settle. |
@@ -2118,7 +2118,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-30 |
+| **Status / parked** | **Closed — Superseded** (2026-09-21 N-0030 audit: N-0013 IA; delivered as N-0009) · **Parked** · 2026-08-30 |
 | **Effort** | Large |
 | **Source** | `docs/design/IMPLEMENTATION_PLAN.md` NS-5; `lineup.html`, `lineup-pending.html` |
 | **Idea** | Grammar 2 Lineup: pending Approve/Reject, inline Planned edit, plan action bar (Calc · Export · Apply); `/buy-plans` net requirement. |
@@ -2135,7 +2135,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-30 |
+| **Status / parked** | **Closed — Superseded** (2026-09-21 N-0030 audit: N-0010 **rejected**; no `/response` container) · **Parked** · 2026-08-30 |
 | **Effort** | Medium–Large |
 | **Source** | `docs/design/IMPLEMENTATION_PLAN.md` NS-6; `response.html`, `response-blocked.html` |
 | **Idea** | Grammar 4: ranked actions + calculator; do-nothing recorded; promo compose → Settlement case; absorb pricing/competition. |
@@ -2152,7 +2152,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-02 |
+| **Status / parked** | **Confirmed open** (2026-09-21 N-0030 audit: `market.py:12` still `competitor_price_import: ready`; `fact_competitor_price` 0 rows; one-liner, Stage 2.8) · **Parked** · 2026-09-02 |
 | **Effort** | Small (three bounded edits) |
 | **Source** | `.eif/audit/NS_REDESIGN_R3_20260902/commercial/CAPABILITY_ACCOUNTING.md` §6; `apps/api/app/api/v1/endpoints/market.py`; `apps/web/src/app/(app)/promotions/page.tsx`; `.eif/program/PROGRAM.yaml` N-0010 `acceptance_criteria` |
 | **Idea** | (1) `market.py` reports `competitor_price_import: ready` although no such template exists in `template_definitions.py` and `fact_competitor_price` has no writer — report `substrate` truthfully. (2) The shipped `/promotions` page shows a "Scaffold plans/readiness are parked" notice beside the live B4 planner — remove the dead scaffold tabs or the notice. (3) N-0010 acceptance criteria cite `CIP_DESIGN_LANGUAGE.md FROZEN v1.1 … container Response`, a rejected design input — re-charter per D-0009. |
@@ -2169,7 +2169,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-02 |
+| **Status / parked** | **Confirmed open** (2026-09-21 N-0030 audit: `LineupScopeBar.tsx:106` inert Apply, no handler; Stage 2.8) · **Parked** · 2026-09-02 |
 | **Effort** | Small |
 | **Source** | `.eif/audit/NS4_SETTLEMENT_20260902/independent-rereview.md` (N-0009 finding); `apps/web/src/features/lineup/LineupScopeBar.tsx` |
 | **Idea** | Apply the same interaction-honesty treatment used on Settlement remediation: disable or clearly label inert From/To/BU/Customer pseudo-selects and the **Apply** button (currently styled as primary CTA with no handler). |
@@ -2203,7 +2203,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-02 |
+| **Status / parked** | **Confirmed open** (2026-09-21 N-0030 audit: primitives promoted to production, lab copies remain; Stage 2.9) · **Parked** · 2026-09-02 |
 | **Effort** | Small (delete) or Large (Phase A promotion plan) |
 | **Source** | `apps/web/src/design-lab/**`, `apps/web/src/app/(design-lab)/`; `.eif/audit/NS_REDESIGN_R3_20260902/DIRECTION.md` §7 |
 | **Idea** | The prototype is design evidence, not product. On acceptance of D-0007, its primitives (`HeadlineFigure`, `Panel`, `ScopeBar`, `LensTabs`, `charts.tsx`, `EntityContextPanel`, `CommandPalette`, `DomainHeader`, `LabShell`) become the Phase A promotion candidates into `apps/web/src/components` / `features`, replacing the duplicates named in `COMPONENT_ECOSYSTEM_AUDIT.md`; on rejection, the route group is deleted. Either way it must not linger as a second UI universe. |
@@ -2237,7 +2237,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-30 |
+| **Status / parked** | **Closed — Superseded** (2026-09-21 N-0030 audit: N-0013 IA; delivered as N-0011) · **Parked** · 2026-08-30 |
 | **Effort** | Large |
 | **Source** | `docs/design/IMPLEMENTATION_PLAN.md` NS-7; `steward.html`; import-parity.mdc |
 | **Idea** | Grammar 5 import factory + grammar 1 steward worklists; absorb commercial-planner Data map; masters as records. |
@@ -2254,7 +2254,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-04 |
+| **Status / parked** | **Confirmed open** (2026-09-21 N-0030 audit: design-lab still 25 tsx with duplicate primitives/shell; Stage 2.9 after density lands) · **Parked** · 2026-09-04 |
 | **Effort** | Medium |
 | **Source** | `apps/web/src/design-lab/shell/CommandPalette.tsx`, `apps/web/src/design-lab/primitives/CapabilityStatus.tsx`, `apps/web/src/design-lab/surfaces/DirectorySurface.tsx`; production `apps/web/src/features/shell/CapabilityRail.tsx` / `CapabilityDirectory.tsx` / `CapabilityStatus.tsx` / `CommandPalette.tsx` (commit `41a8c4b`) |
 | **Idea** | Design-lab keeps its own copies of CapabilityRail / Directory / Status / CommandPalette. Production now has the D-0008 shell. Two implementations will drift. |
@@ -2390,7 +2390,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-04 |
+| **Status / parked** | **Gated** (2026-09-21 N-0030 audit: effective `ai_assist_enabled=False`; `_anthropic_client()` returns None at `:57/:61`; fix before the flag is ever flipped; Stage 3.6) · **Parked** · 2026-09-04 |
 | **Effort** | Small |
 | **Source** | `apps/api/app/services/imports/ai_import_resolver.py` (`os.environ.get("ANTHROPIC_API_KEY")` after `ai_assist_enabled`); `apps/api/.env` has `AI_ASSIST_ENABLED`; the key name is defined nowhere on this machine (`apps/api/.env.example` and `app/core/config.py` have no `ANTHROPIC_API_KEY` field) |
 | **Idea** | With AI assist enabled and no key, `_anthropic_client()` logs a warning and returns `None` (module header: failures log and return None, never raise). Operators can believe AI-assisted import resolution is on while every call silently no-ops. Verify the resolver **fails loudly** rather than degrading silently — then keep that behaviour. |
@@ -2552,7 +2552,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-07 · N-0018 coverage UNCOVERED |
+| **Status / parked** | **Measured** (2026-09-21 N-0030 audit: `line_state` only shipped 13,477 / open_order 1,775; Stage 7.5) · **Parked** · 2026-09-07 · N-0018 coverage UNCOVERED |
 | **Effort** | Medium (domain + schema + steward, if ever chartered) |
 | **Source** | Lab `SupplySurface` / `shipmentLifecycle` fixture state `Arrived` (296). Production `fact_inbound_shipment.line_state` on cip is only `shipped` / `open_order`; lifecycle analog is pipeline / shipped / landed. |
 | **Idea** | A real arrived-not-received state (dock/ASN without POD) distinct from shipped and from unreceived-past-ETA. |
@@ -2619,7 +2619,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-14 · N-0026 UNCOVERED |
+| **Status / parked** | **Measured** (2026-09-21 N-0030 audit: `fact_competitor_price` 0 · `customer_listing` 218 · `listing_observation` 168; buildable with honest empties; Stage 7.1) · **Parked** · 2026-09-14 · N-0026 UNCOVERED |
 | **Effort** | Medium (join + grain + honesty when empty) |
 | **Source** | D-0008; `.eif/audit/NS14_PROMO_PLAN_20260914/RECONCILE.md`. Live `cip`: `fact_competitor_price` 0 rows; `customer_listing` 218 rows on 3 customers; `listing_observation` 168. |
 | **Idea** | Show listing activation and competitor-SKU prices on each `cpor_case_line` without inventing facts. Product competition only. |
@@ -2653,7 +2653,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-14 · N-0026 UNCOVERED (capability already planned) |
+| **Status / parked** | **Data-gated** (2026-09-21 N-0030 audit: `cpor_claim_evidence_line` **0** rows vs **211** settled cases; unlocks with Warren's customer/disti data drive; Stage 7.4) · **Parked** · 2026-09-14 · N-0026 UNCOVERED (capability already planned) |
 | **Effort** | Large (derivation + ≥5 settled-with-claims gate) |
 | **Source** | `PLANNER_CAPABILITIES` uplift row; live `cpor_claim_evidence_line` count 0. |
 | **Idea** | Derive uplift only from settled cases with claim evidence — never estimate. |
@@ -2793,7 +2793,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-15 · N-0029 UNCOVERED |
+| **Status / parked** | **Dropped** (2026-09-21 N-0030 audit: AG Grid Enterprise is a paid licence — breaks Warren's R0/month constraint; N-0029 AC forbids range selection / Excel export) · **Parked** · 2026-09-15 · N-0029 UNCOVERED |
 | **Effort** | Medium + license |
 | **Source** | N-0029 recon. `EnterpriseDataGrid` registers `AllCommunityModule` only. No `ag-grid-enterprise` in `apps/web`. |
 | **Resume-context** | Community clipboard is native cell text selection (N-0029). Range and Excel need the Enterprise module and a license. |
@@ -2923,7 +2923,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Open** · 2026-09-21 · found by the grid/column parity audit (§7.2) |
+| **Status / parked** | **HELD** (2026-09-21 N-0030 audit: N-0029 AC — 'Do not unify MasterColumnPickerDialog and ColumnSelectorModal'; deleting the wrapper is that unification; N-0029 review rules) · **Open** · 2026-09-21 · found by the grid/column parity audit (§7.2) |
 | **Effort** | Trivial |
 | **Source** | `apps/web/src/components/masterGrid/MasterColumnPickerDialog.tsx`; its only referent is `MasterColumnPickerDialog.test.tsx` |
 | **Idea** | Delete the wrapper, or re-point `MasterDataGridShell` at it — but do not leave a component whose only caller is its own test. |
@@ -2941,7 +2941,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Open — needs a product decision before any code** · 2026-09-21 · grid/column parity audit §6.2 |
+| **Status / parked** | **Decided** (2026-09-21 N-0030 audit: Warren — **all columns** pickable on fact grids; Stage 2.4 of `docs/design/STAGED_WORK_PLAN.md`) · **Open — needs a product decision before any code** · 2026-09-21 · grid/column parity audit §6.2 |
 | **Effort** | Medium per surface; the decision is the expensive part, not the wiring |
 | **Source** | ~15 grids listed as Tier A in `docs/audits/GRID_AND_COLUMN_PARITY_AUDIT.md` §6.2 — sell-out (x3), channel-ops movements/inventory, inventory, pricing (x2), buy-plans, roadmap, exceptions, plan-vs-executed, cover/forecasts/channel-intelligence, market listings, customer-commercial-terms |
 | **Idea** | Wide `fact_*`-backed operational grids could let a steward surface columns the fixed `columnDefs` hides, the way shipping / shipment-evidence / master data / planner lines already do. |
@@ -2959,7 +2959,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Open — product call, not a bug** · 2026-09-21 · grid/column parity audit §7.4 |
+| **Status / parked** | **Decided** (2026-09-21 N-0030 audit: Warren — merge the five orphaned tabs onto the settlement desk; Stage 2.7; restores BACKLOG-093 promo-load recon) · **Open — product call, not a bug** · 2026-09-21 · grid/column parity audit §7.4 |
 | **Effort** | Trivial to delete; unknown to re-mount |
 | **Source** | `apps/web/src/features/cpor/CporCaseWorkspace.tsx` (2 grids) and its child `app/(app)/commercial-planner/cpor-cases/[id]/CporPaymentEvidencePanel.tsx`. Only remaining referent: `page.fxReadiness.test.tsx`. The `[id]` route renders `SettlementDeskLive`. |
 | **Idea** | Decide whether the CPOR case workspace is dead code to remove or a surface to re-mount. |

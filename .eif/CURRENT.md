@@ -17,7 +17,7 @@ _No ready unblocked leaves._
 
 ## In progress / leased
 
-_none_
+- **N-0030** Backlog audit against the running tree, P1 sign-off discovery, and staged work plan stage=discovery run=BACKLOG_AUDIT_20260921 expires=2026-09-21T17:16:13Z note=
 
 ## Decision queue
 
