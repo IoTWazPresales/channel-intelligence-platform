@@ -1,6 +1,6 @@
 'use client';
 
-import { InboundShipmentsWorkspace } from '@/app/(app)/shipping/page';
+import { InboundShipmentsWorkspace } from '@/features/supply-inbound/InboundShipmentsWorkspace';
 import { SupplyChrome } from '@/features/supply-inbound/SupplyChrome';
 
 export default function SupplyShipmentsPage() {
