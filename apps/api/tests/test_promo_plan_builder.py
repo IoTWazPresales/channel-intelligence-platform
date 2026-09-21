@@ -65,6 +65,7 @@ def test_build_promo_plan_draft_case_not_found(monkeypatch):
 def test_derive_planned_skips_missing_srp(monkeypatch):
     item = SimpleNamespace(product_id=10, planned_volume_units=100, period_label="26Q2")
     sku = SimpleNamespace(
+        sales_model_name="X1-SALES-MODEL",
         product_id=10,
         controlled_cost_amount=500.0,
         reserve_total_pct=0.1,
@@ -141,8 +142,8 @@ def test_build_promo_plan_draft_emits_per_line_mac_and_units(monkeypatch):
     )
     line_a = SimpleNamespace(id=1, product_id=101, distributor_id=3, srp=19999, estimate_qty=4, pod_quarter="26Q2")
     line_b = SimpleNamespace(id=2, product_id=102, distributor_id=3, srp=8999, estimate_qty=8, pod_quarter="26Q2")
-    prod_a = SimpleNamespace(id=101, sku="SKU-A", name="Alpha")
-    prod_b = SimpleNamespace(id=102, sku="SKU-B", name="Beta")
+    prod_a = SimpleNamespace(sales_model_name="X-SALES-MODEL", id=101, sku="SKU-A", name="Alpha")
+    prod_b = SimpleNamespace(sales_model_name="X-SALES-MODEL", id=102, sku="SKU-B", name="Beta")
 
     class FakeSession:
         def get(self, model, key):
@@ -215,7 +216,7 @@ def test_create_case_from_promo_draft_carries_edits_and_skips_cover_persist(monk
         roe_snapshot=18.5,
         currency_code="ZAR",
     )
-    prod = SimpleNamespace(id=101, sku="SKU-A", name="Alpha")
+    prod = SimpleNamespace(sales_model_name="X-SALES-MODEL", id=101, sku="SKU-A", name="Alpha")
     added = []
     events = []
     committed = {"n": 0}
@@ -226,7 +227,7 @@ def test_create_case_from_promo_draft_carries_edits_and_skips_cover_persist(monk
             if name == "CporCase":
                 return seed
             if name == "DimProduct":
-                return prod if int(key) == 101 else SimpleNamespace(id=int(key), sku="X", name="X")
+                return prod if int(key) == 101 else SimpleNamespace(id=int(key), sku="X", name="X", sales_model_name="X-SALES-MODEL")
             return None
 
         def scalars(self, *_a, **_k):
@@ -381,7 +382,7 @@ def test_build_promo_plan_draft_from_customer_period_same_customer_only(monkeypa
         def get(self, model, key):
             name = getattr(model, "__name__", str(model))
             if name == "DimProduct":
-                return SimpleNamespace(id=int(key), sku="SKU", name="Name")
+                return SimpleNamespace(id=int(key), sku="SKU", name="Name", sales_model_name="X-SALES-MODEL")
             return None
 
         def scalars(self, *_a, **_k):

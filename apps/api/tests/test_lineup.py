@@ -34,7 +34,7 @@ def test_patch_lineup_item_updates_approval_status():
 
     r = client.patch("/api/v1/lineup/items/10", json={"approval_status": "pending_approval"})
     assert r.status_code == 200
-    assert r.json() == {"id": 10, "approval_status": "pending_approval", "notes": None}
+    assert r.json() == {"id": 10, "approval_status": "pending_approval", "notes": None, "planned_volume_units": 1.0}
     assert row.approval_status == "pending_approval"
 
 

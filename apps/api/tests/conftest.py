@@ -163,3 +163,29 @@ def pytest_runtest_setup(item) -> None:  # type: ignore[no-untyped-def]
             "to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a "
             "justification comment if it genuinely requires cip."
         )
+
+# ---------------------------------------------------------------------------------------------
+# Router-level auth (2026-09-21): app/api/v1/router.py puts get_current_user on every route.
+# Contract tests that override get_db with a MagicMock never had auth in their request path
+# before; in stub mode the resolver would now `await MagicMock().scalar(...)` and TypeError.
+# This shim short-circuits ONLY when the injected session is not a real AsyncSession (i.e. a
+# test mock) and lets get_current_user forge from headers as the stub always did. Real sessions,
+# session mode, bearer tokens and forged-header handling all go through the untouched code.
+# ---------------------------------------------------------------------------------------------
+@pytest.fixture(autouse=True)
+def _mock_db_safe_stub_user(monkeypatch: pytest.MonkeyPatch):
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.core import security
+
+    original = security._resolve_stub_app_user
+
+    async def guarded(db, x_user_id):
+        if not isinstance(db, AsyncSession):
+            # Returning None makes get_current_user take its own stub forge branch (missing header ->
+            # ADMIN, X-User-Role/X-User-Id honoured), i.e. exactly the pre-gate behaviour without a DB.
+            return None
+        return await original(db, x_user_id)
+
+    monkeypatch.setattr(security, "_resolve_stub_app_user", guarded)
+    yield

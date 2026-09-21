@@ -185,7 +185,7 @@ def test_product_master_api_requires_admin() -> None:
     with TestClient(app) as client:
         r = client.get(
             "/api/v1/imports/product-master/jobs/1/state",
-            headers={"X-User-Role": "viewer"},
+            headers={"X-User-Role": "viewer", "X-User-Id": "viewer-probe"},
         )
         assert r.status_code == 403
         assert r.json().get("detail") == "Insufficient role"

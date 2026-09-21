@@ -336,7 +336,7 @@ def test_lineup_coverage_endpoint_returns_enriched_lines():
     )
     fake_coverage_result = MagicMock()
     fake_coverage_result.all = MagicMock(
-        return_value=[(fake_line, "2026-Q2", "ZA", "USD", "SKU-X1", "Notebook X1", None, None, None, None, None, None)]
+        return_value=[(fake_line, "2026-Q2", "ZA", "USD", "SKU-X1", "X1-SALES-MODEL", "Notebook X1", None, None, None, None, None, None)]
     )
 
     async def fake_db():
@@ -412,7 +412,7 @@ def test_lineup_coverage_includes_extended_commercial_fields():
     # Tuple now includes (header_customer_id, header_customer_code, header_customer_name)
     fake_result.all = MagicMock(
         return_value=[
-            (fake_line, "2026-Q2", "ZA", "USD", "SKU-Z1", "Widget Z", 7, "CUST-A", "Customer A", 3, "DIST-1", "Distributor One")
+            (fake_line, "2026-Q2", "ZA", "USD", "SKU-Z1", "X1-SALES-MODEL", "Widget Z", 7, "CUST-A", "Customer A", 3, "DIST-1", "Distributor One")
         ]
     )
 

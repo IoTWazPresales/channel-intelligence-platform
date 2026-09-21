@@ -2970,3 +2970,21 @@ Exact engine invariants (do not complete around them):
 | **Behavior to retain** | `/commercial-planner/cpor-cases/[id]` keeps rendering `SettlementDeskLive`. |
 | **Out of scope** | `SettlementPortfolioRead` / `CporPortfolioIntelligencePanel` — same class, already recorded in `CURRENT.md`; fold them in only if Warren wants one sweep. |
 | **TRIGGER** | Warren rules on the three unmounted CPOR/settlement surfaces, **or** a dead-code sweep reaches `features/cpor/`. |
+
+---
+
+## BACKLOG-203 — Seven API tests assume a clean database and fail against shared `cip`
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** · 2026-09-21 · surfaced by the first full no-`-x` suite run after the router-level auth gate (N-0033) |
+| **Effort** | Small per test; the decision (fixtures vs `cip_test`) is the real work |
+| **Source** | `tests/test_distributor_sales_inventory_import.py` ×4 (`…no_queue_spam`, `…approved_alias_resolves_customer`, `…merged_dealer_group_patterns`, `…missing_mapping_message_vs_unresolved_distributor`), `tests/test_shipment_resolved_entities.py::test_apply_resolved_entities_syncs_stamped_ids`, `tests/test_data_integrity_audit.py::test_audit_seeded_violations_on_db`, `tests/test_dsi_validate_bulk_staging.py::test_customer_candidates_from_cache_matches_db_filtering` |
+| **Idea** | These pass only on a database in a known state. Against production `cip` (4,949 customers, live aliases) they hit `UniqueViolation` on `uq_cust_src_token_alias_approved_scope` for a leftover `alias dealer token`, find 0 candidates where 1 is seeded, or compare cache vs DB sets that include real rows. They are environmental, not code defects — all fail on assertions, none on auth. |
+| **Why it matters / deferrable** | The suite cannot be read as green/red while these sit in it; today's verdict needed a manual sort. Deferrable because every failure is explained and none touches the auth gate. |
+| **Resume-context** | Related: BACKLOG-144 (`cip_test` seed gap) and BACKLOG-143 (leftover DBs). The suite runs 2,273 tests in ~18 min; the five slowest are DSI apply tests at ~110–120 s each. |
+| **What the work is** | Either (a) make each test seed and clean its own rows inside a transaction, or (b) route them to `cip_test` with a dedicated seed and mark them `integration`. (b) is the scalable answer; (a) is the quick one. |
+| **Regression traps** | Do not "fix" by widening assertions. Do not delete the leftover alias on `cip` by hand — it may be real data. |
+| **Behavior to retain** | The rest of the suite stays runnable against `cip` with `ALLOW_TESTS_ON_DEV_DB=1` as AGENTS.md describes. |
+| **Out of scope** | The 7 stale tests repaired in the same commit (they matched code changes from 2026-09-02..20); the auth gate itself. |
+| **TRIGGER** | Next API test-hygiene pass, **or** the suite is wired into CI where a red bit must mean something. |
