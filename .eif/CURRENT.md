@@ -18,8 +18,8 @@ _No ready unblocked leaves._
 ## In progress / leased
 
 - **N-0031** Stage 2a: grid height single source, MarketSurface mappings states, LineupScopeBar and market readiness honesty stage=validate run=STAGE2A_GRID_PARITY_20260921 expires=2026-09-21T17:52:56Z note=Stage 2a implemented and self-verified at 5e70f33. quality.a11y and verification.referent are left for an independent run (R2). Do not complete from the implementation run.
-- **N-0032** Stage 2.7: five orphaned CPOR case tabs (USD pivot, Events, Exports, Promo load, Payments/recon) mounted on the settlement desk stage=implement run=STAGE2_7_CPOR_TABS_20260921 expires=2026-09-21T18:54:22Z note=Implementation boundary for Stage 2.7 at e264410. CporCaseWorkspace stays; desk lacks FX anchor, readiness row, comparables and transitions.
-- **N-0033** Stage 3.1/3.5: session auth gate on every API route, production web on loopback, Cloudflare quick tunnel for a small pilot stage=implement run=STAGE3_ACCESS_20260921 expires=2026-09-21T20:10:56Z note=Implementation in this run: 26a6e1a router-level gate; conftest shim + coverage fixture repairs pending commit; production web on 127.0.0.1:3000; cloudflared 2026.9.1 quick tunnel on http2. Baseline ff118ec.
+- **N-0032** Stage 2.7: five orphaned CPOR case tabs (USD pivot, Events, Exports, Promo load, Payments/recon) mounted on the settlement desk stage=validate run=STAGE2_7_CPOR_TABS_20260921 expires=2026-09-21T18:54:22Z note=Implemented and unit-verified at 946c935 (ff118ec). quality.rendered and a11y pending; referent independent (R2). Do not complete from the implementation run.
+- **N-0033** Stage 3.1/3.5: session auth gate on every API route, production web on loopback, Cloudflare quick tunnel for a small pilot stage=validate run=STAGE3_ACCESS_20260921 expires=2026-09-21T20:10:56Z note=Gate, production web and tunnel verified live at 946c935. Full API suite (2273 tests) still running at staging time; result lands in the test-repair commit and CURRENT. referent left for an independent run (R3). Do not complete from the implementation run.
 
 ## Decision queue
 

@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 917
-  log_sha256: 8f16ae5d6559abf6d9ea33dccac9b7a164f6714c162c6a04d8f521b75e069689
+  snapshot_revision: 927
+  log_sha256: 708c5fb5cba935b5f824f8f19cc60e1d44a750b6d8ce0f17a2525ad9a75daaa3
   acceptance_policy:
     milestone: operator
     root: operator
@@ -5465,8 +5465,8 @@ nodes:
     class: feature
     origin: operator
     status: in_progress
-    stage: implement
-    revision: 3
+    stage: validate
+    revision: 7
     lease:
       run: STAGE2_7_CPOR_TABS_20260921
       acquired_at: '2026-09-21T14:54:22Z'
@@ -5502,9 +5502,15 @@ nodes:
     quality:
       ux:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/STAGE2_7_CPOR_TABS_20260921/SMOKE.md
+          tree_hash: 946c935b895fc515f270c1165c410d1c0ed90433
+        rationale: Five orphaned case tabs reachable under the desk; pivot is a table not a JSON dump; every tab has loading,
+          error with Retry and an honest empty state; workspace kept because the desk lacks four capabilities, recorded in
+          BACKLOG-202.
+        pass_run: STAGE2_7_CPOR_TABS_20260921
+        pass_actor: stage2b-001
       a11y:
         required: true
         state: pending
@@ -5514,19 +5520,26 @@ nodes:
         required: true
         state: pending
         evidence: null
-        rationale: null
+        rationale: 'PENDING: authenticated browser render not captured - the API moved to session mode during this node and
+          the agent tab holds no token (raw fetch /auth/me 401 in 10ms, tab hidden, zero app queries). Warren or an independent
+          run captures it. Unit tests cover the tab host and the pivot table.'
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/STAGE2_7_CPOR_TABS_20260921/SMOKE.md
+          tree_hash: 946c935b895fc515f270c1165c410d1c0ed90433
+        rationale: Verbatim missing_roe copy retained; empty-state copy explains where each dataset comes from; BACKLOG-093
+          restored and stamped.
+        pass_run: STAGE2_7_CPOR_TABS_20260921
+        pass_actor: stage2b-001
     verification: {}
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: Implementation boundary for Stage 2.7 at e264410. CporCaseWorkspace stays; desk lacks FX anchor, readiness
-      row, comparables and transitions.
+    stage_note: Implemented and unit-verified at 946c935 (ff118ec). quality.rendered and a11y pending; referent independent
+      (R2). Do not complete from the implementation run.
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -5545,8 +5558,8 @@ nodes:
     class: feature
     origin: operator
     status: in_progress
-    stage: implement
-    revision: 3
+    stage: validate
+    revision: 9
     lease:
       run: STAGE3_ACCESS_20260921
       acquired_at: '2026-09-21T16:10:56Z'
@@ -5581,31 +5594,54 @@ nodes:
     quality:
       ux:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/STAGE3_ACCESS_20260921/SMOKE.md
+          tree_hash: 946c935b895fc515f270c1165c410d1c0ed90433
+        rationale: Anonymous users land on /login (200) and get 401 JSON from every /api/v1 route; wrong password 401 not
+          404; Warren never had to hand a password to the agent. SMOKE.md sections 1, 3, 4.
+        pass_run: STAGE3_ACCESS_20260921
+        pass_actor: stage3-001
       a11y:
         required: true
-        state: pending
+        state: na
         evidence: null
-        rationale: null
+        rationale: 'No UI surface changed: the gate is API-side and the /login page is unchanged. Nothing to assess for this
+          node.'
       rendered:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: &id020
+          path: .eif/audit/STAGE3_ACCESS_20260921/SMOKE.md
+          tree_hash: 946c935b895fc515f270c1165c410d1c0ed90433
+        rationale: 'Live enumeration 207 GET routes: 127 open before, 0 after; public URL through Cloudflare: /login 200,
+          /auth/me 401, /customers 401, /docs 404, Server cloudflare, CF-Ray JNB. Measured, not screenshots.'
+        pass_run: STAGE3_ACCESS_20260921
+        pass_actor: stage3-001
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: pass
+        evidence:
+          path: .eif/audit/STAGE3_ACCESS_20260921/SMOKE.md
+          tree_hash: 946c935b895fc515f270c1165c410d1c0ed90433
+        rationale: Runbook docs/PILOT_TUNNEL_RUNBOOK.md states architecture, findings, risks, start/stop and the two-user
+          plan; public URL deliberately not recorded because it changes per restart.
+        pass_run: STAGE3_ACCESS_20260921
+        pass_actor: stage3-001
+    verification:
+      rendered:
+        state: pass
+        pass_run: STAGE3_ACCESS_20260921
+        pass_actor: stage3-001
+        evidence: *id020
+        path: null
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Implementation in this run: 26a6e1a router-level gate; conftest shim + coverage fixture repairs pending commit;
-      production web on 127.0.0.1:3000; cloudflared 2026.9.1 quick tunnel on http2. Baseline ff118ec.'
+    stage_note: Gate, production web and tunnel verified live at 946c935. Full API suite (2273 tests) still running at staging
+      time; result lands in the test-repair commit and CURRENT. referent left for an independent run (R3). Do not complete
+      from the implementation run.
     debug_iterations: 0
     split_into: null
     deferred: null
