@@ -467,10 +467,11 @@ export function CstArticleAliasesSection() {
     [confirmAlias, openEdit, rejectAlias],
   );
 
+  // No AG Grid `loading` overlay here: ModuleDataSection owns the loading state and
+  // does not mount the grid until rows are ready, so the overlay was unreachable.
   const gridOptions = useMemo(
     () => ({
       getRowId: (p: { data?: AliasRow }) => String(p.data!.id),
-      loading: loadingAliases,
       ...OPS_LIST_GRID_PAGINATION,
       onGridReady,
       onColumnMoved: onColumnStateEvent,
@@ -478,7 +479,7 @@ export function CstArticleAliasesSection() {
       onColumnPinned: onColumnStateEvent,
       onColumnResized: onColumnStateEvent,
     }),
-    [loadingAliases, onGridReady, onColumnStateEvent],
+    [onGridReady, onColumnStateEvent],
   );
 
   const busy =

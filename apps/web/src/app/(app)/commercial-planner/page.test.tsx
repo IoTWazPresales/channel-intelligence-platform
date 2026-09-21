@@ -191,7 +191,15 @@ vi.mock('@/components/PageHeader', () => ({
   PageHeader: ({ title }: { title: string }) => <div>{title}</div>,
 }));
 vi.mock('@/components/ModuleDataSection', () => ({
-  ModuleDataSection: ({ children }: any) => <>{children}</>,
+  // Faithful enough for the loading gate: while isLoading the real component shows its
+  // spinner box instead of the grid. Empty/error stay passthrough so row assertions in the
+  // rest of this file keep exercising the grid.
+  ModuleDataSection: ({ isLoading, loadingLabel, children }: any) =>
+    isLoading ? (
+      <span data-testid="grid-loading-overlay">{loadingLabel ?? 'Loading data…'}</span>
+    ) : (
+      <>{children}</>
+    ),
 }));
 vi.mock('@/components/ModuleGridToolbar', () => ({
   ModuleGridToolbar: ({ onAdd }: any) => <button onClick={onAdd}>add-plan</button>,
@@ -199,7 +207,6 @@ vi.mock('@/components/ModuleGridToolbar', () => ({
 vi.mock('@/components/EnterpriseDataGrid', () => ({
   EnterpriseDataGrid: ({ rowData, columnDefs, gridOptions }: { rowData: any[]; columnDefs?: any[]; gridOptions?: any }) => (
     <div data-testid="enterprise-grid">
-      {gridOptions?.loading ? <span data-testid="grid-loading-overlay">Loading grid…</span> : null}
       {(rowData ?? []).map((r) => {
         const gpCol = columnDefs?.find((c: any) => c.field === 'calc_internal_gp_amount');
         const gpDisplay =

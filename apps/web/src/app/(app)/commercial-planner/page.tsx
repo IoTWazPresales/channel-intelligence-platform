@@ -858,12 +858,20 @@ export default function CommercialPlannerPage() {
   }, [activePlan]);
   const planCcyIso = useMemo(() => (activePlan?.currency_code ?? '').trim(), [activePlan?.currency_code]);
   const planCurrencyLabel = planCcyIso || 'Plan currency not set';
-  const { data: lines, isPending: linesPending } = useQuery({
+  const {
+    data: lines,
+    isPending: linesPending,
+    isError: linesIsError,
+    error: linesError,
+    refetch: refetchLines,
+  } = useQuery({
     queryKey: ['commercial-plan-lines', activePlanId],
     queryFn: ({ signal }) => apiGet<PlanLine[]>(`/api/v1/commercial-planner/plans/${activePlanId}/lines`, { signal }),
     enabled: tab === 0 && activePlanId != null,
   });
-  const linesLoadingOverlay = tab === 0 && activePlanId != null && linesPending;
+  // isPending (not isLoading) so the enabled:false phase before a plan is picked does not
+  // read as loading. Gated on activePlanId so "no plan selected" falls through to the empty state.
+  const linesLoading = tab === 0 && activePlanId != null && linesPending;
   const { data: summary } = useQuery({
     queryKey: ['commercial-plan-summary', activePlanId],
     queryFn: ({ signal }) => apiGet<Summary>(`/api/v1/commercial-planner/plans/${activePlanId}/summary`, { signal }),
@@ -1687,14 +1695,13 @@ export default function CommercialPlannerPage() {
   const lineGrid: GridOptions<PlanLine> = useMemo(
     () => ({
       singleClickEdit: true,
-      loading: linesLoadingOverlay,
       enableBrowserTooltips: true,
       onCellValueChanged: (e) => void onLineCell(e),
       onRowClicked: (e) => {
         if (e.data) setSelectedLineId((prev) => (prev === e.data!.id ? null : e.data!.id));
       },
     }),
-    [onLineCell, linesLoadingOverlay]
+    [onLineCell]
   );
 
   // ── Line detail panel (shown in right column when a line row is clicked) ─────
@@ -2321,7 +2328,47 @@ export default function CommercialPlannerPage() {
         )}
         <Stack direction="row" spacing={2} alignItems="stretch">
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <EnterpriseDataGrid rowData={lines ?? []} columnDefs={lineCols} gridOptions={lineGrid} height={480} />
+            <ModuleDataSection
+              isLoading={linesLoading}
+              isError={linesIsError}
+              error={
+                linesIsError
+                  ? new Error(String((linesError as Error)?.message ?? 'Failed to load plan lines'))
+                  : null
+              }
+              onRetry={() => void refetchLines()}
+              isEmpty={(lines?.length ?? 0) === 0}
+              empty={
+                activePlanId == null
+                  ? {
+                      title: 'No plan selected',
+                      description:
+                        'Pick a plan above to see its lines, or create a new plan to start building one.',
+                      primary: { label: 'New plan', onClick: () => setAddPlanOpen(true) },
+                    }
+                  : {
+                      title: 'No lines in this plan',
+                      description:
+                        'Add a line by hand, or pull rows in from a lineup case, then press Recalculate to compute economics.',
+                      primary: { label: 'Add line', onClick: () => setAddLineOpen(true) },
+                      secondary: {
+                        label: 'Add from lineup',
+                        onClick: () => {
+                          setLineupBatchSummary(null);
+                          setLineupSelectedIds([]);
+                          setLineupModalFilter('');
+                          setLineupResolvedOnly(false);
+                          setLineupUnresolvedCustOnly(false);
+                          setLineupWarningsOnly(false);
+                          setAddFromLineupOpen(true);
+                        },
+                      },
+                    }
+              }
+              loadingLabel="Loading plan lines…"
+            >
+              <EnterpriseDataGrid rowData={lines ?? []} columnDefs={lineCols} gridOptions={lineGrid} height={480} />
+            </ModuleDataSection>
           </Box>
           {selectedLine && (
             <Box sx={{ flex: '0 0 420px', width: 420, minWidth: 320 }}>{lineDetailPanel}</Box>

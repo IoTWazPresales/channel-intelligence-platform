@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { apiGet } from '@/lib/api';
 
 type PayRow = {
@@ -49,7 +50,7 @@ function money(v: number | null | undefined): string {
 }
 
 export function CporPaymentEvidencePanel({ caseId }: { caseId: number }) {
-  const { data, isLoading, isError, error } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['cpor', 'case', caseId, 'payment-evidence'],
     queryFn: ({ signal }) =>
       apiGet<{ items: PayRow[]; total: number }>(
@@ -163,20 +164,31 @@ export function CporPaymentEvidencePanel({ caseId }: { caseId: number }) {
           ) : null}
         </Stack>
       ) : null}
-      {isError ? <Alert severity="error">{String((error as Error).message)}</Alert> : null}
-      {!isLoading && (data?.total ?? 0) === 0 ? (
-        <Alert severity="info">
-          No payment / CN evidence for this case. Import via Import Center
-          (cpor_payment_evidence) or the payment import wizard.
-        </Alert>
-      ) : (
+      <ModuleDataSection
+        isLoading={isLoading}
+        isError={isError}
+        error={isError ? new Error(String((error as Error)?.message ?? 'Failed to load payment evidence')) : null}
+        onRetry={() => void refetch()}
+        isEmpty={(data?.total ?? 0) === 0}
+        empty={{
+          title: 'No payment / CN evidence for this case',
+          description:
+            'Paid is mapped payment and credit-note evidence. Import cpor_payment_evidence via Import Center, or use the payment import wizard.',
+          primary: { label: 'Import Center', href: '/admin/imports?template=cpor_payment_evidence' },
+          secondary: {
+            label: 'Payment import wizard',
+            href: '/commercial-planner/cpor-cases/payment-evidence-import',
+          },
+        }}
+        loadingLabel="Loading payment evidence…"
+      >
         <EnterpriseDataGrid
           rowData={data?.items ?? []}
           columnDefs={columnDefs}
           height={280}
-          gridOptions={{ getRowId: (p) => String(p.data.id), loading: isLoading }}
+          gridOptions={{ getRowId: (p) => String(p.data.id) }}
         />
-      )}
+      </ModuleDataSection>
     </Stack>
   );
 }
