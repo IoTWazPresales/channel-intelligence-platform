@@ -1,6 +1,7 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.core.feature_flags import commercial_planner_enabled
+from app.core.security import get_current_user
 from app.api.v1.endpoints import (
     administration,
     auth,
@@ -58,7 +59,18 @@ from app.api.v1.endpoints import (
     supply,
 )
 
-api_router = APIRouter()
+# Router-level authentication. In stub mode get_current_user resolves admin@local and never
+# raises, so local dev and the pytest suite are unchanged. In session mode (CIP_AUTH_MODE=session)
+# every route below requires a bearer; before this, auth was per-endpoint and a route
+# enumeration on 2026-09-21 found 127 of 229 GET routes serving data with no token.
+# Endpoint-level get_current_user / require_roles dependencies still apply on top (FastAPI
+# caches the resolved user per request, so the lookup runs once).
+api_router = APIRouter(dependencies=[Depends(get_current_user)])
+
+# The one route that must answer without a bearer so a session can be created at all.
+public_router = APIRouter()
+public_router.include_router(auth.public_router, prefix="/auth", tags=["auth"])
+
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(brief.router, prefix="/brief", tags=["brief"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])

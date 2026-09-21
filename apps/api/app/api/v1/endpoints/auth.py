@@ -18,6 +18,11 @@ from app.services import commercial_tenant_profile
 
 router = APIRouter()
 
+# The only auth route that must work WITHOUT a bearer: mounted outside the gated api_router
+# (see app/api/v1/router.py) so session mode can bootstrap. Everything else on `router`
+# inherits the router-level get_current_user dependency.
+public_router = APIRouter()
+
 _SESSION_DAYS = 14
 
 
@@ -76,7 +81,7 @@ async def me(user: dict = Depends(get_current_user)):
     }
 
 
-@router.post("/login", response_model=LoginResponse)
+@public_router.post("/login", response_model=LoginResponse)
 async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
     email = body.email.strip().lower()
     result = await db.execute(select(AppUser).where(AppUser.email == email))

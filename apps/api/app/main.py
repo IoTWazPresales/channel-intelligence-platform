@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from app.api.v1.router import api_router
+from app.api.v1.router import api_router, public_router
 from app.core.config import get_settings
 from app.core.dev_celery_logging import DEV_CELERY_LOGGER
 from app.db.session import AsyncSessionLocal
@@ -55,6 +55,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# public_router (auth/login only) is mounted first and carries no auth dependency;
+# api_router requires get_current_user on every route (see app/api/v1/router.py).
+app.include_router(public_router, prefix=settings.api_v1_prefix)
 app.include_router(api_router, prefix=settings.api_v1_prefix)
 
 
