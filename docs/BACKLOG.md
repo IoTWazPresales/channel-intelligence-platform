@@ -2152,7 +2152,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Confirmed open** (2026-09-21 N-0030 audit: `market.py:12` still `competitor_price_import: ready`; `fact_competitor_price` 0 rows; one-liner, Stage 2.8) · **Parked** · 2026-09-02 |
+| **Status / parked** | **Closed — Done** (2026-09-21 N-0031: `market.py` reports `competitor_price_import: substrate` with an explanatory note; `tests/test_market_placeholders.py` asserts it and the payload shape) · **Confirmed open** (2026-09-21 N-0030 audit: `market.py:12` still `competitor_price_import: ready`; `fact_competitor_price` 0 rows; one-liner, Stage 2.8) · **Parked** · 2026-09-02 |
 | **Effort** | Small (three bounded edits) |
 | **Source** | `.eif/audit/NS_REDESIGN_R3_20260902/commercial/CAPABILITY_ACCOUNTING.md` §6; `apps/api/app/api/v1/endpoints/market.py`; `apps/web/src/app/(app)/promotions/page.tsx`; `.eif/program/PROGRAM.yaml` N-0010 `acceptance_criteria` |
 | **Idea** | (1) `market.py` reports `competitor_price_import: ready` although no such template exists in `template_definitions.py` and `fact_competitor_price` has no writer — report `substrate` truthfully. (2) The shipped `/promotions` page shows a "Scaffold plans/readiness are parked" notice beside the live B4 planner — remove the dead scaffold tabs or the notice. (3) N-0010 acceptance criteria cite `CIP_DESIGN_LANGUAGE.md FROZEN v1.1 … container Response`, a rejected design input — re-charter per D-0009. |
@@ -2169,7 +2169,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Confirmed open** (2026-09-21 N-0030 audit: `LineupScopeBar.tsx:106` inert Apply, no handler; Stage 2.8) · **Parked** · 2026-09-02 |
+| **Status / parked** | **Closed — Done (defect was in dead code)** (2026-09-21 N-0031: `features/lineup/LineupScopeBar.tsx` had **no importers** — `workbench-ui/controls.tsx:67` names it only in a comment as replaced by the shared `ScopeBar`. Production `/lineup/cases` renders `LineupContainer.tsx:141` → shared `ScopeBar` (chips + Clear, no Apply), so the live surface was already honest. Dead file deleted rather than restyled; `SettlementScopeBar` is in the same replaced set but is reachable only via the unmounted `SettlementContainer` — noted, not touched) · **Confirmed open** (2026-09-21 N-0030 audit: `LineupScopeBar.tsx:106` inert Apply, no handler; Stage 2.8) · **Parked** · 2026-09-02 |
 | **Effort** | Small |
 | **Source** | `.eif/audit/NS4_SETTLEMENT_20260902/independent-rereview.md` (N-0009 finding); `apps/web/src/features/lineup/LineupScopeBar.tsx` |
 | **Idea** | Apply the same interaction-honesty treatment used on Settlement remediation: disable or clearly label inert From/To/BU/Customer pseudo-selects and the **Apply** button (currently styled as primary CTA with no handler). |
@@ -2905,7 +2905,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Open** · 2026-09-21 · found by the grid/column parity audit (`docs/audits/GRID_AND_COLUMN_PARITY_AUDIT.md` §4.2) |
+| **Status / parked** | **Closed — Done** (2026-09-21 N-0031: competitor-mappings grid wrapped in `ModuleDataSection` — loading box, error with Retry, `EmptyWorkspace` with Import Center CTA; competitor-prices `SubstrateOrPlanned` fallback untouched) · **Open** · 2026-09-21 · found by the grid/column parity audit (`docs/audits/GRID_AND_COLUMN_PARITY_AUDIT.md` §4.2) |
 | **Effort** | Trivial — one `ModuleDataSection` wrap, same shape as `0d65000` |
 | **Source** | `apps/web/src/features/market-listings/MarketSurface.tsx` — query at `:272`, grid at `:1230` |
 | **Idea** | The competitor-mappings grid should say "loading" while loading and "failed, Retry" on error, instead of asserting there are no mappings. |

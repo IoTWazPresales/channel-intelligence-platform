@@ -1,21 +1,22 @@
+import { GRID_DENSITY, gridRowMetrics, type GridDensity } from '@/theme/gridDensity';
+
 /** Fixed-height AG Grid shell for paginated grids (no autoHeight / row-count hacks). */
 export const PAGINATED_GRID_PAGE_SIZE = 15;
 export const DRILL_GRID_PAGE_SIZE = 20;
 const PAGINATION_BAR_HEIGHT = 48;
 
-/** Standard single-line row height — must match EnterpriseDataGrid default (42) and gridOptions.rowHeight. */
-export const STANDARD_ROW_HEIGHT = 42;
-export const COMPACT_ROW_HEIGHT = 34;
-export const STANDARD_HEADER_HEIGHT = 42;
-export const COMPACT_HEADER_HEIGHT = 36;
+/**
+ * Row/header heights are re-exported from the single source (`@/theme/gridDensity`) so existing
+ * imports keep working. They are the same objects `EnterpriseDataGrid` renders with, so the
+ * paginated shell height below can no longer drift from the rows inside it.
+ */
+export const STANDARD_ROW_HEIGHT = GRID_DENSITY.comfortable.rowHeight;
+export const COMPACT_ROW_HEIGHT = GRID_DENSITY.compact.rowHeight;
+export const STANDARD_HEADER_HEIGHT = GRID_DENSITY.comfortable.headerHeight;
+export const COMPACT_HEADER_HEIGHT = GRID_DENSITY.compact.headerHeight;
 
-export function gridRowMetrics(density: 'comfortable' | 'compact' = 'comfortable') {
-  const compact = density === 'compact';
-  return {
-    rowHeight: compact ? COMPACT_ROW_HEIGHT : STANDARD_ROW_HEIGHT,
-    headerHeight: compact ? COMPACT_HEADER_HEIGHT : STANDARD_HEADER_HEIGHT,
-  };
-}
+export { gridRowMetrics };
+export type { GridDensity };
 
 export function paginatedGridHeight(
   pageSize: number,

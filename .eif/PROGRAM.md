@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 895
+**Snapshot revision:** 901
 
 ## Outcome (verbatim)
 
@@ -52,3 +52,4 @@ _none_
 | N-0028 | Start work cards and Lineup cases on the lab composition | feature | in_progress | in_progress | yes |  | full loop |
 | N-0029 | Grid community clipboard in one wrapper, Case book working content first | feature | in_progress | in_progress | yes |  | full loop |
 | N-0030 | Backlog audit against the running tree, P1 sign-off discovery, and staged work plan | discovery | in_progress | in_progress | yes |  | full loop |
+| N-0031 | Stage 2a: grid height single source, MarketSurface mappings states, LineupScopeBar and market readiness honesty | feature | in_progress | in_progress | yes |  | full loop |

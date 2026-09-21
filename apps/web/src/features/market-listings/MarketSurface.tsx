@@ -269,7 +269,13 @@ export function MarketSurface() {
       ),
     enabled: Boolean(productFilter),
   });
-  const { data: mappings } = useQuery({
+  const {
+    data: mappings,
+    isLoading: mappingsLoading,
+    isError: mappingsIsError,
+    error: mappingsError,
+    refetch: refetchMappings,
+  } = useQuery({
     queryKey: ['competition-mappings'],
     queryFn: ({ signal }) => apiGet<MapRow[]>('/api/v1/competition/mappings', { signal }),
   });
@@ -1227,15 +1233,34 @@ export function MarketSurface() {
                     </Tooltip>
                   }
                 />
-                <EnterpriseDataGrid<MapRow>
-                  rowData={mappings ?? []}
-                  columnDefs={mappingCols}
-                  height={380}
-                  gridOptions={{
-                    onRowClicked: (e: RowClickedEvent<MapRow>) => e.data && setSelectedMapping(e.data.id),
-                    getRowId: (p) => String(p.data.id),
+                <ModuleDataSection
+                  isLoading={mappingsLoading}
+                  isError={mappingsIsError}
+                  error={
+                    mappingsIsError
+                      ? new Error(String((mappingsError as Error)?.message ?? 'Failed to load competitor mappings'))
+                      : null
+                  }
+                  onRetry={() => void refetchMappings()}
+                  isEmpty={(mappings ?? []).length === 0}
+                  empty={{
+                    title: 'No competitor mappings yet',
+                    description:
+                      'A mapping pairs our SKU with a competitor SKU and is approved or rejected here. Candidates arrive from imports — the in-app scorer has no endpoint yet, so there is nothing to propose from this screen.',
+                    primary: { label: 'Import Center', href: '/admin/imports' },
                   }}
-                />
+                  loadingLabel="Loading competitor mappings…"
+                >
+                  <EnterpriseDataGrid<MapRow>
+                    rowData={mappings ?? []}
+                    columnDefs={mappingCols}
+                    height={380}
+                    gridOptions={{
+                      onRowClicked: (e: RowClickedEvent<MapRow>) => e.data && setSelectedMapping(e.data.id),
+                      getRowId: (p) => String(p.data.id),
+                    }}
+                  />
+                </ModuleDataSection>
               </Stack>
               <Stack spacing={2}>
                 <Panel title="Where this feeds" subtitle="Approved mappings are reusable facts" flush>

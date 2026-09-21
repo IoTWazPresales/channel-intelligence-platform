@@ -81,7 +81,10 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
   const gateError =
     !gateLoading &&
     (detailQ.isError || !detailQ.data || settlementQ.isError || !settlementQ.data);
-  if (gateLoading || gateError) {
+  // The two `!…data` terms repeat gateError on purpose: TypeScript narrows property access in a
+  // condition, not through a boolean variable, so this is what lets `detailQ.data` be typed as
+  // defined for the rest of the component instead of `T | undefined`.
+  if (gateLoading || gateError || !detailQ.data || !settlementQ.data) {
     const gateMessage = detailQ.isError || !detailQ.data
       ? String((detailQ.error as Error)?.message ?? 'Failed to load case')
       : String((settlementQ.error as Error)?.message ?? 'Failed to load settlement');
