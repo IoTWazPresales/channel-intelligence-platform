@@ -15,6 +15,7 @@ observation_paths:
 change_paths:
 - apps/api/**
 - apps/web/**
+- packages/ui/**
 - docs/**
 - CONTEXT.md
 - AGENTS.md

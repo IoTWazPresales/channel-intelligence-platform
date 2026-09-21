@@ -31,6 +31,7 @@
     ".eif/**",
     "apps/api/**",
     "apps/web/**",
+    "packages/ui/**",
     "docs/**",
     "CONTEXT.md",
     "AGENTS.md"
@@ -131,6 +132,7 @@
     ".eif/**",
     "apps/api/**",
     "apps/web/**",
+    "packages/ui/**",
     "docs/**",
     "CONTEXT.md",
     "AGENTS.md"
@@ -164,7 +166,7 @@
   "sources": {
     "autonomy_policy": {
       "path": ".eif/AUTONOMY_POLICY.md",
-      "sha256": "e169cbea7c397d7b39edeaeb9993c535f7972d75e3b9d28134b13cd7e137899a"
+      "sha256": "63375ad914ce1a010bd0293742ef5902b91b38342df4a7d56de2bd6d12ba1a2b"
     },
     "environment_policy": {
       "path": ".eif/ENVIRONMENT_POLICY.md",
