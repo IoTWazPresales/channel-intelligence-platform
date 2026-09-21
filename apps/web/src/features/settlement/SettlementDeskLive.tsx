@@ -1,6 +1,6 @@
 'use client';
 
-import { Alert, Typography } from '@mui/material';
+import { Alert } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
@@ -8,6 +8,7 @@ import { CporCaseSupersedeDialog } from '@/features/cpor/CporCaseSupersedeDialog
 import { SettlementConfirmDialog } from '@/features/settlement/SettlementConfirmDialog';
 import { apiGet, apiPost, apiPostFormData } from '@/lib/api';
 
+import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { SettlementDesk } from './SettlementDesk';
 import {
   mapSettlementDeskView,
@@ -71,17 +72,36 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
     },
   });
 
-  if (detailQ.isLoading || settlementQ.isLoading) {
-    return <Typography sx={{ p: 2 }}>Loading…</Typography>;
-  }
-  if (detailQ.isError || !detailQ.data) {
-    return <Alert severity="error">{String((detailQ.error as Error)?.message ?? 'Failed to load case')}</Alert>;
-  }
-  if (settlementQ.isError || !settlementQ.data) {
+  // Gate the desk on both queries in the canonical chrome rather than bare text / a bare
+  // Alert: this is the same loading box and Retry every other module section shows.
+  const gateLoading = detailQ.isLoading || settlementQ.isLoading;
+  // Must exclude the loading phase: data is legitimately undefined while in flight, and
+  // ModuleDataSection checks isError BEFORE isLoading, so an un-gated !data would paint
+  // "Failed to load case" over every first render.
+  const gateError =
+    !gateLoading &&
+    (detailQ.isError || !detailQ.data || settlementQ.isError || !settlementQ.data);
+  if (gateLoading || gateError) {
+    const gateMessage = detailQ.isError || !detailQ.data
+      ? String((detailQ.error as Error)?.message ?? 'Failed to load case')
+      : String((settlementQ.error as Error)?.message ?? 'Failed to load settlement');
     return (
-      <Alert severity="error">
-        {String((settlementQ.error as Error)?.message ?? 'Failed to load settlement')}
-      </Alert>
+      <ModuleDataSection
+        isLoading={gateLoading}
+        isError={gateError}
+        error={gateError ? new Error(gateMessage) : null}
+        onRetry={() => {
+          void detailQ.refetch();
+          void settlementQ.refetch();
+        }}
+        // A case detail is never "empty" — it either loads or it fails. isEmpty is pinned
+        // false and this empty copy is unreachable; it exists to satisfy the contract.
+        isEmpty={false}
+        empty={{ title: 'Case unavailable', description: 'This case could not be loaded.' }}
+        loadingLabel="Loading case…"
+      >
+        {null}
+      </ModuleDataSection>
     );
   }
 

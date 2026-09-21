@@ -60,10 +60,17 @@ type BriefMeta = {
 export function FundingChrome({
   counts,
   title,
+  hideDomainHeader = false,
   children,
 }: {
   counts?: Partial<Record<FundingLens, number>>;
   title?: string;
+  /**
+   * For entity-detail routes that already render their own DomainHeader (the settlement
+   * desk names the case and carries the stage CTA). Keeps the canvas inset and the lens
+   * tabs so the route sits inside the domain, without stacking two page headers.
+   */
+  hideDomainHeader?: boolean;
   children?: ReactNode;
 }) {
   const pathname = usePathname() || '/';
@@ -117,6 +124,7 @@ export function FundingChrome({
 
   return (
     <WorkbenchCanvas>
+      {hideDomainHeader ? null : (
       <DomainHeader
         crumbs={
           title
@@ -146,6 +154,7 @@ export function FundingChrome({
           </>
         }
       />
+      )}
       <LensTabs
         value={lens}
         onChange={(next) => {

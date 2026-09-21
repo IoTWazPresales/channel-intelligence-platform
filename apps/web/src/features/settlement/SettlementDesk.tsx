@@ -190,7 +190,6 @@ export function SettlementDesk({
     [lineId],
   );
 
-  const codeMeta = view.customerCode ? ` · ${view.customerCode}` : '';
 
   return (
     <Stack spacing={2} sx={{ mt: embedded ? 0 : 2 }} data-testid={testId}>
@@ -217,7 +216,7 @@ export function SettlementDesk({
         }
         title={`${view.caseCode} · ${view.customerName}`}
         description={`${view.programme} · ${view.windowLabel} · ${view.distributorName}. Ken’s desk: the next commercial action is visible without opening tabs.`}
-        meta={`Opened ${view.openedOn ?? '—'} · Ended ${view.endedOn ?? '—'} · ${view.currency}${codeMeta}`}
+        meta={`Opened ${view.openedOn ?? '—'} · Ended ${view.endedOn ?? '—'} · ${view.currency}`}
         actions={
           <>
             {onSupersede && view.supersededByCaseId == null && view.status !== 'settled' ? (

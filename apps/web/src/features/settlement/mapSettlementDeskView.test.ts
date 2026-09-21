@@ -58,7 +58,9 @@ describe('mapSettlementDeskView', () => {
     };
     const view = mapSettlementDeskView(detail, settlement);
     expect(view.customerName).toBe('Takealot');
-    expect(view.customerCode).toBe('CUST-000012');
+    // Name-primary, code suppressed (Warren 2026-09-21): the mapper still carries the field,
+    // but customerSecondaryCode withholds it so no identity position can render it.
+    expect(view.customerCode).toBeNull();
     expect(view.settledWithoutClaims).toBe(true);
     expect(view.lines[0].customerQty).toBeNull();
     expect(view.customerAmount).toBeNull();
