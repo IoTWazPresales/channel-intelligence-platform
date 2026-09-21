@@ -2898,3 +2898,75 @@ Exact engine invariants (do not complete around them):
 
 
 
+
+---
+
+## BACKLOG-199 — `MarketSurface` competitor-mappings grid has no loading or error state
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** · 2026-09-21 · found by the grid/column parity audit (`docs/audits/GRID_AND_COLUMN_PARITY_AUDIT.md` §4.2) |
+| **Effort** | Trivial — one `ModuleDataSection` wrap, same shape as `0d65000` |
+| **Source** | `apps/web/src/features/market-listings/MarketSurface.tsx` — query at `:272`, grid at `:1230` |
+| **Idea** | The competitor-mappings grid should say "loading" while loading and "failed, Retry" on error, instead of asserting there are no mappings. |
+| **Why it matters / deferrable** | `const { data: mappings } = useQuery({...})` destructures neither `isLoading` nor `isError`, and the grid renders `rowData={mappings ?? []}` unconditionally — so a pending fetch and a failed fetch both paint AG Grid's default "No Rows To Show". A steward cannot tell "no competitor mappings exist" from "the request died". Deferrable because it is one lens of one surface with no write path attached, and the listings grid on the same page (`:956`) is already correct. |
+| **Resume-context** | This is the **only** MIGRATE left in the production grid set after `306b17d` / `47ef8bb` / `0d65000` / `b9a58a3`. The sibling competitor-prices grid at `:1275` is deliberately **not** in scope — it falls back to `SubstrateOrPlanned` "data only", which carries more meaning than a generic empty and is classified CORRECT (C3). |
+| **What the work is** | Destructure `isLoading` / `isError` / `error` / `refetch`; wrap the `:1230` grid in `ModuleDataSection` with an `EmptyWorkspace` whose CTA points at whatever creates a mapping. |
+| **Regression traps** | Do not touch the `:1275` prices fallback — replacing `SubstrateOrPlanned` with a generic empty loses the substrate explanation. Do not wrap the `:956` listings grid twice. |
+| **Behavior to retain** | `onRowClicked` → `setSelectedMapping`; the disabled "Propose candidates" tooltip (scorer exists in code, no endpoint runs it). |
+| **Out of scope** | Adding a column picker to this grid (that is BACKLOG-201, Tier A); building the candidate-proposal endpoint. |
+| **TRIGGER** | Next `/competition` or market-listings pass, **or** anyone reports an empty mappings grid that turns out to be a failed fetch. |
+
+---
+
+## BACKLOG-200 — `MasterColumnPickerDialog` is a dead test-only wrapper
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** · 2026-09-21 · found by the grid/column parity audit (§7.2) |
+| **Effort** | Trivial |
+| **Source** | `apps/web/src/components/masterGrid/MasterColumnPickerDialog.tsx`; its only referent is `MasterColumnPickerDialog.test.tsx` |
+| **Idea** | Delete the wrapper, or re-point `MasterDataGridShell` at it — but do not leave a component whose only caller is its own test. |
+| **Why it matters / deferrable** | `MasterDataGridShell` imports `ColumnPickerDialog` **directly** (`:34`, `:485`), so the thin `size="md"` wrapper is unreferenced by any surface. Its test still passes, which makes the dead code look live to the next reader. Harmless at runtime — it ships nothing — hence deferrable. |
+| **Resume-context** | The sibling wrapper `features/commercial-planner/ColumnSelectorModal.tsx` (`size="wide"`) **is** live and must stay. Only the master one is dead. |
+| **What the work is** | Either delete the file and its test, or have `MasterDataGridShell` mount the wrapper instead of `ColumnPickerDialog` directly. Prefer deletion — the wrapper adds only a size prop. |
+| **Regression traps** | Do not delete `ColumnSelectorModal`. Do not delete the shared `MasterColumnPickerGroup` type without re-exporting it from `workbench-ui/ColumnPickerDialog` first — hosts import that type through the wrapper's re-export. |
+| **Behavior to retain** | Master-data pickers keep `size="md"`. |
+| **Out of scope** | Any change to `ColumnPickerDialog` itself. |
+| **TRIGGER** | Next masterGrid touch, **or** a dead-code sweep. |
+
+---
+
+## BACKLOG-201 — Tier A fact grids have no column picker
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open — needs a product decision before any code** · 2026-09-21 · grid/column parity audit §6.2 |
+| **Effort** | Medium per surface; the decision is the expensive part, not the wiring |
+| **Source** | ~15 grids listed as Tier A in `docs/audits/GRID_AND_COLUMN_PARITY_AUDIT.md` §6.2 — sell-out (x3), channel-ops movements/inventory, inventory, pricing (x2), buy-plans, roadmap, exceptions, plan-vs-executed, cover/forecasts/channel-intelligence, market listings, customer-commercial-terms |
+| **Idea** | Wide `fact_*`-backed operational grids could let a steward surface columns the fixed `columnDefs` hides, the way shipping / shipment-evidence / master data / planner lines already do. |
+| **Why it matters / deferrable** | Only 5 call sites in the whole app have a picker; ~46 grid mounts ship a fixed column set. For the narrow worklists (Tier B) and case panels (Tier C) that is correct by design. For Tier A it is plausibly a gap — but which fact columns a steward may surface is a **product** question, so this is explicitly **not** classified as a parity defect and must not be treated as a migration. |
+| **Resume-context** | The plumbing is solved and generic: `workbench-ui/ColumnPickerDialog` at `size=md`/`wide`, grouped fields, search, per-group loading/`emptyHint`, optional reset, and the localStorage layout-key pattern in `CstArticleAliasesSection`. Adding a picker is wiring, not new UX. |
+| **What the work is** | Warren picks which Tier A grids earn a picker and which columns belong in each group. Then wire per surface, one at a time, with a layout storage key each. |
+| **Regression traps** | Do not add pickers to Tier B worklists — the fixed set is what keeps a steward decision legible. Do not add to Tier C case panels. Do not add a second picker implementation. `ReportBuilderView` already **is** a column picker — leave it alone. |
+| **Behavior to retain** | Existing default column sets stay the defaults; a picker adds optional columns, it never changes what a grid shows out of the box. |
+| **Out of scope** | AG Grid Enterprise tool panel (BACKLOG-193); density (see the density proposal — not shipped). |
+| **TRIGGER** | Warren names which Tier A grids need column choice, **or** an operator asks for a specific hidden fact column. |
+
+---
+
+## BACKLOG-202 — `CporCaseWorkspace` is unmounted — third orphaned CPOR surface
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open — product call, not a bug** · 2026-09-21 · grid/column parity audit §7.4 |
+| **Effort** | Trivial to delete; unknown to re-mount |
+| **Source** | `apps/web/src/features/cpor/CporCaseWorkspace.tsx` (2 grids) and its child `app/(app)/commercial-planner/cpor-cases/[id]/CporPaymentEvidencePanel.tsx`. Only remaining referent: `page.fxReadiness.test.tsx`. The `[id]` route renders `SettlementDeskLive`. |
+| **Idea** | Decide whether the CPOR case workspace is dead code to remove or a surface to re-mount. |
+| **Why it matters / deferrable** | Third orphan of the same kind, after `SettlementPortfolioRead` and `CporPortfolioIntelligencePanel` (both recorded as unmounted in `CURRENT.md` 2026-09-20). Orphaned surfaces still get maintained — `CporPaymentEvidencePanel` was migrated to `ModuleDataSection` at `b9a58a3` and **could not be browser-smoked, because no route reaches it**. That is wasted effort and a hole in every smoke claim that touches it. Deferrable because nothing user-facing is broken: the live desk is Composition A. |
+| **Resume-context** | The payment-evidence panel's tab index in the workspace was `tab === 6`. Its vitest coverage is `page.fxReadiness.test.tsx` (case 312 shape), which mocks the panel to `null` — so the tests do not prove the panel renders either. |
+| **What the work is** | Warren says keep or delete. If delete: remove the workspace, the panel, and the test's mock. If keep: name the route that should mount it, and add it to the smoke set so future migrations are provable. |
+| **Regression traps** | Do not delete `CporPaymentEvidencePanel` on the assumption the payment-evidence *import* page is the same thing — `cpor-cases/payment-evidence-import` is a separate live route. Do not delete `SettlementDeskLive` or `SettlementDesk`. |
+| **Behavior to retain** | `/commercial-planner/cpor-cases/[id]` keeps rendering `SettlementDeskLive`. |
+| **Out of scope** | `SettlementPortfolioRead` / `CporPortfolioIntelligencePanel` — same class, already recorded in `CURRENT.md`; fold them in only if Warren wants one sweep. |
+| **TRIGGER** | Warren rules on the three unmounted CPOR/settlement surfaces, **or** a dead-code sweep reaches `features/cpor/`. |
