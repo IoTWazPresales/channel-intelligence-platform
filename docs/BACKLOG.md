@@ -3007,6 +3007,8 @@ Exact engine invariants (do not complete around them):
 | **Out of scope** | Rewriting the guard's policy rules themselves. |
 | **TRIGGER** | Before the next implementation session run under Claude Code. |
 
+**2026-09-22 follow-up:** Stage 2.2/2.3 of `docs/design/STAGED_WORK_PLAN.md` (grid-scoped 13px type token, standard density 40/40) shipped this session under Claude Code — `a4fe957` and `459f4c9`. Pre-commit checks (`git diff --cached --name-only`, `git status --short -- .eif .cursor`, an explicit allowed-path check against `packages/ui/**`/`apps/web/**`/`docs/**`) were run and printed manually before each commit, per this entry's gap: nothing enforced them. Same for the read-only `.eif/program/PROGRAM.yaml` check confirming no node exists for 2.2/2.3 before editing. All of it held by the agent following instructions, not by a guard.
+
 ---
 
 ## BACKLOG-205 — Rotate pilot passwords
