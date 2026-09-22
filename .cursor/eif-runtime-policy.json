@@ -56,7 +56,8 @@
     ".eif/hook-guard.json",
     ".cursor/eif-runtime-manifest.json",
     ".eif/runtime-upgrade.lock",
-    ".eif/upgrade-history/**"
+    ".eif/upgrade-history/**",
+    ".claude/**"
   ],
   "derived": true,
   "framework_version": "0.4.0-draft",
@@ -86,6 +87,10 @@
       {
         "server_pattern": "*",
         "tool_pattern": "browser_*"
+      },
+      {
+        "server_pattern": "mcp__claude-in-chrome",
+        "tool_pattern": "*"
       },
       {
         "server_pattern": "*",
@@ -166,7 +171,7 @@
   "sources": {
     "autonomy_policy": {
       "path": ".eif/AUTONOMY_POLICY.md",
-      "sha256": "63375ad914ce1a010bd0293742ef5902b91b38342df4a7d56de2bd6d12ba1a2b"
+      "sha256": "24702288ffb4a878cc2205e420ec7181446b0a582825e9f8e7ab0bfee939fe6d"
     },
     "environment_policy": {
       "path": ".eif/ENVIRONMENT_POLICY.md",

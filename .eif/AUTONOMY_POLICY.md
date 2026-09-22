@@ -43,6 +43,8 @@ mcp:
   browser: interact
   tools:
     - browser_*
+    - tool_pattern: '*'
+      server_pattern: 'mcp__claude-in-chrome'
 network:
   classes:
   - loopback
