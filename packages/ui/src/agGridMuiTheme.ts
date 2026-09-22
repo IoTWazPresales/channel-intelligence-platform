@@ -5,6 +5,19 @@ import { alpha } from '@mui/material/styles';
  * Maps the active MUI theme to AG Grid "material" theme CSS variables so data grids
  * follow the same palette, typography, hover, and focus behavior as the rest of the app.
  */
+/**
+ * Grid-scoped type size (Stage 2.2, `docs/design/STAGED_WORK_PLAN.md`; spec
+ * `docs/design/DENSITY_PROPOSAL_OPERATOR_DATA_SCALE.md` §5.1). Deliberately a fixed literal,
+ * NOT derived from `theme.typography.body2` (or any other MUI variant) — the grid's type size
+ * must be able to move independently of the ~700+ `variant="body2"` usages elsewhere in the
+ * app, in either direction, without a typography-wide change. This is the sole place
+ * `--ag-font-size` is produced; `EnterpriseDataGrid` is the sole consumer of this module's
+ * output, and every AG Grid mount in the app goes through `EnterpriseDataGrid` (zero direct
+ * `AgGridReact` mounts elsewhere — `docs/audits/GRID_AND_COLUMN_PARITY_AUDIT.md`), so this one
+ * constant reaches all of them.
+ */
+export const AG_GRID_FONT_SIZE = '13px';
+
 export function getAgGridMuiCssVariables(theme: Theme): Record<string, string | number> {
   const mode = theme.palette.mode;
   const primary = theme.palette.primary.main;
@@ -22,14 +35,13 @@ export function getAgGridMuiCssVariables(theme: Theme): Record<string, string | 
       ? theme.typography.fontFamily
       : (theme.typography.fontFamily as string[] | undefined)?.join(',') ??
         'Inter, "Segoe UI", system-ui, sans-serif';
-  const fontSize = typeof theme.typography.body2?.fontSize === 'string' ? theme.typography.body2.fontSize : '0.8125rem';
   const radius = typeof theme.shape?.borderRadius === 'number' ? `${theme.shape.borderRadius}px` : '8px';
 
   return {
     '--ag-material-primary-color': primary,
     '--ag-material-accent-color': secondary,
     '--ag-font-family': font,
-    '--ag-font-size': fontSize,
+    '--ag-font-size': AG_GRID_FONT_SIZE,
     '--ag-foreground-color': textPrimary,
     '--ag-data-color': textPrimary,
     '--ag-secondary-foreground-color': textSecondary,
