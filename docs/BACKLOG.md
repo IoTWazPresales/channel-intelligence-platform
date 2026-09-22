@@ -2988,3 +2988,39 @@ Exact engine invariants (do not complete around them):
 | **Behavior to retain** | The rest of the suite stays runnable against `cip` with `ALLOW_TESTS_ON_DEV_DB=1` as AGENTS.md describes. |
 | **Out of scope** | The 7 stale tests repaired in the same commit (they matched code changes from 2026-09-02..20); the auth gate itself. |
 | **TRIGGER** | Next API test-hygiene pass, **or** the suite is wired into CI where a red bit must mean something. |
+
+---
+
+## BACKLOG-204 — EIF guard does not fire under Claude Code
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** · 2026-09-21 · runtime probe `R20260921170432_BDEF22` |
+| **Effort** | Unknown — depends whether Claude Code has an equivalent hook mechanism at all |
+| **Source** | `.eif/AUTONOMY_POLICY.md`, `.cursor/hooks.json` (compiled to `.cursor/eif-runtime-policy.json`), probe evidence `.eif/runtime-probes/R20260921170432_BDEF22/` |
+| **Idea** | The EIF autonomy guard is wired through `.cursor/hooks.json`, which Cursor honours natively. A runtime probe run under Claude Code on 2026-09-21 found **0/14**: both expected-DENY reads went straight through and no hook event was recorded for any step. |
+| **Why it matters / deferrable** | Every boundary respected by an agent running in Claude Code (this session included) is **voluntary, not enforced** — the same policy that blocks a write in Cursor is a no-op here. Deferrable in the sense that nothing has failed *yet*, but any session that assumes the guard is live is trusting an agent's self-restraint, not a mechanism. |
+| **Resume-context** | Probe steps 3/4/8/9/10 were deliberately not run (they would have corrupted the compiled policy or added a git remote) — the FAILED verdict rests on steps 1–2, 5–7, 11–14. |
+| **What the work is** | Establish whether Claude Code has a hook/guard mechanism this policy can be ported to, or accept that sessions run under Claude Code are enforcement-free and document that explicitly wherever a session might start under it. |
+| **Regression traps** | Do not assume a policy amendment to `AUTONOMY_POLICY.md` fixes this — the gap is the runtime wiring, not the policy content. |
+| **Behavior to retain** | The Cursor-side guard, which is proven live (`CONTROL_PLANE_PROTECTED` deny proven per the `hooks.json` restore note elsewhere in this file). |
+| **Out of scope** | Rewriting the guard's policy rules themselves. |
+| **TRIGGER** | Before the next implementation session run under Claude Code. |
+
+---
+
+## BACKLOG-205 — Rotate pilot passwords
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** · 2026-09-21 · pilot tunnel runbook §L |
+| **Effort** | Trivial — one `set-password` call per account |
+| **Source** | `docs/PILOT_TUNNEL_RUNBOOK.md` §L; `admin@local` / `viewer@local` accounts |
+| **Idea** | Both pilot passwords are placeholder-strength and were shared in chat during setup — fine for a short trusted-staff pilot, not for anything longer. |
+| **Why it matters / deferrable** | Low risk while the pilot is active and scoped to trusted staff on `cip`; becomes a real exposure if left as-is after the pilot window closes. |
+| **Resume-context** | Set via `POST /api/v1/auth/users/{id}/set-password`, same endpoint used to set them originally (`docs/PILOT_TUNNEL_RUNBOOK.md` §F). |
+| **What the work is** | Warren rotates both passwords once the pilot is done being tested. |
+| **Regression traps** | None — this is a credential change only. |
+| **Behavior to retain** | n/a |
+| **Out of scope** | Adding rate-limiting/lockout (already tracked separately as Stage 3.4 in `docs/design/STAGED_WORK_PLAN.md`). |
+| **TRIGGER** | End of pilot. |
