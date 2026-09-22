@@ -10,12 +10,14 @@
  *   - Any caller that spreads `gridRowMetrics(...)` into `gridOptions` (e.g. the shipping page).
  *
  * `packages/ui/src/agGridMuiTheme.ts` still emits these two variables with its own literals.
- * `EnterpriseDataGrid` overrides them inline from here; once `packages/ui` is inside the accepted
- * `change_paths`, hoist this file into `@cip/ui` and delete that emission (N-0031 acceptance criteria).
+ * `EnterpriseDataGrid` overrides them inline from here. `packages/ui` joined the accepted
+ * `change_paths` (Warren, 2026-09-21); hoisting this file into `@cip/ui` and deleting that
+ * duplicate emission (N-0031 acceptance criteria) remains open and out of scope for Stage 2.2/2.3.
  *
- * The values here are the CURRENT product values: comfortable 42/42, compact 34/36. The density
- * proposal (40/40 rows, 13px type) is a separate node — do not change numbers in this file for it
- * without that node's evidence.
+ * Comfortable is **40/40** (Stage 2.3, `docs/design/STAGED_WORK_PLAN.md`; D2) — not the lab's
+ * original 36/36 proposal in `DENSITY_PROPOSAL_OPERATOR_DATA_SCALE.md` / `DensitySurface.tsx`,
+ * which stays frozen as the historical audit record. Compact is unchanged at 34/36. The grid-scoped
+ * 13px type size is a separate constant, `AG_GRID_FONT_SIZE` in `packages/ui/src/agGridMuiTheme.ts`.
  */
 
 export type GridDensity = 'comfortable' | 'compact';
@@ -23,7 +25,7 @@ export type GridDensity = 'comfortable' | 'compact';
 export type GridRowMetrics = Readonly<{ rowHeight: number; headerHeight: number }>;
 
 export const GRID_DENSITY: Readonly<Record<GridDensity, GridRowMetrics>> = {
-  comfortable: { rowHeight: 42, headerHeight: 42 },
+  comfortable: { rowHeight: 40, headerHeight: 40 },
   compact: { rowHeight: 34, headerHeight: 36 },
 };
 
