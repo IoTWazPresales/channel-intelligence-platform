@@ -3024,3 +3024,21 @@ Exact engine invariants (do not complete around them):
 | **Behavior to retain** | n/a |
 | **Out of scope** | Adding rate-limiting/lockout (already tracked separately as Stage 3.4 in `docs/design/STAGED_WORK_PLAN.md`). |
 | **TRIGGER** | End of pilot. |
+
+---
+
+## BACKLOG-206 — API binds `0.0.0.0:8001`; bind to `127.0.0.1`
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** · 2026-09-22 · pilot connectivity discovery |
+| **Effort** | Small — dev-server bind flag/config change, plus a check of every place the API host is assumed |
+| **Source** | `pnpm dev:api` (`scripts/dev-api.js` → uvicorn) binds `0.0.0.0:8001`; confirmed listening on all interfaces during the 2026-09-21/22 pilot sessions |
+| **Idea** | The API has no reason to be reachable from outside the host — the web app is the only intended caller, and it proxies to the API server-side (`apps/web/src/app/api/v1/[[...path]]/route.ts`, default `http://127.0.0.1:8001`, overridable via `CIP_API_INTERNAL_URL`). Binding `0.0.0.0` exposes it to the LAN (and to the internet if a tunnel or port-forward ever fronts it directly) with no reason to. |
+| **Why it matters / deferrable** | Today's exposure is bounded by the router-level auth gate (`26a6e1a`) requiring a bearer on every route, so this is not an open-data hole by itself — but it's an unnecessary extra surface, and defense-in-depth says the API shouldn't be reachable off-host at all. Deferrable while the pilot stays small and the gate holds. |
+| **Resume-context** | Same-origin proxy pattern already keeps the browser talking only to the web server; nothing in the client depends on the API being LAN-reachable. |
+| **What the work is** | Bind the API to `127.0.0.1:8001` for local/pilot dev instead of `0.0.0.0:8001`. Confirm nothing else (Celery worker, a teammate's script, a health-check tool) relies on hitting the API from another machine first. |
+| **Regression traps** | The web proxy's fallback and some ad-hoc scripts/tools may target `localhost:8001` rather than `127.0.0.1:8001` — `localhost` can resolve to `::1` (IPv6 loopback) on this machine, which a bind scoped only to the IPv4 `127.0.0.1` address won't answer on. Verify the actual resolution (or bind both loopback addresses) before flipping this, or `localhost`-based calls will silently break. |
+| **Behavior to retain** | The web app's ability to reach the API at all (same-origin proxy) must keep working after the bind change. |
+| **Out of scope** | Any change to the auth gate itself; the LAN-direct web-access path (`docs/PILOT_TUNNEL_RUNBOOK.md` §M), which is about the web port, not the API port. |
+| **TRIGGER** | Before a LAN pilot. |
