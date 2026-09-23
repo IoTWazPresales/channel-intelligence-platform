@@ -659,6 +659,26 @@ def matches(rel, patterns):
     rel=rel.replace('\\','/')
     return any(fnmatch.fnmatch(rel,p) or fnmatch.fnmatch('/'+rel,'/'+p) for p in (patterns or []))
 
+# Committed placeholders that document variable names, never values.
+ENV_TEMPLATE_NAMES = frozenset({'.env.example', '.env.sample', '.env.template'})
+
+def _env_file_name(name):
+    name = name.lower()
+    return name == '.env' or name.startswith('.env.')
+
+def sensitive_read(rel, patterns):
+    """Policy sensitive paths, plus .env / .env.* at any depth.
+
+    A bare policy pattern such as `.env` matches only at the root (see
+    matches()), which left nested env files such as apps/api/.env readable.
+    Env templates stay readable unless a non-env pattern also names them.
+    """
+    if rel is None: return False
+    name = rel.replace('\\','/').rsplit('/',1)[-1]
+    if name.lower() in ENV_TEMPLATE_NAMES:
+        return matches(rel, [p for p in (patterns or []) if not _env_file_name(str(p).replace('\\','/').rsplit('/',1)[-1])])
+    return _env_file_name(name) or matches(rel, patterns)
+
 def tool_path(inp):
     if not isinstance(inp,dict): return None
     for k in ['file_path','path','target_file','target_path','directory']:
@@ -1848,7 +1868,7 @@ def presentation_action(root, data, policy, scope):
                 return False
         elif observation_scopes(policy) and not matches(rel or '**', observation_scopes(policy)):
             return False
-        if matches(rel, policy.get('sensitive_read_paths') or []) or any(has_secret(value) for value in strings(inp)):
+        if sensitive_read(rel, policy.get('sensitive_read_paths') or []) or any(has_secret(value) for value in strings(inp)):
             return False
         if event == 'beforeReadFile' and has_secret(str(data.get('content') or '')):
             return False
@@ -2050,7 +2070,7 @@ def _main():
             if scopes and not matches(rel,scopes):
                 audit(root,data,'deny','OUT_OF_OBSERVATION_SCOPE',rel); return deny('OUT_OF_OBSERVATION_SCOPE',f'read target outside accepted observation scope: {rel}')
         sensitive=(policy.get('sensitive_read_paths') if policy else ['.env','.env.*','**/*.pem','**/*secret*','**/*credential*']) or []
-        if matches(rel,sensitive):
+        if sensitive_read(rel,sensitive):
             audit(root,data,'deny','SENSITIVE_READ',rel); return deny('SENSITIVE_READ',f'direct model read blocked: {rel}')
         # High-confidence content scan before it enters model context.
         if has_secret(str(data.get('content') or '')):
@@ -2161,7 +2181,7 @@ def _main():
             if scopes and not matches(rel,scopes):
                 audit(root,data,'deny','OUT_OF_OBSERVATION_SCOPE',rel); return deny('OUT_OF_OBSERVATION_SCOPE',f'read/search outside accepted observation scope: {rel}')
             sensitive=policy.get('sensitive_read_paths') or []
-            if matches(rel,sensitive):
+            if sensitive_read(rel,sensitive):
                 audit(root,data,'deny','SENSITIVE_TOOL_READ',rel); return deny('SENSITIVE_TOOL_READ',f'read/search blocked on sensitive path {rel}')
 
         if tool=='Shell':

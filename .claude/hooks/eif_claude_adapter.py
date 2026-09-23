@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -45,7 +46,7 @@ MAX_HOOK_INPUT_BYTES = 10 * 1024 * 1024
 # interpreter hangs before the guard's watchdog thread even starts.
 SHIM_TIMEOUT_SEC = 9.5
 
-ADAPTER_VERSION = 'eif-claude-adapter/1'
+ADAPTER_VERSION = 'eif-claude-adapter/2'
 
 
 def shim_timeout_sec() -> float:
@@ -92,9 +93,12 @@ NOTEBOOK_PATH_KEYS = ('notebook_path',)
 # subagent or prompting the user does not read, write, execute, or reach the
 # network. (A subagent's own tool calls each re-enter PreToolUse separately,
 # carrying agent_id/agent_type, and are gated there like any other call.)
+# Agent is Claude Code's current name for the subagent tool (formerly Task).
+# ToolSearch only loads deferred tool schemas into the session; every tool it
+# surfaces is still gated here by name when it is actually called.
 # Keep this list narrow and add to it only after the same review this file's
 # header documents for every other entry.
-NO_SIDE_EFFECT_TOOLS = frozenset({'Task', 'AskUserQuestion', 'EnterPlanMode', 'ExitPlanMode'})
+NO_SIDE_EFFECT_TOOLS = frozenset({'Task', 'Agent', 'ToolSearch', 'AskUserQuestion', 'EnterPlanMode', 'ExitPlanMode'})
 
 EVENT_MAP = {
     'PreToolUse': 'preToolUse',
@@ -176,6 +180,46 @@ def mcp_tool_split(tool_name: str):
     return server, tool
 
 
+# --- post-execution evidence -------------------------------------------------
+#
+# eif_session.record_success clears a retry obligation only for a Shell call
+# whose tool_output carries an integer exitCode == 0. Claude Code reports no
+# exit code on success, so it is derived from the event itself. Evidence, from
+# the Claude Code hooks reference (code.claude.com/docs/en/hooks.md, read
+# 2026-09-23):
+#   - PostToolUse hooks "fire after a tool has already executed successfully";
+#     Bash's tool_response is {stdout, stderr, interrupted, isImage}.
+#   - PostToolUseFailure: "For Bash and PowerShell, a command that ran and
+#     exited produces a first line `Exit code N`" in `error`; the documented
+#     failing `npm test` example (Exit code 1) arrives on that event.
+# So exit 0 is recorded only for a foreground Bash PostToolUse that was not
+# interrupted. Anything else carries no exitCode and the obligation stays.
+# backgroundTaskId / returnCodeInterpretation are not in the reference; their
+# presence can only withhold success, never grant it.
+EXIT_CODE_LINE = re.compile(r'Exit code (-?\d+)')
+
+
+def shell_success_output(payload: dict):
+    response = payload.get('tool_response')
+    tool_input = payload.get('tool_input') if isinstance(payload.get('tool_input'), dict) else {}
+    if not isinstance(response, dict) or response.get('interrupted') is not False:
+        return None
+    if tool_input.get('run_in_background') is True:
+        return None
+    if response.get('backgroundTaskId') or response.get('returnCodeInterpretation'):
+        return None
+    return {'exitCode': 0}
+
+
+def failure_summary(payload: dict) -> str:
+    """The guard audits this label; the raw error text can hold command output."""
+    if payload.get('is_interrupt') is True:
+        return 'interrupt'
+    error = payload.get('error')
+    match = EXIT_CODE_LINE.match(error) if isinstance(error, str) else None
+    return f'exit_code_{match.group(1)}' if match else 'error'
+
+
 def translate_pretooluse(payload: dict) -> dict:
     tool_name = payload.get('tool_name')
     tool_input = payload.get('tool_input')
@@ -235,18 +279,26 @@ def translate_request(payload: dict) -> dict:
             return {'bypass': True, 'cc_event': event}
         base.update({k: v for k, v in result.items()})
     elif event in ('PostToolUse', 'PostToolUseFailure'):
-        tool_name = payload.get('tool_name')
-        if isinstance(tool_name, str):
-            if tool_name in NO_SIDE_EFFECT_TOOLS:
-                base['tool_name'] = tool_name
-            elif tool_name in DIRECT_TOOL_MAP:
-                base['tool_name'] = DIRECT_TOOL_MAP[tool_name]
-            else:
-                server, sub_tool = mcp_tool_split(tool_name)
-                base['tool_name'] = f'MCP:{sub_tool}' if server else tool_name
-        base['tool_input'] = payload.get('tool_input') or {}
+        # Same translation as PreToolUse, so the guard fingerprints the
+        # completed call exactly as it fingerprinted the request (a success
+        # clears only the obligation whose fingerprint it matches). These
+        # events never block, so an unmapped tool passes through by name.
+        try:
+            result = translate_pretooluse(payload)
+        except ShimDenial:
+            result = {'bypass': True}
+        if result.get('bypass'):
+            tool_name = payload.get('tool_name')
+            tool_input = payload.get('tool_input')
+            result = {'tool_name': tool_name if isinstance(tool_name, str) else '',
+                      'tool_input': tool_input if isinstance(tool_input, dict) else {}}
+        base.update(result)
+        if event == 'PostToolUse' and base['tool_name'] == 'Shell':
+            output = shell_success_output(payload)
+            if output is not None:
+                base['tool_output'] = output
         if event == 'PostToolUseFailure':
-            base['failure_type'] = payload.get('error_message')
+            base['failure_type'] = failure_summary(payload)
     # Stop / SessionStart / SessionEnd / SubagentStart need no extra fields:
     # eif_guard.py's handlers for these read only hook_event_name/cwd/conversation_id
     # and (for subagentStart) agent_id/agent_type, already copied above.
