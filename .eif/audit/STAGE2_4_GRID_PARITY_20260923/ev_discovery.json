@@ -1,0 +1,7 @@
+{
+  "id": "EV-N0034-DISCOVERY",
+  "provenance": "implementation-observation",
+  "path": ".eif/audit/STAGE2_4_GRID_PARITY_20260923/DISCOVERY.md",
+  "tree_hash": "65dbed5c3e219151de09b515c7ccf9c88a3439b9",
+  "note": "N-0034 discovery: 53 grid-host files and 63 mounts reconciled with docs/audits/GRID_AND_COLUMN_PARITY_AUDIT.md. Per-host toolbar search (server or client), filter bar, saved views, column picker, export and lab surface. Shared vs bespoke components. BACKLOG check. Reproducible with scan_grid_hosts.py in the same folder."
+}

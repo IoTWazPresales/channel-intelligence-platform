@@ -1,0 +1,7 @@
+{
+  "id": "EV-STAGE23-459F4C9",
+  "provenance": "implementation-observation",
+  "path": "apps/web/src/theme/gridDensity.ts",
+  "tree_hash": "459f4c94eaf994d7e33d567661b2ef11a671e9f7",
+  "note": "Stage 2.3 commit 459f4c9: GRID_DENSITY comfortable 42/42 to 40/40, compact unchanged 34/36. Ran under an unenforced Claude Code runtime, outside the ledger. 390x844 render recorded UNABLE in docs/memory/CURRENT.md."
+}

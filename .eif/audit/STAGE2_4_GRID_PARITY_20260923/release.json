@@ -1,0 +1,4 @@
+{
+  "node": "N-0034",
+  "stage_note": "Discovery done (EV-N0034-DISCOVERY, .eif/audit/STAGE2_4_GRID_PARITY_20260923/DISCOVERY.md): 53 host files / 63 mounts reconcile with the parity audit. Tier A (14 files): 0 pickers, 2 searches, 0 exports. No shared search, saved-view or export primitive exists. Density is global. Before leaving discovery: baseline.add + node.baseline (touches_existing), then Warren decides criterion 4 (toolbar parity: shared primitive vs BACKLOG entries) and the per-fact field-list source for the all-columns picker (UNKNOWN). No product code written in this run."
+}

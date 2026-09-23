@@ -1,0 +1,17 @@
+{
+  "node": "N-0034",
+  "expected_revision": 1,
+  "acceptance_criteria": [
+    "One generic all-fields column picker on every Tier A fact grid in docs/audits/GRID_AND_COLUMN_PARITY_AUDIT.md section 6.2, fed by the fact's field list with a layout key per grid, through the existing features/workbench-ui/ColumnPickerDialog. No second picker implementation (STAGED_WORK_PLAN 2.4, D3, BACKLOG-201)",
+    "Customer code and Distributor code are their own pickable columns. Identity columns show names only, never a code welded into a name cell (D7, BACKLOG-140 display half)",
+    "Every Tier A grid that gains a picker keeps the ModuleDataSection loading, error with Retry and empty states (audit section 2 parity bar)",
+    "Toolbar parity on Tier A hosts is decided per this node's discovery table: each gap in toolbar search, column filters, filter chips, saved views, export or density toggle is either closed through a shared workbench-ui or components/ primitive or recorded in docs/BACKLOG.md with a trigger. Nothing is silently left and no bespoke per-page copy is added",
+    "Tier B worklists and Tier C case panels keep their fixed column sets unless the discovery table states a reason for one",
+    "BACKLOG-200 stays held: MasterColumnPickerDialog and ColumnSelectorModal are not unified until the N-0029 review rules. BACKLOG-193 stays dropped: no AG Grid Enterprise modules, and AgGridReact is imported only inside EnterpriseDataGrid",
+    "Stage 2.5 (line identifier 'both' as two columns) is out of scope, but the picker mechanism must be able to carry it without a second mechanism",
+    "No density value changes (D2 landed at 459f4c9). No migrations. Read-only on cip: print current_database() first if SQL is used",
+    "pnpm test:web green, tsc exit 0, eslint clean on changed files, and new tests cover the generic picker and at least one Tier A host",
+    "Browser smoke at 1280x800 on at least three Tier A grids: open the picker, add a code column, reload, and the layout persists",
+    "docs/BACKLOG.md stamps for 201 and the display half of 140 on completion"
+  ]
+}

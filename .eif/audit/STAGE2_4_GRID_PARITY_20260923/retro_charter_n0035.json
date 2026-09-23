@@ -1,0 +1,7 @@
+{
+  "node": "N-0035",
+  "expected_revision": 1,
+  "evidence_ids": ["EV-STAGE22-A4FE957", "EV-STAGE23-459F4C9"],
+  "as_of": "2026-09-22",
+  "note": "Charter-only retroactive record of Stage 2.2 (a4fe957) and 2.3 (459f4c9), which ran outside the ledger under an unenforced Claude Code runtime. Not completed: independence is recoverable, so a GOV-008 run with its own run and actor records referent and rendered, then node.status complete. Do not use node.retroactive_complete with independence_unrecoverable."
+}

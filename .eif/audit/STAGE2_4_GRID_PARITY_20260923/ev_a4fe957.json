@@ -1,0 +1,7 @@
+{
+  "id": "EV-STAGE22-A4FE957",
+  "provenance": "implementation-observation",
+  "path": "packages/ui/src/agGridMuiTheme.ts",
+  "tree_hash": "a4fe957f14911bfb9a54b084f5a74a7042168667",
+  "note": "Stage 2.2 commit a4fe957: AG_GRID_FONT_SIZE 13px grid-scoped token in packages/ui (agGridMuiTheme.ts, index.ts). Ran under an unenforced Claude Code runtime, outside the ledger. Browser verification is recorded in docs/memory/CURRENT.md (2026-09-22 entry), which is a claim, not independent evidence."
+}
