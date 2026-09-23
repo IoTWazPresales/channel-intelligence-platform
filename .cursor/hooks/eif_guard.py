@@ -1262,6 +1262,104 @@ def _path_candidates(cmd: str):
         found.append(tok.replace('\\','/'))
     return found
 
+def _quote_segments(cmd: str):
+    """[(text, quoted, start, end)] with quote characters excluded from text.
+
+    None when quoting is unbalanced or a backslash precedes a quote: shells
+    disagree on those (POSIX escapes, PowerShell does not), so callers must
+    fall back to treating the whole text as unquoted.
+    """
+    if re.search(r'\\[\'"]', cmd):
+        return None
+    segs=[]; i=0; n=len(cmd)
+    while i < n:
+        if cmd[i] in '\'"':
+            q=cmd[i]; j=cmd.find(q, i+1)
+            if j < 0:
+                return None
+            segs.append((cmd[i+1:j], True, i, j+1)); i=j+1
+        else:
+            j=i
+            while j < n and cmd[j] not in '\'"':
+                j+=1
+            segs.append((cmd[i:j], False, i, j)); i=j
+    return segs
+
+GREP_COMMANDS = frozenset({'grep', 'egrep', 'fgrep', 'rg', 'ag', 'ack', 'select-string', 'sls'})
+GREP_PATTERN_OPTIONS = frozenset({'-e', '--regexp', '-pattern'})
+GREP_NO_VALUE_SHORT = frozenset('EFGPirRnlLcovwxsqHhIaz')
+GREP_NO_VALUE_LONG = frozenset({
+    '--extended-regexp', '--fixed-strings', '--basic-regexp', '--perl-regexp', '--ignore-case',
+    '--smart-case', '--case-sensitive', '--recursive', '--line-number', '--files-with-matches',
+    '--files-without-match', '--count', '--only-matching', '--invert-match', '--word-regexp',
+    '--line-regexp', '--no-messages', '--quiet', '--silent', '--with-filename', '--no-filename',
+    '--hidden', '--no-ignore', '--fixed', '-simplematch', '-casesensitive', '-allmatches', '-notmatch',
+})
+
+def _grep_no_value_flag(tok: str) -> bool:
+    low=tok.lower()
+    if low in GREP_NO_VALUE_LONG:
+        return True
+    return bool(re.fullmatch(r'-[A-Za-z]+', tok)) and all(c in GREP_NO_VALUE_SHORT for c in tok[1:])
+
+def _grep_pattern_spans(cmd: str):
+    """Spans of fully quoted grep-family *pattern* arguments that contain '|'.
+
+    A regex alternation such as "x|/tmp" names no file; scanned as shell text
+    each alternative was read as a standalone path. Only the pattern argument
+    qualifies: the value after -e/--regexp/-Pattern, or the first positional
+    after flags known to take no value. Any other quoted argument (an option
+    value such as --pre, a path, a glob) is scanned exactly as before.
+    """
+    segs=_quote_segments(cmd)
+    if segs is None:
+        return []
+    words=[]; cur=[]; start=None
+    def flush():
+        nonlocal cur, start
+        if cur: words.append((''.join(t for t, _q, _s, _e in cur), cur))
+        cur=[]; start=None
+    commands=[]
+    for text, quoted, s0, e0 in segs:
+        if quoted:
+            cur.append((text, True, s0, e0)); continue
+        pos=s0
+        for m in re.finditer(r'[;&|\n]|\s+|[^\s;&|\n]+', text):
+            piece=m.group(0); a=pos+m.start(); b=pos+m.end()
+            if piece.isspace():
+                flush()
+            elif piece in ';&|\n':
+                flush(); commands.append(words); words=[]
+            else:
+                cur.append((piece, False, a, b))
+    flush(); commands.append(words)
+    spans=[]
+    for words in commands:
+        if not words:
+            continue
+        head=re.split(r'[\\/]', words[0][0])[-1].lower()
+        if head.endswith('.exe'):
+            head=head[:-4]
+        rest=words[1:]
+        if head=='git' and rest and rest[0][0].lower()=='grep':
+            head, rest='grep', rest[1:]
+        if head not in GREP_COMMANDS:
+            continue
+        prev=None
+        for text, parts in rest:
+            whole=len(parts)==1 and parts[0][1]
+            if whole and '|' in text and (
+                    (prev is not None and prev.lower() in GREP_PATTERN_OPTIONS)
+                    or prev is None or _grep_no_value_flag(prev)):
+                spans.append((parts[0][2], parts[0][3], text))
+                break
+            if prev is not None and prev.lower() in GREP_PATTERN_OPTIONS:
+                break
+            if not (text.startswith('-') and (_grep_no_value_flag(text) or text.lower() in GREP_PATTERN_OPTIONS)):
+                break
+            prev=text
+    return spans
+
 PROGRAMME_ENTRY_REL = '.eif/runtime/programme/program.py'
 PROGRAMME_LEDGER_FILES = frozenset({'PROGRAM.yaml', 'PROGRAM_LOG.ndjson'})
 GIT_INVOCATION = re.compile(r'\bgit(?:\s+-C\s+\S+|\s+-c\s+\S+)*\s+', re.I)
@@ -1400,7 +1498,12 @@ def _programme_runtime_shell_invoke(cmd: str) -> bool:
     """True when shell is invoking the installed programme entry point (read/execute, not mutate)."""
     norm = cmd.replace('\\', '/')
     # A substring must not exempt the rest of a compound command or redirect.
-    if re.search(r'[;&|<>`\r\n]|\$\(', norm):
+    # Redirection and substitution disqualify anywhere (substitution still
+    # expands inside double quotes); ; & | only outside quotes, where they chain.
+    if re.search(r'[<>`\r\n]|\$\(', norm):
+        return False
+    segs = _quote_segments(cmd)
+    if segs is None or any(re.search(r'[;&|]', text) for text, quoted, _s, _e in segs if not quoted):
         return False
     return bool(re.fullmatch(
         r'\s*python(?:3)?\s+(?:-B\s+)?(?:["\'])?(?:\./)?\.eif/runtime/programme/program\.py(?:["\'])?(?:\s+[^\r\n]*)?\s*',
@@ -1439,6 +1542,14 @@ def shell_path_consequence(cmd, policy):
     protected=policy.get('protected_paths') or []
     base=roots[0] if roots else None
     scan=NETWORK_URL.sub(' ', cmd)
+    # A quoted grep alternation is a pattern: blank it out of the path scan, but
+    # a control-plane name inside it is still shell text naming the control plane.
+    for a, b, pattern in reversed(_grep_pattern_spans(scan)):
+        for cand in _path_candidates(pattern):
+            rel=_normalize_shell_rel(cand)
+            if control_plane(rel, policy) or any(s in rel for s in ('.cursor/eif-runtime-policy.json','.cursor/hooks','.eif/AUTONOMY_POLICY.md','.eif/RUNTIME_CAPABILITIES.md')):
+                return _shell_result(False,'CONTROL_PLANE_PROTECTED','shell text names a control-plane path; defense-in-depth deny (not process containment)')
+        scan=scan[:a]+' '*(b-a)+scan[b:]
     redirects={m.group(1).strip('\'"') for m in REDIRECT_TARGET.finditer(scan)}
     for cand in _path_candidates(scan):
         if cand.lower() in NULL_DEVICES:

@@ -46,7 +46,7 @@ MAX_HOOK_INPUT_BYTES = 10 * 1024 * 1024
 # interpreter hangs before the guard's watchdog thread even starts.
 SHIM_TIMEOUT_SEC = 9.5
 
-ADAPTER_VERSION = 'eif-claude-adapter/2'
+ADAPTER_VERSION = 'eif-claude-adapter/3'
 
 
 def shim_timeout_sec() -> float:
@@ -72,6 +72,10 @@ def shim_timeout_sec() -> float:
 # (preToolUse) at eif_guard.py ~line 2096-2097.
 DIRECT_TOOL_MAP = {
     'Bash': 'Shell',
+    # Same tool_input shape as Bash (command/description/timeout/
+    # run_in_background, per the Claude Code hooks reference); on Windows it can
+    # be the only shell tool registered, so it must be gated exactly like Bash.
+    'PowerShell': 'Shell',
     'Read': 'Read',
     'Edit': 'Write',
     'MultiEdit': 'Write',
@@ -155,16 +159,40 @@ def read_stdin_bytes(stream) -> bytes:
     return raw
 
 
-def discover_project_root(payload: dict) -> Path:
-    """Mirror eif_guard.select_root()'s preference order: explicit cwd first."""
-    for candidate in (payload.get('cwd'), os.getcwd()):
-        if not candidate:
-            continue
+def resolve_guard(payload: dict):
+    """(root, guard_path, searched) for the project whose guard must decide this call.
+
+    CLAUDE_PROJECT_DIR (the session's project root, which Claude Code exports to
+    every hook command) first; then the payload cwd and each of its parents, so a
+    session whose shell has moved into a subfolder still reaches the project's
+    guard. The shim's own process cwd is never a candidate: a hook launched from
+    an unrelated folder must not borrow whatever guard happens to sit there.
+    root and guard_path are None when no candidate holds a guard.
+    """
+    searched = []
+    env_root = os.environ.get('CLAUDE_PROJECT_DIR')
+    if env_root:
         try:
-            return Path(candidate).resolve()
+            root = Path(env_root).resolve()
+            searched.append(str(root))
+            guard_path = discover_guard(root)
+            if guard_path is not None:
+                return root, guard_path, searched
         except Exception:
-            continue
-    return Path.cwd()
+            pass
+    cwd = payload.get('cwd')
+    if isinstance(cwd, str) and cwd.strip():
+        try:
+            start = Path(cwd).resolve()
+        except Exception:
+            start = None
+        if start is not None:
+            for candidate in (start, *start.parents):
+                searched.append(str(candidate))
+                guard_path = discover_guard(candidate)
+                if guard_path is not None:
+                    return candidate, guard_path, searched
+    return None, None, searched
 
 
 def mcp_tool_split(tool_name: str):
@@ -192,8 +220,8 @@ def mcp_tool_split(tool_name: str):
 #   - PostToolUseFailure: "For Bash and PowerShell, a command that ran and
 #     exited produces a first line `Exit code N`" in `error`; the documented
 #     failing `npm test` example (Exit code 1) arrives on that event.
-# So exit 0 is recorded only for a foreground Bash PostToolUse that was not
-# interrupted. Anything else carries no exitCode and the obligation stays.
+# So exit 0 is recorded only for a foreground Bash or PowerShell PostToolUse
+# that was not interrupted (both translate to Shell). Anything else carries no exitCode and the obligation stays.
 # backgroundTaskId / returnCodeInterpretation are not in the reference; their
 # presence can only withhold success, never grant it.
 EXIT_CODE_LINE = re.compile(r'Exit code (-?\d+)')
@@ -313,7 +341,13 @@ def discover_guard(root: Path):
 
 
 def invoke_guard(root: Path, guard_path: Path, translated: dict):
-    payload_bytes = json.dumps({k: v for k, v in translated.items() if k != 'cc_event'}).encode('utf-8')
+    # cwd is the root resolved above, not the session's shell folder:
+    # eif_guard.select_root() tries the payload cwd before its own process cwd,
+    # so a shell sitting in another project with its own policy would otherwise
+    # have that project's policy decide a call this project's guard was chosen for.
+    request = {k: v for k, v in translated.items() if k != 'cc_event'}
+    request['cwd'] = str(root)
+    payload_bytes = json.dumps(request).encode('utf-8')
     env = dict(os.environ)
     env['CLAUDE_PROJECT_DIR'] = str(root)
     return subprocess.run(
@@ -404,10 +438,11 @@ def main() -> int:
                                       'permissionDecisionReason': 'EIF_CLAUDE_ADAPTER: no-side-effect tool, guard not invoked'}})
         return 0
 
-    root = discover_project_root(payload)
-    guard_path = discover_guard(root)
+    root, guard_path, searched = resolve_guard(payload)
     if guard_path is None:
-        return fail_closed('SHIM_GUARD_NOT_INSTALLED', f'no .cursor/hooks/eif_guard.py under {root}')
+        return fail_closed('SHIM_GUARD_NOT_INSTALLED',
+                           f'no .cursor/hooks/eif_guard.py in CLAUDE_PROJECT_DIR or the payload cwd or its parents '
+                           f'(searched: {", ".join(searched) or "nothing: no CLAUDE_PROJECT_DIR and no payload cwd"})')
 
     try:
         completed = invoke_guard(root, guard_path, translated)
