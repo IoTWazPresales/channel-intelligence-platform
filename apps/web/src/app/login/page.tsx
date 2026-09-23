@@ -112,9 +112,12 @@ export default function LoginPage() {
           <Typography variant="body2" color="text.secondary" data-testid="login-forgot-password">
             Forgot password? Ask an admin to use <strong>Reset password</strong> on Administration → Users & roles.
           </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Dev seed (after IAM migration): admin@local / changeme · API {apiUrl('/api/v1/auth/me')}
-          </Typography>
+          {/* Never print seed credentials on this page: it is the public entry point in session mode. */}
+          {process.env.NODE_ENV !== 'production' ? (
+            <Typography variant="caption" color="text.secondary">
+              API {apiUrl('/api/v1/auth/me')}
+            </Typography>
+          ) : null}
         </Stack>
       </Box>
     </Box>
