@@ -87,8 +87,8 @@ export function getAgGridMuiCssVariables(theme: Theme): Record<string, string | 
     '--ag-border-radius': '0px',
     '--ag-wrapper-border-radius': '0px',
     '--ag-card-radius': radius,
-    '--ag-row-height': theme.density === 'compact' ? '34px' : '42px',
-    '--ag-header-height': theme.density === 'compact' ? '36px' : '42px',
+    // Row and header heights are not emitted here: apps/web GRID_DENSITY is the single source,
+    // applied by EnterpriseDataGrid (the only consumer of these variables).
     '--ag-grid-size': theme.density === 'compact' ? '6px' : '8px',
     '--ag-cell-horizontal-padding': theme.spacing(1.5),
     '--ag-icon-size': '18px',
