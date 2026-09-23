@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 927
+**Snapshot revision:** 938
 
 ## Outcome (verbatim)
 
@@ -55,3 +55,5 @@ _none_
 | N-0031 | Stage 2a: grid height single source, MarketSurface mappings states, LineupScopeBar and market readiness honesty | feature | in_progress | in_progress | yes |  | full loop |
 | N-0032 | Stage 2.7: five orphaned CPOR case tabs (USD pivot, Events, Exports, Promo load, Payments/recon) mounted on the settlement desk | feature | in_progress | in_progress | yes |  | full loop |
 | N-0033 | Stage 3.1/3.5: session auth gate on every API route, production web on loopback, Cloudflare quick tunnel for a small pilot | feature | in_progress | in_progress | yes |  | full loop |
+| N-0034 | Stage 2.4 + grid parity | feature | in_progress | in_progress | yes |  | full loop |
+| N-0035 | Stage 2.2/2.3: grid-scoped 13px type token and density 40/40 (ran outside the ledger) | feature | in_progress | in_progress | yes | yes | full loop |

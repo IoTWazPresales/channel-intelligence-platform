@@ -35,3 +35,5 @@
 - N-0031 **Stage 2a: grid height single source, MarketSurface mappings states, LineupScopeBar and market readiness honesty** `in_progress`/`in_progress` (feature)
 - N-0032 **Stage 2.7: five orphaned CPOR case tabs (USD pivot, Events, Exports, Promo load, Payments/recon) mounted on the settlement desk** `in_progress`/`in_progress` (feature)
 - N-0033 **Stage 3.1/3.5: session auth gate on every API route, production web on loopback, Cloudflare quick tunnel for a small pilot** `in_progress`/`in_progress` (feature)
+- N-0034 **Stage 2.4 + grid parity** `in_progress`/`in_progress` (feature)
+- N-0035 **Stage 2.2/2.3: grid-scoped 13px type token and density 40/40 (ran outside the ledger)** `in_progress`/`in_progress` (feature) RETROACTIVE

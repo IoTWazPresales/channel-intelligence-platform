@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 927
-  log_sha256: 708c5fb5cba935b5f824f8f19cc60e1d44a750b6d8ce0f17a2525ad9a75daaa3
+  snapshot_revision: 938
+  log_sha256: 69107f20bad9a48a367c04bac6fc19ce4db3c852f20020141b6e9d42d8051cb2
   acceptance_policy:
     milestone: operator
     root: operator
@@ -5652,6 +5652,171 @@ nodes:
     risk_class: full
     implementation_run: STAGE3_ACCESS_20260921
     implementation_actor: stage3-001
+  N-0034:
+    id: N-0034
+    parent: null
+    title: Stage 2.4 + grid parity
+    class: feature
+    origin: operator
+    status: in_progress
+    stage: discovery
+    revision: 3
+    lease: null
+    depends_on: []
+    facets:
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - One generic all-fields column picker on every Tier A fact grid in docs/audits/GRID_AND_COLUMN_PARITY_AUDIT.md section
+      6.2, fed by the fact's field list with a layout key per grid, through the existing features/workbench-ui/ColumnPickerDialog.
+      No second picker implementation (STAGED_WORK_PLAN 2.4, D3, BACKLOG-201)
+    - Customer code and Distributor code are their own pickable columns. Identity columns show names only, never a code welded
+      into a name cell (D7, BACKLOG-140 display half)
+    - Every Tier A grid that gains a picker keeps the ModuleDataSection loading, error with Retry and empty states (audit
+      section 2 parity bar)
+    - 'Toolbar parity on Tier A hosts is decided per this node''s discovery table: each gap in toolbar search, column filters,
+      filter chips, saved views, export or density toggle is either closed through a shared workbench-ui or components/ primitive
+      or recorded in docs/BACKLOG.md with a trigger. Nothing is silently left and no bespoke per-page copy is added'
+    - Tier B worklists and Tier C case panels keep their fixed column sets unless the discovery table states a reason for
+      one
+    - 'BACKLOG-200 stays held: MasterColumnPickerDialog and ColumnSelectorModal are not unified until the N-0029 review rules.
+      BACKLOG-193 stays dropped: no AG Grid Enterprise modules, and AgGridReact is imported only inside EnterpriseDataGrid'
+    - Stage 2.5 (line identifier 'both' as two columns) is out of scope, but the picker mechanism must be able to carry it
+      without a second mechanism
+    - 'No density value changes (D2 landed at 459f4c9). No migrations. Read-only on cip: print current_database() first if
+      SQL is used'
+    - pnpm test:web green, tsc exit 0, eslint clean on changed files, and new tests cover the generic picker and at least
+      one Tier A host
+    - 'Browser smoke at 1280x800 on at least three Tier A grids: open the picker, add a code column, reload, and the layout
+      persists'
+    - docs/BACKLOG.md stamps for 201 and the display half of 140 on completion
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: 'Discovery done (EV-N0034-DISCOVERY, .eif/audit/STAGE2_4_GRID_PARITY_20260923/DISCOVERY.md): 53 host files
+      / 63 mounts reconcile with the parity audit. Tier A (14 files): 0 pickers, 2 searches, 0 exports. No shared search,
+      saved-view or export primitive exists. Density is global. Before leaving discovery: baseline.add + node.baseline (touches_existing),
+      then Warren decides criterion 4 (toolbar parity: shared primitive vs BACKLOG entries) and the per-fact field-list source
+      for the all-columns picker (UNKNOWN). No product code written in this run.'
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+  N-0035:
+    id: N-0035
+    parent: null
+    title: 'Stage 2.2/2.3: grid-scoped 13px type token and density 40/40 (ran outside the ledger)'
+    class: feature
+    origin: operator
+    status: in_progress
+    stage: discovery
+    revision: 3
+    lease: null
+    depends_on: []
+    facets:
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - 'STAGED_WORK_PLAN 2.2 and 2.3 (D2): AG_GRID_FONT_SIZE 13px grid-scoped in packages/ui, GRID_DENSITY comfortable 40/40
+      with compact unchanged 34/36, browser-verified per docs/memory/CURRENT.md 2026-09-22'
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: 'Retroactive charter only (EV-STAGE22-A4FE957, EV-STAGE23-459F4C9). Work shipped at a4fe957 and 459f4c9 outside
+      the ledger. To close: GOV-008 run with a distinct run and actor records referent and rendered at 1280x800, then node.status
+      complete. Stays in discovery: no baseline was recorded before the work.'
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+    retroactive:
+      chartered: true
+      completed: false
+      independence_disclaimed: false
+      independence_unrecoverable: false
+      as_of: '2026-09-22'
+      evidence:
+      - EV-STAGE22-A4FE957
+      - EV-STAGE23-459F4C9
+      recording_runs:
+      - STAGE2_2_3_RETRO_20260923
+      disclaimed_pass_runs: []
+      disclaimed_impl_runs: []
+      chartered_seq: 937
+      completed_seq: null
+      disclaimed_seq: null
+      charter_note: 'Charter-only retroactive record of Stage 2.2 (a4fe957) and 2.3 (459f4c9), which ran outside the ledger
+        under an unenforced Claude Code runtime. Not completed: independence is recoverable, so a GOV-008 run with its own
+        run and actor records referent and rendered, then node.status complete. Do not use node.retroactive_complete with
+        independence_unrecoverable.'
 decisions:
   D-0001:
     id: D-0001
@@ -6023,6 +6188,29 @@ evidence:
     tree_hash: null
     note: 'N-0030: dependency-ordered stages 0-10 for features 1-9, still-necessary backlog and the two open nodes. Draft
       pending Warren Wednesday revision. 7 decisions listed in section 3.'
+  EV-N0034-DISCOVERY:
+    id: EV-N0034-DISCOVERY
+    provenance: implementation-observation
+    path: .eif/audit/STAGE2_4_GRID_PARITY_20260923/DISCOVERY.md
+    tree_hash: 65dbed5c3e219151de09b515c7ccf9c88a3439b9
+    note: 'N-0034 discovery: 53 grid-host files and 63 mounts reconciled with docs/audits/GRID_AND_COLUMN_PARITY_AUDIT.md.
+      Per-host toolbar search (server or client), filter bar, saved views, column picker, export and lab surface. Shared vs
+      bespoke components. BACKLOG check. Reproducible with scan_grid_hosts.py in the same folder.'
+  EV-STAGE22-A4FE957:
+    id: EV-STAGE22-A4FE957
+    provenance: implementation-observation
+    path: packages/ui/src/agGridMuiTheme.ts
+    tree_hash: a4fe957f14911bfb9a54b084f5a74a7042168667
+    note: 'Stage 2.2 commit a4fe957: AG_GRID_FONT_SIZE 13px grid-scoped token in packages/ui (agGridMuiTheme.ts, index.ts).
+      Ran under an unenforced Claude Code runtime, outside the ledger. Browser verification is recorded in docs/memory/CURRENT.md
+      (2026-09-22 entry), which is a claim, not independent evidence.'
+  EV-STAGE23-459F4C9:
+    id: EV-STAGE23-459F4C9
+    provenance: implementation-observation
+    path: apps/web/src/theme/gridDensity.ts
+    tree_hash: 459f4c94eaf994d7e33d567661b2ef11a671e9f7
+    note: 'Stage 2.3 commit 459f4c9: GRID_DENSITY comfortable 42/42 to 40/40, compact unchanged 34/36. Ran under an unenforced
+      Claude Code runtime, outside the ledger. 390x844 render recorded UNABLE in docs/memory/CURRENT.md.'
 baselines:
   BLN-0001:
     id: BLN-0001
