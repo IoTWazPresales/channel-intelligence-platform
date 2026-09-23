@@ -1,0 +1,5 @@
+{"ts":"2026-09-23T13:40:28Z","kind":"programme.event","event":"node.add","seq":928}
+{"ts":"2026-09-23T13:40:37Z","kind":"programme.event","event":"node.lease.acquire","seq":929}
+{"ts":"2026-09-23T13:40:59Z","kind":"programme.event","event":"node.patch","seq":930}
+{"ts":"2026-09-23T15:09:40Z","kind":"programme.event","event":"evidence.add","seq":931}
+{"ts":"2026-09-23T15:09:58Z","kind":"programme.event","event":"node.lease.release","seq":932}

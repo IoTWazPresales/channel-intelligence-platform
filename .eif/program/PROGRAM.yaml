@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1002
-  log_sha256: 1bcc69ca8404001e8c9e56101ecc0fcd33073e56b48e300e68cd131a02ed26d5
+  snapshot_revision: 1013
+  log_sha256: 1385325f1470788bdadcd2ed453142a0ad76a405cd546ac1ee13c4c61fef7728
   acceptance_policy:
     milestone: operator
     root: operator
@@ -5823,9 +5823,9 @@ nodes:
     title: 'BACKLOG-206: API binds loopback, not 0.0.0.0:8001'
     class: feature
     origin: operator
-    status: proposed
-    stage: null
-    revision: 0
+    status: blocked
+    stage: implement
+    revision: 4
     lease: null
     depends_on:
     - N-0030
@@ -5844,7 +5844,7 @@ nodes:
     - BACKLOG-206 stamped; PILOT_TUNNEL_RUNBOOK updated if it names the bind
     - Nothing writes to cip; read-only SQL prints current_database() first
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-0005
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
@@ -5866,17 +5866,29 @@ nodes:
         rationale: null
     verification: {}
     evidence: []
-    blockers: []
+    blockers:
+    - id: BL-0009
+      type: environment
+      ref: D-0027
+      opened: '2026-09-23T22:39:43Z'
+      note: OUT_OF_CHANGE_SCOPE on scripts/dev-api.js; needs Warren's change_paths amendment (control-plane). Change prepared
+        in IMPL.md, not applied; API not restarted.
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: Feature definition = operator-specified criteria (queue 2026-09-23, BACKLOG-206 regression traps). Implementation
+      by a fresh subagent (platform-devops-engineer, test-engineering-specialist, reliability-sre-specialist lenses), run
+      N0036_IMPL_20260924.
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      web_proxy: same-origin proxy keeps reaching the API at 127.0.0.1:8001
+      port_preflight: preflight still probes the bound host
     target_artifact_class: null
     design_artifact_class: null
+    implementation_run: N0036_IMPL_20260924
+    implementation_actor: impl-n0036
   N-0037:
     id: N-0037
     parent: null
@@ -5885,10 +5897,9 @@ nodes:
     origin: operator
     status: proposed
     stage: null
-    revision: 0
+    revision: 1
     lease: null
     depends_on:
-    - N-0036
     - N-0033
     facets:
     - api
@@ -8040,6 +8051,89 @@ nodes:
     preservation: {}
     target_artifact_class: null
     design_artifact_class: null
+  N-0064:
+    id: N-0064
+    parent: null
+    title: 'D-h: planning accuracy, deal-stock landing and PM planning bias on Plan vs Executed (chartered, not built)'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0058
+    - N-0062
+    facets:
+    - api
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - 'Recommendation: .eif/audit/PROGRAMME_20260924/dh/RECOMMENDATION.md (D-h feature-definition moment, D-0019). Extends
+      /plan-vs-executed; no new module'
+    - WAPE plan accuracy and unit-weighted signed bias per product_line x closed quarter tie out to a golden fixture and to
+      W1-style recon for at least 2 quarters
+    - Every bias figure carries quarters_n, lines_n and confidence (insufficient / indicative / established); thresholds are
+      tenant config
+    - Open quarters and lines with pipeline remaining are excluded from accuracy and shown as pending
+    - B2 apply_bias refuses with a reason below the established threshold and exposes its source window
+    - Malformed period labels and NULL product_line are counted and reported, never silently dropped
+    - Landing rate uses POD / Arrived (N-0062) only and is labelled distinctly from A1-02 Over-plan intake
+    - Person-level PM bias only when a person field is mapped; otherwise the UI says 'by business line'
+    - COMMERCIAL_SEMANTICS section 4.1 updated in the same change (A1-10..A1-12)
+    - Bias is a trusted signal only after N-0060 historical backfill or 8 closed quarters (~2027 Q1); Warren answers D-0026
+      first
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
 decisions:
   D-0001:
     id: D-0001
@@ -8290,6 +8384,29 @@ decisions:
     scope: N-0072
     statement: Stage 4.7 (BACKLOG-046) ACZA workbook non-operational sheets (BOM Not Ready) allowlist business rule. Not decided
       (D-e).
+    origin: agent
+    status: proposed
+    supersedes: null
+  D-0026:
+    id: D-0026
+    scope: N-0064
+    statement: 'D-h business rules for Warren: (1) ''deal-stock landing rate'' = units arriving (POD), selling through, or
+      taken over plan (already built as A1-02)? (2) Is ''PM'' a person; who owned each BU plan per quarter; does bias follow
+      person or business line? (3) How many closed quarters before a bias number may change a buy plan (agent proposes >=6
+      to show, >=8 to feed B2)? (4) When is a quarter closed for scoring (agent proposes quarter end + 1Q or no pipeline)?
+      (5) Do late shipments count against the plan''s quarter or the ship quarter? Evidence: .eif/audit/PROGRAMME_20260924/dh/RECOMMENDATION.md'
+    origin: agent
+    status: proposed
+    supersedes: null
+  D-0027:
+    id: D-0027
+    scope: N-0036
+    statement: 'Control-plane: N-0036 (BACKLOG-206) needs scripts/dev-api.js (+ new scripts/api-bind-host.cjs and its test)
+      inside AUTONOMY_POLICY change_paths; today change_paths = apps/api, apps/web, packages/ui, docs, CONTEXT.md, AGENTS.md,
+      so the guard denies OUT_OF_CHANGE_SCOPE. Warren amends the policy (add scripts/**, or the three named files) and recompiles,
+      or makes the one-line edit himself: dev-api.js --host process.env.CIP_API_HOST || ''127.0.0.1''. Prepared change and
+      measurements: .eif/audit/PROGRAMME_20260924/n0036/IMPL.md. Measured: localhost resolves IPv4 first on this host; API
+      never listened on ::1; /api/v1/health does not exist (health is /health).'
     origin: agent
     status: proposed
     supersedes: null
@@ -8677,6 +8794,18 @@ baselines:
     path: .eif/audit/STAGE3_ACCESS_20260921/BASELINE.md
     observed_behavior: Stub auth on an empty .env; in session mode 127 of 207 sampled GET routes served data with no token
       because auth was per endpoint; no external access; cloudflared absent.
+  BLN-0005:
+    id: BLN-0005
+    provenance: implementation-observation
+    tree_hash: 2fe78bd5
+    latent_capabilities: []
+    preservation:
+      web_proxy: apps/web/src/app/api/v1/[[...path]]/route.ts defaults to http://127.0.0.1:8001 (CIP_API_INTERNAL_URL override)
+        - must keep reaching the API
+      port_preflight: dev-api.js preflight probes 127.0.0.1:<port>
+    path: scripts/dev-api.js
+    observed_behavior: '2026-09-24 netstat: API listens 0.0.0.0:8001 (pid 24104), web 0.0.0.0:3000 (pid 19900). dev-api.js
+      passes --host ${CIP_API_HOST || ''0.0.0.0''} to uvicorn. Web proxy and dev-web.js default CIP_API_INTERNAL_URL to http://127.0.0.1:8001.'
 caveats:
   consult_model_logged:
     key: consult_model_logged
@@ -8744,9 +8873,29 @@ deferred_findings:
   run: NS19_LEDGER_ALIGN_20260916
   actor: gov-019
   status: deferred
+- seq: 1009
+  code: DOES_NOT_FIT
+  note: 'F2 (D-h moment): existing B2 bias correction (apps/api/app/services/lineup/bias_correction.py apply_bias, off by
+    default) scales the next buy plan from a single quarter''s unweighted mean-of-ratios bias with n>=3 lines. Over-claim
+    risk today; N-0064 criterion 5 closes it. Also F3: COMMERCIAL_SEMANTICS PM grain lists NB/NR/NV/NX; data holds NB/NR/NV/PF/XB;
+    D-g sets 14 product_lines - N-0040 reconciles.'
+  node: N-0064
+  run: PROGRAMME_20260924
+  actor: gov-001
+  status: deferred
+- seq: 1010
+  code: DOES_NOT_FIT
+  note: 'F1 (D-h moment): .eif/CONTEXT.md, DECISIONS.md and JOURNEYS.yaml are empty templates and DESIGN_EXPERIENCE_RECORD.md
+    is status: template; all are untracked in git. Feature-definition moments have nothing durable to check against; de facto
+    canon is docs/COMMERCIAL_SEMANTICS.md, docs/memory/CONTEXT.md and .eif/program decisions. Also: the Skill tool and SendMessage
+    are SHIM_TOOL_UNMAPPED for subagents (BACKLOG-204 N4), so lenses are applied from their charters.'
+  node: null
+  run: PROGRAMME_20260924
+  actor: gov-001
+  status: deferred
 ids:
   node: 5
   decision: 19
-  blocker: 8
+  blocker: 9
   evidence: 2
   baseline: 4

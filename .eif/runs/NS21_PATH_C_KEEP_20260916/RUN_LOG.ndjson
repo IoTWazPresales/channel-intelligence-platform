@@ -1,0 +1,13 @@
+{"ts":"2026-09-16T19:22:36Z","kind":"programme.event","event":"decision.add","seq":852}
+{"ts":"2026-09-16T19:24:31Z","kind":"programme.event","event":"decision.status","seq":853}
+{"ts":"2026-09-16T19:25:56Z","kind":"programme.event","event":"decision.status","seq":854}
+{"ts":"2026-09-16T19:27:25Z","kind":"programme.event","event":"node.lease.acquire","seq":855}
+{"ts":"2026-09-16T19:28:56Z","kind":"programme.event","event":"node.patch","seq":856}
+{"ts":"2026-09-16T19:30:25Z","kind":"programme.event","event":"node.stage_note","seq":857}
+{"ts":"2026-09-16T19:31:53Z","kind":"programme.event","event":"node.lease.release","seq":858}
+{"ts":"2026-09-16T19:33:18Z","kind":"programme.event","event":"node.lease.acquire","seq":859}
+{"ts":"2026-09-16T19:34:22Z","kind":"programme.event","event":"node.quality","seq":860}
+{"ts":"2026-09-16T19:35:28Z","kind":"programme.event","event":"node.quality","seq":861}
+{"ts":"2026-09-16T19:36:24Z","kind":"programme.event","event":"node.quality","seq":862}
+{"ts":"2026-09-16T19:37:39Z","kind":"programme.event","event":"node.stage_note","seq":863}
+{"ts":"2026-09-16T19:39:04Z","kind":"programme.event","event":"node.lease.release","seq":864}

@@ -1,0 +1,6 @@
+{"ts":"2026-09-16T09:02:34Z","kind":"programme.event","event":"node.lease.acquire","seq":819}
+{"ts":"2026-09-16T09:04:00Z","kind":"programme.event","event":"node.stage","seq":820}
+{"ts":"2026-09-16T09:49:31Z","kind":"programme.event","event":"node.patch","seq":821}
+{"ts":"2026-09-16T10:54:03Z","kind":"programme.event","event":"node.lease.heartbeat","seq":822}
+{"ts":"2026-09-16T12:32:17Z","kind":"programme.event","event":"node.stage","seq":823}
+{"ts":"2026-09-16T12:32:43Z","kind":"programme.event","event":"node.lease.release","seq":824}

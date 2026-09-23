@@ -1,0 +1,8 @@
+{"ts":"2026-09-02T09:42:23Z","kind":"programme.event","event":"node.lease.acquire","seq":159}
+{"ts":"2026-09-02T09:42:23Z","kind":"programme.event","event":"node.quality","seq":160}
+{"ts":"2026-09-02T09:42:24Z","kind":"programme.event","event":"node.quality","seq":161}
+{"ts":"2026-09-02T09:42:25Z","kind":"programme.event","event":"node.quality","seq":162}
+{"ts":"2026-09-02T09:42:25Z","kind":"programme.event","event":"node.verification","seq":163}
+{"ts":"2026-09-02T09:42:26Z","kind":"programme.event","event":"node.patch","seq":164}
+{"ts":"2026-09-02T09:42:26Z","kind":"programme.event","event":"node.lease.release","seq":165}
+{"ts":"2026-09-02T09:42:27Z","kind":"programme.event","event":"node.status","seq":166}

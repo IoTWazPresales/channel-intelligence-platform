@@ -1,0 +1,11 @@
+{"id": "N-0064", "title": "D-h: planning accuracy, deal-stock landing and PM planning bias on Plan vs Executed (chartered, not built)", "class": "feature", "origin": "operator", "status": "proposed", "depends_on": ["N-0058", "N-0062"], "facets": ["ui", "api"], "risk": "R2", "touches_existing": true, "acceptance": "operator", "acceptance_criteria": [
+ "Recommendation: .eif/audit/PROGRAMME_20260924/dh/RECOMMENDATION.md (D-h feature-definition moment, D-0019). Extends /plan-vs-executed; no new module",
+ "WAPE plan accuracy and unit-weighted signed bias per product_line x closed quarter tie out to a golden fixture and to W1-style recon for at least 2 quarters",
+ "Every bias figure carries quarters_n, lines_n and confidence (insufficient / indicative / established); thresholds are tenant config",
+ "Open quarters and lines with pipeline remaining are excluded from accuracy and shown as pending",
+ "B2 apply_bias refuses with a reason below the established threshold and exposes its source window",
+ "Malformed period labels and NULL product_line are counted and reported, never silently dropped",
+ "Landing rate uses POD / Arrived (N-0062) only and is labelled distinctly from A1-02 Over-plan intake",
+ "Person-level PM bias only when a person field is mapped; otherwise the UI says 'by business line'",
+ "COMMERCIAL_SEMANTICS section 4.1 updated in the same change (A1-10..A1-12)",
+ "Bias is a trusted signal only after N-0060 historical backfill or 8 closed quarters (~2027 Q1); Warren answers D-0026 first"]}

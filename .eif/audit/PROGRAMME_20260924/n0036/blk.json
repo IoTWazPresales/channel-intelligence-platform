@@ -1,0 +1,1 @@
+{"node": "N-0036", "expected_revision": 3, "type": "environment", "ref": "D-0027", "note": "OUT_OF_CHANGE_SCOPE on scripts/dev-api.js; needs Warren's change_paths amendment (control-plane). Change prepared in IMPL.md, not applied; API not restarted."}

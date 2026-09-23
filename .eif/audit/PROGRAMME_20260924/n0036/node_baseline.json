@@ -1,0 +1,1 @@
+{"node": "N-0036", "expected_revision": 1, "baseline_ref": "BLN-0005", "preservation": {"web_proxy": "same-origin proxy keeps reaching the API at 127.0.0.1:8001", "port_preflight": "preflight still probes the bound host"}}
