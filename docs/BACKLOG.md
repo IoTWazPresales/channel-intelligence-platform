@@ -3211,3 +3211,19 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Behavior to retain** | Root `.env` / `.env.*` protection; reads of `apps/api/.env.example` if the steward workflow needs them. |
 | **Out of scope** | Rewriting `matches()` semantics (e.g. making every bare pattern match at any depth). That is a guard-wide behaviour change. Raise it with EIF separately if wanted. |
 | **TRIGGER** | Before the next agent session (Cursor or Claude Code) that works under `apps/api/`. |
+
+## BACKLOG-208 — Claude Code shim resolves the guard from the tool call's cwd; one `cd` wedges every tool
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** · 2026-09-23 · found in the N-0034 session |
+| **Effort** | Small, in the EIF repo (shim), then reinstall into CIP and re-probe |
+| **Source** | `.claude/hooks/eif_claude_adapter.py` via the `.claude/settings.json` hooks (matcher `*`) |
+| **Idea** | A Bash call `cd apps/web/src && grep …` moved the persistent session cwd. Every later tool (Bash, Read, Grep, including `cd` back) failed PreToolUse with `SHIM_GUARD_NOT_INSTALLED: no .cursor/hooks/eif_guard.py under …\apps\web\src`. The shim looks for the guard under the hook payload's `cwd` instead of `CLAUDE_PROJECT_DIR` or the git root. |
+| **Why it matters / deferrable** | Total session wedge that the agent can't recover from itself. Deferrable because the operator workaround is cheap: `! cd <repo root>` in the prompt. |
+| **Resume-context** | Recovered in-session by Warren typing `! cd /c/Users/warren_eliason/channel-intelligence-platform`. The guard's own path checks stay cwd-relative; only root discovery is wrong. |
+| **What the work is** | Resolve the project root from `CLAUDE_PROJECT_DIR`, else walk up from cwd to the directory holding the guard. Add a probe step: `cd` into a subdirectory, then a Read must still be admitted. |
+| **Regression traps** | Don't let root discovery escape the manifest's `vcs_root` (a nested repo must not borrow a parent's guard). |
+| **Behavior to retain** | Fail-closed when no guard exists at the true root. |
+| **Out of scope** | Changing guard path semantics. |
+| **TRIGGER** | Next EIF shim release, or the next wedge. |

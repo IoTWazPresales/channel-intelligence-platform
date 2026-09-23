@@ -12,6 +12,18 @@
 
 ## On feat/ns-2-brief-nav-collapse
 
+- **2026-09-23 — first EIF node run end to end from Claude Code: N-0034 "Stage 2.4 + grid parity" opened + discovered; N-0035 retroactive charter for Stage 2.2/2.3 (ledger `54494af`, evidence `6984a71`; no product code; never main).**
+  - **N-0034** (run `STAGE2_4_GRID_PARITY_20260923`, R2 ui): 11 criteria from plan 2.4 + parity audit. **Parked in discovery.** `.eif/audit/STAGE2_4_GRID_PARITY_20260923/DISCOVERY.md`: 53 host files / 63 mounts **reconcile** with the audit (customers/products host via `MasterDataGridShell`; shipping grid moved to `InboundShipmentsWorkspace`). **Tier A (14 files):** 0 pickers, 2 searches, 0 exports. No shared search, saved-view or export primitive exists. Density is one global shell toggle. Needs before leaving discovery: baseline, Warren's call on criterion 4 (toolbar parity: shared primitive vs BACKLOG), per-fact field-list source (UNKNOWN).
+  - **N-0035** (run `STAGE2_2_3_RETRO_20260923`): charter-only record of `a4fe957`/`459f4c9`. Not complete; needs GOV-008. **N-0031 is not drift**: validate is correct, and it needs an independent a11y + referent review. The plan's "✅ Done" for 2.1 is a claim.
+  - **Claude Code + EIF operating facts:**
+    - `program.py` runs only as a bare command. The guard exemption rejects `;`, so pass `--criteria` as one item and set the rest with `event node.patch --payload-file` (needs `expected_revision`).
+    - Shell text naming `.eif/program`, `.eif/runtime` or `.claude/settings` is denied (CONTROL_PLANE_PROTECTED), even read-only `git log --`.
+    - A backslash (`\|` in grep) trips FOREIGN_PATH; use `grep -E`.
+    - PowerShell is SHIM_TOOL_UNMAPPED.
+    - **A `cd` into a subdirectory wedges every tool** (SHIM_GUARD_NOT_INSTALLED: the shim resolves the guard from cwd). Recovery: Warren runs `! cd <repo root>`.
+    - `AGENTS.md` carries no EIF instructions (`eif-core.mdc` is Cursor-only), and it references a missing `engineering-rules.mdc`.
+  - N3 below is stale: `.eif/RUNTIME_CAPABILITIES.md` was committed at `65dbed5`.
+
 - **2026-09-23 — BACKLOG-204 arc: Claude Code is now a governed runtime (never main).**
   - **The arc:**
     - 2026-09-21 probe `R20260921170432_BDEF22`: FAILED 0/14, because hooks lived only in `.cursor/hooks.json`.
