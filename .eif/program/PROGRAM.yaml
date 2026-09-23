@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1013
-  log_sha256: 1385325f1470788bdadcd2ed453142a0ad76a405cd546ac1ee13c4c61fef7728
+  snapshot_revision: 1042
+  log_sha256: e544e7807924656c672333c4ab3217700af88e369728a5e4cd6f48ee367a0f30
   acceptance_policy:
     milestone: operator
     root: operator
@@ -4823,7 +4823,7 @@ nodes:
     origin: decomposition
     status: in_progress
     stage: validate
-    revision: 63
+    revision: 74
     lease: null
     depends_on:
     - N-0025
@@ -4866,14 +4866,18 @@ nodes:
     quality:
       ux:
         required: true
-        state: pending
+        state: pass
         evidence:
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          stale_pass_run: GOV008_N0025_N0029_20260915
-          stale_summary: Live dirty tree wraps Panel/PanelRow (FAIL vs no-wrapper AC)
-          amended_ac: StartWorkLaunch + ActionCard
+          path: .eif/audit/GOV008_N0028_20260924/REVIEW.md
+          verdict: FAILED
+          summary: 'All 7 Start work ActionCards clicked on /brief as admin, and each changed the URL to the governed destination.
+            The whole card is clickable and keyboard Enter works with a visible focus ring. The Lineup cases approval chip
+            is wired to ?approval=pending. Findings: at 390, Start work pushes Needs attention below the first viewport; the
+            ScopeBar summary ignores the filter.'
         rationale: GOV-008 ux pass describes a tree that no longer exists against AC now requiring StartWorkLaunch + ActionCard.
           Fresh review required. Do not complete.
+        pass_run: GOV008_N0028_20260924
+        pass_actor: gov-008-n0028
       a11y:
         required: true
         state: pass
@@ -4885,22 +4889,29 @@ nodes:
         pass_actor: gov-008
       rendered:
         required: true
-        state: pending
-        evidence:
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          stale_pass_run: GOV008_N0025_N0029_20260915
-          stale_summary: Live dirty tree wraps Panel/PanelRow (FAIL vs no-wrapper AC)
-          amended_ac: StartWorkLaunch + ActionCard
+        state: pass
+        evidence: &id018
+          path: .eif/audit/GOV008_N0028_20260924/REVIEW.md
+          verdict: FAILED
+          summary: 'Real mouse clicks on each of the 7 cards, then location read: /admin/imports?unified=1, /lineup/cases,
+            /promotions?propose=1, /admin/imports?template=customer_sell_through, /admin/imports?template=inbound_shipments,
+            /admin/mappings (steward-failure-queue-strip present), /commercial-planner/cpor-cases. A click at 390 inside the
+            iframe reached /lineup/cases. Window resize did not work, so an iframe viewport was used.'
         rationale: GOV-008 rendered pass describes a tree that no longer exists against AC now requiring StartWorkLaunch +
           ActionCard. Fresh review required. Do not complete.
+        pass_run: GOV008_N0028_20260924
+        pass_actor: gov-008-n0028
       content:
         required: true
-        state: pending
+        state: fail
         evidence:
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          stale_pass_run: GOV008_N0025_N0029_20260915
-          stale_summary: Live dirty tree wraps Panel/PanelRow (FAIL vs no-wrapper AC)
-          amended_ac: StartWorkLaunch + ActionCard
+          path: .eif/audit/GOV008_N0028_20260924/REVIEW.md
+          verdict: FAILED
+          summary: 'AC2 fails. The steward-queue card reads ''Resolve unmatched tokens / Unmatched tokens from imports, resolved
+            in one place.'' (startWork.ts:62-68). That does not describe the N-0027 failure-type queue, reads as the legacy
+            mapping queue, and ''in one place'' contradicts the queue''s job-steward routing. The previous copy ''Candidates
+            grouped by failure type'' was replaced in d25a9275. Also: header ''2 703 lines'' vs strip ''1647 plan lines'';
+            ''Approval 100%'' rests on 1 decided line.'
         rationale: GOV-008 content pass describes a tree that no longer exists against AC now requiring StartWorkLaunch +
           ActionCard. Fresh review required. Do not complete.
       design_artifact_class:
@@ -4914,48 +4925,55 @@ nodes:
         pass_actor: gov-008
       design_divergence:
         required: false
-        state: pending
+        state: pass
         evidence:
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          stale_pass_run: GOV008_N0025_N0029_20260915
-          stale_verdict: VERIFIED_WITH_LIMITATIONS
-          stale_summary: Live dirty tree wraps Panel/PanelRow (FAIL vs no-wrapper AC)
+          path: .eif/audit/GOV008_N0028_20260924/REVIEW.md
+          verdict: FAILED
+          summary: 'Production matches the lab composition: typography heading, no Panel/Card wrapper, ActionCard grid, strip
+            above dashboard 1fr and attention. Divergences are data-driven only (tenant, live signals, live widgets); lab
+            hrefs are intended analogs.'
         rationale: GOV-008 design_divergence pass describes Panel/PanelRow wrapper against AC now requiring StartWorkLaunch
           + ActionCard. Fresh review required. Do not complete.
+        pass_run: GOV008_N0028_20260924
+        pass_actor: gov-008-n0028
       design_signatures:
         required: false
-        state: pending
+        state: pass
         evidence:
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          stale_pass_run: GOV008_N0025_N0029_20260915
-          stale_signatures:
-          - head_outlined_cards
-          - live_panel_wrapper
-          - lineup_headline_scope_grid
+          path: .eif/audit/GOV008_N0028_20260924/REVIEW.md
+          verdict: FAILED
+          summary: 'Signatures observed: ActionCard (uppercase eyebrow, bold title, 3-line-clamped caption, START chevron
+            affordance, primary icon), HeadlineStrip/HeadlineFigure with warn-accent severity border, ScopeBar chips with
+            Clear, DomainHeader crumbs + LensTabs, EnterpriseDataGrid with StatusChip.'
         rationale: GOV-008 design_signatures pass includes live_panel_wrapper against AC now requiring StartWorkLaunch + ActionCard.
           Fresh review required. Do not complete.
+        pass_run: GOV008_N0028_20260924
+        pass_actor: gov-008-n0028
       rendered_comparison:
         required: false
-        state: pending
+        state: pass
         evidence:
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          stale_pass_run: GOV008_N0025_N0029_20260915
-          stale_verdict: lineup_leaf_on_lab_primitives_start_work_cards_dirty
-          stale_product: Panel/PanelRow tree
-          amended_ac: StartWorkLaunch + ActionCard
+          path: .eif/audit/GOV008_N0028_20260924/REVIEW.md
+          verdict: FAILED
+          summary: 'Side-by-side of /design-lab (planner, 3 cards) and /brief (admin, 7 cards) at the same window: same card
+            dimensions, fill, radius and anatomy; same subline copy.'
         rationale: Optional quality.rendered_comparison still passing from GOV008_N0025_N0029_20260915 against a Panel/PanelRow
           tree and an AC that no longer exists. Fresh independent GOV-008 required. Do not complete.
+        pass_run: GOV008_N0028_20260924
+        pass_actor: gov-008-n0028
       design_sameness_review:
         required: false
-        state: pending
+        state: pass
         evidence:
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          stale_pass_run: GOV008_N0025_N0029_20260915
-          stale_product: Panel/PanelRow tree
-          stale_decision: VERIFIED_WITH_LIMITATIONS
-          amended_ac: StartWorkLaunch + ActionCard
+          path: .eif/audit/GOV008_N0028_20260924/REVIEW.md
+          verdict: FAILED
+          summary: 'The seven cards share one template, differentiated by eyebrow group and icon; that sameness suits a launch
+            strip. Minor: the ActionCard docstring deliberately matches the Import Center tile surface; it is a distinct component
+            with eyebrow and START, so not a type-picker reuse.'
         rationale: Optional quality.design_sameness_review still passing from GOV008_N0025_N0029_20260915, challenging a Panel
           wrapper against an AC that no longer exists. Fresh independent GOV-008 required. Do not complete.
+        pass_run: GOV008_N0028_20260924
+        pass_actor: gov-008-n0028
       design_interaction_spec:
         required: false
         state: pass
@@ -4969,16 +4987,17 @@ nodes:
         pass_actor: gov-008
       design_state_coverage:
         required: false
-        state: pending
+        state: pass
         evidence:
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          stale_pass_run: GOV008_N0025_N0029_20260915
-          stale_states:
-          - lineup_1647_lines
-          - live_panel_start_work
-          amended_ac: StartWorkLaunch + ActionCard
+          path: .eif/audit/GOV008_N0028_20260924/REVIEW.md
+          verdict: FAILED
+          summary: 'States observed: admin populated (7 cards); lab planner role-filtered (3 cards); hover (primary border/tint);
+            keyboard focus-visible ring; Lineup loading (''—'' before queries resolve) then populated; pending filter active
+            (filled chip, URL param); 390 single-column. The viewer empty state was verified by unit test only, not rendered.'
         rationale: Optional quality.design_state_coverage still passing from GOV008_N0025_N0029_20260915 and still contains
           live_panel_start_work against an AC that no longer exists. Fresh independent GOV-008 required. Do not complete.
+        pass_run: GOV008_N0028_20260924
+        pass_actor: gov-008-n0028
       design_identity_tokens:
         required: false
         state: pass
@@ -5011,33 +5030,33 @@ nodes:
         pass_actor: gov-008
     verification:
       rendered:
-        state: pending
-        evidence:
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          stale_pass_run: GOV008_N0025_N0029_20260915
-          stale_product: StartWorkPanel + LineupContainer
-          stale_verdict: VERIFIED_WITH_LIMITATIONS
-          amended_ac: StartWorkLaunch + ActionCard
+        state: pass
+        evidence: *id018
         path: null
+        pass_run: GOV008_N0028_20260924
+        pass_actor: gov-008-n0028
       referent:
-        state: pending
+        state: pass
         evidence:
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          stale_pass_run: GOV008_N0025_N0029_20260915
-          stale_product: StartWorkPanel + LineupContainer
-          stale_verdict: VERIFIED_WITH_LIMITATIONS
-          amended_ac: StartWorkLaunch + ActionCard
+          path: .eif/audit/GOV008_N0028_20260924/REVIEW.md
+          verdict: FAILED
+          summary: The design-lab OverviewSurface mounts StartWorkLaunch (OverviewSurface.tsx:33,231), and the lab ActionCard
+            re-exports the production workbench-ui ActionCard. /design-lab rendered identical card anatomy and metrics (344x122,
+            rgb(34,38,46), 12px radius) and the same strip-above-dashboard/attention order. The planner role showed 3 cards,
+            consistent with PLANNER_PLUS.
         path: null
+        pass_run: GOV008_N0028_20260924
+        pass_actor: gov-008-n0028
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'NS21 finished the NS20 stale-evidence sweep. Reset quality.rendered_comparison, quality.design_sameness_review,
-      and quality.design_state_coverage to pending via node.quality (engine accepted optional dims; pass_run/pass_actor cleared).
-      All three still described GOV008_N0025_N0029_20260915 Panel/PanelRow tree (design_state_coverage still contained live_panel_start_work)
-      against AC requiring StartWorkLaunch + ActionCard. Ignore that GOV-008 batch entirely. Fresh independent GOV-008 required:
-      one node per review; click actual Start work ActionCards and assert URL change; prove role gating from those clicks;
-      render 1280x800 and 390x844 on a clean tree. Direct navigation to destination URLs is not proof. Do not complete.'
+    stage_note: 'GOV-008 GOV008_N0028_20260924 (fresh subagent, actor gov-008-n0028): verdict FAILED on AC2 content only;
+      ux, rendered, referent and all design dims pass (clicked all 7 ActionCards, URL asserted; 1280x800 and 390x844 via exact-size
+      same-origin iframes since window resize does not work). Decision D-0028 open: approved copy (d25a9275) vs AC2. Other
+      findings (not criteria): Planned column header/cell misaligned on /lineup/cases; Approval column off-screen at 1280;
+      ScopeBar summary ignores filter; header ''2 703 lines'' vs strip ''1647 plan lines''; ''Approval 100%'' on 1 decided
+      line. Not complete.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -5126,7 +5145,7 @@ nodes:
       rendered:
         required: true
         state: pass
-        evidence: &id018
+        evidence: &id019
           path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
           url: http://localhost:3000/commercial-planner/cpor-cases
           verdict: VERIFIED_WITH_LIMITATIONS
@@ -5261,7 +5280,7 @@ nodes:
         state: pass
         pass_run: GOV008_N0025_N0029_20260915
         pass_actor: gov-008
-        evidence: *id018
+        evidence: *id019
         path: null
       referent:
         state: pass
@@ -5357,12 +5376,12 @@ nodes:
     origin: operator
     status: in_progress
     stage: validate
-    revision: 9
+    revision: 16
     lease:
-      run: STAGE2A_GRID_PARITY_20260921
-      acquired_at: '2026-09-21T13:52:56Z'
-      heartbeat_at: '2026-09-21T13:52:56Z'
-      expires_at: '2026-09-21T17:52:56Z'
+      run: N0031_REMEDIATE_20260924
+      acquired_at: '2026-09-23T23:05:48Z'
+      heartbeat_at: '2026-09-23T23:05:48Z'
+      expires_at: '2026-09-24T00:05:48Z'
     depends_on: []
     facets:
     - ui
@@ -5408,15 +5427,25 @@ nodes:
         pass_actor: stage2a-001
       a11y:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0031_20260924/REVIEW.md
+          verdict: FAILED
+          summary: 'New mappings states are accessible: loading role=status aria-busy with label, error role=alert with named
+            keyboard-reachable Retry, empty role=region with a real Import Center link; lineup ScopeBar is role=toolbar aria-label=Scope,
+            all controls Tab-reachable with handlers and visible focus. Non-blocking findings: weak focus indicator on Import
+            Center (outline none), focus lost to body after Retry, filter chips lack aria-pressed (state by colour only),
+            deferred ''Propose candidates'' uses native disabled so its explanation is keyboard-unreachable (pre-existing).
+            Screen reader, zoom/reflow and 390px not tested.'
         rationale: Not assessed in the implementation run. Deferred controls carry aria-disabled and tooltips and the empty
           and loading states use role=region / role=status, but no reviewer pass was made. Left pending for the independent
           run.
+        pass_run: GOV008_N0031_20260924
+        pass_actor: gov-008-n0031
       rendered:
         required: true
         state: pass
-        evidence: &id019
+        evidence: &id020
           path: .eif/audit/STAGE2A_GRID_PARITY_20260921/SMOKE.md
           tree_hash: 5e70f33ad4b9e8474b45950d5fc7f0fc6ad1d190
         rationale: 'Live DOM measurements on /admin/customers: comfortable var 42/42 rows 42px; compact var 34/36 rows 34px.
@@ -5439,14 +5468,27 @@ nodes:
         state: pass
         pass_run: STAGE2A_GRID_PARITY_20260921
         pass_actor: stage2a-001
-        evidence: *id019
+        evidence: *id020
+        path: null
+      referent:
+        state: fail
+        evidence:
+          path: .eif/audit/GOV008_N0031_20260924/REVIEW.md
+          verdict: FAILED
+          summary: 'Criteria 2-8 re-verified (diff, vitest 22/22, tsc 0, eslint 0 errors, pytest 2 passed, DOM: rows/headers
+            40px on /admin/customers, paginated shells 688/888px on /stock?lens=execution match paginatedGridHeight, mappings
+            empty/loading/error+Retry rendered, ScopeBar has no inert control). Criterion 1 fails: packages/ui/src/agGridMuiTheme.ts:90-91
+            still emits --ag-row-height/--ag-header-height with its own literals (42px) that now diverge from GRID_DENSITY
+            (40px); present in the live stylesheet (.css-1hv9xw rule) and only masked by EnterpriseDataGrid''s inline override.'
         path: null
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: Stage 2a implemented and self-verified at 5e70f33. quality.a11y and verification.referent are left for an
-      independent run (R2). Do not complete from the implementation run.
+    stage_note: 'Remediated at 99a89db8 (dead packages/ui height emission removed; ui+web tsc 0; 34/34 grid/theme vitest;
+      web rebuilt). quality.a11y pass (GOV008_N0031_20260924). verification.referent is fail pending a fresh independent re-review
+      of criterion 1. Non-blocking a11y findings: Import Center focus outline none, focus lost after Retry, filter chips lack
+      aria-pressed.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -5559,12 +5601,12 @@ nodes:
     origin: operator
     status: in_progress
     stage: validate
-    revision: 9
+    revision: 19
     lease:
-      run: STAGE3_ACCESS_20260921
-      acquired_at: '2026-09-21T16:10:56Z'
-      heartbeat_at: '2026-09-21T16:10:56Z'
-      expires_at: '2026-09-21T20:10:56Z'
+      run: N0033_REMEDIATE_20260924
+      acquired_at: '2026-09-23T23:01:14Z'
+      heartbeat_at: '2026-09-23T23:01:14Z'
+      expires_at: '2026-09-24T00:01:14Z'
     depends_on: []
     facets:
     - ui
@@ -5596,12 +5638,14 @@ nodes:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/STAGE3_ACCESS_20260921/SMOKE.md
-          tree_hash: 946c935b895fc515f270c1165c410d1c0ed90433
+          path: .eif/audit/GOV008_N0033_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: /login renders correctly, wrong credentials show an inline 'Invalid credentials' alert and stay on /login
+            (no 404). Flow is clean and matches the acceptance criteria.
         rationale: Anonymous users land on /login (200) and get 401 JSON from every /api/v1 route; wrong password 401 not
           404; Warren never had to hand a password to the agent. SMOKE.md sections 1, 3, 4.
-        pass_run: STAGE3_ACCESS_20260921
-        pass_actor: stage3-001
+        pass_run: GOV008_N0033_20260924
+        pass_actor: gov-008-n0033-sonnet
       a11y:
         required: true
         state: na
@@ -5611,19 +5655,27 @@ nodes:
       rendered:
         required: true
         state: pass
-        evidence: &id020
-          path: .eif/audit/STAGE3_ACCESS_20260921/SMOKE.md
-          tree_hash: 946c935b895fc515f270c1165c410d1c0ed90433
+        evidence: &id021
+          path: .eif/audit/GOV008_N0033_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: 'Rendered and interacted with /login in a fresh browser tab (not the implementer''s session): screenshot
+            of the initial form and of the post-submit ''Invalid credentials'' state after submitting a fake login through
+            the real form fields.'
         rationale: 'Live enumeration 207 GET routes: 127 open before, 0 after; public URL through Cloudflare: /login 200,
           /auth/me 401, /customers 401, /docs 404, Server cloudflare, CF-Ray JNB. Measured, not screenshots.'
-        pass_run: STAGE3_ACCESS_20260921
-        pass_actor: stage3-001
+        pass_run: GOV008_N0033_20260924
+        pass_actor: gov-008-n0033-sonnet
       content:
         required: true
-        state: pass
+        state: fail
         evidence:
-          path: .eif/audit/STAGE3_ACCESS_20260921/SMOKE.md
-          tree_hash: 946c935b895fc515f270c1165c410d1c0ed90433
+          path: .eif/audit/GOV008_N0033_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: 'The production /login page (apps/web/src/app/login/page.tsx:115-117) unconditionally renders a caption
+            reading ''Dev seed (after IAM migration): admin@local / changeme'', with no environment gate. This is the exact
+            page exposed through the public pilot tunnel, and it discloses a real admin username plus a guessable default
+            password pattern to any anonymous visitor. Not caused by N-0033''s own commits, but discovered live during this
+            review and directly undermines the node''s own ''safe enough for a small temporary pilot'' claim.'
         rationale: Runbook docs/PILOT_TUNNEL_RUNBOOK.md states architecture, findings, risks, start/stop and the two-user
           plan; public URL deliberately not recorded because it changes per restart.
         pass_run: STAGE3_ACCESS_20260921
@@ -5631,17 +5683,32 @@ nodes:
     verification:
       rendered:
         state: pass
-        pass_run: STAGE3_ACCESS_20260921
-        pass_actor: stage3-001
-        evidence: *id020
+        pass_run: GOV008_N0033_20260924
+        pass_actor: gov-008-n0033-sonnet
+        evidence: *id021
+        path: null
+      referent:
+        state: pass
+        pass_run: GOV008_N0033_20260924
+        pass_actor: gov-008-n0033-sonnet
+        evidence:
+          path: .eif/audit/GOV008_N0033_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: 'Live-enumerated all 229/229 /api/v1 GET routes from the running API''s own openapi.json with no bearer
+            token: 0 non-401 responses. Verified forged X-User-Role/X-User-Id headers rejected live. Verified cloudflared
+            binary via a valid Authenticode signature from Cloudflare, Inc. Verified no .env/credentials in git history or
+            tracked files for the evidence commits.'
         path: null
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: Gate, production web and tunnel verified live at 946c935. Full API suite (2273 tests) still running at staging
-      time; result lands in the test-repair commit and CURRENT. referent left for an independent run (R3). Do not complete
-      from the implementation run.
+    stage_note: 'Remediated at d83d7126: /login no longer prints ''admin@local / changeme'' (API caption dev-only); web rebuilt,
+      live /login 200 with no credential text (curl). GOV-008 GOV008_N0033_20260924 (claude-sonnet-5, a different model from
+      the implementer, same vendor): VERIFIED_WITH_LIMITATIONS, 229/229 GET routes 401 without bearer, forged headers rejected,
+      cloudflared signed by Cloudflare; quality.content fail pending fresh re-review of the fix. Limitations: public tunnel
+      URL not re-tested; ~40% of write-capable API tests not re-run (would write to cip). Open risk for Warren: whether the
+      admin password was ever ''changeme'' is unknown (BACKLOG-205 rotate).'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -8407,6 +8474,18 @@ decisions:
       or makes the one-line edit himself: dev-api.js --host process.env.CIP_API_HOST || ''127.0.0.1''. Prepared change and
       measurements: .eif/audit/PROGRAMME_20260924/n0036/IMPL.md. Measured: localhost resolves IPv4 first on this host; API
       never listened on ::1; /api/v1/health does not exist (health is /health).'
+    origin: agent
+    status: proposed
+    supersedes: null
+  D-0028:
+    id: D-0028
+    scope: N-0028
+    statement: 'N-0028 GOV-008 (run GOV008_N0028_20260924) FAILED AC2 only: the Start work steward-queue card reads ''Resolve
+      unmatched tokens / Unmatched tokens from imports, resolved in one place.'' (apps/web/src/features/overview/startWork.ts:62-68,
+      from Warren''s commit d25a9275 ''approved copy'', 2026-09-18). AC2 requires copy describing the N-0027 failure-type
+      queue. Options: (a) restore failure-type copy, e.g. ''Work the steward queue / Unresolved names from imports, grouped
+      by why they failed.''; (b) keep the approved copy and amend AC2. Warren decides; agent recommends (a) because ''in one
+      place'' contradicts per-job steward routing (D-066/N-0027).'
     origin: agent
     status: proposed
     supersedes: null
