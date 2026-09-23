@@ -1,0 +1,7 @@
+{
+ "node": "N-0068",
+ "expected_revision": 0,
+ "type": "decision",
+ "ref": "D-0023",
+ "note": "BACKLOG-198 catalog_product grain: does catalog_product stay the catalogue, get retired, or is it unrelated to per-line column sets? Warren decides."
+}

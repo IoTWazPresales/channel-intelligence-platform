@@ -1,0 +1,5 @@
+{
+ "statement": "D-d (Warren, 2026-09-23): untracked files move to an archive folder OUTSIDE the repo, never deleted; commit only what is clearly real source, and list it.",
+ "origin": "operator",
+ "status": "accepted"
+}

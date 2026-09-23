@@ -1,0 +1,22 @@
+{
+ "id": "N-0061",
+ "title": "Stage 7.1-7.3: promotion intelligence v2 (listing/competitor evidence, observed cover, comparable scope)",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0059"
+ ],
+ "facets": [
+  "ui",
+  "api"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "BACKLOG-183/184/186 with honest empties where data is absent (fact_competitor_price 0 rows)",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

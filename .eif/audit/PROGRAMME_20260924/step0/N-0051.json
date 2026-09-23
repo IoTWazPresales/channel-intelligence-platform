@@ -1,0 +1,21 @@
+{
+ "id": "N-0051",
+ "title": "Stage 3.7: import completion asserts no merged-id leftovers (BACKLOG-133/134)",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0050"
+ ],
+ "facets": [
+  "api"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "customer_leftover_repair's merged-id check runs on the import-complete rail; a leftover FLAGs (FLAG is not BLOCK unless Warren rules); proven on cip_test",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

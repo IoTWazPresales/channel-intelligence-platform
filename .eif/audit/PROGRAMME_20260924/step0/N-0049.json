@@ -1,0 +1,21 @@
+{
+ "id": "N-0049",
+ "title": "Stage 4.3: MAC check reads customer sell-through, not the empty inventory fact (BACKLOG-135)",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0048"
+ ],
+ "facets": [
+  "api"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "MAC check sources customer SOH from fact_customer_sellthrough and stops claiming fact_inventory_customer; proven on cip_test or a clone with printed numbers",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

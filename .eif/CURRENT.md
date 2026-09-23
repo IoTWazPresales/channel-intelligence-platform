@@ -13,7 +13,7 @@
 
 ## Ready leaves
 
-_No ready unblocked leaves._
+- **N-0036** BACKLOG-206: API binds loopback, not 0.0.0.0:8001 (feature, R2, stage=None)
 
 ## In progress / leased
 
@@ -23,4 +23,9 @@ _No ready unblocked leaves._
 
 ## Decision queue
 
-_empty_
+- **D-0020** scope=N-0060: Historical lineup backfill: Warren supplies the pre-2025 lineup archive and decides whether to load it into cip (a cip write). Options: (a) load all history via the existing bulk-backfill path after N-0058 rules land; (b) load only the years D-h needs; (c) do not load. Blocks D-h depth.
+- **D-0021** scope=N-0063: Uplift from settled claims needs claim-evidence rows (cpor_claim_evidence_line 0 vs 211 settled cases). Unlocked by Warren's customer/distributor data drive, not by code.
+- **D-0022** scope=N-0065: BU entitlements semantics: default for a user with no mapping (all lines vs none); read-only vs read+write scoping; which surfaces filter (lineup, settlement, stock, reports); admin bypass. Warren decides.
+- **D-0023** scope=N-0068: BACKLOG-198 catalog_product grain: does catalog_product stay the catalogue, get retired, or is it unrelated to per-line column sets? Warren decides.
+- **D-0024** scope=N-0071: Stage 4.6 (BACKLOG-062) open->shipped fact double-count remediation policy. Not decided (D-e).
+- **D-0025** scope=N-0072: Stage 4.7 (BACKLOG-046) ACZA workbook non-operational sheets (BOM Not Ready) allowlist business rule. Not decided (D-e).

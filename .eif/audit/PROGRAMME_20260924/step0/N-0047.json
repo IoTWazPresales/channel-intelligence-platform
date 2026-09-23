@@ -1,0 +1,22 @@
+{
+ "id": "N-0047",
+ "title": "Stage 4.1: dim_product inverted launch/retire windows (BACKLOG-034), proven on a clone",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0046"
+ ],
+ "facets": [
+  "data_migration"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "Inverted windows counted on cip read-only; repair rule stated; repair run on a clone with printed before/after numbers",
+  "cip apply prepared but not run; listed ready-for-cip for Warren",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

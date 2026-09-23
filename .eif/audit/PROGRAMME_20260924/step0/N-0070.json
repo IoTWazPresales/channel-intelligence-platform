@@ -1,0 +1,24 @@
+{
+ "id": "N-0070",
+ "title": "Stage 10: multi-tenant productisation (P6)",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0069",
+  "N-0068",
+  "N-0065"
+ ],
+ "facets": [
+  "api",
+  "ui"
+ ],
+ "risk": "R3",
+ "touches_existing": true,
+ "acceptance": "operator",
+ "acceptance_criteria": [
+  "Tenant config surface, tenant-2 onboarding, branding, provisioning; catalog grain decided",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

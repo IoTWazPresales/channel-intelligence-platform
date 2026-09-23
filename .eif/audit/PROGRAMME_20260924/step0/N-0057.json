@@ -1,0 +1,23 @@
+{
+ "id": "N-0057",
+ "title": "Stage 6.1/6.2: lineup authoring workbench and the B2 end-to-end PM run (BACKLOG-190)",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0056",
+  "N-0040"
+ ],
+ "facets": [
+  "ui",
+  "api"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "A PM authors next quarter's lineup in CIP beside unified import and exports tenant format; the journey is browser-proven on cip_test, not cip",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

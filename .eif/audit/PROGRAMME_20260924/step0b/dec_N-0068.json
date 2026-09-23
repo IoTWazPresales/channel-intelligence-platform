@@ -1,0 +1,7 @@
+{
+ "id": "D-0023",
+ "scope": "N-0068",
+ "statement": "BACKLOG-198 catalog_product grain: does catalog_product stay the catalogue, get retired, or is it unrelated to per-line column sets? Warren decides.",
+ "origin": "agent",
+ "status": "proposed"
+}

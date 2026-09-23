@@ -1,0 +1,7 @@
+{
+ "node": "N-0063",
+ "expected_revision": 0,
+ "type": "human",
+ "ref": "D-0021",
+ "note": "Uplift from settled claims needs claim-evidence rows (cpor_claim_evidence_line 0 vs 211 settled cases). Unlocked by Warren's customer/distributor data drive, not by code."
+}

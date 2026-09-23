@@ -1,0 +1,21 @@
+{
+ "id": "N-0055",
+ "title": "Stage 3.3: tenant scoping sweep",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0054"
+ ],
+ "facets": [
+  "api"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "Every endpoint module that reads tenant-owned rows filters by tenant_id; module list before and after; tests prove a second tenant cannot read the first",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

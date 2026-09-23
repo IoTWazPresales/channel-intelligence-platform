@@ -1,0 +1,21 @@
+{
+ "id": "N-0048",
+ "title": "Stage 4.2: cpor_case status vs workflow_status drift (BACKLOG-139), proven on a clone",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0047"
+ ],
+ "facets": [
+  "data_migration"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "Owner column chosen with reasoning; drift rows measured on cip read-only; repair proven on a clone with before/after; cip apply listed for Warren",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

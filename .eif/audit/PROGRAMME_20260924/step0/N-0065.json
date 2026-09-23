@@ -1,0 +1,24 @@
+{
+ "id": "N-0065",
+ "title": "BU entitlements: user-to-product-line mapping over the D-g lines",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0055",
+  "N-0040",
+  "N-0038"
+ ],
+ "facets": [
+  "auth",
+  "api"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "A user may be mapped to any subset of dim_product.product_line values (D-g grain); enforcement semantics per Warren's decision (default for unmapped users, read vs write scope, which surfaces filter)",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

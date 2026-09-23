@@ -1,0 +1,21 @@
+{
+ "id": "N-0071",
+ "title": "Stage 4.6: open->shipped fact double-count policy (BACKLOG-062), undecided",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0050"
+ ],
+ "facets": [
+  "data_migration"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "Warren decides the remediation policy (D-e: not decided); nothing is built until then",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

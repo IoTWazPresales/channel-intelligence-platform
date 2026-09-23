@@ -1,0 +1,7 @@
+{
+ "id": "D-0022",
+ "scope": "N-0065",
+ "statement": "BU entitlements semantics: default for a user with no mapping (all lines vs none); read-only vs read+write scoping; which surfaces filter (lineup, settlement, stock, reports); admin bypass. Warren decides.",
+ "origin": "agent",
+ "status": "proposed"
+}

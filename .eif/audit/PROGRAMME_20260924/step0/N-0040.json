@@ -1,0 +1,24 @@
+{
+ "id": "N-0040",
+ "title": "D-g: sellable BU grain is every dim_product.product_line (five-line assumption sweep)",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0039"
+ ],
+ "facets": [
+  "api",
+  "ui"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "Every place that hardcodes or assumes the five-line set (lineup BU derivation, supersession, filters, labels) is enumerated with file:line and made config/data-driven from dim_product.product_line, never a constant",
+  "NULL product_line rows in dim_product are reported as a finding with count",
+  "Any change to lineup supersession behaviour is proven on a clone first with before/after numbers; a cip repair is listed for Warren, not applied",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

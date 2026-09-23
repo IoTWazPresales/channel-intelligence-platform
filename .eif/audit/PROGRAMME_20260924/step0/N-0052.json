@@ -1,0 +1,23 @@
+{
+ "id": "N-0052",
+ "title": "Stage 3.6: ops safety net (restore proven on a clone, alerting, resolver fails loudly)",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0051"
+ ],
+ "facets": [
+  "infra"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "pg_dump backup restored into a clone with row-count parity printed; RTO/RPO measured and written to docs/BACKUP_AND_DR.md",
+  "A Celery task failure raises an alert through a configured channel, proven by a forced local failure",
+  "AI resolver fails loudly when AI_ASSIST_ENABLED is on and the client is missing",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

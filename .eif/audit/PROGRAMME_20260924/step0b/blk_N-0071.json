@@ -1,0 +1,7 @@
+{
+ "node": "N-0071",
+ "expected_revision": 0,
+ "type": "decision",
+ "ref": "D-0024",
+ "note": "Stage 4.6 (BACKLOG-062) open->shipped fact double-count remediation policy. Not decided (D-e)."
+}

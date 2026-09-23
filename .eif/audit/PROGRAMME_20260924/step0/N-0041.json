@@ -1,0 +1,22 @@
+{
+ "id": "N-0041",
+ "title": "D-b: shared grid search (workbench-ui) on Tier A grids",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0034"
+ ],
+ "facets": [
+  "ui"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "One shared toolbar-search component in features/workbench-ui used by the Tier A grids from N-0034 discovery; no bespoke per-page copies",
+  "Field-list source reuses the inbound-shipments optional-columns pattern if present; no migration",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

@@ -1,0 +1,21 @@
+{
+ "id": "N-0058",
+ "title": "Stage 6.3/6.5: unified lineup import 1H fan-out and lineup data rules (BACKLOG-103/105/055/065)",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0057"
+ ],
+ "facets": [
+  "api"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "Unified path fans 1H into Q1+Q2 like the bulk path; PF Qty vs Total Qty, BU resolver thresholds and monthly phasing each implemented per a recorded rule or sent to Warren as a decision",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

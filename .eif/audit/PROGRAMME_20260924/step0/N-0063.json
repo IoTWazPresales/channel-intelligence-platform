@@ -1,0 +1,21 @@
+{
+ "id": "N-0063",
+ "title": "Stage 7.4: uplift from settled claims (BACKLOG-185), data-gated",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0062"
+ ],
+ "facets": [
+  "api"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "Buildable only once cpor_claim_evidence_line has rows (0 vs 211 settled cases, 2026-09-21); Warren's data drive unlocks it",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

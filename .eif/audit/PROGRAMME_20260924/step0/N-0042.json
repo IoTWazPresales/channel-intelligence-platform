@@ -1,0 +1,22 @@
+{
+ "id": "N-0042",
+ "title": "D-b: shared saved grid views (workbench-ui)",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0034"
+ ],
+ "facets": [
+  "ui"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "One shared saved-views component in features/workbench-ui: name, save, apply, delete a grid layout (columns, sort, filters) per layout key",
+  "Reuses the N-0034 layout key; storage decision recorded; no migration unless this node charters one",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

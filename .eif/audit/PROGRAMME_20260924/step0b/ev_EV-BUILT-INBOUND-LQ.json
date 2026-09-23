@@ -1,0 +1,7 @@
+{
+ "id": "EV-BUILT-INBOUND-LQ",
+ "provenance": "implementation-observation",
+ "path": "git:4d7231f0",
+ "tree_hash": "4d7231f0",
+ "note": "Outside-plan candidate inbound-shipments-by-lineup-quarter filter is BUILT: 4d7231f0 (2026-07-08, lineup plan-quarter filter and derived attribution on the inbound grid); InboundShipmentsWorkspace plan_quarter state + shipping.py lineup-quarter-summary."
+}

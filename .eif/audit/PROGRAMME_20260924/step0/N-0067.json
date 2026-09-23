@@ -1,0 +1,21 @@
+{
+ "id": "N-0067",
+ "title": "Light/dark theme completion",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0066"
+ ],
+ "facets": [
+  "ui"
+ ],
+ "risk": "R1",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "Every production surface renders correctly in both modes (cipTheme supports both; 16 hard-coded hex literals under features/ and app/ counted 2026-09-24); grids and charts included; browser-checked",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

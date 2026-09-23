@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 938
-  log_sha256: 69107f20bad9a48a367c04bac6fc19ce4db3c852f20020141b6e9d42d8051cb2
+  snapshot_revision: 1002
+  log_sha256: 1bcc69ca8404001e8c9e56101ecc0fcd33073e56b48e300e68cd131a02ed26d5
   acceptance_policy:
     milestone: operator
     root: operator
@@ -5306,16 +5306,16 @@ nodes:
     title: Backlog audit against the running tree, P1 sign-off discovery, and staged work plan
     class: discovery
     origin: operator
-    status: in_progress
-    stage: validate
-    revision: 3
+    status: complete
+    stage: null
+    revision: 5
     lease: null
     depends_on: []
     facets: []
     risk: R1
     touches_existing: false
     acceptance: auto
-    acceptance_state: not_required
+    acceptance_state: accepted
     acceptance_criteria:
     - Audit every open docs/BACKLOG.md entry against the running tree and label each DONE, NECESSARY, HELPFUL or DROP, each
       marked VERIFIED (evidence path, grep or measurement) or ASSERTED
@@ -5817,6 +5817,2229 @@ nodes:
         under an unenforced Claude Code runtime. Not completed: independence is recoverable, so a GOV-008 run with its own
         run and actor records referent and rendered, then node.status complete. Do not use node.retroactive_complete with
         independence_unrecoverable.'
+  N-0036:
+    id: N-0036
+    parent: null
+    title: 'BACKLOG-206: API binds loopback, not 0.0.0.0:8001'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0030
+    facets:
+    - infra
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - pnpm dev:api (scripts/dev-api.js) and any documented start path bind the API to loopback only; netstat shows no 0.0.0.0:8001
+      or [::]:8001 listener
+    - 'localhost/::1 trap handled: every in-repo caller (web proxy fallback, scripts, runbooks) that targets localhost:8001
+      is repointed to 127.0.0.1 or the API also answers on ::1; resolution measured on this host'
+    - Web same-origin proxy still reaches the API (/api/v1/health 200 via :3000)
+    - BACKLOG-206 stamped; PILOT_TUNNEL_RUNBOOK updated if it names the bind
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      reliability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      finops:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0037:
+    id: N-0037
+    parent: null
+    title: 'Stage 3.4: login rate limit and lockout'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0036
+    - N-0033
+    facets:
+    - api
+    - auth
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - Repeated wrong-password attempts on /api/v1/auth/login are throttled per account and per client address; limit and window
+      are config, not literals
+    - Throttled response is 429 with Retry-After; during lockout even a correct password is refused until the window passes;
+      a successful login resets the counter
+    - 'No enumeration: unknown-user and wrong-password responses are indistinguishable in status and body'
+    - Tests cover throttle, reset and non-enumeration; stub mode unaffected
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      security:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      threat:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0038:
+    id: N-0038
+    parent: null
+    title: 'Stage 3.2: CPOR role checks on the existing roles (BACKLOG-136/141)'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0037
+    facets:
+    - api
+    - auth
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - Every CPOR write endpoint (incl. export generate, settle, transitions, payment-evidence apply) requires a role from
+      the existing admin/steward/planner/viewer set; viewer is read-only
+    - Shipment steward panels accept STEWARD and ADMIN (BACKLOG-141)
+    - 'The role matrix used is written into the node evidence; no new roles (Warren 21 Sep: enforce on existing roles)'
+    - 'Tests: one allowed and one denied role per guarded write'
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      security:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      threat:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0039:
+    id: N-0039
+    parent: null
+    title: Listing links open the real product page (Market & Listings bug)
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0038
+    facets:
+    - api
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - 'Root cause of stored listing URLs that open a marketplace ''doesn''t exist'' page (at least Takealot) is found in code:
+      PLID normaliser b17e950, URL auto-finder bfd0c44, feed-derived listing seeds; no assumed cause'
+    - How the listing data was obtained when the stored URL does not resolve is explained
+    - A SMALL sample per marketplace is checked by GET, rate-limited; no bulk crawling
+    - URL construction fixed at the source, with tests
+    - Links that do not resolve get status dead_link per the registry lifecycle (observed, never deleted); the UI never presents
+      an unverified or dead link as valid
+    - Any repair of stored rows on cip is proven on a clone and listed for Warren, not applied
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0040:
+    id: N-0040
+    parent: null
+    title: 'D-g: sellable BU grain is every dim_product.product_line (five-line assumption sweep)'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0039
+    facets:
+    - api
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - Every place that hardcodes or assumes the five-line set (lineup BU derivation, supersession, filters, labels) is enumerated
+      with file:line and made config/data-driven from dim_product.product_line, never a constant
+    - NULL product_line rows in dim_product are reported as a finding with count
+    - Any change to lineup supersession behaviour is proven on a clone first with before/after numbers; a cip repair is listed
+      for Warren, not applied
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0041:
+    id: N-0041
+    parent: null
+    title: 'D-b: shared grid search (workbench-ui) on Tier A grids'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0034
+    facets:
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - One shared toolbar-search component in features/workbench-ui used by the Tier A grids from N-0034 discovery; no bespoke
+      per-page copies
+    - Field-list source reuses the inbound-shipments optional-columns pattern if present; no migration
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0042:
+    id: N-0042
+    parent: null
+    title: 'D-b: shared saved grid views (workbench-ui)'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0034
+    facets:
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - 'One shared saved-views component in features/workbench-ui: name, save, apply, delete a grid layout (columns, sort,
+      filters) per layout key'
+    - Reuses the N-0034 layout key; storage decision recorded; no migration unless this node charters one
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0043:
+    id: N-0043
+    parent: null
+    title: 'D-b: shared grid export (workbench-ui, community AG Grid)'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0034
+    facets:
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - 'One shared export action in features/workbench-ui: CSV of visible columns and filtered rows, community module only
+      (BACKLOG-193 stays dropped)'
+    - Export follows the name-only identity rule; code columns only when picked
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0044:
+    id: N-0044
+    parent: null
+    title: 'D-c + rest of 2.7: desk absorbs BACKLOG-202 pieces, CporCaseWorkspace retires, two orphan panels ruled'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0040
+    - N-0032
+    facets:
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - FX anchor, settle readiness row, comparable cases and transition buttons are on the settlement desk (BACKLOG-202), then
+      CporCaseWorkspace is deleted
+    - 'SettlementPortfolioRead and CporPortfolioIntelligencePanel: overlap with existing surfaces measured; mounted under
+      Promotions & Funding per the lab if they show intelligence nothing else shows, deleted if they duplicate; ruling and
+      reason reported'
+    - Browser smoke on case 46 and 311
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0045:
+    id: N-0045
+    parent: null
+    title: 'D-d: archive untracked files outside the repo; commit only real source'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0044
+    facets: []
+    risk: R1
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - Every untracked path is classified; non-source files move to an archive folder outside the repo (never deleted); real
+      source is committed and listed
+    - Control-plane paths are not moved by the agent; any that need moving go to Warren
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality: {}
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0046:
+    id: N-0046
+    parent: null
+    title: 'BACKLOG-143: worktrees and leftover-state hygiene'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0045
+    facets: []
+    risk: R1
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - Stale git worktrees and disposable leftover state in BACKLOG-143 are inventoried; removals are local and reversible
+      or archived; nothing on cip
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality: {}
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0047:
+    id: N-0047
+    parent: null
+    title: 'Stage 4.1: dim_product inverted launch/retire windows (BACKLOG-034), proven on a clone'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0046
+    facets:
+    - data_migration
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - Inverted windows counted on cip read-only; repair rule stated; repair run on a clone with printed before/after numbers
+    - cip apply prepared but not run; listed ready-for-cip for Warren
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      data_integrity:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      backup_recovery:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      migration_safety:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0048:
+    id: N-0048
+    parent: null
+    title: 'Stage 4.2: cpor_case status vs workflow_status drift (BACKLOG-139), proven on a clone'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0047
+    facets:
+    - data_migration
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - Owner column chosen with reasoning; drift rows measured on cip read-only; repair proven on a clone with before/after;
+      cip apply listed for Warren
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      data_integrity:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      backup_recovery:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      migration_safety:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0049:
+    id: N-0049
+    parent: null
+    title: 'Stage 4.3: MAC check reads customer sell-through, not the empty inventory fact (BACKLOG-135)'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0048
+    facets:
+    - api
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - MAC check sources customer SOH from fact_customer_sellthrough and stops claiming fact_inventory_customer; proven on
+      cip_test or a clone with printed numbers
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0050:
+    id: N-0050
+    parent: null
+    title: 'Stage 4.4: cpor_case_line week-aligned window columns (BACKLOG-137), migration proven on cip_test only'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0049
+    facets:
+    - data_migration
+    - schema
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - Alembic migration written; upgrade and downgrade proven on cip_test with printed numbers; NOT applied to cip; listed
+      ready-for-cip for Warren
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      data_integrity:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      backup_recovery:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      migration_safety:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0051:
+    id: N-0051
+    parent: null
+    title: 'Stage 3.7: import completion asserts no merged-id leftovers (BACKLOG-133/134)'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0050
+    facets:
+    - api
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - customer_leftover_repair's merged-id check runs on the import-complete rail; a leftover FLAGs (FLAG is not BLOCK unless
+      Warren rules); proven on cip_test
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0052:
+    id: N-0052
+    parent: null
+    title: 'Stage 3.6: ops safety net (restore proven on a clone, alerting, resolver fails loudly)'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0051
+    facets:
+    - infra
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - pg_dump backup restored into a clone with row-count parity printed; RTO/RPO measured and written to docs/BACKUP_AND_DR.md
+    - A Celery task failure raises an alert through a configured channel, proven by a forced local failure
+    - AI resolver fails loudly when AI_ASSIST_ENABLED is on and the client is missing
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      reliability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      finops:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0053:
+    id: N-0053
+    parent: null
+    title: 'Stage 2.5: line identifier ''both'' as two columns'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0052
+    - N-0034
+    facets:
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - LineIdentifierPreference gains 'both', rendered as two sortable and filterable columns through the N-0034 picker mechanism,
+      not a second mechanism
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0054:
+    id: N-0054
+    parent: null
+    title: 'Stage 2.9: design-lab as fixture skin over production primitives (BACKLOG-161/158)'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0052
+    facets:
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - 'design-lab/primitives and design-lab/shell import production components; duplicates removed; lab renders unchanged
+      at 1280x800 (Warren 21 Sep: keep lab as fixture skin)'
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0055:
+    id: N-0055
+    parent: null
+    title: 'Stage 3.3: tenant scoping sweep'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0054
+    facets:
+    - api
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - Every endpoint module that reads tenant-owned rows filters by tenant_id; module list before and after; tests prove a
+      second tenant cannot read the first
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0056:
+    id: N-0056
+    parent: null
+    title: 'Stage 5: analytics delivery (export, event-triggered refresh, calendar delivery, vintage on face)'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0055
+    - N-0052
+    facets:
+    - api
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - Excel/PDF export; load completes then dependents refresh then subscribers are notified; calendar delivery; every report
+      shows its vintage; delivery failures alert via N-0052
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0057:
+    id: N-0057
+    parent: null
+    title: 'Stage 6.1/6.2: lineup authoring workbench and the B2 end-to-end PM run (BACKLOG-190)'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0056
+    - N-0040
+    facets:
+    - api
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - A PM authors next quarter's lineup in CIP beside unified import and exports tenant format; the journey is browser-proven
+      on cip_test, not cip
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0058:
+    id: N-0058
+    parent: null
+    title: 'Stage 6.3/6.5: unified lineup import 1H fan-out and lineup data rules (BACKLOG-103/105/055/065)'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0057
+    facets:
+    - api
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - Unified path fans 1H into Q1+Q2 like the bulk path; PF Qty vs Total Qty, BU resolver thresholds and monthly phasing
+      each implemented per a recorded rule or sent to Warren as a decision
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0059:
+    id: N-0059
+    parent: null
+    title: 'Stage 6.4: bulk-backfill completion UX (BACKLOG-060)'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0058
+    facets:
+    - ui
+    risk: R1
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - Bulk backfill Apply shows progress and a completion summary with next steps; no silent dialog close
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0060:
+    id: N-0060
+    parent: null
+    title: Historical lineup backfill (years before 2025 Q1)
+    class: feature
+    origin: operator
+    status: blocked
+    stage: null
+    revision: 1
+    lease: null
+    depends_on:
+    - N-0058
+    facets:
+    - data_migration
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - Warren supplies the historical lineup archive and authorises the cip load; load rehearsed on a clone with per-quarter
+      case counts printed. cip holds 36 lineup cases, 2025 Q1 to 2026 Q3, today (measured 2026-09-24)
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      data_integrity:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      backup_recovery:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      migration_safety:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers:
+    - id: BL-0003
+      type: human
+      ref: D-0020
+      opened: '2026-09-23T22:26:04Z'
+      note: 'Historical lineup backfill: Warren supplies the pre-2025 lineup archive and decides whether to load it into cip
+        (a cip write). Options: (a) load all history via the existing bulk-backfill path after N-0058 rules land; (b) load
+        only the years D-h needs; (c) do not load. Blocks D-h depth.'
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0061:
+    id: N-0061
+    parent: null
+    title: 'Stage 7.1-7.3: promotion intelligence v2 (listing/competitor evidence, observed cover, comparable scope)'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0059
+    facets:
+    - api
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - BACKLOG-183/184/186 with honest empties where data is absent (fact_competitor_price 0 rows)
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0062:
+    id: N-0062
+    parent: null
+    title: 'Stage 7.5: supply Arrived state and plan-unit PO coverage (BACKLOG-178/179)'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0061
+    facets:
+    - api
+    - schema
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - Stored Arrived state and PO coverage by distributor; any migration proven on cip_test only
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      data_integrity:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      backup_recovery:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      migration_safety:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0063:
+    id: N-0063
+    parent: null
+    title: 'Stage 7.4: uplift from settled claims (BACKLOG-185), data-gated'
+    class: feature
+    origin: operator
+    status: blocked
+    stage: null
+    revision: 1
+    lease: null
+    depends_on:
+    - N-0062
+    facets:
+    - api
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - Buildable only once cpor_claim_evidence_line has rows (0 vs 211 settled cases, 2026-09-21); Warren's data drive unlocks
+      it
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers:
+    - id: BL-0004
+      type: human
+      ref: D-0021
+      opened: '2026-09-23T22:26:10Z'
+      note: Uplift from settled claims needs claim-evidence rows (cpor_claim_evidence_line 0 vs 211 settled cases). Unlocked
+        by Warren's customer/distributor data drive, not by code.
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0065:
+    id: N-0065
+    parent: null
+    title: 'BU entitlements: user-to-product-line mapping over the D-g lines'
+    class: feature
+    origin: operator
+    status: blocked
+    stage: null
+    revision: 1
+    lease: null
+    depends_on:
+    - N-0055
+    - N-0040
+    - N-0038
+    facets:
+    - api
+    - auth
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - A user may be mapped to any subset of dim_product.product_line values (D-g grain); enforcement semantics per Warren's
+      decision (default for unmapped users, read vs write scope, which surfaces filter)
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      security:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      threat:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers:
+    - id: BL-0005
+      type: decision
+      ref: D-0022
+      opened: '2026-09-23T22:26:16Z'
+      note: 'BU entitlements semantics: default for a user with no mapping (all lines vs none); read-only vs read+write scoping;
+        which surfaces filter (lineup, settlement, stock, reports); admin bypass. Warren decides.'
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0066:
+    id: N-0066
+    parent: null
+    title: Naming and polish pass across containers, with outside buyers in mind
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0062
+    facets:
+    - ui
+    risk: R1
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - Every container's labels, empty states and microcopy reviewed against docs/design/NAMING.md hard rules and an outside-buyer
+      read; changes listed
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0067:
+    id: N-0067
+    parent: null
+    title: Light/dark theme completion
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0066
+    facets:
+    - ui
+    risk: R1
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - Every production surface renders correctly in both modes (cipTheme supports both; 16 hard-coded hex literals under features/
+      and app/ counted 2026-09-24); grids and charts included; browser-checked
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0068:
+    id: N-0068
+    parent: null
+    title: Multi-catalogue column sets (BACKLOG-198)
+    class: feature
+    origin: operator
+    status: blocked
+    stage: null
+    revision: 1
+    lease: null
+    depends_on:
+    - N-0067
+    facets:
+    - api
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - Blocked on Warren's catalog_product grain decision (BACKLOG-198)
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers:
+    - id: BL-0006
+      type: decision
+      ref: D-0023
+      opened: '2026-09-23T22:26:21Z'
+      note: 'BACKLOG-198 catalog_product grain: does catalog_product stay the catalogue, get retired, or is it unrelated to
+        per-line column sets? Warren decides.'
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0069:
+    id: N-0069
+    parent: null
+    title: 'Stage 8: steward and import engine follow-ons (trigger-gated umbrella)'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0067
+    facets:
+    - api
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - Each item in STAGED_WORK_PLAN Stage 8 is split into its own node when its trigger fires; this node records the list
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0070:
+    id: N-0070
+    parent: null
+    title: 'Stage 10: multi-tenant productisation (P6)'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0069
+    - N-0068
+    - N-0065
+    facets:
+    - api
+    - ui
+    risk: R3
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - Tenant config surface, tenant-2 onboarding, branding, provisioning; catalog grain decided
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0071:
+    id: N-0071
+    parent: null
+    title: 'Stage 4.6: open->shipped fact double-count policy (BACKLOG-062), undecided'
+    class: feature
+    origin: operator
+    status: blocked
+    stage: null
+    revision: 1
+    lease: null
+    depends_on:
+    - N-0050
+    facets:
+    - data_migration
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - 'Warren decides the remediation policy (D-e: not decided); nothing is built until then'
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      data_integrity:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      backup_recovery:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      migration_safety:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers:
+    - id: BL-0007
+      type: decision
+      ref: D-0024
+      opened: '2026-09-23T22:26:27Z'
+      note: Stage 4.6 (BACKLOG-062) open->shipped fact double-count remediation policy. Not decided (D-e).
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+  N-0072:
+    id: N-0072
+    parent: null
+    title: 'Stage 4.7: ACZA workbook non-operational sheets allowlist (BACKLOG-046), undecided'
+    class: feature
+    origin: operator
+    status: blocked
+    stage: null
+    revision: 1
+    lease: null
+    depends_on:
+    - N-0050
+    facets:
+    - api
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - 'Warren decides the business rule (D-e: not decided); nothing is built until then'
+    - Nothing writes to cip; read-only SQL prints current_database() first
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers:
+    - id: BL-0008
+      type: decision
+      ref: D-0025
+      opened: '2026-09-23T22:26:32Z'
+      note: Stage 4.7 (BACKLOG-046) ACZA workbook non-operational sheets (BOM Not Ready) allowlist business rule. Not decided
+        (D-e).
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
 decisions:
   D-0001:
     id: D-0001
@@ -5953,6 +8176,123 @@ decisions:
     supersedes:
     - D-0006
     - D-0002
+  D-0012:
+    id: D-0012
+    scope: N-0030
+    statement: 'D-a (Warren, 2026-09-23): approve N-0030 once STAGED_WORK_PLAN.md is refreshed (21 Sep section 3 answers,
+      D-g, the 23 Sep stale-item fixes).'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0013:
+    id: D-0013
+    scope: N-0034
+    statement: 'D-b (Warren, 2026-09-23): grid search, saved views and export become three separate nodes, each a shared workbench-ui
+      component, dependent on N-0034. The field-list source is the architecture lens''s engineering call; it must reuse the
+      inbound-shipments optional-columns pattern if present, with no migration.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0014:
+    id: D-0014
+    scope: N-0032
+    statement: 'D-c (Warren, 2026-09-23): CporCaseWorkspace retires once the desk absorbs the BACKLOG-202 pieces. SettlementPortfolioRead
+      and CporPortfolioIntelligencePanel: if they show intelligence nothing else shows, mount under Promotions & Funding per
+      the lab; if they duplicate existing surfaces, delete them; report which and why.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0015:
+    id: D-0015
+    scope: null
+    statement: 'D-d (Warren, 2026-09-23): untracked files move to an archive folder OUTSIDE the repo, never deleted; commit
+      only what is clearly real source, and list it.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0016:
+    id: D-0016
+    scope: null
+    statement: 'D-e (Warren, 2026-09-23): Stage 4.6 (open->shipped double-count policy, BACKLOG-062) and 4.7 (ACZA non-operational
+      sheets allowlist, BACKLOG-046) are NOT decided. Present each in plain language with the lens positions; build nothing
+      for them.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0017:
+    id: D-0017
+    scope: null
+    statement: 'D-f (Warren, 2026-09-23): no customer code mint pass and no remap of the 7 verified rows for now.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0018:
+    id: D-0018
+    scope: null
+    statement: 'D-g (Warren, 2026-09-23): the sellable BU grain is ALL product lines as they appear in dim_product.product_line
+      (Warren counted 16; NX included), not the brief''s five. Every hardcoded or assumed five-line set is a defect and becomes
+      config/data-driven. Null product_line rows are a finding. Any lineup supersession behaviour change is proven on a clone
+      first with before/after numbers; a cip repair goes to Warren.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0019:
+    id: D-0019
+    scope: null
+    statement: 'D-h (Warren, 2026-09-23): proposed-vs-executed intelligence (plan accuracy, deal-stock landing rates, PM planning
+      bias across years): agent recommends start position and outline via a feature-definition moment (product/commercial,
+      UX/design, architecture lenses); charter as an unstarted node at that position; do not build.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0020:
+    id: D-0020
+    scope: N-0060
+    statement: 'Historical lineup backfill: Warren supplies the pre-2025 lineup archive and decides whether to load it into
+      cip (a cip write). Options: (a) load all history via the existing bulk-backfill path after N-0058 rules land; (b) load
+      only the years D-h needs; (c) do not load. Blocks D-h depth.'
+    origin: agent
+    status: proposed
+    supersedes: null
+  D-0021:
+    id: D-0021
+    scope: N-0063
+    statement: Uplift from settled claims needs claim-evidence rows (cpor_claim_evidence_line 0 vs 211 settled cases). Unlocked
+      by Warren's customer/distributor data drive, not by code.
+    origin: agent
+    status: proposed
+    supersedes: null
+  D-0022:
+    id: D-0022
+    scope: N-0065
+    statement: 'BU entitlements semantics: default for a user with no mapping (all lines vs none); read-only vs read+write
+      scoping; which surfaces filter (lineup, settlement, stock, reports); admin bypass. Warren decides.'
+    origin: agent
+    status: proposed
+    supersedes: null
+  D-0023:
+    id: D-0023
+    scope: N-0068
+    statement: 'BACKLOG-198 catalog_product grain: does catalog_product stay the catalogue, get retired, or is it unrelated
+      to per-line column sets? Warren decides.'
+    origin: agent
+    status: proposed
+    supersedes: null
+  D-0024:
+    id: D-0024
+    scope: N-0071
+    statement: Stage 4.6 (BACKLOG-062) open->shipped fact double-count remediation policy. Not decided (D-e).
+    origin: agent
+    status: proposed
+    supersedes: null
+  D-0025:
+    id: D-0025
+    scope: N-0072
+    statement: Stage 4.7 (BACKLOG-046) ACZA workbook non-operational sheets (BOM Not Ready) allowlist business rule. Not decided
+      (D-e).
+    origin: agent
+    status: proposed
+    supersedes: null
 evidence:
   EV-GOV008-REVIEW:
     id: EV-GOV008-REVIEW
@@ -6211,6 +8551,50 @@ evidence:
     tree_hash: 459f4c94eaf994d7e33d567661b2ef11a671e9f7
     note: 'Stage 2.3 commit 459f4c9: GRID_DENSITY comfortable 42/42 to 40/40, compact unchanged 34/36. Ran under an unenforced
       Claude Code runtime, outside the ledger. 390x844 render recorded UNABLE in docs/memory/CURRENT.md.'
+  EV-BUILT-45-MINT:
+    id: EV-BUILT-45-MINT
+    provenance: implementation-observation
+    path: git:66003db9
+    tree_hash: 66003db9
+    note: 'Plan 4.5 CIP-minted customer codes is BUILT: 66003db9 (2026-07-10, BACKLOG-061-U2b mint on bulk promote) and 66ae66d9
+      (distributor mint); customer_code_mint_setting model. Pre-programme work; D-f holds any mint pass.'
+  EV-BUILT-48-ALIAS:
+    id: EV-BUILT-48-ALIAS
+    provenance: implementation-observation
+    path: git:467bc89e
+    tree_hash: 467bc89e
+    note: 'Plan 4.8 customer merge alias seal is BUILT: 467bc89e (2026-07-11, seal merge aliases + follow redirects) and fc14962c
+      (2026-08-19, follow merged_into on customer and distributor resolvers). Pre-programme work.'
+  EV-BUILT-S9-DISTMERGE:
+    id: EV-BUILT-S9-DISTMERGE
+    provenance: implementation-observation
+    path: git:361d138a
+    tree_hash: 361d138a
+    note: 'Plan Stage 9 distributor merge is BUILT: 361d138a (2026-06-30, full distributor merge engine with PO consolidation
+      and soft-redirect). Pre-programme work.'
+  EV-BUILT-INBOUND-LQ:
+    id: EV-BUILT-INBOUND-LQ
+    provenance: implementation-observation
+    path: git:4d7231f0
+    tree_hash: 4d7231f0
+    note: 'Outside-plan candidate inbound-shipments-by-lineup-quarter filter is BUILT: 4d7231f0 (2026-07-08, lineup plan-quarter
+      filter and derived attribution on the inbound grid); InboundShipmentsWorkspace plan_quarter state + shipping.py lineup-quarter-summary.'
+  EV-BUILT-EXTAPI-SPEC:
+    id: EV-BUILT-EXTAPI-SPEC
+    provenance: implementation-observation
+    path: git:49e08364
+    tree_hash: 49e08364
+    note: 'Outside-plan candidate external API layer (spec only until Warren names a consumer) is DONE as spec: docs/EXTERNAL_API_OUTBOUND.md
+      and docs/EXTERNAL_API_INBOUND.md (49e08364, 2026-09-18). No implementation until a first consumer is named.'
+  EV-N0030-PLAN-REFRESH:
+    id: EV-N0030-PLAN-REFRESH
+    provenance: implementation-observation
+    path: docs/design/STAGED_WORK_PLAN.md
+    tree_hash: 1c3f34c4
+    note: 'N-0030: STAGED_WORK_PLAN refreshed 2026-09-24 - 21 Sep section 3 answers, D-a..D-h (D-0012..D-0019), D-g measurement
+      (14 named lines + 10 NULL), stale items fixed (2.6/2.7/2.8/3.1/3.5 built, e264410 applied, node count 71, 4.5 and Stage
+      9 built), every item mapped to a ledger node. CURRENT Next points at the ledger; navConfig.ts steward-queue copy aligned
+      to D-0011.'
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -6362,7 +8746,7 @@ deferred_findings:
   status: deferred
 ids:
   node: 5
-  decision: 0
-  blocker: 2
+  decision: 19
+  blocker: 8
   evidence: 2
   baseline: 4

@@ -1,0 +1,7 @@
+{
+ "id": "EV-BUILT-48-ALIAS",
+ "provenance": "implementation-observation",
+ "path": "git:467bc89e",
+ "tree_hash": "467bc89e",
+ "note": "Plan 4.8 customer merge alias seal is BUILT: 467bc89e (2026-07-11, seal merge aliases + follow redirects) and fc14962c (2026-08-19, follow merged_into on customer and distributor resolvers). Pre-programme work."
+}

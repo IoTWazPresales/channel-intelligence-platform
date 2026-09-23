@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 938
+**Snapshot revision:** 1002
 
 ## Outcome (verbatim)
 
@@ -51,9 +51,45 @@ _none_
 | N-0027 | Steward queue grouped by failure type, routing into existing engines | feature | complete | complete | yes |  | full loop |
 | N-0028 | Start work cards and Lineup cases on the lab composition | feature | in_progress | in_progress | yes |  | full loop |
 | N-0029 | Grid community clipboard in one wrapper, Case book working content first | feature | in_progress | in_progress | yes |  | full loop |
-| N-0030 | Backlog audit against the running tree, P1 sign-off discovery, and staged work plan | discovery | in_progress | in_progress | yes |  | full loop |
+| N-0030 | Backlog audit against the running tree, P1 sign-off discovery, and staged work plan | discovery | complete | complete | yes |  | full loop |
 | N-0031 | Stage 2a: grid height single source, MarketSurface mappings states, LineupScopeBar and market readiness honesty | feature | in_progress | in_progress | yes |  | full loop |
 | N-0032 | Stage 2.7: five orphaned CPOR case tabs (USD pivot, Events, Exports, Promo load, Payments/recon) mounted on the settlement desk | feature | in_progress | in_progress | yes |  | full loop |
 | N-0033 | Stage 3.1/3.5: session auth gate on every API route, production web on loopback, Cloudflare quick tunnel for a small pilot | feature | in_progress | in_progress | yes |  | full loop |
 | N-0034 | Stage 2.4 + grid parity | feature | in_progress | in_progress | yes |  | full loop |
 | N-0035 | Stage 2.2/2.3: grid-scoped 13px type token and density 40/40 (ran outside the ledger) | feature | in_progress | in_progress | yes | yes | full loop |
+| N-0036 | BACKLOG-206: API binds loopback, not 0.0.0.0:8001 | feature | proposed | proposed | yes |  | full loop |
+| N-0037 | Stage 3.4: login rate limit and lockout | feature | proposed | proposed | yes |  | full loop |
+| N-0038 | Stage 3.2: CPOR role checks on the existing roles (BACKLOG-136/141) | feature | proposed | proposed | yes |  | full loop |
+| N-0039 | Listing links open the real product page (Market & Listings bug) | feature | proposed | proposed | yes |  | full loop |
+| N-0040 | D-g: sellable BU grain is every dim_product.product_line (five-line assumption sweep) | feature | proposed | proposed | yes |  | full loop |
+| N-0041 | D-b: shared grid search (workbench-ui) on Tier A grids | feature | proposed | proposed | yes |  | full loop |
+| N-0042 | D-b: shared saved grid views (workbench-ui) | feature | proposed | proposed | yes |  | full loop |
+| N-0043 | D-b: shared grid export (workbench-ui, community AG Grid) | feature | proposed | proposed | yes |  | full loop |
+| N-0044 | D-c + rest of 2.7: desk absorbs BACKLOG-202 pieces, CporCaseWorkspace retires, two orphan panels ruled | feature | proposed | proposed | yes |  | full loop |
+| N-0045 | D-d: archive untracked files outside the repo; commit only real source | feature | proposed | proposed | yes |  | full loop |
+| N-0046 | BACKLOG-143: worktrees and leftover-state hygiene | feature | proposed | proposed | yes |  | full loop |
+| N-0047 | Stage 4.1: dim_product inverted launch/retire windows (BACKLOG-034), proven on a clone | feature | proposed | proposed | yes |  | full loop |
+| N-0048 | Stage 4.2: cpor_case status vs workflow_status drift (BACKLOG-139), proven on a clone | feature | proposed | proposed | yes |  | full loop |
+| N-0049 | Stage 4.3: MAC check reads customer sell-through, not the empty inventory fact (BACKLOG-135) | feature | proposed | proposed | yes |  | full loop |
+| N-0050 | Stage 4.4: cpor_case_line week-aligned window columns (BACKLOG-137), migration proven on cip_test only | feature | proposed | proposed | yes |  | full loop |
+| N-0051 | Stage 3.7: import completion asserts no merged-id leftovers (BACKLOG-133/134) | feature | proposed | proposed | yes |  | full loop |
+| N-0052 | Stage 3.6: ops safety net (restore proven on a clone, alerting, resolver fails loudly) | feature | proposed | proposed | yes |  | full loop |
+| N-0053 | Stage 2.5: line identifier 'both' as two columns | feature | proposed | proposed | yes |  | full loop |
+| N-0054 | Stage 2.9: design-lab as fixture skin over production primitives (BACKLOG-161/158) | feature | proposed | proposed | yes |  | full loop |
+| N-0055 | Stage 3.3: tenant scoping sweep | feature | proposed | proposed | yes |  | full loop |
+| N-0056 | Stage 5: analytics delivery (export, event-triggered refresh, calendar delivery, vintage on face) | feature | proposed | proposed | yes |  | full loop |
+| N-0057 | Stage 6.1/6.2: lineup authoring workbench and the B2 end-to-end PM run (BACKLOG-190) | feature | proposed | proposed | yes |  | full loop |
+| N-0058 | Stage 6.3/6.5: unified lineup import 1H fan-out and lineup data rules (BACKLOG-103/105/055/065) | feature | proposed | proposed | yes |  | full loop |
+| N-0059 | Stage 6.4: bulk-backfill completion UX (BACKLOG-060) | feature | proposed | proposed | yes |  | full loop |
+| N-0060 | Historical lineup backfill (years before 2025 Q1) | feature | blocked | blocked | yes |  | full loop |
+| N-0061 | Stage 7.1-7.3: promotion intelligence v2 (listing/competitor evidence, observed cover, comparable scope) | feature | proposed | proposed | yes |  | full loop |
+| N-0062 | Stage 7.5: supply Arrived state and plan-unit PO coverage (BACKLOG-178/179) | feature | proposed | proposed | yes |  | full loop |
+| N-0063 | Stage 7.4: uplift from settled claims (BACKLOG-185), data-gated | feature | blocked | blocked | yes |  | full loop |
+| N-0065 | BU entitlements: user-to-product-line mapping over the D-g lines | feature | blocked | blocked | yes |  | full loop |
+| N-0066 | Naming and polish pass across containers, with outside buyers in mind | feature | proposed | proposed | yes |  | full loop |
+| N-0067 | Light/dark theme completion | feature | proposed | proposed | yes |  | full loop |
+| N-0068 | Multi-catalogue column sets (BACKLOG-198) | feature | blocked | blocked | yes |  | full loop |
+| N-0069 | Stage 8: steward and import engine follow-ons (trigger-gated umbrella) | feature | proposed | proposed | yes |  | full loop |
+| N-0070 | Stage 10: multi-tenant productisation (P6) | feature | proposed | proposed | yes |  | full loop |
+| N-0071 | Stage 4.6: open->shipped fact double-count policy (BACKLOG-062), undecided | feature | blocked | blocked | yes |  | full loop |
+| N-0072 | Stage 4.7: ACZA workbook non-operational sheets allowlist (BACKLOG-046), undecided | feature | blocked | blocked | yes |  | full loop |

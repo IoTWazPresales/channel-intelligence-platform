@@ -1,0 +1,19 @@
+{
+ "id": "N-0046",
+ "title": "BACKLOG-143: worktrees and leftover-state hygiene",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0045"
+ ],
+ "facets": [],
+ "risk": "R1",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "Stale git worktrees and disposable leftover state in BACKLOG-143 are inventoried; removals are local and reversible or archived; nothing on cip",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

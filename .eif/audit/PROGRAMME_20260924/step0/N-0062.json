@@ -1,0 +1,22 @@
+{
+ "id": "N-0062",
+ "title": "Stage 7.5: supply Arrived state and plan-unit PO coverage (BACKLOG-178/179)",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0061"
+ ],
+ "facets": [
+  "schema",
+  "api"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "Stored Arrived state and PO coverage by distributor; any migration proven on cip_test only",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

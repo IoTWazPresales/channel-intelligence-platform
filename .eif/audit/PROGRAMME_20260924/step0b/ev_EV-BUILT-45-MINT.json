@@ -1,0 +1,7 @@
+{
+ "id": "EV-BUILT-45-MINT",
+ "provenance": "implementation-observation",
+ "path": "git:66003db9",
+ "tree_hash": "66003db9",
+ "note": "Plan 4.5 CIP-minted customer codes is BUILT: 66003db9 (2026-07-10, BACKLOG-061-U2b mint on bulk promote) and 66ae66d9 (distributor mint); customer_code_mint_setting model. Pre-programme work; D-f holds any mint pass."
+}

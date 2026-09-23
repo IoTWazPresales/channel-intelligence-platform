@@ -1,0 +1,22 @@
+{
+ "id": "N-0068",
+ "title": "Multi-catalogue column sets (BACKLOG-198)",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0067"
+ ],
+ "facets": [
+  "api",
+  "ui"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "Blocked on Warren's catalog_product grain decision (BACKLOG-198)",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

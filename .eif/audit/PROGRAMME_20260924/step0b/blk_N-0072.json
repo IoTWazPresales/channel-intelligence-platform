@@ -1,0 +1,7 @@
+{
+ "node": "N-0072",
+ "expected_revision": 0,
+ "type": "decision",
+ "ref": "D-0025",
+ "note": "Stage 4.7 (BACKLOG-046) ACZA workbook non-operational sheets (BOM Not Ready) allowlist business rule. Not decided (D-e)."
+}

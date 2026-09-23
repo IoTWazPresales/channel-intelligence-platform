@@ -1,0 +1,27 @@
+{
+ "id": "N-0039",
+ "title": "Listing links open the real product page (Market & Listings bug)",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0038"
+ ],
+ "facets": [
+  "api",
+  "ui"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "Root cause of stored listing URLs that open a marketplace 'doesn't exist' page (at least Takealot) is found in code: PLID normaliser b17e950, URL auto-finder bfd0c44, feed-derived listing seeds; no assumed cause",
+  "How the listing data was obtained when the stored URL does not resolve is explained",
+  "A SMALL sample per marketplace is checked by GET, rate-limited; no bulk crawling",
+  "URL construction fixed at the source, with tests",
+  "Links that do not resolve get status dead_link per the registry lifecycle (observed, never deleted); the UI never presents an unverified or dead link as valid",
+  "Any repair of stored rows on cip is proven on a clone and listed for Warren, not applied",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

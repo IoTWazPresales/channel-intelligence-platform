@@ -1,0 +1,24 @@
+{
+ "id": "N-0044",
+ "title": "D-c + rest of 2.7: desk absorbs BACKLOG-202 pieces, CporCaseWorkspace retires, two orphan panels ruled",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0040",
+  "N-0032"
+ ],
+ "facets": [
+  "ui"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "FX anchor, settle readiness row, comparable cases and transition buttons are on the settlement desk (BACKLOG-202), then CporCaseWorkspace is deleted",
+  "SettlementPortfolioRead and CporPortfolioIntelligencePanel: overlap with existing surfaces measured; mounted under Promotions & Funding per the lab if they show intelligence nothing else shows, deleted if they duplicate; ruling and reason reported",
+  "Browser smoke on case 46 and 311",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

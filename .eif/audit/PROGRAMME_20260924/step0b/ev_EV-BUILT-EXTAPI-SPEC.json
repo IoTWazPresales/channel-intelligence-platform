@@ -1,0 +1,7 @@
+{
+ "id": "EV-BUILT-EXTAPI-SPEC",
+ "provenance": "implementation-observation",
+ "path": "git:49e08364",
+ "tree_hash": "49e08364",
+ "note": "Outside-plan candidate external API layer (spec only until Warren names a consumer) is DONE as spec: docs/EXTERNAL_API_OUTBOUND.md and docs/EXTERNAL_API_INBOUND.md (49e08364, 2026-09-18). No implementation until a first consumer is named."
+}

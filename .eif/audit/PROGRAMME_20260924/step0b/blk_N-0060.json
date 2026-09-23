@@ -1,0 +1,7 @@
+{
+ "node": "N-0060",
+ "expected_revision": 0,
+ "type": "human",
+ "ref": "D-0020",
+ "note": "Historical lineup backfill: Warren supplies the pre-2025 lineup archive and decides whether to load it into cip (a cip write). Options: (a) load all history via the existing bulk-backfill path after N-0058 rules land; (b) load only the years D-h needs; (c) do not load. Blocks D-h depth."
+}

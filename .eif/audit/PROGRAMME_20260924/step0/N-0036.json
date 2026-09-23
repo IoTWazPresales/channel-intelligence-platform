@@ -1,0 +1,24 @@
+{
+ "id": "N-0036",
+ "title": "BACKLOG-206: API binds loopback, not 0.0.0.0:8001",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0030"
+ ],
+ "facets": [
+  "infra"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "pnpm dev:api (scripts/dev-api.js) and any documented start path bind the API to loopback only; netstat shows no 0.0.0.0:8001 or [::]:8001 listener",
+  "localhost/::1 trap handled: every in-repo caller (web proxy fallback, scripts, runbooks) that targets localhost:8001 is repointed to 127.0.0.1 or the API also answers on ::1; resolution measured on this host",
+  "Web same-origin proxy still reaches the API (/api/v1/health 200 via :3000)",
+  "BACKLOG-206 stamped; PILOT_TUNNEL_RUNBOOK updated if it names the bind",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

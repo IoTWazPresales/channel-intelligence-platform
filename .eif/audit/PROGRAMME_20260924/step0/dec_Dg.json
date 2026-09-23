@@ -1,0 +1,5 @@
+{
+ "statement": "D-g (Warren, 2026-09-23): the sellable BU grain is ALL product lines as they appear in dim_product.product_line (Warren counted 16; NX included), not the brief's five. Every hardcoded or assumed five-line set is a defect and becomes config/data-driven. Null product_line rows are a finding. Any lineup supersession behaviour change is proven on a clone first with before/after numbers; a cip repair goes to Warren.",
+ "origin": "operator",
+ "status": "accepted"
+}

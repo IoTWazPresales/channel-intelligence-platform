@@ -1,0 +1,22 @@
+{
+ "id": "N-0053",
+ "title": "Stage 2.5: line identifier 'both' as two columns",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0052",
+  "N-0034"
+ ],
+ "facets": [
+  "ui"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "LineIdentifierPreference gains 'both', rendered as two sortable and filterable columns through the N-0034 picker mechanism, not a second mechanism",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

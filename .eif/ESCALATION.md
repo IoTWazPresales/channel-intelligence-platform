@@ -2,6 +2,18 @@
 
 # Escalation / decision queue
 
+- blocker **BL-0003** on N-0060 type=human ref=D-0020 Historical lineup backfill: Warren supplies the pre-2025 lineup archive and decides whether to load it into cip (a cip write). Options: (a) load all history via the existing bulk-backfill path after N-0058 rules land; (b) load only the years D-h needs; (c) do not load. Blocks D-h depth.
+- blocker **BL-0004** on N-0063 type=human ref=D-0021 Uplift from settled claims needs claim-evidence rows (cpor_claim_evidence_line 0 vs 211 settled cases). Unlocked by Warren's customer/distributor data drive, not by code.
+- blocker **BL-0005** on N-0065 type=decision ref=D-0022 BU entitlements semantics: default for a user with no mapping (all lines vs none); read-only vs read+write scoping; which surfaces filter (lineup, settlement, stock, reports); admin bypass. Warren decides.
+- blocker **BL-0006** on N-0068 type=decision ref=D-0023 BACKLOG-198 catalog_product grain: does catalog_product stay the catalogue, get retired, or is it unrelated to per-line column sets? Warren decides.
+- blocker **BL-0007** on N-0071 type=decision ref=D-0024 Stage 4.6 (BACKLOG-062) open->shipped fact double-count remediation policy. Not decided (D-e).
+- blocker **BL-0008** on N-0072 type=decision ref=D-0025 Stage 4.7 (BACKLOG-046) ACZA workbook non-operational sheets (BOM Not Ready) allowlist business rule. Not decided (D-e).
+- decision **D-0020** scope=N-0060: Historical lineup backfill: Warren supplies the pre-2025 lineup archive and decides whether to load it into cip (a cip write). Options: (a) load all history via the existing bulk-backfill path after N-0058 rules land; (b) load only the years D-h needs; (c) do not load. Blocks D-h depth.
+- decision **D-0021** scope=N-0063: Uplift from settled claims needs claim-evidence rows (cpor_claim_evidence_line 0 vs 211 settled cases). Unlocked by Warren's customer/distributor data drive, not by code.
+- decision **D-0022** scope=N-0065: BU entitlements semantics: default for a user with no mapping (all lines vs none); read-only vs read+write scoping; which surfaces filter (lineup, settlement, stock, reports); admin bypass. Warren decides.
+- decision **D-0023** scope=N-0068: BACKLOG-198 catalog_product grain: does catalog_product stay the catalogue, get retired, or is it unrelated to per-line column sets? Warren decides.
+- decision **D-0024** scope=N-0071: Stage 4.6 (BACKLOG-062) open->shipped fact double-count remediation policy. Not decided (D-e).
+- decision **D-0025** scope=N-0072: Stage 4.7 (BACKLOG-046) ACZA workbook non-operational sheets (BOM Not Ready) allowlist business rule. Not decided (D-e).
 - deferred **DOES_NOT_FIT** seq=321 node=N-0015: apps/web/src/app/(app)/market/page.tsx remains a static JSON stub. Market & Listings production container is /listing-capture and /competition (MarketSurface), not /market. Do not treat the stub as the container; do not delete it in this recording.
 - deferred **BROWSER_UNSAFE** seq=354 node=N-0011: CDP Emulation.setDeviceMetricsOverride is denied BROWSER_UNSAFE. Do not retry. Viewport checks use Playwright setViewportSize or cursor-ide-browser native size.
 - deferred **NAMED_390_SHIPPED_1280_ONLY** seq=355 node=N-0011: Shipped named 390px workflows verified at 1280 only this wave (do not retrofit): cover-breach lookup (Stock Cover). Execution/Movement are not named 390 workflows. Data & Stewardship import status WILL be verified at 390x844 in this node.

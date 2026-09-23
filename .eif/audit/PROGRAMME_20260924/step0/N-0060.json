@@ -1,0 +1,21 @@
+{
+ "id": "N-0060",
+ "title": "Historical lineup backfill (years before 2025 Q1)",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0058"
+ ],
+ "facets": [
+  "data_migration"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "Warren supplies the historical lineup archive and authorises the cip load; load rehearsed on a clone with per-quarter case counts printed. cip holds 36 lineup cases, 2025 Q1 to 2026 Q3, today (measured 2026-09-24)",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

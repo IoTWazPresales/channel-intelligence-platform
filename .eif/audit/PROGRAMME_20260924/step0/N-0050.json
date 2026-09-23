@@ -1,0 +1,22 @@
+{
+ "id": "N-0050",
+ "title": "Stage 4.4: cpor_case_line week-aligned window columns (BACKLOG-137), migration proven on cip_test only",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0049"
+ ],
+ "facets": [
+  "schema",
+  "data_migration"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "Alembic migration written; upgrade and downgrade proven on cip_test with printed numbers; NOT applied to cip; listed ready-for-cip for Warren",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

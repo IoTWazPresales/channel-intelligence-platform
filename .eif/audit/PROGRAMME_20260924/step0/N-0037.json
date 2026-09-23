@@ -1,0 +1,26 @@
+{
+ "id": "N-0037",
+ "title": "Stage 3.4: login rate limit and lockout",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0036",
+  "N-0033"
+ ],
+ "facets": [
+  "auth",
+  "api"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "Repeated wrong-password attempts on /api/v1/auth/login are throttled per account and per client address; limit and window are config, not literals",
+  "Throttled response is 429 with Retry-After; during lockout even a correct password is refused until the window passes; a successful login resets the counter",
+  "No enumeration: unknown-user and wrong-password responses are indistinguishable in status and body",
+  "Tests cover throttle, reset and non-enumeration; stub mode unaffected",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

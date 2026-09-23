@@ -1,0 +1,7 @@
+{
+ "id": "D-0021",
+ "scope": "N-0063",
+ "statement": "Uplift from settled claims needs claim-evidence rows (cpor_claim_evidence_line 0 vs 211 settled cases). Unlocked by Warren's customer/distributor data drive, not by code.",
+ "origin": "agent",
+ "status": "proposed"
+}

@@ -1,0 +1,23 @@
+{
+ "id": "N-0056",
+ "title": "Stage 5: analytics delivery (export, event-triggered refresh, calendar delivery, vintage on face)",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0055",
+  "N-0052"
+ ],
+ "facets": [
+  "api",
+  "ui"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "Excel/PDF export; load completes then dependents refresh then subscribers are notified; calendar delivery; every report shows its vintage; delivery failures alert via N-0052",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

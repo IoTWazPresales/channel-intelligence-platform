@@ -1,0 +1,20 @@
+{
+ "id": "N-0045",
+ "title": "D-d: archive untracked files outside the repo; commit only real source",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0044"
+ ],
+ "facets": [],
+ "risk": "R1",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "Every untracked path is classified; non-source files move to an archive folder outside the repo (never deleted); real source is committed and listed",
+  "Control-plane paths are not moved by the agent; any that need moving go to Warren",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

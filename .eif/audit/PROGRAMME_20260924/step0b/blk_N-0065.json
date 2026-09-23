@@ -1,0 +1,7 @@
+{
+ "node": "N-0065",
+ "expected_revision": 0,
+ "type": "decision",
+ "ref": "D-0022",
+ "note": "BU entitlements semantics: default for a user with no mapping (all lines vs none); read-only vs read+write scoping; which surfaces filter (lineup, settlement, stock, reports); admin bypass. Warren decides."
+}

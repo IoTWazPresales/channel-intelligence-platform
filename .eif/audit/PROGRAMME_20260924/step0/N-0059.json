@@ -1,0 +1,21 @@
+{
+ "id": "N-0059",
+ "title": "Stage 6.4: bulk-backfill completion UX (BACKLOG-060)",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0058"
+ ],
+ "facets": [
+  "ui"
+ ],
+ "risk": "R1",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "Bulk backfill Apply shows progress and a completion summary with next steps; no silent dialog close",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

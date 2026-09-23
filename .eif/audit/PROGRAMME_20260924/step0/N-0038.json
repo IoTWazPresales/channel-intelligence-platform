@@ -1,0 +1,25 @@
+{
+ "id": "N-0038",
+ "title": "Stage 3.2: CPOR role checks on the existing roles (BACKLOG-136/141)",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0037"
+ ],
+ "facets": [
+  "auth",
+  "api"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "Every CPOR write endpoint (incl. export generate, settle, transitions, payment-evidence apply) requires a role from the existing admin/steward/planner/viewer set; viewer is read-only",
+  "Shipment steward panels accept STEWARD and ADMIN (BACKLOG-141)",
+  "The role matrix used is written into the node evidence; no new roles (Warren 21 Sep: enforce on existing roles)",
+  "Tests: one allowed and one denied role per guarded write",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

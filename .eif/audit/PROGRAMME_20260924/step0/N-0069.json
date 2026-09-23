@@ -1,0 +1,22 @@
+{
+ "id": "N-0069",
+ "title": "Stage 8: steward and import engine follow-ons (trigger-gated umbrella)",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0067"
+ ],
+ "facets": [
+  "api",
+  "ui"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "Each item in STAGED_WORK_PLAN Stage 8 is split into its own node when its trigger fires; this node records the list",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

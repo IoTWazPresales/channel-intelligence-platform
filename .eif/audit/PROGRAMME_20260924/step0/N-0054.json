@@ -1,0 +1,21 @@
+{
+ "id": "N-0054",
+ "title": "Stage 2.9: design-lab as fixture skin over production primitives (BACKLOG-161/158)",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0052"
+ ],
+ "facets": [
+  "ui"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "design-lab/primitives and design-lab/shell import production components; duplicates removed; lab renders unchanged at 1280x800 (Warren 21 Sep: keep lab as fixture skin)",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

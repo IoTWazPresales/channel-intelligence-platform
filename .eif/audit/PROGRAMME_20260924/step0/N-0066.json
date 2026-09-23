@@ -1,0 +1,21 @@
+{
+ "id": "N-0066",
+ "title": "Naming and polish pass across containers, with outside buyers in mind",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0062"
+ ],
+ "facets": [
+  "ui"
+ ],
+ "risk": "R1",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "Every container's labels, empty states and microcopy reviewed against docs/design/NAMING.md hard rules and an outside-buyer read; changes listed",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}

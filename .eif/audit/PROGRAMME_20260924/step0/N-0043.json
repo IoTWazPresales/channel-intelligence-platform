@@ -1,0 +1,22 @@
+{
+ "id": "N-0043",
+ "title": "D-b: shared grid export (workbench-ui, community AG Grid)",
+ "class": "feature",
+ "origin": "operator",
+ "status": "proposed",
+ "depends_on": [
+  "N-0034"
+ ],
+ "facets": [
+  "ui"
+ ],
+ "risk": "R2",
+ "touches_existing": true,
+ "acceptance": "auto",
+ "acceptance_criteria": [
+  "One shared export action in features/workbench-ui: CSV of visible columns and filtered rows, community module only (BACKLOG-193 stays dropped)",
+  "Export follows the name-only identity rule; code columns only when picked",
+  "Nothing writes to cip; read-only SQL prints current_database() first",
+  "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+ ]
+}
