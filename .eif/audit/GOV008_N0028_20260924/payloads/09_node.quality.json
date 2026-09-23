@@ -1,0 +1,11 @@
+{
+ "node": "N-0028",
+ "expected_revision": 71,
+ "dim": "design_sameness_review",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0028_20260924/REVIEW.md",
+  "verdict": "FAILED",
+  "summary": "The seven cards share one template, differentiated by eyebrow group and icon; that sameness suits a launch strip. Minor: the ActionCard docstring deliberately matches the Import Center tile surface; it is a distinct component with eyebrow and START, so not a type-picker reuse."
+ }
+}

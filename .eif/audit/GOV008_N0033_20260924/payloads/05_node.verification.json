@@ -1,0 +1,11 @@
+{
+ "node": "N-0033",
+ "expected_revision": 14,
+ "kind": "rendered",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0033_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Rendered and interacted with /login in a fresh browser tab (not the implementer's session): screenshot of the initial form and of the post-submit 'Invalid credentials' state after submitting a fake login through the real form fields."
+ }
+}

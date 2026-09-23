@@ -1,0 +1,11 @@
+{
+ "node": "N-0028",
+ "expected_revision": 67,
+ "kind": "referent",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0028_20260924/REVIEW.md",
+  "verdict": "FAILED",
+  "summary": "The design-lab OverviewSurface mounts StartWorkLaunch (OverviewSurface.tsx:33,231), and the lab ActionCard re-exports the production workbench-ui ActionCard. /design-lab rendered identical card anatomy and metrics (344x122, rgb(34,38,46), 12px radius) and the same strip-above-dashboard/attention order. The planner role showed 3 cards, consistent with PLANNER_PLUS."
+ }
+}

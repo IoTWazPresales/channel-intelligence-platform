@@ -1,0 +1,11 @@
+{
+ "node": "N-0028",
+ "expected_revision": 72,
+ "dim": "design_state_coverage",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0028_20260924/REVIEW.md",
+  "verdict": "FAILED",
+  "summary": "States observed: admin populated (7 cards); lab planner role-filtered (3 cards); hover (primary border/tint); keyboard focus-visible ring; Lineup loading ('\u2014' before queries resolve) then populated; pending filter active (filled chip, URL param); 390 single-column. The viewer empty state was verified by unit test only, not rendered."
+ }
+}

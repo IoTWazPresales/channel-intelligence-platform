@@ -1,0 +1,11 @@
+{
+ "node": "N-0031",
+ "expected_revision": 11,
+ "kind": "referent",
+ "state": "fail",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0031_20260924/REVIEW.md",
+  "verdict": "FAILED",
+  "summary": "Criteria 2-8 re-verified (diff, vitest 22/22, tsc 0, eslint 0 errors, pytest 2 passed, DOM: rows/headers 40px on /admin/customers, paginated shells 688/888px on /stock?lens=execution match paginatedGridHeight, mappings empty/loading/error+Retry rendered, ScopeBar has no inert control). Criterion 1 fails: packages/ui/src/agGridMuiTheme.ts:90-91 still emits --ag-row-height/--ag-header-height with its own literals (42px) that now diverge from GRID_DENSITY (40px); present in the live stylesheet (.css-1hv9xw rule) and only masked by EnterpriseDataGrid's inline override."
+ }
+}

@@ -1,0 +1,11 @@
+{
+ "node": "N-0033",
+ "expected_revision": 10,
+ "dim": "ux",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0033_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "/login renders correctly, wrong credentials show an inline 'Invalid credentials' alert and stay on /login (no 404). Flow is clean and matches the acceptance criteria."
+ }
+}

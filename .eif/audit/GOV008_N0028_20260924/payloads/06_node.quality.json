@@ -1,0 +1,11 @@
+{
+ "node": "N-0028",
+ "expected_revision": 68,
+ "dim": "design_divergence",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0028_20260924/REVIEW.md",
+  "verdict": "FAILED",
+  "summary": "Production matches the lab composition: typography heading, no Panel/Card wrapper, ActionCard grid, strip above dashboard 1fr and attention. Divergences are data-driven only (tenant, live signals, live widgets); lab hrefs are intended analogs."
+ }
+}

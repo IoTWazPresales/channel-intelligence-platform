@@ -1,0 +1,11 @@
+{
+ "node": "N-0028",
+ "expected_revision": 70,
+ "dim": "rendered_comparison",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0028_20260924/REVIEW.md",
+  "verdict": "FAILED",
+  "summary": "Side-by-side of /design-lab (planner, 3 cards) and /brief (admin, 7 cards) at the same window: same card dimensions, fill, radius and anatomy; same subline copy."
+ }
+}

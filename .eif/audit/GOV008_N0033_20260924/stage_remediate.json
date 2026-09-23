@@ -1,0 +1,1 @@
+{"node": "N-0033", "expected_revision": 17, "to": "implement", "stage_note": "Remediation run N0033_REMEDIATE_20260924: GOV-008 (GOV008_N0033_20260924, claude-sonnet-5) failed quality.content - production /login shows 'Dev seed: admin@local / changeme'. Remove the credential hint from the production page."}

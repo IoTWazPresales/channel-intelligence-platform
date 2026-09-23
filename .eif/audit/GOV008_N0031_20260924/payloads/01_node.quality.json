@@ -1,0 +1,11 @@
+{
+ "node": "N-0031",
+ "expected_revision": 10,
+ "dim": "a11y",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0031_20260924/REVIEW.md",
+  "verdict": "FAILED",
+  "summary": "New mappings states are accessible: loading role=status aria-busy with label, error role=alert with named keyboard-reachable Retry, empty role=region with a real Import Center link; lineup ScopeBar is role=toolbar aria-label=Scope, all controls Tab-reachable with handlers and visible focus. Non-blocking findings: weak focus indicator on Import Center (outline none), focus lost to body after Retry, filter chips lack aria-pressed (state by colour only), deferred 'Propose candidates' uses native disabled so its explanation is keyboard-unreachable (pre-existing). Screen reader, zoom/reflow and 390px not tested."
+ }
+}

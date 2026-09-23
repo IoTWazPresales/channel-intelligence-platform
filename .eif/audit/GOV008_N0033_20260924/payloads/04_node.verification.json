@@ -1,0 +1,11 @@
+{
+ "node": "N-0033",
+ "expected_revision": 13,
+ "kind": "referent",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0033_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Live-enumerated all 229/229 /api/v1 GET routes from the running API's own openapi.json with no bearer token: 0 non-401 responses. Verified forged X-User-Role/X-User-Id headers rejected live. Verified cloudflared binary via a valid Authenticode signature from Cloudflare, Inc. Verified no .env/credentials in git history or tracked files for the evidence commits."
+ }
+}

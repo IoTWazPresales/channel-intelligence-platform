@@ -1,0 +1,11 @@
+{
+ "node": "N-0028",
+ "expected_revision": 66,
+ "kind": "rendered",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0028_20260924/REVIEW.md",
+  "verdict": "FAILED",
+  "summary": "Real mouse clicks on each of the 7 cards, then location read: /admin/imports?unified=1, /lineup/cases, /promotions?propose=1, /admin/imports?template=customer_sell_through, /admin/imports?template=inbound_shipments, /admin/mappings (steward-failure-queue-strip present), /commercial-planner/cpor-cases. A click at 390 inside the iframe reached /lineup/cases. Window resize did not work, so an iframe viewport was used."
+ }
+}

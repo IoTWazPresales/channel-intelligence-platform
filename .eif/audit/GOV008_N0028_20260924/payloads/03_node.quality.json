@@ -1,0 +1,11 @@
+{
+ "node": "N-0028",
+ "expected_revision": 65,
+ "dim": "content",
+ "state": "fail",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0028_20260924/REVIEW.md",
+  "verdict": "FAILED",
+  "summary": "AC2 fails. The steward-queue card reads 'Resolve unmatched tokens / Unmatched tokens from imports, resolved in one place.' (startWork.ts:62-68). That does not describe the N-0027 failure-type queue, reads as the legacy mapping queue, and 'in one place' contradicts the queue's job-steward routing. The previous copy 'Candidates grouped by failure type' was replaced in d25a9275. Also: header '2 703 lines' vs strip '1647 plan lines'; 'Approval 100%' rests on 1 decided line."
+ }
+}

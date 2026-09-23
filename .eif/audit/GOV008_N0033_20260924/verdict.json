@@ -1,0 +1,37 @@
+{
+  "node": "N-0033",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "dims": {
+    "quality.ux": {
+      "state": "pass",
+      "summary": "/login renders correctly, wrong credentials show an inline 'Invalid credentials' alert and stay on /login (no 404). Flow is clean and matches the acceptance criteria.",
+      "rationale": ""
+    },
+    "quality.rendered": {
+      "state": "pass",
+      "summary": "Rendered /login live in a dedicated Claude-in-Chrome tab; screenshotted the form and the post-submit error state after posting a fake login through the real UI.",
+      "rationale": ""
+    },
+    "quality.content": {
+      "state": "fail",
+      "summary": "The production /login page (apps/web/src/app/login/page.tsx:115-117) unconditionally renders a caption reading 'Dev seed (after IAM migration): admin@local / changeme', with no environment gate. This is the exact page exposed through the public pilot tunnel, and it discloses a real admin username plus a guessable default password pattern to any anonymous visitor. Not caused by N-0033's own commits, but discovered live during this review and directly undermines the node's own 'safe enough for a small temporary pilot' claim.",
+      "rationale": ""
+    },
+    "verification.referent": {
+      "state": "pass",
+      "summary": "Live-enumerated all 229/229 /api/v1 GET routes from the running API's own openapi.json with no bearer token: 0 non-401 responses. Verified forged X-User-Role/X-User-Id headers rejected live. Verified cloudflared binary via a valid Authenticode signature from Cloudflare, Inc. Verified no .env/credentials in git history or tracked files for the evidence commits."
+    },
+    "verification.rendered": {
+      "state": "pass",
+      "summary": "Rendered and interacted with /login in a fresh browser tab (not the implementer's session): screenshot of the initial form and of the post-submit 'Invalid credentials' state after submitting a fake login through the real form fields."
+    }
+  },
+  "failed_criteria": [],
+  "limitations": [
+    "Criterion 8 (public URL): UNABLE for the actual tunnel URL by design (starting a tunnel is out of scope for a read-only reviewer). Verified the equivalent four checks through the loopback path (http://127.0.0.1:3000) that the tunnel fronts instead.",
+    "Criterion 10 (full suite green): ~40% of apps/api/tests (the write-capable modules, per conftest.py's own _WRITE_CAPABLE_TEST_MODULES guard) were not independently re-run, to avoid writing to the live cip database. Ran ~260 tests across non-write-capable modules plus test_session_gate.py and one full write-capable-adjacent file that happened to pass its guard check: 251 passed, 0 failed. The remaining slice's 'green' status is ASSERTED from the implementer's commit message (0d34d2ce), not independently reproduced.",
+    "No independent-model verification mechanism was available for this R3 node; this review is session-independent (fresh context, did not read implementer findings) but not confirmed model-independent.",
+    "Did not verify who physically ran the password-set commands (Criterion 9) — inherently unverifiable from static evidence after the fact.",
+    "Did not test whether the admin@local account's real password matches the 'changeme' hint shown on /login (see Finding 1 in REVIEW.md) — correctly out of scope, but leaves that specific risk unquantified."
+  ]
+}

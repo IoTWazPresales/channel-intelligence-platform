@@ -1,0 +1,11 @@
+{
+ "node": "N-0033",
+ "expected_revision": 12,
+ "dim": "content",
+ "state": "fail",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0033_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "The production /login page (apps/web/src/app/login/page.tsx:115-117) unconditionally renders a caption reading 'Dev seed (after IAM migration): admin@local / changeme', with no environment gate. This is the exact page exposed through the public pilot tunnel, and it discloses a real admin username plus a guessable default password pattern to any anonymous visitor. Not caused by N-0033's own commits, but discovered live during this review and directly undermines the node's own 'safe enough for a small temporary pilot' claim."
+ }
+}

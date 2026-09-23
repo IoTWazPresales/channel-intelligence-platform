@@ -1,0 +1,11 @@
+{
+ "node": "N-0033",
+ "expected_revision": 11,
+ "dim": "rendered",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0033_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Rendered /login live in a dedicated Claude-in-Chrome tab; screenshotted the form and the post-submit error state after posting a fake login through the real UI."
+ }
+}

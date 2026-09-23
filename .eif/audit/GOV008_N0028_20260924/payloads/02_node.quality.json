@@ -1,0 +1,11 @@
+{
+ "node": "N-0028",
+ "expected_revision": 64,
+ "dim": "rendered",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0028_20260924/REVIEW.md",
+  "verdict": "FAILED",
+  "summary": "Rendered /brief and /lineup/cases at 1707x876 (window) and in same-origin iframes at exactly 1280x800 and 390x844. Cards show as a 4+3 grid at 1280 and one column of 351px at 390, with no horizontal overflow. The Lineup strip shows 5 live figures (7,309 / 96 / 100% / 1646 / 20%). Findings: Planned column header and cells are misaligned; Approval and actions sit off-screen at 1280 behind the grid's horizontal scroll."
+ }
+}

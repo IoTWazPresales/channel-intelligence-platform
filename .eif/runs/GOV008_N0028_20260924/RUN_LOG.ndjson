@@ -1,0 +1,12 @@
+{"ts":"2026-09-23T22:57:13Z","kind":"programme.event","event":"node.quality","seq":1014}
+{"ts":"2026-09-23T22:57:23Z","kind":"programme.event","event":"node.quality","seq":1015}
+{"ts":"2026-09-23T22:57:31Z","kind":"programme.event","event":"node.quality","seq":1016}
+{"ts":"2026-09-23T22:57:37Z","kind":"programme.event","event":"node.verification","seq":1017}
+{"ts":"2026-09-23T22:57:45Z","kind":"programme.event","event":"node.verification","seq":1018}
+{"ts":"2026-09-23T22:57:52Z","kind":"programme.event","event":"node.quality","seq":1019}
+{"ts":"2026-09-23T22:58:01Z","kind":"programme.event","event":"node.quality","seq":1020}
+{"ts":"2026-09-23T22:58:09Z","kind":"programme.event","event":"node.quality","seq":1021}
+{"ts":"2026-09-23T22:58:18Z","kind":"programme.event","event":"node.quality","seq":1022}
+{"ts":"2026-09-23T22:58:27Z","kind":"programme.event","event":"node.quality","seq":1023}
+{"ts":"2026-09-23T22:58:45Z","kind":"programme.event","event":"decision.add","seq":1024}
+{"ts":"2026-09-23T22:58:53Z","kind":"programme.event","event":"node.stage_note","seq":1025}

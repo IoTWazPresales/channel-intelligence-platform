@@ -1,0 +1,11 @@
+{
+ "node": "N-0028",
+ "expected_revision": 63,
+ "dim": "ux",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0028_20260924/REVIEW.md",
+  "verdict": "FAILED",
+  "summary": "All 7 Start work ActionCards clicked on /brief as admin, and each changed the URL to the governed destination. The whole card is clickable and keyboard Enter works with a visible focus ring. The Lineup cases approval chip is wired to ?approval=pending. Findings: at 390, Start work pushes Needs attention below the first viewport; the ScopeBar summary ignores the filter."
+ }
+}

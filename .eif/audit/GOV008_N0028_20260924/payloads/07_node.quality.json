@@ -1,0 +1,11 @@
+{
+ "node": "N-0028",
+ "expected_revision": 69,
+ "dim": "design_signatures",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0028_20260924/REVIEW.md",
+  "verdict": "FAILED",
+  "summary": "Signatures observed: ActionCard (uppercase eyebrow, bold title, 3-line-clamped caption, START chevron affordance, primary icon), HeadlineStrip/HeadlineFigure with warn-accent severity border, ScopeBar chips with Clear, DomainHeader crumbs + LensTabs, EnterpriseDataGrid with StatusChip."
+ }
+}
