@@ -1,10 +1,14 @@
 # Staged work plan — remaining CIP work
 
-**Date:** 2026-09-21 · **EIF node:** N-0030 (`BACKLOG_AUDIT_20260921`) · **Branch:** `feat/ns-2-brief-nav-collapse`
-**Inputs:** Warren's decisions of 2026-09-21 (below) · `docs/ROADMAP.md` · `docs/BACKLOG.md` after the N-0030 audit (`.eif/audit/BACKLOG_AUDIT_20260921/BACKLOG_AUDIT.md`) · `.eif/program/PROGRAM.yaml` (29 nodes: 22 complete, 5 rejected, N-0028/N-0029 open).
-**Status:** **draft** — Warren said more may be missing and will know by Wednesday 2026-09-24. Treat Wednesday's input as a revision of this file, not a reason to hold it.
+**Date:** 2026-09-21 · **Refreshed:** 2026-09-24 (run `PROGRAMME_20260924`) · **EIF node:** N-0030 · **Branch:** `feat/ns-2-brief-nav-collapse`
+**Inputs:** Warren's decisions of 2026-09-21 (§0) and 2026-09-23 (D-a..D-h, §0b) · `docs/ROADMAP.md` · `docs/BACKLOG.md` after the N-0030 audit (`.eif/audit/BACKLOG_AUDIT_20260921/BACKLOG_AUDIT.md`) · the programme ledger.
+**Status:** **refreshed** — absorbs the 21 Sep §3 answers, D-g, and the stale items the 23 Sep briefing found (2.6, 2.7, 2.8, 3.1, 3.5, `e264410`, node count, 4.5 and Stage 9 already built).
 
-> Code is evidence; this plan is a claim. Every "measured" figure below was read from the running tree or from `cip` (read-only, `current_database()=cip` printed first) on 2026-09-21. Nothing here is complete until proven in the running tree.
+> **The ledger is the queue.** Since 2026-09-24 every item below has a ledger node (column "Node"). `python .eif/runtime/programme/program.py frontier` returns the next item; this file is the narrative, the ledger is the truth. Where they disagree, the ledger wins.
+>
+> Code is evidence; this plan is a claim. Measured figures were read from the running tree or from `cip` (read-only, `current_database()=cip` printed first) on the date given.
+
+**Ledger at refresh (2026-09-24):** 71 nodes (N-0001..N-0072; N-0064 reserved for D-h). 22 complete, 5 rejected, 8 in progress (N-0028..N-0035), 36 proposed (N-0036..N-0072), 6 of them blocked on Warren (N-0060, N-0063, N-0065, N-0068, N-0071, N-0072). The 2026-09-21 text said "29 nodes"; that was already stale at 35 when the 23 Sep briefing ran.
 
 ---
 
@@ -12,151 +16,160 @@
 
 | # | Decision | Consequence in this plan |
 |---|----------|--------------------------|
-| D1 | **Fresh independent GOV-008** for N-0028 and N-0029. No self-completion. | Stage 1 is review work by a distinct actor/run, one node per session. N-0029 is mechanically completable (`gates_valid=True`) but its `stage_note` says do not complete — respected. |
-| D2 | **Density: 40/40 rows + 13px grid type**, not the lab's 36/36. Grid-scoped type token; unify the four duplicated height constants first. | Stage 2.1–2.3. Lands **before** N-0029's review so `grid_above_fold` is reviewed once. |
-| D3 | **All columns pickable** on fact grids — searchability, analysis, intelligence. | Stage 2.4 becomes one generic "every field on the fact" picker, not curated groups. Simpler than BACKLOG-201 assumed. |
-| D4 | `CporCaseWorkspace`'s five orphaned tabs **are needed** → merge onto the settlement desk. | Stage 2.7. Restores BACKLOG-093 promo-load recon, a roadmap-shipped A2 deliverable currently unreachable in production. |
-| D5 | P1 sign-off: discover, then ask. | **Dissolved by discovery:** P1 exited 2026-08-01 (`ROADMAP.md:450`, `CONTEXT.md:438`; `DATA_CENSUS.md` sign-off log: Shipment yes, CPOR yes, DSI + Lineups deliberate leave-alone). Nothing to sign. |
-| D6 | Build features 1–9. **Feature 10 (CST historical backfill) excluded** — Warren will source data from customers and distributors directly. | Stage 7 uplift and Stage 6 depth items are **data-gated**, not build-gated. |
-| D7 | Customer/distributor **codes never in identity columns**; only as their own pickable column. | Stage 2.4 includes the name-only sweep and the `Customer code` / `Distributor code` columns. Memory rule saved. |
-| D8 | External access: **R0/month**, local WSL, Cloudflare Quick Tunnel, **BLOCKED** until auth is real. | Stage 3.1 is one env var (`CIP_AUTH_MODE=session`) plus passwords Warren sets himself. |
-| D9 | Use EIF for the checks it does. | Every stage below is meant to be chartered as node(s); this plan is the decomposition input (cf. BACKLOG-177). |
+| D1 | **Fresh independent GOV-008** for N-0028 and N-0029. No self-completion. | Queue item 3: one fresh reviewer per node, own run and actor. |
+| D2 | **Density: 40/40 rows + 13px grid type**, not the lab's 36/36. | Stage 2.1–2.3 — **done** (`5e70f33`, `a4fe957`, `459f4c9`); review nodes N-0031 and N-0035. |
+| D3 | **All columns pickable** on fact grids. | Stage 2.4 = N-0034 (one generic picker). |
+| D4 | `CporCaseWorkspace`'s five orphaned tabs **are needed** → settlement desk. | Stage 2.7 — tabs **done** (`ff118ec`, N-0032); retirement is N-0044 (D-c). |
+| D5 | P1 sign-off: discover, then ask. | **Dissolved by discovery:** P1 exited 2026-08-01. Nothing to sign. |
+| D6 | Build features 1–9. **Feature 10 (CST historical backfill) excluded.** | Stage 7 uplift and Stage 6 depth items are data-gated. |
+| D7 | Customer/distributor **codes never in identity columns**. | Stage 2.4 name-only sweep + `Customer code` / `Distributor code` columns. |
+| D8 | External access: **R0/month**, local, Cloudflare Quick Tunnel, only once auth is real. | 3.1 and 3.5 **done** (`26a6e1a`, N-0033). |
+| D9 | Use EIF for the checks it does. | Every item is a ledger node (§1). |
 
-**Standing exclusions.** EIF-repo defects (BACKLOG-159, 166, 167, 169–177) are **out of CIP scope** by their own text ("do not fix in CIP") → one separate EIF-repo session, not in these stages. BACKLOG-193 (AG Grid Enterprise) is **dropped**: a paid licence breaks R0 and N-0029's acceptance criteria forbid it. BACKLOG-200 is **held**: N-0029's criteria say "do not unify `MasterColumnPickerDialog` and `ColumnSelectorModal`" — deleting the wrapper is that unification; needs the N-0029 review to rule.
+### 0a. Warren's answers to the 21 Sep §3 questions (recorded 2026-09-21; previously only in `CURRENT.md`)
+
+| §3 question | Answer | Status |
+|---|---|---|
+| 1. 2.2 `packages/ui/**` in `change_paths`? | **Yes** — Warren amended `AUTONOMY_POLICY.md` (`e264410`). | Applied; 2.2 shipped on option (a) (`a4fe957`). |
+| 2. 4.1 repair of inverted `dim_product` windows? | **Agent decides the rule; clone run first; cip apply only with counts shown.** | N-0047. Per the 23 Sep stop rules nothing writes to cip this run: the cip apply is listed ready-for-cip. |
+| 3. 4.4 line-window migration? | **Approved** — write and prove on `cip_test`; `alembic upgrade head` on cip needs an explicit "run". | N-0050. |
+| 4. 3.2 role matrix? | **Enforce on the existing admin/steward/planner/viewer roles; Warren adds users.** No new roles. | N-0038. |
+| 5. BACKLOG-198 catalogue grain? | **Unknown, stays open.** | N-0068 blocked (D-0023). |
+| 6. 3.5 tunnel? | **Instructions given, Warren runs.** | Done (N-0033, `docs/PILOT_TUNNEL_RUNBOOK.md`). |
+| 7. 2.9 design-lab? | **Keep lab as a fixture skin over production primitives.** | N-0054. |
+
+### 0b. Warren's decisions of 2026-09-23 (ledger D-0012..D-0019, accepted)
+
+| # | Ledger | Decision (short) | Where it lands |
+|---|---|---|---|
+| D-a | D-0012 | Approve N-0030 once this file is refreshed. | This refresh. |
+| D-b | D-0013 | Grid search, saved views, export = three shared workbench-ui nodes after N-0034; reuse the inbound-shipments optional-columns pattern; no migration. | N-0041, N-0042, N-0043. |
+| D-c | D-0014 | `CporCaseWorkspace` retires once the desk absorbs BACKLOG-202; the two orphan panels are mounted if unique, deleted if duplicate. | N-0044. |
+| D-d | D-0015 | Untracked files → archive outside the repo; never delete; commit only real source. | N-0045. |
+| D-e | D-0016 | 4.6 and 4.7 are **not decided**. | N-0071, N-0072 blocked. |
+| D-f | D-0017 | No customer code mint pass; no remap of the 7 verified rows. | Holds 4.5 use. |
+| D-g | D-0018 | Sellable BU grain = **every `dim_product.product_line` value**, not the brief's five. Hardcoded five-line sets are defects. | N-0040; also N-0065, N-0057. |
+| D-h | D-0019 | Agent recommends proposed-vs-executed intelligence; chartered unstarted; not built. | N-0064 (position per recommendation). |
+
+**D-g measurement (cip, 2026-09-24):** `dim_product.product_line` has **14** distinct named values (NB 6,848 · NX 5,173 · PF 2,049 · NR 1,910 · PT 1,311 · LM 561 · XB 183 · PD 93 · AI 11 · NV 10 · NL 8 · CB 6 · AX 3 · AZ 1) plus **10 NULL rows** — not 16. Finding for Warren (does "16" count something else?).
+
+**Standing exclusions.** EIF-repo defects (BACKLOG-159, 166, 167, 169–177) are out of CIP scope. BACKLOG-193 (AG Grid Enterprise) **dropped**. BACKLOG-200 **held** pending the N-0029 review.
 
 ---
 
-## 1. Stages, in dependency order
+## 1. Stages and their ledger nodes
 
-Ordering rule: a stage sits after everything it needs to be *proven*, not merely written. Arrows name the dependency.
+Ordering rule: a stage sits after everything it needs to be *proven*, not merely written. The ledger encodes the order as `depends_on`.
 
-### Stage 0 — Ledger hygiene ✅ (this node, N-0030)
-Backlog audited against the tree, stale entries stamped, this plan written, CURRENT/CONTEXT pinned. Deliverable of N-0030; **not** a build stage.
+### Stage 0 — Ledger hygiene ✅ (N-0030)
+Backlog audited, this plan written and refreshed, queue chartered into the ledger (2026-09-24).
 
-### Stage 1a — Independent GOV-008 on **N-0028** (no product dependency)
-"Start work cards and Lineup cases on the lab composition." 11 gates pending — **3 required** (`quality.ux`, `quality.rendered`, `quality.content`) plus `verification.rendered`/`referent` and five optional design dims that NS21 reset because their evidence described a Panel/Pane composition that no longer ships. This is a real rendered review at 1280×800 **and 390×844** — the latter is now reachable: the browser tool catalogue has `resize_window`, so the `BROWSER_UNSAFE` CDP path (deferred finding seq 354) is no longer the only route. Distinct actor/run; do not touch product code in the same run.
+### Stage 1 — Independent reviews (queue item 3)
+| Node | What | Status 2026-09-24 |
+|---|---|---|
+| N-0033 | Session auth gate + loopback web + quick tunnel (R3) | awaiting independent referent |
+| N-0028 | Start work cards + Lineup cases | awaiting fresh GOV-008 |
+| N-0031 | Stage 2a grid heights / mappings states / honesty fixes | awaiting a11y + referent |
+| N-0032 | Five CPOR tabs on the desk | awaiting a11y + rendered + referent |
+| N-0035 | Stage 2.2/2.3 density (retroactive charter) | awaiting referent + rendered |
+| N-0029 | Grid clipboard + Case book | awaiting fresh GOV-008 (after Stage 2 density, now landed) |
 
-### Stage 2 — Grid, desk and density parity (feature 7 + D2/D3/D4/D7)
-Depends on nothing above. **Blocks Stage 1b.**
+### Stage 2 — Grid, desk and density parity
+| # | Item | Node | Status |
+|---|------|------|--------|
+| 2.1 | Grid heights from one source | N-0031 | ✅ built `5e70f33`; review pending |
+| 2.2 | Grid-scoped 13px type token | N-0035 | ✅ built `a4fe957`; review pending |
+| 2.3 | Density 40/40 | N-0035 | ✅ built `459f4c9`; review pending |
+| 2.4 | All-columns picker + code columns + name-only sweep | N-0034 | discovery done; operator acceptance |
+| 2.4b | Shared grid search / saved views / export (D-b) | N-0041 / N-0042 / N-0043 | proposed, after N-0034 |
+| 2.5 | Line identifier `both` as two columns | N-0053 | proposed, after N-0034 |
+| 2.6 | `MarketSurface` mappings grid → `ModuleDataSection` | N-0031 | ✅ **built** `5e70f33` (was listed open) |
+| 2.7 | Five orphaned CPOR tabs onto the desk | N-0032 | ✅ **tabs built** `ff118ec`; workspace retirement + orphan ruling → N-0044 (D-c) |
+| 2.8 | Interaction honesty: `LineupScopeBar` Apply, `market.py` readiness | N-0031 | ✅ **built** `5e70f33` (dead `LineupScopeBar.tsx` deleted; `competitor_price_import: substrate` + test) |
+| 2.9 | Design-lab as fixture skin | N-0054 | proposed |
 
-| # | Item | Depends on | Backlog / node |
-|---|------|-----------|----------------|
-| 2.1 | ✅ **Done** (`5e70f33`). **Unify the four height numbers** now in three files (`EnterpriseDataGrid.tsx:121-122`, `gridPagination.ts:7-10`, dead emission in `packages/ui/agGridMuiTheme.ts:78-79`) into one source. No behaviour change; independently verifiable. | — | density proposal §5.2 |
-| 2.2 | ✅ **Done** (`a4fe957`). **Grid-scoped type token** so 13px reaches the grid and not the 721 `variant="body2"` usages. Option (a) taken: `AG_GRID_FONT_SIZE = '13px'` in `packages/ui/src/agGridMuiTheme.ts`, exported from `@cip/ui`; no longer derived from `theme.typography.body2`. Warren's `packages/ui/**` `change_paths` amendment (`e264410`) made option (a) available. Browser-verified live (DOM `--ag-font-size: 13px` on every grid checked). | 2.1 | density proposal §5.1 |
-| 2.3 | ✅ **Done** (`459f4c9`). **Density 40/40 + 13px** (D2). `GRID_DENSITY.comfortable` → 40/40 in `apps/web/src/theme/gridDensity.ts`; `compact` unchanged 34/36. Browser-smoked at 1280×800 on the settlement Corroboration column (case 46, `--ag-row-height: 40px` DOM-verified, no clipping) and both grids on `/plan-vs-executed` (same DOM values, clean render) — the `wrapText`/multi-line-wrap behaviour itself wasn't exercised (no row in case 46 has long enough text to wrap). 390×844 **UNABLE** — `resize_window` reports success but `window.innerWidth/innerHeight` never changes from 1707×876 in this environment (checked twice). | 2.1, 2.2 | `DENSITY_PROPOSAL_OPERATOR_DATA_SCALE.md` |
-| 2.4 | **All-columns picker** on the ~15 Tier A fact grids (D3): one generic picker fed by the fact's field list, layout key per grid, via the existing `ColumnPickerDialog`. Includes **`Customer code` / `Distributor code` as pickable columns** and the **name-only sweep** of identity columns (D7). | — | BACKLOG-201, 140 (display half) |
-| 2.5 | **SKU / sales model / both**: `LineIdentifierPreference` gains `'both'` as *two* columns (each sortable/filterable), so 2.4 and 2.5 are one mechanism. Tenant profile + ~13 consuming surfaces. | 2.4 | CURRENT line-identifier series |
-| 2.6 | `MarketSurface` mappings grid → `ModuleDataSection` (the one open MIGRATE). | — | BACKLOG-199 |
-| 2.7 | **Five orphaned CPOR tabs onto the settlement desk** (D4): USD pivot, Events, Exports, **Promo load recon**, Payments/recon. Desk now has `FundingChrome`, so they mount as lens/tabs under the case header. Then retire `CporCaseWorkspace`. | `492795c` (desk chrome) | BACKLOG-202, 093 |
-| 2.8 | **Interaction honesty**, two cheap defects on programme-complete nodes: `LineupScopeBar` ships an inert primary **Apply** (`:106`, no handler); `market.py:12` reports `competitor_price_import: ready` while `fact_competitor_price` has **0 rows** and no template exists. | — | BACKLOG-156, 160, 157 |
-| 2.9 | **Design-lab duplicates**: `design-lab/primitives` still carries its own `DomainHeader`, `HeadlineFigure`, `Panel`, `EntityContextPanel`, `charts`, `controls`, `CapabilityStatus`; `design-lab/shell` its own `CommandPalette`, `LabShell` (25 tsx). Production has them in `features/workbench-ui` and `features/shell`. Lab imports production or is deleted. Do this **after** 2.3 so the density lab is no longer needed. | 2.3 | BACKLOG-161, 158 |
+### Stage 3 — Access and operations
+| # | Item | Node | Status |
+|---|------|------|--------|
+| 3.1 | `CIP_AUTH_MODE=session` + router-level gate | N-0033 | ✅ **built** `26a6e1a` (+ tests `0d34d2c`); review pending |
+| 3.2 | CPOR role checks on existing roles (BACKLOG-136/141) | N-0038 | proposed |
+| 3.3 | Tenant scoping sweep | N-0055 | proposed |
+| 3.4 | Login rate limit / lockout | N-0037 | proposed |
+| 3.5 | Quick Tunnel + multi-user test plan | N-0033 | ✅ **done** (runbook `docs/PILOT_TUNNEL_RUNBOOK.md`); review pending |
+| 3.5b | API binds loopback (BACKLOG-206) | N-0036 | proposed |
+| 3.6 | Ops safety net: restore on a clone, alerting, resolver fails loudly | N-0052 | proposed |
+| 3.7 | Import-complete merged-id assertion (BACKLOG-133/134) | N-0051 | proposed |
 
-### Stage 1b — Independent GOV-008 on **N-0029** (after Stage 2)
-"Grid community clipboard in one wrapper, Case book working content first." One optional gate pending (`quality.design_signatures`), three stale signatures: `grid_above_fold` (changes with 2.3), `unmatched_case_id_link`, `payment_evidence_code_unread` (already superseded by `aee82a72`). Reviewing after Stage 2 avoids running it twice. This session's grid/desk commits (`b9a58a3`, `492795c`) are inside its scope and must be listed as evidence for the reviewer.
+### Stage 4 — Data integrity and CPOR correctness
+| # | Item | Node | Status |
+|---|------|------|--------|
+| 4.1 | `dim_product` inverted windows (2,795 rows 2026-09-21) | N-0047 | proposed; clone proof, cip apply listed for Warren |
+| 4.2 | `cpor_case.status` vs `workflow_status` drift (4 rows) | N-0048 | proposed |
+| 4.3 | MAC check reads CST (BACKLOG-135) | N-0049 | proposed |
+| 4.4 | `cpor_case_line` week windows migration (approved for cip_test) | N-0050 | proposed; not applied to cip |
+| 4.5 | CIP-minted customer codes | — | ✅ **already built** `66003db9` / `66ae66d9` (2026-07-10); evidence `EV-BUILT-45-MINT`. D-f: no mint pass now. |
+| 4.6 | Open→shipped double-count policy (BACKLOG-062) | N-0071 | **blocked — not decided (D-e)** |
+| 4.7 | ACZA non-operational sheets (BACKLOG-046) | N-0072 | **blocked — not decided (D-e)** |
+| 4.8 | Customer merge alias seal | — | ✅ **already built** `467bc89e` (2026-07-11) + `fc14962c`; evidence `EV-BUILT-48-ALIAS` |
 
-### Stage 3 — Access and operations (features 1 + 3; the tunnel)
-Depends on nothing in Stage 2. Can run in parallel with it by a different actor.
+### Queue items outside the original stages
+| Item | Node | Status |
+|---|---|---|
+| Listing links open the real product page (Market & Listings bug) | N-0039 | proposed (queue item 5) |
+| D-g five-line assumption sweep | N-0040 | proposed (queue item 6) |
+| D-d untracked-file archive | N-0045 | proposed (queue item 9) |
+| BACKLOG-143 worktrees and hygiene | N-0046 | proposed (queue item 9) |
 
-| # | Item | Notes |
-|---|------|-------|
-| 3.1 | **`CIP_AUTH_MODE=session`** in `apps/api/.env` (currently **0 bytes**; effective mode measured `stub` → every unauthenticated request is `admin@local`, headers forgeable). Warren sets the two passwords (`admin@local`, `viewer@local`, both already have hashes; PBKDF2-SHA256 × 260k). Run `next build && next start` for the tunnel window, not `next dev`. | Security gate → PASS. `redirectToLoginOn401` already exists in the web client. |
-| 3.2 | **RBAC**: one role-matrix CONSULT (Ken/PM/Wayne → admin/steward/planner/viewer), then `require_roles` on every CPOR write incl. export; steward panels `STEWARD+ADMIN` (today `shipment_evidence.py:203,228` are ADMIN-only); planner RBAC. | BACKLOG-136, 141, 021 |
-| 3.3 | **Tenant scoping sweep**: 34 of 58 endpoint modules never reference `tenant_id`. Tolerable for one-tenant staff pilot; not for two tenants. | P2 exit |
-| 3.4 | Login rate-limit / lockout (none today). | small |
-| 3.5 | **Quick Tunnel** + multi-user test plan (Phase 7 of the brief). Only after 3.1. Re-test every route under `session` — some may have leaned on the stub admin. | R0 |
-| 3.6 | **Operational safety net** (feature 3): job-failure alerting on Celery, error tracking, log aggregation, **automated `pg_dump` + a tested restore + RTO/RPO** (`docs/BACKUP_AND_DR.md` exists — verify it is executed, not just written). Admin data-health page. VACUUM runbook. Celery parity audit. AI resolver fail-loud **before** `AI_ASSIST_ENABLED` is ever flipped (today `False`; `_anthropic_client()` returns `None` silently). | BACKLOG-031, 032, 048, 168 |
-| 3.7 | **Import-complete merged-id assertion**: `customer_leftover_repair.py` exists with **zero callers** — wire it to the import-complete rail; fold 134 (measured 0 today). | BACKLOG-133, 134 |
+### Stage 5 — Analytics delivery — N-0056
+Export, event-triggered refresh, calendar delivery, vintage on face. After 3.6 (N-0052).
 
-### Stage 4 — Data integrity and CPOR correctness (small, measured, necessary)
-Independent of Stages 1–3. Several need Warren's approval because they touch `cip` or schema.
-
-| # | Item | Measured 2026-09-21 | Needs |
-|---|------|---------------------|-------|
-| 4.1 | `dim_product` inverted launch/retire windows | **2,795** rows (entry recorded 319 — grown ~9×) | audit → repair on clone → Warren approves cip repair · BACKLOG-034 |
-| 4.2 | `cpor_case.status` vs `workflow_status` drift | **4** rows: settled/ended ×2, cancelled/draft, cancelled/ended | pick owner column, repair · BACKLOG-139 |
-| 4.3 | Customer SOH for the MAC check | `fact_inventory_customer` **0** rows; `fact_customer_sellthrough` **1,823** | point MAC-check at CST; stop claiming the inventory fact · BACKLOG-135 |
-| 4.4 | `cpor_case_line` week-aligned windows | **no** `window_*` columns on the line | migration — Warren approval · BACKLOG-137 |
-| 4.5 | **CIP-minted customer codes** on promote (the other half of D7) | `dim_customer.code`; TMP count in audit | settings + collision-safe sequence; `mode=mint` on existing promote · BACKLOG-140 |
-| 4.6 | Open→shipped fact double-count policy | diagnostic exists (`shipment_plan_d_cutover.py`) | Warren approves remediation policy · BACKLOG-062 |
-| 4.7 | ACZA workbook non-operational sheets (BOM Not Ready) | no allowlist in `_load_frames_for_job` | business rule then allowlist · BACKLOG-046 |
-| 4.8 | Customer merge **alias seal** + companions | not in tree; consult READY (memory) | merge-engine wave · BACKLOG-081, 083 |
-
-### Stage 5 — Analytics delivery (feature 2)
-P3-5: Excel/PDF export, event-triggered refresh (load completes → dependents refresh → subscribers notified) **and** calendar delivery; every report declares its vintage on its face. Depends on Stage 3.6 (a scheduler that can alert on failure) — do not ship scheduled delivery with no failure signal.
-
-### Stage 6 — Planning journey (features 4 + 9)
-| # | Item | Backlog |
-|---|------|---------|
-| 6.1 | **B2 end-to-end PM run** — a PM authors next quarter's lineup in CIP and exports tenant format (demo gate #4, "the dependency moment"). Components exist; the journey is unproven. | roadmap B2 |
-| 6.2 | Lineup **authoring workbench** beside unified import (feature 9). | BACKLOG-190 |
-| 6.3 | Unified lineup import **1H → Q1+Q2 fan-out** (bulk path has it; unified path status in audit). | BACKLOG-103 |
-| 6.4 | Bulk-backfill completion UX (dialog still `onClose()` at `:269`; activity-bell pointer only). | BACKLOG-060 |
-| 6.5 | Lineup data rules: PF `Qty` vs `Total Qty`, BU resolver thresholds, monthly-phased 1H. | BACKLOG-105, 055, 065 |
-
-### Stage 7 — Promotion intelligence v2 (feature 8) — partly **data-gated**
-| # | Item | Gate |
+### Stage 6 — Planning journey
+| # | Item | Node |
 |---|------|------|
-| 7.1 | Listing + competitor evidence on plan lines — buildable now with honest empties (`customer_listing` 218, `listing_observation` 168, `fact_competitor_price` **0**). | BACKLOG-183 |
-| 7.2 | Observed weeks-of-cover as proposal input (`weeks_of_cover_observation` 194k rows; `target_cover_weeks` all null). | BACKLOG-184 |
-| 7.3 | A2-05 comparable ranking scope decision. | BACKLOG-186 |
-| 7.4 | **Uplift from settled claims** — `cpor_claim_evidence_line` **0** rows against **211** settled cases. Cannot be built honestly until claim evidence lands. **Unlocked by Warren's customer/distributor data drive (D6), not by code.** | BACKLOG-185 |
-| 7.5 | Supply: stored "Arrived" state (facts today only `shipped` 13,477 / `open_order` 1,775); plan-unit PO coverage by distributor. | BACKLOG-178, 179 |
+| 6.1/6.2 | B2 PM run + lineup authoring workbench (BACKLOG-190) | N-0057 |
+| 6.3/6.5 | Unified 1H fan-out + lineup data rules (BACKLOG-103/105/055/065) | N-0058 |
+| 6.4 | Bulk-backfill completion UX (BACKLOG-060) | N-0059 |
 
-### Stage 8 — Steward and import engine (helpful; trigger-gated)
-DSI mailbox auto-ingest (shipping slice **is in tree** under `services/mailbox_ingest/`; DSI batch-propose slice open) · layout-coalesce follow-ons · **CST article-alias batch confirm/reject** (P4 is live, so the trigger has effectively fired) · unresolved-volume worklist reader (`apply_exclusion` writer exists) · post-apply reconciliation report · catalogue semantic column mapping · backfill file-provenance retention · PoAutoLink S1–S14 parity · ResolutionWorklist migration · DSI replay after catalogue-gap apply · non-candidate steward coverage · wizard componentisation · DSI post-tier orchestrator · catalog bulk upsert (still per-row `flush()` at `pm_commit_catalog.py:72,294`) · geo indexes · candidates payload slimming.
-BACKLOG-077, 078, 080, 049, 051, 059, 067, 106, 123, 187, 188, 004, 037, 011, 018, 006, 008, 016, 019, 020.
+### Stage 7 — Promotion intelligence v2
+| # | Item | Node |
+|---|------|------|
+| 7.1–7.3 | Listing/competitor evidence, observed cover, comparable scope | N-0061 |
+| 7.4 | Uplift from settled claims — **data-gated** (blocked, D-0021) | N-0063 |
+| 7.5 | Supply Arrived state + PO coverage | N-0062 |
+| D-h | Proposed-vs-executed intelligence (plan accuracy, deal-stock landing, PM bias) | N-0064 (chartered after the D-h moment) |
 
-### Stage 9 — Distributor merge (feature 6)
-Customer-merge engine extended to `dim_distributor`; pairs with 4.8 and the ResolutionWorklist migration (BACKLOG-123 names the distributor auto-link grid as the second consumer).
+### Stage 8 — Steward and import engine (trigger-gated) — N-0069 umbrella
+Items listed in the 2026-09-21 text (BACKLOG-077, 078, 080, 049, 051, 059, 067, 106, 123, 187, 188, 004, 037, 011, 018, 006, 008, 016, 019, 020) each split into its own node when its trigger fires.
 
-### Stage 10 — Multi-tenant productisation (feature 5, P6)
-Tenant config surface (BU vocabulary, period conventions, legal-form normaliser, column-map profiles, metric definitions, export templates), tenant-#2 onboarding, branding, provisioning. Pulls in BACKLOG-059, 067 and the **`catalog_product` grain decision** (BACKLOG-198 — Warren's).
+### Stage 9 — Distributor merge ✅ **already built**
+`361d138a` (2026-06-30, full distributor merge engine with PO consolidation and soft-redirect) + `fc14962c` resolvers follow `merged_into`. Evidence `EV-BUILT-S9-DISTMERGE`. No node.
 
----
+### Stage 10 — Multi-tenant productisation (P6) — N-0070
+After N-0069, N-0068 (catalogue grain) and N-0065 (BU entitlements).
 
-## 2. The same work, grouped by the kind of work it is
-
-| Kind | Items |
-|------|-------|
-| **Config / env only** (minutes) | 3.1 `CIP_AUTH_MODE=session`; `next build && next start` |
-| **One-line honesty fixes** | 2.8 `market.py:12`; 2.8 `LineupScopeBar` Apply; 2.6 mappings grid MDS |
-| **UI parity (web only)** | 2.1, 2.3, 2.4, 2.5, 2.7, 2.9, 6.4 |
-| **Needs a policy or licence decision** | 2.2 (`packages/ui` outside `change_paths`); 193 dropped (licence) |
-| **API + schema (migration, Warren approves)** | 4.4 line windows; 4.5 code mint sequence; 7.5 Arrived state; 2.5 tenant profile field |
-| **Data repair on `cip` (clone first, Warren approves)** | 4.1 (2,795 rows), 4.2 (4 rows), 4.6 |
-| **Security / RBAC** | 3.1–3.5 |
-| **Infrastructure / ops** | 3.6, 3.7, 5 |
-| **Journey proof (browser, not code)** | 6.1 B2 PM run; 3.5 multi-user test |
-| **Data-gated (Warren's data drive)** | 7.4 uplift; P5 observation depth |
-| **Governance (distinct actor)** | 1a N-0028; 1b N-0029 |
-| **Out of CIP scope** | EIF repo: 159, 166, 167, 169–177; `.cursor/hooks` |
-| **Dropped / superseded** | 193; 149–154 (six-container IA superseded by N-0013); 009/010 PIM → fold into Stage 10 or drop; 017; 014 unless business asks |
+### Outside-plan candidates (checked 2026-09-24)
+| Candidate | Verdict | Node / evidence |
+|---|---|---|
+| External API layer (spec only until a consumer is named) | **Done as spec** (`docs/EXTERNAL_API_OUTBOUND.md`, `..._INBOUND.md`, `49e08364`) | `EV-BUILT-EXTAPI-SPEC`; first consumer = Warren |
+| BU entitlements (user → product lines over D-g) | Missing; needs Warren's semantics | N-0065 blocked (D-0022) |
+| Historical lineup backfill | Missing; cip holds 36 cases, 2025 Q1–2026 Q3 | N-0060 blocked (D-0020) |
+| Inbound shipments by lineup quarter filter | **Already built** `4d7231f0` (2026-07-08) | `EV-BUILT-INBOUND-LQ` |
+| Naming and polish pass for outside buyers | Missing | N-0066 |
+| Light/dark theme completion | Both modes exist in `cipTheme`; completion unproven | N-0067 |
+| Multi-catalogue column sets | Blocked on BACKLOG-198 grain | N-0068 blocked (D-0023) |
 
 ---
 
-## 3. Decisions still needed from Warren
+## 2. Still open for Warren
+Shipment-evidence identifier preference · paid/closed migration on `cpor_case` · first outbound API consumer · 4.6 · 4.7 · BU entitlement semantics · historical lineup archive · catalogue grain · the "16 vs 14" product-line count. The session report carries these in its WARREN block.
 
-1. **2.2** — add `packages/ui/**` to `change_paths`, or accept option (b) (`--ag-font-size` in `EnterpriseDataGrid.shellSx`)?
-2. **4.1** — approve repair of the 2,795 inverted `dim_product` windows on cip after a clone run?
-3. **4.4** — approve the `cpor_case_line` window-column migration?
-4. **3.2** — the role matrix: Ken / PM / Wayne onto admin / steward / planner / viewer, or new roles?
-5. **BACKLOG-198** — does `catalog_product` stay the catalogue, get retired, or is it unrelated to per-line column sets?
-6. **3.5** — go for the tunnel once 3.1 and passwords are done?
-7. **2.9** — delete design-lab duplicates outright, or keep lab as a fixture skin over production components?
-
-## 4. Sequencing at a glance
+## 3. Sequencing at a glance (ledger `depends_on`)
 
 ```
-Stage 0 ─┐
-         ├─► Stage 1a (N-0028 review)            ── distinct actor
-         ├─► Stage 2 (grid/desk/density) ──► Stage 1b (N-0029 review)
-         │                              └──► Stage 2.9 (lab dupes)
-         ├─► Stage 3 (auth → RBAC → tunnel → ops) ──► Stage 5 (delivery)
-         ├─► Stage 4 (data integrity)  ── approvals
-         ├─► Stage 6 (planning journey)
-         ├─► Stage 7 (promo intelligence) ── 7.4 waits for claim data
-         ├─► Stage 8 (steward/import)    ── trigger-gated
-         └─► Stage 9 (disti merge) ──► Stage 10 (multi-tenant)
+N-0030 ─► N-0036 ─► N-0037 ─► N-0038 ─► N-0039 ─► N-0040 ─► N-0044 ─► N-0045 ─► N-0046
+  ─► N-0047 ─► N-0048 ─► N-0049 ─► N-0050 ─► N-0051 ─► N-0052 ─► N-0054 ─► N-0055 ─► N-0056
+  ─► N-0057 ─► N-0058 ─► N-0059 ─► N-0061 ─► N-0062 ─► N-0066 ─► N-0067 ─► N-0069 ─► N-0070
+N-0034 ─► N-0041 / N-0042 / N-0043 ; N-0034 + N-0052 ─► N-0053
+blocked on Warren: N-0060 (after N-0058), N-0063, N-0065, N-0068, N-0071, N-0072
+reviews (existing nodes): N-0033, N-0028, N-0031, N-0032, N-0035, N-0029
 ```
-
-Stages 2, 3, 4, 6 are mutually independent and can be chartered as parallel EIF nodes with different actors. Stage 1b must follow Stage 2. Stage 5 must follow 3.6.

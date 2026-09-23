@@ -302,7 +302,7 @@ export const navGroups: NavGroup[] = [
         label: 'Steward queue',
         href: '/admin/mappings',
         roles: STEWARD_PLUS,
-        what: 'Cross-job manual mapping queue for tokens awaiting resolution (legacy queue; disposition deferred, D-0002).',
+        what: 'Unresolved entity tokens waiting as pipeline state, grouped by failure type; resolve them in the resolve workspace.',
       },
       { label: 'Master data', href: '/admin/masters', roles: STEWARD_PLUS, what: 'Identity anchors: products, customers, distributors, stores.' },
       { label: 'Products', href: '/admin/products', roles: STEWARD_PLUS, what: 'Product master: records, SKU economics, provisional enrichment.' },
