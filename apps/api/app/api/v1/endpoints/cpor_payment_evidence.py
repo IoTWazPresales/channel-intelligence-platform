@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.v1.endpoints.cpor_cases import _actor
-from app.core.security import get_current_user
+from app.core.security import Role, get_current_user, require_roles
 from app.db.session_sync import SessionLocal
 from app.models.cpor_payment import CporPaymentEvidence, CporPaymentMappingProfile
 from app.models.ingestion import ImportJob
@@ -37,6 +37,9 @@ from app.services.cpor.payment_evidence.resolve import (
 from app.services.steward_audit import record_steward_audit_sync
 
 router = APIRouter()
+# N-0038 (BACKLOG-136): payment-evidence steward resolve / apply is data-steward work —
+# steward, planner or admin. GETs remain authentication-only (reads).
+_require_cpor_steward = require_roles(Role.STEWARD, Role.PLANNER, Role.ADMIN)
 TEMPLATE_SLUG = "cpor_payment_evidence"
 
 
@@ -149,7 +152,7 @@ def candidates(
 def map_token(
     job_id: int,
     body: MapTokenBody,
-    _user: Annotated[dict, Depends(get_current_user)] = None,
+    _user: Annotated[dict, Depends(_require_cpor_steward)] = None,
     db: Session = Depends(_sync_db),
 ) -> dict[str, Any]:
     _job_or_404(db, job_id)
@@ -179,7 +182,7 @@ def map_token(
 def mark_shell(
     job_id: int,
     body: ShellCaseBody,
-    _user: Annotated[dict, Depends(get_current_user)] = None,
+    _user: Annotated[dict, Depends(_require_cpor_steward)] = None,
     db: Session = Depends(_sync_db),
 ) -> dict[str, Any]:
     _job_or_404(db, job_id)
@@ -202,7 +205,7 @@ def mark_shell(
 @router.post("/payment-evidence/jobs/{job_id}/re-resolve")
 def re_resolve(
     job_id: int,
-    _user: Annotated[dict, Depends(get_current_user)] = None,
+    _user: Annotated[dict, Depends(_require_cpor_steward)] = None,
     db: Session = Depends(_sync_db),
 ) -> dict[str, Any]:
     _job_or_404(db, job_id)
@@ -214,7 +217,7 @@ def re_resolve(
 def apply_job(
     job_id: int,
     body: ApplyBody,
-    _user: Annotated[dict, Depends(get_current_user)] = None,
+    _user: Annotated[dict, Depends(_require_cpor_steward)] = None,
     db: Session = Depends(_sync_db),
 ) -> dict[str, Any]:
     if not body.confirm:

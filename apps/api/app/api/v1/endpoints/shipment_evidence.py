@@ -76,6 +76,8 @@ from app.worker.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+# N-0038 (BACKLOG-141): steward panel gates admit STEWARD as well as ADMIN
+# (require_roles(Role.ADMIN, Role.STEWARD)); planner and viewer are refused.
 
 
 async def _unresolved_shipment_mapping_candidate_count(db: AsyncSession, job_id: int, entity_type: str) -> int:
@@ -200,7 +202,7 @@ def _apply_filters(stmt: Any, model: Any, **kwargs: Any) -> Any:
 @router.get("/raw-column-keys")
 async def list_shipment_evidence_raw_column_keys(
     db: AsyncSession = Depends(get_db),
-    _user: dict = Depends(require_roles(Role.ADMIN)),
+    _user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
     import_job_id: int = Query(..., ge=1),
 ) -> dict[str, Any]:
     """Distinct JSON keys present in ``raw_source_row`` for one import job (for admin column picker)."""
@@ -225,7 +227,7 @@ async def list_shipment_evidence_raw_column_keys(
 async def list_shipment_import_job_mapping_candidates(
     job_id: int,
     db: AsyncSession = Depends(get_db),
-    _user: dict = Depends(require_roles(Role.ADMIN)),
+    _user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> list[dict[str, Any]]:
     """``shipment_distributor`` and ``shipment_customer_token`` candidates for an inbound_shipments job."""
     job = await db.get(ImportJob, job_id)
@@ -302,7 +304,7 @@ async def list_shipment_import_job_mapping_candidates_paginated(
     duplicate_unresolved_only: bool = False,
     status: str = "open",
     db: AsyncSession = Depends(get_db),
-    _user: dict = Depends(require_roles(Role.ADMIN)),
+    _user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> dict[str, Any]:
     """Paginated shipment mapping candidates (default limit 100, max 1000)."""
     job = await db.get(ImportJob, job_id)
@@ -336,7 +338,7 @@ async def list_shipment_import_job_mapping_candidates_paginated(
 async def shipment_mapping_candidate_tab_counts(
     job_id: int,
     db: AsyncSession = Depends(get_db),
-    _user: dict = Depends(require_roles(Role.ADMIN)),
+    _user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> dict[str, Any]:
     job = await db.get(ImportJob, job_id)
     if not job or (job.template_slug or "") != "inbound_shipments":
@@ -381,7 +383,7 @@ class ShipmentResolutionPlanApplyBody(BaseModel):
 async def shipment_resolution_plan_compute_async(
     job_id: int,
     body: ShipmentResolutionPlanGenerateBody,
-    _user: dict = Depends(require_roles(Role.ADMIN)),
+    _user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> dict[str, Any]:
     with SessionLocal() as s:
         job = s.get(ImportJob, job_id)
@@ -409,7 +411,7 @@ async def shipment_resolution_plan_compute_async(
 async def shipment_resolution_plan_generate(
     job_id: int,
     body: ShipmentResolutionPlanGenerateBody,
-    _user: dict = Depends(require_roles(Role.ADMIN)),
+    _user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> dict[str, Any]:
     from app.services.imports.shipment_resolution_plan import build_shipment_resolution_plan_sync
 
@@ -427,7 +429,7 @@ async def shipment_resolution_plan_generate(
 async def shipment_resolution_plan_effective(
     job_id: int,
     body: ShipmentResolutionPlanEffectiveBody,
-    _user: dict = Depends(require_roles(Role.ADMIN)),
+    _user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> dict[str, Any]:
     from app.services.imports.shipment_resolution_plan import build_shipment_resolution_plan_effective_sync
 
@@ -450,7 +452,7 @@ async def shipment_resolution_plan_effective(
 async def shipment_resolution_plan_apply_async(
     job_id: int,
     body: ShipmentResolutionPlanApplyBody,
-    _user: dict = Depends(require_roles(Role.ADMIN)),
+    _user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> dict[str, Any]:
     with SessionLocal() as s:
         job = s.get(ImportJob, job_id)
@@ -621,7 +623,7 @@ def _write_shipment_bulk_slot(job_id: int, task_id: str, *, async_poll: bool, la
 async def shipment_import_job_bulk_apply_confirmed_plans(
     job_id: int,
     body: ShipmentBulkApplyPlansBody,
-    _user: dict = Depends(require_roles(Role.ADMIN)),
+    _user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> dict[str, Any]:
     """Enqueue apply of each candidate's persisted planner ``suggested_action`` as a background task.
 
@@ -647,7 +649,7 @@ async def shipment_import_job_bulk_apply_confirmed_plans(
 @router.post("/import-candidates/bulk-map-customer", status_code=202)
 async def shipment_import_candidates_bulk_map_customer(
     body: ShipmentBulkMapCustomerBody,
-    user: dict = Depends(require_roles(Role.ADMIN)),
+    user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> dict[str, Any]:
     """Enqueue bulk-map of many shipment customer candidates to one existing customer (background task).
 
@@ -690,7 +692,7 @@ async def shipment_import_candidates_bulk_map_customer(
 async def shipment_import_candidate_map_distributor(
     candidate_id: int,
     body: ShipmentMapDistributorBody,
-    user: dict = Depends(require_roles(Role.ADMIN)),
+    user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> dict[str, Any]:
     with SessionLocal() as s:
         cand = s.get(ImportEntityMappingCandidate, candidate_id)
@@ -722,7 +724,7 @@ async def shipment_import_candidate_map_distributor(
 async def shipment_import_candidate_create_provisional_distributor(
     candidate_id: int,
     body: ShipmentCreateProvisionalDistributorBody,
-    user: dict = Depends(require_roles(Role.ADMIN)),
+    user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> dict[str, Any]:
     with SessionLocal() as s:
         cand = s.get(ImportEntityMappingCandidate, candidate_id)
@@ -758,7 +760,7 @@ async def shipment_import_candidate_create_provisional_distributor(
 async def shipment_import_candidate_map_customer(
     candidate_id: int,
     body: ShipmentMapCustomerBody,
-    user: dict = Depends(require_roles(Role.ADMIN)),
+    user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> dict[str, Any]:
     with SessionLocal() as s:
         cand = s.get(ImportEntityMappingCandidate, candidate_id)
@@ -794,7 +796,7 @@ class ShipmentManualSpecialCategoryBody(BaseModel):
 async def shipment_import_candidate_manual_special_category(
     candidate_id: int,
     body: ShipmentManualSpecialCategoryBody,
-    _user: dict = Depends(require_roles(Role.ADMIN)),
+    _user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> dict[str, Any]:
     with SessionLocal() as s:
         cand = s.get(ImportEntityMappingCandidate, candidate_id)
@@ -811,7 +813,7 @@ async def shipment_import_candidate_manual_special_category(
 @router.post("/import-candidates/{candidate_id}/clear-special-category")
 async def shipment_import_candidate_clear_special_category(
     candidate_id: int,
-    _user: dict = Depends(require_roles(Role.ADMIN)),
+    _user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> dict[str, Any]:
     with SessionLocal() as s:
         cand = s.get(ImportEntityMappingCandidate, candidate_id)
@@ -826,7 +828,7 @@ async def shipment_import_candidate_clear_special_category(
 @router.post("/import-candidates/{candidate_id}/reject")
 async def shipment_import_candidate_reject(
     candidate_id: int,
-    user: dict = Depends(require_roles(Role.ADMIN)),
+    user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> dict[str, Any]:
     with SessionLocal() as s:
         cand = s.get(ImportEntityMappingCandidate, candidate_id)
@@ -855,7 +857,7 @@ async def shipment_import_candidate_reject(
 async def shipment_import_candidate_duplicate_different_entity(
     candidate_id: int,
     body: ShipmentDuplicateReviewPeerBody,
-    user: dict = Depends(require_roles(Role.ADMIN)),
+    user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> dict[str, Any]:
     with SessionLocal() as s:
         cand = s.get(ImportEntityMappingCandidate, candidate_id)
@@ -889,7 +891,7 @@ async def shipment_import_candidate_duplicate_different_entity(
 async def shipment_import_candidate_duplicate_same_entity(
     candidate_id: int,
     body: ShipmentDuplicateReviewPeerBody,
-    user: dict = Depends(require_roles(Role.ADMIN)),
+    user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> dict[str, Any]:
     with SessionLocal() as s:
         cand = s.get(ImportEntityMappingCandidate, candidate_id)
@@ -923,7 +925,7 @@ async def shipment_import_candidate_duplicate_same_entity(
 async def shipment_import_candidate_create_provisional_customer(
     candidate_id: int,
     body: ShipmentCreateProvisionalCustomerBody,
-    user: dict = Depends(require_roles(Role.ADMIN)),
+    user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> dict[str, Any]:
     with SessionLocal() as s:
         cand = s.get(ImportEntityMappingCandidate, candidate_id)
@@ -963,7 +965,7 @@ async def shipment_import_job_bulk_create_provisional_customers(
     job_id: int,
     body: ShipmentBulkProvisionalCustomersBody,
     db: AsyncSession = Depends(get_db),
-    _user: dict = Depends(require_roles(Role.ADMIN)),
+    _user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> dict[str, Any]:
     """Enqueue bulk provisional customer creation as a background task (governance: steward-driven only).
 
@@ -1010,7 +1012,7 @@ async def shipment_steward_bulk_provisional_apply_async(
     job_id: int,
     body: ShipmentBulkStewardBody,
     db: AsyncSession = Depends(get_db),
-    _user: dict = Depends(require_roles(Role.ADMIN)),
+    _user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> dict[str, Any]:
     """Enqueue batch provisional customer creation (DSI-shaped route alias)."""
     job = await db.get(ImportJob, job_id)
@@ -1315,7 +1317,7 @@ def _clear_shipment_bulk_slot(job_id: int) -> None:
 async def apply_shipment_import_job(
     job_id: int,
     db: AsyncSession = Depends(get_db),
-    _user: dict = Depends(require_roles(Role.ADMIN)),
+    _user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> dict[str, Any]:
     """Apply an inbound_shipments import job in the background: auto-map ``map_*`` candidates, upsert facts, ``loaded``.
 
@@ -1403,7 +1405,7 @@ async def apply_shipment_import_job(
 @router.get("")
 async def list_shipment_evidence(
     db: AsyncSession = Depends(get_db),
-    _user: dict = Depends(require_roles(Role.ADMIN)),
+    _user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     import_job_id: int | None = None,
@@ -1469,7 +1471,7 @@ async def list_shipment_change_events(
     event_type: list[str] | None = Query(None, description="Filter: date_slip, qty_change, graduated, pod_reversal"),
     line_identity_key: str | None = Query(None),
     limit: int = Query(500, ge=1, le=5000),
-    _user: dict = Depends(require_roles(Role.ADMIN)),
+    _user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> dict[str, Any]:
     """Derived-on-read shipment lifecycle events from observation chains (Plan D v1)."""
     from app.services.imports.shipment_change_events import (
@@ -1505,7 +1507,7 @@ async def list_shipment_change_events(
 async def get_shipment_evidence_line(
     line_id: int,
     db: AsyncSession = Depends(get_db),
-    _user: dict = Depends(require_roles(Role.ADMIN)),
+    _user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> dict[str, Any]:
     EV = shipment_evidence_read_model()
     row = await db.get(EV, line_id)

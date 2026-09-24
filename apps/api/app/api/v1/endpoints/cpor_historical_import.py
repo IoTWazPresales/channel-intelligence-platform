@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.core.config import get_settings
 from app.core.dev_celery_logging import DEV_CELERY_LOGGER
-from app.core.security import get_current_user
+from app.core.security import Role, get_current_user, require_roles
 from app.db.session_sync import SessionLocal
 from app.models.cpor_historical import CporHistoricalMappingProfile, ImportCporHistoricalStagingLine
 from app.models.ingestion import ImportJob
@@ -53,6 +53,11 @@ from app.worker.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# N-0038 (BACKLOG-136 regression trap): these routes were admin-only before R1, and R2 must
+# restore an equivalent or stronger check, so historical-import writes stay ADMIN-only.
+# GETs remain authentication-only (reads).
+_require_cpor_historical_writer = require_roles(Role.ADMIN)
 
 TEMPLATE_SLUG = "cpor_historical_cases"
 
@@ -345,7 +350,7 @@ def historical_candidates(
 def historical_map_token(
     job_id: int,
     body: MapTokenBody,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(_require_cpor_historical_writer),
 ) -> dict[str, Any]:
     with SessionLocal() as db:
         _get_job_sync(db, job_id)
@@ -371,7 +376,7 @@ def historical_map_token(
 def historical_bulk_map_token(
     job_id: int,
     body: BulkMapTokenBody,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(_require_cpor_historical_writer),
 ) -> dict[str, Any]:
     tokens = [t.strip() for t in body.tokens if (t or "").strip()]
     if not tokens:
@@ -403,7 +408,7 @@ def historical_bulk_map_token(
 @router.post("/historical-import/jobs/{job_id}/validate")
 def historical_validate(
     job_id: int,
-    _user: dict = Depends(get_current_user),
+    _user: dict = Depends(_require_cpor_historical_writer),
 ) -> dict[str, Any]:
     """Async validate (parse → stage → deterministic resolve) — same bar as DSI validate."""
     with SessionLocal() as db:
@@ -435,7 +440,7 @@ def historical_validate(
 def historical_apply(
     job_id: int,
     body: ApplyBody,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(_require_cpor_historical_writer),
 ) -> dict[str, Any]:
     if not body.confirm:
         raise HTTPException(
@@ -585,7 +590,7 @@ def historical_progress(
 def historical_resolution_plan_generate(
     job_id: int,
     body: ResolutionPlanGenerateBody,
-    _user: dict = Depends(get_current_user),
+    _user: dict = Depends(_require_cpor_historical_writer),
 ) -> dict[str, Any]:
     """Synchronous plan generation — small jobs / tests. Prefer compute-async for steward UI."""
     with SessionLocal() as db:
@@ -601,7 +606,7 @@ def historical_resolution_plan_generate(
 def historical_resolution_plan_compute_async(
     job_id: int,
     body: ResolutionPlanGenerateBody,
-    _user: dict = Depends(get_current_user),
+    _user: dict = Depends(_require_cpor_historical_writer),
 ) -> dict[str, Any]:
     with SessionLocal() as s:
         job = _get_job_sync(s, job_id)
@@ -631,7 +636,7 @@ def historical_resolution_plan_compute_async(
 def historical_resolution_plan_apply_async(
     job_id: int,
     body: ResolutionPlanApplyBody,
-    _user: dict = Depends(get_current_user),
+    _user: dict = Depends(_require_cpor_historical_writer),
 ) -> dict[str, Any]:
     """Apply ready resolution-plan rows — per-token map_staging_token (D-013; never bulk single-target)."""
     with SessionLocal() as s:

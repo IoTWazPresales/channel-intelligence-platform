@@ -9,13 +9,16 @@ from fastapi.responses import StreamingResponse
 from io import BytesIO
 from sqlalchemy import select
 
-from app.core.security import get_current_user
+from app.core.security import Role, require_roles
 from app.db.session_sync import SessionLocal
 from app.models.cpor import CporCase, CporCaseEvent
 from app.services.cpor.export_xlsx import RESELLER_HEADERS, build_cpor_case_workbook_bytes
 from app.storage.local import LocalStorageBackend
 
 router = APIRouter()
+
+# N-0038 (BACKLOG-136): generating an export is case-lifecycle work — planner or admin.
+_require_cpor_planner = require_roles(Role.PLANNER, Role.ADMIN)
 
 
 def _actor(user: dict) -> str:
@@ -56,7 +59,7 @@ def _file_name(case_code: str, version: int) -> str:
 
 
 @router.post("/cases/{case_id}/export")
-def generate_export(case_id: int, user: dict = Depends(get_current_user)):
+def generate_export(case_id: int, user: dict = Depends(_require_cpor_planner)):
     actor = _actor(user)
     storage = LocalStorageBackend()
     with SessionLocal() as session:

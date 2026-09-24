@@ -11,7 +11,7 @@ from sqlalchemy import exists, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.security import get_current_user
+from app.core.security import Role, get_current_user, require_roles
 from app.core.tenant_scope import tenant_id_from_user, where_tenant
 from app.db.session_sync import SessionLocal
 from app.models.cpor import CporCase, CporCaseEvent, CporCaseLine, CporClaimEvidenceLine
@@ -84,6 +84,11 @@ from app.services.cpor.settlement import (
 )
 
 router = APIRouter()
+
+# N-0038 (BACKLOG-136, Stage 3.2): CPOR writes are gated on the existing IAM roles (Warren
+# 2026-09-21). Case lifecycle, settle, claim evidence and promo-plan writes are planner work;
+# steward and viewer are read-only here. require_roles always admits ADMIN.
+_require_cpor_planner = require_roles(Role.PLANNER, Role.ADMIN)
 
 
 # --- helpers -----------------------------------------------------------------
@@ -702,7 +707,7 @@ def list_cases(
 @router.post("/cases", status_code=201)
 def create_case(
     body: CaseCreate,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(_require_cpor_planner),
 ):
     actor = _actor(user)
     if body.promotion_type not in CPOR_PROMOTION_TYPE_SET:
@@ -791,7 +796,7 @@ def get_case(case_id: int, user: dict = Depends(get_current_user)):
 def patch_case(
     case_id: int,
     body: CasePatch,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(_require_cpor_planner),
 ):
     actor = _actor(user)
     with SessionLocal() as session:
@@ -868,7 +873,7 @@ def patch_case(
 def set_intelligence_exclude(
     case_id: int,
     body: IntelligenceExcludeBody,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(_require_cpor_planner),
 ):
     """Toggle intelligence exclusion. Never blocks settle. Requires confirm=true."""
     if not body.confirm:
@@ -904,7 +909,7 @@ def set_intelligence_exclude(
 def preview_supersede_case(
     case_id: int,
     body: SupersedePreviewBody,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(_require_cpor_planner),
 ):
     """What superseding this case by ``winner_case_id`` would do. No writes."""
     with SessionLocal() as session:
@@ -917,7 +922,7 @@ def preview_supersede_case(
 def supersede_case_endpoint(
     case_id: int,
     body: SupersedeBody,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(_require_cpor_planner),
 ):
     """Soft-supersede this case by ``winner_case_id``. Requires confirm=true; 409 on blockers."""
     if not body.confirm:
@@ -952,7 +957,7 @@ def supersede_case_endpoint(
 def restore_supersede_case(
     case_id: int,
     body: SupersedeRestoreBody,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(_require_cpor_planner),
 ):
     """Clear ``superseded_by_case_id`` (soft reversal). Requires confirm=true."""
     if not body.confirm:
@@ -978,7 +983,7 @@ def restore_supersede_case(
 def create_line(
     case_id: int,
     body: LineCreate,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(_require_cpor_planner),
 ):
     actor = _actor(user)
     with SessionLocal() as session:
@@ -1081,7 +1086,7 @@ def patch_line(
     case_id: int,
     line_id: int,
     body: LinePatch,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(_require_cpor_planner),
 ):
     actor = _actor(user)
     with SessionLocal() as session:
@@ -1135,7 +1140,7 @@ def patch_line(
 def void_line(
     case_id: int,
     line_id: int,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(_require_cpor_planner),
 ):
     """Soft-remove: zero estimate + remark; no hard delete. Row retained."""
     actor = _actor(user)
@@ -1169,7 +1174,7 @@ def split_layers(
     case_id: int,
     line_id: int,
     body: LayerSplitBody,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(_require_cpor_planner),
 ):
     """Clone a line into explicit POD-quarter layers (no FIFO fabrication)."""
     actor = _actor(user)
@@ -1234,7 +1239,7 @@ def split_layers(
 
 
 @router.post("/cases/{case_id}/recompute")
-def recompute(case_id: int, user: dict = Depends(get_current_user)):
+def recompute(case_id: int, user: dict = Depends(_require_cpor_planner)):
     actor = _actor(user)
     with SessionLocal() as session:
         case = _load_case(session, case_id)
@@ -1318,7 +1323,7 @@ def case_pivot(case_id: int):
 def transition_case(
     case_id: int,
     body: TransitionBody,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(_require_cpor_planner),
 ):
     actor = _actor(user)
     action = body.action.strip().lower()
@@ -1612,7 +1617,7 @@ class PromoPlanRecomputeBody(BaseModel):
 @router.post("/intelligence/promo-plan-draft/recompute")
 def cpor_promo_plan_recompute(
     body: PromoPlanRecomputeBody,
-    _user: dict = Depends(get_current_user),
+    _user: dict = Depends(_require_cpor_planner),
 ) -> dict[str, Any]:
     """Recompute per-line suggestions for the given identities. Dirty merge is client-owned (D-052)."""
     with SessionLocal() as session:
@@ -1662,7 +1667,7 @@ class PromoPlanCreateFromDraftBody(BaseModel):
 @router.post("/intelligence/promo-plan-draft/create-case", status_code=201)
 def cpor_promo_plan_create_case(
     body: PromoPlanCreateFromDraftBody,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(_require_cpor_planner),
 ) -> dict[str, Any]:
     """B4 — write a draft CPOR case from compose output (existing case/line path)."""
     actor = _actor(user)
@@ -1734,7 +1739,7 @@ async def import_claim_evidence(
     case_id: int,
     file: UploadFile = File(...),
     include_out_of_window: bool = Form(default=False),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(_require_cpor_planner),
 ):
     """Case-scoped claim evidence upload → upsert cpor_claim_evidence_line + rollup."""
     actor = _actor(user)
@@ -1767,7 +1772,7 @@ async def import_claim_evidence(
 @router.post("/cases/{case_id}/settlement/rollup")
 def post_settlement_rollup(
     case_id: int,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(_require_cpor_planner),
 ):
     actor = _actor(user)
     with SessionLocal() as session:

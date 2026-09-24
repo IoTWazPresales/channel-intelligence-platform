@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 
-from app.core.security import get_current_user
+from app.core.security import Role, get_current_user, require_roles
 from app.core.tenant_scope import tenant_id_from_user, where_tenant
 from app.db.session_sync import SessionLocal
 from app.models.cpor import CporCase
@@ -24,6 +24,9 @@ from app.services.cpor.intelligence_scope import where_commercial_intelligence
 from app.services.cpor.settle_readiness import FX_MODES, case_missing_roe, fx_declared, fx_mode_valid
 
 router = APIRouter()
+
+# N-0038 (BACKLOG-136): FX writes (fetch, backfill confirm, declare mode) — planner or admin.
+_require_cpor_planner = require_roles(Role.PLANNER, Role.ADMIN)
 
 
 class BackfillItem(BaseModel):
@@ -63,7 +66,7 @@ def fx_rate_today(user: dict = Depends(get_current_user)) -> dict[str, Any]:
 
 
 @router.post("/fx/rates/fetch")
-def fx_rate_fetch(user: dict = Depends(get_current_user)) -> dict[str, Any]:
+def fx_rate_fetch(user: dict = Depends(_require_cpor_planner)) -> dict[str, Any]:
     _ = user
     with SessionLocal() as session:
         quote = ensure_today_rate(session)
@@ -121,7 +124,7 @@ def fx_backfill_suggestions(user: dict = Depends(get_current_user)) -> dict[str,
 @router.post("/fx/backfill-confirm")
 def fx_backfill_confirm(
     body: BackfillConfirmBody,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(_require_cpor_planner),
 ) -> dict[str, Any]:
     actor = _actor(user)
     with SessionLocal() as session:
@@ -160,7 +163,7 @@ def fx_backfill_confirm(
 @router.post("/fx/declare-mode")
 def fx_declare_mode(
     body: DeclareModeBody,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(_require_cpor_planner),
 ) -> dict[str, Any]:
     """Bulk-set fx_mode. Never auto. Never writes roe_snapshot."""
     if not body.confirm:
