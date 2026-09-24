@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1081
-  log_sha256: 4fe486282a283de935eabb9de11c9b73a0242b424939c18190c263176fd7f620
+  snapshot_revision: 1087
+  log_sha256: 61da5ff7a6ebb26efa95c9f23291dc9c7c3ed0673704431608513fb3637b6eda
   acceptance_policy:
     milestone: operator
     root: operator
@@ -6035,13 +6035,9 @@ nodes:
     class: feature
     origin: operator
     status: in_progress
-    stage: implement
-    revision: 4
-    lease:
-      run: N0037_IMPL_20260924
-      acquired_at: '2026-09-24T08:34:54Z'
-      heartbeat_at: '2026-09-24T08:34:54Z'
-      expires_at: '2026-09-24T10:34:54Z'
+    stage: validate
+    revision: 6
+    lease: null
     depends_on:
     - N-0033
     facets:
@@ -6090,8 +6086,12 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: Feature definition = operator criteria (queue item 4). Implementation by fresh subagent (backend-engineer,
-      test-engineering-specialist, application-security-specialist), run N0037_IMPL_20260924.
+    stage_note: 'Implemented at 76316728 (impl subagent, IMPL.md): in-memory per-account (5) and per-address (20) sliding
+      window, 900 s, settings not literals; 429 + Retry-After; lockout refuses the correct password; success resets the account;
+      unknown users verify against DUMMY_PASSWORD_HASH (removes a timing oracle); HMAC-keyed structured logs. 26 tests pass.
+      API restarted; live probe with a fake account: 5x401 then 429, Retry-After 898. Limitation: behind the Next proxy a
+      client-supplied X-Forwarded-For is kept (Next fills XFF only when absent), so per-address limits are bypassable/frameable;
+      per-account limit is address-independent. Counters are per-process and reset on restart. Independent review next.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -6109,10 +6109,14 @@ nodes:
     title: 'Stage 3.2: CPOR role checks on the existing roles (BACKLOG-136/141)'
     class: feature
     origin: operator
-    status: proposed
-    stage: null
-    revision: 0
-    lease: null
+    status: in_progress
+    stage: implement
+    revision: 3
+    lease:
+      run: N0038_IMPL_20260924
+      acquired_at: '2026-09-24T08:46:45Z'
+      heartbeat_at: '2026-09-24T08:46:45Z'
+      expires_at: '2026-09-24T10:46:45Z'
     depends_on:
     - N-0037
     facets:
@@ -6130,7 +6134,7 @@ nodes:
     - 'Tests: one allowed and one denied role per guarded write'
     - Nothing writes to cip; read-only SQL prints current_database() first
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-0007
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
@@ -6160,14 +6164,21 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: 'Pipelined: started while N-0037 (ordering-only dependency, disjoint files) is under independent review; N-0038
+      does not complete before N-0037. Feature definition = operator criteria (queue item 4; Warren 21 Sep: enforce on existing
+      roles). Implementation by fresh subagent (backend-engineer, test-engineering-specialist, application-security-specialist),
+      run N0038_IMPL_20260924.'
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      reads: unchanged for every signed-in role
+      session_gate: unchanged
     target_artifact_class: null
     design_artifact_class: null
+    implementation_run: N0038_IMPL_20260924
+    implementation_actor: impl-n0038
   N-0039:
     id: N-0039
     parent: null
@@ -8978,6 +8989,18 @@ baselines:
     path: apps/api/app/api/v1/endpoints/auth.py
     observed_behavior: '2026-09-24: auth.py:84 login has no throttling or lockout; no rate-limit library in apps/api (grep
       slowapi/ratelimit/rate_limit: none).'
+  BLN-0007:
+    id: BLN-0007
+    provenance: implementation-observation
+    tree_hash: '76316728'
+    latent_capabilities: []
+    preservation:
+      reads: all CPOR read endpoints keep working for every signed-in role
+      session_gate: router-level bearer gate (26a6e1a) unchanged
+    path: apps/api/app/api/v1/endpoints
+    observed_behavior: '2026-09-24: cpor_cases.py, cpor_exports.py, cpor_fx.py, cpor_historical_import.py, cpor_payment_evidence.py
+      have 0 require_roles / Role.* checks; any signed-in user can write. shipment_evidence.py steward panels are ADMIN-only
+      (BACKLOG-141). Roles: admin, steward, planner, viewer (core/security.py:18).'
 caveats:
   consult_model_logged:
     key: consult_model_logged
