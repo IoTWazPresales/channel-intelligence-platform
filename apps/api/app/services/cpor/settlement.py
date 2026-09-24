@@ -13,6 +13,11 @@ from sqlalchemy.orm import Session
 from app.models.cpor import CporCase, CporCaseLine, CporClaimEvidenceLine
 from app.models.dimensions import DimDistributor, DimProduct
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
+from app.services.cpor.line_window import (
+    FLAG_WINDOW_WEEK_STRADDLE,
+    effective_line_window,
+    line_window_info,
+)
 from app.services.cpor.recompute import recompute_case_line
 from app.services.cpor.settle_readiness import build_settle_readiness, count_open_assumptions_from_line_flags
 from app.services.cpor.settlement_desk import (
@@ -25,13 +30,30 @@ from app.services.cpor.settlement_desk import (
 from app.services.cpor.waterfall import compute_ttl_result
 
 
-def _claim_in_window(case: CporCase, sale_date: date, raw: dict | None) -> bool:
+def _has_window_override(raw: dict | None) -> bool:
     flags = (raw or {}).get("_cpor_flags") if isinstance(raw, dict) else None
-    if isinstance(flags, dict) and flags.get("include_out_of_window_override"):
+    return isinstance(flags, dict) and bool(flags.get("include_out_of_window_override"))
+
+
+def _claim_in_window(
+    case: CporCase,
+    sale_date: date,
+    raw: dict | None,
+    line: CporCaseLine | None = None,
+) -> bool:
+    """In-window test on the LINE window when a line is given (BACKLOG-137), else the case window.
+
+    Claims are dated (daily); a claim either falls in a window or not, never pro-rated.
+    """
+    if _has_window_override(raw):
         return True
-    if case.window_start and sale_date < case.window_start:
+    if line is not None:
+        ws, we = effective_line_window(line, case)
+    else:
+        ws, we = case.window_start, case.window_end
+    if ws and sale_date < ws:
         return False
-    if case.window_end and sale_date > case.window_end:
+    if we and sale_date > we:
         return False
     return True
 
@@ -42,7 +64,14 @@ def rollup_result_qty_from_claims(
     *,
     actor: str | None = None,
 ) -> dict[str, Any]:
-    """Sum in-window claim units by product_id onto cpor_case_line.result_qty, then recompute."""
+    """Sum claim units in each LINE's window onto cpor_case_line.result_qty, then recompute.
+
+    Each line counts claims for its product dated inside its own window (case window
+    when the line has none). A line whose window cuts a Mon-Sun week mid-week is
+    flagged ``window_week_straddle``; nothing is pro-rated. An out-of-window override
+    claim is counted where the product has a single window; with several windows it
+    cannot be placed and is reported (``override_claim_units_unplaced``), not guessed.
+    """
     case = session.get(CporCase, case_id)
     if case is None:
         raise ValueError(f"cpor_case id={case_id} not found")
@@ -52,9 +81,17 @@ def rollup_result_qty_from_claims(
             select(CporClaimEvidenceLine).where(CporClaimEvidenceLine.case_id == case_id)
         ).all()
     )
+    lines = list(
+        session.scalars(select(CporCaseLine).where(CporCaseLine.case_id == case_id)).all()
+    )
 
-    by_product: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+    windows_by_pid: dict[int, set[tuple[date | None, date | None]]] = defaultdict(set)
+    for line in lines:
+        if line.product_id is not None:
+            windows_by_pid[int(line.product_id)].add(effective_line_window(line, case))
+
     unresolved_units = Decimal("0")
+    products_with_claims: set[int] = set()
     for c in claims:
         raw = c.raw_source_row if isinstance(c.raw_source_row, dict) else {}
         if not _claim_in_window(case, c.sale_date, raw):
@@ -62,28 +99,57 @@ def rollup_result_qty_from_claims(
         if c.product_id is None:
             unresolved_units += Decimal(str(c.units or 0))
             continue
-        by_product[int(c.product_id)] += Decimal(str(c.units or 0))
+        products_with_claims.add(int(c.product_id))
 
-    lines = list(
-        session.scalars(select(CporCaseLine).where(CporCaseLine.case_id == case_id)).all()
-    )
     updated = 0
+    unplaced_override_units = Decimal("0")
+    unplaced_seen: set[int] = set()
+    window_flags: list[dict[str, Any]] = []
     for line in lines:
         pid = int(line.product_id) if line.product_id is not None else None
         if pid is None:
             continue
-        if claims:
-            line.result_qty = float(by_product.get(pid, Decimal("0")))
-            recompute_case_line(session, line, case=case, actor=actor, write_event=False)
-            updated += 1
+        info = line_window_info(line, case)
+        if info["straddle_weeks"]:
+            window_flags.append(
+                {
+                    "line_id": line.id,
+                    "flag": FLAG_WINDOW_WEEK_STRADDLE,
+                    "window_start": info["window_start"],
+                    "window_end": info["window_end"],
+                    "straddle_weeks": info["straddle_weeks"],
+                }
+            )
+        if not claims:
+            continue
+        single_window = len(windows_by_pid.get(pid, set())) <= 1
+        qty = Decimal("0")
+        for c in claims:
+            if c.product_id is None or int(c.product_id) != pid:
+                continue
+            raw = c.raw_source_row if isinstance(c.raw_source_row, dict) else {}
+            if _claim_in_window(case, c.sale_date, None, line):
+                qty += Decimal(str(c.units or 0))
+            elif _has_window_override(raw):
+                if single_window:
+                    qty += Decimal(str(c.units or 0))
+                elif id(c) not in unplaced_seen:
+                    unplaced_seen.add(id(c))
+                    unplaced_override_units += Decimal(str(c.units or 0))
+        line.result_qty = float(qty)
+        recompute_case_line(session, line, case=case, actor=actor, write_event=False)
+        updated += 1
 
     session.flush()
     return {
         "case_id": case_id,
         "lines_updated": updated,
-        "products_with_claims": len(by_product),
+        "products_with_claims": len(products_with_claims),
         "unresolved_claim_units": float(unresolved_units),
         "claim_rows": len(claims),
+        "window_week_straddle_lines": len(window_flags),
+        "window_flags": window_flags,
+        "override_claim_units_unplaced": float(unplaced_override_units),
     }
 
 
@@ -205,6 +271,9 @@ def build_settlement_consolidation(session: Session, case_id: int) -> dict[str, 
         pid = int(line.product_id) if line.product_id is not None else None
         if pid is not None and pid in cst_flags.get("by_product", {}):
             line_flags.append("cst_divergence")
+        window = line_window_info(line, case)
+        if window["straddle_weeks"]:
+            line_flags.append(FLAG_WINDOW_WEEK_STRADDLE)
 
         product = products.get(pid) if pid is not None else None
         dist_id = int(line.distributor_id) if line.distributor_id is not None else None
@@ -228,6 +297,10 @@ def build_settlement_consolidation(session: Session, case_id: int) -> dict[str, 
                 ),
                 "distributor_id": dist_id,
                 "distributor_name": distributor.name if distributor is not None else None,
+                "window_start": window["window_start"],
+                "window_end": window["window_end"],
+                "window_week_aligned": window["week_aligned"],
+                "straddle_weeks": window["straddle_weeks"],
                 "estimate_qty": estimate,
                 "result_qty": result,
                 "cip_qty": cip_qty,

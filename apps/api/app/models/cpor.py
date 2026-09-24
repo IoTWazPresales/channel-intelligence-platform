@@ -9,7 +9,19 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -69,14 +81,18 @@ class CporCase(Base, TimestampMixin):
 
 class CporCaseLine(Base, TimestampMixin):
     __tablename__ = "cpor_case_line"
+    # BACKLOG-137 / D-058: window_start is in the grain so a superseded line and its
+    # successor (same SKU, later week-aligned window) can both be stored.
     __table_args__ = (
         UniqueConstraint(
             "case_id",
             "product_id",
             "distributor_id",
             "pod_quarter",
+            "window_start",
             name="uq_cpor_case_line_grain",
         ),
+        CheckConstraint("window_end >= window_start", name="window_order"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -86,6 +102,10 @@ class CporCaseLine(Base, TimestampMixin):
         ForeignKey("dim_distributor.id"), nullable=True, index=True
     )
     pod_quarter: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # Effective window (Mon–Sun weeks; see services/cpor/line_window.py). Creation
+    # defaults to the case window; a non-aligned window is flagged, never pro-rated.
+    window_start: Mapped[date] = mapped_column(Date, nullable=False)
+    window_end: Mapped[date] = mapped_column(Date, nullable=False)
 
     srp: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False)
     vat_rate: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False)

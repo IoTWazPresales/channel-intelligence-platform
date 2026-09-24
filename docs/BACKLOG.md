@@ -80,7 +80,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Confirmed open** (2026-09-21 N-0030 audit: no `window_*` columns on `cpor_case_line`; Stage 4.4) · **Parked** · 2026-08-20 |
+| **Status / parked** | **Code done + cip_test proven, cip `alembic upgrade head` pending Warren's "run"** (2026-09-24 N-0050: revision `20260924_0023` adds NOT NULL `window_start`/`window_end` backfilled verbatim from the case window; grain `uq_cpor_case_line_grain` + `window_start`; rollup uses line windows; Mon–Sun non-aligned windows flagged `window_week_straddle`, never snapped or pro-rated; API code needs the migration first; evidence `.eif/audit/PROGRAMME_20260924/n0050/IMPL.md`) · Confirmed open 2026-09-21 N-0030 · 2026-08-20 |
 | **Effort** | Medium (approved migration) |
 | **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` §3 / §9.3 / D-058. Warren: `cpor_case_line` has no effective window columns. |
 | **Idea** | Each line carries a week-aligned window + fixed rate. Supersession: old line closes end of prior week; new line from new week to case end. Unique grain today `(case_id, product_id, distributor_id, pod_quarter)` cannot hold two living lines for the same SKU. Settlement `_claim_in_window` currently uses **case** dates. |

@@ -38,6 +38,7 @@ from app.services.cpor.lifecycle import (
     target_status,
     workflow_status_for,
 )
+from app.services.cpor.line_window import default_line_window, follow_case_window
 from app.services.cpor.pivot import build_case_pivot
 from app.services.cpor.norms_and_comparable import build_comparable_cases, build_support_norms
 from app.services.cpor.promo_plan_builder import build_promo_plan_draft, create_case_from_promo_draft
@@ -183,6 +184,8 @@ def _line_flags(line: CporCaseLine) -> list[str]:
 
 def _line_json(line: CporCaseLine, product: DimProduct | None = None) -> dict[str, Any]:
     flags = _line_flags(line)
+    line_ws = getattr(line, "window_start", None)
+    line_we = getattr(line, "window_end", None)
     return {
         "id": line.id,
         "case_id": line.case_id,
@@ -194,6 +197,8 @@ def _line_json(line: CporCaseLine, product: DimProduct | None = None) -> dict[st
         "business_unit": product.business_unit if product else None,
         "distributor_id": line.distributor_id,
         "pod_quarter": line.pod_quarter,
+        "window_start": line_ws.isoformat() if line_ws else None,
+        "window_end": line_we.isoformat() if line_we else None,
         "srp": float(line.srp) if line.srp is not None else None,
         "vat_rate": float(line.vat_rate) if line.vat_rate is not None else None,
         "dealer_margin_pct": float(line.dealer_margin_pct) if line.dealer_margin_pct is not None else None,
@@ -829,8 +834,22 @@ def patch_case(
                 raise HTTPException(status_code=400, detail="roe_snapshot must be a positive number")
         roe_changed = "roe_snapshot" in data
         fx_mode_changed = "fx_mode" in data
+        old_window = (case.window_start, case.window_end)
         for k, v in data.items():
             setattr(case, k, v)
+        if case.window_start is None or case.window_end is None:
+            raise HTTPException(status_code=400, detail="window_start and window_end are required")
+        if case.window_end < case.window_start:
+            raise HTTPException(status_code=400, detail="window_end must be >= window_start")
+        # Draft/rejected only (EDITABLE_STATUSES): lines on the case window follow it.
+        follow_case_window(
+            session,
+            case.id,
+            old_start=old_window[0],
+            old_end=old_window[1],
+            new_start=case.window_start,
+            new_end=case.window_end,
+        )
         if fx_declared(case) and not fx_mode_valid(case):
             raise HTTPException(
                 status_code=400,
@@ -1059,6 +1078,7 @@ def create_line(
             soh_snapshot=body.soh_snapshot,
             remark=body.remark,
         )
+        line.window_start, line.window_end = default_line_window(case)
         session.add(line)
         try:
             session.flush()
@@ -1066,7 +1086,7 @@ def create_line(
             session.rollback()
             raise HTTPException(
                 status_code=409,
-                detail="Line grain conflict (case × product × distributor × pod_quarter must be unique)",
+                detail="Line grain conflict (case × product × distributor × pod_quarter × window_start must be unique)",
             )
         rep = recompute_case_line(session, line, case=case, actor=actor, write_event=False)
         _record_event(
@@ -1207,6 +1227,8 @@ def split_layers(
                 cap_qty=src.cap_qty,
                 soh_snapshot=layer.get("soh_snapshot", src.soh_snapshot),
                 remark=src.remark,
+                window_start=src.window_start,
+                window_end=src.window_end,
             )
             session.add(new_line)
             try:

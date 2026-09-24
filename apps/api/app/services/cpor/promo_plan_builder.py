@@ -1109,6 +1109,8 @@ def create_case_from_promo_draft(
             cost_evidence_json=cost_evidence,
             estimate_qty=estimate,
             remark="b4_promo_plan_draft",
+            window_start=case.window_start,
+            window_end=case.window_end,
         )
         session.add(line)
         session.flush()

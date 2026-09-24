@@ -10,7 +10,7 @@ Locks:
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Callable
 
@@ -24,6 +24,7 @@ from app.models.cpor_historical import ImportCporHistoricalStagingLine
 from app.models.ingestion import ImportJob
 from app.services.cpor.historical_import.resolve import case_apply_blockers
 from app.services.cpor.lifecycle import workflow_status_for
+from app.services.cpor.line_window import follow_case_window
 from app.services.imports.import_job_background_metadata import persist_clear_background_task_metadata
 from app.utils.json_safe import to_jsonable
 
@@ -196,6 +197,16 @@ def _apply_one_case(
         db.add(case)
         db.flush()
     else:
+        # Lines still on the old case window follow the re-imported window, so the
+        # window-aware grain below matches them instead of inserting duplicates.
+        follow_case_window(
+            db,
+            int(existing.id),
+            old_start=existing.window_start,
+            old_end=existing.window_end,
+            new_start=window_start,
+            new_end=window_end,
+        )
         existing.case_name = head.case_name
         existing.customer_id = customer_id
         existing.promotion_type = promo[:128]
@@ -223,7 +234,7 @@ def _apply_one_case(
         grain_rows[grain] = r
 
     for grain, r in grain_rows.items():
-        _upsert_line(db, case_id=case_id, row=r)
+        _upsert_line(db, case_id=case_id, row=r, window_start=window_start, window_end=window_end)
 
     db.add(
         CporCaseEvent(
@@ -243,7 +254,14 @@ def _apply_one_case(
     db.flush()
 
 
-def _upsert_line(db: Session, *, case_id: int, row: ImportCporHistoricalStagingLine) -> None:
+def _upsert_line(
+    db: Session,
+    *,
+    case_id: int,
+    row: ImportCporHistoricalStagingLine,
+    window_start: date,
+    window_end: date,
+) -> None:
     product_id = int(row.resolved_product_id)  # type: ignore[arg-type]
     distributor_id = int(row.resolved_distributor_id) if row.resolved_distributor_id is not None else None
     pod = row.pod_quarter
@@ -252,6 +270,8 @@ def _upsert_line(db: Session, *, case_id: int, row: ImportCporHistoricalStagingL
         "product_id": product_id,
         "distributor_id": distributor_id,
         "pod_quarter": pod,
+        "window_start": window_start,
+        "window_end": window_end,
         "srp": _num(row.srp, 0.0),
         "vat_rate": _num(row.vat_rate, 0.15),
         "dealer_margin_pct": _num(row.dealer_margin_pct, 0.0),
@@ -281,6 +301,7 @@ def _upsert_line(db: Session, *, case_id: int, row: ImportCporHistoricalStagingL
     stmt = stmt.on_conflict_do_update(
         constraint="uq_cpor_case_line_grain",
         set_={
+            "window_end": stmt.excluded.window_end,
             "srp": stmt.excluded.srp,
             "vat_rate": stmt.excluded.vat_rate,
             "dealer_margin_pct": stmt.excluded.dealer_margin_pct,
