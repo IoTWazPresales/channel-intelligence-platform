@@ -607,7 +607,11 @@ export function SettlementDesk({
                       }}
                     />
                   }
-                  label={<Typography variant="caption">Include out-of-window rows on the next upload</Typography>}
+                  label={
+                    <Typography variant="caption" color="text.secondary">
+                      Include out-of-window rows on the next upload
+                    </Typography>
+                  }
                 />
               ) : null}
               {onIntelligenceExcludeChange ? (
@@ -626,7 +630,9 @@ export function SettlementDesk({
                     />
                   }
                   label={
-                    <Typography variant="caption">Exclude from intelligence (comparables, norms, book totals)</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Exclude from intelligence (comparables, norms, book totals)
+                    </Typography>
                   }
                 />
               ) : null}
