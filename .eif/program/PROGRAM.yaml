@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1121
-  log_sha256: 7c58a9db95381f48d1cb9be20271e1db1d148c3958cd7428399d7f8b5cff8334
+  snapshot_revision: 1126
+  log_sha256: 1491e405642dc1e9d26b434132f8c133452f1103ea7f67b32da4136385c63e8f
   acceptance_policy:
     milestone: operator
     root: operator
@@ -6639,10 +6639,14 @@ nodes:
     title: 'D-c + rest of 2.7: desk absorbs BACKLOG-202 pieces, CporCaseWorkspace retires, two orphan panels ruled'
     class: feature
     origin: operator
-    status: proposed
-    stage: null
-    revision: 0
-    lease: null
+    status: in_progress
+    stage: implement
+    revision: 3
+    lease:
+      run: N0044_IMPL_20260924
+      acquired_at: '2026-09-24T11:30:13Z'
+      heartbeat_at: '2026-09-24T11:30:13Z'
+      expires_at: '2026-09-24T14:30:13Z'
     depends_on:
     - N-0040
     - N-0032
@@ -6661,7 +6665,7 @@ nodes:
     - Browser smoke on case 46 and 311
     - Nothing writes to cip; read-only SQL prints current_database() first
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-0011
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
@@ -6691,14 +6695,26 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: Pipelined (ordering-only dependency on N-0040; disjoint files). Discovery n0044/DISCOVERY.md. Implementation
+      by fresh subagent (frontend-engineer, test-engineering-specialist, accessibility-specialist), run N0044_IMPL_20260924.
+      D-0032 open for the mount placement (Option A applied as reversible default) and the orphan subtree (kept).
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      desk_tabs: five N-0032 tabs keep working
+      planner_comparables: unchanged
+      approve_and_book_fx: moves to PlanWorkspace approve before workspace deletion
+      over_budget_reapproval: moves with approve
+      intelligence_exclude_switch: ported to desk or recorded
+      rerollup: ported to desk or recorded
+      fx_mode_toggle: ported to desk or recorded
+      proposed_rate_edit: ported to desk or recorded
     target_artifact_class: null
     design_artifact_class: null
+    implementation_run: N0044_IMPL_20260924
+    implementation_actor: impl-n0044
   N-0045:
     id: N-0045
     parent: null
@@ -8730,6 +8746,18 @@ decisions:
     origin: agent
     status: proposed
     supersedes: null
+  D-0032:
+    id: D-0032
+    scope: N-0044
+    statement: 'D-c follow-ups for Warren (n0044/DISCOVERY.md): (1) CporPortfolioIntelligencePanel shows unique intelligence
+      (support norms by customer, trailing 4Q % of SRP) so D-c says mount ''per the lab'', but the lab has no placement. Agent
+      implements Option A (collapsed ''Portfolio read'' panel on the Case book lens, money via DualMoney) as reversible default;
+      alternatives B dashboards only (delete panel), C new lens after a lab update. (2) The pre-Composition-A SettlementContainer
+      subtree (9 files + 2 tests) is unmounted and outside D-c''s literal scope: delete it? Default: keep until Warren says.
+      SettlementPortfolioRead is deleted under D-c (strict duplicate).'
+    origin: agent
+    status: proposed
+    supersedes: null
 evidence:
   EV-GOV008-REVIEW:
     id: EV-GOV008-REVIEW
@@ -9201,6 +9229,24 @@ baselines:
     observed_behavior: '2026-09-23/24: 53 host files / 63 mounts; Tier A 14 files with 0 pickers, 2 searches, 0 exports; only
       inbound-shipments has an optional-columns picker (shipping.py:695-706, InboundShipmentsWorkspace.tsx:186-223,542-555,1007-1031);
       identity columns weld codes in SellOutTab.tsx:230-233, inventory/page.tsx:125, ChannelIntelligenceWorkspace.tsx:57-59.'
+  BLN-0011:
+    id: BLN-0011
+    provenance: implementation-observation
+    tree_hash: a00129bc
+    latent_capabilities:
+    - approve_and_book_fx
+    - over_budget_reapproval
+    - intelligence_exclude_switch
+    - rerollup
+    - fx_mode_toggle
+    - proposed_rate_edit
+    preservation:
+      desk_tabs: the five N-0032 tabs keep working
+      planner_comparables: PlanWorkspace comparables panel unchanged
+    path: .eif/audit/PROGRAMME_20260924/n0044/DISCOVERY.md
+    observed_behavior: '2026-09-24: CporCaseWorkspace unmounted; holds FX anchor, settle readiness, comparable cases, transition
+      buttons and the latent capabilities listed; SettlementPortfolioRead is a strict subset of CporPortfolioIntelligencePanel
+      (same endpoint/query key), both unmounted; SettlementContainer subtree orphaned.'
 caveats:
   consult_model_logged:
     key: consult_model_logged
