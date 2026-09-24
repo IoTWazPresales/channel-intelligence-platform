@@ -1,0 +1,11 @@
+{
+ "node": "N-0048",
+ "expected_revision": 6,
+ "dim": "backup_recovery",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0048_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Repair records an audit trail: one cpor_case_event (workflow_status_repair) per changed row with before/after values, plus a timestamped before-values JSON per run. No automated rollback script exists; reversal would be manual from the recorded before-values."
+ }
+}

@@ -1,0 +1,11 @@
+{
+ "node": "N-0048",
+ "expected_revision": 5,
+ "dim": "data_integrity",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0048_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "status is confirmed the owner column (lifecycle.py, transition guards, all business branching); workflow_status is a display-only projection written by every writer via workflow_status_for(). Drift on cip measured live: 4 rows, ids 3/309/310/311, matching the commit message. Clone shows 0 disagreeing rows after repair."
+ }
+}

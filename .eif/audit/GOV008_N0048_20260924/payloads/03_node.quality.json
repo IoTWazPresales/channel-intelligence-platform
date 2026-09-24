@@ -1,0 +1,11 @@
+{
+ "node": "N-0048",
+ "expected_revision": 7,
+ "dim": "migration_safety",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0048_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Repair script verified: dry-run by default (--apply required to commit), --expect-db guard checked against current_database() before any read/write, idempotent (WHERE ... IS NOT DISTINCT FROM :old plus live recompute; confirmed by passing idempotency test), touches only workflow_status column (status read but never assigned, empirically unchanged on clone), no DELETE/TRUNCATE anywhere in the file."
+ }
+}

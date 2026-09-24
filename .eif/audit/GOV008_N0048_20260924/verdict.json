@@ -1,0 +1,32 @@
+{
+  "node": "N-0048",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "dims": {
+    "quality.data_integrity": {
+      "state": "pass",
+      "summary": "status is confirmed the owner column (lifecycle.py, transition guards, all business branching); workflow_status is a display-only projection written by every writer via workflow_status_for(). Drift on cip measured live: 4 rows, ids 3/309/310/311, matching the commit message. Clone shows 0 disagreeing rows after repair.",
+      "rationale": ""
+    },
+    "quality.backup_recovery": {
+      "state": "pass",
+      "summary": "Repair records an audit trail: one cpor_case_event (workflow_status_repair) per changed row with before/after values, plus a timestamped before-values JSON per run. No automated rollback script exists; reversal would be manual from the recorded before-values.",
+      "rationale": ""
+    },
+    "quality.migration_safety": {
+      "state": "pass",
+      "summary": "Repair script verified: dry-run by default (--apply required to commit), --expect-db guard checked against current_database() before any read/write, idempotent (WHERE ... IS NOT DISTINCT FROM :old plus live recompute; confirmed by passing idempotency test), touches only workflow_status column (status read but never assigned, empirically unchanged on clone), no DELETE/TRUNCATE anywhere in the file.",
+      "rationale": ""
+    },
+    "verification.referent": {
+      "state": "pass",
+      "summary": "Independently re-ran the live SQL this review relies on (cip drift count/ids, clone before/after, cip repair-event count) via the read-only ro_sql.py tool, and independently re-ran the test suite rather than trusting committed logs; results matched the implementation's claims."
+    }
+  },
+  "failed_criteria": [],
+  "limitations": [
+    "cpor_cases.py:747 and promo_plan_builder.py:1034 (case creation) write workflow_status=\"draft\" literally instead of through workflow_status_for(status); correct today only because \"draft\" is not in the override map, a latent re-drift risk if that map grows.",
+    "No automated reversal/rollback script for the repair; only an audit trail (cpor_case_event rows + before-values JSON) from which a manual revert could be constructed.",
+    "\"Repair does not change business outcome\" conclusion is based on static grep across apps/api and apps/web/src for workflow_status consumers, not an exhaustive runtime trace.",
+    "R2 independence: fresh session but same model family as implementation (no independent-model consult mechanism exercised); self-verification-adjacent, recorded per GOV-008 rung guidance."
+  ]
+}

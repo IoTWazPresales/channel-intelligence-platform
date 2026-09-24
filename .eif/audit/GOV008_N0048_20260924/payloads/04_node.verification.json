@@ -1,0 +1,11 @@
+{
+ "node": "N-0048",
+ "expected_revision": 8,
+ "kind": "referent",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0048_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Independently re-ran the live SQL this review relies on (cip drift count/ids, clone before/after, cip repair-event count) via the read-only ro_sql.py tool, and independently re-ran the test suite rather than trusting committed logs; results matched the implementation's claims."
+ }
+}
