@@ -18,6 +18,7 @@ from app.services.listing_capture.registry import (
     confirm_suggested_proposals,
     create_listing,
     import_listings_csv,
+    last_ok_fetch_by_listing,
     list_proposals,
     list_recent_observations,
     listing_to_dict,
@@ -92,8 +93,9 @@ def list_listings(
         start = (page - 1) * page_size
         page_rows = rows[start : start + page_size]
         products = product_labels(session, [r.product_id for r in page_rows])
+        last_ok = last_ok_fetch_by_listing(session, [r.id for r in page_rows])
         return {
-            "items": [listing_to_dict(r, products=products) for r in page_rows],
+            "items": [listing_to_dict(r, products=products, last_ok_fetch=last_ok) for r in page_rows],
             "total": total,
             "page": page,
             "page_size": page_size,
@@ -144,7 +146,11 @@ def patch_status(
             set_listing_status(session, row, status=body.status)
             session.commit()
             session.refresh(row)
-            return listing_to_dict(row, products=product_labels(session, [row.product_id]))
+            return listing_to_dict(
+                row,
+                products=product_labels(session, [row.product_id]),
+                last_ok_fetch=last_ok_fetch_by_listing(session, [row.id]),
+            )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 

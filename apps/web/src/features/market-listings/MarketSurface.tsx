@@ -10,6 +10,7 @@ import {
   DialogContent,
   DialogTitle,
   LinearProgress,
+  Link,
   Snackbar,
   Stack,
   Table,
@@ -51,6 +52,10 @@ type Listing = {
   status: string;
   source: string;
   external_id: string | null;
+  /** Set by the API only when the stored URL is verified (see `listingUrlState`). */
+  url_verified_at?: string | null;
+  /** URL before a resolved product-page URL replaced it (meta_json.original_url). */
+  original_url?: string | null;
 };
 
 type Proposal = {
@@ -179,6 +184,63 @@ function activationTone(a: string | null): 'success' | 'danger' | 'warning' | 'n
   if (a === 'not_activated') return 'danger';
   if (a === 'no_listing') return 'warning';
   return 'neutral';
+}
+
+export type ListingUrlState = 'verified' | 'unverified' | 'dead';
+
+/**
+ * Whether a listing URL may be presented as a working link (N-0039).
+ *
+ * - `dead`: status is `dead_link` (the fetcher observed the link not resolving).
+ * - `verified`: the API returned `url_verified_at`. The API sets it when
+ *   `meta_json.url_verified_at` is stamped (a fetch of, or resolution to, this URL
+ *   succeeded), or, for non-Takealot marketplaces only, when an observation of this
+ *   URL returned HTTP 200 with a successful parse. Takealot prices come from its
+ *   REST API, so a Takealot price never verifies the stored URL by itself.
+ * - `unverified`: everything else.
+ */
+export function listingUrlState(l: Pick<Listing, 'status' | 'url_verified_at'>): ListingUrlState {
+  if (l.status === 'dead_link') return 'dead';
+  return l.url_verified_at ? 'verified' : 'unverified';
+}
+
+const HTTP_URL_RE = /^https?:\/\//i;
+
+/** Listing URL: an anchor only when verified; otherwise plain text with a marker. */
+export function ListingUrl({ listing }: { listing: Pick<Listing, 'url' | 'status' | 'url_verified_at'> }) {
+  const state = listingUrlState(listing);
+  if (state === 'verified' && HTTP_URL_RE.test(listing.url)) {
+    return (
+      <Tooltip describeChild title={`Verified ${fmtFetched(listing.url_verified_at)}`}>
+        <Link
+          href={listing.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          variant="body2"
+          sx={{ wordBreak: 'break-all' }}
+          data-testid="listing-url-link"
+        >
+          {listing.url}
+        </Link>
+      </Tooltip>
+    );
+  }
+  return (
+    <Stack spacing={0.5} alignItems="flex-start" data-testid="listing-url-text">
+      <Typography variant="body2" component="span" sx={{ wordBreak: 'break-all' }}>
+        {listing.url}
+      </Typography>
+      {state === 'dead' ? (
+        <StatusChip label="Dead link" tone="danger" />
+      ) : (
+        <Tooltip describeChild title="Not yet confirmed to open the product page.">
+          <span>
+            <StatusChip label="Unverified link" tone="warning" />
+          </span>
+        </Tooltip>
+      )}
+    </Stack>
+  );
 }
 
 type GridRow = Listing & {
@@ -1438,7 +1500,19 @@ export function MarketSurface() {
             )}
             <KeyValueList
               items={[
-                { k: 'URL', v: <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>{selected.url}</Typography> },
+                { k: 'URL', v: <ListingUrl listing={selected} /> },
+                ...(selected.original_url
+                  ? [
+                      {
+                        k: 'Original URL',
+                        v: (
+                          <Typography variant="body2" color="text.secondary" sx={{ wordBreak: 'break-all' }}>
+                            {selected.original_url}
+                          </Typography>
+                        ),
+                      },
+                    ]
+                  : []),
                 { k: 'Marketplace', v: selected.marketplace },
                 { k: 'Source', v: SOURCE_LABEL[selected.source] ?? selected.source },
                 {

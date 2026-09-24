@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
-import { MarketSurface } from './MarketSurface';
+import { ListingUrl, listingUrlState, MarketSurface } from './MarketSurface';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
@@ -49,5 +49,47 @@ describe('MarketSurface', () => {
     expect(screen.getByTestId('market-listings-lens')).toBeInTheDocument();
     expect(screen.getByTestId('market-add-listing')).toBeInTheDocument();
     expect(screen.queryByText(/static JSON stub/i)).toBeNull();
+  });
+});
+
+describe('ListingUrl (N-0039)', () => {
+  const url = 'https://www.takealot.com/asus-zenscreen/PLID98174082';
+
+  it('derives state: dead_link wins, then url_verified_at', () => {
+    expect(listingUrlState({ status: 'dead_link', url_verified_at: '2026-09-24T00:00:00Z' })).toBe('dead');
+    expect(listingUrlState({ status: 'active', url_verified_at: '2026-09-24T00:00:00Z' })).toBe('verified');
+    expect(listingUrlState({ status: 'active', url_verified_at: null })).toBe('unverified');
+    expect(listingUrlState({ status: 'out_of_stock' })).toBe('unverified');
+  });
+
+  it('renders a verified URL as a new-tab anchor', () => {
+    renderWithProviders(<ListingUrl listing={{ url, status: 'active', url_verified_at: '2026-09-24T08:00:00Z' }} />);
+    const a = screen.getByRole('link', { name: url });
+    expect(a).toHaveAttribute('href', url);
+    expect(a).toHaveAttribute('target', '_blank');
+    expect(a).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(screen.queryByText('Unverified link')).toBeNull();
+  });
+
+  it('renders an unverified URL as plain text with an Unverified link marker', () => {
+    const sku = 'https://www.takealot.com/PLID222547542';
+    renderWithProviders(<ListingUrl listing={{ url: sku, status: 'active', url_verified_at: null }} />);
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(screen.getByText(sku)).toBeInTheDocument();
+    expect(screen.getByText('Unverified link')).toBeInTheDocument();
+  });
+
+  it('renders a dead link with no anchor and a Dead link marker', () => {
+    renderWithProviders(<ListingUrl listing={{ url, status: 'dead_link', url_verified_at: '2026-09-24T08:00:00Z' }} />);
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(screen.getByText(url)).toBeInTheDocument();
+    expect(screen.getByText('Dead link')).toBeInTheDocument();
+  });
+
+  it('never anchors a non-http URL even when verified', () => {
+    renderWithProviders(
+      <ListingUrl listing={{ url: 'javascript:alert(1)', status: 'active', url_verified_at: '2026-09-24T08:00:00Z' }} />,
+    );
+    expect(screen.queryByRole('link')).toBeNull();
   });
 });

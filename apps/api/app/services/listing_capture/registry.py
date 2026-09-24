@@ -27,6 +27,10 @@ from app.services.listing_capture.observation import (
     parse_snapshot_text,
     should_backoff_dead_link,
 )
+from app.services.listing_capture.takealot_fetch import extract_plid
+
+# Takealot fetch reasons meaning "the REST details call 404'd and EAN recovery failed".
+_TAKEALOT_UNRESOLVED_REASONS = frozenset({"plid_not_found", "ean_not_unique_or_missing"})
 
 
 def _listing_capture_schedule_enabled_from_env() -> bool:
@@ -219,13 +223,17 @@ def confirm_suggested_proposals(
         if limit is not None and confirmed >= int(limit):
             break
         url = suggest_listing_url(str(seed.marketplace), str(seed.external_id))
-        if not url:
+        reason = None if url else "no_suggested_url"
+        if url and str(seed.marketplace).strip().lower() == "takealot" and not extract_plid(url):
+            # Defence in depth: a Takealot seed is bulk-confirmed only with a real PLID.
+            reason = "takealot_plid_unresolved"
+        if reason:
             skipped.append(
                 {
                     "id": int(seed.id),
                     "marketplace": seed.marketplace,
                     "external_id": seed.external_id,
-                    "reason": "no_suggested_url",
+                    "reason": reason,
                 }
             )
             continue
@@ -251,6 +259,92 @@ def reject_proposal(session: Session, *, seed_id: int) -> CstListingSeed:
     seed.status = "rejected"
     session.add(seed)
     return seed
+
+
+def _takealot_url_for(plid: str, parse_flags: dict[str, Any] | None) -> str:
+    from app.services.listing_capture.auto_finder import takealot_product_url
+
+    canon = (parse_flags or {}).get("canonical_url")
+    return takealot_product_url(plid, canonical_url=str(canon) if canon else None)
+
+
+def _write_back_verified_url(
+    session: Session,
+    listing: CustomerListing,
+    *,
+    url: str | None,
+    verified_at: datetime,
+) -> None:
+    """Stamp ``meta_json.url_verified_at``; optionally rewrite ``url`` to the resolved one.
+
+    The first replaced value is kept in ``meta_json.original_url`` (never overwritten).
+    If another listing of the same customer already holds the resolved URL (two report
+    SKUs resolving to one PLID; ``uq_customer_listing_customer_url``), nothing is
+    rewritten or stamped: the id is recorded in ``meta_json.url_conflict_listing_id``
+    and the URL stays unverified. Listings are never merged here.
+    """
+    meta = listing.meta_json if isinstance(getattr(listing, "meta_json", None), dict) else {}
+    meta = dict(meta)
+    new_url = (url or "").strip()[:1024]
+    if new_url and new_url != listing.url:
+        other = session.scalar(
+            select(CustomerListing.id).where(
+                CustomerListing.customer_id == listing.customer_id,
+                CustomerListing.url == new_url,
+                CustomerListing.id != listing.id,
+            )
+        )
+        if other is not None:
+            meta["url_conflict_listing_id"] = int(other)
+            meta.pop("url_verified_at", None)
+            listing.meta_json = meta
+            return
+        meta.setdefault("original_url", listing.url)
+        listing.url = new_url
+    meta.pop("url_conflict_listing_id", None)
+    meta["url_verified_at"] = verified_at.isoformat()
+    listing.meta_json = meta
+
+
+def listing_url_verified_at(
+    listing: CustomerListing,
+    *,
+    last_ok_fetch_at: datetime | None = None,
+) -> str | None:
+    """When the stored URL was last verified to open the product page, else None.
+
+    Definition ("verified"):
+    - ``meta_json.url_verified_at`` is set (stamped by ``record_observation`` when the
+      stored URL was fetched/resolved successfully, or by the N-0039 repair); or
+    - non-Takealot only: an observation of this URL with HTTP 200 and parse ``ok``
+      (``last_ok_fetch_at``). Takealot prices come from the REST API / EAN search, not
+      the stored URL, so a Takealot price observation does NOT verify the URL.
+    A ``dead_link`` status overrides this in the UI.
+    """
+    meta = listing.meta_json if isinstance(getattr(listing, "meta_json", None), dict) else {}
+    stamped = meta.get("url_verified_at")
+    if stamped:
+        return str(stamped)
+    if (listing.marketplace or "").strip().lower() != "takealot" and last_ok_fetch_at is not None:
+        return last_ok_fetch_at.isoformat()
+    return None
+
+
+def last_ok_fetch_by_listing(session: Session, listing_ids: list[int]) -> dict[int, datetime]:
+    """Latest HTTP-200 + parse-ok observation time per listing (for URL verification)."""
+    ids = sorted({int(i) for i in listing_ids})
+    if not ids:
+        return {}
+    rows = session.execute(
+        select(ListingObservation.listing_id, func.max(ListingObservation.fetched_at))
+        .where(
+            ListingObservation.listing_id.in_(ids),
+            ListingObservation.http_status == 200,
+            ListingObservation.parse_status == "ok",
+        )
+        .group_by(ListingObservation.listing_id)
+    ).all()
+    return {int(lid): at for lid, at in rows if at is not None}
 
 
 def record_observation(
@@ -310,6 +404,9 @@ def record_observation(
         body, marketplace=listing.marketplace, preferred_sku=preferred_sku
     )
     flags = {**fetch_flags, **dict(parsed.flags or {})}
+    if fetch_flags.get("reason"):
+        # Parser flags overwrite ``reason``; keep the fetch-side reason for diagnosis.
+        flags["fetch_reason"] = fetch_flags["reason"]
     from app.services.listing_capture.cpor_activation import (
         as_of_from_fetched_at,
         evaluate_cpor_activation,
@@ -337,8 +434,31 @@ def record_observation(
         parse_flags=flags,
     )
     session.add(obs)
-    canonical_dead = marketplace != "takealot" or bool(fetch_flags.get("plid_source"))
-    if status in (404, 410) and canonical_dead and parsed.parse_status != "ok":
+    if marketplace == "takealot":
+        if (
+            fetch_flags.get("plid_source")
+            and not fetch_flags.get("reason")
+            and parsed.parse_status == "ok"
+            and fetch_flags.get("resolved_plid")
+        ):
+            _write_back_verified_url(
+                session,
+                listing,
+                url=_takealot_url_for(fetch_flags["resolved_plid"], parsed.flags),
+                verified_at=fetched_at,
+            )
+        # Dead: the REST details call for the URL's PLID 404'd AND EAN recovery failed
+        # (no EAN, or the EAN search did not give exactly one hit) — or, as before,
+        # a resolved PLID itself 404s.
+        link_dead = (
+            fetch_flags.get("details_status") in (404, 410)
+            and fetch_flags.get("reason") in _TAKEALOT_UNRESOLVED_REASONS
+        ) or (status in (404, 410) and bool(fetch_flags.get("plid_source")))
+    else:
+        link_dead = status in (404, 410)
+        if status == 200 and parsed.parse_status == "ok":
+            _write_back_verified_url(session, listing, url=None, verified_at=fetched_at)
+    if link_dead and parsed.parse_status != "ok":
         set_listing_status(session, listing, status="dead_link")
     elif parsed.availability and "out" in parsed.availability.lower():
         set_listing_status(session, listing, status="out_of_stock")
@@ -400,11 +520,13 @@ def listing_to_dict(
     row: CustomerListing,
     *,
     products: dict[int, tuple[str | None, str | None]] | None = None,
+    last_ok_fetch: dict[int, datetime] | None = None,
 ) -> dict[str, Any]:
     sku: str | None = None
     name: str | None = None
     if row.product_id is not None and products:
         sku, name = products.get(int(row.product_id), (None, None))
+    meta = row.meta_json if isinstance(getattr(row, "meta_json", None), dict) else {}
     return {
         "id": row.id,
         "customer_id": row.customer_id,
@@ -420,6 +542,10 @@ def listing_to_dict(
         "status_observed_at": row.status_observed_at.isoformat() if row.status_observed_at else None,
         "external_id": row.external_id,
         "notes": row.notes,
+        "url_verified_at": listing_url_verified_at(
+            row, last_ok_fetch_at=(last_ok_fetch or {}).get(int(row.id)) if row.id is not None else None
+        ),
+        "original_url": meta.get("original_url"),
     }
 
 

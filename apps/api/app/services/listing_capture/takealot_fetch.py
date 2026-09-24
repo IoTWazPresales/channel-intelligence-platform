@@ -205,6 +205,9 @@ def fetch_takealot_listing(
 
     if plid:
         status, body, data = _get_details(plid)
+        # REST status for the URL/known PLID; the dead-link rule reads this even when
+        # the returned status is the EAN search's.
+        flags["details_status"] = status
         if status == 200 and data and isinstance(data.get("buybox"), dict):
             flags["plid_source"] = "url_or_known"
             flags["resolved_plid"] = plid
