@@ -1,0 +1,51 @@
+current_database() = cip
+fact_inventory_customer rows: 0
+fact_customer_sellthrough rows: 1823
+
+[pair] Hifi cust=11 prod=2254 as_of=2026-09-24
+  BEFORE fact_inventory_customer: rows=0 on_hand=0 -> no customer SOH
+  AFTER  status=available, period_start_date=2025-06-09, row_count=1, soh_units=0.0, soh_unit_cost=None, cost_field=None, vat_basis=ex_vat, flags=['zero_soh', 'no_soh_cost']
+
+[pair] Incredible Connection cust=12 prod=15280 as_of=2026-09-24
+  BEFORE fact_inventory_customer: rows=0 on_hand=0 -> no customer SOH
+  AFTER  status=available, period_start_date=2025-06-09, row_count=1, soh_units=0.0, soh_unit_cost=None, cost_field=None, vat_basis=ex_vat, flags=['zero_soh', 'no_soh_cost']
+
+[pair] Makro cust=15 prod=15712 as_of=2026-09-24
+  BEFORE fact_inventory_customer: rows=0 on_hand=0 -> no customer SOH
+  AFTER  status=available, period_start_date=2026-04-06, row_count=1, soh_units=24.0, soh_unit_cost=6194.26, cost_field=unit_mac, vat_basis=ex_vat, flags=[]
+
+[pair] Computer Mania cust=18 prod=13461 as_of=2026-09-24
+  BEFORE fact_inventory_customer: rows=0 on_hand=0 -> no customer SOH
+  AFTER  status=available, period_start_date=2026-06-29, row_count=1, soh_units=8.0, soh_unit_cost=28086.0, cost_field=unit_cost, vat_basis=ex_vat, flags=[]
+
+[pair] Takealot cust=20 prod=13284 as_of=2026-09-24
+  BEFORE fact_inventory_customer: rows=0 on_hand=0 -> no customer SOH
+  AFTER  status=available, period_start_date=2026-07-27, row_count=1, soh_units=0.0, soh_unit_cost=None, cost_field=unit_cost, vat_basis=inc_vat, flags=['zero_soh']
+
+[pair] Evetech cust=52 prod=16529 as_of=2026-09-24
+  BEFORE fact_inventory_customer: rows=0 on_hand=0 -> no customer SOH
+  AFTER  status=available, period_start_date=2026-07-27, row_count=1, soh_units=1.0, soh_unit_cost=None, cost_field=None, vat_basis=ex_vat, flags=['no_soh_cost']
+
+[pair] Game cust=57 prod=15741 as_of=2026-09-24
+  BEFORE fact_inventory_customer: rows=0 on_hand=0 -> no customer SOH
+  AFTER  status=available, period_start_date=2026-03-30, row_count=1, soh_units=0.0, soh_unit_cost=None, cost_field=None, vat_basis=ex_vat, flags=['zero_soh', 'no_soh_cost']
+
+[pair] AMAZON COMMERCIAL SERVICES (SOUTH AFRICA) cust=299 prod=11929 as_of=2026-09-24
+  BEFORE fact_inventory_customer: rows=0 on_hand=0 -> no customer SOH
+  AFTER  status=unavailable, flags=['no_customer_soh'], reason=customer SOH unavailable — no fact_customer_sellthrough row with reported_soh on or before 2026-09-24
+
+[line 2971] Takealot cust=20 prod=8528 as_of=2026-09-24
+  BEFORE fact_inventory_customer: rows=0 on_hand=0 -> no customer SOH
+  AFTER  status=available, period_start_date=2026-07-27, row_count=1, soh_units=11.0, soh_unit_cost=33516.1, cost_field=unit_cost, vat_basis=inc_vat, derived_mac=30811.213, delta=-2704.887, flags=[]
+
+[line 2968] Takealot cust=20 prod=3750 as_of=2026-09-24
+  BEFORE fact_inventory_customer: rows=0 on_hand=0 -> no customer SOH
+  AFTER  status=available, period_start_date=2026-07-27, row_count=1, soh_units=15.0, soh_unit_cost=11738.35, cost_field=unit_cost, vat_basis=inc_vat, derived_mac=10729.532, delta=-1008.818, flags=[]
+
+[line 2964] Takealot cust=20 prod=16653 as_of=2026-09-24
+  BEFORE fact_inventory_customer: rows=0 on_hand=0 -> no customer SOH
+  AFTER  status=available, period_start_date=2026-07-27, row_count=1, soh_units=4.0, soh_unit_cost=23477.48, cost_field=unit_cost, vat_basis=inc_vat, derived_mac=21883.978, delta=-1593.502, flags=[]
+
+[line 2960] Takealot cust=20 prod=2972 as_of=2026-09-24
+  BEFORE fact_inventory_customer: rows=0 on_hand=0 -> no customer SOH
+  AFTER  status=available, period_start_date=2026-07-27, row_count=1, soh_units=2.0, soh_unit_cost=7042.7, cost_field=unit_cost, vat_basis=inc_vat, derived_mac=6444.576, delta=-598.124, flags=[]
