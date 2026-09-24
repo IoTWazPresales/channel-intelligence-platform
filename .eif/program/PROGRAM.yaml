@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1126
-  log_sha256: 1491e405642dc1e9d26b434132f8c133452f1103ea7f67b32da4136385c63e8f
+  snapshot_revision: 1136
+  log_sha256: 5d61d46f1bec9b4d851283f3d8fd7b725a324237c0f47bc4c18e1625fe94f0d5
   acceptance_policy:
     milestone: operator
     root: operator
@@ -6368,13 +6368,9 @@ nodes:
     class: feature
     origin: operator
     status: in_progress
-    stage: implement
-    revision: 3
-    lease:
-      run: N0040_IMPL_20260924
-      acquired_at: '2026-09-24T08:54:38Z'
-      heartbeat_at: '2026-09-24T08:54:38Z'
-      expires_at: '2026-09-24T10:54:38Z'
+    stage: validate
+    revision: 5
+    lease: null
     depends_on:
     - N-0039
     facets:
@@ -6432,9 +6428,12 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Pipelined (ordering-only dependency on N-0039; disjoint files). Discovery: n0040/DISCOVERY.md. Implementation
-      by fresh subagent (backend-engineer, frontend-engineer, test-engineering-specialist), run N0040_IMPL_20260924. Supersession
-      behaviour proven on a clone before/after (D-g).'
+    stage_note: 'Implemented at 73466a10 (impl subagent; first attempt cut off by usage limit before writing code). list_sellable_product_lines
+      + GET catalog product-lines endpoint; H1/H2/H5/H6 constants removed; codes plumbed through bulk preview and single-file
+      parser; web useProductLines feeds BulkLineupBackfillDialog and archive path parser; neutral copy; literal code-set guard
+      test. Proof in-process (no clone: CREATE DATABASE denied; archive tree outside roots): old vs new code over all 36 persisted
+      cases read-only from cip -> 0 BU changes, collision groups 3=3, 7/7 supersession pairs unchanged. NULL product_line:
+      10 test-pollution rows, reported not edited. Independent review next.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -6721,9 +6720,9 @@ nodes:
     title: 'D-d: archive untracked files outside the repo; commit only real source'
     class: feature
     origin: operator
-    status: proposed
-    stage: null
-    revision: 0
+    status: blocked
+    stage: discovery
+    revision: 2
     lease: null
     depends_on:
     - N-0044
@@ -6745,7 +6744,13 @@ nodes:
     quality: {}
     verification: {}
     evidence: []
-    blockers: []
+    blockers:
+    - id: BL-0010
+      type: human
+      ref: D-0033
+      opened: '2026-09-24T11:37:12Z'
+      note: Committed real records (69864486, d4c5c102, run logs). Archive move of 105 scratch paths outside the repo needs
+        Warren (FOREIGN_PATH); 172 EIF/control-plane paths need Warren's disposition. Script + lists in n0045/.
     conservation_tags: []
     fingerprint: null
     stage_note: null
@@ -6762,12 +6767,12 @@ nodes:
     title: 'BACKLOG-143: worktrees and leftover-state hygiene'
     class: feature
     origin: operator
-    status: proposed
-    stage: null
-    revision: 0
+    status: blocked
+    stage: discovery
+    revision: 3
     lease: null
     depends_on:
-    - N-0045
+    - N-0044
     facets: []
     risk: R1
     touches_existing: true
@@ -6785,7 +6790,12 @@ nodes:
     quality: {}
     verification: {}
     evidence: []
-    blockers: []
+    blockers:
+    - id: BL-0011
+      type: human
+      ref: D-0034
+      opened: '2026-09-24T11:41:02Z'
+      note: 'Inventory done (n0046/INVENTORY.md). Removals are destructive or outside the repo: Warren runs them.'
     conservation_tags: []
     fingerprint: null
     stage_note: null
@@ -6804,10 +6814,10 @@ nodes:
     origin: operator
     status: proposed
     stage: null
-    revision: 0
+    revision: 1
     lease: null
     depends_on:
-    - N-0046
+    - N-0044
     facets:
     - data_migration
     risk: R2
@@ -8758,6 +8768,28 @@ decisions:
     origin: agent
     status: proposed
     supersedes: null
+  D-0033:
+    id: D-0033
+    scope: N-0045
+    statement: 'D-d needs Warren''s hands: (1) run .eif/audit/PROGRAMME_20260924/n0045/archive_untracked.ps1 (dry run, then
+      -Apply) to move 105 scratch files to C:\Users\warren_eliason\cip-untracked-archive-20260924 - the agent''s guard denies
+      paths outside the repo; (2) decide the 172 EIF-install/control-plane untracked paths (warren_controlplane_list.txt:
+      .agents/skills, .eif/runtime, runtime-events.jsonl, upgrade-history/work, node-scope.lock, PROJECT_MANIFEST, ENVIRONMENT_POLICY,
+      AUTONOMY_POLICY backups, .cursor/rules/eif-*.mdc, .cursor-recovery): track, gitignore, or archive. Real records already
+      committed: 69864486, d4c5c102 (see n0045/IMPL.md).'
+    origin: agent
+    status: proposed
+    supersedes: null
+  D-0034:
+    id: D-0034
+    scope: N-0046
+    statement: 'BACKLOG-143 needs Warren (all destructive or outside the repo; n0046/INVENTORY.md): remove 3 in-repo worktrees
+      (.wt-main-baseline has 13 untracked session notes to archive first); inspect 2 outside worktrees; close feat/shipping-mailer-recipients
+      if it has no unique work; drop 16 stale clone/smoke DBs (~35 GB) keeping cip and cip_test; optionally create one fresh
+      full clone (the cip role cannot CREATE DATABASE) so future repairs can be proven on a current full copy.'
+    origin: agent
+    status: proposed
+    supersedes: null
 evidence:
   EV-GOV008-REVIEW:
     id: EV-GOV008-REVIEW
@@ -9374,6 +9406,6 @@ deferred_findings:
 ids:
   node: 5
   decision: 19
-  blocker: 9
+  blocker: 11
   evidence: 2
   baseline: 4
