@@ -2,3 +2,7 @@
 {"ts":"2026-09-24T08:46:53Z","kind":"programme.event","event":"baseline.add","seq":1085}
 {"ts":"2026-09-24T08:47:01Z","kind":"programme.event","event":"node.baseline","seq":1086}
 {"ts":"2026-09-24T08:47:11Z","kind":"programme.event","event":"node.stage","seq":1087}
+{"ts":"2026-09-24T10:58:02Z","kind":"programme.event","event":"decision.add","seq":1103}
+{"ts":"2026-09-24T10:58:11Z","kind":"programme.event","event":"finding.defer","seq":1104}
+{"ts":"2026-09-24T10:58:27Z","kind":"programme.event","event":"node.stage","seq":1105}
+{"ts":"2026-09-24T10:58:36Z","kind":"programme.event","event":"node.lease.release","seq":1106}

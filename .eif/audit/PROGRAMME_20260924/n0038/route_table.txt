@@ -1,0 +1,101 @@
+
+/api/v1/cpor/
+
+| # | Method | Path | Handler | Role required |
+|---|--------|------|---------|---------------|
+| 1 | GET | `/api/v1/cpor/cases` | `cpor_cases.list_cases` | any signed-in user (read) |
+| 2 | POST | `/api/v1/cpor/cases` | `cpor_cases.create_case` | admin + planner |
+| 3 | GET | `/api/v1/cpor/cases/{case_id}` | `cpor_cases.get_case` | any signed-in user (read) |
+| 4 | PATCH | `/api/v1/cpor/cases/{case_id}` | `cpor_cases.patch_case` | admin + planner |
+| 5 | POST | `/api/v1/cpor/cases/{case_id}/intelligence-exclude` | `cpor_cases.set_intelligence_exclude` | admin + planner |
+| 6 | POST | `/api/v1/cpor/cases/{case_id}/supersede/preview` | `cpor_cases.preview_supersede_case` | admin + planner |
+| 7 | POST | `/api/v1/cpor/cases/{case_id}/supersede` | `cpor_cases.supersede_case_endpoint` | admin + planner |
+| 8 | POST | `/api/v1/cpor/cases/{case_id}/supersede/restore` | `cpor_cases.restore_supersede_case` | admin + planner |
+| 9 | POST | `/api/v1/cpor/cases/{case_id}/lines` | `cpor_cases.create_line` | admin + planner |
+| 10 | PATCH | `/api/v1/cpor/cases/{case_id}/lines/{line_id}` | `cpor_cases.patch_line` | admin + planner |
+| 11 | POST | `/api/v1/cpor/cases/{case_id}/lines/{line_id}/void` | `cpor_cases.void_line` | admin + planner |
+| 12 | POST | `/api/v1/cpor/cases/{case_id}/lines/{line_id}/split-layers` | `cpor_cases.split_layers` | admin + planner |
+| 13 | POST | `/api/v1/cpor/cases/{case_id}/recompute` | `cpor_cases.recompute` | admin + planner |
+| 14 | GET | `/api/v1/cpor/cases/{case_id}/lines/{line_id}/cost-suggest` | `cpor_cases.cost_suggest` | any signed-in user (read) |
+| 15 | GET | `/api/v1/cpor/cases/{case_id}/events` | `cpor_cases.list_events` | any signed-in user (read) |
+| 16 | GET | `/api/v1/cpor/cases/{case_id}/pivot` | `cpor_cases.case_pivot` | any signed-in user (read) |
+| 17 | POST | `/api/v1/cpor/cases/{case_id}/transition` | `cpor_cases.transition_case` | admin + planner |
+| 18 | GET | `/api/v1/cpor/settlement/book` | `cpor_cases.cpor_settlement_book` | any signed-in user (read) |
+| 19 | GET | `/api/v1/cpor/intelligence/portfolio` | `cpor_cases.cpor_portfolio_intelligence` | any signed-in user (read) |
+| 20 | GET | `/api/v1/cpor/intelligence/incremental-unit-cost` | `cpor_cases.cpor_incremental_unit_cost` | any signed-in user (read) |
+| 21 | GET | `/api/v1/cpor/intelligence/norms` | `cpor_cases.cpor_support_norms` | any signed-in user (read) |
+| 22 | GET | `/api/v1/cpor/intelligence/comparable-cases` | `cpor_cases.cpor_comparable_cases` | any signed-in user (read) |
+| 23 | GET | `/api/v1/cpor/intelligence/support-bias` | `cpor_cases.cpor_support_bias` | any signed-in user (read) |
+| 24 | GET | `/api/v1/cpor/cases/{case_id}/promo-load-recon` | `cpor_cases.cpor_promo_load_recon` | any signed-in user (read) |
+| 25 | GET | `/api/v1/cpor/cases/{case_id}/payment-recon` | `cpor_cases.cpor_payment_recon` | any signed-in user (read) |
+| 26 | GET | `/api/v1/cpor/intelligence/promo-plan-draft` | `cpor_cases.cpor_promo_plan_draft` | any signed-in user (read) |
+| 27 | POST | `/api/v1/cpor/intelligence/promo-plan-draft/recompute` | `cpor_cases.cpor_promo_plan_recompute` | admin + planner |
+| 28 | POST | `/api/v1/cpor/intelligence/promo-plan-draft/create-case` | `cpor_cases.cpor_promo_plan_create_case` | admin + planner |
+| 29 | GET | `/api/v1/cpor/meta/promotion-types` | `cpor_cases.promotion_types` | any signed-in user (read) |
+| 30 | GET | `/api/v1/cpor/cases/{case_id}/settlement` | `cpor_cases.get_settlement` | any signed-in user (read) |
+| 31 | POST | `/api/v1/cpor/cases/{case_id}/claim-evidence/import` | `cpor_cases.import_claim_evidence` | admin + planner |
+| 32 | POST | `/api/v1/cpor/cases/{case_id}/settlement/rollup` | `cpor_cases.post_settlement_rollup` | admin + planner |
+| 33 | GET | `/api/v1/cpor/meta/lifecycle` | `cpor_cases.lifecycle_meta` | any signed-in user (read) |
+| 34 | GET | `/api/v1/cpor/fx/rates/today` | `cpor_fx.fx_rate_today` | any signed-in user (read) |
+| 35 | POST | `/api/v1/cpor/fx/rates/fetch` | `cpor_fx.fx_rate_fetch` | admin + planner |
+| 36 | GET | `/api/v1/cpor/fx/backfill-suggestions` | `cpor_fx.fx_backfill_suggestions` | any signed-in user (read) |
+| 37 | POST | `/api/v1/cpor/fx/backfill-confirm` | `cpor_fx.fx_backfill_confirm` | admin + planner |
+| 38 | POST | `/api/v1/cpor/fx/declare-mode` | `cpor_fx.fx_declare_mode` | admin + planner |
+| 39 | POST | `/api/v1/cpor/cases/{case_id}/export` | `cpor_exports.generate_export` | admin + planner |
+| 40 | GET | `/api/v1/cpor/cases/{case_id}/exports` | `cpor_exports.list_exports` | any signed-in user (read) |
+| 41 | GET | `/api/v1/cpor/cases/{case_id}/exports/{version}/file` | `cpor_exports.download_export` | any signed-in user (read) |
+| 42 | GET | `/api/v1/cpor/historical-import/profiles` | `cpor_historical_import.list_mapping_profiles` | any signed-in user (read) |
+| 43 | GET | `/api/v1/cpor/historical-import/jobs/{job_id}/summary` | `cpor_historical_import.historical_job_summary` | any signed-in user (read) |
+| 44 | GET | `/api/v1/cpor/historical-import/jobs/{job_id}/candidates` | `cpor_historical_import.historical_candidates` | any signed-in user (read) |
+| 45 | POST | `/api/v1/cpor/historical-import/jobs/{job_id}/map-token` | `cpor_historical_import.historical_map_token` | admin |
+| 46 | POST | `/api/v1/cpor/historical-import/jobs/{job_id}/bulk-map-token` | `cpor_historical_import.historical_bulk_map_token` | admin |
+| 47 | POST | `/api/v1/cpor/historical-import/jobs/{job_id}/validate` | `cpor_historical_import.historical_validate` | admin |
+| 48 | POST | `/api/v1/cpor/historical-import/jobs/{job_id}/apply` | `cpor_historical_import.historical_apply` | admin |
+| 49 | GET | `/api/v1/cpor/historical-import/jobs/{job_id}/progress` | `cpor_historical_import.historical_progress` | any signed-in user (read) |
+| 50 | POST | `/api/v1/cpor/historical-import/jobs/{job_id}/resolution-plan` | `cpor_historical_import.historical_resolution_plan_generate` | admin |
+| 51 | POST | `/api/v1/cpor/historical-import/jobs/{job_id}/resolution-plan/compute-async` | `cpor_historical_import.historical_resolution_plan_compute_async` | admin |
+| 52 | POST | `/api/v1/cpor/historical-import/jobs/{job_id}/resolution-plan/apply-async` | `cpor_historical_import.historical_resolution_plan_apply_async` | admin |
+| 53 | GET | `/api/v1/cpor/historical-import/jobs/{job_id}/resolution-plan-task/{task_id}` | `cpor_historical_import.historical_resolution_plan_task_status` | any signed-in user (read) |
+| 54 | GET | `/api/v1/cpor/payment-evidence/profiles` | `cpor_payment_evidence.list_profiles` | any signed-in user (read) |
+| 55 | GET | `/api/v1/cpor/payment-evidence/overlay` | `cpor_payment_evidence.payment_evidence_overlay` | any signed-in user (read) |
+| 56 | GET | `/api/v1/cpor/payment-evidence/jobs/{job_id}/summary` | `cpor_payment_evidence.job_summary` | any signed-in user (read) |
+| 57 | GET | `/api/v1/cpor/payment-evidence/jobs/{job_id}/candidates` | `cpor_payment_evidence.candidates` | any signed-in user (read) |
+| 58 | POST | `/api/v1/cpor/payment-evidence/jobs/{job_id}/map-token` | `cpor_payment_evidence.map_token` | admin + steward + planner |
+| 59 | POST | `/api/v1/cpor/payment-evidence/jobs/{job_id}/mark-shell-case` | `cpor_payment_evidence.mark_shell` | admin + steward + planner |
+| 60 | POST | `/api/v1/cpor/payment-evidence/jobs/{job_id}/re-resolve` | `cpor_payment_evidence.re_resolve` | admin + steward + planner |
+| 61 | POST | `/api/v1/cpor/payment-evidence/jobs/{job_id}/apply` | `cpor_payment_evidence.apply_job` | admin + steward + planner |
+| 62 | GET | `/api/v1/cpor/cases/{case_id}/payment-evidence` | `cpor_payment_evidence.list_case_payment_evidence` | any signed-in user (read) |
+
+/api/v1/shipment-evidence
+
+| # | Method | Path | Handler | Role required |
+|---|--------|------|---------|---------------|
+| 1 | GET | `/api/v1/shipment-evidence/raw-column-keys` | `shipment_evidence.list_shipment_evidence_raw_column_keys` | admin + steward |
+| 2 | GET | `/api/v1/shipment-evidence/import-jobs/{job_id}/mapping-candidates` | `shipment_evidence.list_shipment_import_job_mapping_candidates` | admin + steward |
+| 3 | GET | `/api/v1/shipment-evidence/import-jobs/{job_id}/mapping-candidates/paginated` | `shipment_evidence.list_shipment_import_job_mapping_candidates_paginated` | admin + steward |
+| 4 | GET | `/api/v1/shipment-evidence/import-jobs/{job_id}/mapping-candidates/tab-counts` | `shipment_evidence.shipment_mapping_candidate_tab_counts` | admin + steward |
+| 5 | POST | `/api/v1/shipment-evidence/import-jobs/{job_id}/resolution-plan/compute-async` | `shipment_evidence.shipment_resolution_plan_compute_async` | admin + steward |
+| 6 | POST | `/api/v1/shipment-evidence/import-jobs/{job_id}/resolution-plan` | `shipment_evidence.shipment_resolution_plan_generate` | admin + steward |
+| 7 | POST | `/api/v1/shipment-evidence/import-jobs/{job_id}/resolution-plan/effective` | `shipment_evidence.shipment_resolution_plan_effective` | admin + steward |
+| 8 | POST | `/api/v1/shipment-evidence/import-jobs/{job_id}/resolution-plan/apply-async` | `shipment_evidence.shipment_resolution_plan_apply_async` | admin + steward |
+| 9 | POST | `/api/v1/shipment-evidence/import-jobs/{job_id}/bulk-apply-confirmed-plans` | `shipment_evidence.shipment_import_job_bulk_apply_confirmed_plans` | admin + steward |
+| 10 | POST | `/api/v1/shipment-evidence/import-candidates/bulk-map-customer` | `shipment_evidence.shipment_import_candidates_bulk_map_customer` | admin + steward |
+| 11 | POST | `/api/v1/shipment-evidence/import-candidates/{candidate_id}/map-distributor` | `shipment_evidence.shipment_import_candidate_map_distributor` | admin + steward |
+| 12 | POST | `/api/v1/shipment-evidence/import-candidates/{candidate_id}/create-provisional-distributor` | `shipment_evidence.shipment_import_candidate_create_provisional_distributor` | admin + steward |
+| 13 | POST | `/api/v1/shipment-evidence/import-candidates/{candidate_id}/map-customer` | `shipment_evidence.shipment_import_candidate_map_customer` | admin + steward |
+| 14 | POST | `/api/v1/shipment-evidence/import-candidates/{candidate_id}/manual-special-category` | `shipment_evidence.shipment_import_candidate_manual_special_category` | admin + steward |
+| 15 | POST | `/api/v1/shipment-evidence/import-candidates/{candidate_id}/clear-special-category` | `shipment_evidence.shipment_import_candidate_clear_special_category` | admin + steward |
+| 16 | POST | `/api/v1/shipment-evidence/import-candidates/{candidate_id}/reject` | `shipment_evidence.shipment_import_candidate_reject` | admin + steward |
+| 17 | POST | `/api/v1/shipment-evidence/import-candidates/{candidate_id}/duplicate-review/different-entity` | `shipment_evidence.shipment_import_candidate_duplicate_different_entity` | admin + steward |
+| 18 | POST | `/api/v1/shipment-evidence/import-candidates/{candidate_id}/duplicate-review/same-entity` | `shipment_evidence.shipment_import_candidate_duplicate_same_entity` | admin + steward |
+| 19 | POST | `/api/v1/shipment-evidence/import-candidates/{candidate_id}/create-provisional-customer` | `shipment_evidence.shipment_import_candidate_create_provisional_customer` | admin + steward |
+| 20 | POST | `/api/v1/shipment-evidence/import-jobs/{job_id}/bulk-create-provisional-customers` | `shipment_evidence.shipment_import_job_bulk_create_provisional_customers` | admin + steward |
+| 21 | POST | `/api/v1/shipment-evidence/import-jobs/{job_id}/shipment-steward-bulk-provisional-customers/apply-async` | `shipment_evidence.shipment_steward_bulk_provisional_apply_async` | admin + steward |
+| 22 | POST | `/api/v1/shipment-evidence/import-jobs/{job_id}/shipment-steward-bulk-preview` | `shipment_evidence.shipment_steward_bulk_preview` | any signed-in user (read) |
+| 23 | POST | `/api/v1/shipment-evidence/import-jobs/{job_id}/shipment-steward-bulk-apply` | `shipment_evidence.shipment_steward_bulk_apply` | any signed-in user (read) |
+| 24 | POST | `/api/v1/shipment-evidence/import-jobs/{job_id}/shipment-steward-bulk-ignore/apply-async` | `shipment_evidence.shipment_steward_bulk_ignore_apply_async` | any signed-in user (read) |
+| 25 | GET | `/api/v1/shipment-evidence/import-jobs/{job_id}/shipment-bulk-task/{task_id}` | `shipment_evidence.shipment_bulk_task_status` | any signed-in user (read) |
+| 26 | POST | `/api/v1/shipment-evidence/jobs/{job_id}/apply` | `shipment_evidence.apply_shipment_import_job` | admin + steward |
+| 27 | GET | `/api/v1/shipment-evidence` | `shipment_evidence.list_shipment_evidence` | admin + steward |
+| 28 | GET | `/api/v1/shipment-evidence/change-events` | `shipment_evidence.list_shipment_change_events` | admin + steward |
+| 29 | GET | `/api/v1/shipment-evidence/{line_id}` | `shipment_evidence.get_shipment_evidence_line` | admin + steward |
