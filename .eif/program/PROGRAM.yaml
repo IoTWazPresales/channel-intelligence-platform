@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1147
-  log_sha256: a0645b325a5c563bf2ed829abd564296cdc190cf55944209f2ac0deade974087
+  snapshot_revision: 1149
+  log_sha256: 4cd9ac3ea8e72f7ff37e891dd9e69a987a28e730dabc86f1b64135c839c40316
   acceptance_policy:
     milestone: operator
     root: operator
@@ -6639,13 +6639,9 @@ nodes:
     class: feature
     origin: operator
     status: in_progress
-    stage: implement
-    revision: 3
-    lease:
-      run: N0044_IMPL_20260924
-      acquired_at: '2026-09-24T11:30:13Z'
-      heartbeat_at: '2026-09-24T11:30:13Z'
-      expires_at: '2026-09-24T14:30:13Z'
+    stage: validate
+    revision: 5
+    lease: null
     depends_on:
     - N-0040
     - N-0032
@@ -6694,9 +6690,11 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: Pipelined (ordering-only dependency on N-0040; disjoint files). Discovery n0044/DISCOVERY.md. Implementation
-      by fresh subagent (frontend-engineer, test-engineering-specialist, accessibility-specialist), run N0044_IMPL_20260924.
-      D-0032 open for the mount placement (Option A applied as reversible default) and the orphan subtree (kept).
+    stage_note: 'Implemented at 657dd1ed (two impl subagents; first cut off by usage limit). Desk: approved support (DualMoney,
+      booked/proposed caption), readiness, lazy Comparable cases tab, transitions, intelligence-exclude switch; PlanWorkspace:
+      approve with fx_rate + over-budget reapproval, FX mode toggle, proposed-rate edit. CporCaseWorkspace + CporFxAnchorPanel
+      deleted; SettlementPortfolioRead deleted; CporPortfolioIntelligencePanel -> PortfolioReadPanel collapsed on Case book
+      (D-0032 default). BACKLOG-202 closed with the move map. Independent review next.'
     debug_iterations: 0
     split_into: null
     deferred: null
