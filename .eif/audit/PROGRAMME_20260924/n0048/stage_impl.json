@@ -1,0 +1,1 @@
+{"node": "N-0048", "expected_revision": 2, "to": "implement", "stage_note": "Pipelined (ordering-only dep on N-0047). Implementation by fresh subagent (database-specialist, backend-engineer, test-engineering-specialist), run N0048_IMPL_20260924, clone cip_ns4_settle_clone. cip apply listed ready-for-cip, not run."}
