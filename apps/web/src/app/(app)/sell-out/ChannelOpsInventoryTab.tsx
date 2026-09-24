@@ -9,6 +9,8 @@ import { useMemo, useState } from 'react';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
+import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiGet } from '@/lib/api';
 
 import { depthAtLeast, type IntelDepth } from './intelDepth';
@@ -18,6 +20,7 @@ type DistHit = { id: number; distributor_code: string; distributor_name: string 
 type InvRow = {
   distributor_id: number;
   distributor_name: string | null;
+  distributor_code?: string | null;
   product_id: number;
   sku: string | null;
   sales_model_name: string | null;
@@ -43,6 +46,7 @@ type InvRow = {
 export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
   const [distributorPick, setDistributorPick] = useState<DistHit | null>(null);
   const lineId = useLineIdentifierPreference();
+  const factColumns = useFactColumns<InvRow>('channel-ops.inventory');
 
   const { data: filterOptions } = useQuery({
     queryKey: ['sellout-filter-options'],
@@ -51,7 +55,7 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
   });
 
   const distId = distributorPick?.id;
-  const { data, isLoading, isError, error } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['channel-ops-inventory', distId],
     queryFn: ({ signal }) =>
       apiGet<{ items: InvRow[] }>(`/api/v1/channel-ops/inventory?distributor_id=${distId}`, { signal }),
@@ -151,8 +155,10 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
         },
       );
     }
-    return cols;
-  }, [operational, strategic, lineId]);
+    // Depth already shows some registry fields as default cells; do not add them twice.
+    const shown = new Set(cols.map((c) => c.field).filter(Boolean));
+    return [...cols, ...factColumns.optionalColDefs.filter((c) => !shown.has(c.field))];
+  }, [operational, strategic, lineId, factColumns.optionalColDefs]);
 
   return (
     <Box>
@@ -180,6 +186,16 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
                 isLoading={isLoading}
                 isError={isError}
                 error={isError ? new Error((error as Error)?.message ?? 'Failed to load inventory.') : null}
+                onRetry={() => void refetch()}
+                toolbar={
+                  <Stack direction="row" sx={{ mb: 1 }}>
+                    <FactColumnsButton
+                      gridId="channel-ops.inventory"
+                      onClick={factColumns.openPicker}
+                      count={factColumns.optionalFields.length}
+                    />
+                  </Stack>
+                }
                 isEmpty={(data?.items ?? []).length === 0}
                 empty={{
                   title: 'No distributor inventory rows for this selection',
@@ -193,6 +209,7 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
           </Paper>
         </>
       )}
+      <FactColumnPicker {...factColumns.pickerProps} />
     </Box>
   );
 }

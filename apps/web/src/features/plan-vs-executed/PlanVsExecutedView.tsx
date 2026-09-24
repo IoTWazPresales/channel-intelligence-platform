@@ -50,6 +50,8 @@ import {
 import { DRILL_GRID_PAGE_SIZE, gridRowMetrics, paginatedGridHeight } from '@/features/plan-vs-executed/gridPagination';
 import { resolveProductDisplay } from '@/features/plan-vs-executed/productDisplay';
 import { buildInboundShipmentsHref } from '@/app/(app)/shipping/buildInboundShipmentsHref';
+import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiGet } from '@/lib/api';
 
 type Scorecard = {
@@ -152,7 +154,9 @@ type PlanVsExecutedResponse = {
     customer_id?: number | null;
     period_label: string;
     business_unit_label: string;
+    /** Customer name (D7: name only); the code is the optional `customer_code` column. */
     customer_label: string;
+    customer_code?: string | null;
     product_name: string | null;
     product_sku?: string | null;
     product_description?: string | null;
@@ -279,6 +283,7 @@ export function PlanVsExecutedView() {
   const [drillProductId, setDrillProductId] = useState<number | null>(null);
   const [drillSalesModel, setDrillSalesModel] = useState<string | null>(null);
   const drillRef = useRef<HTMLDivElement | null>(null);
+  const drillColumns = useFactColumns('pve.drill');
 
   const queryKey = [
     'plan-vs-executed',
@@ -452,8 +457,9 @@ export function PlanVsExecutedView() {
           );
         },
       },
+      ...drillColumns.optionalColDefs,
     ],
-    [productGroupBy],
+    [productGroupBy, drillColumns.optionalColDefs],
   );
 
   const drillGridOptions = useMemo<GridOptions>(
@@ -853,6 +859,12 @@ export function PlanVsExecutedView() {
                     {hasDrill && drillChipLabel ? (
                       <Chip size="small" label={drillChipLabel} data-testid="drill-active-chip" />
                     ) : null}
+                    <Box sx={{ flex: 1 }} />
+                    <FactColumnsButton
+                      gridId="pve.drill"
+                      onClick={drillColumns.openPicker}
+                      count={drillColumns.optionalFields.length}
+                    />
                   </Stack>
                   <EnterpriseDataGrid
                     rowData={data?.drill_rows ?? []}
@@ -866,6 +878,7 @@ export function PlanVsExecutedView() {
           ) : null}
         </ModuleDataSection>
       </Box>
+      <FactColumnPicker {...drillColumns.pickerProps} />
     </Stack>
   );
 }

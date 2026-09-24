@@ -21,6 +21,8 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
+import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
 
 type CustomerTermRow = {
@@ -30,6 +32,7 @@ type CustomerTermRow = {
   customer_name: string;
   customer_margin_pct: number;
   customer_rebate_pct: number;
+  target_cover_weeks?: number | null;
 };
 
 type CustomerPick = {
@@ -50,6 +53,7 @@ function CustomerTermsEditor() {
   const [custPick, setCustPick] = useState<CustomerPick | null>(null);
   const [margin, setMargin] = useState('0.12');
   const [rebate, setRebate] = useState('0.03');
+  const factColumns = useFactColumns<CustomerTermRow>('customer-terms');
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['commercial-planner', 'customer-terms', 'steward', filter],
@@ -121,6 +125,7 @@ function CustomerTermsEditor() {
         width: 140,
         valueFormatter: (p) => (p.value == null ? '' : pctLabel(Number(p.value))),
       },
+      ...factColumns.optionalColDefs,
       {
         headerName: '',
         width: 100,
@@ -134,7 +139,7 @@ function CustomerTermsEditor() {
           ) : null,
       },
     ],
-    [],
+    [factColumns.optionalColDefs],
   );
 
   return (
@@ -154,6 +159,11 @@ function CustomerTermsEditor() {
           data-testid="customer-terms-filter"
         />
         <Box sx={{ flex: 1 }} />
+        <FactColumnsButton
+          gridId="customer-terms"
+          onClick={factColumns.openPicker}
+          count={factColumns.optionalFields.length}
+        />
         <Button
           component={NextLink}
           href="/commercial-planner"
@@ -187,6 +197,7 @@ function CustomerTermsEditor() {
           }}
         />
       </ModuleDataSection>
+      <FactColumnPicker {...factColumns.pickerProps} />
 
       <Dialog open={dlg != null} onClose={() => !save.isPending && setDlg(null)} fullWidth maxWidth="sm">
         <DialogTitle>{dlg === 'edit' ? 'Edit commercial terms' : 'Create commercial terms'}</DialogTitle>

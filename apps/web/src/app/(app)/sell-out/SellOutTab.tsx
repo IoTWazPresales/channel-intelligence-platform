@@ -50,7 +50,9 @@ type SelloutLine = {
 type ChannelSelloutLine = {
   date: string;
   distributor_name: string | null;
+  distributor_code?: string | null;
   customer_name: string | null;
+  customer_code?: string | null;
   product_name: string | null;
   sku: string | null;
   sales_model_name: string | null;
@@ -70,6 +72,7 @@ type ZeroProduct = { product_id: number; sku: string; sales_model_name: string |
 export function SellOutTab({ depth }: { depth: IntelDepth }) {
   const lineId = useLineIdentifierPreference();
   const factColumns = useFactColumns<SelloutLine>('sellout.commercial-lines');
+  const channelColumns = useFactColumns<ChannelSelloutLine>('channel-ops.sell-out');
   const [smartPreset, setSmartPreset] = useState<SmartPresetId>('');
   const [distributorPick, setDistributorPick] = useState<DistHit | null>(null);
   const [customerPick, setCustomerPick] = useState<CustHit | null>(null);
@@ -222,8 +225,8 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
         },
       );
     }
-    return cols;
-  }, [operational, lineId]);
+    return [...cols, ...channelColumns.optionalColDefs];
+  }, [operational, lineId, channelColumns.optionalColDefs]);
   const factCols = useMemo<ColDef<SelloutLine>[]>(
     () => [
       { field: 'period_start', headerName: 'Period', minWidth: 110 },
@@ -383,15 +386,21 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
               error={linesError ? new Error((linesErr as Error)?.message ?? 'Failed to load sell-out lines.') : null}
               onRetry={() => void refetchLines()}
               toolbar={
-                useChannelApi ? undefined : (
-                  <Stack direction="row" sx={{ mb: 1 }}>
+                <Stack direction="row" sx={{ mb: 1 }}>
+                  {useChannelApi ? (
+                    <FactColumnsButton
+                      gridId="channel-ops.sell-out"
+                      onClick={channelColumns.openPicker}
+                      count={channelColumns.optionalFields.length}
+                    />
+                  ) : (
                     <FactColumnsButton
                       gridId="sellout.commercial-lines"
                       onClick={factColumns.openPicker}
                       count={factColumns.optionalFields.length}
                     />
-                  </Stack>
-                )
+                  )}
+                </Stack>
               }
               isEmpty={(lines?.items ?? []).length === 0}
               empty={{
@@ -418,6 +427,7 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
         </Paper>
       )}
       <FactColumnPicker {...factColumns.pickerProps} />
+      <FactColumnPicker {...channelColumns.pickerProps} />
     </>
   );
 }

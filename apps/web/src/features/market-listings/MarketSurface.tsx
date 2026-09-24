@@ -38,12 +38,17 @@ import { CapabilityLedger } from '@/features/workbench-ui/CapabilityLedger';
 import { TrendChart } from '@/features/workbench-ui/charts';
 import { ScopeBar, StatusChip } from '@/features/workbench-ui/controls';
 import { EntityContextPanel, KeyValueList } from '@/features/workbench-ui/EntityContextPanel';
+import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
 import { Panel, PanelRow } from '@/features/workbench-ui/Panel';
 
 type Listing = {
   id: number;
   customer_id: number;
+  /** Joined by the list API (N-0034); the page map below is the fallback. */
+  customer_name?: string | null;
+  customer_code?: string | null;
   product_id: number | null;
   product_sku?: string | null;
   product_name?: string | null;
@@ -245,8 +250,19 @@ export function ListingUrl({ listing }: { listing: Pick<Listing, 'url' | 'status
 
 type GridRow = Listing & {
   intel?: IntelligenceRow;
-  customer_name?: string;
 };
+
+/** Optional `url` column keeps the ListingUrl rules (anchor only when verified, N-0039). */
+function listingColDefFor(field: string): Partial<ColDef<GridRow>> {
+  if (field !== 'url') return {};
+  return {
+    minWidth: 260,
+    autoHeight: true,
+    wrapText: true,
+    valueFormatter: undefined,
+    cellRenderer: (p: { data?: GridRow }) => (p.data ? <ListingUrl listing={p.data} /> : null),
+  };
+}
 
 export function MarketSurface() {
   const pathname = usePathname() || '/listing-capture';
@@ -271,6 +287,7 @@ export function MarketSurface() {
   const [confirmSeed, setConfirmSeed] = useState<Proposal | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const listingColumns = useFactColumns<GridRow>('listings', { colDefFor: listingColDefFor });
 
   const setParams = useCallback(
     (patch: Record<string, string | null>) => {
@@ -389,7 +406,7 @@ export function MarketSurface() {
       listings.map((l) => ({
         ...l,
         intel: intelById.get(l.id),
-        customer_name: customerName.get(l.customer_id),
+        customer_name: l.customer_name ?? customerName.get(l.customer_id),
       })),
     [listings, intelById, customerName],
   );
@@ -609,8 +626,9 @@ export function MarketSurface() {
         valueGetter: (p) => p.data?.intel?.last_fetched ?? null,
         valueFormatter: (p) => fmtFetched(p.value),
       },
+      ...listingColumns.optionalColDefs,
     ],
-    [],
+    [listingColumns.optionalColDefs],
   );
 
   const mappingCols = useMemo<ColDef<MapRow>[]>(
@@ -1005,11 +1023,19 @@ export function MarketSurface() {
                 </Stack>
               }
               trailing={
-                <Button size="small" variant="outlined" disabled={pollMut.isPending} onClick={() => pollMut.mutate()}>
-                  Fetch now
-                </Button>
+                <Stack direction="row" spacing={1}>
+                  <FactColumnsButton
+                    gridId="listings"
+                    onClick={listingColumns.openPicker}
+                    count={listingColumns.optionalFields.length}
+                  />
+                  <Button size="small" variant="outlined" disabled={pollMut.isPending} onClick={() => pollMut.mutate()}>
+                    Fetch now
+                  </Button>
+                </Stack>
               }
             />
+            <FactColumnPicker {...listingColumns.pickerProps} />
             <ModuleDataSection
               isEmpty={scoped.length === 0}
               empty={{

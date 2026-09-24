@@ -13,6 +13,8 @@ import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifier
 import { CategoryBars, ProportionBar, TrendChart } from '@/features/workbench-ui/charts';
 import { ScopeBar, StatusChip } from '@/features/workbench-ui/controls';
 import { EntityContextPanel, KeyValueList } from '@/features/workbench-ui/EntityContextPanel';
+import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
 import { Panel, PanelRow } from '@/features/workbench-ui/Panel';
 import { apiGet } from '@/lib/api';
@@ -99,6 +101,7 @@ export function CoverLensView() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const lineId = useLineIdentifierPreference();
+  const factColumns = useFactColumns<CoverItem>('cover.distribution');
   const [status, setStatus] = useParam('status');
   const [distributor, setDistributor] = useParam('distributor');
   const [family, setFamily] = useParam('family');
@@ -205,8 +208,9 @@ export function CoverLensView() {
           return <StatusChip label={coverStatusLabel(st)} tone={coverStatusTone(st)} />;
         },
       },
+      ...factColumns.optionalColDefs,
     ],
-    [theme, lineId],
+    [theme, lineId, factColumns.optionalColDefs],
   );
 
   const clear = () => {
@@ -382,6 +386,17 @@ export function CoverLensView() {
       />
 
       <ModuleDataSection
+        toolbar={
+          isMobile ? undefined : (
+            <Stack direction="row" justifyContent="flex-end">
+              <FactColumnsButton
+                gridId="cover.distribution"
+                onClick={factColumns.openPicker}
+                count={factColumns.optionalFields.length}
+              />
+            </Stack>
+          )
+        }
         isEmpty={rows.length === 0}
         empty={{
           title: 'No pairs match this scope',
@@ -533,6 +548,7 @@ export function CoverLensView() {
           </Stack>
         ) : null}
       </EntityContextPanel>
+      <FactColumnPicker {...factColumns.pickerProps} />
     </Stack>
   );
 }

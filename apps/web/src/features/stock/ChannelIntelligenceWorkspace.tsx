@@ -17,6 +17,8 @@ import { useCallback, useMemo, useState } from 'react';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
+import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiGet } from '@/lib/api';
 
 type CustomerPick = { id: number; customer_code: string; customer_name: string };
@@ -72,6 +74,7 @@ export function ChannelIntelligenceWorkspace() {
   const [product, setProduct] = useState<ProductPick | null>(null);
   const [site, setSite] = useState('');
   const [selected, setSelected] = useState<IntelRow | null>(null);
+  const factColumns = useFactColumns<IntelRow>('channel-intelligence');
 
   const params = new URLSearchParams();
   if (customer) params.set('customer_id', String(customer.id));
@@ -148,8 +151,9 @@ export function ChannelIntelligenceWorkspace() {
           return flags.join(', ') || '—';
         },
       },
+      ...factColumns.optionalColDefs,
     ],
-    [],
+    [factColumns.optionalColDefs],
   );
 
   return (
@@ -195,6 +199,11 @@ export function ChannelIntelligenceWorkspace() {
         <Button size="small" variant="outlined" onClick={() => refetch()}>
           Refresh
         </Button>
+        <FactColumnsButton
+          gridId="channel-intelligence"
+          onClick={factColumns.openPicker}
+          count={factColumns.optionalFields.length}
+        />
       </Stack>
       <ModuleDataSection
         isLoading={isLoading}
@@ -249,6 +258,7 @@ export function ChannelIntelligenceWorkspace() {
           ) : null}
         </Box>
       </Drawer>
+      <FactColumnPicker {...factColumns.pickerProps} />
     </Box>
   );
 }

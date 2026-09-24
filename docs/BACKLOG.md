@@ -131,7 +131,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Updated** (2026-09-21 N-0030 audit: display half **done** — name-only, `SHOW_CUSTOMER_CODE=false` at `492795c`; mint half open; 14 TMP-coded active customers of 4,949 via `dim_customer.code`; Stage 4.5) · **Partial** · 2026-09-18 · settlement surfaces show name primary (CIP-minted code subordinate via `SHOW_CUSTOMER_CODE`). Do **not** bulk-promote the 14 unverified TMP rows or repoint 216 merged losers. Mint scheme still parked. |
+| **Status / parked** | **Display half done on grids too** (2026-09-24 N-0034, D7: every Tier A fact grid shows customer / distributor **names** in identity cells; codes are their own default-hidden "Reference" columns in the one fact-grid column picker — BACKLOG-201. Not changed: filter-dropdown option labels, `admin/shipment-evidence`, `admin/distributors` code editor (D-0031). Mint half still open.) · **Updated** (2026-09-21 N-0030 audit: display half **done** — name-only, `SHOW_CUSTOMER_CODE=false` at `492795c`; mint half open; 14 TMP-coded active customers of 4,949 via `dim_customer.code`; Stage 4.5) · **Partial** · 2026-09-18 · settlement surfaces show name primary (CIP-minted code subordinate via `SHOW_CUSTOMER_CODE`). Do **not** bulk-promote the 14 unverified TMP rows or repoint 216 merged losers. Mint scheme still parked. |
 | **Effort** | Medium (approved settings table / mint path) |
 | **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` §9.5 / D-065. Warren: named accounts still carry TMP-CUST; promote works but is unused because no code scheme exists; CIP will mint its own, updatable later. |
 | **Idea** | Mint CIP-owned codes on promote (research already in `docs/design/BACKLOG-061-U2a_customer_code_mint_research.md`). BACKLOG-061 promote **map** was pruned as shipped — operator-supplied `new_code`. Mint was never built. ERP/customer-file codes are an optional later mapping, not a blocker. |
@@ -2941,7 +2941,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Decided** (2026-09-21 N-0030 audit: Warren — **all columns** pickable on fact grids; Stage 2.4 of `docs/design/STAGED_WORK_PLAN.md`) · **Open — needs a product decision before any code** · 2026-09-21 · grid/column parity audit §6.2 |
+| **Status / parked** | **Closed — Done** (2026-09-24 N-0034 passes 1 and 2, D-0030: one picker on all 15 in-scope Tier A grids plus inbound shipments; search / saved views / export routed to N-0041 / N-0042 / N-0043 in the table below) · **Decided** (2026-09-21 N-0030 audit: Warren — **all columns** pickable on fact grids; Stage 2.4 of `docs/design/STAGED_WORK_PLAN.md`) · **Open — needs a product decision before any code** · 2026-09-21 · grid/column parity audit §6.2 |
 | **Effort** | Medium per surface; the decision is the expensive part, not the wiring |
 | **Source** | ~15 grids listed as Tier A in `docs/audits/GRID_AND_COLUMN_PARITY_AUDIT.md` §6.2 — sell-out (x3), channel-ops movements/inventory, inventory, pricing (x2), buy-plans, roadmap, exceptions, plan-vs-executed, cover/forecasts/channel-intelligence, market listings, customer-commercial-terms |
 | **Idea** | Wide `fact_*`-backed operational grids could let a steward surface columns the fixed `columnDefs` hides, the way shipping / shipment-evidence / master data / planner lines already do. |
@@ -2953,21 +2953,22 @@ Exact engine invariants (do not complete around them):
 | **Out of scope** | AG Grid Enterprise tool panel (BACKLOG-193); density (see the density proposal — not shipped). |
 | **TRIGGER** | Warren names which Tier A grids need column choice, **or** an operator asks for a specific hidden fact column. |
 | **Progress (N-0034, D-0030)** | **Partial — pass 1 of 2** (2026-09-24). One picker: `features/workbench-ui/useFactColumns` + `FactColumnPicker` (wraps `ColumnPickerDialog` md), fed by the API registry `app/services/grid_fields.py` / `GET /api/v1/grid-fields/{grid_id}`; layout key `cip.grid.<grid_id>.optional.v1`. Customer / Distributor code are default-hidden **Reference** columns; identity cells are name-only (D7). Live on: inbound shipments (moved onto the hook, key `cip.commercial.inbound-shipments.grid.optional.v1` kept; `/shipping/inbound-optional-columns` is now an alias), sell-out commercial lines, inventory, pricing facts, pricing recommendations, buy-plans, roadmap, forecasts. Pass 2: channel-ops sell-out / movements / inventory, plan-vs-executed drill, cover, channel intelligence, market listings, customer-commercial-terms. Excluded: sell-out zero-sellout list (2-column exception list), exceptions inbox (worklist). |
+| **Done (N-0034 pass 2)** | 2026-09-24. Computed-row grids declare a static key tuple in `grid_fields.py` next to a named pure serializer (`channel_sellout_row_dict`, `channel_movement_row_dict`, `channel_inventory_row_dict`, `cover_item_dict` in `channel_ops.py`; `pve_drill_row_dict` in `plan_vs_executed.py`; CST read-model items); `tests/test_grid_fields.py` builds a row with each and checks every offered field is in it. Customer / distributor codes are joined in the list query or one batched `IN (...)` lookup per response (no per-row lookups). Listings now carry `customer_name` / `customer_code` from the API (the page's customer map stays as fallback); the optional URL column renders through `ListingUrl` (N-0039 rules kept). Customer-commercial-terms keeps its code column as a default (already its own column). Not in scope and unchanged: the movements tab's client-side "Inbound totals by product" roll-up (3 columns), `admin/shipment-evidence` (Distributor cell shows the code; Tier B), `admin/distributors` code editor (D-0031). |
 
 **Toolbar parity per host (criterion 4, D-b).** Column filters are already on every host (`EnterpriseDataGrid` default col def); density is global (D2) and unchanged. Nothing below is built per page: each gap is owned by the named node.
 
-| Host | Search | Chips / filter bar | Saved views | Export |
-|---|---|---|---|---|
-| SellOutTab | present → N-0041 adopts | selects → N-0041 | N-0042 | N-0043 |
-| ChannelOps movements / inventory | N-0041 | selects | N-0042 | N-0043 |
-| inventory, pricing, forecasts | N-0041 | date only | N-0042 | N-0043 |
-| buy-plans, roadmap | N-0041 | none | N-0042 | N-0043 |
-| PlanVsExecuted | N-0041 | toggles present | N-0042 | N-0043 |
-| CoverLens | N-0041 | ScopeBar present | presets present, not persisted → N-0042 | N-0043 |
-| ChannelIntelligence | N-0041 | none | N-0042 | N-0043 |
-| MarketSurface listings | N-0041 | ScopeBar present | N-0042 | N-0043 |
-| customer-commercial-terms | present → N-0041 adopts | none | N-0042 | N-0043 |
-| exceptions (excluded from the picker) | N-0041 | none | N-0042 | N-0043 |
+| Host | Column picker (`grid_id`) | Search | Chips / filter bar | Saved views | Export |
+|---|---|---|---|---|---|
+| SellOutTab | `sellout.commercial-lines`, `channel-ops.sell-out` | present → N-0041 adopts | selects → N-0041 | N-0042 | N-0043 |
+| ChannelOps movements / inventory | `channel-ops.movements`, `channel-ops.inventory` | N-0041 | selects | N-0042 | N-0043 |
+| inventory, pricing, forecasts | `inventory.customer`, `pricing.facts`, `pricing.recommendations`, `forecasts` | N-0041 | date only | N-0042 | N-0043 |
+| buy-plans, roadmap | `buy-plans`, `roadmap` | N-0041 | none | N-0042 | N-0043 |
+| PlanVsExecuted | `pve.drill` | N-0041 | toggles present | N-0042 | N-0043 |
+| CoverLens | `cover.distribution` (desktop grid; mobile cards unchanged) | N-0041 | ScopeBar present | presets present, not persisted → N-0042 | N-0043 |
+| ChannelIntelligence | `channel-intelligence` | N-0041 | none | N-0042 | N-0043 |
+| MarketSurface listings | `listings` | N-0041 | ScopeBar present | N-0042 | N-0043 |
+| customer-commercial-terms | `customer-terms` | present → N-0041 adopts | none | N-0042 | N-0043 |
+| exceptions (excluded from the picker) | — (worklist) | N-0041 | none | N-0042 | N-0043 |
 
 ---
 

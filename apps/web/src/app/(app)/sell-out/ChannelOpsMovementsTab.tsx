@@ -1,6 +1,6 @@
 'use client';
 
-import { Alert, Autocomplete, Box, Paper, TextField, Typography } from '@mui/material';
+import { Alert, Autocomplete, Box, Paper, Stack, TextField, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import type { ColDef } from 'ag-grid-community';
 import { useMemo, useState } from 'react';
@@ -8,6 +8,8 @@ import { useMemo, useState } from 'react';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
+import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiGet } from '@/lib/api';
 
 import { depthAtLeast, type IntelDepth } from './intelDepth';
@@ -25,6 +27,7 @@ type MovementRow = {
   units_shipped: number | null;
   line_state: string;
   distributor_name: string | null;
+  distributor_code?: string | null;
 };
 
 type ProductTotal = {
@@ -38,6 +41,7 @@ type ProductTotal = {
 export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
   const [distributorPick, setDistributorPick] = useState<DistHit | null>(null);
   const lineId = useLineIdentifierPreference();
+  const factColumns = useFactColumns<MovementRow>('channel-ops.movements');
   const distId = distributorPick?.id;
 
   const { data: filterOptions } = useQuery({
@@ -46,7 +50,7 @@ export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
       apiGet<{ distributors: DistHit[] }>('/api/v1/sellout/filter-options', { signal }),
   });
 
-  const { data, isLoading, isError, error } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['channel-ops-movements', distId],
     queryFn: ({ signal }) =>
       apiGet<{ items: MovementRow[]; total: number }>(
@@ -94,8 +98,9 @@ export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
         valueFormatter: (p) => (p.value != null ? Number(p.value).toLocaleString() : '—'),
       },
       { field: 'line_state', headerName: 'Status', minWidth: 110 },
+      ...factColumns.optionalColDefs,
     ],
-    [lineId],
+    [lineId, factColumns.optionalColDefs],
   );
   const totalCols = useMemo<ColDef<ProductTotal>[]>(
     () => [
@@ -139,6 +144,16 @@ export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
                 isLoading={isLoading}
                 isError={isError}
                 error={isError ? new Error((error as Error)?.message ?? 'Failed to load movements.') : null}
+                onRetry={() => void refetch()}
+                toolbar={
+                  <Stack direction="row" sx={{ mb: 1 }}>
+                    <FactColumnsButton
+                      gridId="channel-ops.movements"
+                      onClick={factColumns.openPicker}
+                      count={factColumns.optionalFields.length}
+                    />
+                  </Stack>
+                }
                 isEmpty={(data?.items ?? []).length === 0}
                 empty={{
                   title: 'No shipment evidence lines for this distributor',
@@ -160,6 +175,7 @@ export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
           )}
         </>
       )}
+      <FactColumnPicker {...factColumns.pickerProps} />
     </Box>
   );
 }
