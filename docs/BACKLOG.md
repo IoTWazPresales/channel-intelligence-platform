@@ -46,7 +46,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Measured** (2026-09-21 N-0030 audit: `fact_inventory_customer` **0** rows, `fact_customer_sellthrough` **1,823**; point MAC-check at CST; Stage 4.3) · **Parked** · 2026-08-20 |
+| **Status / parked** | **Partial** (2026-09-24 N-0049: SOH check reads CST only — `services/cpor/customer_soh_check.py`, `soh_check` on line cost-suggest; `fact_inventory_customer` not a source. Open: tolerance, VAT basis, Evetech SOH rows, `/inventory` page copy) · **Measured** (2026-09-21 N-0030 audit: `fact_inventory_customer` **0** rows, `fact_customer_sellthrough` **1,823**; Stage 4.3) · 2026-08-20 |
 | **Effort** | Medium |
 | **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` §9.1 / D-062. Warren: `fact_inventory_customer` is empty; customer SOH is arriving and not landing. |
 | **Idea** | Customer weekly SOH (actual cost) is the **check** on derived customer MAC, not the input. Evetech has no SOH file. Tree today: CST apply writes `reported_soh` / `unit_cost` / `unit_mac` to **`fact_customer_sellthrough`**. `fact_inventory_customer` has no writer; `/inventory` still names that table. Decide whether the MAC check reads CST facts or a real `fact_inventory_customer` writer is required — then implement **one** landing path. |

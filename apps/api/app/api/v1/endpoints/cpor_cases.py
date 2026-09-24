@@ -28,6 +28,7 @@ from app.services.cpor.cost_suggestion import (
     resolve_default_margin,
     suggest_cost_basis,
 )
+from app.services.cpor.customer_soh_check import customer_soh_check
 from app.services.cpor.intake_weighted_mac import suggest_intake_weighted_mac
 from app.services.cpor.lifecycle import (
     EDITABLE_STATUSES,
@@ -1306,6 +1307,14 @@ def cost_suggest(case_id: int, line_id: int):
             "drift": detect_cost_basis_drift(line.cost_basis, sug),
             "intake_weighted": _cost_suggestion_json(intake),
             "intake_weighted_drift": detect_cost_basis_drift(line.cost_basis, intake),
+            # D-062 check on stored cost: customer SOH from CST (BACKLOG-135), never an input.
+            "soh_check": customer_soh_check(
+                session,
+                customer_id=case.customer_id,
+                product_id=line.product_id,
+                as_of=as_of,
+                derived_mac=line.cost_basis,
+            ),
         }
 
 
