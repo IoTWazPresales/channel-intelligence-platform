@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1106
-  log_sha256: c5da4bf980a78076611c81aeb9aa756d474511e18863985e8cbc38e0b32976c7
+  snapshot_revision: 1114
+  log_sha256: f4c68dd4506249df60138904bbbde6ac2d8a4448d5f855a5672ef250995b6938
   acceptance_policy:
     milestone: operator
     root: operator
@@ -6160,9 +6160,9 @@ nodes:
     title: 'Stage 3.2: CPOR role checks on the existing roles (BACKLOG-136/141)'
     class: feature
     origin: operator
-    status: in_progress
-    stage: validate
-    revision: 5
+    status: complete
+    stage: null
+    revision: 11
     lease: null
     depends_on:
     - N-0037
@@ -6188,25 +6188,62 @@ nodes:
     quality:
       testing:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0038_20260924/REVIEW.md
+          verdict: VERIFIED
+          summary: 'New test_rbac_n0038_cpor_roles.py (21 tests: exhaustive route-matrix diff, viewer-exclusion, CPOR-reads-stay-open,
+            real dependency-chain allow/deny behaviour) passes; 168 of 26 sampled pre-existing non-write-capable test_cpor*.py
+            tests pass, 1 unrelated environment error.'
         rationale: null
+        pass_run: GOV008_N0038_20260924
+        pass_actor: gov-008-n0038-sonnet
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: na
+        evidence:
+          path: .eif/audit/GOV008_N0038_20260924/REVIEW.md
+          verdict: VERIFIED
+          summary: ''
+        rationale: This node only adds authorization dependencies that raise a standard HTTPException(403); it introduces
+          no new state, side effect, or long-running path, and neither commit's diff touches any logging/metrics/tracing/alerting
+          surface, so there is nothing new to observe.
       security:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0038_20260924/REVIEW.md
+          verdict: VERIFIED
+          summary: Every CPOR and shipment-evidence write route requires require_roles with a non-viewer allowed set (session/DB-derived
+            role, not client-forgeable in session mode); viewer is read-only everywhere; historical-import restores an admin-only
+            check equal-or-stronger than the pre-R1 gate (BACKLOG-136 trap honored).
         rationale: null
+        pass_run: GOV008_N0038_20260924
+        pass_actor: gov-008-n0038-sonnet
       threat:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0038_20260924/REVIEW.md
+          verdict: VERIFIED
+          summary: 'F1 (66757fde) closed a real gap: three shipment-steward-bulk routes (preview/apply/ignore-apply-async)
+            had no user dependency at all pre-fix; verified fixed. Remaining bypass surface (stub-mode X-User-Role header
+            trust) is pre-existing, documented by BACKLOG-136, confined to non-session/dev mode, and untouched by this node.'
         rationale: null
-    verification: {}
+        pass_run: GOV008_N0038_20260924
+        pass_actor: gov-008-n0038-sonnet
+    verification:
+      referent:
+        state: pass
+        pass_run: GOV008_N0038_20260924
+        pass_actor: gov-008-n0038-sonnet
+        evidence:
+          path: .eif/audit/GOV008_N0038_20260924/REVIEW.md
+          verdict: VERIFIED
+          summary: 'All claims re-executed independently this session: fresh git show of both commits, a fresh in-process
+            route-introspection script (not the implementer''s), and fresh pytest runs against test DBs/mocks only; no cip
+            writes.'
+        path: null
     evidence: []
     blockers: []
     conservation_tags: []
@@ -6234,13 +6271,9 @@ nodes:
     class: feature
     origin: operator
     status: in_progress
-    stage: implement
-    revision: 3
-    lease:
-      run: N0039_IMPL_20260924
-      acquired_at: '2026-09-24T08:48:33Z'
-      heartbeat_at: '2026-09-24T08:48:33Z'
-      expires_at: '2026-09-24T10:48:33Z'
+    stage: validate
+    revision: 5
+    lease: null
     depends_on:
     - N-0038
     facets:
@@ -6301,9 +6334,12 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Pipelined (ordering-only dependency on N-0038, disjoint files). Discovery EV: n0039/DISCOVERY.md (read-only
-      seat). Implementation by fresh subagent (backend-engineer, frontend-engineer, test-engineering-specialist), run N0039_IMPL_20260924.
-      cip repair only proven on a scratch/clone DB and listed for Warren.'
+    stage_note: 'Implemented at fc69fda3 (two impl subagents; the first was cut off by a usage limit, the second reviewed
+      and finished its uncommitted work). No Takealot URL from a SKU; /x/PLID<n> or canonical only with a real PLID; write-back
+      of verified URL (original_url, url_verified_at); dead_link on REST 404 + EAN miss; UI anchors verified links only, ''Unverified
+      link'' / ''Dead link'' otherwise. 75 pytest, 6 vitest, tsc 0. Repair script proven on cip_test scratch schema n0039
+      (cip role cannot CREATE DATABASE): R-a 20, R-a-conflict 1, R-b-dead 3, R-b 55; ready-for-cip, not run. Independent review
+      next.'
     debug_iterations: 0
     split_into: null
     deferred: null
