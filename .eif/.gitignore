@@ -1,0 +1,4 @@
+# EIF ephemeral runtime state
+/runtime-budget/
+/runtime-session/
+/runtime-upgrade.lock

@@ -1,0 +1,20 @@
+# Named user journeys for rendered evaluation. Evidence is a used UI, not source inspection.
+# Optional fields are backward-compatible. Label evidence as simulated product evaluation, not real-user research.
+journeys:
+  - id: first-path
+    name: First successful user path
+    required_for: [skeleton]
+    user_intent: complete the primary job without prior product knowledge
+    preconditions: []
+    criticality: high
+    viewport: desktop
+    input_mode: pointer
+    steps:
+      - land
+      - complete_primary_action
+    success_criteria:
+      - user reaches the primary outcome without dead-end
+    required_comprehension:
+      - what the primary action does
+    recovery: optional error/back path if the flow supports it
+    evidence: rendered observation with path/url and outcome
