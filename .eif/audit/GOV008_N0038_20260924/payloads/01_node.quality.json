@@ -1,0 +1,11 @@
+{
+ "node": "N-0038",
+ "expected_revision": 5,
+ "dim": "testing",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0038_20260924/REVIEW.md",
+  "verdict": "VERIFIED",
+  "summary": "New test_rbac_n0038_cpor_roles.py (21 tests: exhaustive route-matrix diff, viewer-exclusion, CPOR-reads-stay-open, real dependency-chain allow/deny behaviour) passes; 168 of 26 sampled pre-existing non-write-capable test_cpor*.py tests pass, 1 unrelated environment error."
+ }
+}

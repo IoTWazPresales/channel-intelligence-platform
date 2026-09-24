@@ -1,0 +1,11 @@
+{
+ "node": "N-0038",
+ "expected_revision": 6,
+ "dim": "security",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0038_20260924/REVIEW.md",
+  "verdict": "VERIFIED",
+  "summary": "Every CPOR and shipment-evidence write route requires require_roles with a non-viewer allowed set (session/DB-derived role, not client-forgeable in session mode); viewer is read-only everywhere; historical-import restores an admin-only check equal-or-stronger than the pre-R1 gate (BACKLOG-136 trap honored)."
+ }
+}

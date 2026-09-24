@@ -1,0 +1,12 @@
+{
+ "node": "N-0038",
+ "expected_revision": 8,
+ "dim": "observability",
+ "state": "na",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0038_20260924/REVIEW.md",
+  "verdict": "VERIFIED",
+  "summary": ""
+ },
+ "rationale": "This node only adds authorization dependencies that raise a standard HTTPException(403); it introduces no new state, side effect, or long-running path, and neither commit's diff touches any logging/metrics/tracing/alerting surface, so there is nothing new to observe."
+}

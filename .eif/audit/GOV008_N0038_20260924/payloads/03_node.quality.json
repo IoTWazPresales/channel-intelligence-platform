@@ -1,0 +1,11 @@
+{
+ "node": "N-0038",
+ "expected_revision": 7,
+ "dim": "threat",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0038_20260924/REVIEW.md",
+  "verdict": "VERIFIED",
+  "summary": "F1 (66757fde) closed a real gap: three shipment-steward-bulk routes (preview/apply/ignore-apply-async) had no user dependency at all pre-fix; verified fixed. Remaining bypass surface (stub-mode X-User-Role header trust) is pre-existing, documented by BACKLOG-136, confined to non-session/dev mode, and untouched by this node."
+ }
+}

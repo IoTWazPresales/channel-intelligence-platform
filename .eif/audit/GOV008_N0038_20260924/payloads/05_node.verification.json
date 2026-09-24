@@ -1,0 +1,11 @@
+{
+ "node": "N-0038",
+ "expected_revision": 9,
+ "kind": "referent",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0038_20260924/REVIEW.md",
+  "verdict": "VERIFIED",
+  "summary": "All claims re-executed independently this session: fresh git show of both commits, a fresh in-process route-introspection script (not the implementer's), and fresh pytest runs against test DBs/mocks only; no cip writes."
+ }
+}

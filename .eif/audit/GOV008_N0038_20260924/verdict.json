@@ -1,0 +1,33 @@
+{
+  "node": "N-0038",
+  "verdict": "VERIFIED",
+  "dims": {
+    "quality.testing": {
+      "state": "pass",
+      "summary": "New test_rbac_n0038_cpor_roles.py (21 tests: exhaustive route-matrix diff, viewer-exclusion, CPOR-reads-stay-open, real dependency-chain allow/deny behaviour) passes; 168 of 26 sampled pre-existing non-write-capable test_cpor*.py tests pass, 1 unrelated environment error."
+    },
+    "quality.security": {
+      "state": "pass",
+      "summary": "Every CPOR and shipment-evidence write route requires require_roles with a non-viewer allowed set (session/DB-derived role, not client-forgeable in session mode); viewer is read-only everywhere; historical-import restores an admin-only check equal-or-stronger than the pre-R1 gate (BACKLOG-136 trap honored)."
+    },
+    "quality.threat": {
+      "state": "pass",
+      "summary": "F1 (66757fde) closed a real gap: three shipment-steward-bulk routes (preview/apply/ignore-apply-async) had no user dependency at all pre-fix; verified fixed. Remaining bypass surface (stub-mode X-User-Role header trust) is pre-existing, documented by BACKLOG-136, confined to non-session/dev mode, and untouched by this node."
+    },
+    "quality.observability": {
+      "state": "na",
+      "rationale": "This node only adds authorization dependencies that raise a standard HTTPException(403); it introduces no new state, side effect, or long-running path, and neither commit's diff touches any logging/metrics/tracing/alerting surface, so there is nothing new to observe."
+    },
+    "verification.referent": {
+      "state": "pass",
+      "summary": "All claims re-executed independently this session: fresh git show of both commits, a fresh in-process route-introspection script (not the implementer's), and fresh pytest runs against test DBs/mocks only; no cip writes."
+    }
+  },
+  "failed_criteria": [],
+  "limitations": [
+    "test_cpor_settle_confirm_clone.py::test_settle_confirm_path_blocked_and_allowed_on_clone errors on an alembic.ini relative-path resolution issue when pytest is run from the repo root; environment/path defect unrelated to RBAC, not carried to a pass/fail conclusion.",
+    "The specific PLANNER/ADMIN and STEWARD/PLANNER/ADMIN role choices for case-lifecycle, settle, export, FX, promo-plan and payment-evidence writes are ASSERTED as the operator's (Warren's) decision per commit message and code comment, not independently confirmed by this reviewer with the operator directly.",
+    "No browser/UI verification performed (not required by this brief).",
+    "Stub-mode header-trust fallback in security.py was reviewed by reading unchanged code and cross-checking BACKLOG-136's own description, not exercised behaviorally end-to-end."
+  ]
+}
