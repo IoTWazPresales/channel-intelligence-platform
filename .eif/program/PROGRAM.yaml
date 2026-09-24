@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1187
-  log_sha256: 0aec263a65865bd4ce30c3f067781c2987a9f6e98aa596c0a709840383cabc05
+  snapshot_revision: 1210
+  log_sha256: 3aafa4588dae5095d6678425fb183c5c53481484d846131af0fd74b7c2cc7aa9
   acceptance_policy:
     milestone: operator
     root: operator
@@ -6744,7 +6744,7 @@ nodes:
     origin: operator
     status: in_progress
     stage: validate
-    revision: 5
+    revision: 15
     lease: null
     depends_on:
     - N-0040
@@ -6771,34 +6771,74 @@ nodes:
     quality:
       ux:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0044_20260924/REVIEW.md
+          verdict: FAILED
+          summary: 'Desk absorbs FX anchor facts, readiness, lifecycle with confirm dialogs, claims/intelligence controls
+            and a Comparable cases tab; approve/book-FX, reapproval and FX editing sit in PlanWorkspace; the portfolio read
+            is collapsed on the Case book. Nits: ended+needs_reapproval banner points to a planner with no link; ''Settlement
+            workspace'' link label names the retired concept.'
         rationale: null
+        pass_run: GOV008_N0044_20260924
+        pass_actor: gov-008-n0044
       a11y:
         required: true
-        state: pending
-        evidence: null
+        state: fail
+        evidence:
+          path: .eif/audit/GOV008_N0044_20260924/REVIEW.md
+          verdict: FAILED
+          summary: Tabs, group, dialog, switch names and aria-expanded are correct, but the new desk control labels (caption
+            / text.muted rgba(160,176,192,.55) on rgb(34,38,46), 12px) measure about 3.1:1, below WCAG 1.4.3 4.5:1 (SettlementDesk.tsx:610,628).
         rationale: null
       rendered:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence: &id026
+          path: .eif/audit/GOV008_N0044_20260924/REVIEW.md
+          verdict: FAILED
+          summary: Live DOM/screenshot evidence on 46, the Case book and plan 311; the Cancel dialog was opened and dismissed
+            with the DB unchanged. 311 desk UNABLE_TO_RENDER (>60s loading, 3 tries).
         rationale: null
+        pass_run: GOV008_N0044_20260924
+        pass_actor: gov-008-n0044
       content:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0044_20260924/REVIEW.md
+          verdict: FAILED
+          summary: 'Copy is clear (terminal-cancel warning, FX basis line, scope subtitle). Pre-existing nits: CUST-000045
+            code in comparables, ''Ken''s desk'', space vs comma thousands in the portfolio caption.'
         rationale: null
-    verification: {}
+        pass_run: GOV008_N0044_20260924
+        pass_actor: gov-008-n0044
+    verification:
+      rendered:
+        state: pass
+        pass_run: GOV008_N0044_20260924
+        pass_actor: gov-008-n0044
+        evidence: *id026
+        path: null
+      referent:
+        state: pass
+        pass_run: GOV008_N0044_20260924
+        pass_actor: gov-008-n0044
+        evidence:
+          path: .eif/audit/GOV008_N0044_20260924/REVIEW.md
+          verdict: FAILED
+          summary: Portfolio support spend R 28,862,697.61 and 304 cases match read-only SQL exactly; case 46 FX 19.14 booked
+            and needs_reapproval match the DB; vitest 89/89 and tsc exit 0 reproduced; deleted-file capability map built from
+            git show 657dd1ed^.
+        path: null
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Implemented at 657dd1ed (two impl subagents; first cut off by usage limit). Desk: approved support (DualMoney,
-      booked/proposed caption), readiness, lazy Comparable cases tab, transitions, intelligence-exclude switch; PlanWorkspace:
-      approve with fx_rate + over-budget reapproval, FX mode toggle, proposed-rate edit. CporCaseWorkspace + CporFxAnchorPanel
-      deleted; SettlementPortfolioRead deleted; CporPortfolioIntelligencePanel -> PortfolioReadPanel collapsed on Case book
-      (D-0032 default). BACKLOG-202 closed with the move map. Independent review next.'
+    stage_note: 'Remediated (N0044_REMEDIATE_20260924): desk control labels text.secondary (settlement vitest 22/22, tsc 0,
+      eslint 0). GOV-008 GOV008_N0044_20260924: ux, rendered, content, verification.rendered and referent pass (portfolio
+      R 28,862,697.61 / 304 cases matched SQL); quality.a11y fail pending a fresh re-review on the rebuilt app. Case 311 ''Loading
+      case'' in that review = hidden automation tab, not a defect (reproduced; renders when foregrounded).'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -6914,9 +6954,9 @@ nodes:
     title: 'Stage 4.1: dim_product inverted launch/retire windows (BACKLOG-034), proven on a clone'
     class: feature
     origin: operator
-    status: in_progress
-    stage: validate
-    revision: 6
+    status: complete
+    stage: null
+    revision: 11
     lease: null
     depends_on:
     - N-0044
@@ -6938,20 +6978,56 @@ nodes:
     quality:
       data_integrity:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0047_20260924/REVIEW.md
+          verdict: VERIFIED
+          summary: Repair values are source-evidenced (one rederived value spot-checked exactly against the raw committed
+            .xlsx cell) or NULL when no evidence exists; no branch of plan_row guesses; the Excel-serial writer fix is wired
+            into the live upsert path (_staging_tuple -> bulk upsert SQL), not just the one-time repair, and covered by 34
+            passing tests.
         rationale: null
+        pass_run: GOV008_N0047_20260924
+        pass_actor: gov-008-n0047-sonnet
       backup_recovery:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0047_20260924/REVIEW.md
+          verdict: VERIFIED
+          summary: Before-apply CSV records launch_before/retired_before and launch_after/retired_after for every changed
+            row; the UPDATE's WHERE clause pins old values (IS NOT DISTINCT FROM), so the operation is naturally reversible
+            from that CSV.
         rationale: null
+        pass_run: GOV008_N0047_20260924
+        pass_actor: gov-008-n0047-sonnet
       migration_safety:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0047_20260924/REVIEW.md
+          verdict: VERIFIED
+          summary: Dry run enters a Postgres-enforced READ ONLY transaction (verified via printed transaction_read_only=on
+            against real cip, not just claimed); --expect-db guard checked in code before any write; --apply required and
+            defaults false; idempotent (second clone apply wrote 0 rows, log-verified, and structurally guaranteed by the
+            WHERE clause); touches only launch_date/retired_date/updated_at; no DELETE/DROP/TRUNCATE in the script.
         rationale: null
-    verification: {}
+        pass_run: GOV008_N0047_20260924
+        pass_actor: gov-008-n0047-sonnet
+    verification:
+      referent:
+        state: pass
+        pass_run: GOV008_N0047_20260924
+        pass_actor: gov-008-n0047-sonnet
+        evidence:
+          path: .eif/audit/GOV008_N0047_20260924/REVIEW.md
+          verdict: VERIFIED
+          summary: 'Independently re-ran the dim_product count query against cip (matches pre-repair state exactly: 2795 inverted,
+            671/671 placeholders) and against the clone cip_merged_leftover_repair (matches post-repair state exactly: 2887
+            inverted, 0 placeholders); independently re-ran the test suite (34 passed); traced one rederived row (SKU 90NB0651-M00560,
+            job 88) back to the literal raw Excel serials in the committed source file and the decoded dates matched the repair
+            log exactly (42156->2015-06-01, 42124->2015-04-30).'
+        path: null
     evidence: []
     blockers: []
     conservation_tags: []
@@ -7074,10 +7150,14 @@ nodes:
     title: 'Stage 4.3: MAC check reads customer sell-through, not the empty inventory fact (BACKLOG-135)'
     class: feature
     origin: operator
-    status: proposed
-    stage: null
-    revision: 0
-    lease: null
+    status: in_progress
+    stage: implement
+    revision: 3
+    lease:
+      run: N0049_IMPL_20260924
+      acquired_at: '2026-09-24T19:10:48Z'
+      heartbeat_at: '2026-09-24T19:10:48Z'
+      expires_at: '2026-09-24T21:10:48Z'
     depends_on:
     - N-0048
     facets:
@@ -7091,7 +7171,7 @@ nodes:
       cip_test or a clone with printed numbers
     - Nothing writes to cip; read-only SQL prints current_database() first
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-0015
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
@@ -7111,14 +7191,18 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: Implementation by fresh subagent (backend-engineer, analytics-bi-specialist, test-engineering-specialist),
+      run N0049_IMPL_20260924.
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      mac_check_contract: shape kept
     target_artifact_class: null
     design_artifact_class: null
+    implementation_run: N0049_IMPL_20260924
+    implementation_actor: impl-n0049
   N-0050:
     id: N-0050
     parent: null
@@ -7231,10 +7315,14 @@ nodes:
     title: 'Stage 3.7: import completion asserts no merged-id leftovers (BACKLOG-133/134)'
     class: feature
     origin: operator
-    status: proposed
-    stage: null
-    revision: 0
-    lease: null
+    status: in_progress
+    stage: implement
+    revision: 3
+    lease:
+      run: N0051_IMPL_20260924
+      acquired_at: '2026-09-24T19:11:16Z'
+      heartbeat_at: '2026-09-24T19:11:16Z'
+      expires_at: '2026-09-24T21:11:16Z'
     depends_on:
     - N-0050
     facets:
@@ -7248,7 +7336,7 @@ nodes:
       Warren rules); proven on cip_test
     - Nothing writes to cip; read-only SQL prints current_database() first
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-0016
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
@@ -7268,14 +7356,18 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: Pipelined (ordering-only dep). Implementation by fresh subagent (backend-engineer, data-quality-governance-specialist,
+      test-engineering-specialist), run N0051_IMPL_20260924.
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      import_completion: unchanged except the added check
     target_artifact_class: null
     design_artifact_class: null
+    implementation_run: N0051_IMPL_20260924
+    implementation_actor: impl-n0051
   N-0052:
     id: N-0052
     parent: null
@@ -9550,6 +9642,26 @@ baselines:
     path: docs/BACKLOG.md#BACKLOG-137
     observed_behavior: '2026-09-24: cpor_case_line has no window_* columns; unique grain (case_id, product_id, distributor_id,
       pod_quarter); settlement _claim_in_window uses case dates; alembic head 20260906_0022 in code and on cip.'
+  BLN-0015:
+    id: BLN-0015
+    provenance: implementation-observation
+    tree_hash: 9a43bfce
+    latent_capabilities: []
+    preservation:
+      mac_check_contract: MAC check response shape unchanged except its source and honesty fields
+    path: docs/BACKLOG.md#BACKLOG-135
+    observed_behavior: '2026-09-21 (N-0030, cip read-only): fact_inventory_customer 0 rows, fact_customer_sellthrough 1,823
+      rows; the MAC check claims customer SOH from the empty inventory fact (BACKLOG-135).'
+  BLN-0016:
+    id: BLN-0016
+    provenance: implementation-observation
+    tree_hash: 9a43bfce
+    latent_capabilities: []
+    preservation:
+      import_completion: import-complete rail behaviour unchanged except the added check
+    path: docs/BACKLOG.md#BACKLOG-133
+    observed_behavior: '2026-09-21 (N-0030): customer_leftover_repair.py exists with zero callers; BACKLOG-134 measured 0
+      today.'
 caveats:
   consult_model_logged:
     key: consult_model_logged
