@@ -1,0 +1,15 @@
+current_database() = cip_merged_leftover_repair
+current_database() = cip_merged_leftover_repair
+before: {"dim_product_rows": 18177, "inverted_retired_lt_launch": 2887, "launch_eq_retired": 27, "epoch_1970_both": 0, "placeholder_retired": 0, "placeholder_launch": 0}
+  PM job 4 Spec new.xlsx: 2883 candidate SKU rows
+  PM job 28 Spec new.xlsx: 2883 candidate SKU rows
+  PM job 31 Spec new.xlsx: 2883 candidate SKU rows
+  PM job 88 Specs_new.xlsx: 2887 candidate SKU rows
+  PM job 95 product_datasheet_for_country_lineup_matthew_benn1_2026_6_18_151252.xlsx: 0 candidate SKU rows
+planned writes by rule: {}
+flags by reason: {"same_in_every_pm_file": 2258, "earlier_pm_file_valid_window": 417, "earlier_pm_file_other_inverted": 208, "single_pm_file": 4}
+flags CSV written: C:\Users\warren_eliason\channel-intelligence-platform\.eif\audit\PROGRAMME_20260924\n0047\flags_cip_merged_leftover_repair_apply_20260924T133138Z.csv
+current_database() before write = cip_merged_leftover_repair
+rows updated: 0
+after: {"dim_product_rows": 18177, "inverted_retired_lt_launch": 2887, "launch_eq_retired": 27, "epoch_1970_both": 0, "placeholder_retired": 0, "placeholder_launch": 0}
+mode: APPLY (commit)

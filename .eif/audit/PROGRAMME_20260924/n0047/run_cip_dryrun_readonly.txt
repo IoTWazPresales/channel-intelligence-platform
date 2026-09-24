@@ -1,0 +1,26 @@
+transaction_read_only = on
+current_database() = cip
+current_database() = cip
+before: {"dim_product_rows": 18177, "inverted_retired_lt_launch": 2795, "launch_eq_retired": 698, "epoch_1970_both": 671, "placeholder_retired": 671, "placeholder_launch": 671}
+  PM job 4 Spec new.xlsx: 3445 candidate SKU rows
+  PM job 28 Spec new.xlsx: 3445 candidate SKU rows
+  PM job 31 Spec new.xlsx: 3445 candidate SKU rows
+  PM job 88 Specs_new.xlsx: 3466 candidate SKU rows
+  PM job 95 product_datasheet_for_country_lineup_matthew_benn1_2026_6_18_151252.xlsx: 0 candidate SKU rows
+planned writes by rule: {"rederive_excel_serial": 671}
+flags by reason: {"same_in_every_pm_file": 2181, "rederived_window_inverted_in_source": 92, "earlier_pm_file_valid_window": 409, "earlier_pm_file_other_inverted": 201, "single_pm_file": 4}
+  id=27 90NB0651-M00560 rederive_excel_serial: 1970-01-01..1970-01-01 -> 2015-06-01..2015-04-30
+  id=38 90NX0711-M012T0 rederive_excel_serial: 1970-01-01..1970-01-01 -> 2025-07-16..2025-12-08
+  id=48 90NB0VV1-M00CL0 rederive_excel_serial: 1970-01-01..1970-01-01 -> 2023-12-13..2023-05-31
+  id=66 90PT0371-M020M0 rederive_excel_serial: 1970-01-01..1970-01-01 -> 2023-02-06..2023-06-30
+  id=112 90NX02W1-M01190 rederive_excel_serial: 1970-01-01..1970-01-01 -> 2021-03-11..2020-12-31
+  id=116 90NX07L1-M00790 rederive_excel_serial: 1970-01-01..1970-01-01 -> 2025-07-16..2025-08-01
+  id=129 90NB0CH1-M08960 rederive_excel_serial: 1970-01-01..1970-01-01 -> 2020-07-01..2018-11-23
+  id=143 90NB0TP1-M06680 rederive_excel_serial: 1970-01-01..1970-01-01 -> 2021-10-22..2023-03-31
+  id=154 90NB0CF1-M29990 rederive_excel_serial: 1970-01-01..1970-01-01 -> 2019-01-10..2019-07-22
+  id=157 90NX0SX1-M00MU0 rederive_excel_serial: 1970-01-01..1970-01-01 -> 2021-11-26..2022-12-31
+before CSV written: C:\Users\warren_eliason\channel-intelligence-platform\.eif\audit\PROGRAMME_20260924\n0047\before_cip_dryrun_20260924T133513Z.csv
+flags CSV written: C:\Users\warren_eliason\channel-intelligence-platform\.eif\audit\PROGRAMME_20260924\n0047\flags_cip_dryrun_20260924T133513Z.csv
+rows updated: 0
+after (projected, nothing written): {"dim_product_rows": 18177, "inverted_retired_lt_launch": 2887, "launch_eq_retired": 27, "epoch_1970_both": 0, "placeholder_retired": 0, "placeholder_launch": 0}
+mode: DRY RUN (read-only, no writes)

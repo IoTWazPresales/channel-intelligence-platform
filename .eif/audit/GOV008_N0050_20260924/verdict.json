@@ -1,0 +1,30 @@
+{
+  "node": "N-0050",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "dims": {
+    "quality.data_integrity": {
+      "state": "pass",
+      "summary": "Window backfill copies the case window verbatim (no snapping/pro-rating); check constraint window_end>=window_start present on cip_test; unique grain extended with window_start so two windows per SKU coexist; D-058 (approved terms immutable) preserved because window mutation (follow_case_window) is only reachable through patch_case, which is gated on EDITABLE_STATUSES (draft/rejected)."
+    },
+    "quality.backup_recovery": {
+      "state": "pass",
+      "summary": "Downgrade is reviewed as code (not executed by this reviewer): it counts (case,product,distributor,pod_quarter) groups with >1 distinct window_start and raises RuntimeError to refuse if any exist, otherwise restores the old 4-column unique constraint and drops the two columns. This is a correct guard against silent grain collision; the drop of window_start/window_end itself is expected data loss for the feature being reverted, not evidence of an unsafe downgrade.",
+      "rationale": "Pass on code-review grounds; not independently executed by this reviewer (see limitations) since the reviewer role is read-only on both databases."
+    },
+    "quality.migration_safety": {
+      "state": "pass",
+      "summary": "cip_test is at head revision 20260924_0023; cip is still at 20260906_0022 and cpor_case_line has zero columns named window_start/window_end there (confirmed by direct read-only SQL) — migration has not touched cip. cip_test holds only 3 cpor_case / 4 cpor_case_line rows, nothing resembling cip's 311/658 production rows, so no production data was copied into cip_test."
+    },
+    "verification.referent": {
+      "state": "pass",
+      "summary": "All schema claims independently re-derived from cip_test via read-only SQL (information_schema, not implementer output): NOT NULL + check constraint ck_cpor_case_line_window_order present; uq_cpor_case_line_grain columns are (case_id, product_id, distributor_id, pod_quarter, window_start) in that order, confirmed via key_column_usage. Migration file, settlement.py/line_window.py diffs, and BACKLOG.md/spec D-058 text were read directly from the repo, not from the implementer's IMPL.md."
+    }
+  },
+  "failed_criteria": [],
+  "limitations": [
+    "Criterion 1(f): pytest run of apps/api/tests/test_cpor_line_window_n0050.py in this environment points at cip (current_database()=cip), so the two DB-backed tests (test_db_grain_holds_two_windows_rejects_duplicate_and_inverted, test_db_follow_case_window_moves_only_lines_on_case_window) SKIPPED rather than ran, per their own skip guard for any database other than cip_test. Per instruction, the reviewer did not repoint the DB; instead read the test bodies (both use nested-transaction rollback, never commit) and cross-checked their asserted schema facts (grain includes window_start; check constraint on window order) directly against cip_test with read-only SQL, which matched. The other 7 tests (pure-Python: week math, effective-window fallback, model grain metadata, single-head migration, and 3 rollup scenarios incl. straddle-flag and override-unplaced) ran and PASSED in this session.",
+    "Downgrade path (criterion 1b) was verified by code review only, not by executing 'alembic downgrade' myself — the reviewer role here is read-only SQL against cip_test (ro_sql.py) with no grant to run alembic or mutate cip_test directly, so this is ASSERTED-from-code rather than VERIFIED-by-execution.",
+    "Did not open .eif/audit/PROGRAMME_20260924/n0050/ (implementer's audit folder, including IMPL.md) per the reviewer brief; all findings above come from commit d8b2e7ac, the migration file, service/model diffs, docs/BACKLOG.md, docs/CPOR_SETTLEMENT_SPEC.md, docs/STEWARD_ENGINE_DECISIONS.md (D-058/D-059), and direct read-only SQL against cip and cip_test.",
+    "No dim named 'verification.independence' or similar was requested; model identity for this review: Claude Sonnet 5 (claude-sonnet-5), a different session from the implementation run, satisfying R2 fresh-context independence; same-model as the implementer's stated co-author (Claude Opus 5.5) note in the commit is the implementer's, not this reviewer's — this review itself was produced by Sonnet 5."
+  ]
+}

@@ -1,0 +1,11 @@
+{
+ "node": "N-0050",
+ "expected_revision": 8,
+ "kind": "referent",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0050_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "All schema claims independently re-derived from cip_test via read-only SQL (information_schema, not implementer output): NOT NULL + check constraint ck_cpor_case_line_window_order present; uq_cpor_case_line_grain columns are (case_id, product_id, distributor_id, pod_quarter, window_start) in that order, confirmed via key_column_usage. Migration file, settlement.py/line_window.py diffs, and BACKLOG.md/spec D-058 text were read directly from the repo, not from the implementer's IMPL.md."
+ }
+}

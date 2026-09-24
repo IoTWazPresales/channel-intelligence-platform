@@ -1,0 +1,11 @@
+{
+ "node": "N-0050",
+ "expected_revision": 7,
+ "dim": "migration_safety",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0050_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "cip_test is at head revision 20260924_0023; cip is still at 20260906_0022 and cpor_case_line has zero columns named window_start/window_end there (confirmed by direct read-only SQL) \u2014 migration has not touched cip. cip_test holds only 3 cpor_case / 4 cpor_case_line rows, nothing resembling cip's 311/658 production rows, so no production data was copied into cip_test."
+ }
+}

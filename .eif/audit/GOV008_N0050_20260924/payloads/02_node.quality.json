@@ -1,0 +1,12 @@
+{
+ "node": "N-0050",
+ "expected_revision": 6,
+ "dim": "backup_recovery",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0050_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Downgrade is reviewed as code (not executed by this reviewer): it counts (case,product,distributor,pod_quarter) groups with >1 distinct window_start and raises RuntimeError to refuse if any exist, otherwise restores the old 4-column unique constraint and drops the two columns. This is a correct guard against silent grain collision; the drop of window_start/window_end itself is expected data loss for the feature being reverted, not evidence of an unsafe downgrade."
+ },
+ "rationale": "Pass on code-review grounds; not independently executed by this reviewer (see limitations) since the reviewer role is read-only on both databases."
+}

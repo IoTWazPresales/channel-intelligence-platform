@@ -1,0 +1,11 @@
+{
+ "node": "N-0050",
+ "expected_revision": 5,
+ "dim": "data_integrity",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0050_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Window backfill copies the case window verbatim (no snapping/pro-rating); check constraint window_end>=window_start present on cip_test; unique grain extended with window_start so two windows per SKU coexist; D-058 (approved terms immutable) preserved because window mutation (follow_case_window) is only reachable through patch_case, which is gated on EDITABLE_STATUSES (draft/rejected)."
+ }
+}

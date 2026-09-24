@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 import psycopg
 
-c = psycopg.connect(host="localhost", port=5432, user="cip", password="cip", dbname="cip")
+c = psycopg.connect(host="localhost", port=5432, user="cip", password=__import__("os").environ["PGPASSWORD"], dbname="cip")
 c.read_only = True
 cur = c.cursor()
 cur.execute("select current_database()")
