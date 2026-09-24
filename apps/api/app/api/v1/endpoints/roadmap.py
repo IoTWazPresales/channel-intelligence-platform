@@ -7,12 +7,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db
 from app.models.dimensions import DimProduct
 from app.models.facts import FactProductRoadmap
+from app.services.grid_fields import fact_row_dict
 
 router = APIRouter()
 
 
 class ClearConfirmBody(BaseModel):
     confirm: bool = False
+
+
+def roadmap_row_dict(r: FactProductRoadmap, prod: DimProduct | None) -> dict:
+    # Registry fields merged under the hand-built keys (existing keys win; N-0034 column picker).
+    return {
+        **fact_row_dict(r, "roadmap"),
+        "id": r.id,
+        "sku": prod.sku if prod else None,
+        "sales_model_name": prod.sales_model_name if prod else None,
+        "lifecycle_phase": r.lifecycle_phase,
+        "whitespace_flag": r.whitespace_flag,
+        "overlap_flag": r.overlap_flag,
+        "launch_target": r.launch_target.isoformat() if r.launch_target else None,
+    }
 
 
 @router.get("")
@@ -22,17 +37,7 @@ async def list_roadmap(db: AsyncSession = Depends(get_db)):
     out = []
     for r in rows:
         prod = await db.get(DimProduct, r.product_id)
-        out.append(
-            {
-                "id": r.id,
-                "sku": prod.sku if prod else None,
-                "sales_model_name": prod.sales_model_name if prod else None,
-                "lifecycle_phase": r.lifecycle_phase,
-                "whitespace_flag": r.whitespace_flag,
-                "overlap_flag": r.overlap_flag,
-                "launch_target": r.launch_target.isoformat() if r.launch_target else None,
-            }
-        )
+        out.append(roadmap_row_dict(r, prod))
     return out
 
 

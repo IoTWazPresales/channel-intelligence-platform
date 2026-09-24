@@ -12,6 +12,7 @@ from app.core.tenant_scope import tenant_id_from_user, where_tenant
 from app.models.dimensions import DimCustomer, DimProduct
 from app.models.facts import FactInventoryCustomer
 from app.services.facts_upsert import get_or_create_customer, get_or_create_product
+from app.services.grid_fields import fact_row_dict
 
 router = APIRouter()
 
@@ -58,19 +59,27 @@ async def inventory_customer(
     for inv in rows:
         prod = await db.get(DimProduct, inv.product_id)
         cust = await db.get(DimCustomer, inv.customer_id)
-        out.append(
-            {
-                "id": inv.id,
-                "product_sku": prod.sku if prod else None,
-                "product_sales_model_name": prod.sales_model_name if prod else None,
-                "product_name": prod.name if prod else None,
-                "customer_code": cust.code if cust else None,
-                "as_of_date": inv.as_of_date.isoformat(),
-                "on_hand_units": float(inv.on_hand_units),
-                "on_order_units": float(inv.on_order_units),
-            }
-        )
+        out.append(inventory_customer_row_dict(inv, prod, cust))
     return out
+
+
+def inventory_customer_row_dict(
+    inv: FactInventoryCustomer, prod: DimProduct | None, cust: DimCustomer | None
+) -> dict:
+    # Registry fields merged under the hand-built keys (existing keys win; N-0034). The Customer
+    # column shows customer_name; customer_code is its own optional column (D7).
+    return {
+        **fact_row_dict(inv, "inventory.customer"),
+        "id": inv.id,
+        "product_sku": prod.sku if prod else None,
+        "product_sales_model_name": prod.sales_model_name if prod else None,
+        "product_name": prod.name if prod else None,
+        "customer_code": cust.code if cust else None,
+        "customer_name": cust.name if cust else None,
+        "as_of_date": inv.as_of_date.isoformat(),
+        "on_hand_units": float(inv.on_hand_units),
+        "on_order_units": float(inv.on_order_units),
+    }
 
 
 @router.post("/customer", status_code=201)

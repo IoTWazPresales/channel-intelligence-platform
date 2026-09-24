@@ -11,6 +11,7 @@ from app.core.security import get_optional_current_user
 from app.core.tenant_scope import where_tenant
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.facts import FactSalesSellout
+from app.services.grid_fields import fact_row_dict
 from app.services.merge_redirect import living_customer_clause, living_distributor_clause
 
 router = APIRouter()
@@ -203,36 +204,40 @@ async def sellout_commercial_lines(
 
     rows = (await db.execute(q.order_by(desc(FactSalesSellout.period_start)).offset(skip).limit(limit))).all()
 
-    items: list[dict[str, object]] = []
-    for row in rows:
-        s = row[0]
-        items.append(
-            {
-                "id": s.id,
-                "source_key": s.source_key,
-                "staging_line_id": s.staging_line_id,
-                "product_id": s.product_id,
-                "product_sku": row.product_sku,
-                "product_sales_model_name": row.product_sales_model_name,
-                "product_name": row.product_name,
-                "customer_id": s.customer_id,
-                "customer_code": row.customer_code,
-                "customer_name": row.customer_name,
-                "distributor_id": s.distributor_id,
-                "distributor_code": row.distributor_code,
-                "distributor_name": row.distributor_name,
-                "period_start": s.period_start.isoformat(),
-                "units": float(s.units),
-                "revenue": float(s.revenue),
-                "unit_sellout_price_ex_tax_amount": float(s.unit_sellout_price_ex_tax_amount)
-                if s.unit_sellout_price_ex_tax_amount is not None
-                else None,
-                "currency_code": s.currency_code,
-                "source_import_job_id": s.source_import_job_id,
-            }
-        )
+    items = [commercial_line_row_dict(row[0], row) for row in rows]
 
     return {"total": total, "skip": skip, "limit": limit, "items": items}
+
+
+def commercial_line_row_dict(s: FactSalesSellout, labels: object) -> dict[str, object]:
+    """One commercial line; ``labels`` carries the joined product / customer / distributor columns.
+
+    Registry fields are merged under the hand-built keys (existing keys win; N-0034 column picker).
+    """
+    return {
+        **fact_row_dict(s, "sellout.commercial-lines"),
+        "id": s.id,
+        "source_key": s.source_key,
+        "staging_line_id": s.staging_line_id,
+        "product_id": s.product_id,
+        "product_sku": getattr(labels, "product_sku", None),
+        "product_sales_model_name": getattr(labels, "product_sales_model_name", None),
+        "product_name": getattr(labels, "product_name", None),
+        "customer_id": s.customer_id,
+        "customer_code": getattr(labels, "customer_code", None),
+        "customer_name": getattr(labels, "customer_name", None),
+        "distributor_id": s.distributor_id,
+        "distributor_code": getattr(labels, "distributor_code", None),
+        "distributor_name": getattr(labels, "distributor_name", None),
+        "period_start": s.period_start.isoformat(),
+        "units": float(s.units),
+        "revenue": float(s.revenue),
+        "unit_sellout_price_ex_tax_amount": float(s.unit_sellout_price_ex_tax_amount)
+        if s.unit_sellout_price_ex_tax_amount is not None
+        else None,
+        "currency_code": s.currency_code,
+        "source_import_job_id": s.source_import_job_id,
+    }
 
 
 @router.get("/zero-sellout-products")

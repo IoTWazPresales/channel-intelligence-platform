@@ -20,6 +20,7 @@ from app.services.demand_forecast.velocity_compute import (
     generate_velocity_demand_forecasts,
     sum_rollup,
 )
+from app.services.grid_fields import customer_labels, distributor_labels, fact_row_dict, reference_fields
 
 router = APIRouter()
 
@@ -157,11 +158,32 @@ async def list_forecasts(
     q = q.limit(limit)
     res = await db.execute(q)
     rows = res.scalars().all()
+    customers = await customer_labels(db, (f.customer_id for f in rows))
+    distributors = await distributor_labels(db, (f.distributor_id for f in rows))
     out = []
     for f in rows:
         prod = await db.get(DimProduct, f.product_id)
-        out.append(_serialize(f, prod))
+        out.append(forecast_row_dict(f, prod, customers, distributors))
     return out
+
+
+def forecast_row_dict(
+    f: FactDemandForecast,
+    prod: DimProduct | None,
+    customers: dict[int, tuple[str, str]],
+    distributors: dict[int, tuple[str, str]],
+) -> dict:
+    # Registry fields + customer / distributor reference merged under ``_serialize`` (its keys win; N-0034).
+    return {
+        **fact_row_dict(f, "forecasts"),
+        **reference_fields(
+            customer_id=f.customer_id,
+            customers=customers,
+            distributor_id=f.distributor_id,
+            distributors=distributors,
+        ),
+        **_serialize(f, prod),
+    }
 
 
 class VelocityComputeBody(BaseModel):

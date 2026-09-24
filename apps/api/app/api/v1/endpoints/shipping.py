@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import Date as SA_Date, cast, desc, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.inspection import inspect as sa_inspect
 from sqlalchemy.orm import InstrumentedAttribute
 
 from app.api.deps import get_db
@@ -17,6 +15,7 @@ from app.core.security import get_optional_current_user
 from app.core.tenant_scope import DEFAULT_TENANT_ID, tenant_id_from_user, where_tenant
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.facts import FactInboundShipment
+from app.services.grid_fields import GRID_FIELDS, fact_row_dict, grid_field_items
 from app.services.merge_redirect import living_customer_clause, living_distributor_clause
 from app.services.commercial_planner.inbound_lineup_quarter import (
     available_plan_periods,
@@ -55,20 +54,8 @@ router = APIRouter()
 # Virtual date field — coalesce(eta_date, promise_date); see SHIPPING_COMMERCIAL_KPI_CONTRACT.md
 EFFECTIVE_ARRIVAL_DATE_FIELD = "effective_arrival_date"
 
-# Fact columns already shown as dedicated default grid cells (not offered as toggles).
-INBOUND_GRID_DEFAULT_FACT_KEYS: frozenset[str] = frozenset(
-    {
-        "line_state",
-        "status",
-        "eta_date",
-        "promise_date",
-        "pod_date",
-        "sales_model_name",
-        "item_code",
-        "bill_to_raw",
-        "ship_to_raw",
-    }
-)
+# Default grid cells (INBOUND_GRID_DEFAULT_FACT_KEYS) and optional-column labels live in the
+# grid-field registry (app.services.grid_fields, N-0034).
 
 DATE_FIELD_MAP: dict[str, InstrumentedAttribute[Any]] = {
     "eta_date": FactInboundShipment.eta_date,
@@ -84,11 +71,6 @@ DATE_FIELD_MAP: dict[str, InstrumentedAttribute[Any]] = {
 }
 
 DATETIME_RANGE_KEYS: frozenset[str] = frozenset({"created_at", "updated_at"})
-
-# Human labels for optional columns (import / steward semantics).
-INBOUND_OPTIONAL_LABEL_OVERRIDES: dict[str, str] = {
-    "customer_dealer_token": "Customer remarks (source)",
-}
 
 
 def _utc_today() -> date:
@@ -109,10 +91,6 @@ def _parse_opt_date(raw: str | None) -> date | None:
         return date.fromisoformat(str(raw).strip()[:10])
     except ValueError:
         return None
-
-
-def _human_column_label(key: str) -> str:
-    return re.sub(r"_+", " ", key).strip().title()
 
 
 def _distributor_display(
@@ -627,6 +605,9 @@ def _fact_to_dict(
         cp_label = "—"
         cp_caption = None
     out: dict[str, Any] = {
+        # Registry fields under the hand-built keys (existing keys win), so every offered column has a
+        # value; raw_source_row stays opt-in below (N-0034).
+        **fact_row_dict(row, "inbound-shipments", exclude=frozenset({"raw_source_row"})),
         "id": row.id,
         "import_job_id": row.import_job_id,
         "source_key": row.source_key,
@@ -694,14 +675,16 @@ def _fact_to_dict(
 
 @router.get("/inbound-optional-columns")
 async def inbound_optional_columns() -> dict[str, Any]:
-    """Every ``fact_inbound_shipment`` column not covered by the default grid."""
-    mapper = sa_inspect(FactInboundShipment)
-    keys = sorted(
-        attr.key for attr in mapper.mapper.column_attrs if attr.key not in INBOUND_GRID_DEFAULT_FACT_KEYS
-    )
+    """Every ``fact_inbound_shipment`` column not covered by the default grid.
+
+    Alias of the registry's ``inbound-shipments`` fact group (``GET /grid-fields/inbound-shipments``);
+    kept at this URL so existing callers do not change.
+    """
     return {
         "items": [
-            {"field": k, "label": INBOUND_OPTIONAL_LABEL_OVERRIDES.get(k, _human_column_label(k))} for k in keys
+            {"field": it["field"], "label": it["label"]}
+            for it in grid_field_items(GRID_FIELDS["inbound-shipments"])
+            if it["group"] == "fact"
         ]
     }
 

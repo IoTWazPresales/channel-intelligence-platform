@@ -10,6 +10,7 @@ from app.models.dimensions import DimProduct
 from app.models.facts import FactBuyPlan
 from app.models.lineup import FactLineupPlanItem
 from app.services.buy_plan_usage import buy_plan_reference_breakdown
+from app.services.grid_fields import distributor_labels, fact_row_dict, reference_fields
 
 router = APIRouter()
 
@@ -18,25 +19,33 @@ class ClearConfirmBody(BaseModel):
     confirm: bool = False
 
 
+def buy_plan_row_dict(
+    b: FactBuyPlan, prod: DimProduct | None, distributors: dict[int, tuple[str, str]]
+) -> dict:
+    # Registry fields + distributor reference merged under the hand-built keys (existing keys win; N-0034).
+    return {
+        **fact_row_dict(b, "buy-plans"),
+        **reference_fields(distributor_id=b.distributor_id, distributors=distributors),
+        "id": b.id,
+        "sku": prod.sku if prod else None,
+        "sales_model_name": prod.sales_model_name if prod else None,
+        "recommended_qty": float(b.recommended_qty),
+        "window_start": b.recommended_window_start.isoformat(),
+        "window_end": b.recommended_window_end.isoformat(),
+        "rationale": b.rationale,
+        "risk_if_not_ordered": b.risk_if_not_ordered,
+    }
+
+
 @router.get("")
 async def list_buy_plans(db: AsyncSession = Depends(get_db)):
     res = await db.execute(select(FactBuyPlan))
     rows = res.scalars().all()
+    distributors = await distributor_labels(db, (b.distributor_id for b in rows))
     out = []
     for b in rows:
         prod = await db.get(DimProduct, b.product_id)
-        out.append(
-            {
-                "id": b.id,
-                "sku": prod.sku if prod else None,
-                "sales_model_name": prod.sales_model_name if prod else None,
-                "recommended_qty": float(b.recommended_qty),
-                "window_start": b.recommended_window_start.isoformat(),
-                "window_end": b.recommended_window_end.isoformat(),
-                "rationale": b.rationale,
-                "risk_if_not_ordered": b.risk_if_not_ordered,
-            }
-        )
+        out.append(buy_plan_row_dict(b, prod, distributors))
     return out
 
 

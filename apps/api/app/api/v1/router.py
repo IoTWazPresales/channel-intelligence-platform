@@ -26,6 +26,7 @@ from app.api.v1.endpoints import (
     distributors,
     exceptions,
     forecasts,
+    grid_fields,
     imports,
     imports_product_master,
     inbound_shipments,
@@ -86,6 +87,7 @@ api_router.include_router(saved_reports.router, prefix="/saved-reports", tags=["
 api_router.include_router(dashboards.router, prefix="/dashboards", tags=["dashboards"])
 api_router.include_router(report_exports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(channel_ops.router, prefix="/channel-ops", tags=["channel-ops"])
+api_router.include_router(grid_fields.router, prefix="/grid-fields", tags=["grid-fields"])
 api_router.include_router(
     channel_intelligence.router, prefix="/channel-intelligence", tags=["channel-intelligence"]
 )

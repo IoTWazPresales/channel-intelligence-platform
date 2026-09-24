@@ -11,6 +11,7 @@ from app.models.dimensions import DimProduct
 from app.models.derived import PricingRecommendation
 from app.models.facts import FactPricing
 from app.services.facts_upsert import get_or_create_product, resolve_channel_id, resolve_customer_id
+from app.services.grid_fields import customer_labels, fact_row_dict, reference_fields
 
 router = APIRouter()
 
@@ -48,21 +49,44 @@ def _parse_iso_date(s: str) -> date:
 async def list_pricing_facts(db: AsyncSession = Depends(get_db)):
     res = await db.execute(select(FactPricing).order_by(FactPricing.effective_date.desc()))
     rows = res.scalars().all()
+    customers = await customer_labels(db, (p.customer_id for p in rows))
     out = []
     for p in rows:
         prod = await db.get(DimProduct, p.product_id)
-        out.append(
-            {
-                "id": p.id,
-                "sku": prod.sku if prod else None,
-                "sales_model_name": prod.sales_model_name if prod else None,
-                "effective_date": p.effective_date.isoformat(),
-                "list_price": float(p.list_price),
-                "net_price": float(p.net_price),
-                "currency": p.currency,
-            }
-        )
+        out.append(pricing_fact_row_dict(p, prod, customers))
     return out
+
+
+def pricing_fact_row_dict(
+    p: FactPricing, prod: DimProduct | None, customers: dict[int, tuple[str, str]]
+) -> dict:
+    # Registry fields + customer reference merged under the hand-built keys (existing keys win; N-0034).
+    return {
+        **fact_row_dict(p, "pricing.facts"),
+        **reference_fields(customer_id=p.customer_id, customers=customers),
+        "id": p.id,
+        "sku": prod.sku if prod else None,
+        "sales_model_name": prod.sales_model_name if prod else None,
+        "effective_date": p.effective_date.isoformat(),
+        "list_price": float(p.list_price),
+        "net_price": float(p.net_price),
+        "currency": p.currency,
+    }
+
+
+def pricing_recommendation_row_dict(r: PricingRecommendation, prod: DimProduct | None) -> dict:
+    # Registry fields merged under the hand-built keys (existing keys win; N-0034).
+    return {
+        **fact_row_dict(r, "pricing.recommendations"),
+        "id": r.id,
+        "sku": prod.sku if prod else None,
+        "sales_model_name": prod.sales_model_name if prod else None,
+        "suggested_state": r.suggested_state,
+        "explanation_summary": r.explanation_summary,
+        "explanation_factors": r.explanation_factors,
+        "confidence": r.confidence,
+        "action_owner": r.action_owner,
+    }
 
 
 @router.post("/facts", status_code=201)
@@ -130,18 +154,7 @@ async def list_pricing_recommendations(db: AsyncSession = Depends(get_db)):
     out = []
     for r in rows:
         prod = await db.get(DimProduct, r.product_id)
-        out.append(
-            {
-                "id": r.id,
-                "sku": prod.sku if prod else None,
-                "sales_model_name": prod.sales_model_name if prod else None,
-                "suggested_state": r.suggested_state,
-                "explanation_summary": r.explanation_summary,
-                "explanation_factors": r.explanation_factors,
-                "confidence": r.confidence,
-                "action_owner": r.action_owner,
-            }
-        )
+        out.append(pricing_recommendation_row_dict(r, prod))
     return out
 
 
