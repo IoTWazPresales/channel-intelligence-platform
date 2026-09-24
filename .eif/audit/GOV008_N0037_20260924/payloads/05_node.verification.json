@@ -1,0 +1,11 @@
+{
+ "node": "N-0037",
+ "expected_revision": 10,
+ "kind": "referent",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0037_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Fresh session, did not read n0037/IMPL.md or implementer stage notes. Re-executed material evidence directly: git show 76316728 (full diff of all 6 changed files), ran the required pytest command myself (22 passed), and issued 7 live wrong-password POSTs to the running API at 127.0.0.1:8001 (all @example.invalid fake emails, no real password used) to independently observe the 401->429 transition, Retry-After header, and byte-identical unknown-vs-unknown response bodies. R2 node: same-model fresh-session independence used (no independent second model available in this environment); recorded as the rung actually used, not upgraded to R3-style independent-model verification."
+ }
+}

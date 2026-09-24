@@ -1,0 +1,11 @@
+{
+ "node": "N-0037",
+ "expected_revision": 6,
+ "dim": "testing",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0037_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "pytest apps/api/tests/test_auth_login_throttle.py test_session_gate.py test_auth_password_roles.py -q => 22 passed. New suite covers throttle trip/Retry-After decay, lockout-refuses-correct-password + reset-after-window, success resets counter, per-address throttle w/ config override, non-enumeration (status/body/timing spy), structured logging w/o raw email, disable flag, stub-mode unaffected, and 7 parametrized client_address/XFF cases."
+ }
+}

@@ -1,0 +1,1 @@
+{"node": "N-0040", "expected_revision": 2, "to": "implement", "stage_note": "Pipelined (ordering-only dependency on N-0039; disjoint files). Discovery: n0040/DISCOVERY.md. Implementation by fresh subagent (backend-engineer, frontend-engineer, test-engineering-specialist), run N0040_IMPL_20260924. Supersession behaviour proven on a clone before/after (D-g)."}

@@ -1,0 +1,12 @@
+{
+ "node": "N-0037",
+ "expected_revision": 7,
+ "dim": "observability",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0037_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Lockout and throttled events logged as structured warnings with HMAC (per-process-peppered, non-reversible) account_key/address_key, never raw email/password; verified by test and by reading login_throttle.py. Gap (not a criterion failure): only threshold-crossing failures are logged, so sub-threshold/low-and-slow guessing produces no log signal."
+ },
+ "rationale": "no acceptance criterion requires per-attempt audit logging; recorded as a limitation."
+}

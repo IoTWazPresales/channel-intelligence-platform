@@ -1,0 +1,36 @@
+{
+  "node": "N-0037",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "dims": {
+    "quality.testing": {
+      "state": "pass",
+      "summary": "pytest apps/api/tests/test_auth_login_throttle.py test_session_gate.py test_auth_password_roles.py -q => 22 passed. New suite covers throttle trip/Retry-After decay, lockout-refuses-correct-password + reset-after-window, success resets counter, per-address throttle w/ config override, non-enumeration (status/body/timing spy), structured logging w/o raw email, disable flag, stub-mode unaffected, and 7 parametrized client_address/XFF cases."
+    },
+    "quality.observability": {
+      "state": "pass",
+      "summary": "Lockout and throttled events logged as structured warnings with HMAC (per-process-peppered, non-reversible) account_key/address_key, never raw email/password; verified by test and by reading login_throttle.py. Gap (not a criterion failure): only threshold-crossing failures are logged, so sub-threshold/low-and-slow guessing produces no log signal.",
+      "rationale": "no acceptance criterion requires per-attempt audit logging; recorded as a limitation."
+    },
+    "quality.security": {
+      "state": "pass",
+      "summary": "Pre-check before password verify, constant-shape dummy PBKDF2 hash for unknown users (closes both status/body and timing enumeration channels), HMAC log keys, in-memory-only state (no cip write), bounded key count (10k) against memory exhaustion. Residual: web proxy (apps/web/src/app/api/v1/[[...path]]/route.ts) forwards client-supplied X-Forwarded-For verbatim and never sets its own, so in the documented loopback-proxy topology the per-address throttle key is attacker-controlled (spoofable/bypassable, and can be used to frame/lock out a victim IP). Implementer's own code comment already discloses this; treated as residual risk, not a criterion fail, since the per-account limit (the primary control) does not depend on address."
+    },
+    "quality.threat": {
+      "state": "pass",
+      "summary": "Threat model sound for stated scope (single-account credential stuffing). Residual risks recorded: XFF spoofing defeats per-address throttle and can DoS a shared-NAT victim address (see quality.security); single-process/in-memory counters mean a multi-worker or multi-instance deployment without a shared store would divide the effective limit by worker count (not checked against actual deployment config, out of scope for this review); counters clear on process restart; shared-IP collateral lockout is an inherent IP-throttling trade-off, not a defect.",
+      "rationale": "none of these are AC failures; recorded for the risk register per the brownfield/no-self-authorized-scope-expansion rule."
+    },
+    "verification.referent": {
+      "state": "pass",
+      "summary": "Fresh session, did not read n0037/IMPL.md or implementer stage notes. Re-executed material evidence directly: git show 76316728 (full diff of all 6 changed files), ran the required pytest command myself (22 passed), and issued 7 live wrong-password POSTs to the running API at 127.0.0.1:8001 (all @example.invalid fake emails, no real password used) to independently observe the 401->429 transition, Retry-After header, and byte-identical unknown-vs-unknown response bodies. R2 node: same-model fresh-session independence used (no independent second model available in this environment); recorded as the rung actually used, not upgraded to R3-style independent-model verification."
+    }
+  },
+  "failed_criteria": [],
+  "limitations": [
+    "Success-resets-account-counter (AC2) verified only via the automated test (test_successful_login_resets_account_counter), not live, because the task rules forbid using a real password against a real account.",
+    "XFF-spoofing bypass of the per-address throttle was verified by full source read of login_throttle.py and route.ts plus the passing parametrized client_address tests, not by an end-to-end live exploit through the :3000 web proxy, to stay within the 8-failed-attempt live budget and avoid risking the shared 127.0.0.1 address counter.",
+    "Retry-After decreasing over real wall-clock time was not observed live (would require waiting out part of the 15-minute window); confirmed instead via the controllable-clock unit test (test_account_throttled_after_limit_with_retry_after).",
+    "Multi-process/multi-instance deployment behavior of the in-memory throttle (effective limit = configured limit x worker/instance count) was not checked against actual deployment/process-manager configuration; this review covers the code and a single running instance only.",
+    "Reviewer is the same model family as the implementer (Claude); no independent second-model verification mechanism was available in this environment for this R2 node, so independence is same-model/fresh-session only."
+  ]
+}

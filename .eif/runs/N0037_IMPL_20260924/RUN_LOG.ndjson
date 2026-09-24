@@ -2,3 +2,5 @@
 {"ts":"2026-09-24T08:34:59Z","kind":"programme.event","event":"baseline.add","seq":1079}
 {"ts":"2026-09-24T08:35:16Z","kind":"programme.event","event":"node.baseline","seq":1080}
 {"ts":"2026-09-24T08:35:23Z","kind":"programme.event","event":"node.stage","seq":1081}
+{"ts":"2026-09-24T08:45:52Z","kind":"programme.event","event":"node.stage","seq":1082}
+{"ts":"2026-09-24T08:46:00Z","kind":"programme.event","event":"node.lease.release","seq":1083}

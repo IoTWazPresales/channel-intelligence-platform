@@ -1,0 +1,11 @@
+{
+ "node": "N-0037",
+ "expected_revision": 8,
+ "dim": "security",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0037_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Pre-check before password verify, constant-shape dummy PBKDF2 hash for unknown users (closes both status/body and timing enumeration channels), HMAC log keys, in-memory-only state (no cip write), bounded key count (10k) against memory exhaustion. Residual: web proxy (apps/web/src/app/api/v1/[[...path]]/route.ts) forwards client-supplied X-Forwarded-For verbatim and never sets its own, so in the documented loopback-proxy topology the per-address throttle key is attacker-controlled (spoofable/bypassable, and can be used to frame/lock out a victim IP). Implementer's own code comment already discloses this; treated as residual risk, not a criterion fail, since the per-account limit (the primary control) does not depend on address."
+ }
+}

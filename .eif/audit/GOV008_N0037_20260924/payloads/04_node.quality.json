@@ -1,0 +1,12 @@
+{
+ "node": "N-0037",
+ "expected_revision": 9,
+ "dim": "threat",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0037_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Threat model sound for stated scope (single-account credential stuffing). Residual risks recorded: XFF spoofing defeats per-address throttle and can DoS a shared-NAT victim address (see quality.security); single-process/in-memory counters mean a multi-worker or multi-instance deployment without a shared store would divide the effective limit by worker count (not checked against actual deployment config, out of scope for this review); counters clear on process restart; shared-IP collateral lockout is an inherent IP-throttling trade-off, not a defect."
+ },
+ "rationale": "none of these are AC failures; recorded for the risk register per the brownfield/no-self-authorized-scope-expansion rule."
+}
