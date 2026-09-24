@@ -1,0 +1,65 @@
+current_database() = cip (read-only session)
+sellable product lines (new source): 14 NB=6848, NX=5173, PF=2049, NR=1910, PT=1311, LM=561, XB=183, PD=93, AI=11, NV=10, NL=8, CB=6, AX=3, AZ=1
+NULL/blank product_line rows: 10
+old resolver default codes: ['NB', 'NR', 'NV', 'NX'] | old archive/web codes: ['NB', 'NR', 'NV', 'NX', 'PF', 'XB']
+
+case | rows/resolved | sheet | folder | manual | persisted BU | old auto (tier) | new auto (tier) | old final | new final | fname PL old->new
+7 | 22/17 | None | None | None | NV | NV (product) | NV (product) | NV | NV | NV -> NV
+9 | 159/159 | None | None | None | NB | NB (product) | NB (product) | NB | NB | Consumer -> None
+90 | 104/104 | None | None | None | NR | NR (product) | NR (product) | NR | NR | Gaming -> NR
+114 | 197/193 | NB | NB/2025/Q1 | NB | NB | NB (product) | NB (product) | NB | NB | Consumer -> None
+115 | 2/2 | NR | NB/2025/Q1 | NV | NV | NV (product) | NV (product) | NV | NV | Consumer -> None
+116 | 2/2 | NR | NB/2025/Q1 | NV | NV | NV (product) | NV (product) | NV | NV | Consumer -> None
+117 | 190/190 | NB | NB/2025/Q2 | NB | NB | NB (product) | NB (product) | NB | NB | Consumer -> None
+118 | 204/203 | NB | NB/2025/Q3 | NB | NB | NB (product) | NB (product) | NB | NB | Consumer -> None
+119 | 289/289 | NB | NB/2026/26Q1 | NB | NB | NB (product) | NB (product) | NB | NB | Consumer -> None
+120 | 201/201 | NB | NB/2026/26Q1 | NB | NB | NB (product) | NB (product) | NB | NB | Consumer -> None
+121 | 201/201 | NB | NB/2026/26Q1 | NB | NB | NB (product) | NB (product) | NB | NB | Consumer -> None
+122 | 168/168 | NB | NB/2026/26Q2 | NB | NB | NB (product) | NB (product) | NB | NB | Consumer -> None
+123 | 221/219 | NB | NB/2026/26Q3 | NB | NB | NB (product) | NB (product) | NB | NB | Consumer -> NB
+124 | 131/131 | Sheet1 | NR/2025/Q2 | NR | NR | NR (product) | NR (product) | NR | NR | Gaming -> None
+125 | 133/133 | Sheet1 | NR/2025/Q3 | NR | NR | NR (product) | NR (product) | NR | NR | Gaming -> NR
+126 | 141/141 | Sheet1 | NR/2025/Q4 | NR | NR | NR (product) | NR (product) | NR | NR | Gaming -> None
+127 | 117/117 | Sheet1 | NR/2026/26Q1 | NR | NR | NR (product) | NR (product) | NR | NR | Gaming -> NR
+128 | 6/6 | Sheet1 | NR/2026/26Q2 | NB | NB | NB (product) | NB (product) | NB | NB | Gaming -> NR
+129 | 6/6 | NR | NR/2026/26Q3 | NB | NB | NB (product) | NB (product) | NB | NB | Gaming -> NR
+130 | 14/14 | Sheet1 | NR/2026/26Q3 | NR | NR | NR (product) | NR (product) | NR | NR | Gaming -> NR
+131 | 9/1 | Sheet1 | NR/2026/26Q3 | NB | NB | NR (folder) | NR (folder) | NB | NB | Gaming -> NR
+132 | 9/5 | Sheet1 | NV/2026 | NV | NV | NV (product) | NV (product) | NV | NV | NV -> NV
+133 | 40/33 | Lineup | NV/Q4 | NV | NV | NV (product) | NV (product) | NV | NV | NV -> NV
+134 | 63/63 | PD Lineup 13 Feb 25 | PF/Q2 | PF | PF | PF (product) | PF (product) | PF | PF | Gaming -> PD
+135 | 63/63 | PD Lineup 13 Feb 25 | PF/Q2 | PF | PF | PF (product) | PF (product) | PF | PF | Gaming -> PD
+136 | 11/11 | Sheet1 | PF/Q4 | PF | PF | PF (product) | PF (product) | PF | PF | Gaming -> None
+137 | 65/45 | ACCY Q2 lineup | XB/2025/Q2 | XB | XB | XB (product) | XB (product) | XB | XB | None -> None
+138 | 27/21 | ACCY Q2 lineup | XB/2025/Q2 | XB | XB | XB (product) | XB (product) | XB | XB | None -> None
+139 | 30/30 | Sheet1 | XB/2025/Q3 | XB | XB | XB (product) | XB (product) | XB | XB | None -> None
+140 | 35/31 | Sheet1 | XB/2025/Q4 | XB | XB | XB (product) | XB (product) | XB | XB | None -> None
+141 | 0/0 | None | None | None | NB | None (None) | None (None) | None | None | Consumer -> None
+142 | 0/0 | None | None | None | NV | None (None) | None (None) | None | None | None -> None
+143 | 0/0 | None | None | None | PF | None (None) | None (None) | None | None | Gaming -> None
+144 | 289/289 | NB | NB/2026/26Q1 | NB | NB | NB (product) | NB (product) | NB | NB | Consumer -> None
+145 | 185/185 | NB | NB/2025/Q4 | NB | NB | NB (product) | NB (product) | NB | NB | Consumer -> None
+146 | 120/120 | NR | NR\2026\26Q3 | NR | NR | NR (product) | NR (product) | NR | NR | Gaming -> NR
+
+cases: 36
+auto BU changed old->new: 0 []
+final BU (manual else auto) changed old->new: 0 []
+new final BU != persisted BU: 0 []
+old final BU != persisted BU: 0 []
+filename-fallback product_line changed old->new: 28 [(9, 'Consumer', None), (90, 'Gaming', 'NR'), (114, 'Consumer', None), (115, 'Consumer', None), (116, 'Consumer', None), (117, 'Consumer', None), (118, 'Consumer', None), (119, 'Consumer', None), (120, 'Consumer', None), (121, 'Consumer', None), (122, 'Consumer', None), (123, 'Consumer', 'NB'), (124, 'Gaming', None), (125, 'Gaming', 'NR'), (126, 'Gaming', None), (127, 'Gaming', 'NR'), (128, 'Gaming', 'NR'), (129, 'Gaming', 'NR'), (130, 'Gaming', 'NR'), (131, 'Gaming', 'NR'), (134, 'Gaming', 'PD'), (135, 'Gaming', 'PD'), (136, 'Gaming', None), (141, 'Consumer', None), (143, 'Gaming', None), (144, 'Consumer', None), (145, 'Consumer', None), (146, 'Gaming', 'NR')]
+effective case product_line inference (catalogue majority, filename fallback when <25% resolved) changed old->new: 3 [(131, 9, 1, 'Gaming', 'NR', 'NB'), (141, 0, 0, 'Consumer', None, 'NB'), (143, 0, 0, 'Gaming', None, 'PF')]
+new effective case product_line != persisted product_line: [(131, 'NR', 'NB'), (141, None, 'NB'), (142, None, 'NV'), (143, None, 'PF')]
+
+active-case collision groups (period|customer|BU, >=2 members): persisted 3 old 3 new 3
+  persisted: {'2026-01-01|52|NR': [90, 127], '2026-04-01|18|NB': [121, 128], '2025-04-01|299|XB': [137, 138]}
+  old == new: True | new == persisted: True
+
+supersession pairs (loser -> winner): 7
+  9->122: persisted NB->NB | old NB->NB | new NB->NB | each member old BU == new BU: True
+  119->120: persisted NB->NB | old NB->NB | new NB->NB | each member old BU == new BU: True
+  130->146: persisted NR->NR | old NR->NR | new NR->NR | each member old BU == new BU: True
+  141->117: persisted NB->NB | old None->NB | new None->NB | each member old BU == new BU: True
+  142->133: persisted NV->NV | old None->NV | new None->NV | each member old BU == new BU: True
+  143->136: persisted PF->PF | old None->PF | new None->PF | each member old BU == new BU: True
+  144->121: persisted NB->NB | old NB->NB | new NB->NB | each member old BU == new BU: True
+pairs unchanged old -> new: 7 of 7

@@ -1,0 +1,11 @@
+{
+ "node": "N-0040",
+ "expected_revision": 5,
+ "dim": "testing",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0040_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "pytest 43 passed on cip_test (5 files incl. new guard + catalog service tests); vitest 2 files / 8 tests passed; tsc 0 errors. Guard regex is narrow (3+ quoted 2-letter codes only) - advisory."
+ }
+}

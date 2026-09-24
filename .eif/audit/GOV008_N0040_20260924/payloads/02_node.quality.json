@@ -1,0 +1,12 @@
+{
+ "node": "N-0040",
+ "expected_revision": 6,
+ "dim": "observability",
+ "state": "na",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0040_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "No logging/metrics change in scope."
+ },
+ "rationale": "Node changes vocabulary source and inference inputs; the only new observable is null_product_line_count on the endpoint (verified 10). No new runtime signal to observe."
+}

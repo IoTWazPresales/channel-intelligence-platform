@@ -1,0 +1,11 @@
+{
+ "node": "N-0040",
+ "expected_revision": 10,
+ "dim": "content",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0040_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "No NB/NR/NV/PF/XB copy in dialog; plan_vs_executed reason neutralised. Residual prose only: lineup_po_competition docstring, InboundShipments placeholder 'e.g. NB'."
+ }
+}

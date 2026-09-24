@@ -1,0 +1,11 @@
+{
+ "node": "N-0040",
+ "expected_revision": 11,
+ "kind": "rendered",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0040_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Own Chrome tab on 127.0.0.1:3000/admin/imports; endpoint fetched live (14 codes, null 10); dialog opened and closed without write controls."
+ }
+}

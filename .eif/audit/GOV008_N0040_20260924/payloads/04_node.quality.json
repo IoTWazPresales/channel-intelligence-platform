@@ -1,0 +1,11 @@
+{
+ "node": "N-0040",
+ "expected_revision": 8,
+ "dim": "a11y",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0040_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Dialog aria-labelledby resolves to its h2; buttons named. Pre-existing: per-row native BU select lacks an accessible name (not introduced by this node)."
+ }
+}

@@ -1,0 +1,13 @@
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mC:/Users/warren_eliason/channel-intelligence-platform/apps/web[39m
+
+ [32m✓[39m src/features/commercial-planner/lineupBackfillArchivePath.test.ts [2m([22m[2m7 tests[22m[2m)[22m[90m 11[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/BulkLineupBackfillDialog.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 884[2mms[22m[39m
+   [33m[2m✓[22m[39m BulkLineupBackfillDialog[2m > [22mBU override options and archive folder codes come from the product-lines endpoint [33m883[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m8 passed[39m[22m[90m (8)[39m
+[2m   Start at [22m 15:14:42
+[2m   Duration [22m 39.96s[2m (transform 648ms, setup 8.94s, collect 17.45s, tests 895ms, environment 20.96s, prepare 4.46s)[22m
+

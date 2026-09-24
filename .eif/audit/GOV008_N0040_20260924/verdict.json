@@ -1,0 +1,18 @@
+{"node": "N-0040", "verdict": "VERIFIED_WITH_LIMITATIONS",
+ "dims": {
+  "quality.testing": {"state": "pass", "summary": "pytest 43 passed on cip_test (5 files incl. new guard + catalog service tests); vitest 2 files / 8 tests passed; tsc 0 errors. Guard regex is narrow (3+ quoted 2-letter codes only) - advisory."},
+  "quality.observability": {"state": "na", "summary": "No logging/metrics change in scope.", "rationale": "Node changes vocabulary source and inference inputs; the only new observable is null_product_line_count on the endpoint (verified 10). No new runtime signal to observe."},
+  "quality.ux": {"state": "pass", "summary": "Dialog opens, copy neutral ('all product-line folders are included'), folder actions gated until codes load. Advisory: endpoint error leaves folder picker enabled with empty codes; wider sheet/filename token matching (PD/AI/PT) may mislead under-resolved imports."},
+  "quality.a11y": {"state": "pass", "summary": "Dialog aria-labelledby resolves to its h2; buttons named. Pre-existing: per-row native BU select lacks an accessible name (not introduced by this node)."},
+  "quality.rendered": {"state": "pass", "summary": "Rendered in own tab: dialog, copy, product-lines request 200. Per-row BU select UNABLE live (needs upload + persisted preview) - covered by vitest + source + live endpoint; 390px not checked."},
+  "quality.content": {"state": "pass", "summary": "No NB/NR/NV/PF/XB copy in dialog; plan_vs_executed reason neutralised. Residual prose only: lineup_po_competition docstring, InboundShipments placeholder 'e.g. NB'."},
+  "verification.rendered": {"state": "pass", "summary": "Own Chrome tab on 127.0.0.1:3000/admin/imports; endpoint fetched live (14 codes, null 10); dialog opened and closed without write controls."},
+  "verification.referent": {"state": "pass", "summary": "Commit 73466a10 diff read; old_* proof modules identical to 73466a10^; proof re-run byte-identical (0 BU/collision/supersession changes, 3 product_line inference diffs, 0 persisted); cip NULL=10/distinct=14 via ro_sql; commercial_lineup_case max(updated_at)=2026-08-05 (no writes)."}
+ },
+ "failed_criteria": [],
+ "limitations": [
+  "D-g clone proof done in-process read-only against cip (CREATE DATABASE denied), not on a clone; persisted-input model with synthetic tokens, not a full archive re-preview.",
+  "Per-row BU override select not rendered live: requires staging files and a persisting preview; verified via source, vitest and live endpoint instead.",
+  "390x844 viewport not attempted (resize known non-working; shared tab group kept detaching tabs).",
+  "Independence: fresh-context same-model session (adequate for R2); no other-model consult."
+ ]}

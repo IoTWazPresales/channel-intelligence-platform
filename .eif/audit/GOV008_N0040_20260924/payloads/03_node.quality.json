@@ -1,0 +1,11 @@
+{
+ "node": "N-0040",
+ "expected_revision": 7,
+ "dim": "ux",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0040_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Dialog opens, copy neutral ('all product-line folders are included'), folder actions gated until codes load. Advisory: endpoint error leaves folder picker enabled with empty codes; wider sheet/filename token matching (PD/AI/PT) may mislead under-resolved imports."
+ }
+}

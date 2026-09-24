@@ -1,0 +1,11 @@
+{
+ "node": "N-0040",
+ "expected_revision": 12,
+ "kind": "referent",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0040_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Commit 73466a10 diff read; old_* proof modules identical to 73466a10^; proof re-run byte-identical (0 BU/collision/supersession changes, 3 product_line inference diffs, 0 persisted); cip NULL=10/distinct=14 via ro_sql; commercial_lineup_case max(updated_at)=2026-08-05 (no writes)."
+ }
+}

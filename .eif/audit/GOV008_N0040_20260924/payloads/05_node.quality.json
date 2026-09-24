@@ -1,0 +1,11 @@
+{
+ "node": "N-0040",
+ "expected_revision": 9,
+ "dim": "rendered",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0040_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Rendered in own tab: dialog, copy, product-lines request 200. Per-row BU select UNABLE live (needs upload + persisted preview) - covered by vitest + source + live endpoint; 390px not checked."
+ }
+}
