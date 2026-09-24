@@ -1,0 +1,11 @@
+{
+ "node": "N-0039",
+ "expected_revision": 9,
+ "dim": "rendered",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0039_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Live-rendered and inspected Takealot listing 65 in the running app: stored bare-PLID URL shown as non-clickable plain text with an Unverified link chip. Verified-anchor state for a non-Takealot listing was not independently rendered live within tool budget (see limitations)."
+ }
+}

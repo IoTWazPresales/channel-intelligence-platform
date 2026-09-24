@@ -1,0 +1,11 @@
+{
+ "node": "N-0039",
+ "expected_revision": 5,
+ "dim": "testing",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0039_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "39 backend pytest + 6 frontend vitest tests, all passing, cover the auto_finder fix, record_observation write-back/dead-link/conflict logic, and ListingUrl's verified/unverified/dead states plus an XSS guard."
+ }
+}

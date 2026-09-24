@@ -1,0 +1,12 @@
+{
+ "node": "N-0039",
+ "expected_revision": 6,
+ "dim": "observability",
+ "state": "na",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0039_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "No new logs/metrics/dashboards added or required."
+ },
+ "rationale": "The acceptance criteria for N-0039 are about URL correctness and link-state presentation, not diagnosability; existing parse_flags diagnostic fields (fetch_reason, details_status) were preserved incidentally but there is no new observability surface to assess."
+}

@@ -1,0 +1,11 @@
+{
+ "node": "N-0039",
+ "expected_revision": 12,
+ "kind": "referent",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0039_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "All cited commit hashes (fc69fda3, b17e950, bfd0c44), file:line evidence, and read-only SQL against cip are independently reproducible; re-ran the SQL and test commands myself this session."
+ }
+}

@@ -1,0 +1,192 @@
+######## PHASE A: scratch copy of cip cpor_case + cpor_case_line inside cip_test
+source: cip (read-only session)
+  [cip today (read-only)]
+    today | rev | cases | lines
+    2026-09-24 | 20260906_0022 | 311 | 658
+current_database() = cip_test   (before write: create scratch schema)
+current_database() = cip_test   (before write: copy cpor_case into n0050_scratch)
+current_database() = cip_test   (before write: copy cpor_case_line into n0050_scratch)
+== numbers: A0 before upgrade (at 20260906_0022) (n0050_scratch)
+  [row counts]
+    cases | lines
+    311 | 658
+  window columns present on cpor_case_line: 0
+  [uq_cpor_case_line_grain]
+    conname | def
+    uq_cpor_case_line_grain | UNIQUE (case_id, product_id, distributor_id, pod_quarter)
+  [old-grain groups with >1 row (NULL pod_quarter; pre-existing)]
+    groups
+    2
+  [alembic_version]
+    version_num
+    20260906_0022
+current_database() = cip_test   (before write: alembic upgrade head (scratch))
+$ alembic upgrade head   (cip_test, search_path=n0050_scratch)
+    current_database() = cip_test  search_path = n0050_scratch
+    INFO  [alembic.runtime.migration] Running upgrade 20260906_0022 -> 20260924_0023, cpor_case_line effective window + window-aware unique grain (BACKLOG-137 / D-058).
+  rc = 0
+== numbers: A1 after upgrade (n0050_scratch)
+  [row counts]
+    cases | lines
+    311 | 658
+  window columns present on cpor_case_line: 2
+  [uq_cpor_case_line_grain]
+    conname | def
+    ck_cpor_case_line_window_order | CHECK ((window_end >= window_start))
+    uq_cpor_case_line_grain | UNIQUE (case_id, product_id, distributor_id, pod_quarter, window_start)
+  [window backfill]
+    lines | ws_populated | we_populated | eq_case_window | lines_not_week_aligned_flagged | cases_not_week_aligned
+    658 | 658 | 658 | 658 | 610 | 292
+  [unique violations on new grain (must be 0)]
+    violating_groups
+    2
+  [old-grain groups with >1 row (NULL pod_quarter; pre-existing)]
+    groups
+    2
+  [alembic_version]
+    version_num
+    20260924_0023
+current_database() = cip_test   (before write: supersede probe insert)
+  supersede probe: line 1 (case 4, 2026-01-01..2026-01-31) + successor line 1000001 from 2026-01-01+7 -> stored OK
+  duplicate same-window insert: rejected by uq_cpor_case_line_grain (expected)
+$ alembic downgrade 20260906_0022   (cip_test, search_path=n0050_scratch)
+    current_database() = cip_test  search_path = n0050_scratch
+    INFO  [alembic.runtime.migration] Running downgrade 20260924_0023 -> 20260906_0022, cpor_case_line effective window + window-aware unique grain (BACKLOG-137 / D-058).
+        raise RuntimeError(
+    RuntimeError: downgrade refused: 1 (case, product, distributor, pod_quarter) groups hold more than one line window; the pre-0023 grain cannot store them
+  downgrade with two windows for one grain: rc = 1 -> refused
+current_database() = cip_test   (before write: remove supersede probe row)
+  probe row 1000001 deleted
+current_database() = cip_test   (before write: alembic downgrade 20260906_0022 (scratch))
+$ alembic downgrade 20260906_0022   (cip_test, search_path=n0050_scratch)
+    current_database() = cip_test  search_path = n0050_scratch
+    INFO  [alembic.runtime.migration] Running downgrade 20260924_0023 -> 20260906_0022, cpor_case_line effective window + window-aware unique grain (BACKLOG-137 / D-058).
+  rc = 0
+== numbers: A2 after downgrade (n0050_scratch)
+  [row counts]
+    cases | lines
+    311 | 658
+  window columns present on cpor_case_line: 0
+  [uq_cpor_case_line_grain]
+    conname | def
+    uq_cpor_case_line_grain | UNIQUE (case_id, product_id, distributor_id, pod_quarter)
+  [old-grain groups with >1 row (NULL pod_quarter; pre-existing)]
+    groups
+    2
+  [alembic_version]
+    version_num
+    20260906_0022
+current_database() = cip_test   (before write: alembic upgrade head again (scratch))
+$ alembic upgrade head   (cip_test, search_path=n0050_scratch)
+    current_database() = cip_test  search_path = n0050_scratch
+    INFO  [alembic.runtime.migration] Running upgrade 20260906_0022 -> 20260924_0023, cpor_case_line effective window + window-aware unique grain (BACKLOG-137 / D-058).
+  rc = 0
+== numbers: A3 after re-upgrade (n0050_scratch)
+  [row counts]
+    cases | lines
+    311 | 658
+  window columns present on cpor_case_line: 2
+  [uq_cpor_case_line_grain]
+    conname | def
+    ck_cpor_case_line_window_order | CHECK ((window_end >= window_start))
+    uq_cpor_case_line_grain | UNIQUE (case_id, product_id, distributor_id, pod_quarter, window_start)
+  [window backfill]
+    lines | ws_populated | we_populated | eq_case_window | lines_not_week_aligned_flagged | cases_not_week_aligned
+    658 | 658 | 658 | 658 | 610 | 292
+  [unique violations on new grain (must be 0)]
+    violating_groups
+    2
+  [old-grain groups with >1 row (NULL pod_quarter; pre-existing)]
+    groups
+    2
+  [alembic_version]
+    version_num
+    20260924_0023
+current_database() = cip_test   (before write: drop scratch schema (removes copied rows))
+  exists after drop: 0
+######## PHASE B: cip_test.public (test fixtures)
+== numbers: B0 before (public)
+  [row counts]
+    cases | lines
+    3 | 4
+  window columns present on cpor_case_line: 0
+  [uq_cpor_case_line_grain]
+    conname | def
+    uq_cpor_case_line_grain | UNIQUE (case_id, product_id, distributor_id, pod_quarter)
+  [old-grain groups with >1 row (NULL pod_quarter; pre-existing)]
+    groups
+    0
+  [alembic_version]
+    version_num
+    20260906_0022
+current_database() = cip_test   (before write: alembic upgrade head (public))
+$ alembic upgrade head   (cip_test, search_path=public)
+    current_database() = cip_test  search_path = "$user", public
+    INFO  [alembic.runtime.migration] Running upgrade 20260906_0022 -> 20260924_0023, cpor_case_line effective window + window-aware unique grain (BACKLOG-137 / D-058).
+  rc = 0
+== numbers: B1 after upgrade (public)
+  [row counts]
+    cases | lines
+    3 | 4
+  window columns present on cpor_case_line: 2
+  [uq_cpor_case_line_grain]
+    conname | def
+    ck_cpor_case_line_window_order | CHECK ((window_end >= window_start))
+    uq_cpor_case_line_grain | UNIQUE (case_id, product_id, distributor_id, pod_quarter, window_start)
+  [window backfill]
+    lines | ws_populated | we_populated | eq_case_window | lines_not_week_aligned_flagged | cases_not_week_aligned
+    4 | 4 | 4 | 4 | 4 | 2
+  [unique violations on new grain (must be 0)]
+    violating_groups
+    0
+  [old-grain groups with >1 row (NULL pod_quarter; pre-existing)]
+    groups
+    0
+  [alembic_version]
+    version_num
+    20260924_0023
+current_database() = cip_test   (before write: alembic downgrade 20260906_0022 (public))
+$ alembic downgrade 20260906_0022   (cip_test, search_path=public)
+    current_database() = cip_test  search_path = "$user", public
+    INFO  [alembic.runtime.migration] Running downgrade 20260924_0023 -> 20260906_0022, cpor_case_line effective window + window-aware unique grain (BACKLOG-137 / D-058).
+  rc = 0
+== numbers: B2 after downgrade (public)
+  [row counts]
+    cases | lines
+    3 | 4
+  window columns present on cpor_case_line: 0
+  [uq_cpor_case_line_grain]
+    conname | def
+    uq_cpor_case_line_grain | UNIQUE (case_id, product_id, distributor_id, pod_quarter)
+  [old-grain groups with >1 row (NULL pod_quarter; pre-existing)]
+    groups
+    0
+  [alembic_version]
+    version_num
+    20260906_0022
+current_database() = cip_test   (before write: alembic upgrade head again (public))
+$ alembic upgrade head   (cip_test, search_path=public)
+    current_database() = cip_test  search_path = "$user", public
+    INFO  [alembic.runtime.migration] Running upgrade 20260906_0022 -> 20260924_0023, cpor_case_line effective window + window-aware unique grain (BACKLOG-137 / D-058).
+  rc = 0
+== numbers: B3 final (left at head) (public)
+  [row counts]
+    cases | lines
+    3 | 4
+  window columns present on cpor_case_line: 2
+  [uq_cpor_case_line_grain]
+    conname | def
+    ck_cpor_case_line_window_order | CHECK ((window_end >= window_start))
+    uq_cpor_case_line_grain | UNIQUE (case_id, product_id, distributor_id, pod_quarter, window_start)
+  [window backfill]
+    lines | ws_populated | we_populated | eq_case_window | lines_not_week_aligned_flagged | cases_not_week_aligned
+    4 | 4 | 4 | 4 | 4 | 2
+  [unique violations on new grain (must be 0)]
+    violating_groups
+    0
+  [old-grain groups with >1 row (NULL pod_quarter; pre-existing)]
+    groups
+    0
+  [alembic_version]
+    version_num
+    20260924_0023

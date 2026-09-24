@@ -1,0 +1,44 @@
+{
+  "node": "N-0039",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "dims": {
+    "quality.testing": {
+      "state": "pass",
+      "summary": "39 backend pytest + 6 frontend vitest tests, all passing, cover the auto_finder fix, record_observation write-back/dead-link/conflict logic, and ListingUrl's verified/unverified/dead states plus an XSS guard."
+    },
+    "quality.observability": {
+      "state": "na",
+      "summary": "No new logs/metrics/dashboards added or required.",
+      "rationale": "The acceptance criteria for N-0039 are about URL correctness and link-state presentation, not diagnosability; existing parse_flags diagnostic fields (fetch_reason, details_status) were preserved incidentally but there is no new observability surface to assess."
+    },
+    "quality.ux": {
+      "state": "pass",
+      "summary": "UI now distinguishes verified (real anchor + verification-time tooltip), unverified (plain text + explanatory tooltip), and dead (plain text + Dead link) instead of presenting every stored URL as an equally trustworthy plain string."
+    },
+    "quality.a11y": {
+      "state": "pass",
+      "summary": "Verified links render as real focusable <a> via MUI Link; non-link states use Tooltip-wrapped span plus a text-labeled StatusChip, so the distinction does not rely on color alone."
+    },
+    "quality.rendered": {
+      "state": "pass",
+      "summary": "Live-rendered and inspected Takealot listing 65 in the running app: stored bare-PLID URL shown as non-clickable plain text with an Unverified link chip. Verified-anchor state for a non-Takealot listing was not independently rendered live within tool budget (see limitations)."
+    },
+    "quality.content": {
+      "state": "pass",
+      "summary": "\"Unverified link\" / \"Dead link\" labels and tooltip copy are plain, non-alarming, and correctly scoped to link verification state rather than listing status."
+    },
+    "verification.rendered": {
+      "state": "pass",
+      "summary": "Independent live render performed in this GOV-008 session (separate run from implementation) against the running app and real cip data, confirming the Takealot unverified/non-anchor behavior end-to-end."
+    },
+    "verification.referent": {
+      "state": "pass",
+      "summary": "All cited commit hashes (fc69fda3, b17e950, bfd0c44), file:line evidence, and read-only SQL against cip are independently reproducible; re-ran the SQL and test commands myself this session."
+    }
+  },
+  "failed_criteria": [],
+  "limitations": [
+    "Takealot URL-shape routing behavior (/PLID<n> -> seo-landing vs /x/PLID<n> -> product page) is ASSERTED from DISCOVERY.md's own rate-limited sample GETs, not independently reproduced over the network by this review.",
+    "The verified (real, clickable anchor) link state was confirmed via passing unit tests, code review, and a matching read-only SQL row in cip (listing id 1, amazon), not via a live click-through in Chrome, due to ag-Grid/customer-filter UI friction within the review's tool budget."
+  ]
+}

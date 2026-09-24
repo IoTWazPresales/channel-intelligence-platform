@@ -1,0 +1,11 @@
+{
+ "node": "N-0039",
+ "expected_revision": 10,
+ "dim": "content",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0039_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "\"Unverified link\" / \"Dead link\" labels and tooltip copy are plain, non-alarming, and correctly scoped to link verification state rather than listing status."
+ }
+}

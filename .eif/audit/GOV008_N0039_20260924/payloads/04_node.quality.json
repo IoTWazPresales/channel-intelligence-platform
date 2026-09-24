@@ -1,0 +1,11 @@
+{
+ "node": "N-0039",
+ "expected_revision": 8,
+ "dim": "a11y",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0039_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Verified links render as real focusable <a> via MUI Link; non-link states use Tooltip-wrapped span plus a text-labeled StatusChip, so the distinction does not rely on color alone."
+ }
+}

@@ -1,0 +1,11 @@
+{
+ "node": "N-0039",
+ "expected_revision": 7,
+ "dim": "ux",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0039_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "UI now distinguishes verified (real anchor + verification-time tooltip), unverified (plain text + explanatory tooltip), and dead (plain text + Dead link) instead of presenting every stored URL as an equally trustworthy plain string."
+ }
+}
