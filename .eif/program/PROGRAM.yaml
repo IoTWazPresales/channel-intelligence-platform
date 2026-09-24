@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1210
-  log_sha256: 3aafa4588dae5095d6678425fb183c5c53481484d846131af0fd74b7c2cc7aa9
+  snapshot_revision: 1215
+  log_sha256: f42faf3dd238f2804be14d837dd65cef336069e56c04861b0bd180b4c8117c9b
   acceptance_policy:
     milestone: operator
     root: operator
@@ -5760,13 +5760,9 @@ nodes:
     class: feature
     origin: operator
     status: in_progress
-    stage: implement
-    revision: 6
-    lease:
-      run: N0034_IMPL_20260924
-      acquired_at: '2026-09-24T11:20:13Z'
-      heartbeat_at: '2026-09-24T11:20:13Z'
-      expires_at: '2026-09-24T14:20:13Z'
+    stage: validate
+    revision: 8
+    lease: null
     depends_on: []
     facets:
     - ui
@@ -5828,10 +5824,12 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Criterion 4 and the field-list source resolved by Warren''s D-b (D-0013): toolbar search/saved views/export
-      -> N-0041/42/43; field list per D-0030 (design seat, EV-N0034-DESIGN). Implementation by fresh subagent (frontend-engineer,
-      test-engineering-specialist, accessibility-specialist; backend for the registry), run N0034_IMPL_20260924. Operator
-      acceptance still required at the end (acceptance=operator).'
+    stage_note: 'Implemented in two passes: 11f7765b + 08e5f974 (pass 1: grid_fields registry + GET grid-fields/{grid_id},
+      useFactColumns + FactColumnPicker, 7 ORM grids + inbound, name-only sweep) and 43d521f4 + c18333fb (pass 2: computed-row
+      grids, listings, customer terms; BACKLOG-201 closed with per-host toolbar table routing search/saved views/export to
+      N-0041/42/43; BACKLOG-140 display half). 15/15 Tier A grids; codes as default-hidden Reference fields; tsc 0; tests
+      per IMPL_PASS1/2. Needs rebuild + API restart, then independent review incl. the 1280x800 browser smoke (open picker,
+      add code column, reload, persists) on three grids. Operator acceptance still required.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -7151,13 +7149,9 @@ nodes:
     class: feature
     origin: operator
     status: in_progress
-    stage: implement
-    revision: 3
-    lease:
-      run: N0049_IMPL_20260924
-      acquired_at: '2026-09-24T19:10:48Z'
-      heartbeat_at: '2026-09-24T19:10:48Z'
-      expires_at: '2026-09-24T21:10:48Z'
+    stage: validate
+    revision: 5
+    lease: null
     depends_on:
     - N-0048
     facets:
@@ -7191,8 +7185,11 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: Implementation by fresh subagent (backend-engineer, analytics-bi-specialist, test-engineering-specialist),
-      run N0049_IMPL_20260924.
+    stage_note: 'Implemented at 3624d7e7. Finding: no MAC/SOH check existed in code (docs only, D-062). Added read-only customer_soh_check
+      on fact_customer_sellthrough (reported_soh, latest week <= as_of, site sum, SOH-weighted unit_mac else unit_cost; honest
+      ''unavailable'', never zero) exposed as soh_check on the cost-suggest response; never names fact_inventory_customer.
+      Proven read-only on cip with printed pairs; 5 new tests; 274 cpor-area tests pass on cip_test. BACKLOG-135 -> Partial.
+      Questions D-0038. Independent review next.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -9117,6 +9114,19 @@ decisions:
       import warning - keep FLAG or block commit? The ready-for-cip repair only re-derives 671 Excel-serial placeholder rows
       from the committed files (evidence-based); inverted count shows 2,795 -> 2,887 because 92 hidden 1970 rows become visibly
       inverted.'
+    origin: agent
+    status: proposed
+    supersedes: null
+  D-0038:
+    id: D-0038
+    scope: N-0049
+    statement: 'N-0049 customer SOH check questions for Warren (n0049/IMPL.md): (1) tolerance - at what gap (% of cost_basis
+      or absolute R) should the check FLAG? today it only reports delta; (2) VAT basis - Takealot CST cost is inc_vat, line
+      cost_basis appears ex-VAT; four Takealot deltas are -8% to -9% (ratio ~1.088, not a clean 1.15) - convert before comparing,
+      at what rate? (3) Evetech - D-062 says no SOH file but CST holds 130 Evetech rows with reported_soh (no cost): keep
+      units-only or exclude? (4) customer SOH = sum across all sites in the latest week (implemented) or per site? (5) until
+      a customer x SKU MAC master exists, is line cost_basis the right comparand? Also a finding: the D-062 ''MAC check''
+      existed only in docs, not code; N-0049 added it read-only on the cost-suggest response.'
     origin: agent
     status: proposed
     supersedes: null
