@@ -505,7 +505,9 @@ async def channel_ops_sell_out(
             DimProduct.sales_model_name.label("sales_model_name"),
             DimProduct.name.label("product_name"),
             DimCustomer.name.label("customer_name"),
+            DimCustomer.code.label("customer_code"),
             DimDistributor.name.label("distributor_name"),
+            DimDistributor.code.label("distributor_code"),
         )
         .join(DimProduct, FactSalesSellout.product_id == DimProduct.id)
         .join(DimCustomer, FactSalesSellout.customer_id == DimCustomer.id)
@@ -567,30 +569,35 @@ async def channel_ops_sell_out(
     items: list[dict[str, Any]] = []
     for row in rows:
         s = row[0]
-        unit_price: float | None = None
-        if s.units and float(s.units) != 0:
-            unit_price = float(s.revenue) / float(s.units)
         prior_units: float | None = None
         if prior_units_map:
             key = (int(s.distributor_id or 0), int(s.product_id), int(s.customer_id))
             if key in prior_units_map:
                 prior_units = prior_units_map[key]
-        items.append(
-            {
-                "date": s.transaction_date.isoformat(),
-                "distributor_name": row.distributor_name,
-                "customer_name": row.customer_name,
-                "product_name": row.product_name,
-                "sku": row.sku,
-                "sales_model_name": row.sales_model_name,
-                "units": float(s.units),
-                "unit_price": unit_price,
-                "revenue": float(s.revenue),
-                "prior_period_units": prior_units,
-            }
-        )
+        items.append(channel_sellout_row_dict(s, row, prior_units))
 
     return {"total": total, "page": page, "page_size": page_size, "items": items}
+
+
+def channel_sellout_row_dict(s: Any, labels: Any, prior_units: float | None) -> dict[str, Any]:
+    """One channel-ops sell-out row (grid ``channel-ops.sell-out``); codes come from the list query's joins."""
+    unit_price: float | None = None
+    if s.units and float(s.units) != 0:
+        unit_price = float(s.revenue) / float(s.units)
+    return {
+        "date": s.transaction_date.isoformat(),
+        "distributor_name": labels.distributor_name,
+        "distributor_code": labels.distributor_code,
+        "customer_name": labels.customer_name,
+        "customer_code": labels.customer_code,
+        "product_name": labels.product_name,
+        "sku": labels.sku,
+        "sales_model_name": labels.sales_model_name,
+        "units": float(s.units),
+        "unit_price": unit_price,
+        "revenue": float(s.revenue),
+        "prior_period_units": prior_units,
+    }
 
 
 @router.get("/inventory")
@@ -653,6 +660,7 @@ async def channel_ops_inventory(
     product_ids = [int(r["product_id"]) for r in derived_rows]
     product_meta: dict[int, tuple[str | None, str | None, str | None]] = {}
     dist_name: str | None = None
+    dist_code: str | None = None
     if product_ids:
         prod_rows = (
             await db.execute(
@@ -665,9 +673,13 @@ async def channel_ops_inventory(
             )
         ).all()
         product_meta = {int(r[0]): (r[1], r[2], r[3]) for r in prod_rows}
-        dist_name = await db.scalar(
-            select(DimDistributor.name).where(DimDistributor.id == int(distributor_id))
-        )
+        dist_row = (
+            await db.execute(
+                select(DimDistributor.code, DimDistributor.name).where(DimDistributor.id == int(distributor_id))
+            )
+        ).first()
+        if dist_row is not None:
+            dist_code, dist_name = dist_row[0], dist_row[1]
 
     threshold = float(REPLENISHMENT_WOC_THRESHOLD_WEEKS)
 
@@ -700,7 +712,6 @@ async def channel_ops_inventory(
     items: list[dict[str, Any]] = []
     for row in derived_rows:
         pid = int(row["product_id"])
-        sku, pname, sales_model = product_meta.get(pid, (None, None, None))
         v52 = velocity_by_product.get(pid)
         derived = float(row["derived_stock"])
         if "weeks_of_cover" in row and not use_live:
@@ -710,33 +721,17 @@ async def channel_ops_inventory(
             weeks = weeks_of_cover_or_none(derived, v52)
             flag = replenishment_flag_v1(weeks, threshold_weeks=threshold)
         items.append(
-            {
-                "distributor_id": int(row["distributor_id"]),
-                "distributor_name": dist_name,
-                "product_id": pid,
-                "sku": sku,
-                "sales_model_name": sales_model,
-                "product_name": pname,
-                "snapshot_date": row.get("snapshot_date"),
-                "reported_soh": float(row["reported_soh"]),
-                "sell_out_since": float(row["sell_out_since"]),
-                "landed_since": float(row["landed_since"]),
-                "derived_stock": derived,
-                "calculated_soh": row.get("calculated_soh"),
-                "variance_units": row.get("variance_units"),
-                "variance_pct": None,
-                "reconciliation_status": row.get("reconciliation_status"),
-                "velocity_52wk": v52,
-                "weeks_of_cover": weeks,
-                "computed_through_date": None,
-                "replenishment_flag": flag,
-                "replenishment_threshold_weeks": threshold,
-                "reorder_signal": flag,  # alias — prefer replenishment_flag (A3-03)
-                "velocity_grain": "distributor_product",
-                "demand_forecast_units_13w": demand_by_product.get(pid),
-                "woc_source": woc_src,
-                "cover_as_of_date": row.get("cover_as_of_date"),
-            }
+            channel_inventory_row_dict(
+                row,
+                product=product_meta.get(pid, (None, None, None)),
+                distributor=(dist_code, dist_name),
+                velocity_52wk=v52,
+                weeks_of_cover=weeks,
+                flag=flag,
+                threshold=threshold,
+                demand_13w=demand_by_product.get(pid),
+                woc_source=woc_src,
+            )
         )
 
     return {
@@ -746,6 +741,51 @@ async def channel_ops_inventory(
         "missing_data_alert": not items,
         "replenishment_threshold_weeks": threshold,
         "replenishment_pairs_below_threshold": sum(1 for i in items if i["replenishment_flag"]),
+    }
+
+
+def channel_inventory_row_dict(
+    row: dict[str, Any],
+    *,
+    product: tuple[str | None, str | None, str | None],
+    distributor: tuple[str | None, str | None],
+    velocity_52wk: float | None,
+    weeks_of_cover: float | None,
+    flag: bool,
+    threshold: float,
+    demand_13w: float | None,
+    woc_source: str,
+) -> dict[str, Any]:
+    """One channel-ops inventory row (grid ``channel-ops.inventory``); product = (sku, name, sales model)."""
+    sku, pname, sales_model = product
+    dist_code, dist_name = distributor
+    return {
+        "distributor_id": int(row["distributor_id"]),
+        "distributor_name": dist_name,
+        "distributor_code": dist_code,
+        "product_id": int(row["product_id"]),
+        "sku": sku,
+        "sales_model_name": sales_model,
+        "product_name": pname,
+        "snapshot_date": row.get("snapshot_date"),
+        "reported_soh": float(row["reported_soh"]),
+        "sell_out_since": float(row["sell_out_since"]),
+        "landed_since": float(row["landed_since"]),
+        "derived_stock": float(row["derived_stock"]),
+        "calculated_soh": row.get("calculated_soh"),
+        "variance_units": row.get("variance_units"),
+        "variance_pct": None,
+        "reconciliation_status": row.get("reconciliation_status"),
+        "velocity_52wk": velocity_52wk,
+        "weeks_of_cover": weeks_of_cover,
+        "computed_through_date": None,
+        "replenishment_flag": flag,
+        "replenishment_threshold_weeks": threshold,
+        "reorder_signal": flag,  # alias — prefer replenishment_flag (A3-03)
+        "velocity_grain": "distributor_product",
+        "demand_forecast_units_13w": demand_13w,
+        "woc_source": woc_source,
+        "cover_as_of_date": row.get("cover_as_of_date"),
     }
 
 
@@ -776,6 +816,7 @@ async def channel_ops_movements(
             DimProduct.sales_model_name.label("sales_model_name"),
             DimProduct.name.label("product_name"),
             DimDistributor.name.label("distributor_name"),
+            DimDistributor.code.label("distributor_code"),
             ship_date_col.label("ship_date"),
         )
         .outerjoin(DimProduct, EV.product_id == DimProduct.id)
@@ -791,24 +832,25 @@ async def channel_ops_movements(
     total = int(await db.scalar(select(func.count()).select_from(q.subquery())) or 0)
     rows = (await db.execute(q.order_by(desc(ship_date_col)).offset(skip).limit(page_size))).all()
 
-    items = []
-    for row in rows:
-        line = row[0]
-        items.append(
-            {
-                "product_id": line.product_id,
-                "sku": row.sku,
-                "sales_model_name": row.sales_model_name,
-                "product_name": row.product_name,
-                "order_no": line.order_no,
-                "delivery_no": line.delivery_no,
-                "ship_date": row.ship_date.isoformat() if row.ship_date else None,
-                "units_shipped": float(line.quantity) if line.quantity is not None else None,
-                "line_state": line.line_state,
-                "distributor_name": row.distributor_name,
-            }
-        )
+    items = [channel_movement_row_dict(row[0], row) for row in rows]
     return {"total": total, "page": page, "page_size": page_size, "items": items}
+
+
+def channel_movement_row_dict(line: Any, labels: Any) -> dict[str, Any]:
+    """One channel-ops movement row (grid ``channel-ops.movements``); names and codes come from the list joins."""
+    return {
+        "product_id": line.product_id,
+        "sku": labels.sku,
+        "sales_model_name": labels.sales_model_name,
+        "product_name": labels.product_name,
+        "order_no": line.order_no,
+        "delivery_no": line.delivery_no,
+        "ship_date": labels.ship_date.isoformat() if labels.ship_date else None,
+        "units_shipped": float(line.quantity) if line.quantity is not None else None,
+        "line_state": line.line_state,
+        "distributor_name": labels.distributor_name,
+        "distributor_code": labels.distributor_code,
+    }
 
 
 @router.get("/forecasts")
@@ -994,6 +1036,41 @@ async def _cover_weekly_flow(db: AsyncSession, tid: str, weeks: int = 13) -> dic
     }
 
 
+def cover_item_dict(
+    r: Any,
+    *,
+    distributor: tuple[str, str],
+    product: tuple[str, str, str, str],
+    inbound_open: float,
+    status: str | None,
+    lab_bucket: str | None,
+    today: date,
+) -> dict[str, Any]:
+    """One cover-distribution pair row (grid ``cover.distribution``); product = (sku, name, family, sales model)."""
+    d_code, d_name = distributor
+    sku, p_name, family, sales_model_name = product
+    return {
+        "id": f"{r.distributor_id}-{r.product_id}",
+        "distributor_id": r.distributor_id,
+        "distributor_code": d_code,
+        "distributor_name": d_name or d_code or f"Distributor {r.distributor_id}",
+        "product_id": r.product_id,
+        "sku": sku,
+        "sales_model_name": sales_model_name,
+        "product_name": p_name or sku or f"Product {r.product_id}",
+        "family": family,
+        "weeks_of_cover": r.weeks_of_cover,
+        "derived_stock": r.derived_stock,
+        "weekly_velocity": r.weekly_velocity,
+        "inbound_open": inbound_open,
+        "vintage_days": max(0, (today - r.cover_as_of_date).days),
+        "status": status,
+        "lab_bucket": lab_bucket,
+        "replenishment_flag": r.replenishment_flag,
+        "cover_as_of_date": r.cover_as_of_date.isoformat(),
+    }
+
+
 @router.get("/cover-distribution")
 async def channel_ops_cover_distribution(
     db: AsyncSession = Depends(get_db),
@@ -1101,28 +1178,16 @@ async def channel_ops_cover_distribution(
         )
         dist_pair_counts[r.distributor_id] = dist_pair_counts.get(r.distributor_id, 0) + 1
         family_pair_counts[family] = family_pair_counts.get(family, 0) + 1
-        vintage_days = max(0, (today - r.cover_as_of_date).days)
         items.append(
-            {
-                "id": f"{r.distributor_id}-{r.product_id}",
-                "distributor_id": r.distributor_id,
-                "distributor_code": d_code,
-                "distributor_name": d_name or d_code or f"Distributor {r.distributor_id}",
-                "product_id": r.product_id,
-                "sku": sku,
-                "sales_model_name": sales_model_name,
-                "product_name": p_name or sku or f"Product {r.product_id}",
-                "family": family,
-                "weeks_of_cover": r.weeks_of_cover,
-                "derived_stock": r.derived_stock,
-                "weekly_velocity": r.weekly_velocity,
-                "inbound_open": inbound_open.get((r.distributor_id, r.product_id), 0.0),
-                "vintage_days": vintage_days,
-                "status": status,
-                "lab_bucket": lab_b,
-                "replenishment_flag": r.replenishment_flag,
-                "cover_as_of_date": r.cover_as_of_date.isoformat(),
-            }
+            cover_item_dict(
+                r,
+                distributor=(d_code, d_name),
+                product=(sku, p_name, family, sales_model_name),
+                inbound_open=inbound_open.get((r.distributor_id, r.product_id), 0.0),
+                status=status,
+                lab_bucket=lab_b,
+                today=today,
+            )
         )
 
     pair_count = len(obs)

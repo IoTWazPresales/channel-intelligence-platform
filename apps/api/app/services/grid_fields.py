@@ -19,8 +19,10 @@ from typing import Any, Iterable
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.inspection import inspect as sa_inspect
+from sqlalchemy.orm import Session
 from sqlalchemy.types import JSON
 
+from app.models.commercial_planner import CommercialCustomerTerm
 from app.models.derived import PricingRecommendation
 from app.models.dimensions import DimCustomer, DimDistributor
 from app.models.fact_demand_forecast import FactDemandForecast
@@ -32,6 +34,7 @@ from app.models.facts import (
     FactProductRoadmap,
     FactSalesSellout,
 )
+from app.models.listing_capture import CustomerListing
 
 # Never offered and never merged into rows: tenant scoping, raw source payloads, resolver tokens.
 _ALWAYS_HIDDEN: frozenset[str] = frozenset({"tenant_id", "raw_source_row"})
@@ -64,6 +67,65 @@ INBOUND_GRID_DEFAULT_FACT_KEYS: frozenset[str] = frozenset(
 INBOUND_OPTIONAL_LABEL_OVERRIDES: dict[str, str] = {
     "customer_dealer_token": "Customer remarks (source)",
 }
+
+# Computed-row grids (pass 2): optional keys of rows built by the named serializer, which is not an
+# ORM row. Default grid columns are not listed. ``tests/test_grid_fields.py`` builds a row with that
+# serializer and checks every key here is in it.
+# channel_ops.channel_sellout_row_dict
+CHANNEL_OPS_SELLOUT_STATIC_KEYS: tuple[tuple[str, str], ...] = (
+    ("product_name", "Product"),
+    ("unit_price", "Unit price"),
+)
+# channel_ops.channel_inventory_row_dict (depth-gated default cells are offered too; hosts skip duplicates)
+CHANNEL_OPS_INVENTORY_STATIC_KEYS: tuple[tuple[str, str], ...] = (
+    ("snapshot_date", "Snapshot date"),
+    ("sell_out_since", "Sell-out since snapshot"),
+    ("landed_since", "Landed since snapshot"),
+    ("calculated_soh", "Calculated SOH"),
+    ("variance_units", "Variance"),
+    ("reconciliation_status", "Recon status"),
+    ("velocity_52wk", "Velocity 52wk"),
+    ("weeks_of_cover", "Weeks of cover"),
+    ("demand_forecast_units_13w", "Demand fcst 13w"),
+    ("replenishment_flag", "Replenishment flag"),
+    ("replenishment_threshold_weeks", "Replenishment threshold (weeks)"),
+    ("velocity_grain", "Velocity grain"),
+    ("woc_source", "Cover source"),
+    ("cover_as_of_date", "Cover as of"),
+)
+# plan_vs_executed.pve_drill_row_dict
+PVE_DRILL_STATIC_KEYS: tuple[tuple[str, str], ...] = (
+    ("case_id", "Lineup case"),
+    ("product_name", "Product name"),
+    ("product_sku", "SKU"),
+    ("product_description", "Description"),
+    ("product_marketing_name", "Marketing name"),
+    ("product_sales_model", "Sales model"),
+    ("awaiting_po", "Awaiting PO"),
+    ("planned_value_plan", "Planned value (plan ccy)"),
+    ("shipped_value_plan", "Shipped value (plan ccy)"),
+    ("shipped_value_cost", "Shipped value (cost ccy)"),
+)
+# channel_ops.cover_item_dict
+COVER_DISTRIBUTION_STATIC_KEYS: tuple[tuple[str, str], ...] = (
+    ("family", "Family"),
+    ("lab_bucket", "Cover bucket"),
+    ("replenishment_flag", "Replenishment flag"),
+    ("cover_as_of_date", "Cover as of"),
+)
+# cst_read_model.load_cst_read_model items (compute_entity_metrics + _attach_display_names)
+CHANNEL_INTELLIGENCE_STATIC_KEYS: tuple[tuple[str, str], ...] = (
+    ("reason", "Reason"),
+    ("weeks_of_cover_reason", "WoC reason"),
+    ("aged_dead_stock", "Aged / dead stock"),
+)
+# listing_capture.registry.listing_to_dict (on top of the CustomerListing mapper columns)
+LISTINGS_STATIC_KEYS: tuple[tuple[str, str], ...] = (
+    ("product_sku", "SKU"),
+    ("product_name", "Product name"),
+    ("url_verified_at", "URL verified"),
+    ("original_url", "Original URL"),
+)
 
 
 @dataclass(frozen=True)
@@ -145,6 +207,56 @@ GRID_FIELDS: dict[str, GridFieldSpec] = {
         ),
         joined_extras=CUSTOMER_REFERENCE + DISTRIBUTOR_REFERENCE,
     ),
+    # ── Pass 2: computed rows (static keys) ──
+    "channel-ops.sell-out": GridFieldSpec(
+        model=None,
+        static_keys=CHANNEL_OPS_SELLOUT_STATIC_KEYS,
+        joined_extras=CUSTOMER_CODE_REFERENCE + DISTRIBUTOR_CODE_REFERENCE,
+    ),
+    "channel-ops.movements": GridFieldSpec(
+        model=None,
+        # One distributor per view: its name and code are reference fields, not default cells.
+        joined_extras=DISTRIBUTOR_REFERENCE,
+    ),
+    "channel-ops.inventory": GridFieldSpec(
+        model=None,
+        static_keys=CHANNEL_OPS_INVENTORY_STATIC_KEYS,
+        joined_extras=DISTRIBUTOR_REFERENCE,
+    ),
+    "pve.drill": GridFieldSpec(
+        model=None,
+        static_keys=PVE_DRILL_STATIC_KEYS,
+        joined_extras=CUSTOMER_CODE_REFERENCE,
+    ),
+    "cover.distribution": GridFieldSpec(
+        model=None,
+        static_keys=COVER_DISTRIBUTION_STATIC_KEYS,
+        joined_extras=DISTRIBUTOR_CODE_REFERENCE,
+    ),
+    "channel-intelligence": GridFieldSpec(
+        model=None,
+        static_keys=CHANNEL_INTELLIGENCE_STATIC_KEYS,
+        joined_extras=CUSTOMER_CODE_REFERENCE,
+    ),
+    # ── Pass 2: listings and customer terms ──
+    "listings": GridFieldSpec(
+        model=CustomerListing,
+        default_keys=frozenset({"status", "source"}),
+        # registered_by names a person (user id / email) — [PII]-like, not a grid column.
+        hidden_internal=frozenset({"registered_by"}),
+        static_keys=LISTINGS_STATIC_KEYS,
+        label_overrides={
+            "url": "URL",
+            "external_id": "External ID",
+            "status_observed_at": "Status observed",
+        },
+        joined_extras=CUSTOMER_CODE_REFERENCE,
+    ),
+    # Customer code is already its own default column on this steward grid (D7 met; DESIGN.md row 17).
+    "customer-terms": GridFieldSpec(
+        model=CommercialCustomerTerm,
+        default_keys=frozenset({"customer_margin_pct", "customer_rebate_pct"}),
+    ),
 }
 
 
@@ -215,6 +327,17 @@ async def customer_labels(db: AsyncSession, ids: Iterable[int | None]) -> dict[i
         return {}
     res = await db.execute(select(DimCustomer.id, DimCustomer.code, DimCustomer.name).where(DimCustomer.id.in_(wanted)))
     return {int(r[0]): (r[1], r[2]) for r in res.all()}
+
+
+def customer_labels_sync(session: Session, ids: Iterable[int | None]) -> dict[int, tuple[str, str]]:
+    """Sync-session twin of ``customer_labels`` (one query) for endpoints on ``SessionLocal``."""
+    wanted = sorted({int(i) for i in ids if i is not None})
+    if not wanted:
+        return {}
+    rows = session.execute(
+        select(DimCustomer.id, DimCustomer.code, DimCustomer.name).where(DimCustomer.id.in_(wanted))
+    ).all()
+    return {int(r[0]): (r[1], r[2]) for r in rows}
 
 
 async def distributor_labels(db: AsyncSession, ids: Iterable[int | None]) -> dict[int, tuple[str, str]]:

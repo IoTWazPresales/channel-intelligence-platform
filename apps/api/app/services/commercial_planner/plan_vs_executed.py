@@ -28,6 +28,7 @@ from app.services.commercial_planner.po_management import (
     coverage,
     product_row_matches_group_line,
 )
+from app.services.grid_fields import customer_labels
 from app.services.imports.shipment_evidence_read import (
     apply_active_evidence_filter,
     shipment_evidence_read_model,
@@ -1048,6 +1049,43 @@ async def _compute_trend(
     return trend
 
 
+def pve_drill_row_dict(
+    r: dict[str, Any],
+    display: dict[str, Any],
+    customers: dict[int, tuple[str, str]],
+) -> dict[str, Any]:
+    """One drill row (grid ``pve.drill``). ``customer_label`` is the customer name; the code is its own key."""
+    val = r.get("value") or {}
+    cust_id = r.get("customer_id")
+    code = customers.get(int(cust_id), (None, None))[0] if cust_id is not None else None
+    return {
+        "case_id": r.get("case_id"),
+        "period_label": r.get("quarter_label"),
+        "business_unit_label": r.get("business_unit_label"),
+        "customer_id": cust_id,
+        "customer_label": r.get("customer_label"),
+        "customer_code": code,
+        "product_id": r.get("product_id"),
+        "product_name": r.get("product_name"),
+        "product_sku": r.get("product_sku"),
+        "product_description": r.get("product_description"),
+        "product_marketing_name": r.get("product_marketing_name"),
+        "product_sales_model": r.get("product_sales_model"),
+        "entity_primary": display["entity_primary"],
+        "entity_secondary": display.get("entity_secondary"),
+        "label_fallback": display.get("label_fallback"),
+        "planned_units": r.get("planned_units"),
+        "shipped_units": r.get("shipped_units"),
+        "pipeline_units": r.get("pipeline_units") or 0,
+        "units_flag": r.get("units_flag"),
+        "awaiting_po": r.get("awaiting_po"),
+        "planned_value_plan": val.get("planned_value_plan"),
+        "shipped_value_plan": val.get("shipped_value_plan"),
+        "shipped_value_cost": val.get("shipped_value_cost"),
+        "value": val,
+    }
+
+
 async def plan_vs_executed_read_model(
     db: AsyncSession,
     *,
@@ -1114,37 +1152,16 @@ async def plan_vs_executed_read_model(
             if ((r.get("product_sales_model") or "").strip().lower() or "unspecified sales model") == norm
         ]
 
-    drill_rows = []
-    for r in drill_rows_source:
-        val = r.get("value") or {}
-        display = resolve_product_display(r, product_group_by)
-        drill_rows.append(
-            {
-                "case_id": r.get("case_id"),
-                "period_label": r.get("quarter_label"),
-                "business_unit_label": r.get("business_unit_label"),
-                "customer_id": r.get("customer_id"),
-                "customer_label": r.get("customer_label"),
-                "product_id": r.get("product_id"),
-                "product_name": r.get("product_name"),
-                "product_sku": r.get("product_sku"),
-                "product_description": r.get("product_description"),
-                "product_marketing_name": r.get("product_marketing_name"),
-                "product_sales_model": r.get("product_sales_model"),
-                "entity_primary": display["entity_primary"],
-                "entity_secondary": display.get("entity_secondary"),
-                "label_fallback": display.get("label_fallback"),
-                "planned_units": r.get("planned_units"),
-                "shipped_units": r.get("shipped_units"),
-                "pipeline_units": r.get("pipeline_units") or 0,
-                "units_flag": r.get("units_flag"),
-                "awaiting_po": r.get("awaiting_po"),
-                "planned_value_plan": val.get("planned_value_plan"),
-                "shipped_value_plan": val.get("shipped_value_plan"),
-                "shipped_value_cost": val.get("shipped_value_cost"),
-                "value": val,
-            }
-        )
+    # Customer codes for the drill grid's Reference column: one batched query (N-0034).
+    try:
+        drill_customers = await customer_labels(db, (r.get("customer_id") for r in drill_rows_source))
+    except Exception:
+        logger.exception("plan_vs_executed drill customer codes failed")
+        drill_customers = {}
+    drill_rows = [
+        pve_drill_row_dict(r, resolve_product_display(r, product_group_by), drill_customers)
+        for r in drill_rows_source
+    ]
 
     drill_context: dict[str, Any] = {
         "customer_id": drill_customer_id,

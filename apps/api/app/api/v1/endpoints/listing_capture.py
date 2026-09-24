@@ -29,6 +29,7 @@ from app.services.listing_capture.registry import (
     reparse_observation,
     set_listing_status,
 )
+from app.services.grid_fields import customer_labels_sync, fact_row_dict, reference_fields
 from sqlalchemy import select
 
 router = APIRouter()
@@ -69,6 +70,21 @@ def listing_meta():
     }
 
 
+def listing_grid_row_dict(
+    row: CustomerListing,
+    *,
+    products: dict[int, tuple[str | None, str | None]],
+    last_ok_fetch: dict,
+    customers: dict[int, tuple[str, str]],
+) -> dict:
+    """Listings grid row (grid ``listings``): registry columns under ``listing_to_dict``, plus customer name and code."""
+    return {
+        **fact_row_dict(row, "listings"),
+        **listing_to_dict(row, products=products, last_ok_fetch=last_ok_fetch),
+        **reference_fields(customer_id=row.customer_id, customers=customers),
+    }
+
+
 @router.get("/listings")
 def list_listings(
     customer_id: int | None = Query(default=None),
@@ -94,8 +110,12 @@ def list_listings(
         page_rows = rows[start : start + page_size]
         products = product_labels(session, [r.product_id for r in page_rows])
         last_ok = last_ok_fetch_by_listing(session, [r.id for r in page_rows])
+        customers = customer_labels_sync(session, [r.customer_id for r in page_rows])
         return {
-            "items": [listing_to_dict(r, products=products, last_ok_fetch=last_ok) for r in page_rows],
+            "items": [
+                listing_grid_row_dict(r, products=products, last_ok_fetch=last_ok, customers=customers)
+                for r in page_rows
+            ],
             "total": total,
             "page": page,
             "page_size": page_size,

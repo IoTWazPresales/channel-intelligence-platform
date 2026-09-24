@@ -85,6 +85,7 @@ from app.services.commercial_planner.lineup_po_gap import (
     restore_gap_po,
 )
 from app.services.commercial_planner.lineup_po_auto_link import po_auto_link_proposals
+from app.services.grid_fields import fact_row_dict
 from app.services.imports.shipment_po_normalization import normalize_po_number
 from app.services.commercial_planner.lineup_po_auto_link_actions import (
     ProposalNotFoundError,
@@ -1491,7 +1492,12 @@ async def list_customer_terms(
         needle = f"%{q.strip()}%"
         stmt = stmt.where(or_(DimCustomer.code.ilike(needle), DimCustomer.name.ilike(needle)))
     rows = (await db.execute(stmt)).all()
-    return [_customer_term_json(t, code, name) for t, code, name in rows]
+    return [customer_term_grid_row_dict(t, code, name) for t, code, name in rows]
+
+
+def customer_term_grid_row_dict(row: CommercialCustomerTerm, customer_code: str, customer_name: str) -> dict:
+    """Customer-terms grid row (grid ``customer-terms``): registry columns under ``_customer_term_json``."""
+    return {**fact_row_dict(row, "customer-terms"), **_customer_term_json(row, customer_code, customer_name)}
 
 
 @router.post("/customer-terms", status_code=201)

@@ -12,15 +12,27 @@ from fastapi.testclient import TestClient
 
 from app.api.deps import get_db
 from app.api.v1.endpoints.buy_plans import buy_plan_row_dict
+from app.api.v1.endpoints.channel_ops import (
+    channel_inventory_row_dict,
+    channel_movement_row_dict,
+    channel_sellout_row_dict,
+    cover_item_dict,
+)
+from app.api.v1.endpoints.commercial_planner import customer_term_grid_row_dict
 from app.api.v1.endpoints.forecasts import forecast_row_dict
 from app.api.v1.endpoints.inventory import inventory_customer_row_dict
+from app.api.v1.endpoints.listing_capture import listing_grid_row_dict
 from app.api.v1.endpoints.pricing import pricing_fact_row_dict, pricing_recommendation_row_dict
 from app.api.v1.endpoints.roadmap import roadmap_row_dict
 from app.api.v1.endpoints.sellout import commercial_line_row_dict
 from app.api.v1.endpoints.shipping import _fact_to_dict
 from app.main import app
+from app.models.commercial_planner import CommercialCustomerTerm
 from app.models.derived import PricingRecommendation
 from app.models.dimensions import DimCustomer, DimProduct
+from app.models.listing_capture import CustomerListing
+from app.services.channel_intelligence.cst_read_model import _attach_display_names, compute_entity_metrics
+from app.services.commercial_planner.plan_vs_executed import pve_drill_row_dict, resolve_product_display
 from app.models.fact_demand_forecast import FactDemandForecast
 from app.models.facts import (
     FactBuyPlan,
@@ -33,6 +45,7 @@ from app.models.facts import (
 from app.services.grid_fields import (
     GRID_FIELDS,
     customer_labels,
+    customer_labels_sync,
     fact_row_dict,
     grid_field_items,
     model_field_keys,
@@ -42,6 +55,69 @@ NOW = datetime(2026, 9, 24, 8, 0, tzinfo=timezone.utc)
 PROD = DimProduct(id=7, sku="SKU-7", sales_model_name="Model 7", name="Product 7")
 CUSTOMERS = {3: ("CUST-3", "Customer Three")}
 DISTRIBUTORS = {5: ("DIST-5", "Distributor Five")}
+
+
+def _computed_rows(sellout: FactSalesSellout, labels: SimpleNamespace) -> dict[str, dict]:
+    """Pass-2 grids: one row per grid from the endpoint's own serializer (no DB)."""
+    move_line = SimpleNamespace(product_id=7, order_no="SO-1", delivery_no="D-1", quantity=5, line_state="shipped")
+    move_labels = SimpleNamespace(
+        sku="SKU-7", sales_model_name="Model 7", product_name="Product 7", ship_date=date(2026, 9, 3),
+        distributor_name="Distributor Five", distributor_code="DIST-5",
+    )
+    inv_row = {
+        "distributor_id": 5, "product_id": 7, "snapshot_date": "2026-09-01", "reported_soh": 10,
+        "sell_out_since": 2, "landed_since": 1, "derived_stock": 9, "cover_as_of_date": "2026-09-20",
+    }
+    obs = SimpleNamespace(
+        distributor_id=5, product_id=7, weeks_of_cover=3.2, derived_stock=9.0, weekly_velocity=2.8,
+        replenishment_flag=True, cover_as_of_date=date(2026, 9, 20),
+    )
+    execution_row = {
+        "case_id": 11, "quarter_label": "2026-Q3", "business_unit_label": "NB", "customer_id": 3,
+        "customer_label": "Customer Three", "product_id": 7, "product_name": "Product 7", "product_sku": "SKU-7",
+        "planned_units": 10, "shipped_units": 8, "units_flag": "short", "awaiting_po": False,
+        "value": {"planned_value_plan": 100.0},
+    }
+    cst_session = MagicMock()
+    cst_session.execute.side_effect = [
+        [SimpleNamespace(id=3, code="CUST-3", name="Customer Three")],
+        [SimpleNamespace(id=7, sku="SKU-7", name="Product 7", sales_model_name="Model 7")],
+    ]
+    cst_items = [{"customer_id": 3, "product_id": 7, "site_label": None, **compute_entity_metrics([])}]
+    _attach_display_names(cst_session, cst_items)
+    listing = CustomerListing(
+        id=12, customer_id=3, product_id=7, url="https://example.test/p/7", marketplace="takealot", status="active",
+        source="manual", registered_by="someone", registered_at=NOW, external_id="PLID7", notes="n",
+        meta_json={"original_url": "https://example.test/old"}, created_at=NOW, updated_at=NOW,
+    )
+    term = CommercialCustomerTerm(
+        id=13, customer_id=3, customer_margin_pct=0.12, customer_rebate_pct=0.03, target_cover_weeks=6,
+        created_at=NOW, updated_at=NOW,
+    )
+    return {
+        "channel-ops.sell-out": channel_sellout_row_dict(sellout, SimpleNamespace(
+            sku="SKU-7", sales_model_name="Model 7", product_name="Product 7", customer_name="Customer Three",
+            customer_code="CUST-3", distributor_name="Distributor Five", distributor_code="DIST-5",
+        ), None),
+        "channel-ops.movements": channel_movement_row_dict(move_line, move_labels),
+        "channel-ops.inventory": channel_inventory_row_dict(
+            inv_row, product=("SKU-7", "Product 7", "Model 7"), distributor=("DIST-5", "Distributor Five"),
+            velocity_52wk=2.0, weeks_of_cover=4.5, flag=False, threshold=4.0, demand_13w=12.0,
+            woc_source="observations",
+        ),
+        "pve.drill": pve_drill_row_dict(
+            execution_row, resolve_product_display(execution_row, "description"), CUSTOMERS
+        ),
+        "cover.distribution": cover_item_dict(
+            obs, distributor=("DIST-5", "Distributor Five"), product=("SKU-7", "Product 7", "NB", "Model 7"),
+            inbound_open=3.0, status="watch", lab_bucket="2–4w", today=date(2026, 9, 24),
+        ),
+        "channel-intelligence": cst_items[0],
+        "listings": listing_grid_row_dict(
+            listing, products={7: ("SKU-7", "Product 7")}, last_ok_fetch={}, customers=CUSTOMERS
+        ),
+        "customer-terms": customer_term_grid_row_dict(term, "CUST-3", "Customer Three"),
+    }
 
 
 def _seeded_rows() -> dict[str, dict]:
@@ -82,6 +158,7 @@ def _seeded_rows() -> dict[str, dict]:
     )
     inbound = FactInboundShipment(id=9, source_key="s9", line_state="open", status="shipped", raw_source_row={})
     return {
+        **_computed_rows(sellout, labels),
         "sellout.commercial-lines": commercial_line_row_dict(sellout, labels),
         "inventory.customer": inventory_customer_row_dict(inv, PROD, DimCustomer(id=3, code="CUST-3", name="Customer Three")),
         "pricing.facts": pricing_fact_row_dict(price, PROD, CUSTOMERS),
@@ -130,6 +207,13 @@ def test_every_item_is_default_hidden_and_grouped(grid_id: str) -> None:
         ("buy-plans", {"distributor_code"}),
         ("forecasts", {"customer_code", "distributor_code"}),
         ("inbound-shipments", {"customer_code", "distributor_code"}),
+        ("channel-ops.sell-out", {"customer_code", "distributor_code"}),
+        ("channel-ops.movements", {"distributor_code"}),
+        ("channel-ops.inventory", {"distributor_code"}),
+        ("pve.drill", {"customer_code"}),
+        ("cover.distribution", {"distributor_code"}),
+        ("channel-intelligence", {"customer_code"}),
+        ("listings", {"customer_code"}),
     ],
 )
 def test_codes_are_reference_fields(grid_id: str, codes: set[str]) -> None:
@@ -228,3 +312,56 @@ def test_inbound_alias_matches_registry_fact_group(client: TestClient) -> None:
     assert {"line_state", "eta_date", "tenant_id"}.isdisjoint(fields)
     labels = {it["field"]: it["label"] for it in alias}
     assert labels["customer_dealer_token"] == "Customer remarks (source)"
+
+
+# ── Pass 2 (computed rows, listings, customer terms) ──
+
+
+def test_listings_hide_person_and_json_columns() -> None:
+    keys = set(model_field_keys(GRID_FIELDS["listings"]))
+    assert "registered_by" not in keys  # names a person
+    assert "meta_json" not in keys  # JSONB blob
+    offered = {it["field"] for it in grid_field_items(GRID_FIELDS["listings"])}
+    assert {"url", "marketplace", "external_id", "url_verified_at", "original_url"} <= offered
+    row = _seeded_rows()["listings"]
+    assert row["customer_name"] == "Customer Three"  # joined server-side now, not only client-side
+    assert row["original_url"] == "https://example.test/old"
+
+
+def test_customer_labels_sync_is_one_batched_query() -> None:
+    session = MagicMock()
+    session.execute.return_value.all.return_value = [(3, "CUST-3", "Customer Three")]
+    assert customer_labels_sync(session, [3, 3, None]) == {3: ("CUST-3", "Customer Three")}
+    assert session.execute.call_count == 1
+    assert customer_labels_sync(session, [None]) == {}
+    assert session.execute.call_count == 1
+
+
+def test_pve_drill_customer_label_stays_name_only() -> None:
+    row = _seeded_rows()["pve.drill"]
+    assert row["customer_label"] == "Customer Three"
+    assert row["customer_code"] == "CUST-3"
+    missing = pve_drill_row_dict({"customer_id": 99}, {"entity_primary": "x"}, CUSTOMERS)
+    assert missing["customer_code"] is None
+
+
+def test_computed_grids_offer_only_declared_keys() -> None:
+    for grid_id in (
+        "channel-ops.sell-out",
+        "channel-ops.movements",
+        "channel-ops.inventory",
+        "pve.drill",
+        "cover.distribution",
+        "channel-intelligence",
+    ):
+        spec = GRID_FIELDS[grid_id]
+        assert spec.model is None
+        offered = {it["field"] for it in grid_field_items(spec)}
+        assert offered == {k for k, _ in spec.static_keys} | {k for k, _ in spec.joined_extras}
+
+
+def test_customer_terms_keep_code_as_default_column() -> None:
+    offered = {it["field"] for it in grid_field_items(GRID_FIELDS["customer-terms"])}
+    assert "customer_code" not in offered  # already a default column on the steward grid
+    assert {"target_cover_weeks", "created_at", "updated_at"} <= offered
+    assert _seeded_rows()["customer-terms"]["customer_margin_pct"] == 0.12
