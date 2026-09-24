@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1167
-  log_sha256: 57b40cac3ba4f7a7d43dde0b3d3813b6ee735a831c642ab8e740207297e206ea
+  snapshot_revision: 1179
+  log_sha256: e683399558662649b8486e9531b018ea9045b4cc580f0aa1d5c3add706370fbd
   acceptance_policy:
     milestone: operator
     root: operator
@@ -6279,9 +6279,9 @@ nodes:
     title: Listing links open the real product page (Market & Listings bug)
     class: feature
     origin: operator
-    status: in_progress
-    stage: validate
-    revision: 5
+    status: complete
+    stage: null
+    revision: 14
     lease: null
     depends_on:
     - N-0038
@@ -6310,35 +6310,87 @@ nodes:
     quality:
       testing:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0039_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: 39 backend pytest + 6 frontend vitest tests, all passing, cover the auto_finder fix, record_observation
+            write-back/dead-link/conflict logic, and ListingUrl's verified/unverified/dead states plus an XSS guard.
         rationale: null
+        pass_run: GOV008_N0039_20260924
+        pass_actor: gov-008-n0039-sonnet
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: na
+        evidence:
+          path: .eif/audit/GOV008_N0039_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: No new logs/metrics/dashboards added or required.
+        rationale: The acceptance criteria for N-0039 are about URL correctness and link-state presentation, not diagnosability;
+          existing parse_flags diagnostic fields (fetch_reason, details_status) were preserved incidentally but there is no
+          new observability surface to assess.
       ux:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0039_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: UI now distinguishes verified (real anchor + verification-time tooltip), unverified (plain text + explanatory
+            tooltip), and dead (plain text + Dead link) instead of presenting every stored URL as an equally trustworthy plain
+            string.
         rationale: null
+        pass_run: GOV008_N0039_20260924
+        pass_actor: gov-008-n0039-sonnet
       a11y:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0039_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: Verified links render as real focusable <a> via MUI Link; non-link states use Tooltip-wrapped span plus
+            a text-labeled StatusChip, so the distinction does not rely on color alone.
         rationale: null
+        pass_run: GOV008_N0039_20260924
+        pass_actor: gov-008-n0039-sonnet
       rendered:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence: &id024
+          path: .eif/audit/GOV008_N0039_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: Independent live render performed in this GOV-008 session (separate run from implementation) against the
+            running app and real cip data, confirming the Takealot unverified/non-anchor behavior end-to-end.
         rationale: null
+        pass_run: GOV008_N0039_20260924
+        pass_actor: gov-008-n0039-sonnet
       content:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0039_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: '"Unverified link" / "Dead link" labels and tooltip copy are plain, non-alarming, and correctly scoped
+            to link verification state rather than listing status.'
         rationale: null
-    verification: {}
+        pass_run: GOV008_N0039_20260924
+        pass_actor: gov-008-n0039-sonnet
+    verification:
+      rendered:
+        state: pass
+        pass_run: GOV008_N0039_20260924
+        pass_actor: gov-008-n0039-sonnet
+        evidence: *id024
+        path: null
+      referent:
+        state: pass
+        pass_run: GOV008_N0039_20260924
+        pass_actor: gov-008-n0039-sonnet
+        evidence:
+          path: .eif/audit/GOV008_N0039_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: All cited commit hashes (fc69fda3, b17e950, bfd0c44), file:line evidence, and read-only SQL against cip
+            are independently reproducible; re-ran the SQL and test commands myself this session.
+        path: null
     evidence: []
     blockers: []
     conservation_tags: []
@@ -6439,7 +6491,7 @@ nodes:
       rendered:
         required: true
         state: pass
-        evidence: &id024
+        evidence: &id025
           path: .eif/audit/GOV008_N0040_20260924/REVIEW.md
           verdict: VERIFIED_WITH_LIMITATIONS
           summary: Own Chrome tab on 127.0.0.1:3000/admin/imports; endpoint fetched live (14 codes, null 10); dialog opened
@@ -6463,7 +6515,7 @@ nodes:
         state: pass
         pass_run: GOV008_N0040_20260924
         pass_actor: gov-008-n0040
-        evidence: *id024
+        evidence: *id025
         path: null
       referent:
         state: pass
@@ -7075,13 +7127,9 @@ nodes:
     class: feature
     origin: operator
     status: in_progress
-    stage: implement
-    revision: 3
-    lease:
-      run: N0050_IMPL_20260924
-      acquired_at: '2026-09-24T13:13:24Z'
-      heartbeat_at: '2026-09-24T13:13:24Z'
-      expires_at: '2026-09-24T16:13:24Z'
+    stage: validate
+    revision: 5
+    lease: null
     depends_on:
     - N-0049
     facets:
@@ -7121,9 +7169,11 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Pipelined (ordering-only deps). Warren 21 Sep: BACKLOG-137 migration approved - write and prove on cip_test;
-      alembic upgrade on cip needs an explicit run (listed ready-for-cip). Implementation by fresh subagent (database-specialist,
-      backend-engineer, test-engineering-specialist), run N0050_IMPL_20260924.'
+    stage_note: 'Implemented at d8b2e7ac: alembic 20260924_0023 (window_start/window_end NOT NULL backfilled from case window
+      as-is; grain uq_cpor_case_line_grain + window_start; CHECK window_end>=window_start; lossless-or-refuse downgrade);
+      writers default to case window; claim rollup uses line windows; straddling weeks FLAGged, never pro-rated. Proven on
+      cip_test only (upgrade/downgrade/upgrade with copied rows, then cleaned). NOT applied to cip; ready-for-cip in IMPL.md.
+      Questions D-0036. Independent review next.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -8910,6 +8960,19 @@ decisions:
       historical import job overwrites status on existing historical_import cases (historical_import/apply_sync.py:204); re-running
       job 978 would reset cases 309/310/311 to ended and lose their settle/cancel. Should re-import skip cases with lifecycle
       transitions after the import? Not changed; needs a decision.'
+    origin: agent
+    status: proposed
+    supersedes: null
+  D-0036:
+    id: D-0036
+    scope: N-0050
+    statement: 'N-0050 line-window questions for Warren (n0050/IMPL.md): (1) 292 of 309 cases with lines have non-week-aligned
+      case windows; lines copy the case window as-is and are flagged window_week_straddle. For a future supersede: keep case
+      start/end days, snap to Mon-Sun, or treat the case''s own weekday cycle as its week? (2) out-of-window override claims
+      when a product has two windows - last line, nearest line, or operator picks? (now reported unplaced, not counted; no
+      cip data affected today). (3) add overlap enforcement (gist exclusion or service check) with the supersede writer? (4)
+      historical staging rows carry their own windows - keep per-row windows for historical lines? (5) pre-existing: 2 duplicate-grain
+      groups with NULL pod_quarter on cip.'
     origin: agent
     status: proposed
     supersedes: null
