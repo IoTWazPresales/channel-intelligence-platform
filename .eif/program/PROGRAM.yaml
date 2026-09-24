@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1087
-  log_sha256: 61da5ff7a6ebb26efa95c9f23291dc9c7c3ed0673704431608513fb3637b6eda
+  snapshot_revision: 1102
+  log_sha256: 8ea664857e6768a7a98f4dd40b886c204cf37499b82bee6d37856dfb94608822
   acceptance_policy:
     milestone: operator
     root: operator
@@ -6034,9 +6034,9 @@ nodes:
     title: 'Stage 3.4: login rate limit and lockout'
     class: feature
     origin: operator
-    status: in_progress
-    stage: validate
-    revision: 6
+    status: complete
+    stage: null
+    revision: 12
     lease: null
     depends_on:
     - N-0033
@@ -6063,25 +6063,76 @@ nodes:
     quality:
       testing:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0037_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: pytest apps/api/tests/test_auth_login_throttle.py test_session_gate.py test_auth_password_roles.py -q =>
+            22 passed. New suite covers throttle trip/Retry-After decay, lockout-refuses-correct-password + reset-after-window,
+            success resets counter, per-address throttle w/ config override, non-enumeration (status/body/timing spy), structured
+            logging w/o raw email, disable flag, stub-mode unaffected, and 7 parametrized client_address/XFF cases.
         rationale: null
+        pass_run: GOV008_N0037_20260924
+        pass_actor: gov-008-n0037-sonnet
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0037_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: 'Lockout and throttled events logged as structured warnings with HMAC (per-process-peppered, non-reversible)
+            account_key/address_key, never raw email/password; verified by test and by reading login_throttle.py. Gap (not
+            a criterion failure): only threshold-crossing failures are logged, so sub-threshold/low-and-slow guessing produces
+            no log signal.'
+        rationale: no acceptance criterion requires per-attempt audit logging; recorded as a limitation.
+        pass_run: GOV008_N0037_20260924
+        pass_actor: gov-008-n0037-sonnet
       security:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0037_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: 'Pre-check before password verify, constant-shape dummy PBKDF2 hash for unknown users (closes both status/body
+            and timing enumeration channels), HMAC log keys, in-memory-only state (no cip write), bounded key count (10k)
+            against memory exhaustion. Residual: web proxy (apps/web/src/app/api/v1/[[...path]]/route.ts) forwards client-supplied
+            X-Forwarded-For verbatim and never sets its own, so in the documented loopback-proxy topology the per-address
+            throttle key is attacker-controlled (spoofable/bypassable, and can be used to frame/lock out a victim IP). Implementer''s
+            own code comment already discloses this; treated as residual risk, not a criterion fail, since the per-account
+            limit (the primary control) does not depend on address.'
         rationale: null
+        pass_run: GOV008_N0037_20260924
+        pass_actor: gov-008-n0037-sonnet
       threat:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0037_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: 'Threat model sound for stated scope (single-account credential stuffing). Residual risks recorded: XFF
+            spoofing defeats per-address throttle and can DoS a shared-NAT victim address (see quality.security); single-process/in-memory
+            counters mean a multi-worker or multi-instance deployment without a shared store would divide the effective limit
+            by worker count (not checked against actual deployment config, out of scope for this review); counters clear on
+            process restart; shared-IP collateral lockout is an inherent IP-throttling trade-off, not a defect.'
+        rationale: none of these are AC failures; recorded for the risk register per the brownfield/no-self-authorized-scope-expansion
+          rule.
+        pass_run: GOV008_N0037_20260924
+        pass_actor: gov-008-n0037-sonnet
+    verification:
+      referent:
+        state: pass
+        pass_run: GOV008_N0037_20260924
+        pass_actor: gov-008-n0037-sonnet
+        evidence:
+          path: .eif/audit/GOV008_N0037_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: 'Fresh session, did not read n0037/IMPL.md or implementer stage notes. Re-executed material evidence directly:
+            git show 76316728 (full diff of all 6 changed files), ran the required pytest command myself (22 passed), and
+            issued 7 live wrong-password POSTs to the running API at 127.0.0.1:8001 (all @example.invalid fake emails, no
+            real password used) to independently observe the 401->429 transition, Retry-After header, and byte-identical unknown-vs-unknown
+            response bodies. R2 node: same-model fresh-session independence used (no independent second model available in
+            this environment); recorded as the rung actually used, not upgraded to R3-style independent-model verification.'
+        path: null
     evidence: []
     blockers: []
     conservation_tags: []
@@ -6185,10 +6236,14 @@ nodes:
     title: Listing links open the real product page (Market & Listings bug)
     class: feature
     origin: operator
-    status: proposed
-    stage: null
-    revision: 0
-    lease: null
+    status: in_progress
+    stage: implement
+    revision: 3
+    lease:
+      run: N0039_IMPL_20260924
+      acquired_at: '2026-09-24T08:48:33Z'
+      heartbeat_at: '2026-09-24T08:48:33Z'
+      expires_at: '2026-09-24T10:48:33Z'
     depends_on:
     - N-0038
     facets:
@@ -6209,7 +6264,7 @@ nodes:
     - Any repair of stored rows on cip is proven on a clone and listed for Warren, not applied
     - Nothing writes to cip; read-only SQL prints current_database() first
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-0008
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
@@ -6249,24 +6304,35 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: 'Pipelined (ordering-only dependency on N-0038, disjoint files). Discovery EV: n0039/DISCOVERY.md (read-only
+      seat). Implementation by fresh subagent (backend-engineer, frontend-engineer, test-engineering-specialist), run N0039_IMPL_20260924.
+      cip repair only proven on a scratch/clone DB and listed for Warren.'
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      price_capture: unchanged
+      amazon_evetech: unchanged
+      lifecycle: observed, never deleted
     target_artifact_class: null
     design_artifact_class: null
+    implementation_run: N0039_IMPL_20260924
+    implementation_actor: impl-n0039
   N-0040:
     id: N-0040
     parent: null
     title: 'D-g: sellable BU grain is every dim_product.product_line (five-line assumption sweep)'
     class: feature
     origin: operator
-    status: proposed
-    stage: null
-    revision: 0
-    lease: null
+    status: in_progress
+    stage: implement
+    revision: 3
+    lease:
+      run: N0040_IMPL_20260924
+      acquired_at: '2026-09-24T08:54:38Z'
+      heartbeat_at: '2026-09-24T08:54:38Z'
+      expires_at: '2026-09-24T10:54:38Z'
     depends_on:
     - N-0039
     facets:
@@ -6284,7 +6350,7 @@ nodes:
       for Warren, not applied
     - Nothing writes to cip; read-only SQL prints current_database() first
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-0009
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
@@ -6324,14 +6390,21 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: 'Pipelined (ordering-only dependency on N-0039; disjoint files). Discovery: n0040/DISCOVERY.md. Implementation
+      by fresh subagent (backend-engineer, frontend-engineer, test-engineering-specialist), run N0040_IMPL_20260924. Supersession
+      behaviour proven on a clone before/after (D-g).'
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      supersession: persisted links unchanged
+      product_tier: unchanged
+      manual_override: unchanged
     target_artifact_class: null
     design_artifact_class: null
+    implementation_run: N0040_IMPL_20260924
+    implementation_actor: impl-n0040
   N-0041:
     id: N-0041
     parent: null
@@ -9001,6 +9074,34 @@ baselines:
     observed_behavior: '2026-09-24: cpor_cases.py, cpor_exports.py, cpor_fx.py, cpor_historical_import.py, cpor_payment_evidence.py
       have 0 require_roles / Role.* checks; any signed-in user can write. shipment_evidence.py steward panels are ADMIN-only
       (BACKLOG-141). Roles: admin, steward, planner, viewer (core/security.py:18).'
+  BLN-0008:
+    id: BLN-0008
+    provenance: implementation-observation
+    tree_hash: ab7c21c6
+    latent_capabilities: []
+    preservation:
+      price_capture: Takealot price capture via REST product-details + EAN search keeps working
+      amazon_evetech: Amazon /dp/ and Evetech URL fetch unchanged
+      lifecycle: listing rows observed, never deleted
+    path: .eif/audit/PROGRAMME_20260924/n0039/DISCOVERY.md
+    observed_behavior: '2026-09-24 (cip read-only): 79/79 takealot customer_listing.url = https://www.takealot.com/PLID||external_id
+      where external_id is a SKU (auto_finder.py:15-18,46-51); /PLID<n> routes to Takealot seo-landing even for valid PLIDs;
+      resolved PLID stored only in meta_json.takealot_plid (21 rows); dead_link never set for takealot (registry.py:340-342);
+      MarketSurface renders url as plain text (:472, :1348, :1441), no verified/unverified distinction.'
+  BLN-0009:
+    id: BLN-0009
+    provenance: implementation-observation
+    tree_hash: ab7c21c6
+    latent_capabilities: []
+    preservation:
+      supersession: persisted superseded_by_case_id links unchanged (7 pairs)
+      product_tier: resolver tier 1 (product, >=25% rows) unchanged
+      manual_override: manual BU override accepts any code
+    path: .eif/audit/PROGRAMME_20260924/n0040/DISCOVERY.md
+    observed_behavior: '2026-09-24: three hardcoded line sets - lineup_business_unit_resolution.py:33 {NB,NR,NX,NV} (default
+      when tenant_bu_codes None; omits PF, XB), lineup_backfill_archive_config.py:14 6 codes, pm_mapping_memory.py:19-34 14
+      codes; web BulkLineupBackfillDialog.tsx:55 and lineupBackfillArchivePath.ts:3 6 codes; lineup_period_inference.py:21
+      {Gaming,Consumer,NV,NB}. dim_product.product_line: 14 values + 10 NULL (test rows).'
 caveats:
   consult_model_logged:
     key: consult_model_logged
@@ -9100,6 +9201,18 @@ deferred_findings:
   node: N-0035
   run: GOV008_N0035_20260924
   actor: gov-008-n0035
+  status: deferred
+- seq: 1098
+  code: DOES_NOT_FIT
+  note: 'Residual risk (GOV008_N0037_20260924): the web proxy apps/web/src/app/api/v1/[[...path]]/route.ts forwards a client-supplied
+    X-Forwarded-For verbatim (Next fills XFF only when absent), so behind the proxy the per-address login throttle key is
+    attacker-controlled: bypassable, and can frame/lock out a victim address. Per-account limit (primary control) is unaffected.
+    Also: counters are in-memory per process (reset on restart; a multi-worker deployment divides the effective limit); sub-threshold
+    guessing is not logged. Candidate follow-up: proxy overwrites XFF with the socket address it saw, or a shared store. For
+    RISK_REGISTER once it is populated.'
+  node: N-0037
+  run: GOV008_N0037_20260924
+  actor: gov-008-n0037-sonnet
   status: deferred
 ids:
   node: 5
