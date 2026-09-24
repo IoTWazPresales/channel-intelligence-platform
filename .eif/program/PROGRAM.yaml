@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1054
-  log_sha256: 43e299f6264aebc04dbe49420207891a3925dbbafa69c390e7ccd38c6bb2554f
+  snapshot_revision: 1071
+  log_sha256: 7f310e1685378f38a45175e6c848c98421c1e0d63420282003935c59f9ad92a3
   acceptance_policy:
     milestone: operator
     root: operator
@@ -5082,9 +5082,9 @@ nodes:
     title: Grid community clipboard in one wrapper, Case book working content first
     class: feature
     origin: decomposition
-    status: in_progress
-    stage: validate
-    revision: 46
+    status: complete
+    stage: null
+    revision: 54
     lease: null
     depends_on:
     - N-0027
@@ -5126,45 +5126,48 @@ nodes:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          summary: 'GOV-008: Case book strip/rail/scope/grid above the fold; overlay/ageing below. Unmatched C19A50693 is
-            a link to payment-evidence-import?code=; page does not read code (unfiltered wizard). AgGridReact only in EnterpriseDataGrid.
-            Do not complete.'
+          path: .eif/audit/GOV008_N0029_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: 'Case book order is HeadlineStrip, then lifecycle caption and rail, then ScopeBar, then grid, then overlay,
+            ageing and blocked panels. Unmatched and pending Case ID rows are real links. Minor: a text-selection drag also
+            fires onRowClicked and opens the case drawer.'
         rationale: null
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+        pass_run: GOV008_N0029_20260924
+        pass_actor: gov-008-n0029
       a11y:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          summary: Clicked controls were real links/buttons. Keyboard/axe full pass not this session.
+          path: .eif/audit/GOV008_N0029_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: PanelRows render as NextLink anchors with accessible names from their primary text (e.g. 'C25B01857 · to_be_clarified').
+            Rows have a pointer cursor. Keyboard activation of grid rows was not tested and predates this scope (ASSERTED).
         rationale: null
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+        pass_run: GOV008_N0029_20260924
+        pass_actor: gov-008-n0029
       rendered:
         required: true
         state: pass
         evidence: &id019
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          url: http://localhost:3000/commercial-planner/cpor-cases
+          path: .eif/audit/GOV008_N0029_20260924/REVIEW.md
           verdict: VERIFIED_WITH_LIMITATIONS
-          clicks:
-          - /commercial-planner/cpor-cases/payment-evidence-import?code=C19A50693
+          summary: 'Clicked unmatched C19B54067: URL became payment-evidence-import?code=C19B54067 and the focus shows 1 row,
+            unlinked. Clicked linked pending C25B01857: URL became ?case=244 and the drawer opened. Mouse-drag selection inside
+            a cell returned ''6,231.52 · $ 9''. Row cursor is pointer.'
         rationale: null
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+        pass_run: GOV008_N0029_20260924
+        pass_actor: gov-008-n0029
       content:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          summary: 'GOV-008: Case book strip/rail/scope/grid above the fold; overlay/ageing below. Unmatched C19A50693 is
-            a link to payment-evidence-import?code=; page does not read code (unfiltered wizard). AgGridReact only in EnterpriseDataGrid.
-            Do not complete.'
+          path: .eif/audit/GOV008_N0029_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: The lifecycle note is a caption, not an Alert. The payment-evidence focus Alert reads 'exact match only.
+            This page does not mint a CIP case.' and the overlay copy says 'not minted as cpor_case'.
         rationale: null
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+        pass_run: GOV008_N0029_20260924
+        pass_actor: gov-008-n0029
       design_artifact_class:
         required: false
         state: pass
@@ -5187,18 +5190,18 @@ nodes:
         pass_actor: gov-008
       design_signatures:
         required: false
-        state: pending
+        state: pass
         evidence:
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          stale_pass_run: GOV008_N0025_N0029_20260915
-          stale_signatures:
-          - grid_above_fold
-          - unmatched_case_id_link
-          - payment_evidence_code_unread
-          superseded_signature: payment_evidence_code_unread
-          superseded_by: aee82a72
+          path: .eif/audit/GOV008_N0029_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: 'Observed: single_community_grid_wrapper, pointer_cursor_on_clickable_rows, lifecycle_caption_not_alert,
+            unmatched_case_id_link (working, ?code= for unlinked and ?case= for linked), payment_evidence_reads_code (yes,
+            exact-only, no mint), grid_above_fold (marginal at 1280x800: header plus clipped first row; overlay below the
+            fold).'
         rationale: GOV-008 design_signatures still lists payment_evidence_code_unread, superseded by aee82a7 (exact Case ID
           overlay equality; no mint). Fresh review required. Do not complete.
+        pass_run: GOV008_N0029_20260924
+        pass_actor: gov-008-n0029
       rendered_comparison:
         required: false
         state: pass
@@ -5278,18 +5281,21 @@ nodes:
     verification:
       rendered:
         state: pass
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+        pass_run: GOV008_N0029_20260924
+        pass_actor: gov-008-n0029
         evidence: *id019
         path: null
       referent:
         state: pass
-        pass_run: GOV008_N0025_N0029_20260915
-        pass_actor: gov-008
+        pass_run: GOV008_N0029_20260924
+        pass_actor: gov-008-n0029
         evidence:
-          path: .eif/audit/GOV008_N0025_N0029_20260915/independent-rendered-review.md
-          product: EnterpriseDataGrid + CaseBookSurface + PaymentEvidenceOverlay
+          path: .eif/audit/GOV008_N0029_20260924/REVIEW.md
           verdict: VERIFIED_WITH_LIMITATIONS
+          summary: 'AgGridReact is imported only in EnterpriseDataGrid.tsx:6 with AllCommunityModule. enableCellTextSelection
+            and ensureDomOrder are set after the options spread (lines 133-134). No enterprise, range or Excel code. The column
+            pickers are not unified. page.tsx:67-68 reads ?code=. The backend only trims before equality (aee82a72). Lowercase
+            code gives 0 matches. ro_sql shows 0 cpor_case minted for C19B54067. vitest: 5 files, 10 tests passed.'
         path: null
     evidence: []
     blockers: []
@@ -5511,12 +5517,12 @@ nodes:
     origin: operator
     status: in_progress
     stage: validate
-    revision: 7
+    revision: 16
     lease:
-      run: STAGE2_7_CPOR_TABS_20260921
-      acquired_at: '2026-09-21T14:54:22Z'
-      heartbeat_at: '2026-09-21T14:54:22Z'
-      expires_at: '2026-09-21T18:54:22Z'
+      run: N0032_REMEDIATE_20260924
+      acquired_at: '2026-09-24T08:14:47Z'
+      heartbeat_at: '2026-09-24T08:14:47Z'
+      expires_at: '2026-09-24T09:14:47Z'
     depends_on: []
     facets:
     - ui
@@ -5558,16 +5564,30 @@ nodes:
         pass_actor: stage2b-001
       a11y:
         required: true
-        state: pending
-        evidence: null
+        state: fail
+        evidence:
+          path: .eif/audit/GOV008_N0032_20260924/REVIEW.md
+          verdict: FAILED
+          summary: The tablist has aria-label 'Case detail', tabs report aria-selected correctly with roving tabindex, arrow
+            keys move focus and Enter activates the tab, and the pivot table has col/row th scopes and an aria-label. However,
+            the role=tabpanel (SettlementCaseTabs.tsx:52) has no accessible name. Tabs have no id and no aria-controls, and
+            the panel has no aria-labelledby. The focus indicator is only a low-contrast MUI ripple (outline none). The pivot
+            table's top-left header cell is empty.
         rationale: null
       rendered:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence: &id021
+          path: .eif/audit/GOV008_N0032_20260924/REVIEW.md
+          verdict: FAILED
+          summary: The reviewer opened every tab on cases 46 and 311 in its own signed-in tab and captured the DOM text and
+            a screenshot. The missing_roe and populated-export states could not be rendered because no data exists for them;
+            see limitations.
         rationale: 'PENDING: authenticated browser render not captured - the API moved to session mode during this node and
           the agent tab holds no token (raw fetch /auth/me 401 in 10ms, tab hidden, zero app queries). Warren or an independent
           run captures it. Unit tests cover the tab host and the pivot table.'
+        pass_run: GOV008_N0032_20260924
+        pass_actor: gov-008-n0032
       content:
         required: true
         state: pass
@@ -5578,13 +5598,33 @@ nodes:
           restored and stamped.
         pass_run: STAGE2_7_CPOR_TABS_20260921
         pass_actor: stage2b-001
-    verification: {}
+    verification:
+      rendered:
+        state: pass
+        pass_run: GOV008_N0032_20260924
+        pass_actor: gov-008-n0032
+        evidence: *id021
+        path: null
+      referent:
+        state: pass
+        pass_run: GOV008_N0032_20260924
+        pass_actor: gov-008-n0032
+        evidence:
+          path: .eif/audit/GOV008_N0032_20260924/REVIEW.md
+          verdict: FAILED
+          summary: The code referents in ff118ec6 resolve. The missing_roe copy is identical to ff118ec6^. The export endpoints
+            are unchanged. There is no apps/api diff. BACKLOG-202 (line 2962) and BACKLOG-093 (line 913) are stamped. Vitest
+            reported 6 files and 17 tests passed, tsc exited 0, and eslint gave 0 errors with 2 pre-existing warnings.
+        path: null
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: Implemented and unit-verified at 946c935 (ff118ec). quality.rendered and a11y pending; referent independent
-      (R2). Do not complete from the implementation run.
+    stage_note: 'Remediated (N0032_REMEDIATE_20260924): SettlementCaseTabs tabpanel id + aria-labelledby active tab, every
+      tab id + aria-controls, focus-visible outline; pivot corner header is a named th. New test asserts panel name and tab
+      linkage; 31/31 settlement+cpor vitest; tsc 0; eslint 0. GOV-008 GOV008_N0032_20260924: rendered, verification.rendered
+      and referent pass; quality.a11y fail pending fresh re-review. Limitations: missing_roe and populated export list not
+      renderable on cip data (case 4 hangs ''Loading case...'' at desk level - finding).'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -5658,7 +5698,7 @@ nodes:
       rendered:
         required: true
         state: pass
-        evidence: &id021
+        evidence: &id022
           path: .eif/audit/GOV008_N0033_20260924/REVIEW.md
           verdict: VERIFIED_WITH_LIMITATIONS
           summary: 'Rendered and interacted with /login in a fresh browser tab (not the implementer''s session): screenshot
@@ -5688,7 +5728,7 @@ nodes:
         state: pass
         pass_run: GOV008_N0033_20260924
         pass_actor: gov-008-n0033-sonnet
-        evidence: *id021
+        evidence: *id022
         path: null
       referent:
         state: pass
@@ -5853,7 +5893,7 @@ nodes:
       rendered:
         required: true
         state: pass
-        evidence: &id022
+        evidence: &id023
           path: .eif/audit/GOV008_N0035_20260924/REVIEW.md
           verdict: VERIFIED_WITH_LIMITATIONS
           summary: Own Chrome tab, 3 routes and 4 grids measured by DOM/computed style plus zoom screenshots; 390x844 via
@@ -5874,7 +5914,7 @@ nodes:
         state: pass
         pass_run: GOV008_N0035_20260924
         pass_actor: gov-008-n0035
-        evidence: *id022
+        evidence: *id023
         path: null
       referent:
         state: pass
