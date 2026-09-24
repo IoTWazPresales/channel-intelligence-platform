@@ -1,0 +1,11 @@
+{
+ "node": "N-0032",
+ "expected_revision": 8,
+ "dim": "a11y",
+ "state": "fail",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0032_20260924/REVIEW.md",
+  "verdict": "FAILED",
+  "summary": "The tablist has aria-label 'Case detail', tabs report aria-selected correctly with roving tabindex, arrow keys move focus and Enter activates the tab, and the pivot table has col/row th scopes and an aria-label. However, the role=tabpanel (SettlementCaseTabs.tsx:52) has no accessible name. Tabs have no id and no aria-controls, and the panel has no aria-labelledby. The focus indicator is only a low-contrast MUI ripple (outline none). The pivot table's top-left header cell is empty."
+ }
+}

@@ -1,0 +1,11 @@
+{
+ "node": "N-0032",
+ "expected_revision": 11,
+ "kind": "referent",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0032_20260924/REVIEW.md",
+  "verdict": "FAILED",
+  "summary": "The code referents in ff118ec6 resolve. The missing_roe copy is identical to ff118ec6^. The export endpoints are unchanged. There is no apps/api diff. BACKLOG-202 (line 2962) and BACKLOG-093 (line 913) are stamped. Vitest reported 6 files and 17 tests passed, tsc exited 0, and eslint gave 0 errors with 2 pre-existing warnings."
+ }
+}

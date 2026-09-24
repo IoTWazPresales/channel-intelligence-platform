@@ -1,0 +1,11 @@
+{
+ "node": "N-0029",
+ "expected_revision": 46,
+ "dim": "ux",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0029_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Case book order is HeadlineStrip, then lifecycle caption and rail, then ScopeBar, then grid, then overlay, ageing and blocked panels. Unmatched and pending Case ID rows are real links. Minor: a text-selection drag also fires onRowClicked and opens the case drawer."
+ }
+}

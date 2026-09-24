@@ -1,0 +1,11 @@
+{
+ "node": "N-0029",
+ "expected_revision": 52,
+ "dim": "design_signatures",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0029_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Observed: single_community_grid_wrapper, pointer_cursor_on_clickable_rows, lifecycle_caption_not_alert, unmatched_case_id_link (working, ?code= for unlinked and ?case= for linked), payment_evidence_reads_code (yes, exact-only, no mint), grid_above_fold (marginal at 1280x800: header plus clipped first row; overlay below the fold)."
+ }
+}

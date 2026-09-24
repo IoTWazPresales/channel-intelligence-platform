@@ -1,0 +1,11 @@
+{
+ "node": "N-0029",
+ "expected_revision": 50,
+ "kind": "rendered",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0029_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Clicked unmatched C19B54067: URL became payment-evidence-import?code=C19B54067 and the focus shows 1 row, unlinked. Clicked linked pending C25B01857: URL became ?case=244 and the drawer opened. Mouse-drag selection inside a cell returned '6,231.52 \u00b7 $ 9'. Row cursor is pointer."
+ }
+}

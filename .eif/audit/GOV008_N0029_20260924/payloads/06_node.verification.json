@@ -1,0 +1,11 @@
+{
+ "node": "N-0029",
+ "expected_revision": 51,
+ "kind": "referent",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0029_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "AgGridReact is imported only in EnterpriseDataGrid.tsx:6 with AllCommunityModule. enableCellTextSelection and ensureDomOrder are set after the options spread (lines 133-134). No enterprise, range or Excel code. The column pickers are not unified. page.tsx:67-68 reads ?code=. The backend only trims before equality (aee82a72). Lowercase code gives 0 matches. ro_sql shows 0 cpor_case minted for C19B54067. vitest: 5 files, 10 tests passed."
+ }
+}

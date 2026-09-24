@@ -1,0 +1,11 @@
+{
+ "node": "N-0029",
+ "expected_revision": 49,
+ "dim": "content",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0029_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "The lifecycle note is a caption, not an Alert. The payment-evidence focus Alert reads 'exact match only. This page does not mint a CIP case.' and the overlay copy says 'not minted as cpor_case'."
+ }
+}

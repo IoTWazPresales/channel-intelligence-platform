@@ -1,0 +1,14 @@
+{"node": "N-0032", "verdict": "FAILED",
+ "dims": {
+  "quality.a11y": {"state": "fail", "summary": "The tablist has aria-label 'Case detail', tabs report aria-selected correctly with roving tabindex, arrow keys move focus and Enter activates the tab, and the pivot table has col/row th scopes and an aria-label. However, the role=tabpanel (SettlementCaseTabs.tsx:52) has no accessible name. Tabs have no id and no aria-controls, and the panel has no aria-labelledby. The focus indicator is only a low-contrast MUI ripple (outline none). The pivot table's top-left header cell is empty."},
+  "quality.rendered": {"state": "pass", "summary": "All five tabs render real content on cases 46 and 311. The pivot is a formatted USD table with row, column and grand totals and no raw JSON. Events, the Exports empty state with Generate, Promo load and Payments/recon all render with no error alerts."},
+  "verification.rendered": {"state": "pass", "summary": "The reviewer opened every tab on cases 46 and 311 in its own signed-in tab and captured the DOM text and a screenshot. The missing_roe and populated-export states could not be rendered because no data exists for them; see limitations."},
+  "verification.referent": {"state": "pass", "summary": "The code referents in ff118ec6 resolve. The missing_roe copy is identical to ff118ec6^. The export endpoints are unchanged. There is no apps/api diff. BACKLOG-202 (line 2962) and BACKLOG-093 (line 913) are stamped. Vitest reported 6 files and 17 tests passed, tsc exited 0, and eslint gave 0 errors with 2 pre-existing warnings."}
+ },
+ "failed_criteria": ["Accessibility (quality.a11y) accessible names / tablist-tab semantics: the tabpanel has no accessible name and tabs are not associated with the panel (no id/aria-controls/aria-labelledby), SettlementCaseTabs.tsx:48-52"],
+ "limitations": [
+  "missing_roe was not rendered live. Case 4 (roe_snapshot null) hung on 'Loading case…' at the desk level before the tabs mounted. The behaviour is verified by CporUsdPivotPanel.test.tsx:47-52 and by code.",
+  "The populated export version list (flags, Download) was not rendered or tested: cip has zero export_generated events, and the tests mock exports as empty. It was verified by code comparison with ff118ec6^ only. Generate export was not clicked, per the brief.",
+  "The first parallel vitest run hit a Windows temp-file 'UNKNOWN open' error in the vitest cache. A serial re-run passed 6/6 files.",
+  "The screenshot could not be copied into the audit folder because a policy hook denied the foreign temp path."
+ ]}

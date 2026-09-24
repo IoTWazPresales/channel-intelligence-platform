@@ -1,0 +1,11 @@
+{
+ "node": "N-0029",
+ "expected_revision": 48,
+ "dim": "rendered",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0029_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "1280x800 same-origin iframe: grid top 722, header 722-763, first row 763-803 (clipped), overlay top 1157, below the fold. Grid header shows before the overlay above the fold, but no full data row is visible at 1280x800."
+ }
+}

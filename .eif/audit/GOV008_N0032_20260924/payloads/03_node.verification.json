@@ -1,0 +1,11 @@
+{
+ "node": "N-0032",
+ "expected_revision": 10,
+ "kind": "rendered",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0032_20260924/REVIEW.md",
+  "verdict": "FAILED",
+  "summary": "The reviewer opened every tab on cases 46 and 311 in its own signed-in tab and captured the DOM text and a screenshot. The missing_roe and populated-export states could not be rendered because no data exists for them; see limitations."
+ }
+}

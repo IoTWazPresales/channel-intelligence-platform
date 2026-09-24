@@ -1,0 +1,17 @@
+{"node": "N-0029", "verdict": "VERIFIED_WITH_LIMITATIONS",
+ "dims": {
+  "quality.ux": {"state": "pass", "summary": "Case book order is HeadlineStrip, then lifecycle caption and rail, then ScopeBar, then grid, then overlay, ageing and blocked panels. Unmatched and pending Case ID rows are real links. Minor: a text-selection drag also fires onRowClicked and opens the case drawer."},
+  "quality.a11y": {"state": "pass", "summary": "PanelRows render as NextLink anchors with accessible names from their primary text (e.g. 'C25B01857 · to_be_clarified'). Rows have a pointer cursor. Keyboard activation of grid rows was not tested and predates this scope (ASSERTED)."},
+  "quality.rendered": {"state": "pass", "summary": "1280x800 same-origin iframe: grid top 722, header 722-763, first row 763-803 (clipped), overlay top 1157, below the fold. Grid header shows before the overlay above the fold, but no full data row is visible at 1280x800."},
+  "quality.content": {"state": "pass", "summary": "The lifecycle note is a caption, not an Alert. The payment-evidence focus Alert reads 'exact match only. This page does not mint a CIP case.' and the overlay copy says 'not minted as cpor_case'."},
+  "verification.rendered": {"state": "pass", "summary": "Clicked unmatched C19B54067: URL became payment-evidence-import?code=C19B54067 and the focus shows 1 row, unlinked. Clicked linked pending C25B01857: URL became ?case=244 and the drawer opened. Mouse-drag selection inside a cell returned '6,231.52 · $ 9'. Row cursor is pointer."},
+  "verification.referent": {"state": "pass", "summary": "AgGridReact is imported only in EnterpriseDataGrid.tsx:6 with AllCommunityModule. enableCellTextSelection and ensureDomOrder are set after the options spread (lines 133-134). No enterprise, range or Excel code. The column pickers are not unified. page.tsx:67-68 reads ?code=. The backend only trims before equality (aee82a72). Lowercase code gives 0 matches. ro_sql shows 0 cpor_case minted for C19B54067. vitest: 5 files, 10 tests passed."},
+  "quality.design_signatures": {"state": "pass", "summary": "Observed: single_community_grid_wrapper, pointer_cursor_on_clickable_rows, lifecycle_caption_not_alert, unmatched_case_id_link (working, ?code= for unlinked and ?case= for linked), payment_evidence_reads_code (yes, exact-only, no mint), grid_above_fold (marginal at 1280x800: header plus clipped first row; overlay below the fold)."}
+ },
+ "failed_criteria": [],
+ "limitations": [
+  "The Chrome window resize did not change the CSS viewport (stayed 1707x876 at DPR 1.5), so the 1280x800 check used an exact-size same-origin iframe.",
+  "At 1280x800 only the grid header and a clipped first data row (763-803) are above the fold. The criterion holds as written, but the grid-first intent is thinly met because the HeadlineStrip, lifecycle rail and two-row ScopeBar use about 720px.",
+  "Selecting cell text by drag also triggers onRowClicked and opens the case drawer (?case=311). Suggested guard: skip setParams when getSelection() is non-empty.",
+  "Independence: fresh-session review on the same model family (acceptable for R2)."
+ ]}

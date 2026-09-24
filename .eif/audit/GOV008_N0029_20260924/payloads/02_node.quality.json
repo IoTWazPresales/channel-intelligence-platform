@@ -1,0 +1,11 @@
+{
+ "node": "N-0029",
+ "expected_revision": 47,
+ "dim": "a11y",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0029_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "PanelRows render as NextLink anchors with accessible names from their primary text (e.g. 'C25B01857 \u00b7 to_be_clarified'). Rows have a pointer cursor. Keyboard activation of grid rows was not tested and predates this scope (ASSERTED)."
+ }
+}
