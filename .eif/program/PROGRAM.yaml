@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1102
-  log_sha256: 8ea664857e6768a7a98f4dd40b886c204cf37499b82bee6d37856dfb94608822
+  snapshot_revision: 1106
+  log_sha256: c5da4bf980a78076611c81aeb9aa756d474511e18863985e8cbc38e0b32976c7
   acceptance_policy:
     milestone: operator
     root: operator
@@ -6161,13 +6161,9 @@ nodes:
     class: feature
     origin: operator
     status: in_progress
-    stage: implement
-    revision: 3
-    lease:
-      run: N0038_IMPL_20260924
-      acquired_at: '2026-09-24T08:46:45Z'
-      heartbeat_at: '2026-09-24T08:46:45Z'
-      expires_at: '2026-09-24T10:46:45Z'
+    stage: validate
+    revision: 5
+    lease: null
     depends_on:
     - N-0037
     facets:
@@ -6215,10 +6211,11 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Pipelined: started while N-0037 (ordering-only dependency, disjoint files) is under independent review; N-0038
-      does not complete before N-0037. Feature definition = operator criteria (queue item 4; Warren 21 Sep: enforce on existing
-      roles). Implementation by fresh subagent (backend-engineer, test-engineering-specialist, application-security-specialist),
-      run N0038_IMPL_20260924.'
+    stage_note: 'Implemented at 209acf82 (impl subagent; IMPL.md: 31 CPOR writes gated via existing require_roles - lifecycle/settle/exports/FX/claim
+      evidence/promo-plan planner+admin, payment evidence steward+planner+admin, historical import admin only per BACKLOG-136
+      trap; 25 shipment steward gates admin+steward; 17 new tests; 255 CPOR/shipment/RBAC tests pass) plus 66757fde (orchestrator,
+      F1: shipment steward bulk preview/apply/ignore were ungated -> admin+steward; test now asserts no ungated shipment-evidence
+      write). Stub admin unaffected. Questions D-0029. Independent review next.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -8654,6 +8651,18 @@ decisions:
     origin: agent
     status: proposed
     supersedes: null
+  D-0029:
+    id: D-0029
+    scope: N-0038
+    statement: 'N-0038 CPOR role matrix questions for Warren (each already gated with a default; see n0038/IMPL.md): Q1 historical
+      plan import writes - default admin only (BACKLOG-136 says no weaker than the old admin gate); options admin+steward
+      or admin+steward+planner; the Plan templates menu shows it to planners who now get 403. Q2 claim-evidence upload + settlement
+      roll-up - default planner+admin; add steward? Q3 KAM/PM/Ken/Wayne separation is not expressible on four roles - planner
+      can propose, approve, settle, export; keep, limit approve/settle to admin, or new roles later? Q4 promo-plan recompute
+      (saves nothing) - default planner+admin; allow viewers?'
+    origin: agent
+    status: proposed
+    supersedes: null
 evidence:
   EV-GOV008-REVIEW:
     id: EV-GOV008-REVIEW
@@ -9213,6 +9222,18 @@ deferred_findings:
   node: N-0037
   run: GOV008_N0037_20260924
   actor: gov-008-n0037-sonnet
+  status: deferred
+- seq: 1104
+  code: DOES_NOT_FIT
+  note: 'Outside N-0038 scope, security: CST steward bulk writes in apps/api/app/api/v1/endpoints/imports.py (/jobs/{id}/cst-steward-bulk-preview,
+    cst-steward-bulk-apply, cst-steward-bulk-ignore/apply-async) are sign-in only - any viewer can bulk-apply CST steward
+    mappings. Also the generic imports upload is sign-in only (a viewer can create CPOR historical/payment-evidence jobs but
+    not apply them). Web shows CPOR write controls to roles the API now refuses (IMPL.md W1-W5; menu-only role gating). Candidate
+    follow-up node: steward-write RBAC sweep across imports.py + web control gating. Shipment bulk steward writes were gated
+    in N-0038 (66757fde).'
+  node: N-0038
+  run: N0038_IMPL_20260924
+  actor: impl-n0038
   status: deferred
 ids:
   node: 5
