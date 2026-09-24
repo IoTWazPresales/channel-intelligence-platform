@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1042
-  log_sha256: e544e7807924656c672333c4ab3217700af88e369728a5e4cd6f48ee367a0f30
+  snapshot_revision: 1054
+  log_sha256: 43e299f6264aebc04dbe49420207891a3925dbbafa69c390e7ccd38c6bb2554f
   acceptance_policy:
     milestone: operator
     root: operator
@@ -5374,14 +5374,10 @@ nodes:
     title: 'Stage 2a: grid height single source, MarketSurface mappings states, LineupScopeBar and market readiness honesty'
     class: feature
     origin: operator
-    status: in_progress
-    stage: validate
-    revision: 16
-    lease:
-      run: N0031_REMEDIATE_20260924
-      acquired_at: '2026-09-23T23:05:48Z'
-      heartbeat_at: '2026-09-23T23:05:48Z'
-      expires_at: '2026-09-24T00:05:48Z'
+    status: complete
+    stage: null
+    revision: 19
+    lease: null
     depends_on: []
     facets:
     - ui
@@ -5471,16 +5467,23 @@ nodes:
         evidence: *id020
         path: null
       referent:
-        state: fail
+        state: pass
         evidence:
-          path: .eif/audit/GOV008_N0031_20260924/REVIEW.md
-          verdict: FAILED
-          summary: 'Criteria 2-8 re-verified (diff, vitest 22/22, tsc 0, eslint 0 errors, pytest 2 passed, DOM: rows/headers
-            40px on /admin/customers, paginated shells 688/888px on /stock?lens=execution match paginatedGridHeight, mappings
-            empty/loading/error+Retry rendered, ScopeBar has no inert control). Criterion 1 fails: packages/ui/src/agGridMuiTheme.ts:90-91
-            still emits --ag-row-height/--ag-header-height with its own literals (42px) that now diverge from GRID_DENSITY
-            (40px); present in the live stylesheet (.css-1hv9xw rule) and only masked by EnterpriseDataGrid''s inline override.'
+          path: .eif/audit/GOV008_REREVIEW_N0031_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: 'Single source confirmed: apps/web/src/theme/gridDensity.ts exports GRID_DENSITY/gridRowMetrics/gridDensityCssVars,
+            imported directly or via re-export by EnterpriseDataGrid.tsx, gridPagination.ts, ExceptionCategoryGrid.tsx and
+            PlanVsExecutedView.tsx (grep + read confirmed each import site). packages/ui/src/agGridMuiTheme.ts no longer emits
+            --ag-row-height/--ag-header-height (removed in commit 99a89db8, confirmed by diff and by zero remaining matches
+            for those variables or the old 34px/36px/42px literals anywhere in packages/ui/src). tsc --noEmit clean for both
+            @cip/web and @cip/ui. Live-DOM stylesheet iteration was blocked by the Claude-in-Chrome extension''s own query-string
+            safety filter on /admin/customers (verified this is a tooling-level block, not content-related, by confirming
+            JS execution works on a query-string-free page); substituted with pixel-measurement of a zoomed screenshot, which
+            found rendered row height ~40px (~67 zoomed px / 1.678 scale), consistent with GRID_DENSITY.comfortable and inconsistent
+            with the removed 42px literal.'
         path: null
+        pass_run: GOV008_REREVIEW_N0031_20260924
+        pass_actor: gov-008-rereview
     evidence: []
     blockers: []
     conservation_tags: []
@@ -5601,7 +5604,7 @@ nodes:
     origin: operator
     status: in_progress
     stage: validate
-    revision: 19
+    revision: 21
     lease:
       run: N0033_REMEDIATE_20260924
       acquired_at: '2026-09-23T23:01:14Z'
@@ -5703,12 +5706,9 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Remediated at d83d7126: /login no longer prints ''admin@local / changeme'' (API caption dev-only); web rebuilt,
-      live /login 200 with no credential text (curl). GOV-008 GOV008_N0033_20260924 (claude-sonnet-5, a different model from
-      the implementer, same vendor): VERIFIED_WITH_LIMITATIONS, 229/229 GET routes 401 without bearer, forged headers rejected,
-      cloudflared signed by Cloudflare; quality.content fail pending fresh re-review of the fix. Limitations: public tunnel
-      URL not re-tested; ~40% of write-capable API tests not re-run (would write to cip). Open risk for Warren: whether the
-      admin password was ever ''changeme'' is unknown (BACKLOG-205 rotate).'
+    stage_note: 'Remediation 2 at 83895f01: /login email defaults to empty; page.test.tsx asserts no changeme/admin@local/dev
+      seed text and empty email (1/1); tsc 0; eslint 0. Web rebuild pending (reviewers using the live app). quality.content
+      awaits a fresh re-review on the rebuilt app.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -5811,7 +5811,7 @@ nodes:
     origin: operator
     status: in_progress
     stage: discovery
-    revision: 3
+    revision: 9
     lease: null
     depends_on: []
     facets:
@@ -5830,25 +5830,63 @@ nodes:
     quality:
       ux:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0035_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: Comfortable density renders 40px rows/header at 13px on 4 grids across /admin/customers, /stock?lens=execution
+            (redirect from /plan-vs-executed) and CPOR case 46; compact 34/36 unchanged in code so the density step remains.
         rationale: null
+        pass_run: GOV008_N0035_20260924
+        pass_actor: gov-008-n0035
       a11y:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0035_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: No vertical text clipping (0 overflowing cells of 60 per grid; zoom screenshots show glyphs centred in
+            rows); 40px rows; non-grid body2 remains 14px. 200% zoom/reflow not tested.
         rationale: null
+        pass_run: GOV008_N0035_20260924
+        pass_actor: gov-008-n0035
       rendered:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence: &id022
+          path: .eif/audit/GOV008_N0035_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: Own Chrome tab, 3 routes and 4 grids measured by DOM/computed style plus zoom screenshots; 390x844 via
+            sandboxed same-origin iframe (plain iframe was frame-busted), not a real viewport.
         rationale: null
+        pass_run: GOV008_N0035_20260924
+        pass_actor: gov-008-n0035
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: na
+        evidence:
+          path: .eif/audit/GOV008_N0035_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: No user-facing copy changed.
+        rationale: Both commits change only a CSS token constant, density numbers and code comments; no UI strings were touched.
+    verification:
+      rendered:
+        state: pass
+        pass_run: GOV008_N0035_20260924
+        pass_actor: gov-008-n0035
+        evidence: *id022
+        path: null
+      referent:
+        state: pass
+        pass_run: GOV008_N0035_20260924
+        pass_actor: gov-008-n0035
+        evidence:
+          path: .eif/audit/GOV008_N0035_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: git show a4fe957f/459f4c94 match the claims; cipTheme.ts untouched by both (last changed 2e0c2a2c; body2
+            override is colour only); AG_GRID_FONT_SIZE exported from packages/ui index.ts:4; vitest src/theme src/components
+            34/34 pass; tsc @cip/web and @cip/ui EXIT 0.
+        path: null
     evidence: []
     blockers: []
     conservation_tags: []
@@ -8971,6 +9009,19 @@ deferred_findings:
   node: null
   run: PROGRAMME_20260924
   actor: gov-001
+  status: deferred
+- seq: 1049
+  code: DOES_NOT_FIT
+  note: 'N-0035 (retroactive charter of Stage 2.2/2.3) passed independent GOV-008 (GOV008_N0035_20260924: VERIFIED_WITH_LIMITATIONS,
+    all dims pass/na) but node.status complete is refused IMPLEMENTATION_PROVENANCE_REQUIRED: the work ran outside the ledger
+    so there is no implementation_run to measure independence against, and node.retroactive_complete refuses without independence_unrecoverable.
+    The charter note''s path (GOV-008 then node.status complete) does not exist in this runtime. Not forged. Resolution needs
+    Warren: accept N-0035 (acceptance=operator) and choose (a) retroactive_complete with independence_unrecoverable=true citing
+    this review, or (b) an EIF runtime fix (EIF repo) so a retroactive node can take a recorded historical implementation
+    run.'
+  node: N-0035
+  run: GOV008_N0035_20260924
+  actor: gov-008-n0035
   status: deferred
 ids:
   node: 5
