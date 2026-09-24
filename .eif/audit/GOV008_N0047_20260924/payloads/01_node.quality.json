@@ -1,0 +1,11 @@
+{
+ "node": "N-0047",
+ "expected_revision": 6,
+ "dim": "data_integrity",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0047_20260924/REVIEW.md",
+  "verdict": "VERIFIED",
+  "summary": "Repair values are source-evidenced (one rederived value spot-checked exactly against the raw committed .xlsx cell) or NULL when no evidence exists; no branch of plan_row guesses; the Excel-serial writer fix is wired into the live upsert path (_staging_tuple -> bulk upsert SQL), not just the one-time repair, and covered by 34 passing tests."
+ }
+}

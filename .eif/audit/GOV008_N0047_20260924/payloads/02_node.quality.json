@@ -1,0 +1,11 @@
+{
+ "node": "N-0047",
+ "expected_revision": 7,
+ "dim": "backup_recovery",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0047_20260924/REVIEW.md",
+  "verdict": "VERIFIED",
+  "summary": "Before-apply CSV records launch_before/retired_before and launch_after/retired_after for every changed row; the UPDATE's WHERE clause pins old values (IS NOT DISTINCT FROM), so the operation is naturally reversible from that CSV."
+ }
+}

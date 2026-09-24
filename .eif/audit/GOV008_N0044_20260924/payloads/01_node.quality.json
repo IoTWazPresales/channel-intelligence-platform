@@ -1,0 +1,11 @@
+{
+ "node": "N-0044",
+ "expected_revision": 5,
+ "dim": "ux",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0044_20260924/REVIEW.md",
+  "verdict": "FAILED",
+  "summary": "Desk absorbs FX anchor facts, readiness, lifecycle with confirm dialogs, claims/intelligence controls and a Comparable cases tab; approve/book-FX, reapproval and FX editing sit in PlanWorkspace; the portfolio read is collapsed on the Case book. Nits: ended+needs_reapproval banner points to a planner with no link; 'Settlement workspace' link label names the retired concept."
+ }
+}

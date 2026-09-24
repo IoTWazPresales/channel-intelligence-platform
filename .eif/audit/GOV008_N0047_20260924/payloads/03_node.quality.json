@@ -1,0 +1,11 @@
+{
+ "node": "N-0047",
+ "expected_revision": 8,
+ "dim": "migration_safety",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0047_20260924/REVIEW.md",
+  "verdict": "VERIFIED",
+  "summary": "Dry run enters a Postgres-enforced READ ONLY transaction (verified via printed transaction_read_only=on against real cip, not just claimed); --expect-db guard checked in code before any write; --apply required and defaults false; idempotent (second clone apply wrote 0 rows, log-verified, and structurally guaranteed by the WHERE clause); touches only launch_date/retired_date/updated_at; no DELETE/DROP/TRUNCATE in the script."
+ }
+}

@@ -1,0 +1,11 @@
+{
+ "node": "N-0044",
+ "expected_revision": 10,
+ "kind": "referent",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0044_20260924/REVIEW.md",
+  "verdict": "FAILED",
+  "summary": "Portfolio support spend R 28,862,697.61 and 304 cases match read-only SQL exactly; case 46 FX 19.14 booked and needs_reapproval match the DB; vitest 89/89 and tsc exit 0 reproduced; deleted-file capability map built from git show 657dd1ed^."
+ }
+}

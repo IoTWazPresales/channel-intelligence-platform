@@ -1,0 +1,11 @@
+{
+ "node": "N-0047",
+ "expected_revision": 9,
+ "kind": "referent",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0047_20260924/REVIEW.md",
+  "verdict": "VERIFIED",
+  "summary": "Independently re-ran the dim_product count query against cip (matches pre-repair state exactly: 2795 inverted, 671/671 placeholders) and against the clone cip_merged_leftover_repair (matches post-repair state exactly: 2887 inverted, 0 placeholders); independently re-ran the test suite (34 passed); traced one rederived row (SKU 90NB0651-M00560, job 88) back to the literal raw Excel serials in the committed source file and the decoded dates matched the repair log exactly (42156->2015-06-01, 42124->2015-04-30)."
+ }
+}

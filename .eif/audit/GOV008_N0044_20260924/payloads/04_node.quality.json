@@ -1,0 +1,11 @@
+{
+ "node": "N-0044",
+ "expected_revision": 8,
+ "dim": "content",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0044_20260924/REVIEW.md",
+  "verdict": "FAILED",
+  "summary": "Copy is clear (terminal-cancel warning, FX basis line, scope subtitle). Pre-existing nits: CUST-000045 code in comparables, 'Ken's desk', space vs comma thousands in the portfolio caption."
+ }
+}

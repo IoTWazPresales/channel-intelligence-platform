@@ -1,0 +1,34 @@
+{
+  "node": "N-0047",
+  "verdict": "VERIFIED",
+  "reviewer": {
+    "role": "GOV-008 verification-controller",
+    "model": "claude-sonnet-5",
+    "extra_lenses": ["database-specialist", "data-quality-governance-specialist", "test-engineering-specialist"],
+    "independence_rung": "R2 (fresh session, same model family; no cross-model consult mechanism available)"
+  },
+  "dims": {
+    "quality.data_integrity": {
+      "state": "pass",
+      "summary": "Repair values are source-evidenced (one rederived value spot-checked exactly against the raw committed .xlsx cell) or NULL when no evidence exists; no branch of plan_row guesses; the Excel-serial writer fix is wired into the live upsert path (_staging_tuple -> bulk upsert SQL), not just the one-time repair, and covered by 34 passing tests."
+    },
+    "quality.backup_recovery": {
+      "state": "pass",
+      "summary": "Before-apply CSV records launch_before/retired_before and launch_after/retired_after for every changed row; the UPDATE's WHERE clause pins old values (IS NOT DISTINCT FROM), so the operation is naturally reversible from that CSV."
+    },
+    "quality.migration_safety": {
+      "state": "pass",
+      "summary": "Dry run enters a Postgres-enforced READ ONLY transaction (verified via printed transaction_read_only=on against real cip, not just claimed); --expect-db guard checked in code before any write; --apply required and defaults false; idempotent (second clone apply wrote 0 rows, log-verified, and structurally guaranteed by the WHERE clause); touches only launch_date/retired_date/updated_at; no DELETE/DROP/TRUNCATE in the script."
+    },
+    "verification.referent": {
+      "state": "pass",
+      "summary": "Independently re-ran the dim_product count query against cip (matches pre-repair state exactly: 2795 inverted, 671/671 placeholders) and against the clone cip_merged_leftover_repair (matches post-repair state exactly: 2887 inverted, 0 placeholders); independently re-ran the test suite (34 passed); traced one rederived row (SKU 90NB0651-M00560, job 88) back to the literal raw Excel serials in the committed source file and the decoded dates matched the repair log exactly (42156->2015-06-01, 42124->2015-04-30)."
+    }
+  },
+  "failed_criteria": [],
+  "limitations": [
+    "Did not re-execute the repair script against a newly created clone; instead independently re-derived the cip/clone counts from first principles via SQL and cross-checked one rederived value against the raw source file cell, which verifies the logged numbers directly rather than merely reproducing the same script run.",
+    "Did not run an end-to-end DSI resolution job before/after the repair to measure the magnitude of the eligibility change; confirmed the launch/retire window gating code path (_product_eligible_for_dsi_auto -> _product_evidence_date_outside_launch_retire_window) is real and reads the repaired columns, but the size of the downstream effect is asserted, not measured.",
+    "R2 independence: fresh session but same model family as the implementer; no independent-model consult mechanism was available."
+  ]
+}

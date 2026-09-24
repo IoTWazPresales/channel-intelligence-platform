@@ -1,0 +1,11 @@
+{
+ "node": "N-0044",
+ "expected_revision": 6,
+ "dim": "a11y",
+ "state": "fail",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0044_20260924/REVIEW.md",
+  "verdict": "FAILED",
+  "summary": "Tabs, group, dialog, switch names and aria-expanded are correct, but the new desk control labels (caption / text.muted rgba(160,176,192,.55) on rgb(34,38,46), 12px) measure about 3.1:1, below WCAG 1.4.3 4.5:1 (SettlementDesk.tsx:610,628)."
+ }
+}

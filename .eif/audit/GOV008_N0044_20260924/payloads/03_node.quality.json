@@ -1,0 +1,11 @@
+{
+ "node": "N-0044",
+ "expected_revision": 7,
+ "dim": "rendered",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0044_20260924/REVIEW.md",
+  "verdict": "FAILED",
+  "summary": "Desk 46, Case book portfolio panel (expanded) and plan 311 rendered and were inspected live; desk 311 stuck on 'Loading case...' (recorded limitation)."
+ }
+}
