@@ -1,0 +1,1 @@
+{"node": "N-0045", "expected_revision": 1, "type": "human", "ref": "D-0033", "note": "Committed real records (69864486, d4c5c102, run logs). Archive move of 105 scratch paths outside the repo needs Warren (FOREIGN_PATH); 172 EIF/control-plane paths need Warren's disposition. Script + lists in n0045/."}
