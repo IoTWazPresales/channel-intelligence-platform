@@ -1,0 +1,4 @@
+{"node": "N-0033", "verdict": "VERIFIED",
+ "dims": {"quality.content": {"state": "pass", "summary": "No seed caption, no pre-filled email/password disclosed to anonymous visitors on /login; form works with 'Invalid credentials' alert on fake login, stays on /login, forgot-password line present. Chrome's own saved-password autofill visually showed admin@local but underlying DOM value was confirmed empty via :-webkit-autofill probe, matching the brief's caveat that browser autofill is not app behaviour."}},
+ "failed_criteria": [],
+ "limitations": ["Seed-credential grep scoped to apps/web/src only (per brief instruction), not repo-wide."]}

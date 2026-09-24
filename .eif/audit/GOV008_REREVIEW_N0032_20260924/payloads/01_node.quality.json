@@ -1,0 +1,11 @@
+{
+ "node": "N-0032",
+ "expected_revision": 17,
+ "dim": "a11y",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_REREVIEW_N0032_20260924/REVIEW.md",
+  "verdict": "VERIFIED",
+  "summary": "Tablist/tab roles reach the AX tree; aria-selected and roving tabindex correct; all tabs' aria-controls point at the single tabpanel whose aria-labelledby tracks the active tab (verified live before/after activation); arrow keys move focus (manual-activation pattern) and Enter activates with a visible focus ring matching the added CSS; pivot corner header is now a scoped TH with visually-hidden 'Row by column' text; loading/error/empty roles delegated to ModuleDataSection (role=alert / role=status). 31 relevant vitest tests pass including a new test pinning the panel-naming/aria-controls behavior."
+ }
+}

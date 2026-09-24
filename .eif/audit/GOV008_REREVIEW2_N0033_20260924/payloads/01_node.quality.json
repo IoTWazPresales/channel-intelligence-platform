@@ -1,0 +1,11 @@
+{
+ "node": "N-0033",
+ "expected_revision": 22,
+ "dim": "content",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_REREVIEW2_N0033_20260924/REVIEW.md",
+  "verdict": "VERIFIED",
+  "summary": "No seed caption, no pre-filled email/password disclosed to anonymous visitors on /login; form works with 'Invalid credentials' alert on fake login, stays on /login, forgot-password line present. Chrome's own saved-password autofill visually showed admin@local but underlying DOM value was confirmed empty via :-webkit-autofill probe, matching the brief's caveat that browser autofill is not app behaviour."
+ }
+}

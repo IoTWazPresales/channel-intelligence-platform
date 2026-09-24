@@ -3,3 +3,4 @@
 {"ts":"2026-09-23T23:10:34Z","kind":"programme.event","event":"node.stage","seq":1042}
 {"ts":"2026-09-24T08:09:55Z","kind":"programme.event","event":"node.stage","seq":1053}
 {"ts":"2026-09-24T08:13:02Z","kind":"programme.event","event":"node.stage","seq":1054}
+{"ts":"2026-09-24T08:33:30Z","kind":"programme.event","event":"node.lease.release","seq":1072}

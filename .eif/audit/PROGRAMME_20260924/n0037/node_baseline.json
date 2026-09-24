@@ -1,0 +1,1 @@
+{"node": "N-0037", "expected_revision": 2, "baseline_ref": "BLN-0006", "preservation": {"login_contract": "success and 401 contract unchanged", "stub_mode": "unaffected"}}
