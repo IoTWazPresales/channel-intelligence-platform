@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1114
-  log_sha256: f4c68dd4506249df60138904bbbde6ac2d8a4448d5f855a5672ef250995b6938
+  snapshot_revision: 1121
+  log_sha256: 7c58a9db95381f48d1cb9be20271e1db1d148c3958cd7428399d7f8b5cff8334
   acceptance_policy:
     milestone: operator
     root: operator
@@ -5760,9 +5760,13 @@ nodes:
     class: feature
     origin: operator
     status: in_progress
-    stage: discovery
-    revision: 3
-    lease: null
+    stage: implement
+    revision: 6
+    lease:
+      run: N0034_IMPL_20260924
+      acquired_at: '2026-09-24T11:20:13Z'
+      heartbeat_at: '2026-09-24T11:20:13Z'
+      expires_at: '2026-09-24T14:20:13Z'
     depends_on: []
     facets:
     - ui
@@ -5794,7 +5798,7 @@ nodes:
     - 'Browser smoke at 1280x800 on at least three Tier A grids: open the picker, add a code column, reload, and the layout
       persists'
     - docs/BACKLOG.md stamps for 201 and the display half of 140 on completion
-    baseline_ref: null
+    baseline_ref: BLN-0010
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
@@ -5824,19 +5828,24 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Discovery done (EV-N0034-DISCOVERY, .eif/audit/STAGE2_4_GRID_PARITY_20260923/DISCOVERY.md): 53 host files
-      / 63 mounts reconcile with the parity audit. Tier A (14 files): 0 pickers, 2 searches, 0 exports. No shared search,
-      saved-view or export primitive exists. Density is global. Before leaving discovery: baseline.add + node.baseline (touches_existing),
-      then Warren decides criterion 4 (toolbar parity: shared primitive vs BACKLOG entries) and the per-fact field-list source
-      for the all-columns picker (UNKNOWN). No product code written in this run.'
+    stage_note: 'Criterion 4 and the field-list source resolved by Warren''s D-b (D-0013): toolbar search/saved views/export
+      -> N-0041/42/43; field list per D-0030 (design seat, EV-N0034-DESIGN). Implementation by fresh subagent (frontend-engineer,
+      test-engineering-specialist, accessibility-specialist; backend for the registry), run N0034_IMPL_20260924. Operator
+      acceptance still required at the end (acceptance=operator).'
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      inbound_picker: same localStorage key and behaviour
+      mds_states: kept on every Tier A host
+      fixed_sets: Tier B/C unchanged
+      enterprise_wrapper: unchanged
     target_artifact_class: null
     design_artifact_class: null
     risk_class: full
+    implementation_run: N0034_IMPL_20260924
+    implementation_actor: impl-n0034
   N-0035:
     id: N-0035
     parent: null
@@ -8699,6 +8708,28 @@ decisions:
     origin: agent
     status: proposed
     supersedes: null
+  D-0030:
+    id: D-0030
+    scope: N-0034
+    statement: 'N-0034 architecture (engineering call delegated by D-b): per-fact field list comes from a server-side GRID_FIELDS
+      registry (app/services/grid_fields.py, GET /api/v1/grid-fields/{grid_id}) generalising the inbound-shipments optional-columns
+      endpoint; fact_row_dict merges mapper columns under existing serializers so list and payload share one source; customer_code/distributor_code
+      as default-hidden Reference fields; web hook useFactColumns + FactColumnPicker wrapping ColumnPickerDialog; localStorage
+      persistence; no migration. Evidence EV-N0034-DESIGN.'
+    origin: agent
+    status: proposed
+    supersedes: null
+  D-0031:
+    id: D-0031
+    scope: N-0034
+    statement: 'N-0034 questions for Warren (D7 covers columns only): (1) filter dropdown options (sell-out, channel ops,
+      inbound, DSI review) weld ''name (code)'' into option labels - name only with code as secondary text? (2) distributors
+      admin sell-out/inbound grids let stewards edit the distributor by code - may the editor show names while storing the
+      code? (3) keep the exceptions inbox out of scope as a worklist? Defaults used: (1) unchanged, (2) unchanged, (3) out
+      of scope.'
+    origin: agent
+    status: proposed
+    supersedes: null
 evidence:
   EV-GOV008-REVIEW:
     id: EV-GOV008-REVIEW
@@ -9001,6 +9032,15 @@ evidence:
       (14 named lines + 10 NULL), stale items fixed (2.6/2.7/2.8/3.1/3.5 built, e264410 applied, node count 71, 4.5 and Stage
       9 built), every item mapped to a ledger node. CURRENT Next points at the ledger; navConfig.ts steward-queue copy aligned
       to D-0011.'
+  EV-N0034-DESIGN:
+    id: EV-N0034-DESIGN
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20260924/n0034/DESIGN.md
+    tree_hash: e8284511
+    note: 'N-0034 design seat (moment b, run N0034_IMPL_20260924 prep): field-list source = server-side GRID_FIELDS registry
+      generalising the inbound-shipments optional-columns endpoint (shipping.py:695-706) + fact_row_dict merged under each
+      serializer; localStorage cip.grid.<grid_id>.optional.v1; 15 Tier A grids in, 2 out (zero-sellout exception list, exceptions
+      inbox); D7 name-only sweep list; criterion-4 table routes search/saved views/export to N-0041/42/43 (D-b).'
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -9147,6 +9187,20 @@ baselines:
       when tenant_bu_codes None; omits PF, XB), lineup_backfill_archive_config.py:14 6 codes, pm_mapping_memory.py:19-34 14
       codes; web BulkLineupBackfillDialog.tsx:55 and lineupBackfillArchivePath.ts:3 6 codes; lineup_period_inference.py:21
       {Gaming,Consumer,NV,NB}. dim_product.product_line: 14 values + 10 NULL (test rows).'
+  BLN-0010:
+    id: BLN-0010
+    provenance: implementation-observation
+    tree_hash: e8284511
+    latent_capabilities: []
+    preservation:
+      inbound_picker: inbound-shipments optional columns keep their localStorage key and behaviour
+      mds_states: every Tier A host keeps ModuleDataSection loading/error/empty
+      fixed_sets: Tier B worklists and Tier C case panels keep fixed column sets
+      enterprise_wrapper: AgGridReact only inside EnterpriseDataGrid; no Enterprise modules
+    path: .eif/audit/STAGE2_4_GRID_PARITY_20260923/DISCOVERY.md
+    observed_behavior: '2026-09-23/24: 53 host files / 63 mounts; Tier A 14 files with 0 pickers, 2 searches, 0 exports; only
+      inbound-shipments has an optional-columns picker (shipping.py:695-706, InboundShipmentsWorkspace.tsx:186-223,542-555,1007-1031);
+      identity columns weld codes in SellOutTab.tsx:230-233, inventory/page.tsx:125, ChannelIntelligenceWorkspace.tsx:57-59.'
 caveats:
   consult_model_logged:
     key: consult_model_logged
