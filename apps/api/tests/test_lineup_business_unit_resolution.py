@@ -35,6 +35,10 @@ def _idx(**kwargs) -> ProductResolutionIndex:
     return ProductResolutionIndex(**base)
 
 
+# Sellable product-line codes as ``sellable_line_codes`` would load them from dim_product (D-g).
+_LINE_CODES = frozenset({"NB", "NR", "NV", "PF", "XB", "PT"})
+
+
 def _row(sku: str | None = None, part: str | None = None, model: str | None = None) -> LineupRowProductTokens:
     return LineupRowProductTokens(sku_raw=sku, part_number_raw=part, model_raw=model)
 
@@ -83,6 +87,7 @@ def test_sheet_fallback_when_product_and_shipment_miss() -> None:
         product_index=idx,
         business_unit_by_product_id={},
         sheet_name="NR",
+        tenant_bu_codes=_LINE_CODES,
     )
 
     assert report.business_unit == "NR"
@@ -95,6 +100,7 @@ def test_folder_fallback() -> None:
         product_index=_idx(),
         business_unit_by_product_id={},
         folder_path=r"NB\2025\Q1\1. ACZA Q1 2025 Consumer Lineup.xlsx",
+        tenant_bu_codes=_LINE_CODES,
     )
 
     assert report.business_unit == "NB"
@@ -111,6 +117,7 @@ def test_label_vs_product_mismatch_flag() -> None:
         product_index=idx,
         business_unit_by_product_id=bu_map,
         sheet_name="NR",
+        tenant_bu_codes=_LINE_CODES,
     )
 
     assert report.business_unit == "NB"
@@ -190,9 +197,55 @@ def test_resolve_row_product_id_uses_shared_tiers() -> None:
 
 
 def test_sheet_and_folder_helpers() -> None:
-    assert infer_business_unit_from_sheet_code("nb") == "NB"
-    assert infer_business_unit_from_sheet_code("Sheet1") is None
-    assert infer_business_unit_from_folder_path(r"NR\2025\Q2\file.xlsx") == "NR"
+    assert infer_business_unit_from_sheet_code("nb", tenant_bu_codes=_LINE_CODES) == "NB"
+    assert infer_business_unit_from_sheet_code("Sheet1", tenant_bu_codes=_LINE_CODES) is None
+    assert infer_business_unit_from_folder_path(r"NR\2025\Q2\file.xlsx", tenant_bu_codes=_LINE_CODES) == "NR"
+
+
+def test_no_line_codes_means_no_label_tier() -> None:
+    """D-g: no built-in code list; without catalogue codes the sheet/folder tiers do not fire."""
+    assert infer_business_unit_from_sheet_code("NB") is None
+    assert infer_business_unit_from_folder_path(r"NB\2025\Q1\file.xlsx") is None
+    assert infer_business_unit_from_sheet_code("NB", tenant_bu_codes=frozenset()) is None
+
+
+@pytest.mark.parametrize("code", ["PF", "XB", "PT"])
+def test_every_catalogue_line_resolves_via_sheet_tier(code: str) -> None:
+    report = resolve_lineup_business_unit(
+        rows=[_row("x")] * 3,
+        product_index=_idx(),
+        business_unit_by_product_id={},
+        sheet_name=code.lower(),
+        tenant_bu_codes=_LINE_CODES,
+    )
+    assert report.business_unit == code
+    assert report.source_tier == "sheet"
+
+
+@pytest.mark.parametrize("code", ["PF", "XB", "PT"])
+def test_every_catalogue_line_resolves_via_folder_tier(code: str) -> None:
+    report = resolve_lineup_business_unit(
+        rows=[],
+        product_index=_idx(),
+        business_unit_by_product_id={},
+        sheet_name="Sheet1",
+        folder_path=code + r"\2025\Q1\lineup.xlsx",
+        tenant_bu_codes=_LINE_CODES,
+    )
+    assert report.business_unit == code
+    assert report.source_tier == "folder"
+
+
+def test_code_outside_catalogue_does_not_resolve() -> None:
+    report = resolve_lineup_business_unit(
+        rows=[],
+        product_index=_idx(),
+        business_unit_by_product_id={},
+        sheet_name="NX",
+        folder_path=r"NX\2025\Q1\lineup.xlsx",
+        tenant_bu_codes=_LINE_CODES,
+    )
+    assert report.business_unit is None
 
 
 def _alembic_script_head() -> str:

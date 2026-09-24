@@ -4,8 +4,8 @@ Pure resolver tiers (never block — unresolved / low confidence surfaces flags 
 
 1. product-derived — SKU tokens via shared ``resolve_product_id_single_match`` → dim_product.business_unit
 2. shipment-derived — catalogue-miss tokens corroborated from shipment_evidence_line → product BU
-3. sheet code — NB / NR / NX / NV
-4. folder path — archive segment (e.g. ``NB\\2025\\Q1``)
+3. sheet code — a sellable product-line code (``tenant_bu_codes``, from ``dim_product.product_line``)
+4. folder path — archive segment naming a product-line code (e.g. ``NB\\2025\\Q1``)
 5. manual — steward override
 
 Reuses ``ProductResolutionIndex`` / ``product_resolution_standard`` — no parallel product resolver.
@@ -29,12 +29,14 @@ EV = shipment_evidence_read_model()
 from app.services.imports.distributor_sales_inventory import ProductResolutionIndex, _product_token_key
 from app.services.imports.product_resolution_standard import resolve_product_id_single_match
 
-# Default sheet/folder BU codes when no tenant config is supplied (unit tests / legacy).
-CANONICAL_SHEET_BU_CODES: frozenset[str] = frozenset({"NB", "NR", "NX", "NV"})
+# Sheet/folder tiers match against the sellable product-line codes (D-g). Callers load them with
+# ``app.services.catalog.product_lines.sellable_line_codes``. There is no built-in code list:
+# without codes the sheet and folder tiers do not fire.
 
 
-def _bu_codes(tenant_bu_codes: frozenset[str] | None) -> frozenset[str]:
-    return tenant_bu_codes if tenant_bu_codes is not None else CANONICAL_SHEET_BU_CODES
+def _bu_codes(tenant_bu_codes: frozenset[str] | None) -> dict[str, str]:
+    """Upper-case lookup key -> code as stored in ``dim_product.product_line``."""
+    return {str(c).strip().upper(): str(c).strip() for c in (tenant_bu_codes or ()) if str(c).strip()}
 
 
 def _norm_sheet_bu(
@@ -50,10 +52,10 @@ def _norm_sheet_bu(
         return None
     # Exact sheet tab codes.
     if text in codes:
-        return text
+        return codes[text]
     # Leading token before space/punctuation, e.g. "NB Consumer" -> NB.
     head = re.split(r"[\s_\-]+", text, maxsplit=1)[0]
-    return head if head in codes else None
+    return codes.get(head)
 
 
 def infer_business_unit_from_sheet_code(
@@ -331,7 +333,7 @@ def _dedupe_flags(flags: list[str]) -> list[str]:
 
 
 async def load_business_unit_by_product_id(db: AsyncSession) -> dict[int, str]:
-    """Folder-grain BU (NB/NR/NV/PF/XB) from ``dim_product.product_line`` for resolver product tier.
+    """Folder-grain BU (the product-line code) from ``dim_product.product_line`` for resolver product tier.
 
     ``dim_product.business_unit`` is division-level (CONSUMER/COMMERCIAL) — not used here.
     """

@@ -3,7 +3,6 @@
 from datetime import date
 
 from app.services.commercial_planner.lineup_period_inference import (
-    CANONICAL_PRODUCT_LINES,
     detect_quarter_from_columns,
     infer_case_product_line,
     infer_period_start,
@@ -86,28 +85,42 @@ def test_catalogue_primary_even_when_filename_suggests_consumer():
     )
 
 
+# Sellable product-line codes as the catalogue service would return them (D-g: data, not a constant).
+_LINE_CODES = frozenset({"NB", "NR", "NV", "PF", "XB", "PT"})
+
+
 def test_filename_fallback_when_under_resolved():
     assert (
         infer_case_product_line(
             filename="Gaming_NR_Q2.xlsx",
             total_rows=20,
             resolved_product_lines=["Gaming"],
+            line_codes=_LINE_CODES,
         )
-        == "Gaming"
+        == "NR"
     )
 
 
 def test_filename_fallback_nv_ally():
-    assert infer_product_line_from_filename("NV_Ally_lineup.xlsx") == "NV"
+    assert infer_product_line_from_filename("NV_Ally_lineup.xlsx", line_codes=_LINE_CODES) == "NV"
 
 
-def test_filename_fallback_consumer_and_nb():
-    assert infer_product_line_from_filename("consumer_26Q2.xlsx") == "Consumer"
-    assert infer_product_line_from_filename("NB_refresh.xlsx") == "NB"
+def test_filename_fallback_matches_any_catalogue_code():
+    assert infer_product_line_from_filename("NB_refresh.xlsx", line_codes=_LINE_CODES) == "NB"
+    assert infer_product_line_from_filename("pt 26Q2.xlsx", line_codes=_LINE_CODES) == "PT"
+    assert infer_product_line_from_filename("XB-lineup.xlsx", line_codes=_LINE_CODES) == "XB"
 
 
-def test_canonical_product_line_labels():
-    assert CANONICAL_PRODUCT_LINES == frozenset({"Gaming", "Consumer", "NV", "NB"})
+def test_filename_fallback_words_are_not_product_lines():
+    """D-g: "Gaming" / "Consumer" / "Notebook" are not dim_product.product_line values."""
+    assert infer_product_line_from_filename("consumer_26Q2.xlsx", line_codes=_LINE_CODES) is None
+    assert infer_product_line_from_filename("gaming lineup.xlsx", line_codes=_LINE_CODES) is None
+    assert infer_product_line_from_filename("notebook_q1.xlsx", line_codes=_LINE_CODES) is None
+
+
+def test_filename_fallback_without_codes_returns_none():
+    assert infer_product_line_from_filename("NB_refresh.xlsx") is None
+    assert infer_product_line_from_filename("NB_refresh.xlsx", line_codes=frozenset()) is None
 
 
 def test_case_inference_ignores_sheet_category_mislabel_scenario():

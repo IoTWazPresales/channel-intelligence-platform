@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
 from app.models.dimensions import DimProduct
+from app.services.catalog.product_lines import sellable_line_codes
 from app.services.commercial_planner.lineup_period_inference import infer_case_product_line
 
 
@@ -50,6 +51,7 @@ async def ensure_case_product_line_from_catalogue(
         filename=case.file_name,
         total_rows=total_rows,
         resolved_product_lines=resolved_plines,
+        line_codes=await sellable_line_codes(db),
     )
     if not inferred:
         return False

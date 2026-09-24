@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
 from app.models.dimensions import DimChannel, DimRegion
+from app.services.catalog.product_lines import list_sellable_product_lines
 from app.services.channel_usage import channel_hard_reference_breakdown
 from app.api.v1.master_bulk_delete_http import raise_bulk_delete_http_error
 from app.services.master_entity_bulk_delete import (
@@ -88,6 +89,12 @@ async def list_channels(db: AsyncSession = Depends(get_db)):
     res = await db.execute(select(DimChannel).order_by(DimChannel.code))
     rows = res.scalars().all()
     return [{"id": c.id, "code": c.code, "name": c.name} for c in rows]
+
+
+@router.get("/product-lines")
+async def list_product_lines(db: AsyncSession = Depends(get_db)):
+    """Sellable product lines (BU grain, D-g): every non-blank ``dim_product.product_line``."""
+    return (await list_sellable_product_lines(db)).to_dict()
 
 
 @router.get("/regions")

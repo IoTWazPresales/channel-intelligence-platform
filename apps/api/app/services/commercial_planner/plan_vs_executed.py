@@ -565,7 +565,7 @@ def compute_volume_bias(
         pm_attribution = "business_line"
         pm_reason = (
             "Tenant profile pm_attribution_mode=business_line; "
-            "PM buckets = business line (e.g. NB/NR/NV/NX) — same grain as by_bu."
+            "PM buckets = business line (each product line in the catalogue) — same grain as by_bu."
         )
     elif mode == "person_field":
         by_pm = []

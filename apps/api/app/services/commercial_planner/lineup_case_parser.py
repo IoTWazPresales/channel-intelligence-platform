@@ -27,6 +27,7 @@ from app.models.commercial_planner import (
 )
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.ingestion import ImportJob, ImportTemplate, SourceDefinition
+from app.services.catalog.product_lines import sellable_line_codes
 from app.services.commercial_planner.lineup_commercial_month_split import (
     HALF_YEAR_SPLIT_REQUIRES_MONTH_COLUMNS,
     HalfYearSplitRequiresMonthColumnsError,
@@ -721,6 +722,7 @@ async def parse_current_lineup_file(
                 filename=filename,
                 total_rows=len(lines_to_add),
                 resolved_product_lines=resolved_plines,
+                line_codes=await sellable_line_codes(db),
             )
             if inferred_line:
                 case.product_line = inferred_line
@@ -765,6 +767,7 @@ async def parse_current_lineup_file(
                 sheet_name=effective_sheet,
                 folder_path=effective_folder,
                 manual_business_unit=parse_opts.get("business_unit"),
+                tenant_bu_codes=await sellable_line_codes(db),
             )
             if bu_report.business_unit:
                 case.business_unit = bu_report.business_unit

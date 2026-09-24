@@ -10,9 +10,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator
 
-# Default ACZA Consumer tenant BU tab/folder codes (Spec C §3.5 + archive inventory).
-DEFAULT_ACZA_TENANT_BU_CODES: frozenset[str] = frozenset({"NB", "NR", "NV", "NX", "PF", "XB"})
-
 _YEAR_RE = re.compile(r"^20\d{2}$")
 _QUARTER_RE = re.compile(r"^Q[1-4]$", re.IGNORECASE)
 _SHORT_QUARTER_RE = re.compile(r"^26Q[1-4]$", re.IGNORECASE)
@@ -36,11 +33,15 @@ class FolderConventionConfig:
 
 @dataclass
 class BackfillArchiveConfig:
-    """Archive scan + metadata config consumed by the bulk backfill preview runner."""
+    """Archive scan + metadata config consumed by the bulk backfill preview runner.
+
+    ``tenant_bu_codes`` is an optional override. When unset, callers pass the sellable
+    product-line codes (``app.services.catalog.product_lines.sellable_line_codes``, D-g).
+    """
 
     archive_roots: list[Path]
     folder_convention: FolderConventionConfig = field(default_factory=FolderConventionConfig)
-    tenant_bu_codes: frozenset[str] = DEFAULT_ACZA_TENANT_BU_CODES
+    tenant_bu_codes: frozenset[str] | None = None
     extra_file_paths: list[Path] = field(default_factory=list)
     exclude_name_substrings: tuple[str, ...] = (
         "do not use",
@@ -54,7 +55,7 @@ class BackfillArchiveConfig:
             "folder_convention": {
                 "segment_roles": list(self.folder_convention.segment_roles),
             },
-            "tenant_bu_codes": sorted(self.tenant_bu_codes),
+            "tenant_bu_codes": sorted(self.tenant_bu_codes) if self.tenant_bu_codes is not None else None,
             "extra_file_paths": [str(p) for p in self.extra_file_paths],
         }
 
@@ -85,7 +86,7 @@ def _classify_segment(segment: str, tenant_bu_codes: frozenset[str]) -> str | No
     if not text:
         return None
     upper = text.upper()
-    if upper in tenant_bu_codes:
+    if any(upper == str(code).strip().upper() for code in tenant_bu_codes):
         return "business_unit"
     if _YEAR_RE.match(text):
         return "year"
@@ -135,9 +136,17 @@ def parse_archive_relative_path(
     }
 
 
-def iter_archive_lineup_files(config: BackfillArchiveConfig) -> Iterator[dict[str, Any]]:
-    """Yield file records: absolute path, relative path, folder_path, bytes-ready metadata."""
+def iter_archive_lineup_files(
+    config: BackfillArchiveConfig,
+    *,
+    sellable_line_codes: frozenset[str] | None = None,
+) -> Iterator[dict[str, Any]]:
+    """Yield file records: absolute path, relative path, folder_path, bytes-ready metadata.
+
+    BU folder segments match ``config.tenant_bu_codes`` when set, else ``sellable_line_codes``.
+    """
     seen: set[Path] = set()
+    bu_codes = config.tenant_bu_codes if config.tenant_bu_codes is not None else (sellable_line_codes or frozenset())
 
     def _maybe_yield(path: Path, *, root: Path | None) -> Iterator[dict[str, Any]]:
         path = path.resolve()
@@ -156,7 +165,7 @@ def iter_archive_lineup_files(config: BackfillArchiveConfig) -> Iterator[dict[st
             relative = Path(path.name)
         meta = parse_archive_relative_path(
             relative,
-            tenant_bu_codes=config.tenant_bu_codes,
+            tenant_bu_codes=bu_codes,
             convention=config.folder_convention,
         )
         yield {

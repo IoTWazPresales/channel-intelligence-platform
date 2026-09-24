@@ -46,13 +46,12 @@ import {
   type StewardOverrides,
 } from '@/features/commercial-planner/lineupBackfillStewardOverrides';
 import { BulkLineup1hRederivationSection } from '@/features/commercial-planner/BulkLineup1hRederivationSection';
+import { useProductLines } from '@/features/catalog/useProductLines';
 import { registerClientBackgroundTask } from '@/features/background-tasks/backgroundTaskRegistry';
 import { apiPostFormData, safeDisplayError } from '@/lib/api';
 
 const ACCEPT =
   '.csv,.xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12,text/csv';
-
-const TENANT_BU_OPTIONS = ['NB', 'NR', 'NV', 'NX', 'PF', 'XB'] as const;
 
 type CaseProposal = {
   proposal_key: string;
@@ -100,6 +99,12 @@ function statusChip(status: string) {
   return <Chip size="small" variant="outlined" label={status} />;
 }
 
+/** Catalogue product-line codes, plus the current value if the catalogue no longer lists it. */
+function buOptionCodes(codes: readonly string[], current: string): string[] {
+  const upper = codes.map((c) => c.toUpperCase());
+  return current && !upper.includes(current) ? [...upper, current] : upper;
+}
+
 function appendFolderPaths(fd: FormData, staged: StagedLineupFile[], globalFolderOverride: string) {
   const globalOverride = globalFolderOverride.trim();
   staged.forEach((s) => {
@@ -118,6 +123,8 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  // BU options and archive folder codes: every catalogue product line (D-g).
+  const { codes: productLineCodes, isPending: productLinesPending } = useProductLines({ enabled: open });
   const [stagedFiles, setStagedFiles] = useState<StagedLineupFile[]>([]);
   const [folderPathOverride, setFolderPathOverride] = useState('');
   const [preview, setPreview] = useState<PreviewPayload | null>(null);
@@ -363,7 +370,7 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
   const onAddFiles = useCallback(
     (list: FileList | null) => {
       if (!list?.length) return;
-      const incoming = stageLineupFilesFromList(list);
+      const incoming = stageLineupFilesFromList(list, productLineCodes);
       if (!incoming.length) {
         setLoadNotice('No lineup spreadsheets found in selection (need .xlsx / .xlsm / .csv).');
         return;
@@ -372,13 +379,13 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
       setLoadNotice(`Added ${incoming.length} file(s).`);
       resetPreviewState();
     },
-    [resetPreviewState],
+    [productLineCodes, resetPreviewState],
   );
 
   const onSelectArchiveFolder = useCallback(
     (list: FileList | null) => {
       if (!list?.length) return;
-      const incoming = stageLineupFilesFromList(list);
+      const incoming = stageLineupFilesFromList(list, productLineCodes);
       if (!incoming.length) {
         setLoadNotice('No lineup spreadsheets found under that folder.');
         return;
@@ -386,11 +393,11 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
       setStagedFiles((prev) => mergeStagedLineupFiles(prev, incoming, 'replace'));
       const withPaths = incoming.filter((s) => s.folderPath).length;
       setLoadNotice(
-        `Loaded ${incoming.length} lineup file(s) from archive tree (${withPaths} with NB/NR/…/year/quarter paths).`,
+        `Loaded ${incoming.length} lineup file(s) from archive tree (${withPaths} with product-line/year/quarter paths).`,
       );
       resetPreviewState();
     },
-    [resetPreviewState],
+    [productLineCodes, resetPreviewState],
   );
 
   useEffect(() => {
@@ -407,7 +414,7 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
           <Typography variant="body2" color="text.secondary">
-            Select your <strong>Product Lineup</strong> root once — all NB/NR/NV/PF/XB subfolders are
+            Select your <strong>Product Lineup</strong> root once — all product-line folders are
             included. Period/BU paths are inferred from each file&apos;s place in the tree. Edit overrides
             after preview; nothing writes until you confirm apply.
           </Typography>
@@ -449,6 +456,7 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
               <Button
                 variant="contained"
                 startIcon={<FolderOpenOutlinedIcon />}
+                disabled={productLinesPending}
                 onClick={() => folderInputRef.current?.click()}
               >
                 Select archive folder
@@ -587,6 +595,7 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
                 <TableBody>
                   {preview.preview.case_proposals.map((p) => {
                     const inCollision = collisionMemberKeys.has(p.proposal_key);
+                    const buValue = (buOverrides[p.proposal_key] ?? p.business_unit ?? '').toUpperCase();
                     return (
                       <TableRow
                         key={p.proposal_key}
@@ -627,7 +636,7 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
                             size="small"
                             select
                             SelectProps={{ native: true }}
-                            value={(buOverrides[p.proposal_key] ?? p.business_unit ?? '').toUpperCase()}
+                            value={buValue}
                             onChange={(e) =>
                               setBuOverrides((prev) => ({
                                 ...prev,
@@ -637,7 +646,7 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
                             sx={{ minWidth: 88 }}
                           >
                             <option value="">—</option>
-                            {TENANT_BU_OPTIONS.map((bu) => (
+                            {buOptionCodes(productLineCodes, buValue).map((bu) => (
                               <option key={bu} value={bu}>
                                 {bu}
                               </option>

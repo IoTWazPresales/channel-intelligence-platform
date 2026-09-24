@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.dimensions import DimCustomer, DimProduct
+from app.services.catalog.product_lines import sellable_line_codes
 from app.services.commercial_planner.lineup_half_year_quantity import (
     HALF_YEAR_ALLOCATION_FLAG,
     half_year_allocation_summary,
@@ -757,9 +758,15 @@ async def build_bulk_lineup_preview(
     tenant_bu_codes: frozenset[str] | None = None,
     include_file_manifest_b64: bool = True,
 ) -> dict[str, Any]:
-    """Build full file-grain preview (no lineup table writes)."""
+    """Build full file-grain preview (no lineup table writes).
+
+    Sheet/folder BU tiers use ``tenant_bu_codes`` when given, else every sellable
+    ``dim_product.product_line`` code (D-g), loaded once per preview.
+    """
     product_index = await asyncio.to_thread(_load_product_index_sync)
     bu_by_pid = await load_business_unit_by_product_id(db)
+    if tenant_bu_codes is None:
+        tenant_bu_codes = await sellable_line_codes(db)
     parser_ctx = await asyncio.to_thread(load_lineup_parser_context_sync)
 
     customers = (await db.execute(select(DimCustomer))).scalars().all()

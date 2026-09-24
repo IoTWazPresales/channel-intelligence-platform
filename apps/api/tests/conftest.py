@@ -56,6 +56,7 @@ _WRITE_CAPABLE_TEST_MODULES: frozenset[str] = frozenset(
         "test_async_broker_dispatch.py",
         "test_backfill_shipment_customer_po.py",
         "test_background_tasks.py",
+        "test_catalog_product_lines.py",
         "test_commercial_planner_api.py",
         "test_commercial_planner_reference_bootstrap.py",
         "test_cpor_cases_api.py",

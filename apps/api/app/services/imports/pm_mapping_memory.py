@@ -14,25 +14,6 @@ from app.services.imports.pm_field_catalog import normalize_pm_mapping_target
 MEMORY_SCHEMA_VERSION = "1"
 MAPPING_PROFILE_KEY = "mapping_profile"
 
-# Observed dim_product.product_line values on cip 2026-09-18 (null handled as empty key).
-# Whether sellable grain is five or sixteen is Warren's call — do not collapse.
-PM_PRODUCT_LINES: tuple[str, ...] = (
-    "NB",
-    "NX",
-    "PF",
-    "NR",
-    "PT",
-    "LM",
-    "XB",
-    "PD",
-    "AI",
-    "NV",
-    "NL",
-    "CB",
-    "AX",
-    "AZ",
-)
-
 PARITY_TARGETS: tuple[str, ...] = (
     "technical_product_id",  # item / material code
     "barcode_ean",  # EAN/UPC

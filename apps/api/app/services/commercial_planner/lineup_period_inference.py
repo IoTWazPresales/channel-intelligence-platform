@@ -8,7 +8,8 @@ Pure, deterministic helpers (no DB/I-O):
   The label supplies the year; the columns (or the label's own quarter token) supply the
   quarter. When they disagree a ``period_quarter_mismatch`` flag is raised and the label wins.
 - ``infer_case_product_line`` picks product line from resolved ``dim_product.product_line``
-  (catalogue majority), with filename fallback when too few rows are resolved.
+  (catalogue majority), with filename fallback when too few rows are resolved. The fallback only
+  matches filename tokens against the caller-supplied sellable product-line codes (D-g).
   Sheet column values are **not** used — they are often misleading.
 """
 from __future__ import annotations
@@ -16,9 +17,6 @@ from __future__ import annotations
 import re
 from datetime import date
 from typing import Any
-
-# Canonical dim_product.product_line labels (ground truth — do not invent new values).
-CANONICAL_PRODUCT_LINES: frozenset[str] = frozenset({"Gaming", "Consumer", "NV", "NB"})
 
 # Minimum share of case lines that must have a resolved product_id to trust catalogue majority.
 CATALOGUE_MIN_RESOLVED_FRACTION: float = 0.25
@@ -196,20 +194,22 @@ def infer_product_line_from_catalogue_values(product_lines: list[str | None]) ->
     return _majority_nonempty(cleaned)
 
 
-def infer_product_line_from_filename(filename: str | None) -> str | None:
-    """Map filename tokens to canonical dim_product.product_line labels."""
-    if not filename:
+def infer_product_line_from_filename(
+    filename: str | None,
+    *,
+    line_codes: frozenset[str] | None = None,
+) -> str | None:
+    """First filename token that equals a sellable ``dim_product.product_line`` code.
+
+    ``line_codes`` comes from ``app.services.catalog.product_lines`` (D-g). Without codes there
+    is no fallback. Words such as "gaming" or "notebook" are not product-line values.
+    """
+    if not filename or not line_codes:
         return None
-    n = str(filename).lower()
-    tokens = [t for t in re.split(r"[\s_\-\.]+", n) if t]
-    if "gaming" in n:
-        return "Gaming"
-    if "nv ally" in n or "nv" in tokens:
-        return "NV"
-    if "consumer" in n:
-        return "Consumer"
-    if "nb" in tokens or "notebook" in n:
-        return "NB"
+    by_key = {str(c).strip().upper(): str(c).strip() for c in line_codes if str(c).strip()}
+    for token in re.split(r"[\s_\-\.]+", str(filename).upper()):
+        if token and token in by_key:
+            return by_key[token]
     return None
 
 
@@ -218,6 +218,7 @@ def infer_case_product_line(
     filename: str | None,
     total_rows: int,
     resolved_product_lines: list[str],
+    line_codes: frozenset[str] | None = None,
 ) -> str | None:
     """Infer case product_line: catalogue majority (primary), filename (fallback when under-resolved).
 
@@ -225,7 +226,7 @@ def infer_case_product_line(
     non-empty dim_product.product_line strings.
     """
     if total_rows <= 0:
-        return infer_product_line_from_filename(filename)
+        return infer_product_line_from_filename(filename, line_codes=line_codes)
 
     resolved_count = len(resolved_product_lines)
     if resolved_count / total_rows >= CATALOGUE_MIN_RESOLVED_FRACTION:
@@ -233,4 +234,4 @@ def infer_case_product_line(
         if majority:
             return majority
 
-    return infer_product_line_from_filename(filename)
+    return infer_product_line_from_filename(filename, line_codes=line_codes)

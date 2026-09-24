@@ -26,7 +26,7 @@ from app.services.imports.pm_field_catalog import (
     field_definitions_for_api,
     normalize_mapping_decisions,
 )
-from app.services.imports.pm_mapping_memory import PM_PRODUCT_LINES
+from app.services.catalog.product_lines import list_sellable_product_lines
 from app.services.imports.pm_staging import pm_staged_row_count_from_metadata
 from app.services.imports.product_master_workflow import (
     STATUS_PM_COMMIT_QUEUED,
@@ -191,7 +191,7 @@ async def get_product_master_job_state(
         "staged_row_count": pm_staged_row_count_from_metadata(job.staged_metadata),
         "inferred_schema": inferred_schema_for_state_payload(job.inferred_schema),
         "progress": progress,
-        "product_lines": list(PM_PRODUCT_LINES),
+        "product_lines": [line.code for line in (await list_sellable_product_lines(db)).lines],
         "product_line": product_line,
         "duplicate_ean_flag": bool(staged_meta.get("duplicate_ean_flag")),
         "duplicate_ean_count": staged_meta.get("duplicate_ean_count") or 0,

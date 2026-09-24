@@ -1,6 +1,9 @@
-/** Mirror of ``lineup_backfill_archive_config.parse_archive_relative_path`` for browser folder upload. */
-
-export const DEFAULT_TENANT_BU_CODES = ['NB', 'NR', 'NV', 'NX', 'PF', 'XB'] as const;
+/**
+ * Mirror of ``lineup_backfill_archive_config.parse_archive_relative_path`` for browser folder upload.
+ *
+ * BU folder segments match ``tenantBuCodes``: the sellable product-line codes from
+ * ``useProductLines`` (D-g). There is no built-in code list.
+ */
 
 export const ARCHIVE_EXCLUDE_NAME_SUBSTRINGS = ['do not use', 'previous q', 'kept as reference'] as const;
 
@@ -30,7 +33,7 @@ function classifySegment(segment: string, tenantBuCodes: readonly string[]): str
 
 export function parseArchiveRelativePath(
   relativePath: string,
-  tenantBuCodes: readonly string[] = DEFAULT_TENANT_BU_CODES,
+  tenantBuCodes: readonly string[],
 ): ParsedArchivePath {
   const normalized = relativePath.replace(/\//g, '\\');
   const parts = normalized.split('\\').filter(Boolean);
@@ -84,7 +87,7 @@ export type StagedLineupFile = {
 
 export function stageLineupFilesFromList(
   list: FileList | File[],
-  tenantBuCodes: readonly string[] = DEFAULT_TENANT_BU_CODES,
+  tenantBuCodes: readonly string[],
 ): StagedLineupFile[] {
   const out: StagedLineupFile[] = [];
   for (const file of Array.from(list)) {
