@@ -1,9 +1,10 @@
 'use client';
 
-import { Alert, Link as MuiLink, Stack, Typography } from '@mui/material';
+import { Link as MuiLink, Stack, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import NextLink from 'next/link';
 
+import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { apiGet } from '@/lib/api';
 import { evidenceBasisLabel } from '@/features/promotions-funding/evidenceBasis';
 
@@ -54,7 +55,7 @@ function formatMatchingAxes(axes: RankAxes): string {
 }
 
 export function CporComparableCasesPanel({ caseId }: { caseId: number }) {
-  const { data, isLoading, isError, error } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['cpor', 'intelligence', 'comparable', caseId],
     queryFn: ({ signal }) =>
       apiGet<ComparablePayload>(
@@ -64,14 +65,6 @@ export function CporComparableCasesPanel({ caseId }: { caseId: number }) {
     enabled: Number.isFinite(caseId) && caseId > 0,
   });
 
-  if (isError) {
-    return (
-      <Alert severity="warning" sx={{ mb: 2 }} data-testid="cpor-comparable-error">
-        {(error as Error)?.message ?? 'Comparable cases unavailable.'}
-      </Alert>
-    );
-  }
-
   return (
     <Stack spacing={0.75} sx={{ mb: 2 }} data-testid="cpor-comparable-cases">
       <Typography variant="subtitle2">Comparable cases</Typography>
@@ -80,9 +73,18 @@ export function CporComparableCasesPanel({ caseId }: { caseId: number }) {
         {data ? ` · ${data.total_candidates} candidates` : ''}
         {data?.file_evidence_rank_note ? ` · ${data.file_evidence_rank_note}` : ''}
       </Typography>
-      {isLoading ? (
-        <Typography variant="body2">Loading…</Typography>
-      ) : (
+      <ModuleDataSection
+        isLoading={isLoading}
+        isError={isError}
+        error={isError ? new Error(String((error as Error)?.message ?? 'Comparable cases unavailable.')) : null}
+        onRetry={() => void refetch()}
+        isEmpty={!data?.items?.length}
+        empty={{
+          title: 'No other cases to rank',
+          description: 'Comparables are ranked from stored, non-superseded, non-excluded cases — none qualify yet.',
+        }}
+        loadingLabel="Ranking comparable cases…"
+      >
         <Stack spacing={0.5}>
           {(data?.items ?? []).map((row, i) => {
             const key = row.case_id != null ? String(row.case_id) : `file-${row.case_code}`;
@@ -107,13 +109,8 @@ export function CporComparableCasesPanel({ caseId }: { caseId: number }) {
             </Typography>
             );
           })}
-          {!data?.items?.length ? (
-            <Typography variant="body2" color="text.secondary">
-              No other cases to rank.
-            </Typography>
-          ) : null}
         </Stack>
-      )}
+      </ModuleDataSection>
     </Stack>
   );
 }

@@ -28,6 +28,9 @@ vi.mock('@/lib/api', () => ({
         payment_evidence_count: 0,
       });
     }
+    if (url.includes('/comparable-cases')) {
+      return Promise.resolve({ case_id: 46, total_candidates: 0, rank_order: [], items: [] });
+    }
     if (url.includes('/auth/tenant-commercial-profile')) return Promise.resolve({ line_identifier_preference: 'sku' });
     return Promise.resolve({});
   },
@@ -44,9 +47,9 @@ function renderTabs(ui: ReactElement) {
 }
 
 describe('SettlementCaseTabs', () => {
-  it('exposes the five orphaned case tabs and mounts only the active one', async () => {
+  it('exposes the orphaned case tabs and mounts only the active one', async () => {
     renderTabs(<SettlementCaseTabs caseId={46} roeSnapshot={16.5} />);
-    for (const key of ['pivot', 'events', 'exports', 'promo-load', 'payments']) {
+    for (const key of ['pivot', 'events', 'exports', 'promo-load', 'payments', 'comparables']) {
       expect(screen.getByTestId(`settlement-tab-${key}`)).toBeInTheDocument();
     }
     expect(await screen.findByText('No USD pivot yet')).toBeInTheDocument();
@@ -76,5 +79,13 @@ describe('SettlementCaseTabs', () => {
     expect(await screen.findByTestId('cpor-promo-load-no-cst')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('settlement-tab-payments'));
     expect(await screen.findByTestId('cpor-payment-evidence-panel')).toBeInTheDocument();
+  });
+
+  it('mounts comparable cases as a tab wired to the shared panel, with the empty state', async () => {
+    renderTabs(<SettlementCaseTabs caseId={46} />);
+    fireEvent.click(screen.getByTestId('settlement-tab-comparables'));
+    const panel = screen.getByRole('tabpanel', { name: 'Comparable cases' });
+    expect(screen.getByTestId('settlement-tab-comparables')).toHaveAttribute('aria-controls', panel.id);
+    expect(await screen.findByText('No other cases to rank')).toBeInTheDocument();
   });
 });

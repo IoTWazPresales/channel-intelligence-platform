@@ -35,7 +35,7 @@ export const PIVOT_MISSING_ROE_COPY =
   'FX undeclared — USD pivot totals are withheld until a case rate of exchange is recorded.';
 
 /**
- * USD pivot for one CPOR case, rendered as a table (the unmounted `CporCaseWorkspace` used a raw
+ * USD pivot for one CPOR case, rendered as a table (the retired CporCaseWorkspace used a raw
  * `<pre>{JSON}</pre>`). Totals are withheld when the case has no declared rate of exchange, exactly
  * as before; the cells themselves are still shown so the operator can see the shape of the case.
  */

@@ -29,6 +29,7 @@ import { DualMoney } from '@/features/cpor/DualMoney';
 import { formatDualMoneyLine } from '@/features/cpor/fxDisplay';
 import { fmtCompact, fmtInt } from '@/features/promotions-funding/format';
 import { PaymentEvidenceOverlayPanel } from '@/features/promotions-funding/PaymentEvidenceOverlay';
+import { PortfolioReadPanel } from '@/features/promotions-funding/PortfolioReadPanel';
 import { CaseScopeFilters } from '@/features/promotions-funding/CaseScopeFilters';
 import {
   caseScopeClearPatch,
@@ -726,6 +727,8 @@ export function CaseBookSurface() {
           </Stack>
         </Panel>
       </Box>
+
+      <PortfolioReadPanel currencyCode={ccy} />
 
       {toastAction ? (
         <Alert severity="success" onClose={() => setToastAction(null)}>

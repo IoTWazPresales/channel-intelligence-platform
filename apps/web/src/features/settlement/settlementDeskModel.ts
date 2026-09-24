@@ -1,3 +1,5 @@
+import type { SettleReadiness } from '@/features/cpor/fxDisplay';
+
 import { customerPrimaryName, customerSecondaryCode } from './customerDisplay';
 
 export const SETTLE_STAGES = [
@@ -104,6 +106,21 @@ export type SettlementDeskView = {
   allowedNext: string[];
   /** BACKLOG-138 — set when this case has been soft-superseded (pointer, not status). */
   supersededByCaseId?: number | null;
+  /** N-0044 (BACKLOG-202) — FX anchor facts that only the retired CporCaseWorkspace showed. */
+  approvedAmount?: number | null;
+  approvedUsd?: number | null;
+  fxMode?: string | null;
+  fxBookedBy?: string | null;
+  fxBookedAt?: string | null;
+  fxProposedRate?: number | null;
+  fxProposedSource?: string | null;
+  needsReapproval?: boolean;
+  intelligenceExclude?: boolean;
+  settleReadiness?: SettleReadiness | null;
+  /** Settlement diagnostics from GET …/settlement. Flags only — none of them blocks settle. */
+  outOfWindowClaimRows?: number;
+  unresolvedProducts?: { token: string; units: number }[];
+  cstReconciliation?: { available: boolean; reason?: string; divergence_count?: number } | null;
 };
 
 export function stageFromCaseStatus(status: string, hasCip: boolean): SettleStage {

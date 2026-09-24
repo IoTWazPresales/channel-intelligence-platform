@@ -1,6 +1,15 @@
 'use client';
 
-import { Alert, Box } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Typography,
+} from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
@@ -22,10 +31,30 @@ type Props = {
   embedded?: boolean;
 };
 
+type ClaimImportResult = {
+  import?: { rows_upserted: number; unresolved_product_rows: number; out_of_window_rows: number };
+  rollup?: { lines_updated: number };
+};
+
+const LIFECYCLE_COPY: Record<'end' | 'cancel', { title: string; body: string; confirm: string }> = {
+  end: {
+    title: 'End this case?',
+    body: 'The case moves from active to ended. From ended the only next steps are settle (on this desk) or cancel.',
+    confirm: 'End case',
+  },
+  cancel: {
+    title: 'Cancel this case?',
+    body: 'Cancelled is terminal: the case cannot be settled or reopened afterwards.',
+    confirm: 'Cancel case',
+  },
+};
+
 export function SettlementDeskLive({ caseId, embedded = false }: Props) {
   const qc = useQueryClient();
   const [settleOpen, setSettleOpen] = useState(false);
   const [supersedeOpen, setSupersedeOpen] = useState(false);
+  const [lifecycleConfirm, setLifecycleConfirm] = useState<'end' | 'cancel' | null>(null);
+  const [includeOow, setIncludeOow] = useState(false);
 
   const detailQ = useQuery({
     queryKey: ['cpor', 'case', caseId],
@@ -44,12 +73,44 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
     mutationFn: (file: File) => {
       const fd = new FormData();
       fd.append('file', file);
-      fd.append('include_out_of_window', 'false');
-      return apiPostFormData(`/api/v1/cpor/cases/${caseId}/claim-evidence/import`, fd);
+      fd.append('include_out_of_window', includeOow ? 'true' : 'false');
+      return apiPostFormData<ClaimImportResult>(`/api/v1/cpor/cases/${caseId}/claim-evidence/import`, fd);
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['cpor', 'case', caseId] });
       await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', caseId] });
+    },
+  });
+
+  // N-0044 (BACKLOG-202): the post-live transitions and claim/intelligence controls that only the
+  // retired CporCaseWorkspace had. Same endpoints; end/cancel go through a confirm dialog.
+  const lifecycle = useMutation({
+    mutationFn: (action: 'end' | 'cancel') =>
+      apiPost(`/api/v1/cpor/cases/${caseId}/transition`, { action }),
+    onSuccess: async () => {
+      setLifecycleConfirm(null);
+      await qc.invalidateQueries({ queryKey: ['cpor', 'case', caseId] });
+      await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', caseId] });
+      await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', 'book'] });
+      await qc.invalidateQueries({ queryKey: ['cpor', 'cases'] });
+    },
+  });
+
+  const rerollup = useMutation({
+    mutationFn: () => apiPost(`/api/v1/cpor/cases/${caseId}/settlement/rollup`, {}),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['cpor', 'case', caseId] });
+      await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', caseId] });
+    },
+  });
+
+  const intelligenceExclude = useMutation({
+    mutationFn: (exclude: boolean) =>
+      apiPost(`/api/v1/cpor/cases/${caseId}/intelligence-exclude`, { exclude, confirm: true }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['cpor', 'case', caseId] });
+      await qc.invalidateQueries({ queryKey: ['cpor', 'cases'] });
+      await qc.invalidateQueries({ queryKey: ['cpor', 'settlement', 'book'] });
     },
   });
 
@@ -132,6 +193,26 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
           {String((restoreSupersession.error as Error)?.message)}
         </Alert>
       ) : null}
+      {[lifecycle, rerollup, intelligenceExclude].map((m, i) =>
+        m.isError ? (
+          <Alert key={i} severity="error" sx={{ mb: 1 }}>
+            {String((m.error as Error)?.message)}
+          </Alert>
+        ) : null,
+      )}
+      {importClaims.isSuccess && importClaims.data?.import ? (
+        <Alert
+          severity="success"
+          sx={{ mb: 1 }}
+          onClose={() => importClaims.reset()}
+          data-testid="settlement-desk-import-summary"
+        >
+          Upserted {importClaims.data.import.rows_upserted} claim row(s); updated{' '}
+          {importClaims.data.rollup?.lines_updated ?? 0} line(s). Unresolved:{' '}
+          {importClaims.data.import.unresolved_product_rows}; out-of-window:{' '}
+          {importClaims.data.import.out_of_window_rows}.
+        </Alert>
+      ) : null}
       <SettlementDesk
         view={view}
         embedded={embedded}
@@ -142,8 +223,17 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
         onSupersede={() => setSupersedeOpen(true)}
         onRestoreSupersession={() => restoreSupersession.mutate()}
         restoringSupersession={restoreSupersession.isPending}
+        onLifecycleAction={(a) => setLifecycleConfirm(a)}
+        transitioning={lifecycle.isPending}
+        plannerHref={`/promotions?plan=${caseId}`}
+        includeOutOfWindow={includeOow}
+        onIncludeOutOfWindowChange={setIncludeOow}
+        onRerollup={() => rerollup.mutate()}
+        rerolling={rerollup.isPending}
+        onIntelligenceExcludeChange={(exclude) => intelligenceExclude.mutate(exclude)}
+        excludingIntelligence={intelligenceExclude.isPending}
       />
-      {/* Stage 2.7 (N-0032): the five case-detail tabs that only the unmounted CporCaseWorkspace had. */}
+      {/* Stage 2.7 (N-0032, N-0044): the case-detail tabs that only the retired CporCaseWorkspace had. */}
       <Box sx={{ mt: 2 }}>
         <SettlementCaseTabs caseId={caseId} roeSnapshot={view.roeSnapshot} />
       </Box>
@@ -166,7 +256,42 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
         currencyCode={view.currency}
         settleReadiness={settlementQ.data.settle_readiness ?? detailQ.data.settle_readiness}
         claimRowCount={view.claimRowCount}
+        unresolvedProductCount={view.unresolvedProducts?.length ?? 0}
       />
+      <Dialog
+        open={lifecycleConfirm != null}
+        onClose={() => !lifecycle.isPending && setLifecycleConfirm(null)}
+        fullWidth
+        maxWidth="xs"
+        aria-labelledby="settlement-lifecycle-confirm-title"
+      >
+        {lifecycleConfirm ? (
+          <>
+            <DialogTitle id="settlement-lifecycle-confirm-title">
+              {LIFECYCLE_COPY[lifecycleConfirm].title}
+            </DialogTitle>
+            <DialogContent>
+              <Typography variant="body2" color="text.secondary">
+                {view.caseCode} · {view.customerName}. {LIFECYCLE_COPY[lifecycleConfirm].body}
+              </Typography>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setLifecycleConfirm(null)} disabled={lifecycle.isPending}>
+                Keep case
+              </Button>
+              <Button
+                variant="contained"
+                color={lifecycleConfirm === 'cancel' ? 'warning' : 'primary'}
+                disabled={lifecycle.isPending}
+                onClick={() => lifecycle.mutate(lifecycleConfirm)}
+                data-testid="settlement-lifecycle-confirm"
+              >
+                {lifecycle.isPending ? 'Saving…' : LIFECYCLE_COPY[lifecycleConfirm].confirm}
+              </Button>
+            </DialogActions>
+          </>
+        ) : null}
+      </Dialog>
     </>
   );
 }

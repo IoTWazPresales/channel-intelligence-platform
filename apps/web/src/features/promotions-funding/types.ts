@@ -105,6 +105,8 @@ export type CporCaseDetail = {
   created_by?: string | null;
   evidence_basis?: 'claim_evidenced' | 'source_attested' | 'none' | null;
   intelligence_exclude?: boolean;
+  needs_reapproval?: boolean;
+  last_comment?: string | null;
 };
 
 export type SupportBiasRead = {

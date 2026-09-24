@@ -26,6 +26,15 @@ export type SettlementDeskCase = {
   settle_readiness?: SettleReadiness;
   customer_id?: number | null;
   superseded_by_case_id?: number | null;
+  ttl_support_zar?: number | null;
+  ttl_support_usd?: number | null;
+  fx_mode?: string | null;
+  fx_proposed_rate?: number | null;
+  fx_proposed_source?: string | null;
+  fx_declared_at?: string | null;
+  fx_declared_by?: string | null;
+  needs_reapproval?: boolean;
+  intelligence_exclude?: boolean;
 };
 
 export type SettlementDeskApiLine = {
@@ -53,6 +62,8 @@ export type SettlementDeskApi = {
   window_end: string | null;
   claim_row_count: number;
   out_of_window_claim_rows?: number;
+  unresolved_products?: { token: string; units: number }[];
+  cst_reconciliation?: { available: boolean; reason?: string; divergence_count?: number };
   lines: SettlementDeskApiLine[];
   can_settle: boolean;
   settle_readiness?: SettleReadiness;
@@ -167,6 +178,19 @@ export function mapSettlementDeskView(
       settlement.settle_readiness?.fx_basis_line ?? detail.settle_readiness?.fx_basis_line ?? null,
     allowedNext: detail.allowed_next ?? [],
     supersededByCaseId: detail.superseded_by_case_id ?? null,
+    approvedAmount: detail.ttl_support_zar ?? null,
+    approvedUsd: detail.ttl_support_usd ?? null,
+    fxMode: detail.fx_mode ?? null,
+    fxBookedBy: detail.fx_declared_by ?? null,
+    fxBookedAt: detail.fx_declared_at ?? null,
+    fxProposedRate: detail.fx_proposed_rate ?? null,
+    fxProposedSource: detail.fx_proposed_source ?? null,
+    needsReapproval: Boolean(detail.needs_reapproval),
+    intelligenceExclude: Boolean(detail.intelligence_exclude),
+    settleReadiness: settlement.settle_readiness ?? detail.settle_readiness ?? null,
+    outOfWindowClaimRows: settlement.out_of_window_claim_rows ?? 0,
+    unresolvedProducts: settlement.unresolved_products ?? [],
+    cstReconciliation: settlement.cst_reconciliation ?? null,
   };
 }
 

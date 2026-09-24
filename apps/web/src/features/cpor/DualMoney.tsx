@@ -5,7 +5,7 @@ import { Box, Typography } from '@mui/material';
 import { formatDualMoneyLine, formatUsdMoney } from '@/features/cpor/fxDisplay';
 
 /**
- * ZAR primary with booked USD alongside. Evaluated CporFxAnchorPanel (too large for
+ * ZAR primary with booked USD alongside. Evaluated the retired CporFxAnchorPanel (too large for
  * headline strips and grid cells) and HeadlineFigure caption (too secondary — neither
  * currency is "the" number).
  *

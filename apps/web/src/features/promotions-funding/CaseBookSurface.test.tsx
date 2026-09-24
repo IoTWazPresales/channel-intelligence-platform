@@ -1,5 +1,5 @@
 import React from 'react';
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -117,8 +117,46 @@ const bookPayload = {
   currency_code: 'ZAR',
 };
 
+const portfolioPayload = {
+  cases_in_scope: 304,
+  lines_included: 621,
+  evidence_basis_mix: { claim_evidenced: 0, source_attested: 230, none: 74 },
+  totals: {
+    support_usd: 1_617_054,
+    support_zar: 28_862_698,
+    estimate_qty: 48_463,
+    result_qty: 29_970,
+    delivery_rate: 0.618,
+    support_per_unit_sold_usd: 53.96,
+    support_per_unit_sold_zar: 963,
+  },
+  claim_evidenced_only: { cases_in_scope: 0, delivery_rate: null },
+  by_bu: [{ bu: 'NB', support_usd: 900_000, support_zar: 16_000_000 }],
+  by_promotion_type: [{ promotion_type: 'Sell out PP', support_usd: 1_000_000, support_zar: 18_000_000 }],
+  incremental_unit_cost: { cases_ok: 8, cases_flagged: 192, cases_evaluated: 200, avg_cost_per_incremental_unit_usd: 70.62 },
+};
+
+const normsPayload = {
+  trailing_quarters: 4,
+  window_quarters: ['2025Q4', '2026Q1', '2026Q2', '2026Q3'],
+  anchor_quarter: '2026Q3',
+  by_customer: [
+    {
+      customer_id: 12,
+      customer_code: 'CUST-000012',
+      customer_name: 'Takealot',
+      quarters_present: 3,
+      absolute_support_usd_avg: 1000,
+      absolute_support_zar_avg: 18_000,
+      support_pct_of_srp_avg: 0.052,
+    },
+  ],
+};
+
 vi.mock('@/lib/api', () => ({
   apiGet: (url: string) => {
+    if (url.includes('/intelligence/portfolio')) return Promise.resolve(portfolioPayload);
+    if (url.includes('/intelligence/norms')) return Promise.resolve(normsPayload);
     if (url.includes('/settlement/book')) return Promise.resolve(bookPayload);
     if (url.includes('/cpor/cases')) return Promise.resolve(listPayload);
     return Promise.resolve({});
@@ -153,5 +191,38 @@ describe('CaseBookSurface', () => {
     const overlay = screen.getByTestId('cpor-payment-overlay');
     expect(grid.compareDocumentPosition(overlay) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByTestId('case-book-lifecycle')).toBeInTheDocument();
+  });
+
+  it('mounts the portfolio read collapsed after the ageing grid, money through DualMoney (N-0044)', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <CaseBookSurface />
+      </QueryClientProvider>,
+    );
+    const panel = await screen.findByTestId('case-book-portfolio-read');
+    expect(panel).toHaveTextContent('Portfolio read — all non-superseded cases');
+    const ageing = screen.getByTestId('case-book-ageing');
+    expect(ageing.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const toggle = screen.getByTestId('case-book-portfolio-toggle');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByTestId('portfolio-support')).toBeNull();
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(document.getElementById(toggle.getAttribute('aria-controls') ?? '')).not.toBeNull();
+    const support = await screen.findByTestId('portfolio-support');
+    expect(support).toHaveTextContent(/^R /);
+    expect(screen.getByTestId('portfolio-support-usd')).toHaveTextContent(/\$ 1[\s,.]?617[\s,.]?054[.,]00 · Σ per-line booked USD/);
+    expect(screen.getByTestId('portfolio-per-unit-usd')).toHaveTextContent(/\$ 53[.,]96/);
+    expect(screen.getByTestId('case-book-portfolio-top')).toHaveTextContent('Top BU · NB');
+    expect(await screen.findByTestId('portfolio-norm-12')).toBeInTheDocument();
+    expect(screen.getByText('Takealot')).toBeInTheDocument();
+    expect(screen.getByText(/5\.2% of SRP · 3Q present/)).toBeInTheDocument();
+    // Trimmed: no do-not-build incremental-unit tile, no support-bias block, no empty claim-only line.
+    expect(screen.queryByText(/incremental unit/i)).toBeNull();
+    expect(screen.queryByText(/Support bias/i)).toBeNull();
+    expect(screen.queryByText(/claim-evidenced only/i)).toBeNull();
   });
 });

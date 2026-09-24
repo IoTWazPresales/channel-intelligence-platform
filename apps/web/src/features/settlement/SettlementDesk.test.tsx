@@ -157,4 +157,44 @@ describe('SettlementDesk', () => {
       'FX rate 18.78 · mode not declared',
     );
   });
+
+  it('offers end / cancel only from allowedNext and hands the choice to the caller (N-0044)', () => {
+    const onLifecycleAction = vi.fn();
+    const { unmount } = renderDesk(
+      <SettlementDesk
+        view={view({ status: 'active', allowedNext: ['ended', 'cancelled'] })}
+        onLifecycleAction={onLifecycleAction}
+      />,
+    );
+    screen.getByTestId('settlement-desk-action-end').click();
+    expect(onLifecycleAction).toHaveBeenCalledWith('end');
+    expect(screen.getByTestId('settlement-desk-action-cancel')).toBeInTheDocument();
+    unmount();
+
+    renderDesk(<SettlementDesk view={view({ allowedNext: [] })} onLifecycleAction={onLifecycleAction} />);
+    expect(screen.queryByTestId('settlement-desk-action-end')).toBeNull();
+    expect(screen.queryByTestId('settlement-desk-action-cancel')).toBeNull();
+  });
+
+  it('shows the reapproval warning and links pre-approval work to the planner', () => {
+    renderDesk(
+      <SettlementDesk
+        view={view({ status: 'proposed', allowedNext: ['approved', 'rejected', 'cancelled'], needsReapproval: true })}
+        plannerHref="/promotions?plan=311"
+      />,
+    );
+    expect(screen.getByTestId('settlement-desk-needs-reapproval')).toHaveTextContent(/Needs reapproval \(over budget\)/);
+    expect(screen.getByTestId('settlement-desk-open-planner')).toHaveAttribute('href', '/promotions?plan=311');
+  });
+
+  it('puts approved support first in the headline strip via DualMoney', () => {
+    renderDesk(
+      <SettlementDesk
+        view={view({ approvedAmount: 1878, approvedUsd: 100, fxMode: 'booked', fxBookedBy: 'ken' })}
+      />,
+    );
+    expect(screen.getByTestId('desk-approved-usd')).toHaveTextContent(/\$ 100[.,]00/);
+    expect(screen.getByText('Booked 18.78 · booked · by ken')).toBeInTheDocument();
+    expect(screen.queryByTestId('settlement-desk-open-planner')).toBeNull();
+  });
 });

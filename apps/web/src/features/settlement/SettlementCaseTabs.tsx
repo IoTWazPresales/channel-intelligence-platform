@@ -3,13 +3,14 @@
 import { Box, Tab, Tabs } from '@mui/material';
 import { useId, useState } from 'react';
 
+import { CporComparableCasesPanel } from '@/app/(app)/commercial-planner/cpor-cases/[id]/CporComparableCasesPanel';
 import { CporPaymentEvidencePanel } from '@/app/(app)/commercial-planner/cpor-cases/[id]/CporPaymentEvidencePanel';
 import { CporPromoLoadPanel } from '@/app/(app)/commercial-planner/cpor-cases/[id]/CporPromoLoadPanel';
 import { CporEventsPanel } from '@/features/cpor/CporEventsPanel';
 import { CporExportsPanel } from '@/features/cpor/CporExportsPanel';
 import { CporUsdPivotPanel } from '@/features/cpor/CporUsdPivotPanel';
 
-export type SettlementCaseTabKey = 'pivot' | 'events' | 'exports' | 'promo-load' | 'payments';
+export type SettlementCaseTabKey = 'pivot' | 'events' | 'exports' | 'promo-load' | 'payments' | 'comparables';
 
 const TABS: ReadonlyArray<{ key: SettlementCaseTabKey; label: string }> = [
   { key: 'pivot', label: 'USD pivot' },
@@ -17,12 +18,14 @@ const TABS: ReadonlyArray<{ key: SettlementCaseTabKey; label: string }> = [
   { key: 'exports', label: 'Exports' },
   { key: 'promo-load', label: 'Promo load' },
   { key: 'payments', label: 'Payments / recon' },
+  { key: 'comparables', label: 'Comparable cases' },
 ];
 
 /**
- * Case-detail tabs under the settlement desk. These five surfaces lived only in the unmounted
- * `CporCaseWorkspace` (BACKLOG-202) — promo-load recon among them, a shipped A2 deliverable
- * (BACKLOG-093) nobody could reach. Only the active tab mounts, so each panel's query fires lazily.
+ * Case-detail tabs under the settlement desk. These surfaces lived only in the retired
+ * CporCaseWorkspace (BACKLOG-202) — promo-load recon among them, a shipped A2 deliverable
+ * (BACKLOG-093) nobody could reach. Only the active tab mounts, so each panel's query fires lazily
+ * (comparable cases ranks every stored case, ~800 ms — it must not load with the desk).
  */
 export function SettlementCaseTabs({
   caseId,
@@ -79,6 +82,7 @@ export function SettlementCaseTabs({
         {tab === 'exports' ? <CporExportsPanel caseId={caseId} /> : null}
         {tab === 'promo-load' ? <CporPromoLoadPanel caseId={caseId} /> : null}
         {tab === 'payments' ? <CporPaymentEvidencePanel caseId={caseId} /> : null}
+        {tab === 'comparables' ? <CporComparableCasesPanel caseId={caseId} /> : null}
       </Box>
     </Box>
   );

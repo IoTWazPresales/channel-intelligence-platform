@@ -81,6 +81,9 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
   const [product, setProduct] = useState<ProductPick | null>(null);
   const [srp, setSrp] = useState('13999');
   const [estimate, setEstimate] = useState('20');
+  const [approveOpen, setApproveOpen] = useState(false);
+  const [approveRate, setApproveRate] = useState('');
+  const [proposedEdit, setProposedEdit] = useState('');
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['cpor', 'case', caseId],
@@ -119,14 +122,31 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
   });
 
   const transition = useMutation({
-    mutationFn: (payload: { action: string; comment?: string }) =>
-      apiPost(`/api/v1/cpor/cases/${caseId}/transition`, payload),
+    mutationFn: (payload: {
+      action: string;
+      comment?: string;
+      confirm_over_budget_reapproval?: boolean;
+      fx_rate?: number | null;
+    }) => apiPost(`/api/v1/cpor/cases/${caseId}/transition`, payload),
     onSuccess: async (_r, vars) => {
       setRejectOpen(false);
+      setApproveOpen(false);
       setToast(`${data?.case_code ?? caseId} → ${ACTION_LABELS[vars.action] ?? vars.action}`);
       await qc.invalidateQueries({ queryKey: ['cpor', 'case', caseId] });
       await qc.invalidateQueries({ queryKey: ['cpor', 'cases'] });
       await refetch();
+    },
+    onError: (e) => setToast(e instanceof Error ? e.message : String(e)),
+  });
+
+  // N-0044 (BACKLOG-202): FX mode and proposed rate were editable only in the retired
+  // CporCaseWorkspace after create. Same PATCH, same draft/rejected rule as the line edits.
+  const patchFx = useMutation({
+    mutationFn: (body: { fx_mode?: 'booked' | 'floating'; fx_proposed_rate?: number }) =>
+      apiPatch(`/api/v1/cpor/cases/${caseId}`, body),
+    onSuccess: async () => {
+      setProposedEdit('');
+      await qc.invalidateQueries({ queryKey: ['cpor', 'case', caseId] });
     },
     onError: (e) => setToast(e instanceof Error ? e.message : String(e)),
   });
@@ -282,8 +302,12 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
   const stage = data.status as PlanStage;
   const nextActions: [string, string][] = Object.entries(ACTION_LABELS).filter(([action]) => {
     if (action === 'resend') return data.status === 'rejected';
+    // Settle only on the desk: it owns the FX readiness gate and the SettlementConfirmDialog.
+    if (action === 'settle') return false;
     return (data.allowed_next ?? []).includes(ACTION_TARGET[action]);
   });
+  const canSettleOnDesk = (data.allowed_next ?? []).includes('settled');
+  const proposedValue = proposedEdit || (data.fx_proposed_rate != null ? String(data.fx_proposed_rate) : '');
 
   return (
     <Stack spacing={2} sx={{ mt: 2 }} data-testid="plan-workspace">
@@ -318,6 +342,20 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
               <Button key={action} size="small" variant="outlined" color="error" onClick={() => setRejectOpen(true)}>
                 {label}
               </Button>
+            ) : action === 'approve' ? (
+              <Button
+                key={action}
+                size="small"
+                variant="contained"
+                disabled={transition.isPending}
+                onClick={() => {
+                  setApproveRate(String(data.fx_proposed_rate ?? data.roe_snapshot ?? ''));
+                  setApproveOpen(true);
+                }}
+                data-testid="plan-approve"
+              >
+                {data.needs_reapproval ? 'Reapprove (over budget)' : label}
+              </Button>
             ) : (
               <Button
                 key={action}
@@ -330,8 +368,14 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
               </Button>
             ),
           )}
-          <Button size="small" variant="text" component={NextLink} href={`/commercial-planner/cpor-cases/${caseId}`}>
-            Settlement workspace
+          <Button
+            size="small"
+            variant={canSettleOnDesk ? 'contained' : 'text'}
+            component={NextLink}
+            href={`/commercial-planner/cpor-cases/${caseId}`}
+            data-testid="plan-open-desk"
+          >
+            {canSettleOnDesk ? 'Settle on the desk' : 'Settlement workspace'}
           </Button>
         </Stack>
       </Stack>
@@ -345,6 +389,19 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
             : undefined
         }
       />
+
+      {data.needs_reapproval ? (
+        <Alert severity="warning" data-testid="plan-needs-reapproval">
+          Needs reapproval (over budget). Money ceiling exceeded or reapproval required — reapprove
+          with over-budget confirmation, or reduce support / raise the tenant money ceiling.
+        </Alert>
+      ) : null}
+
+      {data.last_comment ? (
+        <Alert severity={data.status === 'rejected' ? 'warning' : 'info'} data-testid="plan-last-comment">
+          PM comment: {data.last_comment}
+        </Alert>
+      ) : null}
 
       <Panel title="Plan parameters" subtitle="Customer, mechanic and window define the case; terms come from the customer’s defaults and can be overridden per line">
         <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(auto-fit, minmax(150px, 1fr))' } }}>
@@ -360,6 +417,64 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
             helperText="Template-driven customer layout is not built"
           />
         </Box>
+        <Stack
+          direction="row"
+          spacing={1}
+          alignItems="center"
+          flexWrap="wrap"
+          useFlexGap
+          sx={{ mt: 1.5 }}
+          role="group"
+          aria-label="FX basis"
+          data-testid="plan-fx"
+        >
+          <Typography variant="body2" color="text.secondary">
+            FX mode
+          </Typography>
+          {(['booked', 'floating'] as const).map((mode) => (
+            <Button
+              key={mode}
+              size="small"
+              variant={data.fx_mode === mode ? 'contained' : 'outlined'}
+              aria-pressed={data.fx_mode === mode}
+              disabled={!editable || patchFx.isPending}
+              onClick={() => patchFx.mutate({ fx_mode: mode })}
+              data-testid={`plan-fx-mode-${mode}`}
+            >
+              {mode}
+            </Button>
+          ))}
+          {editable ? (
+            <>
+              <TextField
+                size="small"
+                type="number"
+                label="Proposed ZAR/USD"
+                value={proposedValue}
+                onChange={(e) => setProposedEdit(e.target.value)}
+                sx={{ width: 170 }}
+                inputProps={{ 'data-testid': 'plan-fx-proposed-edit', step: '0.01' }}
+              />
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={patchFx.isPending || !(Number(proposedValue) > 0)}
+                onClick={() => patchFx.mutate({ fx_proposed_rate: Number(proposedValue) })}
+                data-testid="plan-fx-proposed-save"
+              >
+                Save proposed
+              </Button>
+            </>
+          ) : (
+            <Typography variant="caption" color="text.secondary">
+              {data.fx_booked || (data.roe_snapshot != null && !data.missing_roe)
+                ? `Booked ${data.roe_snapshot?.toFixed(2) ?? '—'}${data.fx_declared_by ? ` by ${data.fx_declared_by}` : ''}`
+                : data.fx_proposed_rate != null
+                  ? `Proposed ${data.fx_proposed_rate.toFixed(2)} · books at approval`
+                  : 'No rate proposed'}
+            </Typography>
+          )}
+        </Stack>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
           Header fields are editable only in draft or rejected — the same rule as the settlement workspace.
         </Typography>
@@ -590,6 +705,55 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
             onClick={() => transition.mutate({ action: 'reject', comment: rejectComment.trim() })}
           >
             Reject
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={approveOpen}
+        onClose={() => !transition.isPending && setApproveOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        aria-labelledby="plan-approve-title"
+      >
+        <DialogTitle id="plan-approve-title">
+          {data.needs_reapproval ? `Reapprove ${data.case_code} and book FX` : `Approve ${data.case_code} and book FX`}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 1.5 }}>
+            The rate books at approval (default mode: booked). Proposed history is kept. Override here if
+            the fetched suggestion is wrong.
+          </Typography>
+          <TextField
+            size="small"
+            type="number"
+            label="Booked ZAR per USD"
+            value={approveRate}
+            onChange={(e) => setApproveRate(e.target.value)}
+            fullWidth
+            helperText={
+              data.needs_reapproval ? 'Over-budget reapproval will be confirmed with this rate.' : undefined
+            }
+            inputProps={{ 'data-testid': 'plan-approve-fx-rate', step: '0.01' }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setApproveOpen(false)} disabled={transition.isPending}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            disabled={transition.isPending}
+            onClick={() =>
+              transition.mutate({
+                action: 'approve',
+                confirm_over_budget_reapproval: Boolean(data.needs_reapproval),
+                fx_rate: approveRate.trim() ? Number(approveRate) : null,
+              })
+            }
+            data-testid="plan-approve-confirm"
+          >
+            {data.needs_reapproval ? 'Reapprove and book' : 'Approve and book'}
           </Button>
         </DialogActions>
       </Dialog>

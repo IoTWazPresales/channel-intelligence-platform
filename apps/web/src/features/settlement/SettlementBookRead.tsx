@@ -6,7 +6,6 @@ import Link from 'next/link';
 
 import { formatLocalMoney } from '@/features/cpor/fxDisplay';
 import { evidenceBasisLabel } from '@/features/promotions-funding/evidenceBasis';
-import { SettlementPortfolioRead } from '@/features/settlement/SettlementPortfolioRead';
 import { SettlementShapeBar } from '@/features/settlement/SettlementShapeBar';
 import { useSettlementBook } from '@/features/settlement/useSettlementBook';
 
@@ -53,7 +52,6 @@ export function SettlementBookRead() {
           blockedPct={seg.blocked_pct}
         />
       ) : null}
-      <SettlementPortfolioRead />
       {data?.concentration?.length ? (
         <Stack spacing={0.5} sx={{ mt: 1.5 }}>
           <Typography variant="caption" color="text.secondary">

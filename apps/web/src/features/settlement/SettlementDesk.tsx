@@ -1,13 +1,13 @@
 'use client';
 
 import type { ColDef } from 'ag-grid-community';
-import { Alert, Box, Button, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Checkbox, FormControlLabel, Stack, Switch, Typography } from '@mui/material';
 import Link from 'next/link';
 import { useMemo, useRef, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { DualMoney } from '@/features/cpor/DualMoney';
-import { formatLocalMoney } from '@/features/cpor/fxDisplay';
+import { buildSettleReadinessChips, formatLocalMoney, type ReadinessChip } from '@/features/cpor/fxDisplay';
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { ScopeBar, StatusChip } from '@/features/workbench-ui/controls';
 import { DomainHeader } from '@/features/workbench-ui/DomainHeader';
@@ -41,7 +41,27 @@ type Props = {
   /** BACKLOG-138 — clear the supersession pointer. Only rendered when the case is superseded. */
   onRestoreSupersession?: () => void;
   restoringSupersession?: boolean;
+  /** N-0044 — post-live lifecycle actions (end / cancel). The caller confirms before posting. */
+  onLifecycleAction?: (action: 'end' | 'cancel') => void;
+  transitioning?: boolean;
+  /** Pre-approval actions (propose, approve, reject, resend, activate) live in the planner. */
+  plannerHref?: string;
+  includeOutOfWindow?: boolean;
+  onIncludeOutOfWindowChange?: (include: boolean) => void;
+  onRerollup?: () => void;
+  rerolling?: boolean;
+  onIntelligenceExcludeChange?: (exclude: boolean) => void;
+  excludingIntelligence?: boolean;
 };
+
+const READINESS_TONE: Record<ReadinessChip['tone'], 'success' | 'warning' | 'danger'> = {
+  pass: 'success',
+  open: 'warning',
+  fail: 'danger',
+};
+
+/** Targets reached from the planner, not the desk — any of these in allowed_next shows "Open in planner". */
+const PLANNER_TARGETS = ['proposed', 'approved', 'rejected', 'active'];
 
 /**
  * Shared Ken next-action settlement desk (composition A, with three B ports).
@@ -63,6 +83,15 @@ export function SettlementDesk({
   onSupersede,
   onRestoreSupersession,
   restoringSupersession = false,
+  onLifecycleAction,
+  transitioning = false,
+  plannerHref,
+  includeOutOfWindow = false,
+  onIncludeOutOfWindowChange,
+  onRerollup,
+  rerolling = false,
+  onIntelligenceExcludeChange,
+  excludingIntelligence = false,
 }: Props) {
   const [mismatchOnly, setMismatchOnly] = useState(false);
   const [disti, setDisti] = useState<string | null>(null);
@@ -92,6 +121,25 @@ export function SettlementDesk({
       testId={testId}
     />
   );
+  const readinessChips = view.settleReadiness ? buildSettleReadinessChips(view.settleReadiness) : [];
+  const unresolvedCount = view.unresolvedProducts?.length ?? 0;
+  const cst = view.cstReconciliation;
+  const cstDivergence = cst?.available ? (cst.divergence_count ?? 0) : 0;
+  const approvedCaption = view.fxDeclared
+    ? [
+        `Booked ${view.roeSnapshot != null ? view.roeSnapshot.toFixed(2) : '—'}${view.fxMode ? ` · ${view.fxMode}` : ''}`,
+        view.fxBookedBy ? `by ${view.fxBookedBy}` : null,
+        view.fxBookedAt ? view.fxBookedAt.slice(0, 10) : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : view.fxProposedRate != null
+      ? `Proposed ${view.fxProposedRate.toFixed(2)}${view.fxProposedSource ? ` · ${view.fxProposedSource}` : ''} · not booked`
+      : 'No rate booked or proposed';
+  const lifecycleActions = (['end', 'cancel'] as const).filter((a) =>
+    view.allowedNext.includes(a === 'end' ? 'ended' : 'cancelled'),
+  );
+  const showPlannerLink = Boolean(plannerHref) && view.allowedNext.some((t) => PLANNER_TARGETS.includes(t));
   const paidCaption = 'Not in schema today';
   const customerEmpty = view.claimRowCount === 0;
   const raiseEnabled = view.status === 'settled' && view.hqCreditLineCount > 0 && Boolean(onRaiseHqCredit);
@@ -216,9 +264,37 @@ export function SettlementDesk({
         }
         title={`${view.caseCode} · ${view.customerName}`}
         description={`${view.programme} · ${view.windowLabel} · ${view.distributorName}. Ken’s desk: the next commercial action is visible without opening tabs.`}
-        meta={`Opened ${view.openedOn ?? '—'} · Ended ${view.endedOn ?? '—'} · ${view.currency}`}
+        meta={`Opened ${view.openedOn ?? '—'} · Ended ${view.endedOn ?? '—'} · ${view.currency}${
+          view.fxSettleAllowed && view.fxBasisLine ? ` · ${view.fxBasisLine}` : ''
+        }`}
         actions={
           <>
+            {showPlannerLink && plannerHref ? (
+              <Button
+                variant="text"
+                size="small"
+                component={Link}
+                href={plannerHref}
+                data-testid="settlement-desk-open-planner"
+              >
+                Open in planner
+              </Button>
+            ) : null}
+            {onLifecycleAction
+              ? lifecycleActions.map((a) => (
+                  <Button
+                    key={a}
+                    variant="outlined"
+                    size="small"
+                    color={a === 'cancel' ? 'warning' : 'primary'}
+                    disabled={transitioning}
+                    onClick={() => onLifecycleAction(a)}
+                    data-testid={`settlement-desk-action-${a}`}
+                  >
+                    {a === 'end' ? 'End case…' : 'Cancel case…'}
+                  </Button>
+                ))
+              : null}
             {onSupersede && view.supersededByCaseId == null && view.status !== 'settled' ? (
               <Button
                 variant="outlined"
@@ -283,6 +359,13 @@ export function SettlementDesk({
         </Alert>
       ) : null}
 
+      {view.needsReapproval ? (
+        <Alert severity="warning" data-testid="settlement-desk-needs-reapproval">
+          Needs reapproval (over budget). The money ceiling is exceeded — reapprove with over-budget
+          confirmation in the planner, or reduce support.
+        </Alert>
+      ) : null}
+
       {!view.fxSettleAllowed ? (
         <Alert severity="warning" data-testid="settlement-desk-fx-blocked">
           {view.fxBasisLine ||
@@ -304,7 +387,24 @@ export function SettlementDesk({
         </Alert>
       ) : null}
 
-      <HeadlineStrip columns={5}>
+      <HeadlineStrip columns={6}>
+        <HeadlineFigure
+          label="Approved support"
+          value={
+            <DualMoney
+              amount={view.approvedAmount ?? null}
+              currencyCode={view.currency}
+              roeSnapshot={view.roeSnapshot}
+              missingRoe={!view.fxDeclared}
+              usdAmount={view.fxDeclared ? (view.approvedUsd ?? null) : null}
+              // DualMoney prints usdNote in place of the USD when missingRoe — only label a booked sum.
+              usdNote={view.fxDeclared ? 'Σ line USD at the booked rate' : undefined}
+              testId="desk-approved"
+            />
+          }
+          compact
+          caption={approvedCaption}
+        />
         <HeadlineFigure
           label="CIP reconciled"
           value={moneyDual(view.cipAmount, 'desk-cip')}
@@ -413,6 +513,20 @@ export function SettlementDesk({
           title="Next action"
           subtitle={`One CTA for the current stage — “${primaryCta.label}” in the header above. Finance lag does not change SETTLED.`}
         >
+          {readinessChips.length ? (
+            <Box
+              role="group"
+              aria-label="Settle readiness"
+              data-testid="settlement-desk-readiness"
+              sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mb: 1.5 }}
+            >
+              {readinessChips.map((c) => (
+                <Box component="span" key={c.key} data-testid={`settlement-desk-readiness-${c.key}`} data-tone={c.tone}>
+                  <StatusChip label={c.label} tone={READINESS_TONE[c.tone]} />
+                </Box>
+              ))}
+            </Box>
+          ) : null}
           <Stack spacing={0.25}>
             <PanelRow
               primary="Both parties agree"
@@ -447,6 +561,90 @@ export function SettlementDesk({
               <PanelRow key={e.id} primary={e.title} secondary={e.secondary} />
             ))
           )}
+          <Box
+            role="group"
+            aria-label="Claim diagnostics"
+            data-testid="settlement-desk-diagnostics"
+            sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 1 }}
+          >
+            <StatusChip
+              label={`Out-of-window rows · ${view.outOfWindowClaimRows ?? 0}`}
+              tone={(view.outOfWindowClaimRows ?? 0) > 0 ? 'warning' : 'neutral'}
+            />
+            <StatusChip
+              label={`Unresolved products · ${unresolvedCount}`}
+              tone={unresolvedCount > 0 ? 'warning' : 'neutral'}
+            />
+            <StatusChip
+              label={cst?.available ? `CST divergence · ${cstDivergence}` : `CST · ${cst?.reason ?? 'n/a'}`}
+              tone={cstDivergence > 0 ? 'warning' : 'neutral'}
+            />
+          </Box>
+          {unresolvedCount > 0 ? (
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: 'block', mt: 0.5 }}
+              data-testid="settlement-desk-unresolved-tokens"
+            >
+              Unresolved tokens: {(view.unresolvedProducts ?? []).map((u) => `${u.token} (${u.units})`).join(', ')}
+            </Typography>
+          ) : null}
+          {onIncludeOutOfWindowChange || onRerollup || onIntelligenceExcludeChange ? (
+            <Stack spacing={0.5} sx={{ mt: 1.5 }} data-testid="settlement-desk-claim-controls">
+              <Typography variant="caption" color="text.secondary">
+                Claims &amp; intelligence
+              </Typography>
+              {onIncludeOutOfWindowChange ? (
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={includeOutOfWindow}
+                      onChange={(e) => onIncludeOutOfWindowChange(e.target.checked)}
+                      slotProps={{
+                        input: { 'data-testid': 'settlement-desk-include-oow' } as React.InputHTMLAttributes<HTMLInputElement>,
+                      }}
+                    />
+                  }
+                  label={<Typography variant="caption">Include out-of-window rows on the next upload</Typography>}
+                />
+              ) : null}
+              {onIntelligenceExcludeChange ? (
+                <FormControlLabel
+                  control={
+                    <Switch
+                      size="small"
+                      checked={Boolean(view.intelligenceExclude)}
+                      disabled={excludingIntelligence}
+                      onChange={(e) => onIntelligenceExcludeChange(e.target.checked)}
+                      slotProps={{
+                        input: {
+                          'data-testid': 'settlement-desk-intelligence-exclude',
+                        } as React.InputHTMLAttributes<HTMLInputElement>,
+                      }}
+                    />
+                  }
+                  label={
+                    <Typography variant="caption">Exclude from intelligence (comparables, norms, book totals)</Typography>
+                  }
+                />
+              ) : null}
+              {onRerollup ? (
+                <Box>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    disabled={rerolling}
+                    onClick={onRerollup}
+                    data-testid="settlement-desk-rerollup"
+                  >
+                    {rerolling ? 'Re-rolling…' : 'Re-rollup from claims'}
+                  </Button>
+                </Box>
+              ) : null}
+            </Stack>
+          ) : null}
         </Panel>
       </Box>
 
