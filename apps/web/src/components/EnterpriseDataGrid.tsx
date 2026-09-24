@@ -40,9 +40,8 @@ function EnterpriseDataGridInner<T>(
     for (const [k, v] of Object.entries(agVars)) {
       out[k] = typeof v === 'number' ? String(v) : v;
     }
-    // Row/header heights come from the one source in `@/theme/gridDensity`. `@cip/ui` still emits
-    // these two variables with its own literals; overriding them here means the CSS variables and
-    // the AgGridReact props below are always the same numbers.
+    // Row/header heights come from the one source in `@/theme/gridDensity`; setting them here means
+    // the CSS variables and the AgGridReact props below are always the same numbers.
     Object.assign(out, gridDensityCssVars(theme.density));
     return out as CSSProperties;
   }, [agVars, theme.density]);

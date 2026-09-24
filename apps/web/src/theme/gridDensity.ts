@@ -9,10 +9,8 @@
  *     paginated shells from the same numbers.
  *   - Any caller that spreads `gridRowMetrics(...)` into `gridOptions` (e.g. the shipping page).
  *
- * `packages/ui/src/agGridMuiTheme.ts` still emits these two variables with its own literals.
- * `EnterpriseDataGrid` overrides them inline from here. `packages/ui` joined the accepted
- * `change_paths` (Warren, 2026-09-21); hoisting this file into `@cip/ui` and deleting that
- * duplicate emission (N-0031 acceptance criteria) remains open and out of scope for Stage 2.2/2.3.
+ * `packages/ui/src/agGridMuiTheme.ts` no longer emits these two variables (removed at 99a89db8);
+ * `EnterpriseDataGrid` sets them from here, so this file is the only source.
  *
  * Comfortable is **40/40** (Stage 2.3, `docs/design/STAGED_WORK_PLAN.md`; D2) — not the lab's
  * original 36/36 proposal in `DENSITY_PROPOSAL_OPERATOR_DATA_SCALE.md` / `DensitySurface.tsx`,

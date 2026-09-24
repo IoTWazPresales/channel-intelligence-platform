@@ -23,7 +23,7 @@ type LoginResponse = {
 export default function LoginPage() {
   const router = useRouter();
   const qc = useQueryClient();
-  const [email, setEmail] = useState('admin@local');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
