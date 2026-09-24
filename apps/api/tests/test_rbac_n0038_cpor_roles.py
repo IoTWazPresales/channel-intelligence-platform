@@ -137,8 +137,12 @@ def test_shipment_evidence_gates_admit_steward_and_admin():
         for r in app.routes
         if isinstance(r, APIRoute) and r.path.startswith("/api/v1/shipment-evidence")
     }
+    ungated_writes = [
+        k for k, v in gated.items() if v is None and not k[0].startswith("GET")
+    ]
+    assert ungated_writes == [], f"shipment-evidence writes must be role-gated: {ungated_writes}"
     gated = {k: v for k, v in gated.items() if v is not None}
-    assert len(gated) == 25
+    assert len(gated) == 28
     wrong = {k: v for k, v in gated.items() if v != _SHIPMENT_STEWARD}
     assert wrong == {}, f"shipment steward gates must be ADMIN+STEWARD: {wrong}"
 

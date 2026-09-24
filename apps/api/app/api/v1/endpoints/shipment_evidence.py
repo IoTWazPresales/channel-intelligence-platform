@@ -1043,7 +1043,11 @@ async def shipment_steward_bulk_provisional_apply_async(
 
 
 @router.post("/import-jobs/{job_id}/shipment-steward-bulk-preview", status_code=200)
-async def shipment_steward_bulk_preview(job_id: int, body: ShipmentBulkStewardBody) -> dict[str, Any]:
+async def shipment_steward_bulk_preview(
+    job_id: int,
+    body: ShipmentBulkStewardBody,
+    _user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
+) -> dict[str, Any]:
     with SessionLocal() as s:
         _assert_shipment_import_job_sync(s, job_id)
         res = s.execute(
@@ -1110,7 +1114,11 @@ async def shipment_steward_bulk_preview(job_id: int, body: ShipmentBulkStewardBo
 
 
 @router.post("/import-jobs/{job_id}/shipment-steward-bulk-apply", status_code=200)
-async def shipment_steward_bulk_apply(job_id: int, body: ShipmentBulkStewardBody) -> dict[str, Any]:
+async def shipment_steward_bulk_apply(
+    job_id: int,
+    body: ShipmentBulkStewardBody,
+    _user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
+) -> dict[str, Any]:
     if body.action == "create_provisional_customer":
         raise HTTPException(
             status_code=400,
@@ -1232,6 +1240,7 @@ async def shipment_steward_bulk_ignore_apply_async(
     job_id: int,
     body: ShipmentBulkStewardBody,
     db: AsyncSession = Depends(get_db),
+    _user: dict = Depends(require_roles(Role.ADMIN, Role.STEWARD)),
 ) -> dict[str, Any]:
     """Enqueue batch steward reject (ignore) for shipment mapping candidates."""
     job = await db.get(ImportJob, job_id)
