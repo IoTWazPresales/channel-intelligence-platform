@@ -53,6 +53,16 @@ describe('SettlementCaseTabs', () => {
     expect(screen.queryByTestId('cpor-events')).toBeNull();
   });
 
+  it('names the panel by its active tab and links every tab to the panel', () => {
+    renderTabs(<SettlementCaseTabs caseId={46} />);
+    const panel = screen.getByRole('tabpanel', { name: 'USD pivot' });
+    for (const tab of screen.getAllByRole('tab')) {
+      expect(tab).toHaveAttribute('aria-controls', panel.id);
+    }
+    fireEvent.click(screen.getByTestId('settlement-tab-events'));
+    expect(screen.getByRole('tabpanel', { name: 'Events' })).toBe(panel);
+  });
+
   it('switches to Events and renders the API rows through the panel', async () => {
     renderTabs(<SettlementCaseTabs caseId={46} />);
     fireEvent.click(screen.getByTestId('settlement-tab-events'));

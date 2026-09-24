@@ -1,7 +1,7 @@
 'use client';
 
 import { Box, Tab, Tabs } from '@mui/material';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 import { CporPaymentEvidencePanel } from '@/app/(app)/commercial-planner/cpor-cases/[id]/CporPaymentEvidencePanel';
 import { CporPromoLoadPanel } from '@/app/(app)/commercial-planner/cpor-cases/[id]/CporPromoLoadPanel';
@@ -34,6 +34,9 @@ export function SettlementCaseTabs({
   defaultTab?: SettlementCaseTabKey;
 }) {
   const [tab, setTab] = useState<SettlementCaseTabKey>(defaultTab);
+  const idBase = useId();
+  const tabId = (key: SettlementCaseTabKey) => `${idBase}-tab-${key}`;
+  const panelId = `${idBase}-panel`;
 
   return (
     <Box data-testid="settlement-case-tabs">
@@ -43,13 +46,34 @@ export function SettlementCaseTabs({
         variant="scrollable"
         allowScrollButtonsMobile
         aria-label="Case detail"
-        sx={{ borderBottom: '1px solid', borderColor: 'divider' }}
+        sx={{
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          '& .MuiTab-root.Mui-focusVisible': {
+            outline: '2px solid',
+            outlineColor: 'primary.main',
+            outlineOffset: '-2px',
+          },
+        }}
       >
         {TABS.map((t) => (
-          <Tab key={t.key} value={t.key} label={t.label} data-testid={`settlement-tab-${t.key}`} />
+          <Tab
+            key={t.key}
+            value={t.key}
+            label={t.label}
+            id={tabId(t.key)}
+            aria-controls={panelId}
+            data-testid={`settlement-tab-${t.key}`}
+          />
         ))}
       </Tabs>
-      <Box role="tabpanel" sx={{ pt: 2 }} data-testid={`settlement-tabpanel-${tab}`}>
+      <Box
+        role="tabpanel"
+        id={panelId}
+        aria-labelledby={tabId(tab)}
+        sx={{ pt: 2 }}
+        data-testid={`settlement-tabpanel-${tab}`}
+      >
         {tab === 'pivot' ? <CporUsdPivotPanel caseId={caseId} roeSnapshot={roeSnapshot} /> : null}
         {tab === 'events' ? <CporEventsPanel caseId={caseId} /> : null}
         {tab === 'exports' ? <CporExportsPanel caseId={caseId} /> : null}

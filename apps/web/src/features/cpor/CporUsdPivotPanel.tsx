@@ -1,6 +1,19 @@
 'use client';
 
 import { Alert, Box, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography } from '@mui/material';
+
+/** Screen-reader-only text (same rules as MUI's visuallyHidden, without adding @mui/utils). */
+const visuallyHidden = {
+  border: 0,
+  clip: 'rect(0 0 0 0)',
+  height: '1px',
+  margin: '-1px',
+  overflow: 'hidden',
+  padding: 0,
+  position: 'absolute',
+  whiteSpace: 'nowrap',
+  width: '1px',
+} as const;
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
@@ -65,7 +78,11 @@ export function CporUsdPivotPanel({ caseId, roeSnapshot }: { caseId: number; roe
           <Table size="small" aria-label="USD pivot by row and column">
             <TableHead>
               <TableRow>
-                <TableCell />
+                <TableCell component="th" scope="col">
+                  <Box component="span" sx={visuallyHidden}>
+                    Row by column
+                  </Box>
+                </TableCell>
                 {cols.map((c) => (
                   <TableCell key={c} align="right">
                     {c}
