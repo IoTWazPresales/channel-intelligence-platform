@@ -1,0 +1,12 @@
+{
+ "node": "N-0035",
+ "expected_revision": 6,
+ "dim": "content",
+ "state": "na",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0035_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "No user-facing copy changed."
+ },
+ "rationale": "Both commits change only a CSS token constant, density numbers and code comments; no UI strings were touched."
+}

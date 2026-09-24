@@ -1,0 +1,11 @@
+{
+ "node": "N-0035",
+ "expected_revision": 4,
+ "dim": "a11y",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0035_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "No vertical text clipping (0 overflowing cells of 60 per grid; zoom screenshots show glyphs centred in rows); 40px rows; non-grid body2 remains 14px. 200% zoom/reflow not tested."
+ }
+}

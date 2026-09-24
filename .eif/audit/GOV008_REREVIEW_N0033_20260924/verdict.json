@@ -1,0 +1,18 @@
+{
+  "node": "N-0033",
+  "verdict": "FAILED",
+  "dims": {
+    "quality.content": {
+      "state": "fail",
+      "summary": "Caption text 'Dev seed: admin@local / changeme' correctly removed from /login (verified via git show d83d7126, curl of rendered page, and browser render). But the Email field is still pre-filled with the literal account name 'admin@local' via an unconditional `useState('admin@local')` at apps/web/src/app/login/page.tsx:26, outside the diff, rendered visibly to anonymous visitors on page load with no NODE_ENV guard. The stated criterion ('must not disclose any account name ... to anonymous visitors') is not met by the current production page."
+    }
+  },
+  "failed_criteria": [
+    "The production /login page must not disclose any account name or password hint to anonymous visitors: the page still discloses the account name 'admin@local' via the pre-filled Email input default at apps/web/src/app/login/page.tsx:26 (useState('admin@local')), unconditionally rendered and unaddressed by commit d83d7126."
+  ],
+  "limitations": [
+    "This disclosure predates commit d83d7126 (line 26 is outside its diff) — not a regression introduced by the remediation, but the page-level criterion as stated for this re-review is not satisfied.",
+    "Password field showed pre-filled dots in the browser screenshot; attributed to local Chrome saved-password autofill (not present in raw curl HTML, not app-rendered) and excluded from the finding.",
+    "Independence rung R2: fresh session, but same model family (Claude Opus 5.5) as the implementer; not an R3+ cross-model check."
+  ]
+}

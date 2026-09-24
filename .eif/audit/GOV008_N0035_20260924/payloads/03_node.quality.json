@@ -1,0 +1,11 @@
+{
+ "node": "N-0035",
+ "expected_revision": 5,
+ "dim": "rendered",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0035_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Computed --ag-font-size 13px, --ag-row-height 40px, --ag-header-height 40px; row rects 40, header 40, cell font 13px/37px on all measured grids, including a 390x844 sandboxed iframe."
+ }
+}

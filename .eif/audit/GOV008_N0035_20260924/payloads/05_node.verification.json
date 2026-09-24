@@ -1,0 +1,11 @@
+{
+ "node": "N-0035",
+ "expected_revision": 7,
+ "kind": "rendered",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0035_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Own Chrome tab, 3 routes and 4 grids measured by DOM/computed style plus zoom screenshots; 390x844 via sandboxed same-origin iframe (plain iframe was frame-busted), not a real viewport."
+ }
+}

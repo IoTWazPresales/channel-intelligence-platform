@@ -1,0 +1,11 @@
+{
+ "node": "N-0035",
+ "expected_revision": 8,
+ "kind": "referent",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0035_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "git show a4fe957f/459f4c94 match the claims; cipTheme.ts untouched by both (last changed 2e0c2a2c; body2 override is colour only); AG_GRID_FONT_SIZE exported from packages/ui index.ts:4; vitest src/theme src/components 34/34 pass; tsc @cip/web and @cip/ui EXIT 0."
+ }
+}

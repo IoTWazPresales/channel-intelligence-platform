@@ -1,3 +1,4 @@
 {"ts":"2026-09-23T23:05:48Z","kind":"programme.event","event":"node.lease.acquire","seq":1039}
 {"ts":"2026-09-23T23:05:54Z","kind":"programme.event","event":"node.stage","seq":1040}
 {"ts":"2026-09-23T23:10:25Z","kind":"programme.event","event":"node.stage","seq":1041}
+{"ts":"2026-09-24T08:09:09Z","kind":"programme.event","event":"node.lease.release","seq":1050}

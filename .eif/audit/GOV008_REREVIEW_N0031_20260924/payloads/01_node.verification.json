@@ -1,0 +1,11 @@
+{
+ "node": "N-0031",
+ "expected_revision": 17,
+ "kind": "referent",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_REREVIEW_N0031_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Single source confirmed: apps/web/src/theme/gridDensity.ts exports GRID_DENSITY/gridRowMetrics/gridDensityCssVars, imported directly or via re-export by EnterpriseDataGrid.tsx, gridPagination.ts, ExceptionCategoryGrid.tsx and PlanVsExecutedView.tsx (grep + read confirmed each import site). packages/ui/src/agGridMuiTheme.ts no longer emits --ag-row-height/--ag-header-height (removed in commit 99a89db8, confirmed by diff and by zero remaining matches for those variables or the old 34px/36px/42px literals anywhere in packages/ui/src). tsc --noEmit clean for both @cip/web and @cip/ui. Live-DOM stylesheet iteration was blocked by the Claude-in-Chrome extension's own query-string safety filter on /admin/customers (verified this is a tooling-level block, not content-related, by confirming JS execution works on a query-string-free page); substituted with pixel-measurement of a zoomed screenshot, which found rendered row height ~40px (~67 zoomed px / 1.678 scale), consistent with GRID_DENSITY.comfortable and inconsistent with the removed 42px literal."
+ }
+}

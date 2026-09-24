@@ -1,0 +1,16 @@
+{
+  "node": "N-0031",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "dims": {
+    "verification.referent": {
+      "state": "pass",
+      "summary": "Single source confirmed: apps/web/src/theme/gridDensity.ts exports GRID_DENSITY/gridRowMetrics/gridDensityCssVars, imported directly or via re-export by EnterpriseDataGrid.tsx, gridPagination.ts, ExceptionCategoryGrid.tsx and PlanVsExecutedView.tsx (grep + read confirmed each import site). packages/ui/src/agGridMuiTheme.ts no longer emits --ag-row-height/--ag-header-height (removed in commit 99a89db8, confirmed by diff and by zero remaining matches for those variables or the old 34px/36px/42px literals anywhere in packages/ui/src). tsc --noEmit clean for both @cip/web and @cip/ui. Live-DOM stylesheet iteration was blocked by the Claude-in-Chrome extension's own query-string safety filter on /admin/customers (verified this is a tooling-level block, not content-related, by confirming JS execution works on a query-string-free page); substituted with pixel-measurement of a zoomed screenshot, which found rendered row height ~40px (~67 zoomed px / 1.678 scale), consistent with GRID_DENSITY.comfortable and inconsistent with the removed 42px literal."
+    }
+  },
+  "failed_criteria": [],
+  "limitations": [
+    "Live-DOM check specified in the brief (iterate document.styleSheets cssRules for --ag-row-height) could not be executed: Claude-in-Chrome's javascript_tool returned '[BLOCKED: Cookie/query string data]' on /admin/customers because the app appends ?page=&page_size=&sort_by=&sort_dir= to the URL on load, and the extension blocks script execution on any tab whose URL carries a query string. Confirmed this is URL-based, not content-based, by successfully running the identical style of script on a query-string-free page (/brief). Substituted pixel measurement from a zoomed screenshot (scale ~1.678x, 6-row sample) confirming ~40px rows as a corroborating but lower-precision method (~1px tolerance).",
+    "Three code comments (apps/web/src/theme/gridDensity.ts:12-15, apps/web/src/components/EnterpriseDataGrid.tsx:43, apps/web/src/design-lab/surfaces/DensitySurface.tsx:21) were not updated by commit 99a89db8 and now incorrectly state that packages/ui still emits its own literals and that removing it is 'open and out of scope' — this is stale documentation, not a code defect; recorded as a finding for a follow-up doc fix, not a verdict-affecting issue.",
+    "Independence rung R2: fresh session, but same model family (Claude Opus 5.5) as the implementer; not an R3+ cross-model check."
+  ]
+}

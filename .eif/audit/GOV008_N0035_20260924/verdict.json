@@ -1,0 +1,18 @@
+{"node": "N-0035", "verdict": "VERIFIED_WITH_LIMITATIONS",
+ "dims": {
+  "quality.ux": {"state": "pass", "summary": "Comfortable density renders 40px rows/header at 13px on 4 grids across /admin/customers, /stock?lens=execution (redirect from /plan-vs-executed) and CPOR case 46; compact 34/36 unchanged in code so the density step remains."},
+  "quality.a11y": {"state": "pass", "summary": "No vertical text clipping (0 overflowing cells of 60 per grid; zoom screenshots show glyphs centred in rows); 40px rows; non-grid body2 remains 14px. 200% zoom/reflow not tested."},
+  "quality.rendered": {"state": "pass", "summary": "Computed --ag-font-size 13px, --ag-row-height 40px, --ag-header-height 40px; row rects 40, header 40, cell font 13px/37px on all measured grids, including a 390x844 sandboxed iframe."},
+  "quality.content": {"state": "na", "summary": "No user-facing copy changed.", "rationale": "Both commits change only a CSS token constant, density numbers and code comments; no UI strings were touched."},
+  "verification.rendered": {"state": "pass", "summary": "Own Chrome tab, 3 routes and 4 grids measured by DOM/computed style plus zoom screenshots; 390x844 via sandboxed same-origin iframe (plain iframe was frame-busted), not a real viewport."},
+  "verification.referent": {"state": "pass", "summary": "git show a4fe957f/459f4c94 match the claims; cipTheme.ts untouched by both (last changed 2e0c2a2c; body2 override is colour only); AG_GRID_FONT_SIZE exported from packages/ui index.ts:4; vitest src/theme src/components 34/34 pass; tsc @cip/web and @cip/ui EXIT 0."}
+ },
+ "failed_criteria": [],
+ "limitations": [
+  "Independence rung R2: fresh session, same model family; not a different model.",
+  "390x844 was an emulated sandboxed iframe (a plain iframe triggered top-frame navigation); no real viewport resize was done.",
+  "Compact 34/36 was verified from code/diff only; no unit test pins GRID_DENSITY or AG_GRID_FONT_SIZE values; compact was not rendered (per instructions).",
+  "Dark theme only; 200% zoom/reflow not tested.",
+  "/plan-vs-executed redirects to /stock?lens=execution; grids measured there.",
+  "Out-of-scope observation: at 390px width the desktop sidebar stays expanded (~230px) and cuts off page/grid content."
+ ]}

@@ -1,0 +1,1 @@
+{"node": "N-0033", "expected_revision": 20, "to": "validate", "stage_note": "Remediation 2 at 83895f01: /login email defaults to empty; page.test.tsx asserts no changeme/admin@local/dev seed text and empty email (1/1); tsc 0; eslint 0. Web rebuild pending (reviewers using the live app). quality.content awaits a fresh re-review on the rebuilt app."}

@@ -1,0 +1,34 @@
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mC:/Users/warren_eliason/channel-intelligence-platform/apps/web[39m
+
+ [32m✓[39m src/theme/cipTheme.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 18[2mms[22m[39m
+ [32m✓[39m src/components/bulkTable/BulkSelectionToolbar.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 618[2mms[22m[39m
+ [32m✓[39m src/components/bulkTable/MasterBulkDeleteImpactDialog.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 784[2mms[22m[39m
+   [33m[2m✓[22m[39m MasterBulkDeleteImpactDialog[2m > [22mshows blocked rows and requires acknowledgement [33m549[2mms[22m[39m
+ [32m✓[39m src/components/PageHeader.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 575[2mms[22m[39m
+   [33m[2m✓[22m[39m PageHeader[2m > [22mrenders link crumb when href is set [33m415[2mms[22m[39m
+ [32m✓[39m src/components/masterGrid/MasterColumnPickerDialog.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 806[2mms[22m[39m
+   [33m[2m✓[22m[39m MasterColumnPickerDialog[2m > [22mrenders injected groups and filters by search [33m671[2mms[22m[39m
+ [32m✓[39m src/components/EnterpriseDataGrid.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[90m 279[2mms[22m[39m
+ [32m✓[39m src/components/EmptyWorkspace.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 879[2mms[22m[39m
+   [33m[2m✓[22m[39m EmptyWorkspace[2m > [22mrenders title, description, and links [33m646[2mms[22m[39m
+ [32m✓[39m src/components/bulkTable/ImportJobBulkDeleteImpactDialog.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 1157[2mms[22m[39m
+   [33m[2m✓[22m[39m ImportJobBulkDeleteImpactDialog[2m > [22mblocks confirm until acknowledged [33m638[2mms[22m[39m
+ [32m✓[39m src/components/KpiCard.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 420[2mms[22m[39m
+   [33m[2m✓[22m[39m KpiCard[2m > [22minvokes onExplain when card is clicked [33m320[2mms[22m[39m
+ [32m✓[39m src/components/gridDeleteColumn.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 503[2mms[22m[39m
+   [33m[2m✓[22m[39m gridDeleteColumn[2m > [22minvokes onDelete when confirm is skipped [33m423[2mms[22m[39m
+ [32m✓[39m src/components/ModuleDataSection.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 608[2mms[22m[39m
+   [33m[2m✓[22m[39m ModuleDataSection[2m > [22mshows loading state [33m315[2mms[22m[39m
+ [32m✓[39m src/components/BulkPasteDialog.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 775[2mms[22m[39m
+   [33m[2m✓[22m[39m BulkPasteDialog[2m > [22mdisables submit when value is blank [33m552[2mms[22m[39m
+ [32m✓[39m src/components/ModuleGridToolbar.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 666[2mms[22m[39m
+   [33m[2m✓[22m[39m ModuleGridToolbar[2m > [22minvokes refresh and clear handlers [33m618[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m13 passed[39m[22m[90m (13)[39m
+[2m      Tests [22m [1m[32m34 passed[39m[22m[90m (34)[39m
+[2m   Start at [22m 09:59:24
+[2m   Duration [22m 58.43s[2m (transform 4.18s, setup 63.30s, collect 468.32s, tests 8.09s, environment 138.72s, prepare 20.57s)[22m
+
+EXIT 0

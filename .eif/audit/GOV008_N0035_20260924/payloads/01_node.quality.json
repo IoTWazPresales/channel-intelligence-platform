@@ -1,0 +1,11 @@
+{
+ "node": "N-0035",
+ "expected_revision": 3,
+ "dim": "ux",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0035_20260924/REVIEW.md",
+  "verdict": "VERIFIED_WITH_LIMITATIONS",
+  "summary": "Comfortable density renders 40px rows/header at 13px on 4 grids across /admin/customers, /stock?lens=execution (redirect from /plan-vs-executed) and CPOR case 46; compact 34/36 unchanged in code so the density step remains."
+ }
+}
