@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1149
-  log_sha256: 4cd9ac3ea8e72f7ff37e891dd9e69a987a28e730dabc86f1b64135c839c40316
+  snapshot_revision: 1158
+  log_sha256: 05818b3c7e7563ce500b508fec85bbd28d21303f3bb3a065ece5a6a489f113f9
   acceptance_policy:
     milestone: operator
     root: operator
@@ -6875,9 +6875,9 @@ nodes:
     title: 'Stage 4.2: cpor_case status vs workflow_status drift (BACKLOG-139), proven on a clone'
     class: feature
     origin: operator
-    status: in_progress
-    stage: validate
-    revision: 5
+    status: complete
+    stage: null
+    revision: 10
     lease: null
     depends_on:
     - N-0047
@@ -6899,20 +6899,53 @@ nodes:
     quality:
       data_integrity:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0048_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: 'status is confirmed the owner column (lifecycle.py, transition guards, all business branching); workflow_status
+            is a display-only projection written by every writer via workflow_status_for(). Drift on cip measured live: 4
+            rows, ids 3/309/310/311, matching the commit message. Clone shows 0 disagreeing rows after repair.'
         rationale: null
+        pass_run: GOV008_N0048_20260924
+        pass_actor: gov-008-n0048-sonnet
       backup_recovery:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0048_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: 'Repair records an audit trail: one cpor_case_event (workflow_status_repair) per changed row with before/after
+            values, plus a timestamped before-values JSON per run. No automated rollback script exists; reversal would be
+            manual from the recorded before-values.'
         rationale: null
+        pass_run: GOV008_N0048_20260924
+        pass_actor: gov-008-n0048-sonnet
       migration_safety:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0048_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: 'Repair script verified: dry-run by default (--apply required to commit), --expect-db guard checked against
+            current_database() before any read/write, idempotent (WHERE ... IS NOT DISTINCT FROM :old plus live recompute;
+            confirmed by passing idempotency test), touches only workflow_status column (status read but never assigned, empirically
+            unchanged on clone), no DELETE/TRUNCATE anywhere in the file.'
         rationale: null
-    verification: {}
+        pass_run: GOV008_N0048_20260924
+        pass_actor: gov-008-n0048-sonnet
+    verification:
+      referent:
+        state: pass
+        pass_run: GOV008_N0048_20260924
+        pass_actor: gov-008-n0048-sonnet
+        evidence:
+          path: .eif/audit/GOV008_N0048_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: Independently re-ran the live SQL this review relies on (cip drift count/ids, clone before/after, cip repair-event
+            count) via the read-only ro_sql.py tool, and independently re-ran the test suite rather than trusting committed
+            logs; results matched the implementation's claims.
+        path: null
     evidence: []
     blockers: []
     conservation_tags: []
@@ -6989,10 +7022,14 @@ nodes:
     title: 'Stage 4.4: cpor_case_line week-aligned window columns (BACKLOG-137), migration proven on cip_test only'
     class: feature
     origin: operator
-    status: proposed
-    stage: null
-    revision: 0
-    lease: null
+    status: in_progress
+    stage: implement
+    revision: 3
+    lease:
+      run: N0050_IMPL_20260924
+      acquired_at: '2026-09-24T13:13:24Z'
+      heartbeat_at: '2026-09-24T13:13:24Z'
+      expires_at: '2026-09-24T16:13:24Z'
     depends_on:
     - N-0049
     facets:
@@ -7007,7 +7044,7 @@ nodes:
       ready-for-cip for Warren
     - Nothing writes to cip; read-only SQL prints current_database() first
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-0014
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
@@ -7032,14 +7069,22 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: 'Pipelined (ordering-only deps). Warren 21 Sep: BACKLOG-137 migration approved - write and prove on cip_test;
+      alembic upgrade on cip needs an explicit run (listed ready-for-cip). Implementation by fresh subagent (database-specialist,
+      backend-engineer, test-engineering-specialist), run N0050_IMPL_20260924.'
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      support_unit_rate: unchanged
+      cap_qty: unchanged
+      case_window: unchanged
+      approved_terms: not mutated
     target_artifact_class: null
     design_artifact_class: null
+    implementation_run: N0050_IMPL_20260924
+    implementation_actor: impl-n0050
   N-0051:
     id: N-0051
     parent: null
@@ -9325,6 +9370,19 @@ baselines:
     path: docs/BACKLOG.md#BACKLOG-139
     observed_behavior: '2026-09-21 (N-0030, cip read-only): 4 cpor_case rows where status and workflow_status disagree: settled/ended
       x2, cancelled/draft, cancelled/ended.'
+  BLN-0014:
+    id: BLN-0014
+    provenance: implementation-observation
+    tree_hash: 1ed20eab
+    latent_capabilities: []
+    preservation:
+      support_unit_rate: support_unit remains the rate (D-027/D-063)
+      cap_qty: per line
+      case_window: case-level window remains the case span
+      approved_terms: never mutated in place (D-058)
+    path: docs/BACKLOG.md#BACKLOG-137
+    observed_behavior: '2026-09-24: cpor_case_line has no window_* columns; unique grain (case_id, product_id, distributor_id,
+      pod_quarter); settlement _claim_in_window uses case dates; alembic head 20260906_0022 in code and on cip.'
 caveats:
   consult_model_logged:
     key: consult_model_logged
