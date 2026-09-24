@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1136
-  log_sha256: 5d61d46f1bec9b4d851283f3d8fd7b725a324237c0f47bc4c18e1625fe94f0d5
+  snapshot_revision: 1147
+  log_sha256: a0645b325a5c563bf2ed829abd564296cdc190cf55944209f2ac0deade974087
   acceptance_policy:
     milestone: operator
     root: operator
@@ -6812,10 +6812,14 @@ nodes:
     title: 'Stage 4.1: dim_product inverted launch/retire windows (BACKLOG-034), proven on a clone'
     class: feature
     origin: operator
-    status: proposed
-    stage: null
-    revision: 1
-    lease: null
+    status: in_progress
+    stage: implement
+    revision: 4
+    lease:
+      run: N0047_IMPL_20260924
+      acquired_at: '2026-09-24T11:42:21Z'
+      heartbeat_at: '2026-09-24T11:42:21Z'
+      expires_at: '2026-09-24T13:42:21Z'
     depends_on:
     - N-0044
     facets:
@@ -6829,7 +6833,7 @@ nodes:
     - cip apply prepared but not run; listed ready-for-cip for Warren
     - Nothing writes to cip; read-only SQL prints current_database() first
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-0012
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
@@ -6854,23 +6858,28 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: 'Warren 21 Sep: agent decides the repair rule; clone run first; cip apply only with counts shown (this run:
+      listed ready-for-cip, not applied). Implementation by fresh subagent (database-specialist, data-quality-governance-specialist,
+      test-engineering-specialist), run N0047_IMPL_20260924, clone cip_merged_leftover_repair.'
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      dim_product_rows: no row deleted
     target_artifact_class: null
     design_artifact_class: null
+    implementation_run: N0047_IMPL_20260924
+    implementation_actor: impl-n0047
   N-0048:
     id: N-0048
     parent: null
     title: 'Stage 4.2: cpor_case status vs workflow_status drift (BACKLOG-139), proven on a clone'
     class: feature
     origin: operator
-    status: proposed
-    stage: null
-    revision: 0
+    status: in_progress
+    stage: validate
+    revision: 5
     lease: null
     depends_on:
     - N-0047
@@ -6885,7 +6894,7 @@ nodes:
       cip apply listed for Warren
     - Nothing writes to cip; read-only SQL prints current_database() first
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-0013
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
@@ -6910,14 +6919,21 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: 'Implemented at 84002d8e (two impl subagents; first cut off by usage limit). Owner column = status (every
+      transition writes it; workflow_status now projected from status on all writers). Drift on cip read-only 2026-09-24:
+      4 of 311 (ids 3, 309, 310, 311), each with an event-logged transition. Repair script proven on clone cip_ns4_settle_clone
+      (vintage 2026-09-02) + 4-shape unit test; 90 cpor tests pass on cip_test. Ready-for-cip (not run; dry run itself is
+      a rolled-back write). D-0035 questions incl. historical re-import overwrite risk. Independent review next.'
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      cpor_case_rows: no row deleted
     target_artifact_class: null
     design_artifact_class: null
+    implementation_run: N0048_IMPL_20260924
+    implementation_actor: impl-n0048
   N-0049:
     id: N-0049
     parent: null
@@ -8790,6 +8806,18 @@ decisions:
     origin: agent
     status: proposed
     supersedes: null
+  D-0035:
+    id: D-0035
+    scope: N-0048
+    statement: 'N-0048 questions for Warren (n0048/IMPL.md): (1) case 3 BATCH0-SMOKE-001 is a smoke-test row in cip (cancelled,
+      intelligence_exclude) - keep, or retire in a separate explicit step? (2) case 310 C26759823 was cancelled from ended
+      on 2026-08-16 with no actor recorded - the repair keeps the cancel; confirm it was intended. (3) RISK: re-applying a
+      historical import job overwrites status on existing historical_import cases (historical_import/apply_sync.py:204); re-running
+      job 978 would reset cases 309/310/311 to ended and lose their settle/cancel. Should re-import skip cases with lifecycle
+      transitions after the import? Not changed; needs a decision.'
+    origin: agent
+    status: proposed
+    supersedes: null
 evidence:
   EV-GOV008-REVIEW:
     id: EV-GOV008-REVIEW
@@ -9279,6 +9307,26 @@ baselines:
     observed_behavior: '2026-09-24: CporCaseWorkspace unmounted; holds FX anchor, settle readiness, comparable cases, transition
       buttons and the latent capabilities listed; SettlementPortfolioRead is a strict subset of CporPortfolioIntelligencePanel
       (same endpoint/query key), both unmounted; SettlementContainer subtree orphaned.'
+  BLN-0012:
+    id: BLN-0012
+    provenance: implementation-observation
+    tree_hash: 04a2e20f
+    latent_capabilities: []
+    preservation:
+      dim_product_rows: no product row deleted; only launch/retire dates change
+    path: docs/BACKLOG.md#BACKLOG-034
+    observed_behavior: '2026-09-21 (N-0030, cip read-only): 2,795 dim_product rows with launch date after retire date (BACKLOG-034
+      recorded 319).'
+  BLN-0013:
+    id: BLN-0013
+    provenance: implementation-observation
+    tree_hash: 04a2e20f
+    latent_capabilities: []
+    preservation:
+      cpor_case_rows: no case deleted; only the drifted status column changes
+    path: docs/BACKLOG.md#BACKLOG-139
+    observed_behavior: '2026-09-21 (N-0030, cip read-only): 4 cpor_case rows where status and workflow_status disagree: settled/ended
+      x2, cancelled/draft, cancelled/ended.'
 caveats:
   consult_model_logged:
     key: consult_model_logged
