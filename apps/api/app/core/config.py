@@ -107,6 +107,32 @@ class Settings(BaseSettings):
         default="stub",
         description="Auth mode (env CIP_AUTH_MODE). Use session after IAM migration + seed admin.",
     )
+    # N-0037 login throttle (in-memory, per API process; see app/core/login_throttle.py).
+    cip_login_throttle_enabled: bool = Field(
+        default=True,
+        description="Throttle failed POST /auth/login attempts (env CIP_LOGIN_THROTTLE_ENABLED).",
+    )
+    cip_login_max_failures_per_account: int = Field(
+        default=5,
+        ge=1,
+        description=(
+            "Failed logins per normalised email within the window before that account is locked "
+            "(env CIP_LOGIN_MAX_FAILURES_PER_ACCOUNT)."
+        ),
+    )
+    cip_login_max_failures_per_address: int = Field(
+        default=20,
+        ge=1,
+        description=(
+            "Failed logins per client address within the window before that address is throttled "
+            "(env CIP_LOGIN_MAX_FAILURES_PER_ADDRESS)."
+        ),
+    )
+    cip_login_throttle_window_seconds: int = Field(
+        default=900,
+        ge=1,
+        description="Sliding window for login failure counts, seconds (env CIP_LOGIN_THROTTLE_WINDOW_SECONDS).",
+    )
 
     money_ceiling_usd: float | None = Field(
         default=None,

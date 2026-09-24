@@ -189,3 +189,13 @@ def _mock_db_safe_stub_user(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(security, "_resolve_stub_app_user", guarded)
     yield
+
+
+# N-0037: the login throttle is process-global; clear it so one test's failures never lock another.
+@pytest.fixture(autouse=True)
+def _reset_login_throttle():
+    from app.core.login_throttle import login_throttle
+
+    login_throttle.reset_all()
+    yield
+    login_throttle.reset_all()

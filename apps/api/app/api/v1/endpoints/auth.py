@@ -4,14 +4,21 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
 from app.core.config import get_settings
-from app.core.password import hash_password, hash_session_token, new_session_token, verify_password
+from app.core.login_throttle import client_address, log_throttle_event, login_throttle
+from app.core.password import (
+    DUMMY_PASSWORD_HASH,
+    hash_password,
+    hash_session_token,
+    new_session_token,
+    verify_password,
+)
 from app.core.security import Role, get_current_user, normalize_role, require_roles
 from app.models.iam import AppUser, AuthSession, Tenant
 from app.services import commercial_tenant_profile
@@ -81,13 +88,41 @@ async def me(user: dict = Depends(get_current_user)):
     }
 
 
+def _too_many_attempts(retry_after: int) -> HTTPException:
+    # Same body for account and address throttles, known and unknown emails (no enumeration).
+    return HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail="Too many login attempts. Try again later.",
+        headers={"Retry-After": str(retry_after)},
+    )
+
+
 @public_router.post("/login", response_model=LoginResponse)
-async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(body: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
     email = body.email.strip().lower()
+    throttle_on = get_settings().cip_login_throttle_enabled
+    address = client_address(request)
+    if throttle_on:
+        verdict = login_throttle.check(email, address)
+        if verdict is not None:
+            log_throttle_event("throttled", verdict, account=email, address=address)
+            raise _too_many_attempts(verdict.retry_after)
+
     result = await db.execute(select(AppUser).where(AppUser.email == email))
     user = result.scalar_one_or_none()
-    if user is None or not user.is_active or not verify_password(body.password, user.password_hash):
+    # Always verify (dummy hash when unknown) and only then branch, so unknown / inactive /
+    # wrong-password take the same path and roughly the same time.
+    password_ok = verify_password(
+        body.password, user.password_hash if user is not None else DUMMY_PASSWORD_HASH
+    )
+    if user is None or not user.is_active or not password_ok:
+        if throttle_on:
+            for locked in login_throttle.record_failure(email, address):
+                log_throttle_event("lockout", locked, account=email, address=address)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    if throttle_on:
+        login_throttle.reset_account(email)
 
     token = new_session_token()
     expires_at = datetime.now(timezone.utc) + timedelta(days=_SESSION_DAYS)

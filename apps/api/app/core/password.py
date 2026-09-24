@@ -30,6 +30,11 @@ def verify_password(password: str, password_hash: str) -> bool:
     return hmac.compare_digest(dk.hex(), digest)
 
 
+# Well-formed hash that matches no password: login verifies against it when the email is
+# unknown so an unknown user costs the same PBKDF2 work as a wrong password (N-0037).
+DUMMY_PASSWORD_HASH = f"{_SCHEME}${_ITERATIONS}${secrets.token_hex(16)}${'0' * 64}"
+
+
 def hash_session_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
