@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1158
-  log_sha256: 05818b3c7e7563ce500b508fec85bbd28d21303f3bb3a065ece5a6a489f113f9
+  snapshot_revision: 1167
+  log_sha256: 57b40cac3ba4f7a7d43dde0b3d3813b6ee735a831c642ab8e740207297e206ea
   acceptance_policy:
     milestone: operator
     root: operator
@@ -6367,9 +6367,9 @@ nodes:
     title: 'D-g: sellable BU grain is every dim_product.product_line (five-line assumption sweep)'
     class: feature
     origin: operator
-    status: in_progress
-    stage: validate
-    revision: 5
+    status: complete
+    stage: null
+    revision: 14
     lease: null
     depends_on:
     - N-0039
@@ -6395,35 +6395,87 @@ nodes:
     quality:
       testing:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0040_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: pytest 43 passed on cip_test (5 files incl. new guard + catalog service tests); vitest 2 files / 8 tests
+            passed; tsc 0 errors. Guard regex is narrow (3+ quoted 2-letter codes only) - advisory.
         rationale: null
+        pass_run: GOV008_N0040_20260924
+        pass_actor: gov-008-n0040
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: na
+        evidence:
+          path: .eif/audit/GOV008_N0040_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: No logging/metrics change in scope.
+        rationale: Node changes vocabulary source and inference inputs; the only new observable is null_product_line_count
+          on the endpoint (verified 10). No new runtime signal to observe.
       ux:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0040_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: 'Dialog opens, copy neutral (''all product-line folders are included''), folder actions gated until codes
+            load. Advisory: endpoint error leaves folder picker enabled with empty codes; wider sheet/filename token matching
+            (PD/AI/PT) may mislead under-resolved imports.'
         rationale: null
+        pass_run: GOV008_N0040_20260924
+        pass_actor: gov-008-n0040
       a11y:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0040_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: 'Dialog aria-labelledby resolves to its h2; buttons named. Pre-existing: per-row native BU select lacks
+            an accessible name (not introduced by this node).'
         rationale: null
+        pass_run: GOV008_N0040_20260924
+        pass_actor: gov-008-n0040
       rendered:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence: &id024
+          path: .eif/audit/GOV008_N0040_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: Own Chrome tab on 127.0.0.1:3000/admin/imports; endpoint fetched live (14 codes, null 10); dialog opened
+            and closed without write controls.
         rationale: null
+        pass_run: GOV008_N0040_20260924
+        pass_actor: gov-008-n0040
       content:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0040_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: 'No NB/NR/NV/PF/XB copy in dialog; plan_vs_executed reason neutralised. Residual prose only: lineup_po_competition
+            docstring, InboundShipments placeholder ''e.g. NB''.'
         rationale: null
-    verification: {}
+        pass_run: GOV008_N0040_20260924
+        pass_actor: gov-008-n0040
+    verification:
+      rendered:
+        state: pass
+        pass_run: GOV008_N0040_20260924
+        pass_actor: gov-008-n0040
+        evidence: *id024
+        path: null
+      referent:
+        state: pass
+        pass_run: GOV008_N0040_20260924
+        pass_actor: gov-008-n0040
+        evidence:
+          path: .eif/audit/GOV008_N0040_20260924/REVIEW.md
+          verdict: VERIFIED_WITH_LIMITATIONS
+          summary: Commit 73466a10 diff read; old_* proof modules identical to 73466a10^; proof re-run byte-identical (0 BU/collision/supersession
+            changes, 3 product_line inference diffs, 0 persisted); cip NULL=10/distinct=14 via ro_sql; commercial_lineup_case
+            max(updated_at)=2026-08-05 (no writes).
+        path: null
     evidence: []
     blockers: []
     conservation_tags: []
