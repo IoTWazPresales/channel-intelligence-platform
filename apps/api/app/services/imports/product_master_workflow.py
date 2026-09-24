@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from app.ingestion.infer import infer_schema, read_tabular
 from app.models.dimensions import DimProduct
 from app.models.ingestion import ImportJob, ImportRowResult, RawFileMetadata, SourceDefinition
-from app.services.catalog.product_import_sync import sync_bulk_upsert_products_from_rows
+from app.services.catalog.product_import_sync import _parse_date_val, sync_bulk_upsert_products_from_rows
 from app.services.imports.import_background_slots import (
     SLOT_PM_COMMIT,
     SLOT_PM_VALIDATE,
@@ -612,6 +612,21 @@ def _append_pm_row_result(
     )
 
 
+def pm_row_inverted_window(row: Any, launch_col: str | None, eol_col: str | None) -> dict[str, str] | None:
+    """Launch/end-of-life pair when the file's own end-of-life is before its launch, else None.
+
+    FLAG, not BLOCK (N-0047 / BACKLOG-034): commit still stores the file's values as given; the
+    steward sees the window before commit instead of finding it later as a silently ineligible product.
+    """
+    if not launch_col or not eol_col:
+        return None
+    ld = _parse_date_val(normalize_scalar_for_pm(row.get(launch_col)))
+    eol = _parse_date_val(normalize_scalar_for_pm(row.get(eol_col)))
+    if ld is None or eol is None or eol >= ld:
+        return None
+    return {"launch_date": ld.isoformat(), "end_of_life_date": eol.isoformat()}
+
+
 def _bulk_insert_row_results(db: Session, rows: list[dict[str, Any]], *, chunk_size: int = 2000) -> None:
     if not rows:
         return
@@ -674,6 +689,8 @@ def validate_product_master_sync(db: Session, job_id: int, *, from_worker: bool 
     cc_col = next((k for k, v in fm.items() if v == "country_code"), None)
     ean_col = next((k for k, v in fm.items() if v == "barcode_ean"), None)
     upc_col = next((k for k, v in fm.items() if v == "barcode_upc"), None)
+    launch_col = next((k for k, v in fm.items() if v == "launch_date"), None)
+    eol_col = next((k for k, v in fm.items() if v == "end_of_life_date"), None)
 
     stage_cols = stage_raw_columns_from_decisions(job.mapping_decisions)
     cand_cols = [
@@ -805,6 +822,20 @@ def validate_product_master_sync(db: Session, job_id: int, *, from_worker: bool 
                 )
                 errors += 1
                 continue
+        inverted = pm_row_inverted_window(row, launch_col, eol_col)
+        if inverted:
+            _append_pm_row_result(
+                row_results,
+                job_id=job.id,
+                row_number=int(idx) + 1,
+                severity="warning",
+                code="launch_after_end_of_life",
+                message=(
+                    f"End-of-life {inverted['end_of_life_date']} is before launch {inverted['launch_date']}; "
+                    "stored as given, the product falls outside its own window for every date."
+                ),
+                raw_payload={"technical_product_id": tid[:128], **inverted},
+            )
         if row_has_stage_raw_data(row, stage_cols):
             staged_row_count += 1
 

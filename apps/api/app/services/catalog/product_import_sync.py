@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
+import numpy as np
 import pandas as pd
 from sqlalchemy import Boolean, Date, String, case, cast, func, literal_column, select, true
 from sqlalchemy import values as sql_values
@@ -68,6 +69,22 @@ def _bounded_str(key: str, val: str | None, sku: str) -> str | None:
     return val
 
 
+# Excel stores dates as day serials from 1899-12-30. A bare number in a date column is a serial;
+# pandas would read it as nanoseconds since 1970 and every such cell became 1970-01-01 (N-0047:
+# 671 dim_product rows from Specs_new.xlsx, job 88). Range 1..2958465 = 1900-01-01..9999-12-31.
+_EXCEL_EPOCH = date(1899, 12, 30)
+_EXCEL_SERIAL_MAX = 2958465
+
+
+def _excel_serial_to_date(v: Any) -> date | None:
+    if isinstance(v, bool) or not isinstance(v, (int, float, np.integer, np.floating)):
+        return None
+    f = float(v)
+    if pd.isna(f) or not (1 <= f < _EXCEL_SERIAL_MAX + 1):
+        return None
+    return _EXCEL_EPOCH + timedelta(days=int(f))  # a fractional part is the time of day
+
+
 def _parse_date_val(v: Any) -> date | None:
     if v is None or (isinstance(v, float) and pd.isna(v)):
         return None
@@ -77,6 +94,8 @@ def _parse_date_val(v: Any) -> date | None:
         return v.date()
     if isinstance(v, pd.Timestamp):
         return v.date()
+    if isinstance(v, (bool, int, float, np.integer, np.floating)):
+        return _excel_serial_to_date(v)
     ts = pd.to_datetime(v, errors="coerce")
     if pd.isna(ts):
         return None
