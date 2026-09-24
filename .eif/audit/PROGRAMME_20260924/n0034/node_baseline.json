@@ -1,0 +1,1 @@
+{"node": "N-0034", "expected_revision": 4, "baseline_ref": "BLN-0010", "preservation": {"inbound_picker": "same localStorage key and behaviour", "mds_states": "kept on every Tier A host", "fixed_sets": "Tier B/C unchanged", "enterprise_wrapper": "unchanged"}}
