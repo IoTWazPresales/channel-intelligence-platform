@@ -2952,6 +2952,22 @@ Exact engine invariants (do not complete around them):
 | **Behavior to retain** | Existing default column sets stay the defaults; a picker adds optional columns, it never changes what a grid shows out of the box. |
 | **Out of scope** | AG Grid Enterprise tool panel (BACKLOG-193); density (see the density proposal — not shipped). |
 | **TRIGGER** | Warren names which Tier A grids need column choice, **or** an operator asks for a specific hidden fact column. |
+| **Progress (N-0034, D-0030)** | **Partial — pass 1 of 2** (2026-09-24). One picker: `features/workbench-ui/useFactColumns` + `FactColumnPicker` (wraps `ColumnPickerDialog` md), fed by the API registry `app/services/grid_fields.py` / `GET /api/v1/grid-fields/{grid_id}`; layout key `cip.grid.<grid_id>.optional.v1`. Customer / Distributor code are default-hidden **Reference** columns; identity cells are name-only (D7). Live on: inbound shipments (moved onto the hook, key `cip.commercial.inbound-shipments.grid.optional.v1` kept; `/shipping/inbound-optional-columns` is now an alias), sell-out commercial lines, inventory, pricing facts, pricing recommendations, buy-plans, roadmap, forecasts. Pass 2: channel-ops sell-out / movements / inventory, plan-vs-executed drill, cover, channel intelligence, market listings, customer-commercial-terms. Excluded: sell-out zero-sellout list (2-column exception list), exceptions inbox (worklist). |
+
+**Toolbar parity per host (criterion 4, D-b).** Column filters are already on every host (`EnterpriseDataGrid` default col def); density is global (D2) and unchanged. Nothing below is built per page: each gap is owned by the named node.
+
+| Host | Search | Chips / filter bar | Saved views | Export |
+|---|---|---|---|---|
+| SellOutTab | present → N-0041 adopts | selects → N-0041 | N-0042 | N-0043 |
+| ChannelOps movements / inventory | N-0041 | selects | N-0042 | N-0043 |
+| inventory, pricing, forecasts | N-0041 | date only | N-0042 | N-0043 |
+| buy-plans, roadmap | N-0041 | none | N-0042 | N-0043 |
+| PlanVsExecuted | N-0041 | toggles present | N-0042 | N-0043 |
+| CoverLens | N-0041 | ScopeBar present | presets present, not persisted → N-0042 | N-0043 |
+| ChannelIntelligence | N-0041 | none | N-0042 | N-0043 |
+| MarketSurface listings | N-0041 | ScopeBar present | N-0042 | N-0043 |
+| customer-commercial-terms | present → N-0041 adopts | none | N-0042 | N-0043 |
+| exceptions (excluded from the picker) | N-0041 | none | N-0042 | N-0043 |
 
 ---
 

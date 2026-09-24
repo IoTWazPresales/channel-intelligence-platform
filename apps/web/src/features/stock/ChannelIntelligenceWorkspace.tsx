@@ -54,11 +54,9 @@ type IntelResponse = {
   thresholds?: Record<string, unknown>;
 };
 
-function customerLabel(row: Pick<IntelRow, 'customer_id' | 'customer_code' | 'customer_name'>): string {
-  if (row.customer_name) {
-    return row.customer_code ? `${row.customer_name} (${row.customer_code})` : row.customer_name;
-  }
-  return `Customer ${row.customer_id}`;
+/** Name only (D7): the customer code is not welded into the name cell. */
+function customerLabel(row: Pick<IntelRow, 'customer_id' | 'customer_name'>): string {
+  return row.customer_name || `Customer ${row.customer_id}`;
 }
 
 function productLabel(row: Pick<IntelRow, 'product_id' | 'product_sku' | 'product_name' | 'sales_model_name'>): string {

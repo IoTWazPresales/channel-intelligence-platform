@@ -24,6 +24,8 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
+import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
@@ -85,6 +87,8 @@ function parsePricingPaste(text: string): PricingPasteRow[] {
 export default function PricingPage() {
   const qc = useQueryClient();
   const lineId = useLineIdentifierPreference();
+  const factFields = useFactColumns<PriceRow>('pricing.facts');
+  const recFields = useFactColumns<RecRow>('pricing.recommendations');
   const [tab, setTab] = useState(0);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [paste, setPaste] = useState('');
@@ -180,9 +184,10 @@ export default function PricingPage() {
       { field: 'net_price', headerName: 'Net', type: 'numericColumn' },
       { field: 'list_price', headerName: 'List', type: 'numericColumn' },
       { field: 'effective_date', headerName: 'Effective' },
+      ...factFields.optionalColDefs,
       gridDeleteColumn<PriceRow>((id) => void delFact.mutate(id), { busy: busyDel }),
     ];
-  }, [delFact, delFact.isPending, clearFacts.isPending, lineId]);
+  }, [delFact, delFact.isPending, clearFacts.isPending, lineId, factFields.optionalColDefs]);
 
   const recCols: ColDef<RecRow>[] = useMemo(() => {
     const busyDel = delRec.isPending || clearRecs.isPending;
@@ -195,9 +200,10 @@ export default function PricingPage() {
       { field: 'suggested_state', headerName: 'State' },
       { field: 'explanation_summary', headerName: 'Explanation', flex: 1, minWidth: 240 },
       { field: 'confidence', headerName: 'Confidence' },
+      ...recFields.optionalColDefs,
       gridDeleteColumn<RecRow>((id) => void delRec.mutate(id), { busy: busyDel }),
     ];
-  }, [delRec, delRec.isPending, clearRecs.isPending, lineId]);
+  }, [delRec, delRec.isPending, clearRecs.isPending, lineId, recFields.optionalColDefs]);
 
   const factRows = facts ?? [];
   const recRows = recs ?? [];
@@ -233,6 +239,13 @@ export default function PricingPage() {
             }}
             toolbar={
               <ModuleGridToolbar
+                leading={
+                  <FactColumnsButton
+                    gridId="pricing.facts"
+                    onClick={factFields.openPicker}
+                    count={factFields.optionalFields.length}
+                  />
+                }
                 onRefresh={() => qc.invalidateQueries({ queryKey: ['pricing-facts'] })}
                 onClearAll={() => {
                   if (!window.confirm('Delete every price fact? This cannot be undone.')) return;
@@ -263,6 +276,13 @@ export default function PricingPage() {
             }}
             toolbar={
               <ModuleGridToolbar
+                leading={
+                  <FactColumnsButton
+                    gridId="pricing.recommendations"
+                    onClick={recFields.openPicker}
+                    count={recFields.optionalFields.length}
+                  />
+                }
                 onRefresh={() => qc.invalidateQueries({ queryKey: ['pricing-recs'] })}
                 onClearAll={() => {
                   if (!window.confirm('Delete every pricing recommendation row? This cannot be undone.')) return;
@@ -278,6 +298,8 @@ export default function PricingPage() {
           </ModuleDataSection>
         )}
       </Paper>
+      <FactColumnPicker {...factFields.pickerProps} />
+      <FactColumnPicker {...recFields.pickerProps} />
 
       <BulkPasteDialog
         open={pasteOpen}

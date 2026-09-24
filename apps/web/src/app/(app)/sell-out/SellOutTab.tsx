@@ -17,6 +17,8 @@ import { useMemo, useState } from 'react';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
+import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiGet } from '@/lib/api';
 
 import { depthAtLeast, type IntelDepth } from './intelDepth';
@@ -38,6 +40,7 @@ type SelloutLine = {
   customer_code: string | null;
   customer_name: string | null;
   distributor_code: string | null;
+  distributor_name: string | null;
   period_start: string;
   units: number;
   revenue: number;
@@ -66,6 +69,7 @@ type ZeroProduct = { product_id: number; sku: string; sales_model_name: string |
 
 export function SellOutTab({ depth }: { depth: IntelDepth }) {
   const lineId = useLineIdentifierPreference();
+  const factColumns = useFactColumns<SelloutLine>('sellout.commercial-lines');
   const [smartPreset, setSmartPreset] = useState<SmartPresetId>('');
   const [distributorPick, setDistributorPick] = useState<DistHit | null>(null);
   const [customerPick, setCustomerPick] = useState<CustHit | null>(null);
@@ -106,7 +110,13 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
     [useChannelApi, smartPreset, distributorPick?.id, customerPick?.id, search, periodFrom]
   );
 
-  const { data: lines, isLoading: linesLoading, isError: linesError, error: linesErr } = useQuery({
+  const {
+    data: lines,
+    isLoading: linesLoading,
+    isError: linesError,
+    error: linesErr,
+    refetch: refetchLines,
+  } = useQuery({
     queryKey: linesQueryKey,
     queryFn: async ({ signal }) => {
       if (useChannelApi) {
@@ -223,14 +233,9 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
         minWidth: 110,
         valueGetter: (p) => lineId.value(p.data?.product_sku, p.data?.product_sales_model_name),
       },
-      {
-        headerName: 'Customer',
-        flex: 1,
-        minWidth: 160,
-        valueGetter: (p) =>
-          p.data ? `${p.data.customer_name ?? ''} (${p.data.customer_code ?? ''})` : '—',
-      },
-      { field: 'distributor_code', headerName: 'Distributor', minWidth: 130, valueFormatter: (p) => p.value ?? '—' },
+      // Names only (D7): customer and distributor codes are optional columns in the picker's Reference group.
+      { field: 'customer_name', headerName: 'Customer', flex: 1, minWidth: 160, valueFormatter: (p) => p.value ?? '—' },
+      { field: 'distributor_name', headerName: 'Distributor', minWidth: 140, valueFormatter: (p) => p.value ?? '—' },
       {
         field: 'units',
         headerName: 'Units',
@@ -245,8 +250,9 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
         minWidth: 110,
         valueFormatter: (p) => Number(p.value ?? 0).toLocaleString(),
       },
+      ...factColumns.optionalColDefs,
     ],
-    [lineId],
+    [lineId, factColumns.optionalColDefs],
   );
 
   return (
@@ -375,6 +381,18 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
               isLoading={linesLoading}
               isError={Boolean(linesError)}
               error={linesError ? new Error((linesErr as Error)?.message ?? 'Failed to load sell-out lines.') : null}
+              onRetry={() => void refetchLines()}
+              toolbar={
+                useChannelApi ? undefined : (
+                  <Stack direction="row" sx={{ mb: 1 }}>
+                    <FactColumnsButton
+                      gridId="sellout.commercial-lines"
+                      onClick={factColumns.openPicker}
+                      count={factColumns.optionalFields.length}
+                    />
+                  </Stack>
+                )
+              }
               isEmpty={(lines?.items ?? []).length === 0}
               empty={{
                 title: 'No sell-out rows match',
@@ -399,6 +417,7 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
           </Box>
         </Paper>
       )}
+      <FactColumnPicker {...factColumns.pickerProps} />
     </>
   );
 }

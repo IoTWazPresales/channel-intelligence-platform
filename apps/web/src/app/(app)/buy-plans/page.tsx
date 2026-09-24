@@ -12,6 +12,8 @@ import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { navPageChrome } from '@/features/shell/navPageChrome';
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
+import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiDelete, apiGet, apiPost, HttpConflictError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 import { useUiStore } from '@/stores/uiStore';
@@ -31,6 +33,7 @@ export default function BuyPlansPage() {
   const qc = useQueryClient();
   const openDrawer = useUiStore((s) => s.openDrawer);
   const lineId = useLineIdentifierPreference();
+  const factColumns = useFactColumns<Row>('buy-plans');
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['buy-plans'],
     queryFn: ({ signal }) => apiGet<Row[]>('/api/v1/buy-plans', { signal }),
@@ -103,9 +106,10 @@ export default function BuyPlansPage() {
           if (e.data) openDrawer('Buy rationale', e.data.rationale);
         },
       },
+      ...factColumns.optionalColDefs,
       gridDeleteColumn<Row>((id) => void delRow.mutate(id), { busy: busyDel }),
     ];
-  }, [delRow, delRow.isPending, clearAll.isPending, lineId]);
+  }, [delRow, delRow.isPending, clearAll.isPending, lineId, factColumns.optionalColDefs]);
 
   const rows = data ?? [];
   const busy = delRow.isPending || clearAll.isPending;
@@ -168,6 +172,13 @@ export default function BuyPlansPage() {
           }}
           toolbar={
             <ModuleGridToolbar
+              leading={
+                <FactColumnsButton
+                  gridId="buy-plans"
+                  onClick={factColumns.openPicker}
+                  count={factColumns.optionalFields.length}
+                />
+              }
               onRefresh={() => qc.invalidateQueries({ queryKey: ['buy-plans'] })}
               onClearAll={() => {
                 if (!window.confirm('Delete every buy plan row? This cannot be undone.')) return;
@@ -181,6 +192,7 @@ export default function BuyPlansPage() {
           <EnterpriseDataGrid rowData={rows} columnDefs={colDefs} />
         </ModuleDataSection>
       </Paper>
+      <FactColumnPicker {...factColumns.pickerProps} />
     </>
   );
 }

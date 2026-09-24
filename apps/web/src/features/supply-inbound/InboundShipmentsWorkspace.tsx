@@ -35,18 +35,22 @@ import { apiGet } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
 import { buildShippingLinesUrl, type ShippingFilterParams } from '@/app/(app)/shipping/buildShippingLinesUrl';
-import { ColumnPickerDialog } from '@/features/workbench-ui/ColumnPickerDialog';
-
-type OptionalColumnMeta = { field: string; label: string };
+import { FactColumnPicker } from '@/features/workbench-ui/FactColumnPicker';
+import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { ShippingCommercialSummary } from '@/app/(app)/shipping/ShippingCommercialSummary';
 import { ShippingLineupQuarterSummary } from '@/app/(app)/shipping/ShippingLineupQuarterSummary';
-import { fmtCellForKey, fmtShortDate } from '@/app/(app)/shipping/shippingGridFormatters';
+import { fmtShortDate } from '@/app/(app)/shipping/shippingGridFormatters';
 import { shippingDistributorCellValue } from '@/app/(app)/shipping/shippingDistributorDisplay';
 import { gridRowMetrics } from '@/features/plan-vs-executed/gridPagination';
 import type { SmartPresetId } from '@/app/(app)/shipping/shippingSmartPresets';
 
 const LS_GRID = 'cip.commercial.inbound-shipments.grid.optional.v1';
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 250, 500] as const;
+
+/** The raw source row is a JSON blob: give it room and let it wrap. */
+function inboundOptionalColDef(field: string): Partial<ColDef<ShippingLine>> {
+  return field === 'raw_source_row' ? { minWidth: 220, wrapText: true, autoHeight: true } : {};
+}
 
 const DATE_FIELD_OPTIONS: { value: string; label: string }[] = [
   { value: 'eta_date', label: 'ETA date' },
@@ -174,29 +178,25 @@ export function InboundShipmentsWorkspace() {
   const [skip, setSkip] = useState(0);
   const [limit, setLimit] = useState<number>(50);
 
-  const [colDialogOpen, setColDialogOpen] = useState(false);
-  const [colSearch, setColSearch] = useState('');
-  const [optionalFields, setOptionalFields] = useState<string[]>([]);
   const [persistReady, setPersistReady] = useState(false);
 
   const gridSectionRef = useRef<HTMLDivElement | null>(null);
 
   const resetPagination = useCallback(() => setSkip(0), []);
 
-  const { data: colMeta, isLoading: colMetaLoading } = useQuery({
-    queryKey: ['shipping-inbound-optional-columns'],
-    queryFn: ({ signal }) =>
-      apiGet<{ items: OptionalColumnMeta[] }>('/api/v1/shipping/inbound-optional-columns', { signal }),
+  // Optional columns come from the shared grid-field registry; the existing key keeps each user's layout.
+  const factColumns = useFactColumns<ShippingLine>('inbound-shipments', {
+    storageKey: LS_GRID,
+    colDefFor: inboundOptionalColDef,
   });
+  const displayOptionalFields = factColumns.optionalFields;
 
+  // Page size shares LS_GRID with the column layout; both sides merge into the stored object.
   useEffect(() => {
     try {
       const raw = localStorage.getItem(LS_GRID);
       if (raw) {
-        const p = JSON.parse(raw) as { optionalFields?: string[]; pageSize?: number };
-        if (Array.isArray(p.optionalFields)) {
-          setOptionalFields(p.optionalFields);
-        }
+        const p = JSON.parse(raw) as { pageSize?: number };
         if (typeof p.pageSize === 'number' && PAGE_SIZE_OPTIONS.includes(p.pageSize as (typeof PAGE_SIZE_OPTIONS)[number])) {
           setLimit(p.pageSize);
         }
@@ -208,28 +208,15 @@ export function InboundShipmentsWorkspace() {
   }, []);
 
   useEffect(() => {
-    if (!colMeta?.items?.length) return;
-    const allowed = new Set(colMeta.items.map((c) => c.field));
-    setOptionalFields((prev) => prev.filter((f) => allowed.has(f)));
-  }, [colMeta]);
-
-  useEffect(() => {
     if (!persistReady) return;
     try {
-      localStorage.setItem(LS_GRID, JSON.stringify({ optionalFields, pageSize: limit }));
+      const raw = localStorage.getItem(LS_GRID);
+      const prev = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+      localStorage.setItem(LS_GRID, JSON.stringify({ ...prev, pageSize: limit }));
     } catch {
       /* ignore */
     }
-  }, [optionalFields, limit, persistReady]);
-
-  const optionalSet = useMemo(() => new Set(optionalFields), [optionalFields]);
-  const allowedOptional = colMeta?.items ?? [];
-  const allowedSet = useMemo(() => new Set(allowedOptional.map((c) => c.field)), [allowedOptional]);
-  const columnLabels = useMemo(() => new Map(allowedOptional.map((c) => [c.field, c.label])), [allowedOptional]);
-  const displayOptionalFields = useMemo(
-    () => optionalFields.filter((f) => optionalSet.has(f) && allowedSet.has(f)),
-    [optionalFields, optionalSet, allowedSet]
-  );
+  }, [limit, persistReady]);
 
   const clearSmartPreset = useCallback(() => {
     setSmartPreset(null);
@@ -539,18 +526,7 @@ export function InboundShipmentsWorkspace() {
     [resetPagination]
   );
 
-  const optionalColDefs: ColDef<ShippingLine>[] = useMemo(
-    () =>
-      displayOptionalFields.map((f) => ({
-        field: f,
-        headerName: columnLabels.get(f) ?? f,
-        minWidth: f === 'raw_source_row' ? 220 : 130,
-        valueFormatter: (p: ValueFormatterParams<ShippingLine>) => fmtCellForKey(f, p.value),
-        wrapText: f === 'raw_source_row',
-        autoHeight: f === 'raw_source_row',
-      })),
-    [displayOptionalFields, columnLabels]
-  );
+  const optionalColDefs = factColumns.optionalColDefs;
 
   const colDefs = useMemo(() => [...baseColDefs, ...optionalColDefs], [baseColDefs, optionalColDefs]);
 
@@ -986,7 +962,8 @@ export function InboundShipmentsWorkspace() {
                 size="small"
                 variant="outlined"
                 startIcon={<ViewColumnIcon />}
-                onClick={() => setColDialogOpen(true)}
+                onClick={factColumns.openPicker}
+                aria-haspopup="dialog"
                 data-testid="shipping-additional-columns"
               >
                 Additional columns
@@ -1004,34 +981,12 @@ export function InboundShipmentsWorkspace() {
         </ModuleDataSection>
       </Paper>
 
-      <ColumnPickerDialog
-        size="md"
+      <FactColumnPicker
+        {...factColumns.pickerProps}
         data-testid="shipping-column-picker"
-        open={colDialogOpen}
-        onClose={() => setColDialogOpen(false)}
         title="Additional columns"
         description="Default columns stay shipping-focused (distributor, product model + SKU, line/cargo state, key dates). Every other column on fact_inbound_shipment can be toggled on below."
-        groups={[
-          {
-            label: 'fact_inbound_shipment fields',
-            fields: allowedOptional.map((c) => c.field),
-            loading: colMetaLoading,
-          },
-        ]}
-        columnLabelByField={Object.fromEntries(allowedOptional.map((c) => [c.field, c.label]))}
-        visibility={Object.fromEntries(optionalFields.map((f) => [f, true]))}
-        onToggle={(field, visible) =>
-          setOptionalFields((prev) => {
-            const s = new Set(prev);
-            if (visible) s.add(field);
-            else s.delete(field);
-            return [...s];
-          })
-        }
-        onReset={() => setOptionalFields([])}
-        gridReady={!colMetaLoading}
-        search={colSearch}
-        onSearchChange={setColSearch}
+        factGroupLabel="fact_inbound_shipment fields"
       />
     </>
   );

@@ -10,6 +10,8 @@ import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PlanningChrome } from '@/features/planning/PlanningChrome';
+import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
@@ -27,6 +29,7 @@ type Row = {
 export default function RoadmapPage() {
   const qc = useQueryClient();
   const lineId = useLineIdentifierPreference();
+  const factColumns = useFactColumns<Row>('roadmap');
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['roadmap'],
     queryFn: ({ signal }) => apiGet<Row[]>('/api/v1/roadmap', { signal }),
@@ -54,9 +57,10 @@ export default function RoadmapPage() {
       { field: 'whitespace_flag', headerName: 'Whitespace' },
       { field: 'overlap_flag', headerName: 'Overlap' },
       { field: 'launch_target', headerName: 'Launch target' },
+      ...factColumns.optionalColDefs,
       gridDeleteColumn<Row>((id) => void delRow.mutate(id), { busy: busyDel }),
     ];
-  }, [delRow, delRow.isPending, clearAll.isPending, lineId]);
+  }, [delRow, delRow.isPending, clearAll.isPending, lineId, factColumns.optionalColDefs]);
 
   const rows = data ?? [];
 
@@ -84,6 +88,13 @@ export default function RoadmapPage() {
           }}
           toolbar={
             <ModuleGridToolbar
+              leading={
+                <FactColumnsButton
+                  gridId="roadmap"
+                  onClick={factColumns.openPicker}
+                  count={factColumns.optionalFields.length}
+                />
+              }
               onRefresh={() => qc.invalidateQueries({ queryKey: ['roadmap'] })}
               onClearAll={() => {
                 if (!window.confirm('Delete every roadmap row? This cannot be undone.')) return;
@@ -97,6 +108,7 @@ export default function RoadmapPage() {
           <EnterpriseDataGrid rowData={rows} columnDefs={colDefs} />
         </ModuleDataSection>
       </Paper>
+      <FactColumnPicker {...factColumns.pickerProps} />
     </PlanningChrome>
   );
 }

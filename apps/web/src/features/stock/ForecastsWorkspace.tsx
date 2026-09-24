@@ -12,6 +12,8 @@ import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
+import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
@@ -80,6 +82,7 @@ function parseForecastPaste(text: string): ForecastPasteRow[] {
 export function ForecastsWorkspace() {
   const qc = useQueryClient();
   const lineId = useLineIdentifierPreference();
+  const factColumns = useFactColumns<Row>('forecasts');
   const [pasteOpen, setPasteOpen] = useState(false);
   const [paste, setPaste] = useState('');
   const [addOpen, setAddOpen] = useState(false);
@@ -203,9 +206,10 @@ export function ForecastsWorkspace() {
       { field: 'confidence_level', headerName: 'Confidence' },
       { field: 'confidence_placeholder', headerName: 'Confidence (legacy)', hide: true },
       { field: 'is_override', headerName: 'Override' },
+      ...factColumns.optionalColDefs,
       gridDeleteColumn<Row>((id) => void delRow.mutate(id), { busy: busyDel }),
     ];
-  }, [delRow, delRow.isPending, clearAll.isPending, lineId]);
+  }, [delRow, delRow.isPending, clearAll.isPending, lineId, factColumns.optionalColDefs]);
 
   const rows = data ?? [];
   const busy = bulk.isPending || addOne.isPending || delRow.isPending || clearAll.isPending || computeHistory.isPending;
@@ -258,16 +262,23 @@ export function ForecastsWorkspace() {
           toolbar={
             <ModuleGridToolbar
               leading={
-                <Button
-                  startIcon={<HistoryIcon />}
-                  variant="contained"
-                  size="small"
-                  disabled={busy}
-                  onClick={runComputeFromHistory}
-                  data-testid="forecast-compute-from-history"
-                >
-                  Compute from history
-                </Button>
+                <>
+                  <Button
+                    startIcon={<HistoryIcon />}
+                    variant="contained"
+                    size="small"
+                    disabled={busy}
+                    onClick={runComputeFromHistory}
+                    data-testid="forecast-compute-from-history"
+                  >
+                    Compute from history
+                  </Button>
+                  <FactColumnsButton
+                    gridId="forecasts"
+                    onClick={factColumns.openPicker}
+                    count={factColumns.optionalFields.length}
+                  />
+                </>
               }
               onRefresh={() => qc.invalidateQueries({ queryKey: ['forecasts'] })}
               onClearAll={() => {
@@ -287,6 +298,7 @@ export function ForecastsWorkspace() {
           <EnterpriseDataGrid rowData={rows} columnDefs={colDefs} />
         </ModuleDataSection>
       </Paper>
+      <FactColumnPicker {...factColumns.pickerProps} />
 
       <BulkPasteDialog
         open={pasteOpen}
