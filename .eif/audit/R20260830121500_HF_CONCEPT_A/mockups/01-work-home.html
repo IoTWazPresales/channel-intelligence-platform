@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CIP — Home</title>
+  <link rel="stylesheet" href="desk.css" />
+</head>
+<body>
+<div class="desk">
+  <aside class="spine">
+    <div class="brand">CIP<em>Channel Intelligence</em></div>
+    <div class="room"><span>Work</span>
+      <a class="leaf on">Home</a>
+      <a class="leaf">Deliveries</a>
+    </div>
+    <div class="room"><span>Channel</span>
+      <a class="leaf">Position</a>
+      <a class="leaf">Inbound</a>
+      <a class="leaf">Execution</a>
+    </div>
+    <div class="room"><span>Promotion</span>
+      <a class="leaf">Actions</a>
+      <a class="leaf">Plans</a>
+    </div>
+    <div class="room"><span>Funding</span>
+      <a class="leaf">Queue</a>
+    </div>
+    <div class="room"><span>Data</span>
+      <a class="leaf">Import</a>
+      <a class="leaf">Identity</a>
+    </div>
+    <div class="foot">Local Admin<br>30 Aug 2026 · 00:12</div>
+  </aside>
+  <div class="plane">
+    <header class="mast">
+      <div class="sit">
+        <div class="journey">Oem <i>→</i> Disti <i>→</i> Retail <i>→</i> Consumer</div>
+        <h1>Fourteen decisions need a person before the channel can be trusted this morning.</h1>
+        <p>Blocking work is listed first. Cover stays blocked until DSI is current.</p>
+      </div>
+      <div class="mast-meta">
+        Vintage <strong>12 Jun 2026</strong><br>
+        DSI <strong>10d stale</strong><br>
+        2 ingest jobs running
+      </div>
+    </header>
+    <div class="warnbar">
+      <span><b>Cover decisions are blocked</b> until DSI is current. Position vintage is 79 days behind the desk.</span>
+      <button class="bar-act" type="button">Open Import</button>
+    </div>
+    <div class="workbar">
+      <span class="cut">All rooms</span>
+      <span class="cut">Blocking first</span>
+      <span class="cut">Mine <span>· Local Admin</span></span>
+      <span class="count"><b>14</b> open · 6 blocking</span>
+    </div>
+    <div class="stage">
+      <div class="blotter">
+        <table class="ledger">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Weight</th>
+              <th>Decision</th>
+              <th>Next</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="block">
+              <td class="r">01</td>
+              <td><span class="sev block">Blocking</span><div class="why">Trust · Data</div></td>
+              <td>21 failed import jobs — DSI apply stalled, 14 lines unresolved identity.<div class="why">Job 1204 · distributor_inventory · last retry 29 Aug 22:11</div></td>
+              <td class="next">Resume steward</td>
+            </tr>
+            <tr class="block">
+              <td class="r">02</td>
+              <td><span class="sev block">Blocking</span><div class="why">Trust · Position</div></td>
+              <td>DSI snapshot 10 days stale — derived SOH still computing from 12 Jun.<div class="why">Cannot recommend buy or promo cover on this vintage</div></td>
+              <td class="next">Ingest current DSI</td>
+            </tr>
+            <tr class="block">
+              <td class="r">03</td>
+              <td><span class="sev block">Blocking</span><div class="why">Funding · Money</div></td>
+              <td>14 cases marked settled with outstanding money — close rule is broken.<div class="why">R 2.41m outstanding on “settled” lifecycle</div></td>
+              <td class="next">Open Funding queue</td>
+            </tr>
+            <tr class="block">
+              <td class="r">04</td>
+              <td><span class="sev block">Blocking</span><div class="why">Funding · FX</div></td>
+              <td>86 list rows show Ttl ZAR identical to Ttl USD — FX undeclared on the queue.<div class="why">Compute remains USD; display ZAR must not be a copy</div></td>
+              <td class="next">Flag list, open record FX</td>
+            </tr>
+            <tr class="block">
+              <td class="r">05</td>
+              <td><span class="sev block">Blocking</span><div class="why">Identity</div></td>
+              <td>8 lineup tokens unresolved — net requirement cannot resolve SKU grain.<div class="why">NB-LAT-14-I7 × Rectron among them</div></td>
+              <td class="next">Decide identity</td>
+            </tr>
+            <tr class="block">
+              <td class="r">06</td>
+              <td><span class="sev block">Blocking</span><div class="why">Funding</div></td>
+              <td>Esquire C26759761 — lifecycle settled, outstanding R 184,220.16.<div class="why">Paid R 0.00 · CN not on file</div></td>
+              <td class="next">Close or reopen</td>
+            </tr>
+            <tr class="wait">
+              <td class="r">07</td>
+              <td><span class="sev wait">Cover</span><div class="why">Position</div></td>
+              <td>119 replenish pairs below 4 weeks while headline cover is 24.3 weeks.<div class="why">The average is healthy; the tail is not</div></td>
+              <td class="next">Open Position · Replenish</td>
+            </tr>
+            <tr class="wait">
+              <td class="r">08</td>
+              <td><span class="sev wait">Inbound</span><div class="why">Position</div></td>
+              <td>1,713 shipped units not received — POD missing on Rectron and Axiz.<div class="why">Landed axis, not fill. Do not treat as short-plan</div></td>
+              <td class="next">Open Inbound</td>
+            </tr>
+            <tr class="wait">
+              <td class="r">09</td>
+              <td><span class="sev wait">CST</span><div class="why">Identity</div></td>
+              <td>Takealot and Game CST slots late — velocity into Position is incomplete.<div class="why">Takealot last week 31 · Game week 27</div></td>
+              <td class="next">Chase CST</td>
+            </tr>
+            <tr class="wait">
+              <td class="r">10</td>
+              <td><span class="sev wait">Bias</span><div class="why">Funding</div></td>
+              <td>Support bias 262.5% — planned $182k vs actual $659k. 103 lines missing SKU assumptions.<div class="why">Do not compose new promo until assumptions exist</div></td>
+              <td class="next">Open Promotion</td>
+            </tr>
+            <tr class="wait">
+              <td class="r">11</td>
+              <td><span class="sev wait">Promo</span><div class="why">Promotion</div></td>
+              <td>23 ranked actions waiting review — 4 blocked on economics, 6 recommend do-nothing.<div class="why">Do-nothing is a valid close</div></td>
+              <td class="next">Review Actions</td>
+            </tr>
+            <tr class="wait">
+              <td class="r">12</td>
+              <td><span class="sev wait">Execution</span><div class="why">Position</div></td>
+              <td>NB Q2 fill 61.4% — short 3,842 units; over-plan intake on NV still unexplained.<div class="why">PvE reports outcomes; PO work stays on Inbound</div></td>
+              <td class="next">Open Execution</td>
+            </tr>
+            <tr class="note">
+              <td class="r">13</td>
+              <td><span class="sev">Listing</span><div class="why">Promotion</div></td>
+              <td>Takealot price drift on 11 SKUs — listing intelligence, 14-day span.<div class="why">Activation worklist, not a new module</div></td>
+              <td class="next">Inspect listings</td>
+            </tr>
+            <tr class="note">
+              <td class="r">14</td>
+              <td><span class="sev">Deliveries</span><div class="why">Work</div></td>
+              <td>Weekly CST Takealot ready · inbound mailbox 4 unparsed (parked).<div class="why">Typed deliveries, not a second inbox product</div></td>
+              <td class="next">Open Deliveries</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <aside class="insp">
+        <p class="k">Inspector</p>
+        <h2>Select a decision</h2>
+        <p style="color:var(--mute);font-size:0.82rem;max-width:19rem">Money, evidence and the next action open here. Rank 01–06 are blocking; 07 is the cover contradiction (24.3w vs 119 below 4w).</p>
+      </aside>
+    </div>
+  </div>
+</div>
+</body>
+</html>

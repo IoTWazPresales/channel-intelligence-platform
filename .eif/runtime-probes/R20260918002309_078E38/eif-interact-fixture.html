@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>EIF interact fixture</title></head>
+<body>
+  <h1>EIF interact fixture</h1>
+  <p>EIF-owned loopback surface. Not the product under test.</p>
+  <button type="button" id="eif-harmless">EIF harmless</button>
+  <p id="eif-status">idle</p>
+  <script>
+    document.getElementById('eif-harmless').addEventListener('click', function () {
+      document.getElementById('eif-status').textContent = 'clicked';
+    });
+  </script>
+</body></html>
