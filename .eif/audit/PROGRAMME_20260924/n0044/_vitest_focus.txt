@@ -1,0 +1,68 @@
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mC:/Users/warren_eliason/channel-intelligence-platform/apps/web[39m
+
+ [32m✓[39m src/features/settlement/SettlementCaseTabs.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 1164[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementCaseTabs[2m > [22mnames the panel by its active tab and links every tab to the panel [33m517[2mms[22m[39m
+ [32m✓[39m src/app/(app)/commercial-planner/cpor-cases/[id]/page.fxReadiness.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 3622[2mms[22m[39m
+   [33m[2m✓[22m[39m Settlement desk FX anchor / readiness (case 312 shape, ported from CporCaseWorkspace)[2m > [22mshows approved support, readiness chips, reapproval and diagnostics; hides settle when FX blocks [33m1035[2mms[22m[39m
+   [33m[2m✓[22m[39m Settlement desk FX anchor / readiness (case 312 shape, ported from CporCaseWorkspace)[2m > [22mputs the FX basis line in the header meta when FX is not blocked [33m315[2mms[22m[39m
+   [33m[2m✓[22m[39m Settlement desk FX anchor / readiness (case 312 shape, ported from CporCaseWorkspace)[2m > [22mwithholds the approved USD when the case has no booked rate and shows the proposal [33m476[2mms[22m[39m
+   [33m[2m✓[22m[39m Settlement desk FX anchor / readiness (case 312 shape, ported from CporCaseWorkspace)[2m > [22mconfirms before cancelling and posts the existing transition endpoint [33m963[2mms[22m[39m
+   [33m[2m✓[22m[39m Settlement desk FX anchor / readiness (case 312 shape, ported from CporCaseWorkspace)[2m > [22mposts the intelligence-exclude switch and re-rollup to their existing endpoints [33m473[2mms[22m[39m
+   [33m[2m✓[22m[39m Settlement desk FX anchor / readiness (case 312 shape, ported from CporCaseWorkspace)[2m > [22mmounts comparable cases lazily in the case tabs [33m357[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/PlanWorkspace.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 4150[2mms[22m[39m
+   [33m[2m✓[22m[39m PlanWorkspace approve / FX (N-0044, ported from CporCaseWorkspace)[2m > [22mapproves through the book-FX dialog carrying fx_rate and the over-budget reapproval [33m2208[2mms[22m[39m
+   [33m[2m✓[22m[39m PlanWorkspace approve / FX (N-0044, ported from CporCaseWorkspace)[2m > [22msends confirm_over_budget_reapproval false when the case is within budget [33m659[2mms[22m[39m
+   [33m[2m✓[22m[39m PlanWorkspace approve / FX (N-0044, ported from CporCaseWorkspace)[2m > [22medits FX mode and the proposed rate on a draft through the existing PATCH [33m598[2mms[22m[39m
+[90mstderr[2m | src/features/promotions-funding/CaseBookSurface.test.tsx[2m > [22m[2mCaseBookSurface[2m > [22m[2mdoes not mount the settlement desk and labels open-book vs FX-blocked scopes
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[90mstderr[2m | src/features/promotions-funding/CaseBookSurface.test.tsx[2m > [22m[2mCaseBookSurface[2m > [22m[2mdoes not mount the settlement desk and labels open-book vs FX-blocked scopes
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[90mstderr[2m | src/features/promotions-funding/CaseBookSurface.test.tsx[2m > [22m[2mCaseBookSurface[2m > [22m[2mmounts the portfolio read collapsed after the ageing grid, money through DualMoney (N-0044)
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[90mstderr[2m | src/features/promotions-funding/CaseBookSurface.test.tsx[2m > [22m[2mCaseBookSurface[2m > [22m[2mmounts the portfolio read collapsed after the ageing grid, money through DualMoney (N-0044)
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+ [32m✓[39m src/features/promotions-funding/CaseBookSurface.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 1163[2mms[22m[39m
+   [33m[2m✓[22m[39m CaseBookSurface[2m > [22mdoes not mount the settlement desk and labels open-book vs FX-blocked scopes [33m721[2mms[22m[39m
+   [33m[2m✓[22m[39m CaseBookSurface[2m > [22mmounts the portfolio read collapsed after the ageing grid, money through DualMoney (N-0044) [33m440[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[1m[7m Unhandled Errors [27m[22m⎯⎯⎯⎯⎯⎯[39m
+[31m[1m
+Vitest caught 1 unhandled error during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[1m[7m Unhandled Error [27m[22m⎯⎯⎯⎯⎯⎯⎯[39m
+[31m[1mError[22m: UNKNOWN: unknown error, open 'C:\Users\WARREN~1\AppData\Local\Temp\M5iL7ElEeVKypMwgfbh1I\web\40b9f1f37d5bd759c353e90078138580f67eb091'[39m
+[90m [2m❯[22m open node:internal/fs/promises:[2m637:25[22m[39m
+[90m [2m❯[22m writeFile node:internal/fs/promises:[2m1239:14[22m[39m
+[90m [2m❯[22m Proxy.fetch ../../node_modules/.pnpm/vitest@2.1.9_@types+node@22.19.17_jsdom@25.0.1/node_modules/vitest/dist/chunks/resolveConfig.rBxzbVsl.js:[2m6643:7[22m[39m
+[90m [2m❯[22m EventEmitter.onMessage ../../node_modules/.pnpm/vitest@2.1.9_@types+node@22.19.17_jsdom@25.0.1/node_modules/vitest/dist/chunks/index.68735LiX.js:[2m91:20[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[39m
+
+[2m Test Files [22m [1m[32m4 passed[39m[22m[90m (4)[39m
+[2m      Tests [22m [1m[32m19 passed[39m[22m[90m (19)[39m
+[2m     Errors [22m [1m[31m1 error[39m[22m
+[2m   Start at [22m 14:59:17
+[2m   Duration [22m 34.39s[2m (transform 1.94s, setup 5.64s, collect 80.32s, tests 10.10s, environment 9.87s, prepare 4.36s)[22m
+
+undefined
+C:\Users\warren_eliason\channel-intelligence-platform\apps\web:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "vitest" not found

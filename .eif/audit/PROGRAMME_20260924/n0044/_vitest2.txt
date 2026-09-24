@@ -1,0 +1,79 @@
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mC:/Users/warren_eliason/channel-intelligence-platform/apps/web[39m
+
+ [32m✓[39m src/features/promotions-funding/caseScope.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 10[2mms[22m[39m
+ [32m✓[39m src/features/cpor/fxDisplay.test.ts [2m([22m[2m21 tests[22m[2m)[22m[90m 19[2mms[22m[39m
+ [32m✓[39m src/features/settlement/mapSettlementDeskView.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 8[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/paymentEvidenceCode.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 7[2mms[22m[39m
+ [32m✓[39m src/features/settlement/customerDisplay.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m src/features/settlement/settlementViews.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 7[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/lifecycle.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/format.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m src/features/settlement/SettlementScopeBar.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 345[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementScopeBar[2m > [22mrenders deferred structural filters and disabled Apply honestly [33m343[2mms[22m[39m
+ [32m✓[39m src/features/cpor/CporUsdPivotPanel.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 532[2mms[22m[39m
+   [33m[2m✓[22m[39m CporUsdPivotPanel[2m > [22mrenders the pivot as a table with row, column and grand totals [33m350[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/FundingPointerLens.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 560[2mms[22m[39m
+   [33m[2m✓[22m[39m FundingPointerLens[2m > [22mrenders a single empty-state pointer with Import Center CTA [33m557[2mms[22m[39m
+ [32m✓[39m src/features/settlement/SettlementConfirmDialog.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 872[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementConfirmDialog[2m > [22mshows the outstanding amount as ZAR with booked USD alongside [33m674[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/PaymentEvidenceOverlay.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 818[2mms[22m[39m
+   [33m[2m✓[22m[39m PaymentEvidenceOverlayPanel[2m > [22mshows exact Case ID match rates and Latest Comment on pending rows [33m815[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/PlanTemplatesSurface.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 730[2mms[22m[39m
+   [33m[2m✓[22m[39m PlanTemplatesSurface[2m > [22mlists stored profiles and keeps export as Planned honesty [33m722[2mms[22m[39m
+ [32m✓[39m src/features/settlement/SettlementCaseTabs.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 1302[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementCaseTabs[2m > [22mexposes the orphaned case tabs and mounts only the active one [33m343[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementCaseTabs[2m > [22mnames the panel by its active tab and links every tab to the panel [33m379[2mms[22m[39m
+ [32m✓[39m src/features/cpor/CporCaseSupersedeDialog.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 2487[2mms[22m[39m
+   [33m[2m✓[22m[39m CporCaseSupersedeDialog (BACKLOG-138)[2m > [22mlists only live, un-superseded other cases for the customer [33m1337[2mms[22m[39m
+   [33m[2m✓[22m[39m CporCaseSupersedeDialog (BACKLOG-138)[2m > [22mpreviews on pick, blocks confirm on blockers, confirms when clean [33m794[2mms[22m[39m
+   [33m[2m✓[22m[39m CporCaseSupersedeDialog (BACKLOG-138)[2m > [22mkeeps confirm disabled when the preview returns a blocker [33m353[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/FundingChrome.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 7[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/PromotionPlannerSurface.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 1793[2mms[22m[39m
+   [33m[2m✓[22m[39m PromotionPlannerSurface[2m > [22mlists real CPOR cases and shows line-sum support, not a stale plan total [33m1790[2mms[22m[39m
+ [32m✓[39m src/features/settlement/SettlementDesk.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 2015[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementDesk[2m > [22mshows customer name primary, not welded to the CIP-minted code [33m1082[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementDesk[2m > [22moffers end / cancel only from allowedNext and hands the choice to the caller (N-0044) [33m336[2mms[22m[39m
+ [32m✓[39m src/app/(app)/commercial-planner/cpor-cases/[id]/page.fxReadiness.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 3137[2mms[22m[39m
+   [33m[2m✓[22m[39m Settlement desk FX anchor / readiness (case 312 shape, ported from CporCaseWorkspace)[2m > [22mshows approved support, readiness chips, reapproval and diagnostics; hides settle when FX blocks [33m977[2mms[22m[39m
+   [33m[2m✓[22m[39m Settlement desk FX anchor / readiness (case 312 shape, ported from CporCaseWorkspace)[2m > [22mputs the FX basis line in the header meta when FX is not blocked [33m357[2mms[22m[39m
+   [33m[2m✓[22m[39m Settlement desk FX anchor / readiness (case 312 shape, ported from CporCaseWorkspace)[2m > [22mconfirms before cancelling and posts the existing transition endpoint [33m835[2mms[22m[39m
+   [33m[2m✓[22m[39m Settlement desk FX anchor / readiness (case 312 shape, ported from CporCaseWorkspace)[2m > [22mposts the intelligence-exclude switch and re-rollup to their existing endpoints [33m461[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/PlanWorkspace.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 3551[2mms[22m[39m
+   [33m[2m✓[22m[39m PlanWorkspace approve / FX (N-0044, ported from CporCaseWorkspace)[2m > [22mapproves through the book-FX dialog carrying fx_rate and the over-budget reapproval [33m1898[2mms[22m[39m
+   [33m[2m✓[22m[39m PlanWorkspace approve / FX (N-0044, ported from CporCaseWorkspace)[2m > [22msends confirm_over_budget_reapproval false when the case is within budget [33m575[2mms[22m[39m
+   [33m[2m✓[22m[39m PlanWorkspace approve / FX (N-0044, ported from CporCaseWorkspace)[2m > [22medits FX mode and the proposed rate on a draft through the existing PATCH [33m527[2mms[22m[39m
+[90mstderr[2m | src/features/promotions-funding/CaseBookSurface.test.tsx[2m > [22m[2mCaseBookSurface[2m > [22m[2mdoes not mount the settlement desk and labels open-book vs FX-blocked scopes
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[90mstderr[2m | src/features/promotions-funding/CaseBookSurface.test.tsx[2m > [22m[2mCaseBookSurface[2m > [22m[2mdoes not mount the settlement desk and labels open-book vs FX-blocked scopes
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[90mstderr[2m | src/features/promotions-funding/CaseBookSurface.test.tsx[2m > [22m[2mCaseBookSurface[2m > [22m[2mmounts the portfolio read collapsed after the ageing grid, money through DualMoney (N-0044)
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[90mstderr[2m | src/features/promotions-funding/CaseBookSurface.test.tsx[2m > [22m[2mCaseBookSurface[2m > [22m[2mmounts the portfolio read collapsed after the ageing grid, money through DualMoney (N-0044)
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+ [32m✓[39m src/features/promotions-funding/CaseBookSurface.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 1141[2mms[22m[39m
+   [33m[2m✓[22m[39m CaseBookSurface[2m > [22mdoes not mount the settlement desk and labels open-book vs FX-blocked scopes [33m732[2mms[22m[39m
+   [33m[2m✓[22m[39m CaseBookSurface[2m > [22mmounts the portfolio read collapsed after the ageing grid, money through DualMoney (N-0044) [33m407[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m22 passed[39m[22m[90m (22)[39m
+[2m      Tests [22m [1m[32m78 passed[39m[22m[90m (78)[39m
+[2m   Start at [22m 15:00:24
+[2m   Duration [22m 69.46s[2m (transform 11.05s, setup 86.81s, collect 557.36s, tests 19.36s, environment 175.35s, prepare 43.54s)[22m
+
