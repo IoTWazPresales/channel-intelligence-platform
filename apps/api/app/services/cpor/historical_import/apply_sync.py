@@ -23,6 +23,7 @@ from app.models.cpor import CporCase, CporCaseEvent, CporCaseLine
 from app.models.cpor_historical import ImportCporHistoricalStagingLine
 from app.models.ingestion import ImportJob
 from app.services.cpor.historical_import.resolve import case_apply_blockers
+from app.services.cpor.lifecycle import workflow_status_for
 from app.services.imports.import_job_background_metadata import persist_clear_background_task_metadata
 from app.utils.json_safe import to_jsonable
 
@@ -190,7 +191,7 @@ def _apply_one_case(
             origin="historical_import",
             notes=f"Imported via historical job {job_id}",
             created_by=actor or "historical_import",
-            workflow_status=status[:32],
+            workflow_status=workflow_status_for(status[:32]),
         )
         db.add(case)
         db.flush()
@@ -203,7 +204,7 @@ def _apply_one_case(
         existing.status = status[:32]
         existing.roe_snapshot = roe
         existing.channel = channel[:32]
-        existing.workflow_status = status[:32]
+        existing.workflow_status = workflow_status_for(status[:32])
         existing.notes = f"Imported via historical job {job_id}"
         case = existing
         db.flush()

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.models.cpor import CporCase, CporCaseEvent
 from app.models.cpor_payment import CporPaymentEvidence, ImportCporPaymentStagingLine
+from app.services.cpor.lifecycle import workflow_status_for
 
 
 def _default_promo(raw: str | None) -> str:
@@ -63,7 +64,7 @@ def _ensure_shell_case(
             f"File case_status_raw={line.case_status_raw!r} stored on evidence only."
         ),
         created_by=actor or "payment_evidence",
-        workflow_status="imported",
+        workflow_status=workflow_status_for("draft"),
     )
     db.add(case)
     db.flush()

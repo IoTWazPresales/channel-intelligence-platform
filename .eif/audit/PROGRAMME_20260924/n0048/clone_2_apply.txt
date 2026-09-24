@@ -1,0 +1,11 @@
+current_database() = cip_ns4_settle_clone
+current_database() = cip_ns4_settle_clone
+before: {"cpor_case_rows": 311, "status_ne_workflow_status": 3, "workflow_status_ne_projection": 3}
+  id=3 BATCH0-SMOKE-001 origin=native status=cancelled: workflow_status draft -> cancelled
+  id=309 C26761655 origin=historical_import status=settled: workflow_status ended -> settled
+  id=310 C26759823 origin=historical_import status=cancelled: workflow_status ended -> cancelled
+before-values written: C:\Users\warren_eliason\channel-intelligence-platform\.eif\audit\PROGRAMME_20260924\n0048\before_cip_ns4_settle_clone_apply_20260924T125939Z.json
+current_database() before write = cip_ns4_settle_clone
+rows updated: 3
+after: {"cpor_case_rows": 311, "status_ne_workflow_status": 0, "workflow_status_ne_projection": 0}
+mode: APPLY (commit)

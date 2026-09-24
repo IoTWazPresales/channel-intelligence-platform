@@ -114,7 +114,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Measured** (2026-09-21 N-0030 audit: **4** disagreeing rows — settled/ended ×2, cancelled/draft, cancelled/ended; Stage 4.2) · **Parked** · 2026-08-20 |
+| **Status / parked** | **Code fixed + clone-proven, cip apply pending** (2026-09-24 N-0048: owner = `status`; `workflow_status = workflow_status_for(status)` on every writer — the transition endpoint never set it on activate/end/settle/cancel, which caused all 4 cip rows (ids 3, 309, 310, 311). Repair: `apps/api/scripts/ops/repair_n0048_cpor_case_status_drift.py`; evidence `.eif/audit/PROGRAMME_20260924/n0048/IMPL.md`) · Measured 2026-09-21 N-0030: **4** rows · 2026-08-20 |
 | **Effort** | Small |
 | **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` §9.6. Warren: status and workflow_status have drifted on ~4 rows. |
 | **Idea** | `cpor_case` has both `status` (lifecycle.py) and `workflow_status` (promo-export-shaped). They can disagree. Count, explain, and either (a) make `workflow_status` a projection of `status` or (b) document two distinct machines and stop writing both from uncoordinated paths. Then repair the drifted rows on a clone, then cip. |

@@ -1,0 +1,7 @@
+current_database() = cip_ns4_settle_clone
+current_database() = cip_ns4_settle_clone
+before: {"cpor_case_rows": 311, "status_ne_workflow_status": 0, "workflow_status_ne_projection": 0}
+current_database() before write = cip_ns4_settle_clone
+rows updated: 0
+after: {"cpor_case_rows": 311, "status_ne_workflow_status": 0, "workflow_status_ne_projection": 0}
+mode: APPLY (commit)

@@ -52,3 +52,14 @@ def target_status(action: str) -> str:
 
 # Header edits allowed only in these statuses
 EDITABLE_STATUSES = frozenset({"draft", "rejected"})
+
+
+# BACKLOG-139 / N-0048: ``status`` owns the lifecycle; ``workflow_status`` is a
+# projection of it (never an independent machine). Only ``proposed`` keeps the
+# promo-export-shaped name; every other status projects to itself.
+_WORKFLOW_STATUS_OVERRIDES: dict[str, str] = {"proposed": "pending_approval"}
+
+
+def workflow_status_for(status: str) -> str:
+    """Projection ``status`` → ``cpor_case.workflow_status``. Every writer uses this."""
+    return _WORKFLOW_STATUS_OVERRIDES.get(status, status)

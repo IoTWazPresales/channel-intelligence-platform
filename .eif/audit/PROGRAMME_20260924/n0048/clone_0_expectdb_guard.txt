@@ -1,0 +1,2 @@
+current_database() = cip_ns4_settle_clone
+STOP: current_database() is cip_ns4_settle_clone, expected cip

@@ -36,6 +36,7 @@ from app.services.cpor.lifecycle import (
     allowed_next,
     can_transition,
     target_status,
+    workflow_status_for,
 )
 from app.services.cpor.pivot import build_case_pivot
 from app.services.cpor.norms_and_comparable import build_comparable_cases, build_support_norms
@@ -1380,12 +1381,10 @@ def transition_case(
 
         if action == "propose":
             case.status = "proposed"
-            case.workflow_status = "pending_approval"
             case.submitted_at = now
             case.last_comment = None
         elif action == "approve":
             case.status = "approved"
-            case.workflow_status = "approved"
             case.decided_at = now
             case.decided_by = actor
             case.last_comment = None
@@ -1394,13 +1393,11 @@ def transition_case(
             drifts = _run_drift_check(session, case, actor, user)
         elif action == "reject":
             case.status = "rejected"
-            case.workflow_status = "rejected"
             case.decided_at = now
             case.decided_by = actor
             case.last_comment = body.comment
         elif action == "resend":
             case.status = "proposed"
-            case.workflow_status = "pending_approval"
             case.export_version = int(case.export_version or 1) + 1
             case.submitted_at = now
             case.decided_at = None
@@ -1433,6 +1430,8 @@ def transition_case(
         elif action == "cancel":
             case.status = "cancelled"
 
+        # BACKLOG-139: one projection for every transition (activate/end/settle/cancel used to leave it stale).
+        case.workflow_status = workflow_status_for(case.status)
         session.add(case)
         _record_event(
             session,

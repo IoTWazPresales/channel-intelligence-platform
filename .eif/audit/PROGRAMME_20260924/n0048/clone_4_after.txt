@@ -1,0 +1,17 @@
+current_database() = cip_ns4_settle_clone
+-- SELECT id, status, workflow_status, updated_at FROM cpor_case WHERE id IN (3,309,310) ORDER BY id
+id | status | workflow_status | updated_at
+3 | cancelled | cancelled | 2026-07-09 16:44:20.997646+02:00
+309 | settled | settled | 2026-08-26 16:51:34.679577+02:00
+310 | cancelled | cancelled | 2026-08-16 17:14:45.735867+02:00
+-- SELECT case_id, event_type, actor, payload_json FROM cpor_case_event WHERE event_type='workflow_status_repair' ORDER BY case_id
+case_id | event_type | actor | payload_json
+3 | workflow_status_repair | ops:N-0048 | {'repair': 'N-0048', 'status': 'cancelled', 'backlog': 'BACKLOG-139', 'workflow_status_after': 'cancelled', 'workflow_status_before': 'draft'}
+309 | workflow_status_repair | ops:N-0048 | {'repair': 'N-0048', 'status': 'settled', 'backlog': 'BACKLOG-139', 'workflow_status_after': 'settled', 'workflow_status_before': 'ended'}
+310 | workflow_status_repair | ops:N-0048 | {'repair': 'N-0048', 'status': 'cancelled', 'backlog': 'BACKLOG-139', 'workflow_status_after': 'cancelled', 'workflow_status_before': 'ended'}
+-- SELECT status, count(*) FROM cpor_case GROUP BY 1 ORDER BY 1
+status | count
+cancelled | 23
+draft | 3
+ended | 75
+settled | 210
