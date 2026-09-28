@@ -1,0 +1,95 @@
+{
+  "copied": [
+    ".cursor/rules",
+    ".cursor/hooks",
+    ".agents/skills",
+    ".cursor/hooks.json",
+    ".cursor/eif-runtime-policy.json",
+    ".cursor/eif-runtime-manifest.json",
+    ".eif/.gitignore",
+    ".eif/runtime/programme",
+    ".eif/RUNTIME_CAPABILITIES.md"
+  ],
+  "created": [],
+  "finished_at": "2026-09-23T21:08:03Z",
+  "phase": "committed",
+  "pre": {
+    "action_classes": {
+      "artifact_write": true,
+      "control_plane_change": false,
+      "delete": true,
+      "destructive_data": false,
+      "force_vcs": false,
+      "identity_mutation": false,
+      "infrastructure_control": false,
+      "read": true,
+      "release": false,
+      "remote_push": true,
+      "write": true
+    },
+    "artifact_paths": [
+      ".eif/audit/**"
+    ],
+    "autonomy_status": "accepted",
+    "capabilities_status": "unverified",
+    "change_paths": [
+      "apps/api/**",
+      "apps/web/**",
+      "packages/ui/**",
+      "docs/**",
+      "CONTEXT.md",
+      "AGENTS.md"
+    ],
+    "derived_framework_version": "0.4.0-draft",
+    "derived_max_authority": "L3",
+    "digests": {
+      "autonomy": "24702288ffb4a878cc2205e420ec7181446b0a582825e9f8e7ab0bfee939fe6d",
+      "capabilities": "e5511889ce2c91f194ffa0d2128fe5d1daf7eb965d3602827a6d6569d0683d83",
+      "environment": "8202535e3b52d65e9e7209c07c5bf1ce64cbfa094fa89c8fa43f549108d2e815",
+      "guard": "dd51e8bc6c00f6a16d1f8a93cca5119c54e24a2ac60fe2b1dd61334ea0b9e89b",
+      "hooks_json": "d7d7c183e44342e4674a83e969a1d79400b3af2763fa1a352239afc2f7a58167",
+      "manifest": "d825bc51b332b089b480124906c6b15c0ed9a4f795f86024aaaa70dd7c95067b",
+      "runtime_policy": "c21be12c9babc6e6f13eb53409b14dc4f5be8908059223c24af3c3a5bc9dba84"
+    },
+    "identity": {
+      "additional_repositories": [],
+      "path_scopes": [
+        "**"
+      ],
+      "remotes": [
+        "https://github.com/IoTWazPresales/channel-intelligence-platform.git"
+      ],
+      "root_commit": "8f7f1b53e3555dd3010244c7fe8b398ecb881548",
+      "vcs_root": "C:/Users/warren_eliason/channel-intelligence-platform"
+    },
+    "manifest_status": "bootstrap",
+    "max_authority": "L3",
+    "mcp": {
+      "browser": "interact",
+      "profile": "cursor-review",
+      "tools": [
+        "browser_*",
+        {
+          "server_pattern": "mcp__claude-in-chrome",
+          "tool_pattern": "*"
+        }
+      ]
+    },
+    "network": {
+      "classes": [
+        "loopback",
+        "public_read"
+      ],
+      "destinations": []
+    },
+    "observation_paths": [
+      "**"
+    ],
+    "project_id": "channel-intelligence-platform",
+    "shell": {
+      "mode": "workspace"
+    }
+  },
+  "started_at": "2026-09-23T21:08:00Z",
+  "state_root": ".eif"
+}

@@ -1,0 +1,41 @@
+﻿node.exe : [33mThe CJS build of Vite's Node API is deprecated. See 
+https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+At C:\Users\warren_eliason\AppData\Roaming\npm\pnpm.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/pnpm/bin/pnpm.cjs" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([33mThe CJS bu...e details.[39m:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+ RUN  v2.1.9 C:/Users/warren_eliason/channel-intelligence-platform/apps/web
+
+ Ô£ô src/features/administration/adminPaths.test.ts (2 tests) 3ms
+ Ô£ô src/features/administration/AdminOverview.test.tsx (1 test) 343ms
+   Ô£ô AdminOverview > renders lab headlines, operations rows, attention, and remapped workflows 341ms
+ Ô£ô src/app/(app)/admin/users/page.test.tsx (1 test) 300ms
+ Ô£ô src/app/(app)/settings/page.test.tsx (4 tests) 1063ms
+   Ô£ô SettingsPage semantic overlay gate > shows the semantic catalog panel for admin 616ms
+
+ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ» Unhandled Errors ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»
+
+Vitest caught 1 unhandled error during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+
+ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ» Unhandled Error ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»
+Error: UNKNOWN: unknown error, open 
+'C:\Users\WARREN~1\AppData\Local\Temp\FJ4u0_m5F-EBCun8vYXG3\web\40b9f1f37d5bd759c353e90078138580f67eb091'
+ ÔØ» open node:internal/fs/promises:637:25
+ ÔØ» writeFile node:internal/fs/promises:1239:14
+ ÔØ» Proxy.fetch ../../node_modules/.pnpm/vitest@2.1.9_@types+node@22.19.17_jsdom@25.0.1/node_modules/vitest/dist/chunk
+s/resolveConfig.rBxzbVsl.js:6643:7
+ ÔØ» EventEmitter.onMessage ../../node_modules/.pnpm/vitest@2.1.9_@types+node@22.19.17_jsdom@25.0.1/node_modules/vitest
+/dist/chunks/index.68735LiX.js:91:20
+
+ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»
+
+ Test Files  4 passed (4)
+      Tests  8 passed (8)
+     Errors  1 error
+   Start at  15:58:08
+   Duration  31.41s (transform 907ms, setup 15.67s, collect 38.40s, tests 1.71s, environment 36.49s, prepare 5.62s)
+

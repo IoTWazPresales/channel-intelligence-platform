@@ -1,0 +1,26 @@
+﻿node.exe : [33mThe CJS build of Vite's Node API is deprecated. See 
+https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+At C:\Users\warren_eliason\AppData\Roaming\npm\pnpm.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/pnpm/bin/pnpm.cjs" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([33mThe CJS bu...e details.[39m:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+ RUN  v2.1.9 C:/Users/warren_eliason/channel-intelligence-platform/apps/web
+
+ Ô£ô src/features/administration/adminPaths.test.ts (2 tests) 4ms
+ Ô£ô src/app/(app)/admin/users/list/page.test.tsx (1 test) 466ms
+   Ô£ô AdminUsersListPage > relocates UsersWorkspace under Administration chrome 463ms
+ Ô£ô src/features/administration/AdminOverview.test.tsx (1 test) 792ms
+   Ô£ô AdminOverview > renders lab headlines, operations rows, attention, and remapped workflows 790ms
+ Ô£ô src/app/(app)/admin/users/page.test.tsx (1 test) 702ms
+   Ô£ô Administration hub at /admin/users > mounts the lab Admin composition instead of the users workspace 699ms
+ Ô£ô src/app/(app)/settings/page.test.tsx (4 tests) 1461ms
+   Ô£ô SettingsPage semantic overlay gate > shows the semantic catalog panel for admin 721ms
+
+ Test Files  5 passed (5)
+      Tests  9 passed (9)
+   Start at  16:15:19
+   Duration  42.44s (transform 1.56s, setup 18.98s, collect 96.40s, tests 3.43s, environment 38.47s, prepare 7.73s)
+

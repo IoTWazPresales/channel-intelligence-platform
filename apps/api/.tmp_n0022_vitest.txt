@@ -1,0 +1,27 @@
+﻿node.exe : [33mThe CJS build of Vite's Node API is deprecated. See 
+https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+At C:\Users\warren_eliason\AppData\Roaming\npm\pnpm.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/pnpm/bin/pnpm.cjs" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([33mThe CJS bu...e details.[39m:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+ RUN  v2.1.9 C:/Users/warren_eliason/channel-intelligence-platform/apps/web
+
+ Ô£ô src/features/stock/stockLeafPaths.test.ts (1 test) 3ms
+ Ô£ô src/features/stock/StockThinLenses.test.tsx (2 tests) 224ms
+ Ô£ô src/app/(app)/forecasts/page.test.tsx (1 test) 312ms
+   Ô£ô Forecasts landing > mounts ThinLens honesty instead of the forecast grid 311ms
+ Ô£ô src/app/(app)/channel-intelligence/page.test.tsx (1 test) 297ms
+ Ô£ô src/app/(app)/channel-intelligence/workspace/page.test.tsx (1 test) 353ms
+   Ô£ô ChannelIntelligence workspace leaf > relocates the CST grid under Stock chrome 351ms
+ Ô£ô src/features/stock/StockChrome.test.ts (1 test) 5ms
+ Ô£ô src/app/(app)/forecasts/workspace/page.test.tsx (1 test) 862ms
+   Ô£ô ForecastsWorkspace 15B > shows Compute from history as the primary CTA and posts confirm 860ms
+
+ Test Files  7 passed (7)
+      Tests  8 passed (8)
+   Start at  16:42:59
+   Duration  34.07s (transform 1.53s, setup 25.23s, collect 96.59s, tests 2.06s, environment 61.07s, prepare 11.43s)
+

@@ -1,0 +1,18 @@
+﻿
+=================================== ERRORS ====================================
+________________ ERROR collecting tests/test_admin_overview.py ________________
+ImportError while importing test module 'C:\Users\warren_eliason\channel-intelligence-platform\apps\api\tests\test_admin_overview.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python314\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\test_admin_overview.py:1: in <module>
+    from app.services.admin_overview import role_caption
+app\services\admin_overview.py:8: in <module>
+    from sqlalchemy import case, func, select, text
+E   ModuleNotFoundError: No module named 'sqlalchemy'
+=========================== short test summary info ===========================
+ERROR tests/test_admin_overview.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 0.95s

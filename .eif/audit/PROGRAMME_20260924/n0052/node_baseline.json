@@ -1,0 +1,1 @@
+{"node": "N-0052", "expected_revision": 1, "baseline_ref": "BLN-0017", "preservation": {"celery_tasks": "unchanged except failure signalling", "ai_assist_off": "default stays off"}}

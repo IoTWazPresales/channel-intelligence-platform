@@ -1,0 +1,6 @@
+{
+  "id": "EV-SETTLEMENT-DESK-RESUME-20260918",
+  "provenance": "implementation-observation",
+  "path": "apps/api/app/services/cpor/settlement_desk.py",
+  "note": "Resume settlement desk from uncommitted salvage. Actor desk-resume-001. No GOV-008. No node complete. Keep salvaged CIP qty product-grain CST and customer qty result_qty mapping."
+}

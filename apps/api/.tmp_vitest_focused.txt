@@ -1,0 +1,388 @@
+﻿node.exe : [33mThe CJS build of Vite's Node API is deprecated. See 
+https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+At C:\Users\warren_eliason\AppData\Roaming\npm\pnpm.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/pnpm/bin/pnpm.cjs" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([33mThe CJS bu...e details.[39m:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+ RUN  v2.1.9 C:/Users/warren_eliason/channel-intelligence-platform/apps/web
+
+ ÔØ» src/features/promotions-funding/PlanTemplatesSurface.test.tsx (2 tests | 1 failed) 490ms
+   ├ù PlanTemplatesSurface > lists stored profiles and keeps export as Planned honesty 484ms
+     ÔåÆ Found multiple elements with the text: /template-driven export is not built/i
+
+Here are the matching elements:
+
+Ignored nodes: comments, script, style
+[36m<span[39m
+  [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-9h85rr-MuiTypography-root"[39m
+[36m>[39m
+  [0mImport profile exists in DB; template-driven export is not built[0m
+[36m</span>[39m
+
+Ignored nodes: comments, script, style
+[36m<span[39m
+  [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-1uumv5t-MuiTypography-root"[39m
+[36m>[39m
+  [0mExport is one frozen 32-column tuple today. Template-driven export is not built.[0m
+[36m</span>[39m
+
+(If this is intentional, then use the `*AllBy*` variant of the query (like `queryAllByText`, `getAllByText`, or `findAllByText`)).
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"MuiStack-root css-11zvfn9-MuiStack-root"[39m
+      [33mdata-testid[39m=[32m"plan-templates"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 MuiAlert-root MuiAlert-colorInfo MuiAlert-outlinedInfo MuiAlert-outlined css-1y3o3hw-MuiPaper-root-MuiAlert-root"[39m
+        [33mrole[39m=[32m"alert"[39m
+        [33mstyle[39m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiAlert-icon css-vab54s-MuiAlert-icon"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"[39m
+            [33mdata-testid[39m=[32m"SwapHorizOutlinedIcon"[39m
+            [33mfocusable[39m=[32m"false"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+          [36m>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M6.99 11 3 15l3.99 4v-3H14v-2H6.99zM21 9l-3.99-4v3H10v2h7.01v3z"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiAlert-message css-zioonp-MuiAlert-message"[39m
+        [36m>[39m
+          [36m<b>[39m
+            [0mLearn once, use both ways.[0m
+          [36m</b>[39m
+          [0m A customerÔÇÖs promotion-plan workbook is mapped to CIPÔÇÖs canonical case model one time ÔÇö usually from a historical plan they already sent. The same profile then reads their future files. Template-driven export into that layout is not built ÔÇö export remains the frozen 32-column XLSX.[0m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"MuiBox-root css-1lhrfs6"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-1kfn1ao-MuiPaper-root"[39m
+          [33mstyle[39m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[39m
+          [36m>[39m
+            [0mTemplates[0m
+          [36m</span>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[39m
+            [36m>[39m
+              [0m1[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-1jkjn5n"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-9h85rr-MuiTypography-root"[39m
+            [36m>[39m
+              [0m1 with a stored column map[0m
+            [36m</span>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-1kfn1ao-MuiPaper-root"[39m
+          [33mstyle[39m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[39m
+          [36m>[39m
+            [0mPlans read through templates[0m
+          [36m</span>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[39m
+            [36m>[39m
+              [0m1[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-1jkjn5n"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-9h85rr-MuiTypography-root"[39m
+            [36m>[39m
+              [0morigin=historical_import on this book (profile is not stored on the case)[0m
+            [36m</span>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-1kfn1ao-MuiPaper-root"[39m
+          [33mstyle[39m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[39m
+          [36m>[39m
+            [0mCanonical fields[0m
+          [36m</span>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[39m
+            [36m>[39m
+              [0m7[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-1jkjn5n"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-9h85rr-MuiTypography-root"[39m
+            [36m>[39m
+              [0m6 required groups[0m
+            [36m</span>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-1kfn1ao-MuiPaper-root"[39m
+          [33mstyle[39m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[39m
+          [36m>[39m
+            [0mExport side[0m
+          [36m</span>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[39m
+            [36m>[39m
+              [0mÔÇö[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiB...
+ Ô£ô src/app/(app)/commercial-planner/cpor-cases/[id]/page.fxReadiness.test.tsx (2 tests) 551ms
+   Ô£ô CporCaseDetailPage FX/readiness (case 312 shape) > renders FX anchor and settle readiness when case has assumption flags 351ms
+ Ô£ô src/features/promotions-funding/PromotionPlannerSurface.test.tsx (1 test) 1096ms
+   Ô£ô PromotionPlannerSurface > lists real CPOR cases and shows line-sum support, not a stale plan total 1094ms
+ Ô£ô src/app/(app)/commercial-planner/cpor-cases/historical-import/CporHistoricalImportPage.uploadFirst.test.tsx (2 tests) 474ms
+
+ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ» Failed Tests 1 ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»
+
+ FAIL  src/features/promotions-funding/PlanTemplatesSurface.test.tsx > PlanTemplatesSurface > lists stored profiles 
+and keeps export as Planned honesty
+TestingLibraryElementError: Found multiple elements with the text: /template-driven export is not built/i
+
+Here are the matching elements:
+
+Ignored nodes: comments, script, style
+[36m<span[39m
+  [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-9h85rr-MuiTypography-root"[39m
+[36m>[39m
+  [0mImport profile exists in DB; template-driven export is not built[0m
+[36m</span>[39m
+
+Ignored nodes: comments, script, style
+[36m<span[39m
+  [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-1uumv5t-MuiTypography-root"[39m
+[36m>[39m
+  [0mExport is one frozen 32-column tuple today. Template-driven export is not built.[0m
+[36m</span>[39m
+
+(If this is intentional, then use the `*AllBy*` variant of the query (like `queryAllByText`, `getAllByText`, or 
+`findAllByText`)).
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"MuiStack-root css-11zvfn9-MuiStack-root"[39m
+      [33mdata-testid[39m=[32m"plan-templates"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 MuiAlert-root 
+MuiAlert-colorInfo MuiAlert-outlinedInfo MuiAlert-outlined css-1y3o3hw-MuiPaper-root-MuiAlert-root"[39m
+        [33mrole[39m=[32m"alert"[39m
+        [33mstyle[39m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 
+255, 255, 0));"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiAlert-icon css-vab54s-MuiAlert-icon"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"[39m
+            [33mdata-testid[39m=[32m"SwapHorizOutlinedIcon"[39m
+            [33mfocusable[39m=[32m"false"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+          [36m>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M6.99 11 3 15l3.99 4v-3H14v-2H6.99zM21 9l-3.99-4v3H10v2h7.01v3z"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiAlert-message css-zioonp-MuiAlert-message"[39m
+        [36m>[39m
+          [36m<b>[39m
+            [0mLearn once, use both ways.[0m
+          [36m</b>[39m
+          [0m A customerÔÇÖs promotion-plan workbook is mapped to CIPÔÇÖs canonical case model one time ÔÇö usually 
+from a historical plan they already sent. The same profile then reads their future files. Template-driven export into 
+that layout is not built ÔÇö export remains the frozen 32-column XLSX.[0m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"MuiBox-root css-1lhrfs6"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 
+css-1kfn1ao-MuiPaper-root"[39m
+          [33mstyle[39m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), 
+rgba(255, 255, 255, 0));"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[39m
+          [36m>[39m
+            [0mTemplates[0m
+          [36m</span>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[39m
+            [36m>[39m
+              [0m1[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-1jkjn5n"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-9h85rr-MuiTypography-root"[39m
+            [36m>[39m
+              [0m1 with a stored column map[0m
+            [36m</span>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 
+css-1kfn1ao-MuiPaper-root"[39m
+          [33mstyle[39m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), 
+rgba(255, 255, 255, 0));"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[39m
+          [36m>[39m
+            [0mPlans read through templates[0m
+          [36m</span>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[39m
+            [36m>[39m
+              [0m1[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-1jkjn5n"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-9h85rr-MuiTypography-root"[39m
+            [36m>[39m
+              [0morigin=historical_import on this book (profile is not stored on the case)[0m
+            [36m</span>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 
+css-1kfn1ao-MuiPaper-root"[39m
+          [33mstyle[39m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), 
+rgba(255, 255, 255, 0));"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[39m
+          [36m>[39m
+            [0mCanonical fields[0m
+          [36m</span>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[39m
+            [36m>[39m
+              [0m7[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-1jkjn5n"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-9h85rr-MuiTypography-root"[39m
+            [36m>[39m
+              [0m6 required groups[0m
+            [36m</span>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 
+css-1kfn1ao-MuiPaper-root"[39m
+          [33mstyle[39m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), 
+rgba(255, 255, 255, 0));"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[39m
+          [36m>[39m
+            [0mExport side[0m
+          [36m</span>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[39m
+            [36m>[39m
+              [0mÔÇö[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiB...
+ ÔØ» Object.getElementError 
+../../node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/config.js:37:19
+ ÔØ» getElementError 
+../../node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:20:35
+ ÔØ» getMultipleElementsFoundError 
+../../node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:23:10
+ ÔØ» ../../node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:55:13
+ ÔØ» ../../node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ÔØ» src/features/promotions-funding/PlanTemplatesSurface.test.tsx:74:19
+ Test Files  1 failed | 3 passed (4)
+     72|     });
+     73|     expect(screen.getByTestId('template-learn')).toBeInTheDocument();
+     74|     expect(screen.getByText(/template-driven export is not built/i)).tÔÇª
+       |                   ^
+     75|     expect(screen.getByTestId('capability-status-planned')).toBeInTheDÔÇª
+     76|     expect(screen.getByTestId('capability-status-partial')).toBeInTheDÔÇª
+
+ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»[1/1]ÔÄ»
+
+      Tests  1 failed | 6 passed (7)
+   Start at  21:42:40
+   Duration  21.90s (transform 1.79s, setup 5.83s, collect 46.74s, tests 2.61s, environment 10.21s, prepare 4.00s)
+
+undefined
+C:\Users\warren_eliason\channel-intelligence-platform\apps\web:
+ÔÇëERR_PNPM_RECURSIVE_EXEC_FIRST_FAILÔÇë Command "vitest" not found

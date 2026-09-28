@@ -1,0 +1,9 @@
+---
+alwaysApply: true
+---
+# EIF Project Adapter
+- Project state root defaults to `.eif/`; read `PROJECT_MANIFEST.md` first when it exists.
+- Treat `AUTONOMY_POLICY.md` as authority source, derived runtime JSON as enforcement output, and `RUNTIME_CAPABILITIES.md` as measured capability evidence.
+- Resolve `CURRENT.md`, `WORK_ITEM.md`, `AUTONOMY_POLICY.md`, `RUNTIME_CAPABILITIES.md` and relevant discovery/decision artifacts for state-changing work.
+- The manifest front matter is authoritative for project identity; project facts in this rule are intentionally not duplicated.
+- Use project-local commands and conventions from canonical project sources; do not infer them from a different repository or prior conversation.

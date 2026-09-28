@@ -1,0 +1,11 @@
+{
+ "node": "N-0049",
+ "expected_revision": 5,
+ "dim": "testing",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0049_20260924/REVIEW.md",
+  "verdict": "VERIFIED",
+  "summary": "5 new tests (test_cpor_customer_soh_check.py) independently re-run green against cip_test; two real-data cases hand-recomputed against the actual function and matched exactly."
+ }
+}
