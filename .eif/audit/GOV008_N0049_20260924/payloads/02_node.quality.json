@@ -1,0 +1,12 @@
+{
+ "node": "N-0049",
+ "expected_revision": 6,
+ "dim": "observability",
+ "state": "na",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0049_20260924/REVIEW.md",
+  "verdict": "VERIFIED",
+  "summary": "No new failure mode requiring logs/metrics/alerts."
+ },
+ "rationale": "Synchronous, side-effect-free read path on an existing GET endpoint; degenerate/failure states are already surfaced as explicit response fields (status: unavailable, flags) rather than silent errors, so there is nothing new to observe beyond what the endpoint already has."
+}

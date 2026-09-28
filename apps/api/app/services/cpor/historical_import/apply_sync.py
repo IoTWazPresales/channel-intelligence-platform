@@ -131,6 +131,10 @@ def run_cpor_historical_apply_sync(
             job.status = "completed_with_errors"
             job.error_summary = f"{blocked} case(s) blocked; 0 applied"[0:2000]
         job.completed_at = datetime.now(timezone.utc)
+        # BACKLOG-133/134: FLAG (never BLOCK) rows still pointing at merged ids.
+        from app.services.imports.merged_leftover_flag import flag_merged_id_leftovers
+
+        flag_merged_id_leftovers(db, job)
         persist_clear_background_task_metadata(db, job)
         db.commit()
         _emit("loaded", "Historical CPOR apply complete", total, total)

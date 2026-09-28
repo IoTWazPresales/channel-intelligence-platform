@@ -1,0 +1,18 @@
+﻿node.exe : [33mThe CJS build of Vite's Node API is deprecated. See 
+https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+At C:\Users\warren_eliason\AppData\Roaming\npm\pnpm.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/pnpm/bin/pnpm.cjs" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([33mThe CJS bu...e details.[39m:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+ RUN  v2.1.9 C:/Users/warren_eliason/channel-intelligence-platform/apps/web
+
+ Ô£ô src/app/(app)/admin/users/list/page.test.tsx > AdminUsersListPage > relocates UsersWorkspace under Administration chrome
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  15:59:19
+   Duration  13.05s (transform 283ms, setup 793ms, collect 7.03s, tests 128ms, environment 1.39s, prepare 676ms)
+

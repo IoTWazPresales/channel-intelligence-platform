@@ -209,5 +209,9 @@ def apply_cpor_payment_evidence_job(
     pe["apply"] = out
     meta["cpor_payment_evidence"] = pe
     job.staged_metadata = meta
+    # BACKLOG-133/134: FLAG (never BLOCK) rows still pointing at merged ids.
+    from app.services.imports.merged_leftover_flag import flag_merged_id_leftovers
+
+    flag_merged_id_leftovers(db, job)
     db.flush()
     return out

@@ -764,6 +764,10 @@ def process_import_job_sync(db: Session, job_id: int, on_progress: Any = None) -
             job.error_summary = f"{errors} rows require attention" if errors else None
             if not errors and job.import_mode == "apply":
                 job.stage = STAGE_LOADED
+            # BACKLOG-133/134: FLAG (never BLOCK) rows still pointing at merged ids.
+            from app.services.imports.merged_leftover_flag import flag_merged_id_leftovers
+
+            flag_merged_id_leftovers(db, job)
             persist_clear_background_task_metadata(db, job)
             db.commit()
             db.refresh(job)
@@ -886,6 +890,10 @@ def process_import_job_sync(db: Session, job_id: int, on_progress: Any = None) -
             job.status = "completed_with_errors" if errors else "completed"
             job.error_summary = f"{errors} rows require attention" if errors else None
         job.completed_at = datetime.now(timezone.utc)
+        # BACKLOG-133/134: FLAG (never BLOCK) rows still pointing at merged ids.
+        from app.services.imports.merged_leftover_flag import flag_merged_id_leftovers
+
+        flag_merged_id_leftovers(db, job)
         persist_clear_background_task_metadata(db, job)
         db.commit()
         db.refresh(job)

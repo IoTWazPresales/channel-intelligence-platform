@@ -1,0 +1,20 @@
+﻿ FAIL  src/app/(app)/admin/customers/page.test.tsx > AdminCustomersPage phase1 behaviors > submits add location and  add contact from drawer
+ FAIL  src/app/(app)/admin/imports/page.test.tsx > AdminImportsPage historical_lineup Apply button post-success  behavior > Apply button appears after validate succeeds and a file is present
+ FAIL  src/app/(app)/admin/imports/page.test.tsx > AdminImportsPage historical_lineup Apply button post-success  behavior > Apply button disappears and apply success Alert appears after apply succeeds
+ FAIL  src/app/(app)/admin/imports/page.test.tsx > AdminImportsPage historical_lineup Apply button post-success  behavior > validate success Alert shows generic message and does not show apply Alert
+ FAIL  src/app/(app)/admin/imports/page.test.tsx > AdminImportsPage historical_lineup mapping review panel > mapping  review panel appears and shows source columns after validate
+ FAIL  src/app/(app)/admin/imports/page.test.tsx > AdminImportsPage historical_lineup mapping review panel >  re-validate with corrections sends mapping_override in FormData
+ FAIL  src/app/(app)/admin/imports/page.test.tsx > AdminImportsPage historical_lineup mapping review panel > apply  with edits sends mapping_override in FormData
+ FAIL  src/app/(app)/admin/imports/page.test.tsx > AdminImportsPage historical_lineup mapping review panel > start  over clears the mapping review panel
+ FAIL  src/app/(app)/admin/imports/page.test.tsx > AdminImportsPage Phase 3B ÔÇö mapping review label clarity >  mapping review shows "Product identity (SKU)" label not bare "SKU"
+ FAIL  src/app/(app)/admin/imports/page.test.tsx > AdminImportsPage Phase 3B ÔÇö mapping review label clarity >  mapping review shows "Base unit (descriptor)" as a target option
+ FAIL  src/app/(app)/admin/imports/page.test.tsx > AdminImportsPage Phase 3B ÔÇö mapping review label clarity >  regression: sku_raw stays unmapped when field_mapping has no sku_raw
+ FAIL  src/app/(app)/admin/imports/page.test.tsx > AdminImportsPage Phase 3B ÔÇö diagnostic summary chips > diagnostic  summary chips appear with code counts after validate returns rows
+ FAIL  src/app/(app)/admin/imports/page.test.tsx > AdminImportsPage Phase 3C ÔÇö quality review panel > quality review  panel shows apply-ready badge when no blocking errors exist
+ FAIL  src/app/(app)/admin/imports/page.test.tsx > AdminImportsPage Phase 3C ÔÇö quality review panel > quality review  panel groups unknown customer tokens with row counts
+ FAIL  src/app/(app)/admin/imports/page.test.tsx > AdminImportsPage Phase 3C ÔÇö quality review panel > apply button  shows inline confirmation when unresolved customers exist, then applies on confirm
+ FAIL  src/app/(app)/admin/imports/page.test.tsx > AdminImportsPage Sub-pass A ÔÇö loaded lineup records > loaded  lineup section appears after apply and shows line data
+ FAIL  src/app/(app)/admin/imports/page.test.tsx > AdminImportsPage Sub-pass A ÔÇö loaded lineup records > loaded  lineup section shows empty state when no lines returned
+ FAIL  src/app/(app)/admin/imports/page.test.tsx > AdminImportsPage Sub-pass A ÔÇö loaded lineup records > View apply  job link appears in success alert with correct job id
+ FAIL  src/app/(app)/admin/imports/page.test.tsx > AdminImportsPage Sub-pass A ÔÇö loaded lineup records > unresolved  customer token chips appear in loaded lineup section when lines have unknown_customer
+ FAIL  src/app/(app)/admin/imports/page.test.tsx > AdminImportsPage Sub-pass A ÔÇö loaded lineup records > unresolved  customer token section is absent when all customers are resolved

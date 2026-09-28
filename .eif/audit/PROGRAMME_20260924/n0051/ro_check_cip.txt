@@ -1,0 +1,12 @@
+current_database() = cip
+merged customers: 255
+merged distributors: 36
+{
+ "customer_leftover_rows": 0,
+ "customer_fk_counts": {},
+ "distributor_leftover_rows": 0,
+ "distributor_fk_counts": {},
+ "total_leftover_rows": 0
+}
+check_seconds=2.19
+per-loser audit total (customer, existing helper): 0

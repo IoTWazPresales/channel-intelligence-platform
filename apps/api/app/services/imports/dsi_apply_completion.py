@@ -90,6 +90,10 @@ def complete_dsi_import_job_to_loaded(db: Session, job_id: int) -> dict[str, Any
 
     job.stage = STAGE_LOADED
     job.status = "completed"
+    # BACKLOG-133/134: FLAG (never BLOCK) rows still pointing at merged ids.
+    from app.services.imports.merged_leftover_flag import flag_merged_id_leftovers
+
+    flag_merged_id_leftovers(db, job)
     db.add(job)
     db.commit()
     db.refresh(job)

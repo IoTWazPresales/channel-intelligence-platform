@@ -1,0 +1,11 @@
+{
+ "node": "N-0049",
+ "expected_revision": 7,
+ "kind": "referent",
+ "state": "pass",
+ "evidence": {
+  "path": ".eif/audit/GOV008_N0049_20260924/REVIEW.md",
+  "verdict": "VERIFIED",
+  "summary": "Re-executed evidence independently: re-ran parent-tree grep myself, re-ran the test suite myself against cip_test, and recomputed the check's arithmetic by hand against real fact_customer_sellthrough rows through the real production function (not a reimplementation) via a read-only cip session; all matched."
+ }
+}

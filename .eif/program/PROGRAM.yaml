@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1215
-  log_sha256: f42faf3dd238f2804be14d837dd65cef336069e56c04861b0bd180b4c8117c9b
+  snapshot_revision: 1223
+  log_sha256: f376f83677fd20066f05f3c8129f325a803a7d2a9f2a031fbb21cbfd8e3068b9
   acceptance_policy:
     milestone: operator
     root: operator
@@ -7148,9 +7148,9 @@ nodes:
     title: 'Stage 4.3: MAC check reads customer sell-through, not the empty inventory fact (BACKLOG-135)'
     class: feature
     origin: operator
-    status: in_progress
-    stage: validate
-    revision: 5
+    status: complete
+    stage: null
+    revision: 9
     lease: null
     depends_on:
     - N-0048
@@ -7172,15 +7172,37 @@ nodes:
     quality:
       testing:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/GOV008_N0049_20260924/REVIEW.md
+          verdict: VERIFIED
+          summary: 5 new tests (test_cpor_customer_soh_check.py) independently re-run green against cip_test; two real-data
+            cases hand-recomputed against the actual function and matched exactly.
         rationale: null
+        pass_run: GOV008_N0049_20260924
+        pass_actor: gov-008-n0049-sonnet
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: na
+        evidence:
+          path: .eif/audit/GOV008_N0049_20260924/REVIEW.md
+          verdict: VERIFIED
+          summary: No new failure mode requiring logs/metrics/alerts.
+        rationale: 'Synchronous, side-effect-free read path on an existing GET endpoint; degenerate/failure states are already
+          surfaced as explicit response fields (status: unavailable, flags) rather than silent errors, so there is nothing
+          new to observe beyond what the endpoint already has.'
+    verification:
+      referent:
+        state: pass
+        pass_run: GOV008_N0049_20260924
+        pass_actor: gov-008-n0049-sonnet
+        evidence:
+          path: .eif/audit/GOV008_N0049_20260924/REVIEW.md
+          verdict: VERIFIED
+          summary: 'Re-executed evidence independently: re-ran parent-tree grep myself, re-ran the test suite myself against
+            cip_test, and recomputed the check''s arithmetic by hand against real fact_customer_sellthrough rows through the
+            real production function (not a reimplementation) via a read-only cip session; all matched.'
+        path: null
     evidence: []
     blockers: []
     conservation_tags: []
@@ -7371,10 +7393,14 @@ nodes:
     title: 'Stage 3.6: ops safety net (restore proven on a clone, alerting, resolver fails loudly)'
     class: feature
     origin: operator
-    status: proposed
-    stage: null
-    revision: 0
-    lease: null
+    status: in_progress
+    stage: implement
+    revision: 3
+    lease:
+      run: N0052_IMPL_20260924
+      acquired_at: '2026-09-24T19:30:18Z'
+      heartbeat_at: '2026-09-24T19:30:18Z'
+      expires_at: '2026-09-24T22:30:18Z'
     depends_on:
     - N-0051
     facets:
@@ -7389,7 +7415,7 @@ nodes:
     - AI resolver fails loudly when AI_ASSIST_ENABLED is on and the client is missing
     - Nothing writes to cip; read-only SQL prints current_database() first
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-0017
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
@@ -7414,14 +7440,21 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: 'Pipelined (ordering-only dep on N-0051; overlapping files avoided). Restore target: cip_alembic_empty (15
+      MB disposable smoke DB already proposed for dropping in D-0034) because the cip role cannot CREATE DATABASE; flagged
+      to Warren. Implementation by fresh subagent (reliability-sre-specialist, observability-specialist, backend-engineer),
+      run N0052_IMPL_20260924.'
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      celery_tasks: unchanged except failure signalling
+      ai_assist_off: default stays off
     target_artifact_class: null
     design_artifact_class: null
+    implementation_run: N0052_IMPL_20260924
+    implementation_actor: impl-n0052
   N-0053:
     id: N-0053
     parent: null
@@ -9672,6 +9705,17 @@ baselines:
     path: docs/BACKLOG.md#BACKLOG-133
     observed_behavior: '2026-09-21 (N-0030): customer_leftover_repair.py exists with zero callers; BACKLOG-134 measured 0
       today.'
+  BLN-0017:
+    id: BLN-0017
+    provenance: implementation-observation
+    tree_hash: f90e5d21
+    latent_capabilities: []
+    preservation:
+      celery_tasks: task behaviour unchanged except failure signalling
+      ai_assist_off: AI_ASSIST_ENABLED stays False by default
+    path: docs/BACKUP_AND_DR.md
+    observed_behavior: '2026-09-21 (N-0030): BACKUP_AND_DR.md exists but execution unverified; no Celery job-failure alerting;
+      _anthropic_client() returns None silently when AI assist is enabled without a client (BACKLOG-031/032/048/168).'
 caveats:
   consult_model_logged:
     key: consult_model_logged

@@ -12,6 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.services.customer_fk_discovery import discover_customer_fk_columns
+from app.services.distributor_fk_discovery import discover_distributor_fk_columns
 from app.services.customer_full_repoint import (
     _assert_zero_loser_refs,
     count_customer_fk_refs,
@@ -21,6 +22,17 @@ from app.services.merge_redirect import follow_customer_merge_redirect_sync
 
 # Match the leftover audit: skip the self-redirect column on dim_customer.
 _LEFTOVER_SKIP = {("dim_customer", "merged_into_customer_id")}
+_DISTRIBUTOR_LEFTOVER_SKIP = {("dim_distributor", "merged_into_distributor_id")}
+
+# Same loser definition as ``list_merged_losers`` (and its distributor twin).
+_MERGED_CUSTOMER_IDS_SQL = (
+    "SELECT id FROM dim_customer WHERE merged_into_customer_id IS NOT NULL "
+    "OR lower(coalesce(customer_status, '')) = 'merged'"
+)
+_MERGED_DISTRIBUTOR_IDS_SQL = (
+    "SELECT id FROM dim_distributor WHERE merged_into_distributor_id IS NOT NULL "
+    "OR lower(coalesce(distributor_status, '')) = 'merged'"
+)
 
 EXPECTED_DIRTY_LOSERS = 9
 EXPECTED_LEFTOVER_ROWS = 3266
@@ -153,6 +165,54 @@ def leftover_row_total_across_merged_losers(db: Session) -> int:
     for lid, _code, _name, _mid, _status in list_merged_losers(db):
         total += int(sum(leftover_fk_counts(db, lid).values()))
     return total
+
+
+def _merged_leftover_counts(
+    db: Session,
+    columns: tuple[tuple[str, str], ...],
+    skip: set[tuple[str, str]],
+    merged_ids_sql: str,
+) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for table, column in columns:
+        if (table, column) in skip:
+            continue
+        n = int(
+            db.execute(
+                text(f"SELECT count(*) FROM {table} WHERE {column} IN ({merged_ids_sql})")
+            ).scalar()
+            or 0
+        )
+        if n:
+            counts[f"{table}.{column}"] = n
+    return counts
+
+
+def merged_id_leftover_check(db: Session) -> dict[str, Any]:
+    """Read-only: rows still pointing at a merged customer/distributor id (BACKLOG-133/134).
+
+    One count per discovered FK column (same leftover definition as ``leftover_fk_counts``,
+    batched over all losers). Covers ``customer_source_token_alias`` /
+    ``distributor_source_token_alias`` via FK discovery. Never repoints.
+    """
+    cust = _merged_leftover_counts(
+        db, discover_customer_fk_columns(db), _LEFTOVER_SKIP, _MERGED_CUSTOMER_IDS_SQL
+    )
+    dist = _merged_leftover_counts(
+        db,
+        discover_distributor_fk_columns(db),
+        _DISTRIBUTOR_LEFTOVER_SKIP,
+        _MERGED_DISTRIBUTOR_IDS_SQL,
+    )
+    cust_rows = int(sum(cust.values()))
+    dist_rows = int(sum(dist.values()))
+    return {
+        "customer_leftover_rows": cust_rows,
+        "customer_fk_counts": cust,
+        "distributor_leftover_rows": dist_rows,
+        "distributor_fk_counts": dist,
+        "total_leftover_rows": cust_rows + dist_rows,
+    }
 
 
 def repair_dirty_losers(

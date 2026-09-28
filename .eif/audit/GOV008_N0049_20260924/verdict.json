@@ -1,0 +1,12 @@
+{"node": "N-0049", "verdict": "VERIFIED",
+ "dims": {
+   "quality.testing": {"state": "pass", "summary": "5 new tests (test_cpor_customer_soh_check.py) independently re-run green against cip_test; two real-data cases hand-recomputed against the actual function and matched exactly."},
+   "quality.observability": {"state": "na", "summary": "No new failure mode requiring logs/metrics/alerts.", "rationale": "Synchronous, side-effect-free read path on an existing GET endpoint; degenerate/failure states are already surfaced as explicit response fields (status: unavailable, flags) rather than silent errors, so there is nothing new to observe beyond what the endpoint already has."},
+   "verification.referent": {"state": "pass", "summary": "Re-executed evidence independently: re-ran parent-tree grep myself, re-ran the test suite myself against cip_test, and recomputed the check's arithmetic by hand against real fact_customer_sellthrough rows through the real production function (not a reimplementation) via a read-only cip session; all matched."}
+ },
+ "failed_criteria": [],
+ "limitations": [
+   "cip_test has 0 rows in fact_customer_sellthrough; 'printed numbers' proof used a read-only session against cip instead (driver-level read_only=True, no write attempted), per the brief's 'cip_test or a clone' allowance.",
+   "Did not exercise the live HTTP endpoint; verified wiring by reading cpor_cases.py and exercising the underlying service function directly with real row data.",
+   "Did not audit other readers of fact_inventory_customer (e.g. /inventory page) — out of scope for this node's acceptance criteria."
+ ]}

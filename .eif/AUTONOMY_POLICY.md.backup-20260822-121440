@@ -1,0 +1,109 @@
+---
+eif: autonomy-policy
+version: 0.3
+status: accepted
+last_updated: null
+owner: null
+review_after: 30d
+project_id: channel-intelligence-platform
+policy_id: AUTONOMY-001
+runtime_mode: local
+max_authority: L1
+max_risk_without_escalation: R1
+observation_paths:
+- '**'
+change_paths: []
+adjacent_scope:
+  mode: none
+  paths: []
+action_classes:
+  read: true
+  write: false
+  delete: false
+  test: false
+  build: false
+  dependency_change: false
+  branch_create: false
+  commit: false
+  remote_push: false
+  vcs_history_read: false
+  network: false
+  force_vcs: false
+  destructive_data: false
+  infrastructure_control: false
+  identity_mutation: false
+  mcp_read: false
+  mcp_write: false
+  mcp_destructive: false
+  control_plane_change: false
+  release: false
+  artifact_write: true
+shell:
+  mode: deny
+  require_sandbox: true
+  allowed: []
+mcp:
+  mode: none
+  tools: []
+network:
+  mode: none
+  destinations: []
+secrets:
+  mode: none
+  names: []
+budgets:
+  tool_calls: 100
+  wall_clock_minutes: 30
+  debug_iterations: 5
+  improvement_items: 0
+artifact_paths:
+- .eif/audit/**
+---
+
+> **Authoritative policy:** the YAML front matter above is machine-readable and is the only policy input compiled into runtime enforcement. The body is explanatory and must not duplicate competing values.
+
+# Autonomy Policy
+
+This policy is an **accepted authority envelope**, not an agent personality setting. `proposed` policy does not grant additional authority. Change the YAML, review it, mark it `accepted`, then regenerate the runtime policy with `tools/compile_policy.py`.
+
+## Shell allowlist entry shape
+
+```yaml
+shell:
+  mode: allowlist
+  require_sandbox: true
+  allowed:
+    - pattern: '^python -m pytest(?:\\s+tests/unit)?$'
+      action_class: test
+      sandbox_required: true
+      description: bounded unit-test command
+```
+
+Free-form shell is not an ENFORCED security boundary. For R2+ stateful work, only full-match allowlist entries are permitted. Shell safety is defense in depth and should be paired with Cursor sandboxing or an equivalent OS/container boundary.
+
+## MCP allowlist entry shape
+
+```yaml
+mcp:
+  mode: allowlist
+  tools:
+    - tool_pattern: 'list_*'
+      server_pattern: 'https://mcp.example.internal/*'
+      action_class: mcp_read
+```
+
+MCP is default deny. A broad `*` tool/server grant requires an explicit risk decision and must never appear by omission.
+
+## Observation vs change paths
+
+`observation_paths` controls where EIF may inspect/read inside the accepted project boundary. `change_paths` controls where implementation writes may occur. Observation scope may be broader; it never authorizes writes. Audit Mode normally uses broad observation paths and `change_paths: []` with code-write action classes disabled.
+
+For L2/L3, `change_paths` must be explicit before code writes are granted. Adjacent-scope paths are separate and still require the necessary external change test in Constitution §0.5.
+
+## Policy lifecycle
+
+1. Draft/modify this file.
+2. Have the appropriate owner accept it.
+3. Run `tools/compile_policy.py`.
+4. Run the runtime probe in the same Cursor mode that will execute the work.
+5. Grant only authority supported by the **measured** `RUNTIME_CAPABILITIES.md`.

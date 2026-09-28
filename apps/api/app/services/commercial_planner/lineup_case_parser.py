@@ -785,6 +785,10 @@ async def parse_current_lineup_file(
         job.stage = "loaded"
         case.import_job_id = job.id
         case.file_name = filename
+        # BACKLOG-133/134: FLAG (never BLOCK) rows still pointing at merged ids.
+        from app.services.imports.merged_leftover_flag import flag_merged_id_leftovers
+
+        await db.run_sync(lambda sync_db: flag_merged_id_leftovers(sync_db, job))
 
         await db.commit()
 

@@ -1,0 +1,89 @@
+﻿node.exe : [33mThe CJS build of Vite's Node API is deprecated. See 
+https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+At C:\Users\warren_eliason\AppData\Roaming\npm\pnpm.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/pnpm/bin/pnpm.cjs" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([33mThe CJS bu...e details.[39m:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+ RUN  v2.1.9 C:/Users/warren_eliason/channel-intelligence-platform/apps/web
+
+ Ô£ô src/features/planning/planningPaths.test.ts (2 tests) 6ms
+ Ô£ô src/app/(app)/lineup/page.test.tsx (1 test) 384ms
+   Ô£ô Planning hub at /lineup > mounts the lab Planning composition instead of LineupContainer 382ms
+ Ô£ô src/features/planning/PlanningOverview.test.tsx (3 tests) 537ms
+   Ô£ô PlanningOverview > renders lab headlines, paired bars, readiness, attention, and workflows 418ms
+ Ô£ô src/app/(app)/lineup/cases/page.test.tsx (1 test) 479ms
+   Ô£ô LineupCasesPage > relocates LineupContainer under Planning chrome 477ms
+ Ô£ô src/app/(app)/commercial-planner/page.test.tsx (83 tests) 51007ms
+   Ô£ô CommercialPlannerPage > loads planner workspace and summary 1086ms
+   Ô£ô CommercialPlannerPage > shows workflow guidance toggle collapsed by default, expands on click 345ms
+   Ô£ô CommercialPlannerPage > renders plan selector chips and action buttons in the compact plan controls 463ms
+   Ô£ô CommercialPlannerPage > applies assisted suggestion after preview and confirm 581ms
+   Ô£ô CommercialPlannerPage > Data map tab shows commercial field map 683ms
+   Ô£ô CommercialPlannerPage > loads planner defaults tab and fetches maintenance lists 562ms
+   Ô£ô CommercialPlannerPage > shows economics trust banner after Recalculate when API reports low trust 638ms
+   Ô£ô CommercialPlannerPage ÔÇö QA polish > Columns opens popover with optional column toggles 436ms
+   Ô£ô CommercialPlannerPage ÔÇö QA polish > toggling Promo mix shows column in grid column defs 733ms
+   Ô£ô CommercialPlannerPage ÔÇö QA polish > grid estimated internal margin shows em dash when line has blocking flag 392ms
+   Ô£ô CommercialPlannerPage ÔÇö QA polish > persists optional column toggles under localStorage key cip.commercial-planner.gridColumns.v4 643ms
+   Ô£ô CommercialPlannerPage ÔÇö QA polish > CPU spec shows value from product_specs_flat when metadata-driven spec column is enabled 828ms
+   Ô£ô CommercialPlannerPage ÔÇö QA polish > toggling effective FX shows column in grid defs 675ms
+   Ô£ô CommercialPlannerPage ÔÇö QA polish > Add from lineup posts new lines without landed_cost_usd and skips plan duplicates 1594ms
+   Ô£ô CommercialPlannerPage ÔÇö QA polish > fractional target_units suggestion preview shows rounded value and confirm sends integer 745ms
+   Ô£ô CommercialPlannerPage ÔÇö QA polish > shows grid loading overlay while lines request is pending 406ms
+   Ô£ô CommercialPlannerPage ÔÇö Lineup coverage tab > Lineup coverage panel renders empty state when no jobs are available 658ms
+   Ô£ô CommercialPlannerPage ÔÇö Lineup coverage tab > lineup-jobs endpoint is queried when Lineup coverage tab is active 797ms
+   Ô£ô CommercialPlannerPage ÔÇö Lineup coverage tab > auto-selects the latest job and loads coverage lines without manual selection 798ms
+   Ô£ô CommercialPlannerPage ÔÇö Lineup coverage tab > plan queries (plans/lines/summary/suggestions) are not called after switching to Lineup Coverage 515ms
+   Ô£ô CommercialPlannerPage ÔÇö Lineup coverage tab > disti_margin_pct 0.0724 displays as 7.24% in coverage table 717ms
+   Ô£ô CommercialPlannerPage ÔÇö Lineup coverage tab > unresolved customer chips use has_unknown_customer ÔÇö not has_warnings 692ms
+   Ô£ô CommercialPlannerPage ÔÇö Lineup coverage tab > summary cards show correct resolved-product and unresolved-customer counts 754ms
+   Ô£ô CommercialPlannerPage ÔÇö Lineup coverage tab > coverage table renders line data from the endpoint 756ms
+   Ô£ô CommercialPlannerPage ÔÇö Lineup coverage tab > shows no-lines state when coverage returns empty array 655ms
+   Ô£ô CommercialPlannerPage ÔÇö Lineup coverage tab > product defaults coverage section renders gap status for each product 734ms
+   Ô£ô CommercialPlannerPage ÔÇö Lineup coverage tab > cost semantics note renders in product defaults section 694ms
+   Ô£ô CommercialPlannerPage ÔÇö Lineup coverage tab > text filter reduces visible coverage rows by matching on model_raw 1484ms
+   Ô£ô CommercialPlannerPage ÔÇö Lineup coverage tab > coverage table column headers use MSRP / list and Promo price labels 723ms
+   Ô£ô CommercialPlannerPage ÔÇö Lineup coverage tab > commercial completeness summary shows MSRP, Promo, DAP, and month split counts 662ms
+   Ô£ô CommercialPlannerPage ÔÇö Lineup coverage tab > month split data renders in coverage table row 732ms
+   Ô£ô CommercialPlannerPage ÔÇö Lineup coverage tab > product defaults coverage explanation caption is visible 904ms
+   Ô£ô Plan readiness chips > shows missing SKU assumption chip when readiness reports gaps 498ms
+   Ô£ô Plan readiness chips > shows all-defaults-present message when plan is ready 544ms
+   Ô£ô Plan readiness chips > readiness missing customer term shows Customer admin link and Planner defaults action 459ms
+   Ô£ô Plan readiness chips > readiness missing distributor term shows Distributor admin link and Planner defaults action 439ms
+   Ô£ô Plan readiness chips > readiness missing SKU assumption shows Planner defaults action for SKU assumptions 396ms
+   Ô£ô Plan readiness chips > readiness invalid controlled cost shows warning and link to planner defaults 485ms
+   Ô£ô Plan readiness chips > readiness UNASSIGNED distributor shows informational alert 384ms
+   Ô£ô Lineup evidence panel in Add line dialog > shows lineup evidence panel when product is selected and evidence is available 1213ms
+   Ô£ô Lineup evidence panel in Add line dialog > clicking MSRP chip prefills the Target SRP field 1222ms
+   Ô£ô CommercialPlannerPage ÔÇö Workspace V1 > recalculate-needed banner appears when a line has null economics 407ms
+   Ô£ô CommercialPlannerPage ÔÇö Workspace V1 > shows plan / customer-facing currency banner from active plan 365ms
+   Ô£ô CommercialPlannerPage ÔÇö Workspace V1 > selected-line detail panel appears when a grid row is clicked 697ms
+   Ô£ô CommercialPlannerPage ÔÇö Workspace V1 > selected-line detail shows "Economics OK" chip for a clean line 640ms
+   Ô£ô CommercialPlannerPage ÔÇö Workspace V1 > selected-line detail shows controlled cost missing warning when flag is present 630ms
+   Ô£ô CommercialPlannerPage ÔÇö Workspace V1 > suggestions panel shows lineup-based source indicator when meta.data_sources.lineup is true 844ms
+   Ô£ô CommercialPlannerPage ÔÇö Workspace V1 > plan summary strip shows "Economics incomplete" when a line has null sell-in price 460ms
+   Ô£ô CommercialPlannerPage ÔÇö Workspace V1 > plan summary strip shows OEM net margin label when economics are complete 340ms
+   Ô£ô CommercialPlannerPage ÔÇö Workspace V1 > suggestions section is collapsible and defaults to open 1297ms
+   Ô£ô V3: Column selector modal > opens column selector modal when Columns button is clicked 1249ms
+   Ô£ô V3: Column selector modal > shows locked columns note in modal 1560ms
+   Ô£ô V3: Column selector modal > preset button triggers onPreset callback 1702ms
+   Ô£ô V3: Add product set > Add product set button is present when plan is active 1268ms
+   Ô£ô V3: Add product set > opens Add product set dialog when button clicked 1374ms
+   Ô£ô V3: Add product set > Add product set dialog shows customer and distributor pickers 1093ms
+   Ô£ô V3: Current lineup section > Current lineups section renders when plan is active 626ms
+   Ô£ô V3: Current lineup section > Upload current lineup button is present in section 554ms
+   Ô£ô V3: Richer product label > Add line product shows SKU ┬À model label format 953ms
+   Ô£ô V4: Column metadata and label fixes > column modal receives columnMeta prop when active plan has column metadata 889ms
+   Ô£ô V4: Column metadata and label fixes > plan summary strip shows OEM net margin label not per-unit 910ms
+   Ô£ô CurrentLineupSection ÔÇö sync to plan > sync button visible only for accepted cases 2315ms
+   Ô£ô CurrentLineupSection ÔÇö sync to plan > sync preview dialog shows counts when sync button is clicked 1197ms
+   Ô£ô CurrentLineupSection ÔÇö sync to plan > workbench shows resolve entities and sync preview chip when case is draft and linked to plan 895ms
+
+ Test Files  5 passed (5)
+      Tests  90 passed (90)
+   Start at  15:27:39
+   Duration  90.38s (transform 3.73s, setup 25.20s, collect 80.90s, tests 52.41s, environment 43.73s, prepare 6.61s)
+
