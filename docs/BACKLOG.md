@@ -215,7 +215,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Confirmed open** (2026-09-21 N-0030 audit: `customer_leftover_repair.py` has zero callers — not wired to import-complete; absorbs 134; Stage 3.7) · **Parked** · 2026-08-20 |
+| **Status / parked** | **Closed — Done** (2026-09-29 N-0051). Import-complete rail calls `customer_leftover_repair` plus the distributor twin. Non-zero is a warning flag (`merged_id_leftover`), not a block. Unit tests 3 passed. Read-only measure on `cip_test` returned total 0. Live apply was not re-run. |
 | **Effort** | Small–medium |
 | **Source** | Warren 2026-08-20 after merge of `fix/merged-customer-resolver-guard`: periodic assertion that no fact/FK still points at a merged loser, checked on import completion. |
 | **Idea** | After each successful import apply/complete, assert leftover row count is zero for every `dim_customer` / `dim_distributor` id that has `merged_into_*` set. Fail loudly (FLAG the job / activity feed) rather than silently re-accumulating loser FKs. Reuse leftover-query logic from `customer_leftover_repair.py` / `repoint_customer_footprint_full` discovery — do not invent a parallel scan. |

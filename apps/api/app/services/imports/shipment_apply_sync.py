@@ -233,18 +233,10 @@ def run_shipment_apply_sync(
             job_id,
         )
 
-    # BACKLOG-098: fan-out on_import_complete report schedules (best-effort).
-    # Only delivers ReportSchedule rows with enabled=True (config/opt-in).
-    try:
-        from app.services.report_schedule_runner import dispatch_import_complete_report_fanout
+    # Import-complete rail: merged-id leftover flag (warning, not a block) then report fan-out.
+    from app.services.imports.merged_id_leftover_check import run_import_complete_rail
 
-        tid = getattr(job, "tenant_id", None) if job is not None else None
-        dispatch_import_complete_report_fanout(tenant_id=str(tid or "default"))
-    except Exception:
-        logger.exception(
-            "Shipment post-apply report schedule fan-out failed job_id=%s; apply remains complete",
-            job_id,
-        )
+    run_import_complete_rail(db, job)
 
     # BACKLOG-132: shipping digest inbox preview; SMTP when CIP_SHIPPING_MAILER_SEND=1.
     try:

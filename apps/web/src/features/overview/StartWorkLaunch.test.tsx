@@ -23,7 +23,7 @@ describe('StartWorkLaunch', () => {
       'href',
       '/promotions?propose=1',
     );
-    expect(screen.getByRole('link', { name: /Resolve unmatched tokens/i })).toHaveAttribute('href', '/admin/mappings');
+    expect(screen.getByRole('link', { name: /Work the steward queue/i })).toHaveAttribute('href', '/admin/mappings');
     expect(screen.getAllByText('Plan').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Data').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Funding')).toBeInTheDocument();

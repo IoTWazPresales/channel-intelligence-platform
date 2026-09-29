@@ -1,0 +1,1 @@
+{"id": "BLN-N0035", "provenance": "implementation-observation", "tree_hash": "459f4c9", "path": "docs/memory/CURRENT.md", "observed_behavior": "Stage 2.2 a4fe957 sets AG_GRID_FONT_SIZE to 13px in packages/ui. Stage 2.3 459f4c9 sets GRID_DENSITY comfortable to 40/40; compact stays 34/36.", "latent_capabilities": [], "preservation": {}, "node": "N-0035", "expected_revision": 13}

@@ -1,0 +1,1 @@
+{"dim": "observability", "state": "pass", "evidence": {"path": ".eif/audit/PROGRAMME_20260929/n0051/IMPL.md", "summary": "Non-zero leftovers stamp staged_metadata.merged_id_leftover and a warning row code merged_id_leftover. blocks_apply is false. Scan failures are logged. cip_test measure returned total 0."}, "node": "N-0051", "expected_revision": 5}

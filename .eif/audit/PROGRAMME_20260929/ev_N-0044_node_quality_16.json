@@ -1,0 +1,1 @@
+{"dim": "a11y", "state": "pass", "evidence": {"path": ".eif/audit/PROGRAMME_20260929/n0044/A11Y.md", "summary": "Desk control labels use text.secondary. Composited on #22262e the ratio is 5.26:1, above 4.5:1. The muted token that failed was 3.09:1."}, "node": "N-0044", "expected_revision": 16}

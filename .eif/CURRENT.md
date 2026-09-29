@@ -16,10 +16,11 @@
 - **N-0041** D-b: shared grid search (workbench-ui) on Tier A grids (feature, R2, stage=None)
 - **N-0042** D-b: shared saved grid views (workbench-ui) (feature, R2, stage=None)
 - **N-0043** D-b: shared grid export (workbench-ui, community AG Grid) (feature, R2, stage=None)
+- **N-0052** Stage 3.6: ops safety net (restore proven on a clone, alerting, resolver fails loudly) (feature, R2, stage=None)
 
 ## In progress / leased
 
-- **N-0051** Stage 3.7: import completion asserts no merged-id leftovers (BACKLOG-133/134) stage=implement run=N0051_IMPL_20260924 expires=2026-09-24T21:11:16Z note=Pipelined (ordering-only dep). Implementation by fresh subagent (backend-engineer, data-quality-governance-specialist, test-engineering-specialist), run N0051_IMPL_20260924.
+_none_
 
 ## Decision queue
 
