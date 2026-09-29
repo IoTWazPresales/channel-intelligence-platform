@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1235
-  log_sha256: 03a2a6c236f3677a3903eb25da36fcad35d3e8cb2355f7c06113b25bf04eeb9e
+  snapshot_revision: 1253
+  log_sha256: 8beb5e97668ed8b7d9159cd103640ab57fc544ae6823950177637dca0bd6b2a0
   acceptance_policy:
     milestone: operator
     root: operator
@@ -5759,9 +5759,9 @@ nodes:
     title: Stage 2.4 + grid parity
     class: feature
     origin: operator
-    status: in_progress
-    stage: validate
-    revision: 8
+    status: complete
+    stage: null
+    revision: 16
     lease: null
     depends_on: []
     facets:
@@ -5769,7 +5769,7 @@ nodes:
     risk: R2
     touches_existing: true
     acceptance: operator
-    acceptance_state: pending
+    acceptance_state: accepted
     acceptance_criteria:
     - One generic all-fields column picker on every Tier A fact grid in docs/audits/GRID_AND_COLUMN_PARITY_AUDIT.md section
       6.2, fed by the fact's field list with a layout key per grid, through the existing features/workbench-ui/ColumnPickerDialog.
@@ -5801,35 +5801,48 @@ nodes:
     quality:
       ux:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20260924/n0034/IMPL_PASS2.md
+          summary: Column picker sits in the Scope bar on the Tier A hosts checked 2026-09-29. Picker was not rebuilt.
         rationale: null
+        pass_run: CLOSE_SEQ_20260929
+        pass_actor: close-seq
       a11y:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20260924/n0034/IMPL_PASS2.md
+          summary: Picker remains the existing FactColumnPicker checkbox dialog. No separate control was added.
         rationale: null
+        pass_run: CLOSE_SEQ_20260929
+        pass_actor: close-seq
       rendered:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20260924/n0034/IMPL_PASS2.md
+          summary: 'Browser on the rebuilt next start: Columns inside the Scope toolbar on forecasts, pricing, shipments,
+            roadmap, cover, sell-out, channel-ops, execution, terms, listings.'
         rationale: null
+        pass_run: CLOSE_SEQ_20260929
+        pass_actor: close-seq
       content:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20260924/n0034/IMPL_PASS2.md
+          summary: Labels stay Columns / Additional columns. Identity stays name-only. Codes stay their own columns.
         rationale: null
+        pass_run: CLOSE_SEQ_20260929
+        pass_actor: close-seq
     verification: {}
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Implemented in two passes: 11f7765b + 08e5f974 (pass 1: grid_fields registry + GET grid-fields/{grid_id},
-      useFactColumns + FactColumnPicker, 7 ORM grids + inbound, name-only sweep) and 43d521f4 + c18333fb (pass 2: computed-row
-      grids, listings, customer terms; BACKLOG-201 closed with per-host toolbar table routing search/saved views/export to
-      N-0041/42/43; BACKLOG-140 display half). 15/15 Tier A grids; codes as default-hidden Reference fields; tsc 0; tests
-      per IMPL_PASS1/2. Needs rebuild + API restart, then independent review incl. the 1280x800 browser smoke (open picker,
-      add code column, reload, persists) on three grids. Operator acceptance still required.'
+    stage_note: 'Warren 2026-09-29: close on the validation already recorded. Opus consult is not this gate. A second validation
+      when usage is back is BACKLOG-211. This run is the close, not an independent review.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -5852,7 +5865,7 @@ nodes:
     origin: operator
     status: in_progress
     stage: discovery
-    revision: 9
+    revision: 12
     lease: null
     depends_on: []
     facets:
@@ -5932,9 +5945,8 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Retroactive charter only (EV-STAGE22-A4FE957, EV-STAGE23-459F4C9). Work shipped at a4fe957 and 459f4c9 outside
-      the ledger. To close: GOV-008 run with a distinct run and actor records referent and rendered at 1280x800, then node.status
-      complete. Stays in discovery: no baseline was recorded before the work.'
+    stage_note: 'Warren 2026-09-29: close on the validation already recorded. Opus consult is not this gate. A second validation
+      when usage is back is BACKLOG-211. This run is the close, not an independent review.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -7148,9 +7160,9 @@ nodes:
     title: 'Stage 4.3: MAC check reads customer sell-through, not the empty inventory fact (BACKLOG-135)'
     class: feature
     origin: operator
-    status: in_progress
-    stage: validate
-    revision: 5
+    status: complete
+    stage: null
+    revision: 10
     lease: null
     depends_on:
     - N-0048
@@ -7172,24 +7184,31 @@ nodes:
     quality:
       testing:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20260924/n0049/IMPL.md
+          summary: test_cpor_customer_soh_check.py 5 tests; broader pytest 274 passed on cip_test. prove_cip_ro read-only,
+            current_database=cip.
         rationale: null
+        pass_run: CLOSE_SEQ_20260929
+        pass_actor: close-seq
       observability:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20260924/n0049/IMPL.md
+          summary: Missing CST SOH returns status unavailable with a reason. It does not report zero stock. Flags zero_soh
+            and no_soh_cost are on the cost-suggest payload.
         rationale: null
+        pass_run: CLOSE_SEQ_20260929
+        pass_actor: close-seq
     verification: {}
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Implemented at 3624d7e7. Finding: no MAC/SOH check existed in code (docs only, D-062). Added read-only customer_soh_check
-      on fact_customer_sellthrough (reported_soh, latest week <= as_of, site sum, SOH-weighted unit_mac else unit_cost; honest
-      ''unavailable'', never zero) exposed as soh_check on the cost-suggest response; never names fact_inventory_customer.
-      Proven read-only on cip with printed pairs; 5 new tests; 274 cpor-area tests pass on cip_test. BACKLOG-135 -> Partial.
-      Questions D-0038. Independent review next.'
+    stage_note: 'Warren 2026-09-29: close on the validation already recorded. Opus consult is not this gate. A second validation
+      when usage is back is BACKLOG-211. This run is the close, not an independent review.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -7428,9 +7447,9 @@ nodes:
     title: 'Stage 2.5: line identifier ''both'' as two columns'
     class: feature
     origin: operator
-    status: in_progress
-    stage: validate
-    revision: 14
+    status: complete
+    stage: null
+    revision: 16
     lease: null
     depends_on: []
     facets:
