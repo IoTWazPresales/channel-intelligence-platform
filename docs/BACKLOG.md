@@ -2253,7 +2253,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Confirmed open** (2026-09-21 N-0030 audit: design-lab still 25 tsx with duplicate primitives/shell; Stage 2.9 after density lands) · **Parked** · 2026-09-04 |
+| **Status / parked** | **Parked — Warren 2026-09-29.** Do not touch the design lab. Leave both copies. Do not import production components into the lab, and do not import lab fixtures into production. Sharing them cross-wires the two trees. Drift is accepted until Warren asks. N-0054 is blocked on that decision and does not hold up tenant scoping. · Earlier: confirmed open 2026-09-21 (lab still had its own shell copies) · Parked 2026-09-04 |
 | **Effort** | Medium |
 | **Source** | `apps/web/src/design-lab/shell/CommandPalette.tsx`, `apps/web/src/design-lab/primitives/CapabilityStatus.tsx`, `apps/web/src/design-lab/surfaces/DirectorySurface.tsx`; production `apps/web/src/features/shell/CapabilityRail.tsx` / `CapabilityDirectory.tsx` / `CapabilityStatus.tsx` / `CommandPalette.tsx` (commit `41a8c4b`) |
 | **Idea** | Design-lab keeps its own copies of CapabilityRail / Directory / Status / CommandPalette. Production now has the D-0008 shell. Two implementations will drift. |
@@ -2262,7 +2262,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 | **Regression traps** | Prototype fixtures must never be imported by production. Lab `/design-lab/directory` must keep fixture data; production `/directory` uses `navConfig` + live role. Do not reopen N-0013. |
 | **Behavior to retain** | Production AppShell + `/directory` from `41a8c4b`. Lab remains fixtures-only (no production API writes). |
 | **Out of scope** | I1–I5 capability acceptance criteria; N-0006. |
-| **TRIGGER** | Next production or lab shell/nav change. |
+| **TRIGGER** | Warren explicitly asks to reconcile design-lab with production. A shell or nav change does not fire this. |
 
 ---
 

@@ -55,7 +55,7 @@
 - N-0051 **Stage 3.7: import completion asserts no merged-id leftovers (BACKLOG-133/134)** `complete`/`complete` (feature)
 - N-0052 **Stage 3.6: ops safety net (restore proven on a clone, alerting, resolver fails loudly)** `proposed`/`proposed` (feature)
 - N-0053 **Stage 2.5: line identifier 'both' as two columns** `complete`/`complete` (feature)
-- N-0054 **Stage 2.9: design-lab as fixture skin over production primitives (BACKLOG-161/158)** `proposed`/`proposed` (feature)
+- N-0054 **Stage 2.9: design-lab as fixture skin over production primitives (BACKLOG-161/158)** `blocked`/`blocked` (feature)
 - N-0055 **Stage 3.3: tenant scoping sweep** `proposed`/`proposed` (feature)
 - N-0056 **Stage 5: analytics delivery (export, event-triggered refresh, calendar delivery, vintage on face)** `proposed`/`proposed` (feature)
 - N-0057 **Stage 6.1/6.2: lineup authoring workbench and the B2 end-to-end PM run (BACKLOG-190)** `proposed`/`proposed` (feature)

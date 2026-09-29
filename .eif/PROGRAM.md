@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 1277
+**Snapshot revision:** 1279
 
 ## Outcome (verbatim)
 
@@ -75,7 +75,7 @@ _none_
 | N-0051 | Stage 3.7: import completion asserts no merged-id leftovers (BACKLOG-133/134) | feature | complete | complete | yes |  | full loop |
 | N-0052 | Stage 3.6: ops safety net (restore proven on a clone, alerting, resolver fails loudly) | feature | proposed | proposed | yes |  | full loop |
 | N-0053 | Stage 2.5: line identifier 'both' as two columns | feature | complete | complete | yes |  | full loop |
-| N-0054 | Stage 2.9: design-lab as fixture skin over production primitives (BACKLOG-161/158) | feature | proposed | proposed | yes |  | full loop |
+| N-0054 | Stage 2.9: design-lab as fixture skin over production primitives (BACKLOG-161/158) | feature | blocked | blocked | yes |  | full loop |
 | N-0055 | Stage 3.3: tenant scoping sweep | feature | proposed | proposed | yes |  | full loop |
 | N-0056 | Stage 5: analytics delivery (export, event-triggered refresh, calendar delivery, vintage on face) | feature | proposed | proposed | yes |  | full loop |
 | N-0057 | Stage 6.1/6.2: lineup authoring workbench and the B2 end-to-end PM run (BACKLOG-190) | feature | proposed | proposed | yes |  | full loop |

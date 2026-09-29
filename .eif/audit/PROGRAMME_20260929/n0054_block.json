@@ -1,0 +1,7 @@
+{
+  "node": "N-0054",
+  "expected_revision": 0,
+  "type": "decision",
+  "ref": "BACKLOG-161",
+  "note": "Warren 2026-09-29: do not touch the design lab. Leave both copies. Do not share production components with the lab or lab fixtures with production; sharing cross-wires the two trees. Drift is accepted until Warren asks. This does not block tenant scoping."
+}
