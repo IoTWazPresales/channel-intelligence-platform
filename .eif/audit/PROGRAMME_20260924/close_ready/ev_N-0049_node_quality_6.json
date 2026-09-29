@@ -1,0 +1,1 @@
+{"dim": "testing", "state": "pass", "evidence": {"path": ".eif/audit/PROGRAMME_20260924/n0049/IMPL.md", "summary": "test_cpor_customer_soh_check.py 5 tests; broader pytest 274 passed on cip_test. prove_cip_ro read-only, current_database=cip."}, "node": "N-0049", "expected_revision": 6}

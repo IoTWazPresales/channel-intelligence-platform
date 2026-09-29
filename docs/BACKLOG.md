@@ -3252,7 +3252,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Open** · 2026-09-29 · Opus CONSULT and VERIFY still not run. Cursor must not self-PASS. **Warren 2026-09-29: this CONSULT/VERIFY debt applies to every stage shipped on this branch until Anthropic usage is available — it does not block feature-branch commits, only promotion to `main`.** Covers the ScopeBar unit (`a8755854`) and N-0053 line identifier `both` (same day, see CONTEXT). Browser on the rebuilt `next start` at :3000: Columns / Additional columns sit inside the Scope toolbar on forecasts (Velocity shows Clear; Compute stays outside; `customer_code` still checked after reload), pricing facts, pricing recommendations, shipments (Unattributed inside; Slipped in disabled until a plan quarter), roadmap, cover, sell-out, channel-ops inventory and movements (after a distributor is chosen), execution drill, channel-intelligence workspace, customer commercial terms, and listing capture. `/buy-plans` and `/inventory` redirect before those pages render. Shipment search stays the paper under the bar. |
+| **Status / parked** | **Open** · 2026-09-29 · Warren later the same day: do not wait on Opus to close nodes. Nodes that already had validation are complete. The second pass is BACKLOG-211. This entry stays the consultant's checklist. It does not block ledger complete. Promotion to `main` is still a separate instruction. Browser on the rebuilt `next start` at :3000: Columns / Additional columns sit inside the Scope toolbar on forecasts (Velocity shows Clear; Compute stays outside; `customer_code` still checked after reload), pricing facts, pricing recommendations, shipments (Unattributed inside; Slipped in disabled until a plan quarter), roadmap, cover, sell-out, channel-ops inventory and movements (after a distributor is chosen), execution drill, channel-intelligence workspace, customer commercial terms, and listing capture. `/buy-plans` and `/inventory` redirect before those pages render. Shipment search stays the paper under the bar. |
 | **Effort** | Small — one Opus CONSULT, then VERIFY against the running pages |
 | **Source** | This session on `feat/ns-2-brief-nav-collapse`. Warren: continue the ScopeBar work and hold CONSULT until Anthropic usage resets. Charter: when the consultant is unavailable, record VERIFY-debt; debt blocks promotion to `main`. |
 | **Idea** | The existing fact-grid column picker now sits on the shared `ScopeBar` for forecasts, pricing facts, pricing recommendations, and inbound shipments. That composition has not had an Opus CONSULT or VERIFY. |
@@ -3277,3 +3277,18 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Behavior to retain** | Single-mode behaviour identical to today; `both` keeps `SKU` / `Sales model` headers and `—` for empty. |
 | **Out of scope** | Any change to which fields are stored; any import/steward path. |
 | **TRIGGER** | The `CurrentLineupSection` workbench moves onto the shared picker mechanism, or Warren asks for two-line captions under `both`. |
+
+## BACKLOG-211 — Second validation of nodes closed without Opus
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** · 2026-09-29 · Warren: close on the validation already recorded, and come back for a second validation when Anthropic usage is available. |
+| **Effort** | One consultant or fresh-session pass per closed node. No build. |
+| **Source** | Warren, this session. Ledger run `CLOSE_SEQ_20260929`. |
+| **Idea** | N-0034, N-0049, and N-0053 are complete on the evidence already on the node (tests, and for N-0034 and N-0053 a browser check). That close is not an independent review and not an Opus consult. |
+| **Why it matters / deferrable** | The build queue should not sit behind a model allowance. A second look can still catch a product or accessibility miss. Deferrable until usage is back. It does not reopen the nodes by itself. |
+| **What the work is** | Re-read each closed node's acceptance criteria against the running app. Record the result on the node as a later evidence note, or in this entry. N-0034: Scope bar column control, picker not rebuilt. N-0049: customer SOH check reads sell-through, missing data stays unavailable. N-0053: `both` is two sortable columns through the existing picker. |
+| **Regression traps** | Do not mark this pass as the original independent review. Do not rebuild the picker. Do not write to `cip`. |
+| **Behavior to retain** | The three nodes stay complete unless the second pass finds a real miss. A miss becomes a new node or a fix, not a silent reopen. |
+| **Out of scope** | Nodes that are still open (see CURRENT). Those are not "closed pending Opus". |
+| **TRIGGER** | Anthropic usage is available, or Warren asks a fresh session to do this pass without Opus. |

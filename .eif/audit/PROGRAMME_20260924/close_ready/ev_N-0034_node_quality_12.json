@@ -1,0 +1,1 @@
+{"dim": "content", "state": "pass", "evidence": {"path": ".eif/audit/PROGRAMME_20260924/n0034/IMPL_PASS2.md", "summary": "Labels stay Columns / Additional columns. Identity stays name-only. Codes stay their own columns."}, "node": "N-0034", "expected_revision": 12}

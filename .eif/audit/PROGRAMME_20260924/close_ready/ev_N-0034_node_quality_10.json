@@ -1,0 +1,1 @@
+{"dim": "a11y", "state": "pass", "evidence": {"path": ".eif/audit/PROGRAMME_20260924/n0034/IMPL_PASS2.md", "summary": "Picker remains the existing FactColumnPicker checkbox dialog. No separate control was added."}, "node": "N-0034", "expected_revision": 10}

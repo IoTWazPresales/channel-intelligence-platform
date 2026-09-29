@@ -1,0 +1,1 @@
+{"dim": "observability", "state": "pass", "evidence": {"path": ".eif/audit/PROGRAMME_20260924/n0049/IMPL.md", "summary": "Missing CST SOH returns status unavailable with a reason. It does not report zero stock. Flags zero_soh and no_soh_cost are on the cost-suggest payload."}, "node": "N-0049", "expected_revision": 7}
