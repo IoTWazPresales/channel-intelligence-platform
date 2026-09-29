@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1277
-  log_sha256: bad52827f4f1c2273843bb379fc79bce800ce869a9fccbb04ef905ba690d2eae
+  snapshot_revision: 1279
+  log_sha256: 860c04800a8a13379e7bfadb66acf03f8228783dea0e2a0ec39791e1a6228269
   acceptance_policy:
     milestone: operator
     root: operator
@@ -7550,9 +7550,9 @@ nodes:
     title: 'Stage 2.9: design-lab as fixture skin over production primitives (BACKLOG-161/158)'
     class: feature
     origin: operator
-    status: proposed
+    status: blocked
     stage: null
-    revision: 0
+    revision: 1
     lease: null
     depends_on:
     - N-0052
@@ -7594,7 +7594,14 @@ nodes:
         rationale: null
     verification: {}
     evidence: []
-    blockers: []
+    blockers:
+    - id: BL-0012
+      type: decision
+      ref: BACKLOG-161
+      opened: '2026-09-29T15:18:18Z'
+      note: 'Warren 2026-09-29: do not touch the design lab. Leave both copies. Do not share production components with the
+        lab or lab fixtures with production; sharing cross-wires the two trees. Drift is accepted until Warren asks. This
+        does not block tenant scoping.'
     conservation_tags: []
     fingerprint: null
     stage_note: null
@@ -7613,10 +7620,10 @@ nodes:
     origin: operator
     status: proposed
     stage: null
-    revision: 0
+    revision: 1
     lease: null
     depends_on:
-    - N-0054
+    - N-0052
     facets:
     - api
     risk: R2
@@ -9930,6 +9937,6 @@ deferred_findings:
 ids:
   node: 5
   decision: 19
-  blocker: 11
+  blocker: 12
   evidence: 2
   baseline: 4
