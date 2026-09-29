@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 1235
+**Snapshot revision:** 1253
 
 ## Outcome (verbatim)
 
@@ -55,7 +55,7 @@ _none_
 | N-0031 | Stage 2a: grid height single source, MarketSurface mappings states, LineupScopeBar and market readiness honesty | feature | complete | complete | yes |  | full loop |
 | N-0032 | Stage 2.7: five orphaned CPOR case tabs (USD pivot, Events, Exports, Promo load, Payments/recon) mounted on the settlement desk | feature | complete | complete | yes |  | full loop |
 | N-0033 | Stage 3.1/3.5: session auth gate on every API route, production web on loopback, Cloudflare quick tunnel for a small pilot | feature | complete | complete | yes |  | full loop |
-| N-0034 | Stage 2.4 + grid parity | feature | in_progress | in_progress | yes |  | full loop |
+| N-0034 | Stage 2.4 + grid parity | feature | complete | complete | yes |  | full loop |
 | N-0035 | Stage 2.2/2.3: grid-scoped 13px type token and density 40/40 (ran outside the ledger) | feature | in_progress | in_progress | yes | yes | full loop |
 | N-0036 | BACKLOG-206: API binds loopback, not 0.0.0.0:8001 | feature | blocked | blocked | yes |  | full loop |
 | N-0037 | Stage 3.4: login rate limit and lockout | feature | complete | complete | yes |  | full loop |
@@ -70,11 +70,11 @@ _none_
 | N-0046 | BACKLOG-143: worktrees and leftover-state hygiene | feature | blocked | blocked | yes |  | full loop |
 | N-0047 | Stage 4.1: dim_product inverted launch/retire windows (BACKLOG-034), proven on a clone | feature | complete | complete | yes |  | full loop |
 | N-0048 | Stage 4.2: cpor_case status vs workflow_status drift (BACKLOG-139), proven on a clone | feature | complete | complete | yes |  | full loop |
-| N-0049 | Stage 4.3: MAC check reads customer sell-through, not the empty inventory fact (BACKLOG-135) | feature | in_progress | in_progress | yes |  | full loop |
+| N-0049 | Stage 4.3: MAC check reads customer sell-through, not the empty inventory fact (BACKLOG-135) | feature | complete | complete | yes |  | full loop |
 | N-0050 | Stage 4.4: cpor_case_line week-aligned window columns (BACKLOG-137), migration proven on cip_test only | feature | complete | complete | yes |  | full loop |
 | N-0051 | Stage 3.7: import completion asserts no merged-id leftovers (BACKLOG-133/134) | feature | in_progress | in_progress | yes |  | full loop |
 | N-0052 | Stage 3.6: ops safety net (restore proven on a clone, alerting, resolver fails loudly) | feature | proposed | proposed | yes |  | full loop |
-| N-0053 | Stage 2.5: line identifier 'both' as two columns | feature | in_progress | in_progress | yes |  | full loop |
+| N-0053 | Stage 2.5: line identifier 'both' as two columns | feature | complete | complete | yes |  | full loop |
 | N-0054 | Stage 2.9: design-lab as fixture skin over production primitives (BACKLOG-161/158) | feature | proposed | proposed | yes |  | full loop |
 | N-0055 | Stage 3.3: tenant scoping sweep | feature | proposed | proposed | yes |  | full loop |
 | N-0056 | Stage 5: analytics delivery (export, event-triggered refresh, calendar delivery, vintage on face) | feature | proposed | proposed | yes |  | full loop |

@@ -13,7 +13,9 @@
 
 ## Ready leaves
 
-_No ready unblocked leaves._
+- **N-0041** D-b: shared grid search (workbench-ui) on Tier A grids (feature, R2, stage=None)
+- **N-0042** D-b: shared saved grid views (workbench-ui) (feature, R2, stage=None)
+- **N-0043** D-b: shared grid export (workbench-ui, community AG Grid) (feature, R2, stage=None)
 
 ## In progress / leased
 
