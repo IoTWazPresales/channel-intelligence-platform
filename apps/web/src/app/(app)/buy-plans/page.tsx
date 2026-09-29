@@ -13,6 +13,8 @@ import { PageHeader } from '@/components/PageHeader';
 import { navPageChrome } from '@/features/shell/navPageChrome';
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { ScopeBar } from '@/features/workbench-ui/controls';
+import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiDelete, apiGet, apiPost, HttpConflictError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
@@ -112,6 +114,7 @@ export default function BuyPlansPage() {
   }, [delRow, delRow.isPending, clearAll.isPending, lineId, factColumns.optionalColDefs]);
 
   const rows = data ?? [];
+  const gridChrome = useFactGridChrome('buy-plans', { exportDisabled: rows.length === 0 });
   const busy = delRow.isPending || clearAll.isPending;
 
   return (
@@ -171,14 +174,25 @@ export default function BuyPlansPage() {
             secondary: { label: 'Forecast', href: '/forecasts' },
           }}
           toolbar={
-            <ModuleGridToolbar
-              leading={
+            <>
+            <ScopeBar
+              chips={[]}
+              savedViews={gridChrome.viewNames}
+              savedView={gridChrome.active}
+              onSavedView={gridChrome.selectView}
+              filters={gridChrome.filters}
+              trailing={
+                <>
                 <FactColumnsButton
                   gridId="buy-plans"
                   onClick={factColumns.openPicker}
                   count={factColumns.optionalFields.length}
                 />
+                {gridChrome.trailing}
+                </>
               }
+            />
+            <ModuleGridToolbar
               onRefresh={() => qc.invalidateQueries({ queryKey: ['buy-plans'] })}
               onClearAll={() => {
                 if (!window.confirm('Delete every buy plan row? This cannot be undone.')) return;
@@ -187,9 +201,10 @@ export default function BuyPlansPage() {
               importsHref="/admin/imports"
               busy={busy}
             />
+            </>
           }
         >
-          <EnterpriseDataGrid rowData={rows} columnDefs={colDefs} />
+          <EnterpriseDataGrid ref={gridChrome.gridRef} quickFilterText={gridChrome.query} rowData={rows} columnDefs={colDefs} />
         </ModuleDataSection>
       </Paper>
       <FactColumnPicker {...factColumns.pickerProps} />

@@ -5,7 +5,7 @@ import { Box, Button, Card, CardActionArea, CardContent, CircularProgress, Stack
 import { useTheme } from '@mui/material/styles';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
@@ -14,6 +14,7 @@ import { CategoryBars, ProportionBar, TrendChart } from '@/features/workbench-ui
 import { ScopeBar, StatusChip } from '@/features/workbench-ui/controls';
 import { EntityContextPanel, KeyValueList } from '@/features/workbench-ui/EntityContextPanel';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
 import { Panel, PanelRow } from '@/features/workbench-ui/Panel';
@@ -107,7 +108,12 @@ export function CoverLensView() {
   const [family, setFamily] = useParam('family');
   const [product, setProduct] = useParam('product');
   const [bucket, setBucket] = useParam('bucket');
-  const [savedView, setSavedView] = useState('All pairs');
+  const [savedView, setSavedView] = useState(() => {
+    if (typeof window === 'undefined') return 'All pairs';
+    return window.localStorage.getItem('cip.grid.cover.distribution.savedView.v1') === 'Breaches only'
+      ? 'Breaches only'
+      : 'All pairs';
+  });
   const [selected, setSelected] = useState<CoverItem | null>(null);
 
   const { data, isLoading, isError } = useQuery({
@@ -131,6 +137,17 @@ export function CoverLensView() {
       }),
     [items, status, distributor, family, product, bucket],
   );
+  const gridChrome = useFactGridChrome('cover.distribution', { exportDisabled: rows.length === 0 });
+
+  useEffect(() => {
+    window.localStorage.setItem('cip.grid.cover.distribution.savedView.v1', savedView);
+  }, [savedView]);
+
+  useEffect(() => {
+    if (savedView === 'Breaches only' && !status) setStatus('breach');
+    // Restore the preset once. A status already in the URL wins.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const columnDefs = useMemo<ColDef<CoverItem>[]>(
     () => [
@@ -220,6 +237,7 @@ export function CoverLensView() {
     setProduct(null);
     setBucket(null);
     setSavedView('All pairs');
+    gridChrome.clearFind();
   };
 
   const chips = [
@@ -383,20 +401,20 @@ export function CoverLensView() {
         }}
         summary={`${rows.length} of ${items.length} pairs`}
         onClear={clear}
+        filters={gridChrome.filters}
+        trailing={
+          <>
+          {gridChrome.trailing}
+          <FactColumnsButton
+            gridId="cover.distribution"
+            onClick={factColumns.openPicker}
+            count={factColumns.optionalFields.length}
+          />
+          </>
+        }
       />
 
       <ModuleDataSection
-        toolbar={
-          isMobile ? undefined : (
-            <Stack direction="row" justifyContent="flex-end">
-              <FactColumnsButton
-                gridId="cover.distribution"
-                onClick={factColumns.openPicker}
-                count={factColumns.optionalFields.length}
-              />
-            </Stack>
-          )
-        }
         isEmpty={rows.length === 0}
         empty={{
           title: 'No pairs match this scope',
@@ -445,6 +463,8 @@ export function CoverLensView() {
           </Stack>
         ) : (
           <EnterpriseDataGrid<CoverItem>
+            ref={gridChrome.gridRef}
+            quickFilterText={gridChrome.query}
             rowData={rows}
             columnDefs={columnDefs}
             height={440}

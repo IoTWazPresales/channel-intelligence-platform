@@ -11,6 +11,8 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PlanningChrome } from '@/features/planning/PlanningChrome';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { ScopeBar } from '@/features/workbench-ui/controls';
+import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { apiDelete, apiGet, apiPost } from '@/lib/api';
@@ -63,6 +65,7 @@ export default function RoadmapPage() {
   }, [delRow, delRow.isPending, clearAll.isPending, lineId, factColumns.optionalColDefs]);
 
   const rows = data ?? [];
+  const gridChrome = useFactGridChrome('roadmap', { exportDisabled: rows.length === 0 });
 
   return (
     <PlanningChrome>
@@ -87,14 +90,25 @@ export default function RoadmapPage() {
             secondary: { label: 'Lineup cases', href: '/lineup/cases' },
           }}
           toolbar={
-            <ModuleGridToolbar
-              leading={
+            <>
+            <ScopeBar
+              chips={[]}
+              savedViews={gridChrome.viewNames}
+              savedView={gridChrome.active}
+              onSavedView={gridChrome.selectView}
+              filters={gridChrome.filters}
+              trailing={
+                <>
                 <FactColumnsButton
                   gridId="roadmap"
                   onClick={factColumns.openPicker}
                   count={factColumns.optionalFields.length}
                 />
+                {gridChrome.trailing}
+                </>
               }
+            />
+            <ModuleGridToolbar
               onRefresh={() => qc.invalidateQueries({ queryKey: ['roadmap'] })}
               onClearAll={() => {
                 if (!window.confirm('Delete every roadmap row? This cannot be undone.')) return;
@@ -103,9 +117,10 @@ export default function RoadmapPage() {
               importsHref="/admin/imports"
               busy={delRow.isPending || clearAll.isPending}
             />
+            </>
           }
         >
-          <EnterpriseDataGrid rowData={rows} columnDefs={colDefs} />
+          <EnterpriseDataGrid ref={gridChrome.gridRef} quickFilterText={gridChrome.query} rowData={rows} columnDefs={colDefs} />
         </ModuleDataSection>
       </Paper>
       <FactColumnPicker {...factColumns.pickerProps} />

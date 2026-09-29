@@ -22,10 +22,12 @@ type Props<T> = {
   columnDefs: ColDef<T>[];
   height?: number | string;
   gridOptions?: GridOptions<T>;
+  /** Client filter across loaded rows. Server-filtered grids should omit this. */
+  quickFilterText?: string;
 };
 
 function EnterpriseDataGridInner<T>(
-  { rowData, columnDefs, height = 480, gridOptions }: Props<T>,
+  { rowData, columnDefs, height = 480, gridOptions, quickFilterText }: Props<T>,
   ref: ForwardedRef<AgGridReact<T>>
 ) {
   const pathname = usePathname();
@@ -132,6 +134,7 @@ function EnterpriseDataGridInner<T>(
         ensureDomOrder
         onRowClicked={onRowClicked}
         rowSelection={rowSelection}
+        quickFilterText={quickFilterText}
         theme="legacy"
       />
     </Box>

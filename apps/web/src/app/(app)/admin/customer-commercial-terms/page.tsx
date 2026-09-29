@@ -22,6 +22,8 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
+import { ScopeBar } from '@/features/workbench-ui/controls';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
 
@@ -47,18 +49,21 @@ function pctLabel(v: number): string {
 
 function CustomerTermsEditor() {
   const qc = useQueryClient();
-  const [filter, setFilter] = useState('');
+  const factColumns = useFactColumns<CustomerTermRow>('customer-terms');
+  const gridChrome = useFactGridChrome('customer-terms', {
+    findTestId: 'customer-terms-filter',
+    label: 'Filter by code or name',
+  });
   const [dlg, setDlg] = useState<'add' | 'edit' | null>(null);
   const [editId, setEditId] = useState<number | null>(null);
   const [custPick, setCustPick] = useState<CustomerPick | null>(null);
   const [margin, setMargin] = useState('0.12');
   const [rebate, setRebate] = useState('0.03');
-  const factColumns = useFactColumns<CustomerTermRow>('customer-terms');
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['commercial-planner', 'customer-terms', 'steward', filter],
+    queryKey: ['commercial-planner', 'customer-terms', 'steward', gridChrome.query],
     queryFn: ({ signal }) => {
-      const q = filter.trim() ? `?q=${encodeURIComponent(filter.trim())}` : '';
+      const q = gridChrome.query.trim() ? `?q=${encodeURIComponent(gridChrome.query.trim())}` : '';
       return apiGet<CustomerTermRow[]>(`/api/v1/commercial-planner/customer-terms${q}`, { signal });
     },
   });
@@ -149,16 +154,16 @@ function CustomerTermsEditor() {
         (dealer price → support per unit). Edited here, applied on the next recompute. SKU assumptions
         live on Commercial planner — this leaf does not invent a second economics editor.
       </Alert>
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
-        <TextField
-          size="small"
-          label="Filter by code or name"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          sx={{ minWidth: 280 }}
-          data-testid="customer-terms-filter"
-        />
-        <Box sx={{ flex: 1 }} />
+      <Box sx={{ mb: 1.5 }}>
+      <ScopeBar
+        chips={[]}
+        savedViews={gridChrome.viewNames}
+        savedView={gridChrome.active}
+        onSavedView={gridChrome.selectView}
+        filters={gridChrome.filters}
+        trailing={
+          <>
+        {gridChrome.trailing}
         <FactColumnsButton
           gridId="customer-terms"
           onClick={factColumns.openPicker}
@@ -175,7 +180,10 @@ function CustomerTermsEditor() {
         <Button variant="contained" onClick={openAdd} data-testid="customer-terms-steward-add">
           Add terms
         </Button>
-      </Stack>
+          </>
+        }
+      />
+      </Box>
       <ModuleDataSection
         isLoading={isLoading}
         isError={isError}
@@ -189,6 +197,7 @@ function CustomerTermsEditor() {
         }}
       >
         <EnterpriseDataGrid
+          ref={gridChrome.gridRef}
           rowData={data ?? []}
           columnDefs={columnDefs}
           height={560}

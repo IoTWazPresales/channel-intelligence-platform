@@ -28,6 +28,15 @@ describe('EnterpriseDataGrid', () => {
       <EnterpriseDataGrid<Row> rowData={[{ id: 1, sku: 'A' }]} columnDefs={cols} height={200} />
     );
     expect(getByTestId('ag-grid-mock').getAttribute('data-has-row-selection')).toBe('no');
+    expect((globalThis as unknown as { __agGridLastProps?: { quickFilterText?: string } }).__agGridLastProps?.quickFilterText).toBeUndefined();
+  });
+
+  it('passes quickFilterText through to the grid', () => {
+    const cols: ColDef<Row>[] = [{ field: 'sku', headerName: 'SKU' }];
+    renderWithProviders(
+      <EnterpriseDataGrid<Row> rowData={[{ id: 1, sku: 'A' }]} columnDefs={cols} quickFilterText="sku-a" />
+    );
+    expect((globalThis as unknown as { __agGridLastProps?: { quickFilterText?: string } }).__agGridLastProps?.quickFilterText).toBe('sku-a');
   });
 
   it('passes rowSelection through gridOptions for bulk selection mode', () => {

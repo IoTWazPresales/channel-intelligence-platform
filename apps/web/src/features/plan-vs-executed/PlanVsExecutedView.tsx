@@ -51,6 +51,8 @@ import { DRILL_GRID_PAGE_SIZE, gridRowMetrics, paginatedGridHeight } from '@/fea
 import { resolveProductDisplay } from '@/features/plan-vs-executed/productDisplay';
 import { buildInboundShipmentsHref } from '@/app/(app)/shipping/buildInboundShipmentsHref';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
+import { ScopeBar } from '@/features/workbench-ui/controls';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiGet } from '@/lib/api';
 
@@ -284,6 +286,7 @@ export function PlanVsExecutedView() {
   const [drillSalesModel, setDrillSalesModel] = useState<string | null>(null);
   const drillRef = useRef<HTMLDivElement | null>(null);
   const drillColumns = useFactColumns('pve.drill');
+  const gridChrome = useFactGridChrome('pve.drill');
 
   const queryKey = [
     'plan-vs-executed',
@@ -860,13 +863,27 @@ export function PlanVsExecutedView() {
                       <Chip size="small" label={drillChipLabel} data-testid="drill-active-chip" />
                     ) : null}
                     <Box sx={{ flex: 1 }} />
-                    <FactColumnsButton
-                      gridId="pve.drill"
-                      onClick={drillColumns.openPicker}
-                      count={drillColumns.optionalFields.length}
-                    />
                   </Stack>
+                  <ScopeBar
+                    chips={[]}
+                    savedViews={gridChrome.viewNames}
+                    savedView={gridChrome.active}
+                    onSavedView={gridChrome.selectView}
+                    filters={gridChrome.filters}
+                    trailing={
+                      <>
+                      {gridChrome.trailing}
+                      <FactColumnsButton
+                        gridId="pve.drill"
+                        onClick={drillColumns.openPicker}
+                        count={drillColumns.optionalFields.length}
+                      />
+                      </>
+                    }
+                  />
                   <EnterpriseDataGrid
+                    ref={gridChrome.gridRef}
+                    quickFilterText={gridChrome.query}
                     rowData={data?.drill_rows ?? []}
                     columnDefs={drillCols}
                     height={drillGridHeight}

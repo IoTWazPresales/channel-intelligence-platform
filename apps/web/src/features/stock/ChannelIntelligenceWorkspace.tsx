@@ -18,6 +18,8 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
+import { ScopeBar } from '@/features/workbench-ui/controls';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiGet } from '@/lib/api';
 
@@ -75,6 +77,7 @@ export function ChannelIntelligenceWorkspace() {
   const [site, setSite] = useState('');
   const [selected, setSelected] = useState<IntelRow | null>(null);
   const factColumns = useFactColumns<IntelRow>('channel-intelligence');
+  const gridChrome = useFactGridChrome('channel-intelligence');
 
   const params = new URLSearchParams();
   if (customer) params.set('customer_id', String(customer.id));
@@ -163,7 +166,13 @@ export function ChannelIntelligenceWorkspace() {
         pricing are out of scope. Grain policy: {data?.grain_policy ?? '…'}. Sparse CST →
         insufficient_data (never false aged flags).
       </Alert>
-      <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
+      <Box sx={{ mb: 2 }}>
+      <ScopeBar
+        chips={[]}
+        filters={
+          <>
+          {gridChrome.filters}
+      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
         <Box sx={{ minWidth: 220 }} data-testid="sellthrough-customer-filter">
           <EntitySearchAutocomplete<CustomerPick>
             label="Customer"
@@ -196,15 +205,27 @@ export function ChannelIntelligenceWorkspace() {
         />
         <Chip size="small" label={`rows: ${data?.total ?? '…'}`} />
         {data?.data_unavailable ? <Chip size="small" color="warning" label="data unavailable" /> : null}
-        <Button size="small" variant="outlined" onClick={() => refetch()}>
-          Refresh
-        </Button>
-        <FactColumnsButton
-          gridId="channel-intelligence"
-          onClick={factColumns.openPicker}
-          count={factColumns.optionalFields.length}
-        />
       </Stack>
+          </>
+        }
+        savedViews={gridChrome.viewNames}
+        savedView={gridChrome.active}
+        onSavedView={gridChrome.selectView}
+        trailing={
+          <>
+            {gridChrome.trailing}
+            <Button size="small" variant="outlined" onClick={() => refetch()}>
+              Refresh
+            </Button>
+            <FactColumnsButton
+              gridId="channel-intelligence"
+              onClick={factColumns.openPicker}
+              count={factColumns.optionalFields.length}
+            />
+          </>
+        }
+      />
+      </Box>
       <ModuleDataSection
         isLoading={isLoading}
         isError={isError}
@@ -220,6 +241,8 @@ export function ChannelIntelligenceWorkspace() {
         }}
       >
         <EnterpriseDataGrid
+          ref={gridChrome.gridRef}
+          quickFilterText={gridChrome.query}
           rowData={data?.items ?? []}
           columnDefs={cols}
           height={520}

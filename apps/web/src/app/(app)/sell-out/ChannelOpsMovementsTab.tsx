@@ -9,6 +9,8 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
+import { ScopeBar } from '@/features/workbench-ui/controls';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiGet } from '@/lib/api';
 
@@ -42,6 +44,7 @@ export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
   const [distributorPick, setDistributorPick] = useState<DistHit | null>(null);
   const lineId = useLineIdentifierPreference();
   const factColumns = useFactColumns<MovementRow>('channel-ops.movements');
+  const gridChrome = useFactGridChrome('channel-ops.movements');
   const distId = distributorPick?.id;
 
   const { data: filterOptions } = useQuery({
@@ -146,13 +149,23 @@ export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
                 error={isError ? new Error((error as Error)?.message ?? 'Failed to load movements.') : null}
                 onRetry={() => void refetch()}
                 toolbar={
-                  <Stack direction="row" sx={{ mb: 1 }}>
-                    <FactColumnsButton
-                      gridId="channel-ops.movements"
-                      onClick={factColumns.openPicker}
-                      count={factColumns.optionalFields.length}
-                    />
-                  </Stack>
+                  <ScopeBar
+                    chips={[]}
+                    savedViews={gridChrome.viewNames}
+                    savedView={gridChrome.active}
+                    onSavedView={gridChrome.selectView}
+                    filters={gridChrome.filters}
+                    trailing={
+                      <>
+                      {gridChrome.trailing}
+                      <FactColumnsButton
+                        gridId="channel-ops.movements"
+                        onClick={factColumns.openPicker}
+                        count={factColumns.optionalFields.length}
+                      />
+                      </>
+                    }
+                  />
                 }
                 isEmpty={(data?.items ?? []).length === 0}
                 empty={{
@@ -161,7 +174,7 @@ export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
                   primary: { label: 'Import Center', href: '/admin/imports?template=inbound_shipments' },
                 }}
               >
-                <EnterpriseDataGrid rowData={data?.items ?? []} columnDefs={movementCols} height={420} />
+                <EnterpriseDataGrid ref={gridChrome.gridRef} quickFilterText={gridChrome.query} rowData={data?.items ?? []} columnDefs={movementCols} height={420} />
               </ModuleDataSection>
             </Box>
           </Paper>

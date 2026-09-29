@@ -8,10 +8,8 @@
 
 ## VERIFY-debt register (charter v1.3 amendment 7)
 
-**Status:** **Cleared** · 2026-08-31 · `12404bc`  
-**Register:** empty — Warren accepted Opus CONSULT fourth-pass `VERDICT: PASS` for all seven
-units (`docs/verify/VERIFY_VERDICTS.md`). Charter v1.3 amendment 7 satisfied; promotion to
-`main` is no longer gated by outstanding VERIFY debt.
+**Status:** **Open** · 2026-09-29 · one unit. The 2026-08-31 clearance of units 6f–B4 stands (`12404bc`).  
+**Outstanding:** BACKLOG-209. Promotion of `feat/ns-2-brief-nav-collapse` to `main` stays gated until Opus VERIFY on that unit. The seven earlier units are not reopened.
 
 | Unit | Verdict | Cleared |
 |------|---------|---------|
@@ -22,6 +20,7 @@ units (`docs/verify/VERIFY_VERDICTS.md`). Charter v1.3 amendment 7 satisfied; pr
 | **12** | PASS | 2026-08-31 · `12404bc` |
 | **15B** | PASS | 2026-08-31 · `12404bc` |
 | **B4 (15C)** | PASS | 2026-08-31 · `12404bc` |
+| **N-0034 ScopeBar mount** | OPEN — BACKLOG-209 | — |
 
 **Arc findings (retained):** 19 web tests broken by RBAC commit `5b2a6a4` and fixed
 (`docs/verify/WEB_TEST_FAILURE_DIAGNOSIS.md`); HL mapping parity gap closed; shipment steward
@@ -2970,6 +2969,8 @@ Exact engine invariants (do not complete around them):
 | customer-commercial-terms | `customer-terms` | present → N-0041 adopts | none | N-0042 | N-0043 |
 | exceptions (excluded from the picker) | — (worklist) | N-0041 | none | N-0042 | N-0043 |
 
+**Progress (N-0041 / N-0042 / N-0043, 2026-09-29).** Shared `useFactGridChrome` in `features/workbench-ui/gridFind.tsx`: Find on the Scope bar (300ms), named find-views in `cip.grid.<gridId>.views.v1`, CSV export of the loaded grid. Wired on forecasts, pricing facts, pricing recommendations, roadmap, buy-plans, inventory, cover (client find plus the existing All pairs / Breaches only preset now stored in `cip.grid.cover.distribution.savedView.v1`), sell-out (commercial lines keep server `product_search`; channel-ops sell-out filters the loaded page), channel-ops inventory and movements, plan-vs-executed drill, channel intelligence, customer terms (server `q`, test id `customer-terms-filter` kept), listings. Shipment search, partner, dates, and the rest of the line filters now sit in that same Scope bar (`shipping-search`). Not wired: exceptions (route redirects to brief). Opus CONSULT still BACKLOG-209. Nodes stay proposed until that verify.
+
 ---
 
 ## BACKLOG-202 — `CporCaseWorkspace` is unmounted — third orphaned CPOR surface
@@ -3244,3 +3245,20 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Behavior to retain** | Fail-closed when no guard exists at the true root. |
 | **Out of scope** | Changing guard path semantics. |
 | **TRIGGER** | Next EIF shim release, or the next wedge. |
+
+---
+
+## BACKLOG-209 — VERIFY-debt: ScopeBar holds the column picker on forecasts, pricing, and inbound shipments
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** · 2026-09-29 · Opus CONSULT and VERIFY still not run. Cursor must not self-PASS. Browser on the rebuilt `next start` at :3000 (uncommitted): Columns / Additional columns sit inside the Scope toolbar on forecasts (Velocity shows Clear; Compute stays outside; `customer_code` still checked after reload), pricing facts, pricing recommendations, shipments (Unattributed inside; Slipped in disabled until a plan quarter), roadmap, cover, sell-out, channel-ops inventory and movements (after a distributor is chosen), execution drill, channel-intelligence workspace, customer commercial terms, and listing capture. `/buy-plans` and `/inventory` redirect before those pages render. Shipment search stays the paper under the bar. |
+| **Effort** | Small — one Opus CONSULT, then VERIFY against the running pages |
+| **Source** | This session on `feat/ns-2-brief-nav-collapse`. Warren: continue the ScopeBar work and hold CONSULT until Anthropic usage resets. Charter: when the consultant is unavailable, record VERIFY-debt; debt blocks promotion to `main`. |
+| **Idea** | The existing fact-grid column picker now sits on the shared `ScopeBar` for forecasts, pricing facts, pricing recommendations, and inbound shipments. That composition has not had an Opus CONSULT or VERIFY. |
+| **Why it matters / deferrable** | The bar is the shell later search, saved views, and export attach to. Calling it done without the consultant would self-PASS a product choice. Deferrable for further implementation that does not reshape the bar; not deferrable past promotion to `main`. |
+| **What the work is** | Opus CONSULT, then VERIFY. Check: `ScopeBar` in `features/workbench-ui/controls.tsx` is the shell and `FactColumnPicker` was not rebuilt. Forecasts method chips and the Columns button are inside the Scope toolbar; Compute stays on `ModuleGridToolbar`; `forecast-method-filter-*` test ids remain; Clear shows only when a method other than All is selected. Pricing: both tabs put the Columns button in the Scope toolbar. Shipments: lineup chips, smart views, plan quarter, plan BU, and Additional columns are in the Scope toolbar; Slipped in and Slipped out stay disabled until a plan quarter is set. The shipment search, partner, and date fields are still the paper under the bar — that is an open gap, not a silent completion. Column choice `customer_code` survives reload. Storage keys stay `cip.grid.<gridId>.optional.v1` and `cip.commercial.inbound-shipments.grid.optional.v1`. Existing ScopeBar callers still show Clear when a chip is active. |
+| **Regression traps** | Do not rebuild the picker. Do not touch N-0028. Do not move the shipment search form into the bar during VERIFY. Do not mark N-0034 operator acceptance; that stays Warren's. |
+| **Behavior to retain** | Method filter still drives the forecasts query. Shipment server filters and the PO banner stay. Identity cells stay name-only; codes stay their own columns. |
+| **Out of scope** | Astra or any other model as the verdict of record. N-0041 search, N-0042 saved views, N-0043 export. |
+| **TRIGGER** | Anthropic allowance is back, so Opus can CONSULT and VERIFY. Clear this entry only on `VERDICT: PASS` or a written waiver from Warren. Required before promotion of this branch to `main`. |

@@ -25,6 +25,8 @@ import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { ScopeBar } from '@/features/workbench-ui/controls';
+import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
@@ -121,6 +123,8 @@ export default function PricingPage() {
     queryKey: ['pricing-recs'],
     queryFn: ({ signal }) => apiGet<RecRow[]>('/api/v1/pricing/recommendations', { signal }),
   });
+  const factChrome = useFactGridChrome('pricing.facts', { exportDisabled: (facts?.length ?? 0) === 0 });
+  const recChrome = useFactGridChrome('pricing.recommendations', { exportDisabled: (recs?.length ?? 0) === 0 });
 
   const bulkFacts = useMutation({
     mutationFn: (rows: PricingPasteRow[]) => apiPost<{ created: number }>('/api/v1/pricing/facts/bulk', { rows }),
@@ -224,6 +228,24 @@ export default function PricingPage() {
       </Tabs>
       <Paper sx={{ p: 2 }}>
         {tab === 0 ? (
+          <>
+          <ScopeBar
+            chips={[]}
+            savedViews={factChrome.viewNames}
+            savedView={factChrome.active}
+            onSavedView={factChrome.selectView}
+            filters={factChrome.filters}
+            trailing={
+              <>
+              {factChrome.trailing}
+              <FactColumnsButton
+                gridId="pricing.facts"
+                onClick={factFields.openPicker}
+                count={factFields.optionalFields.length}
+              />
+              </>
+            }
+          />
           <ModuleDataSection
             intro="Paste or add list/net prices per SKU (optional customer and channel codes). Unknown SKUs create placeholder products."
             isLoading={factsLoading}
@@ -239,13 +261,6 @@ export default function PricingPage() {
             }}
             toolbar={
               <ModuleGridToolbar
-                leading={
-                  <FactColumnsButton
-                    gridId="pricing.facts"
-                    onClick={factFields.openPicker}
-                    count={factFields.optionalFields.length}
-                  />
-                }
                 onRefresh={() => qc.invalidateQueries({ queryKey: ['pricing-facts'] })}
                 onClearAll={() => {
                   if (!window.confirm('Delete every price fact? This cannot be undone.')) return;
@@ -258,9 +273,28 @@ export default function PricingPage() {
               />
             }
           >
-            <EnterpriseDataGrid rowData={factRows} columnDefs={factCols} />
+            <EnterpriseDataGrid ref={factChrome.gridRef} quickFilterText={factChrome.query} rowData={factRows} columnDefs={factCols} />
           </ModuleDataSection>
+          </>
         ) : (
+          <>
+          <ScopeBar
+            chips={[]}
+            savedViews={recChrome.viewNames}
+            savedView={recChrome.active}
+            onSavedView={recChrome.selectView}
+            filters={recChrome.filters}
+            trailing={
+              <>
+              {recChrome.trailing}
+              <FactColumnsButton
+                gridId="pricing.recommendations"
+                onClick={recFields.openPicker}
+                count={recFields.optionalFields.length}
+              />
+              </>
+            }
+          />
           <ModuleDataSection
             intro="Recommendations appear when the planning service has evaluated pricing against stock and competitor context."
             isLoading={recsLoading}
@@ -276,13 +310,6 @@ export default function PricingPage() {
             }}
             toolbar={
               <ModuleGridToolbar
-                leading={
-                  <FactColumnsButton
-                    gridId="pricing.recommendations"
-                    onClick={recFields.openPicker}
-                    count={recFields.optionalFields.length}
-                  />
-                }
                 onRefresh={() => qc.invalidateQueries({ queryKey: ['pricing-recs'] })}
                 onClearAll={() => {
                   if (!window.confirm('Delete every pricing recommendation row? This cannot be undone.')) return;
@@ -294,8 +321,9 @@ export default function PricingPage() {
               />
             }
           >
-            <EnterpriseDataGrid rowData={recRows} columnDefs={recCols} />
+            <EnterpriseDataGrid ref={recChrome.gridRef} quickFilterText={recChrome.query} rowData={recRows} columnDefs={recCols} />
           </ModuleDataSection>
+          </>
         )}
       </Paper>
       <FactColumnPicker {...factFields.pickerProps} />

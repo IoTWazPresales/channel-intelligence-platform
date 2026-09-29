@@ -39,6 +39,7 @@ import { TrendChart } from '@/features/workbench-ui/charts';
 import { ScopeBar, StatusChip } from '@/features/workbench-ui/controls';
 import { EntityContextPanel, KeyValueList } from '@/features/workbench-ui/EntityContextPanel';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
 import { Panel, PanelRow } from '@/features/workbench-ui/Panel';
@@ -270,6 +271,7 @@ export function MarketSurface() {
   const router = useRouter();
   const qc = useQueryClient();
   const lens = marketLensFromLocation(pathname, search);
+  const listingChrome = useFactGridChrome('listings');
   const customerFilter = search.get('customer');
   const productFilter = search.get('product');
   const activationFilter = search.get('activation');
@@ -990,9 +992,17 @@ export function MarketSurface() {
                 },
               ]}
               summary={`${scoped.length} of ${listings.length} listings${customerFilter ? ' · customer scoped' : ''}${productFilter ? ' · product scoped' : ''}`}
-              onClear={() => setParams({ activation: null, customer: null, product: null })}
-              clearAvailable={Boolean(activationFilter || customerFilter || productFilter)}
+              onClear={() => {
+                setParams({ activation: null, customer: null, product: null });
+                listingChrome.clearFind();
+              }}
+              clearAvailable={Boolean(activationFilter || customerFilter || productFilter || listingChrome.draft)}
+              savedViews={listingChrome.viewNames}
+              savedView={listingChrome.active}
+              onSavedView={listingChrome.selectView}
               filters={
+                <>
+                {listingChrome.filters}
                 <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ minWidth: 280 }}>
                   <EntitySearchAutocomplete<CustomerPick>
                     label="Customer"
@@ -1021,9 +1031,11 @@ export function MarketSurface() {
                     getOptionLabel={(o) => `${o.sku} ${o.name}`.trim()}
                   />
                 </Stack>
+                </>
               }
               trailing={
                 <Stack direction="row" spacing={1}>
+                  {listingChrome.trailing}
                   <FactColumnsButton
                     gridId="listings"
                     onClick={listingColumns.openPicker}
@@ -1048,6 +1060,8 @@ export function MarketSurface() {
               }}
             >
               <EnterpriseDataGrid<GridRow>
+                ref={listingChrome.gridRef}
+                quickFilterText={listingChrome.query}
                 rowData={scoped}
                 columnDefs={listingCols}
                 height={380}

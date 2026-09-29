@@ -10,6 +10,8 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
+import { ScopeBar } from '@/features/workbench-ui/controls';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiGet } from '@/lib/api';
 
@@ -47,6 +49,7 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
   const [distributorPick, setDistributorPick] = useState<DistHit | null>(null);
   const lineId = useLineIdentifierPreference();
   const factColumns = useFactColumns<InvRow>('channel-ops.inventory');
+  const gridChrome = useFactGridChrome('channel-ops.inventory');
 
   const { data: filterOptions } = useQuery({
     queryKey: ['sellout-filter-options'],
@@ -188,13 +191,23 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
                 error={isError ? new Error((error as Error)?.message ?? 'Failed to load inventory.') : null}
                 onRetry={() => void refetch()}
                 toolbar={
-                  <Stack direction="row" sx={{ mb: 1 }}>
-                    <FactColumnsButton
-                      gridId="channel-ops.inventory"
-                      onClick={factColumns.openPicker}
-                      count={factColumns.optionalFields.length}
-                    />
-                  </Stack>
+                  <ScopeBar
+                    chips={[]}
+                    savedViews={gridChrome.viewNames}
+                    savedView={gridChrome.active}
+                    onSavedView={gridChrome.selectView}
+                    filters={gridChrome.filters}
+                    trailing={
+                      <>
+                      {gridChrome.trailing}
+                      <FactColumnsButton
+                        gridId="channel-ops.inventory"
+                        onClick={factColumns.openPicker}
+                        count={factColumns.optionalFields.length}
+                      />
+                      </>
+                    }
+                  />
                 }
                 isEmpty={(data?.items ?? []).length === 0}
                 empty={{
@@ -203,7 +216,7 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
                   primary: { label: 'Import Center', href: '/admin/imports?template=distributor_inventory' },
                 }}
               >
-                <EnterpriseDataGrid rowData={data?.items ?? []} columnDefs={invCols} height={480} />
+                <EnterpriseDataGrid ref={gridChrome.gridRef} quickFilterText={gridChrome.query} rowData={data?.items ?? []} columnDefs={invCols} height={480} />
               </ModuleDataSection>
             </Box>
           </Paper>

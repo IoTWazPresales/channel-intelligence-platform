@@ -18,6 +18,8 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
+import { ScopeBar } from '@/features/workbench-ui/controls';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiGet } from '@/lib/api';
 
@@ -76,8 +78,11 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
   const [smartPreset, setSmartPreset] = useState<SmartPresetId>('');
   const [distributorPick, setDistributorPick] = useState<DistHit | null>(null);
   const [customerPick, setCustomerPick] = useState<CustHit | null>(null);
-  const [search, setSearch] = useState('');
   const useChannelApi = depthAtLeast(depth, 'operational');
+  const gridChrome = useFactGridChrome(useChannelApi ? 'channel-ops.sell-out' : 'sellout.commercial-lines', {
+    label: 'Search SKU / product / customer',
+    findDisabled: smartPreset === 'zero_sellout_products',
+  });
 
   const { data: summary } = useQuery({
     queryKey: ['sellout-commercial-summary'],
@@ -107,10 +112,10 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
         smartPreset,
         distributorPick?.id ?? null,
         customerPick?.id ?? null,
-        search,
+        gridChrome.query,
         periodFrom,
       ] as const,
-    [useChannelApi, smartPreset, distributorPick?.id, customerPick?.id, search, periodFrom]
+    [useChannelApi, smartPreset, distributorPick?.id, customerPick?.id, gridChrome.query, periodFrom]
   );
 
   const {
@@ -140,7 +145,7 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
       params.set('limit', '50');
       if (distributorPick != null) params.set('distributor_id', String(distributorPick.id));
       if (customerPick != null) params.set('customer_id', String(customerPick.id));
-      if (search.trim()) params.set('product_search', search.trim());
+      if (gridChrome.query.trim() && !useChannelApi) params.set('product_search', gridChrome.query.trim());
       if (periodFrom) params.set('period_from', periodFrom);
       if (smartPreset && smartPreset !== 'zero_sellout_products' && smartPreset !== 'slowest_movers') {
         if (smartPreset === 'fastest_movers') params.set('smart_view', 'fastest_movers');
@@ -320,14 +325,6 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
       </Stack>
 
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
-        <TextField
-          size="small"
-          label="Search SKU / product / customer"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          sx={{ minWidth: 260, flex: 1 }}
-          disabled={smartPreset === 'zero_sellout_products' || useChannelApi}
-        />
         <Autocomplete
           sx={{ minWidth: 280, flex: 1 }}
           size="small"
@@ -386,21 +383,31 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
               error={linesError ? new Error((linesErr as Error)?.message ?? 'Failed to load sell-out lines.') : null}
               onRetry={() => void refetchLines()}
               toolbar={
-                <Stack direction="row" sx={{ mb: 1 }}>
-                  {useChannelApi ? (
-                    <FactColumnsButton
-                      gridId="channel-ops.sell-out"
-                      onClick={channelColumns.openPicker}
-                      count={channelColumns.optionalFields.length}
-                    />
-                  ) : (
-                    <FactColumnsButton
-                      gridId="sellout.commercial-lines"
-                      onClick={factColumns.openPicker}
-                      count={factColumns.optionalFields.length}
-                    />
-                  )}
-                </Stack>
+                <ScopeBar
+                  chips={[]}
+                  savedViews={gridChrome.viewNames}
+                  savedView={gridChrome.active}
+                  onSavedView={gridChrome.selectView}
+                  filters={gridChrome.filters}
+                  trailing={
+                    <>
+                    {gridChrome.trailing}
+                    {useChannelApi ? (
+                      <FactColumnsButton
+                        gridId="channel-ops.sell-out"
+                        onClick={channelColumns.openPicker}
+                        count={channelColumns.optionalFields.length}
+                      />
+                    ) : (
+                      <FactColumnsButton
+                        gridId="sellout.commercial-lines"
+                        onClick={factColumns.openPicker}
+                        count={factColumns.optionalFields.length}
+                      />
+                    )}
+                    </>
+                  }
+                />
               }
               isEmpty={(lines?.items ?? []).length === 0}
               empty={{
@@ -411,12 +418,15 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
             >
               {lines?.channel ? (
                 <EnterpriseDataGrid
+                  ref={gridChrome.gridRef}
+                  quickFilterText={gridChrome.query}
                   rowData={lines.items as ChannelSelloutLine[]}
                   columnDefs={channelCols}
                   height={420}
                 />
               ) : (
                 <EnterpriseDataGrid
+                  ref={gridChrome.gridRef}
                   rowData={(lines?.items ?? []) as SelloutLine[]}
                   columnDefs={factCols}
                   height={420}

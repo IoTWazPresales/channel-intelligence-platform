@@ -61,6 +61,9 @@ export type ScopeChip = {
   active: boolean;
   onToggle: () => void;
   tone?: 'danger' | 'warning' | 'success' | 'default';
+  /** Set when the preset needs another filter before it can be chosen. */
+  disabled?: boolean;
+  testId?: string;
 };
 
 /**
@@ -88,7 +91,8 @@ export function ScopeBar({
   filters?: ReactNode;
   clearAvailable?: boolean;
 }) {
-  const anyActive = chips.some((c) => c.active) || Boolean(clearAvailable);
+  const showClear =
+    Boolean(onClear) && (clearAvailable !== undefined ? clearAvailable : chips.some((c) => c.active));
   return (
     <Box
       role="toolbar"
@@ -125,7 +129,9 @@ export function ScopeBar({
           key={c.key}
           size="small"
           label={c.label}
-          clickable
+          clickable={!c.disabled}
+          disabled={c.disabled}
+          data-testid={c.testId}
           onClick={c.onToggle}
           variant={c.active ? 'filled' : 'outlined'}
           color={
@@ -148,7 +154,7 @@ export function ScopeBar({
           {summary}
         </Typography>
       ) : null}
-      {anyActive && onClear ? (
+      {showClear ? (
         <Button size="small" startIcon={<ClearIcon fontSize="small" />} onClick={onClear} sx={{ minWidth: 0 }}>
           Clear
         </Button>

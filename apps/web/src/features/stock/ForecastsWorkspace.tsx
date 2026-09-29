@@ -1,7 +1,7 @@
 'use client';
 
 import HistoryIcon from '@mui/icons-material/History';
-import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Paper, Stack, Switch, TextField } from '@mui/material';
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Paper, Stack, Switch, TextField } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColDef } from 'ag-grid-community';
 import { useMemo, useState } from 'react';
@@ -13,6 +13,8 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
+import { ScopeBar } from '@/features/workbench-ui/controls';
+import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
@@ -83,6 +85,7 @@ export function ForecastsWorkspace() {
   const qc = useQueryClient();
   const lineId = useLineIdentifierPreference();
   const factColumns = useFactColumns<Row>('forecasts');
+  const gridChrome = useFactGridChrome('forecasts');
   const [pasteOpen, setPasteOpen] = useState(false);
   const [paste, setPaste] = useState('');
   const [addOpen, setAddOpen] = useState(false);
@@ -227,24 +230,34 @@ export function ForecastsWorkspace() {
             {computeMsg}
           </Alert>
         ) : null}
-        <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} flexWrap="wrap" useFlexGap>
-          {[
-            { id: null, label: 'All methods' },
-            { id: 'velocity', label: 'Velocity' },
-            { id: 'analogue', label: 'Analogue' },
-            { id: 'manual', label: 'Manual / override' },
-          ].map((opt) => (
-            <Chip
-              key={opt.label}
-              size="small"
-              label={opt.label}
-              color={methodFilter === opt.id ? 'primary' : 'default'}
-              variant={methodFilter === opt.id ? 'filled' : 'outlined'}
-              onClick={() => setMethodFilter(opt.id)}
-              data-testid={`forecast-method-filter-${opt.id ?? 'all'}`}
+        <ScopeBar
+          chips={[
+            { key: 'all', label: 'All methods', active: methodFilter === null, onToggle: () => setMethodFilter(null), testId: 'forecast-method-filter-all' },
+            { key: 'velocity', label: 'Velocity', active: methodFilter === 'velocity', onToggle: () => setMethodFilter('velocity'), testId: 'forecast-method-filter-velocity' },
+            { key: 'analogue', label: 'Analogue', active: methodFilter === 'analogue', onToggle: () => setMethodFilter('analogue'), testId: 'forecast-method-filter-analogue' },
+            { key: 'manual', label: 'Manual / override', active: methodFilter === 'manual', onToggle: () => setMethodFilter('manual'), testId: 'forecast-method-filter-manual' },
+          ]}
+          clearAvailable={methodFilter != null || gridChrome.draft !== ''}
+          onClear={() => {
+            setMethodFilter(null);
+            gridChrome.clearFind();
+          }}
+          summary={methodFilter ? `Method ${methodFilter}` : undefined}
+          savedViews={gridChrome.viewNames}
+          savedView={gridChrome.active}
+          onSavedView={gridChrome.selectView}
+          filters={gridChrome.filters}
+          trailing={
+            <>
+            {gridChrome.trailing}
+            <FactColumnsButton
+              gridId="forecasts"
+              onClick={factColumns.openPicker}
+              count={factColumns.optionalFields.length}
             />
-          ))}
-        </Stack>
+            </>
+          }
+        />
         <ModuleDataSection
           introWhen="always"
           intro="History is the source of the forecast: Compute from history writes velocity (52wk × seasonal) and analogue rows into fact_demand_forecast. Paste and Add row are overrides — they never merge into sell-out actuals. Rollups are plain sums."
@@ -262,23 +275,16 @@ export function ForecastsWorkspace() {
           toolbar={
             <ModuleGridToolbar
               leading={
-                <>
-                  <Button
-                    startIcon={<HistoryIcon />}
-                    variant="contained"
-                    size="small"
-                    disabled={busy}
-                    onClick={runComputeFromHistory}
-                    data-testid="forecast-compute-from-history"
-                  >
-                    Compute from history
-                  </Button>
-                  <FactColumnsButton
-                    gridId="forecasts"
-                    onClick={factColumns.openPicker}
-                    count={factColumns.optionalFields.length}
-                  />
-                </>
+                <Button
+                  startIcon={<HistoryIcon />}
+                  variant="contained"
+                  size="small"
+                  disabled={busy}
+                  onClick={runComputeFromHistory}
+                  data-testid="forecast-compute-from-history"
+                >
+                  Compute from history
+                </Button>
               }
               onRefresh={() => qc.invalidateQueries({ queryKey: ['forecasts'] })}
               onClearAll={() => {
@@ -295,7 +301,7 @@ export function ForecastsWorkspace() {
             />
           }
         >
-          <EnterpriseDataGrid rowData={rows} columnDefs={colDefs} />
+          <EnterpriseDataGrid ref={gridChrome.gridRef} quickFilterText={gridChrome.query} rowData={rows} columnDefs={colDefs} />
         </ModuleDataSection>
       </Paper>
       <FactColumnPicker {...factColumns.pickerProps} />

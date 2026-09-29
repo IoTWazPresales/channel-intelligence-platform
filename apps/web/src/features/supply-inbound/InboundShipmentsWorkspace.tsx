@@ -19,10 +19,8 @@ import {
   MenuItem,
   Paper,
   Select,
-  Stack,
   TablePagination,
   TextField,
-  Typography,
 } from '@mui/material';
 import type { ColDef, GridOptions, ValueFormatterParams } from 'ag-grid-community';
 import { useQuery } from '@tanstack/react-query';
@@ -36,6 +34,7 @@ import { toQueryError } from '@/lib/queryError';
 
 import { buildShippingLinesUrl, type ShippingFilterParams } from '@/app/(app)/shipping/buildShippingLinesUrl';
 import { FactColumnPicker } from '@/features/workbench-ui/FactColumnPicker';
+import { ScopeBar } from '@/features/workbench-ui/controls';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { ShippingCommercialSummary } from '@/app/(app)/shipping/ShippingCommercialSummary';
 import { ShippingLineupQuarterSummary } from '@/app/(app)/shipping/ShippingLineupQuarterSummary';
@@ -585,345 +584,337 @@ export function InboundShipmentsWorkspace() {
         />
       ) : null}
 
-      <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
-        Lineup plan quarter
-      </Typography>
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }} alignItems="center">
-        <FormControl size="small" sx={{ minWidth: 160 }}>
-          <InputLabel id="flt-plan-quarter">Plan quarter</InputLabel>
-          <Select
-            labelId="flt-plan-quarter"
-            label="Plan quarter"
-            value={planQuarter}
-            onChange={(e) => {
-              setPlanQuarter(String(e.target.value));
-              setLineupAttribution('');
-              resetPagination();
-            }}
-          >
-            <MenuItem value="">(any)</MenuItem>
-            {(planPeriods?.items ?? []).map((p) => (
-              <MenuItem key={p.label} value={p.label}>
-                {p.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <TextField
-          size="small"
-          label="Plan BU"
-          placeholder="e.g. NB"
-          value={planBusinessUnit}
-          onChange={(e) => {
-            setPlanBusinessUnit(e.target.value);
-            resetPagination();
-          }}
-          sx={{ width: 100 }}
+      <Box sx={{ mb: 2 }}>
+        <ScopeBar
+          chips={[
+            {
+              key: 'unattributed',
+              label: 'Unattributed',
+              active: lineupAttribution === 'unattributed',
+              tone: 'warning',
+              onToggle: () => {
+                setLineupAttribution((prev) => (prev === 'unattributed' ? '' : 'unattributed'));
+                setPlanQuarter('');
+                resetPagination();
+              },
+            },
+            ...(['shipped', 'pipeline', 'landed'] as const).map((b) => ({
+              key: b,
+              label: b === 'pipeline' ? 'Pipeline' : b.charAt(0).toUpperCase() + b.slice(1),
+              active: lifecycleBucket === b,
+              onToggle: () => {
+                setLifecycleBucket((prev) => (prev === b ? '' : b));
+                resetPagination();
+              },
+            })),
+            {
+              key: 'slipped_in',
+              label: 'Slipped in',
+              active: slipDirection === 'slipped_in',
+              disabled: !planQuarter,
+              onToggle: () => {
+                setSlipDirection((prev) => (prev === 'slipped_in' ? '' : 'slipped_in'));
+                resetPagination();
+              },
+            },
+            {
+              key: 'slipped_out',
+              label: 'Slipped out',
+              active: slipDirection === 'slipped_out',
+              disabled: !planQuarter,
+              onToggle: () => {
+                setSlipDirection((prev) => (prev === 'slipped_out' ? '' : 'slipped_out'));
+                resetPagination();
+              },
+            },
+            {
+              key: 'arriving_week',
+              label: 'Arriving this week',
+              active: smartPreset === 'arriving_week',
+              onToggle: () => toggleSmartPreset('arriving_week'),
+            },
+            {
+              key: 'overdue',
+              label: 'Overdue (promise passed, not landed)',
+              active: smartPreset === 'overdue',
+              onToggle: () => toggleSmartPreset('overdue'),
+            },
+            {
+              key: 'landed_week',
+              label: 'Delivered this week',
+              active: smartPreset === 'landed_week',
+              onToggle: () => toggleSmartPreset('landed_week'),
+            },
+            {
+              key: 'delivered',
+              label: 'Delivered (all)',
+              active: deliveryLens === 'delivered',
+              tone: 'success' as const,
+              onToggle: () => toggleDeliveryLens('delivered'),
+            },
+            {
+              key: 'in_transit',
+              label: 'In transit',
+              active: deliveryLens === 'in_transit',
+              onToggle: () => toggleDeliveryLens('in_transit'),
+            },
+            {
+              key: 'outstanding',
+              label: 'Outstanding orders',
+              active: smartPreset === 'outstanding',
+              onToggle: () => toggleSmartPreset('outstanding'),
+            },
+          ]}
+          clearAvailable={Boolean(smartPreset || deliveryLens || cohort)}
+          onClear={clearSmartPreset}
+          filters={
+            <>
+              <FormControl size="small" sx={{ minWidth: 160 }}>
+                <InputLabel id="flt-plan-quarter">Plan quarter</InputLabel>
+                <Select
+                  labelId="flt-plan-quarter"
+                  label="Plan quarter"
+                  value={planQuarter}
+                  onChange={(e) => {
+                    setPlanQuarter(String(e.target.value));
+                    setLineupAttribution('');
+                    resetPagination();
+                  }}
+                >
+                  <MenuItem value="">(any)</MenuItem>
+                  {(planPeriods?.items ?? []).map((p) => (
+                    <MenuItem key={p.label} value={p.label}>
+                      {p.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <TextField
+                size="small"
+                label="Plan BU"
+                placeholder="e.g. NB"
+                value={planBusinessUnit}
+                onChange={(e) => {
+                  setPlanBusinessUnit(e.target.value);
+                  resetPagination();
+                }}
+                sx={{ width: 100 }}
+              />
+              <TextField
+                size="small"
+                label="Search"
+                placeholder="Distributor, product, SKU, sales model, order #, channel partner…"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setSmartPreset(null);
+                  setDeliveryLens(null);
+                  setCohort('');
+                  resetPagination();
+                }}
+                sx={{ minWidth: 240, flex: 1 }}
+                data-testid="shipping-search"
+              />
+              <Autocomplete
+                sx={{ minWidth: 240, flex: 1 }}
+                size="small"
+                loading={!filterOptions}
+                options={distOptions}
+                value={distributorPick}
+                onChange={(_e, v) => {
+                  setDistributorPick(v);
+                  setSmartPreset(null);
+                  setDeliveryLens(null);
+                  setCohort('');
+                  resetPagination();
+                }}
+                getOptionLabel={(o) => `${o.distributor_name} (${o.distributor_code})`}
+                isOptionEqualToValue={(a, b) => a.id === b.id}
+                renderInput={(params) => (
+                  <TextField {...params} label="Distributor (canonical)" placeholder="All distributors · type to filter" />
+                )}
+              />
+              <Autocomplete
+                sx={{ minWidth: 220, flex: 1 }}
+                size="small"
+                loading={!filterOptions}
+                options={custOptions}
+                value={customerPick}
+                onChange={(_e, v) => {
+                  setCustomerPick(v);
+                  setSmartPreset(null);
+                  setDeliveryLens(null);
+                  setCohort('');
+                  resetPagination();
+                }}
+                getOptionLabel={(o) => `${o.customer_name} (${o.customer_code})`}
+                isOptionEqualToValue={(a, b) => a.id === b.id}
+                renderInput={(params) => (
+                  <TextField {...params} label="Channel partner (customer)" placeholder="All customers · type to filter" />
+                )}
+              />
+              <FormControl size="small" sx={{ minWidth: 140 }}>
+                <InputLabel id="flt-line-state">Line state</InputLabel>
+                <Select
+                  labelId="flt-line-state"
+                  label="Line state"
+                  value={lineState}
+                  onChange={(e) => {
+                    setLineState(String(e.target.value));
+                    setSmartPreset(null);
+                    setDeliveryLens(null);
+                    setCohort('');
+                    resetPagination();
+                  }}
+                >
+                  <MenuItem value="">(any)</MenuItem>
+                  {(summary?.by_line_state ?? []).map((b) => (
+                    <MenuItem key={b.key} value={b.key}>
+                      {b.key}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 140 }}>
+                <InputLabel id="flt-cargo">Cargo status</InputLabel>
+                <Select
+                  labelId="flt-cargo"
+                  label="Cargo status"
+                  value={cargoStatus}
+                  onChange={(e) => {
+                    setCargoStatus(String(e.target.value));
+                    setSmartPreset(null);
+                    setDeliveryLens(null);
+                    setCohort('');
+                    resetPagination();
+                  }}
+                >
+                  <MenuItem value="">(any)</MenuItem>
+                  {(summary?.by_status ?? []).map((b) => (
+                    <MenuItem key={b.key} value={b.key}>
+                      {cargoStatusLabel(b.key)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 180 }}>
+                <InputLabel id="flt-date-field">Date field</InputLabel>
+                <Select
+                  labelId="flt-date-field"
+                  label="Date field"
+                  value={dateField}
+                  onChange={(e) => {
+                    setDateField(String(e.target.value));
+                    setSmartPreset(null);
+                    setDeliveryLens(null);
+                    setCohort('');
+                    resetPagination();
+                  }}
+                >
+                  {DATE_FIELD_OPTIONS.map((o) => (
+                    <MenuItem key={o.value} value={o.value}>
+                      {o.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <TextField
+                size="small"
+                label="Date from"
+                type="date"
+                InputLabelProps={{ shrink: true }}
+                value={dateFrom}
+                onChange={(e) => {
+                  setDateFrom(e.target.value);
+                  setSmartPreset(null);
+                  setDeliveryLens(null);
+                  resetPagination();
+                }}
+                sx={{ width: 160 }}
+              />
+              <TextField
+                size="small"
+                label="Date to"
+                type="date"
+                InputLabelProps={{ shrink: true }}
+                value={dateTo}
+                onChange={(e) => {
+                  setDateTo(e.target.value);
+                  setSmartPreset(null);
+                  setDeliveryLens(null);
+                  resetPagination();
+                }}
+                sx={{ width: 160 }}
+              />
+              <TextField
+                size="small"
+                label="Product family"
+                placeholder="Category / line / series"
+                value={productFamily}
+                onChange={(e) => {
+                  setProductFamily(e.target.value);
+                  setSmartPreset(null);
+                  setDeliveryLens(null);
+                  resetPagination();
+                }}
+                sx={{ minWidth: 160 }}
+              />
+              <TextField
+                size="small"
+                label="Product model"
+                placeholder="Model, marketing name, SKU…"
+                value={productModel}
+                onChange={(e) => {
+                  setProductModel(e.target.value);
+                  setSmartPreset(null);
+                  setDeliveryLens(null);
+                  resetPagination();
+                }}
+                sx={{ minWidth: 160 }}
+              />
+              <TextField
+                size="small"
+                label="Currency"
+                placeholder="e.g. USD"
+                value={currencyCode}
+                onChange={(e) => {
+                  setCurrencyCode(e.target.value);
+                  setSmartPreset(null);
+                  setDeliveryLens(null);
+                  resetPagination();
+                }}
+                sx={{ width: 100 }}
+              />
+              <TextField
+                size="small"
+                label="Operating unit"
+                value={operatingUnit}
+                onChange={(e) => {
+                  setOperatingUnit(e.target.value);
+                  setSmartPreset(null);
+                  setDeliveryLens(null);
+                  resetPagination();
+                }}
+                sx={{ minWidth: 140 }}
+              />
+            </>
+          }
+          trailing={
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<ViewColumnIcon />}
+              onClick={factColumns.openPicker}
+              aria-haspopup="dialog"
+              data-testid="shipping-additional-columns"
+            >
+              Additional columns
+            </Button>
+          }
         />
-        <Chip
-          label="Unattributed"
-          size="small"
-          variant={lineupAttribution === 'unattributed' ? 'filled' : 'outlined'}
-          color={lineupAttribution === 'unattributed' ? 'warning' : 'default'}
-          onClick={() => {
-            setLineupAttribution((prev) => (prev === 'unattributed' ? '' : 'unattributed'));
-            setPlanQuarter('');
-            resetPagination();
-          }}
-        />
-        {(['shipped', 'pipeline', 'landed'] as const).map((b) => (
-          <Chip
-            key={b}
-            label={b === 'pipeline' ? 'Pipeline' : b.charAt(0).toUpperCase() + b.slice(1)}
-            size="small"
-            variant={lifecycleBucket === b ? 'filled' : 'outlined'}
-            color={lifecycleBucket === b ? 'primary' : 'default'}
-            onClick={() => {
-              setLifecycleBucket((prev) => (prev === b ? '' : b));
-              resetPagination();
-            }}
-          />
-        ))}
-        <Chip
-          label="Slipped in"
-          size="small"
-          variant={slipDirection === 'slipped_in' ? 'filled' : 'outlined'}
-          color={slipDirection === 'slipped_in' ? 'secondary' : 'default'}
-          disabled={!planQuarter}
-          onClick={() => {
-            setSlipDirection((prev) => (prev === 'slipped_in' ? '' : 'slipped_in'));
-            resetPagination();
-          }}
-        />
-        <Chip
-          label="Slipped out"
-          size="small"
-          variant={slipDirection === 'slipped_out' ? 'filled' : 'outlined'}
-          color={slipDirection === 'slipped_out' ? 'secondary' : 'default'}
-          disabled={!planQuarter}
-          onClick={() => {
-            setSlipDirection((prev) => (prev === 'slipped_out' ? '' : 'slipped_out'));
-            resetPagination();
-          }}
-        />
-      </Stack>
-
-      <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
-        Smart views
-      </Typography>
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }} alignItems="center">
-        <Chip
-          label="Arriving this week"
-          size="small"
-          variant={smartPreset === 'arriving_week' ? 'filled' : 'outlined'}
-          color={smartPreset === 'arriving_week' ? 'primary' : 'default'}
-          onClick={() => toggleSmartPreset('arriving_week')}
-        />
-        <Chip
-          label="Overdue (promise passed, not landed)"
-          size="small"
-          variant={smartPreset === 'overdue' ? 'filled' : 'outlined'}
-          color={smartPreset === 'overdue' ? 'primary' : 'default'}
-          onClick={() => toggleSmartPreset('overdue')}
-        />
-        <Chip
-          label="Delivered this week"
-          size="small"
-          variant={smartPreset === 'landed_week' ? 'filled' : 'outlined'}
-          color={smartPreset === 'landed_week' ? 'primary' : 'default'}
-          onClick={() => toggleSmartPreset('landed_week')}
-        />
-        <Chip
-          label="Delivered (all)"
-          size="small"
-          variant={deliveryLens === 'delivered' ? 'filled' : 'outlined'}
-          color={deliveryLens === 'delivered' ? 'success' : 'default'}
-          onClick={() => toggleDeliveryLens('delivered')}
-        />
-        <Chip
-          label="In transit"
-          size="small"
-          variant={deliveryLens === 'in_transit' ? 'filled' : 'outlined'}
-          color={deliveryLens === 'in_transit' ? 'info' : 'default'}
-          onClick={() => toggleDeliveryLens('in_transit')}
-        />
-        <Chip
-          label="Outstanding orders"
-          size="small"
-          variant={smartPreset === 'outstanding' ? 'filled' : 'outlined'}
-          color={smartPreset === 'outstanding' ? 'primary' : 'default'}
-          onClick={() => toggleSmartPreset('outstanding')}
-        />
-        {smartPreset || deliveryLens || cohort ? (
-          <Button size="small" onClick={clearSmartPreset}>
-            Clear view
-          </Button>
-        ) : null}
-      </Stack>
+      </Box>
 
       <Paper ref={gridSectionRef} variant="outlined" sx={{ p: 1.5, mb: 2 }}>
-        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-          Filters
-        </Typography>
-        <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.5} sx={{ mb: 1.5 }} flexWrap="wrap" useFlexGap alignItems="flex-start">
-          <TextField
-            size="small"
-            label="Search"
-            placeholder="Distributor, product, SKU, sales model, order #, channel partner…"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setSmartPreset(null);
-              setDeliveryLens(null);
-              setCohort('');
-              resetPagination();
-            }}
-            sx={{ minWidth: 240, flex: 1 }}
-          />
-          <Autocomplete
-            sx={{ minWidth: 240, flex: 1 }}
-            size="small"
-            loading={!filterOptions}
-            options={distOptions}
-            value={distributorPick}
-            onChange={(_e, v) => {
-              setDistributorPick(v);
-              setSmartPreset(null);
-              setDeliveryLens(null);
-              setCohort('');
-              resetPagination();
-            }}
-            getOptionLabel={(o) => `${o.distributor_name} (${o.distributor_code})`}
-            isOptionEqualToValue={(a, b) => a.id === b.id}
-            renderInput={(params) => (
-              <TextField {...params} label="Distributor (canonical)" placeholder="All distributors · type to filter" />
-            )}
-          />
-          <Autocomplete
-            sx={{ minWidth: 220, flex: 1 }}
-            size="small"
-            loading={!filterOptions}
-            options={custOptions}
-            value={customerPick}
-            onChange={(_e, v) => {
-              setCustomerPick(v);
-              setSmartPreset(null);
-              setDeliveryLens(null);
-              setCohort('');
-              resetPagination();
-            }}
-            getOptionLabel={(o) => `${o.customer_name} (${o.customer_code})`}
-            isOptionEqualToValue={(a, b) => a.id === b.id}
-            renderInput={(params) => (
-              <TextField {...params} label="Channel partner (customer)" placeholder="All customers · type to filter" />
-            )}
-          />
-          <FormControl size="small" sx={{ minWidth: 140 }}>
-            <InputLabel id="flt-line-state">Line state</InputLabel>
-            <Select
-              labelId="flt-line-state"
-              label="Line state"
-              value={lineState}
-              onChange={(e) => {
-                setLineState(String(e.target.value));
-                setSmartPreset(null);
-                setDeliveryLens(null);
-                setCohort('');
-                resetPagination();
-              }}
-            >
-              <MenuItem value="">(any)</MenuItem>
-              {(summary?.by_line_state ?? []).map((b) => (
-                <MenuItem key={b.key} value={b.key}>
-                  {b.key}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 140 }}>
-            <InputLabel id="flt-cargo">Cargo status</InputLabel>
-            <Select
-              labelId="flt-cargo"
-              label="Cargo status"
-              value={cargoStatus}
-              onChange={(e) => {
-                setCargoStatus(String(e.target.value));
-                setSmartPreset(null);
-                setDeliveryLens(null);
-                setCohort('');
-                resetPagination();
-              }}
-            >
-              <MenuItem value="">(any)</MenuItem>
-              {(summary?.by_status ?? []).map((b) => (
-                <MenuItem key={b.key} value={b.key}>
-                  {cargoStatusLabel(b.key)}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 180 }}>
-            <InputLabel id="flt-date-field">Date field</InputLabel>
-            <Select
-              labelId="flt-date-field"
-              label="Date field"
-              value={dateField}
-              onChange={(e) => {
-                setDateField(String(e.target.value));
-                setSmartPreset(null);
-                setDeliveryLens(null);
-                setCohort('');
-                resetPagination();
-              }}
-            >
-              {DATE_FIELD_OPTIONS.map((o) => (
-                <MenuItem key={o.value} value={o.value}>
-                  {o.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <TextField
-            size="small"
-            label="Date from"
-            type="date"
-            InputLabelProps={{ shrink: true }}
-            value={dateFrom}
-            onChange={(e) => {
-              setDateFrom(e.target.value);
-              setSmartPreset(null);
-              setDeliveryLens(null);
-              resetPagination();
-            }}
-            sx={{ width: 160 }}
-          />
-          <TextField
-            size="small"
-            label="Date to"
-            type="date"
-            InputLabelProps={{ shrink: true }}
-            value={dateTo}
-            onChange={(e) => {
-              setDateTo(e.target.value);
-              setSmartPreset(null);
-              setDeliveryLens(null);
-              resetPagination();
-            }}
-            sx={{ width: 160 }}
-          />
-          <TextField
-            size="small"
-            label="Product family"
-            placeholder="Category / line / series"
-            value={productFamily}
-            onChange={(e) => {
-              setProductFamily(e.target.value);
-              setSmartPreset(null);
-              setDeliveryLens(null);
-              resetPagination();
-            }}
-            sx={{ minWidth: 160 }}
-          />
-          <TextField
-            size="small"
-            label="Product model"
-            placeholder="Model, marketing name, SKU…"
-            value={productModel}
-            onChange={(e) => {
-              setProductModel(e.target.value);
-              setSmartPreset(null);
-              setDeliveryLens(null);
-              resetPagination();
-            }}
-            sx={{ minWidth: 160 }}
-          />
-          <TextField
-            size="small"
-            label="Currency"
-            placeholder="e.g. USD"
-            value={currencyCode}
-            onChange={(e) => {
-              setCurrencyCode(e.target.value);
-              setSmartPreset(null);
-              setDeliveryLens(null);
-              resetPagination();
-            }}
-            sx={{ width: 100 }}
-          />
-          <TextField
-            size="small"
-            label="Operating unit"
-            value={operatingUnit}
-            onChange={(e) => {
-              setOperatingUnit(e.target.value);
-              setSmartPreset(null);
-              setDeliveryLens(null);
-              resetPagination();
-            }}
-            sx={{ minWidth: 140 }}
-          />
-        </Stack>
-
         <TablePagination
           component="div"
           count={total}
@@ -957,19 +948,7 @@ export function InboundShipmentsWorkspace() {
             secondary: { label: 'Shipment evidence', href: '/admin/shipment-evidence' },
           }}
           toolbar={
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center" sx={{ mb: 2 }}>
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<ViewColumnIcon />}
-                onClick={factColumns.openPicker}
-                aria-haspopup="dialog"
-                data-testid="shipping-additional-columns"
-              >
-                Additional columns
-              </Button>
-              <ModuleGridToolbar onRefresh={() => void refetch()} importsHref="/admin/imports?template=inbound_shipments" />
-            </Stack>
+            <ModuleGridToolbar onRefresh={() => void refetch()} importsHref="/admin/imports?template=inbound_shipments" />
           }
         >
           <EnterpriseDataGrid
