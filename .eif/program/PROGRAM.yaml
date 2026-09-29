@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1215
-  log_sha256: f42faf3dd238f2804be14d837dd65cef336069e56c04861b0bd180b4c8117c9b
+  snapshot_revision: 1235
+  log_sha256: 03a2a6c236f3677a3903eb25da36fcad35d3e8cb2355f7c06113b25bf04eeb9e
   acceptance_policy:
     milestone: operator
     root: operator
@@ -7428,13 +7428,11 @@ nodes:
     title: 'Stage 2.5: line identifier ''both'' as two columns'
     class: feature
     origin: operator
-    status: proposed
-    stage: null
-    revision: 0
+    status: in_progress
+    stage: validate
+    revision: 14
     lease: null
-    depends_on:
-    - N-0052
-    - N-0034
+    depends_on: []
     facets:
     - ui
     risk: R2
@@ -7446,44 +7444,88 @@ nodes:
       not a second mechanism
     - Nothing writes to cip; read-only SQL prints current_database() first
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-0017
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
     quality:
       ux:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20260924/n0053/IMPL.md
+          summary: both = two real identity columns pinned where the welded column sat; picker excludes what the preference
+            pins and offers the complement under Line identity; flip back restores one column. Self-verification in the implementation
+            run.
         rationale: null
+        pass_run: N0053_IMPL_20260929
+        pass_actor: impl-n0053
       a11y:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20260924/n0053/IMPL.md
+          summary: Identity columns are ordinary AG Grid columns (header sort button, filter menu, keyboard nav inherited
+            from EnterpriseDataGrid defaultColDef). Picker group uses the existing FactColumnPicker checkbox list. No axe/keyboard
+            full pass this run.
         rationale: null
+        pass_run: N0053_IMPL_20260929
+        pass_actor: impl-n0053
       rendered:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence: &id027
+          path: .eif/audit/PROGRAMME_20260924/n0053/IMPL.md
+          url: http://localhost:3000/stock?lens=movement
+          independence: self-verification (same run/actor as implementation)
+          checks:
+          - settings both saved + reload
+          - inventory grid two identity columns sortable/filterable
+          - picker excludes pinned pair under both
+          - 'flip back to sku: one column, Line identity offers Sales model'
         rationale: null
+        pass_run: N0053_IMPL_20260929
+        pass_actor: impl-n0053
       content:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20260924/n0053/IMPL.md
+          summary: 'Settings option label: ''SKU and sales model number (two columns)''. Column headers fixed ''SKU'' / ''Sales
+            model''; empty cells render an em dash. Text-slot consumers keep ''SKU · Sales model'' (deferred finding).'
         rationale: null
-    verification: {}
+        pass_run: N0053_IMPL_20260929
+        pass_actor: impl-n0053
+    verification:
+      rendered:
+        state: pass
+        pass_run: N0053_IMPL_20260929
+        pass_actor: impl-n0053
+        evidence: *id027
+        path: null
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: 'Implementer validate (run N0053_IMPL_20260929): both renders two real field columns via lineIdentifierColumns
+      through useFactColumns.identityColDefs (N-0034 picker mechanism), registry identity group on 10 hosts, 7 non-picker
+      AG Grid hosts + 2 MUI-table files on the same helper. tsc 0, eslint 0 errors, focused vitest 58/58, pytest 91. Browser
+      smoke on channel-ops Inventory + settings (self-verification). Found + fixed stale runtime: orphaned uvicorn (5 days)
+      and stale next build. Text-slot single-cell consumers deferred (finding). Independent GOV-008 referent/rendered not
+      recorded; Opus CONSULT stays BACKLOG-209 until Anthropic usage is available. Do not complete.'
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      sku_sales_model_modes: unchanged single welded column
+      picker_layouts: storage keys and behaviour unchanged
+      stored_keys: display only
+      identity_name_only: D7 kept
     target_artifact_class: null
     design_artifact_class: null
+    implementation_run: N0053_IMPL_20260929
+    implementation_actor: impl-n0053
   N-0054:
     id: N-0054
     parent: null
@@ -9130,6 +9172,18 @@ decisions:
     origin: agent
     status: proposed
     supersedes: null
+  D-0039:
+    id: D-0039
+    scope: N-0053
+    statement: 'Warren 2026-09-29: N-0053 may start now. depends_on [N-0052, N-0034] dropped. N-0034 at stage validate is
+      sufficient for N-0053 to build on the grid_fields / useFactColumns / FactColumnPicker mechanism; N-0034 itself stays
+      in_progress with operator acceptance pending. N-0052 (Stage 3.6 ops safety net) had no functional relation to line identifier
+      columns; the dependency was a sequencing-chain artefact from STAGED_WORK_PLAN section 3. Opus CONSULT / VERIFY remains
+      recorded as BACKLOG debt (BACKLOG-209 pattern) for every stage until Anthropic usage is available; VERIFY-debt gates
+      promotion to main, not feature-branch commits.'
+    origin: operator
+    status: accepted
+    supersedes: null
 evidence:
   EV-GOV008-REVIEW:
     id: EV-GOV008-REVIEW
@@ -9441,6 +9495,26 @@ evidence:
       generalising the inbound-shipments optional-columns endpoint (shipping.py:695-706) + fact_row_dict merged under each
       serializer; localStorage cip.grid.<grid_id>.optional.v1; 15 Tier A grids in, 2 out (zero-sellout exception list, exceptions
       inbox); D7 name-only sweep list; criterion-4 table routes search/saved views/export to N-0041/42/43 (D-b).'
+  EV-N0053-DESIGN:
+    id: EV-N0053-DESIGN
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20260924/n0053/DESIGN.md
+    tree_hash: null
+    note: 'N-0053 design (moment b, same run): identity pair lives in the grid_fields registry as group identity; useFactColumns
+      pins per preference and offers the complementary identifier in a Line identity picker group; non-picker hosts use the
+      same lineIdentifierColumns/headers/values helper; no second column mechanism; column-by-column mapping table.'
+  EV-N0053-IMPL:
+    id: EV-N0053-IMPL
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20260924/n0053/IMPL.md
+    tree_hash: null
+    note: 'N-0053 implementation record (run N0053_IMPL_20260929): lineIdentifierColumns is the single source of identity
+      ColDefs; registry identity group + useFactColumns identityColDefs/covered-field filtering; 10 Tier A hosts via the hook,
+      7 AG Grid hosts via lineId.columns, 2 MUI-table files via headers/values; settings third option. tsc 0, eslint 0 errors,
+      focused vitest 58/58, pytest 91 passed. Rendered check PASS by self-verification in the browser (channel-ops Inventory
+      grid under both: two real SKU/Sales model columns, sortable + filterable, picker excludes the pair; flip back to sku:
+      one column, Line identity group offers Sales model; settings save/reload). Stale orphaned uvicorn (5 days old) and stale
+      next build were restarted to run it.'
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -9672,6 +9746,24 @@ baselines:
     path: docs/BACKLOG.md#BACKLOG-133
     observed_behavior: '2026-09-21 (N-0030): customer_leftover_repair.py exists with zero callers; BACKLOG-134 measured 0
       today.'
+  BLN-0017:
+    id: BLN-0017
+    provenance: implementation-observation
+    tree_hash: a8755854
+    latent_capabilities: []
+    preservation:
+      sku_sales_model_modes: under sku / sales_model the single welded identity column (colId line_identifier, fallback to
+        the other identifier) renders exactly as today
+      picker_layouts: cip.grid.<gridId>.optional.v1 layouts and the inbound-shipments key untouched; no second toggle mechanism
+      stored_keys: sku and sales_model_name stay on every row; display only
+      identity_name_only: customer / distributor identity cells stay name-only (D7)
+    path: .eif/audit/PROGRAMME_20260924/n0053/DESIGN.md
+    observed_behavior: '2026-09-29 at a8755854: LineIdentifierPreference = ''sku'' | ''sales_model'' (web lineIdentifier.ts:1,
+      API commercial_tenant_profile.py:30 and :174); useLineIdentifierPreference returns {preference, header, value}; 20 web
+      hosts weld one identity column or one TableCell (grep useLineIdentifierPreference); grid_fields.py offers no sku / sales-model
+      field on the 10 Tier A grids that carry them (pve.drill and listings expose product_sku / product_sales_model as static
+      keys); settings/page.tsx:73 LINE_IDENTIFIER_OPTIONS = [''sku'',''sales_model'']; preference persists in {local_storage_path}/tenant_profiles/{tenant}.json
+      (file, not cip).'
 caveats:
   consult_model_logged:
     key: consult_model_logged
@@ -9795,6 +9887,18 @@ deferred_findings:
   node: N-0038
   run: N0038_IMPL_20260924
   actor: impl-n0038
+  status: deferred
+- seq: 1232
+  code: DOES_NOT_FIT
+  note: 'Single text-slot consumers keep a welded ''sku · model'' string under the both preference: CoverLensView product
+    caption/subtitle, SettlementDesk drawer title, commercial-planner drawer heading, and the CurrentLineupSection workbench
+    (colId ''sku'' cell renderer, column label and column-selector search) whose column model is a fixed per-colId switch
+    rather than ColDef[]. These are captions/labels or a bespoke workbench, not grid columns, so two columns is out of N-0053
+    scope. Candidate follow-up when the lineup workbench moves onto the picker mechanism: split the ''sku'' colId into the
+    identity pair via lineIdentifierColumns.'
+  node: N-0053
+  run: N0053_IMPL_20260929
+  actor: impl-n0053
   status: deferred
 ids:
   node: 5
