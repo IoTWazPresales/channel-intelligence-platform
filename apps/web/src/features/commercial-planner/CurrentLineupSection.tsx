@@ -1702,7 +1702,9 @@ function CaseLinesDialog({
                 <TableRow>
                   <TableCell>#</TableCell>
                   <TableCell>Model / product</TableCell>
-                  <TableCell>{lineIdent.header}</TableCell>
+                  {lineIdent.headers.map((h) => (
+                    <TableCell key={h}>{h}</TableCell>
+                  ))}
                   <TableCell>Part #</TableCell>
                   <TableCell>Customer</TableCell>
                   <TableCell>Distributor</TableCell>
@@ -1725,11 +1727,13 @@ function CaseLinesDialog({
                         </Typography>
                       )}
                     </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" fontFamily="monospace">
-                        {lineIdent.value(ln.product_sku ?? ln.sku_raw, ln.product_sales_model_name ?? ln.model_raw)}
-                      </Typography>
-                    </TableCell>
+                    {lineIdent.values(ln.product_sku ?? ln.sku_raw, ln.product_sales_model_name ?? ln.model_raw).map((v, i) => (
+                      <TableCell key={lineIdent.headers[i]}>
+                        <Typography variant="body2" fontFamily="monospace">
+                          {v}
+                        </Typography>
+                      </TableCell>
+                    ))}
                     <TableCell>{ln.product_part_number ?? ln.part_number_raw ?? '—'}</TableCell>
                     <TableCell>{lineupCustomerCell(ln)}</TableCell>
                     <TableCell>{lineupDistributorCell(ln)}</TableCell>

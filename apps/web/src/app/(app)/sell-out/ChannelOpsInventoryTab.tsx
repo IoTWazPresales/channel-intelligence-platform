@@ -8,7 +8,6 @@ import { useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
-import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
 import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
 import { ScopeBar } from '@/features/workbench-ui/controls';
@@ -45,10 +44,15 @@ type InvRow = {
   demand_forecast_units_13w?: number | null;
 };
 
+const LINE_IDENTITY = { sku: 'sku', salesModel: 'sales_model_name' } as const;
+const LINE_IDENTITY_COL: Partial<ColDef<InvRow>> = { minWidth: 120 };
+
 export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
   const [distributorPick, setDistributorPick] = useState<DistHit | null>(null);
-  const lineId = useLineIdentifierPreference();
-  const factColumns = useFactColumns<InvRow>('channel-ops.inventory');
+  const factColumns = useFactColumns<InvRow>('channel-ops.inventory', {
+    lineIdentifier: LINE_IDENTITY,
+    lineIdentifierColDef: LINE_IDENTITY_COL,
+  });
   const gridChrome = useFactGridChrome('channel-ops.inventory');
 
   const { data: filterOptions } = useQuery({
@@ -70,12 +74,7 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
   const invCols = useMemo<ColDef<InvRow>[]>(() => {
     const cols: ColDef<InvRow>[] = [
       { field: 'product_name', headerName: 'Product', flex: 1, minWidth: 160 },
-      {
-        colId: 'line_identifier',
-        headerName: lineId.header,
-        minWidth: 120,
-        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.sales_model_name),
-      },
+      ...factColumns.identityColDefs,
       {
         field: 'reported_soh',
         headerName: 'Reported SOH',
@@ -161,7 +160,7 @@ export function ChannelOpsInventoryTab({ depth }: { depth: IntelDepth }) {
     // Depth already shows some registry fields as default cells; do not add them twice.
     const shown = new Set(cols.map((c) => c.field).filter(Boolean));
     return [...cols, ...factColumns.optionalColDefs.filter((c) => !shown.has(c.field))];
-  }, [operational, strategic, lineId, factColumns.optionalColDefs]);
+  }, [operational, strategic, factColumns.identityColDefs, factColumns.optionalColDefs]);
 
   return (
     <Box>

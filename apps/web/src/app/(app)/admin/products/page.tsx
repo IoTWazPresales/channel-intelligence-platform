@@ -422,14 +422,10 @@ function AdminProductsPageContent() {
 
   const colDefs: ColDef<ProductRow>[] = useMemo(() => {
     const staticCols: ColDef<ProductRow>[] = [
-      {
-        colId: 'line_identifier_display',
-        headerName: lineIdent.header,
-        pinned: 'left',
-        minWidth: 140,
-        editable: false,
-        valueGetter: (p) => lineIdent.value(p.data?.sku, p.data?.sales_model_name),
-      },
+      ...lineIdent.columns<ProductRow>(
+        { sku: 'sku', salesModel: 'sales_model_name' },
+        { pinned: 'left', minWidth: 140, editable: false },
+      ),
       { field: 'sku', headerName: 'SKU', minWidth: 140, editable: false },
       { field: 'name', headerName: 'Name', flex: 1, minWidth: 180, editable: true },
       { field: 'category', headerName: 'Category', minWidth: 120, editable: true },

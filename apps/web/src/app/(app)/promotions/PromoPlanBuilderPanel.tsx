@@ -190,13 +190,10 @@ export function PromoPlanBuilderPanel() {
 
   const colDefs: ColDef<PlannerRow>[] = useMemo(
     () => [
-      {
-        colId: 'line_identifier',
-        headerName: lineId.header,
-        minWidth: 120,
-        editable: false,
-        valueGetter: (p) => lineId.value(p.data?.product_sku, p.data?.product_sales_model_name),
-      },
+      ...lineId.columns<PlannerRow>(
+        { sku: 'product_sku', salesModel: 'product_sales_model_name' },
+        { minWidth: 120, editable: false },
+      ),
       { field: 'product_name', headerName: 'Product', minWidth: 160, editable: false, flex: 1 },
       {
         field: 'distributor_id',

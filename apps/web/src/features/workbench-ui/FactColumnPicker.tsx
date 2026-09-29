@@ -9,8 +9,9 @@ import type { FactColumnPickerProps } from './useFactColumns';
 
 /**
  * The one all-fields column picker for Tier A fact grids (N-0034): a thin wrapper over the md
- * `ColumnPickerDialog`, fed by `useFactColumns(gridId).pickerProps`. Groups: fact fields, then
- * Reference (customer / distributor codes, hidden by default so identity cells stay name-only).
+ * `ColumnPickerDialog`, fed by `useFactColumns(gridId).pickerProps`. Groups: Line identity (the
+ * identifier the tenant preference does not already pin, N-0053), fact fields, then Reference
+ * (customer / distributor codes, hidden by default so identity cells stay name-only).
  */
 export function FactColumnPicker({
   open,
@@ -34,9 +35,14 @@ export function FactColumnPicker({
 }) {
   const [search, setSearch] = useState('');
   const groups = useMemo(() => {
-    const fact = items.filter((i) => i.group !== 'reference').map((i) => i.field);
+    const identity = items.filter((i) => i.group === 'identity').map((i) => i.field);
+    const fact = items.filter((i) => i.group !== 'reference' && i.group !== 'identity').map((i) => i.field);
     const reference = items.filter((i) => i.group === 'reference').map((i) => i.field);
-    const out = [{ label: factGroupLabel, fields: fact, loading }];
+    const out: { label: string; fields: string[]; loading: boolean }[] = [];
+    if (identity.length) {
+      out.push({ label: 'Line identity', fields: identity, loading: false });
+    }
+    out.push({ label: factGroupLabel, fields: fact, loading });
     if (reference.length) {
       out.push({ label: 'Reference', fields: reference, loading: false });
     }

@@ -1,0 +1,10 @@
+{
+  "dim": "content",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/PROGRAMME_20260924/n0053/IMPL.md",
+    "summary": "Settings option label: 'SKU and sales model number (two columns)'. Column headers fixed 'SKU' / 'Sales model'; empty cells render an em dash. Text-slot consumers keep 'SKU \u00b7 Sales model' (deferred finding)."
+  },
+  "node": "N-0053",
+  "expected_revision": 9
+}

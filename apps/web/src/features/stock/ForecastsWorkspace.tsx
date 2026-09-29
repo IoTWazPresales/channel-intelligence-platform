@@ -11,7 +11,6 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
-import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
 import { ScopeBar } from '@/features/workbench-ui/controls';
 import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
@@ -36,6 +35,8 @@ type Row = {
   lower_band?: number | null;
   upper_band?: number | null;
 };
+
+const LINE_IDENTIFIER_PINNED: Partial<ColDef<Row>> = { pinned: 'left' };
 
 type ComputeFromHistoryResponse = {
   tenant_id: string;
@@ -83,8 +84,10 @@ function parseForecastPaste(text: string): ForecastPasteRow[] {
 
 export function ForecastsWorkspace() {
   const qc = useQueryClient();
-  const lineId = useLineIdentifierPreference();
-  const factColumns = useFactColumns<Row>('forecasts');
+  const factColumns = useFactColumns<Row>('forecasts', {
+    lineIdentifier: { sku: 'sku', salesModel: 'sales_model_name' },
+    lineIdentifierColDef: LINE_IDENTIFIER_PINNED,
+  });
   const gridChrome = useFactGridChrome('forecasts');
   const [pasteOpen, setPasteOpen] = useState(false);
   const [paste, setPaste] = useState('');
@@ -184,12 +187,7 @@ export function ForecastsWorkspace() {
   const colDefs: ColDef<Row>[] = useMemo(() => {
     const busyDel = delRow.isPending || clearAll.isPending;
     return [
-      {
-        colId: 'line_identifier',
-        headerName: lineId.header,
-        pinned: 'left',
-        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.sales_model_name),
-      },
+      ...factColumns.identityColDefs,
       { field: 'period_start', headerName: 'Period' },
       { field: 'forecast_units', headerName: 'Units', type: 'numericColumn' },
       { field: 'method', headerName: 'Method' },
@@ -212,7 +210,7 @@ export function ForecastsWorkspace() {
       ...factColumns.optionalColDefs,
       gridDeleteColumn<Row>((id) => void delRow.mutate(id), { busy: busyDel }),
     ];
-  }, [delRow, delRow.isPending, clearAll.isPending, lineId, factColumns.optionalColDefs]);
+  }, [delRow, delRow.isPending, clearAll.isPending, factColumns.identityColDefs, factColumns.optionalColDefs]);
 
   const rows = data ?? [];
   const busy = bulk.isPending || addOne.isPending || delRow.isPending || clearAll.isPending || computeHistory.isPending;

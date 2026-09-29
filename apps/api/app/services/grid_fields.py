@@ -6,6 +6,11 @@ payload. ``tests/test_grid_fields.py`` guards that (catalog fields are a subset 
 
 Reference fields (customer / distributor code and name) are joined labels, not mapper columns;
 they are always ``default_hidden`` and live in their own group so identity cells stay name-only (D7).
+
+Identity fields (the product line's SKU and sales model) are the third group (N-0053). Which of them
+is pinned as a default column is the tenant's ``line_identifier_preference`` (``sku`` / ``sales_model``
+/ ``both``), decided client-side by ``useFactColumns``; the registry only names the row keys so the
+picker can offer the one the preference does not already show.
 """
 
 from __future__ import annotations
@@ -49,6 +54,12 @@ DISTRIBUTOR_REFERENCE: tuple[tuple[str, str], ...] = (
 )
 CUSTOMER_CODE_REFERENCE: tuple[tuple[str, str], ...] = (("customer_code", "Customer code"),)
 DISTRIBUTOR_CODE_REFERENCE: tuple[tuple[str, str], ...] = (("distributor_code", "Distributor code"),)
+
+# Product-line identity pair as (sku_key, sales_model_key); labels are fixed so every grid agrees.
+SKU_LABEL = "SKU"
+SALES_MODEL_LABEL = "Sales model"
+PRODUCT_IDENTITY: tuple[str, str] = ("sku", "sales_model_name")
+PRODUCT_IDENTITY_PREFIXED: tuple[str, str] = ("product_sku", "product_sales_model_name")
 
 # Inbound shipments keep their historical list (every mapper column minus the default grid cells).
 INBOUND_GRID_DEFAULT_FACT_KEYS: frozenset[str] = frozenset(
@@ -137,6 +148,8 @@ class GridFieldSpec:
     ``joined_extras``: (field, label) reference fields the endpoint joins in batches.
     ``hidden_internal``: model keys never offered or merged (on top of tenant/raw/token/JSON rules).
     ``auto_hide``: apply the ``*_token`` / JSON-column rules; off only for inbound's legacy list.
+    ``identity``: ``(sku_key, sales_model_key)`` on rows that carry the product line's identity
+    (N-0053); ``None`` when the grid has no line identity column.
     """
 
     model: type | None
@@ -146,6 +159,7 @@ class GridFieldSpec:
     label_overrides: dict[str, str] = field(default_factory=dict)
     static_keys: tuple[tuple[str, str], ...] = ()
     auto_hide: bool = True
+    identity: tuple[str, str] | None = None
 
 
 GRID_FIELDS: dict[str, GridFieldSpec] = {
@@ -160,22 +174,26 @@ GRID_FIELDS: dict[str, GridFieldSpec] = {
         model=FactSalesSellout,
         default_keys=frozenset({"period_start", "units", "revenue"}),
         joined_extras=CUSTOMER_CODE_REFERENCE + DISTRIBUTOR_CODE_REFERENCE,
+        identity=PRODUCT_IDENTITY_PREFIXED,
     ),
     "inventory.customer": GridFieldSpec(
         model=FactInventoryCustomer,
         default_keys=frozenset({"as_of_date", "on_hand_units", "on_order_units"}),
         joined_extras=CUSTOMER_CODE_REFERENCE,
+        identity=PRODUCT_IDENTITY_PREFIXED,
     ),
     "pricing.facts": GridFieldSpec(
         model=FactPricing,
         default_keys=frozenset({"effective_date", "list_price", "net_price"}),
         joined_extras=CUSTOMER_REFERENCE,
+        identity=PRODUCT_IDENTITY,
     ),
     "pricing.recommendations": GridFieldSpec(
         model=PricingRecommendation,
         default_keys=frozenset({"suggested_state", "explanation_summary", "confidence"}),
         # reviewed_by names a person (user id / email) — [PII]-like, not a grid column.
         hidden_internal=frozenset({"reviewed_by"}),
+        identity=PRODUCT_IDENTITY,
     ),
     "buy-plans": GridFieldSpec(
         model=FactBuyPlan,
@@ -183,10 +201,12 @@ GRID_FIELDS: dict[str, GridFieldSpec] = {
             {"recommended_qty", "recommended_window_start", "recommended_window_end", "rationale"}
         ),
         joined_extras=DISTRIBUTOR_REFERENCE,
+        identity=PRODUCT_IDENTITY,
     ),
     "roadmap": GridFieldSpec(
         model=FactProductRoadmap,
         default_keys=frozenset({"lifecycle_phase", "whitespace_flag", "overlap_flag", "launch_target"}),
+        identity=PRODUCT_IDENTITY,
     ),
     "forecasts": GridFieldSpec(
         model=FactDemandForecast,
@@ -206,22 +226,26 @@ GRID_FIELDS: dict[str, GridFieldSpec] = {
             }
         ),
         joined_extras=CUSTOMER_REFERENCE + DISTRIBUTOR_REFERENCE,
+        identity=PRODUCT_IDENTITY,
     ),
     # ── Pass 2: computed rows (static keys) ──
     "channel-ops.sell-out": GridFieldSpec(
         model=None,
         static_keys=CHANNEL_OPS_SELLOUT_STATIC_KEYS,
         joined_extras=CUSTOMER_CODE_REFERENCE + DISTRIBUTOR_CODE_REFERENCE,
+        identity=PRODUCT_IDENTITY,
     ),
     "channel-ops.movements": GridFieldSpec(
         model=None,
         # One distributor per view: its name and code are reference fields, not default cells.
         joined_extras=DISTRIBUTOR_REFERENCE,
+        identity=PRODUCT_IDENTITY,
     ),
     "channel-ops.inventory": GridFieldSpec(
         model=None,
         static_keys=CHANNEL_OPS_INVENTORY_STATIC_KEYS,
         joined_extras=DISTRIBUTOR_REFERENCE,
+        identity=PRODUCT_IDENTITY,
     ),
     "pve.drill": GridFieldSpec(
         model=None,
@@ -289,11 +313,23 @@ def model_field_keys(spec: GridFieldSpec) -> list[str]:
     return sorted(out)
 
 
+def identity_items(spec: GridFieldSpec) -> list[dict[str, Any]]:
+    """The line-identity pair as picker items (group ``identity``), or ``[]`` when the grid has none."""
+    if spec.identity is None:
+        return []
+    sku_key, model_key = spec.identity
+    return [
+        {"field": sku_key, "label": SKU_LABEL, "group": "identity", "default_hidden": True},
+        {"field": model_key, "label": SALES_MODEL_LABEL, "group": "identity", "default_hidden": True},
+    ]
+
+
 def grid_field_items(spec: GridFieldSpec) -> list[dict[str, Any]]:
-    """Picker list: optional fact fields, then reference fields; all hidden by default."""
-    items: list[dict[str, Any]] = []
-    fact_keys = [k for k in model_field_keys(spec) if k not in spec.default_keys]
-    fact_keys += [k for k, _ in spec.static_keys if k not in spec.default_keys]
+    """Picker list: identity pair, optional fact fields, then reference fields; all hidden by default."""
+    items: list[dict[str, Any]] = identity_items(spec)
+    identity_keys = {it["field"] for it in items}
+    fact_keys = [k for k in model_field_keys(spec) if k not in spec.default_keys and k not in identity_keys]
+    fact_keys += [k for k, _ in spec.static_keys if k not in spec.default_keys and k not in identity_keys]
     static_labels = dict(spec.static_keys)
     for k in fact_keys:
         label = spec.label_overrides.get(k) or static_labels.get(k) or human_column_label(k)

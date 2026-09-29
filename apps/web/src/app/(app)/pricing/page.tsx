@@ -23,7 +23,6 @@ import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
-import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
 import { ScopeBar } from '@/features/workbench-ui/controls';
 import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
@@ -48,6 +47,9 @@ type RecRow = {
   explanation_summary: string | null;
   confidence: string | null;
 };
+
+const LINE_IDENTITY = { sku: 'sku', salesModel: 'sales_model_name' } as const;
+const PINNED_LEFT: Partial<ColDef<PriceRow>> = { pinned: 'left' };
 
 type PricingPasteRow = {
   sku: string;
@@ -88,9 +90,11 @@ function parsePricingPaste(text: string): PricingPasteRow[] {
 
 export default function PricingPage() {
   const qc = useQueryClient();
-  const lineId = useLineIdentifierPreference();
-  const factFields = useFactColumns<PriceRow>('pricing.facts');
-  const recFields = useFactColumns<RecRow>('pricing.recommendations');
+  const factFields = useFactColumns<PriceRow>('pricing.facts', {
+    lineIdentifier: LINE_IDENTITY,
+    lineIdentifierColDef: PINNED_LEFT,
+  });
+  const recFields = useFactColumns<RecRow>('pricing.recommendations', { lineIdentifier: LINE_IDENTITY });
   const [tab, setTab] = useState(0);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [paste, setPaste] = useState('');
@@ -179,35 +183,26 @@ export default function PricingPage() {
   const factCols: ColDef<PriceRow>[] = useMemo(() => {
     const busyDel = delFact.isPending || clearFacts.isPending;
     return [
-      {
-        colId: 'line_identifier',
-        headerName: lineId.header,
-        pinned: 'left',
-        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.sales_model_name),
-      },
+      ...factFields.identityColDefs,
       { field: 'net_price', headerName: 'Net', type: 'numericColumn' },
       { field: 'list_price', headerName: 'List', type: 'numericColumn' },
       { field: 'effective_date', headerName: 'Effective' },
       ...factFields.optionalColDefs,
       gridDeleteColumn<PriceRow>((id) => void delFact.mutate(id), { busy: busyDel }),
     ];
-  }, [delFact, delFact.isPending, clearFacts.isPending, lineId, factFields.optionalColDefs]);
+  }, [delFact, delFact.isPending, clearFacts.isPending, factFields.identityColDefs, factFields.optionalColDefs]);
 
   const recCols: ColDef<RecRow>[] = useMemo(() => {
     const busyDel = delRec.isPending || clearRecs.isPending;
     return [
-      {
-        colId: 'line_identifier',
-        headerName: lineId.header,
-        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.sales_model_name),
-      },
+      ...recFields.identityColDefs,
       { field: 'suggested_state', headerName: 'State' },
       { field: 'explanation_summary', headerName: 'Explanation', flex: 1, minWidth: 240 },
       { field: 'confidence', headerName: 'Confidence' },
       ...recFields.optionalColDefs,
       gridDeleteColumn<RecRow>((id) => void delRec.mutate(id), { busy: busyDel }),
     ];
-  }, [delRec, delRec.isPending, clearRecs.isPending, lineId, recFields.optionalColDefs]);
+  }, [delRec, delRec.isPending, clearRecs.isPending, recFields.identityColDefs, recFields.optionalColDefs]);
 
   const factRows = facts ?? [];
   const recRows = recs ?? [];

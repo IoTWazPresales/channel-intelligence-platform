@@ -1,0 +1,14 @@
+{
+  "dim": "rendered",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/PROGRAMME_20260924/n0053/IMPL.md",
+    "url": "http://localhost:3000/stock?lens=movement",
+    "viewports": [
+      "1024x576"
+    ],
+    "summary": "channel-ops Inventory grid (Mustek) under both: SKU + Sales model columns, filter icons, Sales model header sort; picker shows Fact fields + Reference only. Under sku: one SKU column; picker leads with Line identity > Sales model. Settings save + reload keep the value. Self-verification, not independent."
+  },
+  "node": "N-0053",
+  "expected_revision": 8
+}

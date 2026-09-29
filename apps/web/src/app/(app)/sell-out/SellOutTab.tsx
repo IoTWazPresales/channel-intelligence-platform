@@ -71,10 +71,22 @@ type DistHit = { id: number; distributor_code: string; distributor_name: string 
 type CustHit = { id: number; customer_code: string; customer_name: string };
 type ZeroProduct = { product_id: number; sku: string; sales_model_name: string | null; name: string };
 
+const LINE_IDENTITY = { sku: 'sku', salesModel: 'sales_model_name' } as const;
+const LINE_IDENTITY_PREFIXED = { sku: 'product_sku', salesModel: 'product_sales_model_name' } as const;
+const FACT_LINE_IDENTITY_COL: Partial<ColDef<SelloutLine>> = { minWidth: 110 };
+const CHANNEL_LINE_IDENTITY_COL: Partial<ColDef<ChannelSelloutLine>> = { minWidth: 110 };
+const ZERO_LINE_IDENTITY_COL: Partial<ColDef<ZeroProduct>> = { minWidth: 120 };
+
 export function SellOutTab({ depth }: { depth: IntelDepth }) {
   const lineId = useLineIdentifierPreference();
-  const factColumns = useFactColumns<SelloutLine>('sellout.commercial-lines');
-  const channelColumns = useFactColumns<ChannelSelloutLine>('channel-ops.sell-out');
+  const factColumns = useFactColumns<SelloutLine>('sellout.commercial-lines', {
+    lineIdentifier: LINE_IDENTITY_PREFIXED,
+    lineIdentifierColDef: FACT_LINE_IDENTITY_COL,
+  });
+  const channelColumns = useFactColumns<ChannelSelloutLine>('channel-ops.sell-out', {
+    lineIdentifier: LINE_IDENTITY,
+    lineIdentifierColDef: CHANNEL_LINE_IDENTITY_COL,
+  });
   const [smartPreset, setSmartPreset] = useState<SmartPresetId>('');
   const [distributorPick, setDistributorPick] = useState<DistHit | null>(null);
   const [customerPick, setCustomerPick] = useState<CustHit | null>(null);
@@ -171,12 +183,7 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
   const operational = depthAtLeast(depth, 'operational');
   const zeroCols = useMemo<ColDef<ZeroProduct>[]>(
     () => [
-      {
-        colId: 'line_identifier',
-        headerName: lineId.header,
-        minWidth: 120,
-        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.sales_model_name),
-      },
+      ...lineId.columns<ZeroProduct>(LINE_IDENTITY, ZERO_LINE_IDENTITY_COL),
       { field: 'name', headerName: 'Name', flex: 1, minWidth: 180 },
     ],
     [lineId],
@@ -184,12 +191,7 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
   const channelCols = useMemo<ColDef<ChannelSelloutLine>[]>(() => {
     const cols: ColDef<ChannelSelloutLine>[] = [
       { field: 'date', headerName: 'Date', minWidth: 110 },
-      {
-        colId: 'line_identifier',
-        headerName: lineId.header,
-        minWidth: 110,
-        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.sales_model_name),
-      },
+      ...channelColumns.identityColDefs,
       { field: 'customer_name', headerName: 'Customer', flex: 1, minWidth: 140 },
       { field: 'distributor_name', headerName: 'Distributor', minWidth: 140, valueFormatter: (p) => p.value ?? '—' },
       {
@@ -231,16 +233,11 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
       );
     }
     return [...cols, ...channelColumns.optionalColDefs];
-  }, [operational, lineId, channelColumns.optionalColDefs]);
+  }, [operational, channelColumns.identityColDefs, channelColumns.optionalColDefs]);
   const factCols = useMemo<ColDef<SelloutLine>[]>(
     () => [
       { field: 'period_start', headerName: 'Period', minWidth: 110 },
-      {
-        colId: 'line_identifier',
-        headerName: lineId.header,
-        minWidth: 110,
-        valueGetter: (p) => lineId.value(p.data?.product_sku, p.data?.product_sales_model_name),
-      },
+      ...factColumns.identityColDefs,
       // Names only (D7): customer and distributor codes are optional columns in the picker's Reference group.
       { field: 'customer_name', headerName: 'Customer', flex: 1, minWidth: 160, valueFormatter: (p) => p.value ?? '—' },
       { field: 'distributor_name', headerName: 'Distributor', minWidth: 140, valueFormatter: (p) => p.value ?? '—' },
@@ -260,7 +257,7 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
       },
       ...factColumns.optionalColDefs,
     ],
-    [lineId, factColumns.optionalColDefs],
+    [factColumns.identityColDefs, factColumns.optionalColDefs],
   );
 
   return (

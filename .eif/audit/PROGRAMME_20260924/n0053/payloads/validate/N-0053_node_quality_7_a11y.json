@@ -1,0 +1,10 @@
+{
+  "dim": "a11y",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/PROGRAMME_20260924/n0053/IMPL.md",
+    "summary": "Identity columns are ordinary AG Grid columns (header sort button, filter menu, keyboard nav inherited from EnterpriseDataGrid defaultColDef). Picker group uses the existing FactColumnPicker checkbox list. No axe/keyboard full pass this run."
+  },
+  "node": "N-0053",
+  "expected_revision": 7
+}

@@ -1,0 +1,5 @@
+{
+  "stage_note": "Implementer validate (run N0053_IMPL_20260929): both renders two real field columns via lineIdentifierColumns through useFactColumns.identityColDefs (N-0034 picker mechanism), registry identity group on 10 hosts, 7 non-picker AG Grid hosts + 2 MUI-table files on the same helper. tsc 0, eslint 0 errors, focused vitest 58/58, pytest 91. Browser smoke on channel-ops Inventory + settings (self-verification). Found + fixed stale runtime: orphaned uvicorn (5 days) and stale next build. Text-slot single-cell consumers deferred (finding). Independent GOV-008 referent/rendered not recorded; Opus CONSULT stays BACKLOG-209 until Anthropic usage is available. Do not complete.",
+  "node": "N-0053",
+  "expected_revision": 12
+}

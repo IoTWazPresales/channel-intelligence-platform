@@ -11,7 +11,6 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { navPageChrome } from '@/features/shell/navPageChrome';
-import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
 import { ScopeBar } from '@/features/workbench-ui/controls';
 import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
@@ -31,11 +30,13 @@ type Row = {
   risk_if_not_ordered: string | null;
 };
 
+const LINE_IDENTITY = { sku: 'sku', salesModel: 'sales_model_name' } as const;
+const PINNED_LEFT: Partial<ColDef<Row>> = { pinned: 'left' };
+
 export default function BuyPlansPage() {
   const qc = useQueryClient();
   const openDrawer = useUiStore((s) => s.openDrawer);
-  const lineId = useLineIdentifierPreference();
-  const factColumns = useFactColumns<Row>('buy-plans');
+  const factColumns = useFactColumns<Row>('buy-plans', { lineIdentifier: LINE_IDENTITY, lineIdentifierColDef: PINNED_LEFT });
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['buy-plans'],
     queryFn: ({ signal }) => apiGet<Row[]>('/api/v1/buy-plans', { signal }),
@@ -90,12 +91,7 @@ export default function BuyPlansPage() {
   const colDefs: ColDef<Row>[] = useMemo(() => {
     const busyDel = delRow.isPending || clearAll.isPending;
     return [
-      {
-        colId: 'line_identifier',
-        headerName: lineId.header,
-        pinned: 'left',
-        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.sales_model_name),
-      },
+      ...factColumns.identityColDefs,
       { field: 'recommended_qty', headerName: 'Buy qty', type: 'numericColumn' },
       { field: 'window_start', headerName: 'Window start' },
       { field: 'window_end', headerName: 'Window end' },
@@ -111,7 +107,7 @@ export default function BuyPlansPage() {
       ...factColumns.optionalColDefs,
       gridDeleteColumn<Row>((id) => void delRow.mutate(id), { busy: busyDel }),
     ];
-  }, [delRow, delRow.isPending, clearAll.isPending, lineId, factColumns.optionalColDefs]);
+  }, [delRow, delRow.isPending, clearAll.isPending, factColumns.identityColDefs, factColumns.optionalColDefs]);
 
   const rows = data ?? [];
   const gridChrome = useFactGridChrome('buy-plans', { exportDisabled: rows.length === 0 });

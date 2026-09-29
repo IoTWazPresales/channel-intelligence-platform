@@ -729,9 +729,10 @@ function AdminDistributorsPageContent() {
     () => {
       const busyDel = delSell.isPending || clearSell.isPending;
       return [
-        { field: 'product_sku', headerName: lineIdent.header, minWidth: 130, editable: false,
-          valueGetter: (p) => lineIdent.value(p.data?.product_sku, p.data?.product_sales_model_name),
-        },
+        ...lineIdent.columns<SelloutRow>(
+          { sku: 'product_sku', salesModel: 'product_sales_model_name' },
+          { minWidth: 130, editable: false },
+        ),
         { field: 'customer_code', headerName: 'Customer', minWidth: 120, editable: false },
         { field: 'period_start', headerName: 'Period', minWidth: 120, editable: false },
         { field: 'units', headerName: 'Units', type: 'numericColumn', editable: false },
@@ -753,9 +754,10 @@ function AdminDistributorsPageContent() {
     () => {
       const busyDel = delInbound.isPending || clearInbound.isPending;
       return [
-        { field: 'product_sku', headerName: lineIdent.header, minWidth: 130, editable: false,
-          valueGetter: (p) => lineIdent.value(p.data?.product_sku, p.data?.product_sales_model_name),
-        },
+        ...lineIdent.columns<InboundRow>(
+          { sku: 'product_sku', salesModel: 'product_sales_model_name' },
+          { minWidth: 130, editable: false },
+        ),
         { field: 'eta_date', headerName: 'ETA', minWidth: 120, editable: false },
         { field: 'quantity', headerName: 'Qty', type: 'numericColumn', editable: false },
         { field: 'status', headerName: 'Status', minWidth: 100, editable: false },

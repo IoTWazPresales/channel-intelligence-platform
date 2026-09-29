@@ -14,7 +14,6 @@ import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/Fac
 import { ScopeBar } from '@/features/workbench-ui/controls';
 import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
-import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 
@@ -28,10 +27,12 @@ type Row = {
   launch_target: string | null;
 };
 
+const LINE_IDENTITY = { sku: 'sku', salesModel: 'sales_model_name' } as const;
+const PINNED_LEFT: Partial<ColDef<Row>> = { pinned: 'left' };
+
 export default function RoadmapPage() {
   const qc = useQueryClient();
-  const lineId = useLineIdentifierPreference();
-  const factColumns = useFactColumns<Row>('roadmap');
+  const factColumns = useFactColumns<Row>('roadmap', { lineIdentifier: LINE_IDENTITY, lineIdentifierColDef: PINNED_LEFT });
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['roadmap'],
     queryFn: ({ signal }) => apiGet<Row[]>('/api/v1/roadmap', { signal }),
@@ -49,12 +50,7 @@ export default function RoadmapPage() {
   const colDefs: ColDef<Row>[] = useMemo(() => {
     const busyDel = delRow.isPending || clearAll.isPending;
     return [
-      {
-        colId: 'line_identifier',
-        headerName: lineId.header,
-        pinned: 'left',
-        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.sales_model_name),
-      },
+      ...factColumns.identityColDefs,
       { field: 'lifecycle_phase', headerName: 'Phase' },
       { field: 'whitespace_flag', headerName: 'Whitespace' },
       { field: 'overlap_flag', headerName: 'Overlap' },
@@ -62,7 +58,7 @@ export default function RoadmapPage() {
       ...factColumns.optionalColDefs,
       gridDeleteColumn<Row>((id) => void delRow.mutate(id), { busy: busyDel }),
     ];
-  }, [delRow, delRow.isPending, clearAll.isPending, lineId, factColumns.optionalColDefs]);
+  }, [delRow, delRow.isPending, clearAll.isPending, factColumns.identityColDefs, factColumns.optionalColDefs]);
 
   const rows = data ?? [];
   const gridChrome = useFactGridChrome('roadmap', { exportDisabled: rows.length === 0 });

@@ -27,7 +27,8 @@ ReservationSource = Literal["derived_from_profit", "explicit_column", "hybrid"]
 PmAttributionMode = Literal["business_line", "person_field", "none"]
 
 # Which product identifier labels a line in reports and workspaces (display only).
-LineIdentifierPreference = Literal["sku", "sales_model"]
+# ``both`` renders SKU and sales model as two columns (N-0053); stored keys never change.
+LineIdentifierPreference = Literal["sku", "sales_model", "both"]
 
 # Current-tenant defaults (Warren 2026-08-01). Override later via onboarding.
 CONSTRAINT_AXIS: ConstraintAxis = "money"
@@ -171,7 +172,7 @@ _TENANT_PROFILE_VALID_VALUES: dict[str, frozenset[str]] = {
     "over_budget_action": frozenset({"require_reapproval", "warn", "block"}),
     "reservation_source": frozenset({"derived_from_profit", "explicit_column", "hybrid"}),
     "pm_attribution_mode": frozenset({"business_line", "person_field", "none"}),
-    "line_identifier_preference": frozenset({"sku", "sales_model"}),
+    "line_identifier_preference": frozenset({"sku", "sales_model", "both"}),
     "reporting_cadence": frozenset(
         {
             "weekly_monday",

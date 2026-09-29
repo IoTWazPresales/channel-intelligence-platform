@@ -12,7 +12,19 @@ const ITEMS: GridFieldItem[] = [
   { field: 'customer_code', label: 'Customer code', group: 'reference', default_hidden: true },
 ];
 
-const apiGetMock = vi.fn(async (_url: string) => ({ grid_id: 'roadmap', items: ITEMS }));
+const IDENTITY_ITEMS: GridFieldItem[] = [
+  { field: 'sku', label: 'SKU', group: 'identity', default_hidden: true },
+  { field: 'sales_model_name', label: 'Sales model', group: 'identity', default_hidden: true },
+];
+
+const PROFILE_URL = '/api/v1/auth/tenant-commercial-profile';
+let tenantPreference: 'sku' | 'sales_model' | 'both' = 'sku';
+let registryItems: GridFieldItem[] = ITEMS;
+
+const apiGetMock = vi.fn(async (url: string) => {
+  if (url === PROFILE_URL) return { line_identifier_preference: tenantPreference };
+  return { grid_id: 'roadmap', items: registryItems };
+});
 vi.mock('@/lib/api', () => ({
   apiGet: (url: string) => apiGetMock(url),
 }));
@@ -28,6 +40,8 @@ describe('useFactColumns', () => {
   beforeEach(() => {
     localStorage.clear();
     apiGetMock.mockClear();
+    tenantPreference = 'sku';
+    registryItems = ITEMS;
   });
   afterEach(() => {
     vi.restoreAllMocks();
@@ -115,6 +129,65 @@ describe('useFactColumns', () => {
     const fmt = col.valueFormatter as (p: { value: unknown }) => string;
     expect(fmt({ value: 7 })).toBe('#7');
   });
+
+  describe('line identity (N-0053)', () => {
+    const LINE = { sku: 'sku', salesModel: 'sales_model_name' } as const;
+
+    it('returns no identity columns and the raw registry when no lineIdentifier is given', async () => {
+      registryItems = [...IDENTITY_ITEMS, ...ITEMS];
+      const { result } = renderHook(() => useFactColumns('roadmap'), { wrapper: wrapper() });
+      await waitFor(() => expect(result.current.pickerProps.items).toHaveLength(5));
+      expect(result.current.identityColDefs).toEqual([]);
+    });
+
+    it('sku preference pins one welded column and offers only Sales model in the picker', async () => {
+      registryItems = [...IDENTITY_ITEMS, ...ITEMS];
+      const { result } = renderHook(
+        () => useFactColumns('roadmap', { lineIdentifier: LINE, lineIdentifierColDef: { pinned: 'left' } }),
+        { wrapper: wrapper() }
+      );
+      await waitFor(() => expect(result.current.pickerProps.items).toHaveLength(4));
+      expect(result.current.pickerProps.items.map((i) => i.field)).toEqual([
+        'sales_model_name',
+        'retire_target',
+        'product_id',
+        'customer_code',
+      ]);
+      await waitFor(() => expect(result.current.identityColDefs).toHaveLength(1));
+      expect(result.current.identityColDefs[0]).toMatchObject({
+        colId: 'line_identifier',
+        headerName: 'SKU',
+        pinned: 'left',
+      });
+      act(() => result.current.pickerProps.onToggle('sales_model_name', true));
+      expect(result.current.optionalColDefs.map((c) => [c.field, c.headerName])).toEqual([
+        ['sales_model_name', 'Sales model'],
+      ]);
+    });
+
+    it('`both` pins two field columns and removes both identifiers from the picker and optional set', async () => {
+      tenantPreference = 'both';
+      registryItems = [...IDENTITY_ITEMS, ...ITEMS];
+      // A Sales model pick saved while the tenant was on `sku` must not become a duplicate column.
+      localStorage.setItem(gridLayoutStorageKey('roadmap'), JSON.stringify({ optionalFields: ['sales_model_name'] }));
+      const { result } = renderHook(
+        () => useFactColumns('roadmap', { lineIdentifier: LINE, lineIdentifierColDef: { minWidth: 110 } }),
+        { wrapper: wrapper() }
+      );
+      await waitFor(() => expect(result.current.identityColDefs).toHaveLength(2));
+      expect(result.current.identityColDefs.map((c) => [c.colId, c.field, c.headerName, c.minWidth])).toEqual([
+        ['line_identifier_sku', 'sku', 'SKU', 110],
+        ['line_identifier_sales_model', 'sales_model_name', 'Sales model', 110],
+      ]);
+      await waitFor(() => expect(result.current.pickerProps.items).toHaveLength(3));
+      expect(result.current.pickerProps.items.every((i) => i.group !== 'identity')).toBe(true);
+      expect(result.current.optionalColDefs).toEqual([]);
+      // The stored pick survives (pruned against the full registry) so it returns on a flip back.
+      expect(JSON.parse(localStorage.getItem(gridLayoutStorageKey('roadmap')) ?? '{}').optionalFields).toEqual([
+        'sales_model_name',
+      ]);
+    });
+  });
 });
 
 describe('FactColumnPicker', () => {
@@ -146,5 +219,24 @@ describe('FactColumnPicker', () => {
     fireEvent.change(screen.getByLabelText('Search columns'), { target: { value: 'customer' } });
     expect(screen.queryByTestId('master-column-toggle-product_id')).not.toBeInTheDocument();
     expect(screen.getByTestId('master-column-toggle-customer_code')).toBeInTheDocument();
+  });
+
+  it('lists a Line identity group first when the registry offers an identifier the preference does not pin', () => {
+    render(
+      <FactColumnPicker
+        open
+        onClose={vi.fn()}
+        gridId="roadmap"
+        items={[IDENTITY_ITEMS[1], ...ITEMS]}
+        selected={[]}
+        onToggle={vi.fn()}
+        onReset={vi.fn()}
+        gridReady
+        loading={false}
+      />
+    );
+    expect(screen.getByText('Line identity')).toBeInTheDocument();
+    expect(screen.getByTestId('master-column-toggle-sales_model_name')).toBeInTheDocument();
+    expect(screen.queryByTestId('master-column-toggle-sku')).not.toBeInTheDocument();
   });
 });

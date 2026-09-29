@@ -1308,17 +1308,21 @@ export default function CommercialPlannerPage() {
           return bits.length ? bits.join(' — ') : `#${d.distributor_id}`;
         },
       },
-      {
-        colId: 'product_sku_display',
-        headerName: lineIdent.header,
-        minWidth: 100,
-        valueGetter: (p) => {
-          const d = p.data;
-          if (!d) return '';
-          const label = lineIdent.value(d.product_sku, d.product_sales_model_name);
-          return label !== '—' ? label : `#${d.product_id}`;
-        },
-      },
+      ...(lineIdent.preference === 'both'
+        ? lineIdent.columns<PlanLine>({ sku: 'product_sku', salesModel: 'product_sales_model_name' }, { minWidth: 100 })
+        : [
+            {
+              colId: 'product_sku_display',
+              headerName: lineIdent.header,
+              minWidth: 100,
+              valueGetter: (p) => {
+                const d = p.data;
+                if (!d) return '';
+                const label = lineIdent.value(d.product_sku, d.product_sales_model_name);
+                return label !== '—' ? label : `#${d.product_id}`;
+              },
+            } satisfies ColDef<PlanLine>,
+          ]),
       {
         colId: 'product_part_number_display',
         headerName: 'Part #',
@@ -3114,7 +3118,9 @@ export default function CommercialPlannerPage() {
                     </TableCell>
                     <TableCell>Row</TableCell>
                     <TableCell>Model / product</TableCell>
-                    <TableCell>{lineIdent.header}</TableCell>
+                    {lineIdent.headers.map((h) => (
+                      <TableCell key={h}>{h}</TableCell>
+                    ))}
                     <TableCell>Part #</TableCell>
                     <TableCell>Customer</TableCell>
                     <TableCell>Distributor</TableCell>
@@ -3140,11 +3146,13 @@ export default function CommercialPlannerPage() {
                       </TableCell>
                       <TableCell>{row.source_row_number}</TableCell>
                       <TableCell>{coverageLineupProductLabel(row)}</TableCell>
-                      <TableCell>
-                        <Typography variant="body2" fontFamily="monospace" component="span">
-                          {lineIdent.value(row.product_sku, row.product_sales_model_name ?? row.model_raw)}
-                        </Typography>
-                      </TableCell>
+                      {lineIdent.values(row.product_sku, row.product_sales_model_name ?? row.model_raw).map((v, i) => (
+                        <TableCell key={lineIdent.headers[i]}>
+                          <Typography variant="body2" fontFamily="monospace" component="span">
+                            {v}
+                          </Typography>
+                        </TableCell>
+                      ))}
                       <TableCell>{row.part_number_raw?.trim() || '—'}</TableCell>
                       <TableCell>{coverageLineupCustomerCell(row)}</TableCell>
                       <TableCell>{coverageLineupDistributorCell(row)}</TableCell>
@@ -3368,7 +3376,9 @@ export default function CommercialPlannerPage() {
                   <Table size="small" sx={{ minWidth: 700 }}>
                     <TableHead>
                       <TableRow>
-                        <TableCell>{lineIdent.header}</TableCell>
+                        {lineIdent.headers.map((h) => (
+                          <TableCell key={h}>{h}</TableCell>
+                        ))}
                         <TableCell>Product</TableCell>
                         <TableCell>SKU assumption</TableCell>
                         <TableCell align="right">DAP evidence (src/local)</TableCell>
@@ -3380,7 +3390,9 @@ export default function CommercialPlannerPage() {
                     <TableBody>
                       {(productGaps ?? []).map((pg) => (
                         <TableRow key={pg.product_id}>
-                          <TableCell>{lineIdent.value(pg.product_sku, pg.product_sales_model_name)}</TableCell>
+                          {lineIdent.values(pg.product_sku, pg.product_sales_model_name).map((v, i) => (
+                            <TableCell key={lineIdent.headers[i]}>{v}</TableCell>
+                          ))}
                           <TableCell>{pg.product_name}</TableCell>
                           <TableCell>
                             <Chip
@@ -3446,7 +3458,9 @@ export default function CommercialPlannerPage() {
                 <TableHead>
                   <TableRow>
                     <TableCell>Row</TableCell>
-                    <TableCell>{lineIdent.header}</TableCell>
+                    {lineIdent.headers.map((h) => (
+                      <TableCell key={h}>{h}</TableCell>
+                    ))}
                     <TableCell>Model</TableCell>
                     <TableCell>Part #</TableCell>
                     <TableCell>Base unit</TableCell>
@@ -3467,7 +3481,9 @@ export default function CommercialPlannerPage() {
                   {filteredCoverageLines.map((ln) => (
                     <TableRow key={ln.id}>
                       <TableCell>{ln.source_row_number}</TableCell>
-                      <TableCell>{lineIdent.value(ln.product_sku, ln.product_sales_model_name ?? ln.model_raw)}</TableCell>
+                      {lineIdent.values(ln.product_sku, ln.product_sales_model_name ?? ln.model_raw).map((v, i) => (
+                        <TableCell key={lineIdent.headers[i]}>{v}</TableCell>
+                      ))}
                       <TableCell>{ln.model_raw ?? '—'}</TableCell>
                       <TableCell>{ln.part_number_raw ?? '—'}</TableCell>
                       <TableCell>{ln.base_unit_raw ?? '—'}</TableCell>

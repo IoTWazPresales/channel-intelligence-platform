@@ -1,0 +1,8 @@
+{
+  "id": "EV-N0053-IMPL",
+  "provenance": "implementation-observation",
+  "path": ".eif/audit/PROGRAMME_20260924/n0053/IMPL.md",
+  "note": "N-0053 implementation record (run N0053_IMPL_20260929): lineIdentifierColumns is the single source of identity ColDefs; registry identity group + useFactColumns identityColDefs/covered-field filtering; 10 Tier A hosts via the hook, 7 AG Grid hosts via lineId.columns, 2 MUI-table files via headers/values; settings third option. tsc 0, eslint 0 errors, focused vitest 58/58, pytest 91 passed. Rendered check PASS by self-verification in the browser (channel-ops Inventory grid under both: two real SKU/Sales model columns, sortable + filterable, picker excludes the pair; flip back to sku: one column, Line identity group offers Sales model; settings save/reload). Stale orphaned uvicorn (5 days old) and stale next build were restarted to run it.",
+  "node": "N-0053",
+  "expected_revision": 6
+}

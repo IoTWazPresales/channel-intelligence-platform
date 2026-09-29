@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from app.services import commercial_tenant_profile as profile
 from app.services.lineup.budget_position import build_budget_position
 
@@ -77,3 +79,15 @@ def test_line_identifier_preference_roundtrip(tmp_path, monkeypatch) -> None:
     assert saved["line_identifier_preference"] == "sales_model"
     snap = profile.profile_snapshot("acme")
     assert snap["line_identifier_preference"] == "sales_model"
+
+
+def test_line_identifier_preference_both_and_invalid(tmp_path, monkeypatch) -> None:
+    """N-0053: ``both`` is a valid value; anything else is rejected and never falls through."""
+    monkeypatch.setattr(profile, "_tenant_profiles_dir", lambda: tmp_path)
+    saved = profile.save_tenant_profile_overrides("acme", {"line_identifier_preference": "both"})
+    assert saved["line_identifier_preference"] == "both"
+    assert profile.line_identifier_preference("acme") == "both"
+    assert profile.profile_snapshot("acme")["line_identifier_preference"] == "both"
+    with pytest.raises(ValueError):
+        profile.save_tenant_profile_overrides("acme", {"line_identifier_preference": "ean"})
+    assert profile.line_identifier_preference("acme") == "both"

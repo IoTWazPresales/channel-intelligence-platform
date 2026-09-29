@@ -1,0 +1,10 @@
+{
+  "dim": "ux",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/PROGRAMME_20260924/n0053/IMPL.md",
+    "summary": "both = two real identity columns pinned where the welded column sat; picker excludes what the preference pins and offers the complement under Line identity; flip back restores one column. Self-verification in the implementation run."
+  },
+  "node": "N-0053",
+  "expected_revision": 6
+}

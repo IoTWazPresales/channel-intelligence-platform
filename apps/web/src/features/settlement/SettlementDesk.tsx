@@ -176,13 +176,7 @@ export function SettlementDesk({
 
   const columnDefs = useMemo<ColDef<SettlementDeskLine>[]>(
     () => [
-      {
-        colId: 'line_identifier',
-        headerName: lineId.header,
-        width: 140,
-        pinned: 'left',
-        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.salesModel),
-      },
+      ...lineId.columns<SettlementDeskLine>({ sku: 'sku', salesModel: 'salesModel' }, { width: 140, pinned: 'left' }),
       { field: 'product', headerName: 'Product', minWidth: 200, flex: 1.4 },
       { field: 'distributor', headerName: 'Distributor', minWidth: 160, flex: 1 },
       {

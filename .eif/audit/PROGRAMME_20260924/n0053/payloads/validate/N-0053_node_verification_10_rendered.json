@@ -1,0 +1,17 @@
+{
+  "kind": "rendered",
+  "state": "pass",
+  "evidence": {
+    "path": ".eif/audit/PROGRAMME_20260924/n0053/IMPL.md",
+    "url": "http://localhost:3000/stock?lens=movement",
+    "independence": "self-verification (same run/actor as implementation)",
+    "checks": [
+      "settings both saved + reload",
+      "inventory grid two identity columns sortable/filterable",
+      "picker excludes pinned pair under both",
+      "flip back to sku: one column, Line identity offers Sales model"
+    ]
+  },
+  "node": "N-0053",
+  "expected_revision": 10
+}

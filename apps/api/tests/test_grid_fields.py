@@ -192,7 +192,7 @@ def test_every_item_is_default_hidden_and_grouped(grid_id: str) -> None:
     items = grid_field_items(GRID_FIELDS[grid_id])
     assert items, grid_id
     assert all(it["default_hidden"] is True for it in items)
-    assert {it["group"] for it in items} <= {"fact", "reference"}
+    assert {it["group"] for it in items} <= {"identity", "fact", "reference"}
     fields = [it["field"] for it in items]
     assert len(fields) == len(set(fields)), f"{grid_id}: duplicate fields"
     assert not set(fields) & GRID_FIELDS[grid_id].default_keys
@@ -357,7 +357,49 @@ def test_computed_grids_offer_only_declared_keys() -> None:
         spec = GRID_FIELDS[grid_id]
         assert spec.model is None
         offered = {it["field"] for it in grid_field_items(spec)}
-        assert offered == {k for k, _ in spec.static_keys} | {k for k, _ in spec.joined_extras}
+        identity = set(spec.identity or ())
+        assert offered == {k for k, _ in spec.static_keys} | {k for k, _ in spec.joined_extras} | identity
+
+
+# ── N-0053: line identity pair ──
+
+IDENTITY_GRIDS = {
+    "forecasts": ("sku", "sales_model_name"),
+    "pricing.facts": ("sku", "sales_model_name"),
+    "pricing.recommendations": ("sku", "sales_model_name"),
+    "roadmap": ("sku", "sales_model_name"),
+    "buy-plans": ("sku", "sales_model_name"),
+    "inventory.customer": ("product_sku", "product_sales_model_name"),
+    "sellout.commercial-lines": ("product_sku", "product_sales_model_name"),
+    "channel-ops.sell-out": ("sku", "sales_model_name"),
+    "channel-ops.movements": ("sku", "sales_model_name"),
+    "channel-ops.inventory": ("sku", "sales_model_name"),
+}
+
+
+def test_identity_grids_are_exactly_the_hosts_with_a_line_column() -> None:
+    assert {g for g, s in GRID_FIELDS.items() if s.identity is not None} == set(IDENTITY_GRIDS)
+
+
+@pytest.mark.parametrize("grid_id,keys", sorted(IDENTITY_GRIDS.items()))
+def test_identity_pair_is_offered_with_fixed_labels_and_present_in_rows(grid_id: str, keys: tuple[str, str]) -> None:
+    """The picker can carry the identifier the preference does not pin; both keys are in the payload."""
+    items = [it for it in grid_field_items(GRID_FIELDS[grid_id]) if it["group"] == "identity"]
+    assert [(it["field"], it["label"]) for it in items] == [(keys[0], "SKU"), (keys[1], "Sales model")]
+    assert all(it["default_hidden"] is True for it in items)
+    row = _seeded_rows()[grid_id]
+    assert row[keys[0]] == "SKU-7"
+    assert row[keys[1]] == "Model 7"
+    # Identity keys are not duplicated into the fact group.
+    fact_fields = {it["field"] for it in grid_field_items(GRID_FIELDS[grid_id]) if it["group"] == "fact"}
+    assert not fact_fields & set(keys)
+
+
+def test_pve_drill_keeps_product_identity_as_static_fact_keys() -> None:
+    """No welded identity column there: product_sku / product_sales_model stay ordinary pickable fields."""
+    items = {it["field"]: it["group"] for it in grid_field_items(GRID_FIELDS["pve.drill"])}
+    assert items["product_sku"] == "fact"
+    assert items["product_sales_model"] == "fact"
 
 
 def test_customer_terms_keep_code_as_default_column() -> None:

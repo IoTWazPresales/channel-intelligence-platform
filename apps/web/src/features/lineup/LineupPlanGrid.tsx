@@ -70,13 +70,10 @@ export function LineupPlanGrid({ rows, pendingOnly }: Props) {
         minWidth: 140,
         valueGetter: (p) => p.data?.customer_name || p.data?.customer_code || '—',
       },
-      {
-        colId: 'line_identifier',
-        headerName: lineId.header,
-        minWidth: 140,
-        cellClass: 'lineup-sku-cell',
-        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.sales_model_name),
-      },
+      ...lineId.columns<LineupPlanRow>(
+        { sku: 'sku', salesModel: 'sales_model_name' },
+        { minWidth: 140, cellClass: 'lineup-sku-cell' },
+      ),
       { field: 'period_label', headerName: 'Period', minWidth: 100 },
       {
         field: 'planned_volume_units',

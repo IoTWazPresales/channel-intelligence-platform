@@ -5,6 +5,12 @@
  * (`GET /api/v1/grid-fields/{gridId}`), so the list and the row payload share one source; this hook
  * owns the fetch, the per-grid localStorage layout (read / write / prune) and the generic formatter.
  * Render the picker with `<FactColumnPicker {...pickerProps} />` (features/workbench-ui/FactColumnPicker).
+ *
+ * Line identity (N-0053): pass `lineIdentifier: { sku, salesModel }` (the row keys) and the hook
+ * returns `identityColDefs` — one welded column or, under the tenant's `both` preference, two real
+ * field columns — from the shared `lineIdentifierColumns`. Identity fields the preference already
+ * pins are removed from the picker and from the optional set, so there is one mechanism and no
+ * duplicate column after a preference change.
  */
 
 import { useQuery } from '@tanstack/react-query';
@@ -12,12 +18,18 @@ import type { ColDef, ValueFormatterParams } from 'ag-grid-community';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { fmtCellForKey } from '@/app/(app)/shipping/shippingGridFormatters';
+import {
+  lineIdentifierColumns,
+  lineIdentifierCoveredFields,
+  type LineIdentifierFields,
+} from '@/features/tenant/lineIdentifier';
+import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { apiGet } from '@/lib/api';
 
 export type GridFieldItem = {
   field: string;
   label: string;
-  group: 'fact' | 'reference';
+  group: 'identity' | 'fact' | 'reference';
   default_hidden: boolean;
 };
 
@@ -40,6 +52,10 @@ export type UseFactColumnsOptions<T> = {
   formatters?: Record<string, (value: unknown) => string>;
   /** Extra ColDef props per optional field (width, wrap). */
   colDefFor?: (field: string) => Partial<ColDef<T>>;
+  /** Row keys of the line identity pair; enables `identityColDefs` (N-0053). */
+  lineIdentifier?: LineIdentifierFields;
+  /** ColDef props shared by the identity column(s) — pinned, minWidth. */
+  lineIdentifierColDef?: Partial<ColDef<T>>;
 };
 
 export function gridLayoutStorageKey(gridId: string): string {
@@ -71,10 +87,11 @@ function writeStored(key: string, optionalFields: string[]): void {
 
 export function useFactColumns<T>(gridId: string, opts: UseFactColumnsOptions<T> = {}) {
   const storageKey = opts.storageKey ?? gridLayoutStorageKey(gridId);
-  const { formatters, colDefFor } = opts;
+  const { formatters, colDefFor, lineIdentifier, lineIdentifierColDef } = opts;
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [persistReady, setPersistReady] = useState(false);
+  const { preference } = useLineIdentifierPreference();
 
   const { data, isLoading, isSuccess } = useQuery({
     queryKey: ['grid-fields', gridId],
@@ -82,7 +99,26 @@ export function useFactColumns<T>(gridId: string, opts: UseFactColumnsOptions<T>
       apiGet<{ items?: GridFieldItem[] }>(`/api/v1/grid-fields/${encodeURIComponent(gridId)}`, { signal }),
     staleTime: 5 * 60_000,
   });
-  const items = useMemo(() => (Array.isArray(data?.items) ? data.items : []), [data]);
+  const skuKey = lineIdentifier?.sku;
+  const modelKey = lineIdentifier?.salesModel;
+  // Identity keys the preference already renders as pinned columns: never offered or duplicated.
+  const coveredFields = useMemo(
+    () => (skuKey && modelKey ? lineIdentifierCoveredFields(preference, { sku: skuKey, salesModel: modelKey }) : []),
+    [preference, skuKey, modelKey]
+  );
+  const identityColDefs = useMemo<ColDef<T>[]>(
+    () =>
+      skuKey && modelKey
+        ? lineIdentifierColumns<T>(preference, { sku: skuKey, salesModel: modelKey }, lineIdentifierColDef)
+        : [],
+    [preference, skuKey, modelKey, lineIdentifierColDef]
+  );
+  const registryItems = useMemo(() => (Array.isArray(data?.items) ? data.items : []), [data]);
+  const items = useMemo(() => {
+    if (!coveredFields.length) return registryItems;
+    const covered = new Set(coveredFields);
+    return registryItems.filter((i) => !covered.has(i.field));
+  }, [registryItems, coveredFields]);
 
   useEffect(() => {
     const stored = readStored(storageKey);
@@ -93,17 +129,21 @@ export function useFactColumns<T>(gridId: string, opts: UseFactColumnsOptions<T>
   }, [storageKey]);
 
   // Prune fields the registry no longer offers (renamed / removed columns), once the list is known.
+  // Pruned against the full registry, not the preference-filtered list, so a stored identity pick
+  // survives a preference flip and comes back when the preference no longer covers it.
   useEffect(() => {
-    if (!isSuccess || !items.length) return;
-    const allowed = new Set(items.map((i) => i.field));
+    if (!isSuccess || !registryItems.length) return;
+    const allowed = new Set(registryItems.map((i) => i.field));
     setSelected((prev) => (prev.every((f) => allowed.has(f)) ? prev : prev.filter((f) => allowed.has(f))));
-  }, [isSuccess, items]);
+  }, [isSuccess, registryItems]);
 
   useEffect(() => {
     if (!persistReady) return;
     writeStored(storageKey, selected);
   }, [selected, persistReady, storageKey]);
 
+  // `items` already excludes preference-covered identity fields, so a stored selection of one
+  // (picked before the tenant switched to `both`) drops out of the visible set without a write.
   const labelByField = useMemo(() => new Map(items.map((i) => [i.field, i.label])), [items]);
   const visibleFields = useMemo(() => selected.filter((f) => labelByField.has(f)), [selected, labelByField]);
 
@@ -147,5 +187,13 @@ export function useFactColumns<T>(gridId: string, opts: UseFactColumnsOptions<T>
     loading: isLoading,
   };
 
-  return { optionalColDefs, optionalFields: visibleFields, pickerProps, openPicker, loading: isLoading };
+  return {
+    optionalColDefs,
+    optionalFields: visibleFields,
+    /** Line identity column(s) per the tenant preference; `[]` when `lineIdentifier` not given. */
+    identityColDefs,
+    pickerProps,
+    openPicker,
+    loading: isLoading,
+  };
 }

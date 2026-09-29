@@ -12,7 +12,6 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { navPageChrome } from '@/features/shell/navPageChrome';
-import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
 import { ScopeBar } from '@/features/workbench-ui/controls';
 import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
@@ -30,6 +29,9 @@ type Row = {
   on_order_units: number;
   as_of_date: string;
 };
+
+const LINE_IDENTITY = { sku: 'product_sku', salesModel: 'product_sales_model_name' } as const;
+const PINNED_LEFT: Partial<ColDef<Row>> = { pinned: 'left', minWidth: 140 };
 
 type InvPasteRow = {
   sku: string;
@@ -64,8 +66,10 @@ function parseInventoryPaste(text: string): InvPasteRow[] {
 
 export default function InventoryPage() {
   const qc = useQueryClient();
-  const lineId = useLineIdentifierPreference();
-  const factColumns = useFactColumns<Row>('inventory.customer');
+  const factColumns = useFactColumns<Row>('inventory.customer', {
+    lineIdentifier: LINE_IDENTITY,
+    lineIdentifierColDef: PINNED_LEFT,
+  });
   const [pasteOpen, setPasteOpen] = useState(false);
   const [paste, setPaste] = useState('');
   const [addOpen, setAddOpen] = useState(false);
@@ -121,13 +125,7 @@ export default function InventoryPage() {
   const colDefs: ColDef<Row>[] = useMemo(() => {
     const busyDel = delRow.isPending || clearAll.isPending;
     return [
-      {
-        colId: 'line_identifier',
-        headerName: lineId.header,
-        pinned: 'left',
-        minWidth: 140,
-        valueGetter: (p) => lineId.value(p.data?.product_sku, p.data?.product_sales_model_name),
-      },
+      ...factColumns.identityColDefs,
       // Name only (D7); the code is its own optional column in the picker's Reference group.
       { field: 'customer_name', headerName: 'Customer', minWidth: 160, valueFormatter: (p) => p.value ?? '—' },
       { field: 'on_hand_units', headerName: 'On hand', type: 'numericColumn' },
@@ -136,7 +134,7 @@ export default function InventoryPage() {
       ...factColumns.optionalColDefs,
       gridDeleteColumn<Row>((id) => void delRow.mutate(id), { busy: busyDel }),
     ];
-  }, [delRow, delRow.isPending, clearAll.isPending, lineId, factColumns.optionalColDefs]);
+  }, [delRow, delRow.isPending, clearAll.isPending, factColumns.identityColDefs, factColumns.optionalColDefs]);
 
   const rows = data ?? [];
   const gridChrome = useFactGridChrome('inventory.customer', { exportDisabled: rows.length === 0 });

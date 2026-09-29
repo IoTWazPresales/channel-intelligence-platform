@@ -52,12 +52,7 @@ export function CporPromoLoadPanel({ caseId }: { caseId: number }) {
 
   const cols = useMemo<ColDef<PromoLoadLine>[]>(
     () => [
-      {
-        colId: 'line_identifier',
-        headerName: lineId.header,
-        flex: 1,
-        valueGetter: (p) => lineId.value(p.data?.product_sku, p.data?.product_sales_model_name),
-      },
+      ...lineId.columns<PromoLoadLine>({ sku: 'product_sku', salesModel: 'product_sales_model_name' }, { flex: 1 }),
       { field: 'product_name', headerName: 'Product', flex: 1.5 },
       { field: 'estimate_qty', headerName: 'Est qty', width: 100 },
       { field: 'cst_units', headerName: 'CST units', width: 110 },

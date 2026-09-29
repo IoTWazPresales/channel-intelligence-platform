@@ -40,10 +40,16 @@ type ProductTotal = {
   inbound: number;
 };
 
+const LINE_IDENTITY = { sku: 'sku', salesModel: 'sales_model_name' } as const;
+const LINE_IDENTITY_COL: Partial<ColDef<MovementRow>> = { minWidth: 110 };
+
 export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
   const [distributorPick, setDistributorPick] = useState<DistHit | null>(null);
   const lineId = useLineIdentifierPreference();
-  const factColumns = useFactColumns<MovementRow>('channel-ops.movements');
+  const factColumns = useFactColumns<MovementRow>('channel-ops.movements', {
+    lineIdentifier: LINE_IDENTITY,
+    lineIdentifierColDef: LINE_IDENTITY_COL,
+  });
   const gridChrome = useFactGridChrome('channel-ops.movements');
   const distId = distributorPick?.id;
 
@@ -85,12 +91,7 @@ export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
     () => [
       { field: 'ship_date', headerName: 'Ship date', minWidth: 120, valueFormatter: (p) => p.value ?? '—' },
       { field: 'product_name', headerName: 'Product', flex: 1, minWidth: 140, valueFormatter: (p) => p.value ?? '—' },
-      {
-        colId: 'line_identifier',
-        headerName: lineId.header,
-        minWidth: 110,
-        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.sales_model_name),
-      },
+      ...factColumns.identityColDefs,
       { field: 'order_no', headerName: 'Order no', minWidth: 120, valueFormatter: (p) => p.value ?? '—' },
       { field: 'delivery_no', headerName: 'Delivery no', minWidth: 120, valueFormatter: (p) => p.value ?? '—' },
       {
@@ -103,16 +104,11 @@ export function ChannelOpsMovementsTab({ depth }: { depth: IntelDepth }) {
       { field: 'line_state', headerName: 'Status', minWidth: 110 },
       ...factColumns.optionalColDefs,
     ],
-    [lineId, factColumns.optionalColDefs],
+    [factColumns.identityColDefs, factColumns.optionalColDefs],
   );
   const totalCols = useMemo<ColDef<ProductTotal>[]>(
     () => [
-      {
-        colId: 'line_identifier',
-        headerName: lineId.header,
-        minWidth: 110,
-        valueGetter: (p) => lineId.value(p.data?.sku, p.data?.sales_model_name),
-      },
+      ...lineId.columns<ProductTotal>(LINE_IDENTITY, { minWidth: 110 }),
       { field: 'name', headerName: 'Product', flex: 1, minWidth: 160 },
       {
         field: 'inbound',

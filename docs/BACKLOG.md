@@ -3252,7 +3252,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Open** · 2026-09-29 · Opus CONSULT and VERIFY still not run. Cursor must not self-PASS. Browser on the rebuilt `next start` at :3000 (uncommitted): Columns / Additional columns sit inside the Scope toolbar on forecasts (Velocity shows Clear; Compute stays outside; `customer_code` still checked after reload), pricing facts, pricing recommendations, shipments (Unattributed inside; Slipped in disabled until a plan quarter), roadmap, cover, sell-out, channel-ops inventory and movements (after a distributor is chosen), execution drill, channel-intelligence workspace, customer commercial terms, and listing capture. `/buy-plans` and `/inventory` redirect before those pages render. Shipment search stays the paper under the bar. |
+| **Status / parked** | **Open** · 2026-09-29 · Opus CONSULT and VERIFY still not run. Cursor must not self-PASS. **Warren 2026-09-29: this CONSULT/VERIFY debt applies to every stage shipped on this branch until Anthropic usage is available — it does not block feature-branch commits, only promotion to `main`.** Covers the ScopeBar unit (`a8755854`) and N-0053 line identifier `both` (same day, see CONTEXT). Browser on the rebuilt `next start` at :3000: Columns / Additional columns sit inside the Scope toolbar on forecasts (Velocity shows Clear; Compute stays outside; `customer_code` still checked after reload), pricing facts, pricing recommendations, shipments (Unattributed inside; Slipped in disabled until a plan quarter), roadmap, cover, sell-out, channel-ops inventory and movements (after a distributor is chosen), execution drill, channel-intelligence workspace, customer commercial terms, and listing capture. `/buy-plans` and `/inventory` redirect before those pages render. Shipment search stays the paper under the bar. |
 | **Effort** | Small — one Opus CONSULT, then VERIFY against the running pages |
 | **Source** | This session on `feat/ns-2-brief-nav-collapse`. Warren: continue the ScopeBar work and hold CONSULT until Anthropic usage resets. Charter: when the consultant is unavailable, record VERIFY-debt; debt blocks promotion to `main`. |
 | **Idea** | The existing fact-grid column picker now sits on the shared `ScopeBar` for forecasts, pricing facts, pricing recommendations, and inbound shipments. That composition has not had an Opus CONSULT or VERIFY. |
@@ -3262,3 +3262,18 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Behavior to retain** | Method filter still drives the forecasts query. Shipment server filters and the PO banner stay. Identity cells stay name-only; codes stay their own columns. |
 | **Out of scope** | Astra or any other model as the verdict of record. N-0041 search, N-0042 saved views, N-0043 export. |
 | **TRIGGER** | Anthropic allowance is back, so Opus can CONSULT and VERIFY. Clear this entry only on `VERDICT: PASS` or a written waiver from Warren. Required before promotion of this branch to `main`. |
+
+## BACKLOG-210 — Line identifier `both`: single text-slot consumers still weld `SKU · Sales model` into one string
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** · 2026-09-29 · Recorded as `finding.defer` (`DOES_NOT_FIT`) on N-0053. |
+| **Effort** | Small per consumer; the lineup workbench is Medium because its column model is a fixed per-`colId` switch, not `ColDef[]`. |
+| **Source** | `.eif/audit/PROGRAMME_20260924/n0053/finding_textslot.json`; `.eif/audit/PROGRAMME_20260924/n0053/IMPL.md` ("Text-slot consumers"). |
+| **Idea** | N-0053 made `both` render two real, sortable, filterable columns on every AG Grid and MUI-table host through `lineIdentifierColumns` / `headers` / `values`. Four places consume the identifier as a single text slot and, under `both`, still show the welded `value` (`sku · model`) with header `SKU · Sales model`: `CoverLensView` product caption/subtitle, `SettlementDesk` drawer title, the commercial-planner drawer heading, and the `CurrentLineupSection` lineup workbench (`colId === 'sku'` cell renderer, column label, and column-selector search). |
+| **Why it matters / deferrable** | Captions and drawer titles are legitimately one string — a welded label there is arguably correct, not a defect. The lineup workbench is the only one that is a grid-like surface showing one cell where the preference asks for two columns. Deferrable because it is display-only, the stored keys are unchanged, and the workbench is already slated to move onto the shared picker mechanism (BACKLOG-190 / N-0034 Tier A follow-ups). |
+| **What the work is** | When the lineup workbench adopts `useFactColumns` / `ColDef[]`, split its `sku` colId into the identity pair via `lineIdentifierColumns` and drop the bespoke `colId === 'sku'` branches. Decide per caption whether the welded string stays (recommended for drawer titles) or becomes two labelled lines. |
+| **Regression traps** | Do not add a second column mechanism; go through `lineIdentifierColumns`. Do not change `sku` / `sales_model` single modes. Do not rename the stored preference values. |
+| **Behavior to retain** | Single-mode behaviour identical to today; `both` keeps `SKU` / `Sales model` headers and `—` for empty. |
+| **Out of scope** | Any change to which fields are stored; any import/steward path. |
+| **TRIGGER** | The `CurrentLineupSection` workbench moves onto the shared picker mechanism, or Warren asks for two-line captions under `both`. |

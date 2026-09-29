@@ -25,6 +25,7 @@ import { AdminChrome } from '@/features/administration/AdminChrome';
 import { SemanticCatalogOverlayPanel } from '@/features/settings/SemanticCatalogOverlayPanel';
 import { ShippingDigestRecipientsPanel } from '@/features/shipping-mailer';
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
+import { LINE_IDENTIFIER_PREFERENCES, type LineIdentifierPreference } from '@/features/tenant/lineIdentifier';
 import { apiGet, apiPost, apiPut, getApiBase, safeDisplayError } from '@/lib/api';
 import { loadWipeAvailability } from '@/lib/wipeAvailability';
 import { useUiStore } from '@/stores/uiStore';
@@ -35,7 +36,6 @@ type ConstraintAxis = 'money' | 'support_pct' | 'dual' | 'none';
 type OverBudgetAction = 'require_reapproval' | 'warn' | 'block';
 type ReservationSource = 'derived_from_profit' | 'explicit_column' | 'hybrid';
 type PmAttributionMode = 'business_line' | 'person_field' | 'none';
-type LineIdentifierPreference = 'sku' | 'sales_model';
 
 type LineupExportColumn = { field: string; header: string };
 
@@ -70,7 +70,12 @@ const CONSTRAINT_AXIS_OPTIONS: ConstraintAxis[] = ['money', 'support_pct', 'dual
 const OVER_BUDGET_ACTION_OPTIONS: OverBudgetAction[] = ['require_reapproval', 'warn', 'block'];
 const RESERVATION_SOURCE_OPTIONS: ReservationSource[] = ['derived_from_profit', 'explicit_column', 'hybrid'];
 const PM_ATTRIBUTION_MODE_OPTIONS: PmAttributionMode[] = ['business_line', 'person_field', 'none'];
-const LINE_IDENTIFIER_OPTIONS: LineIdentifierPreference[] = ['sku', 'sales_model'];
+const LINE_IDENTIFIER_OPTIONS: readonly LineIdentifierPreference[] = LINE_IDENTIFIER_PREFERENCES;
+const LINE_IDENTIFIER_LABELS: Record<LineIdentifierPreference, string> = {
+  sku: 'SKU',
+  sales_model: 'Sales model number',
+  both: 'SKU and sales model number (two columns)',
+};
 const REPORTING_CADENCE_OPTIONS: ReportingCadence[] = [
   'weekly_monday',
   'weekly_tuesday',
@@ -324,7 +329,7 @@ export default function SettingsPage() {
               >
                 {LINE_IDENTIFIER_OPTIONS.map((v) => (
                   <MenuItem key={v} value={v}>
-                    {v === 'sales_model' ? 'Sales model number' : 'SKU'}
+                    {LINE_IDENTIFIER_LABELS[v]}
                   </MenuItem>
                 ))}
               </Select>
