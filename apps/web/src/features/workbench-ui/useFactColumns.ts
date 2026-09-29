@@ -172,6 +172,9 @@ export function useFactColumns<T>(gridId: string, opts: UseFactColumnsOptions<T>
     });
   }, []);
   const onReset = useCallback(() => setSelected([]), []);
+  const replaceOptionalFields = useCallback((fields: string[]) => {
+    setSelected(fields.filter((f) => typeof f === 'string'));
+  }, []);
   const openPicker = useCallback(() => setOpen(true), []);
   const onClose = useCallback(() => setOpen(false), []);
 
@@ -190,6 +193,9 @@ export function useFactColumns<T>(gridId: string, opts: UseFactColumnsOptions<T>
   return {
     optionalColDefs,
     optionalFields: visibleFields,
+    /** Picker selection as stored on the N-0034 layout key, including fields not yet in the registry. */
+    optionalFieldSelection: selected,
+    replaceOptionalFields,
     /** Line identity column(s) per the tenant preference; `[]` when `lineIdentifier` not given. */
     identityColDefs,
     pickerProps,

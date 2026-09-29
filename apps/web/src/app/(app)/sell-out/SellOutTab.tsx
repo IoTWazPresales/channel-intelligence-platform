@@ -18,7 +18,7 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifierPreference';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
-import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
+import { factGridLayout, useFactGridChrome } from '@/features/workbench-ui/gridFind';
 import { ScopeBar } from '@/features/workbench-ui/controls';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiGet } from '@/lib/api';
@@ -94,6 +94,7 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
   const gridChrome = useFactGridChrome(useChannelApi ? 'channel-ops.sell-out' : 'sellout.commercial-lines', {
     label: 'Search SKU / product / customer',
     findDisabled: smartPreset === 'zero_sellout_products',
+    layout: factGridLayout(useChannelApi ? channelColumns : factColumns),
   });
 
   const { data: summary } = useQuery({

@@ -12,7 +12,7 @@ import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PlanningChrome } from '@/features/planning/PlanningChrome';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
 import { ScopeBar } from '@/features/workbench-ui/controls';
-import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
+import { factGridLayout, useFactGridChrome } from '@/features/workbench-ui/gridFind';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
@@ -61,7 +61,10 @@ export default function RoadmapPage() {
   }, [delRow, delRow.isPending, clearAll.isPending, factColumns.identityColDefs, factColumns.optionalColDefs]);
 
   const rows = data ?? [];
-  const gridChrome = useFactGridChrome('roadmap', { exportDisabled: rows.length === 0 });
+  const gridChrome = useFactGridChrome('roadmap', {
+    exportDisabled: rows.length === 0,
+    layout: factGridLayout(factColumns),
+  });
 
   return (
     <PlanningChrome>

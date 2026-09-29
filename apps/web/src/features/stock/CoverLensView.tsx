@@ -14,7 +14,7 @@ import { CategoryBars, ProportionBar, TrendChart } from '@/features/workbench-ui
 import { ScopeBar, StatusChip } from '@/features/workbench-ui/controls';
 import { EntityContextPanel, KeyValueList } from '@/features/workbench-ui/EntityContextPanel';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
-import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
+import { factGridLayout, useFactGridChrome } from '@/features/workbench-ui/gridFind';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
 import { Panel, PanelRow } from '@/features/workbench-ui/Panel';
@@ -137,7 +137,10 @@ export function CoverLensView() {
       }),
     [items, status, distributor, family, product, bucket],
   );
-  const gridChrome = useFactGridChrome('cover.distribution', { exportDisabled: rows.length === 0 });
+  const gridChrome = useFactGridChrome('cover.distribution', {
+    exportDisabled: rows.length === 0,
+    layout: factGridLayout(factColumns),
+  });
 
   useEffect(() => {
     window.localStorage.setItem('cip.grid.cover.distribution.savedView.v1', savedView);

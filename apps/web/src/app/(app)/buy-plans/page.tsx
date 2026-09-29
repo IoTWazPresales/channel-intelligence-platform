@@ -13,7 +13,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { navPageChrome } from '@/features/shell/navPageChrome';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
 import { ScopeBar } from '@/features/workbench-ui/controls';
-import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
+import { factGridLayout, useFactGridChrome } from '@/features/workbench-ui/gridFind';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiDelete, apiGet, apiPost, HttpConflictError } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
@@ -110,7 +110,10 @@ export default function BuyPlansPage() {
   }, [delRow, delRow.isPending, clearAll.isPending, factColumns.identityColDefs, factColumns.optionalColDefs]);
 
   const rows = data ?? [];
-  const gridChrome = useFactGridChrome('buy-plans', { exportDisabled: rows.length === 0 });
+  const gridChrome = useFactGridChrome('buy-plans', {
+    exportDisabled: rows.length === 0,
+    layout: factGridLayout(factColumns),
+  });
   const busy = delRow.isPending || clearAll.isPending;
 
   return (

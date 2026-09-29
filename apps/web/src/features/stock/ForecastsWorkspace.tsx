@@ -13,7 +13,7 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
 import { ScopeBar } from '@/features/workbench-ui/controls';
-import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
+import { factGridLayout, useFactGridChrome } from '@/features/workbench-ui/gridFind';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
@@ -88,7 +88,7 @@ export function ForecastsWorkspace() {
     lineIdentifier: { sku: 'sku', salesModel: 'sales_model_name' },
     lineIdentifierColDef: LINE_IDENTIFIER_PINNED,
   });
-  const gridChrome = useFactGridChrome('forecasts');
+  const gridChrome = useFactGridChrome('forecasts', { layout: factGridLayout(factColumns) });
   const [pasteOpen, setPasteOpen] = useState(false);
   const [paste, setPaste] = useState('');
   const [addOpen, setAddOpen] = useState(false);

@@ -51,7 +51,7 @@ import { DRILL_GRID_PAGE_SIZE, gridRowMetrics, paginatedGridHeight } from '@/fea
 import { resolveProductDisplay } from '@/features/plan-vs-executed/productDisplay';
 import { buildInboundShipmentsHref } from '@/app/(app)/shipping/buildInboundShipmentsHref';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
-import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
+import { factGridLayout, useFactGridChrome } from '@/features/workbench-ui/gridFind';
 import { ScopeBar } from '@/features/workbench-ui/controls';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiGet } from '@/lib/api';
@@ -286,7 +286,7 @@ export function PlanVsExecutedView() {
   const [drillSalesModel, setDrillSalesModel] = useState<string | null>(null);
   const drillRef = useRef<HTMLDivElement | null>(null);
   const drillColumns = useFactColumns('pve.drill');
-  const gridChrome = useFactGridChrome('pve.drill');
+  const gridChrome = useFactGridChrome('pve.drill', { layout: factGridLayout(drillColumns) });
 
   const queryKey = [
     'plan-vs-executed',

@@ -39,7 +39,7 @@ import { TrendChart } from '@/features/workbench-ui/charts';
 import { ScopeBar, StatusChip } from '@/features/workbench-ui/controls';
 import { EntityContextPanel, KeyValueList } from '@/features/workbench-ui/EntityContextPanel';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
-import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
+import { factGridLayout, useFactGridChrome } from '@/features/workbench-ui/gridFind';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
 import { Panel, PanelRow } from '@/features/workbench-ui/Panel';
@@ -271,7 +271,8 @@ export function MarketSurface() {
   const router = useRouter();
   const qc = useQueryClient();
   const lens = marketLensFromLocation(pathname, search);
-  const listingChrome = useFactGridChrome('listings');
+  const listingColumns = useFactColumns<GridRow>('listings', { colDefFor: listingColDefFor });
+  const listingChrome = useFactGridChrome('listings', { layout: factGridLayout(listingColumns) });
   const customerFilter = search.get('customer');
   const productFilter = search.get('product');
   const activationFilter = search.get('activation');
@@ -289,7 +290,6 @@ export function MarketSurface() {
   const [confirmSeed, setConfirmSeed] = useState<Proposal | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
-  const listingColumns = useFactColumns<GridRow>('listings', { colDefFor: listingColDefFor });
 
   const setParams = useCallback(
     (patch: Record<string, string | null>) => {

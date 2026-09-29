@@ -11,10 +11,23 @@ describe('readSavedFindViews', () => {
       { name: 'Empty ok', find: '' },
       { find: 'missing name' },
       'nope',
+      {
+        name: 'Wide',
+        find: 'sku',
+        optionalFields: ['customer_code', 1],
+        columnState: [{ colId: 'sku', sort: 'asc', sortIndex: 0 }, { sort: 'desc' }],
+        filterModel: { sku: { filterType: 'text', type: 'contains', filter: 'sku' } },
+      },
     ]);
     expect(readSavedFindViews(raw)).toEqual([
       { name: 'Takealot', find: 'takealot' },
       { name: 'Empty ok', find: '' },
+      {
+        name: 'Wide',
+        find: 'sku',
+        columnState: [{ colId: 'sku', hide: null, sort: 'asc', sortIndex: 0, pinned: null }],
+        filterModel: { sku: { filterType: 'text', type: 'contains', filter: 'sku' } },
+      },
     ]);
   });
 

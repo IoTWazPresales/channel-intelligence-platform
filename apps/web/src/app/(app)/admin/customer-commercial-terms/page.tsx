@@ -22,7 +22,7 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { FundingChrome } from '@/features/promotions-funding/FundingChrome';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
-import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
+import { factGridLayout, useFactGridChrome } from '@/features/workbench-ui/gridFind';
 import { ScopeBar } from '@/features/workbench-ui/controls';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
@@ -53,6 +53,7 @@ function CustomerTermsEditor() {
   const gridChrome = useFactGridChrome('customer-terms', {
     findTestId: 'customer-terms-filter',
     label: 'Filter by code or name',
+    layout: factGridLayout(factColumns),
   });
   const [dlg, setDlg] = useState<'add' | 'edit' | null>(null);
   const [editId, setEditId] = useState<number | null>(null);

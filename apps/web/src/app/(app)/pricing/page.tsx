@@ -25,7 +25,7 @@ import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
 import { FactColumnPicker, FactColumnsButton } from '@/features/workbench-ui/FactColumnPicker';
 import { ScopeBar } from '@/features/workbench-ui/controls';
-import { useFactGridChrome } from '@/features/workbench-ui/gridFind';
+import { factGridLayout, useFactGridChrome } from '@/features/workbench-ui/gridFind';
 import { useFactColumns } from '@/features/workbench-ui/useFactColumns';
 import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
@@ -127,8 +127,14 @@ export default function PricingPage() {
     queryKey: ['pricing-recs'],
     queryFn: ({ signal }) => apiGet<RecRow[]>('/api/v1/pricing/recommendations', { signal }),
   });
-  const factChrome = useFactGridChrome('pricing.facts', { exportDisabled: (facts?.length ?? 0) === 0 });
-  const recChrome = useFactGridChrome('pricing.recommendations', { exportDisabled: (recs?.length ?? 0) === 0 });
+  const factChrome = useFactGridChrome('pricing.facts', {
+    exportDisabled: (facts?.length ?? 0) === 0,
+    layout: factGridLayout(factFields),
+  });
+  const recChrome = useFactGridChrome('pricing.recommendations', {
+    exportDisabled: (recs?.length ?? 0) === 0,
+    layout: factGridLayout(recFields),
+  });
 
   const bulkFacts = useMutation({
     mutationFn: (rows: PricingPasteRow[]) => apiPost<{ created: number }>('/api/v1/pricing/facts/bulk', { rows }),

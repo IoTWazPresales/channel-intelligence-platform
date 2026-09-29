@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1279
-  log_sha256: 860c04800a8a13379e7bfadb66acf03f8228783dea0e2a0ec39791e1a6228269
+  snapshot_revision: 1301
+  log_sha256: 1652cc5e444891d26ac19e2413129c23fb31d0d75244d84bbfb12bece42b5468
   acceptance_policy:
     milestone: operator
     root: operator
@@ -6560,9 +6560,9 @@ nodes:
     title: 'D-b: shared grid search (workbench-ui) on Tier A grids'
     class: feature
     origin: operator
-    status: proposed
+    status: complete
     stage: null
-    revision: 0
+    revision: 9
     lease: null
     depends_on:
     - N-0034
@@ -6578,37 +6578,56 @@ nodes:
     - Field-list source reuses the inbound-shipments optional-columns pattern if present; no migration
     - Nothing writes to cip; read-only SQL prints current_database() first
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-N0041
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
     quality:
       ux:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20260929/n0041/MATCH.md
+          summary: One Find field on the Scope bar for the Tier A fact grids. 300ms query. Server search kept where the page
+            already had it.
         rationale: null
+        pass_run: N0041_CLOSE_20260929
+        pass_actor: close-n0041
       a11y:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20260929/n0041/MATCH.md
+          summary: The field is a labelled MUI text input (Find). No new unlabelled control.
         rationale: null
+        pass_run: N0041_CLOSE_20260929
+        pass_actor: close-n0041
       rendered:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20260929/n0041/MATCH.md
+          summary: Find is the filters slot of ScopeBar on the listed hosts. This close did not repeat a signed-in click;
+            the mount is in the source at a8755854.
         rationale: null
+        pass_run: N0041_CLOSE_20260929
+        pass_actor: close-n0041
       content:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20260929/n0041/MATCH.md
+          summary: The label is Find. Shipment search keeps its own placeholder because it queries shipment lines, not the
+            fact-grid Find.
         rationale: null
+        pass_run: N0041_CLOSE_20260929
+        pass_actor: close-n0041
     verification: {}
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: Source match against the Tier A hosts. gridFind unit tests cover view parsing.
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -6616,15 +6635,17 @@ nodes:
     preservation: {}
     target_artifact_class: null
     design_artifact_class: null
+    implementation_run: N0041_CLOSE_20260929
+    implementation_actor: close-n0041
   N-0042:
     id: N-0042
     parent: null
     title: 'D-b: shared saved grid views (workbench-ui)'
     class: feature
     origin: operator
-    status: proposed
+    status: complete
     stage: null
-    revision: 0
+    revision: 9
     lease: null
     depends_on:
     - N-0034
@@ -6640,37 +6661,54 @@ nodes:
     - Reuses the N-0034 layout key; storage decision recorded; no migration unless this node charters one
     - Nothing writes to cip; read-only SQL prints current_database() first
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-N0042
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
     quality:
       ux:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20260929/n0042/MATCH.md
+          summary: Save view, a named chip, and Delete view on the Scope bar. All clears find and filters.
         rationale: null
+        pass_run: N0042_CLOSE_20260929
+        pass_actor: close-n0042
       a11y:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20260929/n0042/MATCH.md
+          summary: Save and Delete are named buttons. The name field in the dialog is labelled Name.
         rationale: null
+        pass_run: N0042_CLOSE_20260929
+        pass_actor: close-n0042
       rendered:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20260929/n0042/MATCH.md
+          summary: 'Roadmap: saved Empty check, chip survived reload, Delete removed it. Sell-out shows Save view and Export.'
         rationale: null
+        pass_run: N0042_CLOSE_20260929
+        pass_actor: close-n0042
       content:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20260929/n0042/MATCH.md
+          summary: Labels are Save view, Delete view, and All. Cover keeps its own All pairs / Breaches only chips.
         rationale: null
+        pass_run: N0042_CLOSE_20260929
+        pass_actor: close-n0042
     verification: {}
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: 'Browser on the rebuilt web: roadmap Save view, reload keeps the chip, Delete removes it. Sell-out chrome
+      shows the same buttons. Live-row sort round trip not clicked.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -6678,6 +6716,8 @@ nodes:
     preservation: {}
     target_artifact_class: null
     design_artifact_class: null
+    implementation_run: N0042_CLOSE_20260929
+    implementation_actor: close-n0042
   N-0043:
     id: N-0043
     parent: null
@@ -9540,6 +9580,18 @@ evidence:
       grid under both: two real SKU/Sales model columns, sortable + filterable, picker excludes the pair; flip back to sku:
       one column, Line identity group offers Sales model; settings save/reload). Stale orphaned uvicorn (5 days old) and stale
       next build were restarted to run it.'
+  EV-N0041:
+    id: EV-N0041
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20260929/n0041/MATCH.md
+    tree_hash: a8755854
+    note: N-0041 source match for shared Find
+  EV-N0042:
+    id: EV-N0042
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20260929/n0042/MATCH.md
+    tree_hash: cfbeaebe
+    note: N-0042 saved layout views
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -9798,6 +9850,24 @@ baselines:
     path: docs/memory/CURRENT.md
     observed_behavior: Stage 2.2 a4fe957 sets AG_GRID_FONT_SIZE to 13px in packages/ui. Stage 2.3 459f4c9 sets GRID_DENSITY
       comfortable to 40/40; compact stays 34/36.
+  BLN-N0041:
+    id: BLN-N0041
+    provenance: implementation-observation
+    tree_hash: a8755854
+    latent_capabilities: []
+    preservation: {}
+    path: .eif/audit/PROGRAMME_20260929/n0041/MATCH.md
+    observed_behavior: Tier A fact grids share GridFindField on the Scope bar. Query follows the draft by 300ms. Shipments
+      keep shipping-search. Exceptions redirect to the brief.
+  BLN-N0042:
+    id: BLN-N0042
+    provenance: implementation-observation
+    tree_hash: cfbeaebe
+    latent_capabilities: []
+    preservation: {}
+    path: .eif/audit/PROGRAMME_20260929/n0042/MATCH.md
+    observed_behavior: Named views store find text, picker columns, column state, and filters. Apply writes picker columns
+      back to the N-0034 layout key. Delete removes the name.
 caveats:
   consult_model_logged:
     key: consult_model_logged

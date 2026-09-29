@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 1279
+**Snapshot revision:** 1301
 
 ## Outcome (verbatim)
 
@@ -62,8 +62,8 @@ _none_
 | N-0038 | Stage 3.2: CPOR role checks on the existing roles (BACKLOG-136/141) | feature | complete | complete | yes |  | full loop |
 | N-0039 | Listing links open the real product page (Market & Listings bug) | feature | complete | complete | yes |  | full loop |
 | N-0040 | D-g: sellable BU grain is every dim_product.product_line (five-line assumption sweep) | feature | complete | complete | yes |  | full loop |
-| N-0041 | D-b: shared grid search (workbench-ui) on Tier A grids | feature | proposed | proposed | yes |  | full loop |
-| N-0042 | D-b: shared saved grid views (workbench-ui) | feature | proposed | proposed | yes |  | full loop |
+| N-0041 | D-b: shared grid search (workbench-ui) on Tier A grids | feature | complete | complete | yes |  | full loop |
+| N-0042 | D-b: shared saved grid views (workbench-ui) | feature | complete | complete | yes |  | full loop |
 | N-0043 | D-b: shared grid export (workbench-ui, community AG Grid) | feature | proposed | proposed | yes |  | full loop |
 | N-0044 | D-c + rest of 2.7: desk absorbs BACKLOG-202 pieces, CporCaseWorkspace retires, two orphan panels ruled | feature | complete | complete | yes |  | full loop |
 | N-0045 | D-d: archive untracked files outside the repo; commit only real source | feature | blocked | blocked | yes |  | full loop |
