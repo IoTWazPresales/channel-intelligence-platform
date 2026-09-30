@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1314
-  log_sha256: bab7b887f0e72b698a3be2ce7f651b6432cde53174555f9beba4092a451dd5d3
+  snapshot_revision: 1327
+  log_sha256: 73498bf904b52dc984559bdca6374760ce039923a5c8760491e666b3800b920a
   acceptance_policy:
     milestone: operator
     root: operator
@@ -7447,9 +7447,9 @@ nodes:
     title: 'Stage 3.6: ops safety net (restore proven on a clone, alerting, resolver fails loudly)'
     class: feature
     origin: operator
-    status: proposed
+    status: complete
     stage: null
-    revision: 0
+    revision: 11
     lease: null
     depends_on:
     - N-0051
@@ -7465,32 +7465,41 @@ nodes:
     - AI resolver fails loudly when AI_ASSIST_ENABLED is on and the client is missing
     - Nothing writes to cip; read-only SQL prints current_database() first
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-N0052
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
     quality:
       reliability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0052
+        rationale: Readable-table dump restored into cip_alembic_smoke with dim_product parity 18177. fx_daily_rate omitted
+          and documented. Resolver fails loudly when the client is missing.
+        pass_run: N0052_OPS_20260930
+        pass_actor: cursor
       finops:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0052
+        rationale: Alert channel is a local log line and an optional file. No external pager. Dump stays under .tmp.
+        pass_run: N0052_OPS_20260930
+        pass_actor: cursor
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0052
+        rationale: Forced LedgerTask failure emits task_failure with task, run, and error before the ledger failure write.
+          The test mocks ledger writers so cip is not opened.
+        pass_run: N0052_OPS_20260930
+        pass_actor: cursor
     verification: {}
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: Clone dim_product 18177 equals live cip 18177. Restore 202.7s. Forced failure appended the alert file. Resolver
+      tests cover the missing client.
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -7498,6 +7507,8 @@ nodes:
     preservation: {}
     target_artifact_class: null
     design_artifact_class: null
+    implementation_run: N0052_OPS_20260930
+    implementation_actor: cursor
   N-0053:
     id: N-0053
     parent: null
@@ -9616,6 +9627,12 @@ evidence:
     path: .eif/audit/PROGRAMME_20260930/N-0043.md
     tree_hash: null
     note: N-0043 community CSV of visible filtered rows
+  EV-N0052:
+    id: EV-N0052
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20260930/N-0052.md
+    tree_hash: null
+    note: N-0052 clone restore parity, task-failure alert, resolver raises when the client is missing
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -9901,6 +9918,16 @@ baselines:
     path: .eif/audit/PROGRAMME_20260930/N-0043.md
     observed_behavior: Fact grids already had an Export button calling community exportDataAsCsv with a file name only. Cover
       shows name columns (Distributor, Product) and hides code columns unless picked.
+  BLN-N0052:
+    id: BLN-N0052
+    provenance: implementation-observation
+    tree_hash: fa9b2f15a3d77a5be621e4b564e82290bc0cef65
+    latent_capabilities: []
+    preservation: {}
+    path: .eif/audit/PROGRAMME_20260930/N-0052.md
+    observed_behavior: Local dump and restore scripts exist. A full pg_dump as role cip fails because fx_daily_rate is owned
+      by postgres and cip cannot lock it. Celery failures were written to the task ledger without a separate alert channel.
+      The AI resolver logged and returned None when the client was missing.
 caveats:
   consult_model_logged:
     key: consult_model_logged
