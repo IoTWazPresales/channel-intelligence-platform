@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1340
-  log_sha256: 953c4ba32f86e045e261a540d0ee8adf42a397883ed255fd7aca111ec9771cd8
+  snapshot_revision: 1357
+  log_sha256: d8fa324ef430e24409b9daa5d5b0078f5e1bcb0947b112bf4570d046238c1ef5
   acceptance_policy:
     milestone: operator
     root: operator
@@ -7746,14 +7746,10 @@ nodes:
     title: 'Stage 5: analytics delivery (export, event-triggered refresh, calendar delivery, vintage on face)'
     class: feature
     origin: operator
-    status: in_progress
-    stage: discovery
-    revision: 1
-    lease:
-      run: N0056_ANALYTICS_20260930
-      acquired_at: '2026-09-30T11:22:32Z'
-      heartbeat_at: '2026-09-30T11:22:32Z'
-      expires_at: '2026-09-30T11:52:32Z'
+    status: complete
+    stage: null
+    revision: 15
+    lease: null
     depends_on:
     - N-0055
     - N-0052
@@ -7769,47 +7765,71 @@ nodes:
       shows its vintage; delivery failures alert via N-0052
     - Nothing writes to cip; read-only SQL prints current_database() first
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-N0056
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
     quality:
       testing:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0056
+        rationale: pytest test_report_delivery_alert.py 3 passed. vitest inboxVintage.test.ts 3 passed. No cip writes.
+        pass_run: N0056_ANALYTICS_20260930
+        pass_actor: cursor
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0056
+        rationale: Delivery failures log and call emit_task_failure_alert. The alert appends CIP_TASK_FAILURE_ALERT_PATH when
+          set and does not open a database session.
+        pass_run: N0056_ANALYTICS_20260930
+        pass_actor: cursor
       ux:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0056
+        rationale: Each inbox card shows the data vintage on its own line under the timestamp, metric, and format. The operator
+          does not open the export to see when the numbers were computed.
+        pass_run: N0056_ANALYTICS_20260930
+        pass_actor: cursor
       a11y:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0056
+        rationale: Vintage is text in the card, not colour alone. The caption uses the secondary text colour on the existing
+          inbox surface and stays in the document flow.
+        pass_run: N0056_ANALYTICS_20260930
+        pass_actor: cursor
       rendered:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: .eif/audit/PROGRAMME_20260930/N-0056.md
+        rationale: Same-session browser check on http://localhost:3000/inbox. Signed-in cards show a Vintage line and the
+          xlsx format. Self-verification, not an independent session.
+        pass_run: N0056_ANALYTICS_20260930
+        pass_actor: cursor
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: pass
+        evidence: EV-N0056
+        rationale: The line reads Vintage plus the as-of timestamp. Missing vintage reads Vintage unavailable. A vintage without
+          an as-of timestamp reads Vintage recorded.
+        pass_run: N0056_ANALYTICS_20260930
+        pass_actor: cursor
+    verification:
+      rendered:
+        state: pass
+        pass_run: N0056_ANALYTICS_20260930
+        pass_actor: cursor
+        evidence: .eif/audit/PROGRAMME_20260930/N-0056.md
+        path: .eif/audit/PROGRAMME_20260930/N-0056.md
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: pytest 3 passed, vitest 3 passed, eslint exit 0, tsc exit 0. Inbox on localhost:3000 shows Vintage and xlsx
+      on each loaded card. Same-session rendered check.
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -7817,16 +7837,22 @@ nodes:
     preservation: {}
     target_artifact_class: null
     design_artifact_class: null
+    implementation_run: N0056_ANALYTICS_20260930
+    implementation_actor: cursor
   N-0057:
     id: N-0057
     parent: null
     title: 'Stage 6.1/6.2: lineup authoring workbench and the B2 end-to-end PM run (BACKLOG-190)'
     class: feature
     origin: operator
-    status: proposed
-    stage: null
-    revision: 0
-    lease: null
+    status: in_progress
+    stage: discovery
+    revision: 1
+    lease:
+      run: N0057_LINEUP_20260930
+      acquired_at: '2026-09-30T12:53:39Z'
+      heartbeat_at: '2026-09-30T12:53:39Z'
+      expires_at: '2026-09-30T13:23:39Z'
     depends_on:
     - N-0056
     - N-0040
@@ -9651,6 +9677,12 @@ evidence:
     path: .eif/audit/PROGRAMME_20260930/N-0055.md
     tree_hash: null
     note: N-0055 request tenant filter; second tenant cannot read the first
+  EV-N0056:
+    id: EV-N0056
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20260930/N-0056.md
+    tree_hash: null
+    note: N-0056 import refresh before notify, failure alert, inbox vintage on the face
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -9955,6 +9987,16 @@ baselines:
     path: .eif/audit/PROGRAMME_20260930/N-0055.md
     observed_behavior: Fourteen endpoint modules read tenant-owned models without a tenant_id predicate. where_tenant existed
       and was used by twenty other modules. Login loads the user before any tenant is known.
+  BLN-N0056:
+    id: BLN-N0056
+    provenance: implementation-observation
+    tree_hash: a79dde7c8ed20930d55a9ee958d8ab4199bf3ae1
+    latent_capabilities: []
+    preservation: {}
+    path: .eif/audit/PROGRAMME_20260930/N-0056.md
+    observed_behavior: Excel and PDF export, calendar schedules, and import-complete fan-out already existed. Import-event
+      delivery used the query cache. Inbox cards showed created_at and metric, not the data vintage. Delivery failures wrote
+      a failed inbox row and did not call the N-0052 alert.
 caveats:
   consult_model_logged:
     key: consult_model_logged
