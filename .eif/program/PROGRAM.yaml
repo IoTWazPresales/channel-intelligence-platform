@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1301
-  log_sha256: 1652cc5e444891d26ac19e2413129c23fb31d0d75244d84bbfb12bece42b5468
+  snapshot_revision: 1314
+  log_sha256: bab7b887f0e72b698a3be2ce7f651b6432cde53174555f9beba4092a451dd5d3
   acceptance_policy:
     milestone: operator
     root: operator
@@ -6724,9 +6724,9 @@ nodes:
     title: 'D-b: shared grid export (workbench-ui, community AG Grid)'
     class: feature
     origin: operator
-    status: proposed
+    status: complete
     stage: null
-    revision: 0
+    revision: 11
     lease: null
     depends_on:
     - N-0034
@@ -6742,37 +6742,53 @@ nodes:
     - Export follows the name-only identity rule; code columns only when picked
     - Nothing writes to cip; read-only SQL prints current_database() first
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-N0043
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
     quality:
       ux:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0043
+        rationale: Export sits with Find and Columns. It is enabled on the populated cover grid and disabled when roadmap
+          has no rows.
+        pass_run: N0043_EXPORT_20260930
+        pass_actor: impl-n0043
       a11y:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0043
+        rationale: Export is a real button with the visible name Export.
+        pass_run: N0043_EXPORT_20260930
+        pass_actor: impl-n0043
       rendered:
         required: true
-        state: pending
-        evidence: null
+        state: pass
+        evidence: .eif/audit/PROGRAMME_20260930/N-0043.md
         rationale: null
+        pass_run: N0043_EXPORT_20260930
+        pass_actor: impl-n0043
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: pass
+        evidence: EV-N0043
+        rationale: Cover headers are Distributor and Product. Code columns are not on screen unless picked, and export uses
+          those displayed columns.
+        pass_run: N0043_EXPORT_20260930
+        pass_actor: impl-n0043
+    verification:
+      rendered:
+        state: pass
+        pass_run: N0043_EXPORT_20260930
+        pass_actor: impl-n0043
+        evidence: .eif/audit/PROGRAMME_20260930/N-0043.md
+        path: .eif/audit/PROGRAMME_20260930/N-0043.md
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: Vitest 4/4, tsc 0, eslint 0. Browser Export click on /stock?lens=cover after rebuild BUILD_ID QuVGHZye8t4hszaxANhBg.
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -6780,6 +6796,8 @@ nodes:
     preservation: {}
     target_artifact_class: null
     design_artifact_class: null
+    implementation_run: N0043_EXPORT_20260930
+    implementation_actor: impl-n0043
   N-0044:
     id: N-0044
     parent: null
@@ -9592,6 +9610,12 @@ evidence:
     path: .eif/audit/PROGRAMME_20260929/n0042/MATCH.md
     tree_hash: cfbeaebe
     note: N-0042 saved layout views
+  EV-N0043:
+    id: EV-N0043
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20260930/N-0043.md
+    tree_hash: null
+    note: N-0043 community CSV of visible filtered rows
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -9868,6 +9892,15 @@ baselines:
     path: .eif/audit/PROGRAMME_20260929/n0042/MATCH.md
     observed_behavior: Named views store find text, picker columns, column state, and filters. Apply writes picker columns
       back to the N-0034 layout key. Delete removes the name.
+  BLN-N0043:
+    id: BLN-N0043
+    provenance: implementation-observation
+    tree_hash: f6eb2c25925d6fbfbd02c92683ba891b40d36d5b
+    latent_capabilities: []
+    preservation: {}
+    path: .eif/audit/PROGRAMME_20260930/N-0043.md
+    observed_behavior: Fact grids already had an Export button calling community exportDataAsCsv with a file name only. Cover
+      shows name columns (Distributor, Product) and hides code columns unless picked.
 caveats:
   consult_model_logged:
     key: consult_model_logged
