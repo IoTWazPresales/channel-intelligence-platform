@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1379
-  log_sha256: d588bd8d172bc85652ece4fcb8bb09ff625f55c4da3cad4fedc5b2430e89e2e5
+  snapshot_revision: 1385
+  log_sha256: f6b65c5b11efa8e99bc6b20a99eee5c6cd24b40e4d2a7b8b9bdfbc7a78891405
   acceptance_policy:
     milestone: operator
     root: operator
@@ -7945,9 +7945,9 @@ nodes:
     title: 'Stage 6.3/6.5: unified lineup import 1H fan-out and lineup data rules (BACKLOG-103/105/055/065)'
     class: feature
     origin: operator
-    status: blocked
+    status: ready
     stage: discovery
-    revision: 4
+    revision: 8
     lease: null
     depends_on:
     - N-0057
@@ -7979,20 +7979,13 @@ nodes:
         rationale: null
     verification: {}
     evidence: []
-    blockers:
-    - id: BL-0013
-      type: decision
-      ref: N-0058-lineup-rules
-      opened: '2026-10-01T12:33:21Z'
-      note: 'Unified import refuses uniform_half (Warren lock in lineup_case_parser). Bulk re-derivation still falls back
-        to uniform_half. Need a decision before any quantity change: should unified 1H fan out like bulk, or stay month-derived
-        only? Also undecided: PF Qty vs Total Qty, BU resolver thresholds, monthly phasing. No mapping was changed.'
+    blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Unified parse already refuses uniform_half. The code records Warren''s lock: month columns derive the half;
-      no months raises HalfYearSplitRequiresMonthColumnsError. Bulk re-derivation still falls back to uniform_half. That conflict,
-      plus PF Qty vs Total Qty, BU resolver thresholds, and monthly phasing, is a decision for Warren. No quantity mapping
-      was changed.'
+    stage_note: 'Warren 2026-10-01 accepted: no quarter plan without month columns. Unified and bulk parse already refuse.
+      apply_1h_rederivation_sync now returns refused_no_month_columns and does not write when uniform_half_line_count > 0.
+      Month-derived splits still apply. pytest test_lineup_1h_rederivation.py and test_lineup_month_derived_allocation.py:
+      24 passed. PF Qty vs Total Qty and BU thresholds stay proposed, not changed.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -9349,6 +9342,24 @@ decisions:
     origin: operator
     status: accepted
     supersedes: null
+  D-0040:
+    id: D-0040
+    scope: N-0058
+    statement: 'Warren 2026-10-01: do not write a lineup quarter plan that was not derived from month columns. A 1H file with
+      no month columns is refused. Do not add a uniform half split. Unified import and bulk parse already refuse. Re-derivation
+      apply now refuses a proposal that still contains a uniform_half line. Month-derived Q1 and Q2 from real month columns
+      stays.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0041:
+    id: D-0041
+    scope: N-0058
+    statement: 'Still undecided, not changed: PF Qty versus Total Qty (BACKLOG-105), and BU resolver thresholds 0.25 and 0.05
+      (BACKLOG-055). Monthly phasing without month columns is closed by the accepted month-column rule.'
+    origin: operator
+    status: proposed
+    supersedes: null
 evidence:
   EV-GOV008-REVIEW:
     id: EV-GOV008-REVIEW
@@ -10183,7 +10194,7 @@ deferred_findings:
   status: deferred
 ids:
   node: 5
-  decision: 19
+  decision: 41
   blocker: 13
   evidence: 2
   baseline: 4
