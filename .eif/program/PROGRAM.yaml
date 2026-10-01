@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1357
-  log_sha256: d8fa324ef430e24409b9daa5d5b0078f5e1bcb0947b112bf4570d046238c1ef5
+  snapshot_revision: 1379
+  log_sha256: d588bd8d172bc85652ece4fcb8bb09ff625f55c4da3cad4fedc5b2430e89e2e5
   acceptance_policy:
     milestone: operator
     root: operator
@@ -7845,14 +7845,10 @@ nodes:
     title: 'Stage 6.1/6.2: lineup authoring workbench and the B2 end-to-end PM run (BACKLOG-190)'
     class: feature
     origin: operator
-    status: in_progress
-    stage: discovery
-    revision: 1
-    lease:
-      run: N0057_LINEUP_20260930
-      acquired_at: '2026-09-30T12:53:39Z'
-      heartbeat_at: '2026-09-30T12:53:39Z'
-      expires_at: '2026-09-30T13:23:39Z'
+    status: complete
+    stage: null
+    revision: 17
+    lease: null
     depends_on:
     - N-0056
     - N-0040
@@ -7868,47 +7864,72 @@ nodes:
       on cip_test, not cip
     - Nothing writes to cip; read-only SQL prints current_database() first
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-N0057
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
     quality:
       testing:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0057
+        rationale: vitest lineupQuarter.test.ts 2 passed. eslint on the four lineup files exit 0. tsc --noEmit exit 0. No
+          write to cip.
+        pass_run: N0057_LINEUP_20260930
+        pass_actor: cursor
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0057
+        rationale: The bar shows the quarter label and the net-requirement unit total. The unified import dialog tells the
+          operator that each file is parsed in the activity feed.
+        pass_run: N0057_LINEUP_20260930
+        pass_actor: cursor
       ux:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0057
+        rationale: An empty plan still shows Next quarter, Import a lineup file, and Export, so the PM is not sent only to
+          Steward imports.
+        pass_run: N0057_LINEUP_20260930
+        pass_actor: cursor
       a11y:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0057
+        rationale: The accessibility tree names Next quarter 2026Q4 and the controls Calc, Import a lineup file, Export, and
+          Apply.
+        pass_run: N0057_LINEUP_20260930
+        pass_actor: cursor
       rendered:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: .eif/audit/PROGRAMME_20260930/N-0057.md
+        rationale: Same-session browser on cip_test. Lineup cases showed Next quarter 2026Q4 and the empty plan. Import opened
+          the unified lineup dialog. Self-verification, not an independent session.
+        pass_run: N0057_VERIFY_20261001
+        pass_actor: cursor
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: pass
+        evidence: EV-N0057
+        rationale: Visible copy is Next quarter 2026Q4, Import a lineup file, and Unified lineup import (multi-file).
+        pass_run: N0057_LINEUP_20260930
+        pass_actor: cursor
+    verification:
+      rendered:
+        state: pass
+        pass_run: N0057_VERIFY_20261001
+        pass_actor: cursor
+        evidence: .eif/audit/PROGRAMME_20260930/N-0057.md
+        path: .eif/audit/PROGRAMME_20260930/N-0057.md
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: '2026-10-01 cip_test browser: Next quarter 2027Q1. Apply returned inserted 0, updated 0 because net requirement
+      is 0. Unified import dialog opened. A bare export link returned 401; the authenticated download returned 200. eslint
+      exit 0, tsc exit 0. Same-session check. cip was not written.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -7916,15 +7937,17 @@ nodes:
     preservation: {}
     target_artifact_class: null
     design_artifact_class: null
+    implementation_run: N0057_LINEUP_20260930
+    implementation_actor: cursor
   N-0058:
     id: N-0058
     parent: null
     title: 'Stage 6.3/6.5: unified lineup import 1H fan-out and lineup data rules (BACKLOG-103/105/055/065)'
     class: feature
     origin: operator
-    status: proposed
-    stage: null
-    revision: 0
+    status: blocked
+    stage: discovery
+    revision: 4
     lease: null
     depends_on:
     - N-0057
@@ -7956,10 +7979,20 @@ nodes:
         rationale: null
     verification: {}
     evidence: []
-    blockers: []
+    blockers:
+    - id: BL-0013
+      type: decision
+      ref: N-0058-lineup-rules
+      opened: '2026-10-01T12:33:21Z'
+      note: 'Unified import refuses uniform_half (Warren lock in lineup_case_parser). Bulk re-derivation still falls back
+        to uniform_half. Need a decision before any quantity change: should unified 1H fan out like bulk, or stay month-derived
+        only? Also undecided: PF Qty vs Total Qty, BU resolver thresholds, monthly phasing. No mapping was changed.'
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: 'Unified parse already refuses uniform_half. The code records Warren''s lock: month columns derive the half;
+      no months raises HalfYearSplitRequiresMonthColumnsError. Bulk re-derivation still falls back to uniform_half. That conflict,
+      plus PF Qty vs Total Qty, BU resolver thresholds, and monthly phasing, is a decision for Warren. No quantity mapping
+      was changed.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -9683,6 +9716,12 @@ evidence:
     path: .eif/audit/PROGRAMME_20260930/N-0056.md
     tree_hash: null
     note: N-0056 import refresh before notify, failure alert, inbox vintage on the face
+  EV-N0057:
+    id: EV-N0057
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20260930/N-0057.md
+    tree_hash: null
+    note: N-0057 next-quarter lineup bar, unified import, tenant export on cip_test
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -9997,6 +10036,15 @@ baselines:
     observed_behavior: Excel and PDF export, calendar schedules, and import-complete fan-out already existed. Import-event
       delivery used the query cache. Inbox cards showed created_at and metric, not the data vintage. Delivery failures wrote
       a failed inbox row and did not call the N-0052 alert.
+  BLN-N0057:
+    id: BLN-N0057
+    provenance: implementation-observation
+    tree_hash: bee87e0f0a709b4a1086ae29bcf02c09c935a7b5
+    latent_capabilities: []
+    preservation: {}
+    path: .eif/audit/PROGRAMME_20260930/N-0057.md
+    observed_behavior: LineupPlanActionBar hardcoded period 2026-04-01 / 2026Q2 and rendered only when plan rows existed,
+      so an empty tenant hid next-quarter authoring, unified import, and tenant export.
 caveats:
   consult_model_logged:
     key: consult_model_logged
@@ -10136,6 +10184,6 @@ deferred_findings:
 ids:
   node: 5
   decision: 19
-  blocker: 12
+  blocker: 13
   evidence: 2
   baseline: 4
