@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1409
-  log_sha256: d8b6972ff7e96511651d2ecf016b3bac6db91045c600279b7b12d8753f8b5f5b
+  snapshot_revision: 1414
+  log_sha256: 8daf743b3af3065fc8e03322bc8031fdb641a1c8e85d9399762ae4f118a240d9
   acceptance_policy:
     milestone: operator
     root: operator
@@ -9385,6 +9385,48 @@ decisions:
     origin: operator
     status: proposed
     supersedes: null
+  D-0042:
+    id: D-0042
+    scope: N-0064
+    statement: 'Warren 2026-10-01 accepted the Plan vs Executed bundle: deal-stock landing is the over-plan intake already
+      on the page; bias follows the product line, not a named person; show the bias after 6 closed quarters and let it change
+      a buy plan after 8; a quarter is closed one quarter after it ends; a late shipment scores in the quarter it shipped.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0043:
+    id: D-0043
+    scope: N-0065
+    statement: 'Warren 2026-10-01: a user with no product-line assignment sees no product lines until an admin assigns some.
+      Admin sees every line. A person cannot write a line they cannot see. The filter applies on lineup, settlement, stock,
+      and reports.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0044:
+    id: D-0044
+    scope: N-0068
+    statement: 'Warren 2026-10-01: multiple catalogs stay. Different product types in a business can have their own catalog.
+      catalog_product is not retired and is not collapsed into a single Product Master catalogue.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0045:
+    id: D-0045
+    scope: N-0071
+    statement: 'Warren 2026-10-01: once units are arrived they leave the open pipeline and are counted once. Do not count
+      the same units as both open and arrived.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0046:
+    id: D-0046
+    scope: N-0072
+    statement: 'Warren 2026-10-01: import only ACZA sheets that match the shipment template. Skip BOM Not Ready and any other
+      non-shipment sheet. Show the skipped sheet names. Do not load those sheets as shipments.'
+    origin: operator
+    status: accepted
+    supersedes: null
 evidence:
   EV-GOV008-REVIEW:
     id: EV-GOV008-REVIEW
@@ -10250,7 +10292,7 @@ deferred_findings:
   status: deferred
 ids:
   node: 5
-  decision: 41
+  decision: 46
   blocker: 13
   evidence: 2
   baseline: 4
