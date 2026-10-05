@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1453
-  log_sha256: e51bd1aa2166969858a850394f503b8cb7ad75ad07afb4ac140bed3ddd97aca8
+  snapshot_revision: 1457
+  log_sha256: 0e636925cf04787db8eea339b16afb104affab65f452a0bc64158615031be111
   acceptance_policy:
     milestone: operator
     root: operator
@@ -8149,9 +8149,9 @@ nodes:
     title: 'Stage 7.1-7.3: promotion intelligence v2 (listing/competitor evidence, observed cover, comparable scope)'
     class: feature
     origin: operator
-    status: in_progress
-    stage: discovery
-    revision: 13
+    status: complete
+    stage: null
+    revision: 17
     lease: null
     depends_on:
     - N-0059
@@ -8182,10 +8182,14 @@ nodes:
         pass_actor: gov-001
       observability:
         required: true
-        state: blocked
+        state: pass
         evidence: EV-N0061
-        rationale: load_promotion_line_evidence catches Exception and returns the same not-listed and no-price shape, with
-          no log. A failed read looks like an honest empty. Gate stays blocked.
+        rationale: A failed promotion-line evidence read logs the exception, sets data_unavailable on listing, competitor,
+          and cover, and returns read_failed true. The caption is Evidence unavailable. A successful empty read stays read_failed
+          false and Not listed / No competitor price. pytest test_promo_plan_builder.py 8 passed, including the failed-read
+          test. No cip write.
+        pass_run: N0061_OBS_20261005
+        pass_actor: gov-001
       ux:
         required: true
         state: pass
@@ -8226,11 +8230,9 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Not complete. Evidence column is painted: seed case 309, period 2025Q2, Propose from evidence, 3 lines, pinned
-      Evidence starts Not listed · No competitor price. Create draft was not clicked. Baseline is BLN-N0061. Empty BLN-0018
-      was not attached. Web tsc exit 0 after the BulkLineupBackfillDialog.test.tsx spread tuple fix. ESLint clean on the planner
-      files. pytest 7 and vitest 6 passed. Observability stays blocked: load_promotion_line_evidence swallows exceptions into
-      the same empty caption and does not log. window_start still absent on cip. Do not Apply or Create draft on cip.'
+    stage_note: Observability passes. A failed evidence read logs and the caption is Evidence unavailable. An honest empty
+      stays Not listed / No competitor price. pytest 8 passed. Create draft was not clicked. window_start is still absent
+      on cip.
     debug_iterations: 0
     split_into: null
     deferred: null
