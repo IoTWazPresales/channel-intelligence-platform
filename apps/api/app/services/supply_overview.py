@@ -1,13 +1,22 @@
 """Read-only Supply & Inbound headline grains. Callers must print current_database() first."""
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.tenant_scope import tenant_id_from_user
+from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupCasePo, CommercialLineupLine
+from app.models.dimensions import DimDistributor
+from app.services.commercial_planner.lineup_period_canonical import (
+    active_lineup_case_filters,
+    active_lineup_line_filters,
+)
 from app.services.commercial_planner.po_management import coverage as po_coverage
+
+logger = logging.getLogger(__name__)
 
 # ISO Monday in Africa/Johannesburg — same grain as Movement / Data stewardship week keys.
 _ISO_WEEK_START_SAST = """
@@ -17,6 +26,58 @@ _ISO_WEEK_START_SAST = """
 """
 
 _TODAY_SAST = "(now() AT TIME ZONE 'Africa/Johannesburg')::date"
+
+
+def shape_plan_unit_po_coverage(rows: list[tuple[Any, ...]]) -> list[dict[str, Any]]:
+    """Plan units vs case-linked POs. Covered is the full line quantity, not PO quantity."""
+    shaped: list[dict[str, Any]] = []
+    for distributor_id, distributor, plan_units, covered_units in rows:
+        plan = float(plan_units or 0)
+        covered_qty = float(covered_units or 0)
+        shaped.append(
+            {
+                "distributor_id": int(distributor_id) if distributor_id is not None else None,
+                "distributor": str(distributor),
+                "plan_units": plan,
+                "covered_units": covered_qty,
+                "backlog_units": plan - covered_qty,
+                "covered": (covered_qty / plan) if plan else 0.0,
+            }
+        )
+    return shaped
+
+
+async def plan_unit_po_coverage_by_distributor(db: AsyncSession) -> list[dict[str, Any]]:
+    """Derived read. Nothing is stored.
+
+    Plan units are active lineup line quantities. A line is covered when its case
+    has a linked purchase order. Backlog is the uncovered quantity. Distributor
+    is the lineup line's distributor, not the purchase order's.
+    """
+    linked = select(CommercialLineupCasePo.case_id).distinct().subquery()
+    distributor_name = func.coalesce(DimDistributor.name, "Unmapped distributor")
+    covered_qty = func.coalesce(
+        func.sum(CommercialLineupLine.quantity_units).filter(linked.c.case_id.is_not(None)),
+        0,
+    )
+    plan_qty = func.coalesce(func.sum(CommercialLineupLine.quantity_units), 0)
+    stmt = (
+        select(
+            CommercialLineupLine.distributor_id,
+            distributor_name,
+            plan_qty,
+            covered_qty,
+        )
+        .select_from(CommercialLineupLine)
+        .join(CommercialLineupCase, CommercialLineupCase.id == CommercialLineupLine.case_id)
+        .outerjoin(DimDistributor, DimDistributor.id == CommercialLineupLine.distributor_id)
+        .outerjoin(linked, linked.c.case_id == CommercialLineupCase.id)
+        .where(*active_lineup_case_filters(), *active_lineup_line_filters())
+        .group_by(CommercialLineupLine.distributor_id, DimDistributor.name)
+        .order_by(plan_qty.desc(), distributor_name.asc())
+    )
+    rows = (await db.execute(stmt)).all()
+    return shape_plan_unit_po_coverage(rows)
 
 
 async def supply_overview(db: AsyncSession, user: dict | None) -> dict[str, Any]:
@@ -69,6 +130,12 @@ async def supply_overview(db: AsyncSession, user: dict | None) -> dict[str, Any]
                         WHERE pod_date IS NULL AND line_state = 'shipped'
                       ), 0) AS shipped_units,
                       count(*) FILTER (
+                        WHERE pod_date IS NULL AND line_state = 'arrived'
+                      ) AS arrived_lines,
+                      coalesce(sum(quantity) FILTER (
+                        WHERE pod_date IS NULL AND line_state = 'arrived'
+                      ), 0) AS arrived_units,
+                      count(*) FILTER (
                         WHERE status = 'scheduled'
                           AND pod_date IS NULL
                           AND promise_date IS NOT NULL
@@ -86,6 +153,7 @@ async def supply_overview(db: AsyncSession, user: dict | None) -> dict[str, Any]
             )
         ).mappings().one()
     except Exception:
+        logger.exception("supply overview read failed tenant_id=%s", tenant)
         return {
             "database": dbname,
             "tenant_id": tenant,
@@ -147,11 +215,20 @@ async def supply_overview(db: AsyncSession, user: dict | None) -> dict[str, Any]
             for r in dist_rows
         ]
     except Exception:
+        logger.exception("supply overview purchase-order coverage read failed")
         po_by_distributor = []
+
+    plan_unit_po_by_distributor: list[dict[str, Any]] = []
+    try:
+        plan_unit_po_by_distributor = await plan_unit_po_coverage_by_distributor(db)
+    except Exception:
+        logger.exception("supply overview plan-unit coverage read failed")
+        plan_unit_po_by_distributor = []
 
     try:
         po = await po_coverage(db)
     except Exception:
+        logger.exception("supply overview purchase-order total read failed")
         po = {
             "total_pos_observed": 0,
             "total_pos_linked": 0,
@@ -169,11 +246,11 @@ async def supply_overview(db: AsyncSession, user: dict | None) -> dict[str, Any]
     pipeline_units = float(row["pipeline_units"] or 0)
     overdue = int(row["overdue_commercial_lines"] or 0)
 
-    job_caption = "No inbound_shipments job on file"
+    job_caption = "No shipment import on file"
     if last_job is not None:
         created = last_job["created_at"]
         job_caption = (
-            f"Last inbound job {last_job['file_name'] or '(unnamed)'} "
+            f"Last shipment file {last_job['file_name'] or '(unnamed)'} "
             f"({last_job['stage'] or last_job['status']}"
             f"{', ' + created.isoformat() if created is not None else ''})"
         )
@@ -197,6 +274,8 @@ async def supply_overview(db: AsyncSession, user: dict | None) -> dict[str, Any]
         "shipped_units": float(row["shipped_units"] or 0),
         "landed_lines": int(row["landed_lines"] or 0),
         "landed_units": float(row["landed_units"] or 0),
+        "arrived_lines": int(row["arrived_lines"] or 0),
+        "arrived_units": float(row["arrived_units"] or 0),
         "overdue_commercial_lines": overdue,
         "po_observed": observed,
         "po_linked": linked,
@@ -214,12 +293,18 @@ async def supply_overview(db: AsyncSession, user: dict | None) -> dict[str, Any]
                 "units": float(row["shipped_units"] or 0),
             },
             {
+                "state": "Arrived, no POD",
+                "count": int(row["arrived_lines"] or 0),
+                "units": float(row["arrived_units"] or 0),
+            },
+            {
                 "state": "Landed (POD)",
                 "count": int(row["landed_lines"] or 0),
                 "units": float(row["landed_units"] or 0),
             },
         ],
         "po_by_distributor": po_by_distributor,
+        "plan_unit_po_by_distributor": plan_unit_po_by_distributor,
         "labels": {
             "open_lines": "Open shipments",
             "eta_past_no_pod_lines": "Unreceived past ETA",
@@ -228,21 +313,27 @@ async def supply_overview(db: AsyncSession, user: dict | None) -> dict[str, Any]
             "pipeline_units": "Backlog units",
         },
         "captions": {
-            "open_lines": "status ≠ received (pipeline + shipped, no POD) — not the lab shipped+arrived fixture",
+            "open_lines": "Still open: on order, shipped, or arrived, and no proof of delivery yet",
             "eta_past_no_pod_lines": (
-                f"pod_date is null and eta_date < today SAST"
+                f"Past the expected date, and no proof of delivery"
                 f"{f'; oldest {oldest_days} days ({oldest_eta_s})' if oldest_days is not None else ''}"
-                f". Overlaps pipeline and shipped; not a fifth lifecycle bar. "
-                f"Commercial overdue (promise window) is {overdue} — different grain."
+                f". These rows are already inside the open count. "
+                f"A separate commercial-overdue count (promise window) is {overdue}."
             ),
             "landed_pod_iso_week": (
-                f"POD date this ISO week (Monday 00:00 SAST). {job_caption}"
+                f"Proof of delivery dated this week (from Monday, South Africa time). {job_caption}"
             ),
             "po_coverage": (
-                f"{linked} of {observed} observed POs linked to an active lineup case — "
-                "not plan units covered"
+                f"{linked} of {observed} purchase orders linked to an active lineup case. "
+                "This is order count, not plan units."
             ),
-            "pipeline_units": "open_order units still in the pipeline (line_state), not lab plan backlog",
+            "plan_unit_po_coverage": (
+                "Active lineup quantity by distributor. A line counts as covered when its case "
+                "has a linked purchase order, and the whole line quantity counts. Backlog is "
+                "the quantity still uncovered. This is not the purchase-order count above, "
+                "and it is not the quantity written on the purchase order."
+            ),
+            "pipeline_units": "Units still on order. Arrived units are not in this figure.",
         },
         "number_class": {
             "open_lines": "iii",

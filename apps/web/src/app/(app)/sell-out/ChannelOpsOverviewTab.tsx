@@ -17,6 +17,8 @@ import {
   YAxis,
 } from 'recharts';
 
+import { useTheme } from '@mui/material/styles';
+
 import { apiGet } from '@/lib/api';
 
 import { useChannelOpsSummary } from './ChannelOpsKpiCards';
@@ -35,6 +37,7 @@ export function ChannelOpsOverviewTab({
   depth: IntelDepth;
   distributorId?: number | null;
 }) {
+  const theme = useTheme();
   const { data: summary } = useChannelOpsSummary(distributorId);
   const [dismissed, setDismissed] = useState<Record<string, boolean>>(() => {
     if (typeof window === 'undefined') return { recon: false, velocity: false, forecast: false };
@@ -103,10 +106,10 @@ export function ChannelOpsOverviewTab({
                 <YAxis fontSize={11} />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="units" fill="#1976d2" name="Sell-out units" />
-                <Line type="monotone" dataKey="units" stroke="#2e7d32" name="Trend" dot={false} />
+                <Bar dataKey="units" fill={theme.palette.primary.main} name="Sell-out units" />
+                <Line type="monotone" dataKey="units" stroke={theme.palette.success.main} name="Trend" dot={false} />
                 {depthAtLeast(depth, 'forecast') && (
-                  <Bar dataKey="forecast" fill="#90caf9" name="Forecast (illustrative)" />
+                  <Bar dataKey="forecast" fill={theme.palette.secondary.main} name="Forecast (illustrative)" />
                 )}
               </ComposedChart>
             ) : (
@@ -115,7 +118,7 @@ export function ChannelOpsOverviewTab({
                 <XAxis dataKey="label" fontSize={11} />
                 <YAxis fontSize={11} />
                 <Tooltip />
-                <Bar dataKey="units" fill="#1976d2" name="Sell-out units" />
+                <Bar dataKey="units" fill={theme.palette.primary.main} name="Sell-out units" />
               </BarChart>
             )}
           </ResponsiveContainer>

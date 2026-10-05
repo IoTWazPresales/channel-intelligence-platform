@@ -352,7 +352,7 @@ metrics:
     status: implemented
     owner_surface: channel-ops
     calendar_period: true
-    formula: "Σ units from fact_sales_sellout, bucketed by period_grain of transaction_date; raw units only — never velocity/WoC"
+    formula: "Sum of distributor sell-out units, bucketed by week, month, or quarter; raw units only — never velocity or weeks of cover"
     source_facts: [fact_sales_sellout]
     allowed_grains:
       - [distributor, product]
@@ -376,7 +376,7 @@ metrics:
     status: implemented
     owner_surface: channel-intelligence
     calendar_period: true
-    formula: "Σ units_sold from fact_customer_sellthrough, bucketed by period_start_date, never finer than stored period_type"
+    formula: "Sum of customer sell-through units, bucketed by the stored period, never finer than that period"
     source_facts: [fact_customer_sellthrough]
     allowed_grains:
       - [customer]

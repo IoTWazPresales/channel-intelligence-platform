@@ -142,7 +142,7 @@ export function AdminOverview() {
                   <PanelRow
                     severity="warning"
                     primary={`${fmtInt(failedOpen)} failed import jobs still open`}
-                    secondary="Open failed import_job rows (not the 24h headline grain)"
+                    secondary="Older failed imports that are still open"
                     href="/admin/ops"
                   />
                 ) : null}
@@ -150,7 +150,7 @@ export function AdminOverview() {
                   <PanelRow
                     severity="info"
                     primary={`${fmtInt(pending)} import jobs pending`}
-                    secondary="Queued import_job.status='pending'; not counted as running"
+                    secondary="Queued, and not counted as running"
                     href="/admin/ops"
                   />
                 ) : null}

@@ -273,14 +273,8 @@ async def planning_overview(db: AsyncSession, user: dict | None) -> dict[str, An
             "economics_flagged": "Economics flagged",
         },
         "captions": {
-            "cases": (
-                f"{lines} commercial_lineup_line on active commercial_lineup_case "
-                f"({period_text}). Not fact_lineup_plan_item (relocated N-0009 workspace)."
-            ),
-            "plan_units": (
-                "sum(commercial_lineup_line.quantity_units) on active cases; "
-                "not commercial_plan_line.target_units"
-            ),
+            "cases": f"{lines} lineup lines on active cases ({period_text}).",
+            "plan_units": "Sum of planned units on active lineup cases.",
             "shipped_vs_plan": (
                 f"Fill rate min(shipped, planned)/planned on Execution vs plan grain "
                 f"({exec_period})"
@@ -292,12 +286,12 @@ async def planning_overview(db: AsyncSession, user: dict | None) -> dict[str, An
                 + ". Not lab shipped/plan fixture and not P09."
             ),
             "readiness_missing": (
-                "Active lineup lines missing SKU assumption, customer terms, "
-                "distributor_id, or controlled_cost_amount > 0"
+                "Active lineup lines missing a SKU assumption, customer terms, "
+                "a distributor, or a cost."
             ),
             "economics_flagged": (
-                f"{economics_ok} ok · commercial_plan_line.calc_flags non-empty "
-                f"({plan_lines} planner lines). Different table from lineup lines."
+                f"{economics_ok} ok. {plan_lines} planner lines have a warning flag. "
+                "Separate from lineup lines."
             ),
         },
         "number_class": {

@@ -49,7 +49,11 @@ export function DashboardWidgetCard({ widget, metric, onEdit, onDelete, onPromot
     const rows = q.data?.rows ?? [];
     const keys = new Set<string>();
     for (const row of rows) Object.keys(row).forEach((k) => keys.add(k));
-    return [...keys].map((field) => ({ field, flex: 1 }));
+    return [...keys].map((field) => ({
+      field,
+      headerName: field.replaceAll('_', ' '),
+      flex: 1,
+    }));
   }, [q.data?.rows]);
 
   return (

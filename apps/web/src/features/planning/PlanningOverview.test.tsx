@@ -72,8 +72,8 @@ const populated: Payload = {
     economics_flagged: 'Economics flagged',
   },
   captions: {
-    cases: '400 commercial_lineup_line on active commercial_lineup_case',
-    plan_units: 'sum(commercial_lineup_line.quantity_units)',
+    cases: '400 lineup lines on active cases.',
+    plan_units: 'Sum of planned units on active lineup cases.',
     shipped_vs_plan: 'Fill rate min(shipped, planned)/planned',
     readiness_missing: 'missing assumptions / terms',
     economics_flagged: '89 ok · flags explain why',
@@ -103,7 +103,7 @@ describe('PlanningOverview', () => {
     expect(screen.getByText('Shipped vs plan')).toBeInTheDocument();
     expect(screen.getByText('Lines not ready')).toBeInTheDocument();
     expect(screen.getByText('Economics flagged')).toBeInTheDocument();
-    expect(screen.getByText('400 commercial_lineup_line on active commercial_lineup_case')).toBeInTheDocument();
+    expect(screen.getByText('400 lineup lines on active cases.')).toBeInTheDocument();
     expect(screen.getByTestId('paired-bars')).toBeInTheDocument();
     expect(screen.getAllByTestId('proportion-bar').length).toBeGreaterThanOrEqual(4);
     expect(screen.getByText('40 Lineup lines missing SKU assumptions, terms or cost basis')).toBeInTheDocument();

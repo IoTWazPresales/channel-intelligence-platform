@@ -13,7 +13,7 @@ const metrics: SemanticMetric[] = [
     key: 'sellout_units',
     label: 'Sell-out units',
     status: 'implemented',
-    formula: 'Σ units from fact_sales_sellout, bucketed by period_grain',
+    formula: 'Sum of distributor sell-out units, bucketed by week, month, or quarter',
     allowed_grains: [['period'], ['customer'], ['product']],
     calendar_period: true,
   },
@@ -22,7 +22,7 @@ const metrics: SemanticMetric[] = [
     key: 'cst_sellthrough_units',
     label: 'CST sell-through units',
     status: 'implemented',
-    formula: 'Σ units_sold from fact_customer_sellthrough',
+    formula: 'Sum of customer sell-through units, bucketed by the stored period',
     allowed_grains: [['customer'], ['period']],
     calendar_period: true,
   },
@@ -40,7 +40,7 @@ describe('WidgetEditorDialog', () => {
         onSave={() => undefined}
       />
     );
-    expect(screen.getByTestId('widget-editor-formula')).toHaveTextContent('fact_sales_sellout');
+    expect(screen.getByTestId('widget-editor-formula')).toHaveTextContent('distributor sell-out units');
     expect(screen.getByTestId('widget-editor-period-week')).toBeInTheDocument();
     await user.click(screen.getByTestId('widget-editor-visual-line'));
     expect(screen.getByTestId('widget-editor-visual-line')).toHaveAttribute('aria-pressed', 'true');
@@ -61,7 +61,7 @@ describe('WidgetEditorDialog', () => {
         onSave={() => undefined}
       />
     );
-    expect(screen.getByTestId('widget-editor-formula')).toHaveTextContent('fact_customer_sellthrough');
+    expect(screen.getByTestId('widget-editor-formula')).toHaveTextContent('customer sell-through units');
     expect(screen.queryByTestId('widget-editor-period-week')).not.toBeInTheDocument();
     expect(screen.getByTestId('widget-editor-grain-customer')).toBeInTheDocument();
   });

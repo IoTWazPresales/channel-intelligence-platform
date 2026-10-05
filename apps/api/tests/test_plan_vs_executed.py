@@ -1,5 +1,6 @@
 """Unit tests for Plan vs Executed read model (derived-on-read)."""
 import asyncio
+from datetime import date
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -105,6 +106,69 @@ def test_volume_bias_by_bu_signed_mean():
     assert len(out["by_pm"]) == 1
     assert out["by_pm"][0]["pm"] == "NB"
     assert abs(out["by_bu"][0]["mean_signed_bias"] - 0.0) < 1e-9  # (+0.2 -0.2 +0)/3
+    assert out["by_bu"][0]["applies_to_buy_plan"] is False
+
+
+def test_quarter_closes_one_quarter_after_it_ends():
+    assert mod.quarter_is_closed(2026, 2, today=date(2026, 10, 2)) is True
+    assert mod.quarter_is_closed(2026, 2, today=date(2026, 9, 30)) is False
+    assert mod.quarter_is_closed(2026, 3, today=date(2026, 10, 2)) is False
+
+
+def test_late_shipment_does_not_fill_the_plan_quarter():
+    late = {
+        **_row(planned=100, shipped=100),
+        "plan_quarter_ordinal": 2026 * 4 + 0,
+        "ship_quarter_ordinal": 2026 * 4 + 1,
+    }
+    on_time = [
+        _row(planned=100, shipped=100, customer_id=2, product_id=11),
+        _row(planned=100, shipped=100, customer_id=3, product_id=12),
+    ]
+    out = mod.compute_volume_bias([late, *on_time], min_lines=3)
+    assert abs(out["by_bu"][0]["mean_signed_bias"] - (-1.0 / 3.0)) < 1e-9
+    assert out["by_bu"][0]["late_lines_not_filling_plan_quarter"] == 1
+
+
+def _closed_quarter_rows(n: int) -> list[dict]:
+    rows = []
+    year, quarter = 2026, 2
+    for i in range(n):
+        rows.append(
+            {
+                **_row(planned=100, shipped=80, customer_id=i + 1, product_id=10 + i),
+                "year": year,
+                "quarter": quarter,
+            }
+        )
+        quarter -= 1
+        if quarter == 0:
+            quarter = 4
+            year -= 1
+    return rows
+
+
+def test_bias_hidden_until_six_closed_quarters_and_buy_plan_after_eight():
+    today = date(2026, 10, 2)
+    hidden = mod.compute_volume_bias(_closed_quarter_rows(5), today=today)
+    assert hidden["by_bu"] == []
+    shown = mod.compute_volume_bias(_closed_quarter_rows(6), today=today)
+    assert len(shown["by_bu"]) == 1
+    assert shown["by_bu"][0]["closed_quarters"] == 6
+    assert shown["by_bu"][0]["applies_to_buy_plan"] is False
+    applied = mod.compute_volume_bias(_closed_quarter_rows(8), today=today)
+    assert applied["by_bu"][0]["closed_quarters"] == 8
+    assert applied["by_bu"][0]["applies_to_buy_plan"] is True
+
+
+def test_buy_plan_bias_factors_omit_display_only_lines():
+    today = date(2026, 10, 2)
+    shown = mod.compute_volume_bias(_closed_quarter_rows(6), today=today)
+    assert mod.buy_plan_bias_factors(shown) == {}
+    applied = mod.compute_volume_bias(_closed_quarter_rows(8), today=today)
+    factors = mod.buy_plan_bias_factors(applied)
+    assert set(factors) == {"NB"}
+    assert factors["NB"] == applied["by_bu"][0]["mean_signed_bias"]
 
 
 def test_slip_summary_mean_quarter_delta():

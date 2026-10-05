@@ -23,7 +23,7 @@ export function SettlementCasePane({ caseId }: Props) {
           height: '100%',
           minHeight: 240,
           color: alpha(theme.palette.text.primary, 0.45),
-          borderLeft: `1px solid ${alpha(theme.palette.common.white, 0.12)}`,
+          borderLeft: `1px solid ${theme.palette.divider}`,
         }}
       >
         <Typography variant="body2">Select a case from the queue</Typography>
@@ -37,7 +37,7 @@ export function SettlementCasePane({ caseId }: Props) {
       sx={{
         height: '100%',
         overflow: 'auto',
-        borderLeft: `1px solid ${alpha(theme.palette.common.white, 0.12)}`,
+        borderLeft: `1px solid ${theme.palette.divider}`,
         minHeight: 0,
       }}
     >

@@ -15,10 +15,11 @@ const Q2_BARS = [
 ];
 
 function BarPair({ plan, ship }: { plan: number; ship: number }) {
+  const theme = useTheme();
   return (
     <Box sx={{ flex: 1, display: 'flex', alignItems: 'flex-end', gap: '2px', height: '100%' }}>
-      <Box sx={{ flex: 1, height: `${plan}%`, bgcolor: alpha('#78a0be', 0.22), borderRadius: '1px 1px 0 0' }} />
-      <Box sx={{ flex: 1, height: `${ship}%`, bgcolor: '#3db8e8', opacity: 0.78, borderRadius: '1px 1px 0 0' }} />
+      <Box sx={{ flex: 1, height: `${plan}%`, bgcolor: alpha(theme.palette.primary.main, 0.28), borderRadius: '1px 1px 0 0' }} />
+      <Box sx={{ flex: 1, height: `${ship}%`, bgcolor: theme.palette.primary.main, opacity: 0.78, borderRadius: '1px 1px 0 0' }} />
     </Box>
   );
 }

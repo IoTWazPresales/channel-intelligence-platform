@@ -48,8 +48,12 @@ _BUCKET_EXECUTED = ("matched", "short", "over")
 _BUCKET_OFF_PLAN = ("unplanned", "amended")
 _BUCKET_PENDING = ("unshipped",)
 
-# A1-07 — minimum in-plan lines before a BU/PM bias bucket is displayed.
+# A1-07 — minimum in-plan lines before a product-line bias bucket is displayed
+# when the rows carry no quarter (legacy grain). With quarters, display waits
+# for closed quarters instead.
 VOLUME_BIAS_MIN_LINES = 3
+BIAS_SHOW_CLOSED_QUARTERS = 6
+BIAS_APPLY_CLOSED_QUARTERS = 8
 
 
 def scorecard_tie_out_fields(scorecard: dict[str, Any]) -> dict[str, Any]:
@@ -513,42 +517,105 @@ def _quarter_key_from_date(d: date | None) -> str | None:
     return quarter_key_from_period_start(d)
 
 
+def shift_quarter(year: int, quarter: int, delta: int) -> tuple[int, int]:
+    idx = year * 4 + (quarter - 1) + delta
+    return idx // 4, (idx % 4) + 1
+
+
+def quarter_is_closed(year: int, quarter: int, *, today: date | None = None) -> bool:
+    """A quarter is closed one quarter after it ends (the start of the quarter two ahead)."""
+    today = today or date.today()
+    close_year, close_quarter = shift_quarter(year, quarter, 2)
+    close_on = date(close_year, 3 * (close_quarter - 1) + 1, 1)
+    return today >= close_on
+
+
+def _bias_product_line(row: dict[str, Any]) -> str:
+    product_line = str(row.get("product_line") or "").strip()
+    if product_line:
+        return product_line
+    label = str(row.get("business_unit_label") or "").strip()
+    return label or "(unassigned)"
+
+
+def _scored_shipped_units(row: dict[str, Any]) -> tuple[float, bool]:
+    """Late shipments score in the ship quarter: they do not fill the plan quarter."""
+    shipped = float(row.get("shipped_units") or 0)
+    plan_ord = row.get("plan_quarter_ordinal")
+    ship_ord = row.get("ship_quarter_ordinal")
+    late = plan_ord is not None and ship_ord is not None and int(ship_ord) > int(plan_ord)
+    if late:
+        return 0.0, True
+    return shipped, False
+
+
 def compute_volume_bias(
     rows: list[dict[str, Any]],
     *,
     min_lines: int = VOLUME_BIAS_MIN_LINES,
+    today: date | None = None,
 ) -> dict[str, Any]:
-    """A1-07 — mean signed (shipped − planned) / planned by BU (and PM per tenant profile).
+    """Mean signed (scored shipped − planned) / planned by product line.
 
-    Excludes planned = 0. Direction is the finding. When
-    ``pm_attribution_mode=business_line`` (Q-009), PM buckets mirror business-line / BU.
+    Excludes planned = 0. A late shipment (ship quarter after plan quarter) scores
+    as unfilled on the plan quarter. When rows carry a year and quarter, a product
+    line is shown only after 6 closed quarters and may change a buy plan only after 8.
+    When they do not, the legacy minimum line count applies and the bias does not
+    change a buy plan. PM buckets follow the product line when the tenant profile
+    says business_line.
     """
     from app.services import commercial_tenant_profile as tenant_profile
 
     excluded_zero_plan = sum(1 for r in rows if float(r.get("planned_units") or 0) <= 0)
     in_plan = [r for r in rows if float(r.get("planned_units") or 0) > 0]
 
-    by_bu: dict[str, list[float]] = defaultdict(list)
+    by_line: dict[str, list[float]] = defaultdict(list)
+    periods: dict[str, set[tuple[int, int]]] = defaultdict(set)
+    late_lines: dict[str, int] = defaultdict(int)
     for r in in_plan:
-        p = float(r["planned_units"])
-        s = float(r.get("shipped_units") or 0)
-        bu = (r.get("business_unit_label") or r.get("product_line") or "(unassigned)").strip() or "(unassigned)"
-        by_bu[bu].append((s - p) / p)
+        planned = float(r["planned_units"])
+        scored, late = _scored_shipped_units(r)
+        product_line = _bias_product_line(r)
+        by_line[product_line].append((scored - planned) / planned)
+        if late:
+            late_lines[product_line] += 1
+        year, quarter = r.get("year"), r.get("quarter")
+        if year is not None and quarter is not None:
+            periods[product_line].add((int(year), int(quarter)))
 
     bu_out: list[dict[str, Any]] = []
     suppressed = 0
-    for bu, biases in sorted(by_bu.items(), key=lambda kv: -abs(sum(kv[1]) / len(kv[1])) if kv[1] else 0):
+    for product_line, biases in sorted(
+        by_line.items(), key=lambda kv: -abs(sum(kv[1]) / len(kv[1])) if kv[1] else 0
+    ):
         n = len(biases)
-        if n < min_lines:
+        period_set = periods[product_line]
+        closed_quarters = (
+            sum(1 for year, quarter in period_set if quarter_is_closed(year, quarter, today=today))
+            if period_set
+            else None
+        )
+        if closed_quarters is None:
+            if n < min_lines:
+                suppressed += 1
+                continue
+            applies_to_buy_plan = False
+        elif closed_quarters < BIAS_SHOW_CLOSED_QUARTERS:
             suppressed += 1
             continue
+        else:
+            applies_to_buy_plan = closed_quarters >= BIAS_APPLY_CLOSED_QUARTERS
         mean_bias = sum(biases) / n
         bu_out.append(
             {
-                "bu": bu,
+                "bu": product_line,
+                "product_line": product_line,
                 "line_count": n,
+                "closed_quarters": closed_quarters,
+                "late_lines_not_filling_plan_quarter": late_lines[product_line],
                 "mean_signed_bias": mean_bias,
                 "direction": "over" if mean_bias > 0 else ("under" if mean_bias < 0 else "flat"),
+                "applies_to_buy_plan": applies_to_buy_plan,
             }
         )
 
@@ -565,8 +632,7 @@ def compute_volume_bias(
         ]
         pm_attribution = "business_line"
         pm_reason = (
-            "Tenant profile pm_attribution_mode=business_line; "
-            "PM buckets = business line (each product line in the catalogue) — same grain as by_bu."
+            "Bias follows the product line. Shown after 6 closed quarters; it may change a buy plan after 8."
         )
     elif mode == "person_field":
         by_pm = []
@@ -588,8 +654,21 @@ def compute_volume_bias(
         "by_pm": by_pm,
         "pm_attribution": pm_attribution,
         "pm_attribution_reason": pm_reason,
-        "formula": "mean((shipped - planned) / planned) on in-plan lines; planned=0 excluded",
+        "formula": "mean((scored shipped - planned) / planned) by product line; late shipment scores in the ship quarter; show after 6 closed quarters; buy plan after 8",
     }
+
+
+def buy_plan_bias_factors(volume_bias: dict[str, Any]) -> dict[str, float]:
+    """Bias a buy plan may apply. Display-only lines (under 8 closed quarters) are omitted."""
+    factors: dict[str, float] = {}
+    for item in volume_bias.get("by_bu") or []:
+        if not item.get("applies_to_buy_plan"):
+            continue
+        bu = item.get("bu")
+        if bu is None:
+            continue
+        factors[str(bu)] = float(item.get("mean_signed_bias") or 0)
+    return factors
 
 
 def compute_slip_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:

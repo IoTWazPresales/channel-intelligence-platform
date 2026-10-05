@@ -106,7 +106,7 @@ export function StockRegimeStrip() {
             sx={{
               fontFamily: '"IBM Plex Mono", monospace',
               fontSize: '13px',
-              color: t.tone === 'risk' ? '#e8b4b4' : alpha(theme.palette.text.primary, 0.72),
+              color: t.tone === 'risk' ? theme.palette.error.main : alpha(theme.palette.text.primary, 0.72),
             }}
           >
             {t.value}

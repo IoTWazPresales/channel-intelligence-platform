@@ -59,9 +59,9 @@ const populated: Payload = {
   },
   captions: {
     users: '1 admin · 0 steward · 0 planner · 1 viewer',
-    jobs_running: "import_job.status='running'",
-    failed_24h: 'failed in last 24h',
-    sql_queries_7d: 'sql_viewer_audit last 7 days',
+    jobs_running: 'Running now. Queued jobs are not counted here.',
+    failed_24h: 'Failed in the last 24 hours.',
+    sql_queries_7d: 'Queries run in the SQL viewer in the last 7 days.',
   },
 };
 

@@ -25,7 +25,7 @@ function formatBriefFooterAsOf(iso: string): string {
 
 export function BriefPageContent() {
   const theme = useTheme();
-  const line = alpha(theme.palette.common.white, 0.12);
+  const line = theme.palette.divider;
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['brief', 'signals'],

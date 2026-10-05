@@ -1,29 +1,25 @@
 'use client';
 
 import { Box, Typography } from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
 
 import {
   buildSettleReadinessChips,
   type SettleReadiness,
 } from '@/features/cpor/fxDisplay';
 
-const toneSx = {
-  pass: {
-    color: '#9dceb4',
-    bgcolor: 'rgba(61,155,106,.13)',
-    borderColor: 'rgba(61,155,106,.35)',
-  },
-  open: {
-    color: '#e8d4a8',
-    bgcolor: 'rgba(212,161,90,.13)',
-    borderColor: 'rgba(212,161,90,.35)',
-  },
-  fail: {
-    color: '#e8b4b4',
-    bgcolor: 'rgba(196,92,92,.14)',
-    borderColor: 'rgba(196,92,92,.4)',
-  },
-} as const;
+function toneSx(theme: { palette: { success: { main: string }; warning: { main: string }; error: { main: string } } }) {
+  const chip = (color: string) => ({
+    color,
+    bgcolor: alpha(color, 0.12),
+    borderColor: alpha(color, 0.35),
+  });
+  return {
+    pass: chip(theme.palette.success.main),
+    open: chip(theme.palette.warning.main),
+    fail: chip(theme.palette.error.main),
+  };
+}
 
 export function CporSettleReadinessRow({
   readiness,
@@ -33,6 +29,7 @@ export function CporSettleReadinessRow({
   testIdPrefix?: string;
 }) {
   const chips = buildSettleReadinessChips(readiness);
+  const tones = toneSx(useTheme());
 
   return (
     <Box
@@ -64,7 +61,7 @@ export function CporSettleReadinessRow({
             borderRadius: '4px',
             border: '1px solid',
             fontFamily: 'var(--font-mono, "IBM Plex Mono", ui-monospace, monospace)',
-            ...toneSx[chip.tone],
+            ...tones[chip.tone],
           }}
         >
           {chip.tone === 'pass' && chip.key === 'fx' ? `✓ ${chip.label}` : chip.label}

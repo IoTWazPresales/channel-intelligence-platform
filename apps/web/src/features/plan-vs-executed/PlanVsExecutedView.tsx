@@ -123,9 +123,12 @@ type PlanVsExecutedResponse = {
   volume_bias?: {
     by_bu: Array<{
       bu: string;
+      product_line?: string;
       line_count: number;
+      closed_quarters?: number | null;
       mean_signed_bias: number;
       direction: string;
+      applies_to_buy_plan?: boolean;
     }>;
     by_pm: unknown[];
     pm_attribution: string;
@@ -544,7 +547,7 @@ export function PlanVsExecutedView() {
         </Typography>
         <Typography variant="body2" sx={{ mt: 1 }}>
           <strong>Fill rate</strong> uses in-plan shipped only. <strong>Total shipped (in scope)</strong>{' '}
-          counts all executed units on linked POs in this period×BU filter (in-plan + unplanned) — use that
+          counts all executed units on linked purchase orders in this period and product line (in-plan + unplanned) — use that
           tile for intake volume KPIs. Workbook POD-quarter filters align with shipment evidence, not the
           fill-rate numerator.
         </Typography>
@@ -584,15 +587,15 @@ export function PlanVsExecutedView() {
           </Select>
         </FormControl>
         <FormControl size="small" sx={{ minWidth: 140 }}>
-          <InputLabel id="pve-bu-filter-label">BU filter</InputLabel>
+          <InputLabel id="pve-bu-filter-label">Product line</InputLabel>
           <Select
             labelId="pve-bu-filter-label"
-            label="BU filter"
+            label="Product line"
             value={productLine}
             onChange={(e) => setProductLine(e.target.value)}
-            renderValue={(v) => (v === ALL_BU ? 'All BUs' : String(v))}
+            renderValue={(v) => (v === ALL_BU ? 'All product lines' : String(v))}
           >
-            <MenuItem value={ALL_BU}>All BUs</MenuItem>
+            <MenuItem value={ALL_BU}>All product lines</MenuItem>
             {buOptions.map((bu) => (
               <MenuItem key={bu} value={bu}>
                 {bu}
@@ -669,7 +672,7 @@ export function PlanVsExecutedView() {
                 />
                 <KpiTile
                   label="Total shipped (in scope)"
-                  title="All shipped execution (line_state=shipped) on POs linked to lineups in this period and BU filter — in-plan plus unplanned. Scope is plan period + linked POs, not POD-landed quarter. For workbook POD-quarter totals, compare shipment evidence directly."
+                  title="All shipped units on purchase orders linked to lineups in this period and product line — in-plan plus unplanned. Scope is the plan period and linked purchase orders."
                   primary={fmtUnits(sc.shipped_units_total)}
                   secondary={`${fmtUnits(sc.shipped_units_in_plan)} in-plan · ${fmtUnits(sc.unplanned_intake_units)} unplanned`}
                   tone="neutral"
@@ -690,8 +693,8 @@ export function PlanVsExecutedView() {
                   tone="warning"
                 />
                 <KpiTile
-                  label="Over-plan intake"
-                  title="Σ max(shipped − planned, 0) on in-plan rows — overship vs plan, not POD landing."
+                  label="Deal-stock landing"
+                  title="This is the over-plan intake already on the page: max(shipped − planned, 0) on in-plan rows. Not a separate POD landing."
                   primary={fmtUnits(sc.over_plan_intake_units ?? sc.deal_stock_units)}
                   secondary={`${fmtValue(sc.value.over_plan_intake_value_plan ?? sc.value.deal_stock_value_plan)} plan${fxNote}`}
                   tone="positive"
@@ -704,7 +707,7 @@ export function PlanVsExecutedView() {
                   tone="neutral"
                 />
                 <KpiTile
-                  label="No-PO blind spot"
+                  label="Lines with no purchase order"
                   primary={`${sc.no_po_blind_spot.line_count} lines`}
                   secondary={`${fmtUnits(sc.no_po_blind_spot.planned_units)} units at risk`}
                   tone="warning"
@@ -741,24 +744,29 @@ export function PlanVsExecutedView() {
                     data-testid="pve-slip"
                   />
                   <KpiTile
-                    label="Volume bias (by BU)"
-                    title="Mean signed (shipped − planned) / planned on in-plan lines. Direction is the finding. PM attribution follows tenant profile (business_line = same as BU)."
+                    label="Volume bias (by product line)"
+                    title="Mean signed (scored shipped − planned) / planned by product line. Shown after 6 closed quarters. May change a buy plan after 8. A late shipment scores in the ship quarter and does not fill the plan quarter."
                     primary={
                       data.volume_bias?.by_bu?.[0]
-                        ? `${data.volume_bias.by_bu[0].bu}: ${(data.volume_bias.by_bu[0].mean_signed_bias * 100).toFixed(1)}%`
+                        ? `${data.volume_bias.by_bu[0].product_line ?? data.volume_bias.by_bu[0].bu}: ${(data.volume_bias.by_bu[0].mean_signed_bias * 100).toFixed(1)}%`
                         : '—'
                     }
                     secondary={
                       data.volume_bias?.by_bu?.length
                         ? data.volume_bias.by_bu
                             .slice(0, 3)
-                            .map(
-                              (b) =>
-                                `${b.bu} ${(b.mean_signed_bias * 100).toFixed(0)}% (${b.direction}, n=${b.line_count})`,
-                            )
+                            .map((b) => {
+                              const gate =
+                                b.closed_quarters == null
+                                  ? ''
+                                  : b.applies_to_buy_plan
+                                    ? `, ${b.closed_quarters} closed Q, changes buy plan`
+                                    : `, ${b.closed_quarters} closed Q, display only`;
+                              return `${b.product_line ?? b.bu} ${(b.mean_signed_bias * 100).toFixed(0)}% (${b.direction}, n=${b.line_count}${gate})`;
+                            })
                             .join(' · ')
                         : data.volume_bias?.pm_attribution === 'unavailable'
-                          ? 'No BU buckets above min lines'
+                          ? 'No product line has 6 closed quarters yet'
                           : '—'
                     }
                     tone="neutral"
@@ -766,7 +774,7 @@ export function PlanVsExecutedView() {
                   />
                   {data.volume_bias?.pm_attribution === 'business_line' ? (
                     <Typography variant="caption" color="text.secondary" sx={{ width: '100%' }} data-testid="pve-pm-bias-business-line">
-                      PM volume bias = business line (same as BU) — {data.volume_bias.pm_attribution_reason}
+                      Bias follows the product line — {data.volume_bias.pm_attribution_reason}
                     </Typography>
                   ) : null}
                   {data.volume_bias?.pm_attribution === 'unavailable' ? (
@@ -790,8 +798,8 @@ export function PlanVsExecutedView() {
                         <YAxis domain={[0, 1]} tickFormatter={(v) => `${Math.round(v * 100)}%`} />
                         <RechartsTooltip formatter={(v: number) => fmtPct(v)} />
                         <Legend />
-                        <Line type="monotone" dataKey="fill_rate" name="Fill rate" stroke="#1976d2" dot />
-                        <Line type="monotone" dataKey="line_hit_rate" name="Line-hit rate" stroke="#9c27b0" dot />
+                        <Line type="monotone" dataKey="fill_rate" name="Fill rate" stroke={theme.palette.primary.main} dot />
+                        <Line type="monotone" dataKey="line_hit_rate" name="Line-hit rate" stroke={theme.palette.secondary.main} dot />
                       </LineChart>
                     </ResponsiveContainer>
                   </CardContent>
@@ -814,7 +822,7 @@ export function PlanVsExecutedView() {
                     >
                       <Tab value="customer" label="By customer" />
                       <Tab value="product" label="By product" />
-                      <Tab value="bu" label="By BU" />
+                      <Tab value="bu" label="By product line" />
                     </Tabs>
                     <Tabs
                       value={exceptionCategory}

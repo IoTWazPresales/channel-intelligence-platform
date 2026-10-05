@@ -174,19 +174,16 @@ async def administration_overview(db: AsyncSession, user: dict | None) -> dict[s
             "sql_queries_7d": "Audited SQL queries (7d)",
         },
         "captions": {
-            "users": f"{role_caption(users_by_role)} · active app_user; not lab fixture 14",
+            "users": f"{role_caption(users_by_role)} · active accounts",
             "jobs_running": (
-                f"import_job.status='running' and archived_at is null "
-                f"(not pending). {pending} pending queued."
+                f"Running now. Queued jobs are not counted here. {pending} queued."
             ),
             "failed_24h": (
-                f"import_job.status='failed' in last 24h via "
-                f"coalesce(completed_at, updated_at, created_at). "
-                f"{failed_open} failed still open (not this grain)."
+                f"Failed in the last 24 hours. "
+                f"{failed_open} older failed jobs are still open and are not in this count."
             ),
             "sql_queries_7d": (
-                f"sql_viewer_audit.created_at in last 7 days. {sql_all} all-time. "
-                "Not lab fixture 38."
+                f"Queries run in the SQL viewer in the last 7 days. {sql_all} all time."
             ),
         },
         "number_class": {

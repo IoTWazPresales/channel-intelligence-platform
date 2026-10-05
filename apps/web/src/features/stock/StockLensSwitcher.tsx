@@ -14,7 +14,7 @@ type StockLensSwitcherProps = {
 
 export function StockLensSwitcher({ lens }: StockLensSwitcherProps) {
   const theme = useTheme();
-  const line = alpha(theme.palette.common.white, 0.12);
+  const line = theme.palette.divider;
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -60,7 +60,7 @@ export function StockLensSwitcher({ lens }: StockLensSwitcherProps) {
               py: 1,
               pb: 1.125,
               borderBottom: '2px solid',
-              borderColor: active ? '#3db8e8' : 'transparent',
+              borderColor: active ? theme.palette.primary.main : 'transparent',
               textDecoration: 'none',
               '&:hover': { color: theme.palette.text.primary },
             }}

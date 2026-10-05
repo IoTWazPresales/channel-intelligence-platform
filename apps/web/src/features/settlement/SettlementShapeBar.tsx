@@ -26,7 +26,7 @@ export function SettlementShapeBar({ settledPct, outstandingPct, blockedPct, hei
         height,
         borderRadius: 0.5,
         overflow: 'hidden',
-        bgcolor: alpha(theme.palette.common.white, 0.06),
+        bgcolor: alpha(theme.palette.text.primary, theme.palette.mode === 'dark' ? 0.06 : 0.08),
       }}
     >
       {settledW > 0 ? (
