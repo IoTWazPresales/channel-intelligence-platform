@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1433
-  log_sha256: 5d90586629e7c06519df5c7429d2f06a938fa6afe85deb7a732e4ec76dde9c40
+  snapshot_revision: 1436
+  log_sha256: dfa2f06bca28d03e7d393e9b7d71feafad438089ced89ea860f67dc6443da401
   acceptance_policy:
     milestone: operator
     root: operator
@@ -6972,7 +6972,7 @@ nodes:
     origin: operator
     status: blocked
     stage: discovery
-    revision: 3
+    revision: 4
     lease: null
     depends_on:
     - N-0044
@@ -7001,7 +7001,9 @@ nodes:
       note: 'Inventory done (n0046/INVENTORY.md). Removals are destructive or outside the repo: Warren runs them.'
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: '2026-10-05: in-repo worktrees removed after the 13 .wt-main-baseline notes were copied to .eif/audit/PROGRAMME_20261005/n0046-notes.
+      The two outside worktrees were clean detached checkouts and were removed. Leftover database drops and the cip window_start
+      upgrade did not run: the postgres owner login rejected the app password.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -8292,9 +8294,9 @@ nodes:
     title: 'Stage 7.4: uplift from settled claims (BACKLOG-185), data-gated'
     class: feature
     origin: operator
-    status: blocked
+    status: deferred
     stage: null
-    revision: 1
+    revision: 3
     lease: null
     depends_on:
     - N-0062
@@ -8326,19 +8328,17 @@ nodes:
         rationale: null
     verification: {}
     evidence: []
-    blockers:
-    - id: BL-0004
-      type: human
-      ref: D-0021
-      opened: '2026-09-23T22:26:10Z'
-      note: Uplift from settled claims needs claim-evidence rows (cpor_claim_evidence_line 0 vs 211 settled cases). Unlocked
-        by Warren's customer/distributor data drive, not by code.
+    blockers: []
     conservation_tags: []
     fingerprint: null
     stage_note: null
     debug_iterations: 0
     split_into: null
-    deferred: null
+    deferred:
+      decision: D-0021
+      note: No historical claim-file drive. 211 settled cases stay settled with zero claim rows. 74 ended cases stay ended.
+        Upload customer report stays on the settlement desk for a later file. Uplift stays on BACKLOG-185 until at least five
+        settled cases have claim rows.
     rejected: null
     preservation: {}
     target_artifact_class: null
