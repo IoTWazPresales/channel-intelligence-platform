@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1436
-  log_sha256: dfa2f06bca28d03e7d393e9b7d71feafad438089ced89ea860f67dc6443da401
+  snapshot_revision: 1449
+  log_sha256: 8a71fe60c4ed6813bc9445d0865261da87f71cf2d3518ad0439581c80a4635d6
   acceptance_policy:
     milestone: operator
     root: operator
@@ -8151,7 +8151,7 @@ nodes:
     origin: operator
     status: in_progress
     stage: discovery
-    revision: 3
+    revision: 13
     lease: null
     depends_on:
     - N-0059
@@ -8166,50 +8166,71 @@ nodes:
     - BACKLOG-183/184/186 with honest empties where data is absent (fact_competitor_price 0 rows)
     - Nothing writes to cip; read-only SQL prints current_database() first
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-N0061
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
     quality:
       testing:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0061
+        rationale: Web tsc --noEmit exit 0 after the BulkLineupBackfillDialog.test.tsx form-data spread was typed as a tuple
+          (TS2556). ESLint exit 0 on PromoPlanBuilderPanel.tsx, PromotionPlannerSurface.tsx, promoPlanDraftMerge.ts, and that
+          test. vitest 6 passed. pytest test_promo_plan_builder.py 7 passed, monkeypatched, no cip write.
+        pass_run: N0061_GATES_20261005
+        pass_actor: gov-001
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: blocked
+        evidence: EV-N0061
+        rationale: load_promotion_line_evidence catches Exception and returns the same not-listed and no-price shape, with
+          no log. A failed read looks like an honest empty. Gate stays blocked.
       ux:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0061
+        rationale: Evidence is pinned on the right. The helper says the column shows listing, competitor price, and observed
+          cover and does not set the quantity. Operator saw 3 lines for seed case 309 / 2025Q2 starting Not listed · No competitor
+          price. Create draft was not clicked.
+        pass_run: N0061_GATES_20261005
+        pass_actor: gov-001
       a11y:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0061
+        rationale: The column header is the word Evidence. The tooltip carries the full caption when the cell truncates. The
+          pinned Reset control has aria-label Reset to suggested. Screen reader and contrast were not re-measured this session.
+        pass_run: N0061_GATES_20261005
+        pass_actor: gov-001
       rendered:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0061
+        rationale: 'Operator signed-in proof, restated 2026-10-05: Create promotion plan, seed case 309, period 2025Q2, Propose
+          from evidence, 3 lines, Evidence pinned, text starts Not listed · No competitor price. Create draft was not clicked.
+          This session did not re-open the page.'
+        pass_run: N0061_GATES_20261005
+        pass_actor: gov-001
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0061
+        rationale: Visible copy is Create promotion plan, the Evidence header, and the caption Not listed · No competitor
+          price · No observed cover. The helper states the column does not set the quantity. An empty competitor fact stays
+          No competitor price.
+        pass_run: N0061_GATES_20261005
+        pass_actor: gov-001
     verification: {}
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: Not complete. Promo-plan evidence is proven in Python on seed case 309 (3 lines) and is not painted in the
-      grid. The planner still says listings are not joined onto case lines. Competitor prices stay an honest empty while that
-      fact table is empty. cpor_case_line.window_start is absent on cip (alembic 20260906_0022). Role cip is not the table
-      owner and cannot ALTER. Do not Apply or Create draft until the column exists.
+    stage_note: 'Not complete. Evidence column is painted: seed case 309, period 2025Q2, Propose from evidence, 3 lines, pinned
+      Evidence starts Not listed · No competitor price. Create draft was not clicked. Baseline is BLN-N0061. Empty BLN-0018
+      was not attached. Web tsc exit 0 after the BulkLineupBackfillDialog.test.tsx spread tuple fix. ESLint clean on the planner
+      files. pytest 7 and vitest 6 passed. Observability stays blocked: load_promotion_line_evidence swallows exceptions into
+      the same empty caption and does not log. window_start still absent on cip. Do not Apply or Create draft on cip.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -9827,6 +9848,12 @@ evidence:
     path: .eif/audit/PROGRAMME_20260930/N-0059.md
     tree_hash: null
     note: N-0059 bulk backfill Apply stays open and shows applied and skipped counts
+  EV-N0061:
+    id: EV-N0061
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261005/N-0061.md
+    tree_hash: 7a8edef95b68d75ea255f52b57a7c98b3918238c
+    note: N-0061 evidence column painted on seed case 309 / 2025Q2. Web tsc exit 0. Observability still blocked.
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -10177,6 +10204,16 @@ baselines:
     preservation: {}
     path: null
     observed_behavior: null
+  BLN-N0061:
+    id: BLN-N0061
+    provenance: implementation-observation
+    tree_hash: 7a8edef95b68d75ea255f52b57a7c98b3918238c
+    latent_capabilities: []
+    preservation: {}
+    path: .eif/audit/PROGRAMME_20261005/N-0061.md
+    observed_behavior: Dirty tree at 7a8edef9. Create promotion plan, seed case 309, period 2025Q2, Propose from evidence,
+      3 lines. Evidence is pinned and starts Not listed · No competitor price. Create draft was not clicked. Competitor price
+      stays an honest empty. window_start is still absent on cip.
 caveats:
   consult_model_logged:
     key: consult_model_logged
@@ -10312,6 +10349,14 @@ deferred_findings:
   node: N-0053
   run: N0053_IMPL_20260929
   actor: impl-n0053
+  status: deferred
+- seq: 1448
+  code: DOES_NOT_FIT
+  note: load_promotion_line_evidence swallows Exception into the same Not listed / No competitor price shape and does not
+    log. A failed read is indistinguishable from an honest empty. Observability stays blocked. Not fixed this session.
+  node: N-0061
+  run: N0061_GATES_20261005
+  actor: gov-001
   status: deferred
 ids:
   node: 5
