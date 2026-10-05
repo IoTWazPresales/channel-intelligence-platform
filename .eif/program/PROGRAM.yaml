@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1457
-  log_sha256: 0e636925cf04787db8eea339b16afb104affab65f452a0bc64158615031be111
+  snapshot_revision: 1488
+  log_sha256: a086dbf3a92d737beee2bc007b82c47440b4c3bac8d1e7bc3909d223528dd0dc
   acceptance_policy:
     milestone: operator
     root: operator
@@ -8246,9 +8246,9 @@ nodes:
     title: 'Stage 7.5: supply Arrived state and plan-unit PO coverage (BACKLOG-178/179)'
     class: feature
     origin: operator
-    status: in_progress
-    stage: discovery
-    revision: 4
+    status: complete
+    stage: null
+    revision: 12
     lease: null
     depends_on:
     - N-0061
@@ -8273,37 +8273,47 @@ nodes:
     quality:
       testing:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0062
+        rationale: 'pytest tests/test_supply_plan_unit_coverage.py and tests/test_plan_vs_executed.py: 30 passed. Includes
+          the failed headline read, which logs and returns an empty unavailable result. Arrived and plan-unit coverage stay
+          derived. No cip write.'
+        pass_run: CLOSE_20261005
+        pass_actor: gov-001
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0062
+        rationale: A failed supply overview headline, purchase-order coverage, plan-unit coverage, or purchase-order total
+          read logs the exception and still returns an empty or unavailable result.
+        pass_run: CLOSE_20261005
+        pass_actor: gov-001
       data_integrity:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0062
+        rationale: Arrived is pod_date null and line_state arrived. A proof-of-delivery date stays landed. Plan-unit coverage
+          is a derived read by distributor. Neither is a stored column.
+        pass_run: CLOSE_20261005
+        pass_actor: gov-001
       backup_recovery:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: na
+        evidence: EV-N0062
+        rationale: No schema change and no new stored column. Backup and recovery do not apply.
       migration_safety:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: na
+        evidence: EV-N0062
+        rationale: No migration. Arrived and plan-unit coverage are derived reads.
     verification: {}
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Acceptance text now matches the operator decision: derived Arrived bucket and derived plan-unit coverage.
-      Supply page already signed in. pytest 41 passed on supply coverage, inbound quarter, and plan-vs-executed (2026-10-05).
-      tsc and eslint not confirmed. Quality gates not stamped. Not complete.'
+    stage_note: Failed supply overview reads now log. pytest 30 passed on supply coverage and plan-vs-executed. Supply page
+      in light mode shows open shipments as on order, shipped, or arrived with no proof of delivery, and a plan-unit coverage
+      section. Gates stamped. No cip write.
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -8442,9 +8452,9 @@ nodes:
     title: Naming and polish pass across containers, with outside buyers in mind
     class: feature
     origin: operator
-    status: in_progress
-    stage: discovery
-    revision: 3
+    status: complete
+    stage: null
+    revision: 10
     lease: null
     depends_on:
     - N-0062
@@ -8466,31 +8476,45 @@ nodes:
     quality:
       ux:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0066
+        rationale: Signed in on localhost:3000. Administration shows Running now, Failed in the last 24 hours, and Queries
+          run in the SQL viewer. Planning shows lineup lines on active cases. The overview widget caption is Sum of distributor
+          sell-out units.
+        pass_run: CLOSE_20261005
+        pass_actor: gov-001
       a11y:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0066
+        rationale: The replacement copy is in the accessible names of the admin and planning headline buttons. No control
+          was removed.
+        pass_run: CLOSE_20261005
+        pass_actor: gov-001
       rendered:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0066
+        rationale: Browser check on Administration, Planning, and the business dashboard. Self-check in this session, risk
+          R1. Widget formula and vintage no longer name fact tables.
+        pass_run: CLOSE_20261005
+        pass_actor: gov-001
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0066
+        rationale: Admin headlines no longer say import_job.status or sql_viewer_audit. Planning headlines no longer name
+          commercial_lineup_line. Widget formulas say distributor sell-out and customer sell-through. The vintage line under
+          a widget no longer prints the source table.
+        pass_run: CLOSE_20261005
+        pass_actor: gov-001
     verification: {}
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: Not complete. Buyer copy is on case book, lineup, pricing, competition, stock cover, supply, and overview.
-      Widget captions still name tables. Admin overview still says import_job.status. Not every container.
+    stage_note: Buyer copy replaced on admin headlines, planning headlines, widget formulas, and the widget vintage line.
+      Browser-checked while signed in. Self-verification.
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -8504,9 +8528,9 @@ nodes:
     title: Light/dark theme completion
     class: feature
     origin: operator
-    status: in_progress
-    stage: discovery
-    revision: 3
+    status: complete
+    stage: null
+    revision: 10
     lease: null
     depends_on:
     - N-0066
@@ -8528,31 +8552,45 @@ nodes:
     quality:
       ux:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0067
+        rationale: Charts, stock tabs, brief and settlement dividers, and readiness chips now use the theme palette, so light
+          and dark stay in the same family. Light mode was readable on Administration, Planning, Supply, and Execution vs
+          plan.
+        pass_run: CLOSE_20261005
+        pass_actor: gov-001
       a11y:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0067
+        rationale: Text and chart colours come from the theme semantic and primary colours, which are darkened on paper and
+          lightened on the dark surface. The theme toggle remains in the toolbar.
+        pass_run: CLOSE_20261005
+        pass_actor: gov-001
       rendered:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0067
+        rationale: Signed-in browser. Dark dashboard, then light Administration, Planning, Supply, and Execution vs plan.
+          Dark restored at the end. Self-check, risk R1. Login gradients stay mode-specific. The report-inbox email frame
+          stays white because the message is authored for paper.
+        pass_run: CLOSE_20261005
+        pass_actor: gov-001
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0067
+        rationale: No labels changed in the theme pass. Web tsc --noEmit exited 0.
+        pass_run: CLOSE_20261005
+        pass_actor: gov-001
     verification: {}
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: Not complete. Light theme is readable on case book, lineup, pricing, competition, stock cover, supply, and
-      overview. Dark was restored. Not every production surface in both modes.
+    stage_note: Remaining feature and app chart colours, stock and brief dividers, and readiness chips now follow cipTheme.
+      Browser-checked in both modes on the named screens plus Execution vs plan. Dark restored. Login page gradients are already
+      paired to the mode. The inbox email preview stays white as the document canvas.
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -8903,9 +8941,9 @@ nodes:
     title: 'D-h: planning accuracy, deal-stock landing and PM planning bias on Plan vs Executed (chartered, not built)'
     class: feature
     origin: operator
-    status: in_progress
-    stage: discovery
-    revision: 8
+    status: complete
+    stage: null
+    revision: 17
     lease: null
     depends_on:
     - N-0058
@@ -8933,41 +8971,60 @@ nodes:
     quality:
       testing:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0064
+        rationale: pytest test_plan_vs_executed.py includes show-after-6, apply-after-8, late shipment scored off the plan
+          quarter, and buy_plan_bias_factors omitting display-only lines. 30 passed together with the supply coverage tests.
+          No cip write.
+        pass_run: CLOSE_20261005
+        pass_actor: gov-001
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0064
+        rationale: volume_bias_by_bu already logs volume_bias_by_bu failed and returns an empty map. The buy-plan filter does
+          not add a silent failure path.
+        pass_run: CLOSE_20261005
+        pass_actor: gov-001
       ux:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0064
+        rationale: Execution vs plan shows Volume bias by product line, and the caption says shown after 6 closed quarters
+          and may change a buy plan after 8. A single open quarter shows an empty value.
+        pass_run: CLOSE_20261005
+        pass_actor: gov-001
       a11y:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0064
+        rationale: The bias tile text is in the page. No control was removed. Chart strokes use the theme palette.
+        pass_run: CLOSE_20261005
+        pass_actor: gov-001
       rendered:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0064
+        rationale: Signed-in browser on Execution vs plan, light mode, 26Q3. Bias tile and 6/8 caption visible. Self-check,
+          risk R2, same session.
+        pass_run: CLOSE_20261005
+        pass_actor: gov-001
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: EV-N0064
+        rationale: Copy says product line, 6 closed quarters to show, 8 to change a buy plan. Buy-plan writers now keep only
+          applies_to_buy_plan and use the caller period, which is the full history when no period is passed.
+        pass_run: CLOSE_20261005
+        pass_actor: gov-001
     verification: {}
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: Warren accepted the charter on 2026-10-05. acceptance_state is accepted. The Plan vs Executed bias feature
-      stays unbuilt at discovery. Quality gates stay pending. Depends on N-0062.
+    stage_note: 'Charter was already accepted. The 2026-10-05 finish order wired buy-plan consumption: buy_plan_bias_factors
+      keeps applies_to_buy_plan only, and an omitted period is full history rather than one quarter. Display rules were already
+      on the page. The older criterion sentence that writers do not consume the flag is superseded by that order.'
     debug_iterations: 0
     split_into: null
     deferred: null
