@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1449
-  log_sha256: 8a71fe60c4ed6813bc9445d0865261da87f71cf2d3518ad0439581c80a4635d6
+  snapshot_revision: 1453
+  log_sha256: e51bd1aa2166969858a850394f503b8cb7ad75ad07afb4ac140bed3ddd97aca8
   acceptance_policy:
     milestone: operator
     root: operator
@@ -8903,7 +8903,7 @@ nodes:
     origin: operator
     status: in_progress
     stage: discovery
-    revision: 4
+    revision: 8
     lease: null
     depends_on:
     - N-0058
@@ -8914,7 +8914,7 @@ nodes:
     risk: R2
     touches_existing: true
     acceptance: operator
-    acceptance_state: pending
+    acceptance_state: accepted
     acceptance_criteria:
     - Extends /plan-vs-executed. No new module.
     - Bias is grouped by product line. A late shipment scores in the quarter it shipped and does not fill the plan quarter.
@@ -8964,8 +8964,8 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: Operator decision recorded 2026-10-05 and overrides the WAPE charter. acceptance_state stays pending. Do not
-      complete until Warren accepts.
+    stage_note: Warren accepted the charter on 2026-10-05. acceptance_state is accepted. The Plan vs Executed bias feature
+      stays unbuilt at discovery. Quality gates stay pending. Depends on N-0062.
     debug_iterations: 0
     split_into: null
     deferred: null
