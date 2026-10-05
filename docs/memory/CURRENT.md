@@ -4,7 +4,7 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**HEAD:** `08cc5278` (`eif: accept N-0064 charter`), pushed on this branch. The four-node close and its product edits are local and not committed. Do not sweep the rest of the dirty tree. Do not push main.
+**HEAD:** `1b1f341a` (`eif: complete N-0062 N-0064 N-0066 and N-0067`). Product commit `5e8c89fa`. Do not sweep the rest of the dirty tree. Do not push main.
 
 **Alembic (code):** `20260924_0023` (`cpor_case_line.window_start` / `window_end`; revises `20260906_0022`)
 
