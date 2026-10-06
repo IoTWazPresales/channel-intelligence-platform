@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-10-06 — **N-0046 complete** on `feat/ns-2-brief-nav-collapse`. Ledger `bfbf01c0` (programme rev 1499, pushed, never main). The 16 leftover databases are dropped. `cip` and `cip_test` remain. `window_start` was not applied. N-0036 is complete at `621a4a98`. Product `275da96f` excludes strict open-shipped pairs on the supply overview read.
+- 2026-10-06 — **N-0046 complete** on `feat/ns-2-brief-nav-collapse`. Ledger `bfbf01c0` (programme rev 1499). Docs `2c1b3cdc`. Pushed, never main. The 16 leftover databases are dropped. `cip` and `cip_test` remain. `window_start` was not applied. N-0036 is complete at `621a4a98`. Product `275da96f` excludes strict open-shipped pairs on the supply overview read.
 - 2026-10-05 — **N-0062, N-0066, N-0064, and N-0067 complete** on `feat/ns-2-brief-nav-collapse`. Product `5e8c89fa`. Ledger `1b1f341a` (rev 1488, never main). Failed supply reads log. Widget and admin captions no longer name tables. Buy-plan bias applies only after 8 closed quarters. Theme colours follow the palette. pytest 30 passed. Web tsc exit 0. Dark restored.
 - 2026-10-05 — **N-0061 complete** on `feat/ns-2-brief-nav-collapse` (ledger rev 1457, not committed, never main). Observability passes. pytest 8 passed. A failed evidence read captions `Evidence unavailable`. Next is N-0062.
 - 2026-10-05 — **N-0064 charter accepted** on `feat/ns-2-brief-nav-collapse` (ledger rev 1453, committed `08cc5278`, never main). `acceptance_state` is accepted. The node stays `in_progress` at discovery. The bias feature is not built. Next is the N-0061 observability stamp, then N-0062.

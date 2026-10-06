@@ -4,7 +4,7 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**HEAD:** `bfbf01c0` (`eif: complete N-0046 leftover database hygiene`). Pushed. Do not sweep the dirty product tree. Do not push main.
+**HEAD:** `2c1b3cdc` (`docs: record N-0046 leftover database drop`). Ledger `bfbf01c0`. Pushed. Do not sweep the dirty product tree. Do not push main.
 
 **Alembic (code):** `20260924_0023` (`cpor_case_line.window_start` / `window_end`; revises `20260906_0022`)
 
