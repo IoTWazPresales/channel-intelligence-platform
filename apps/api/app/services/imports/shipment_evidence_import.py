@@ -983,6 +983,37 @@ def _openpyxl_sheet_to_dataframe(ws: Any) -> pd.DataFrame:
     return pd.DataFrame(list(data_rows), columns=header, dtype=object)
 
 
+_PREFERRED_SHEET_KEYS = frozenset({"shipped", "unship", "unshipped"})
+
+
+def default_selected_sheets(sheet_names: list[str]) -> list[str]:
+    """Sheets to import before the operator confirms. Shipped and Unship start on; other tabs stay off.
+
+    A workbook with none of those names keeps every sheet, so a one-tab file is not dropped.
+    """
+    preferred = [name for name in sheet_names if name.strip().lower() in _PREFERRED_SHEET_KEYS]
+    return preferred if preferred else list(sheet_names)
+
+
+def workbook_sheet_names(file_name: str, raw_bytes: bytes) -> list[str]:
+    lower = (file_name or "").lower()
+    if not lower.endswith((".xlsx", ".xlsm")):
+        return []
+    wb = load_workbook(io.BytesIO(raw_bytes), read_only=True, data_only=True)
+    try:
+        return list(wb.sheetnames)
+    finally:
+        wb.close()
+
+
+def selected_sheets_for_job(job: ImportJob) -> set[str] | None:
+    meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+    raw = meta.get("selected_sheets")
+    if not isinstance(raw, list):
+        return None
+    return {str(name) for name in raw}
+
+
 def _load_frames_for_job(job: ImportJob, _df_passed: pd.DataFrame, raw_bytes: bytes) -> list[tuple[str | None, pd.DataFrame, str, str]]:
     """List of (sheet_name, dataframe, report_type, line_state).
 
@@ -1002,8 +1033,11 @@ def _load_frames_for_job(job: ImportJob, _df_passed: pd.DataFrame, raw_bytes: by
 
     if lower.endswith((".xlsx", ".xlsm")):
         wb = load_workbook(io.BytesIO(raw_bytes), read_only=True, data_only=True)
+        chosen = selected_sheets_for_job(job)
         try:
             for sheet in wb.sheetnames:
+                if chosen is not None and sheet not in chosen:
+                    continue
                 ws = wb[sheet]
                 sdf = _openpyxl_sheet_to_dataframe(ws)
                 cols = _norm_cols(list(sdf.columns))

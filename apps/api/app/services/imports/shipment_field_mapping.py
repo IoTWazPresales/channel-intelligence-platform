@@ -360,6 +360,16 @@ def infer_shipment_import_job_sync(db: Session, job_id: int) -> ImportJob:
     from app.services.imports.dsi_mapping_workflow import column_samples_from_schema_dict
     from app.services.imports.shipment_evidence_import import _load_frames_for_job
 
+    from app.services.imports.shipment_evidence_import import workbook_sheet_names, default_selected_sheets
+
+    names = workbook_sheet_names(job.file_name or "", data)
+    if names:
+        meta = dict(job.staged_metadata or {})
+        if not isinstance(meta.get("selected_sheets"), list):
+            meta["available_sheets"] = names
+            meta["selected_sheets"] = default_selected_sheets(names)
+            meta["sheet_selection_confirmed"] = False
+            job.staged_metadata = meta
     frames = _load_frames_for_job(job, pd.DataFrame(), data)
 
     headers = _union_frame_headers(frames)
@@ -433,4 +443,12 @@ def shipment_mapping_state_dict(job: ImportJob) -> dict[str, Any]:
         "mapping_adjustment_notices": notices,
         "column_samples": samples,
         "field_target_descriptions": dict(SHIPMENT_FIELD_TARGET_DESCRIPTIONS),
+        "available_sheets": [str(name) for name in (job.staged_metadata or {}).get("available_sheets") or []]
+        or [
+            str(item.get("sheet"))
+            for item in (inf.get("sheets") or [])
+            if isinstance(item, dict) and item.get("sheet")
+        ],
+        "selected_sheets": [str(name) for name in (job.staged_metadata or {}).get("selected_sheets") or []],
+        "sheet_selection_confirmed": bool((job.staged_metadata or {}).get("sheet_selection_confirmed")),
     }

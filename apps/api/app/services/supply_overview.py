@@ -27,6 +27,24 @@ _ISO_WEEK_START_SAST = """
 
 _TODAY_SAST = "(now() AT TIME ZONE 'Africa/Johannesburg')::date"
 
+# An open-order fact does not count when the same order line is already shipped.
+# Strict pair: operating unit + order number + item code. A looser join is not a pair.
+_OPEN_HAS_SHIPPED_TWIN = """
+EXISTS (
+  SELECT 1
+  FROM fact_inbound_shipment shipped_twin
+  WHERE shipped_twin.tenant_id = fact_inbound_shipment.tenant_id
+    AND shipped_twin.id <> fact_inbound_shipment.id
+    AND lower(shipped_twin.line_state) = 'shipped'
+    AND trim(coalesce(fact_inbound_shipment.order_no, '')) <> ''
+    AND trim(coalesce(fact_inbound_shipment.item_code, '')) <> ''
+    AND lower(trim(coalesce(shipped_twin.operating_unit, '')))
+        = lower(trim(coalesce(fact_inbound_shipment.operating_unit, '')))
+    AND lower(trim(shipped_twin.order_no)) = lower(trim(fact_inbound_shipment.order_no))
+    AND lower(trim(shipped_twin.item_code)) = lower(trim(fact_inbound_shipment.item_code))
+)
+"""
+
 
 def shape_plan_unit_po_coverage(rows: list[tuple[Any, ...]]) -> list[dict[str, Any]]:
     """Plan units vs case-linked POs. Covered is the full line quantity, not PO quantity."""
@@ -92,9 +110,17 @@ async def supply_overview(db: AsyncSession, user: dict | None) -> dict[str, Any]
                       :tenant AS tenant_id,
                       count(*) FILTER (
                         WHERE status IS DISTINCT FROM 'received'
+                          AND NOT (
+                            lower(line_state) = 'open_order'
+                            AND {_OPEN_HAS_SHIPPED_TWIN}
+                          )
                       ) AS open_lines,
                       coalesce(sum(quantity) FILTER (
                         WHERE status IS DISTINCT FROM 'received'
+                          AND NOT (
+                            lower(line_state) = 'open_order'
+                            AND {_OPEN_HAS_SHIPPED_TWIN}
+                          )
                       ), 0) AS open_units,
                       count(*) FILTER (
                         WHERE pod_date IS NULL
@@ -119,9 +145,11 @@ async def supply_overview(db: AsyncSession, user: dict | None) -> dict[str, Any]
                       coalesce(sum(quantity) FILTER (WHERE pod_date IS NOT NULL), 0) AS landed_units,
                       count(*) FILTER (
                         WHERE pod_date IS NULL AND line_state = 'open_order'
+                          AND NOT ({_OPEN_HAS_SHIPPED_TWIN})
                       ) AS pipeline_lines,
                       coalesce(sum(quantity) FILTER (
                         WHERE pod_date IS NULL AND line_state = 'open_order'
+                          AND NOT ({_OPEN_HAS_SHIPPED_TWIN})
                       ), 0) AS pipeline_units,
                       count(*) FILTER (
                         WHERE pod_date IS NULL AND line_state = 'shipped'
