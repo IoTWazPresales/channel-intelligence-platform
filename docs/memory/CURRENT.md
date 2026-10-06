@@ -1,18 +1,18 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-10-05
+**Last updated:** 2026-10-06
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
-**HEAD:** `1b1f341a` (`eif: complete N-0062 N-0064 N-0066 and N-0067`). Product commit `5e8c89fa`. Do not sweep the rest of the dirty tree. Do not push main.
+**HEAD:** `bfbf01c0` (`eif: complete N-0046 leftover database hygiene`). Pushed. Do not sweep the dirty product tree. Do not push main.
 
 **Alembic (code):** `20260924_0023` (`cpor_case_line.window_start` / `window_end`; revises `20260906_0022`)
 
-**Alembic on cip:** `20260906_0022`. Column `cpor_case_line.window_start` is absent. Role `cip` is the application login and is not the table owner. The `postgres` owner login rejected the app password, so the approved upgrade was not applied and was not stamped. Do not Apply or Create draft CPOR case on cip until `window_start` exists.
+**Alembic on cip:** `20260906_0022`. Column `cpor_case_line.window_start` is absent. Role `cip` is the application login and is not the table owner. The owner login works. The approved upgrade was not applied and was not stamped. Do not Apply or Create draft CPOR case on cip until `window_start` exists.
 
 ## Programme
 
-N-0061, N-0062, N-0064, N-0066, and N-0067 are complete on the local ledger (programme rev 1488, not committed).
+Programme rev 1499. N-0036 and N-0046 are complete and pushed (`621a4a98`, `bfbf01c0`). N-0061, N-0062, N-0064, N-0066, and N-0067 are complete. Product `275da96f` excludes a strict open-and-shipped pair from the supply overview read and defaults shipment sheet load to Shipped and Unship. Fact rows were not rewritten. The sheet picker dialog and POST are still uncommitted inside already-dirty files.
 
 - **N-0061** — complete. Baseline `BLN-N0061`. Observability passes. The evidence-read code is still in the dirty working tree.
 - **N-0062** — complete. A failed supply overview read logs and still returns an empty unavailable result. Arrived and plan-unit coverage stay derived. pytest 30 passed on supply coverage and plan-vs-executed. Supply page checked while signed in.
@@ -20,14 +20,14 @@ N-0061, N-0062, N-0064, N-0066, and N-0067 are complete on the local ledger (pro
 - **N-0066** — complete. Admin and planning headlines, widget formulas, and the vintage line under a widget no longer name tables. Checked on Administration, Planning, and the business dashboard.
 - **N-0067** — complete. Charts, tabs, and chips follow the theme. Light was readable on Administration, Planning, Supply, and Execution vs plan. Dark was restored. Login gradients stay paired to the mode. The inbox email frame stays white.
 
-**N-0036 bind is live, node not stamped.** `pnpm dev:api` listens on `127.0.0.1:8001` only (`CIP_API_HOST` unset). `GET /health` and `/health/ready` are 200 on that address. `GET /api/v1/auth/me` is 401 direct and through the web proxy on `:3000`. There is no `/api/v1/health` route (proxy 404). `localhost` resolves to `127.0.0.1` then `::1`; living callers were repointed to `127.0.0.1`. `node --test scripts/api-bind-host.test.cjs` 4 passed. Ledger still says blocked on change scope. Web `tsc` is exit 0 as of the N-0061 check. Quality gates for this node are still not stamped.
+**N-0036 is complete.** `pnpm dev:api` listens on `127.0.0.1:8001` only (`CIP_API_HOST` unset). There is no `/api/v1/health` route. `node --test scripts/api-bind-host.test.cjs` passed 4. Ledger commit `621a4a98`.
 
-**N-0045 scratch list is already gone.** The 105 classified paths are not in the tree. Control-plane paths were not moved. Live dirty product files were not archived.
+**N-0045 scratch list is already gone.** The 105 classified paths are not in the tree. Control-plane paths were not moved. The node is still blocked until the current untracked set is classified. Live dirty product files were not archived.
 
-**N-0046 worktrees are gone.** The 13 `.wt-main-baseline` notes are copied under `.eif/audit/PROGRAMME_20261005/n0046-notes`. Bisect, main-baseline, the broken baseline folder, and the two outside checkouts are removed. Leftover databases were not dropped. The node stays open on that.
+**N-0046 is complete.** Worktrees are gone. The 16 leftover databases are dropped. `cip` and `cip_test` remain. Ledger commit `bfbf01c0`, pushed. `window_start` was not added.
 
 **N-0063 is deferred** (ledger rev 1435). No claim-file backfill. On cip: settled 211, ended 74, cancelled 23, draft 3, claim rows 0. Case rows were not changed. Upload customer report stays on the settlement desk. Uplift stays on BACKLOG-185 until at least five settled cases have claim rows.
 
-**Decisions held, not built:** N-0065 — a user sees no Data unless product lines are assigned in permissions. N-0068 — keep multiple catalogs; do not retire `catalog_product`; per-line maps already overlay `column_mapping_memory`. N-0068 stays open on N-0067 and the five-vs-sixteen sellable grain. Do not start N-0069.
+**Decisions held:** N-0065 — every screen filters to assigned product lines; no assignment means no Data; each assignment is read-only or read-and-edit. Not built. N-0068 — grain is every product line, set per business by an admin; keep `catalog_product`; do not unique-index EAN. Not built. N-0060 stays open: scoring must read whatever lineup history is stored and pick up older quarters when the archive is loaded. Do not start N-0069 or N-0070.
 
 **Env:** local Windows. Web `:3000`. API `127.0.0.1:8001` only. Database `cip`. No Docker. The API virtualenv was rebuilt 2026-10-05 with Python 3.12 after the leftover baseline-folder delete removed its library files. `GET /health` and `/health/ready` are 200. The FX poller cannot write `fx_daily_rate` (role `cip` is not the owner). That does not stop the API.
