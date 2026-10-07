@@ -19,6 +19,7 @@ const fs = require('fs');
 const net = require('net');
 const path = require('path');
 const { URL } = require('url');
+const { liveSupervisorPid } = require('./supervisor-guard.cjs');
 
 const pidDir = path.join(__dirname, '..', '.cip-dev-pids');
 const pidFile = path.join(pidDir, 'worker.pid');
@@ -165,6 +166,19 @@ function onChildExit(code, signal) {
 }
 
 async function main() {
+  // N-0073: the always-on supervisor owns the worker. Starting a second one here would stop the
+  // supervisor's worker (preflight below) and the supervisor would stop this one, in a loop.
+  const supervisorPid = liveSupervisorPid();
+  if (supervisorPid) {
+    console.error(
+      `[cip-dev-worker] The CIP always-on supervisor (pid ${supervisorPid}) is running and already runs the worker.\n` +
+        '  Refusing to start a second one. Restart its worker with:\n' +
+        '    .\\scripts\\cip-supervisor-stop.ps1 -Component worker -Restart\n' +
+        '  or stop the supervisor first: .\\scripts\\cip-supervisor-stop.ps1'
+    );
+    process.exit(1);
+  }
+
   writePid();
   process.on('exit', deletePid);
   process.on('SIGTERM', () => {
@@ -241,7 +255,10 @@ async function main() {
     console.error(
       '[cip-dev-worker] Windows: spawning sibling celery beat (worker --beat is unsupported on Windows).'
     );
-    const beat = spawnCelery('beat');
+    // CIP_CELERY_BEAT_SCHEDULE (set by the always-on supervisor, N-0073) keeps beat's schedule file
+    // out of apps/api, where celerybeat-schedule.* are tracked files.
+    const beatArgs = process.env.CIP_CELERY_BEAT_SCHEDULE ? ['-s', process.env.CIP_CELERY_BEAT_SCHEDULE] : [];
+    const beat = spawnCelery('beat', beatArgs);
     beat.on('exit', onChildExit);
   } else {
     workerExtra.push('--beat');

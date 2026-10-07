@@ -6,6 +6,28 @@
 
 $ErrorActionPreference = 'Continue'
 
+# N-0073: refuse while the always-on supervisor is running. It owns the worker, API and web;
+# restarting them here would fight it. Live = PID file names a running process and the
+# status.json heartbeat is younger than 10 minutes (same rule as scripts/supervisor-guard.cjs).
+$supState = Join-Path $env:LOCALAPPDATA 'CIP\always-on'
+$supPidFile = Join-Path $supState 'supervisor.pid'
+if (Test-Path $supPidFile) {
+    $supPid = (Get-Content $supPidFile -ErrorAction SilentlyContinue | Select-Object -First 1) -as [int]
+    if ($supPid -and (Get-Process -Id $supPid -ErrorAction SilentlyContinue)) {
+        $fresh = $true
+        try {
+            $hb = [datetime]((Get-Content (Join-Path $supState 'status.json') -Raw | ConvertFrom-Json).supervisor.heartbeat)
+            if (((Get-Date) - $hb).TotalMinutes -gt 10) { $fresh = $false }
+        } catch { }
+        if ($fresh) {
+            Write-Host "The CIP always-on supervisor (pid $supPid) is running. Refusing to restart the dev stack." -ForegroundColor Yellow
+            Write-Host '  Stop it first: .\scripts\cip-supervisor-stop.ps1' -ForegroundColor Yellow
+            Write-Host '  Or restart one part: .\scripts\cip-supervisor-stop.ps1 -Component api -Restart' -ForegroundColor Yellow
+            exit 1
+        }
+    }
+}
+
 . (Join-Path $PSScriptRoot 'stop-dev.ps1')
 Stop-CipDevProcesses
 

@@ -70,3 +70,7 @@ apps/api/_*.json
 
 # Claude-in-browser catch-up snapshot (regenerated each run; not Cursor context)
 docs/memory/CLAUDE_CATCHUP.md
+# Celery beat schedule state (N-0073). The always-on supervisor writes it outside the repo via
+# CIP_CELERY_BEAT_SCHEDULE; a manual beat run writes it under apps/api. The three files already
+# tracked in apps/api stay tracked until someone runs git rm --cached on them.
+celerybeat-schedule*
