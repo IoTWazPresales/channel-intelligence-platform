@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1549
-  log_sha256: 179380f12764ff933d1ef45845e77de63a9d3701c0f92cb79ac64097040ddec2
+  snapshot_revision: 1607
+  log_sha256: 84ba13f978c77ee7660f9ea27f21cf93f8aad7c09e0c388fcaaa85a2e8acf5e8
   acceptance_policy:
     milestone: operator
     root: operator
@@ -8376,10 +8376,14 @@ nodes:
     title: 'BU entitlements: user-to-product-line mapping over the D-g lines'
     class: feature
     origin: operator
-    status: ready
-    stage: null
-    revision: 2
-    lease: null
+    status: in_progress
+    stage: implement
+    revision: 9
+    lease:
+      run: RUN-20261007-N0065-IMPL
+      acquired_at: '2026-10-07T13:25:10Z'
+      heartbeat_at: '2026-10-07T13:25:10Z'
+      expires_at: '2026-10-07T15:25:10Z'
     depends_on:
     - N-0055
     - N-0040
@@ -8396,7 +8400,7 @@ nodes:
       decision (default for unmapped users, read vs write scope, which surfaces filter)
     - Nothing writes to cip; read-only SQL prints current_database() first
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-N0065
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
@@ -8426,14 +8430,22 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: 'Implementation run RUN-20261007-N0065-IMPL: admin bypass in the router scope dependency (admin binds * for
+      read and edit), docstring and admin UI copy, tests for admin-no-rows, non-admin-no-rows, read-only line, worker/unset
+      path.'
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      unset-scope-open-for-workers: kept
+      star-scope-all-lines: kept and reused for admins
+      admin-catalog-widen-for-assignment: kept
+      read-vs-edit-per-line: kept for non-admins
     target_artifact_class: null
     design_artifact_class: null
+    implementation_run: RUN-20261007-N0065-IMPL
+    implementation_actor: gov-001
   N-0066:
     id: N-0066
     parent: null
@@ -8592,9 +8604,9 @@ nodes:
     title: Multi-catalogue column sets (BACKLOG-198)
     class: feature
     origin: operator
-    status: blocked
+    status: ready
     stage: null
-    revision: 1
+    revision: 2
     lease: null
     depends_on:
     - N-0067
@@ -8646,13 +8658,7 @@ nodes:
         rationale: null
     verification: {}
     evidence: []
-    blockers:
-    - id: BL-0006
-      type: decision
-      ref: D-0023
-      opened: '2026-09-23T22:26:21Z'
-      note: 'BACKLOG-198 catalog_product grain: does catalog_product stay the catalogue, get retired, or is it unrelated to
-        per-line column sets? Warren decides.'
+    blockers: []
     conservation_tags: []
     fingerprint: null
     stage_note: null
@@ -8813,10 +8819,14 @@ nodes:
     title: 'Stage 4.6: open->shipped fact double-count policy (BACKLOG-062), undecided'
     class: feature
     origin: operator
-    status: ready
-    stage: null
-    revision: 2
-    lease: null
+    status: in_progress
+    stage: discovery
+    revision: 3
+    lease:
+      run: RUN-20261007-N0071-IMPL
+      acquired_at: '2026-10-07T13:24:54Z'
+      heartbeat_at: '2026-10-07T13:24:54Z'
+      expires_at: '2026-10-07T15:24:54Z'
     depends_on:
     - N-0050
     facets:
@@ -9022,14 +9032,10 @@ nodes:
       tunnel at logon'
     class: feature
     origin: operator
-    status: in_progress
-    stage: implement
-    revision: 7
-    lease:
-      run: RUN-20261007-N0073-IMPL
-      acquired_at: '2026-10-07T11:42:50Z'
-      heartbeat_at: '2026-10-07T11:42:50Z'
-      expires_at: '2026-10-07T13:42:50Z'
+    status: complete
+    stage: null
+    revision: 18
+    lease: null
     depends_on:
     - N-0033
     - N-0036
@@ -9038,7 +9044,7 @@ nodes:
     risk: R2
     touches_existing: true
     acceptance: operator
-    acceptance_state: pending
+    acceptance_state: accepted
     acceptance_criteria:
     - 'Warren''s request 2026-10-07: ''lets start with getting the system ALWAYS ON using cloud flare like we were doing which
       did work'''
@@ -9059,25 +9065,68 @@ nodes:
     quality:
       reliability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261007/N0073_IMPL.md
+          summary: 'Each component killed once and returned healthy via a new launch: web 55s, api 53s, worker wrapper 46s,
+            redis (service stop) 51s, cloudflared 56s (new link, public /login 200, /auth/me 401). Second supervisor copy
+            exits in 1.8s (mutex). Clean stop+restart 67s to all healthy; healthy processes adopted. Orphaned 8001 listener
+            (dead owner pid) resolved to its live child. Self-verification by the implementation run.'
+        rationale: Measured recovery under 60s for every component with a 30s cycle; single instance proven; supervisor left
+          running.
+        pass_run: RUN-20261007-N0073-IMPL
+        pass_actor: gov-001
       finops:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261007/N0073_IMPL.md
+          summary: 'Zero spend: Cloudflare quick tunnel (trycloudflare, free, no account), all components local on this PC,
+            no cloud resources, no paid services or licences added.'
+        rationale: No cost incurred or committed; named tunnel/domain (possible cost) is N-0074.
+        pass_run: RUN-20261007-N0073-IMPL
+        pass_actor: gov-001
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261007/N0073_IMPL.md
+          summary: status.json written every cycle with heartbeat, per-component state/detail/pid/adopted/launches, link and
+            public check codes; link.html with stale-heartbeat banner; supervisor log (10 MB roll) and per-launch component
+            logs (3 generations); scripts/cip-supervisor-status.ps1 reads it all plus a direct Redis PING; status swap measured
+            0 missing reads in 300 rewrites (MoveFileEx).
+        rationale: Every state change and restart is logged with reason; operator can read state without the agent. No off-machine
+          alerting (out of scope by design).
+        pass_run: RUN-20261007-N0073-IMPL
+        pass_actor: gov-001
+    verification:
+      behavioral:
+        state: pass
+        pass_run: RUN-20261007-N0073-VER
+        pass_actor: gov-008
+        evidence: .eif/audit/PROGRAMME_20261007/N0073_VERIFY.md
+        path: null
+      referent:
+        state: pass
+        pass_run: RUN-20261007-N0073-VER
+        pass_actor: gov-008
+        evidence: .eif/audit/PROGRAMME_20261007/N0073_VERIFY.md
+        path: scripts/cip-supervisor.ps1
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: Implementation run RUN-20261007-N0073-IMPL building the accepted design N0073_DESIGN.md
+    stage_note: 'GOV-008 RUN-20261007-N0073-VER (R2: fresh-context subagent, same model family; not a different model). Verdict
+      VERIFIED_WITH_LIMITATIONS, no criterion failed (N0073_VERIFY.md). Re-executed: kill web 46s and worker wrapper 50s back
+      healthy via new launches, then exactly 1 celery worker + 1 beat; 30s cycle (~33s measured); second copy exits 1.3s (mutex);
+      dev-worker.js refuses (exit 1); per-user Startup shortcut present, 0 scheduled tasks, 0 services; web only 127.0.0.1:3000;
+      local API/proxy /auth/me 401; public /login 200, /auth/me 401; gate plant-false probe 36/36 (5xx/0 never auth-open,
+      200 is; .env not session refuses and closes; closure latched until supervisor restart); hostname from /quicktunnel JSON,
+      no bracketed URL regex; no SQL/Docker/powercfg/registry/firewall/task/service in supervisor code; adoption and log rotation
+      confirmed. Limitations: API, Redis, WSL, cloudflared kills not re-run (cloudflared kept to preserve Warren''s link;
+      rely on code + implementer evidence); no cold start or real logon observed; cycle can exceed 60s during Redis/tunnel
+      start and by design in backoff; apps/api/.env unreadable (hook), session inferred from live 401s. Supervisor left RUNNING
+      pid 46156, all 6 healthy, link unchanged. Acceptance is Warren''s.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -9265,11 +9314,12 @@ nodes:
     origin: operator
     status: proposed
     stage: null
-    revision: 0
+    revision: 1
     lease: null
     depends_on:
     - N-0073
     - N-0061
+    - N-0085
     facets:
     - api
     - ui
@@ -9344,11 +9394,12 @@ nodes:
     origin: operator
     status: proposed
     stage: null
-    revision: 1
+    revision: 2
     lease: null
     depends_on:
     - N-0073
     - N-0061
+    - N-0085
     facets:
     - api
     - schema
@@ -9436,16 +9487,18 @@ nodes:
   N-0078:
     id: N-0078
     parent: null
-    title: SEO and listing-quality monitoring on our listings (was a listing-capture v0 non-goal; requested by Warren 2026-10-07)
+    title: 'Listing quality and SEO across all reporting customers: cross-retailer parity, content floor, spec accuracy, freshness,
+      sell-through beside quality, search position'
     class: feature
     origin: operator
-    status: blocked
+    status: ready
     stage: null
-    revision: 1
+    revision: 4
     lease: null
     depends_on:
     - N-0073
     - N-0076
+    - N-0085
     facets:
     - api
     - ui
@@ -9454,10 +9507,13 @@ nodes:
     acceptance: operator
     acceptance_state: pending
     acceptance_criteria:
-    - 'The checks are the ones Warren names (decision): for example title, image count, description, key attributes, search
-      position for named terms'
-    - Each check is read from the stored listing snapshot; a re-parse needs no re-fetch
-    - A failing check is a finding on the listing with its evidence, not a score with hidden weights
+    - Checks per accepted decision D-0062 (Warren 2026-10-07), on every retailer covered by N-0085
+    - Each check reads the stored snapshot; re-parse needs no re-fetch; results carry a rules_version and the snapshot age
+    - A failing check is an amber flag with its evidence, never a hidden score and never a block; missing data shows as 'No
+      data'
+    - The Market & Listings quality lens shows one row per listing, a column per check, the flag count, snapshot age, and
+      that product's weekly sell-through at the same retailer
+    - 'Search position (second step): daily per retailer site search for Warren''s terms, polite limits, its own table'
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
     baseline_ref: null
     parity_source: []
@@ -9496,12 +9552,7 @@ nodes:
         rationale: null
     verification: {}
     evidence: []
-    blockers:
-    - id: BL-0016
-      type: decision
-      ref: D-0050
-      opened: '2026-10-07T11:14:20Z'
-      note: Warren names the listing-quality checks and the search terms.
+    blockers: []
     conservation_tags: []
     fingerprint: null
     stage_note: null
@@ -9516,12 +9567,13 @@ nodes:
   N-0079:
     id: N-0079
     parent: null
-    title: 'Budget ledger: allocation, commitment, consumption and reconciliation (spec section 9.7)'
+    title: 'Budget ledger: derived reserve, commitment, consumption, payment and reconciliation, with transfers and optional
+      caps (spec section 9.7)'
     class: feature
     origin: operator
-    status: blocked
+    status: ready
     stage: null
-    revision: 1
+    revision: 3
     lease: null
     depends_on:
     - N-0073
@@ -9534,10 +9586,16 @@ nodes:
     acceptance: operator
     acceptance_state: pending
     acceptance_criteria:
-    - Budget rules per Warren's decision (who allocates, at what grain, the 50/50 policy question)
-    - Allocation, commitment from approved cases, consumption from settled claims, and the reconciliation gap are recorded
-      rows, not recomputed guesses
-    - The Budgets page shows real rows; the planner budget check reads the ledger instead of the lineup-derived reservation
+    - 'Rules per accepted decision D-0059 (Warren 2026-10-07): derived reserve, commit at approve, consume at settle, paid
+      separate with link coverage, audited transfers, campaign/non-campaign reserve rows with a view switch, historical settled
+      cases loaded as consumption, unplanned-spend and unknown-quarter buckets, optional admin caps that flag and never block'
+    - Every ledger row is written in the same transaction as its source event; no updates or deletes; balances are sums; corrections
+      are reversing rows
+    - The planner budget check, lineup budget position and reapproval gate read the ledger; draft and cancelled cases no longer
+      count
+    - The historical load is proven on a clone of cip before it runs on cip
+    - Budgets page shows product line x quarter with reserved, committed, pending, consumed, released, paid, remaining, cap,
+      and drills to entries
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
     baseline_ref: null
     parity_source: []
@@ -9591,12 +9649,7 @@ nodes:
         rationale: null
     verification: {}
     evidence: []
-    blockers:
-    - id: BL-0017
-      type: decision
-      ref: D-0051
-      opened: '2026-10-07T11:14:33Z'
-      note: Warren answers the five budget-ledger rules (grain, allocator, 50/50, committed, consumed).
+    blockers: []
     conservation_tags: []
     fingerprint: null
     stage_note: null
@@ -10042,6 +10095,1189 @@ nodes:
     target_artifact_class: null
     design_artifact_class: null
     risk_class: full
+  N-0085:
+    id: N-0085
+    parent: null
+    title: 'Listing coverage for all eight reporting customers: find, confirm and watch our product pages at Game, Makro,
+      Computer Mania, Incredible Connection, HiFi Corp, Evetech, Takealot and Amazon'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0073
+    facets:
+    - api
+    - schema
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - 'Warren 2026-10-07: listing intelligence is needed for all reporting customers, not only Takealot and Evetech'
+    - For every product a reporting customer sells (from CST rows), CIP proposes that retailer's product page found by EAN
+      or model on the retailer's own site; a steward confirms; nothing auto-registers
+    - One page reader per retailer extracts price, stock, title, images, description and specs from the stored snapshot
+    - Fetching respects robots rules, uses per-retailer spacing, and stops on 403/429; refusals are recorded, not retried
+      hard
+    - Amazon's 51 registered listings are linked to products or flagged
+    - 'Coverage view: per customer, products sold vs listings watched'
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      data_integrity:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      backup_recovery:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      migration_safety:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+  N-0086:
+    id: N-0086
+    parent: null
+    title: 'Security hardening before 24/7 exposure: proxy login-throttle address, steward-write role checks, pilot passwords'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0073
+    facets:
+    - api
+    - auth
+    - ui
+    risk: R3
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - The web proxy overwrites X-Forwarded-For with the socket address it saw, so the per-address login throttle cannot be
+      dodged (N-0037 residual)
+    - CST steward bulk preview/apply/ignore and other steward writes in imports.py require steward or admin; the web hides
+      those controls from other roles (N-0038 residual)
+    - Placeholder pilot passwords are rotated or retired by the N-0075 invite flow (BACKLOG-205)
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      security:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      threat:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+  N-0087:
+    id: N-0087
+    parent: null
+    title: 'Honest surfaces: pricing page stops creating products, stub routes and stub import templates resolved, legacy
+      promotion scaffold and dead settlement code retired'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on: []
+    facets:
+    - api
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - 'Recording a price for an unknown SKU goes to the steward queue and never creates a dim_product row (standing rule:
+      never auto-create masters)'
+    - /pricing is wired into the nav with a real recommendation writer, or retired
+    - /market and /api/v1/market/placeholders are removed or given a written feed contract
+    - Each stub_noop Import Center template is hidden, routed to its real path, or built; no upload silently goes nowhere
+    - The duplicate 'Audit log' nav leaf is removed until N-0092 lands
+    - The legacy /promotions plans API and promo_exports DimPromotion path are removed or pointed at CPOR cases; dropping
+      tables is a separate Warren decision
+    - The unmounted SettlementContainer subtree is deleted if Warren confirms D-0032(2)
+    - 'CIP_DESIGN_LANGUAGE.md states the rule: an inert control is disabled or labelled unavailable'
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+  N-0088:
+    id: N-0088
+    parent: null
+    title: 'Promotion planner: suggested line quantities, and plans exported in the customer''s own workbook layout'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on: []
+    facets:
+    - api
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - '''Use CIP quantities'' fills each line from cover, forecast and that customer''s history, with the evidence shown;
+      flag only, never block'
+    - A mapped customer plan template is read on import and written on export; a template can be learned from an example file
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+  N-0089:
+    id: N-0089
+    parent: null
+    title: 'Operations and data health: data-health page, vacuum runbook, CST apply progress, retry coverage, background-task
+      parity, visible evidence-read failures'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0073
+    facets:
+    - api
+    - infra
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - Read-only /admin/data-health shows table counts and staging vs fact per import job (BACKLOG-031)
+    - A targeted VACUUM runbook/script exists for after large deletes (BACKLOG-032)
+    - CST apply shows a progress panel; every commit path uses transient retry
+    - One as-built matrix of dispatch, slot, poll and cancel per importer, with no orphan slots (BACKLOG-048)
+    - load_promotion_line_evidence logs failures and returns a state distinct from 'Not listed' (N-0061 residual)
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      reliability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      finops:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+  N-0090:
+    id: N-0090
+    parent: null
+    title: Alert on late and missing customer sell-through reports
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0073
+    facets:
+    - api
+    - ui
+    risk: R1
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - Late and missing expected-report slots appear as an Attention signal linking to the CST steward worklist
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+  N-0091:
+    id: N-0091
+    parent: null
+    title: Shipment receipt page and shipment change timeline
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on: []
+    facets:
+    - api
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - One page per shipment shows its receipts, POD evidence and matched lines
+    - An in-app event timeline over the existing shipment change API (BACKLOG-064)
+    - Cancelled-candidate signal from report coverage per Warren's rule for 'cancelled' (BACKLOG-063)
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+  N-0092:
+    id: N-0092
+    parent: null
+    title: Platform audit log for admin, user, settings and case-state actions
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on: []
+    facets:
+    - api
+    - auth
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - One append-only audit trail for admin, user, settings and case-state actions beyond steward and SQL-viewer events
+    - The Audit log nav leaf gets its own route
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      security:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      threat:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+  N-0093:
+    id: N-0093
+    parent: null
+    title: Pin saved reports to Overview
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on: []
+    facets:
+    - api
+    - ui
+    risk: R1
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - A saved report can be pinned or unpinned on Overview, per user
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+  N-0094:
+    id: N-0094
+    parent: null
+    title: 'Product roadmap planning view: lifecycle phase and replacement candidates'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on: []
+    facets:
+    - api
+    - schema
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - Lifecycle phase and replacement candidates have a writer (import or edit) and a planning view that lineup and forecast
+      read
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      data_integrity:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      backup_recovery:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      migration_safety:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+  N-0095:
+    id: N-0095
+    parent: null
+    title: 'Customer merge completion: loser-name alias seal at confirm, resolvers follow merged_into, related-name worklist
+      and repair scripts (BACKLOG-081 + 083, shipped as a pair)'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on: []
+    facets:
+    - api
+    - data_migration
+    risk: R3
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - A confirmed merge mints approved loser-name aliases to the keeper, so merged tokens stop returning as steward work
+    - Resolvers follow merged_into; related-name worklist; repair/backfill scripts proven on a clone before cip
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      data_integrity:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      backup_recovery:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      migration_safety:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+  N-0096:
+    id: N-0096
+    parent: null
+    title: 'Test, CI and record honesty: self-seeding tests, live API in CI, backlog and context drift corrected'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on: []
+    facets:
+    - api
+    risk: R1
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - Distributor-as-customer and non-split-sheet tests seed their own rows on cip_test (BACKLOG-144, 121)
+    - The seven environment-dependent API tests seed and clean up or carry an integration mark (BACKLOG-203)
+    - GitHub Actions starts the API against cip_test and runs the live specs (BACKLOG-099)
+    - BACKLOG.md and CONTEXT.md status lines that contradict the code are corrected (SWEEP_A/B/C contradiction lists)
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+  N-0097:
+    id: N-0097
+    parent: null
+    title: 'Lineup follow-ons: PF quantity columns, workbench identifier split, supersession hardening, margin amounts'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on: []
+    facets:
+    - api
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - PF/desktop template family reads Total Qty / month columns per Warren's mapping choice (BACKLOG-105)
+    - The lineup workbench shows SKU and Sales model as two columns under 'both' (BACKLOG-210)
+    - W2 supersession refuses mixed-customer cases; carry provenance column if needed (BACKLOG-122/120, trigger-gated)
+    - Amount columns capture currency margins when a real workbook with Rand amounts arrives (BACKLOG-052, data-gated)
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+  N-0098:
+    id: N-0098
+    parent: null
+    title: 'Shipment evidence Plan D: stop the dual write, then drop redundant columns (BACKLOG-057 D4, 058 D5)'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on: []
+    facets:
+    - data_migration
+    - schema
+    risk: R3
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - D4 runs only after the 30-day soak and Warren's approval; D5 after D4 plus migration review
+    - Proven on a clone of cip before cip
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      data_integrity:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      backup_recovery:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      migration_safety:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+  N-0099:
+    id: N-0099
+    parent: null
+    title: Independent second-look verification of self-verified closed nodes before the branch goes to main
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on: []
+    facets:
+    - api
+    risk: R2
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - N-0034, N-0043, N-0049, N-0053 and later self-verified closes get an independent pass from a fresh session or another
+      model, recorded as later evidence (BACKLOG-209, 211)
+    - The ScopeBar VERIFY debt is cleared or waived in writing by Warren
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+  N-0100:
+    id: N-0100
+    parent: null
+    title: 'CPOR duty separation: KAM, PM, Ken and Wayne responsibilities on cases (BACKLOG-136)'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0065
+    facets:
+    - api
+    - auth
+    - ui
+    risk: R3
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - Separation per Warren's mapping (D-0029 Q3); the four system roles stay unless Warren decides otherwise
+    - PM edits pre-approval only; Ken cannot write MAC or terms (per the mapping)
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      security:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      threat:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
 decisions:
   D-0001:
     id: D-0001
@@ -10278,7 +11514,7 @@ decisions:
     statement: 'BACKLOG-198 catalog_product grain: does catalog_product stay the catalogue, get retired, or is it unrelated
       to per-line column sets? Warren decides.'
     origin: agent
-    status: proposed
+    status: superseded
     supersedes: null
   D-0024:
     id: D-0024
@@ -10569,7 +11805,7 @@ decisions:
       re-fetching; search position needs a new fetch of the search page per term. Impact: content checks are cheap; search
       position adds polling load per term. Reversibility: high. Resolving step: Warren lists the checks and the search terms.'
     origin: gov-001
-    status: proposed
+    status: superseded
     supersedes: null
   D-0051:
     id: D-0051
@@ -10582,7 +11818,7 @@ decisions:
       shows allocation/commitment/actual not recorded; planner budget check uses the lineup-derived profit reservation. Reversibility:
       medium (ledger rows are history). Resolving step: Warren answers 1-5.'
     origin: gov-001
-    status: proposed
+    status: superseded
     supersedes: null
   D-0052:
     id: D-0052
@@ -10656,6 +11892,60 @@ decisions:
     origin: operator
     status: accepted
     supersedes: null
+  D-0059:
+    id: D-0059
+    scope: N-0079
+    statement: 'Warren 2026-10-07, budget ledger rules (N0079_PROPOSAL.md plus four improvements): budget is DERIVED (approving
+      a lineup writes reserve rows; nobody types a pot; COMMERCIAL_DOMAIN_RULES 1.1). One append-only ledger at product x
+      customer x landed-quarter grain; rolls up by product line x quarter and customer x quarter; limit check at product line
+      x quarter. Committed = case approve event at ttl_support_usd with FX booked at approval; post-approval edits write adjust
+      rows; cancel writes release. Consumed = case settle event at ttl_result_usd, releasing commitment minus result (rule
+      1.6). Paid = separate rows from linked payment evidence, shown with link coverage. Transfers between lines/quarters
+      are audited rows by admin or a planner with can_edit on that product line. Campaign and non-campaign reserve are stored
+      as separate rows; an on-screen switch chooses which counts. The 211 settled historical cases are loaded as consumption
+      rows tagged historical_import (proven on a clone before cip). Spend with no reserve shows as flagged ''unplanned spend'';
+      lines with no landed quarter go to an ''unknown quarter'' bucket. Optional management caps per product line x quarter:
+      admin-set, audited, over-cap flags and never blocks. Old fact_budget_* tables (0 rows) and hard-delete budget endpoints
+      retire.'
+    origin: operator
+    status: accepted
+    supersedes: D-0051
+  D-0060:
+    id: D-0060
+    scope: N-0068
+    statement: 'Warren 2026-10-05 (recorded in docs/BACKLOG.md BACKLOG-198 status line, entered in the ledger 2026-10-07):
+      keep multiple catalogs; do not retire catalog_product. Per-line column maps overlay column_mapping_memory.mapping_profile.by_product_line
+      (tenant_column_grain, one row per business per product line). Duplicate EAN stays FLAG, not a unique index. Sellable
+      grain is every dim_product.product_line (N-0040, complete).'
+    origin: operator
+    status: accepted
+    supersedes: D-0023
+  D-0061:
+    id: D-0061
+    scope: N-0085
+    statement: 'Warren 2026-10-07: listing coverage for all eight reporting customers (Game, Makro, Computer Mania, Incredible
+      Connection, HiFi Corp, Evetech, Takealot, Amazon). CIP proposes each retailer product page found by EAN or model on
+      the retailer''s own site for products that customer sells; a steward confirms; nothing auto-registers; one page reader
+      per retailer; robots respected, per-retailer spacing, stop on 403/429. Listing capture polling is turned ON (about every
+      30 minutes for watched listings) once N-0073 is verified: the supervisor''s worker environment sets CIP_LISTING_CAPTURE_SCHEDULE
+      and CIP_LISTING_LIVE_FETCH. Daily search position per retailer site search uses terms Warren supplies.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0062:
+    id: D-0062
+    scope: N-0078
+    statement: 'Warren 2026-10-07, listing quality (best version): (1) cross-retailer parity: the same product is compared
+      across all retailers and the one behind is flagged; (2) floor: 6+ images, 150+ words description, key specs CPU/RAM/storage/screen/OS,
+      title has brand + model; (3) specs that disagree with the product master are a core check; (4) every result shows snapshot
+      age and stale is never a pass; (5) retailer-appropriate checks: buy box held by the retailer on marketplaces (Takealot,
+      Amazon), listed/in stock/price on single-seller retailers; (6) quality shown beside that product''s weekly sell-through
+      at the same retailer, labelled as correlation. Rating/review count shown, zero reviews flagged. Failures are amber flags
+      and never block; missing data is grey ''No data'', never a failure. Search position per retailer site search as a second
+      step with Warren''s terms. SEO is no longer a non-goal (spec section 8 v0 note superseded).'
+    origin: operator
+    status: accepted
+    supersedes: D-0050
 evidence:
   EV-GOV008-REVIEW:
     id: EV-GOV008-REVIEW
@@ -11061,6 +12351,47 @@ evidence:
     tree_hash: null
     note: 'N-0073 feature-definition panel output (architecture-specialist, product-manager, reliability-sre-specialist):
       12 challenge findings, supervisor design, wake-up table, open questions answered by Warren in D-0058'
+  EV-0005:
+    id: EV-0005
+    provenance: implementation-observation
+    path: scripts/cip-supervisor.ps1
+    tree_hash: 9c28bdcf9bc7e4bcdf366cc70ef923168aecdd82
+    note: 'N-0073 supervisor loop plus its operator scripts (uncommitted, working tree on 9c28bdcf): scripts/cip-supervisor.ps1,
+      cip-supervisor-install.ps1 (-Check), cip-supervisor-stop.ps1, cip-supervisor-status.ps1. Continuation fixes: orphaned-listener
+      adoption/stop (Resolve-PortOwner, Stop-Tree dead root), MoveFileEx status swap, worker array guard. Parse 0 errors (N0073_static.ps1).'
+  EV-0006:
+    id: EV-0006
+    provenance: implementation-observation
+    path: scripts/supervisor-guard.cjs
+    tree_hash: 9c28bdcf9bc7e4bcdf366cc70ef923168aecdd82
+    note: 'N-0073 small edits (uncommitted, on 9c28bdcf): scripts/supervisor-guard.cjs + supervisor-guard.test.cjs (dev-worker
+      refusal; live check exit 1 while supervisor 46156 runs), scripts/dev-worker.js (guard + beat -s CIP_CELERY_BEAT_SCHEDULE,
+      live beat cmdline confirms schedule outside repo), scripts/restart-dev.ps1 (guard), scripts/pilot-tunnel.ps1 (/quicktunnel
+      hostname, auth gates kept), apps/web/package.json (start -H 127.0.0.1), .gitignore (celerybeat-schedule*). node --test
+      11/11 pass; node --check exit 0.'
+  EV-0007:
+    id: EV-0007
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261007/N0073_IMPL.md
+    tree_hash: 9c28bdcf9bc7e4bcdf366cc70ef923168aecdd82
+    note: 'N-0073 implementation report RUN-20261007-N0073-IMPL: files changed, commands and observed results, kill-test measurements
+      (web 55s, api 53s, worker 46s, redis 51s, tunnel 56s), public /login 200 and /auth/me 401 after tunnel restart, mutex,
+      shortcuts, open items. Self-verification only; GOV-008 pending.'
+  EV-0008:
+    id: EV-0008
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261007/N0073_static.ps1
+    tree_hash: 9c28bdcf9bc7e4bcdf366cc70ef923168aecdd82
+    note: 'N-0073 validation helpers (audit only): N0073_static.ps1 (parse 0 errors on 6 .ps1, 11/11 orphan/dead-root/reused-PID
+      and atomic-swap checks PASS), N0073_swap_probe.ps1 (Move-Item 101 / File.Replace 89 / MoveFileEx 0 missing reads in
+      300 rewrites), N0073_killtest.ps1, N0073_waithealthy.ps1.'
+  EV-0009:
+    id: EV-0009
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261007/N0065_DISCOVERY.md
+    tree_hash: 9c28bdcf9bc7e4bcdf366cc70ef923168aecdd82
+    note: 'N-0065 discovery: dirty-tree product-line gate, the single behaviour to change (admin bypass per D-0056), preserved
+      capabilities'
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -11440,6 +12771,24 @@ baselines:
     observed_behavior: Only Postgres starts by itself. Redis (WSL Ubuntu) stopped, worker not running, API on 127.0.0.1:8001
       and web on 0.0.0.0:3000 run as manual processes, quick tunnel pid 9960 live with a changing address read from metrics
       /quicktunnel.
+  BLN-N0065:
+    id: BLN-N0065
+    provenance: implementation-observation
+    tree_hash: 9c28bdcf9bc7e4bcdf366cc70ef923168aecdd82
+    latent_capabilities:
+    - unset-scope-open-for-workers
+    - star-scope-all-lines
+    - admin-catalog-widen-for-assignment
+    - read-vs-edit-per-line
+    preservation:
+      unset-scope-open-for-workers: 'kept: workers and forged test identities stay unset'
+      star-scope-all-lines: kept and reused for admins
+      admin-catalog-widen-for-assignment: kept
+      read-vs-edit-per-line: kept for non-admins
+    path: .eif/audit/PROGRAMME_20261007/N0065_DISCOVERY.md
+    observed_behavior: 'Dirty-tree product-line gate: router binds each signed-in user''s assigned lines (read / editable)
+      as session settings; database row security filters dim_product and product-keyed tables; unset = open, empty = none,
+      * = all. Admin with no assignment sees no product data.'
 caveats:
   consult_model_logged:
     key: consult_model_logged
@@ -11603,9 +12952,30 @@ deferred_findings:
   run: RUN-20261007-N0073-GOV
   actor: gov-001
   status: deferred
+- seq: 1577
+  code: DOES_NOT_FIT
+  note: 'Backlog sweep 2026-10-07 (SWEEP_C.md WP-6, WP-7): EIF-repo work, not CIP product work, no CIP node: BACKLOG-204 residuals
+    (Stop hook fail-open, Chrome origin gating, server-scoped MCP grants, install script, unmapped Skill/Artifact/SendMessage/SubagentHandback
+    for Claude Code subagents), 207 (shell .env read), 208 (cwd root discovery), 172/173 (unclear), and engine items 159,
+    166, 167, 171, 175, 176, 177. Also observed today: one HOOK_INTERNAL_ERROR (bracketed URL, Invalid IPv6 URL) wedges every
+    session via pending() globbing all runtime-session files (BACKLOG B2). Needs a Warren-authorised session in the EIF repo.'
+  node: null
+  run: R20261007T130814Z
+  actor: gov-001
+  status: deferred
+- seq: 1598
+  code: DOES_NOT_FIT
+  note: 'N-0065 feature-definition panel not convened as separate seats: the semantics are Warren''s accepted decision D-0056
+    and the feature is already built in the dirty tree; the only open design point is a one-branch admin bypass using the
+    existing ''*'' scope. Product/commercial/interaction/visual seats own no open decision here; identity-access and application-security
+    lenses are carried into the implementation and GOV-008 runs instead.'
+  node: N-0065
+  run: RUN-20261007-N0065-GOV
+  actor: gov-001
+  status: deferred
 ids:
   node: 5
-  decision: 58
+  decision: 62
   blocker: 19
-  evidence: 4
+  evidence: 9
   baseline: 18
