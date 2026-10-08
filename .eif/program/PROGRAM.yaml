@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1607
-  log_sha256: 84ba13f978c77ee7660f9ea27f21cf93f8aad7c09e0c388fcaaa85a2e8acf5e8
+  snapshot_revision: 1705
+  log_sha256: 5dc1c153d79edd1e35d58a2fb01d980b72068f5caff396673f7c5f27f3a8ee53
   acceptance_policy:
     milestone: operator
     root: operator
@@ -8377,13 +8377,9 @@ nodes:
     class: feature
     origin: operator
     status: in_progress
-    stage: implement
-    revision: 9
-    lease:
-      run: RUN-20261007-N0065-IMPL
-      acquired_at: '2026-10-07T13:25:10Z'
-      heartbeat_at: '2026-10-07T13:25:10Z'
-      expires_at: '2026-10-07T15:25:10Z'
+    stage: validate
+    revision: 26
+    lease: null
     depends_on:
     - N-0055
     - N-0040
@@ -8407,32 +8403,93 @@ nodes:
     quality:
       testing:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261007/N0065_IMPL.md
+          summary: 'Round 2 (after GOV-008 FAILED C1/K2): 10 new no-DB listener tests (SessionLocal under empty scope issues
+            set_config; rebind after commit/rollback; savepoint not rebound; worker unset; pooled worker bound ''*''; threadpool,
+            to_thread and FastAPI sync endpoint carry scope; bare thread unscoped) + 11 round-1 unit = 21 passed. cip_test
+            DB tests 10 passed (5 new: sync SessionLocal empty 0 / ''*'' all / one line only that line / worker open; read-only
+            line UPDATE 0 rows; rebind after commit; real COMMIT keeps scope and no pool leak; async keeps scope across commit);
+            cip_test unchanged. Mutations: listener removed -> 7 unit + 5 DB fail; ''*'' rebind disabled -> 1 unit + 2 DB
+            fail. Broad sample incl. auth/RBAC and SessionLocal endpoint suites: 551 passed, 2 skipped. Stale single-head
+            test now asserts the true single head. Self-verification only.'
+        rationale: 'The failing path (sync SessionLocal on the request path) is now covered at unit level and against real
+          Postgres row security, and both mutations are caught. Not run: write-capable endpoint modules (guarded off cip,
+          cip_test not seeded).'
+        pass_run: RUN-20261007-N0065-IMPL
+        pass_actor: gov-001
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261007/N0065_IMPL.md
+          summary: 'Unchanged in round 2: the per-request router log line still records product_lines=<all|assigned:n|unset>.
+            The after_begin listener does not log (it would be one line per transaction). The read-only probe N0065_impl_r2_probe.py
+            prints the bound setting and counts per scope for diagnosis. Live restart observed via cip-supervisor-status.ps1
+            (restarting -> healthy, /health 200).'
+        rationale: 'Adequate for R2: an operator can see which branch each request bound, and the probe reproduces the per-transaction
+          binding. Limitation: no metric or alert on scope decisions or on the ''*'' worker rebind.'
+        pass_run: RUN-20261007-N0065-IMPL
+        pass_actor: gov-001
       security:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261007/N0065_IMPL.md
+          summary: 'Round 2 closes the GOV-008 C1/K2 fail-open: a Session after_begin listener on the base ORM Session binds
+            the request scope (transaction-local set_config) on every ORM transaction, sync and async. Live read-only on cip:
+            sync SessionLocal under a non-admin empty scope now sees 0 products / 0 forecasts (was 18177 / 38625); AZ read-only
+            sees 1, 0 other lines, 0 editable; admin sees 18177 before and after a commit. API restarted, healthy, unauthenticated
+            /auth/me 401 local, web proxy and public. No new trust input: the listener reads only the contextvars the router
+            sets from app_user.role and grant rows.'
+        rationale: 'Every request-context ORM transaction, including threadpool and to_thread hand-offs, now carries the D-0056
+          scope; read-only lines are not writable on the sync paths. Residual: user-triggered background jobs (task queue,
+          in-process fallback thread) run unscoped as workers; recorded as an open item for decision.'
+        pass_run: RUN-20261007-N0065-IMPL
+        pass_actor: gov-001
       threat:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261007/N0065_IMPL.md
+          summary: 'Round 2 threats: (1) cross-request leak through the sync pool - mitigated, setting is transaction-local
+            and measured unscoped checkouts after scoped use read ''*'', never the request value; (2) fail-closed for in-process
+            workers on a reused connection (leftover '''' hides all products) - found and mitigated by binding ''*'' on connections
+            marked as previously scoped, measured in cip_test and live; (3) post-commit '''' scope (round-1 open item 2) -
+            fixed, rebind per transaction; (4) user-triggered background jobs run unscoped (workers by D-0056) - residual,
+            open decision; (5) admin compromise exposes all lines - accepted D-0056 residual, unchanged.'
+        rationale: 'Threats are enumerated with controls and measurements. Residual (4) is a design question about job scope,
+          not a regression: the jobs were unscoped before this node too.'
+        pass_run: RUN-20261007-N0065-IMPL
+        pass_actor: gov-001
+    verification:
+      behavioral:
+        state: fail
+        evidence: .eif/audit/PROGRAMME_20261007/N0065_VERIFY.md
+        path: null
+      referent:
+        state: pass
+        pass_run: RUN-20261007-N0065-VER
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261007/N0065_VERIFY.md
+        path: apps/api/app/api/v1/router.py
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Implementation run RUN-20261007-N0065-IMPL: admin bypass in the router scope dependency (admin binds * for
-      read and edit), docstring and admin UI copy, tests for admin-no-rows, non-admin-no-rows, read-only line, worker/unset
-      path.'
+    stage_note: 'Round 2 self-validated (RUN-20261007-N0065-IMPL; N0065_IMPL.md ''Round 2''). Fix for GOV-008 FAILED C1/K2:
+      Session after_begin listener on the base ORM Session (app/core/product_line_scope.py, installed from session.py and
+      session_sync.py) binds the request product-line scope with one transaction-local set_config at the start of every root
+      ORM transaction, sync SessionLocal() and AsyncSession alike; rebinds after commit (fixes post-commit ''''); unset scope
+      stays open, with ''*'' bound on pooled connections that carried a scope before. get_db''s redundant apply removed; router
+      keeps the apply for the transaction open at bind time. Thread hand-offs verified: run_in_threadpool/anyio and asyncio.to_thread
+      copy context (tested incl. a FastAPI sync endpoint); bare threads and task-queue jobs stay unscoped as workers. Tests:
+      21 unit, 10 cip_test DB (cip_test unchanged), 551 passed sample; mutations caught; stale single-head test fixed. Live
+      read-only on cip: sync SessionLocal empty scope 0/0 (was 18177/38625), AZ read-only 1 / 0 editable, admin commit-then-read
+      18177, unscoped pool checkouts ''*''. API restarted 16:59, healthy 17:00, /auth/me 401 local/proxy/public. Open: scope
+      for user-triggered background jobs (decision), async connection.info not marked (NullPool, harmless), PUT 400 on ''*''/comma,
+      cip_test at 0023. Needs GOV-008 under a different run.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -8820,13 +8877,9 @@ nodes:
     class: feature
     origin: operator
     status: in_progress
-    stage: discovery
-    revision: 3
-    lease:
-      run: RUN-20261007-N0071-IMPL
-      acquired_at: '2026-10-07T13:24:54Z'
-      heartbeat_at: '2026-10-07T13:24:54Z'
-      expires_at: '2026-10-07T15:24:54Z'
+    stage: validate
+    revision: 22
+    lease: null
     depends_on:
     - N-0050
     facets:
@@ -8839,39 +8892,83 @@ nodes:
     - 'Warren decides the remediation policy (D-e: not decided); nothing is built until then'
     - Nothing writes to cip; read-only SQL prints current_database() first
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-N0071
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
     quality:
       data_integrity:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261007/N0071_IMPL.md
+          summary: 'Round 2 (D-0057 + D-0065), read-only: predicates, a read-only window CTE and counts; no UPDATE/DELETE,
+            write path or migration. test_remainder_does_not_rewrite_fact_rows and test_fact_rows_are_not_rewritten pass;
+            cip (read-only txn, current_database printed): 15,255 rows, max(updated_at) 2026-09-21, 0 updated in last 12 h.
+            Helper partial set equals an independent self-join (10 lines, 904 open units, remainder 336); covered set 542
+            + partial 10 = round-1 552. Readers on the rule agree on cip: supply open_lines = brief = 1,571; supply overdue
+            = shipping overdue KPI = 364; /summary = grid rule (14,713). Own mutants caught (remainder_zero 14 fail, supply_no_rule
+            3 fail). Self-verification by the implementation run; readers still on D-0057 recorded as finding.defer.'
+        rationale: Stored fact rows stay as imported; one rule (D-0057 + D-0065) in one module for the readers in scope.
+        pass_run: RUN-20261007-N0071-IMPL
+        pass_actor: gov-001
       backup_recovery:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: na
+        evidence:
+          path: .eif/audit/PROGRAMME_20261007/N0071_IMPL.md
+          summary: 'Round 2: still no data write and no schema change; cip was only read (read-only transactions, rolled back).
+            Undo is a code revert.'
+        rationale: 'Nothing to back up or recover: no data written.'
       migration_safety:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: na
+        evidence:
+          path: .eif/audit/PROGRAMME_20261007/N0071_IMPL.md
+          summary: 'Round 2: no Alembic migration, no index, no fact rewrite (D-0057 and D-0065 both keep rows as imported).
+            The remainder is computed on read (window CTE). Files changed are read-side Python and tests only.'
+        rationale: No migration in this node.
+    verification:
+      behavioral:
+        state: fail
+        evidence: .eif/audit/PROGRAMME_20261007/N0071_VERIFY.md
+        path: null
+      referent:
+        state: pass
+        pass_run: RUN-20261007-N0071-VER
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261007/N0071_VERIFY.md
+        path: apps/api/app/services/shipment_strict_pair.py
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: 'Round 2 built and self-checked (N0071_IMPL.md Round 2). A (GOV-008 finding): supply overview headline follows
+      the strict-pair rule in every column; cip read-only eta_past 1,218 -> 696 (686 + 10 partial lines), overdue 375 -> 364
+      = shipping overdue KPI, oldest 2026-05-07/153 -> 2026-05-08/152. B (D-0065): remainder built once in shipment_strict_pair.py
+      (window CTE, keep_counted_line, twin_remainder) and used by supply overview units, brief/dashboard count, lineup quarter
+      summary, shipping grid scope + /summary + ETA-shift + KPI quantity, CPOR intake MAC + disti proxy; cip pipeline units
+      84,914 -> 85,250 (+336 = remainder of the 10 lines; 904 is their open qty, 568 shipped). Timings under RLS: 0.3-3.6
+      s per reader, lineup ~10 s (its own ORM load, same with D-0057). Tests: test_shipment_strict_pair 39 passed; mutants
+      remainder_zero 14 fail, supply_no_rule 3 fail, files restored byte-identical; round-1 suites 206 + 56 passed, 33 cip-guard
+      errors (not run). Quality: data_integrity pass (self), backup_recovery na, migration_safety na. Open: readers still
+      on D-0057 (finding.defer), value of a remainder (proposed decision for Warren; built = no amount, as D-0057), guarded
+      tests need a disposable DB, live screens not exercised. Next: GOV-008 by a different run. Not recorded: verification,
+      complete.'
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      stored-open-twin-rows-unchanged: no write path touched; read predicates only (D-0057)
+      readers-already-wired-same-result: same 552 ids dropped on cip (md5 match)
+      shipped-and-arrived-rows-never-dropped: rule drops open_order rows only; unit tests
+      sheet-picker-default-shipped-unship: N-0072 area, unchanged
+      landed-readers-shipped-only: unchanged; no open rows to drop
     target_artifact_class: null
     design_artifact_class: null
+    implementation_run: RUN-20261007-N0071-IMPL
+    implementation_actor: gov-001
   N-0072:
     id: N-0072
     parent: null
@@ -10104,7 +10201,7 @@ nodes:
     origin: operator
     status: proposed
     stage: null
-    revision: 0
+    revision: 1
     lease: null
     depends_on:
     - N-0073
@@ -10117,15 +10214,16 @@ nodes:
     acceptance: operator
     acceptance_state: pending
     acceptance_criteria:
-    - 'Warren 2026-10-07: listing intelligence is needed for all reporting customers, not only Takealot and Evetech'
-    - For every product a reporting customer sells (from CST rows), CIP proposes that retailer's product page found by EAN
-      or model on the retailer's own site; a steward confirms; nothing auto-registers
-    - One page reader per retailer extracts price, stock, title, images, description and specs from the stored snapshot
-    - Fetching respects robots rules, uses per-retailer spacing, and stops on 403/429; refusals are recorded, not retried
-      hard
-    - Amazon's 51 registered listings are linked to products or flagged
-    - 'Coverage view: per customer, products sold vs listings watched'
-    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    - 'Warren 2026-10-07 (D-0061, D-0063): listing coverage for every reporting customer''s site, including Amazon and Makro'
+    - 'Discovery basis: products each customer reported selling in its sell-through files in the last 6 months; exact keys
+      only (normalised EAN, part number, feed id); a page counts only if it shows the EAN or part number; a steward confirms;
+      nothing auto-registers'
+    - One page reader per retailer extracts price, stock, promo, title, brand, images, description length, specs, seller/buy
+      box, rating, reviews, page EAN/part number for N-0078
+    - Ordinary browser user agent; polite per-site spacing; per-site pause on 403/429 with back-off; per-run time limit; no
+      CAPTCHA solving or block evasion; a paused site shows on screen
+    - 'Coverage view per customer: products reported vs listings watched vs awaiting steward vs failing vs not found'
+    - Complete when child units N-0101..N-0106 are complete
     baseline_ref: null
     parity_source: []
     parity_matrix: {}
@@ -11278,6 +11376,429 @@ nodes:
     target_artifact_class: null
     design_artifact_class: null
     risk_class: full
+  N-0101:
+    id: N-0101
+    parent: N-0085
+    title: 'N-0085 U1: listing polling on under the supervisor, restock seen again, dead-link back-off, per-site 403/429 pause,
+      run time limit'
+    class: feature
+    origin: decomposition
+    status: in_progress
+    stage: validate
+    revision: 11
+    lease: null
+    depends_on:
+    - N-0073
+    facets:
+    - api
+    - infra
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - The supervisor's worker environment sets CIP_LISTING_CAPTURE_SCHEDULE and CIP_LISTING_LIVE_FETCH; status shows both
+      present
+    - A beat run records new Takealot and Evetech observations on cip
+    - An out_of_stock listing seen in stock returns to active (restocked); out_of_stock listings keep being polled
+    - consecutive failures drive the dead-link back-off; a 403/429 pauses only that site (1 h doubling to 24 h) and is recorded
+    - Each poll run takes the oldest-due listings first, mixes retailers and stops at 10 minutes
+    - Market ledger copy 'Checked on a schedule' is true, or changed to what is true
+    - 'Design: .eif/audit/PROGRAMME_20261007/N0085_DESIGN.md; decisions D-0061 and D-0063'
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: BLN-N0101
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261007/N0101_IMPL.md
+          summary: '16 new no-DB tests (restock, unknown availability not a restock, out_of_stock polled, query statuses and
+            oldest-due NULLS FIRST, 3x404 back-off with no request/no row then daily retry and reset, link_recovered, 429
+            pauses only that site and is recorded with no price from the refusal body, 403 doubling 1..24 h and clear on success,
+            Takealot no follow-up request, 10-min limit, round-robin, per-site spacing, browser UA sent) plus existing listing
+            tests: 101 passed; neighbours 102 passed. Live: two beat runs wrote 218 observations each. Self-verification by
+            the implementation run.'
+        rationale: 'Every U1 rule is pinned at the unit layer; the live beat proves wiring end to end. Not covered live: a
+          real restock and a real 403/429 (none occurred); ruff not installed; no web change so tsc/eslint not applicable.'
+        pass_run: RUN-20261007-N0101-IMPL
+        pass_actor: gov-001
+      observability:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261007/N0101_IMPL.md
+          summary: Each run returns polled, failed, skipped_backoff, skipped_paused, paused_sites, stopped_reason, duration_seconds
+            to the Celery result backend (read back for both runs) and logs it; refusals log a warning with site, status,
+            hours and until; observations carry parse_flags.status_transition and parse_flags.site_paused; status.json env
+            shows what the worker was given.
+        rationale: 'Enough to diagnose U1 from the result backend and cip. Limits: no alert or UI chip for a paused site yet
+          (design puts it in U6); worker log not read in this run (outside the declared roots).'
+        pass_run: RUN-20261007-N0101-IMPL
+        pass_actor: gov-001
+      reliability:
+        required: true
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261007/N0101_IMPL.md
+          summary: Run bounded at 600 s (measured 266 s and 234 s for 218 listings); per-site spacing; refused site gets no
+            further requests in the run or until the pause ends; dead links backed off after 3; Redis outage falls back to
+            a process-local store; poll exceptions are counted, not raised; supervisor restart left all components healthy
+            and the public link healthy (new hostname).
+        rationale: 'Limits recorded: solo worker busy about 4 of every 30 min; in-flight Takealot check can overrun by up
+          to 60 s; no Celery hard time limit; pause and failure count not durable until U2 migrations; the full restart changed
+          the public tunnel address.'
+        pass_run: RUN-20261007-N0101-IMPL
+        pass_actor: gov-001
+      finops:
+        required: true
+        state: fail
+        evidence:
+          path: .eif/audit/PROGRAMME_20261007/N0101_IMPL.md
+          summary: 'Measured 20.6 MB and 19.7 MB of stored gzip snapshots per run: about 0.95 GB/day, about 29 GB/month in
+            cip, and about 4.2k Evetech page downloads a day at the D-0061 cadence. No paid service or new dependency.'
+        rationale: Storage growth is unbounded and material for a local Postgres; needs a decision (snapshot-on-change/failure,
+          retention, or per-site interval) before polling runs for long. Recorded as finding.defer; stopgap is removing the
+          two worker flags.
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: 'Implementation run self-validation: 101 listing tests + 102 neighbour tests passed; supervisor restarted
+      at 16:31, status shows both worker flags present; beat runs 17:00 and 17:30 each polled 218 listings (amazon 51, evetech
+      88, takealot 79), 266 s and 234 s, no 403/429, retailers interleaved; 52 evetech -> out_of_stock and 42 takealot ->
+      dead_link in run 1 (pre-existing rules, first run since 13 Aug). Public tunnel hostname changed on the full restart.
+      finops FAIL: about 20 MB snapshots per run (~0.95 GB/day) needs a decision. Open: Amazon CAPTCHA pages at HTTP 200 are
+      not paused; live restock not yet seen. Uncommitted. Ready for GOV-008 verification in a different run.'
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation:
+      parse-and-price-extraction-unchanged: parser modules untouched
+      takealot-rest-and-ean-recovery-unchanged: fetch_takealot_listing untouched
+      dead-link-on-404-410: same rule; also counted in meta_json.consecutive_failures
+      out-of-stock-on-availability: same rule; out_of_stock now polled
+      verified-url-write-back: untouched
+      cpor-activation-per-observation: still per observation
+      beat-and-env-gates: task gates unchanged
+      manual-poll-endpoint: same call
+      supervisor-adopt-healthy-components: only worker env, comment, log line, status env block change
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+    implementation_run: RUN-20261007-N0101-IMPL
+    implementation_actor: gov-001
+  N-0102:
+    id: N-0102
+    parent: N-0085
+    title: 'N-0085 U2: per-retailer page reader framework (Takealot, Evetech, Amazon), N-0078 fields, registry migrations,
+      discovery for Takealot and Evetech'
+    class: feature
+    origin: decomposition
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0101
+    facets:
+    - api
+    - schema
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - 'listing_capture/adapters/<site>.py contract: find(keys), fetch(listing), parse() with the N-0078 field set into parse_flags.fields'
+    - Migrations M1-M4 per the design, proven on cip_test before cip; marketplace vocab and status lifecycle (restocked, retired)
+      extended
+    - The 168 stored snapshots re-parse with zero fetches and the same price/stock as before
+    - Discovery job (daily) proposes only corroborated pages (EAN or part number shown) for reported products with no listing;
+      Amazon's 51 listings linked to products by feed id or flagged
+    - 'Design: .eif/audit/PROGRAMME_20261007/N0085_DESIGN.md; decisions D-0061 and D-0063'
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      data_integrity:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      backup_recovery:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      migration_safety:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+  N-0103:
+    id: N-0103
+    parent: N-0085
+    title: 'N-0085 U6: Proposed listings steward worklist with bulk confirm, and a per-customer Coverage lens'
+    class: feature
+    origin: decomposition
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0102
+    facets:
+    - api
+    - ui
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - 'Feed proposals becomes Proposed listings: customer, product, page link, how found, what the page shows (title, EAN,
+      price); Confirm selected takes corroborated rows only and lists skipped ones'
+    - 'Coverage lens (?tab=coverage): per customer reported, watched, awaiting steward, failing, not found, not searched,
+      plus site state; drill to products; counts match SQL'
+    - A paused site shows a chip with reason and next try; nothing blocks
+    - 'Design: .eif/audit/PROGRAMME_20261007/N0085_DESIGN.md; decisions D-0061 and D-0063'
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+  N-0104:
+    id: N-0104
+    parent: N-0085
+    title: 'N-0085 U4: Computer Mania reader and discovery (Shopify search, sku/barcode corroboration)'
+    class: feature
+    origin: decomposition
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0102
+    facets:
+    - api
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - Search by part number or model, corroborate via the product's sku/barcode; most of the 36 reported products proposed
+      corroborated
+    - 'Design: .eif/audit/PROGRAMME_20261007/N0085_DESIGN.md; decisions D-0061 and D-0063'
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+  N-0105:
+    id: N-0105
+    parent: N-0085
+    title: 'N-0085 U3: Game and Makro readers and discovery (Makro site search per D-0063)'
+    class: feature
+    origin: decomposition
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0102
+    facets:
+    - api
+    risk: R2
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - 'Game: reader for its product pages and search; the 15 reported products proposed'
+    - 'Makro: reader and site search (Warren D-0063), the 27 reported products proposed; if a site serves only a script shell,
+      record what was tried and show it as not found, never invent'
+    - 'Design: .eif/audit/PROGRAMME_20261007/N0085_DESIGN.md; decisions D-0061 and D-0063'
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
+  N-0106:
+    id: N-0106
+    parent: N-0085
+    title: 'N-0085 U5: Incredible Connection and HiFi Corp shared reader and discovery'
+    class: feature
+    origin: decomposition
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0102
+    facets:
+    - api
+    risk: R1
+    touches_existing: true
+    acceptance: auto
+    acceptance_state: not_required
+    acceptance_criteria:
+    - One reader for the shared site; their reported products (4 while reports are stopped) proposed; widens automatically
+      when their reports resume
+    - 'Design: .eif/audit/PROGRAMME_20261007/N0085_DESIGN.md; decisions D-0061 and D-0063'
+    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
 decisions:
   D-0001:
     id: D-0001
@@ -11946,6 +12467,73 @@ decisions:
     origin: operator
     status: accepted
     supersedes: D-0050
+  D-0063:
+    id: D-0063
+    scope: N-0085
+    statement: 'Warren 2026-10-07 on the N0085_DESIGN.md questions: (1) every reporting customer''s site is fetched, including
+      Amazon product pages and Makro site search, regardless of their site terms or robots rules; Warren states the data is
+      public product and price information and no privacy act applies; the site-terms risk is ASUS''s commercial call. (2)
+      Discovery basis: only products each customer has reported selling in its sell-through files (last 6 months); Incredible
+      Connection and HiFi Corp follow the same rule (4 products while their reports are stopped). (3) CIP fetches with an
+      ordinary browser user agent, not a CIP-identifying one. Engineering bounds kept by GOV-001: polite per-site spacing,
+      a per-site pause on 403/429, a per-run time limit; no CAPTCHA solving, proxy/IP rotation or other bot-protection evasion;
+      a site that blocks shows as paused on screen.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0064:
+    id: D-0064
+    scope: N-0071
+    statement: 'N-0071 follow-up to D-0057 (domain rule, Warren''s call; not built). Question: when an open line''s strict
+      shipped twin has shipped less than the open quantity, should totals still skip the whole open line? Evidence (cip read-only,
+      N0071_DISCOVERY.md): 552 strict pairs; 471 open = shipped, 71 open < shipped, 10 open > shipped (904 open units). In
+      all 552 pairs a twin has the same order_line. Options: (a) keep as built (D-0057): skip the whole open line on key match;
+      may under-count up to 904 units still open on those 10 lines; (b) count only the open quantity above the shipped twin
+      total (open minus shipped, floor 0); needs a per-key sum and changes every reader on the shared helper at once; (c)
+      keep (a) and list the 10 lines to Warren for a manual check. Assumptions: the Unship sheet row is a stale snapshot of
+      the order line, not a separate remainder line. Impact: at most 904 units across 10 lines today; zero effect on the other
+      542. Reversibility: high, read-side only, no fact rewrite in any option. Resolving step: Warren reviews the 10 lines
+      against the OEM order report. Built today: (a), as accepted.'
+    origin: gov-001
+    status: superseded
+    supersedes: null
+  D-0065:
+    id: D-0065
+    scope: N-0071
+    statement: 'Warren 2026-10-07, partial shipments: when an open line''s quantity exceeds its strict shipped twin''s shipped
+      total (10 pairs, 904 open units on cip), totals count the remainder (open minus shipped) instead of skipping the whole
+      open line. Lines where open <= shipped are still skipped. Stored fact rows are never rewritten (D-0057 unchanged).'
+    origin: operator
+    status: accepted
+    supersedes: D-0064
+  D-0066:
+    id: D-0066
+    scope: N-0065
+    statement: 'Warren 2026-10-07 approves a product-line row-security migration (N0065_PERF.md fixes 1-3): (1) inline-able
+      policy predicate with identical semantics (unset open, ''*'' all, listed lines only, ''no lines'' none, NULL product
+      visible), (2) shipment_evidence_current made security_invoker so row security applies through it, (3) a distinct ''no
+      lines'' sentinel so a leftover empty setting on a pooled connection reads as unset; plus the code-only net-requirement
+      query fix. Proven on cip_test first with a parity test across all 45 protected tables, then applied to cip by the run
+      using the configured migration (owner) connection; if no owner connection is configured, the run stops before cip and
+      hands Warren the exact command.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0067:
+    id: D-0067
+    scope: N-0071
+    statement: 'N-0071 follow-up to D-0065 (domain rule, Warren''s call; not picked). Question: what value (amount) should
+      a partly shipped open line contribute to value totals, now that its quantity counts the remainder? Evidence (cip read-only,
+      N0071_IMPL.md Round 2): 10 partial lines, open 904 units, shipped twins 568, remainder 336; all 10 have an amount; none
+      is in any shipping KPI cohort today (current incoming, arriving week, overdue, landed), so value impact today is 0.
+      Built now: (a). Options: (a) keep D-0057 for value: the open line adds no amount (built; units and value can disagree
+      for these lines); (b) pro-rata: amount x remainder / open quantity; (c) full stored amount (double counts the shipped
+      part''s value). Assumptions: the open row''s amount is the whole order line''s value. Impact: shipping KPI value-by-currency
+      only (no other D-0065 reader totals amount). Reversibility: high, read-side only, no fact rewrite. Resolving step: Warren
+      picks (a)/(b)/(c); (b) is one CASE in shipment_strict_pair.twin_remainder plus the KPI amount sum.'
+    origin: gov-001
+    status: proposed
+    supersedes: null
 evidence:
   EV-GOV008-REVIEW:
     id: EV-GOV008-REVIEW
@@ -12392,6 +12980,224 @@ evidence:
     tree_hash: 9c28bdcf9bc7e4bcdf366cc70ef923168aecdd82
     note: 'N-0065 discovery: dirty-tree product-line gate, the single behaviour to change (admin bypass per D-0056), preserved
       capabilities'
+  EV-0010:
+    id: EV-0010
+    provenance: implementation-observation
+    path: apps/api/app/api/v1/router.py
+    tree_hash: 9c28bdcf9bc7e4bcdf366cc70ef923168aecdd82
+    note: 'N-0065 D-0056 admin bypass: _bind_request_tenant binds ''*'' for read and edit when user role == Role.ADMIN and
+      skips the assignment lookup; non-admins use product_line_scope_for over their rows; non-numeric ids stay unset; log
+      line shows all/assigned:n/unset. Uncommitted, working tree on 9c28bdcf.'
+  EV-0011:
+    id: EV-0011
+    provenance: implementation-observation
+    path: apps/api/app/core/product_line_scope.py
+    tree_hash: 9c28bdcf9bc7e4bcdf366cc70ef923168aecdd82
+    note: N-0065 docstring states D-0056 (admin sees all lines; non-admin with no assignment sees none); ALL_PRODUCT_LINES
+      and product_line_scope_for(is_admin, assignments) added; non-admin '*' or comma rows ignored. Uncommitted, working tree
+      on 9c28bdcf.
+  EV-0012:
+    id: EV-0012
+    provenance: implementation-observation
+    path: apps/web/src/features/administration/UsersWorkspace.tsx
+    tree_hash: 9c28bdcf9bc7e4bcdf366cc70ef923168aecdd82
+    note: 'N-0065 Product line access copy: removed ''An admin with no lines still sees no product data''; now says admins
+      see and edit every line without an assignment; admin-selected note (product-line-admin-note). tsc exit 0, eslint (ESLINT_USE_FLAT_CONFIG=false)
+      exit 0, users page vitest 1 passed.'
+  EV-0013:
+    id: EV-0013
+    provenance: implementation-observation
+    path: apps/api/tests/test_product_line_scope_n0065.py
+    tree_hash: 9c28bdcf9bc7e4bcdf366cc70ef923168aecdd82
+    note: 'N-0065 11 no-DB tests: admin no rows binds ''*'' and skips lookup; non-admin no rows binds empty; read-only line
+      not editable; ''*''/comma rows ignored; forged/worker ids unset; 11 passed; mutation (is_admin forced False) makes 2
+      admin tests fail. Companion cip_test-only module apps/api/tests/test_product_line_rls_n0065_db.py (5 passed on cip_test
+      via N0065_run_db_tests.py, rolled back; cip_test unchanged after) and conftest write-capable entry.'
+  EV-0014:
+    id: EV-0014
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261007/N0065_IMPL.md
+    tree_hash: 9c28bdcf9bc7e4bcdf366cc70ef923168aecdd82
+    note: 'N-0065 implementation record: files changed, exact test commands and results (11+5 new, 29 regression, 52 auth/RBAC,
+      tsc 0, eslint 0, vitest 1), live API restart healthy with unauthenticated /auth/me 401, security/threat residuals, open
+      items (cip_test not at 0024, transaction-local setting after commit, PUT accepts ''*''/comma).'
+  EV-0015:
+    id: EV-0015
+    provenance: design-direction
+    path: .eif/audit/PROGRAMME_20261007/N0085_DESIGN.md
+    tree_hash: null
+    note: 'N-0085 feature-definition panel output: AS-IS counts per reporting customer, retailer platform and robots findings,
+      adapter contract, discovery, worklist, registry, polling, migrations M1-M4, work split U1-U6 (N-0101..N-0106)'
+  EV-0016:
+    id: EV-0016
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261007/N0071_DISCOVERY.md
+    tree_hash: 9c28bdcf9bc7e4bcdf366cc70ef923168aecdd82
+    note: 'N-0071 discovery: reader inventory (totals open+shipped? strict-pair exclusion? file:line), cip read-only measurements
+      (552 strict pairs, 42,956 units; per-reader double count), and the RLS performance finding. Probe outputs N0071_probe_out.json,
+      N0071_probe_new_out_run1.txt, N0071_probe_new_out.json.'
+  EV-0017:
+    id: EV-0017
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261007/N0071_IMPL.md
+    tree_hash: 9c28bdcf9bc7e4bcdf366cc70ef923168aecdd82
+    note: 'N-0071 implementation report: discovery summary, design, files changed, tests (19 new pass; mutant control 5/5
+      fail; 186+56 pass in touched suites; 33 cip-guarded errors not run), quality, open items.'
+  EV-0018:
+    id: EV-0018
+    provenance: implementation-observation
+    path: apps/api/app/services/shipment_strict_pair.py
+    tree_hash: 9c28bdcf9bc7e4bcdf366cc70ef923168aecdd82
+    note: 'N-0071: strict-pair helper rewritten from correlated EXISTS to an uncorrelated key lookup; same D-0057 rule; new
+      open_has_shipped_twin. Uncommitted, working tree on 9c28bdcf.'
+  EV-0019:
+    id: EV-0019
+    provenance: implementation-observation
+    path: apps/api/app/api/v1/endpoints/shipping.py
+    tree_hash: 9c28bdcf9bc7e4bcdf366cc70ef923168aecdd82
+    note: 'N-0071 reader wiring (uncommitted): shipping.py (/summary + open_lines_skipped_shipped_twin, ETA-shift scope),
+      brief_signals.py (inbound_not_received_count_stmt), dashboard.py (late_risk), commercial_planner/inbound_lineup_quarter.py
+      (lineup_quarter_summary), cpor/intake_weighted_mac.py (_intake_wavg, _disti_cost_proxy_wavg).'
+  EV-0020:
+    id: EV-0020
+    provenance: implementation-observation
+    path: apps/api/tests/test_shipment_strict_pair.py
+    tree_hash: 9c28bdcf9bc7e4bcdf366cc70ef923168aecdd82
+    note: 'N-0071 tests: 19 SQLite in-memory tests, no cip; rule edge cases and one per changed reader; mutant control n0071_mutant_plugin.py
+      makes the 5 reader tests fail.'
+  EV-0021:
+    id: EV-0021
+    provenance: implementation-observation
+    path: apps/api/app/core/product_line_scope.py
+    tree_hash: a86eff9489c859f885ef35aaa80b80a3a2fca52b
+    note: 'N-0065 round 2 (C1/K2 fix): Session after_begin listener _bind_scope_on_begin registered on the base ORM Session
+      by install_product_line_transaction_scope(); binds the request product-line contextvars with one transaction-local set_config
+      at the start of every root ORM transaction, sync and async; unset scope issues nothing on a fresh connection and binds
+      ''*'' on a pooled connection that carried a scope before (leftover '''' would hide all products from workers). sha256
+      prefix 0d0c4f58f7666167. Uncommitted, working tree on a86eff94.'
+  EV-0022:
+    id: EV-0022
+    provenance: implementation-observation
+    path: apps/api/app/db/session_sync.py
+    tree_hash: a86eff9489c859f885ef35aaa80b80a3a2fca52b
+    note: 'N-0065 round 2: session_sync.py and session.py call install_product_line_transaction_scope() at import, so request-path
+      SessionLocal() and AsyncSession transactions both get the scope; deps.py get_db no longer applies the scope itself (redundant,
+      it ran before the router bound the contextvars); router.py keeps the explicit apply for the transaction already open
+      at bind time. Uncommitted, working tree on a86eff94.'
+  EV-0023:
+    id: EV-0023
+    provenance: implementation-observation
+    path: apps/api/tests/test_product_line_session_listener_n0065.py
+    tree_hash: a86eff9489c859f885ef35aaa80b80a3a2fca52b
+    note: 'N-0065 round 2 regression tests (no DB, 10): SessionLocal() under bound empty scope issues set_config('''', '''');
+      read-only line binds read/edit separately; rebind after commit and rollback; savepoint not re-bound; worker unset issues
+      nothing; worker on previously scoped pooled connection bound ''*''; run_in_threadpool and asyncio.to_thread carry scope;
+      bare thread unscoped; FastAPI sync def endpoint under async dependency gets scope. Plus +5 cip_test tests in tests/test_product_line_rls_n0065_db.py
+      and stale single-head fix in tests/test_cpor_line_window_n0050.py.'
+  EV-0024:
+    id: EV-0024
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261007/N0065_IMPL.md
+    tree_hash: a86eff9489c859f885ef35aaa80b80a3a2fca52b
+    note: 'N-0065 round 2 section: change, thread hand-off analysis, tests (21 unit, 10 cip_test DB, 551 passed sample, mutations),
+      read-only cip measurements (sync SessionLocal empty scope 0/0, was 18177/38625; admin commit-then-read 18177; unscoped
+      pool checkouts ''*''), API restart healthy with /auth/me 401, open items. Probe: .eif/audit/PROGRAMME_20261007/N0065_impl_r2_probe.py.'
+  EV-0025:
+    id: EV-0025
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261007/N0101_IMPL.md
+    tree_hash: a86eff9489c859f885ef35aaa80b80a3a2fca52b
+    note: 'N-0101 implementation record: discovery, files changed, tests (101 + 102 passed), live beat run 17:00 (218 observations,
+      266 s, no 403/429), open items.'
+  EV-0026:
+    id: EV-0026
+    provenance: implementation-observation
+    path: apps/api/app/services/listing_capture/observation.py
+    tree_hash: a86eff9489c859f885ef35aaa80b80a3a2fca52b
+    note: 'N-0101 / D-0063: ordinary desktop Chrome User-Agent and Accept-Language; pause, spacing default and 600 s run-limit
+      constants. Uncommitted.'
+  EV-0027:
+    id: EV-0027
+    provenance: implementation-observation
+    path: scripts/cip-supervisor.ps1
+    tree_hash: a86eff9489c859f885ef35aaa80b80a3a2fca52b
+    note: 'N-0101 / D-0061: worker ExtraEnv gains CIP_LISTING_CAPTURE_SCHEDULE=1 and CIP_LISTING_LIVE_FETCH=1; header comment;
+      launch log and status.json env report what the worker got. Live: status shows both present after the full restart at
+      16:31. Uncommitted.'
+  EV-0028:
+    id: EV-0028
+    provenance: implementation-observation
+    path: apps/api/tests/test_listing_capture_n0101_polling.py
+    tree_hash: a86eff9489c859f885ef35aaa80b80a3a2fca52b
+    note: 'N-0101: 16 no-DB tests for restock, out_of_stock polled, back-off, 403/429 pause, time limit, round-robin, spacing,
+      UA. New, uncommitted.'
+  EV-0029:
+    id: EV-0029
+    provenance: implementation-observation
+    path: apps/api/app/services/listing_capture/registry.py
+    tree_hash: a86eff9489c859f885ef35aaa80b80a3a2fca52b
+    note: 'N-0101: poller polls active/out_of_stock/dead_link oldest-due first, round-robin, per-site spacing, 600 s limit,
+      403/429 guard and site pause; record_observation writes status_transition (restocked, link_recovered, out_of_stock,
+      dead_link) and meta_json.consecutive_failures for the dead-link back-off. Uncommitted.'
+  EV-0030:
+    id: EV-0030
+    provenance: implementation-observation
+    path: apps/api/app/services/listing_capture/site_pause.py
+    tree_hash: a86eff9489c859f885ef35aaa80b80a3a2fca52b
+    note: 'N-0101: per-site pause record in Redis (TTL hours+24 h), 1 h doubling to 24 h, cleared by a 200; process-local
+      fallback. New, uncommitted.'
+  EV-0031:
+    id: EV-0031
+    provenance: implementation-observation
+    path: apps/api/app/services/shipment_strict_pair.py
+    tree_hash: a86eff9489c859f885ef35aaa80b80a3a2fca52b
+    note: 'N-0071 round 2: D-0065 remainder built once here. keep_counted_line (id NOT IN covered open-twin ids), skipped_open_twin_line,
+      twin_remainder / outerjoin_twin_remainder (MATERIALIZED CTE, counted_quantity), OPEN_TWIN_REMAINDER_SQL + TWIN_KEPT_SQL
+      + TWIN_COUNTED_QTY_SQL. One scan + window over the strict key (self-join form was 21 s on cip under RLS). D-0057 helpers
+      kept for readers not yet moved. sha256 306e0b2fe90a18447e61b8dc1247b45f50560176bc2353f90ceb6b6d82f308b2; untracked,
+      uncommitted.'
+  EV-0032:
+    id: EV-0032
+    provenance: implementation-observation
+    path: apps/api/app/services/supply_overview.py
+    tree_hash: a86eff9489c859f885ef35aaa80b80a3a2fca52b
+    note: 'N-0071 round 2, GOV-008 finding fixed: headline SQL in _headline_sql with MATERIALIZED twin_rem CTE + LEFT JOIN
+      + one kept-line guard, so eta_past_no_pod_lines, oldest_eta_past/oldest_days_past_eta, overdue_commercial_lines (and
+      landed, no-op) follow the strict-pair rule; open/pipeline/landed units sum counted quantity (D-0065). cip read-only:
+      eta_past 1,218 -> 696 (686 + 10 partial lines), overdue 375 -> 364 (= shipping overdue KPI 364), oldest 2026-05-07/153
+      -> 2026-05-08/152, pipeline units 84,914 -> 85,250 (+336 remainder), 1.4 s. sha256 430d7809173cc52609a8223dbb6cc547b042125268fa06d9ba4237c08c94e968.'
+  EV-0033:
+    id: EV-0033
+    provenance: implementation-observation
+    path: apps/api/app/api/v1/endpoints/shipping.py
+    tree_hash: a86eff9489c859f885ef35aaa80b80a3a2fca52b
+    note: 'N-0071 round 2 readers on D-0065: shipping.py (_apply_fact_where_clause grid/KPI/cohort scope, ETA-shift scope
+      and /summary use keep_counted_line; KPI quantity totals sum counted quantity; partial-line amount not added, as D-0057),
+      brief_signals.py inbound_not_received_count_stmt (keep_counted_line), commercial_planner/inbound_lineup_quarter.py lineup_quarter_summary
+      (remainder join), cpor/intake_weighted_mac.py _intake_wavg and _disti_cost_proxy_wavg (remainder as weight). cip read-only:
+      brief 1,561 -> 1,571 = supply open_lines; /summary 14,703 -> 14,713, skipped 552 -> 542; lineup 26Q3 unattributed +336;
+      KPI 2.6 s / 1.8 s, CPOR 0.41 s, ETA-shift 3.4 s, lineup ~10 s (reader''s own ORM load; D-0057 swap 9-12 s).'
+  EV-0034:
+    id: EV-0034
+    provenance: implementation-observation
+    path: apps/api/tests/test_shipment_strict_pair.py
+    tree_hash: a86eff9489c859f885ef35aaa80b80a3a2fca52b
+    note: 'N-0071 round 2 tests: 39 passed (19 + 20 new): remainder cases (open 10 vs shipped 6 -> 4; 6 vs 6 skipped; 5 vs
+      6 skipped; twins 3+4 summed -> 3; 3+3+4 covers), strict-key-only sum, NULL qty, blank keys, form agreement, no rewrite;
+      supply overview _headline_sql on SQLite (eta_past/oldest, overdue, open/pipeline units); one test per D-0065 reader
+      (brief, lineup quarter, ETA-shift, /summary, shipping KPI qty+amount, CPOR intake MAC, disti proxy). Own mutants (n0071_r2_mutant.py):
+      remainder_zero 14 failed, supply_no_rule 3 failed; files restored byte-identical (sha256 printed). Round-1 suites: 206
+      passed + 13 guard errors; 56 passed + 20 guard errors (cip-guarded modules not run). sha256 3e86acc6b8b1a000e070ba2d405aa1dcff1c957a192b9708fee4294c65fdbcb6.'
+  EV-0035:
+    id: EV-0035
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261007/N0071_IMPL.md
+    tree_hash: a86eff9489c859f885ef35aaa80b80a3a2fca52b
+    note: 'N-0071 round 2 section (changes, tests, cip read-only before/after, timings, open items). cip probes: N0071_r2_probe.py
+      with N0071_r2_probe_before_out.json / N0071_r2_probe_after_out.json, N0071_r2_explain.py, N0071_r2_nowrite.py; each
+      prints current_database() = cip, transaction_read_only on, rolls back. Independent self-join: 552 pairs = 542 covered
+      + 10 partial, 904 open units, remainder 336; helper partial set equals it. No fact row updated (max updated_at 2026-09-21;
+      0 in last 12 h).'
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -12789,6 +13595,64 @@ baselines:
     observed_behavior: 'Dirty-tree product-line gate: router binds each signed-in user''s assigned lines (read / editable)
       as session settings; database row security filters dim_product and product-keyed tables; unset = open, empty = none,
       * = all. Admin with no assignment sees no product data.'
+  BLN-N0071:
+    id: BLN-N0071
+    provenance: implementation-observation
+    tree_hash: 9c28bdcf9bc7e4bcdf366cc70ef923168aecdd82
+    latent_capabilities:
+    - stored-open-twin-rows-unchanged
+    - readers-already-wired-same-result
+    - shipped-and-arrived-rows-never-dropped
+    - sheet-picker-default-shipped-unship
+    - landed-readers-shipped-only
+    preservation:
+      stored-open-twin-rows-unchanged: no write path touched; every change is a read predicate; fact rows stay as imported
+        (D-0057)
+      readers-already-wired-same-result: new predicate drops the same 552 ids (md5 equal to an independent key join; count,
+        units, amount equal to the old predicate)
+      shipped-and-arrived-rows-never-dropped: rule only drops open_order rows; unit tests pin it
+      sheet-picker-default-shipped-unship: N-0072 area, unchanged
+      landed-readers-shipped-only: derived stock, PO management, PO gap, WOC observation unchanged (no open rows to drop)
+    path: .eif/audit/PROGRAMME_20261007/N0071_DISCOVERY.md
+    observed_behavior: 'Dirty tree on 9c28bdcf: shipment_strict_pair.py (correlated EXISTS) is wired into supply overview,
+      the shipping fact filter (grid, KPIs, cohorts), channel ops, net requirement, PO auto-link, PO reconciliation and 1H
+      rederivation. Not wired: brief not-received count, dashboard late_risk, lineup quarter summary, shipping /summary, ETA-shift
+      no-filter scope, CPOR intake MAC. cip (read-only, current_database printed): 552 open rows (42,956 units, all scheduled,
+      none with pod_date) have a strict shipped twin; 10 of them have open qty above the twin''s shipped qty (904 open units).
+      The correlated form times out (120 s ORM, 240 s FILTER form) under N-0065 RLS.'
+  BLN-N0101:
+    id: BLN-N0101
+    provenance: implementation-observation
+    tree_hash: a86eff9489c859f885ef35aaa80b80a3a2fca52b
+    latent_capabilities:
+    - parse-and-price-extraction-unchanged
+    - takealot-rest-and-ean-recovery-unchanged
+    - dead-link-on-404-410
+    - out-of-stock-on-availability
+    - verified-url-write-back
+    - cpor-activation-per-observation
+    - beat-and-env-gates
+    - manual-poll-endpoint
+    - supervisor-adopt-healthy-components
+    preservation:
+      parse-and-price-extraction-unchanged: parse_snapshot_text and Takealot parser untouched; existing parser tests stay
+        green
+      takealot-rest-and-ean-recovery-unchanged: fetch_takealot_listing untouched; test_takealot_listing_fetch stays green
+      dead-link-on-404-410: same link_dead rule; now also counted in meta_json.consecutive_failures
+      out-of-stock-on-availability: same rule; out_of_stock listings now keep being polled
+      verified-url-write-back: _write_back_verified_url untouched
+      cpor-activation-per-observation: evaluate_cpor_activation still called per observation
+      beat-and-env-gates: task gates unchanged; supervisor now supplies the two flags to the worker only
+      manual-poll-endpoint: POST /poll still calls poll_active_listings with the same arguments
+      supervisor-adopt-healthy-components: only the worker ExtraEnv, header comment, launch log line and status env block
+        change
+    path: .eif/audit/PROGRAMME_20261007/N0101_IMPL.md
+    observed_behavior: 'Poller selects status=''active'' only (registry.py poll_active_listings), ordered by id, one global
+      sleep between fetches, no time limit, no 403/429 handling; record_observation is called without consecutive_dead so
+      the 3x/24 h dead-link back-off never fires; nothing sets a listing back to active. UA ''CIP-listing-capture/1.0''. Beat
+      listing-capture-poll every 30 min is gated by CIP_LISTING_CAPTURE_SCHEDULE and CIP_LISTING_LIVE_FETCH (1/true/on); the
+      supervisor worker env sets neither and status.json reports the supervisor''s own env. cip (read-only): 218 listings
+      all active (amazon 51, evetech 88, takealot 79); 168 observations, none since 2026-08-13.'
 caveats:
   consult_model_logged:
     key: consult_model_logged
@@ -12973,9 +13837,126 @@ deferred_findings:
   run: RUN-20261007-N0065-GOV
   actor: gov-001
   status: deferred
+- seq: 1617
+  code: DOES_NOT_FIT
+  note: 'N-0065 implementation findings outside this node''s change scope (see N0065_IMPL.md open items): (1) product-line
+    scope is set_config(..., true), transaction-local; measured on cip_test, after commit current_setting(''cip.product_lines'',
+    true) returns '''' so a read after commit in the same request sees no lines, admins included (fails closed; pre-existing;
+    no after_begin re-apply). (2) cip_test is at 20260924_0023, not 20261006_0024, so router requests against cip_test (e.g.
+    test_rbac_r1d_session_e2e) will fail on the missing user_product_line_access table, and test_cpor_line_window_n0050::test_migration_follows_0022_single_head
+    still asserts head 20260924_0023. (3) PUT /auth/users/{id}/product-lines accepts ''*'' and comma lines; ignored by product_line_scope_for
+    now, but the route should 400.'
+  node: N-0065
+  run: RUN-20261007-N0065-IMPL
+  actor: gov-001
+  status: deferred
+- seq: 1632
+  code: DOES_NOT_FIT
+  note: 'N-0065 performance risk found in N-0071 discovery (read-only, cip): the product-line RLS policy calls cip_product_id_visible
+    (SECURITY DEFINER SQL, not inlined) for every scanned fact_inbound_shipment row. Any correlated subquery or nested-loop
+    semi-join over this table multiplies that cost: the previous strict-pair EXISTS hit a 120 s / 240 s statement_timeout.
+    N-0071 rewrote its own predicate to an uncorrelated key lookup (0.4 s to 2.5 s). Other correlated reads over RLS tables
+    were not surveyed; owner N-0065.'
+  node: N-0071
+  run: RUN-20261007-N0071-IMPL
+  actor: gov-001
+  status: deferred
+- seq: 1633
+  code: DOES_NOT_FIT
+  note: 'Left unwired on purpose: dsi_soh_reconciliation sums any-state rows with pod_date into fact_inventory_reconciliation
+    at DSI import. It is a no-op today (0 open rows have a pod_date). It is a derived-write path, so wiring it is outside
+    this read-only change. Wire it if open rows ever carry a pod_date. lineup_distributor_attribution matches by distributor
+    set, not a total; the twin has the same distributor, so it is unchanged. Convening: the implementation run carried backend-engineer,
+    test-engineering-specialist and database-specialist. No separate feature-definition panel: D-0057 accepted the rule as
+    built; the design is mechanical reuse of one helper, with no UX, copy or commercial surface. The one domain question (partial
+    ship) is a proposed decision for Warren.'
+  node: N-0071
+  run: RUN-20261007-N0071-IMPL
+  actor: gov-001
+  status: deferred
+- seq: 1673
+  code: DOES_NOT_FIT
+  note: 'N-0065 round 2 findings outside this change (N0065_IMPL.md ''Open items after round 2''): (1) user-triggered background
+    jobs (task-queue send_task/.delay and the in-process fallback task_run_ledger.spawn_in_process_thread_with_ledger, a bare
+    thread with empty context) run with unset scope like workers, including write paths such as resolution-plan apply and
+    bulk-apply; needs a decision whether D-0056 treats them as workers or the job should carry the requester''s scope. (2)
+    apply_product_line_guc / widen_product_line_catalog on the async session do not mark connection.info; harmless while the
+    async engine is NullPool, would fail closed for workers if pooling were enabled. Round-1 items resolved this round: post-commit
+    '''' scope (fixed by after_begin rebind) and the stale single-head test (now asserts the true single head). Still open
+    from round 1: PUT product-lines should 400 on ''*''/comma; cip_test at 0023.'
+  node: N-0065
+  run: RUN-20261007-N0065-IMPL
+  actor: gov-001
+  status: deferred
+- seq: 1682
+  code: DOES_NOT_FIT
+  note: 'Amazon serves CAPTCHA pages with HTTP 200 (not 403/429): in the 17:00 beat run 28 of 51 Amazon observations were
+    bot-check pages (markers captcha/automated access, about 3.8 KB) and 12 more failed to parse; only 11 parsed. D-0063 pauses
+    only on 403/429, so the poller keeps fetching Amazon every 30 min. N-0085 design says Amazon stays off until decision
+    1, but U1 kept the existing Amazon polling (no change of which sites are polled). Warren''s call: (a) treat a detected
+    CAPTCHA page as a refusal and pause like a 429 (no solving), (b) stop polling Amazon until decision 1, (c) leave as is.
+    Recommend (a) or (b); owner N-0102 (U2) or Warren.'
+  node: N-0101
+  run: RUN-20261007-N0101-IMPL
+  actor: gov-001
+  status: deferred
+- seq: 1683
+  code: DOES_NOT_FIT
+  note: 'Takealot: the first beat run marked 42 of 79 Takealot listings dead_link (REST details 404 for the URL PLID; 22 with
+    no EAN, 20 with an EAN search returning 0 results). None of the 42 ever had a good observation. The rule pre-dates N-0101;
+    polling simply ran it for the first time since 13 Aug. They are retried each run until 3 consecutive dead results, then
+    daily. Rediscovery (design: search again by EAN and propose a moved page) is U2.'
+  node: N-0101
+  run: RUN-20261007-N0101-IMPL
+  actor: gov-001
+  status: deferred
+- seq: 1684
+  code: DOES_NOT_FIT
+  note: 'Evetech: 52 of 88 listings went active -> out_of_stock in the first run; all 52 pages carry JSON-LD availability
+    OutOfStock (27 also contain ''in stock'' text elsewhere). Before the run 5 of 44 Evetech observations were out_of_stock.
+    Looks genuine but unverified against the site by eye; worth a spot check. Separately, 2 Evetech observations were HTTP
+    404 with parse ok (price found on a 404 page), so not marked dead: pre-existing parser behaviour, not changed.'
+  node: N-0101
+  run: RUN-20261007-N0101-IMPL
+  actor: gov-001
+  status: deferred
+- seq: 1685
+  code: DOES_NOT_FIT
+  note: 'Durability: the per-site pause lives in Redis (TTL) with a process-local fallback because there is no site-state
+    table yet; consecutive_failures lives in customer_listing.meta_json. U2''s M2 listing_site_state and M4 consecutive_failures/next_due_at
+    should take these over. delisted listings are still not polled (design: weekly) and retired does not exist yet: both left
+    for U2.'
+  node: N-0101
+  run: RUN-20261007-N0101-IMPL
+  actor: gov-001
+  status: deferred
+- seq: 1693
+  code: DOES_NOT_FIT
+  note: 'N-0071 round 2 scope left these readers on the D-0057 helper (exclude_open_when_shipped_twin: a partial open line
+    is skipped whole): channel_ops.py (movement, weekly flow, cover distribution), lineup/net_requirement.py (in-transit),
+    lineup_po_auto_link.py, lineup_po_reconciliation.py (evidence read model), lineup_bulk_rederivation.py (1H hint). On cip
+    the 10 partial lines carry product_id and distributor_id but no purchase_order_id, so the PO readers are unaffected today;
+    channel ops and net requirement can under-count by up to 336 units / 10 lines against the D-0065 screens (supply overview,
+    brief, shipping, lineup quarter, CPOR). Moving them is mechanical (keep_counted_line / twin_remainder) and needs its own
+    scope grant.'
+  node: N-0071
+  run: RUN-20261007-N0071-IMPL
+  actor: gov-001
+  status: deferred
+- seq: 1699
+  code: DOES_NOT_FIT
+  note: 'FinOps/storage: with polling on, each run stores about 20 MB of gzip raw snapshots (Evetech 16.6 MB at 188 KB per
+    page, Amazon 3.8 MB, Takealot 0.3 MB): about 0.95 GB/day, about 29 GB/month in cip listing_observation, and about 4.2k
+    Evetech page downloads a day. Measured over the 17:00 and 17:30 beat runs (N0101_IMPL.md Live). Not changed in U1. Options:
+    store raw snapshot only on parse failure or price/stock change, a retention job, per-site poll_minutes (U2). Stopgap:
+    drop the two flags from $WorkerListingEnv and restart the worker.'
+  node: N-0101
+  run: RUN-20261007-N0101-IMPL
+  actor: gov-001
+  status: deferred
 ids:
   node: 5
-  decision: 62
+  decision: 67
   blocker: 19
-  evidence: 9
+  evidence: 35
   baseline: 18
