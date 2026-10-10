@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1867
-  log_sha256: 2b8429a2cbbbd4256e7be56746cbd7d83caaecc9804074ec4a57da7aa009847b
+  snapshot_revision: 1876
+  log_sha256: 06b48b822ca17ca2ff174d6610193506e61c878fc2e6d01cb43362903c6c519c
   acceptance_policy:
     milestone: operator
     root: operator
@@ -8377,13 +8377,9 @@ nodes:
     class: feature
     origin: operator
     status: in_progress
-    stage: implement
-    revision: 48
-    lease:
-      run: RUN-20261007-N0065-IMPL
-      acquired_at: '2026-10-09T12:22:43Z'
-      heartbeat_at: '2026-10-09T12:22:43Z'
-      expires_at: '2026-10-09T14:22:43Z'
+    stage: validate
+    revision: 55
+    lease: null
     depends_on:
     - N-0055
     - N-0040
@@ -8410,17 +8406,11 @@ nodes:
         state: pass
         evidence:
           path: .eif/audit/PROGRAMME_20261007/N0065_IMPL.md
-          summary: 'Round 4 (0026, VER2 S3/F1 + Warren 2026-10-08 decision). cip_test (current_database() = cip_test printed):
-            new lineage DB test asserts exact rows per scope (steward/planner/viewer/admin/no-lines/worker/pooled '''') across
-            the view and the three lineage tables, with an identity re-resolved A->B that only the scope-independent pick
-            keeps out of the view, plus edit counts, INSERT/RETURNING, pick loops=1, refresh path; parity extended to 0024/0025/0026,
-            990 cells each, 0 mismatches, 0025->0026 differences confined to the lineage tables; mutations M1/M2/M3 each caught
-            (3/9/3 failed) and restored; migration up/down/up/down/up; full run 483 passed exit 0; no-DB listener/scope suites
-            27 passed incl. new role tests. cip: per-scope counts after apply equal the decision computed independently by
-            the owner, 0 mismatches. Self-verification only.'
-        rationale: 'Every cell of the decision is measured on cip_test and on cip, and the tests are shown to fail when the
-          pick, the lineage rule or the steward branch is removed. Limitations: no signed-in live browse; heavy-path timings
-          are single runs.'
+          summary: 'Round 5 (0027). cip_test: 498 passed, parity 0 mismatches, mutations Ma-Md fail then pass when restored,
+            both enable_sort and enable_incremental_sort off on the pick. cip apply 2026-10-09: current_database()=cip, alembic
+            20261009_0027, every per-scope cell matched, mismatches 0 (N0065_r5_apply_cip_output.txt). Self-verification only.'
+        rationale: 'The 0027 rule was measured on cip_test and on cip. Limitations: no signed-in browse of 0027; heavy-path
+          timings are still multi-second; GOV-008 has not re-verified this round.'
         pass_run: RUN-20261007-N0065-IMPL
         pass_actor: gov-001
       observability:
@@ -8428,14 +8418,11 @@ nodes:
         state: pass
         evidence:
           path: .eif/audit/PROGRAMME_20261007/N0065_IMPL.md
-          summary: 'Round 4: the apply script records preflight identity, before/after rows per scope against independently
-            computed expectations, catalogue (helpers, grants, policies, view definition, index), view timings and plans per
-            scope (pick never executed / loops=1), heavy-path captures before and after, supervisor states and ANALYZE last_analyze,
-            all in N0065_r4_apply_cip_output.txt; --smoke reproduces it READ ONLY. A READ ONLY perf probe locates the scoped-read
-            cost in the pick helper (seq scan + external sort, ~0.45 s; ordered index-only scan measured at 77 ms).'
-        rationale: 'An operator can see which rows each scope gets and why, and re-run the checks. Limitation: still no metric
-          or alert on scope decisions; the scoped-read slowdown (plan-vs-executed NB 11.4 s -> 23.3 s, single run) is recorded
-          as a follow-up, not fixed.'
+          summary: Round 5 apply log records preflight identity, before/after rows per scope, pick proconfig, policy md5,
+            helper timings, the Index Only Scan plan, heavy-path captures, and supervisor state. Finished 14:52:40 mismatches
+            0. Worker healthy after restart. Tunnel blocked on outbound TCP 7844.
+        rationale: 'An operator can see the 0027 apply and re-read the log. Limitation: no metric or alert on scope decisions;
+          plan-vs-executed stayed tens of seconds.'
         pass_run: RUN-20261007-N0065-IMPL
         pass_actor: gov-001
       security:
@@ -8443,18 +8430,11 @@ nodes:
         state: pass
         evidence:
           path: .eif/audit/PROGRAMME_20261007/N0065_IMPL.md
-          summary: 'Round 4 closes VER2 S3/F1 on cip: shipment_evidence_current picks each identity''s current row over all
-            rows before row security (helper used only for scoped callers), and rows with no product in shipment_evidence_observation
-            / shipment_evidence_line / fact_inbound_shipment inherit their identity''s resolved product, else are visible/editable
-            only under an open scope or to role steward. On cip after 0026: no-lines planner sees 0 rows in the view and the
-            three tables (before 2532 / 5876 / 5896 / 546); NB planner view 8758 = decision; steward no-lines 495 = truly
-            unresolved current rows. Helpers are SECURITY INVOKER with pinned search_path, restore the caller''s setting (asserted),
-            EXECUTE revoked from PUBLIC. Role bound from app_user.role via the router (same source as require_roles); every
-            scoped transaction writes it ('''' when unknown).'
-        rationale: 'The decision''s visibility is enforced in the database for every scope the app produces, measured on cip
-          with 0 mismatches. Limitations stated: the setting-based gate is not a boundary against arbitrary SQL as role cip
-          (unchanged); four non-shipment tables still show rows with no product to all scopes pending Warren''s decision;
-          fact_inbound_shipment inclusion to be confirmed by Warren.'
+          summary: 'Round 5 on cip: pick walks ix_shipment_ev_obs_identity_latest with enable_sort and enable_incremental_sort
+            off. No-product rows in the four non-shipment tables are visible only to admins (*) and stewards; workers unset
+            stay open; WITH CHECK unchanged. fact_inbound_shipment stays as in 0026. Per-scope cells matched, mismatches 0.'
+        rationale: The 2026-10-09 decision is enforced in the database and measured on cip. Self-verification only. The setting-based
+          gate is still not a boundary against arbitrary SQL as role cip.
         pass_run: RUN-20261007-N0065-IMPL
         pass_actor: gov-001
       threat:
@@ -8462,17 +8442,11 @@ nodes:
         state: pass
         evidence:
           path: .eif/audit/PROGRAMME_20261007/N0065_IMPL.md
-          summary: 'Round 4 threats: (1) stale-row surfacing through the invoker view - closed by the scope-independent pick
-            (mutation M1 caught); (2) unresolved rows readable by everyone - closed by lineage policies (M2 caught); (3) role
-            spoofing - cip.request_role comes only from the server-side role through the router, forged/non-numeric ids bind
-            nothing, every scoped transaction overwrites it so a pooled backend never carries another request''s role (tests);
-            (4) helper misuse - invoker rights, pinned search_path, caller setting restored and asserted, EXECUTE only to
-            roles that read the tables; an error reverts the setting with the (sub)transaction; (5) deploy order - API restarted
-            before the migration; code compatible with 0025 (role unused there); (6) view re-creation dropping the pick -
-            refresh adds it when the helper exists (test).'
-        rationale: 'Each new trust input or failure path has a control and a test. Residuals: INSERT ... RETURNING / ON CONFLICT
-          DO UPDATE of a row the scoped requester cannot read now fails closed (imports run in workers; shipment write endpoints
-          are admin/steward); background-job scope decision still open; admin compromise exposes all lines.'
+          summary: 'Round 5: Incremental Sort could still pick the wrong index when enable_sort alone was off (F5-1). Closed
+            on cip_test and applied on cip by also setting enable_incremental_sort=off. Observed plan is Index Only Scan on
+            ix_shipment_ev_obs_identity_latest. No-product rows on the four tables are no longer visible to a scoped planner.'
+        rationale: 'The measured plan and the per-scope counts match the decision. Residual: heavy screens are still slow;
+          GOV-008 has not re-verified 0027.'
         pass_run: RUN-20261007-N0065-IMPL
         pass_actor: gov-001
     verification:
@@ -8490,15 +8464,11 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Round 5 of RUN-20261007-N0065-IMPL: migration 20261009_0027 per Warren''s decision of 2026-10-09. (a) The
-      shipment-evidence current-row pick (cip_sev_current_observation_ids, used by shipment_evidence_current for scoped callers)
-      walks ix_shipment_ev_obs_identity_latest in order with an ordered index-only scan (r4 measured ~77 ms vs ~450 ms per
-      scoped statement); the lineage helpers (82-176 ms) are checked for the same improvement. (b) Rows with no product in
-      commercial_lineup_line, cst_listing_seed, customer_listing and historical_lineup_import_line become visible/editable
-      only under an open scope (workers unset, admin ''*'') or to cip.request_role = ''steward''; INSERT/UPDATE WITH CHECK
-      unchanged. fact_inbound_shipment stays as in 0026. Prove on cip_test first (up/down/up, parity extended, lineage/N-0065
-      suites, full round-4 run, mutations, EXPLAIN), then apply to cip with the owner connection, parity spot-check per scope
-      and before/after timings; tested downgrade to 0026 on any mismatch.'
+    stage_note: Round 5 of RUN-20261007-N0065-IMPL applied 20261009_0027 to cip (N0065_IMPL.md Round 5, N0065_r5_apply_cip_output.txt).
+      current_database()=cip. Mismatches 0. Pick is an Index Only Scan on ix_shipment_ev_obs_identity_latest with enable_sort
+      and enable_incremental_sort off. No-product rows on the four non-shipment tables are admin/steward only; workers unset
+      stay open. Self-verified only. Behavioral verification remains the earlier fail. GOV-008 has not re-verified 0027. No
+      product commit.
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -14022,6 +13992,23 @@ evidence:
       no dim_product index mentions ean; unique constraints only part_number and sku; catalog_product 18157 rows and product_catalog
       1 (equal to BLN-N0068); 56 duplicate EAN values; tenant_column_grain default=product_line; no source has a mapping_profile
       yet. Nothing written to cip.'
+  EV-0068:
+    id: EV-0068
+    provenance: implementation-observation
+    path: apps/api/alembic/versions/20261009_0027_current_pick_index_order_no_product_steward.py
+    tree_hash: 198dea4605567bc91cbbd0fab5e13732e9027e8b
+    note: N-0065 round 5 migration 20261009_0027. Current-row pick sets enable_sort=off and enable_incremental_sort=off so
+      the plan walks ix_shipment_ev_obs_identity_latest. No-product rows in commercial_lineup_line, cst_listing_seed, customer_listing,
+      and historical_lineup_import_line are visible only to admins (*) and stewards; workers unset stay open; WITH CHECK unchanged.
+      fact_inbound_shipment stays as in 0026. Uncommitted. Applied to cip 2026-10-09, mismatches 0.
+  EV-0069:
+    id: EV-0069
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261007/N0065_r5_apply_cip_output.txt
+    tree_hash: 198dea4605567bc91cbbd0fab5e13732e9027e8b
+    note: N-0065 round 5 apply to cip. current_database() = cip printed. Alembic 20261009_0026 to 20261009_0027. Every per-scope
+      cell matched. Mismatches 0. Finished 2026-10-09 14:52:40. Pick is Index Only Scan on ix_shipment_ev_obs_identity_latest.
+      Self-verification only.
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -14938,5 +14925,5 @@ ids:
   node: 5
   decision: 75
   blocker: 19
-  evidence: 67
+  evidence: 69
   baseline: 18
