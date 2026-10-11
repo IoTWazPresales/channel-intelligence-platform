@@ -118,7 +118,9 @@ export function ChannelOpsKpiCards({ distributorId }: { distributorId?: number |
         testId="channel-ops-replenishment"
         label="Replenish flag"
         state={isLoading ? 'loading' : data?.replenishment_pairs_below_threshold == null ? 'empty' : 'ready'}
-        stateNote="Reorder point not available"
+        stateNote={
+          !isLoading && data?.replenishment_pairs_below_threshold == null ? 'Reorder point not available' : undefined
+        }
         value={data?.replenishment_pairs_below_threshold ?? '—'}
         unit="pairs"
         caption={

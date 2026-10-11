@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-10-11 — **N-0109 dashboard stack** on `feat/ns-2-brief-nav-collapse` (uncommitted, HEAD `52571a24`). Build `Bba3WfMSgEQyUCOn2SDlN`. Narrow dashboards stack widgets; wide stays 12 columns. Week labels W36–W40. Not ledger-closed. Never main.
+- 2026-10-11 — **product commit** `eb230ccf` on `feat/ns-2-brief-nav-collapse`, pushed. Replenish flag is a KPI tile. Never main.
 - 2026-10-11 — **N-0109 execution guard** on `feat/ns-2-brief-nav-collapse` (uncommitted, HEAD `52571a24`). Build `SDZ5nGPgSzMvRHULFcpiV`. Listings, shipments, and execution vs plan stay up on a thin fixture. Not ledger-closed. Never main.
 - 2026-10-11 — **N-0109 fixture render** on `feat/ns-2-brief-nav-collapse` (uncommitted, HEAD `52571a24`). Reports at 1440 and 390, light and dark. Attention, audit log, and recorded prices also painted. Thin-fixture crashes guarded in source. Not ledger-closed. Never main.
 - 2026-10-11 — **N-0109 shell scroll** on `feat/ns-2-brief-nav-collapse` (uncommitted, HEAD `52571a24`). The top bar no longer sticks over the page. The page body scrolls. Not ledger-closed. Never main.
