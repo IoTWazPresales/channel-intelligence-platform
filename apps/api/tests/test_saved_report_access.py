@@ -71,6 +71,13 @@ def test_normalize_shared_roles():
     assert normalize_shared_roles(["VIEWER", "planner", "viewer"]) == ["viewer", "planner"]
 
 
+def test_dashboard_widget_declares_saved_report():
+    from app.models.saved_reports import DashboardWidget
+
+    relation = DashboardWidget.__mapper__.relationships["saved_report"]
+    assert relation.mapper.class_.__tablename__ == "saved_report"
+
+
 def test_overview_pin_is_one_row_per_user_and_report():
     from app.models.saved_reports import OverviewReportPin
 

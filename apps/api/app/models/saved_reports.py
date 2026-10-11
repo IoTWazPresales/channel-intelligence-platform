@@ -119,6 +119,7 @@ class DashboardWidget(Base):
     )
 
     dashboard: Mapped[Dashboard] = relationship(back_populates="widgets")
+    saved_report: Mapped[SavedReport | None] = relationship()
 
 
 class OverviewReportPin(Base):
