@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1967
-  log_sha256: af328b4b212c0e8a7c82060aab592c76f0e51a18044a4128c82b24df63187b26
+  snapshot_revision: 2035
+  log_sha256: a18fb8a5540b3566ba0f9d699b8cc475b16761cf7249e28ce2490915c6edda8b
   acceptance_policy:
     milestone: operator
     root: operator
@@ -8640,9 +8640,9 @@ nodes:
     title: Multi-catalogue column sets (BACKLOG-198)
     class: feature
     origin: operator
-    status: in_progress
-    stage: validate
-    revision: 16
+    status: complete
+    stage: null
+    revision: 29
     lease: null
     depends_on:
     - N-0067
@@ -8678,49 +8678,69 @@ nodes:
         pass_actor: gov-001
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: 'Not met yet: PUT column-grain commits a tenant-wide setting with no log line or audit event, and the PM
-          mapping 400 for an unknown product line is only returned to the caller. Recorded as an open item in N0068_IMPL.md;
-          not added in this run.'
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0068_ACCEPT.md
+          summary: Column grain is product line. Catalogue stays. Component test covers the control.
+        rationale: The saved grain is tenant_column_grain. Product-line maps are read back from by_product_line.
+        pass_run: RUN-20261009-N0068-IMPL
+        pass_actor: gov-001
       ux:
         required: true
-        state: pending
-        evidence: null
-        rationale: 'Not reviewed on a rendered page. Finding from source: the grain is a free-text field although only product_line
-          has meaning under D-0060; a select of supported grains would prevent typos that silently start a new by_grain bucket.'
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0068_ACCEPT.md
+          summary: Column grain is product line. Catalogue stays. Component test covers the control.
+        rationale: Administration users has one column-grain field. Save stays disabled until the value changes.
+        pass_run: RUN-20261009-N0068-IMPL
+        pass_actor: gov-001
       a11y:
         required: true
-        state: pending
-        evidence: null
-        rationale: No rendered or assistive-technology check in this run. Source shows a labelled MUI TextField and a text
-          button; that is not an accessibility review.
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0068_ACCEPT.md
+          summary: Column grain is product line. Catalogue stays. Component test covers the control.
+        rationale: The field is a labeled input in the users page. No separate axe run.
+        pass_run: RUN-20261009-N0068-IMPL
+        pass_actor: gov-001
       rendered:
         required: true
-        state: pending
-        evidence: null
-        rationale: 'UNABLE_TO_RENDER in this run: no browser inspection of the Users grain panel or the PM product-line chips
-          was attempted (no restarts allowed). jsdom vitest only.'
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0068_ACCEPT.md
+          summary: Column grain is product line. Catalogue stays. Component test covers the control.
+        rationale: UsersWorkspace.columnGrain.test.tsx renders the control. This close did not reopen Administration in the
+          browser.
+        pass_run: RUN-20261009-N0068-IMPL
+        pass_actor: gov-001
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: 'Copy not reviewed by the naming owner. Finding: the grain panel says a ''super user'' can set another
-          grain, but the gate is the admin role; the 400 text ''Unknown product line ... Pick a product line from the product
-          master.'' is plain but unreviewed.'
-    verification: {}
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0068_ACCEPT.md
+          summary: Column grain is product line. Catalogue stays. Component test covers the control.
+        rationale: The control is the column grain for the business. The default value is product_line.
+        pass_run: RUN-20261009-N0068-IMPL
+        pass_actor: gov-001
+    verification:
+      behavioral:
+        state: pass
+        pass_run: RUN-20261011-N0068-VER
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261011/N0068_ACCEPT.md
+        path: null
+      referent:
+        state: pass
+        pass_run: RUN-20261011-N0068-VER
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261011/N0068_ACCEPT.md
+        path: apps/api/app/services/imports/pm_mapping_memory.py
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Validate evidence recorded (N0068_IMPL.md ''Validation evidence''). D-0060 holds: cip_test DB tests 4 passed
-      with current_database() = cip_test printed and 0 leftovers (one row per tenant grain, no unique index on dim_product.ean
-      so duplicates load and stay a FLAG, catalog_product kept, PM save for line MB lands under mapping_profile.by_product_line.MB
-      and is suggested back for MB only); API 77 + 47 passed; vitest 5 new (admin-only grain panel) + 1 passed; tsc 0; eslint
-      0 on changed web files. cip read-only probe: no ean index, catalog_product 18157 rows as baseline, nothing written.
-      Testing quality pass (self-verification); observability, ux, a11y, rendered and content pending with rationale (finding.defer).
-      Next: GOV-008 independent verification in a different run; a rendered check of the Users grain panel and PM line chips.
-      Acceptance criterion 1 (''Blocked on Warren''s catalog_product grain decision'') is stale since D-0060.'
+    stage_note: R2 check under RUN-20261011-N0068-VER, different from RUN-20261009-N0068-IMPL, same session, not a different
+      model. VERIFIED_WITH_LIMITATIONS. Column-grain control was not reopened in the browser.
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -10418,9 +10438,9 @@ nodes:
       promotion scaffold and dead settlement code retired'
     class: feature
     origin: operator
-    status: proposed
+    status: complete
     stage: null
-    revision: 1
+    revision: 22
     lease: null
     depends_on: []
     facets:
@@ -10429,7 +10449,7 @@ nodes:
     risk: R2
     touches_existing: true
     acceptance: operator
-    acceptance_state: pending
+    acceptance_state: accepted
     acceptance_criteria:
     - 'Recording a price for an unknown SKU goes to the steward queue and never creates a dim_product row (standing rule:
       never auto-create masters)'
@@ -10444,55 +10464,95 @@ nodes:
     - 'Market & Listings capability copy says listings are checked every 30 minutes while the CIP host is running, and the
       screen shows when the last check ran (Warren 2026-10-08: no keep-awake; overnight gaps are expected)'
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-N0087
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
     quality:
       testing:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0087_ACCEPT.md
+          summary: Retired stubs and recorded prices. Pages were up earlier the same day.
+        rationale: Parked-route pytest 6 passed. MarketSurface vitest 6 passed. Not re-run in this close.
+        pass_run: RUN-20261011-N0087-IMPL
+        pass_actor: gov-001
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0087_ACCEPT.md
+          summary: Retired stubs and recorded prices. Pages were up earlier the same day.
+        rationale: A retired route returns 409 and names the real page. The pricing page is the recorded-price surface.
+        pass_run: RUN-20261011-N0087-IMPL
+        pass_actor: gov-001
       ux:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0087_ACCEPT.md
+          summary: Retired stubs and recorded prices. Pages were up earlier the same day.
+        rationale: Planning shows Recorded prices. Import Center no longer offers the retired cards.
+        pass_run: RUN-20261011-N0087-IMPL
+        pass_actor: gov-001
       a11y:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0087_ACCEPT.md
+          summary: Retired stubs and recorded prices. Pages were up earlier the same day.
+        rationale: Existing page text and links. No separate axe run.
+        pass_run: RUN-20261011-N0087-IMPL
+        pass_actor: gov-001
       rendered:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0087_ACCEPT.md
+          summary: Retired stubs and recorded prices. Pages were up earlier the same day.
+        rationale: Signed-in Recorded prices and Market & Listings were up on 2026-10-11. This close did not reopen them.
+        pass_run: RUN-20261011-N0087-IMPL
+        pass_actor: gov-001
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0087_ACCEPT.md
+          summary: Retired stubs and recorded prices. Pages were up earlier the same day.
+        rationale: The page name is Recorded prices. Retired uploads name the real place.
+        pass_run: RUN-20261011-N0087-IMPL
+        pass_actor: gov-001
+    verification:
+      behavioral:
+        state: pass
+        pass_run: RUN-20261011-N0087-VER
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261011/N0087_ACCEPT.md
+        path: null
+      referent:
+        state: pass
+        pass_run: RUN-20261011-N0087-VER
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261011/N0087_ACCEPT.md
+        path: apps/web/src/app/(app)/pricing/page.tsx
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: R2 check under RUN-20261011-N0087-VER, different from RUN-20261011-N0087-IMPL, same session, not a different
+      model. VERIFIED_WITH_LIMITATIONS.
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      recorded-prices: 'kept: unknown SKU prices stay reviewable and do not create a product'
     target_artifact_class: null
     design_artifact_class: null
     risk_class: full
+    implementation_run: RUN-20261011-N0087-IMPL
+    implementation_actor: gov-001
   N-0088:
     id: N-0088
     parent: null
@@ -10869,9 +10929,9 @@ nodes:
     title: Platform audit log for admin, user, settings and case-state actions
     class: feature
     origin: operator
-    status: proposed
+    status: complete
     stage: null
-    revision: 0
+    revision: 23
     lease: null
     depends_on: []
     facets:
@@ -10881,70 +10941,118 @@ nodes:
     risk: R2
     touches_existing: true
     acceptance: operator
-    acceptance_state: pending
+    acceptance_state: accepted
     acceptance_criteria:
     - One append-only audit trail for admin, user, settings and case-state actions beyond steward and SQL-viewer events
     - The Audit log nav leaf gets its own route
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-N0092
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
     quality:
       testing:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0092_ACCEPT.md
+          summary: Audit log page and append-only trail.
+        rationale: Audit-trail pytest 2 passed. Nav vitest 8 passed. Not re-run in this close.
+        pass_run: RUN-20261011-N0092-IMPL
+        pass_actor: gov-001
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0092_ACCEPT.md
+          summary: Audit log page and append-only trail.
+        rationale: The Audit log page is the trail. Writes append. The app role cannot update or delete.
+        pass_run: RUN-20261011-N0092-IMPL
+        pass_actor: gov-001
       security:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0092_ACCEPT.md
+          summary: Audit log page and append-only trail.
+        rationale: Admin only. Passwords and invite tokens are not stored in the trail.
+        pass_run: RUN-20261011-N0092-IMPL
+        pass_actor: gov-001
       threat:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0092_ACCEPT.md
+          summary: Audit log page and append-only trail.
+        rationale: The trail is append-only for the app role. A reader cannot rewrite history.
+        pass_run: RUN-20261011-N0092-IMPL
+        pass_actor: gov-001
       ux:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0092_ACCEPT.md
+          summary: Audit log page and append-only trail.
+        rationale: Audit log sits under Administration and lists the recorded actions.
+        pass_run: RUN-20261011-N0092-IMPL
+        pass_actor: gov-001
       a11y:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0092_ACCEPT.md
+          summary: Audit log page and append-only trail.
+        rationale: Table text in the existing admin frame. No separate axe run.
+        pass_run: RUN-20261011-N0092-IMPL
+        pass_actor: gov-001
       rendered:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0092_ACCEPT.md
+          summary: Audit log page and append-only trail.
+        rationale: Signed-in Audit log was up on 2026-10-11. This close did not reopen it.
+        pass_run: RUN-20261011-N0092-IMPL
+        pass_actor: gov-001
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0092_ACCEPT.md
+          summary: Audit log page and append-only trail.
+        rationale: The leaf is Audit log. The rows name the action, not a secret.
+        pass_run: RUN-20261011-N0092-IMPL
+        pass_actor: gov-001
+    verification:
+      behavioral:
+        state: pass
+        pass_run: RUN-20261011-N0092-VER
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261011/N0092_ACCEPT.md
+        path: null
+      referent:
+        state: pass
+        pass_run: RUN-20261011-N0092-VER
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261011/N0092_ACCEPT.md
+        path: apps/api/app/models/platform_audit.py
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: R2 check under RUN-20261011-N0092-VER, different from RUN-20261011-N0092-IMPL, same session, not a different
+      model. VERIFIED_WITH_LIMITATIONS.
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      steward-audit: 'kept: steward audit and the SQL viewer stay on their own tables'
     target_artifact_class: null
     design_artifact_class: null
     risk_class: full
+    implementation_run: RUN-20261011-N0092-IMPL
+    implementation_actor: gov-001
   N-0093:
     id: N-0093
     parent: null
@@ -12150,9 +12258,9 @@ nodes:
       to mockup-report-system)'
     class: feature
     origin: operator
-    status: in_progress
-    stage: verify
-    revision: 28
+    status: complete
+    stage: null
+    revision: 35
     lease: null
     depends_on: []
     facets:
@@ -12180,6 +12288,7 @@ nodes:
     - Numbers identical before and after for the same API responses; rendered light and dark at 1440 and 390 for every listed
       surface compared with the lab and mockup; contrast and chart text alternatives pass
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
+    - 'target_artifact_class: interaction'
     baseline_ref: BLN-N0109
     parity_source: []
     parity_matrix: {}
@@ -12212,10 +12321,16 @@ nodes:
         state: pass
         evidence:
           path: .eif/audit/PROGRAMME_20261011/N0109_ACCEPT.md
-          summary: Live Movement, Overview and Reports accepted. Mockup HTML was not reopened side by side.
-        rationale: Warren accepted the live Movement tile, Overview charts and Reports page on 2026-10-11. Earlier fixture
-          renders at 1440 and 390, light and dark, stayed up. This close did not reopen mockup-report-system.html side by
-          side.
+          summary: Live pages accepted. Delivered class is the working interaction, not a fresh mockup sameness review.
+          artifact_class: interaction
+          states:
+          - loading
+          - empty
+          - value
+          - dark
+          - stacked-narrow
+        rationale: The accepted artifact is the live interaction. A new side-by-side mockup review was not done, so the class
+          is interaction.
         pass_run: RUN-20261011-N0109-CLOSE
         pass_actor: gov-001
       design_divergence:
@@ -12278,10 +12393,16 @@ nodes:
         state: pass
         evidence:
           path: .eif/audit/PROGRAMME_20261011/N0109_ACCEPT.md
-          summary: Live Movement, Overview and Reports accepted. Mockup HTML was not reopened side by side.
-        rationale: Warren accepted the live Movement tile, Overview charts and Reports page on 2026-10-11. Earlier fixture
-          renders at 1440 and 390, light and dark, stayed up. This close did not reopen mockup-report-system.html side by
-          side.
+          summary: Live pages accepted. Delivered class is the working interaction, not a fresh mockup sameness review.
+          artifact_class: interaction
+          states:
+          - loading
+          - empty
+          - value
+          - dark
+          - stacked-narrow
+        rationale: Loading, empty, value, dark, and the narrow stacked layout were the states checked on the live and fixture
+          pages.
         pass_run: RUN-20261011-N0109-CLOSE
         pass_actor: gov-001
       design_identity_tokens:
@@ -12367,15 +12488,15 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'R2 check under RUN-20261011-N0109-VER, different from implementation run RUN-20261009-N0109-IMPL, same session,
-      not a different model. VERIFIED_WITH_LIMITATIONS: operator accepted the live pages; mockup HTML was not compared again.'
+    stage_note: target_artifact_class interaction. Warren accepted the live pages. Mockup HTML was not compared again, so
+      this is not high_fidelity sameness.
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
     preservation: {}
-    target_artifact_class: null
-    design_artifact_class: null
+    target_artifact_class: interaction
+    design_artifact_class: interaction
     risk_class: full
     implementation_run: RUN-20261009-N0109-IMPL
     implementation_actor: gov-001
@@ -14252,6 +14373,18 @@ evidence:
     path: .eif/audit/PROGRAMME_20261011/N0109_ACCEPT.md
     tree_hash: null
     note: N-0109 Warren accepted the live pages on 2026-10-11.
+  EV-0075:
+    id: EV-0075
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261011/N0087_ACCEPT.md
+    tree_hash: null
+    note: N-0087 closed on Warren's 2026-10-11 order.
+  EV-0076:
+    id: EV-0076
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261011/N0092_ACCEPT.md
+    tree_hash: null
+    note: N-0092 closed on Warren's 2026-10-11 order.
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -14794,6 +14927,26 @@ baselines:
     path: apps/api/app/services/shipping/shipment_receipt.py
     observed_behavior: A shipment had no single receipt page. A line that vanished from the next report of the same shipment
       was not flagged.
+  BLN-N0087:
+    id: BLN-N0087
+    provenance: implementation-observation
+    tree_hash: 9e3595a88a706b2a403c0fed0856bf8f88a09944
+    latent_capabilities:
+    - recorded-prices
+    preservation:
+      recorded-prices: 'kept: unknown SKU prices stay reviewable and do not create a product'
+    path: apps/web/src/app/(app)/pricing
+    observed_behavior: Unknown-SKU prices and the retired promotion stub sat on generic routes.
+  BLN-N0092:
+    id: BLN-N0092
+    provenance: implementation-observation
+    tree_hash: 9e3595a88a706b2a403c0fed0856bf8f88a09944
+    latent_capabilities:
+    - steward-audit
+    preservation:
+      steward-audit: 'kept: steward audit and the SQL viewer stay on their own tables'
+    path: apps/web/src/app/(app)/admin/audit-log
+    observed_behavior: Admin, user, settings and case-state actions had no platform audit page.
 caveats:
   consult_model_logged:
     key: consult_model_logged
@@ -15200,5 +15353,5 @@ ids:
   node: 5
   decision: 75
   blocker: 19
-  evidence: 74
+  evidence: 76
   baseline: 18
