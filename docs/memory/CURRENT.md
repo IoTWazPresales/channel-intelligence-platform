@@ -4,6 +4,10 @@
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
+**Historical CPOR upload:** Promotions & Funding → Plan templates. **Upload historical cases** opens the workbook wizard. **Learn a new template from a workbook** stays the column-map action.
+
+**Closed this evening:** N-0109, N-0087, N-0092, N-0068. N-0065 stays in progress: the last behavioral check failed on shipment-evidence rows outside the user's product lines. N-0086 stays in progress: the pilot-password half depends on the invite, which stays unsent. N-0075 stays ready.
+
 **HEAD:** `687455d4` on `feat/ns-2-brief-nav-collapse`. Dashboard widgets declare the saved-report link, so the overview dashboard list no longer 500s. Product work through `dca2a682` is already pushed. Do not push main.
 
 **Alembic (code):** `20261011_0032` drops the old promotion and pricing-recommendation tables. Applied on cip 2026-10-11 as `postgres` (`database=cip`). Lineup rows stayed 1647. Budget rows stayed 0. `pricing_unknown_sku` remains. `20261011_0031` (`platform_audit_event`) is applied. `20261011_0030`, `20261010_0029`, and `20261010_0028` are applied. These revisions are uncommitted.

@@ -244,7 +244,7 @@ export const navGroups: NavGroup[] = [
         href: '/commercial-planner/cpor-cases/historical-import',
         roles: PLANNER_PLUS,
         status: 'partial',
-        what: 'Customer promotion-plan workbooks mapped once. Reading historical plans works; writing plans back into that layout is not built.',
+        what: 'Upload historical CPOR and funding workbooks. Learn a column map when the layout is new. Writing a plan back into that layout is not built.',
       },
       {
         label: 'Terms & assumptions',

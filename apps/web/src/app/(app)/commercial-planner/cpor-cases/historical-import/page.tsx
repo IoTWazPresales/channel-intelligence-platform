@@ -57,7 +57,7 @@ const CPOR_PROGRESS_PHASES = [
   { id: 'complete', label: 'Complete' },
 ] as const;
 
-function CporHistoricalImportWizard() {
+function CporHistoricalImportWizard({ mode }: { mode: 'upload' | 'learn' }) {
   const qc = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
   const [jobId, setJobId] = useState<number | null>(null);
@@ -197,12 +197,10 @@ function CporHistoricalImportWizard() {
 
   return (
     <FundingChrome>
-      <Alert severity="info" sx={{ mt: 2, mb: 2 }}>
-        Upload a customer tracking workbook to learn (or refresh) a column map. Settled results
-        are kept as a snapshot. Unmatched names block that case only — products, customers, and
-        distributors are never created automatically. The stored map fills the columns; names are
-        matched before apply. Writing a plan back into that layout is not built — export stays the
-        fixed workbook.
+      <Alert severity="info" sx={{ mt: 2, mb: 2 }} data-testid="cpor-historical-intent">
+        {mode === 'upload'
+          ? 'Upload a historical CPOR or funding workbook. The file is validated, unmatched names are resolved, then the cases are applied. Settled results are kept as a snapshot. Unmatched names block that case only. Products, customers, and distributors are never created from the file.'
+          : 'Learn a column map from an example workbook. You can validate and apply that same file as historical cases once the names match. Writing a plan back into that layout is not built.'}
       </Alert>
       <Button
         size="small"
@@ -404,7 +402,8 @@ function CporHistoricalImportWizard() {
 
 function CporHistoricalImportGate() {
   const search = useSearchParams();
-  if (search.get('learn') === '1') return <CporHistoricalImportWizard />;
+  if (search.get('upload') === '1') return <CporHistoricalImportWizard mode="upload" />;
+  if (search.get('learn') === '1') return <CporHistoricalImportWizard mode="learn" />;
   return (
     <FundingChrome>
       <PlanTemplatesSurface />

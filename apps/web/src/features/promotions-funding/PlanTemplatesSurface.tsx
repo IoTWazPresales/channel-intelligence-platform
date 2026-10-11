@@ -160,9 +160,10 @@ export function PlanTemplatesSurface() {
   return (
     <Stack spacing={2} sx={{ mt: 2 }} data-testid="plan-templates">
       <Alert severity="info" variant="outlined" icon={<SwapHorizOutlinedIcon />}>
-        <b>Learn once, use both ways.</b> A customer’s promotion-plan workbook is mapped once —
-        usually from a historical plan they already sent. The same profile then reads their future
-        files. Writing a plan back into that layout is not built — export stays the fixed workbook.
+        <b>Upload historical cases here.</b> A customer promotion or funding workbook is validated,
+        the names are matched, and the cases are applied. Learn a template only when that
+        customer’s column layout is new. Writing a plan back into that layout is not built — export
+        stays the fixed workbook.
       </Alert>
 
       <HeadlineStrip columns={4}>
@@ -246,15 +247,25 @@ export function PlanTemplatesSurface() {
                   </Card>
                 );
               })}
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<UploadFileOutlinedIcon />}
-                onClick={() => router.push('/commercial-planner/cpor-cases/historical-import?learn=1')}
-                data-testid="template-learn"
-              >
-                Learn a new template from a workbook
-              </Button>
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<UploadFileOutlinedIcon />}
+                  onClick={() => router.push('/commercial-planner/cpor-cases/historical-import?upload=1')}
+                  data-testid="historical-cases-upload"
+                >
+                  Upload historical cases
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => router.push('/commercial-planner/cpor-cases/historical-import?learn=1')}
+                  data-testid="template-learn"
+                >
+                  Learn a new template from a workbook
+                </Button>
+              </Stack>
             </Stack>
           </Panel>
           <CapabilityLedger title="What works here" items={TEMPLATE_CAPABILITIES} />
@@ -363,7 +374,7 @@ export function PlanTemplatesSurface() {
             </Panel>
           </Stack>
         ) : (
-          <Alert severity="info">No mapping profiles yet. Learn one from a workbook.</Alert>
+          <Alert severity="info">No mapping profiles yet. Upload a historical workbook, or learn a template from an example file.</Alert>
         )}
       </Box>
       <Snackbar

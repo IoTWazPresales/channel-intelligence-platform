@@ -36,6 +36,11 @@ export const PLANNER_CAPABILITIES: CapabilityItem[] = [
 
 export const TEMPLATE_CAPABILITIES: CapabilityItem[] = [
   {
+    label: 'Upload historical cases',
+    state: 'live',
+    note: 'Upload historical cases opens the workbook, then validate, resolve names, and apply. Products, customers, and distributors are not created from the file.',
+  },
+  {
     label: 'Store a profile: sheet roles, column map, value maps',
     state: 'live',
     note: 'A stored column map for past promotion workbooks. Historical imports use it today.',

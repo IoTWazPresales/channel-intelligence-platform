@@ -70,8 +70,9 @@ describe('PlanTemplatesSurface', () => {
     await waitFor(() => {
       expect(screen.getByTestId('template-asus_consumer_cpor_tracking_v1')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('template-learn')).toBeInTheDocument();
-    expect(screen.getAllByText(/template-driven export is not built/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByTestId('historical-cases-upload')).toHaveTextContent('Upload historical cases');
+    expect(screen.getByTestId('template-learn')).toHaveTextContent('Learn a new template from a workbook');
+    expect(screen.getAllByText(/writing a plan back into that layout is not built/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByTestId('capability-status-planned')).toBeInTheDocument();
     expect(screen.getByTestId('capability-status-partial')).toBeInTheDocument();
   });

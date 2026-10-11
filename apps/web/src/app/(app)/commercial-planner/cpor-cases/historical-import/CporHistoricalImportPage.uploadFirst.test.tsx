@@ -61,13 +61,23 @@ describe('CporHistoricalImportPage', () => {
   it('default lens is the plan templates surface, not the upload wizard', async () => {
     wrap(<CporHistoricalImportPage />);
     expect(await screen.findByTestId('plan-templates')).toBeInTheDocument();
+    expect(screen.getByTestId('historical-cases-upload')).toBeInTheDocument();
     expect(screen.getByTestId('template-learn')).toBeInTheDocument();
     expect(screen.queryByTestId('cpor-historical-upload-step')).not.toBeInTheDocument();
+  });
+
+  it('upload=1 is the historical case wizard', async () => {
+    navState.search = 'upload=1';
+    wrap(<CporHistoricalImportPage />);
+    expect(await screen.findByTestId('cpor-historical-upload-step')).toBeInTheDocument();
+    expect(screen.getByTestId('cpor-historical-intent')).toHaveTextContent('Upload a historical CPOR or funding workbook');
+    expect(screen.queryByTestId('plan-templates')).not.toBeInTheDocument();
   });
 
   it('learn=1 is upload CTA with no mapping table', async () => {
     navState.search = 'learn=1';
     wrap(<CporHistoricalImportPage />);
+    expect(await screen.findByTestId('cpor-historical-intent')).toHaveTextContent('Learn a column map');
     expect(await screen.findByTestId('cpor-historical-upload-step')).toBeInTheDocument();
     expect(screen.getByTestId('cpor-historical-file')).toBeInTheDocument();
     expect(screen.getByTestId('cpor-historical-upload')).toBeInTheDocument();
