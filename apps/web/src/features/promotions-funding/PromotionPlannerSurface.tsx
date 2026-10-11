@@ -438,16 +438,17 @@ function PlannerList({
                 !(endedPage?.items ?? []).some((p) => p.needs_reapproval) &&
                 !(endedPage?.items ?? []).some((p) => (p.settle_readiness?.claim_evidence_count ?? 0) === 0) ? (
                   <Typography variant="body2" color="text.secondary" sx={{ px: 1.5, py: 1 }}>
-                    Nothing waiting on you. Live-but-not-at-promo-price is not listed — listings are not
-                    joined onto case lines.
+                    Nothing waiting on you. This list does not flag a live listing that is off the promo
+                    price. Listing, competitor price, and observed cover are on the Evidence column when
+                    you create a promotion plan.
                   </Typography>
                 ) : (
                   <PanelRow
                     severity="neutral"
-                    primary="Live listing vs promo price is not on this list"
-                    secondary="Cover / listings / competitors are not joined to cpor_case_line — open Market & Listings"
-                    figure="Market › Activation"
-                    onClick={() => router.push('/listing-capture?tab=intelligence')}
+                    primary="Live listing vs promo price is not a row on this list"
+                    secondary="Create a promotion plan. The Evidence column shows listing, competitor price, and observed cover, and it does not set the quantity."
+                    figure="Evidence"
+                    onClick={() => setProposeOpen(true)}
                   />
                 )}
               </Stack>
@@ -574,7 +575,8 @@ function PlanGrid({ rows, onOpen }: { rows: CporCaseListRow[]; onOpen: (id: numb
         width: 110,
         valueGetter: () => null,
         valueFormatter: () => '—',
-        tooltipValueGetter: () => 'Listing activation is not joined onto cpor_case_line',
+        tooltipValueGetter: () =>
+          'Listing, competitor price, and observed cover are on the Evidence column when you create a promotion plan. This case list does not repeat them.',
       },
       {
         colId: 'export_template',
@@ -583,7 +585,7 @@ function PlanGrid({ rows, onOpen }: { rows: CporCaseListRow[]; onOpen: (id: numb
         flex: 1,
         valueGetter: () => null,
         valueFormatter: () => '—',
-        tooltipValueGetter: () => 'Template-driven export is not built — frozen 32-column XLSX only',
+        tooltipValueGetter: () => 'Writing a plan back into the customer layout is not built — export stays the fixed workbook',
       },
       {
         field: 'flags',

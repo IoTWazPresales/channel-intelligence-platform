@@ -89,6 +89,7 @@ describe('PlanVsExecutedView', () => {
     expect(screen.getByTestId('exception-category-tabs')).toBeTruthy();
     expect(screen.getByTestId('product-group-by')).toBeTruthy();
     expect(screen.getByTestId('pve-total-shipped-in-scope')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'About this figure' })).toHaveAttribute('aria-expanded', 'false');
     expect(screen.getByText('70')).toBeTruthy();
     expect(screen.getByText(/62 in-plan · 5 unplanned/)).toBeTruthy();
     expect(screen.getByRole('button', { name: /Rank: value/i })).toHaveProperty('disabled', true);

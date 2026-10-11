@@ -5,27 +5,27 @@ export const PLANNER_CAPABILITIES: CapabilityItem[] = [
   {
     label: 'Propose a plan from history, cover, forecast and MAC',
     state: 'partial',
-    note: 'Compose from customer and period (lineup, then that customer’s history). Seed case id remains optional. Competitor prices, listing joins, and observed cover-as-target are not inputs.',
+    note: 'Build a plan from the customer and period: the lineup first, then that customer’s history. A seed case is optional. Listing, competitor price, and observed cover show on the line and do not set the quantity.',
   },
   {
     label: 'Create and edit plans manually (lines, layers, parameters)',
     state: 'live',
-    note: 'Case + line CRUD and lifecycle transitions with events. Header and line edits are draft or rejected only.',
+    note: 'You can add and edit the case and its lines, and move it through the stages. Header and line edits are draft or rejected only.',
   },
   {
     label: 'Waterfall and validation (dealer price, support/unit, budget check, flags)',
     state: 'live',
-    note: 'Server-side recompute; flags never block. List support is the sum of line totals, same as the workspace.',
+    note: 'Figures are recalculated for you. Flags never block. List support is the sum of line totals, same as the workspace.',
   },
   {
     label: 'Evidence behind each line in one view',
-    state: 'partial',
-    note: 'Waterfall and stored flags on the line. Cover, listings and competitor counts are not joined onto the line yet — open those domains from Related.',
+    state: 'live',
+    note: 'Each proposed line has an Evidence column: listed or not, competitor price or none, observed cover as a flag. It does not write cover policy. Uplift from claim evidence is not derived.',
   },
   {
     label: 'Export in the customer’s promotion-plan format',
     state: 'partial',
-    note: 'Versioned XLSX exists; layout is one frozen 32-column tuple in code. Template-driven export is not built.',
+    note: 'A saved workbook exists. The layout is fixed. Writing a plan back into the customer layout is not built.',
   },
   {
     label: 'Uplift, elasticity, effectiveness',
@@ -38,21 +38,21 @@ export const TEMPLATE_CAPABILITIES: CapabilityItem[] = [
   {
     label: 'Store a profile: sheet roles, column map, value maps',
     state: 'live',
-    note: 'cpor_historical_mapping_profile — the import side, used by historical CPOR loads today.',
+    note: 'A stored column map for past promotion workbooks. Historical imports use it today.',
   },
   {
     label: 'Confirm a mapping in the shared mapping panel',
     state: 'live',
-    note: 'This screen mounts the production CanonicalColumnMappingPanel. Edits here are not a writer — the stored map is applied on the next historical import.',
+    note: 'This screen uses the shared column-mapping panel. A change here is applied on the next historical import.',
   },
   {
     label: 'Learn a profile from an example workbook',
     state: 'partial',
-    note: 'Header detection exists in the historical-import parser; open Learn from a workbook to run that path. Propose-mapping-from-file is not a separate writer.',
+    note: 'Open Learn from a workbook to detect the headers. Suggesting a map from a file is not a separate step.',
   },
   {
     label: 'Render an export in the profile’s layout',
     state: 'planned',
-    note: 'Export is one frozen 32-column tuple today. Template-driven export is not built.',
+    note: 'Export uses a fixed layout today. Writing a plan back into the customer layout is not built.',
   },
 ];

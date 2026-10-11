@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db
 from app.core.security import Role, require_roles
 from app.core.tenant_scope import tenant_id_from_user
+from app.services.platform_audit import record_platform_audit
 from app.services.shipping_digest.recipients_store import (
     RecipientValidationError,
     add_recipient,
@@ -92,6 +93,14 @@ async def post_shipping_mailer_recipient(
         )
     except RecipientValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await record_platform_audit(
+        db,
+        admin,
+        area="settings",
+        action="mailer_recipient_add",
+        target_type="shipping_mailer_recipient",
+        target_id=str(row.get("id")) if row.get("id") is not None else None,
+    )
     await db.commit()
     return _out(row)
 
@@ -119,6 +128,14 @@ async def patch_shipping_mailer_recipient(
     )
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recipient not found")
+    await record_platform_audit(
+        db,
+        admin,
+        area="settings",
+        action="mailer_recipient_update",
+        target_type="shipping_mailer_recipient",
+        target_id=str(recipient_id),
+    )
     await db.commit()
     return _out(row)
 
@@ -133,5 +150,13 @@ async def delete_shipping_mailer_recipient(
     deleted = await delete_recipient(db, tenant_id, recipient_id)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recipient not found")
+    await record_platform_audit(
+        db,
+        admin,
+        area="settings",
+        action="mailer_recipient_delete",
+        target_type="shipping_mailer_recipient",
+        target_id=str(recipient_id),
+    )
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

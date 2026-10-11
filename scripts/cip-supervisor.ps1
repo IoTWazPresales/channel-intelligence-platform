@@ -15,7 +15,14 @@
 #   - The tunnel starts only when CIP_AUTH_MODE=session and /api/v1/auth/me answers 401.
 #   - The tunnel is closed (and not restarted) on positive evidence that auth is open.
 #   - The public address comes from the cloudflared metrics endpoint /quicktunnel (.hostname).
-#   - The supervisor never builds the web, never sets CIP_LISTING_* and changes no machine setting.
+#   - The supervisor never builds the web and changes no machine setting.
+#   - A network that drops outbound TCP 7844 (N-0107): when the cloudflared log shows repeated dial timeouts to
+#     port 7844 and no registered connection, the tunnel is held ('blocked'), not restarted; one fresh launch
+#     per 30 min; /ready 200 returns it to the normal checks.
+#   - Listing polling (D-0061, N-0101): only the Celery worker (and its beat) gets
+#     CIP_LISTING_CAPTURE_SCHEDULE=1 and CIP_LISTING_LIVE_FETCH=1, so listing-capture-poll
+#     checks listings every 30 min. The API and web do not get them. status.json "env"
+#     reports what the running worker was given.
 
 $ErrorActionPreference = 'Continue'
 
@@ -42,6 +49,13 @@ $TunnelDeadMinutes = 10                       # /ready or public /login failing 
 $PublicEverySec    = 300
 $PublicFirstDelay  = 60                       # give a new hostname time to resolve before the first public check
 $MetricsPort       = 20241
+# N-0107: a network that drops outbound TCP 7844 (cloudflared's edge port) cannot be fixed by a restart;
+# every restart only changes the public link. Hold the tunnel instead and try a fresh launch rarely.
+$TunnelBlockedDialErrors  = 6                 # '7844: i/o timeout' dial lines (2 per attempt) = blocked
+$TunnelBlockedRetryMinutes = 30               # one fresh launch per this many minutes while blocked
+$TunnelLogTailBytes       = 65536             # how much of the cloudflared log the detector reads
+# Worker-only env for listing polling; values match the API's truthy parse (1/true/on).
+$WorkerListingEnv  = [ordered]@{ CIP_LISTING_CAPTURE_SCHEDULE = '1'; CIP_LISTING_LIVE_FETCH = '1' }
 $Utf8NoBom         = New-Object System.Text.UTF8Encoding($false)
 
 New-Item -ItemType Directory -Path $logDir -Force | Out-Null
@@ -312,7 +326,7 @@ function New-Component {
         Launches = New-Object System.Collections.ArrayList
         ConsecutiveRestarts = 0; NextStartAt = [datetime]::MinValue
         LastStart = $null; LastHealthy = $null; EverHealthy = $false
-        Held = $false; Log = $null; MetricsPort = $null
+        Held = $false; Log = $null; ErrLog = $null; MetricsPort = $null; ListingEnv = $null
     }
 }
 
@@ -328,6 +342,7 @@ $tunnel = @{
     Hostname = $null; HostnameSince = $null
     LastReadyOk = $null; LastPublicOk = $null; LastPublicCheck = $null; PublicEverOk = $false
     PublicLogin = $null; PublicMe = $null; ClosedReason = $null; FirstPublicAfter = $null
+    BlockedReason = $null; BlockedSince = $null; BlockedRetryAt = $null
 }
 
 function Set-State {
@@ -366,6 +381,7 @@ function Set-Adopted {
     $Comp.StartTime = $null
     if ($p) { try { $Comp.StartTime = $p.StartTime } catch { } }
     $Comp.Adopted = $true
+    $Comp.ListingEnv = $null   # an adopted process's env is not known
     if ($changed) { Write-Log ("{0}: adopted running process {1}" -f $Comp.Name, $ProcId) }
 }
 
@@ -374,6 +390,7 @@ function Clear-Process {
     $Comp.Pid = $null
     $Comp.StartTime = $null
     $Comp.Adopted = $false
+    $Comp.ListingEnv = $null
 }
 
 function Test-InGrace {
@@ -439,8 +456,16 @@ function Start-Component {
     $Comp.StartTime = $null
     try { $Comp.StartTime = $p.StartTime } catch { }
     $Comp.Log = $logs.Out
+    $Comp.ErrLog = $logs.Err
+    # What the child received: ExtraEnv wins over the supervisor's own process env.
+    $given = @{}
+    foreach ($k in @('CIP_LISTING_LIVE_FETCH', 'CIP_LISTING_CAPTURE_SCHEDULE')) {
+        if ($ExtraEnv.ContainsKey($k)) { $given[$k] = [bool]$ExtraEnv[$k] }
+        else { $given[$k] = [bool][Environment]::GetEnvironmentVariable($k, 'Process') }
+    }
+    $Comp.ListingEnv = $given
     $listing = 'CIP_LISTING_LIVE_FETCH present={0}, CIP_LISTING_CAPTURE_SCHEDULE present={1}' -f `
-        [bool]$env:CIP_LISTING_LIVE_FETCH, [bool]$env:CIP_LISTING_CAPTURE_SCHEDULE
+        $given['CIP_LISTING_LIVE_FETCH'], $given['CIP_LISTING_CAPTURE_SCHEDULE']
     Write-Log ("{0}: started pid {1} (launch {2}; {3}): {4} {5}" -f $Comp.Name, $p.Id, $Comp.Launches.Count, $listing, $File, ($Arguments -join ' '))
     Set-State $Comp 'starting' ("pid {0}" -f $p.Id)
 }
@@ -535,10 +560,12 @@ function Invoke-Worker {
     # dev-worker.js stops any stray celery itself before it spawns (single consumer).
     $node = (Get-Command node.exe -ErrorAction SilentlyContinue).Source
     if (-not $node) { Set-State $c 'error' 'node.exe not found on PATH'; return }
-    Start-Component $c $node @((Quote (Join-Path $repo 'scripts\dev-worker.js'))) $repo @{
+    $workerEnv = @{
         CIP_ENABLE_DEV_BEAT = '1'; PYTHONUNBUFFERED = '1'; CIP_SUPERVISOR_CHILD = '1'
         CIP_CELERY_BEAT_SCHEDULE = (Join-Path $stateDir 'celerybeat-schedule')
     }
+    foreach ($k in $WorkerListingEnv.Keys) { $workerEnv[$k] = $WorkerListingEnv[$k] }
+    Start-Component $c $node @((Quote (Join-Path $repo 'scripts\dev-worker.js'))) $repo $workerEnv
 }
 
 function Invoke-Api {
@@ -706,6 +733,67 @@ function Invoke-PublicCheck {
     Write-Log ("tunnel: public check /login {0}, /api/v1/auth/me {1}" -f $tunnel.PublicLogin, $tunnel.PublicMe)
 }
 
+function Read-LogTail {
+    # The last $MaxBytes of a log file as lines. Opened with full sharing so the writer (cloudflared) is not
+    # disturbed. When the read starts mid-file, the first (partial) line is dropped. Never throws.
+    param([string]$Path, [int]$MaxBytes = 65536)
+    if (-not $Path -or -not [System.IO.File]::Exists($Path)) { return @() }
+    $fs = $null
+    try {
+        $fs = New-Object System.IO.FileStream($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read,
+            ([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete))
+        $len = $fs.Length
+        $start = [Math]::Max([int64]0, $len - $MaxBytes)
+        [void]$fs.Seek($start, [System.IO.SeekOrigin]::Begin)
+        $buf = New-Object byte[] ([int]($len - $start))
+        $n = 0
+        while ($n -lt $buf.Length) {
+            $r = $fs.Read($buf, $n, $buf.Length - $n)
+            if ($r -le 0) { break }
+            $n += $r
+        }
+        $lines = [System.Text.Encoding]::UTF8.GetString($buf, 0, $n).Split([char]10)
+        $skip = 0
+        if ($start -gt 0) { $skip = 1 }
+        return @($lines | Select-Object -Skip $skip | ForEach-Object { $_.TrimEnd([char]13) })
+    } catch {
+        return @()
+    } finally {
+        if ($fs) { $fs.Dispose() }
+    }
+}
+
+function Get-TunnelNetworkVerdict {
+    # Reads cloudflared log lines (oldest first) and says what the network lets it do (N-0107):
+    #   'port-blocked' - at least $Threshold dial timeouts to the edge port 7844 since the last registered
+    #                    connection (or since the launch, when none registered)
+    #   'connected'    - a connection registered and fewer timeouts than that followed
+    #   'unknown'      - neither
+    # Plain string checks only (no regex).
+    param([string[]]$Lines, [int]$Threshold = 6)
+    $timeouts = 0
+    $registered = $false
+    foreach ($line in $Lines) {
+        if (-not $line) { continue }
+        if ($line.Contains('Registered tunnel connection')) { $registered = $true; $timeouts = 0; continue }
+        if ($line.Contains('dial tcp ') -and $line.Contains(':7844: i/o timeout')) { $timeouts++ }
+    }
+    if ($timeouts -ge $Threshold) { return 'port-blocked' }
+    if ($registered) { return 'connected' }
+    return 'unknown'
+}
+
+function Get-TunnelErrLogPath {
+    # cloudflared logs to stderr. A tunnel this supervisor launched knows its own err log; an adopted one
+    # (launched by an earlier supervisor) wrote to the newest tunnel err log in the log folder.
+    param($Comp)
+    if ($Comp.ErrLog -and -not $Comp.Adopted) { return $Comp.ErrLog }
+    $f = Get-ChildItem -Path $logDir -Filter 'tunnel*.err.log' -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name.EndsWith('.err.log') } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($f) { return $f.FullName }
+    return $null
+}
+
 function Invoke-Tunnel {
     param($All)
     $c = $Components.tunnel
@@ -750,21 +838,54 @@ function Invoke-Tunnel {
         Invoke-PublicCheck
         $detail = "/ready {0}; public /login {1}, /auth/me {2}; pid {3}" -f $ready, $tunnel.PublicLogin, $tunnel.PublicMe, $c.Pid
         if ($tunnel.PublicMe -eq 200) { return }   # handled as auth-open evidence on the next cycle
-        $readyStale  = $tunnel.LastReadyOk -and (($now - $tunnel.LastReadyOk).TotalMinutes -ge $TunnelDeadMinutes)
-        # Public failure restarts only once the public check has worked at least once in this
-        # supervisor's life, so a network that blocks trycloudflare cannot churn the address.
-        $publicStale = $tunnel.PublicEverOk -and $tunnel.LastPublicOk -and (($now - $tunnel.LastPublicOk).TotalMinutes -ge $TunnelDeadMinutes)
-        if (-not $readyStale -and -not $publicStale) {
-            if ($ready -eq 200 -and $tunnel.Hostname) { Set-Healthy $c $detail }
-            elseif (Test-InGrace $c) { Set-State $c 'starting' $detail }
-            else { Set-State $c 'unhealthy' $detail }
-            return
+        # N-0107: a network that drops outbound TCP 7844 makes every launch fail the same way; restarting
+        # only changes the public link. Hold the process (cloudflared keeps retrying by itself and keeps its
+        # hostname) and make one fresh launch per $TunnelBlockedRetryMinutes. /ready 200 ends the episode.
+        $blockedRetry = $false
+        if ($ready -eq 200) {
+            if ($tunnel.BlockedSince) {
+                Write-Log ("tunnel: connection registered; port 7844 no longer blocked (blocked since {0})" -f (Format-Time $tunnel.BlockedSince))
+                $tunnel.BlockedSince = $null; $tunnel.BlockedRetryAt = $null; $tunnel.BlockedReason = $null
+            }
+        } else {
+            $verdict = Get-TunnelNetworkVerdict @(Read-LogTail (Get-TunnelErrLogPath $c) $TunnelLogTailBytes) $TunnelBlockedDialErrors
+            if ($verdict -eq 'port-blocked') {
+                $tunnel.BlockedReason = 'network blocks tunnel port 7844 (outbound TCP)'
+                if (-not $tunnel.BlockedSince) {
+                    $tunnel.BlockedSince = $now
+                    $tunnel.BlockedRetryAt = $now.AddMinutes($TunnelBlockedRetryMinutes)
+                    Write-Log ("tunnel: cloudflared log shows {0}+ dial timeouts to port 7844 and no registered connection; holding the tunnel, next fresh attempt {1}" -f `
+                        $TunnelBlockedDialErrors, (Format-Time $tunnel.BlockedRetryAt))
+                }
+                if (-not $tunnel.BlockedRetryAt -or $now -lt $tunnel.BlockedRetryAt) {
+                    Set-State $c 'blocked' ("network blocks tunnel port 7844 (outbound TCP); not restarting. Blocked since {0}; next fresh attempt {1}; {2}" -f `
+                        (Format-Time $tunnel.BlockedSince), (Format-Time $tunnel.BlockedRetryAt), $detail)
+                    return
+                }
+                if (-not (Test-MayStart $c)) { return }
+                $why = "port 7844 blocked for {0} min; one fresh attempt" -f $TunnelBlockedRetryMinutes
+                Write-Log "tunnel: restarting ($why)"
+                Stop-QuickTunnels $why
+                $blockedRetry = $true
+            }
         }
-        if (-not (Test-MayStart $c)) { return }
-        $why = 'public /login failing for 10 min'
-        if ($readyStale) { $why = '/ready failing for 10 min' }
-        Write-Log "tunnel: restarting ($why)"
-        Stop-QuickTunnels $why
+        if (-not $blockedRetry) {
+            $readyStale  = $tunnel.LastReadyOk -and (($now - $tunnel.LastReadyOk).TotalMinutes -ge $TunnelDeadMinutes)
+            # Public failure restarts only once the public check has worked at least once in this
+            # supervisor's life, so a network that blocks trycloudflare cannot churn the address.
+            $publicStale = $tunnel.PublicEverOk -and $tunnel.LastPublicOk -and (($now - $tunnel.LastPublicOk).TotalMinutes -ge $TunnelDeadMinutes)
+            if (-not $readyStale -and -not $publicStale) {
+                if ($ready -eq 200 -and $tunnel.Hostname) { Set-Healthy $c $detail }
+                elseif (Test-InGrace $c) { Set-State $c 'starting' $detail }
+                else { Set-State $c 'unhealthy' $detail }
+                return
+            }
+            if (-not (Test-MayStart $c)) { return }
+            $why = 'public /login failing for 10 min'
+            if ($readyStale) { $why = '/ready failing for 10 min' }
+            Write-Log "tunnel: restarting ($why)"
+            Stop-QuickTunnels $why
+        }
     } else {
         if ($c.LastStart -or $tunnel.Hostname) { Set-State $c 'dead' 'cloudflared is not running' }
         if (-not (Test-MayStart $c)) { return }
@@ -782,6 +903,8 @@ function Invoke-Tunnel {
     $c.MetricsPort = $MetricsPort
     $tunnel.LastReadyOk = Get-Date
     $tunnel.LastPublicOk = Get-Date
+    # Inside a blocked episode every launch restarts the long back-off clock (N-0107).
+    if ($tunnel.BlockedSince) { $tunnel.BlockedRetryAt = (Get-Date).AddMinutes($TunnelBlockedRetryMinutes) }
     foreach ($i in 1..30) {
         Start-Sleep -Seconds 1
         Update-Hostname $MetricsPort
@@ -819,6 +942,13 @@ function Write-Status {
     }
     $url = $null
     if ($tunnel.Hostname) { $url = 'https://' + $tunnel.Hostname }
+    $blockedReason = $null
+    if ($Components.tunnel.State -eq 'blocked') { $blockedReason = $tunnel.BlockedReason }
+    $wc = $Components.worker
+    $workerListing = @{ CIP_LISTING_LIVE_FETCH = $null; CIP_LISTING_CAPTURE_SCHEDULE = $null }
+    if ($wc.ListingEnv) { $workerListing = $wc.ListingEnv; $workerEnvSource = 'launched by this supervisor' }
+    elseif ($wc.Adopted) { $workerEnvSource = 'adopted; env not known' }
+    else { $workerEnvSource = 'worker not running' }
     $status = [ordered]@{
         supervisor = [ordered]@{
             state = $SupervisorState; pid = $PID; started = (Format-Time $script:SupervisorStarted)
@@ -829,10 +959,20 @@ function Write-Status {
             hostname = $tunnel.Hostname; url = $url; since = (Format-Time $tunnel.HostnameSince)
             public_login = $tunnel.PublicLogin; public_auth_me = $tunnel.PublicMe
             public_checked = (Format-Time $tunnel.LastPublicCheck); closed_reason = $tunnel.ClosedReason
+            # N-0107: set while the tunnel is held because the network drops outbound TCP 7844.
+            blocked_reason = $blockedReason; blocked_since = (Format-Time $tunnel.BlockedSince)
+            next_fresh_attempt = (Format-Time $tunnel.BlockedRetryAt)
         }
+        # What the running worker was given at launch (null when adopted or not running: not known).
         env = [ordered]@{
-            CIP_LISTING_LIVE_FETCH_present = [bool]$env:CIP_LISTING_LIVE_FETCH
-            CIP_LISTING_CAPTURE_SCHEDULE_present = [bool]$env:CIP_LISTING_CAPTURE_SCHEDULE
+            scope = 'worker'
+            source = $workerEnvSource
+            CIP_LISTING_LIVE_FETCH_present = $workerListing['CIP_LISTING_LIVE_FETCH']
+            CIP_LISTING_CAPTURE_SCHEDULE_present = $workerListing['CIP_LISTING_CAPTURE_SCHEDULE']
+            supervisor_process = [ordered]@{
+                CIP_LISTING_LIVE_FETCH_present = [bool]$env:CIP_LISTING_LIVE_FETCH
+                CIP_LISTING_CAPTURE_SCHEDULE_present = [bool]$env:CIP_LISTING_CAPTURE_SCHEDULE
+            }
         }
         components = $comps
     }
@@ -847,10 +987,15 @@ function Get-LinkHtml {
     $loginUrl = ''
     if ($Status.link.url) { $loginUrl = $Status.link.url + '/login'; $link = $loginUrl }
     if ($Status.link.closed_reason) { $link = 'Tunnel closed: ' + $Status.link.closed_reason }
+    $blockedNote = ''
+    if ($Status.link.blocked_reason) {
+        $blockedNote = "<div class='blocked'>The public link does not work on this network: {0}. The supervisor keeps this link and does not restart the tunnel; cloudflared reconnects by itself when the network allows. Blocked since {1}; next fresh attempt {2}.</div>" -f `
+            (& $enc $Status.link.blocked_reason), (& $enc $Status.link.blocked_since), (& $enc $Status.link.next_fresh_attempt)
+    }
     $rows = foreach ($k in $Status.components.Keys) {
         $c = $Status.components[$k]
         $cls = 'bad'
-        if ($c.state -eq 'healthy') { $cls = 'ok' } elseif ($c.state -eq 'starting') { $cls = 'warn' }
+        if ($c.state -eq 'healthy') { $cls = 'ok' } elseif ($c.state -eq 'starting' -or $c.state -eq 'blocked') { $cls = 'warn' }
         $adopted = ''
         if ($c.adopted) { $adopted = 'adopted' }
         "<tr><td>{0}</td><td class='{1}'>{2}</td><td>{3}</td><td>{4}</td><td>{5}</td><td>{6}</td></tr>" -f `
@@ -869,11 +1014,13 @@ function Get-LinkHtml {
  .ok { color: #116611; font-weight: 600; } .warn { color: #8a6100; font-weight: 600; } .bad { color: #a40000; font-weight: 600; }
  #stale { display: none; background: #a40000; color: #fff; padding: 10px; font-weight: 600; margin-bottom: 12px; }
  .muted { color: #666; font-size: 13px; }
+ .blocked { background: #fff4d6; border: 1px solid #8a6100; color: #5c4100; padding: 10px; margin: 8px 0 12px; max-width: 900px; }
 </style></head><body>
 <div id="stale">Supervisor heartbeat is stale (more than 3 minutes old). The supervisor may have stopped; this page is out of date.</div>
 <div class="muted">CIP public link</div>
 <div class="link" id="link">$(& $enc $link)</div>
 <button onclick="navigator.clipboard.writeText(document.getElementById('link').textContent)">Copy</button>
+$blockedNote
 <p class="muted">Heartbeat $(& $enc $Status.supervisor.heartbeat) &middot; supervisor pid $(& $enc $Status.supervisor.pid) &middot; public /login $(& $enc $Status.link.public_login), /api/v1/auth/me $(& $enc $Status.link.public_auth_me)</p>
 <table><tr><th>Component</th><th>State</th><th>PID</th><th></th><th>Launches</th><th>Detail</th></tr>
 $($rows -join "`n")

@@ -1,7 +1,7 @@
 # Plan (Phase 1b-e AI import resolver):
 # - Single generic resolver for all import types; no import-type-specific branches.
 # - Every public entry checks Settings.ai_assist_enabled before any API call.
-# - Anthropic client lazy-imported; failures log and return None (never raise).
+# - Anthropic client lazy-imported; a missing client raises AiResolverUnavailable; API-call failures still log and return None.
 
 from __future__ import annotations
 
@@ -52,20 +52,22 @@ def _ai_enabled() -> bool:
     return bool(get_settings().ai_assist_enabled)
 
 
+class AiResolverUnavailable(RuntimeError):
+    """Raised when AI assist is on and the Anthropic client cannot be built."""
+
 def _anthropic_client():
     if not _ai_enabled():
         return None
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = os.environ.get('ANTHROPIC_API_KEY')
     if not api_key:
-        logger.warning("AI assist enabled but ANTHROPIC_API_KEY is not set")
-        return None
+        logger.error("AI assist enabled but the Anthropic client key is missing")
+        raise AiResolverUnavailable('AI assist is enabled but the Anthropic client key is missing')
     try:
         import anthropic  # type: ignore[import-untyped]
     except ImportError:
-        logger.warning("AI assist enabled but anthropic package is not installed")
-        return None
+        logger.error("AI assist enabled but the anthropic package is not installed")
+        raise AiResolverUnavailable('AI assist is enabled but the anthropic package is not installed')
     return anthropic.Anthropic(api_key=api_key)
-
 
 def _extract_json_object(text: str) -> dict[str, Any] | None:
     text = (text or "").strip()
@@ -102,6 +104,8 @@ def _call_claude(*, system: str, user: str) -> dict[str, Any] | None:
             if getattr(block, "type", None) == "text":
                 parts.append(getattr(block, "text", "") or "")
         return _extract_json_object("".join(parts))
+    except AiResolverUnavailable:
+        raise
     except Exception as exc:  # noqa: BLE001
         logger.warning("AI import resolver API call failed: %s", exc)
         return None

@@ -8,12 +8,13 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
 from app.core.security import get_optional_current_user
 from app.core.tenant_scope import tenant_id_from_user
-from app.models.saved_reports import SavedReport
+from app.models.saved_reports import OverviewReportPin, SavedReport
 from app.services.saved_report_access import (
     can_edit_owned_item,
     can_view_owned_item,
@@ -91,8 +92,8 @@ async def list_saved_reports(
     if visibility in ("personal", "published"):
         q = q.where(SavedReport.visibility == visibility)
     rows = (await db.execute(q)).scalars().all()
-    items = [
-        item_to_dict(r, kind="report")
+    visible = [
+        r
         for r in rows
         if can_view_owned_item(
             visibility=r.visibility,
@@ -100,6 +101,20 @@ async def list_saved_reports(
             shared_roles=r.shared_roles,
             user=user,
         )
+    ]
+    pinned_ids: set[int] = set()
+    uid = parse_user_id(user)
+    if uid is not None and visible:
+        pinned_ids = set(
+            (
+                await db.execute(
+                    select(OverviewReportPin.saved_report_id).where(OverviewReportPin.user_id == uid)
+                )
+            ).scalars().all()
+        )
+    items = [
+        {**item_to_dict(r, kind="report"), "overview_pinned": int(r.id) in pinned_ids}
+        for r in visible
     ]
     return {"items": items, "count": len(items)}
 
@@ -154,6 +169,72 @@ async def get_saved_report(
     ):
         raise HTTPException(status_code=403, detail="Not allowed to view this report")
     return item_to_dict(row, kind="report")
+
+
+async def _viewable_report(db: AsyncSession, report_id: int, user: dict | None) -> SavedReport:
+    tid = tenant_id_from_user(user)
+    row = await db.get(SavedReport, report_id)
+    if row is None or row.tenant_id != tid:
+        raise HTTPException(status_code=404, detail="Saved report not found")
+    if not can_view_owned_item(
+        visibility=row.visibility,
+        owner_user_id=row.owner_user_id,
+        shared_roles=row.shared_roles,
+        user=user,
+    ):
+        raise HTTPException(status_code=403, detail="Not allowed to view this report")
+    return row
+
+
+@router.put("/{report_id}/overview-pin")
+async def pin_saved_report_on_overview(
+    report_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: dict | None = Depends(get_optional_current_user),
+) -> dict[str, Any]:
+    uid = parse_user_id(user)
+    if uid is None:
+        raise HTTPException(status_code=401, detail="Sign in to pin a report")
+    row = await _viewable_report(db, report_id, user)
+    existing = (
+        await db.execute(
+            select(OverviewReportPin).where(
+                OverviewReportPin.user_id == uid,
+                OverviewReportPin.saved_report_id == row.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is None:
+        db.add(OverviewReportPin(user_id=uid, saved_report_id=int(row.id)))
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+    return {"saved_report_id": int(row.id), "overview_pinned": True}
+
+
+@router.delete("/{report_id}/overview-pin")
+async def unpin_saved_report_from_overview(
+    report_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: dict | None = Depends(get_optional_current_user),
+) -> dict[str, Any]:
+    uid = parse_user_id(user)
+    if uid is None:
+        raise HTTPException(status_code=401, detail="Sign in to unpin a report")
+    row = await _viewable_report(db, report_id, user)
+    existing = (
+        await db.execute(
+            select(OverviewReportPin).where(
+                OverviewReportPin.user_id == uid,
+                OverviewReportPin.saved_report_id == row.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        await db.delete(existing)
+        await db.commit()
+    return {"saved_report_id": int(row.id), "overview_pinned": False}
 
 
 @router.patch("/{report_id}")

@@ -50,6 +50,8 @@ const populated: Payload = {
   shipped_units: 1,
   landed_lines: 2,
   landed_units: 1,
+  arrived_lines: 1,
+  arrived_units: 7,
   overdue_commercial_lines: 546,
   po_observed: 2308,
   po_linked: 322,
@@ -61,6 +63,16 @@ const populated: Payload = {
     { state: 'Landed (POD)', count: 2, units: 1 },
   ],
   po_by_distributor: [{ distributor: 'Highveld', observed_pos: 10, linked_pos: 4, covered: 0.4 }],
+  plan_unit_po_by_distributor: [
+    {
+      distributor_id: 4,
+      distributor: 'Highveld Wholesale',
+      plan_units: 100,
+      covered_units: 64,
+      backlog_units: 36,
+      covered: 0.64,
+    },
+  ],
   labels: {
     open_lines: 'Open shipments',
     eta_past_no_pod_lines: 'Unreceived past ETA',
@@ -101,8 +113,11 @@ describe('SupplyOverview', () => {
     expect(screen.getByText('Backlog units')).toBeInTheDocument();
     expect(screen.getAllByText('PO coverage').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('322 of 2308 observed POs linked — not plan units covered')).toBeInTheDocument();
+    expect(screen.getByText('Plan-unit coverage by distributor')).toBeInTheDocument();
+    expect(screen.getByText(/backlog/)).toBeInTheDocument();
+    expect(screen.getByText('64 covered / 100 plan · backlog 36')).toBeInTheDocument();
     expect(screen.getByTestId('lifecycle-bars')).toBeInTheDocument();
-    expect(screen.getByTestId('proportion-bar')).toBeInTheDocument();
+    expect(screen.getAllByTestId('proportion-bar').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('770 Inbound shipments unreceived past ETA')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Inbound shipments unreceived past ETA/ })).toHaveAttribute(
       'href',

@@ -196,8 +196,8 @@ export function CatalogDimensionGridPanel({ config }: { config: CatalogDimension
         <ModuleDataSection
           intro={
             <>
-              Master list in <strong>{config.tableName}</strong>. Deleting a row blocked by downstream references
-              shows which areas still point at this {config.dimensionTitle.toLowerCase()}.
+              {config.dimensionTitle} list. If a delete is blocked, the message names what still uses this{' '}
+              {config.dimensionTitle.toLowerCase()}.
             </>
           }
           isLoading={isLoading}

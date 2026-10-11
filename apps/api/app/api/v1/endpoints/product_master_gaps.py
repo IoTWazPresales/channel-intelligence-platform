@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
+from app.core.security import Role, require_roles
 from app.db.session_sync import SessionLocal
 from app.services.imports.product_master_gap_resolve import (
     apply_gap_resolve,
@@ -18,6 +19,9 @@ from app.services.imports.product_master_gap_resolve import (
 from app.services.imports.product_master_gap_worklist import product_master_gap_worklist
 
 router = APIRouter()
+
+# N-0086: steward writes need steward or admin (admin always passes require_roles); reads stay sign-in only.
+_STEWARD_WRITE = [Depends(require_roles(Role.ADMIN, Role.STEWARD))]
 
 
 class TokensBody(BaseModel):
@@ -37,7 +41,7 @@ def _actor(x_user_id: str | None) -> str:
 @router.get("/worklist")
 async def get_product_master_gap_worklist(
     db: AsyncSession = Depends(get_db),
-    source: Literal["shipment", "dsi", "cpor_claim", "cst"] | None = Query(default=None),
+    source: Literal["shipment", "dsi", "cpor_claim", "cst", "pricing"] | None = Query(default=None),
     status: Literal["unresolved", "ignored"] | None = Query(default=None),
     search: str | None = Query(default=None, max_length=128),
     limit: int = Query(default=2000, ge=1, le=5000),
@@ -52,7 +56,7 @@ async def get_product_master_gap_worklist(
     )
 
 
-@router.post("/scan")
+@router.post("/scan", dependencies=_STEWARD_WRITE)
 def post_gap_scan(limit: int = Query(default=500, ge=1, le=2000)):
     """On-demand: find open gap tokens that now exact-match Product Master."""
     with SessionLocal() as session:
@@ -65,7 +69,7 @@ def post_gap_scan(limit: int = Query(default=500, ge=1, le=2000)):
             ) from exc
 
 
-@router.post("/preview")
+@router.post("/preview", dependencies=_STEWARD_WRITE)
 def post_gap_preview(body: TokensBody):
     """Read-only preview: match + counts by source. No writes."""
     with SessionLocal() as session:
@@ -78,7 +82,7 @@ def post_gap_preview(body: TokensBody):
             ) from exc
 
 
-@router.post("/apply")
+@router.post("/apply", dependencies=_STEWARD_WRITE)
 def post_gap_apply(
     body: ApplyBody,
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),

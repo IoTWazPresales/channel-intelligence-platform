@@ -8,6 +8,7 @@ import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
+import { useTheme } from '@mui/material/styles';
 
 import { apiPost, apiUrl, safeDisplayError } from '@/lib/api';
 import { setAuthToken } from '@/lib/authSession';
@@ -27,6 +28,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const theme = useTheme();
+  const darkPage = theme.palette.mode === 'dark';
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -59,7 +62,9 @@ export default function LoginPage() {
         display: 'grid',
         placeItems: 'center',
         px: 2,
-        background: 'linear-gradient(160deg, #0f172a 0%, #1e293b 45%, #334155 100%)',
+        background: darkPage
+          ? 'linear-gradient(160deg, #0f172a 0%, #1e293b 45%, #334155 100%)'
+          : 'linear-gradient(160deg, #f3f5f7 0%, #e8edf1 45%, #d5dee6 100%)',
       }}
     >
       <Box
@@ -110,7 +115,7 @@ export default function LoginPage() {
             {busy ? 'Signing in…' : 'Sign in'}
           </Button>
           <Typography variant="body2" color="text.secondary" data-testid="login-forgot-password">
-            Forgot password? Ask an admin to use <strong>Reset password</strong> on Administration → Users & roles.
+            Forgot password? Ask an admin to send you a new set-password link from Administration → Users.
           </Typography>
           {/* Never print seed credentials on this page: it is the public entry point in session mode. */}
           {process.env.NODE_ENV !== 'production' ? (

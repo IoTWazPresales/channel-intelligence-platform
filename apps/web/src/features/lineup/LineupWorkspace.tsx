@@ -45,9 +45,9 @@ export function LineupWorkspace() {
       >
         <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
           <LineupPlanGrid rows={scoped} pendingOnly={pendingOnly} />
-          <LineupPlanActionBar />
         </Box>
       </ModuleDataSection>
+      <LineupPlanActionBar />
     </Box>
   );
 }

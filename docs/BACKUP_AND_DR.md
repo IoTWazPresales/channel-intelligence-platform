@@ -57,8 +57,8 @@ Optional alternate (needs a role with `CREATEDB`, via env `CIP_PG_ADMIN_URL`): c
 
 ## Monitoring hooks
 
-- Liveness: `GET http://localhost:8001/health`
-- Readiness: `GET http://localhost:8001/health/ready` (DB ping)
+- Liveness: `GET http://127.0.0.1:8001/health`
+- Readiness: `GET http://127.0.0.1:8001/health/ready` (DB ping)
 - Operator UI: `/admin/ops` — failed import jobs + readiness chip
 
 ## Proof log
@@ -71,6 +71,14 @@ Optional alternate (needs a role with `CREATEDB`, via env `CIP_PG_ADMIN_URL`): c
 | 2026-08-12 | `restore_cip_smoke.ps1` → `cip_alembic_smoke` | `RESTORE_SMOKE_OK` dim_product=18177 import_job=340 alembic=`20260812_0014` (parity with live cip) |
 | 2026-08-14 | `backup_cip.ps1` → `.tmp/backups/cip_20260814_171118.dump` (~261 MB) | OK |
 | 2026-08-14 | `restore_cip_smoke.ps1` → `cip_alembic_smoke` | `RESTORE_SMOKE_OK` dim_product=18177 import_job=341 alembic=`20260814_0016` (parity with live cip) |
+| 2026-09-30 | Readable-table `pg_dump -Fc` as role `cip` after `current_database()=cip` → `.tmp/backups/cip_n0052_exclude_fx.dump` (123 tables, 129,416,904 bytes, dump 62.3s) | OK with a gap: `fx_daily_rate` and `fx_daily_rate_id_seq` omitted. Owner is `postgres`, `cip` has no SELECT, `reltuples=-1`. A GRANT on `cip` was not run. `backup_cip.ps1` still fails on `LOCK TABLE fx_daily_rate`. |
+| 2026-09-30 | `restore_cip_smoke.ps1` → `cip_alembic_smoke` (restore 202.7s) | `RESTORE_SMOKE_OK database=cip_alembic_smoke dim_product=18177 import_job=589 alembic=20260906_0022 live_cip_dim_product=18177`. One ignored `pg_restore` error: gist exclusion on `customer_article_alias` because the table-only dump does not recreate extension `btree_gist`. |
+
+### N-0052 measured (2026-09-30)
+
+- **RPO:** last successful dump of the tables role `cip` can read. Dump window 62.3s. Target stays "last successful dump before risky ops". This proof is not a full-database dump.
+- **RTO:** disposable restore of that dump took 202.7s. That is the data-restore portion. Stopping writers and restarting API/web is still inside the 30–90 min operator target.
+- **Parity:** `dim_product` 18177 on the clone equals live `cip` 18177. Clone `import_job` 589, Alembic `20260906_0022`. Live `cip` was not written.
 
 ## Out of scope (deferred with hosting)
 

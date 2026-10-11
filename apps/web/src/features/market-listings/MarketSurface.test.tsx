@@ -47,6 +47,10 @@ describe('MarketSurface', () => {
     await waitFor(() => expect(screen.getByTestId('market-surface')).toBeInTheDocument());
     expect(screen.getByRole('heading', { name: /Market & Listings/i })).toBeInTheDocument();
     expect(screen.getByTestId('market-listings-lens')).toBeInTheDocument();
+    expect(screen.getByTestId('listing-last-check')).toHaveTextContent(
+      'Checks run every 30 minutes while this computer is running',
+    );
+    expect(screen.getByTestId('listing-last-check')).toHaveTextContent('Last check: not yet');
     expect(screen.getByTestId('market-add-listing')).toBeInTheDocument();
     expect(screen.queryByText(/static JSON stub/i)).toBeNull();
   });

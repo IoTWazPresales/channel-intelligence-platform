@@ -28,7 +28,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy.types import JSON
 
 from app.models.commercial_planner import CommercialCustomerTerm
-from app.models.derived import PricingRecommendation
 from app.models.dimensions import DimCustomer, DimDistributor
 from app.models.fact_demand_forecast import FactDemandForecast
 from app.models.facts import (
@@ -78,6 +77,9 @@ INBOUND_GRID_DEFAULT_FACT_KEYS: frozenset[str] = frozenset(
 INBOUND_OPTIONAL_LABEL_OVERRIDES: dict[str, str] = {
     "customer_dealer_token": "Customer remarks (source)",
 }
+# Computed on read by shipping /lines (N-0071, D-0065): an open line's quantity not yet shipped by its
+# strict shipped twins (the stored quantity when it has none); blank on shipped / arrived lines.
+INBOUND_STATIC_KEYS: tuple[tuple[str, str], ...] = (("still_to_ship", "Still to ship"),)
 
 # Computed-row grids (pass 2): optional keys of rows built by the named serializer, which is not an
 # ORM row. Default grid columns are not listed. ``tests/test_grid_fields.py`` builds a row with that
@@ -168,6 +170,7 @@ GRID_FIELDS: dict[str, GridFieldSpec] = {
         default_keys=INBOUND_GRID_DEFAULT_FACT_KEYS,
         joined_extras=CUSTOMER_CODE_REFERENCE + DISTRIBUTOR_CODE_REFERENCE,
         label_overrides=INBOUND_OPTIONAL_LABEL_OVERRIDES,
+        static_keys=INBOUND_STATIC_KEYS,
         auto_hide=False,
     ),
     "sellout.commercial-lines": GridFieldSpec(
@@ -186,13 +189,6 @@ GRID_FIELDS: dict[str, GridFieldSpec] = {
         model=FactPricing,
         default_keys=frozenset({"effective_date", "list_price", "net_price"}),
         joined_extras=CUSTOMER_REFERENCE,
-        identity=PRODUCT_IDENTITY,
-    ),
-    "pricing.recommendations": GridFieldSpec(
-        model=PricingRecommendation,
-        default_keys=frozenset({"suggested_state", "explanation_summary", "confidence"}),
-        # reviewed_by names a person (user id / email) — [PII]-like, not a grid column.
-        hidden_internal=frozenset({"reviewed_by"}),
         identity=PRODUCT_IDENTITY,
     ),
     "buy-plans": GridFieldSpec(

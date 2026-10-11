@@ -207,7 +207,7 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
           onClose={() => importClaims.reset()}
           data-testid="settlement-desk-import-summary"
         >
-          Upserted {importClaims.data.import.rows_upserted} claim row(s); updated{' '}
+          Wrote {importClaims.data.import.rows_upserted} claim row(s); updated{' '}
           {importClaims.data.rollup?.lines_updated ?? 0} line(s). Unresolved:{' '}
           {importClaims.data.import.unresolved_product_rows}; out-of-window:{' '}
           {importClaims.data.import.out_of_window_rows}.

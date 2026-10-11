@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 import os
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 
 from app.models.cst_listing_seed import CstListingSeed
 from app.models.dimensions import DimProduct
@@ -31,6 +33,16 @@ from app.services.listing_capture.takealot_fetch import extract_plid
 
 # Takealot fetch reasons meaning "the REST details call 404'd and EAN recovery failed".
 _TAKEALOT_UNRESOLVED_REASONS = frozenset({"plid_not_found", "ean_not_unique_or_missing"})
+
+_log = logging.getLogger(__name__)
+
+# Snapshot policy (Warren, 2026-10-08, N-0101; all retailers): store the raw page
+# snapshot only when the extracted fields changed versus the listing's previous
+# successful observation (HTTP 200 + parse ok), on its first observation, or when the
+# fetch or parse failed. An unchanged observation is stored without a payload and says
+# so in ``parse_flags.snapshot_skipped`` (re-parse then has nothing to read).
+# Snapshots older than 90 days are cleared by ``snapshot_retention`` (payload only).
+SNAPSHOT_SKIPPED_UNCHANGED = "unchanged"
 
 
 def _listing_capture_schedule_enabled_from_env() -> bool:
@@ -347,15 +359,123 @@ def last_ok_fetch_by_listing(session: Session, listing_ids: list[int]) -> dict[i
     return {int(lid): at for lid, at in rows if at is not None}
 
 
+def _listing_meta(listing: Any) -> dict[str, Any]:
+    meta = getattr(listing, "meta_json", None)
+    return dict(meta) if isinstance(meta, dict) else {}
+
+
+def listing_consecutive_failures(listing: Any) -> int:
+    """Consecutive dead (404/410) results, kept in ``meta_json`` until U2's M4 column."""
+    try:
+        return max(0, int(_listing_meta(listing).get("consecutive_failures") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _listing_last_failure_at(listing: Any) -> datetime | None:
+    raw = _listing_meta(listing).get("last_failure_at")
+    if raw:
+        try:
+            at = datetime.fromisoformat(str(raw))
+            return at if at.tzinfo else at.replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
+    return getattr(listing, "status_observed_at", None)
+
+
+def listing_in_dead_link_backoff(listing: Any, *, now: datetime | None = None) -> bool:
+    return should_backoff_dead_link(
+        consecutive_dead=listing_consecutive_failures(listing),
+        last_fetch_at=_listing_last_failure_at(listing),
+        now=now,
+    )
+
+
+def _seen_in_stock(availability: str | None) -> bool:
+    a = (availability or "").strip().lower().replace("_", " ")
+    return "out" not in a and ("in stock" in a or a == "instock")
+
+
+def previous_successful_observation(session: Session, listing_id: int | None) -> ListingObservation | None:
+    """The listing's latest HTTP-200 + parse-ok observation (snapshot payload not loaded)."""
+    if listing_id is None:
+        return None
+    stmt = (
+        select(ListingObservation)
+        .options(defer(ListingObservation.raw_snapshot))
+        .where(
+            ListingObservation.listing_id == listing_id,
+            ListingObservation.http_status == 200,
+            ListingObservation.parse_status == "ok",
+        )
+        .order_by(ListingObservation.fetched_at.desc(), ListingObservation.id.desc())
+        .limit(1)
+    )
+    prev = session.scalars(stmt).first()
+    # Anything that is not a stored observation (e.g. a mocked session) counts as "no
+    # previous observation", which keeps the snapshot: the safe direction.
+    return prev if isinstance(prev, ListingObservation) else None
+
+
+def _price_key(value: Any) -> str | None:
+    """Price as stored (Numeric(18, 4)), so a float parse and a DB Decimal compare equal."""
+    if value is None:
+        return None
+    try:
+        return str(Decimal(str(value)).quantize(Decimal("0.0001")))
+    except (InvalidOperation, ValueError):
+        return str(value)
+
+
+def extraction_unchanged(prev: ListingObservation | None, *, parsed: Any, parser_version: str) -> bool:
+    """True when ``parsed`` extracts exactly what ``prev`` holds.
+
+    Compared: parser version, price, availability, promo badge, and every key the parser
+    put in its own flags (method, VAT basis, Takealot PLID/TSIN/SKU, RRP, canonical URL,
+    SKU match, ...). Fetch-side flags, CPOR activation and status transitions are not
+    extracted fields and are not compared.
+    """
+    if prev is None or getattr(parsed, "parse_status", None) != "ok":
+        return False
+    if (prev.parser_version or "") != (parser_version or ""):
+        return False
+    if _price_key(prev.extracted_price) != _price_key(parsed.price):
+        return False
+    if (prev.extracted_availability or None) != (parsed.availability or None):
+        return False
+    if (prev.extracted_promo_badge or None) != (parsed.promo_badge or None):
+        return False
+    prev_flags = prev.parse_flags if isinstance(prev.parse_flags, dict) else {}
+    for key, value in (parsed.flags or {}).items():
+        if prev_flags.get(key) != value:
+            return False
+    return True
+
+
 def record_observation(
     session: Session,
     listing: CustomerListing,
     *,
     http_get=None,
-    consecutive_dead: int = 0,
+    consecutive_dead: int | None = None,
 ) -> ListingObservation:
-    """Fetch (mocked) + compress + parse. Parse failure retains snapshot."""
-    if should_backoff_dead_link(consecutive_dead=consecutive_dead, last_fetch_at=listing.status_observed_at):
+    """Fetch (mocked) + compress + parse. Parse failure retains snapshot.
+
+    Snapshot policy (2026-10-08): the payload is kept on the first observation, when the
+    fetch or parse failed, when the extracted fields changed versus the previous
+    successful observation, or on a status transition; otherwise the row is stored with
+    ``raw_snapshot=None`` and ``parse_flags.snapshot_skipped='unchanged'``. Kept rows say
+    why in ``parse_flags.snapshot_stored``.
+
+    ``consecutive_dead`` defaults to the listing's tracked ``meta_json.consecutive_failures``.
+    Status transitions are written on the observation as ``parse_flags.status_transition``.
+    """
+    if consecutive_dead is None:
+        consecutive_dead = listing_consecutive_failures(listing)
+        backoff_from = _listing_last_failure_at(listing)
+    else:
+        backoff_from = listing.status_observed_at
+    if should_backoff_dead_link(consecutive_dead=consecutive_dead, last_fetch_at=backoff_from):
         obs = ListingObservation(
             listing_id=listing.id,
             fetched_at=_now(),
@@ -421,6 +541,23 @@ def record_observation(
     )
     flags["cpor_activation"] = activation
 
+    # Snapshot policy: look up the previous successful observation BEFORE this one is
+    # added (autoflush would otherwise let the query find this observation itself).
+    fetch_ok = status == 200 and not fetch_flags.get("reason")
+    prev_ok = None
+    if fetch_ok and parsed.parse_status == "ok":
+        prev_ok = previous_successful_observation(session, getattr(listing, "id", None))
+    if not fetch_ok:
+        snapshot_reason = "fetch_failed"
+    elif parsed.parse_status != "ok":
+        snapshot_reason = "parse_failed"
+    elif prev_ok is None:
+        snapshot_reason = "first_observation"
+    elif extraction_unchanged(prev_ok, parsed=parsed, parser_version=PARSER_VERSION):
+        snapshot_reason = None
+    else:
+        snapshot_reason = "changed"
+
     obs = ListingObservation(
         listing_id=listing.id,
         fetched_at=fetched_at,
@@ -458,16 +595,70 @@ def record_observation(
         link_dead = status in (404, 410)
         if status == 200 and parsed.parse_status == "ok":
             _write_back_verified_url(session, listing, url=None, verified_at=fetched_at)
-    if link_dead and parsed.parse_status != "ok":
-        set_listing_status(session, listing, status="dead_link")
+    prev_status = (getattr(listing, "status", None) or "").strip().lower()
+    new_status: str | None = None
+    reason: str | None = None
+    dead = bool(link_dead and parsed.parse_status != "ok")
+    if dead:
+        new_status, reason = "dead_link", "dead_link"
     elif parsed.availability and "out" in parsed.availability.lower():
-        set_listing_status(session, listing, status="out_of_stock")
+        new_status, reason = "out_of_stock", "out_of_stock"
+    elif parsed.parse_status == "ok" and prev_status == "out_of_stock" and _seen_in_stock(parsed.availability):
+        new_status, reason = "active", "restocked"
+    elif parsed.parse_status == "ok" and prev_status == "dead_link":
+        new_status, reason = "active", "link_recovered"
+    transitioned = False
+    if new_status is not None:
+        if new_status != prev_status:
+            transitioned = True
+            obs.parse_flags = {
+                **flags,
+                "status_transition": {"from": prev_status or None, "to": new_status, "reason": reason},
+            }
+        set_listing_status(session, listing, status=new_status, observed_at=fetched_at)
+
+    # A status transition keeps the page even when the extracted fields match (e.g. a
+    # dead link that recovers with the same price): it is the evidence for the change.
+    if snapshot_reason is None and transitioned:
+        snapshot_reason = "status_transition"
+    obs_flags = dict(obs.parse_flags or {})
+    if snapshot_reason is None:
+        obs.raw_snapshot = None
+        obs_flags["snapshot_skipped"] = SNAPSHOT_SKIPPED_UNCHANGED
+        obs_flags["unchanged_since_observation_id"] = getattr(prev_ok, "id", None)
+    else:
+        obs_flags["snapshot_stored"] = snapshot_reason
+    obs.parse_flags = obs_flags
+
+    # Consecutive dead results drive the dead-link back-off (should_backoff_dead_link).
+    meta = _listing_meta(listing)
+    if dead:
+        meta["consecutive_failures"] = listing_consecutive_failures(listing) + 1
+        meta["last_failure_at"] = fetched_at.isoformat()
+        listing.meta_json = meta
+    elif parsed.parse_status == "ok" and ("consecutive_failures" in meta or "last_failure_at" in meta):
+        meta.pop("consecutive_failures", None)
+        meta.pop("last_failure_at", None)
+        listing.meta_json = meta
     session.flush()
     return obs
 
 
 def reparse_observation(session: Session, observation: ListingObservation, *, marketplace: str) -> ListingObservation:
-    """Re-run parser on stored snapshot — no re-fetch. Re-evaluate CPOR activation."""
+    """Re-run parser on stored snapshot — no re-fetch. Re-evaluate CPOR activation.
+
+    An observation without a payload (stored unchanged, or cleared after 90 days) is
+    skipped: it is returned as it is, so its extracted fields are never overwritten by a
+    parse of nothing.
+    """
+    if not getattr(observation, "raw_snapshot", None):
+        flags = observation.parse_flags if isinstance(getattr(observation, "parse_flags", None), dict) else {}
+        _log.info(
+            "listing capture: reparse skipped for observation %s (no stored snapshot: %s)",
+            getattr(observation, "id", None),
+            flags.get("snapshot_skipped") or ("cleared" if flags.get("snapshot_cleared") else "none"),
+        )
+        return observation
     text = decompress_snapshot(observation.raw_snapshot)
     listing_id = getattr(observation, "listing_id", None)
     listing_for_sku = session.get(CustomerListing, listing_id) if listing_id is not None else None
@@ -593,41 +784,172 @@ def list_recent_observations(
     return [observation_to_dict(obs, listing) for obs, listing in rows]
 
 
+# Statuses the poller checks (N-0085 design "Registry"). dead_link listings are retried
+# until the back-off (3 consecutive dead results, then 24 h) holds them to once a day.
+POLLED_LISTING_STATUSES: tuple[str, ...] = ("active", "out_of_stock", "dead_link")
+
+
+def _interleave_by_marketplace(listings: list[CustomerListing]) -> list[CustomerListing]:
+    """Round-robin across marketplaces, keeping each marketplace's oldest-due order."""
+    lanes: dict[str, list[CustomerListing]] = {}
+    for listing in listings:
+        lanes.setdefault((listing.marketplace or "").strip().lower(), []).append(listing)
+    out: list[CustomerListing] = []
+    depth = max((len(v) for v in lanes.values()), default=0)
+    for i in range(depth):
+        for lane in lanes.values():
+            if i < len(lane):
+                out.append(lane[i])
+    return out
+
+
 def poll_active_listings(
     session: Session,
     *,
     marketplaces: list[str] | None = None,
     http_get=None,
     limit: int | None = None,
+    time_limit_seconds: float | None = None,
+    pause_store=None,
+    clock=None,
+    sleep=None,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
-    """Synchronous poll for active listings — used by API + Celery task."""
+    """Synchronous poll — used by API + Celery task.
+
+    - Checks ``active``, ``out_of_stock`` and ``dead_link`` listings (dead links in
+      back-off are skipped without writing a row).
+    - Oldest-due first (oldest last real observation, never-checked first), then
+      round-robin across marketplaces.
+    - Spacing is per marketplace (time since that site's previous request).
+    - A 403/429 from a site pauses that site (``site_pause``): no more requests to it
+      this run, and later runs skip it until the pause ends.
+    - Stops starting new fetches after ``time_limit_seconds`` (default 10 min).
+    """
+    import logging
     import time
 
-    from app.services.listing_capture.observation import RATE_LIMIT_SECONDS, default_http_get
+    from app.services.listing_capture import site_pause
+    from app.services.listing_capture.observation import (
+        DEFAULT_RATE_LIMIT_SECONDS,
+        POLL_RUN_TIME_LIMIT_SECONDS,
+        RATE_LIMIT_SECONDS,
+        SITE_PAUSE_HTTP_STATUSES,
+        default_http_get,
+    )
 
+    log = logging.getLogger(__name__)
     getter = http_get or default_http_get
-    stmt = select(CustomerListing).where(CustomerListing.status == "active").order_by(CustomerListing.id)
+    clock = clock or time.monotonic
+    sleep = sleep or time.sleep
+    store = pause_store if pause_store is not None else site_pause.default_site_pause_store()
+    run_now = now or _now()
+    limit_s = POLL_RUN_TIME_LIMIT_SECONDS if time_limit_seconds is None else float(time_limit_seconds)
+
+    last_seen = (
+        select(func.max(ListingObservation.fetched_at))
+        .where(
+            ListingObservation.listing_id == CustomerListing.id,
+            ListingObservation.parse_status != "skipped",
+        )
+        .correlate(CustomerListing)
+        .scalar_subquery()
+    )
+    stmt = (
+        select(CustomerListing)
+        .where(CustomerListing.status.in_(POLLED_LISTING_STATUSES))
+        .order_by(last_seen.asc().nulls_first(), CustomerListing.id)
+    )
     if marketplaces:
         want = {m.strip().lower() for m in marketplaces if m and m.strip()}
         if want:
             stmt = stmt.where(CustomerListing.marketplace.in_(want))
-    listings = list(session.scalars(stmt).all())
+    listings = _interleave_by_marketplace(list(session.scalars(stmt).all()))
     if limit is not None:
         listings = listings[: int(limit)]
 
+    started = clock()
     polled = 0
     failed = 0
-    last_mkt: str | None = None
+    skipped_backoff = 0
+    skipped_paused: dict[str, int] = {}
+    paused_sites: dict[str, dict[str, Any]] = {}
+    stopped_reason: str | None = None
+    last_fetch_at: dict[str, float] = {}
+    pause_checked: set[str] = set()
+    had_pause_record: set[str] = set()
+
     for listing in listings:
+        if clock() - started >= limit_s:
+            stopped_reason = "time_limit"
+            break
         mkt = (listing.marketplace or "").strip().lower()
-        delay = float(RATE_LIMIT_SECONDS.get(mkt, 1.0))
-        if last_mkt is not None and delay > 0:
-            time.sleep(delay)
-        last_mkt = mkt
+        if mkt not in pause_checked:
+            pause_checked.add(mkt)
+            until = site_pause.paused_until(store, mkt, now=run_now)
+            if until is not None:
+                paused_sites[mkt] = {"until": until.isoformat(), "paused_this_run": False}
+            elif site_pause.has_pause_record(store, mkt):
+                had_pause_record.add(mkt)
+        if mkt in paused_sites:
+            skipped_paused[mkt] = skipped_paused.get(mkt, 0) + 1
+            continue
+        if listing_in_dead_link_backoff(listing, now=run_now):
+            skipped_backoff += 1
+            continue
+
+        spacing = float(RATE_LIMIT_SECONDS.get(mkt, DEFAULT_RATE_LIMIT_SECONDS))
+        if mkt in last_fetch_at and spacing > 0:
+            wait = spacing - (clock() - last_fetch_at[mkt])
+            if wait > 0:
+                if clock() - started + wait >= limit_s:
+                    stopped_reason = "time_limit"
+                    break
+                sleep(wait)
+
+        refused: list[int] = []
+
+        def guarded_get(url: str, _refused: list[int] = refused) -> tuple[int, str]:
+            # After a refusal, send nothing more to this site (a Takealot check makes 2-3 calls).
+            if _refused:
+                return _refused[0], ""
+            status, body = getter(url)
+            if status in SITE_PAUSE_HTTP_STATUSES:
+                # A refusal page is not a product page: never parse a price from it.
+                _refused.append(int(status))
+                return status, ""
+            return status, body
+
+        obs = None
         try:
-            record_observation(session, listing, http_get=getter)
+            # Back-off was decided above (consecutive_dead=0 stops a second, clock-skewed check).
+            obs = record_observation(session, listing, http_get=guarded_get, consecutive_dead=0)
             polled += 1
         except Exception:  # noqa: BLE001
             failed += 1
+            log.warning("listing capture: listing %s poll failed", getattr(listing, "id", None), exc_info=True)
+        last_fetch_at[mkt] = clock()
+
+        if refused:
+            record = site_pause.pause_site(store, mkt, http_status=refused[0], now=_now())
+            paused_sites[mkt] = {**record, "paused_this_run": True}
+            if obs is not None:
+                flags = obs.parse_flags if isinstance(getattr(obs, "parse_flags", None), dict) else {}
+                obs.parse_flags = {**flags, "site_paused": record}
+        elif mkt in had_pause_record and obs is not None and getattr(obs, "http_status", None) == 200:
+            site_pause.clear_site_pause(store, mkt)
+            had_pause_record.discard(mkt)
+
     session.flush()
-    return {"polled": polled, "failed": failed, "listing_count": len(listings)}
+    result = {
+        "polled": polled,
+        "failed": failed,
+        "listing_count": len(listings),
+        "skipped_backoff": skipped_backoff,
+        "skipped_paused": skipped_paused,
+        "paused_sites": paused_sites,
+        "stopped_reason": stopped_reason,
+        "duration_seconds": round(clock() - started, 3),
+    }
+    log.info("listing capture poll: %s", result)
+    return result

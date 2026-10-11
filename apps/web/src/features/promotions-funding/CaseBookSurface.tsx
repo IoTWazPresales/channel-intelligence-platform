@@ -452,7 +452,7 @@ export function CaseBookSurface() {
             />
           }
           compact
-          caption={`${book?.open_case_count ?? '—'} non-settled, non-cancelled cases (draft + ended). Owed = Σ line ttl_support. Mix: claim ${book?.by_evidence_basis?.claim_evidenced?.case_count ?? 0} · attested ${book?.by_evidence_basis?.source_attested?.case_count ?? 0} · none ${book?.by_evidence_basis?.none?.case_count ?? 0}. USD is per-case booked rates summed — never one FX on the ZAR total.`}
+          caption={`${book?.open_case_count ?? '—'} open cases (draft and ended; settled and cancelled are out). Owed is the sum of line support. Mix: claim ${book?.by_evidence_basis?.claim_evidenced?.case_count ?? 0} · attested ${book?.by_evidence_basis?.source_attested?.case_count ?? 0} · none ${book?.by_evidence_basis?.none?.case_count ?? 0}. Dollar totals add each case at its own booked rate.`}
         />
         <HeadlineFigure
           label="Paid on the open book"
@@ -677,8 +677,8 @@ export function CaseBookSurface() {
             </Stack>
             {missingRateRows.length === 0 ? (
               <Typography variant="body2" color="text.secondary" sx={{ px: 1.5, py: 0.5 }}>
-                No cases are missing a rate. Rate suggestion is not offered. {rateNoModeRows.length} case
-                {rateNoModeRows.length === 1 ? '' : 's'} have a rate and need booked or floating mode.
+                No cases are missing a rate. Rate suggestion is not offered. {rateNoModeRows.length}{' '}
+                {rateNoModeRows.length === 1 ? 'case has' : 'cases have'} a rate and need a booked or floating rate.
               </Typography>
             ) : null}
             {backfillItems && backfillItems.length === 0 && missingRateRows.length > 0 ? (
@@ -704,7 +704,7 @@ export function CaseBookSurface() {
                 key={`neg-${c.id}`}
                 severity="warning"
                 primary={`${c.case_code} · ${c.customer_name}`}
-                secondary="Negative line ttl_support — a stored credit, not FX. This is why FX-blocked positive outstanding exceeds the open book."
+                secondary="A stored credit on the line, not a missing exchange rate. This is why the blocked positive outstanding is larger than the open book."
                 figure={fmtCompact(c.outstanding_amount, c.currency_code ?? ccy)}
                 onClick={() => setParams({ case: String(c.id) })}
               />
@@ -774,7 +774,7 @@ export function CaseBookSurface() {
                 {
                   label: 'Open in Promotion planner',
                   href: `/promotions?plan=${selected.id}`,
-                  hint: 'Same cpor_case — planning workspace',
+                  hint: 'Same promotion case — planning workspace',
                 },
                 {
                   label: 'Settlement workspace (claims, settle, FX)',
@@ -860,8 +860,8 @@ export function CaseBookSurface() {
             ) : null}
             {(Number(selected.outstanding_amount) || 0) < -0.005 ? (
               <Alert severity="warning" variant="outlined">
-                Outstanding is negative because stored line <code>ttl_support</code> sums below zero.
-                That is a stored fact, not FX rounding.
+                Outstanding is negative because the stored line support sums below zero.
+                That is a stored credit, not exchange-rate rounding.
               </Alert>
             ) : null}
             <Box>
@@ -877,7 +877,7 @@ export function CaseBookSurface() {
                 )}
               </Stack>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                Sell-through corroboration is not joined onto the case list — open the settlement
+                Sell-through is not on this case list — open the settlement
                 workspace. Approve in this drawer is only offered when the case may actually transition
                 to approved.
               </Typography>
@@ -886,7 +886,7 @@ export function CaseBookSurface() {
               items={[
                 { k: 'Type', v: selected.promotion_type },
                 { k: 'Est. units', v: fmtInt(selected.estimate_qty_sum) },
-                { k: 'Owed (Σ ttl_support)', v: fmtCompact(selected.owed_amount, selected.currency_code) },
+                { k: 'Owed (line support)', v: fmtCompact(selected.owed_amount, selected.currency_code) },
                 { k: 'Paid', v: fmtCompact(selected.paid_amount_sum, selected.currency_code) },
                 { k: 'Window', v: `${selected.window_start ?? '—'} → ${selected.window_end ?? '—'}` },
               ]}

@@ -3,13 +3,15 @@
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
-import { Alert, Box, IconButton, Paper, Stack, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, Button, Collapse, IconButton, Paper, Stack, Tooltip, Typography } from '@mui/material';
 import type { ColDef } from 'ag-grid-community';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { HeadlineFigure } from '@/features/workbench-ui/HeadlineFigure';
 import { apiPost, safeDisplayError } from '@/lib/api';
 
 import { formatMetricValue, formatVintage } from './formatters';
@@ -24,7 +26,16 @@ type Props = {
   onPromote: () => void;
 };
 
+function plainDefinition(formula: unknown, metricKey: string): string | null {
+  if (typeof formula !== 'string') return null;
+  const text = formula.trim();
+  if (!text || text === metricKey) return null;
+  if (!/\s/.test(text)) return null;
+  return text;
+}
+
 export function DashboardWidgetCard({ widget, metric, onEdit, onDelete, onPromote }: Props) {
+  const [aboutOpen, setAboutOpen] = useState(false);
   const q = useQuery({
     queryKey: [
       'dashboard-widget-query',
@@ -44,7 +55,8 @@ export function DashboardWidgetCard({ widget, metric, onEdit, onDelete, onPromot
   });
 
   const refused = q.data && !q.data.ok;
-  const formula = metric?.formula ?? q.data?.data_vintage?.formula;
+  const definition = plainDefinition(metric?.formula ?? q.data?.data_vintage?.formula, widget.metric_key);
+  const vintage = q.data ? formatVintage(q.data.data_vintage) : null;
   const colDefs = useMemo<ColDef[]>(() => {
     const rows = q.data?.rows ?? [];
     const keys = new Set<string>();
@@ -92,13 +104,30 @@ export function DashboardWidgetCard({ widget, metric, onEdit, onDelete, onPromot
           </IconButton>
         </Tooltip>
       </Stack>
-      <Box sx={{ px: 1.5, py: 0.5 }}>
-        <Typography variant="caption" color="text.secondary" display="block" data-testid={`dashboard-widget-formula-${widget.id}`}>
-          {typeof formula === 'string' ? formula : widget.metric_key}
-        </Typography>
-        <Typography variant="caption" color="text.secondary" display="block" data-testid={`dashboard-widget-vintage-${widget.id}`}>
-          {q.data ? formatVintage(q.data.data_vintage) : '…'}
-        </Typography>
+      <Box sx={{ px: 1, py: 0.25 }}>
+        <Button
+          size="small"
+          variant="text"
+          onClick={() => setAboutOpen((open) => !open)}
+          aria-expanded={aboutOpen}
+          endIcon={<ExpandMoreIcon sx={{ transform: aboutOpen ? 'rotate(180deg)' : 'none', transition: 'transform 120ms' }} />}
+          sx={{ px: 0.5 }}
+          data-testid={`dashboard-widget-about-${widget.id}`}
+        >
+          About this figure
+        </Button>
+        <Collapse in={aboutOpen}>
+          <Box sx={{ px: 0.5, pb: 0.5 }} data-testid={`dashboard-widget-formula-${widget.id}`}>
+            <Typography variant="body2">
+              {definition ?? 'A plain-language definition is not available for this tile.'}
+            </Typography>
+            {vintage ? (
+              <Typography variant="body2" sx={{ mt: 1 }} data-testid={`dashboard-widget-vintage-${widget.id}`}>
+                Coverage: {vintage}.
+              </Typography>
+            ) : null}
+          </Box>
+        </Collapse>
       </Box>
       <Box sx={{ flex: 1, px: 1.5, pb: 1.5, minHeight: 0 }}>
         {q.isLoading && <Typography variant="body2">Loading…</Typography>}
@@ -109,9 +138,12 @@ export function DashboardWidgetCard({ widget, metric, onEdit, onDelete, onPromot
           </Alert>
         )}
         {q.data?.ok && widget.visual === 'kpi' && (
-          <Typography variant="h4" fontWeight={700} data-testid={`dashboard-widget-value-${widget.id}`}>
-            {formatMetricValue(q.data.value)}
-          </Typography>
+          <HeadlineFigure
+            compact
+            label={metric?.label && metric.label !== widget.metric_key ? metric.label : widget.title}
+            value={formatMetricValue(q.data.value)}
+            testId={`dashboard-widget-value-${widget.id}`}
+          />
         )}
         {q.data?.ok && widget.visual === 'table' && (
           <EnterpriseDataGrid rowData={q.data.rows ?? []} columnDefs={colDefs} height="100%" />

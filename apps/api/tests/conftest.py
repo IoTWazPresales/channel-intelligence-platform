@@ -61,6 +61,9 @@ _WRITE_CAPABLE_TEST_MODULES: frozenset[str] = frozenset(
         "test_commercial_planner_reference_bootstrap.py",
         "test_cpor_cases_api.py",
         "test_cpor_historical_unit_c.py",
+        # N-0068: seeds tenant/tenant_column_grain/dim_product/import_job fixtures inside one
+        # rolled-back transaction; cip_test only.
+        "test_column_grain_n0068_db.py",
         "test_cst_mapping_candidates.py",
         "test_customer_alias_scope_merge.py",
         "test_customer_full_merge.py",
@@ -93,6 +96,14 @@ _WRITE_CAPABLE_TEST_MODULES: frozenset[str] = frozenset(
         "test_master_bulk_delete_sql_integration.py",
         "test_pipeline_failure_writeback.py",
         "test_product_dsi_maintenance.py",
+        # N-0065: applies 20261006_0024, inserts fixture dim_product rows, always rolled back; cip_test only.
+        "test_product_line_rls_n0065_db.py",
+        # N-0065 round 3/4: swaps 0024/0025/0026 policies and seeds rows in every protected
+        # table inside one rolled-back transaction per version; cip_test only.
+        "test_product_line_rls_parity_n0065_db.py",
+        # N-0065 round 4: seeds shipment evidence lineage fixtures inside one rolled-back
+        # transaction; cip_test only.
+        "test_shipment_evidence_lineage_rls_n0065_db.py",
         "test_product_resolution_index_plain.py",
         "test_rbac_r1d_session_e2e.py",
         "test_products_delete.py",

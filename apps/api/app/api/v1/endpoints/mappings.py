@@ -88,6 +88,9 @@ from app.services.imports.dsi_steward_candidate_ops import (
 )
 
 router = APIRouter()
+
+# N-0086: steward writes need steward or admin (admin always passes require_roles); reads stay sign-in only.
+_STEWARD_WRITE = [Depends(require_roles(Role.ADMIN, Role.STEWARD))]
 logger = logging.getLogger(__name__)
 
 # Dev-only in-process DSI bulk steward task results (shared with post-validate enqueue).
@@ -122,7 +125,7 @@ async def mapping_queue(db: AsyncSession = Depends(get_db)):
     ]
 
 
-@router.post("/queue/{item_id}/approve")
+@router.post("/queue/{item_id}/approve", dependencies=_STEWARD_WRITE)
 async def approve(
     item_id: int, entity_id: int = Query(...), db: AsyncSession = Depends(get_db)
 ):
@@ -136,7 +139,7 @@ async def approve(
     return {"ok": True, "id": item_id}
 
 
-@router.post("/queue/{item_id}/reject")
+@router.post("/queue/{item_id}/reject", dependencies=_STEWARD_WRITE)
 async def reject(item_id: int, db: AsyncSession = Depends(get_db)):
     item = await db.get(EntityMappingQueue, item_id)
     if not item:
@@ -146,7 +149,7 @@ async def reject(item_id: int, db: AsyncSession = Depends(get_db)):
     return {"ok": True, "id": item_id}
 
 
-@router.delete("/queue/{item_id}", status_code=204)
+@router.delete("/queue/{item_id}", status_code=204, dependencies=_STEWARD_WRITE)
 async def delete_queue_item(item_id: int, db: AsyncSession = Depends(get_db)):
     row = await db.get(EntityMappingQueue, item_id)
     if not row:
@@ -160,7 +163,7 @@ async def delete_queue_item(item_id: int, db: AsyncSession = Depends(get_db)):
     return Response(status_code=204)
 
 
-@router.post("/queue/clear-all", status_code=200)
+@router.post("/queue/clear-all", status_code=200, dependencies=_STEWARD_WRITE)
 async def clear_mapping_queue(body: ClearConfirmBody, db: AsyncSession = Depends(get_db)):
     if not body.confirm:
         raise HTTPException(status_code=400, detail="Set confirm to true")
@@ -323,7 +326,7 @@ class ResolveProductCandidateBody(BaseModel):
     idempotency_key: str | None = Field(default=None, max_length=128)
 
 
-@router.post("/import-candidates/{candidate_id}/resolve-product", status_code=200)
+@router.post("/import-candidates/{candidate_id}/resolve-product", status_code=200, dependencies=_STEWARD_WRITE)
 async def resolve_dsi_product_candidate(
     candidate_id: int,
     body: ResolveProductCandidateBody,
@@ -359,7 +362,7 @@ async def resolve_dsi_product_candidate(
     return out
 
 
-@router.post("/import-candidates/{candidate_id}/map-customer", status_code=200)
+@router.post("/import-candidates/{candidate_id}/map-customer", status_code=200, dependencies=_STEWARD_WRITE)
 async def map_dsi_candidate_to_customer(
     candidate_id: int,
     body: MapCustomerBody,
@@ -408,7 +411,7 @@ class DsiDuplicateClusterSameEntityBody(BaseModel):
     audit_note: str | None = Field(default=None, max_length=2000)
 
 
-@router.post("/import-candidates/{candidate_id}/duplicate-review/different-entity", status_code=200)
+@router.post("/import-candidates/{candidate_id}/duplicate-review/different-entity", status_code=200, dependencies=_STEWARD_WRITE)
 async def acknowledge_dsi_duplicate_different_entity(
     candidate_id: int, body: DsiDuplicateReviewPeerBody, db: AsyncSession = Depends(get_db)
 ):
@@ -424,7 +427,7 @@ async def acknowledge_dsi_duplicate_different_entity(
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
-@router.post("/import-candidates/{candidate_id}/duplicate-review/same-entity", status_code=200)
+@router.post("/import-candidates/{candidate_id}/duplicate-review/same-entity", status_code=200, dependencies=_STEWARD_WRITE)
 async def resolve_dsi_duplicate_same_entity(
     candidate_id: int, body: DsiDuplicateSameEntityBody, db: AsyncSession = Depends(get_db)
 ):
@@ -444,7 +447,7 @@ async def resolve_dsi_duplicate_same_entity(
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
-@router.post("/import-jobs/{job_id}/duplicate-review/cluster-same-entity", status_code=200)
+@router.post("/import-jobs/{job_id}/duplicate-review/cluster-same-entity", status_code=200, dependencies=_STEWARD_WRITE)
 async def resolve_dsi_duplicate_cluster_same_entity(
     job_id: int, body: DsiDuplicateClusterSameEntityBody, db: AsyncSession = Depends(get_db)
 ):
@@ -462,7 +465,7 @@ async def resolve_dsi_duplicate_cluster_same_entity(
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
-@router.post("/import-candidates/{candidate_id}/create-provisional-customer", status_code=200)
+@router.post("/import-candidates/{candidate_id}/create-provisional-customer", status_code=200, dependencies=_STEWARD_WRITE)
 async def create_provisional_customer_from_dsi_candidate(
     candidate_id: int,
     body: CreateProvisionalCustomerBody,
@@ -514,7 +517,7 @@ async def create_provisional_customer_from_dsi_candidate(
     return out
 
 
-@router.post("/import-candidates/{candidate_id}/mark-open-channel", status_code=200)
+@router.post("/import-candidates/{candidate_id}/mark-open-channel", status_code=200, dependencies=_STEWARD_WRITE)
 async def mark_dsi_candidate_open_channel(
     candidate_id: int, body: MarkOpenChannelBody, db: AsyncSession = Depends(get_db)
 ):
@@ -566,7 +569,7 @@ async def mark_dsi_candidate_open_channel(
     return {"ok": True, "alias_id": alias.id, "open_channel_customer_id": oc_id, "candidate_id": cand.id}
 
 
-@router.post("/import-candidates/{candidate_id}/ignore", status_code=200)
+@router.post("/import-candidates/{candidate_id}/ignore", status_code=200, dependencies=_STEWARD_WRITE)
 async def ignore_dsi_candidate(
     candidate_id: int,
     body: IgnoreCandidateBody,
@@ -592,7 +595,7 @@ async def ignore_dsi_candidate(
     return out
 
 
-@router.post("/import-candidates/{candidate_id}/map-distributor", status_code=200)
+@router.post("/import-candidates/{candidate_id}/map-distributor", status_code=200, dependencies=_STEWARD_WRITE)
 async def map_dsi_candidate_to_distributor(
     candidate_id: int,
     body: MapDistributorBody,
@@ -621,7 +624,7 @@ async def map_dsi_candidate_to_distributor(
     return out
 
 
-@router.post("/import-candidates/{candidate_id}/create-provisional-distributor", status_code=200)
+@router.post("/import-candidates/{candidate_id}/create-provisional-distributor", status_code=200, dependencies=_STEWARD_WRITE)
 async def create_provisional_distributor_from_dsi_candidate(
     candidate_id: int,
     body: CreateProvisionalDistributorBody,
@@ -735,7 +738,7 @@ def _dsi_bulk_totals_from_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-@router.post("/import-jobs/{job_id}/dsi-steward-bulk-preview", status_code=200)
+@router.post("/import-jobs/{job_id}/dsi-steward-bulk-preview", status_code=200, dependencies=_STEWARD_WRITE)
 async def dsi_steward_bulk_preview(job_id: int, body: DsiBulkStewardBody, db: AsyncSession = Depends(get_db)):
     await _assert_dsi_import_job(db, job_id)
     res = await db.execute(
@@ -1040,7 +1043,7 @@ def _enqueue_dsi_bulk_ignore(
         return task_id, False
 
 
-@router.post("/import-jobs/{job_id}/dsi-steward-bulk-provisional-customers/apply-async", status_code=202)
+@router.post("/import-jobs/{job_id}/dsi-steward-bulk-provisional-customers/apply-async", status_code=202, dependencies=_STEWARD_WRITE)
 async def dsi_steward_bulk_provisional_apply_async(
     job_id: int, body: DsiBulkStewardBody, db: AsyncSession = Depends(get_db)
 ):
@@ -1071,7 +1074,7 @@ async def dsi_steward_bulk_provisional_apply_async(
     }
 
 
-@router.post("/import-jobs/{job_id}/dsi-steward-bulk-ignore/apply-async", status_code=202)
+@router.post("/import-jobs/{job_id}/dsi-steward-bulk-ignore/apply-async", status_code=202, dependencies=_STEWARD_WRITE)
 async def dsi_steward_bulk_ignore_apply_async(
     job_id: int, body: DsiBulkStewardBody, db: AsyncSession = Depends(get_db)
 ):
@@ -1164,7 +1167,7 @@ async def dsi_steward_bulk_task_status(job_id: int, task_id: str) -> dict[str, A
     return progress
 
 
-@router.post("/import-jobs/{job_id}/dsi-steward-bulk-apply", status_code=200)
+@router.post("/import-jobs/{job_id}/dsi-steward-bulk-apply", status_code=200, dependencies=_STEWARD_WRITE)
 async def dsi_steward_bulk_apply(
     job_id: int,
     body: DsiBulkStewardBody,
@@ -1327,7 +1330,7 @@ def _dsi_resolution_plan_compute_payload_from_body(body: DsiResolutionPlanGenera
     }
 
 
-@router.post("/import-jobs/{job_id}/dsi-resolution-plan/compute-async", status_code=202)
+@router.post("/import-jobs/{job_id}/dsi-resolution-plan/compute-async", status_code=202, dependencies=_STEWARD_WRITE)
 async def dsi_resolution_plan_compute_async(
     job_id: int, body: DsiResolutionPlanGenerateBody, db: AsyncSession = Depends(get_db)
 ):
@@ -1377,7 +1380,7 @@ async def dsi_resolution_plan_compute_async(
     }
 
 
-@router.post("/import-jobs/{job_id}/dsi-resolution-plan", status_code=200)
+@router.post("/import-jobs/{job_id}/dsi-resolution-plan", status_code=200, dependencies=_STEWARD_WRITE)
 async def dsi_resolution_plan_generate(
     job_id: int, body: DsiResolutionPlanGenerateBody, db: AsyncSession = Depends(get_db)
 ):
@@ -1399,7 +1402,7 @@ async def dsi_resolution_plan_generate(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.post("/import-jobs/{job_id}/dsi-resolution-plan/effective", status_code=200)
+@router.post("/import-jobs/{job_id}/dsi-resolution-plan/effective", status_code=200, dependencies=_STEWARD_WRITE)
 async def dsi_resolution_plan_effective(
     job_id: int, body: DsiResolutionPlanEffectiveBody, db: AsyncSession = Depends(get_db)
 ):
@@ -1446,7 +1449,7 @@ def _enqueue_dsi_resolution_plan_apply(
     return enqueue_dsi_resolution_plan_apply(job_id, payload, detach_from_caller=False)
 
 
-@router.post("/import-jobs/{job_id}/dsi-resolution-plan/apply-async", status_code=202)
+@router.post("/import-jobs/{job_id}/dsi-resolution-plan/apply-async", status_code=202, dependencies=_STEWARD_WRITE)
 async def dsi_resolution_plan_apply_async(
     job_id: int, body: DsiResolutionPlanApplyBody, db: AsyncSession = Depends(get_db)
 ):
@@ -1485,7 +1488,7 @@ async def dsi_resolution_plan_apply_async(
     }
 
 
-@router.post("/import-jobs/{job_id}/dsi-resolution-plan/apply", status_code=200)
+@router.post("/import-jobs/{job_id}/dsi-resolution-plan/apply", status_code=200, dependencies=_STEWARD_WRITE)
 async def dsi_resolution_plan_apply_endpoint(
     job_id: int, body: DsiResolutionPlanApplyBody, db: AsyncSession = Depends(get_db)
 ):
@@ -1539,7 +1542,7 @@ async def dsi_apply_complete_to_loaded(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.post("/import-jobs/{job_id}/revalidate-distributor-sales-inventory")
+@router.post("/import-jobs/{job_id}/revalidate-distributor-sales-inventory", dependencies=_STEWARD_WRITE)
 async def revalidate_dsi_import_job(job_id: int, db: AsyncSession = Depends(get_db)):
     """Re-run DSI import validation via Celery (same pipeline as validate)."""
     await _assert_dsi_import_job(db, job_id)
@@ -1876,7 +1879,7 @@ class CustomerSourceTokenAliasCreate(BaseModel):
     import_entity_mapping_candidate_id: int | None = None
 
 
-@router.post("/customer-source-token-aliases", status_code=201)
+@router.post("/customer-source-token-aliases", status_code=201, dependencies=_STEWARD_WRITE)
 async def create_customer_source_token_alias(body: CustomerSourceTokenAliasCreate, db: AsyncSession = Depends(get_db)):
     nt = _norm_key(body.raw_token)
     if not nt:

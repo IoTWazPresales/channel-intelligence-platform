@@ -8,6 +8,7 @@
  */
 
 import ViewColumnIcon from '@mui/icons-material/ViewColumn';
+import Link from 'next/link';
 import {
   Alert,
   Autocomplete,
@@ -23,6 +24,7 @@ import {
   TextField,
 } from '@mui/material';
 import type { ColDef, GridOptions, ValueFormatterParams } from 'ag-grid-community';
+import { useTheme } from '@mui/material/styles';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -151,6 +153,7 @@ function dateColFormatter(p: ValueFormatterParams<ShippingLine>): string {
 }
 
 export function InboundShipmentsWorkspace() {
+  const theme = useTheme();
   const [lineState, setLineState] = useState<string>('');
   const [cargoStatus, setCargoStatus] = useState<string>('');
   const [distributorPick, setDistributorPick] = useState<DistHit | null>(null);
@@ -443,6 +446,19 @@ export function InboundShipmentsWorkspace() {
     () => [
       { field: 'id', headerName: 'ID', width: 88, pinned: 'left' },
       {
+        colId: 'receipt',
+        headerName: 'Receipt',
+        width: 110,
+        sortable: false,
+        filter: false,
+        cellRenderer: (p: { data?: ShippingLine }) =>
+          p.data?.id != null ? (
+            <Link href={`/supply/shipments/${p.data.id}`} data-testid={`shipment-receipt-link-${p.data.id}`}>
+              Open
+            </Link>
+          ) : null,
+      },
+      {
         headerName: 'Distributor',
         minWidth: 160,
         tooltipValueGetter: (p) => {
@@ -515,14 +531,14 @@ export function InboundShipmentsWorkspace() {
         },
         cellStyle: (p) =>
           p.data?.purchase_order_id != null
-            ? { cursor: 'pointer', color: '#1565c0', textDecoration: 'underline' }
+            ? { cursor: 'pointer', color: theme.palette.primary.main, textDecoration: 'underline' }
             : undefined,
       },
       { field: 'quantity', headerName: 'Qty', width: 90 },
       { field: 'amount', headerName: 'Amount', width: 100 },
       { field: 'currency_code', headerName: 'CCY', width: 72 },
     ],
-    [resetPagination]
+    [resetPagination, theme]
   );
 
   const optionalColDefs = factColumns.optionalColDefs;
@@ -545,8 +561,8 @@ export function InboundShipmentsWorkspace() {
   return (
     <>
       <Alert severity="info" sx={{ mb: 2 }}>
-        Truth layer from <strong>fact_inbound_shipment</strong> (populated when an inbound import job is applied).
-        Steward raw imports under <strong>Data & Stewardship → Receipts & POD</strong>.
+        Shipment rows appear after an inbound import is applied.
+        Raw files are reviewed under <strong>Receipts & POD</strong>.
       </Alert>
       {purchaseOrderId != null && (
         <Alert
@@ -731,7 +747,7 @@ export function InboundShipmentsWorkspace() {
                 getOptionLabel={(o) => `${o.distributor_name} (${o.distributor_code})`}
                 isOptionEqualToValue={(a, b) => a.id === b.id}
                 renderInput={(params) => (
-                  <TextField {...params} label="Distributor (canonical)" placeholder="All distributors · type to filter" />
+                  <TextField {...params} label="Distributor" placeholder="All distributors · type to filter" />
                 )}
               />
               <Autocomplete
@@ -943,7 +959,7 @@ export function InboundShipmentsWorkspace() {
           isEmpty={!linesLoading && (lines?.items?.length ?? 0) === 0}
           empty={{
             title: 'No shipment lines match',
-            description: 'Adjust filters or run an inbound import apply to populate fact_inbound_shipment.',
+            description: 'Adjust the filters, or apply an inbound shipment import.',
             primary: { label: 'Import Center', href: '/admin/imports?template=inbound_shipments' },
             secondary: { label: 'Shipment evidence', href: '/admin/shipment-evidence' },
           }}
@@ -964,8 +980,8 @@ export function InboundShipmentsWorkspace() {
         {...factColumns.pickerProps}
         data-testid="shipping-column-picker"
         title="Additional columns"
-        description="Default columns stay shipping-focused (distributor, product model + SKU, line/cargo state, key dates). Every other column on fact_inbound_shipment can be toggled on below."
-        factGroupLabel="fact_inbound_shipment fields"
+        description="Default columns stay shipping-focused (distributor, product model and SKU, line and cargo state, key dates). Every other shipment column can be turned on below."
+        factGroupLabel="Shipment fields"
       />
     </>
   );

@@ -501,7 +501,7 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
             />
           }
           compact
-          caption="Sum of line ttl_support"
+          caption="Sum of line support"
         />
         <HeadlineFigure
           label="Budget after this plan"
@@ -520,7 +520,7 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
           label="On shelf today"
           value="—"
           compact
-          caption="Listing activation is not joined onto case lines — open Market & Listings"
+          caption="Listing activation is not on these lines yet — open Market & Listings"
         />
       </HeadlineStrip>
 
@@ -533,7 +533,7 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
         }
         actions={
           <Stack direction="row" spacing={1}>
-            <Tooltip title="CIP suggested quantity is not derived — cover and forecast are not joined onto the line" arrow>
+            <Tooltip title="Suggested quantity is not calculated yet — cover and forecast are not on the line" arrow>
               <span>
                 <Button size="small" variant="text" disabled data-testid="plan-use-cip-qty">
                   Use CIP quantities
@@ -763,8 +763,8 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 0.5 }}>
             <Typography variant="body2" color="text.secondary">
-              This records a versioned XLSX on the case so later approvals refer to an exact file.
-              The layout is one frozen 32-column tuple in code.
+              This saves a workbook on the case so later approvals refer to an exact file.
+              The layout is fixed.
             </Typography>
             <Alert severity="warning" variant="outlined">
               Template-driven export is not built. This is not the customer&apos;s promotion-plan

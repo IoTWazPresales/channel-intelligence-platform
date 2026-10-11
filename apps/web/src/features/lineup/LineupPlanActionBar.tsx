@@ -5,15 +5,16 @@ import { alpha, useTheme } from '@mui/material/styles';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { nextLineupQuarter } from '@/features/lineup/lineupQuarter';
 import { formatUnits, type ApplyNetRequirementResponse, type NetRequirementResponse } from '@/features/lineup/lineupTypes';
-import { apiGet, apiPost } from '@/lib/api';
+import { apiDownloadBlob, apiGet, apiPost } from '@/lib/api';
 
 export function LineupPlanActionBar() {
   const theme = useTheme();
   const qc = useQueryClient();
   const [applyMsg, setApplyMsg] = useState<string | null>(null);
-  const [applyPeriodStart, setApplyPeriodStart] = useState('2026-04-01');
-  const [applyPeriodLabel, setApplyPeriodLabel] = useState('2026Q2');
+  const [exporting, setExporting] = useState(false);
+  const { periodStart: applyPeriodStart, periodLabel: applyPeriodLabel } = nextLineupQuarter();
   const applyBias = true;
 
   const { data: netReq, refetch: refetchNetReq, isFetching } = useQuery({
@@ -66,7 +67,10 @@ export function LineupPlanActionBar() {
         Net requirement
       </Typography>
       <Typography sx={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: '12px', color: alpha(theme.palette.text.primary, 0.75) }}>
-        {formatUnits(netTotal)} units (B2)
+        {formatUnits(netTotal)} units to buy
+      </Typography>
+      <Typography data-testid="lineup-next-quarter" sx={{ fontSize: '12px', color: 'text.primary' }}>
+        Next quarter {applyPeriodLabel}
       </Typography>
       {applyMsg ? (
         <Typography sx={{ fontSize: '11px', color: alpha(theme.palette.text.primary, 0.6) }}>{applyMsg}</Typography>
@@ -85,12 +89,38 @@ export function LineupPlanActionBar() {
         <Button
           size="small"
           component="a"
-          href={`/api/v1/lineup/net-requirement/export.xlsx?limit=200&apply_bias=true&period_start=${encodeURIComponent(applyPeriodStart)}&period_label=${encodeURIComponent(applyPeriodLabel)}`}
-          data-testid="lineup-net-export"
+          href="/admin/imports?unified=1"
+          data-testid="lineup-unified-import"
           sx={{ textTransform: 'none', borderColor: 'divider', color: 'text.secondary' }}
           variant="outlined"
         >
-          Export
+          Import a lineup file
+        </Button>
+        <Button
+          size="small"
+          data-testid="lineup-net-export"
+          disabled={exporting}
+          onClick={() => {
+            const q = new URLSearchParams({
+              limit: '200',
+              apply_bias: 'true',
+              period_start: applyPeriodStart,
+              period_label: applyPeriodLabel,
+            });
+            setExporting(true);
+            setApplyMsg(null);
+            void apiDownloadBlob(
+              `/api/v1/lineup/net-requirement/export.xlsx?${q.toString()}`,
+              'lineup_net_requirement.xlsx',
+            )
+              .then(() => setApplyMsg(`Exported tenant workbook for ${applyPeriodLabel}`))
+              .catch((err: unknown) => setApplyMsg(err instanceof Error ? err.message : String(err)))
+              .finally(() => setExporting(false));
+          }}
+          sx={{ textTransform: 'none', borderColor: 'divider', color: 'text.secondary' }}
+          variant="outlined"
+        >
+          {exporting ? 'Exporting…' : 'Export'}
         </Button>
         <Button
           size="small"

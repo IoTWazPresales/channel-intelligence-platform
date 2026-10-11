@@ -198,11 +198,11 @@ function CporHistoricalImportWizard() {
   return (
     <FundingChrome>
       <Alert severity="info" sx={{ mt: 2, mb: 2 }}>
-        Upload a customer tracking workbook to learn (or refresh) a mapping profile. Settled Results
-        are stored as a frozen snapshot (parity flags only). Unresolved entities block that case only —
-        never auto-create masters. Column mapping is driven by the stored profile; steward mapping
-        resolves products, customers, and distributors. Template-driven export is not built — the
-        frozen 32-column XLSX remains.
+        Upload a customer tracking workbook to learn (or refresh) a column map. Settled results
+        are kept as a snapshot. Unmatched names block that case only — products, customers, and
+        distributors are never created automatically. The stored map fills the columns; names are
+        matched before apply. Writing a plan back into that layout is not built — export stays the
+        fixed workbook.
       </Alert>
       <Button
         size="small"

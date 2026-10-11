@@ -4,7 +4,7 @@ Norms: trailing N quarters (tenant config default 4) — absolute support (USD +
 and unit support-% of SRP. Quarters from line ``pod_quarter`` (normalized) with
 case ``window_start`` fallback.
 
-Comparable: ranked never filtered — customer → BU → promo type → quarter proximity → volume.
+Comparable: same customer only. Other customers are excluded and an empty list states why.
 """
 
 from __future__ import annotations
@@ -16,9 +16,9 @@ from datetime import date
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, load_only
 
-from app.models.cpor import CporCase
+from app.models.cpor import CporCase, CporCaseLine
 from app.models.dimensions import DimCustomer, DimProduct
 from app.services.cpor.intelligence_scope import where_commercial_intelligence
 from app.services.commercial_tenant_profile import (
@@ -115,7 +115,22 @@ def _load_cases(session: Session) -> list[CporCase]:
             select(CporCase)
             .where(CporCase.superseded_by_case_id.is_(None))
             .where(where_commercial_intelligence())
-            .options(joinedload(CporCase.lines))
+            .options(
+                joinedload(CporCase.lines).load_only(
+                    CporCaseLine.id,
+                    CporCaseLine.case_id,
+                    CporCaseLine.product_id,
+                    CporCaseLine.estimate_qty,
+                    CporCaseLine.remark,
+                    CporCaseLine.pod_quarter,
+                    CporCaseLine.result_qty,
+                    CporCaseLine.srp,
+                    CporCaseLine.support_unit,
+                    CporCaseLine.ttl_support,
+                    CporCaseLine.ttl_support_usd,
+                    CporCaseLine.support_usd,
+                )
+            )
         )
         .unique()
         .all()
@@ -314,7 +329,7 @@ def build_comparable_cases(
     case_id: int,
     limit: int = 25,
 ) -> dict[str, Any]:
-    """A2-05 — ranked comparable cases (never filtered to empty)."""
+    """A2-05 — comparable cases for the same customer. Empty is explicit, not silent."""
     cases = _load_cases(session)
     basis_by = load_evidence_basis_by_case(session, cases)
     seed = next((c for c in cases if int(c.id) == int(case_id)), None)
@@ -485,7 +500,17 @@ def build_comparable_cases(
             }
         )
     file_ranked.sort(key=lambda r: (-r["score"], r["case_code"] or ""))
+    other_customers_excluded = sum(
+        1 for row in ranked + file_ranked if not row["rank_axes"]["same_customer"]
+    )
+    ranked = [row for row in ranked if row["rank_axes"]["same_customer"]]
+    file_ranked = [row for row in file_ranked if row["rank_axes"]["same_customer"]]
     combined = ranked + file_ranked
+    empty_reason = None
+    if not combined:
+        empty_reason = (
+            "No other cases for this customer. Other customers are not used as comparables."
+        )
     return {
         "case_id": int(seed.id),
         "case_code": seed.case_code,
@@ -503,6 +528,9 @@ def build_comparable_cases(
             "Source-attested unmatched pending-report Case IDs rank below all CIP cases. "
             "Customer/promo match is exact token equality only."
         ),
+        "same_customer_only": True,
+        "other_customers_excluded": other_customers_excluded,
+        "empty_reason": empty_reason,
         "total_candidates": len(combined),
         "cip_candidates": len(ranked),
         "attested_file_candidates": len(file_ranked),

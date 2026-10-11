@@ -1920,9 +1920,9 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | Parked · 2026-07-02 |
-| **Source** | Plan D phase 4 scope note; `shipment_change_events.py` v1 |
-| **TRIGGER** | Steward/report-coverage semantics for cancelled lines defined; ETA or channel-ops UI needs cancelled signal. |
+| **Status / parked** | Done · 2026-10-11. A line is a cancelled candidate when an earlier report of the same shipment contained it and the latest report does not. Shown on the shipment receipt. Fact rows are not rewritten. |
+| **Source** | Plan D phase 4 scope note; `shipment_change_events.py` v1. Rule set by Warren 2026-10-11. |
+| **TRIGGER** | Fired. |
 
 ---
 
@@ -2652,7 +2652,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Data-gated** (2026-09-21 N-0030 audit: `cpor_claim_evidence_line` **0** rows vs **211** settled cases; unlocks with Warren's customer/disti data drive; Stage 7.4) · **Parked** · 2026-09-14 · N-0026 UNCOVERED (capability already planned) |
+| **Status / parked** | **Data-gated** · 2026-10-05 · Warren: do not backfill claim files. The 211 settled cases stay settled with 0 claim rows. Upload customer report stays on the settlement desk for a later file. Uplift is not estimated. Trigger remains ≥5 settled cases with claim rows. |
 | **Effort** | Large (derivation + ≥5 settled-with-claims gate) |
 | **Source** | `PLANNER_CAPABILITIES` uplift row; live `cpor_claim_evidence_line` count 0. |
 | **Idea** | Derive uplift only from settled cases with claim evidence — never estimate. |
@@ -2882,7 +2882,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Partial** · 2026-09-18 · per-line maps nest in `source_definition.column_mapping_memory.mapping_profile.by_product_line`. Duplicate EAN FLAG on `import_job.staged_metadata`. Whether sellable grain is five or sixteen is still Warren's. |
+| **Status / parked** | **Partial** · 2026-10-05 · Warren: keep multiple catalogs; do not retire `catalog_product`. Per-line maps already overlay `column_mapping_memory.mapping_profile.by_product_line`. Duplicate EAN stays FLAG. Sellable grain five vs sixteen is still open. |
 | **Effort** | Medium+; likely a catalogue-model decision before code |
 | **Source** | `apps/api/app/models/product_catalog.py`; `pm_commit_catalog.py`; `dim_product.product_line` counts on `cip` 2026-09-18. |
 | **Resume-context** | `product_line` grain is real (NB/NX/PF/NR/PT/LM/XB/…; 10 null). `business_unit` is a different axis (CONSUMER/COMMERCIAL/PHONE/DISPLAY/Gaming & Workspace Gear). `catalog_product` is live: 18157 rows, all linked to `dim_product`, 1 `product_catalog` (`default_master`), 1 `source_definition` (`product_catalog_default`). 192 `attribute_definition` rows are leftover staged-column defs; EAV values 0 because `pm_write_legacy_eav` default False. Recommendation (not implemented): nest per-line maps in `column_mapping_memory`; keep specs in `specs_json`; do not revive EAV for column sets. Catalogue axis is source/feed, not product line. |
@@ -3200,7 +3200,7 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Open** · 2026-09-22 · pilot connectivity discovery |
+| **Status / parked** | **Done** · 2026-10-05 · `scripts/dev-api.js` defaults to `127.0.0.1`; `CIP_API_HOST` still overrides and warns when the override is not loopback |
 | **Effort** | Small — dev-server bind flag/config change, plus a check of every place the API host is assumed |
 | **Source** | `pnpm dev:api` (`scripts/dev-api.js` → uvicorn) binds `0.0.0.0:8001`; confirmed listening on all interfaces during the 2026-09-21/22 pilot sessions |
 | **Idea** | The API has no reason to be reachable from outside the host — the web app is the only intended caller, and it proxies to the API server-side (`apps/web/src/app/api/v1/[[...path]]/route.ts`, default `http://127.0.0.1:8001`, overridable via `CIP_API_INTERNAL_URL`). Binding `0.0.0.0` exposes it to the LAN (and to the internet if a tunnel or port-forward ever fronts it directly) with no reason to. |

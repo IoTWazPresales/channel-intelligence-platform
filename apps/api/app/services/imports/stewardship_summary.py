@@ -181,17 +181,14 @@ async def stewardship_summary(db: AsyncSession, user: dict | None) -> dict[str, 
             "distributors_unverified": "Unverified distributors",
         },
         "captions": {
-            "jobs_last_7d": f"ISO week-to-date is {jobs_iso} after Monday 00:00 SAST",
-            "failed_7d": "status = failed; not validation_failed",
-            "pending_7d": f"{pending_all} older jobs still pending mapping",
-            "completed_7d": "status = completed — production has no applied status",
-            "templates_enabled": f"{int(templates['visible_non_admin'] or 0)} visible to non-admin",
-            "legacy_queue_open": (
-                f"{int(candidates['needs_review'] or 0)} per-job candidates still need_review; "
-                "cross-job queue is D-0002"
-            ),
-            "stores": "customer_location where location_type = store — no store master grid",
-            "customers_unverified": "customer_status = unverified; not a lab fixture",
-            "distributors_unverified": "distributor_status = unverified",
+            "jobs_last_7d": f"{jobs_iso} started since Monday (Johannesburg)",
+            "failed_7d": "Imports that failed. A row that only failed a check is counted separately.",
+            "pending_7d": f"{pending_all} older jobs still waiting for a column map",
+            "completed_7d": "Imports that finished",
+            "templates_enabled": f"{int(templates['visible_non_admin'] or 0)} shown to people who are not administrators",
+            "legacy_queue_open": f"{int(candidates['needs_review'] or 0)} name matches still need a decision",
+            "stores": "Store locations. There is no separate store list.",
+            "customers_unverified": "Customers not yet confirmed",
+            "distributors_unverified": "Distributors not yet confirmed",
         },
     }

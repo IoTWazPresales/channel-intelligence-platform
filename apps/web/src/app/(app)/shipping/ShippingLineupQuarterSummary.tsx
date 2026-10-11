@@ -17,6 +17,8 @@ export type LineupQuarterSummary = {
   landed_this_quarter_units?: number;
   /** BACKLOG-068: plan-quarter shipped ∧ pod_date IS NULL. */
   shipped_not_landed_units?: number;
+  /** Plan-quarter line_state arrived ∧ pod_date IS NULL. Not also pipeline. */
+  arrived_units?: number;
   pipeline_units?: number;
   slipped_in_units?: number;
   slipped_out_units?: number;
@@ -113,6 +115,12 @@ export function ShippingLineupQuarterSummary({ planQuarter, customerId, planBusi
           testId="lineup-q-landed-this-quarter"
         />
         <Metric label="Pipeline" value={data?.pipeline_units} />
+        <Metric
+          label="Arrived"
+          value={data?.arrived_units}
+          title="Plan-quarter rows with line_state=arrived and no proof-of-delivery date. Left the open pipeline and counted once. A POD date stays in Landed."
+          testId="lineup-q-arrived"
+        />
         <Metric label="Slipped in" value={data?.slipped_in_units} />
         <Metric label="Slipped out" value={data?.slipped_out_units} />
         <Metric label="Unattributed" value={data?.unattributed_units} />

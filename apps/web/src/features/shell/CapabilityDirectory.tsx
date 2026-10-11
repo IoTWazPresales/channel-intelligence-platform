@@ -8,9 +8,9 @@ import { leafStatus, leafStatusLabel, shellNavGroups, type LeafStatus } from '@/
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
 
 const LEGEND: Record<Exclude<LeafStatus, 'live'>, string> = {
-  partial: 'real code path, a required step is missing or hard-coded — in navigation, marked',
-  substrate: 'tables or endpoints exist, no working view — directory only',
-  planned: 'chartered, not built — directory only',
+  partial: 'a required step is still missing — shown in navigation',
+  substrate: 'there is no working view yet',
+  planned: 'on the roadmap, not built',
 };
 
 /**
@@ -32,8 +32,8 @@ export function CapabilityDirectory() {
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 880 }}>
         Channel Intelligence tracks stock and money from OEM through distributors and retailers to the consumer. Files come
-        in through Data &amp; Stewardship; every other area is derived from those facts. If a figure is shown, the data layer
-        computed it.
+        in through Data &amp; Stewardship; every other area is derived from those files. If a figure is shown, it was
+        calculated from what was imported.
       </Typography>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }} data-testid="directory-meta">
         {groups.length} capability areas · {leaves.length} workflows · {count('live')} work today · {count('partial')} partly

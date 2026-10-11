@@ -6,7 +6,8 @@ lineup are unattributed — never fuzzy-matched to a quarter.
 Taxonomy (``docs/PLAN_VS_EXECUTED_SHIPPED_TAXONOMY.md``):
   pipeline — ``line_state='open_order'``
   shipped  — ``line_state='shipped'`` and ``pod_date IS NULL``
-  landed   — ``pod_date IS NOT NULL`` (sub-state; may also be shipped)
+  arrived  — ``line_state='arrived'`` and ``pod_date IS NULL`` (leaves the open pipeline; counted once)
+  landed   — ``pod_date IS NOT NULL`` (a proof-of-delivery date stays landed, including arrived rows)
 """
 from __future__ import annotations
 
@@ -41,10 +42,11 @@ from app.services.commercial_planner.open_channel_customer import (
     get_open_channel_canonical_and_aliases,
 )
 from app.services.commercial_planner.plan_vs_executed import enumerate_available_periods
+from app.services.shipment_strict_pair import outerjoin_twin_remainder
 
 logger = logging.getLogger(__name__)
 
-LifecycleBucket = Literal["shipped", "pipeline", "landed"]
+LifecycleBucket = Literal["shipped", "pipeline", "landed", "arrived"]
 SlipDirection = Literal["slipped_in", "slipped_out"]
 
 
@@ -83,12 +85,19 @@ def quarter_after(a: str | None, b: str | None) -> bool:
 
 
 def lifecycle_bucket(line_state: str | None, pod_date: date | None) -> LifecycleBucket | None:
+    """Classify one shipment line. A proof-of-delivery date is landed and wins over line_state.
+
+    ``arrived`` with no proof-of-delivery date is its own bucket: it has left the open
+    pipeline and is not also shipped or landed.
+    """
     if pod_date is not None:
         return "landed"
     if line_state == "open_order":
         return "pipeline"
     if line_state == "shipped":
         return "shipped"
+    if line_state == "arrived":
+        return "arrived"
     return None
 
 
@@ -447,6 +456,8 @@ def accumulate_lineup_quarter_row(
         totals["shipped_not_landed_units"] += qty
     elif bucket == "landed":
         totals["landed_units"] += qty
+    elif bucket == "arrived":
+        totals["arrived_units"] += qty
     elif bucket == "pipeline":
         totals["pipeline_units"] += qty
 
@@ -458,6 +469,7 @@ def empty_lineup_quarter_totals() -> dict[str, float]:
     return {
         "shipped_units": 0.0,
         "landed_units": 0.0,
+        "arrived_units": 0.0,
         "pipeline_units": 0.0,
         "slipped_in_units": 0.0,
         "slipped_out_units": 0.0,
@@ -485,10 +497,15 @@ async def lineup_quarter_summary(
     )
 
     product_meta: dict[int, tuple[str | None, str | None]] = {}
-    fact_stmt = select(FactInboundShipment)
+    # An open line covered by its strict shipped twins is not also pipeline (D-0057);
+    # a partly shipped open line counts only its remainder (D-0065).
+    fact_stmt, twin = outerjoin_twin_remainder(select(FactInboundShipment), FactInboundShipment)
+    fact_stmt = fact_stmt.add_columns(twin.counted_quantity)
     if customer_id is not None:
         fact_stmt = fact_stmt.where(FactInboundShipment.customer_id == int(customer_id))
-    rows = (await db.execute(fact_stmt)).scalars().all()
+    fact_rows = (await db.execute(fact_stmt)).all()
+    rows = [r[0] for r in fact_rows]
+    counted_qty = {int(r[0].id): float(r[1] or 0) for r in fact_rows}
     prod_ids = {int(r.product_id) for r in rows if r.product_id is not None}
     if prod_ids:
         for pid, pl, bu in (
@@ -516,7 +533,7 @@ async def lineup_quarter_summary(
         accumulate_lineup_quarter_row(
             totals,
             filter_key=filter_key,
-            qty=float(row.quantity or 0),
+            qty=counted_qty[int(row.id)],
             plan_quarter=enriched.get("plan_quarter"),
             landing_quarter=enriched.get("landing_quarter"),
             bucket=enriched.get("lifecycle_bucket"),
@@ -534,7 +551,9 @@ async def lineup_quarter_summary(
             "(customer×product) lineup line match, else single-case fallback, else BU match; "
             "no-case PO = unattributed. "
             "landed_this_quarter_units = qty where quarter(pod_date)=filter (landing axis); "
-            "shipped_not_landed_units = plan-quarter shipped ∧ pod_date IS NULL."
+            "shipped_not_landed_units = plan-quarter shipped ∧ pod_date IS NULL; "
+            "arrived_units = plan-quarter line_state arrived ∧ pod_date IS NULL, "
+            "excluded from pipeline and counted once. A pod_date stays landed."
         ),
     }
 

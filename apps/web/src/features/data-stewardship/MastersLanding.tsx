@@ -26,7 +26,7 @@ const CARDS: {
     labelKey: 'products',
     href: '/admin/products',
     extraHref: { label: 'Catalogue gaps', href: '/admin/product-master-gaps' },
-    what: 'SKU, EAN, model, family, lifecycle; specs JSON. No provisional flag on dim_product.',
+    what: 'SKU, EAN, model, family, and lifecycle. A product has no provisional flag.',
   },
   {
     key: 'customers',
@@ -42,13 +42,13 @@ const CARDS: {
     href: '/admin/distributors',
     extraHref: { label: 'Duplicates', href: '/admin/distributors/duplicates' },
     unverifiedKey: 'distributors_unverified',
-    what: 'Commercial terms, regions, DSI file conventions.',
+    what: 'Commercial terms and regions.',
   },
   {
     key: 'stores',
     labelKey: 'stores',
     href: null,
-    what: 'Retail locations under customers (customer_location). No production grid — UNCOVERED.',
+    what: 'Retail locations under customers. There is no grid for them yet.',
     status: 'uncovered',
   },
 ];
@@ -66,8 +66,8 @@ export function MastersLanding() {
     <DataChrome>
       <Stack spacing={2} sx={{ mt: 2 }} data-testid="masters-landing">
         <Typography variant="body2" color="text.secondary">
-          Master data is the identity anchor for every fact. Import evidence never creates a master record silently —
-          provisional records are steward-initiated and enriched here.
+          These are the product, customer, and distributor records everything else points at. An import never
+          creates one of them on its own. A provisional record is added here, then filled in.
         </Typography>
         <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' } }}>
           {CARDS.map((m) => {
@@ -99,7 +99,7 @@ export function MastersLanding() {
                     severity={unverified ? 'warn' : 'neutral'}
                     caption={
                       m.key === 'products'
-                        ? 'dim_product has no provisional column'
+                        ? 'Products have no provisional flag'
                         : data?.captions[m.unverifiedKey ?? '']
                     }
                   />
@@ -107,7 +107,7 @@ export function MastersLanding() {
                     label="Possible duplicates"
                     value="—"
                     dense
-                    caption="Review on the duplicates leaf — no stored cluster count"
+                    caption="Review on the duplicates screen — no stored cluster count"
                   />
                 </HeadlineStrip>
                 {m.extraHref ? (
@@ -117,7 +117,7 @@ export function MastersLanding() {
                 ) : null}
                 {m.status === 'uncovered' ? (
                   <Alert severity="info" sx={{ mt: 1 }}>
-                    UNCOVERED — recorded, not migrated. Related leaves: Channels & regions, CST steward stay in nav.
+                    Stores are recorded under customers. There is no store grid on this page. Channels, regions, and retailer sell-through matching stay in the navigation.
                   </Alert>
                 ) : null}
               </Panel>
@@ -125,8 +125,8 @@ export function MastersLanding() {
           })}
         </Box>
         <Typography variant="body2" color="text.secondary">
-          Products, customers, duplicates, catalogue gaps, CST steward, and channels &amp; regions stay
-          reachable from Also in this area on every Data page. Stores has no production grid — UNCOVERED.
+          Products, customers, duplicates, catalogue gaps, retailer sell-through matching, and channels and
+          regions stay reachable from Also in this area on every Data page. Stores have no grid yet.
         </Typography>
       </Stack>
     </DataChrome>

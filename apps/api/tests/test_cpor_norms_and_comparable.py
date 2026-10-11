@@ -140,9 +140,12 @@ def test_comparable_ranks_same_customer_first(monkeypatch) -> None:
         MagicMock(all=MagicMock(return_value=[(1, "A", "Alpha"), (2, "B", "Beta")])),
     ]
     out = build_comparable_cases(session, case_id=10, limit=10)
+    assert out["same_customer_only"] is True
+    assert out["other_customers_excluded"] >= 1
     assert out["items"][0]["case_id"] == 11
     assert out["items"][0]["rank_axes"]["same_customer"] is True
-    assert out["items"][1]["case_id"] == 12
+    assert all(row["case_id"] != 12 for row in out["items"])
     file_item = next(r for r in out["items"] if r["case_id"] is None)
     assert file_item["case_code"] == "CFILE1"
     assert file_item["evidence_basis"] == "source_attested"
+    assert file_item["rank_axes"]["same_customer"] is True

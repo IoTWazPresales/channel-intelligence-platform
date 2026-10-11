@@ -1,7 +1,73 @@
+import logging
+
 from fastapi import APIRouter, Depends
 
 from app.core.feature_flags import commercial_planner_enabled
-from app.core.security import get_current_user
+from app.core.security import Role, get_current_user, normalize_role
+from app.api.deps import get_db
+from app.core.product_line_scope import (
+    apply_product_line_guc,
+    product_line_scope_for,
+    request_editable_product_lines,
+    request_product_lines,
+    request_role,
+)
+from app.core.tenant_scope import request_tenant_id, tenant_id_from_user
+from app.models.product_line_access import UserProductLineAccess
+
+logger = logging.getLogger(__name__)
+
+
+async def _bind_request_tenant(
+    user: dict = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """Scope ORM reads to the signed-in tenant and product lines (admin: all lines)."""
+    from sqlalchemy import select
+
+    tid = tenant_id_from_user(user)
+    token = request_tenant_id.set(tid)
+    read_token = None
+    edit_token = None
+    role_token = None
+    uid = str(user.get("id") or "")
+    scope_kind = "unset"
+    if uid.isdigit():
+        # D-0056: an admin sees and edits every product line without an assignment.
+        is_admin = user.get("role") == Role.ADMIN
+        rows = []
+        if not is_admin:
+            rows = (
+                await db.execute(
+                    select(UserProductLineAccess).where(UserProductLineAccess.user_id == int(uid))
+                )
+            ).scalars().all()
+        read, edit = product_line_scope_for(
+            is_admin=is_admin,
+            assignments=((row.product_line, bool(row.can_edit)) for row in rows),
+        )
+        read_token = request_product_lines.set(read)
+        edit_token = request_editable_product_lines.set(edit)
+        # Server-side role (the same source require_roles trusts), bound as cip.request_role:
+        # shipment evidence with no product and no resolved identity is steward/admin only.
+        raw_role = user.get("role")
+        role_token = request_role.set(normalize_role(getattr(raw_role, "value", raw_role)).value)
+        # The sign-in and access-row lookups normally began this transaction before the
+        # scope was known, so the after_begin listener bound nothing; bind it now. Every
+        # later transaction, on this session or any SessionLocal(), is bound by the listener.
+        await apply_product_line_guc(db)
+        scope_kind = "all" if is_admin else f"assigned:{len(read)}"
+    logger.info("tenant_scope bound tenant=%s product_lines=%s", tid, scope_kind)
+    try:
+        yield
+    finally:
+        request_tenant_id.reset(token)
+        if read_token is not None:
+            request_product_lines.reset(read_token)
+        if edit_token is not None:
+            request_editable_product_lines.reset(edit_token)
+        if role_token is not None:
+            request_role.reset(role_token)
 from app.api.v1.endpoints import (
     administration,
     auth,
@@ -34,8 +100,8 @@ from app.api.v1.endpoints import (
     lineup,
     listing_capture,
     planning,
+    platform_audit,
     mappings,
-    market,
     ops,
     plan_vs_executed,
     po_management,
@@ -66,7 +132,7 @@ from app.api.v1.endpoints import (
 # enumeration on 2026-09-21 found 127 of 229 GET routes serving data with no token.
 # Endpoint-level get_current_user / require_roles dependencies still apply on top (FastAPI
 # caches the resolved user per request, so the lookup runs once).
-api_router = APIRouter(dependencies=[Depends(get_current_user)])
+api_router = APIRouter(dependencies=[Depends(get_current_user), Depends(_bind_request_tenant)])
 
 # The one route that must answer without a bearer so a session can be created at all.
 public_router = APIRouter()
@@ -120,7 +186,6 @@ api_router.include_router(promotions.router, prefix="/promotions", tags=["promot
 api_router.include_router(promo_exports.router, prefix="/promotions", tags=["promotions"])
 api_router.include_router(lineup.router, prefix="/lineup", tags=["lineup"])
 api_router.include_router(competition.router, prefix="/competition", tags=["competition"])
-api_router.include_router(market.router, prefix="/market", tags=["market"])
 api_router.include_router(roadmap.router, prefix="/roadmap", tags=["roadmap"])
 api_router.include_router(budgets.router, prefix="/budgets", tags=["budgets"])
 api_router.include_router(imports.router, prefix="/imports", tags=["imports"])
@@ -131,6 +196,7 @@ api_router.include_router(
 )
 api_router.include_router(mappings.router, prefix="/mappings", tags=["mappings"])
 api_router.include_router(steward_audit.router, prefix="/admin", tags=["admin"])
+api_router.include_router(platform_audit.router, prefix="/admin", tags=["admin"])
 api_router.include_router(sql_viewer.router, prefix="/admin", tags=["admin"])
 api_router.include_router(ops.router, prefix="/admin", tags=["admin"])
 api_router.include_router(product_master_gaps.router, prefix="/product-master-gaps", tags=["product-master-gaps"])

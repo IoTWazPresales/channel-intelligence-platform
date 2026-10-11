@@ -25,9 +25,19 @@ from sqlalchemy.orm import Session
 from app.db.session import AsyncSessionLocal
 from app.models.report_delivery import ReportDelivery, ReportSchedule
 from app.models.saved_reports import SavedReport
-from app.services.report_delivery import deliver_saved_report, next_run_for_cadence
+from app.services.report_delivery import (
+    deliver_saved_report,
+    import_event_skips_cache,
+    next_run_for_cadence,
+)
+from app.worker.task_failure_alert import emit_task_failure_alert
 
 logger = logging.getLogger(__name__)
+
+
+def alert_report_delivery_failure(*, task_name: str, task_run_id: str, error: str) -> None:
+    """N-0052 alert channel. Never opens a database session."""
+    emit_task_failure_alert(task_name=task_name, task_run_id=task_run_id, error=error)
 
 CALENDAR_CADENCES = frozenset({"weekly_monday_0700", "daily_0700"})
 IMPORT_CADENCE = "on_import_complete"
@@ -194,10 +204,16 @@ async def _deliver_schedule_async(
                     fmt=sched.format,  # type: ignore[arg-type]
                     trigger=trigger,  # type: ignore[arg-type]
                     recipient_user_id=int(rid) if rid is not None else None,
+                    skip_cache=import_event_skips_cache(trigger),
                 )
                 delivery_ids.append(int(d.id))
         except Exception as exc:
             logger.exception("report schedule delivery failed schedule_id=%s", schedule_id)
+            alert_report_delivery_failure(
+                task_name="reports.schedule_delivery",
+                task_run_id=str(schedule_id),
+                error=str(exc),
+            )
             await db.rollback()
             sched = await db.get(ReportSchedule, schedule_id)
             report = None
@@ -264,6 +280,11 @@ def run_due_schedules_sync(*, now: datetime | None = None) -> dict[str, Any]:
             )
         except Exception as exc:
             logger.exception("report schedule delivery failed schedule_id=%s", sid)
+            alert_report_delivery_failure(
+                task_name="reports.due_schedule",
+                task_run_id=str(sid),
+                error=str(exc),
+            )
             results.append({"schedule_id": sid, "error": str(exc)})
 
     return {"ok": True, "due_count": len(ids), "claimed": ids, "results": results}
@@ -274,8 +295,13 @@ def run_due_schedules_safe(*, reason: str) -> dict[str, Any]:
         out = run_due_schedules_sync()
         logger.warning("report schedule poll reason=%s %s", reason, out)
         return out
-    except Exception:
+    except Exception as exc:
         logger.exception("report schedule poll failed reason=%s", reason)
+        alert_report_delivery_failure(
+            task_name="reports.schedule_poll",
+            task_run_id=reason,
+            error=str(exc),
+        )
         return {"ok": False, "reason": reason}
 
 
@@ -321,6 +347,11 @@ def fanout_on_import_complete_sync(*, tenant_id: str) -> dict[str, Any]:
             results.append(run_schedule_delivery_sync(sid, trigger="import_event"))
         except Exception as exc:
             logger.exception("import_complete schedule delivery failed schedule_id=%s", sid)
+            alert_report_delivery_failure(
+                task_name="reports.fanout_import_complete",
+                task_run_id=str(sid),
+                error=str(exc),
+            )
             results.append({"schedule_id": sid, "error": str(exc)})
 
     return {"ok": True, "tenant_id": tenant_id, "schedule_count": len(ids), "results": results}

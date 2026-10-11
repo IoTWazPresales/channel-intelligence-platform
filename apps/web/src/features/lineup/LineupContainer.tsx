@@ -115,7 +115,7 @@ function LineupContainerInner() {
             label="Net requirement"
             value={netTotal != null ? formatUnits(netTotal) : '—'}
             compact
-            caption="B2 apply-bias"
+            caption="Bias included"
           />
           <HeadlineFigure
             label="Approval"

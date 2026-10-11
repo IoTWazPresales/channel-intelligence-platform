@@ -13,19 +13,36 @@ from typing import Any, Callable
 
 from app.services.listing_capture.marketplace_vocab import PARSER_VERSION
 
-LISTING_CAPTURE_USER_AGENT = "CIP-listing-capture/1.0"
+# D-0063 (Warren, 2026-10-07): fetch every site with an ordinary desktop browser
+# User-Agent. Politeness comes from per-site spacing, the per-site 403/429 pause and
+# the run time limit — never from CAPTCHA solving, proxy/IP rotation or evasion.
+# Refresh the Chrome major version now and then so it stays a mainstream string.
+LISTING_CAPTURE_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+)
+LISTING_CAPTURE_ACCEPT_LANGUAGE = "en-ZA,en;q=0.9"
 LISTING_CAPTURE_HTTP_TIMEOUT_SECONDS = 20
 
-# Polite defaults (seconds between fetches per marketplace).
+# Polite defaults (seconds between fetches to the same marketplace).
 RATE_LIMIT_SECONDS: dict[str, float] = {
     "takealot": 2.0,
     "evetech": 2.0,
     "amazon": 2.0,
 }
+DEFAULT_RATE_LIMIT_SECONDS = 5.0  # a retailer without its own entry (N-0085 design: 5 s)
 
 # Dead-link backoff: after N consecutive 404/410, wait this many hours before retry.
 DEAD_LINK_BACKOFF_HOURS = 24
 DEAD_LINK_CONSECUTIVE_THRESHOLD = 3
+
+# Site refusal (D-0063): a 403 or 429 pauses that site — 1 h, doubling up to 24 h.
+SITE_PAUSE_HTTP_STATUSES: frozenset[int] = frozenset({403, 429})
+SITE_PAUSE_BASE_HOURS = 1
+SITE_PAUSE_MAX_HOURS = 24
+
+# Each poll run stops after this long (beat runs every 30 min on a single worker).
+POLL_RUN_TIME_LIMIT_SECONDS = 600.0
 
 
 def compress_snapshot(raw: str | bytes) -> bytes:
@@ -175,10 +192,14 @@ def should_backoff_dead_link(
 def default_http_get(url: str) -> tuple[int, str]:
     """Live HTTP fetch — only invoked when the caller explicitly enables live fetch (P5).
 
-    Uses urllib (stdlib, no new dependency) with a declared User-Agent and a bounded
-    timeout so a slow/unreachable marketplace host cannot hang the beat task.
+    Uses urllib (stdlib, no new dependency) with an ordinary browser User-Agent (D-0063)
+    and a bounded timeout so a slow/unreachable marketplace host cannot hang the beat task.
     """
-    headers = {"User-Agent": LISTING_CAPTURE_USER_AGENT}
+    headers = {
+        "User-Agent": LISTING_CAPTURE_USER_AGENT,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": LISTING_CAPTURE_ACCEPT_LANGUAGE,
+    }
     if "api.takealot.com" in url:
         headers["Accept"] = "application/json"
         headers["Referer"] = "https://www.takealot.com/"

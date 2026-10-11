@@ -205,7 +205,7 @@ def test_stub_mode_gated_routes_unaffected_by_lockout(client, clock) -> None:
     assert get_settings().cip_auth_mode == "stub"
     for _ in range(6):
         _login(client)
-    assert client.get("/api/v1/market/placeholders").status_code == 200
+    assert client.get("/api/v1/cpor/meta/lifecycle").status_code == 200
 
 
 def _request(peer: str | None, xff: str | None = None) -> Request:

@@ -9,7 +9,7 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
     {
         "slug": "product_master",
         "display_name": "Product Master / Catalog",
-        "description": "SKU-level product specs (foundational master data). Upserts dim_product when applied.",
+        "description": "Product records by SKU. Applying updates the product list. Confirm before you apply.",
         "enabled": True,
         "hidden": False,
         "admin_only": False,
@@ -37,7 +37,7 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
     {
         "slug": "distributor_master",
         "display_name": "Distributor master",
-        "description": "Distributor master import with validation + apply upsert into dim_distributor.",
+        "description": "Distributor accounts. Check the file, then applying updates the distributor list.",
         "enabled": True,
         "hidden": False,
         "admin_only": False,
@@ -54,10 +54,9 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
         "slug": "distributor_inventory",
         "display_name": "Distributor sales & inventory",
         "description": (
-            "Distributor-reported sell-out (reseller/customer movement) and dated distributor stock snapshots. "
-            "Maps into canonical contracts before apply. Unit sell-out price columns are ex tax / ex VAT where "
-            "supplied and are not the same as total revenue. OTW/POD/shipping-like columns are preserved as raw "
-            "evidence only and are not applied to inbound shipments."
+            "Distributor sell-out (what resellers and customers bought) and dated stock snapshots. "
+            "A unit price excludes tax and is not the same as total revenue. Shipping and proof-of-delivery "
+            "columns are kept as evidence and are not written to inbound shipments."
         ),
         "enabled": True,
         "hidden": False,
@@ -285,7 +284,7 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
     {
         "slug": "customer_master",
         "display_name": "Customer master",
-        "description": "Customer account master import with validation + apply upsert into dim_customer.",
+        "description": "Customer accounts. Check the file, then applying updates the customer list.",
         "enabled": True,
         "hidden": False,
         "admin_only": False,
@@ -305,7 +304,7 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
     {
         "slug": "historical_lineup",
         "display_name": "Historical lineup workbook",
-        "description": "Workbook-style historical lineups with governed parsing, diagnostics, and normalized history persistence.",
+        "description": "Past lineup workbooks. The file is checked, and the history is kept.",
         "enabled": True,
         "hidden": False,
         "admin_only": True,
@@ -324,7 +323,7 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
     {
         "slug": "current_lineup",
         "display_name": "Current working lineup",
-        "description": "Active/proposed commercial lineup uploaded from Commercial Planner. Import intent: current_working_lineup. Not historical evidence.",
+        "description": "The lineup you are working on now. This is not past history.",
         "enabled": True,
         "hidden": True,  # use Commercial Planner parse-upload, not generic imports UI
         "admin_only": False,
@@ -352,10 +351,8 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
         "slug": "unified_lineup",
         "display_name": "Lineup (unified import)",
         "description": (
-            "Unified multi-file lineup import. Accepts several .csv/.xlsx/.xlsm files in one session and "
-            "dispatches one parse job per file. Maps the full pricing chain (SRP, dealer/disti margin, "
-            "rebate, VAT, ROE, import tax, net/disti/dealer price, DAP), applies trade-term defaults, runs "
-            "the backwards SRP->DAP calculator, and infers reporting period + product line."
+            "Several lineup files in one go. Each file becomes its own case. Pricing, period, and product "
+            "line are filled in from the file."
         ),
         "enabled": True,
         "hidden": True,  # dedicated multi-file surface in the Import Centre, not the generic wizard
@@ -391,8 +388,8 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
         "slug": "bulk_lineup_backfill",
         "display_name": "Bulk historical lineup backfill",
         "description": (
-            "File-grain steward panel for historical lineup archive backfill. Multi-file upload, "
-            "layered period inference, per-sheet BU fan-out, supersession preview, and batch apply."
+            "An archive of historical lineup files. Each file’s period is detected, sheets are split, "
+            "and you preview what replaces older lines before applying."
         ),
         "enabled": True,
         "hidden": True,
@@ -406,9 +403,9 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
     {
         "slug": "customer_channel_mapping",
         "display_name": "Customer/channel mapping",
-        "description": "Customer classification mapping import (intentionally deferred; not wired for apply yet).",
+        "description": "Not an import. Set the channel on the customer master.",
         "enabled": True,
-        "hidden": False,
+        "hidden": True,
         "admin_only": False,
         "requires_provider": True,
         "pipeline_handler": "stub_noop",
@@ -423,7 +420,7 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
     {
         "slug": "customer_inventory_sales",
         "display_name": "Customer inventory & sales",
-        "description": "Customer-side inventory and/or POS-style sales extracts (pipeline scaffold).",
+        "description": "Customer stock and point-of-sale extracts. Not ready to apply yet.",
         "enabled": True,
         "hidden": True,
         "admin_only": False,
@@ -441,8 +438,8 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
         "slug": "customer_sell_through",
         "display_name": "Customer Sell-Through Report",
         "description": (
-            "Retailer sell-through reports (weekly/monthly file extracts; daily via API in a future phase). "
-            "Supports flat, pivoted, multi-sheet, MTD delta, and wide extract layouts."
+            "Retailer sell-through files, weekly or monthly. Flat, pivoted, multi-sheet, month-to-date, "
+            "and wide layouts are accepted."
         ),
         "enabled": True,
         "hidden": False,
@@ -598,9 +595,9 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
         "slug": "inbound_shipments",
         "display_name": "Shipment / order evidence",
         "description": (
-            "OEM shipment and open-order extracts (XXOMRPT0025/0027-style CSV, ACZA Shipped/Unship workbook). "
-            "Stages canonical evidence lines with raw row JSON; resolves product from Item/EAN/UPC/sales model "
-            "and distributor from Bill To / Ship To where deterministic."
+            "OEM shipment and open-order files, including ACZA shipped and unshipped workbooks. "
+            "Products are matched from item code, barcode, or sales model. Distributors are matched from "
+            "bill-to and ship-to when that match is clear."
         ),
         "enabled": True,
         "hidden": False,
@@ -699,7 +696,7 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
     {
         "slug": "pricing_support",
         "display_name": "Pricing & support (MDF)",
-        "description": "List/net pricing and MDF / support rows (pipeline scaffold; admin).",
+        "description": "List price, net price, and support rows. Not ready to apply yet.",
         "enabled": True,
         "hidden": True,
         "admin_only": True,
@@ -712,9 +709,9 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
     {
         "slug": "lineup_plan",
         "display_name": "Line-up plan",
-        "description": "Assortment / line-up planning rows (preview scaffold; use dedicated bulk flows for full upsert).",
+        "description": "Not this wizard. Use the lineup import on Import Center.",
         "enabled": True,
-        "hidden": False,
+        "hidden": True,
         "admin_only": True,
         "requires_provider": True,
         "pipeline_handler": "stub_noop",
@@ -725,7 +722,7 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
     {
         "slug": "promotion_plan",
         "display_name": "Promotion plan (legacy stub)",
-        "description": "Deprecated scaffold — use cpor_claim_evidence for settlement claims (U5).",
+        "description": "Retired. Use claim evidence for settlement claims.",
         "enabled": False,
         "hidden": True,
         "admin_only": False,
@@ -738,9 +735,9 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
     {
         "slug": "cpor_claim_evidence",
         "display_name": "CPOR claim evidence",
-        "description": "Case-scoped settlement claim rows (product × date × units). Prefer case detail upload.",
+        "description": "Not this wizard. Upload the claim file on the case settlement desk.",
         "enabled": True,
-        "hidden": False,
+        "hidden": True,
         "admin_only": True,
         "requires_provider": False,
         "pipeline_handler": "stub_noop",
@@ -760,10 +757,7 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
     {
         "slug": "cpor_historical_cases",
         "display_name": "CPOR historical cases",
-        "description": (
-            "Bulk import of past CPOR tracking workbooks (case codes preserved). "
-            "Steward mapping profile + entity resolve; async apply after steward."
-        ),
+        "description": "Past promotion workbooks. Case codes are kept. Names are matched before applying.",
         "enabled": True,
         "hidden": True,
         "admin_only": True,
@@ -786,10 +780,7 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
     {
         "slug": "cpor_payment_evidence",
         "display_name": "CPOR payment / CN evidence",
-        "description": (
-            "Generic payment and credit-note evidence for CPOR cases. "
-            "Profile-mapped tenant extracts; steward resolve; upsert by source_key."
-        ),
+        "description": "Payment and credit-note evidence for promotion cases. Names are matched before applying. Applying the same file again updates those rows.",
         "enabled": True,
         "hidden": True,
         "admin_only": True,

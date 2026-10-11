@@ -22,6 +22,7 @@ import { useLineIdentifierPreference } from '@/features/tenant/useLineIdentifier
 import { apiGet, apiPost } from '@/lib/api';
 
 import {
+  evidenceCaption,
   hydratePlannerRows,
   markDirty,
   mergePromoPlanSuggestions,
@@ -250,6 +251,15 @@ export function PromoPlanBuilderPanel() {
       },
       { field: 'cover_source', headerName: 'Cover src', minWidth: 120, editable: false },
       {
+        field: 'evidence_caption',
+        headerName: 'Evidence',
+        minWidth: 320,
+        width: 460,
+        editable: false,
+        pinned: 'right',
+        tooltipValueGetter: (p) => (p.value == null || p.value === '' ? '' : String(p.value)),
+      },
+      {
         headerName: 'Reset',
         colId: 'reset',
         minWidth: 90,
@@ -295,7 +305,8 @@ export function PromoPlanBuilderPanel() {
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
         Pick a customer and period. Lines come from that customer’s lineup for the period, or from that
-        customer’s own history — not from other customers. Listing and competitor prices are not joined here.
+        customer’s own history — not from other customers. The Evidence column shows listing, competitor
+        price, and observed cover; it does not set the quantity.
       </Typography>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }} flexWrap="wrap" useFlexGap>
         <Box sx={{ minWidth: 280, flex: 1 }}>
@@ -420,6 +431,7 @@ export function PromoPlanBuilderPanel() {
               dirty_fields: [],
               intake_weighted: {},
               flags: [],
+              evidence_caption: evidenceCaption(undefined),
             };
             const next = [...rows, extra];
             setRows(next);

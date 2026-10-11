@@ -13,6 +13,7 @@ from app.services.task_run_ledger import (
     reset_current_task_run_id,
     set_current_task_run_id,
 )
+from app.worker.task_failure_alert import emit_task_failure_alert
 
 
 class LedgerTask(Task):
@@ -38,6 +39,11 @@ class LedgerTask(Task):
             mark_task_run_succeeded(str(task_run_id))
             return result
         except Exception as exc:
+            emit_task_failure_alert(
+                task_name=task_name,
+                task_run_id=str(task_run_id),
+                error=str(exc),
+            )
             mark_task_run_failed(str(task_run_id), str(exc))
             raise
         finally:

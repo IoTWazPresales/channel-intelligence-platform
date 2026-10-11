@@ -9,7 +9,9 @@ import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
 import { PageHeader } from '@/components/PageHeader';
+import { StewardWriteNotice } from '@/components/StewardWriteGate';
 import { navPageChrome } from '@/features/shell/navPageChrome';
+import { useStewardWriteAccess } from '@/features/shell/stewardAccess';
 import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
 import { useUiStore } from '@/stores/uiStore';
@@ -27,6 +29,9 @@ type Row = {
 export default function ExceptionsPage() {
   const qc = useQueryClient();
   const openDrawer = useUiStore((s) => s.openDrawer);
+  // N-0086: deleting or clearing inbox rows needs steward or admin (the API refuses other roles).
+  const stewardAccess = useStewardWriteAccess();
+  const canDelete = stewardAccess.allowed;
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['exceptions'],
     queryFn: ({ signal }) => apiGet<Row[]>('/api/v1/exceptions', { signal }),
@@ -59,9 +64,9 @@ export default function ExceptionsPage() {
           />
         ),
       },
-      gridDeleteColumn<Row>((id) => void delRow.mutate(id), { busy: busyDel }),
+      ...(canDelete ? [gridDeleteColumn<Row>((id) => void delRow.mutate(id), { busy: busyDel })] : []),
     ];
-  }, [delRow, delRow.isPending, clearAll.isPending]);
+  }, [canDelete, delRow, delRow.isPending, clearAll.isPending, openDrawer]);
 
   const rows = data ?? [];
 
@@ -69,6 +74,10 @@ export default function ExceptionsPage() {
     <>
       <PageHeader {...navPageChrome('/brief')} />
       <Paper sx={{ p: 2 }}>
+        <StewardWriteNotice
+          access={stewardAccess}
+          extra="On this inbox that means Delete and Clear all rows are hidden; Why still opens the detail."
+        />
         <ModuleDataSection
           intro={
             <>
@@ -92,10 +101,14 @@ export default function ExceptionsPage() {
           toolbar={
             <ModuleGridToolbar
               onRefresh={() => qc.invalidateQueries({ queryKey: ['exceptions'] })}
-              onClearAll={() => {
-                if (!window.confirm('Delete every exception inbox row? This cannot be undone.')) return;
-                void clearAll.mutate();
-              }}
+              onClearAll={
+                canDelete
+                  ? () => {
+                      if (!window.confirm('Delete every exception inbox row? This cannot be undone.')) return;
+                      void clearAll.mutate();
+                    }
+                  : undefined
+              }
               importsHref="/admin/imports"
               busy={delRow.isPending || clearAll.isPending}
             />

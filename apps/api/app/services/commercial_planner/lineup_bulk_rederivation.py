@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupCasePo, CommercialLineupLine
 from app.models.dimensions import DimCustomer
 from app.models.facts import FactInboundShipment
+from app.services.shipment_strict_pair import twin_remainder
 from app.models.ingestion import ImportJob
 from app.services.commercial_planner.lineup_bulk_backfill_apply import persist_preview_session
 from app.services.commercial_planner.lineup_bulk_period_inference import (
@@ -142,15 +143,34 @@ def _line_already_allocated(line: CommercialLineupLine) -> bool:
 def _shipment_q1_hint(db: Session, *, product_id: int | None, customer_id: int | None, q1_start: date, q2_start: date) -> float | None:
     if product_id is None:
         return None
-    stmt = select(func.coalesce(func.sum(FactInboundShipment.quantity), 0)).where(
+    # Counted quantity: a covered open twin is skipped, a partly shipped one adds its remainder (D-0065).
+    # Called once per lineup line, so the remainder join (one window over the table, ~0.5 s on cip
+    # under row security) runs only when open_order rows fall in the window; other rows are never
+    # adjusted by the rule, so their stored quantity is summed directly.
+    scope = [
         FactInboundShipment.product_id == int(product_id),
         FactInboundShipment.ship_confirm_date >= q1_start,
         FactInboundShipment.ship_confirm_date < q2_start,
-    )
+    ]
     if customer_id is not None:
-        stmt = stmt.where(FactInboundShipment.customer_id == int(customer_id))
-    val = db.scalar(stmt)
-    return float(val) if val is not None else None
+        scope.append(FactInboundShipment.customer_id == int(customer_id))
+    is_open = func.lower(FactInboundShipment.line_state) == "open_order"
+    total = float(
+        db.scalar(select(func.coalesce(func.sum(FactInboundShipment.quantity), 0)).where(*scope, ~is_open)) or 0
+    )
+    open_ids = db.scalars(select(FactInboundShipment.id).where(*scope, is_open)).all()
+    if open_ids:
+        twin = twin_remainder(FactInboundShipment)
+        total += float(
+            db.scalar(
+                select(func.coalesce(func.sum(twin.counted_quantity), 0))
+                .select_from(FactInboundShipment)
+                .outerjoin(twin.subquery, twin.onclause)
+                .where(FactInboundShipment.id.in_(open_ids), twin.kept)
+            )
+            or 0
+        )
+    return total
 
 
 def _compute_case_line_allocations(
@@ -294,6 +314,7 @@ def _build_rederivation_proposal(
         "half_year_signal_source": signal_source,
         "flags": [PERIOD_SCOPE_1H_SPLIT_FLAG, str(alloc.get("allocation_flag") or HALF_YEAR_ALLOCATION_FLAG)],
         "allocation_summary": alloc,
+        "refused_no_month_columns": int(alloc.get("uniform_half_line_count") or 0) > 0,
         "line_allocations": line_previews,
         "qty_month_disagreement_count": disagreement_count,
         "q1_adjustment": {
@@ -552,6 +573,18 @@ def _clone_line_for_case(
     )
 
 
+def rederivation_proposal_refuses_without_months(proposal: dict[str, Any]) -> bool:
+    """A quarter split with no month columns is not written.
+
+    Warren 2026-10-01: a plan without month columns does not go into the database.
+    Month-derived lines still split. Any uniform_half line refuses the proposal.
+    """
+    if proposal.get("refused_no_month_columns") is True:
+        return True
+    summary = proposal.get("allocation_summary") if isinstance(proposal.get("allocation_summary"), dict) else {}
+    return int(summary.get("uniform_half_line_count") or 0) > 0
+
+
 def apply_1h_rederivation_sync(
     session_job_id: int,
     *,
@@ -583,6 +616,15 @@ def apply_1h_rederivation_sync(
         for prop in preview.get("rederivation_proposals") or []:
             pk = str(prop.get("proposal_key") or "")
             if pk not in approved:
+                continue
+            if rederivation_proposal_refuses_without_months(prop):
+                results.append(
+                    {
+                        "proposal_key": pk,
+                        "outcome": "refused_no_month_columns",
+                        "source_case_id": int(prop.get("source_case_id") or 0),
+                    }
+                )
                 continue
             case_id = int(prop["source_case_id"])
             case = db.get(CommercialLineupCase, case_id)

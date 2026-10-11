@@ -87,10 +87,10 @@ export function ImportJobBulkDeleteImpactDialog({
                 DSI mapping candidates: {c.dsi_mapping_candidate_rows ?? 0}
               </Typography>
               <Typography component="li" variant="body2">
-                Fact sales sell-out (source_import_job_id): {c.fact_sales_sellout_rows ?? 0}
+                Distributor sell-out rows: {c.fact_sales_sellout_rows ?? 0}
               </Typography>
               <Typography component="li" variant="body2">
-                Fact distributor inventory (source_import_job_id): {c.fact_inventory_distributor_rows ?? 0}
+                Distributor inventory rows: {c.fact_inventory_distributor_rows ?? 0}
               </Typography>
               <Typography component="li" variant="body2">
                 Other linked rows (mapping queue, historical lineup, commercial cases, catalog pointers, competitor

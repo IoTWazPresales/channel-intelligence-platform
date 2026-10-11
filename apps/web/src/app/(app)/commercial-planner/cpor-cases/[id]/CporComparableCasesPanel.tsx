@@ -81,7 +81,7 @@ export function CporComparableCasesPanel({ caseId }: { caseId: number }) {
         isEmpty={!data?.items?.length}
         empty={{
           title: 'No other cases to rank',
-          description: 'Comparables are ranked from stored, non-superseded, non-excluded cases — none qualify yet.',
+          description: 'Comparables are ranked from stored cases that are still in the book — none qualify yet.',
         }}
         loadingLabel="Ranking comparable cases…"
       >

@@ -10,16 +10,16 @@ import { leafStatusLabel, type LeafStatus } from '@/features/shell/navConfig';
  * planned. `live` renders nothing: absence of a marker means it works.
  */
 const tone: Record<LeafStatus, { color: 'default' | 'warning' | 'info'; hint: string }> = {
-  live: { color: 'default', hint: 'End-to-end usable on real data.' },
+  live: { color: 'default', hint: 'Usable end to end.' },
   partial: {
     color: 'warning',
-    hint: 'Real code path, but a required step is missing, manual or hard-coded. Details on the surface.',
+    hint: 'A required step is still missing or done by hand. The screen says which step.',
   },
   substrate: {
     color: 'info',
-    hint: 'Tables or endpoints exist; there is no working user-facing view yet. Nothing here is computed for you.',
+    hint: 'There is no working view yet. Nothing here is calculated for you.',
   },
-  planned: { color: 'default', hint: 'Chartered on the roadmap, not built. Shown so you know where it will live.' },
+  planned: { color: 'default', hint: 'On the roadmap, not built. Shown so you know where it will live.' },
 };
 
 export function CapabilityStatus({ status, size = 'small' }: { status?: LeafStatus; size?: 'small' | 'inline' }) {

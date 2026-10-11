@@ -160,10 +160,9 @@ export function PlanTemplatesSurface() {
   return (
     <Stack spacing={2} sx={{ mt: 2 }} data-testid="plan-templates">
       <Alert severity="info" variant="outlined" icon={<SwapHorizOutlinedIcon />}>
-        <b>Learn once, use both ways.</b> A customer’s promotion-plan workbook is mapped to CIP’s
-        canonical case model one time — usually from a historical plan they already sent. The same
-        profile then reads their future files. Template-driven export into that layout is not built —
-        export remains the frozen 32-column XLSX.
+        <b>Learn once, use both ways.</b> A customer’s promotion-plan workbook is mapped once —
+        usually from a historical plan they already sent. The same profile then reads their future
+        files. Writing a plan back into that layout is not built — export stays the fixed workbook.
       </Alert>
 
       <HeadlineStrip columns={4}>
@@ -177,10 +176,10 @@ export function PlanTemplatesSurface() {
           label="Plans read through templates"
           value={historicalN}
           compact
-          caption="origin=historical_import on this book (profile is not stored on the case)"
+          caption="Plans that came in through a historical import. The column map is not stored on the case."
         />
         <HeadlineFigure
-          label="Canonical fields"
+          label="Plan fields"
           value={canonicalFieldCount}
           compact
           caption={`${REQUIRED.length} required groups`}
@@ -189,7 +188,7 @@ export function PlanTemplatesSurface() {
           label="Export side"
           value="—"
           compact
-          caption="Import profile exists in DB; template-driven export is not built"
+          caption="The import map is saved. Writing a plan back into the customer layout is not built."
         />
       </HeadlineStrip>
 
@@ -313,7 +312,7 @@ export function PlanTemplatesSurface() {
                   <StepLabel>Example workbook</StepLabel>
                 </Step>
                 <Step completed={step > 1}>
-                  <StepLabel>Map columns → canonical</StepLabel>
+                  <StepLabel>Map columns</StepLabel>
                 </Step>
                 <Step completed={step > 2}>
                   <StepLabel>Value maps & constants</StepLabel>
@@ -330,13 +329,13 @@ export function PlanTemplatesSurface() {
                 requiredGroups={REQUIRED}
                 blockingErrors={missingRequired.map((g) => ({
                   code: `missing_${g.id}`,
-                  message: `Required canonical field “${g.label}” has no column in this workbook — map a column or set a constant.`,
+                  message: `Required field “${g.label}” has no column in this workbook — map a column or set a constant.`,
                 }))}
                 adjustmentNotices={[
                   {
                     code: 'export_planned',
                     message:
-                      '“Use for import & export” is Partly built / Planned: import uses this profile today; template-driven export is not built. The frozen 32-column XLSX remains.',
+                      '“Use for import & export” is partly built: import uses this profile today; writing a plan back into that layout is not built. Export stays the fixed workbook.',
                   },
                 ]}
                 dirty={dirty}
@@ -344,8 +343,8 @@ export function PlanTemplatesSurface() {
               />
             </Panel>
             <Panel
-              title="Unmapped canonical fields"
-              subtitle="Canonical fields with no target column in this workbook. Required ones block a complete map; optional ones are omitted."
+              title="Fields with no column"
+              subtitle="Plan fields this workbook does not map. Required ones block a complete map; optional ones are left out."
             >
               <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                 {TEMPLATE_CANONICAL.filter((c) => !mappedCanonical.has(c.value)).map((c) => {

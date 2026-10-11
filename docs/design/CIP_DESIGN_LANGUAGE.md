@@ -29,6 +29,10 @@ reason in the PR/prompt, not silent drift.
    vocabulary. Buttons state what happens, with the amount when money moves
    ("Record settlement · R 1,616,231.52"). No meta-commentary, no
    implementation language, no verbs-as-nav.
+7. **An inert control is disabled or labelled unavailable.** A button, link,
+   or field that does not do the thing it appears to do is `disabled`, or it
+   carries a visible label such as Unavailable or Not ready. It is not left
+   looking ready. Added 2026-10-11.
 
 ## 2. Tokens
 
@@ -232,7 +236,8 @@ severity channel).
 Uniform KPI-card rows · equal-weight card grids · pill color as sole
 hierarchy · numbered nav markers · decorative command bars · toy tables ·
 teleport drill-down (context must persist) · verbs or implementation words as
-nav labels · meta-commentary in UI copy · charts without a decision question ·
+nav labels · meta-commentary in UI copy · an enabled control that does
+nothing · charts without a decision question ·
 trend-styling as identity: **no** neumorphism, glassmorphism, claymorphism,
 aurora gradients, Y2K/cyberpunk, brutalism, or light-theme minimalism. The
 identity is this workbench language; micro-borrowings (subtle elevation,

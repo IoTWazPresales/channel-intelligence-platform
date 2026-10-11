@@ -148,6 +148,14 @@ def _closed_quarter_rows(n: int) -> list[dict]:
     return rows
 
 
+def test_bias_counts_a_stored_pre_2025_quarter():
+    today = date(2026, 10, 2)
+    rows = _closed_quarter_rows(8)
+    assert 2024 in {row["year"] for row in rows}
+    out = mod.compute_volume_bias(rows, today=today)
+    assert out["by_bu"][0]["closed_quarters"] == 8
+
+
 def test_bias_hidden_until_six_closed_quarters_and_buy_plan_after_eight():
     today = date(2026, 10, 2)
     hidden = mod.compute_volume_bias(_closed_quarter_rows(5), today=today)

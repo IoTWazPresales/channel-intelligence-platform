@@ -91,6 +91,6 @@ describe('AdminOverview', () => {
     expect(screen.getByText(/dsi · job 12/)).toBeInTheDocument();
     expect(screen.getByText('44 failed import jobs still open')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Users & roles/ })).toHaveAttribute('href', '/admin/users/list');
-    expect(screen.getByText(/Audit log \(planned\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/Audit log \(planned\)/)).not.toBeInTheDocument();
   });
 });

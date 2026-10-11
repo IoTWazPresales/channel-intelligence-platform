@@ -3497,7 +3497,7 @@ async def list_lineup_case_lines(
                     and not body.fallback_distributor_id
                 ):
                     warn_parts.append(
-                        "Distributor intentionally unassigned — sync will use placeholder dim_distributor UNASSIGNED."
+                        "Distributor left blank on purpose — sync will use the Unassigned distributor."
                     )
                 if (
                     lineup_line_is_open_channel_staging(ln)
@@ -3506,7 +3506,7 @@ async def list_lineup_case_lines(
                     and not body.fallback_customer_id
                 ):
                     d["sync_customer_resolution_note"] = (
-                        "Sync will use Open Channel account (dim_customer code OPEN_CHANNEL)."
+                        "Sync will use the Open Channel account."
                     )
                 else:
                     d["sync_customer_resolution_note"] = None
@@ -3969,14 +3969,13 @@ async def bulk_lineup_backfill_get_preview(
     session_import_job_id: int,
     db: AsyncSession = Depends(get_db),
 ):
-    """Reload a persisted bulk lineup preview session."""
-    from app.services.commercial_planner.lineup_bulk_backfill_apply import load_preview_session
+    """Reload a persisted bulk lineup preview, including the apply summary when present."""
+    from app.services.commercial_planner.lineup_bulk_backfill_apply import load_backfill_session_view
 
     try:
-        preview = await load_preview_session(db, session_import_job_id)
+        return await load_backfill_session_view(db, session_import_job_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return {"session_import_job_id": session_import_job_id, "preview": preview}
 
 
 @router.post("/lineup/bulk-backfill/rederivation/preview")

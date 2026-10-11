@@ -6,9 +6,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings, get_settings
+from app.core.product_line_scope import install_product_line_transaction_scope
 from app.db.sync_url import resolve_sync_engine_url
 
 settings = get_settings()
+# N-0065 / D-0056: request-path SessionLocal() sessions get the request's product-line
+# scope at the start of every transaction (workers leave it unset, so they stay open).
+install_product_line_transaction_scope()
 
 
 def build_sync_connect_args(settings: Settings) -> dict[str, Any]:

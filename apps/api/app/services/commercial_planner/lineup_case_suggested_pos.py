@@ -21,6 +21,15 @@ from app.services.commercial_planner.lineup_case_po_confirm import (
 )
 
 
+def _shipped_units_sum():
+    """Units of shipped evidence lines only (N-0071, as the PO auto-link "Shipped").
+
+    Open-order lines of the same PO stay in the match (they still count toward
+    ``matched_product_count``) but are not shipped units.
+    """
+    return func.coalesce(func.sum(EV.quantity).filter(EV.line_state == "shipped"), 0)
+
+
 async def _case_product_ids(db: AsyncSession, case_id: int) -> list[int]:
     rows = (
         await db.execute(
@@ -88,7 +97,7 @@ async def suggest_pos_for_case(db: AsyncSession, case_id: int) -> dict[str, Any]
             DimDistributor.code.label("distributor_code"),
             DimDistributor.name.label("distributor_name"),
             func.count(func.distinct(EV.product_id)).label("matched_product_count"),
-            func.coalesce(func.sum(EV.quantity), 0).label("total_shipped_units"),
+            _shipped_units_sum().label("total_shipped_units"),
         )
         .join(
             EV,
@@ -207,7 +216,7 @@ async def suggest_distributors_for_case(db: AsyncSession, case_id: int) -> dict[
             DimDistributor.code.label("distributor_code"),
             DimDistributor.name.label("distributor_name"),
             func.count(func.distinct(EV.product_id)).label("matched_product_count"),
-            func.coalesce(func.sum(EV.quantity), 0).label("total_shipped_units"),
+            _shipped_units_sum().label("total_shipped_units"),
             func.count(func.distinct(PurchaseOrder.id)).label("po_count"),
         )
         # INNER join on DimDistributor: only real master records can be suggested/linked.
@@ -225,7 +234,7 @@ async def suggest_distributors_for_case(db: AsyncSession, case_id: int) -> dict[
         )
         .order_by(
             func.count(func.distinct(EV.product_id)).desc(),
-            func.coalesce(func.sum(EV.quantity), 0).desc(),
+            _shipped_units_sum().desc(),
         ),
         model=EV,
     )

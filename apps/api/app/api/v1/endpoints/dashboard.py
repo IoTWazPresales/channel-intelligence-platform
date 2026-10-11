@@ -9,8 +9,9 @@ from app.core.feature_flags import commercial_planner_enabled
 from app.core.security import get_optional_current_user
 from app.core.tenant_scope import tenant_id_from_user, where_tenant
 from app.models.derived import ExceptionInboxItem, StockHealth
-from app.models.facts import FactBudgetRequest, FactInboundShipment
+from app.models.facts import FactBudgetRequest
 from app.models.ingestion import ImportJob
+from app.services.brief_signals import inbound_not_received_count_stmt
 from app.services.commercial_planner.plan_readiness import commercial_planner_dashboard_aggregate
 
 router = APIRouter()
@@ -33,12 +34,7 @@ async def summary(
     open_budget = await db.scalar(
         select(func.count()).select_from(FactBudgetRequest).where(FactBudgetRequest.status.in_(["draft", "submitted", "under_review"]))
     ) or 0
-    late_risk = await db.scalar(
-        select(func.count())
-        .select_from(FactInboundShipment)
-        .where(FactInboundShipment.status != "received")
-        .where(where_tenant(FactInboundShipment.tenant_id, user))
-    ) or 0
+    late_risk = await db.scalar(inbound_not_received_count_stmt(user)) or 0
 
     cp_kpis = None
     if commercial_planner_enabled():

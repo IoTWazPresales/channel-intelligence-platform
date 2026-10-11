@@ -41,7 +41,7 @@ describe('startVerbsForRole', () => {
     expect(START_VERBS.find((v) => v.id === 'settle-case')?.href).toBe('/commercial-planner/cpor-cases');
     expect(START_VERBS.find((v) => v.id === 'steward-queue')?.href).toBe('/admin/mappings');
     expect(START_VERBS.find((v) => v.id === 'steward-queue')?.label).toBe('Work the steward queue');
-    expect(START_VERBS.find((v) => v.id === 'steward-queue')?.what).toMatch(/grouped by failure type/);
+    expect(START_VERBS.find((v) => v.id === 'steward-queue')?.what).toMatch(/grouped by why they failed/);
     expect(START_VERBS.find((v) => v.id === 'steward-queue')?.what).not.toMatch(/in one place/);
     expect(START_VERBS.find((v) => v.id === 'open-lineup')?.label).toBe('Review lineup cases');
     expect(START_VERBS.find((v) => v.id === 'create-promo-plan')?.label).toBe('Propose a promotion');

@@ -16,6 +16,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 
 import { ModuleDataSection } from '@/components/ModuleDataSection';
+import { inboxVintageLabel } from '@/features/reports/inboxVintage';
 import { OverviewChrome } from '@/features/overview/OverviewChrome';
 import { apiGet, safeDisplayError } from '@/lib/api';
 
@@ -158,6 +159,15 @@ export default function ReportInboxPage() {
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
                   {d.created_at || '—'}
                   {d.metric_key ? ` · ${d.metric_key}` : ''}
+                  {d.format ? ` · ${d.format}` : ''}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  display="block"
+                  data-testid={`report-inbox-vintage-${d.id}`}
+                >
+                  {inboxVintageLabel(d.data_vintage)}
                 </Typography>
                 {counts && (
                   <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>

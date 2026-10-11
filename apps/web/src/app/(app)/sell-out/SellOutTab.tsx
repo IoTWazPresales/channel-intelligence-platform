@@ -264,14 +264,14 @@ export function SellOutTab({ depth }: { depth: IntelDepth }) {
   return (
     <>
       <Alert severity="info" sx={{ mb: 2 }}>
-        Commercial view over <strong>fact_sales_sellout</strong> (populated when DSI import jobs are applied). Use{' '}
-        <strong>Data & Stewardship → Import Center</strong> for distributor sales &amp; inventory loads.
+        Distributor sell-out appears here after a distributor sales and inventory import is applied. Load those
+        files in <strong>Data & Stewardship → Import Center</strong>.
       </Alert>
 
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
         <Paper variant="outlined" sx={{ p: 2, flex: '1 1 200px' }}>
           <Typography variant="overline" color="text.secondary">
-            Fact rows
+            Sell-out rows
           </Typography>
           <Typography variant="h5">{summary?.total_rows ?? '—'}</Typography>
         </Paper>

@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { createElement, createRef } from 'react';
+import { describe, expect, it, vi } from 'vitest';
 
-import { readSavedFindViews } from './gridFind';
+import { GridCsvExportButton, readSavedFindViews, visibleFilteredCsvParams } from './gridFind';
+import type { AgGridReact } from 'ag-grid-react';
 
 describe('readSavedFindViews', () => {
   it('keeps named find strings and drops All and junk', () => {
@@ -35,5 +38,36 @@ describe('readSavedFindViews', () => {
     expect(readSavedFindViews(null)).toEqual([]);
     expect(readSavedFindViews('not json')).toEqual([]);
     expect(readSavedFindViews('{"name":"x"}')).toEqual([]);
+  });
+});
+
+describe('visible filtered CSV export', () => {
+  it('keeps the community CSV contract: visible columns, filtered rows, no excel', () => {
+    expect(visibleFilteredCsvParams('roadmap', ['customer_label', 'sku'])).toEqual({
+      fileName: 'roadmap.csv',
+      allColumns: false,
+      exportedRows: 'filteredAndSorted',
+      onlySelected: false,
+      columnKeys: ['customer_label', 'sku'],
+    });
+    expect(visibleFilteredCsvParams('roadmap.csv', ['sku']).fileName).toBe('roadmap.csv');
+  });
+
+  it('exports only displayed columns, so an unpicked code stays out of the file', () => {
+    const exportDataAsCsv = vi.fn();
+    const ref = createRef<AgGridReact>();
+    ref.current = {
+      api: {
+        getAllDisplayedColumns: () => [{ getColId: () => 'customer_label' }, { getColId: () => 'sku' }],
+        exportDataAsCsv,
+      },
+    } as unknown as AgGridReact;
+    render(createElement(GridCsvExportButton, { gridRef: ref, fileName: 'roadmap' }));
+    fireEvent.click(screen.getByTestId('grid-export-roadmap'));
+    expect(exportDataAsCsv).toHaveBeenCalledWith(
+      visibleFilteredCsvParams('roadmap', ['customer_label', 'sku']),
+    );
+    const passed = exportDataAsCsv.mock.calls[0][0] as { columnKeys: string[] };
+    expect(passed.columnKeys).not.toContain('customer_code');
   });
 });

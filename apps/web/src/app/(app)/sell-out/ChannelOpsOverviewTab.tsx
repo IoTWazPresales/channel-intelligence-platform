@@ -4,22 +4,9 @@ import CloseIcon from '@mui/icons-material/Close';
 import { Alert, Box, IconButton, Paper, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ComposedChart,
-  Legend,
-  Line,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
-
-import { useTheme } from '@mui/material/styles';
 
 import { apiGet } from '@/lib/api';
+import { CategoryBars, TrendChart } from '@/features/workbench-ui/charts';
 
 import { useChannelOpsSummary } from './ChannelOpsKpiCards';
 import { depthAtLeast, type IntelDepth } from './intelDepth';
@@ -37,7 +24,6 @@ export function ChannelOpsOverviewTab({
   depth: IntelDepth;
   distributorId?: number | null;
 }) {
-  const theme = useTheme();
   const { data: summary } = useChannelOpsSummary(distributorId);
   const [dismissed, setDismissed] = useState<Record<string, boolean>>(() => {
     if (typeof window === 'undefined') return { recon: false, velocity: false, forecast: false };
@@ -97,31 +83,21 @@ export function ChannelOpsOverviewTab({
           <Typography variant="body2" color="text.secondary">
             No sell-out transactions in the last 13 weeks.
           </Typography>
+        ) : depthAtLeast(depth, 'strategic') ? (
+          <TrendChart
+            data={chartData}
+            x="label"
+            height={280}
+            series={[
+              { key: 'units', label: 'Sell-out units', kind: 'bar' },
+              { key: 'units', label: 'Trend', kind: 'line' },
+              ...(depthAtLeast(depth, 'forecast')
+                ? [{ key: 'forecast', label: 'Forecast (illustrative)', kind: 'bar' as const, tone: 'secondary' as const }]
+                : []),
+            ]}
+          />
         ) : (
-          <ResponsiveContainer width="100%" height={280}>
-            {depthAtLeast(depth, 'strategic') ? (
-              <ComposedChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="label" fontSize={11} />
-                <YAxis fontSize={11} />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="units" fill={theme.palette.primary.main} name="Sell-out units" />
-                <Line type="monotone" dataKey="units" stroke={theme.palette.success.main} name="Trend" dot={false} />
-                {depthAtLeast(depth, 'forecast') && (
-                  <Bar dataKey="forecast" fill={theme.palette.secondary.main} name="Forecast (illustrative)" />
-                )}
-              </ComposedChart>
-            ) : (
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="label" fontSize={11} />
-                <YAxis fontSize={11} />
-                <Tooltip />
-                <Bar dataKey="units" fill={theme.palette.primary.main} name="Sell-out units" />
-              </BarChart>
-            )}
-          </ResponsiveContainer>
+          <CategoryBars data={chartData} x="label" y="units" height={280} />
         )}
       </Paper>
     </Box>

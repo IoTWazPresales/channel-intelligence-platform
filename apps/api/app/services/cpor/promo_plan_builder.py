@@ -7,16 +7,20 @@ intake-weighted MAC + history units; create carries operator edits (D-051–D-05
 
 from __future__ import annotations
 
+import logging
 from datetime import date, timedelta
 from typing import Any
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, load_only
 
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupLine
 from app.models.commercial_planner import CommercialSkuAssumption
 from app.models.cpor import CporCase, CporCaseLine
+from app.models.derived import WeeksOfCoverObservation
 from app.models.dimensions import DimCustomer, DimProduct
+from app.models.facts import FactCompetitorPrice
+from app.models.listing_capture import CustomerListing, ListingObservation
 from app.models.fact_demand_forecast import FactDemandForecast
 from app.models.lineup import FactLineupPlanItem
 from app.services import commercial_tenant_profile as tenant_profile
@@ -31,6 +35,8 @@ from app.services.commercial_planner.lineup_period_canonical import (
     quarter_from_period_start,
 )
 from app.services.cpor.intake_weighted_mac import suggest_intake_weighted_mac
+
+logger = logging.getLogger(__name__)
 from app.services.cpor.intelligence_scope import where_commercial_intelligence
 from app.services.cpor.norms_and_comparable import (
     build_comparable_cases,
@@ -137,6 +143,19 @@ def _specs_from_lineup(session: Session, *, customer_id: int, period_label: str)
     return _dedupe_specs(out)
 
 
+# Reads used by propose. Window columns stay on the model for the case-line grain;
+# these queries do not need them, so a database that has not added them yet still loads.
+_CASE_LINE_PROPOSE_READ = (
+    CporCaseLine.id,
+    CporCaseLine.case_id,
+    CporCaseLine.product_id,
+    CporCaseLine.distributor_id,
+    CporCaseLine.pod_quarter,
+    CporCaseLine.srp,
+    CporCaseLine.estimate_qty,
+)
+
+
 def _specs_from_customer_history(session: Session, *, customer_id: int, period_label: str) -> list[dict[str, Any]]:
     cases = list(
         session.scalars(
@@ -155,6 +174,7 @@ def _specs_from_customer_history(session: Session, *, customer_id: int, period_l
     case_ids = [int(c.id) for c in cases]
     lines = session.scalars(
         select(CporCaseLine)
+        .options(load_only(*_CASE_LINE_PROPOSE_READ))
         .where(CporCaseLine.case_id.in_(tuple(case_ids)), CporCaseLine.product_id.isnot(None))
         .order_by(CporCaseLine.id.desc())
     ).all()
@@ -210,7 +230,7 @@ def build_same_customer_comparables(
                 CporCase.superseded_by_case_id.is_(None),
                 where_commercial_intelligence(),
             )
-            .options(joinedload(CporCase.lines))
+            .options(joinedload(CporCase.lines).load_only(*_CASE_LINE_PROPOSE_READ))
         )
         .unique()
         .all()
@@ -503,7 +523,7 @@ def _collect_line_specs(
     specs: list[dict[str, Any]] = []
     source: str | None = None
     if seed is not None:
-        stmt = select(CporCaseLine).where(CporCaseLine.case_id == seed.id)
+        stmt = select(CporCaseLine).options(load_only(*_CASE_LINE_PROPOSE_READ)).where(CporCaseLine.case_id == seed.id)
         if product_id is not None:
             stmt = stmt.where(CporCaseLine.product_id == int(product_id))
         stmt = stmt.order_by(CporCaseLine.id.asc())
@@ -522,6 +542,98 @@ def _collect_line_specs(
         if source is None:
             source = PRODUCT_SET_EXPLICIT
     return specs, source
+
+
+def load_promotion_line_evidence(
+    session: Session,
+    *,
+    customer_id: int | None,
+    product_id: int,
+    distributor_id: int | None,
+) -> dict[str, Any]:
+    """Listing and cover for one plan line. Competitor price is never invented."""
+    listing: dict[str, Any] = {
+        "listed": False,
+        "listing_count": 0,
+        "status": None,
+        "last_observed_price": None,
+    }
+    competitor: dict[str, Any] = {
+        "data_unavailable": True,
+        "row_count": 0,
+        "price": None,
+        "note": (
+            "No competitor price is attached to this product. "
+            "An empty fact is not filled in, and there is no approved map from this product to a competitor SKU."
+        ),
+    }
+    cover: dict[str, Any] = {
+        "weeks": None,
+        "flag": None,
+        "grain": "distributor_product",
+        "writes_target_cover": False,
+        "note": "Observed cover is a flag only. It does not change the customer cover target.",
+    }
+    try:
+        if customer_id is not None:
+            listings = session.execute(
+                select(CustomerListing.id, CustomerListing.status)
+                .where(CustomerListing.customer_id == int(customer_id))
+                .where(CustomerListing.product_id == int(product_id))
+            ).all()
+            listing["listing_count"] = len(listings)
+            listing["listed"] = len(listings) > 0
+            if listings:
+                listing["status"] = listings[0][1]
+                obs = session.execute(
+                    select(ListingObservation.extracted_price)
+                    .where(ListingObservation.listing_id.in_([int(row[0]) for row in listings]))
+                    .order_by(ListingObservation.fetched_at.desc())
+                    .limit(1)
+                ).all()
+                if obs and obs[0][0] is not None:
+                    listing["last_observed_price"] = float(obs[0][0])
+        count = session.execute(select(func.count()).select_from(FactCompetitorPrice)).scalar()
+        row_count = int(count or 0)
+        competitor["row_count"] = row_count
+        competitor["data_unavailable"] = row_count == 0
+        if row_count > 0:
+            competitor["note"] = (
+                "Competitor prices exist and stay off this product. There is no approved product map."
+            )
+        woc_stmt = select(WeeksOfCoverObservation.weeks_of_cover).where(
+            WeeksOfCoverObservation.product_id == int(product_id)
+        )
+        if distributor_id is not None:
+            woc_stmt = woc_stmt.where(WeeksOfCoverObservation.distributor_id == int(distributor_id))
+        woc_rows = session.execute(
+            woc_stmt.order_by(WeeksOfCoverObservation.cover_as_of_date.desc()).limit(1)
+        ).all()
+        if woc_rows and woc_rows[0][0] is not None:
+            cover["weeks"] = float(woc_rows[0][0])
+            cover["flag"] = "observed_cover"
+    except Exception:
+        logger.exception(
+            "promotion line evidence read failed customer_id=%s product_id=%s distributor_id=%s",
+            customer_id,
+            product_id,
+            distributor_id,
+        )
+        listing["data_unavailable"] = True
+        competitor["data_unavailable"] = True
+        cover["data_unavailable"] = True
+        return {
+            "listing": listing,
+            "competitor_price": competitor,
+            "observed_cover": cover,
+            "read_failed": True,
+        }
+    return {
+        "listing": listing,
+        "competitor_price": competitor,
+        "observed_cover": cover,
+        "read_failed": False,
+    }
 
 
 def _compose_suggestion_row(
@@ -628,6 +740,12 @@ def _compose_suggestion_row(
             "override_weeks": float(cover_override) if cover_override is not None else None,
         },
         "volume": volume,
+        "promotion_evidence": load_promotion_line_evidence(
+            session,
+            customer_id=int(customer_id) if customer_id is not None else None,
+            product_id=pid,
+            distributor_id=int(did) if did is not None else None,
+        ),
         "intake_weighted": intake_json,
         "flags": list(intake_json.get("flags") or []),
         "editable_fields": list(EDITABLE_PLANNER_FIELDS),
@@ -806,7 +924,10 @@ def build_promo_plan_draft(
     seed_lines: list[dict[str, Any]] = []
     if seed is not None:
         for line in session.scalars(
-            select(CporCaseLine).where(CporCaseLine.case_id == seed.id).order_by(CporCaseLine.id.asc())
+            select(CporCaseLine)
+            .options(load_only(*_CASE_LINE_PROPOSE_READ))
+            .where(CporCaseLine.case_id == seed.id)
+            .order_by(CporCaseLine.id.asc())
         ).all():
             seed_lines.append(
                 {
@@ -860,13 +981,9 @@ def build_promo_plan_draft(
             "Budget uses B2 lineup-derived reservation when planned_support_usd omitted",
             "Dirty-flag is client-owned; Refresh must not clobber dirty cells",
             "Customer+period product set is lineup then same-customer history; never other customers",
-            "Competitor prices and listing joins are not inputs to this compose",
+            "Listing joins by customer and product. Competitor price stays empty unless a mapped fact exists. Observed cover is a flag and does not write the customer cover target.",
         ],
         "uncovered": [
-            "fact_competitor_price",
-            "listing_joined_to_line",
-            "weeks_of_cover_observation_as_target_cover",
-            "cross_customer_analogue",
             "uplift_from_claim_evidence",
         ],
     }

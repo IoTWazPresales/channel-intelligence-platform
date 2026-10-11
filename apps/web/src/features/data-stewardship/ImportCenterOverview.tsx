@@ -19,7 +19,7 @@ const START_CARDS: { label: string; slug: string; href: string }[] = [
   { label: 'Inbound shipments', slug: 'inbound_shipments', href: '/admin/imports?template=inbound_shipments' },
   // unified_lineup is hidden from the generic wizard — dedicated dialog via ?unified=1.
   { label: 'Lineup (unified)', slug: 'unified_lineup', href: '/admin/imports?unified=1' },
-  { label: 'Claim evidence', slug: 'cpor_claim_evidence', href: '/admin/imports?template=cpor_claim_evidence' },
+  { label: 'Claim evidence', slug: 'cpor_claim_evidence', href: '/commercial-planner/cpor-cases' },
   { label: 'Product master', slug: 'product_master', href: '/admin/imports?template=product_master' },
 ];
 
@@ -27,7 +27,7 @@ export function ImportStartPanel() {
   return (
     <Panel
       title="Start an import"
-      subtitle="Upload → parse → map → validate → steward → apply → derive. Same guided wizard for every type — column mapping stays desktop-first."
+      subtitle="Every import follows the same steps: upload, map columns, check, resolve names, then apply."
       actions={
         <Button variant="contained" size="small" component={NextLink} href="/admin/imports">
           New import
@@ -41,9 +41,6 @@ export function ImportStartPanel() {
               <CardContent sx={{ py: 1.25, '&:last-child': { pb: 1.25 } }}>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
                   {c.label}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {c.slug}
                 </Typography>
               </CardContent>
             </CardActionArea>

@@ -21,7 +21,7 @@ import { useClientReady } from './useClientReady';
 export const DATA_TITLE = 'Data & Stewardship';
 
 export const DATA_DESCRIPTION =
-  'Bring files in, resolve unknown names to master records, and keep master data trustworthy. Every fact in CIP arrives through this door.';
+  'Bring files in, resolve unknown names to master records, and keep master data trustworthy. Everything CIP stores arrives through this door.';
 
 export type DataLens = 'imports' | 'steward' | 'masters' | 'audit';
 

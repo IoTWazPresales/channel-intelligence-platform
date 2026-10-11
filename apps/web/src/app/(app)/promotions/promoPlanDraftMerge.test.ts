@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  evidenceCaption,
   hydratePlannerRows,
   markDirty,
   mergePromoPlanSuggestions,
@@ -49,5 +50,23 @@ describe('promoPlanDraftMerge', () => {
     row = resetField(row, 'cost_basis');
     expect(row.cost_basis).toBe(12.5);
     expect(row.dirty_fields).toEqual([]);
+  });
+
+  it('captions listing, competitor price, and observed cover', () => {
+    expect(evidenceCaption(undefined)).toBe('Not listed · No competitor price · No observed cover');
+    expect(evidenceCaption({ read_failed: true, listing: { listed: false }, competitor_price: { row_count: 0 } })).toBe(
+      'Evidence unavailable',
+    );
+    const row = hydratePlannerRows([
+      {
+        ...line(1, 10, 12.5),
+        promotion_evidence: {
+          listing: { listed: true },
+          competitor_price: { data_unavailable: false, row_count: 4, price: null },
+          observed_cover: { weeks: 6, flag: 'observed_cover', writes_target_cover: false },
+        },
+      },
+    ])[0];
+    expect(row.evidence_caption).toBe('Listed · Competitor price not on this product · Observed cover 6w (flag only)');
   });
 });

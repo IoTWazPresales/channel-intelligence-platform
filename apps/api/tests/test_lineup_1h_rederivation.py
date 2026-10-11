@@ -18,6 +18,19 @@ from app.services.commercial_planner.lineup_bulk_rederivation import (
 from app.services.commercial_planner.lineup_half_year_quantity import half_year_allocation_summary
 
 
+def test_rederivation_refuses_split_without_month_columns():
+    from app.services.commercial_planner.lineup_bulk_rederivation import (
+        rederivation_proposal_refuses_without_months,
+    )
+
+    assert rederivation_proposal_refuses_without_months(
+        {"allocation_summary": {"uniform_half_line_count": 2, "month_derived_line_count": 0}}
+    )
+    assert not rederivation_proposal_refuses_without_months(
+        {"allocation_summary": {"uniform_half_line_count": 0, "month_derived_line_count": 4}}
+    )
+
+
 def test_case_has_1h_signal_from_filename():
     case = SimpleNamespace(file_name="ACZA 1H 2026 Consumer Lineup.xlsx")
     assert case_has_1h_signal(case)  # type: ignore[arg-type]

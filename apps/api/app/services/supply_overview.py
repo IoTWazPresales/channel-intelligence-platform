@@ -27,23 +27,79 @@ _ISO_WEEK_START_SAST = """
 
 _TODAY_SAST = "(now() AT TIME ZONE 'Africa/Johannesburg')::date"
 
-# An open-order fact does not count when the same order line is already shipped.
-# Strict pair: operating unit + order number + item code. A looser join is not a pair.
-_OPEN_HAS_SHIPPED_TWIN = """
-EXISTS (
-  SELECT 1
-  FROM fact_inbound_shipment shipped_twin
-  WHERE shipped_twin.tenant_id = fact_inbound_shipment.tenant_id
-    AND shipped_twin.id <> fact_inbound_shipment.id
-    AND lower(shipped_twin.line_state) = 'shipped'
-    AND trim(coalesce(fact_inbound_shipment.order_no, '')) <> ''
-    AND trim(coalesce(fact_inbound_shipment.item_code, '')) <> ''
-    AND lower(trim(coalesce(shipped_twin.operating_unit, '')))
-        = lower(trim(coalesce(fact_inbound_shipment.operating_unit, '')))
-    AND lower(trim(shipped_twin.order_no)) = lower(trim(fact_inbound_shipment.order_no))
-    AND lower(trim(shipped_twin.item_code)) = lower(trim(fact_inbound_shipment.item_code))
+from app.services.shipment_strict_pair import (
+    OPEN_TWIN_REMAINDER_SQL as _OPEN_TWIN_REMAINDER,
+    TWIN_COUNTED_QTY_SQL as _COUNTED_QTY,
+    TWIN_KEPT_SQL as _KEPT,
 )
-"""
+
+
+def _headline_sql(today_sql: str, week_start_sql: str) -> str:
+    """Headline aggregate over ``fact_inbound_shipment`` for one tenant.
+
+    Every column counts kept lines only and totals counted quantity (D-0057 + D-0065):
+    an open line covered by its strict shipped twins is skipped; a partly shipped open
+    line counts once, with its remainder as units. Fact rows are not rewritten.
+    The remainder is computed once (MATERIALIZED CTE) and left-joined by id (fast under RLS).
+    """
+    return f"""
+    WITH twin_rem AS MATERIALIZED ({_OPEN_TWIN_REMAINDER})
+    SELECT
+      :tenant AS tenant_id,
+      count(*) FILTER (WHERE status IS DISTINCT FROM 'received') AS open_lines,
+      coalesce(sum({_COUNTED_QTY}) FILTER (WHERE status IS DISTINCT FROM 'received'), 0) AS open_units,
+      count(*) FILTER (
+        WHERE pod_date IS NULL
+          AND eta_date IS NOT NULL
+          AND eta_date < {today_sql}
+      ) AS eta_past_no_pod_lines,
+      min(eta_date) FILTER (
+        WHERE pod_date IS NULL
+          AND eta_date IS NOT NULL
+          AND eta_date < {today_sql}
+      ) AS oldest_eta_past,
+      max(({today_sql} - eta_date)) FILTER (
+        WHERE pod_date IS NULL
+          AND eta_date IS NOT NULL
+          AND eta_date < {today_sql}
+      ) AS oldest_days_past_eta,
+      count(*) FILTER (
+        WHERE pod_date IS NOT NULL
+          AND pod_date >= {week_start_sql}
+      ) AS landed_pod_iso_week,
+      count(*) FILTER (WHERE pod_date IS NOT NULL) AS landed_lines,
+      coalesce(sum({_COUNTED_QTY}) FILTER (WHERE pod_date IS NOT NULL), 0) AS landed_units,
+      count(*) FILTER (WHERE pod_date IS NULL AND line_state = 'open_order') AS pipeline_lines,
+      coalesce(sum({_COUNTED_QTY}) FILTER (
+        WHERE pod_date IS NULL AND line_state = 'open_order'
+      ), 0) AS pipeline_units,
+      count(*) FILTER (
+        WHERE pod_date IS NULL AND line_state = 'shipped'
+      ) AS shipped_lines,
+      coalesce(sum(quantity) FILTER (
+        WHERE pod_date IS NULL AND line_state = 'shipped'
+      ), 0) AS shipped_units,
+      count(*) FILTER (
+        WHERE pod_date IS NULL AND line_state = 'arrived'
+      ) AS arrived_lines,
+      coalesce(sum(quantity) FILTER (
+        WHERE pod_date IS NULL AND line_state = 'arrived'
+      ), 0) AS arrived_units,
+      count(*) FILTER (
+        WHERE status = 'scheduled'
+          AND pod_date IS NULL
+          AND promise_date IS NOT NULL
+          AND promise_date < {today_sql}
+          AND promise_date >= {today_sql} - 180
+          AND eta_date IS NOT NULL
+          AND eta_date >= {today_sql}
+          AND eta_date <= {today_sql} + 90
+      ) AS overdue_commercial_lines
+    FROM fact_inbound_shipment
+    LEFT JOIN twin_rem ON twin_rem.fact_id = fact_inbound_shipment.id
+    WHERE fact_inbound_shipment.tenant_id = :tenant
+      AND {_KEPT}
+    """
 
 
 def shape_plan_unit_po_coverage(rows: list[tuple[Any, ...]]) -> list[dict[str, Any]]:
@@ -104,79 +160,7 @@ async def supply_overview(db: AsyncSession, user: dict | None) -> dict[str, Any]
     try:
         row = (
             await db.execute(
-                text(
-                    f"""
-                    SELECT
-                      :tenant AS tenant_id,
-                      count(*) FILTER (
-                        WHERE status IS DISTINCT FROM 'received'
-                          AND NOT (
-                            lower(line_state) = 'open_order'
-                            AND {_OPEN_HAS_SHIPPED_TWIN}
-                          )
-                      ) AS open_lines,
-                      coalesce(sum(quantity) FILTER (
-                        WHERE status IS DISTINCT FROM 'received'
-                          AND NOT (
-                            lower(line_state) = 'open_order'
-                            AND {_OPEN_HAS_SHIPPED_TWIN}
-                          )
-                      ), 0) AS open_units,
-                      count(*) FILTER (
-                        WHERE pod_date IS NULL
-                          AND eta_date IS NOT NULL
-                          AND eta_date < {_TODAY_SAST}
-                      ) AS eta_past_no_pod_lines,
-                      min(eta_date) FILTER (
-                        WHERE pod_date IS NULL
-                          AND eta_date IS NOT NULL
-                          AND eta_date < {_TODAY_SAST}
-                      ) AS oldest_eta_past,
-                      max(({_TODAY_SAST} - eta_date)) FILTER (
-                        WHERE pod_date IS NULL
-                          AND eta_date IS NOT NULL
-                          AND eta_date < {_TODAY_SAST}
-                      ) AS oldest_days_past_eta,
-                      count(*) FILTER (
-                        WHERE pod_date IS NOT NULL
-                          AND pod_date >= {_ISO_WEEK_START_SAST}
-                      ) AS landed_pod_iso_week,
-                      count(*) FILTER (WHERE pod_date IS NOT NULL) AS landed_lines,
-                      coalesce(sum(quantity) FILTER (WHERE pod_date IS NOT NULL), 0) AS landed_units,
-                      count(*) FILTER (
-                        WHERE pod_date IS NULL AND line_state = 'open_order'
-                          AND NOT ({_OPEN_HAS_SHIPPED_TWIN})
-                      ) AS pipeline_lines,
-                      coalesce(sum(quantity) FILTER (
-                        WHERE pod_date IS NULL AND line_state = 'open_order'
-                          AND NOT ({_OPEN_HAS_SHIPPED_TWIN})
-                      ), 0) AS pipeline_units,
-                      count(*) FILTER (
-                        WHERE pod_date IS NULL AND line_state = 'shipped'
-                      ) AS shipped_lines,
-                      coalesce(sum(quantity) FILTER (
-                        WHERE pod_date IS NULL AND line_state = 'shipped'
-                      ), 0) AS shipped_units,
-                      count(*) FILTER (
-                        WHERE pod_date IS NULL AND line_state = 'arrived'
-                      ) AS arrived_lines,
-                      coalesce(sum(quantity) FILTER (
-                        WHERE pod_date IS NULL AND line_state = 'arrived'
-                      ), 0) AS arrived_units,
-                      count(*) FILTER (
-                        WHERE status = 'scheduled'
-                          AND pod_date IS NULL
-                          AND promise_date IS NOT NULL
-                          AND promise_date < {_TODAY_SAST}
-                          AND promise_date >= {_TODAY_SAST} - 180
-                          AND eta_date IS NOT NULL
-                          AND eta_date >= {_TODAY_SAST}
-                          AND eta_date <= {_TODAY_SAST} + 90
-                      ) AS overdue_commercial_lines
-                    FROM fact_inbound_shipment
-                    WHERE tenant_id = :tenant
-                    """
-                ),
+                text(_headline_sql(_TODAY_SAST, _ISO_WEEK_START_SAST)),
                 {"tenant": tenant},
             )
         ).mappings().one()

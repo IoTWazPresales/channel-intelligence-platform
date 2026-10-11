@@ -4,8 +4,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from app.core.config import get_settings
+from app.core.product_line_scope import install_product_line_transaction_scope
+from app.core.tenant_scope import install_tenant_select_scope
 
 settings = get_settings()
+install_tenant_select_scope()
+# N-0065 / D-0056: bind the request's product-line scope at the start of every ORM transaction.
+install_product_line_transaction_scope()
 
 
 def _asyncpg_connect_args(database_url: str) -> dict:

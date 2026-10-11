@@ -127,9 +127,11 @@ from app.models.commercial_lineup import (
     CommercialLineupLine,
 )
 from app.models.task_run import TaskRun
-from app.models.iam import AppUser, AuthSession, Tenant
+from app.models.iam import AppUser, AppUserInvite, AuthSession, Tenant
 from app.models.steward_audit import StewardAuditEvent
-from app.models.saved_reports import Dashboard, DashboardWidget, SavedReport
+from app.models.platform_audit import PlatformAuditEvent
+from app.models.pricing_unknown_sku import PricingUnknownSku
+from app.models.saved_reports import Dashboard, DashboardWidget, OverviewReportPin, SavedReport
 from app.models.report_delivery import ReportDelivery, ReportSchedule
 from app.models.sql_viewer_audit import SqlViewerAudit
 from app.models.shipping_mailer_recipient import ShippingMailerRecipient
@@ -171,6 +173,7 @@ __all__ = [
     "FactDsiForecast",
     "FactInboundShipment",
     "FactPricing",
+    "PricingUnknownSku",
     "FactSupport",
     "FactPromotionPlan",
     "FactPromotionPerformance",
@@ -250,6 +253,8 @@ __all__ = [
     "AppUser",
     "AuthSession",
     "StewardAuditEvent",
+    "PlatformAuditEvent",
+    "OverviewReportPin",
     "SavedReport",
     "Dashboard",
     "DashboardWidget",

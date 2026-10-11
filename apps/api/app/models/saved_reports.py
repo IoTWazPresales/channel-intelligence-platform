@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Integer, Text, func
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Integer, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -119,4 +119,23 @@ class DashboardWidget(Base):
     )
 
     dashboard: Mapped[Dashboard] = relationship(back_populates="widgets")
-    saved_report: Mapped[SavedReport | None] = relationship()
+
+
+class OverviewReportPin(Base):
+    """Per-user pin of a saved report onto Overview. One row per user and report."""
+
+    __tablename__ = "overview_report_pin"
+    __table_args__ = (
+        UniqueConstraint("user_id", "saved_report_id", name="uq_overview_report_pin_user_report"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    saved_report_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("saved_report.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

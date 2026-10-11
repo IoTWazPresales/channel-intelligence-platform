@@ -49,6 +49,7 @@ from app.services.imports.pm_mapping_memory import (
     headers_parity_first,
     load_by_header_norm,
     merge_memory_from_pm_save,
+    tenant_column_grain_sync,
 )
 from app.services.imports.pm_suggest_mapping import suggest_pm_mapping
 from app.storage.local import get_storage_backend
@@ -429,8 +430,11 @@ def suggest_mapping_decisions(
     source: Any,
     inferred_schema: dict[str, Any] | None = None,
     product_line: str | None = None,
+    *,
+    grain: str | None = None,
 ) -> dict[str, Any]:
-    mem = load_by_header_norm(source, product_line=product_line)
+    # Same axis as save_mapping_sync, so a line's learned set is read where it was written.
+    mem = load_by_header_norm(source, product_line=product_line, grain=grain)
     ordered = headers_parity_first(headers, mem)
     suggested = suggest_pm_mapping(ordered, source, inferred_schema, header_memory=mem)
     return {h: suggested[h] for h in headers if h in suggested}
@@ -575,11 +579,14 @@ def save_mapping_sync(
     job.validation_passed = None
     job.staged_metadata = None
     job.error_summary = None
+    tenant_id = getattr(job, "tenant_id", None)
+    grain_name = tenant_column_grain_sync(db, tenant_id if isinstance(tenant_id, str) else None)
     merge_memory_from_pm_save(
         db,
         source_id=job.source_id,
         mapping_decisions=job.mapping_decisions or {},
         product_line=product_line,
+        grain=grain_name,
     )
     db.commit()
     db.refresh(job)

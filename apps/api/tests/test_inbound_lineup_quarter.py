@@ -38,6 +38,8 @@ def test_lifecycle_bucket_taxonomy():
     assert lifecycle_bucket("open_order", None) == "pipeline"
     assert lifecycle_bucket("shipped", None) == "shipped"
     assert lifecycle_bucket("shipped", date(2026, 6, 1)) == "landed"
+    assert lifecycle_bucket("arrived", None) == "arrived"
+    assert lifecycle_bucket("arrived", date(2026, 6, 1)) == "landed"
 
 
 def test_awaiting_pod_days_shipped_without_pod():
@@ -228,3 +230,23 @@ def test_accumulate_landed_this_quarter_vs_plan_landed():
     )
     assert totals["landed_units"] == 5
     assert totals["landed_this_quarter_units"] == 15
+
+
+def test_accumulate_arrived_leaves_pipeline_and_counts_once():
+    """Arrived with no POD leaves the open pipeline and is counted once."""
+    totals = empty_lineup_quarter_totals()
+    accumulate_lineup_quarter_row(
+        totals,
+        filter_key="26Q2",
+        qty=7,
+        plan_quarter="26Q2",
+        landing_quarter=None,
+        bucket="arrived",
+        ship_quarter="26Q2",
+    )
+    assert totals["arrived_units"] == 7
+    assert totals["pipeline_units"] == 0
+    assert totals["shipped_units"] == 0
+    assert totals["landed_units"] == 0
+    assert totals["shipped_not_landed_units"] == 0
+    assert totals["landed_this_quarter_units"] == 0

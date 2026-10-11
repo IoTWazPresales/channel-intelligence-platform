@@ -30,7 +30,7 @@ def session_mode(monkeypatch: pytest.MonkeyPatch):
 PREVIOUSLY_OPEN = [
     "/api/v1/customers?page=1&page_size=1",
     "/api/v1/products?page=1&page_size=1",
-    "/api/v1/market/placeholders",
+    "/api/v1/pricing/facts",
     "/api/v1/cpor/meta/lifecycle",
     "/api/v1/imports/jobs",
     "/api/v1/brief/signals",
@@ -65,5 +65,5 @@ def test_stub_mode_is_unchanged_by_the_gate() -> None:
     get_settings.cache_clear()
     assert get_settings().cip_auth_mode == "stub"
     with TestClient(app) as client:
-        assert client.get("/api/v1/market/placeholders").status_code == 200
+        assert client.get("/api/v1/pricing/facts").status_code == 200
         assert client.get("/api/v1/cpor/meta/lifecycle").status_code == 200

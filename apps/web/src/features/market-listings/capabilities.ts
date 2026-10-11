@@ -7,37 +7,37 @@ export const LISTING_CAPABILITIES: CapabilityItem[] = [
   {
     label: 'Monitored listings and URLs per customer × product',
     state: 'live',
-    note: 'Registry with status history; manual, CSV, feed proposals, auto-finder.',
+    note: 'A listing URL per customer and product, with status history. Add one by hand, from a file, from a feed, or by search.',
   },
   {
     label: 'Price and availability history',
     state: 'live',
-    note: 'Scheduled and manual polls; snapshots retained; re-parse without re-fetch.',
+    note: 'Checked every 30 minutes while this computer is running, and by hand. Overnight gaps are expected. The screen shows the last check. Earlier checks are kept.',
   },
   {
     label: 'Is the promotion live at the planned price?',
     state: 'live',
-    note: 'Each observation is checked against the covering CPOR line SRP.',
+    note: 'Each check is compared with the planned price on the covering promotion.',
   },
   {
     label: 'Price-change detection and alerts',
     state: 'partial',
-    note: 'First→last drift per listing; no per-change events or attention signal yet.',
+    note: 'Shows how far the latest price has moved from the first. A separate alert for each change is not built.',
   },
   {
     label: 'Late activation / early deactivation',
     state: 'substrate',
-    note: 'Derivable from the observation timeline and the line window; not computed.',
+    note: 'Can be read from the check history and the promotion window. Not calculated yet.',
   },
   {
     label: 'Product content and specification evidence',
     state: 'substrate',
-    note: 'Raw snapshots are stored; only price, availability and badge are extracted.',
+    note: 'The full page is stored. Only price, availability, and badge are pulled out.',
   },
   {
     label: 'SEO / listing-quality monitoring',
     state: 'planned',
-    note: 'Spec v0 non-goal; roadmap P5.',
+    note: 'Not in this release.',
   },
 ];
 
@@ -45,26 +45,26 @@ export const COMPETITION_CAPABILITIES: CapabilityItem[] = [
   {
     label: 'Our SKU ↔ competitor SKU mappings with approval',
     state: 'live',
-    note: 'Approve / reject workflow exists; score is the stored mapping score, not a lab fixture blend.',
+    note: 'You can approve or reject a match. The score shown is the one stored with the match.',
   },
   {
     label: 'System-proposed candidates with factor breakdown',
     state: 'substrate',
-    note: 'Deterministic scorer exists in code; nothing calls it yet. No Why-this-score factor panel (BACKLOG-164).',
+    note: 'Suggested matches, and a reason for the score, are not offered yet.',
   },
   {
     label: 'Competitor price observations',
     state: 'substrate',
-    note: 'Table and list endpoint exist; no import template.',
+    note: 'No file to import yet, so this list stays empty.',
   },
   {
     label: 'Monitored competitor listings',
     state: 'planned',
-    note: 'Extend the listing registry to competitor products (BACKLOG §9.9).',
+    note: 'Competitor product pages are not watched yet.',
   },
   {
     label: 'Competitor impact on our sell-out or price',
     state: 'planned',
-    note: 'Not derivable from stored data; not shown.',
+    note: 'Not calculated from what is stored, so it is not shown.',
   },
 ];

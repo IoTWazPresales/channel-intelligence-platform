@@ -1,7 +1,7 @@
 export const OVERVIEW_TITLE = 'Overview';
 
 export const OVERVIEW_DESCRIPTION =
-  'Your configurable view of the business, what needs attention now, and governed reports.';
+  'Your configurable view of the business, what needs attention now, and reports you can save.';
 
 export type OverviewLeaf = 'hub' | 'dashboard' | 'reports' | 'inbox';
 

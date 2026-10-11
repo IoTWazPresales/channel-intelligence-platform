@@ -148,7 +148,7 @@ export default function InventoryPage() {
       <PageHeader {...navPageChrome('/stock', { search: '?lens=cover' })} />
       <Paper sx={{ p: 2 }}>
         <ModuleDataSection
-          intro="Rows are stored in fact_inventory_customer. Unknown SKUs and customer codes create placeholder dimension rows."
+          intro="Customer stock reported by retailers. Unknown SKUs and customer codes stay as provisional records until they are matched."
           isLoading={isLoading}
           isError={isError}
           error={toQueryError(error)}

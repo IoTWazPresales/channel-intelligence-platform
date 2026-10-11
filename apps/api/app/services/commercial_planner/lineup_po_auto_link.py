@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.commercial_lineup import CommercialLineupCase, CommercialLineupCasePo, CommercialLineupLine, CommercialLineupPoAutoLinkDismiss
 from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.facts import FactInboundShipment
+from app.services.shipment_strict_pair import outerjoin_twin_remainder
 from app.models.purchase_order import PurchaseOrder
 
 logger = logging.getLogger(__name__)
@@ -470,14 +471,19 @@ async def _po_auto_link_proposals_inner(
 
     # Truth layer: global ``source_key`` upsert (latest-job-wins). Evidence rows are per-job and
     # must not be summed for shipped totals — see ``shipment_inbound_facts.upsert_inbound_shipment_facts_for_job``.
-    shipment_rows = (
+    # An open line covered by its strict shipped twins is skipped; a partly shipped one
+    # counts its remainder (D-0065). Rows stay as stored; only the counted quantity differs.
+    ship_stmt, twin = outerjoin_twin_remainder(select(FactInboundShipment), FactInboundShipment)
+    ship_result = (
         await db.execute(
-            select(FactInboundShipment).where(
+            ship_stmt.add_columns(twin.counted_quantity).where(
                 FactInboundShipment.purchase_order_id.isnot(None),
                 FactInboundShipment.product_id.isnot(None),
             )
         )
-    ).scalars().all()
+    ).all()
+    shipment_rows = [r[0] for r in ship_result]
+    counted_qty_by_fact = {int(r[0].id): float(r[1] or 0) for r in ship_result}
 
     ship_po_ids = sorted({int(s.purchase_order_id) for s in shipment_rows if s.purchase_order_id is not None})
     linked_po_ids = sorted({po_id for _cid, po_id in linked_pairs})
@@ -516,7 +522,7 @@ async def _po_auto_link_proposals_inner(
         product_id = int(ship.product_id)  # type: ignore[arg-type]
         ship_cust = int(ship.resolved_customer_id) if ship.resolved_customer_id is not None else None
         ship_dist = int(ship.resolved_distributor_id) if ship.resolved_distributor_id is not None else None
-        ship_qty = float(ship.quantity or 0)
+        ship_qty = counted_qty_by_fact[int(ship.id)]
         line_state = (ship.line_state or "").strip().lower()
         ev_date, date_src = evidence_date_for_period_match(
             crad_date=ship.crad_date,

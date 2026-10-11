@@ -18,9 +18,10 @@ import {
 } from '@mui/material';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
+import { StewardWriteGate } from '@/components/StewardWriteGate';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { DataChrome } from '@/features/data-stewardship/DataChrome';
 import { OPS_LIST_GRID_PAGINATION } from '@/features/shell/opsListGridPagination';
@@ -54,6 +55,11 @@ type SlotItem = {
 export default function CstStewardPage() {
   const qc = useQueryClient();
   const [tab, setTab] = useState(0);
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('tab');
+    if (requested === 'slots') setTab(1);
+    if (requested === 'aliases') setTab(2);
+  }, []);
   const [filter, setFilter] = useState('');
   const [dlg, setDlg] = useState<KeyAccountRow | null>(null);
   const [keyFlag, setKeyFlag] = useState(false);
@@ -173,6 +179,7 @@ export default function CstStewardPage() {
 
   return (
     <DataChrome>
+      <StewardWriteGate>
       <Alert severity="info" sx={{ mb: 2 }} data-testid="cst-steward-guide">
         Key-account flag, report cadence / feed profile, expected-report worklist, and article-alias confirm. FLAG ≠
         BLOCK — unconfirmed aliases never auto-resolve. Slot advance is steward/dev triggered here; beat job is
@@ -348,6 +355,7 @@ export default function CstStewardPage() {
           </Button>
         </DialogActions>
       </Dialog>
+      </StewardWriteGate>
     </DataChrome>
   );
 }

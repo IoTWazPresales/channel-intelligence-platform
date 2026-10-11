@@ -2,7 +2,7 @@
 
 import { Box, Button, Stack, Typography, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import NextLink from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 
@@ -11,7 +11,7 @@ import { DashboardWidgetCard } from '@/features/dashboards/DashboardWidgetCard';
 import type { CatalogResponse, Dashboard } from '@/features/dashboards/types';
 import { StartWorkPanel } from '@/features/overview/StartWorkPanel';
 import { Panel, PanelRow } from '@/features/workbench-ui/Panel';
-import { apiGet } from '@/lib/api';
+import { apiDelete, apiGet } from '@/lib/api';
 
 import { overviewAttentionFirst } from './overviewPaths';
 import { useClientReady } from './useClientReady';
@@ -26,8 +26,8 @@ type BriefSignalsResponse = {
 type SavedReportItem = {
   id: number;
   name: string;
-  metric_key?: string;
   visibility?: string;
+  overview_pinned?: boolean;
 };
 
 function signalSeverity(s: BriefSignal): 'danger' | 'warning' | 'info' | 'neutral' {
@@ -43,6 +43,13 @@ export function OverviewHub() {
   const search = useSearchParams();
   const router = useRouter();
   const ready = useClientReady();
+  const qc = useQueryClient();
+  const unpin = useMutation({
+    mutationFn: (id: number) => apiDelete(`/api/v1/saved-reports/${id}/overview-pin`),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['saved-reports'] });
+    },
+  });
   const attentionFirst = overviewAttentionFirst(isMobile, search?.get('zone'));
 
   const briefQ = useQuery({
@@ -69,6 +76,7 @@ export function OverviewHub() {
   const brief = ready ? briefQ.data : undefined;
   const dashboards = ready ? dashQ.data?.items ?? [] : [];
   const reports = ready ? reportsQ.data?.items ?? [] : [];
+  const pinnedReports = reports.filter((r) => r.overview_pinned);
   const metrics = catalogQ.data?.metrics ?? [];
 
   const signals = brief?.signals ?? [];
@@ -138,7 +146,7 @@ export function OverviewHub() {
             ? 'Loading live signals…'
             : briefUnavailable
               ? 'Attention signals are not available yet'
-              : `${urgent.length} urgent · ${informational.length} informational · live from /api/v1/brief/signals`
+              : `${urgent.length} urgent · ${informational.length} informational`
         }
         flush
       >
@@ -188,7 +196,7 @@ export function OverviewHub() {
       </Panel>
       <Panel
         title="Pinned reports"
-        subtitle="Saved governed reports listed here. Pinning a saved report onto this Overview as a widget is not built."
+        subtitle="Reports you pinned. Each person has their own list."
         actions={
           <Button size="small" component={NextLink} href="/reports" data-testid="overview-all-reports">
             All reports
@@ -201,19 +209,25 @@ export function OverviewHub() {
             <Typography variant="body2" color="text.secondary" sx={{ px: 1.5, py: 1 }}>
               Saved reports are not available right now.
             </Typography>
-          ) : reports.length === 0 ? (
+          ) : pinnedReports.length === 0 ? (
             <Typography variant="body2" color="text.secondary" sx={{ px: 1.5, py: 1 }}>
-              No saved reports yet. The report builder is at /reports.
+              Nothing pinned. Open All reports and choose Pin to Overview.
             </Typography>
           ) : (
-            reports.map((r) => (
-              <PanelRow
-                key={r.id}
-                severity="neutral"
-                primary={r.name}
-                secondary={r.metric_key ? `${r.metric_key}${r.visibility ? ` · ${r.visibility}` : ''}` : r.visibility}
-                href="/reports"
-              />
+            pinnedReports.map((r) => (
+              <Stack key={r.id} direction="row" alignItems="center" spacing={0.5} data-testid={`pinned-report-${r.id}`}>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <PanelRow
+                    severity="neutral"
+                    primary={r.name}
+                    secondary={r.visibility === 'published' ? 'Shared' : 'Only you'}
+                    href="/reports"
+                  />
+                </Box>
+                <Button size="small" variant="text" onClick={() => unpin.mutate(r.id)} data-testid={`unpin-report-${r.id}`}>
+                  Unpin
+                </Button>
+              </Stack>
             ))
           )}
         </Stack>

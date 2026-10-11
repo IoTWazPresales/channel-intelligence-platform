@@ -68,8 +68,8 @@ export function PortfolioReadPanel({ currencyCode }: { currencyCode: string }) {
   return (
     <Box data-testid="case-book-portfolio-read">
       <Panel
-        title="Portfolio read — all non-superseded cases"
-        subtitle="Every lifecycle stage including settled, intelligence-excluded cases left out. The open book above is a narrower scope."
+        title="Portfolio — every case still in the book"
+        subtitle="Every stage, including settled. Test cases are left out. The open book above is a narrower view."
         actions={
           <Button
             size="small"
@@ -112,7 +112,7 @@ function PortfolioReadBody({ currencyCode }: { currencyCode: string }) {
         error={q.isError ? new Error(String((q.error as Error)?.message ?? 'Could not load the portfolio read')) : null}
         onRetry={() => void q.refetch()}
         isEmpty={!data || data.cases_in_scope === 0}
-        empty={{ title: 'No cases in scope', description: 'No non-superseded, non-excluded cases have lines yet.' }}
+        empty={{ title: 'No cases in scope', description: 'No cases still in the book have lines yet.' }}
         loadingLabel="Loading portfolio read…"
       >
         <Stack spacing={1.5}>
@@ -134,7 +134,7 @@ function PortfolioReadBody({ currencyCode }: { currencyCode: string }) {
                 />
               }
               compact
-              caption="Σ line ttl_support across all lifecycle stages"
+              caption="Sum of line support across every stage"
             />
             <HeadlineFigure
               label="Delivery rate"

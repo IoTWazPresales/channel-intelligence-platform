@@ -18,8 +18,6 @@ from app.models.derived import (
     BudgetHealth,
     BuyRecommendation,
     ExceptionInboxItem,
-    PricingRecommendation,
-    PromoReadiness,
     StockHealth,
     StockRisk,
     WeeksOfStock,
@@ -32,12 +30,10 @@ from app.models.dimensions import (
     DimCustomer,
     DimDistributor,
     DimProduct,
-    DimPromotion,
     DimRegion,
     DimSource,
 )
 from app.models.lineup import FactLineupPlanItem
-from app.models.promo_export import PromoPlanExport, PromoPlanExportEvent
 from app.models.fact_demand_forecast import FactDemandForecast
 from app.models.facts import (
     FactBudgetAllocation,
@@ -57,11 +53,8 @@ from app.models.ingestion import ImportJob, ImportRowResult, ImportTemplate, Raw
 from app.models.product_catalog import BusinessUnit, ProductCatalog
 from app.models.mapping import EntityMappingQueue, ProductAlias
 from app.services.planning.buy import BuyInputs, build_buy_plan
-from app.services.planning.pricing import PricingInputs, pricing_state
 from app.services.planning.wos import WosInputs, classify_stock_risk
-from app.services.promo_export.cpor_xlsx import TEMPLATE_CODE, build_promo_plan_workbook_bytes
 from app.services.imports.template_definitions import DEFAULT_SOURCES, IMPORT_TEMPLATE_ROWS
-from app.storage.local import LocalStorageBackend
 
 from app.services.commercial_planner.reference_bootstrap import ensure_commercial_planner_system_reference_data_sync
 
@@ -227,14 +220,6 @@ def run(session: Session, *, full_demo: bool = False) -> None:
     session.add_all(owners)
     session.flush()
 
-    # Spec §7: stop seeding FactPromotionPlan (empty scaffold). DimPromotion retained
-    # only while PromoReadiness / PromoPlanExport / lineup.link_promotion_id still FK it.
-    promos = [
-        DimPromotion(code="PROMO-Q2", name="Spring Audio Event", start_date=date.today(), end_date=date.today() + timedelta(days=45)),
-    ]
-    session.add_all(promos)
-    session.flush()
-
     comp_brand = DimCompetitorBrand(name="Northwave Audio")
     session.add(comp_brand)
     session.flush()
@@ -389,43 +374,6 @@ def run(session: Session, *, full_demo: bool = False) -> None:
         )
     )
 
-    price_rec = pricing_state(
-        PricingInputs(
-            current_net_price=169.99,
-            reference_price=179.99,
-            stock_risk_kind=risk.kind,
-            days_to_promo=14,
-            competitor_net=154.5,
-        )
-    )
-    session.add(
-        PricingRecommendation(
-            product_id=products[0].id,
-            suggested_state=price_rec.suggested_state,
-            recommendation_type="pricing",
-            status="active",
-            confidence="medium",
-            explanation_summary=price_rec.explanation_summary,
-            explanation_factors=price_rec.factors,
-            impact_estimate="Margin vs share trade-off in promo window.",
-            action_owner="commercial_manager",
-        )
-    )
-
-    session.add(
-        PromoReadiness(
-            promotion_id=promos[0].id,
-            product_id=products[0].id,
-            recommendation_type="promo_readiness",
-            status="active",
-            confidence="medium",
-            explanation_summary="Inbound arrives after promo start; risk of stock-out during uplift.",
-            explanation_factors={"eta_days": 10, "promo_start": str(date.today())},
-            impact_estimate="Promo performance at risk without pull-forward or air freight.",
-            action_owner="planner_queue",
-        )
-    )
-
     roadmap = FactProductRoadmap(
         product_id=products[2].id,
         lifecycle_phase="growth",
@@ -481,7 +429,7 @@ def run(session: Session, *, full_demo: bool = False) -> None:
                 amount=35000,
                 initiative_type="promo_support",
                 linked_product_id=products[0].id,
-                linked_promotion_id=promos[0].id,
+                linked_promotion_id=None,
                 justification_summary="Fund incremental promo support for Alpha Pro 200 in West region.",
                 expected_impact="Protect share during competitor surge; estimated +6 pts lift.",
                 risk_of_not_funding="Promo execution weakens; stock risk compounds with late inbound.",
@@ -568,10 +516,10 @@ def run(session: Session, *, full_demo: bool = False) -> None:
                 approval_status="submitted",
                 link_buy_plan_id=buy_fact.id,
                 link_pricing_id=pricing_row.id,
-                link_promotion_id=promos[0].id,
+                link_promotion_id=None,
                 link_budget_request_id=budget_row.id,
                 link_roadmap_id=None,
-                notes="Cross-links: buy plan, pricing row, promo, and budget request.",
+                notes="Cross-links: buy plan, pricing row, and budget request.",
             ),
             FactLineupPlanItem(
                 customer_id=customers[0].id,
@@ -598,43 +546,6 @@ def run(session: Session, *, full_demo: bool = False) -> None:
                 notes="Whitespace candidate aligned to roadmap gap signal.",
             ),
         ]
-    )
-
-    data, digest = build_promo_plan_workbook_bytes(session, promos[0].id, default_customer_id=customers[0].id)
-    demo_export = PromoPlanExport(
-        promotion_id=promos[0].id,
-        template_code=TEMPLATE_CODE,
-        export_version=1,
-        storage_key="pending",
-        file_name=f"CPOR_PromoPlan_{promos[0].code}_v1.xlsx",
-        checksum_sha256=digest,
-        validation_status="passed",
-        workflow_status="approved",
-        created_by="seed",
-        submitted_at=datetime.now(timezone.utc),
-        decided_at=datetime.now(timezone.utc),
-        decided_by="seed",
-    )
-    session.add(demo_export)
-    session.flush()
-    storage = LocalStorageBackend()
-    demo_key = f"exports/promo/{demo_export.id}/cpor_v1.xlsx"
-    storage.save(demo_key, data)
-    demo_export.storage_key = demo_key
-    session.add(
-        PromoPlanExportEvent(
-            export_id=demo_export.id,
-            event_type="created",
-            actor="seed",
-            payload={"seed": True},
-        )
-    )
-    session.add(
-        PromoPlanExportEvent(
-            export_id=demo_export.id,
-            event_type="approved",
-            actor="seed",
-        )
     )
 
     session.commit()

@@ -22,13 +22,12 @@ from app.api.v1.endpoints.commercial_planner import customer_term_grid_row_dict
 from app.api.v1.endpoints.forecasts import forecast_row_dict
 from app.api.v1.endpoints.inventory import inventory_customer_row_dict
 from app.api.v1.endpoints.listing_capture import listing_grid_row_dict
-from app.api.v1.endpoints.pricing import pricing_fact_row_dict, pricing_recommendation_row_dict
+from app.api.v1.endpoints.pricing import pricing_fact_row_dict
 from app.api.v1.endpoints.roadmap import roadmap_row_dict
 from app.api.v1.endpoints.sellout import commercial_line_row_dict
 from app.api.v1.endpoints.shipping import _fact_to_dict
 from app.main import app
 from app.models.commercial_planner import CommercialCustomerTerm
-from app.models.derived import PricingRecommendation
 from app.models.dimensions import DimCustomer, DimProduct
 from app.models.listing_capture import CustomerListing
 from app.services.channel_intelligence.cst_read_model import _attach_display_names, compute_entity_metrics
@@ -140,10 +139,6 @@ def _seeded_rows() -> dict[str, dict]:
         id=3, product_id=7, customer_id=3, effective_date=date(2026, 9, 1), list_price=10, net_price=9,
         currency="ZAR", created_at=NOW, updated_at=NOW,
     )
-    rec = PricingRecommendation(
-        id=4, product_id=7, suggested_state="hold", recommendation_type="price", status="active",
-        explanation_factors={"a": 1}, reviewed_by="someone", created_at=NOW, updated_at=NOW,
-    )
     buy = FactBuyPlan(
         id=5, product_id=7, distributor_id=5, recommended_qty=10, recommended_window_start=date(2026, 9, 1),
         recommended_window_end=date(2026, 9, 30), rationale="r", created_at=NOW, updated_at=NOW,
@@ -162,7 +157,6 @@ def _seeded_rows() -> dict[str, dict]:
         "sellout.commercial-lines": commercial_line_row_dict(sellout, labels),
         "inventory.customer": inventory_customer_row_dict(inv, PROD, DimCustomer(id=3, code="CUST-3", name="Customer Three")),
         "pricing.facts": pricing_fact_row_dict(price, PROD, CUSTOMERS),
-        "pricing.recommendations": pricing_recommendation_row_dict(rec, PROD),
         "buy-plans": buy_plan_row_dict(buy, PROD, DISTRIBUTORS),
         "roadmap": roadmap_row_dict(road, PROD),
         "forecasts": forecast_row_dict(fc, PROD, CUSTOMERS, DISTRIBUTORS),
@@ -235,17 +229,6 @@ def test_internal_columns_never_offered_or_merged(grid_id: str) -> None:
     assert "raw_source_row" not in keys
     assert not {k for k in keys if k.endswith("_token")}
     assert not keys & spec.hidden_internal
-
-
-def test_json_and_pii_like_columns_hidden_on_recommendations() -> None:
-    keys = set(model_field_keys(GRID_FIELDS["pricing.recommendations"]))
-    assert "explanation_factors" not in keys  # JSONB blob
-    assert "reviewed_by" not in keys  # names a person
-    merged = fact_row_dict(
-        PricingRecommendation(id=1, product_id=1, suggested_state="x", reviewed_by="p", explanation_factors={}),
-        "pricing.recommendations",
-    )
-    assert "reviewed_by" not in merged
 
 
 def test_fact_row_dict_values_are_json_safe() -> None:
@@ -366,7 +349,6 @@ def test_computed_grids_offer_only_declared_keys() -> None:
 IDENTITY_GRIDS = {
     "forecasts": ("sku", "sales_model_name"),
     "pricing.facts": ("sku", "sales_model_name"),
-    "pricing.recommendations": ("sku", "sales_model_name"),
     "roadmap": ("sku", "sales_model_name"),
     "buy-plans": ("sku", "sales_model_name"),
     "inventory.customer": ("product_sku", "product_sales_model_name"),

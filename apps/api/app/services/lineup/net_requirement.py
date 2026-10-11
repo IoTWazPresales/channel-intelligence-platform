@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fact_demand_forecast import FactDemandForecast
 from app.models.facts import FactInboundShipment
+from app.services.shipment_strict_pair import twin_remainder
 from app.services.channel_ops_config import REPLENISHMENT_WOC_THRESHOLD_WEEKS
 from app.services.channel_ops_derived_stock import (
     derived_stock_by_dist_product,
@@ -195,17 +196,22 @@ async def _in_transit_by_dist_product(
         FactInboundShipment.pod_date.is_(None),
     )
     open_po = FactInboundShipment.line_state.in_(tuple(_OPEN_PO_LINE_STATES))
+    # Counted quantity: a covered open twin is skipped, a partly shipped one adds its remainder (D-0065).
+    twin = twin_remainder(FactInboundShipment)
     stmt = (
         select(
             dist_col.label("distributor_id"),
             FactInboundShipment.product_id,
-            func.coalesce(func.sum(FactInboundShipment.quantity), 0),
+            func.coalesce(func.sum(twin.counted_quantity), 0),
         )
+        .select_from(FactInboundShipment)
+        .outerjoin(twin.subquery, twin.onclause)
         .where(
             FactInboundShipment.purchase_order_id.is_not(None),
             FactInboundShipment.product_id.is_not(None),
             dist_col.is_not(None),
             or_(shipped_not_landed, open_po),
+            twin.kept,
         )
         .group_by(dist_col, FactInboundShipment.product_id)
     )

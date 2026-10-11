@@ -357,13 +357,13 @@ export function ProductMasterGapWorklistView() {
           <Stack spacing={2}>
             <Typography variant="body2">
               Matched {preview?.matched_count ?? 0} · unmatched {preview?.unmatched_count ?? 0}. Apply
-              updates shipment evidence / DSI staging candidates / CPOR claim lines only — never creates
+              updates shipment evidence, distributor-sales staging, and claim lines only — it never creates
               products.
             </Typography>
             {hasDsiFactsFlag ? (
               <Alert severity="warning">
-                DSI fact rows are not rewritten (source_key includes product_id). Staging candidates are
-                resolved; leftovers stay FLAG, not BLOCK.
+                Already-applied distributor sell-out and inventory rows are not rewritten. Staged name matches are
+                resolved; leftovers stay flagged, not blocked.
               </Alert>
             ) : null}
             <FormControlLabel

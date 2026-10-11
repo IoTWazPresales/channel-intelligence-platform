@@ -17,6 +17,11 @@ Format = Literal["xlsx", "pdf"]
 Trigger = Literal["manual", "schedule", "import_event"]
 
 
+def import_event_skips_cache(trigger: str) -> bool:
+    """Import completion recomputes the metric before subscribers are notified."""
+    return trigger == "import_event"
+
+
 def next_run_for_cadence(cadence: str, *, now: datetime | None = None) -> datetime:
     """Compute next run instant (UTC). weekly_monday_0700 = next Monday 07:00 UTC."""
     now = now or datetime.now(timezone.utc)
@@ -43,6 +48,7 @@ async def deliver_saved_report(
     fmt: Format = "xlsx",
     trigger: Trigger = "manual",
     recipient_user_id: int | None = None,
+    skip_cache: bool = False,
 ) -> ReportDelivery:
     tid = report.tenant_id
     result = await execute_query(
@@ -51,7 +57,7 @@ async def deliver_saved_report(
         grains=list(report.grains or []),
         filters=dict(report.filters or {}),
         tenant_id=tid,
-        skip_cache=False,
+        skip_cache=skip_cache,
     )
     payload = result.as_dict()
     missing = detect_missing_data(payload)

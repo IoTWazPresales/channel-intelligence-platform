@@ -41,6 +41,7 @@ class AppUser(Base):
     )
 
     sessions: Mapped[list["AuthSession"]] = relationship(back_populates="user")
+    invites: Mapped[list["AppUserInvite"]] = relationship(back_populates="user")
 
 
 class AuthSession(Base):
@@ -58,3 +59,22 @@ class AuthSession(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped[AppUser] = relationship(back_populates="sessions")
+
+
+class AppUserInvite(Base):
+    """Single-use set-password link. The raw token is emailed once and never stored."""
+
+    __tablename__ = "app_user_invite"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    token_hash: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    user: Mapped[AppUser] = relationship(back_populates="invites")

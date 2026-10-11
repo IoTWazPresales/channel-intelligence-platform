@@ -34,7 +34,7 @@ export function ImportJobLoadedSuccessCallout({
   fileName,
   status,
   stage,
-  factLayerLabel = 'canonical fact tables',
+  factLayerLabel = 'the records for this import',
   unresolvedNotes = [],
   onStartNewImport,
   testId = 'import-job-loaded-success',
@@ -65,8 +65,8 @@ export function ImportJobLoadedSuccessCallout({
               · <em>{fileName}</em>
             </>
           ) : null}
-          ) reached stage <strong>{stage}</strong>. Facts were upserted into {factLayerLabel} using each row&apos;s{' '}
-          <strong>source_key</strong> (latest apply wins). Evidence from validate is still preserved on the import job.
+          ) is <strong>{stage}</strong>. Rows were written to {factLayerLabel}. Applying the same file again
+          updates those rows. The validation record stays on this import.
         </Typography>
         {unresolvedNotes.length > 0 ? (
           <Typography variant="body2" component="div">

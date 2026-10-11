@@ -106,9 +106,9 @@ export function PaymentEvidenceOverlayPanel() {
       <Alert severity="warning" variant="outlined" data-testid="cpor-payment-paid-note">
         {data?.paid_note ??
           'Paid on the ZAR open book only sums same-currency linked evidence. USD pending-report rows do not move R0 paid.'}{' '}
-        This is payment/CN status evidence, not per-SKU claim lines. Unmatched closed/paid Case IDs
-        below are historical source attestation — not minted as cpor_case. Claim-sale ageing stays
-        claim-line-only; uplift stays blocked.
+        This is payment and credit-note evidence, not claim lines. Unmatched closed or paid case
+        codes below come from the file — they are not promotion cases. Ageing stays on claim lines;
+        uplift stays blocked.
       </Alert>
       <Panel
         title="Pending — Latest Comment"
@@ -135,7 +135,7 @@ export function PaymentEvidenceOverlayPanel() {
       </Panel>
       <Panel
         title="Unmatched historical Case IDs"
-        subtitle="Persisted cpor_payment_evidence with nullable case_id. Exact Case ID only — not minted as cpor_case. Closed/paid is source_attested."
+        subtitle="Payment rows that name a case code with no matching promotion case. Closed or paid is what the file said."
       >
         {(data?.unmatched_file_rows ?? []).length === 0 ? (
           <Typography variant="body2" color="text.secondary">

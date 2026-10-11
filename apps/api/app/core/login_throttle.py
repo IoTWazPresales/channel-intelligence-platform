@@ -52,22 +52,45 @@ def _is_loopback(host: str) -> bool:
     return bool(ip.is_loopback or (mapped is not None and mapped.is_loopback))
 
 
-def client_address(request: Request) -> str:
-    """Client address for per-address throttling.
+def throttle_address_key(value: str) -> str:
+    """Throttle key for an address: IPv4 as is, IPv4-mapped IPv6 as IPv4, other IPv6 as its /64.
 
-    request.client.host is the TCP peer. The Next same-origin proxy (apps/web .../route.ts)
-    connects from loopback and forwards the browser's headers, so X-Forwarded-For is honoured
-    only when the peer is loopback; the right-most entry is used (the hop nearest us).
-    Limitation: Next 15 only fills X-Forwarded-For when the client did not send one, so a
-    client can choose this value; per-account limits do not depend on it.
+    One IPv6 subscriber normally holds a whole /64, so keying on the full address would let a
+    single client rotate through 2**64 keys and never hit the per-address limit (N-0086).
+    """
+    try:
+        ip = ipaddress.ip_address(value)
+    except ValueError:
+        return value[:64] or "unknown"
+    if isinstance(ip, ipaddress.IPv6Address):
+        if ip.ipv4_mapped is not None:
+            return str(ip.ipv4_mapped)
+        return str(ipaddress.IPv6Network((ip, 64), strict=False))
+    return str(ip)
+
+
+def client_address(request: Request) -> str:
+    """Client address for per-address throttling (N-0037, trust model fixed in N-0086).
+
+    Only a loopback peer may name the client. The API listens on 127.0.0.1, and the one loopback
+    peer that relays browser traffic is the Next same-origin proxy (apps/web .../route.ts). Since
+    N-0086 that proxy drops every visitor-supplied X-Forwarded-For / X-Real-IP / Forwarded /
+    CF-Connecting-IP and sends exactly one X-Forwarded-For: Cloudflare's CF-Connecting-IP for
+    tunnel traffic, else 127.0.0.1 (see apps/web/src/lib/proxyForwardedHeaders.ts).
+
+    uvicorn's proxy-header middleware (on by default, trusting 127.0.0.1) may already have
+    replaced request.client with that X-Forwarded-For value; this function gives the same answer
+    either way: loopback peer -> right-most X-Forwarded-For entry, otherwise the peer itself.
+    The result is reduced by throttle_address_key (IPv6 /64).
     """
     peer = request.client.host if request.client else ""
+    address = peer
     if peer and _is_loopback(peer):
         xff = request.headers.get("x-forwarded-for", "")
         hops = [h.strip() for h in xff.split(",") if h.strip()]
         if hops:
-            return hops[-1]
-    return peer or "unknown"
+            address = hops[-1]
+    return throttle_address_key(address) if address else "unknown"
 
 
 @dataclass(frozen=True)

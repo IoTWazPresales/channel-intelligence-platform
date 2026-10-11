@@ -37,6 +37,9 @@ from app.utils.json_safe import to_jsonable
 
 router = APIRouter()
 
+# N-0086: steward writes need steward or admin (admin always passes require_roles); reads stay sign-in only.
+_STEWARD_WRITE = [Depends(require_roles(Role.ADMIN, Role.STEWARD))]
+
 
 def _actor(x_user_id: str | None) -> str | None:
     return x_user_id
@@ -221,7 +224,7 @@ def get_key_account_steward(customer_id: int):
         return _config_json(cfg, customer=cust)
 
 
-@router.patch("/key-accounts/{customer_id}")
+@router.patch("/key-accounts/{customer_id}", dependencies=_STEWARD_WRITE)
 def patch_key_account_steward(
     customer_id: int,
     body: KeyAccountPatch,
@@ -326,7 +329,7 @@ def report_slot_worklist(
         }
 
 
-@router.post("/report-slots/advance")
+@router.post("/report-slots/advance", dependencies=_STEWARD_WRITE)
 def advance_report_slots(
     body: SlotAdvanceBody | None = None,
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
@@ -391,7 +394,7 @@ def list_article_aliases(
         ]
 
 
-@router.post("/article-aliases/import")
+@router.post("/article-aliases/import", dependencies=_STEWARD_WRITE)
 async def import_article_aliases(
     file: UploadFile = File(...),
     confirm_unique: bool = Query(
@@ -440,7 +443,7 @@ async def import_article_aliases(
         return payload
 
 
-@router.post("/article-aliases/confirm-import")
+@router.post("/article-aliases/confirm-import", dependencies=_STEWARD_WRITE)
 def confirm_imported_article_aliases(
     body: AliasImportConfirmBody,
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
@@ -456,7 +459,7 @@ def confirm_imported_article_aliases(
         return result
 
 
-@router.patch("/article-aliases/{alias_id}")
+@router.patch("/article-aliases/{alias_id}", dependencies=_STEWARD_WRITE)
 def patch_article_alias(
     alias_id: int,
     body: AliasPatchBody,
@@ -514,7 +517,7 @@ def patch_article_alias(
         return _alias_json(row, cust, prod)
 
 
-@router.post("/article-aliases/derive-eras-from-shipping")
+@router.post("/article-aliases/derive-eras-from-shipping", dependencies=_STEWARD_WRITE)
 def derive_eras_from_shipping(
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
 ):
@@ -543,7 +546,7 @@ def derive_eras_from_shipping(
         return summary.to_dict()
 
 
-@router.post("/article-aliases/confirm-shipping-derived")
+@router.post("/article-aliases/confirm-shipping-derived", dependencies=_STEWARD_WRITE)
 def confirm_shipping_derived_eras(
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
 ):
@@ -590,7 +593,7 @@ def confirm_shipping_derived_eras(
         return {"confirmed": confirmed, "failed": failed, "candidates": len(confirmable)}
 
 
-@router.post("/article-aliases/reresolve-job-residuals")
+@router.post("/article-aliases/reresolve-job-residuals", dependencies=_STEWARD_WRITE)
 def reresolve_job_residuals(
     job_id: int = Query(...),
     apply: bool = Query(default=False),
@@ -658,7 +661,7 @@ def reresolve_job_residuals(
         }
 
 
-@router.post("/article-aliases/{alias_id}/confirm")
+@router.post("/article-aliases/{alias_id}/confirm", dependencies=_STEWARD_WRITE)
 def confirm_article_alias(
     alias_id: int,
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
@@ -675,7 +678,7 @@ def confirm_article_alias(
         return _alias_json(row, cust, prod)
 
 
-@router.post("/article-aliases/{alias_id}/reject")
+@router.post("/article-aliases/{alias_id}/reject", dependencies=_STEWARD_WRITE)
 def reject_article_alias(
     alias_id: int,
     body: AliasRejectBody | None = None,

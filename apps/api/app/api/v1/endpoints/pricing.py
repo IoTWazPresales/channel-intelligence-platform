@@ -8,9 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
 from app.models.dimensions import DimProduct
-from app.models.derived import PricingRecommendation
 from app.models.facts import FactPricing
-from app.services.facts_upsert import get_or_create_product, resolve_channel_id, resolve_customer_id
+from app.services.facts_upsert import resolve_channel_id, resolve_customer_id
+from app.services.pricing_unknown_sku import (
+    UNKNOWN_PRICING_SKU_HREF,
+    UNKNOWN_PRICING_SKU_MESSAGE,
+    clear_queued_pricing_sku,
+    find_product_by_sku,
+    queue_unknown_pricing_sku,
+)
 from app.services.grid_fields import customer_labels, fact_row_dict, reference_fields
 
 router = APIRouter()
@@ -74,26 +80,46 @@ def pricing_fact_row_dict(
     }
 
 
-def pricing_recommendation_row_dict(r: PricingRecommendation, prod: DimProduct | None) -> dict:
-    # Registry fields merged under the hand-built keys (existing keys win; N-0034).
-    return {
-        **fact_row_dict(r, "pricing.recommendations"),
-        "id": r.id,
-        "sku": prod.sku if prod else None,
-        "sales_model_name": prod.sales_model_name if prod else None,
-        "suggested_state": r.suggested_state,
-        "explanation_summary": r.explanation_summary,
-        "explanation_factors": r.explanation_factors,
-        "confidence": r.confidence,
-        "action_owner": r.action_owner,
-    }
+_RECOMMENDATIONS_GONE = {
+    "message": "Pricing recommendations were removed. Recorded prices stay on this page. Unknown SKUs stay on the unknown-price queue.",
+    "href": "/pricing",
+}
+
+
+async def _product_or_queue(db: AsyncSession, row: PricingFactRowIn, eff: date):
+    prod = await find_product_by_sku(db, row.sku)
+    if prod is not None:
+        return prod
+    await queue_unknown_pricing_sku(
+        db,
+        sku=row.sku,
+        list_price=row.list_price,
+        net_price=row.net_price,
+        currency=row.currency,
+        effective_date=eff,
+        customer_code=row.customer_code,
+        channel_code=row.channel_code,
+    )
+    return None
 
 
 @router.post("/facts", status_code=201)
 async def create_pricing_fact(row: PricingFactRowIn, db: AsyncSession = Depends(get_db)):
     try:
         eff = _parse_iso_date(row.effective_date)
-        prod = await get_or_create_product(db, row.sku)
+        prod = await _product_or_queue(db, row, eff)
+        if prod is None:
+            await db.commit()
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": UNKNOWN_PRICING_SKU_MESSAGE,
+                    "sku": row.sku.strip(),
+                    "queued": True,
+                    "href": UNKNOWN_PRICING_SKU_HREF,
+                },
+            )
+        await clear_queued_pricing_sku(db, row.sku)
         cust_id = await resolve_customer_id(db, row.customer_code, create=True)
         ch_id = (
             await resolve_channel_id(db, row.channel_code.strip())
@@ -122,10 +148,15 @@ async def bulk_create_pricing_facts(body: PricingFactsBulkBody, db: AsyncSession
     if len(body.rows) > 5000:
         raise HTTPException(status_code=400, detail="Too many rows (max 5000)")
     n = 0
+    queued: list[str] = []
     for row in body.rows:
         try:
             eff = _parse_iso_date(row.effective_date)
-            prod = await get_or_create_product(db, row.sku)
+            prod = await _product_or_queue(db, row, eff)
+            if prod is None:
+                queued.append(row.sku.strip())
+                continue
+            await clear_queued_pricing_sku(db, row.sku)
             cust_id = await resolve_customer_id(db, row.customer_code, create=True)
             ch_id = None
             if row.channel_code and row.channel_code.strip():
@@ -144,18 +175,12 @@ async def bulk_create_pricing_facts(body: PricingFactsBulkBody, db: AsyncSession
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
     await db.commit()
-    return {"created": n}
+    return {"created": n, "queued_skus": queued}
 
 
 @router.get("/recommendations")
-async def list_pricing_recommendations(db: AsyncSession = Depends(get_db)):
-    res = await db.execute(select(PricingRecommendation))
-    rows = res.scalars().all()
-    out = []
-    for r in rows:
-        prod = await db.get(DimProduct, r.product_id)
-        out.append(pricing_recommendation_row_dict(r, prod))
-    return out
+async def list_pricing_recommendations():
+    raise HTTPException(status_code=409, detail=_RECOMMENDATIONS_GONE)
 
 
 @router.delete("/facts/{fact_id}", status_code=204)
@@ -186,27 +211,12 @@ async def clear_pricing_facts(body: ClearConfirmBody, db: AsyncSession = Depends
 
 
 @router.delete("/recommendations/{rec_id}", status_code=204)
-async def delete_pricing_recommendation(rec_id: int, db: AsyncSession = Depends(get_db)):
-    row = await db.get(PricingRecommendation, rec_id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Not found")
-    try:
-        await db.delete(row)
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        raise HTTPException(status_code=409, detail="Row is still referenced by other tables")
-    return Response(status_code=204)
+async def delete_pricing_recommendation(rec_id: int):
+    _ = rec_id
+    raise HTTPException(status_code=409, detail=_RECOMMENDATIONS_GONE)
 
 
 @router.post("/recommendations/clear-all", status_code=200)
-async def clear_pricing_recommendations(body: ClearConfirmBody, db: AsyncSession = Depends(get_db)):
-    if not body.confirm:
-        raise HTTPException(status_code=400, detail="Set confirm to true")
-    try:
-        res = await db.execute(delete(PricingRecommendation))
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        raise HTTPException(status_code=409, detail="Cannot clear: rows are still referenced by other tables. Delete dependent rows first.")
-    return {"deleted": res.rowcount or 0}
+async def clear_pricing_recommendations(body: ClearConfirmBody):
+    _ = body
+    raise HTTPException(status_code=409, detail=_RECOMMENDATIONS_GONE)

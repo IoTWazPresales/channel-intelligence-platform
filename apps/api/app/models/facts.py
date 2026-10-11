@@ -375,9 +375,8 @@ class FactBudgetRequest(Base, TimestampMixin):
     linked_customer_id: Mapped[int | None] = mapped_column(
         ForeignKey("dim_customer.id"), nullable=True
     )
-    linked_promotion_id: Mapped[int | None] = mapped_column(
-        ForeignKey("dim_promotion.id"), nullable=True
-    )
+    # Plain integer. dim_promotion was dropped in 20261011_0032. Existing values stay; nothing joins them.
+    linked_promotion_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     linked_roadmap_id: Mapped[int | None] = mapped_column(
         ForeignKey("fact_product_roadmap.id"), nullable=True
     )

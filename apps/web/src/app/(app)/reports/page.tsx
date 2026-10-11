@@ -1,17 +1,23 @@
 'use client';
 
-import { Typography } from '@mui/material';
+import { Button } from '@mui/material';
+import NextLink from 'next/link';
 
 import { OverviewChrome } from '@/features/overview/OverviewChrome';
 import { ReportBuilderView } from '@/features/reports/ReportBuilderView';
 
 export default function ReportsPage() {
   return (
-    <OverviewChrome>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 720 }}>
-        Build a governed report from the commercial semantic layer. Export Excel/PDF with data vintage on the cover,
-        deliver to the inbox, or schedule Monday 07:00 UTC.
-      </Typography>
+    <OverviewChrome
+      title="Reports"
+      description="Ask a question of the same figures as Stock, Planning and the Case book: pick a figure, choose how to break it down, and run it. Export Excel or PDF with the as-of date on the cover, send it to the inbox, or schedule it."
+      meta={null}
+      actions={
+        <Button component={NextLink} href="/inbox" size="small" variant="outlined" sx={{ whiteSpace: 'nowrap' }}>
+          Report inbox
+        </Button>
+      }
+    >
       <ReportBuilderView />
     </OverviewChrome>
   );

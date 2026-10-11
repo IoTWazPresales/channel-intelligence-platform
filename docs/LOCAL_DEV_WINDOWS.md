@@ -157,7 +157,7 @@ pnpm dev:web
 ```
 
 - Web: [http://localhost:3000](http://localhost:3000)
-- API: [http://localhost:8001/docs](http://localhost:8001/docs)
+- API: [http://127.0.0.1:8001/docs](http://127.0.0.1:8001/docs)
 
 If port **3000** or **8001** is taken, use `pnpm dev:ports` and stop the conflicting process.
 

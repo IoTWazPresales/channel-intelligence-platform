@@ -204,7 +204,7 @@ export function ChannelIntelligenceWorkspace() {
           sx={{ width: 180 }}
         />
         <Chip size="small" label={`rows: ${data?.total ?? '…'}`} />
-        {data?.data_unavailable ? <Chip size="small" color="warning" label="data unavailable" /> : null}
+        {data?.data_unavailable ? <Chip size="small" color="warning" label="Figures not available" /> : null}
       </Stack>
           </>
         }
@@ -233,10 +233,10 @@ export function ChannelIntelligenceWorkspace() {
         onRetry={() => void refetch()}
         isEmpty={(data?.items ?? []).length === 0}
         empty={{
-          title: data?.data_unavailable ? 'Channel intelligence data unavailable' : 'No channel intelligence rows',
+          title: data?.data_unavailable ? 'Sell-through figures are not available' : 'No sell-through rows',
           description: data?.data_unavailable
-            ? 'The upstream sell-through and stock tables have no rows yet, so no customer × product intelligence can be derived.'
-            : 'Adjust the filters above, or import customer sell-through and stock evidence via the Import Center.',
+            ? 'Sell-through and stock have not been imported yet, so customer and product figures cannot be shown.'
+            : 'Adjust the filters above, or import customer sell-through and stock via the Import Center.',
           primary: { label: 'Import Center', href: '/admin/imports' },
         }}
       >

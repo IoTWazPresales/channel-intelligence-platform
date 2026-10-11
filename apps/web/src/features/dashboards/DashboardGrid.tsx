@@ -16,6 +16,19 @@ type Props = {
   renderWidget: (widget: DashboardWidget) => ReactNode;
 };
 
+/** Below this container width, widgets stack full-width. The saved 12-column layout is not rewritten. */
+export const DASHBOARD_STACK_BELOW = 720;
+
+export function layoutForWidth(items: LayoutItem[], width: number): LayoutItem[] {
+  if (width <= 0 || width >= DASHBOARD_STACK_BELOW) return items;
+  let y = 0;
+  return items.map((item) => {
+    const next: LayoutItem = { ...item, x: 0, y, w: 12 };
+    y += item.h;
+    return next;
+  });
+}
+
 function itemLayout(w: DashboardWidget, index: number): LayoutItem {
   const l = w.layout_json || {};
   return {
@@ -33,7 +46,9 @@ export function DashboardGrid({ widgets, onLayoutPersist, renderWidget }: Props)
   const { width, containerRef, mounted } = useContainerWidth();
   const skipMount = useRef(true);
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const layout = useMemo(() => widgets.map((w, i) => itemLayout(w, i)), [widgets]);
+  const savedLayout = useMemo(() => widgets.map((w, i) => itemLayout(w, i)), [widgets]);
+  const layout = useMemo(() => layoutForWidth(savedLayout, width), [savedLayout, width]);
+  const stacked = width > 0 && width < DASHBOARD_STACK_BELOW;
 
   return (
     <div ref={containerRef} style={{ width: '100%' }}>
@@ -42,10 +57,11 @@ export function DashboardGrid({ widgets, onLayoutPersist, renderWidget }: Props)
           width={width}
           layout={layout}
           gridConfig={{ cols: 12, rowHeight: 36, margin: [12, 12] }}
-          dragConfig={{ enabled: true, handle: '.dashboard-widget-drag' }}
-          resizeConfig={{ enabled: true }}
+          dragConfig={{ enabled: !stacked, handle: '.dashboard-widget-drag' }}
+          resizeConfig={{ enabled: !stacked }}
           compactor={verticalCompactor}
           onLayoutChange={(next: Layout) => {
+            if (stacked) return;
             if (skipMount.current) {
               skipMount.current = false;
               return;

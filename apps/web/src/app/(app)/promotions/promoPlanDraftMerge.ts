@@ -29,6 +29,23 @@ export type IntakeWeighted = {
   not_in_blend?: string[];
 };
 
+export type PromotionEvidence = {
+  read_failed?: boolean;
+  listing?: { listed?: boolean; listing_count?: number; status?: string | null; last_observed_price?: number | null; data_unavailable?: boolean };
+  competitor_price?: { data_unavailable?: boolean; row_count?: number; price?: number | null; note?: string };
+  observed_cover?: { weeks?: number | null; flag?: string | null; grain?: string; writes_target_cover?: boolean; note?: string; data_unavailable?: boolean };
+};
+
+export function evidenceCaption(evidence: PromotionEvidence | null | undefined): string {
+  if (evidence?.read_failed) return 'Evidence unavailable';
+  const listed = evidence?.listing?.listed ? 'Listed' : 'Not listed';
+  const rows = evidence?.competitor_price?.row_count ?? 0;
+  const competitor = rows > 0 ? 'Competitor price not on this product' : 'No competitor price';
+  const weeks = evidence?.observed_cover?.weeks;
+  const cover = weeks == null ? 'No observed cover' : `Observed cover ${weeks}w (flag only)`;
+  return `${listed} · ${competitor} · ${cover}`;
+}
+
 export type SuggestionLine = {
   row_key: string;
   seed_line_id?: number | null;
@@ -46,6 +63,7 @@ export type SuggestionLine = {
   cover?: { weeks?: number | null; source?: string; override_weeks?: number | null };
   intake_weighted?: IntakeWeighted;
   flags?: string[];
+  promotion_evidence?: PromotionEvidence | null;
 };
 
 export type PlannerRow = {
@@ -73,6 +91,7 @@ export type PlannerRow = {
   dirty_fields: DirtyField[];
   intake_weighted: IntakeWeighted;
   flags: string[];
+  evidence_caption: string;
 };
 
 function identityKey(row: { row_key?: string; product_id: number; distributor_id?: number | null; pod_quarter?: string | null; seed_line_id?: number | null }): string {
@@ -109,6 +128,7 @@ export function hydratePlannerRows(lines: SuggestionLine[]): PlannerRow[] {
       dirty_fields: [],
       intake_weighted: line.intake_weighted ?? {},
       flags: line.flags ?? line.intake_weighted?.flags ?? [],
+      evidence_caption: evidenceCaption(line.promotion_evidence),
     };
   });
 }

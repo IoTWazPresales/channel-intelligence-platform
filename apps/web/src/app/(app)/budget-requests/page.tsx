@@ -61,9 +61,8 @@ export default function BudgetRequestsPage() {
         <ModuleDataSection
           intro={
             <>
-              Budget requests link commercial initiatives (promos, products, roadmap) to finance justification. Data
-              comes from <strong>fact_budget_request</strong> via the API—populate through imports or future submission
-              flows.
+              Budget requests link commercial initiatives (promotions, products, roadmap) to a finance justification.
+              Add them through imports, or through a submission flow when that exists.
             </>
           }
           isLoading={isLoading}

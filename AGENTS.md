@@ -148,7 +148,7 @@ run `pnpm docker:up:detached` from repo root.
 | Service | Port |
 |---------|------|
 | Web | http://localhost:3000 |
-| API (local direct) | http://localhost:8001 |
+| API (local direct) | http://127.0.0.1:8001 |
 | API (Docker) | http://localhost:8010 → container :8000 |
 | Postgres | localhost:5432, database `cip` |
 | Redis | localhost:6379 |

@@ -139,6 +139,15 @@ def put_semantic_overlay(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    from app.services.platform_audit import record_platform_audit_committed
+
+    record_platform_audit_committed(
+        admin,
+        area="settings",
+        action="semantic_overlay",
+        target_type="tenant",
+        target_id=tid,
+    )
     return _overlay_editor_payload(tid)
 
 

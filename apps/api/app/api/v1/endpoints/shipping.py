@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import Date as SA_Date, cast, desc, func, literal, or_, select
+from sqlalchemy import Date as SA_Date, and_, cast, desc, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
@@ -31,6 +32,7 @@ from app.services.shipping.amount_scale import (
     amount_scale_not_suspect_clause,
     amount_scale_suspect_clause,
 )
+from app.services.shipment_strict_pair import keep_counted_line, skipped_open_twin_line, twin_remainder
 from app.services.shipping.newly_landed import newly_landed_transitions
 from app.services.shipping.observation_transitions import (
     compute_eta_shifts,
@@ -164,6 +166,8 @@ def _apply_fact_where_clause(
     tenant_id = (kwargs.get("tenant_id") or DEFAULT_TENANT_ID).strip() or DEFAULT_TENANT_ID
 
     stmt = stmt.where(FactInboundShipment.tenant_id == tenant_id)
+    # D-0057 + D-0065: skip an open line its strict shipped twins cover; a partly shipped one stays.
+    stmt = stmt.where(keep_counted_line(FactInboundShipment))
 
     if import_job_id is not None:
         stmt = stmt.where(FactInboundShipment.import_job_id == import_job_id)
@@ -519,10 +523,16 @@ async def _aggregate_currency_qty_lines(
     *extra_where: Any,
     require_amount: bool = False,
 ) -> tuple[list[dict[str, Any]], float, int]:
-    """Return (value_by_currency, quantity, line_count) under filt + extras."""
+    """Return (value_by_currency, quantity, line_count) under filt + extras.
+
+    Quantity is counted quantity: a partly shipped open line adds only its remainder
+    (D-0065). Its value is pro-rata, amount x remainder / open quantity (Warren
+    2026-10-07, N-0071); a covered open line is skipped.
+    """
     need_dist, need_prod, need_cust = _dim_join_flags(filt)
-    qty_expr = func.coalesce(func.sum(FactInboundShipment.quantity), 0)
-    amt_expr = func.coalesce(func.sum(FactInboundShipment.amount), 0)
+    twin = twin_remainder(FactInboundShipment)
+    qty_expr = func.coalesce(func.sum(twin.counted_quantity), 0)
+    amt_expr = func.coalesce(func.sum(twin.counted_amount), 0)
     cnt_expr = func.count(FactInboundShipment.id)
 
     pipe_stmt = (
@@ -533,6 +543,7 @@ async def _aggregate_currency_qty_lines(
             cnt_expr,
         )
         .select_from(FactInboundShipment)
+        .outerjoin(twin.subquery, twin.onclause)
     )
     pipe_stmt = _apply_outer_joins(pipe_stmt, need_dist, need_prod, need_cust)
     pipe_stmt = _apply_fact_where_clause(
@@ -555,7 +566,7 @@ async def _aggregate_currency_qty_lines(
     ]
     by_currency.sort(key=lambda x: -x["amount"])
 
-    tot_stmt = select(qty_expr, cnt_expr).select_from(FactInboundShipment)
+    tot_stmt = select(qty_expr, cnt_expr).select_from(FactInboundShipment).outerjoin(twin.subquery, twin.onclause)
     tot_stmt = _apply_outer_joins(tot_stmt, need_dist, need_prod, need_cust)
     tot_stmt = _apply_fact_where_clause(
         tot_stmt,
@@ -571,6 +582,26 @@ async def _aggregate_currency_qty_lines(
     quantity = float(tot_row[0] or 0)
     line_count = int(tot_row[1] or 0)
     return by_currency, quantity, line_count
+
+
+async def _still_to_ship_by_id(db: AsyncSession, rows: list[Any]) -> dict[int, float | None]:
+    """Counted open quantity for the open_order rows of one grid page (D-0065).
+
+    The remainder for a partly shipped line, else the stored quantity. Shipped and
+    arrived rows are not in the map (blank cell). One statement, only when the page
+    has open rows.
+    """
+    open_ids = [int(r.id) for r in rows if (r.line_state or "").strip().lower() == "open_order"]
+    if not open_ids:
+        return {}
+    twin = twin_remainder(FactInboundShipment)
+    res = await db.execute(
+        select(FactInboundShipment.id, twin.counted_quantity)
+        .select_from(FactInboundShipment)
+        .outerjoin(twin.subquery, twin.onclause)
+        .where(FactInboundShipment.id.in_(open_ids))
+    )
+    return {int(i): (float(q) if q is not None else None) for i, q in res.all()}
 
 
 def _fmt_date(d: Any) -> str | None:
@@ -589,6 +620,7 @@ def _fact_to_dict(
     customer_name: str | None,
     customer_code: str | None,
     include_raw_row: bool,
+    still_to_ship: float | None = None,
 ) -> dict[str, Any]:
     dist_disp = _distributor_display(row, distributor_name, distributor_code)
     dist_provisional = _distributor_is_provisional(distributor_code, distributor_name)
@@ -633,6 +665,8 @@ def _fact_to_dict(
         "upc_code": row.upc_code,
         "mpor_item_no": row.mpor_item_no,
         "quantity": float(row.quantity) if row.quantity is not None else None,
+        # Stored quantity stays as imported; "Still to ship" is the counted open quantity (D-0065).
+        "still_to_ship": still_to_ship,
         "unit_price": float(row.unit_price) if row.unit_price is not None else None,
         "amount": float(row.amount) if row.amount is not None else None,
         "currency_code": row.currency_code,
@@ -711,6 +745,8 @@ async def _eta_shift_metrics(
         FactInboundShipment.id,
         FactInboundShipment.shipment_evidence_line_id,
     ).select_from(FactInboundShipment)
+    # Same line scope as the KPI tiles on every path, filtered or not (D-0057 + D-0065).
+    fact_scope = fact_scope.where(keep_counted_line(FactInboundShipment))
     if require_current_incoming:
         fact_scope = fact_scope.where(predicate_current_incoming(ref))
     if scoped_ids is not None:
@@ -904,10 +940,12 @@ async def shipping_commercial_summary(
             func.coalesce(DimDistributor.name, FactInboundShipment.bill_to_raw, literal("Unknown")),
             48,
         )
-        qty_sum = func.coalesce(func.sum(FactInboundShipment.quantity), 0)
+        arr_twin = twin_remainder(FactInboundShipment)
+        qty_sum = func.coalesce(func.sum(arr_twin.counted_quantity), 0)
         arr_stmt = (
             select(dist_lbl, qty_sum, func.count())
             .select_from(FactInboundShipment)
+            .outerjoin(arr_twin.subquery, arr_twin.onclause)
             .outerjoin(DimDistributor, FactInboundShipment.distributor_id == DimDistributor.id)
             .where(predicate_arriving_week(w0, w1))
         )
@@ -1292,8 +1330,15 @@ async def shipping_evidence_summary(
     db: AsyncSession = Depends(get_db),
     user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
-    """Structured counts for dashboard tiles (``fact_inbound_shipment``)."""
-    tenant_f = where_tenant(FactInboundShipment.tenant_id, user)
+    """Structured counts for dashboard tiles (``fact_inbound_shipment``).
+
+    Line counts match the lines grid: an open line covered by its strict shipped
+    twins is skipped (D-0057); a partly shipped open line still counts as one line
+    (D-0065). The row stays stored; ``open_lines_skipped_shipped_twin`` says how
+    many were skipped. There are no unit totals here.
+    """
+    tenant_scope = where_tenant(FactInboundShipment.tenant_id, user)
+    tenant_f = and_(tenant_scope, keep_counted_line(FactInboundShipment))
     by_state = await db.execute(
         select(FactInboundShipment.line_state, func.count())
         .where(tenant_f)
@@ -1324,12 +1369,22 @@ async def shipping_evidence_summary(
         .order_by(dist_bucket)
     )
     total = await db.scalar(select(func.count()).select_from(FactInboundShipment).where(tenant_f)) or 0
+    skipped = (
+        await db.scalar(
+            # FILTER, not WHERE: keeps the skipped-id lookup a hashed subplan (fast under RLS).
+            select(func.count().filter(skipped_open_twin_line(FactInboundShipment)))
+            .select_from(FactInboundShipment)
+            .where(tenant_scope)
+        )
+        or 0
+    )
 
     def rows_to_items(res: Any) -> list[dict[str, Any]]:
         return [{"key": str(r[0]), "count": int(r[1])} for r in res.all() if r[0] is not None]
 
     return {
         "total_lines": int(total),
+        "open_lines_skipped_shipped_twin": int(skipped),
         "by_line_state": rows_to_items(by_state),
         "by_status": rows_to_items(by_cargo),
         "by_distributor": rows_to_items(by_dist),
@@ -1515,6 +1570,7 @@ async def shipping_evidence_lines(
         for c in cr.scalars().all():
             customers[int(c.id)] = (c.name or "", c.code or "")
 
+    still_to_ship = await _still_to_ship_by_id(db, rows)
     items = []
     for r in rows:
         pn, ps = products.get(int(r.product_id), (None, None)) if r.product_id else (None, None)
@@ -1530,6 +1586,7 @@ async def shipping_evidence_lines(
             customer_name=cname,
             customer_code=ccode,
             include_raw_row=include_raw_row,
+            still_to_ship=still_to_ship.get(int(r.id)),
         )
         if int(r.id) in enrich_by_id:
             payload.update(enrich_by_id[int(r.id)])
@@ -1543,3 +1600,220 @@ async def shipping_evidence_lines(
     if lineup_active:
         out["lineup_filter_active"] = True
     return out
+
+
+def _receipt_line(row: FactInboundShipment, product_sku: str | None, *, cancelled_candidate: bool) -> dict[str, Any]:
+    return {
+        "id": int(row.id),
+        "order_no": row.order_no,
+        "order_line": row.order_line,
+        "delivery_no": row.delivery_no,
+        "item_code": row.item_code,
+        "sales_model_name": row.sales_model_name,
+        "product_sku": product_sku,
+        "quantity": float(row.quantity) if row.quantity is not None else None,
+        "line_state": row.line_state,
+        "pod_date": _fmt_date(row.pod_date),
+        "cancelled_candidate": cancelled_candidate,
+    }
+
+
+def _receipt_cancelled(
+    *,
+    group: str,
+    operating_unit: str | None,
+    delivery_no: str | None,
+    order_no: str | None,
+) -> tuple[set[str], list[dict[str, Any]]]:
+    """Lines present on an earlier report of this shipment and missing from the latest report."""
+    from sqlalchemy import select
+
+    from app.db.session_sync import SessionLocal
+    from app.models.shipment_evidence_observation import ShipmentEvidenceObservation
+    from app.services.shipping.shipment_receipt import reports_oldest_first, vanished_line_keys
+
+    if group == "line":
+        return set(), []
+    with SessionLocal() as session:
+        stmt = select(
+            ShipmentEvidenceObservation.import_job_id,
+            ShipmentEvidenceObservation.valid_from,
+            ShipmentEvidenceObservation.line_identity_key,
+            ShipmentEvidenceObservation.id,
+            ShipmentEvidenceObservation.order_no,
+            ShipmentEvidenceObservation.order_line,
+            ShipmentEvidenceObservation.delivery_no,
+            ShipmentEvidenceObservation.item_code,
+            ShipmentEvidenceObservation.sales_model_name,
+            ShipmentEvidenceObservation.quantity,
+        ).where(ShipmentEvidenceObservation.operating_unit == operating_unit)
+        if group == "delivery":
+            stmt = stmt.where(ShipmentEvidenceObservation.delivery_no == delivery_no)
+        else:
+            stmt = stmt.where(ShipmentEvidenceObservation.order_no == order_no)
+        rows = list(session.execute(stmt).all())
+    reports = reports_oldest_first([(int(r[0]), r[1], str(r[2])) for r in rows])
+    missing = vanished_line_keys(reports)
+    if not reports:
+        return missing, []
+    latest_from = None
+    latest_job = None
+    by_job: dict[int, Any] = {}
+    for job_id, valid_from, _key, *_rest in (
+        (int(r[0]), r[1], str(r[2]), r[3]) for r in rows
+    ):
+        previous = by_job.get(job_id)
+        if previous is None or valid_from < previous:
+            by_job[job_id] = valid_from
+    if by_job:
+        latest_job = max(by_job, key=lambda job_id: (by_job[job_id], job_id))
+        latest_from = by_job[latest_job]
+    last_seen: dict[str, Any] = {}
+    for row in rows:
+        key = str(row[2])
+        if key not in missing:
+            continue
+        previous = last_seen.get(key)
+        if previous is None or row[1] >= previous[1]:
+            last_seen[key] = row
+    events: list[dict[str, Any]] = []
+    if latest_from is not None:
+        for key, row in sorted(last_seen.items()):
+            events.append(
+                {
+                    "event_type": "cancelled_candidate",
+                    "valid_from": latest_from.isoformat() if hasattr(latest_from, "isoformat") else str(latest_from),
+                    "line_identity_key": key,
+                    "details": {
+                        "item_code": row[7],
+                        "missing_from_import_job_id": latest_job,
+                        "last_seen_observation_id": int(row[3]),
+                    },
+                }
+            )
+    return missing, events
+
+
+def _receipt_events(line_identity_key: str) -> list[dict[str, Any]]:
+    from app.db.session_sync import SessionLocal
+    from app.services.imports.shipment_change_events import derive_change_events
+
+    with SessionLocal() as session:
+        events = derive_change_events(session, line_identity_key=line_identity_key, limit=50)
+    return [event.to_dict() for event in events][:100]
+
+
+@router.get("/shipments/{shipment_id}")
+async def get_shipment_receipt(
+    shipment_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: dict | None = Depends(get_optional_current_user),
+) -> dict[str, Any]:
+    """One shipment: its lines, proof of delivery, and the derived change timeline."""
+    from app.services.shipping.shipment_receipt import receipt_group, receipt_line_identity
+
+    tenant_id = tenant_id_from_user(user)
+    row = await db.get(FactInboundShipment, shipment_id)
+    if row is None or row.tenant_id != tenant_id:
+        raise HTTPException(status_code=404, detail="Shipment not found")
+
+    fields = {
+        "line_state": row.line_state,
+        "operating_unit": row.operating_unit,
+        "order_no": row.order_no,
+        "order_line": row.order_line,
+        "delivery_no": row.delivery_no,
+        "invoice_line": row.invoice_line,
+        "item_code": row.item_code,
+        "purchase_order_id": row.purchase_order_id,
+    }
+    group = receipt_group(fields)
+    stmt = select(FactInboundShipment).where(FactInboundShipment.tenant_id == tenant_id)
+    if group == "delivery":
+        stmt = stmt.where(
+            FactInboundShipment.delivery_no == row.delivery_no,
+            FactInboundShipment.operating_unit == row.operating_unit,
+        )
+    elif group == "order":
+        stmt = stmt.where(
+            FactInboundShipment.order_no == row.order_no,
+            FactInboundShipment.operating_unit == row.operating_unit,
+        )
+    else:
+        stmt = stmt.where(FactInboundShipment.id == row.id)
+    siblings = list((await db.execute(stmt.order_by(FactInboundShipment.id).limit(100))).scalars().all())
+    if not any(int(item.id) == int(row.id) for item in siblings):
+        siblings.insert(0, row)
+
+    prod_ids = {item.product_id for item in siblings if item.product_id}
+    skus: dict[int, str] = {}
+    if prod_ids:
+        found = await db.execute(select(DimProduct).where(DimProduct.id.in_(prod_ids)))
+        for product in found.scalars().all():
+            skus[int(product.id)] = product.sku or ""
+
+    identity = receipt_line_identity(fields)
+    events = await asyncio.to_thread(_receipt_events, identity)
+    missing, cancelled_events = await asyncio.to_thread(
+        _receipt_cancelled,
+        group=group,
+        operating_unit=row.operating_unit,
+        delivery_no=row.delivery_no,
+        order_no=row.order_no,
+    )
+    events = [*events, *cancelled_events]
+    title_no = (row.delivery_no or "").strip() or (row.order_no or "").strip() or str(row.id)
+    title = f"Delivery {title_no}" if group == "delivery" else f"Order {title_no}" if group == "order" else f"Shipment {title_no}"
+    lines = []
+    present_keys: set[str] = set()
+    for item in siblings:
+        item_key = receipt_line_identity(
+            {
+                "line_state": item.line_state,
+                "operating_unit": item.operating_unit,
+                "order_no": item.order_no,
+                "order_line": item.order_line,
+                "delivery_no": item.delivery_no,
+                "invoice_line": item.invoice_line,
+                "item_code": item.item_code,
+                "purchase_order_id": item.purchase_order_id,
+            }
+        )
+        present_keys.add(item_key)
+        lines.append(
+            _receipt_line(
+                item,
+                skus.get(int(item.product_id)) if item.product_id else None,
+                cancelled_candidate=item_key in missing,
+            )
+        )
+    for event in cancelled_events:
+        key = str(event.get("line_identity_key") or "")
+        if key in present_keys:
+            continue
+        detail = event.get("details") or {}
+        lines.append(
+            {
+                "id": -int(detail.get("last_seen_observation_id") or 0),
+                "order_no": row.order_no,
+                "order_line": None,
+                "delivery_no": row.delivery_no,
+                "item_code": detail.get("item_code"),
+                "sales_model_name": None,
+                "product_sku": None,
+                "quantity": None,
+                "line_state": None,
+                "pod_date": None,
+                "cancelled_candidate": True,
+            }
+        )
+    return {
+        "id": int(row.id),
+        "group": group,
+        "title": title,
+        "pod_recorded": row.pod_date is not None,
+        "pod_date": _fmt_date(row.pod_date),
+        "est_pod_date": _fmt_date(row.est_pod_date),
+        "lines": lines,
+        "events": events,
+    }

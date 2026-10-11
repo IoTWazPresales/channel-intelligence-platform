@@ -7,6 +7,7 @@ from app.services.cpor.promo_plan_builder import (
     build_promo_plan_draft,
     create_case_from_promo_draft,
     derive_planned_reservation_sync,
+    load_promotion_line_evidence,
 )
 
 
@@ -447,5 +448,33 @@ def test_build_promo_plan_draft_from_customer_period_same_customer_only(monkeypa
     assert out["comparables"]["same_customer_only"] is True
     assert out["lines"][0]["product_id"] == 81
     assert all(t["customer_id"] == 18 for t in out["comparables"]["top"])
-    assert "cross_customer_analogue" in out["uncovered"]
+    evidence = out["lines"][0]["promotion_evidence"]
+    assert evidence["read_failed"] is False
+    assert evidence["listing"]["listed"] is False
+    assert evidence["competitor_price"]["data_unavailable"] is True
+    assert evidence["competitor_price"]["price"] is None
+    assert evidence["observed_cover"]["writes_target_cover"] is False
+    assert evidence["observed_cover"]["flag"] is None
+    assert out["uncovered"] == ["uplift_from_claim_evidence"]
+
+
+def test_load_promotion_line_evidence_failed_read_is_not_an_honest_empty(caplog):
+    class Boom:
+        def execute(self, *_a, **_k):
+            raise RuntimeError("db down")
+
+    with caplog.at_level("ERROR"):
+        evidence = load_promotion_line_evidence(
+            Boom(), customer_id=18, product_id=81, distributor_id=None
+        )
+
+    assert evidence["read_failed"] is True
+    assert evidence["listing"]["listed"] is False
+    assert evidence["listing"]["data_unavailable"] is True
+    assert evidence["competitor_price"]["price"] is None
+    assert evidence["competitor_price"]["data_unavailable"] is True
+    assert evidence["observed_cover"]["weeks"] is None
+    assert evidence["observed_cover"]["data_unavailable"] is True
+    assert any("promotion line evidence read failed" in record.message for record in caplog.records)
+    assert any(record.exc_info and record.exc_info[0] is RuntimeError for record in caplog.records)
 

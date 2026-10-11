@@ -5,9 +5,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
+from app.core.security import Role, require_roles
 from app.models.derived import ExceptionInboxItem
 
 router = APIRouter()
+
+# N-0086: steward writes need steward or admin (admin always passes require_roles); reads stay sign-in only.
+_STEWARD_WRITE = [Depends(require_roles(Role.ADMIN, Role.STEWARD))]
 
 
 class ClearConfirmBody(BaseModel):
@@ -34,7 +38,7 @@ async def list_exceptions(db: AsyncSession = Depends(get_db)):
     ]
 
 
-@router.delete("/{item_id}", status_code=204)
+@router.delete("/{item_id}", status_code=204, dependencies=_STEWARD_WRITE)
 async def delete_exception(item_id: int, db: AsyncSession = Depends(get_db)):
     row = await db.get(ExceptionInboxItem, item_id)
     if not row:
@@ -48,7 +52,7 @@ async def delete_exception(item_id: int, db: AsyncSession = Depends(get_db)):
     return Response(status_code=204)
 
 
-@router.post("/clear-all", status_code=200)
+@router.post("/clear-all", status_code=200, dependencies=_STEWARD_WRITE)
 async def clear_exceptions(body: ClearConfirmBody, db: AsyncSession = Depends(get_db)):
     if not body.confirm:
         raise HTTPException(status_code=400, detail="Set confirm to true")

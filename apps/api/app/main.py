@@ -55,7 +55,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# public_router (auth/login only) is mounted first and carries no auth dependency;
+# public_router (login and invite accept) is mounted first and carries no auth dependency;
 # api_router requires get_current_user on every route (see app/api/v1/router.py).
 app.include_router(public_router, prefix=settings.api_v1_prefix)
 app.include_router(api_router, prefix=settings.api_v1_prefix)

@@ -56,7 +56,8 @@ class FactLineupPlanItem(Base, TimestampMixin):
 
     link_buy_plan_id: Mapped[int | None] = mapped_column(ForeignKey("fact_buy_plan.id"), nullable=True)
     link_pricing_id: Mapped[int | None] = mapped_column(ForeignKey("fact_pricing.id"), nullable=True)
-    link_promotion_id: Mapped[int | None] = mapped_column(ForeignKey("dim_promotion.id"), nullable=True)
+    # Plain integer. dim_promotion was dropped in 20261011_0032. Existing values stay; nothing joins them.
+    link_promotion_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     link_budget_request_id: Mapped[int | None] = mapped_column(ForeignKey("fact_budget_request.id"), nullable=True)
     link_roadmap_id: Mapped[int | None] = mapped_column(ForeignKey("fact_product_roadmap.id"), nullable=True)
 

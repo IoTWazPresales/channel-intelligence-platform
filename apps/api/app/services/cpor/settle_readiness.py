@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 from app.models.cpor import CporCase, CporCaseLine, CporClaimEvidenceLine
 
@@ -95,7 +95,20 @@ def load_open_assumption_counts_by_case_id(session: Session, case_ids: list[int]
     """Count case lines carrying at least one assumption flag."""
     if not case_ids:
         return {}
-    lines = session.scalars(select(CporCaseLine).where(CporCaseLine.case_id.in_(case_ids))).all()
+    # Assumption flags use distributor, cost basis, and cost evidence only.
+    lines = session.scalars(
+        select(CporCaseLine)
+        .options(
+            load_only(
+                CporCaseLine.id,
+                CporCaseLine.case_id,
+                CporCaseLine.distributor_id,
+                CporCaseLine.cost_basis,
+                CporCaseLine.cost_evidence_json,
+            )
+        )
+        .where(CporCaseLine.case_id.in_(case_ids))
+    ).all()
     by_case: dict[int, int] = {cid: 0 for cid in case_ids}
     for line in lines:
         flags: list[str] = []

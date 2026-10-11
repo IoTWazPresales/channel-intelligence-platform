@@ -50,6 +50,12 @@ def build_beat_schedule() -> dict:
             "task": "listing_capture.poll_listings",
             "schedule": crontab(minute="*/30"),
         },
+        # N-0101 snapshot retention (Warren 2026-10-08): clear raw page snapshots older than
+        # 90 days; payload only, observation rows kept. Bounded batches + time limit.
+        "listing-capture-snapshot-retention": {
+            "task": "listing_capture.clear_expired_snapshots",
+            "schedule": crontab(hour=3, minute=15),
+        },
         # BACKLOG-098: deliver due calendar schedules (including catch-up).
         # Only delivers ReportSchedule rows with enabled=True (config/opt-in).
         "reports-run-due-schedules": {

@@ -64,7 +64,11 @@ def test_migration_follows_0022_single_head() -> None:
     from alembic.script import ScriptDirectory
 
     script = ScriptDirectory.from_config(Config("alembic.ini"))
-    assert script.get_heads() == ["20260924_0023"]
+    # One head, and 0023 sits on its line. Was pinned to 0023 as the head, which went
+    # stale when 20261006_0024 (N-0065) was added on top of it.
+    heads = script.get_heads()
+    assert len(heads) == 1
+    assert "20260924_0023" in {rev.revision for rev in script.iterate_revisions(heads[0], "base")}
     assert script.get_revision("20260924_0023").down_revision == "20260906_0022"
 
 

@@ -25,6 +25,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
+import { StewardWriteGate } from '@/components/StewardWriteGate';
 import { SupplyChrome } from '@/features/supply-inbound/SupplyChrome';
 import { apiGet, apiPost } from '@/lib/api';
 import { toQueryError } from '@/lib/queryError';
@@ -464,6 +465,7 @@ export default function ShipmentEvidenceAdminPage() {
 
   return (
     <SupplyChrome>
+    <StewardWriteGate>
     <Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 900 }}>
         Canonical lines from shipment / open-order imports (report auto-detect). Upload via Import Center using
@@ -769,10 +771,10 @@ export default function ShipmentEvidenceAdminPage() {
         open={colDialogOpen}
         onClose={() => setColDialogOpen(false)}
         title="Additional columns"
-        description="Add optional canonical fields to the grid, and when an import job is in scope, pick columns from the original file (raw JSON keys). Large page sizes with many raw columns increase payload size."
+        description="Add optional shipment fields to the grid. When an import job is in scope, you can also show columns from the original file. Large pages with many of those columns are slower."
         groups={[
           {
-            label: 'Canonical fields',
+            label: 'Shipment fields',
             description: 'API-backed columns; values match the evidence line record.',
             fields: SHIPMENT_EVIDENCE_OPTIONAL_FIELDS.map((c) => c.field),
           },
@@ -857,6 +859,7 @@ export default function ShipmentEvidenceAdminPage() {
         </DialogContent>
       </Dialog>
     </Box>
+    </StewardWriteGate>
     </SupplyChrome>
   );
 }

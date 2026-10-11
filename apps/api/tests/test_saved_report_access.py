@@ -69,3 +69,16 @@ def test_edit_owner_or_admin():
 
 def test_normalize_shared_roles():
     assert normalize_shared_roles(["VIEWER", "planner", "viewer"]) == ["viewer", "planner"]
+
+
+def test_overview_pin_is_one_row_per_user_and_report():
+    from app.models.saved_reports import OverviewReportPin
+
+    assert OverviewReportPin.__tablename__ == "overview_report_pin"
+    unique = [
+        c
+        for c in OverviewReportPin.__table__.constraints
+        if getattr(c, "name", None) == "uq_overview_report_pin_user_report"
+    ]
+    assert len(unique) == 1
+    assert {col.name for col in unique[0].columns} == {"user_id", "saved_report_id"}

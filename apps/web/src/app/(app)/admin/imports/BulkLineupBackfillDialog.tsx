@@ -28,7 +28,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
@@ -48,10 +48,23 @@ import {
 import { BulkLineup1hRederivationSection } from '@/features/commercial-planner/BulkLineup1hRederivationSection';
 import { useProductLines } from '@/features/catalog/useProductLines';
 import { registerClientBackgroundTask } from '@/features/background-tasks/backgroundTaskRegistry';
-import { apiPostFormData, safeDisplayError } from '@/lib/api';
+import { apiGet, apiPostFormData, safeDisplayError } from '@/lib/api';
 
 const ACCEPT =
   '.csv,.xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12,text/csv';
+
+type BackfillApplySummary = {
+  applied?: number;
+  skipped?: number;
+  needs_attention?: unknown[];
+};
+
+type BackfillSessionView = {
+  session_import_job_id: number;
+  job_status?: string | null;
+  job_stage?: string | null;
+  apply?: BackfillApplySummary | null;
+};
 
 type CaseProposal = {
   proposal_key: string;
@@ -164,6 +177,7 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
   const [confirmRederivation, setConfirmRederivation] = useState(false);
   const [rederivationCollisionWinners, setRederivationCollisionWinners] = useState<Record<string, string>>({});
   const [rederivationApplyNotice, setRederivationApplyNotice] = useState<string | null>(null);
+  const [applySession, setApplySession] = useState<{ sessionId: number; taskId?: string } | null>(null);
 
   const resetPreviewState = useCallback(() => {
     setPreview(null);
@@ -273,7 +287,10 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
         });
       }
       void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
-      onClose();
+      setApplySession({
+        sessionId: data.session_import_job_id,
+        taskId: data.task_id,
+      });
     },
   });
 
@@ -343,6 +360,27 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
   });
 
   const sessionId = preview?.session_import_job_id ?? preview?.preview?.session_import_job_id;
+
+  const applyStatusQuery = useQuery({
+    queryKey: ['bulk-backfill-session', applySession?.sessionId],
+    enabled: applySession != null,
+    refetchOnWindowFocus: false,
+    queryFn: ({ signal }) =>
+      apiGet<BackfillSessionView>(
+        `/api/v1/commercial-planner/lineup/bulk-backfill/preview/${applySession!.sessionId}`,
+        { signal },
+      ),
+    refetchInterval: (query) => {
+      const view = query.state.data;
+      const status = String(view?.job_status ?? '').toLowerCase();
+      if (view?.apply || status === 'completed' || status === 'completed_with_errors' || status === 'failed') {
+        return false;
+      }
+      return 1500;
+    },
+  });
+  const applySummary = applyStatusQuery.data?.apply ?? null;
+  const applyFinished = applySummary != null;
   const rederivationSessionId = rederivationPreview?.session_import_job_id;
 
   const readyCount = useMemo(
@@ -405,6 +443,7 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
       setConfirmApply(false);
       setLoadNotice(null);
       setRederivationApplyNotice(null);
+      setApplySession(null);
     }
   }, [open]);
 
@@ -413,6 +452,41 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
       <DialogTitle>Bulk historical lineup backfill</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
+          {applySession ? (
+            <Alert
+              severity={
+                applyFinished
+                  ? applyStatusQuery.data?.job_status === 'completed_with_errors'
+                    ? 'warning'
+                    : 'success'
+                  : 'info'
+              }
+              data-testid="bulk-backfill-apply-status"
+            >
+              {applyFinished ? (
+                <Stack spacing={1}>
+                  <Typography variant="body2">
+                    Applied {applySummary?.applied ?? 0}, skipped {applySummary?.skipped ?? 0}. Session #
+                    {applySession.sessionId}.
+                  </Typography>
+                  <Stack direction="row" spacing={1}>
+                    <Button size="small" variant="contained" component="a" href="/admin/po-management">
+                      Link POs
+                    </Button>
+                    <Button size="small" variant="outlined" component="a" href="/commercial-planner">
+                      Review lineup cases
+                    </Button>
+                  </Stack>
+                </Stack>
+              ) : (
+                <Typography variant="body2">
+                  Applying session #{applySession.sessionId}. This dialog stays open. The activity bell shows the same
+                  job.
+                </Typography>
+              )}
+            </Alert>
+          ) : null}
+
           <Typography variant="body2" color="text.secondary">
             Select your <strong>Product Lineup</strong> root once — all product-line folders are
             included. Period/BU paths are inferred from each file&apos;s place in the tree. Edit overrides
@@ -742,7 +816,8 @@ export function BulkLineupBackfillDialog({ open, onClose }: BulkLineupBackfillDi
             !confirmApply ||
             readyCount === 0 ||
             applyMutation.isPending ||
-            hasPendingOverrides
+            hasPendingOverrides ||
+            applySession != null
           }
           onClick={() => sessionId && applyMutation.mutate(sessionId)}
         >

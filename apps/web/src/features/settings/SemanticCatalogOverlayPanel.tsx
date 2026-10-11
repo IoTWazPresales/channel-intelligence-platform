@@ -385,7 +385,7 @@ export function SemanticCatalogOverlayPanel() {
                   >
                     {(slot === 0 ? handlerBacked : inputOptions).map((m) => (
                       <MenuItem key={m.key} value={m.key}>
-                        {m.label} ({m.fact_family})
+                        {m.label}
                       </MenuItem>
                     ))}
                   </Select>

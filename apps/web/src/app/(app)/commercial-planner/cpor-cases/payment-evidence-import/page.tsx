@@ -411,7 +411,7 @@ function PaymentEvidenceImportWizard() {
                 Apply evidence
               </Button>
               {apply.isSuccess ? (
-                <Alert severity="success">Applied — evidence upserted (and shells if marked).</Alert>
+                <Alert severity="success">Applied. Payment rows were written. A shell case was created only where you marked one.</Alert>
               ) : null}
               {apply.isError ? (
                 <Alert severity="error">{safeDisplayError(apply.error)}</Alert>

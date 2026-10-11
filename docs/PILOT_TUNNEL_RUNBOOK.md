@@ -11,7 +11,7 @@
 | Layer | What | Where it binds |
 |---|---|---|
 | Web | Next.js 15 App Router, **production build** (`next build` + `next start`) | `127.0.0.1:3000` — overridden from the package `start` script's `0.0.0.0` |
-| API | FastAPI + uvicorn via `pnpm dev:api` | `0.0.0.0:8001` (dev script; **not** fronted by the tunnel) |
+| API | FastAPI + uvicorn via `pnpm dev:api` | `127.0.0.1:8001` (dev script default; `CIP_API_HOST` overrides; **not** fronted by the tunnel) |
 | Browser → API | same-origin `/api/v1/*` proxied server-side by `apps/web/src/app/api/v1/[[...path]]/route.ts` to `127.0.0.1:8001` | no cross-origin, no CORS, `NEXT_PUBLIC_API_URL` **unset** |
 | DB / Redis / worker | Postgres `localhost:5432` (`cip`), Redis `:6379`, Celery | never exposed |
 | Auth | `CIP_AUTH_MODE=session` in `apps/api/.env`; bearer tokens from `POST /api/v1/auth/login`; PBKDF2-SHA256 × 260k; client `redirectToLoginOn401` | router-level gate on every `/api/v1` route (`26a6e1a`) |
@@ -48,7 +48,7 @@ No WebSockets in app code; no SSE anywhere (Quick Tunnel's SSE limitation does n
 
 ```powershell
 # passwords (Warren, stub mode, before the flip)
-Invoke-RestMethod -Method Post -Uri http://localhost:8001/api/v1/auth/users/1/set-password -ContentType 'application/json' -Body (@{new_password='<…>'} | ConvertTo-Json)
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8001/api/v1/auth/users/1/set-password -ContentType 'application/json' -Body (@{new_password='<…>'} | ConvertTo-Json)
 # mode flip + restart
 Add-Content apps\api\.env "CIP_AUTH_MODE=session"; pnpm dev:api
 # production web on loopback
@@ -60,7 +60,7 @@ pnpm --filter @cip/web exec next start -H 127.0.0.1 -p 3000
 
 ## G. Local CIP URL
 
-`http://127.0.0.1:3000` (login at `/login`). API `http://localhost:8001` (LAN-visible on `0.0.0.0` via the dev script; behind the gate).
+`http://127.0.0.1:3000` (login at `/login`). API `http://127.0.0.1:8001` (loopback only via the dev script; behind the gate).
 
 ## H. Public URL
 
@@ -89,11 +89,11 @@ if (-not (Select-String -Path apps\api\.env -Pattern '^CIP_AUTH_MODE=session' -Q
 if (-not (Test-Path $cf)) { throw "cloudflared not found at $cf (install from https://github.com/cloudflare/cloudflared/releases)" }
 
 # 1. API
-if ((Up 'http://localhost:8001/health') -ne 200) {
+if ((Up 'http://127.0.0.1:8001/health') -ne 200) {
   Start-Process pnpm -ArgumentList 'dev:api' -WindowStyle Minimized
-  1..30 | ForEach-Object { if ((Up 'http://localhost:8001/health') -eq 200) { break }; Start-Sleep 2 }
+  1..30 | ForEach-Object { if ((Up 'http://127.0.0.1:8001/health') -eq 200) { break }; Start-Sleep 2 }
 }
-if ((Up 'http://localhost:8001/api/v1/auth/me') -ne 401) { throw "API is not enforcing session auth (expected 401 on /auth/me without a token). Refusing." }
+if ((Up 'http://127.0.0.1:8001/api/v1/auth/me') -ne 401) { throw "API is not enforcing session auth (expected 401 on /auth/me without a token). Refusing." }
 
 # 2. Web (production build on loopback). Stop any `next dev` on :3000 first — dev and build share .next.
 $listening = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue

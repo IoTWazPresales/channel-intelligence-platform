@@ -95,7 +95,7 @@ export function SupplyOverview() {
             <>
               <Panel
                 title="Shipment lifecycle"
-                subtitle="Disjoint buckets from line_state + POD. Unreceived past ETA overlaps pipeline and shipped — not a fifth bar. Arrived is not a stored state."
+                subtitle="Each shipment is in one bar. Past-ETA rows are already inside the open bars. Arrived with no proof of delivery is its own bar. A proof-of-delivery date stays in Landed."
               >
                 <CategoryBars
                   data={(data?.lifecycle ?? []) as Record<string, unknown>[]}
@@ -107,7 +107,7 @@ export function SupplyOverview() {
               </Panel>
               <Panel
                 title="PO coverage by distributor"
-                subtitle="Share of observed POs linked to an active lineup case — not P09 plan units. Plan-unit coverage is uncovered."
+                subtitle="Share of purchase orders linked to an active lineup case. Plan units are in the chart below."
               >
                 <Stack spacing={1.25}>
                   {(data?.po_by_distributor ?? []).map((r) => (
@@ -129,6 +129,38 @@ export function SupplyOverview() {
                   {!data?.po_by_distributor?.length ? (
                     <Typography variant="body2" color="text.secondary">
                       No observed purchase orders to group.
+                    </Typography>
+                  ) : null}
+                </Stack>
+              </Panel>
+              <Panel
+                title="Plan-unit coverage by distributor"
+                subtitle={
+                  data?.captions.plan_unit_po_coverage ??
+                  'Active lineup quantity. Covered means the case has a linked purchase order.'
+                }
+              >
+                <Stack spacing={1.25}>
+                  {(data?.plan_unit_po_by_distributor ?? []).map((r) => (
+                    <Box key={`${r.distributor_id ?? 'none'}-${r.distributor}`}>
+                      <Stack direction="row" justifyContent="space-between">
+                        <Typography variant="caption" color="text.secondary">
+                          {r.distributor}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {fmtInt(r.covered_units)} covered / {fmtInt(r.plan_units)} plan · backlog{' '}
+                          {fmtInt(r.backlog_units)}
+                        </Typography>
+                      </Stack>
+                      <ProportionBar
+                        value={r.covered}
+                        tone={r.covered > 0.85 ? 'success' : r.covered > 0.75 ? 'primary' : 'warning'}
+                      />
+                    </Box>
+                  ))}
+                  {!data?.plan_unit_po_by_distributor?.length ? (
+                    <Typography variant="body2" color="text.secondary">
+                      No active lineup plan units.
                     </Typography>
                   ) : null}
                 </Stack>

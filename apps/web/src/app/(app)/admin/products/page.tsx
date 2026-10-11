@@ -642,15 +642,15 @@ function AdminProductsPageContent() {
               {dsiConflictActive && blockedDeleteProductId != null ? (
                 <Paper variant="outlined" sx={{ p: 2, bgcolor: 'action.hover' }}>
                   <Typography variant="overline" color="text.secondary">
-                    Admin maintenance / dev cleanup
+                    Maintenance
                   </Typography>
                   <Typography variant="subtitle2" sx={{ mt: 0.5 }}>
-                    Distributor sales &amp; inventory (DSI) facts
+                    Distributor sales &amp; inventory
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    Recommended: keep the SKU and set <strong>Active</strong> to false, or re-import Product Master as an
-                    upsert. Clearing DSI facts removes imported sell-out and distributor inventory evidence rows for this
-                    product only — not normal day-to-day operations.
+                    Recommended: keep the SKU and set <strong>Active</strong> to false, or re-import the product list.
+                    Clearing sell-out and distributor inventory removes those imported rows for this product only — not
+                    a normal day-to-day step.
                   </Typography>
                   {dsiDetailQuery.isLoading ? (
                     <Typography variant="body2" sx={{ mt: 1 }}>
@@ -663,11 +663,11 @@ function AdminProductsPageContent() {
                   ) : dsiDetailQuery.data ? (
                     <Stack spacing={1} sx={{ mt: 1.5 }}>
                       <Typography variant="body2">
-                        Distributor inventory facts:{' '}
+                        Distributor inventory:{' '}
                         <strong>{dsiDetailQuery.data.distributor_inventory.count}</strong> rows
                       </Typography>
                       <Typography variant="body2">
-                        Sell-out facts: <strong>{dsiDetailQuery.data.sell_out.count}</strong> rows
+                        Sell-out: <strong>{dsiDetailQuery.data.sell_out.count}</strong> rows
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
                         This data was imported through <strong>Distributor sales &amp; inventory</strong> and is not yet
@@ -714,11 +714,11 @@ function AdminProductsPageContent() {
                             setDsiConfirmOpen(true);
                           }}
                         >
-                          Clear distributor inventory facts for this product
+                          Clear distributor inventory and sell-out for this product
                         </Button>
                       ) : (
                         <Typography variant="body2" color="success.main">
-                          No DSI fact rows remain for this product in the maintenance scope.
+                          No distributor inventory or sell-out rows remain for this product.
                         </Typography>
                       )}
                     </Stack>
@@ -746,7 +746,7 @@ function AdminProductsPageContent() {
         onRetry={() => void refetchProducts()}
         intro={
           <>
-            Rows are stored in <strong>dim_product</strong>.
+            Product records. Channel and catalogue fields stay on the product.
           </>
         }
         empty={{
@@ -1025,7 +1025,7 @@ function AdminProductsPageContent() {
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>Confirm DSI fact removal</DialogTitle>
+        <DialogTitle>Confirm removal of sell-out and inventory</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 1 }}>
             Second confirmation: this removes imported <strong>sell-out</strong> and{' '}

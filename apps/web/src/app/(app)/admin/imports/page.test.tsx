@@ -1,6 +1,6 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -82,6 +82,8 @@ const mockState = vi.hoisted(() => ({
     template_slug: 'product_master',
     import_mode: 'validate',
   } as any,
+  // N-0086: role returned by /auth/me; null keeps the role unknown (controls stay on).
+  meRole: null as string | null,
   // Populated in Apply button tests' beforeEach so the ?source=100 URL param resolves
   hlSources: [] as any[],
   dsiSources: [{ id: 5, code: 'distributor_inventory', name: 'Distributor feed', import_template_slug: 'distributor_inventory' }] as any[],
@@ -178,6 +180,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
   return {
     ...actual,
     apiGet: vi.fn(async (url: string) => {
+      if (url === '/api/v1/auth/me') return mockState.meRole ? { id: 'u1', role: mockState.meRole } : [];
       if (url === '/api/v1/imports/templates') return mockState.templates;
       if (
         url === '/api/v1/imports/jobs' ||
@@ -1270,5 +1273,53 @@ describe('AdminImportsPage distributor sales & inventory guidance', () => {
     expect(screen.getByTestId('dsi-shipping-copy')).toHaveTextContent(/Inbound shipments/i);
     expect(screen.getByTestId('dsi-customer-copy')).toHaveTextContent(/not/i);
     expect(screen.getByTestId('dsi-customer-copy')).toHaveTextContent(/auto-created/i);
+  });
+});
+
+describe('AdminImportsPage steward write gating (N-0086)', () => {
+  function renderPage() {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <AdminImportsPage />
+      </QueryClientProvider>
+    );
+  }
+
+  beforeEach(() => {
+    searchString = '';
+    mockRouterReplace.mockReset();
+  });
+
+  afterEach(() => {
+    mockState.meRole = null;
+  });
+
+  it('a steward sees no notice and every template card is enabled', async () => {
+    mockState.meRole = 'steward';
+    renderPage();
+    const card = await screen.findByTestId('import-template-card-distributor_inventory');
+    await waitFor(() => expect(card).toBeEnabled());
+    expect(screen.queryByTestId('steward-write-notice')).not.toBeInTheDocument();
+    expect(screen.getByTestId('steward-write-area')).toBeEnabled();
+  });
+
+  it('a planner gets the reason, steward template cards are off, lineup cards stay on', async () => {
+    mockState.meRole = 'planner';
+    renderPage();
+    const notice = await screen.findByTestId('steward-write-notice');
+    expect(notice).toHaveTextContent('signed in as planner');
+    expect(notice).toHaveTextContent(/lineup import cards/i);
+    expect(screen.getByTestId('import-template-card-distributor_inventory')).toBeDisabled();
+    expect(screen.getByTestId('import-template-card-customer_master')).toBeDisabled();
+    expect(within(screen.getByTestId('unified-lineup-import-card')).getByRole('button')).toBeEnabled();
+  });
+
+  it('a viewer opening a steward template by URL gets a disabled wizard', async () => {
+    mockState.meRole = 'viewer';
+    searchString = 'template=distributor_inventory';
+    renderPage();
+    expect(await screen.findByTestId('steward-write-notice')).toHaveTextContent('signed in as viewer');
+    await waitFor(() => expect(screen.getByTestId('steward-write-area')).toBeDisabled());
   });
 });

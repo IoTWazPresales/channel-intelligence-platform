@@ -4,7 +4,7 @@ import { Alert, Box, Chip, Link, Paper, Stack, Typography } from '@mui/material'
 import { useQuery } from '@tanstack/react-query';
 import NextLink from 'next/link';
 
-import { KpiCard } from '@/components/KpiCard';
+import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
 import { PageHeader } from '@/components/PageHeader';
 import { navPageChrome } from '@/features/shell/navPageChrome';
 import { apiGet } from '@/lib/api';
@@ -127,44 +127,36 @@ export default function DashboardPage() {
             <Chip component={NextLink} href="/admin/steward-audit" label="Steward audit" clickable />
           </Stack>
 
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }}>
-            <Box sx={{ flex: 1 }}>
-              <KpiCard
-                label="Open exceptions"
-                value={data?.kpis.open_exceptions ?? '—'}
-                hint="Central action queue"
-                onExplain={() =>
-                  openDrawer(
-                    'Exceptions',
-                    'Exceptions aggregate stock, pricing, mapping, and budget gaps with explicit triggers.'
-                  )
-                }
-              />
-            </Box>
-            <Box sx={{ flex: 1 }}>
-              <KpiCard
-                label="Budget requests in flight"
-                value={data?.kpis.open_budget_requests ?? '—'}
-                hint="Draft / submitted / in review"
-              />
-            </Box>
-            <Box sx={{ flex: 1 }}>
-              <KpiCard
-                label="Inbound shipments tracked"
-                value={data?.kpis.inbound_shipments_tracked ?? '—'}
-                hint="Not yet received"
-              />
-            </Box>
+          <HeadlineStrip>
+            <HeadlineFigure
+              label="Open exceptions"
+              value={data?.kpis.open_exceptions ?? '—'}
+              caption="Central action queue"
+              onClick={() =>
+                openDrawer(
+                  'Exceptions',
+                  'Exceptions aggregate stock, pricing, mapping, and budget gaps with explicit triggers.'
+                )
+              }
+            />
+            <HeadlineFigure
+              label="Budget requests in flight"
+              value={data?.kpis.open_budget_requests ?? '—'}
+              caption="Draft, submitted, or in review"
+            />
+            <HeadlineFigure
+              label="Inbound shipments tracked"
+              value={data?.kpis.inbound_shipments_tracked ?? '—'}
+              caption="Not yet received"
+            />
             {isCommercialPlannerEnabled() && data?.kpis.commercial_planner ? (
-              <Box sx={{ flex: 1 }}>
-                <KpiCard
-                  label="Commercial plans not ready"
-                  value={data.kpis.commercial_planner.plans_not_ready}
-                  hint={`${data.kpis.commercial_planner.plan_count} plan(s) scanned — open Plans & line economics`}
-                />
-              </Box>
+              <HeadlineFigure
+                label="Commercial plans not ready"
+                value={data.kpis.commercial_planner.plans_not_ready}
+                caption={`${data.kpis.commercial_planner.plan_count} plans scanned`}
+              />
             ) : null}
-          </Stack>
+          </HeadlineStrip>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
             <Paper sx={{ p: 2, flex: 1 }}>
               <Typography variant="subtitle1" fontWeight={600} gutterBottom>

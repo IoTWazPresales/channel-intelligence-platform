@@ -162,7 +162,7 @@ export function ForecastsWorkspace() {
       const a = res.analogue?.upserted ?? 0;
       const skipped = (res.velocity?.skipped_override ?? 0) + (res.analogue?.skipped_override ?? 0);
       setComputeMsg(
-        `Computed from history: ${v} velocity + ${a} analogue rows (tenant ${res.tenant_id}). ` +
+        `Computed from history: ${v} velocity and ${a} analogue rows. ` +
           `Overrides kept: ${skipped}. Forecast never writes sell-out actuals.`,
       );
       void qc.invalidateQueries({ queryKey: ['forecasts'] });
@@ -258,7 +258,7 @@ export function ForecastsWorkspace() {
         />
         <ModuleDataSection
           introWhen="always"
-          intro="History is the source of the forecast: Compute from history writes velocity (52wk × seasonal) and analogue rows into fact_demand_forecast. Paste and Add row are overrides — they never merge into sell-out actuals. Rollups are plain sums."
+          intro="History is the source of the forecast. Compute from history writes a 52-week seasonal velocity and analogue rows. Paste and Add row are overrides — they never change sell-out actuals. Rollups are plain sums."
           isLoading={isLoading}
           isError={isError}
           error={toQueryError(error)}

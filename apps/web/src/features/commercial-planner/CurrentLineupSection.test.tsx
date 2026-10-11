@@ -144,7 +144,7 @@ function lineupLineOpenChannel() {
     sync_skip_reason: null,
     sync_skip_detail: null,
     sync_ui_severity: null,
-    sync_customer_resolution_note: 'Sync will use Open Channel account (dim_customer code OPEN_CHANNEL).',
+    sync_customer_resolution_note: 'Sync will use the Open Channel account.',
   };
 }
 

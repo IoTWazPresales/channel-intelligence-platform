@@ -177,10 +177,10 @@ describe('CaseBookSurface', () => {
     expect(screen.queryByTestId('settlement-container')).toBeNull();
     expect(screen.queryByTestId('settlement-scope-bar')).toBeNull();
     expect(screen.getByText(/Open book total/i)).toBeInTheDocument();
-    expect(screen.getByText(/non-settled, non-cancelled/i)).toBeInTheDocument();
+    expect(screen.getByText(/open cases \(draft and ended/i)).toBeInTheDocument();
     expect(screen.getByText('Paid on the open book')).toBeInTheDocument();
     expect(screen.getByText(/USD pending-report rows do not pay this ZAR book/i)).toBeInTheDocument();
-    expect(screen.getByText(/Negative line ttl_support/i)).toBeInTheDocument();
+    expect(screen.getByText(/stored credit on the line/i)).toBeInTheDocument();
     expect(screen.getByText(/excludes settled and negative-support/i)).toBeInTheDocument();
     expect(screen.getByText(/FX blocked · 1/)).toBeInTheDocument();
     expect(screen.getByTestId('fx-declare-mode')).toHaveTextContent(/Declare booked FX mode · 3/);
@@ -201,7 +201,7 @@ describe('CaseBookSurface', () => {
       </QueryClientProvider>,
     );
     const panel = await screen.findByTestId('case-book-portfolio-read');
-    expect(panel).toHaveTextContent('Portfolio read — all non-superseded cases');
+    expect(panel).toHaveTextContent('Portfolio — every case still in the book');
     const ageing = screen.getByTestId('case-book-ageing');
     expect(ageing.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 

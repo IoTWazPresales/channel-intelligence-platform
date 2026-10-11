@@ -19,9 +19,17 @@ type BriefSignalsResponse = {
 
 export function OverviewChrome({
   title,
+  description,
+  meta: metaOverride,
+  actions,
   children,
 }: {
   title?: string;
+  /** Page-specific description; defaults to the Overview description. */
+  description?: string;
+  /** Page-specific meta line; `null` hides the brief-signals meta. */
+  meta?: ReactNode | null;
+  actions?: ReactNode;
   children?: ReactNode;
 }) {
   const pathname = usePathname() || '/brief';
@@ -50,8 +58,9 @@ export function OverviewChrome({
       <DomainHeader
         crumbs={crumbs}
         title={title ?? OVERVIEW_TITLE}
-        description={OVERVIEW_DESCRIPTION}
-        meta={meta}
+        description={description ?? OVERVIEW_DESCRIPTION}
+        meta={metaOverride === undefined ? meta : metaOverride ?? undefined}
+        actions={actions}
       />
       {children}
     </WorkbenchCanvas>

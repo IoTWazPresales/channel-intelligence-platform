@@ -240,6 +240,16 @@ def _latest_snapshot_subquery(
     as_of: date | None = None,
 ) -> Any:
     """Distinct (distributor, product) with max(as_of_date) [optionally <= as_of]."""
+    return _latest_snapshot_select(distributor_id, tenant_id=tenant_id, as_of=as_of).subquery()
+
+
+def _latest_snapshot_select(
+    distributor_id: int | None = None,
+    *,
+    tenant_id: str | None = None,
+    as_of: date | None = None,
+) -> Any:
+    """The SELECT behind ``_latest_snapshot_subquery`` (usable as a CTE)."""
     q = select(
         FactInventoryDistributor.distributor_id.label("distributor_id"),
         FactInventoryDistributor.product_id.label("product_id"),
@@ -254,7 +264,7 @@ def _latest_snapshot_subquery(
         q = q.where(FactInventoryDistributor.tenant_id == tenant_id)
     if as_of is not None:
         q = q.where(FactInventoryDistributor.as_of_date <= as_of)
-    return q.subquery()
+    return q
 
 
 def _shipped_landed_filter(
@@ -429,7 +439,17 @@ async def derived_stock_components_by_dist_product(
 ) -> dict[tuple[int, int], DerivedStockComponents]:
     """Set-based derived stock components keyed by (distributor_id, product_id)."""
     tid = (tenant_id or "").strip() or None
-    latest = _latest_snapshot_subquery(distributor_id, tenant_id=tid, as_of=as_of)
+    # The latest-snapshot set is joined three times (inventory, sell-out, landed). As a
+    # MATERIALIZED CTE it is computed once per statement; as three inline subqueries the
+    # planner re-derived it per join and, with row-security misestimates, chose nested
+    # loops that ran past 60 s on cip (N-0065 N0065_PERF.md fix 4). Same rows either way.
+    # The sell-out and landed aggregates below are MATERIALIZED for the same reason: with a
+    # one-row estimate the planner re-ran each aggregate once per inventory row.
+    latest = (
+        _latest_snapshot_select(distributor_id, tenant_id=tid, as_of=as_of)
+        .cte("latest_snapshot")
+        .prefix_with("MATERIALIZED", dialect="postgresql")
+    )
 
     inv_q = select(
         FactInventoryDistributor.distributor_id.label("distributor_id"),
@@ -474,7 +494,7 @@ async def derived_stock_components_by_dist_product(
         sell_q = sell_q.where(FactSalesSellout.distributor_id == int(distributor_id))
     if product_id is not None:
         sell_q = sell_q.where(FactSalesSellout.product_id == int(product_id))
-    sell = sell_q.subquery("sell_since")
+    sell = sell_q.cte("sell_since").prefix_with("MATERIALIZED", dialect="postgresql")
 
     land_q = (
         select(
@@ -502,7 +522,7 @@ async def derived_stock_components_by_dist_product(
         land_q = land_q.where(FactInboundShipment.distributor_id == int(distributor_id))
     if product_id is not None:
         land_q = land_q.where(FactInboundShipment.product_id == int(product_id))
-    land = land_q.subquery("land_since")
+    land = land_q.cte("land_since").prefix_with("MATERIALIZED", dialect="postgresql")
 
     q = (
         select(

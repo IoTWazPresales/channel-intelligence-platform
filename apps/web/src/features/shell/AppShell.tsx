@@ -127,7 +127,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
   );
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }} data-testid="app-shell">
+    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', bgcolor: 'background.default' }} data-testid="app-shell">
       <Box
         component="nav"
         aria-label="Primary"
@@ -137,8 +137,6 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
           flexShrink: 0,
           borderRight: '1px solid',
           borderColor: 'divider',
-          position: 'sticky',
-          top: 0,
           height: '100vh',
           overflow: 'hidden',
         }}
@@ -157,12 +155,13 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
         {rail}
       </Drawer>
 
-      <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
         <Box
           component="header"
           data-testid="app-topbar"
           sx={{
             height: 52,
+            flexShrink: 0,
             display: 'flex',
             alignItems: 'center',
             gap: 1,
@@ -170,8 +169,6 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
             borderBottom: '1px solid',
             borderColor: 'divider',
             bgcolor: 'background.default',
-            position: 'sticky',
-            top: 0,
             zIndex: (t) => t.zIndex.appBar,
           }}
         >
@@ -283,7 +280,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
 
         <Box
           component="main"
-          sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, pb: { xs: 9, md: 0 } }}
+          sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'auto', pb: { xs: 9, md: 0 } }}
         >
           {children}
         </Box>

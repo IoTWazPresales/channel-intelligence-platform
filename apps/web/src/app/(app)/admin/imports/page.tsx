@@ -11,6 +11,10 @@ import {
   CardContent,
   Checkbox,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControl,
   FormControlLabel,
   InputLabel,
@@ -92,6 +96,8 @@ import { useImportJobProgressQuery } from '@/features/background-tasks/useImport
 import { DataChrome } from '@/features/data-stewardship/DataChrome';
 import { ImportCenterOverview, ImportStartPanel } from '@/features/data-stewardship/ImportCenterOverview';
 import { ImportJobCards } from '@/features/data-stewardship/ImportJobCards';
+import { StewardWriteFieldset, StewardWriteNotice } from '@/components/StewardWriteGate';
+import { canRunImportTemplate, useStewardWriteAccess } from '@/features/shell/stewardAccess';
 
 import { CstImportJobResolutionSection } from './CstImportJobResolutionSection';
 import { DsiImportJobResolutionSection } from './DsiImportJobResolutionSection';
@@ -395,7 +401,14 @@ const stepsDsi = [
   'Apply',
 ];
 
-const DEFERRED_TEMPLATE_SLUGS = new Set(['customer_channel_mapping']);
+const DEFERRED_TEMPLATE_SLUGS = new Set([
+  'customer_channel_mapping',
+  'customer_inventory_sales',
+  'pricing_support',
+  'lineup_plan',
+  'promotion_plan',
+  'cpor_claim_evidence',
+]);
 
 /** Human labels for inbound shipment canonical mapping targets (imports column-mapping step). */
 const SHIPMENT_FIELD_LABELS: Record<string, string> = {
@@ -475,33 +488,32 @@ const SHIPMENT_PROGRESS_DESCRIPTIONS: Record<string, string> = {
 };
 
 function describeTemplateBehavior(template: ImportTemplate | null, isPm: boolean, isDsi: boolean): string {
-  if (!template) return 'Pipeline behavior is determined by the selected import type and provider.';
+  if (!template) return 'What happens next depends on the import type you chose.';
   if (isPm) {
-    return 'You upload a file, map columns only to approved Product Master fields, validate rows, then commit. Extra columns can be ignored or retained as staged metadata (no new schema from this UI).';
+    return 'Upload a file, map columns to product fields, check the rows, then apply. Extra columns can be ignored or kept with the import. This screen does not add new fields.';
   }
   if (isDsi) {
     return (
       'Source files may use your own column names (for example DISTI for distributor). After upload, map each column to ' +
-      'the required business fields; the system auto-suggests matches and remembers mappings for this provider. ' +
-      'Validate previews staging and diagnostics, then apply to upsert canonical sell-out and inventory facts. ' +
-      'Master products, customers, and distributors are never auto-created from this import.'
+      'the required fields; the system suggests matches and remembers them for this provider. ' +
+      'The check previews the rows, then apply writes distributor sell-out and inventory. ' +
+      'Products, customers, and distributors are never created automatically from this import.'
     );
   }
   if (!template.pipeline_ready) {
-    return 'File is stored and schema inferred; full loader for this type is not enabled yet.';
+    return 'This type is not applied from Import Center.';
   }
   switch (template.slug) {
     case 'distributor_master':
-      return 'Validates distributor_code/distributor_name, then upserts dim_distributor when mode is Apply.';
+      return 'Checks distributor code and name, then writes distributor records when you apply.';
     case 'customer_master':
-      return 'Validates customer master fields, then upserts dim_customer when mode is Apply.';
+      return 'Checks customer fields, then writes customer records when you apply.';
     case 'inbound_shipments':
       return (
-        'Runs in validate mode: after upload, confirm column mapping (auto-suggested), then run validation to write ' +
-        'shipment evidence lines. Use Shipment evidence admin to steward entities and Apply when ready.'
+        'After upload, confirm the column mapping, then run the check. Names are matched under Receipts & POD before you apply.'
       );
     default:
-      return 'Runs the configured template pipeline for this import type.';
+      return 'Runs the steps configured for this import type.';
   }
 }
 
@@ -527,6 +539,9 @@ function AdminImportsPageContent() {
   const [bulkLineupBackfillOpen, setBulkLineupBackfillOpen] = useState(false);
   const [unifiedPeriodPrefill, setUnifiedPeriodPrefill] = useState<string | null>(null);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  // N-0086: steward imports need steward or admin; planners keep the CPOR templates and the lineup cards.
+  const stewardAccess = useStewardWriteAccess();
+  const wizardWriteAllowed = canRunImportTemplate(stewardAccess, selectedSlug);
   const [sourceId, setSourceId] = useState<number | ''>('');
   const [importMode, setImportMode] = useState<'validate' | 'apply'>('validate');
   const [confirmDestructive, setConfirmDestructive] = useState(false);
@@ -596,7 +611,10 @@ function AdminImportsPageContent() {
   const visibleTemplates = useMemo(
     // Exclude deferred slugs and any `hidden` template (e.g. `unified_lineup`, which has its own
     // dedicated Import-Centre card + dialog rather than the generic wizard).
-    () => (templates ?? []).filter((t) => !DEFERRED_TEMPLATE_SLUGS.has(t.slug) && !t.hidden),
+    () =>
+      (templates ?? []).filter(
+        (t) => !DEFERRED_TEMPLATE_SLUGS.has(t.slug) && !t.hidden && t.pipeline_ready !== false,
+      ),
     [templates]
   );
 
@@ -1879,7 +1897,7 @@ function AdminImportsPageContent() {
     () =>
       HL_MAPPING_DISPLAY_FIELDS.map((f) => ({
         value: f.canonical,
-        label: `${f.label} (${f.canonical})`,
+        label: f.label,
       })),
     []
   );
@@ -2017,6 +2035,9 @@ function AdminImportsPageContent() {
     mapping_adjustment_notices?: Array<{ code?: string; message?: string }>;
     column_samples?: Record<string, string[]>;
     field_target_descriptions?: Record<string, string>;
+    available_sheets?: string[];
+    selected_sheets?: string[];
+    sheet_selection_confirmed?: boolean;
   };
 
   const {
@@ -2035,6 +2056,15 @@ function AdminImportsPageContent() {
         shipmentMappingPanelEnabled
     ),
   });
+
+  const [sheetDraft, setSheetDraft] = useState<string[] | null>(null);
+  useEffect(() => {
+    if (!shipmentMappingState || shipmentMappingState.sheet_selection_confirmed) {
+      setSheetDraft(null);
+      return;
+    }
+    setSheetDraft(shipmentMappingState.selected_sheets ?? []);
+  }, [shipmentMappingState?.id, shipmentMappingState?.sheet_selection_confirmed]);
 
   const shipmentCanonSet = useMemo(
     () => new Set(shipmentMappingState?.canonical_targets ?? []),
@@ -2489,7 +2519,16 @@ function AdminImportsPageContent() {
           </Link>
         ),
       },
-      { field: 'template_slug', headerName: 'Template', minWidth: 140 },
+      {
+        colId: 'import_type',
+        headerName: 'Import type',
+        minWidth: 160,
+        valueGetter: (p) => {
+          const slug = p.data?.template_slug;
+          if (!slug) return '';
+          return templates?.find((t) => t.slug === slug)?.display_name ?? slug;
+        },
+      },
       { field: 'import_mode', headerName: 'Mode', width: 100 },
       { field: 'file_name', headerName: 'File', flex: 1, minWidth: 160 },
       { field: 'status', headerName: 'Status' },
@@ -2503,7 +2542,7 @@ function AdminImportsPageContent() {
       },
       { field: 'error_summary', headerName: 'Notes', flex: 1, minWidth: 200 },
     ],
-    [showArchivedImportJobs],
+    [showArchivedImportJobs, templates],
   );
 
   const jobsList = useMemo(() => {
@@ -2779,6 +2818,15 @@ function AdminImportsPageContent() {
   return (
     <>
       <ImportCenterOverview />
+      <StewardWriteNotice
+        access={stewardAccess}
+        id="import-center-steward-notice"
+        extra={
+          stewardAccess.role === 'planner'
+            ? 'The lineup import cards, CPOR historical cases and payment evidence still work for planners.'
+            : undefined
+        }
+      />
       <UnifiedLineupImportDialog
         open={unifiedLineupOpen}
         onClose={() => setUnifiedLineupOpen(false)}
@@ -2858,7 +2906,7 @@ function AdminImportsPageContent() {
         {activeStep === 0 ? (
           <Stack spacing={2}>
             <Typography variant="body2" color="text.secondary">
-              Choose the import <strong>type</strong> that matches your file (not the low-level parser id).
+              Choose the import type that matches your file.
             </Typography>
             <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
               <Card
@@ -2872,11 +2920,11 @@ function AdminImportsPageContent() {
                       Lineup (unified import)
                     </Typography>
                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                      unified_lineup · multi-file
+                      Several files at once
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Upload several lineup files at once. Each file becomes its own case, parsed
-                      async with the full backwards pricing chain and period inference.
+                      Upload several lineup files at once. Each file becomes its own case, with the
+                      period and pricing filled in from the file.
                     </Typography>
                     <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
                       <Chip size="small" label="Multi-file" color="primary" variant="outlined" />
@@ -2896,11 +2944,12 @@ function AdminImportsPageContent() {
                       Bulk historical lineup backfill
                     </Typography>
                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                      bulk_lineup_backfill · steward preview
+                      Preview before apply
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Multi-file archive upload with file-grain period/BU detection, sheet fan-out,
-                      supersession preview, and batch apply. Flagged files never block good ones.
+                      Upload an archive of historical lineup files. Each file’s period is detected,
+                      sheets are split, and you preview what replaces older lines before applying. A
+                      flagged file does not block the others.
                     </Typography>
                     <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
                       <Chip size="small" label="Preview-first" color="secondary" variant="outlined" />
@@ -2912,6 +2961,11 @@ function AdminImportsPageContent() {
               {visibleTemplates.map((t) => (
                 <Card key={t.slug} variant="outlined" sx={{ width: 280 }}>
                   <CardActionArea
+                    disabled={!canRunImportTemplate(stewardAccess, t.slug)}
+                    aria-describedby={
+                      canRunImportTemplate(stewardAccess, t.slug) ? undefined : 'import-center-steward-notice'
+                    }
+                    data-testid={`import-template-card-${t.slug}`}
                     onClick={() => {
                       setSelectedSlug(t.slug);
                       setSourceId('');
@@ -2934,17 +2988,14 @@ function AdminImportsPageContent() {
                     }}
                   >
                     <CardContent>
-                      <Typography variant="subtitle1" fontWeight={600}>
+                      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
                         {t.display_name}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                        {t.slug}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
                         {t.description ?? '—'}
                       </Typography>
                       <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
-                        {!t.pipeline_ready ? <Chip size="small" label="Pipeline scaffold" color="warning" /> : null}
+                        {!t.pipeline_ready ? <Chip size="small" label="Not ready to apply" color="warning" /> : null}
                         {t.destructive_apply_requires_confirm ? (
                           <Chip size="small" label="Apply needs confirm" variant="outlined" />
                         ) : null}
@@ -2957,10 +3008,11 @@ function AdminImportsPageContent() {
           </Stack>
         ) : null}
 
+        <StewardWriteFieldset disabled={!wizardWriteAllowed} describedBy="import-center-steward-notice">
         {activeStep === 1 ? (
           <Stack spacing={2}>
             <Typography variant="body2">
-              Selected type: <strong>{selectedTemplate?.display_name}</strong> ({selectedSlug})
+              Selected type: <strong>{selectedTemplate?.display_name}</strong>
             </Typography>
             {selectedTemplate?.requires_provider ? (
               <FormControl size="small" sx={{ maxWidth: 420 }}>
@@ -3013,16 +3065,16 @@ function AdminImportsPageContent() {
             {selectedTemplate.slug === 'historical_lineup' ? (
               <Alert severity="info">
                 Preferred workbook shape: keep the lineup data on a named sheet (for example <strong>NB</strong>) with a
-                single header row near the top. Title/blank rows before the header are tolerated. Validation reports
-                detected sheet and header row using <code>historical_lineup_sheet_summary</code>.
+                single header row near the top. Title and blank rows before the header are tolerated. The check
+                names the sheet and header row it used.
               </Alert>
             ) : null}
             {selectedTemplate.slug === 'distributor_inventory' ? (
               <Stack spacing={1}>
                 <Alert severity="info" data-testid="dsi-contract-copy">
-                  The system accepts different distributor column layouts, but values must map into the required business
-                  fields before apply. Map your file columns to canonical targets (for example distributor account, product
-                  identifier, dates, quantities).
+                  The system accepts different distributor column layouts, but values must map into the required
+                  fields before apply. Map your file columns to those fields (for example distributor, product,
+                  dates, and quantities).
                 </Alert>
                 <Alert severity="info" data-testid="dsi-unit-price-copy">
                   <strong>Unit sell-out price</strong> fields are <strong>ex tax / ex VAT</strong> per unit where supplied.
@@ -3074,8 +3126,8 @@ function AdminImportsPageContent() {
                 }
                 onChange={(e) => setImportMode(e.target.value as 'validate' | 'apply')}
               >
-                <MenuItem value="validate">Validate only (no catalog writes)</MenuItem>
-                <MenuItem value="apply">Apply / upsert (when supported)</MenuItem>
+                <MenuItem value="validate">Check only (nothing is written)</MenuItem>
+                <MenuItem value="apply">Apply (when this type supports it)</MenuItem>
               </Select>
             </FormControl>
             {selectedTemplate.slug === 'historical_lineup' ? (
@@ -3379,8 +3431,8 @@ function AdminImportsPageContent() {
               <>
                 {selectedTemplate?.slug === 'historical_lineup' ? (
                   <Alert severity="info">
-                    Legacy workbook tolerance is enabled. Review rows with <code>historical_lineup_sheet_summary</code>,{' '}
-                    <code>low_mapping_confidence</code>, and unresolved entity diagnostics before apply.
+                    Legacy workbook tolerance is on. Review the sheet summary, low-confidence column maps, and
+                    unmatched names before you apply.
                   </Alert>
                 ) : null}
                 <Table size="small">
@@ -3424,8 +3476,8 @@ function AdminImportsPageContent() {
           <Stack spacing={2}>
             <Typography variant="subtitle2">Commit to catalog</Typography>
             <Alert severity="warning">
-              This step applies validated rows to the product catalog. Unmapped columns marked &quot;staged metadata&quot; are
-              merged under each SKU after upsert.
+              This step writes the checked rows onto the product list. Extra columns kept with the import are
+              stored on the product after apply.
             </Alert>
             {selectedTemplate.destructive_apply_requires_confirm ? (
               <FormControlLabel
@@ -3561,6 +3613,59 @@ function AdminImportsPageContent() {
               <Alert severity="error">{safeDisplayError(shipmentMappingStateQueryErr)}</Alert>
             ) : null}
             {shipmentMappingStateLoading ? <LinearProgress /> : null}
+            <Dialog
+              open={Boolean(
+                shipmentMappingPanelEnabled &&
+                  shipmentMappingState &&
+                  !shipmentMappingState.sheet_selection_confirmed &&
+                  (shipmentMappingState.available_sheets?.length ?? 0) > 1
+              )}
+              data-testid="shipment-sheet-picker"
+            >
+              <DialogTitle>Choose sheets to import</DialogTitle>
+              <DialogContent>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  Shipped and Unship start selected. Leave other tabs off unless you want them in this import.
+                </Typography>
+                <Stack>
+                  {(shipmentMappingState?.available_sheets ?? []).map((name) => (
+                    <FormControlLabel
+                      key={name}
+                      control={
+                        <Checkbox
+                          checked={(sheetDraft ?? []).includes(name)}
+                          onChange={(_event, checked) => {
+                            setSheetDraft((current) => {
+                              const next = new Set(current ?? []);
+                              if (checked) next.add(name);
+                              else next.delete(name);
+                              return (shipmentMappingState?.available_sheets ?? []).filter((sheet) => next.has(sheet));
+                            });
+                          }}
+                        />
+                      }
+                      label={name}
+                    />
+                  ))}
+                </Stack>
+              </DialogContent>
+              <DialogActions>
+                <Button
+                  variant="contained"
+                  disabled={(sheetDraft ?? []).length === 0}
+                  onClick={() => {
+                    const jid = shipmentMappingJobId;
+                    const sheets = sheetDraft ?? [];
+                    if (jid == null || sheets.length === 0) return;
+                    void apiPost(`/api/v1/imports/jobs/${jid}/shipment-sheets`, { sheets }).then(() => {
+                      void qc.invalidateQueries({ queryKey: ['shipment-mapping-state', jid] });
+                    });
+                  }}
+                >
+                  Use these sheets
+                </Button>
+              </DialogActions>
+            </Dialog>
             {!shipmentMappingPanelEnabled ? (
               <Alert severity="warning">Upload a file first — column headers appear after the job is created.</Alert>
             ) : null}
@@ -3721,7 +3826,7 @@ function AdminImportsPageContent() {
 
         {activeStep === 6 && isShipmentEvidence && selectedTemplate ? (
           <Stack spacing={2}>
-            <Typography variant="subtitle2">Apply to canonical facts (upsert)</Typography>
+            <Typography variant="subtitle2">Apply inbound shipments</Typography>
             {shipmentEvidencePollJobId != null &&
             importJobApplyIsLoaded(shipmentStageTrim, shipmentStatus) ? (
               <ImportJobLoadedSuccessCallout
@@ -3730,7 +3835,7 @@ function AdminImportsPageContent() {
                 fileName={shipmentImportJob?.file_name ?? jobDetail?.file_name}
                 status={shipmentStatus}
                 stage={shipmentStageTrim}
-                factLayerLabel="inbound shipment facts (`fact_inbound_shipment`)"
+                factLayerLabel="inbound shipments"
                 unresolvedNotes={shipmentApplyWarning ? [shipmentApplyWarning] : []}
                 onStartNewImport={() => {
                   setActiveStep(0);
@@ -3748,8 +3853,8 @@ function AdminImportsPageContent() {
             ) : (
               <>
                 <Alert severity="warning">
-                  Apply upserts inbound shipment facts using <strong>source_key</strong> (latest apply wins). Evidence from
-                  each validate is preserved on the import job.
+                  Applying writes inbound shipments. Applying the same shipment again updates it. The validation
+                  record stays on this import.
                 </Alert>
                 {shipmentApplyMut.isError ? (
                   <Alert severity="error">{safeDisplayError(shipmentApplyMut.error)}</Alert>
@@ -4255,9 +4360,8 @@ function AdminImportsPageContent() {
                     {(distributorSiSummary.rows_inventory_ready_with_sellout_warnings ?? 0) > 0 ? (
                       <>
                         <strong>{distributorSiSummary.rows_inventory_ready_with_sellout_warnings}</strong> row(s) have
-                        valid distributor inventory (stock snapshot) but incomplete sell-out — applying may still upsert
-                        inventory facts while leaving sell-out unresolved for those rows unless you fix mappings or
-                        aliases first.{' '}
+                        valid stock snapshot but incomplete sell-out — applying may still write the stock snapshot while
+                        leaving sell-out unmatched for those rows unless you fix the names first.{' '}
                       </>
                     ) : null}
                     Review row diagnostics and mapping candidates before applying.
@@ -4371,7 +4475,7 @@ function AdminImportsPageContent() {
 
         {activeStep === 7 && isDsi && selectedTemplate ? (
           <Stack spacing={2}>
-            <Typography variant="subtitle2">Apply to canonical facts (upsert)</Typography>
+            <Typography variant="subtitle2">Apply distributor sell-out and inventory</Typography>
             {importJobApplyIsLoaded(dsiJobSnapshotForRouting.stage, dsiJobSnapshotForRouting.status) ? (
               <ImportJobLoadedSuccessCallout
                 importJobId={lastJobId ?? 0}
@@ -4379,7 +4483,7 @@ function AdminImportsPageContent() {
                 fileName={jobDetail?.file_name}
                 status={dsiJobSnapshotForRouting.status}
                 stage={dsiJobSnapshotForRouting.stage}
-                factLayerLabel="distributor sell-out & inventory facts (`fact_sales_sellout`, `fact_inventory_distributor`)"
+                factLayerLabel="distributor sell-out and inventory"
                 onStartNewImport={() => {
                   setActiveStep(0);
                   setSelectedSlug(null);
@@ -4398,9 +4502,9 @@ function AdminImportsPageContent() {
               <>
             {dsiJobFailedAlert}
             <Alert severity="warning">
-              Apply upserts sell-out and distributor inventory using natural keys (distributor + customer + product + period
-              for sell-out; distributor + product + snapshot date for inventory). Re-uploading overlapping history updates
-              existing facts instead of duplicating them.
+              Applying writes distributor sell-out and distributor inventory. Sell-out is matched on distributor,
+              customer, product, and period. Inventory is matched on distributor, product, and snapshot date. Applying
+              overlapping history updates those rows.
             </Alert>
             {distributorSiSummary != null &&
             ((distributorSiSummary.warning_rows ?? 0) > 0 ||
@@ -4430,8 +4534,8 @@ function AdminImportsPageContent() {
             {dsiApply.isPending || dsiApplyComplete.isPending || dsiApplyAsync ? <LinearProgress /> : null}
             {dsiApplyAsync ? (
               <Alert severity="info" data-testid="dsi-apply-running">
-                Applying facts and finalizing to <strong>loaded</strong> in the background worker. This can take a few
-                minutes for large files — you can leave this page and the job will continue.
+                Applying distributor sell-out and inventory in the background. This can take a few minutes for large
+                files — you can leave this page and the job will continue.
               </Alert>
             ) : null}
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
@@ -4464,7 +4568,7 @@ function AdminImportsPageContent() {
             {dsiCanFinalizeToLoaded ? (
               <Alert severity="info" data-testid="dsi-apply-complete-hint">
                 After stewards clear blocked staging lines and facts apply cleanly, use <strong>Finalize to loaded</strong>{' '}
-                to re-resolve rows, run fact upserts, and set the job to <strong>loaded</strong>.
+                to match the rows again and mark the job <strong>loaded</strong>.
               </Alert>
             ) : null}
               </>
@@ -4791,11 +4895,11 @@ function AdminImportsPageContent() {
                         {lineupLines.map((ln) => (
                           <TableRow key={ln.id}>
                             <TableCell>{ln.source_row_number}</TableCell>
-                            <TableCell>{ln.product_id ?? <em style={{ color: '#999' }}>—</em>}</TableCell>
+                            <TableCell sx={ln.product_id == null ? { color: 'text.disabled', fontStyle: 'italic' } : undefined}>{ln.product_id ?? '—'}</TableCell>
                             <TableCell>{ln.part_number_raw ?? '—'}</TableCell>
                             <TableCell>{ln.model_raw ?? '—'}</TableCell>
                             <TableCell>{ln.base_unit_raw ?? '—'}</TableCell>
-                            <TableCell>{ln.header_customer_id ?? <em style={{ color: '#999' }}>—</em>}</TableCell>
+                            <TableCell sx={ln.header_customer_id == null ? { color: 'text.disabled', fontStyle: 'italic' } : undefined}>{ln.header_customer_id ?? '—'}</TableCell>
                             <TableCell>{ln.quantity_units ?? '—'}</TableCell>
                             <TableCell>{ln.msrp_local ?? '—'}</TableCell>
                             <TableCell>{ln.promo_price_local ?? '—'}</TableCell>
@@ -4885,6 +4989,7 @@ function AdminImportsPageContent() {
             </Stack>
           </Stack>
         ) : null}
+        </StewardWriteFieldset>
       </Paper>
       </Box>
 
@@ -4893,7 +4998,7 @@ function AdminImportsPageContent() {
           Import jobs
         </Typography>
         <ModuleDataSection
-          intro="Jobs include template slug and import mode. Product Master mapping jobs show stages pm_headers_ready → pm_mapping_saved → pm_validated → pm_committed."
+          intro="Each job shows the import type, file, and where it is in the process."
           isLoading={jobsLoading && jobs == null}
           isError={jobsIsError}
           error={importJobsListError}
@@ -4901,7 +5006,7 @@ function AdminImportsPageContent() {
           isEmpty={jobsList.length === 0}
           empty={{
             title: 'No import jobs yet',
-            description: 'Start an import from the cards below, or use the API directly.',
+            description: 'Start an import from the cards below.',
             primary: { label: 'Mapping queue', href: '/admin/mappings' },
             secondary: { label: 'Steward queue', href: '/admin/mappings' },
           }}
@@ -4967,11 +5072,11 @@ function AdminImportsPageContent() {
           onConfirm={() => void confirmImportJobBulkDelete()}
         />
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-          Lineup bulk upsert remains on the{' '}
+          Lineup files are applied from the{' '}
           <Link component={NextLink} href="/lineup/cases">
             Lineup cases
           </Link>{' '}
-          screen; this wizard focuses on constrained file imports.
+          screen. This page is for the other file types.
         </Typography>
       </Paper>
       <Box sx={{ order: 2 }}>

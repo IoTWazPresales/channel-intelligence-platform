@@ -24,6 +24,7 @@ vi.mock('@/lib/api', () => ({
   apiDelete: vi.fn(),
   apiPatch: vi.fn(),
   apiPost: vi.fn(),
+  apiPut: vi.fn(),
 }));
 
 describe('AdminUsersListPage', () => {

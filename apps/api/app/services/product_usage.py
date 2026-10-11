@@ -15,8 +15,6 @@ from app.models.derived import (
     CompetitivePositioning,
     ExceptionInboxItem,
     ForecastSummary,
-    PricingRecommendation,
-    PromoReadiness,
     StockHealth,
     StockRisk,
     WeeksOfStock,
@@ -36,8 +34,6 @@ from app.models.facts import (
     FactInventoryDistributor,
     FactPricing,
     FactProductRoadmap,
-    FactPromotionPerformance,
-    FactPromotionPlan,
     FactSalesSellin,
     FactSalesSellout,
     FactSupport,
@@ -66,8 +62,6 @@ _SPECS: list[tuple[str, object]] = [
     ("Inbound shipments", FactInboundShipment.product_id),
     ("Pricing", FactPricing.product_id),
     ("Support / MDF", FactSupport.product_id),
-    ("Promotion plans", FactPromotionPlan.product_id),  # scaffold kept until table drop (spec §7)
-    ("Promotion performance", FactPromotionPerformance.product_id),
     ("CPOR case lines", CporCaseLine.product_id),
     ("Forecasts (legacy)", FactForecast.product_id),
     ("Demand forecasts", FactDemandForecast.product_id),
@@ -140,8 +134,6 @@ async def product_hard_reference_breakdown_batch(
 async def cleanup_soft_product_references(db: AsyncSession, product_id: int) -> None:
     """Delete derived / auxiliary rows so dim_product delete is not blocked by them."""
     await db.execute(delete(BuyRecommendation).where(BuyRecommendation.product_id == product_id))
-    await db.execute(delete(PricingRecommendation).where(PricingRecommendation.product_id == product_id))
-    await db.execute(delete(PromoReadiness).where(PromoReadiness.product_id == product_id))
     await db.execute(delete(CompetitivePositioning).where(CompetitivePositioning.product_id == product_id))
     await db.execute(delete(StockRisk).where(StockRisk.product_id == product_id))
     await db.execute(delete(WeeksOfStock).where(WeeksOfStock.product_id == product_id))

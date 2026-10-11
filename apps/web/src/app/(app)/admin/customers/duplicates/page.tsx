@@ -81,8 +81,8 @@ function AdminCustomerDuplicatesPageContent() {
       ) : (
         <>
           <Alert severity="warning" sx={{ mb: 2 }}>
-            <strong>Name-similarity merge</strong> consolidates whole <code>dim_customer</code> records (all FK
-            surfaces). For DSI import alias-token conflicts only, use the alias-scope tab.
+            <strong>Name-similarity merge</strong> combines two customer records, including everything that
+            points at them. For distributor sell-out name conflicts only, use the alias-scope tab.
           </Alert>
           <NameSimilarityMergeSection
             page={page}

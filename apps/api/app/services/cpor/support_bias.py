@@ -13,7 +13,7 @@ from datetime import date
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, load_only
 
 from app.models.commercial_planner import (
     CommercialCustomerTerm,
@@ -145,7 +145,21 @@ def build_support_bias(
     q = (
         select(CporCase)
         .where(CporCase.superseded_by_case_id.is_(None))
-        .options(joinedload(CporCase.lines))
+        .options(
+            joinedload(CporCase.lines).load_only(
+                CporCaseLine.id,
+                CporCaseLine.case_id,
+                CporCaseLine.product_id,
+                CporCaseLine.distributor_id,
+                CporCaseLine.estimate_qty,
+                CporCaseLine.remark,
+                CporCaseLine.ttl_support_usd,
+                CporCaseLine.support_usd,
+                CporCaseLine.srp,
+                CporCaseLine.dealer_margin_pct,
+                CporCaseLine.vat_rate,
+            )
+        )
     )
     if case_id is not None:
         q = q.where(CporCase.id == int(case_id))

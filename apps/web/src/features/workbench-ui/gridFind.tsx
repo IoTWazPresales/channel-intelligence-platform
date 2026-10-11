@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, TextField } from '@mui/material';
-import type { ColumnState } from 'ag-grid-community';
+import type { ColumnState, CsvExportParams } from 'ag-grid-community';
 import type { AgGridReact } from 'ag-grid-react';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 
@@ -159,6 +159,23 @@ export function GridFindField({
   );
 }
 
+/**
+ * Community CSV of the grid the operator is looking at.
+ * Visible columns only, so a code column leaves the file unless it was picked
+ * and is on screen. Filtered and sorted rows, not the unfiltered load.
+ * Excel export stays out (BACKLOG-193).
+ */
+export function visibleFilteredCsvParams(fileName: string, columnKeys: string[]): CsvExportParams {
+  const base = fileName.endsWith('.csv') ? fileName.slice(0, -4) : fileName;
+  return {
+    fileName: `${base}.csv`,
+    allColumns: false,
+    exportedRows: 'filteredAndSorted',
+    onlySelected: false,
+    columnKeys,
+  };
+}
+
 export function GridCsvExportButton({
   gridRef,
   fileName,
@@ -174,7 +191,12 @@ export function GridCsvExportButton({
       variant="outlined"
       disabled={disabled}
       data-testid={`grid-export-${fileName}`}
-      onClick={() => gridRef.current?.api?.exportDataAsCsv({ fileName: `${fileName}.csv` })}
+      onClick={() => {
+        const api = gridRef.current?.api;
+        if (!api) return;
+        const columnKeys = api.getAllDisplayedColumns().map((col) => col.getColId());
+        api.exportDataAsCsv(visibleFilteredCsvParams(fileName, columnKeys));
+      }}
     >
       Export
     </Button>

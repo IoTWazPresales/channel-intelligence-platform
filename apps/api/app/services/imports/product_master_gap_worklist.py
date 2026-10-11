@@ -1,7 +1,8 @@
 """Cross-import unresolved product token worklist (derived-on-read).
 
-Aggregates shipment evidence, DSI mapping candidates, and other product-resolving
-importers into one steward-facing vocabulary gap surface. No new tables; no auto-create.
+Aggregates shipment evidence, DSI mapping candidates, other product-resolving
+importers, and price entries whose SKU is not in the product master.
+No auto-create of dim_product.
 """
 from __future__ import annotations
 
@@ -11,17 +12,19 @@ from datetime import datetime
 from typing import Any, Literal
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cpor import CporClaimEvidenceLine
 from app.models.import_distributor_si import ImportEntityMappingCandidate
+from app.models.pricing_unknown_sku import PricingUnknownSku
 from app.models.shipment_evidence_current import ShipmentEvidenceCurrent
 from app.services.imports.dsi_product_running_change import (
     STEWARD_IGNORED_LINE_DIAG_PREFIX,
     infer_dsi_ignore_reason_code,
 )
 
-SourceKind = Literal["shipment", "dsi", "cpor_claim", "cst"]
+SourceKind = Literal["shipment", "dsi", "cpor_claim", "cst", "pricing"]
 WorklistStatus = Literal["unresolved", "ignored"]
 
 _SHIPMENT_UNRESOLVED_STATUSES = frozenset({"no_match", "inactive_only", "ambiguous", "no_identifier"})
@@ -68,6 +71,8 @@ async def product_master_gap_worklist(
         await _merge_cpor_claim_tokens(db, rows_by_token)
     if source in (None, "cst"):
         await _merge_cst_tokens(db, rows_by_token)
+    if source in (None, "pricing"):
+        await _merge_pricing_tokens(db, rows_by_token)
 
     out = sorted(rows_by_token.values(), key=lambda r: (-int(r["occurrence_count"]), r["token"]))
     if status:
@@ -88,6 +93,7 @@ async def product_master_gap_worklist(
             "dsi": ["needs_review", "ignored", "resolved"],
             "cpor_claim": ["unresolved", "ambiguous"],
             "cst": ["needs_review", "ignored", "resolved"],
+            "pricing": ["unresolved"],
             "worklist": ["unresolved", "ignored"],
         },
         "data_unavailable": False,
@@ -279,6 +285,32 @@ async def _merge_cst_tokens(db: AsyncSession, rows_by_token: dict[str, dict[str,
         )
 
 
+async def _merge_pricing_tokens(db: AsyncSession, rows_by_token: dict[str, dict[str, Any]]) -> None:
+    try:
+        queued = (await db.execute(select(PricingUnknownSku).order_by(PricingUnknownSku.sku))).scalars().all()
+    except ProgrammingError:
+        await db.rollback()
+        return
+    for row in queued:
+        token = _norm_token(row.sku)
+        if not token:
+            continue
+        sample = f"list {row.list_price} net {row.net_price} {row.currency}"
+        _upsert_token_row(
+            rows_by_token,
+            token=token,
+            source="pricing",
+            status="unresolved",
+            resolution_status="unknown_sku",
+            occurrence_count=int(row.attempt_count or 1),
+            quantity_impact=0,
+            sample_identifiers=sample,
+            job_ids=set(),
+            first_seen=row.created_at,
+            last_seen=row.updated_at or row.created_at,
+        )
+
+
 def _sample_ids(item: str | None, ean: str | None, model: str | None) -> str:
     parts = [p for p in (item, ean, model) if p and str(p).strip()]
     return " · ".join(parts[:3])
@@ -355,5 +387,10 @@ def _deep_link(source: str, job_ids: set[int]) -> dict[str, str]:
         return {
             "href": f"/admin/imports?job={jid}",
             "label": "CST steward",
+        }
+    if source == "pricing":
+        return {
+            "href": "/admin/product-master-gaps",
+            "label": "Product catalogue gaps",
         }
     return {"href": "/admin/imports", "label": "Import center"}

@@ -124,7 +124,7 @@ export function PmImportProgressPanel({
     if (jobStatus === 'commit_running') {
       return (
         progress?.phase_description ||
-        'The worker is writing dim_product and catalog rows. This can take several minutes for large files.'
+        'The worker is writing product and catalogue rows. This can take several minutes for large files.'
       );
     }
     if (jobStatus === 'commit_queued') {

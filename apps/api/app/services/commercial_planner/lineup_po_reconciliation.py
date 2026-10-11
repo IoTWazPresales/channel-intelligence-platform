@@ -43,9 +43,11 @@ from app.services.commercial_planner.open_channel_customer import (
     get_open_channel_canonical_and_aliases,
 )
 from app.services.imports.shipment_evidence_read import (
+    active_evidence_line_predicate,
     apply_active_evidence_filter,
     shipment_evidence_read_model,
 )
+from app.services.shipment_strict_pair import twin_remainder
 from app.services.imports.shipment_evidence_report_detect import (
     LINE_OPEN_ORDER,
     LINE_SHIPPED,
@@ -215,19 +217,25 @@ async def _reconcile_case_inner(db: AsyncSession, case: CommercialLineupCase) ->
             shipped[key] = {"units": float(units), "value_cost": float(val)}
 
         # PIPELINE (line_state='open_order'): allocated/inbound, NOT shipped. Surfaced as its
-        # own forward metric; never summed into shipped or fill.
+        # own forward metric; never summed into shipped or fill. An open line covered by its
+        # strict shipped twins is skipped; a partly shipped one counts its remainder (D-0065).
+        # Shipped totals are summed over active evidence rows only (same filter as the reads).
+        twin = twin_remainder(EV, row_filter=active_evidence_line_predicate)
         pipeline_rows = (
             await db.execute(
                 apply_active_evidence_filter(
                     select(
                         EV.resolved_customer_id,
                         EV.product_id,
-                        func.coalesce(func.sum(EV.quantity), 0),
+                        func.coalesce(func.sum(twin.counted_quantity), 0),
                     )
+                    .select_from(EV)
+                    .outerjoin(twin.subquery, twin.onclause)
                     .where(
                         EV.purchase_order_id.in_(po_ids),
                         EV.product_id.isnot(None),
                         EV.line_state == LINE_OPEN_ORDER,
+                        twin.kept,
                     )
                     .group_by(EV.resolved_customer_id, EV.product_id),
                     model=EV,

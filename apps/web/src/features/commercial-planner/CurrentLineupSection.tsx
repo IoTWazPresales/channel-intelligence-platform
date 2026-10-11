@@ -1504,16 +1504,16 @@ function SyncPreviewDialog({
             {syncResult.skipped_open_channel_account_missing != null &&
               syncResult.skipped_open_channel_account_missing > 0 && (
                 <Typography variant="body2">
-                  Blocked — reference data missing: controlled dim_customer OPEN_CHANNEL not found (not a normal row
-                  mapping issue). From repo root run pnpm local:db:seed or pnpm docker:seed — never create from upload
-                  tokens: {syncResult.skipped_open_channel_account_missing}
+                  Blocked — the Open Channel account is missing. This is reference data, not a row that failed to
+                  match. From the repo root run pnpm local:db:seed or pnpm docker:seed. Do not create it from the
+                  file: {syncResult.skipped_open_channel_account_missing}
                 </Typography>
               )}
             {syncResult.skipped_missing_distributor != null && syncResult.skipped_missing_distributor > 0 && (
               <Typography variant="body2">
-                Skipped — distributor required for sync (includes unresolved distributor_token rows and missing
-                UNASSIGNED placeholder when distributor was intentionally blank). Map a distributor, use fallback, or
-                seed dim_distributor UNASSIGNED: {syncResult.skipped_missing_distributor}
+                Skipped — a distributor is required. That includes an unmatched distributor name, and a blank
+                distributor when the Unassigned placeholder is missing. Map a distributor, use a fallback, or load
+                the reference data: {syncResult.skipped_missing_distributor}
               </Typography>
             )}
             {syncResult.skipped_missing_quantity != null && syncResult.skipped_missing_quantity > 0 && (
@@ -1609,8 +1609,8 @@ function SyncPreviewDialog({
                 {preview.skipped_open_channel_account_missing != null &&
                   preview.skipped_open_channel_account_missing > 0 && (
                     <Typography variant="body2" color="error">
-                      Blocked — reference data setup: dim_customer OPEN_CHANNEL missing (pnpm local:db:seed or pnpm
-                      docker:seed). Not a row-mapping issue — do not create from file tokens:{' '}
+                      Blocked — the Open Channel account is missing (pnpm local:db:seed or pnpm docker:seed). This is
+                      not a row that failed to match. Do not create it from the file:{' '}
                       {preview.skipped_open_channel_account_missing}
                     </Typography>
                   )}

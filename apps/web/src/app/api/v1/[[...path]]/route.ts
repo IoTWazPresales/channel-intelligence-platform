@@ -1,6 +1,8 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
+import { HOP_BY_HOP, buildUpstreamHeaders } from '@/lib/proxyForwardedHeaders';
+
 /**
  * Same-origin reverse proxy: browser calls `/api/v1/...` on the Next host, this route forwards to FastAPI.
  *
@@ -9,18 +11,11 @@ import { NextResponse } from 'next/server';
  *   (typical local `pnpm --filter web start` + API on :8001). Disable with `CIP_DISABLE_NEXT_API_PROXY=true`.
  * - Non-loopback production (e.g. internal service URL): set `CIP_ENABLE_NEXT_API_PROXY=true` to opt in.
  * - Opt out anywhere: `CIP_DISABLE_NEXT_API_PROXY=true`.
+ *
+ * Client address (N-0086): every incoming X-Forwarded-For / X-Real-IP / Forwarded / CF-Connecting-IP is
+ * dropped and one trusted address is sent upstream (see `@/lib/proxyForwardedHeaders`), so the API's
+ * per-address login throttle cannot be steered by the visitor.
  */
-const HOP_BY_HOP = new Set([
-  'connection',
-  'keep-alive',
-  'proxy-authenticate',
-  'proxy-authorization',
-  'te',
-  'trailers',
-  'transfer-encoding',
-  'upgrade',
-  'host',
-]);
 
 /** Resolved origin (no trailing slash) used for both allow-gate and upstream fetch. */
 function resolvedApiUpstreamOrigin(): string {
@@ -99,12 +94,7 @@ async function proxy(request: NextRequest, pathSegments: string[] | undefined) {
   const suffix = pathSegments?.length ? pathSegments.join('/') : '';
   const url = `${upstreamOrigin()}/api/v1/${suffix}${request.nextUrl.search}`;
 
-  const headers = new Headers();
-  request.headers.forEach((value, key) => {
-    if (!HOP_BY_HOP.has(key.toLowerCase())) {
-      headers.set(key, value);
-    }
-  });
+  const headers = buildUpstreamHeaders(request.headers);
 
   const long = proxyFetchInitNeedsLongTimeout(request.method, suffix);
   const init: RequestInit & { duplex?: 'half'; dispatcher?: import('undici').Dispatcher } = {

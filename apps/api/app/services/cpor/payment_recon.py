@@ -14,7 +14,7 @@ from datetime import date
 from typing import Any
 
 from sqlalchemy import or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 from app.models.cpor import CporCase, CporCaseLine
 from app.models.cpor_payment import CporPaymentEvidence
@@ -239,7 +239,24 @@ def load_payment_recon_by_case_id(
     id_set = set(ids)
     code_to_id = {c.case_code: c.id for c in cases}
 
-    lines = list(session.scalars(select(CporCaseLine).where(CporCaseLine.case_id.in_(ids))).all())
+    # List recon reads ttl and void markers only. Window columns stay on the model;
+    # this query does not need them, so a database that has not added them yet still loads.
+    lines = list(
+        session.scalars(
+            select(CporCaseLine)
+            .options(
+                load_only(
+                    CporCaseLine.id,
+                    CporCaseLine.case_id,
+                    CporCaseLine.ttl_support,
+                    CporCaseLine.ttl_support_usd,
+                    CporCaseLine.remark,
+                    CporCaseLine.estimate_qty,
+                )
+            )
+            .where(CporCaseLine.case_id.in_(ids))
+        ).all()
+    )
     lines_by: dict[int, list[CporCaseLine]] = defaultdict(list)
     for ln in lines:
         lines_by[ln.case_id].append(ln)

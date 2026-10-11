@@ -103,6 +103,25 @@ async def load_preview_session(db: AsyncSession, session_job_id: int) -> dict[st
     return preview
 
 
+async def load_backfill_session_view(db: AsyncSession, session_job_id: int) -> dict[str, Any]:
+    """Preview plus the apply summary once the background apply has finished."""
+    job = await db.get(ImportJob, session_job_id)
+    if job is None:
+        raise ValueError(f"Preview session import_job_id={session_job_id} not found")
+    meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+    preview = meta.get("bulk_lineup_backfill_preview")
+    if not isinstance(preview, dict):
+        raise ValueError("Preview session payload missing")
+    apply = meta.get("bulk_lineup_backfill_apply")
+    return {
+        "session_import_job_id": session_job_id,
+        "preview": preview,
+        "apply": apply if isinstance(apply, dict) else None,
+        "job_status": job.status,
+        "job_stage": job.stage,
+    }
+
+
 def _file_bytes_by_key(preview: dict[str, Any]) -> dict[str, bytes]:
     out: dict[str, bytes] = {}
     for entry in preview.get("file_manifest") or []:

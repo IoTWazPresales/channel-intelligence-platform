@@ -103,8 +103,13 @@ def test_poll_task_polls_active_listings_when_fully_enabled(monkeypatch) -> None
     monkeypatch.setenv("CIP_LISTING_CAPTURE_SCHEDULE", "1")
     monkeypatch.setenv("CIP_LISTING_LIVE_FETCH", "1")
     monkeypatch.setattr("time.sleep", lambda _s: None)
+    from app.services.listing_capture.site_pause import MemorySitePauseStore
 
-    def fake_record_observation(_session, _listing, *, http_get=None):
+    monkeypatch.setattr(
+        "app.services.listing_capture.site_pause.default_site_pause_store", MemorySitePauseStore
+    )
+
+    def fake_record_observation(_session, _listing, *, http_get=None, **_kw):
         assert http_get is not None
         return MagicMock()
 

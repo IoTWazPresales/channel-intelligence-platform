@@ -13,17 +13,16 @@ export default function BudgetsPage() {
         sx={{ mt: 2 }}
         title={
           <Stack direction="row" spacing={1} alignItems="center">
-            <span>Budget ledger — data only</span>
+            <span>Budget ledger</span>
             <CapabilityStatus status="substrate" />
           </Stack>
         }
       >
         <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 760 }}>
-          Allocation → commitment → actual tables (fact_budget_*) exist with no writer and no rows
-          (verified empty on cip). The planner’s budget check uses the lineup-derived profit
-          reservation instead, and says so on the figure. When a budget import or ledger writer
-          lands, this lens shows allocation vs drawn per programme and period; until then nothing is
-          shown rather than a placeholder.
+          Allocation, commitment, and actual are not recorded yet. The planner’s budget check uses
+          the lineup-derived profit reservation instead, and says so on the figure. When a budget
+          import lands, this view shows allocation against what has been drawn, per programme and
+          period. Until then the ledger stays empty.
         </Typography>
       </Panel>
     </FundingChrome>

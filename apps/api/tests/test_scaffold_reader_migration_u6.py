@@ -26,7 +26,7 @@ def test_has_cpor_false_when_empty() -> None:
 def test_product_usage_includes_cpor_case_line() -> None:
     labels = [label for label, _ in _SPECS]
     assert "CPOR case lines" in labels
-    assert "Promotion plans" in labels  # legacy check retained until table drop
+    assert "Promotion plans" not in labels
 
 
 def test_promotion_plan_template_disabled() -> None:
@@ -61,8 +61,12 @@ def test_promotions_plans_parked(monkeypatch) -> None:
 
     client = TestClient(app)
     res = client.get("/api/v1/promotions/plans")
-    assert res.status_code == 200
-    assert res.json() == []
+    assert res.status_code == 409
+    assert res.json()["detail"]["href"] == "/commercial-planner/cpor-cases"
     meta = client.get("/api/v1/promotions/meta")
     assert meta.status_code == 200
     assert meta.json().get("parked") is True
+    assert meta.json().get("href") == "/commercial-planner/cpor-cases"
+    export = client.post("/api/v1/promotions/1/exports/validate")
+    assert export.status_code == 409
+    assert export.json()["detail"]["export_href"] == "/api/v1/cpor/cases/{case_id}/export"

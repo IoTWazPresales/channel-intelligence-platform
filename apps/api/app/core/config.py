@@ -179,6 +179,10 @@ class Settings(BaseSettings):
     )
     cip_shipping_mailer_smtp_host: str = "smtp.gmail.com"
     cip_shipping_mailer_smtp_port: int = 587
+    cip_public_web_origin: str = Field(
+        default="http://127.0.0.1:3000",
+        description="Origin used in account-invite links (env CIP_PUBLIC_WEB_ORIGIN).",
+    )
     # auto = Graph when CIP_MAILBOX_GRAPH_CLIENT_ID is set, else IMAP.
     cip_mailbox_transport: str = "auto"
     cip_mailbox_graph_client_id: str = ""

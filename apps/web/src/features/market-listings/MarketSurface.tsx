@@ -365,6 +365,8 @@ export function MarketSurface() {
     queryFn: ({ signal }) => apiGet<PriceRow[]>('/api/v1/competition/prices', { signal }),
     enabled: lens === 'competitor-prices' || lens === 'competition',
   });
+  const mappingRows = Array.isArray(mappings) ? mappings : [];
+  const priceRows = Array.isArray(prices) ? prices : [];
 
   const listings = listingsPage?.items ?? [];
   const intelById = useMemo(() => {
@@ -372,6 +374,14 @@ export function MarketSurface() {
     for (const row of intel?.items ?? []) m.set(row.listing_id, row);
     return m;
   }, [intel]);
+  const lastCheckAt = useMemo(() => {
+    let latest = '';
+    for (const row of intelById.values()) {
+      const stamp = row.last_fetched ?? '';
+      if (stamp > latest) latest = stamp;
+    }
+    return latest || null;
+  }, [intelById]);
   const customerName = useMemo(() => {
     const m = new Map<number, string>();
     for (const c of customersPage?.items ?? []) m.set(c.id, c.customer_name || c.customer_code);
@@ -433,8 +443,8 @@ export function MarketSurface() {
     ).length,
     proposals: (proposals?.items ?? []).filter((p) => p.status === 'proposed' || !p.status || p.status === 'pending')
       .length,
-    pendingMappings: (mappings ?? []).filter((m) => m.approval_status === 'pending').length,
-    approvedMappings: (mappings ?? []).filter((m) => m.approval_status === 'approved').length,
+    pendingMappings: mappingRows.filter((m) => m.approval_status === 'pending').length,
+    approvedMappings: mappingRows.filter((m) => m.approval_status === 'approved').length,
   };
 
   const selected = gridRows.find((l) => l.id === selectedListing) ?? null;
@@ -708,7 +718,7 @@ export function MarketSurface() {
         valueGetter: (p) => {
           const sku = p.data?.competitor_sku;
           if (!sku) return 0;
-          return (prices ?? []).filter((row) => row.competitor_sku === sku).length;
+          return priceRows.filter((row) => row.competitor_sku === sku).length;
         },
         valueFormatter: (p) => (p.value ? String(p.value) : 'none observed'),
       },
@@ -722,7 +732,7 @@ export function MarketSurface() {
     [prices],
   );
 
-  const mapping = (mappings ?? []).find((m) => m.id === selectedMapping) ?? null;
+  const mapping = mappingRows.find((m) => m.id === selectedMapping) ?? null;
   const obsCount = listings.reduce((n, l) => n + (intelById.get(l.id)?.observation_count ?? 0), 0);
 
   const lensCounts: Partial<Record<MarketLens, number>> = {
@@ -764,6 +774,10 @@ export function MarketSurface() {
       >
         {lens === 'listings' || lens === 'history' ? (
           <Stack spacing={2} sx={{ mt: 2 }} data-testid="market-listings-lens">
+            <Typography variant="body2" color="text.secondary" data-testid="listing-last-check">
+              Checks run every 30 minutes while this computer is running. Last check:{' '}
+              {lastCheckAt ? fmtFetched(lastCheckAt) : 'not yet'}.
+            </Typography>
             <HeadlineStrip columns={5}>
               <HeadlineFigure
                 label="Active listings"
@@ -1146,7 +1160,7 @@ export function MarketSurface() {
                 </Box>
               </Panel>
               <Stack spacing={2}>
-                <Panel title="Where this feeds" subtitle="Same fact, four consumers" flush>
+                <Panel title="Where this feeds" subtitle="The same listing evidence, four places" flush>
                   <Stack spacing={0.25} sx={{ px: 1, pb: 1 }}>
                     <PanelRow
                       severity="neutral"
@@ -1276,7 +1290,7 @@ export function MarketSurface() {
                 label="Approved mappings"
                 value={counts.approvedMappings}
                 compact
-                caption="stored score on fact_competitor_mapping"
+                caption="Stored match score"
               />
               <HeadlineFigure
                 label="Pending review"
@@ -1289,13 +1303,13 @@ export function MarketSurface() {
                 label="Competitor prices observed"
                 value={prices?.length ?? 0}
                 compact
-                caption="fact_competitor_price — nothing inferred"
+                caption="Observed prices only — nothing inferred"
               />
               <HeadlineFigure
                 label="Competitor impact"
                 value="—"
                 compact
-                caption="Not derivable; never shown as a number"
+                caption="Not calculated, so it is not shown as a number"
               />
             </HeadlineStrip>
             <Box
@@ -1324,9 +1338,9 @@ export function MarketSurface() {
                       tone: 'success',
                     },
                   ]}
-                  summary={`${(mappings ?? []).length} mappings · our SKU ↔ competitor SKU`}
+                  summary={`${mappingRows.length} mappings · our SKU ↔ competitor SKU`}
                   trailing={
-                    <Tooltip title="Data only: a scorer exists in code but no endpoint runs it against the catalogue yet." arrow>
+                    <Tooltip title="A scorer exists, but nothing proposes candidates from this screen yet." arrow>
                       <span>
                         <Button size="small" variant="outlined" disabled>
                           Propose candidates
@@ -1344,17 +1358,17 @@ export function MarketSurface() {
                       : null
                   }
                   onRetry={() => void refetchMappings()}
-                  isEmpty={(mappings ?? []).length === 0}
+                  isEmpty={mappingRows.length === 0}
                   empty={{
                     title: 'No competitor mappings yet',
                     description:
-                      'A mapping pairs our SKU with a competitor SKU and is approved or rejected here. Candidates arrive from imports — the in-app scorer has no endpoint yet, so there is nothing to propose from this screen.',
+                      'A mapping pairs our SKU with a competitor SKU and is approved or rejected here. Suggested matches are not offered on this screen yet. Import a file, or add a match from Import Center.',
                     primary: { label: 'Import Center', href: '/admin/imports' },
                   }}
                   loadingLabel="Loading competitor mappings…"
                 >
                   <EnterpriseDataGrid<MapRow>
-                    rowData={mappings ?? []}
+                    rowData={mappingRows}
                     columnDefs={mappingCols}
                     height={380}
                     gridOptions={{
@@ -1365,7 +1379,7 @@ export function MarketSurface() {
                 </ModuleDataSection>
               </Stack>
               <Stack spacing={2}>
-                <Panel title="Where this feeds" subtitle="Approved mappings are reusable facts" flush>
+                <Panel title="Where this feeds" subtitle="Approved mappings are reused elsewhere" flush>
                   <Stack spacing={0.25} sx={{ px: 1, pb: 1 }}>
                     <PanelRow
                       severity="neutral"
@@ -1413,8 +1427,8 @@ export function MarketSurface() {
           ) : (
             <SubstrateOrPlanned
               status="substrate"
-              title="Competitor prices — data only"
-              body="The table (fact_competitor_price) and its list endpoint exist. There is no import template, so this lens shows nothing rather than a placeholder chart. When an import lands, observed competitor prices appear per approved mapping — still as observations, never as inferred impact."
+              title="Competitor prices are not imported yet"
+              body="There is no import for competitor prices, so this view stays empty rather than showing a chart. When prices are imported, they appear against approved mappings as observations, never as inferred impact."
               related={[
                 { label: 'Competitor mappings', href: '/competition?tab=mappings' },
                 { label: 'Import Center', href: '/admin/imports' },
@@ -1584,7 +1598,7 @@ export function MarketSurface() {
                 label="Match score"
                 value={Number(mapping.score).toFixed(3)}
                 dense
-                caption="stored on fact_competitor_mapping — not a lab fixture blend"
+                caption="Stored match score, not a blended estimate"
                 severity={mapping.score >= 0.8 ? 'good' : mapping.score >= 0.6 ? 'neutral' : 'warn'}
               />
               <HeadlineFigure label="Approval" value={mapping.approval_status} dense />

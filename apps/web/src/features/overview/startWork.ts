@@ -67,7 +67,7 @@ export const START_VERBS: StartVerb[] = [
     id: 'steward-queue',
     label: 'Work the steward queue',
     href: '/admin/mappings',
-    what: 'Unresolved entity tokens waiting as pipeline state, grouped by failure type; resolve them in the resolve workspace.',
+    what: 'Names that did not match, grouped by why they failed. Decide them on the queue.',
     roles: STEWARD_PLUS,
     group: 'data',
   },

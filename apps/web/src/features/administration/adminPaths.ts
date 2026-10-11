@@ -1,6 +1,6 @@
 export const ADMIN_TITLE = 'Administration';
 
-export const ADMIN_DESCRIPTION = 'Users and roles, background operations, audited SQL access, settings.';
+export const ADMIN_DESCRIPTION = 'Users and roles, background work, recorded lookups, and settings.';
 
 export type AdminLens = 'hub' | 'users' | 'ops' | 'sql' | 'settings';
 

@@ -9,6 +9,7 @@ import { Suspense, useMemo } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
+import { StewardWriteGate } from '@/components/StewardWriteGate';
 import { gridDeleteColumn } from '@/components/gridDeleteColumn';
 import { DataChrome } from '@/features/data-stewardship/DataChrome';
 import { StewardFailureQueue } from '@/features/data-stewardship/StewardFailureQueue';
@@ -184,7 +185,9 @@ export default function AdminMappingsPage() {
           </Box>
         }
       >
-        <AdminMappingsPageContent />
+        <StewardWriteGate>
+          <AdminMappingsPageContent />
+        </StewardWriteGate>
       </Suspense>
     </DataChrome>
   );

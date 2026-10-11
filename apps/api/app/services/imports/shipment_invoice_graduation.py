@@ -172,10 +172,40 @@ def _set_steward_flag(obs: ShipmentEvidenceObservation, flag: str) -> bool:
     return True
 
 
+# N-0065 migration 20261009_0026: a scoped caller sees only each identity's current
+# observation, picked over ALL rows before row security applies, so a hidden newer row
+# never surfaces an older one. Open scopes (unset, '' or '*') keep the plain DISTINCT ON.
+_SUPERSEDED_TEST = "WHERE o.superseded_by_id IS NULL\n"
+_CURRENT_PICK_FILTER = (
+    "WHERE o.superseded_by_id IS NULL\n"
+    "  AND (coalesce(current_setting('cip.product_lines', true), '') IN ('', '*')\n"
+    "       OR o.id IN (SELECT c.row_id FROM public.cip_sev_current_observation_ids() c))\n"
+)
+
+
+def current_view_create_sql(*, current_pick: bool) -> str:
+    """CREATE statement for the view; ``current_pick`` when the 0026 helper exists."""
+    # security_invoker: product-line row security applies through the view to the
+    # caller, whoever owns it (N-0065 migration 20261007_0025). A plain CREATE drops it.
+    sql = _CURRENT_VIEW_SQL.replace(
+        "CREATE OR REPLACE VIEW shipment_evidence_current AS",
+        "CREATE VIEW shipment_evidence_current WITH (security_invoker = true) AS",
+        1,
+    )
+    if current_pick:
+        assert sql.count(_SUPERSEDED_TEST) == 1
+        sql = sql.replace(_SUPERSEDED_TEST, _CURRENT_PICK_FILTER, 1)
+    return sql
+
+
 def refresh_shipment_evidence_current_view(db: Session, *, admin_engine=None) -> None:
     """Replace view so superseded observations are excluded from current-state reads."""
     sql_drop = "DROP VIEW IF EXISTS shipment_evidence_current"
-    sql_create = _CURRENT_VIEW_SQL.replace("CREATE OR REPLACE VIEW", "CREATE VIEW", 1)
+    current_pick = bool(
+        db.execute(text("SELECT to_regprocedure('public.cip_sev_current_observation_ids()') IS NOT NULL")).scalar()
+    )
+    sql_create = current_view_create_sql(current_pick=current_pick)
+    assert "security_invoker" in sql_create
     sql_grant = "GRANT SELECT ON shipment_evidence_current TO cip"
     try:
         db.execute(text(sql_drop))

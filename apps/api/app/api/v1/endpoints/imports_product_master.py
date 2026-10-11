@@ -27,6 +27,7 @@ from app.services.imports.pm_field_catalog import (
     normalize_mapping_decisions,
 )
 from app.services.catalog.product_lines import list_sellable_product_lines
+from app.services.imports.pm_mapping_memory import DEFAULT_COLUMN_GRAIN, tenant_column_grain_sync
 from app.services.imports.pm_staging import pm_staged_row_count_from_metadata
 from app.services.imports.product_master_workflow import (
     STATUS_PM_COMMIT_QUEUED,
@@ -83,6 +84,13 @@ class PMColumnMapping(BaseModel):
 class PMMappingBody(BaseModel):
     columns: list[PMColumnMapping]
     product_line: str | None = None
+
+
+async def _is_sellable_line(db: AsyncSession, line: str) -> bool:
+    """Membership in the sellable set; one forced refresh covers a line a PM commit just added."""
+    if line in (await list_sellable_product_lines(db)).codes:
+        return True
+    return line in (await list_sellable_product_lines(db, force_refresh=True)).codes
 
 
 @router.post("/jobs")
@@ -153,11 +161,16 @@ async def get_product_master_job_state(
             sync_job = sync_db.get(ImportJob, job_id)
             if sync_job and reconcile_stale_pm_validate_sync(sync_db, sync_job):
                 await db.refresh(job)
+            column_grain = tenant_column_grain_sync(sync_db, job.tenant_id)
         headers = job.file_headers or []
         suggestions = None
         if headers and job.source:
             suggestions = suggest_mapping_decisions(
-                headers, job.source, job.inferred_schema, product_line=product_line
+                headers,
+                job.source,
+                job.inferred_schema,
+                product_line=product_line,
+                grain=column_grain,
             )
         md_norm = normalize_mapping_decisions(job.mapping_decisions) if job.mapping_decisions else None
         sev_result = await db.execute(
@@ -193,6 +206,7 @@ async def get_product_master_job_state(
         "progress": progress,
         "product_lines": [line.code for line in (await list_sellable_product_lines(db)).lines],
         "product_line": product_line,
+        "column_grain": column_grain,
         "duplicate_ean_flag": bool(staged_meta.get("duplicate_ean_flag")),
         "duplicate_ean_count": staged_meta.get("duplicate_ean_count") or 0,
     }
@@ -209,9 +223,17 @@ async def put_product_master_mapping(
     if not job or job.template_slug != "product_master":
         raise HTTPException(status_code=404, detail="Job not found")
     cols = [c.model_dump(exclude_none=False) for c in body.columns]
+    product_line = (body.product_line or "").strip() or None
     try:
         with SessionLocal() as sync_db:
-            save_mapping_sync(sync_db, job_id, cols, product_line=body.product_line)
+            if product_line is not None:
+                grain = tenant_column_grain_sync(sync_db, job.tenant_id)
+                # D-0060 / N-0040: a product-line column set is keyed by a sellable line.
+                if grain == DEFAULT_COLUMN_GRAIN and not await _is_sellable_line(db, product_line):
+                    raise ValueError(
+                        f"Unknown product line {product_line!r}. Pick a product line from the product master."
+                    )
+            save_mapping_sync(sync_db, job_id, cols, product_line=product_line)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     await db.refresh(job)

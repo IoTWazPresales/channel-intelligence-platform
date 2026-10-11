@@ -32,9 +32,11 @@ describe('nav role gating (D-0008 capability domains)', () => {
     ]);
     expect(hrefs).toContain('/admin/users/list');
     expect(hrefs).toContain('/admin/sql-viewer');
+    expect(hrefs).toContain('/admin/audit-log');
     expect(hrefs).toContain('/admin/steward-audit');
     expect(hrefs).toContain('/admin/ops');
     expect(hrefs).toContain('/commercial-planner');
+    expect(hrefs).toContain('/pricing');
     expect(hrefs).toContain('/admin/imports');
   });
 
@@ -58,9 +60,11 @@ describe('nav role gating (D-0008 capability domains)', () => {
     expect(hrefs).not.toContain('/sell-out');
     expect(hrefs).not.toContain('/admin/users/list');
     expect(hrefs).not.toContain('/admin/sql-viewer');
+    expect(hrefs).not.toContain('/admin/audit-log');
     expect(hrefs).not.toContain('/admin/imports');
     expect(hrefs).not.toContain('/commercial-planner');
     expect(hrefs).not.toContain('/lineup/cases');
+    expect(hrefs).not.toContain('/pricing');
     expect(labelsFor('viewer')).not.toContain('Administration');
     expect(labelsFor('viewer')).not.toContain('Data & Stewardship');
     expect(labelsFor('viewer')).not.toContain('Planning');
@@ -72,8 +76,10 @@ describe('nav role gating (D-0008 capability domains)', () => {
     expect(hrefs).toContain('/commercial-planner');
     expect(hrefs).toContain('/commercial-planner/cpor-cases');
     expect(hrefs).toContain('/lineup/cases');
+    expect(hrefs).toContain('/pricing');
     expect(hrefs).not.toContain('/admin/users/list');
     expect(hrefs).not.toContain('/admin/sql-viewer');
+    expect(hrefs).not.toContain('/admin/audit-log');
     expect(hrefs).not.toContain('/admin/imports');
     expect(labelsFor('planner')).toContain('Promotions & Funding');
     expect(labelsFor('planner')).not.toContain('Data & Stewardship');
@@ -88,7 +94,9 @@ describe('nav role gating (D-0008 capability domains)', () => {
     expect(hrefs).toContain('/admin/ops');
     expect(hrefs).toContain('/admin/mappings');
     expect(hrefs).not.toContain('/admin/sql-viewer');
+    expect(hrefs).not.toContain('/admin/audit-log');
     expect(hrefs).not.toContain('/commercial-planner');
+    expect(hrefs).not.toContain('/pricing');
     expect(hrefs).not.toContain('/admin/users/list');
     expect(labelsFor('steward')).toContain('Data & Stewardship');
     expect(labelsFor('steward')).not.toContain('Planning');

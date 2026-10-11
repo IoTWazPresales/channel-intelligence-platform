@@ -41,7 +41,7 @@ export function StartWorkLaunch({
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1.25 }}>
         {verbs.length
-          ? 'Begin a job from here. Needs attention stays exceptions-only.'
+          ? 'Begin a job from here. Needs attention stays for exceptions.'
           : 'No start actions for this role. Find a workflow from the directory or Ctrl+K.'}
       </Typography>
       {verbs.length ? (

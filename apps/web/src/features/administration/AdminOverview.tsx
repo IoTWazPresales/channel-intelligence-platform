@@ -184,7 +184,7 @@ export function AdminOverview() {
                   {notInRail
                     .map((l) => `${l.label} (${leafStatusLabel[l.status ?? 'live'].toLowerCase()})`)
                     .join(', ')}{' '}
-                  — listed in the capability directory. Platform audit log is planned; this is not steward-audit.
+                  — listed in the capability directory.
                 </Typography>
               ) : null}
             </Stack>

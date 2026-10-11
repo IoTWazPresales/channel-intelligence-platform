@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import re
+import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
@@ -19,9 +21,13 @@ from app.core.password import (
     new_session_token,
     verify_password,
 )
+from app.core.product_line_scope import widen_product_line_catalog
 from app.core.security import Role, get_current_user, normalize_role, require_roles
 from app.models.iam import AppUser, AuthSession, Tenant
+from app.models.product_line_access import TenantColumnGrain, UserProductLineAccess
 from app.services import commercial_tenant_profile
+from app.services.account_invite import accept_invite, issue_invite
+from app.services.platform_audit import record_platform_audit, record_platform_audit_committed
 
 router = APIRouter()
 
@@ -57,7 +63,7 @@ class LoginResponse(BaseModel):
 
 class CreateUserRequest(BaseModel):
     email: str = Field(min_length=3, max_length=320)
-    password: str = Field(min_length=8)
+    password: str | None = None
     display_name: str = Field(min_length=1, max_length=200)
     role: Role = Role.VIEWER
     tenant_id: str = "default"
@@ -72,6 +78,18 @@ class CreateUserRequest(BaseModel):
         if not local or not domain:
             raise ValueError("Invalid email")
         return email
+
+    @field_validator("password")
+    @classmethod
+    def _optional_password(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        cleaned = v.strip()
+        if cleaned == "":
+            return None
+        if len(cleaned) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return cleaned
 
 
 @router.get("/me")
@@ -211,15 +229,28 @@ async def create_user(
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already exists")
 
+    # No password from the admin: store a hash nobody knows until the invite link is used.
+    chosen = body.password if body.password else secrets.token_urlsafe(32)
     user = AppUser(
         tenant_id=tenant_id,
         email=email,
-        password_hash=hash_password(body.password),
+        password_hash=hash_password(chosen),
         display_name=body.display_name.strip(),
         role=body.role.value,
         is_active=True,
     )
     db.add(user)
+    await db.flush()
+    invite_sent = await issue_invite(db, user)
+    await record_platform_audit(
+        db,
+        _admin,
+        area="admin",
+        action="user_create",
+        target_type="app_user",
+        target_id=str(user.id),
+        detail={"role": user.role, "invite_sent": invite_sent},
+    )
     await db.commit()
     await db.refresh(user)
     return {
@@ -229,6 +260,7 @@ async def create_user(
         "tenant_id": user.tenant_id,
         "display_name": user.display_name,
         "is_active": user.is_active,
+        "invite_sent": invite_sent,
     }
 
 
@@ -263,8 +295,57 @@ async def admin_set_password(
         now = datetime.now(timezone.utc)
         for sess in result.scalars().all():
             sess.revoked_at = now
+    await record_platform_audit(
+        db,
+        admin,
+        area="admin",
+        action="user_set_password",
+        target_type="app_user",
+        target_id=str(user.id),
+        detail={"sessions_revoked": body.revoke_sessions},
+    )
     await db.commit()
     return {"ok": True, "user_id": str(user.id), "sessions_revoked": body.revoke_sessions}
+
+
+@router.post("/users/{user_id}/invite")
+async def resend_user_invite(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: dict = Depends(require_roles(Role.ADMIN)),
+):
+    tenant_id = (admin.get("tenant_id") or "default").strip() or "default"
+    user = await db.get(AppUser, user_id)
+    if user is None or user.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    invite_sent = await issue_invite(db, user)
+    await record_platform_audit(
+        db,
+        admin,
+        area="admin",
+        action="user_invite",
+        target_type="app_user",
+        target_id=str(user.id),
+        detail={"invite_sent": invite_sent},
+    )
+    await db.commit()
+    return {"ok": True, "user_id": str(user.id), "invite_sent": invite_sent}
+
+
+class AcceptInviteRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=500)
+    new_password: str = Field(min_length=8, max_length=200)
+
+
+@public_router.post("/invites/accept")
+async def accept_user_invite(body: AcceptInviteRequest, db: AsyncSession = Depends(get_db)):
+    ok = await accept_invite(db, body.token, body.new_password)
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This link is not valid. Ask an admin to send a new one.",
+        )
+    return {"ok": True}
 
 
 class TenantCommercialProfileUpdate(BaseModel):
@@ -301,4 +382,172 @@ async def put_tenant_commercial_profile(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    record_platform_audit_committed(
+        admin,
+        area="settings",
+        action="tenant_profile",
+        target_type="tenant",
+        target_id=tenant_id,
+        detail={"fields": sorted(body.model_dump(exclude_unset=True))},
+    )
     return commercial_tenant_profile.profile_snapshot(tenant_id)
+
+
+class ProductLineAssignment(BaseModel):
+    product_line: str = Field(min_length=1, max_length=256)
+    can_edit: bool = False
+
+
+class ProductLineAssignmentBody(BaseModel):
+    assignments: list[ProductLineAssignment]
+
+
+class ColumnGrainBody(BaseModel):
+    # The grain names a key inside column_mapping_memory.mapping_profile, so keep it an identifier.
+    grain: str = Field(min_length=1, max_length=64)
+
+    @field_validator("grain")
+    @classmethod
+    def _identifier(cls, v: str) -> str:
+        grain = v.strip().lower()
+        if not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", grain):
+            raise ValueError("grain must be a lowercase name such as product_line")
+        return grain
+
+
+@router.get("/product-lines")
+async def list_product_lines(
+    db: AsyncSession = Depends(get_db),
+    admin: dict = Depends(require_roles(Role.ADMIN)),
+):
+    """Every product line on the master, so an admin can assign them."""
+    await widen_product_line_catalog(db)
+    rows = (
+        await db.execute(
+            text(
+                """
+                SELECT DISTINCT btrim(product_line) AS product_line
+                FROM dim_product
+                WHERE product_line IS NOT NULL AND btrim(product_line) <> ''
+                ORDER BY 1
+                """
+            )
+        )
+    ).all()
+    return {
+        "tenant_id": (admin.get("tenant_id") or "default").strip() or "default",
+        "product_lines": [str(row.product_line) for row in rows],
+    }
+
+
+@router.get("/users/{user_id}/product-lines")
+async def get_user_product_lines(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: dict = Depends(require_roles(Role.ADMIN)),
+):
+    tenant_id = (admin.get("tenant_id") or "default").strip() or "default"
+    user = await db.get(AppUser, user_id)
+    if user is None or user.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    rows = (
+        await db.execute(
+            select(UserProductLineAccess)
+            .where(UserProductLineAccess.user_id == user.id)
+            .order_by(UserProductLineAccess.product_line.asc())
+        )
+    ).scalars().all()
+    return {
+        "user_id": str(user.id),
+        "assignments": [
+            {"product_line": row.product_line, "can_edit": bool(row.can_edit)} for row in rows
+        ],
+    }
+
+
+@router.put("/users/{user_id}/product-lines")
+async def put_user_product_lines(
+    user_id: int,
+    body: ProductLineAssignmentBody,
+    db: AsyncSession = Depends(get_db),
+    admin: dict = Depends(require_roles(Role.ADMIN)),
+):
+    tenant_id = (admin.get("tenant_id") or "default").strip() or "default"
+    user = await db.get(AppUser, user_id)
+    if user is None or user.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    seen: set[str] = set()
+    clean: list[tuple[str, bool]] = []
+    for item in body.assignments:
+        line = item.product_line.strip()
+        if not line or line in seen:
+            continue
+        seen.add(line)
+        clean.append((line, bool(item.can_edit)))
+    existing = (
+        await db.execute(select(UserProductLineAccess).where(UserProductLineAccess.user_id == user.id))
+    ).scalars().all()
+    for row in existing:
+        await db.delete(row)
+    for line, can_edit in clean:
+        db.add(
+            UserProductLineAccess(
+                tenant_id=tenant_id,
+                user_id=user.id,
+                product_line=line,
+                can_edit=can_edit,
+            )
+        )
+    await record_platform_audit(
+        db,
+        admin,
+        area="admin",
+        action="user_product_lines",
+        target_type="app_user",
+        target_id=str(user.id),
+        detail={"line_count": len(clean)},
+    )
+    await db.commit()
+    return {
+        "user_id": str(user.id),
+        "assignments": [{"product_line": line, "can_edit": can_edit} for line, can_edit in clean],
+    }
+
+
+@router.get("/column-grain")
+async def get_column_grain(
+    db: AsyncSession = Depends(get_db),
+    admin: dict = Depends(require_roles(Role.ADMIN)),
+):
+    tenant_id = (admin.get("tenant_id") or "default").strip() or "default"
+    row = await db.get(TenantColumnGrain, tenant_id)
+    return {"tenant_id": tenant_id, "grain": row.grain if row else "product_line"}
+
+
+@router.put("/column-grain")
+async def put_column_grain(
+    body: ColumnGrainBody,
+    db: AsyncSession = Depends(get_db),
+    admin: dict = Depends(require_roles(Role.ADMIN)),
+):
+    tenant_id = (admin.get("tenant_id") or "default").strip() or "default"
+    grain = body.grain.strip()
+    if not grain:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="grain is required")
+    row = await db.get(TenantColumnGrain, tenant_id)
+    if row is None:
+        row = TenantColumnGrain(tenant_id=tenant_id, grain=grain)
+        db.add(row)
+    else:
+        row.grain = grain
+    await record_platform_audit(
+        db,
+        admin,
+        area="settings",
+        action="column_grain",
+        target_type="tenant",
+        target_id=tenant_id,
+        detail={"grain": grain},
+    )
+    await db.commit()
+    return {"tenant_id": tenant_id, "grain": grain}

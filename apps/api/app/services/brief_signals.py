@@ -5,11 +5,12 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.feature_flags import commercial_planner_enabled
 from app.core.tenant_scope import tenant_id_from_user, where_tenant
+from app.models.customer_cst_report_slot import CustomerCstReportSlot
 from app.models.iam import Tenant
 from app.models.cpor import CporCase, CporCaseLine
 from app.models.facts import FactInboundShipment, FactInventoryReconciliation
@@ -19,13 +20,31 @@ from app.services.channel_ops_derived_stock import replenishment_flag_v1, weeks_
 from app.services.cpor.intelligence_scope import where_commercial_intelligence
 from app.services.cpor.promotion_type_vocab import CPOR_CASE_STATUS_SET
 from app.services.cpor.settle_readiness import case_missing_roe
+from app.services.shipment_strict_pair import keep_counted_line
 from app.services.woc_observation_read import latest_woc_observations, observations_to_stock_vel
 
 _FRESH_STATUSES = ("completed", "completed_with_errors")
 _STALE_HOURS = 168
 _DSI_TEMPLATE = "distributor_sales_inventory"
 FAILED_IMPORTS_HREF = "/admin/imports?jobStatus=failed"
+CST_STEWARD_SLOTS_HREF = "/admin/cst-steward?tab=slots"
 _OPEN_CPOR_STATUSES = tuple(s for s in CPOR_CASE_STATUS_SET if s not in {"settled", "cancelled", "rejected"})
+
+
+def inbound_not_received_count_stmt(user: dict | None) -> Select[Any]:
+    """Inbound lines not yet received (a line count).
+
+    An open line covered by its strict shipped twins is skipped (D-0057); a partly
+    shipped open line still counts as one line (D-0065). Shared by the brief card and
+    the dashboard tile so the two numbers agree.
+    """
+    return (
+        select(func.count())
+        .select_from(FactInboundShipment)
+        .where(FactInboundShipment.status != "received")
+        .where(where_tenant(FactInboundShipment.tenant_id, user))
+        .where(keep_counted_line(FactInboundShipment))
+    )
 
 
 def _severity_from_rank(rank: int) -> str:
@@ -62,6 +81,53 @@ def _signal_row(
         "data_unavailable": data_unavailable,
         "figures": figures or {},
     }
+
+
+def cst_late_missing_signal(*, late: int, missing: int) -> dict[str, Any] | None:
+    """Attention row for expected customer sell-through reports that are late or missing."""
+    late_n = max(0, int(late))
+    missing_n = max(0, int(missing))
+    total = late_n + missing_n
+    if total <= 0:
+        return None
+    if late_n and missing_n:
+        title = f"{total} customer sell-through reports are late or missing"
+        detail = f"{late_n} late, {missing_n} missing. These expected reports have not arrived."
+    elif missing_n == 1:
+        title = "1 customer sell-through report is missing"
+        detail = "This expected report has not arrived."
+    elif missing_n:
+        title = f"{missing_n} customer sell-through reports are missing"
+        detail = "These expected reports have not arrived."
+    elif late_n == 1:
+        title = "1 customer sell-through report is late"
+        detail = "This expected report is past due and has not arrived."
+    else:
+        title = f"{late_n} customer sell-through reports are late"
+        detail = "These expected reports are past due and have not arrived."
+    return _signal_row(
+        id="cst_reports_late_missing",
+        rank=1,
+        title=title,
+        detail=detail,
+        meta=f"{total} reports",
+        meta_hot=True,
+        action_label="Open CST steward",
+        action_href=CST_STEWARD_SLOTS_HREF,
+        figures={"late": late_n, "missing": missing_n},
+    )
+
+
+async def _cst_late_missing_counts(db: AsyncSession) -> tuple[int, int]:
+    rows = (
+        await db.execute(
+            select(CustomerCstReportSlot.status, func.count())
+            .where(CustomerCstReportSlot.status.in_(("late", "missing")))
+            .group_by(CustomerCstReportSlot.status)
+        )
+    ).all()
+    counts = {str(status): int(n) for status, n in rows}
+    return counts.get("late", 0), counts.get("missing", 0)
 
 
 async def _dsi_freshness(db: AsyncSession, user: dict | None) -> dict[str, Any] | None:
@@ -173,24 +239,17 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
     cover = await _cover_summary(db, user)
     settlement = await _settlement_aggregates(db, user)
 
-    inbound_open = int(
-        await db.scalar(
-            select(func.count())
-            .select_from(FactInboundShipment)
-            .where(FactInboundShipment.status != "received")
-            .where(where_tenant(FactInboundShipment.tenant_id, user))
-        )
-        or 0
-    )
+    inbound_open = int(await db.scalar(inbound_not_received_count_stmt(user)) or 0)
+    cst_late, cst_missing = await _cst_late_missing_counts(db)
 
     signals: list[dict[str, Any]] = []
     rank = 1
 
     if failed_open > 0:
         dsi_date = dsi["completed_at"] if dsi else None
-        detail = "unarchived import_job.status = failed"
+        detail = "Failed imports still open"
         if dsi_date:
-            detail += f"; latest batch DSI {dsi_date}"
+            detail += f"; latest sell-out batch {dsi_date}"
         signals.append(
             _signal_row(
                 id="failed_imports",
@@ -255,6 +314,12 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
     )
     rank += 1
 
+    cst_signal = cst_late_missing_signal(late=cst_late, missing=cst_missing)
+    if cst_signal is not None:
+        cst_signal["rank"] = rank
+        signals.append(cst_signal)
+        rank += 1
+
     if cover["pairs_below_threshold"] > 0:
         mean = cover["book_mean_weeks"]
         mean_txt = f"{mean}w" if mean is not None else "n/a"
@@ -263,7 +328,7 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
                 id="cover_breach",
                 rank=rank,
                 title=f"{cover['pairs_below_threshold']} pairs under {int(REPLENISHMENT_WOC_THRESHOLD_WEEKS)} weeks of cover",
-                detail=f"book mean {mean_txt} ({cover['grain']} grain)",
+                detail=f"average cover on the book {mean_txt}",
                 meta=f"{cover['pairs_below_threshold']} pairs",
                 meta_hot=cover["pairs_below_threshold"] > 0,
                 action_label="Open Stock · Cover",
@@ -279,7 +344,7 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
                 id="inbound_open",
                 rank=rank,
                 title=f"{inbound_open} inbound shipments not received",
-                detail="pipeline fill % requires line-grain read model",
+                detail="Still open. A fill rate against the plan is not on this card.",
                 meta=f"{inbound_open} shipments",
                 meta_hot=True,
                 action_label="Open Supply · Shipments",
@@ -338,6 +403,8 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
         read_parts.append(f"**{failed_open}** imports failed")
     if soh_recon_not_run:
         read_parts.append("SOH recon not run")
+    if cst_late or cst_missing:
+        read_parts.append(f"**{cst_late + cst_missing}** customer sell-through reports late or missing")
     if cover["pairs_below_threshold"] > 0:
         read_parts.append(f"**{cover['pairs_below_threshold']}** pairs under {int(REPLENISHMENT_WOC_THRESHOLD_WEEKS)}w cover")
     if settlement.get("open_cases"):

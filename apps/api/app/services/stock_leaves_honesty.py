@@ -157,28 +157,27 @@ async def stock_leaves_honesty(db: AsyncSession, user: dict | None) -> dict[str,
     customer_names = [str(c["name"]) for c in customers if c.get("name")]
 
     cst_body_parts = [
-        "Sell-through is derived from retailer files (fact_customer_sellthrough.period_start_date, ISO week in Africa/Johannesburg).",
-        f"Current ISO week {current_short} has {cst_now} rows.",
+        "Sell-through comes from retailer files, by week (Africa/Johannesburg).",
+        f"Current week {current_short} has {cst_now} rows.",
     ]
     if cst_max_period is not None:
         cst_body_parts.append(
-            f"Latest applied period_start is {cst_max_period.isoformat()} ({cst_max_short}, {cst_max_rows} rows)"
+            f"Latest applied week starts {cst_max_period.isoformat()} ({cst_max_short}, {cst_max_rows} rows)"
             + (f" — {', '.join(customer_names)}" if customer_names else "")
             + "."
         )
     else:
-        cst_body_parts.append("No fact_customer_sellthrough rows.")
-    cst_body_parts.append("Not lab fixture W36 / TechMart.")
+        cst_body_parts.append("No retailer sell-through has been applied.")
 
     fc_body = (
-        f"Trailing window is the current ISO Monday plus seven prior Mondays ({TRAILING_WEEKS} weeks). "
-        f"fact_sales_sellout.transaction_date has {trailing} of {TRAILING_WEEKS} weeks. "
+        f"Trailing window is the current ISO Monday plus the seven Mondays before it ({TRAILING_WEEKS} weeks). "
+        f"Applied sell-out covers {trailing} of {TRAILING_WEEKS} weeks. "
         + (
             f"Latest sell-out is {so_max_short} ({so_max_tx.isoformat()}). "
             if so_max_tx is not None
-            else "No fact_sales_sellout rows. "
+            else "No sell-out has been applied. "
         )
-        + f"{forecast_n} fact_demand_forecast rows stay on the relocated workspace — they are not a complete trailing window. "
+        + f"{forecast_n} forecast rows stay on the workspace — they are not a complete trailing window. "
         "Velocity and analogue projections are labelled by method."
     )
 

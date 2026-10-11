@@ -183,13 +183,13 @@ const DEFAULT_INITIALLY_HIDDEN_DISTRIBUTOR_FIELDS: readonly DistributorMasterCol
 
 const STATIC_DISTRIBUTOR_MASTER_COLUMN_GROUPS: { label: string; fields: DistributorMasterColumnField[] }[] = [
   {
-    label: 'dim_distributor',
+    label: 'Distributor',
     fields: ['id', 'distributor_code', 'distributor_name', 'no_code_disposition', 'created_at', 'updated_at'],
   },
   { label: 'Related counts', fields: ['location_count', 'contact_count'] },
   { label: 'Import & alias linkage', fields: ['alias_count', 'last_import_at', 'alias_link_status'] },
-  { label: 'Fact linkage', fields: ['linkage_status', 'linked_sellout_rows', 'linked_inbound_rows'] },
-  { label: 'Recency (facts)', fields: ['latest_sellout_period_start', 'latest_inbound_eta_date'] },
+  { label: 'Sell-out and shipment links', fields: ['linkage_status', 'linked_sellout_rows', 'linked_inbound_rows'] },
+  { label: 'Latest activity', fields: ['latest_sellout_period_start', 'latest_inbound_eta_date'] },
 ];
 
 function TabPanel({ value, index, children }: { value: number; index: number; children: ReactNode }) {
@@ -931,7 +931,7 @@ function AdminDistributorsPageContent() {
                   <MenuItem value="healthy">healthy</MenuItem>
                   <MenuItem value="partial">partial</MenuItem>
                   <MenuItem value="unmapped">unmapped</MenuItem>
-                  <MenuItem value="no_fact_links">no fact links</MenuItem>
+                  <MenuItem value="no_fact_links">No linked sell-out or shipments</MenuItem>
                 </Select>
               </FormControl>
               <TextField
@@ -1397,8 +1397,7 @@ function AdminDistributorsPageContent() {
                   </Alert>
                 ) : null}
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75 }}>
-                  Master import updates `dim_distributor`; inventory import validates SKU/on-hand snapshots. Deferred
-                  templates are intentionally not shown as ready paths.
+                  The distributor import updates distributor records. The inventory import checks SKU and on-hand snapshots. Types that are not ready to apply are not shown as ready paths.
                 </Typography>
               </Paper>
             </Stack>
@@ -1412,8 +1411,7 @@ function AdminDistributorsPageContent() {
           <ModuleDataSection
             intro={
               <>
-                Transitional mapper over <strong>fact_sales_sellout</strong>. Keep this for continuity while
-                distributor linkage workflows are hardened.
+                Distributor sell-out linkage. Kept while distributor matching is still being finished.
               </>
             }
             isLoading={sellLoading}
@@ -1448,7 +1446,7 @@ function AdminDistributorsPageContent() {
           <ModuleDataSection
             intro={
               <>
-                Transitional mapper over <strong>fact_inbound_shipment</strong> to keep current operations running.
+                Inbound shipment linkage, kept so current operations keep running.
               </>
             }
             isLoading={inboundLoading}

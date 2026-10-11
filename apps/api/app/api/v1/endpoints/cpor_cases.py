@@ -147,6 +147,22 @@ def _record_event(
             payload_json=payload_json,
         )
     )
+    if str(event_type).startswith("transition_"):
+        from app.services.platform_audit import record_platform_audit_sync
+
+        record_platform_audit_sync(
+            session,
+            user,
+            area="case",
+            action=event_type,
+            target_type="cpor_case",
+            target_id=str(case_id),
+            detail={
+                "from": (payload or {}).get("from"),
+                "to": (payload or {}).get("to"),
+            },
+            actor_label=actor,
+        )
 
 
 def _generate_case_code(session: Session) -> str:

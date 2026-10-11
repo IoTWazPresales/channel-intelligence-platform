@@ -851,6 +851,22 @@ def listing_capture_poll_listings_task() -> dict:
         return {"skipped": False, **result, **gate}
 
 
+@celery_app.task(name="listing_capture.clear_expired_snapshots")
+def listing_capture_clear_expired_snapshots_task() -> dict:
+    """Beat task (daily): clear raw page snapshots older than 90 days (payload only, rows kept)."""
+    from app.db.session_sync import SessionLocal
+    from app.services.listing_capture.snapshot_retention import clear_expired_snapshots
+    from app.worker.celery_queues import dev_beat_disabled
+
+    if dev_beat_disabled():
+        return {"skipped": True, "reason": "dev_beat_disabled"}
+
+    with SessionLocal() as session:
+        result = clear_expired_snapshots(session)
+        session.commit()
+        return {"skipped": False, **result}
+
+
 @celery_app.task(name="cpor.fetch_daily_fx_rate")
 def cpor_fetch_daily_fx_rate_task() -> dict:
     """Beat/lifespan task: persist today's USDZAR quote. Never raises to the worker."""

@@ -32,6 +32,7 @@ from app.services.cpor.cost_suggestion import (
     suggest_cost_basis,
 )
 from app.services.cpor.waterfall import _as_decimal
+from app.services.shipment_strict_pair import twin_remainder
 
 
 def _f(value: Decimal | float | int | None) -> float | None:
@@ -119,12 +120,18 @@ def _intake_wavg(
     ]
     if distributor_id is not None:
         clauses.append(dist_col == int(distributor_id))
+    # Weight = counted quantity: an open line covered by its strict shipped twins is
+    # skipped (D-0057); a partly shipped one weighs only its remainder (D-0065).
+    twin = twin_remainder(FactInboundShipment)
     rows = session.execute(
         select(
-            FactInboundShipment.quantity,
+            twin.counted_quantity,
             FactInboundShipment.unit_price,
             landing.label("landing_date"),
-        ).where(and_(*clauses))
+        )
+        .select_from(FactInboundShipment)
+        .outerjoin(twin.subquery, twin.onclause)
+        .where(and_(*clauses), twin.kept)
     ).all()
     if not rows:
         flags.append("no_intake_evidence")
@@ -235,12 +242,17 @@ def _disti_cost_proxy_wavg(
         FactInboundShipment.resolved_distributor_id,
         FactInboundShipment.distributor_id,
     )
+    # Weight = counted quantity (D-0057 + D-0065), as in ``_intake_wavg``.
+    twin = twin_remainder(FactInboundShipment)
     rows = session.execute(
         select(
-            FactInboundShipment.quantity,
+            twin.counted_quantity,
             FactInboundShipment.unit_price,
             FactInboundShipment.pod_date,
-        ).where(
+        )
+        .select_from(FactInboundShipment)
+        .outerjoin(twin.subquery, twin.onclause)
+        .where(
             dist_col == int(distributor_id),
             FactInboundShipment.product_id == int(product_id),
             FactInboundShipment.purchase_order_id.is_not(None),
@@ -248,6 +260,7 @@ def _disti_cost_proxy_wavg(
             FactInboundShipment.unit_price > 0,
             FactInboundShipment.quantity.is_not(None),
             FactInboundShipment.quantity > 0,
+            twin.kept,
         )
     ).all()
     if not rows:

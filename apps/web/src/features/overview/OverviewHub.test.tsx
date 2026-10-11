@@ -39,6 +39,8 @@ vi.mock('@/features/overview/StartWorkPanel', () => ({
 }));
 
 vi.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  useMutation: () => ({ mutate: vi.fn(), isPending: false }),
   useQuery: ({ queryKey }: { queryKey: string[] }) => {
     if (queryKey[0] === 'brief') return queryByKey.brief;
     if (queryKey[0] === 'dashboards') return queryByKey.dashboards;
@@ -110,5 +112,24 @@ describe('OverviewHub', () => {
     expect(screen.getByTestId('overview-edit-dashboard')).toHaveAttribute('href', '/dashboards');
     expect(screen.getByTestId('overview-all-reports')).toHaveAttribute('href', '/reports');
     expect(screen.getByTestId('overview-body')).toBeInTheDocument();
+  });
+
+  it('lists only this user\'s pinned reports and does not print a metric key', () => {
+    queryByKey.reports = {
+      isLoading: false,
+      isError: false,
+      data: {
+        count: 2,
+        items: [
+          { id: 1, name: 'Weekly cover', visibility: 'personal', overview_pinned: true },
+          { id: 2, name: 'Hidden report', visibility: 'published', overview_pinned: false },
+        ],
+      },
+    };
+    renderHub();
+    expect(screen.getByText('Weekly cover')).toBeInTheDocument();
+    expect(screen.queryByText('Hidden report')).toBeNull();
+    expect(screen.getByTestId('unpin-report-1')).toBeInTheDocument();
+    expect(screen.queryByText('sellout_units')).toBeNull();
   });
 });

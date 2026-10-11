@@ -1,5 +1,6 @@
 'use client';
 
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {
   Alert,
   Box,
@@ -7,6 +8,7 @@ import {
   Card,
   CardContent,
   Chip,
+  Collapse,
   FormControl,
   InputLabel,
   LinearProgress,
@@ -17,7 +19,6 @@ import {
   Tabs,
   ToggleButton,
   ToggleButtonGroup,
-  Tooltip as MuiTooltip,
   Typography,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
@@ -26,16 +27,9 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip as RechartsTooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+
+import { TrendChart } from '@/features/workbench-ui/charts';
+import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
@@ -226,54 +220,6 @@ function fmtValue(n: number | null | undefined): string {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(n);
 }
 
-function KpiTile({
-  label,
-  primary,
-  secondary,
-  tone = 'default',
-  title,
-  'data-testid': testId,
-}: {
-  label: string;
-  primary: string;
-  secondary?: string;
-  tone?: 'default' | 'positive' | 'warning' | 'neutral';
-  /** Tooltip explaining metric scope (shown on label). */
-  title?: string;
-  'data-testid'?: string;
-}) {
-  const color =
-    tone === 'positive' ? 'success.main' : tone === 'warning' ? 'warning.main' : 'text.primary';
-  const labelNode = (
-    <Typography variant="caption" color="text.secondary" component="span">
-      {label}
-    </Typography>
-  );
-  return (
-    <Card variant="outlined" sx={{ flex: '1 1 160px', minWidth: 160 }} data-testid={testId}>
-      <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-        {title ? (
-          <MuiTooltip title={title}>
-            <Box component="span" sx={{ cursor: 'help', borderBottom: '1px dotted', borderColor: 'text.disabled' }}>
-              {labelNode}
-            </Box>
-          </MuiTooltip>
-        ) : (
-          labelNode
-        )}
-        <Typography variant="h6" sx={{ fontWeight: 600, color }}>
-          {primary}
-        </Typography>
-        {secondary ? (
-          <Typography variant="body2" color="text.secondary">
-            {secondary}
-          </Typography>
-        ) : null}
-      </CardContent>
-    </Card>
-  );
-}
-
 export function PlanVsExecutedView() {
   const theme = useTheme();
   const searchParams = useSearchParams();
@@ -287,6 +233,7 @@ export function PlanVsExecutedView() {
   const [drillCustomerId, setDrillCustomerId] = useState<number | null>(null);
   const [drillProductId, setDrillProductId] = useState<number | null>(null);
   const [drillSalesModel, setDrillSalesModel] = useState<string | null>(null);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const drillRef = useRef<HTMLDivElement | null>(null);
   const drillColumns = useFactColumns('pve.drill');
   const gridChrome = useFactGridChrome('pve.drill', { layout: factGridLayout(drillColumns) });
@@ -350,7 +297,7 @@ export function PlanVsExecutedView() {
   }, [data?.drill_rows, data?.available_periods]);
 
   const lensExceptions = data?.exceptions?.[lens];
-  const periodForPoLink = selectedTo || data?.period_range.to || data?.default_period || '';
+  const periodForPoLink = selectedTo || data?.period_range?.to || data?.default_period || '';
   const buForPoLink = productLine !== ALL_BU ? productLine : data?.product_line_filter;
 
   const clearDrill = useCallback(() => {
@@ -520,7 +467,7 @@ export function PlanVsExecutedView() {
 
   return (
     <Stack spacing={2}>
-      {data?.data_quality.backlog_066_message ? (
+      {data?.data_quality?.backlog_066_message ? (
         <Alert severity="warning" data-testid="backlog-066-flag">
           {data.data_quality.backlog_066_message}
           {data.data_quality.backlog_066_affected_periods.length
@@ -534,7 +481,7 @@ export function PlanVsExecutedView() {
           What this view answers — and what it does not
         </Typography>
         <Typography variant="body2" component="ul" sx={{ m: 0, pl: 2.5 }}>
-          {(data?.scope_notes.out_of_scope ?? [
+          {(data?.scope_notes?.out_of_scope ?? [
             'Sell-through / aging — see DSI sell-out.',
             'Cancelled vs never-shipped — unshipped means planned with no linked-PO shipment yet.',
           ]).map((note) => (
@@ -657,62 +604,97 @@ export function PlanVsExecutedView() {
         >
           {sc ? (
             <>
-              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
-                <KpiTile
+              <HeadlineStrip>
+                <HeadlineFigure
+                  compact
                   label="Fill rate (headline)"
-                  title="Σ min(shipped, planned) / Σ planned on in-plan lines only. Unplanned intake does not affect fill."
-                  primary={fmtPct(sc.fill_rate)}
-                  secondary={`Line-hit ${fmtPct(sc.line_hit_rate)}`}
+                  value={fmtPct(sc.fill_rate)}
+                  caption={`Line-hit ${fmtPct(sc.line_hit_rate)}`}
                 />
-                <KpiTile
+                <HeadlineFigure
+                  compact
                   label="Planned vs in-plan shipped"
-                  title="Planned lineup units vs shipped on matching plan lines (linked POs). This is the fill-rate pair — not total intake."
-                  primary={`${fmtUnits(sc.planned_units)} planned`}
-                  secondary={`${fmtUnits(sc.shipped_units_in_plan)} shipped against plan`}
+                  value={fmtUnits(sc.planned_units)}
+                  unit="planned"
+                  caption={`${fmtUnits(sc.shipped_units_in_plan)} shipped against plan`}
                 />
-                <KpiTile
+                <HeadlineFigure
+                  compact
+                  testId="pve-total-shipped-in-scope"
                   label="Total shipped (in scope)"
-                  title="All shipped units on purchase orders linked to lineups in this period and product line — in-plan plus unplanned. Scope is the plan period and linked purchase orders."
-                  primary={fmtUnits(sc.shipped_units_total)}
-                  secondary={`${fmtUnits(sc.shipped_units_in_plan)} in-plan · ${fmtUnits(sc.unplanned_intake_units)} unplanned`}
-                  tone="neutral"
-                  data-testid="pve-total-shipped-in-scope"
+                  value={fmtUnits(sc.shipped_units_total)}
+                  unit="units"
+                  caption={`${fmtUnits(sc.shipped_units_in_plan)} in-plan · ${fmtUnits(sc.unplanned_intake_units)} unplanned`}
                 />
-                <KpiTile
+                <HeadlineFigure
+                  compact
                   label="Pipeline (inbound)"
-                  primary={fmtUnits(sc.pipeline_units_in_plan)}
-                  secondary={`${sc.pending_split?.inbound_pipeline_lines ?? 0} plan lines inbound · ${
+                  value={fmtUnits(sc.pipeline_units_in_plan)}
+                  unit="units"
+                  caption={`${sc.pending_split?.inbound_pipeline_lines ?? 0} plan lines inbound · ${
                     sc.pending_split?.cold_lines ?? 0
                   } cold`}
-                  tone="neutral"
                 />
-                <KpiTile
+                <HeadlineFigure
+                  compact
                   label="Short exposure"
-                  primary={fmtUnits(sc.short_exposure_units)}
-                  secondary={`${fmtValue(sc.value.short_exposure_value_plan)} plan${fxNote}`}
-                  tone="warning"
+                  value={fmtUnits(sc.short_exposure_units)}
+                  unit="units"
+                  caption={`${fmtValue(sc.value.short_exposure_value_plan)} plan${fxNote}`}
+                  severity="warn"
                 />
-                <KpiTile
+                <HeadlineFigure
+                  compact
+                  testId="pve-over-plan-intake"
                   label="Deal-stock landing"
-                  title="This is the over-plan intake already on the page: max(shipped − planned, 0) on in-plan rows. Not a separate POD landing."
-                  primary={fmtUnits(sc.over_plan_intake_units ?? sc.deal_stock_units)}
-                  secondary={`${fmtValue(sc.value.over_plan_intake_value_plan ?? sc.value.deal_stock_value_plan)} plan${fxNote}`}
-                  tone="positive"
-                  data-testid="pve-over-plan-intake"
+                  value={fmtUnits(sc.over_plan_intake_units ?? sc.deal_stock_units)}
+                  unit="units"
+                  caption={`${fmtValue(sc.value.over_plan_intake_value_plan ?? sc.value.deal_stock_value_plan)} plan${fxNote}`}
+                  severity="good"
                 />
-                <KpiTile
+                <HeadlineFigure
+                  compact
                   label="Unplanned intake"
-                  primary={fmtUnits(sc.unplanned_intake_units)}
-                  secondary={`${fmtValue(sc.value.unplanned_intake_value_plan)} plan${fxNote}`}
-                  tone="neutral"
+                  value={fmtUnits(sc.unplanned_intake_units)}
+                  unit="units"
+                  caption={`${fmtValue(sc.value.unplanned_intake_value_plan)} plan${fxNote}`}
                 />
-                <KpiTile
+                <HeadlineFigure
+                  compact
                   label="Lines with no purchase order"
-                  primary={`${sc.no_po_blind_spot.line_count} lines`}
-                  secondary={`${fmtUnits(sc.no_po_blind_spot.planned_units)} units at risk`}
-                  tone="warning"
+                  value={sc.no_po_blind_spot.line_count}
+                  unit="lines"
+                  caption={`${fmtUnits(sc.no_po_blind_spot.planned_units)} units at risk`}
+                  severity="warn"
                 />
-              </Stack>
+              </HeadlineStrip>
+              <Button
+                size="small"
+                variant="text"
+                onClick={() => setAboutOpen((open) => !open)}
+                aria-expanded={aboutOpen}
+                endIcon={<ExpandMoreIcon sx={{ transform: aboutOpen ? 'rotate(180deg)' : 'none', transition: 'transform 120ms' }} />}
+                sx={{ px: 0.5, mt: 0.5, mb: 1 }}
+                data-testid="pve-about-figure"
+              >
+                About this figure
+              </Button>
+              <Collapse in={aboutOpen}>
+                <Box sx={{ mb: 1, p: 1.5, borderRadius: 1, bgcolor: 'action.hover' }} data-testid="pve-about">
+                  <Typography variant="body2">
+                    Fill rate compares units shipped on lines that were on the plan with the units that were planned. Only the overlapping amount counts. Intake that was never on the plan does not change fill. Line-hit is the share of those plan lines that shipped at least the planned quantity.
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    Planned versus in-plan shipped is that same pair. Total shipped adds units on linked purchase orders that were not on the plan. Pipeline is inbound on plan lines that have not landed. Cold lines have no inbound movement.
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    Short exposure is planned quantity still not shipped. Deal-stock landing is the extra shipped above the plan on lines that were on the plan. It is the same over-plan intake already on this page, not a separate proof-of-delivery landing. Unplanned intake is shipped on linked purchase orders with no plan line.
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    Ship-quarter slip is the average of ship quarter minus plan quarter on plan lines that have shipped. The date is the ship confirmation, or the scheduled ship date when confirmation is missing. Proof of delivery is not used. Volume bias is the average of shipped-against-plan minus planned, divided by planned, by product line. It is shown after 6 closed quarters and may change a buy plan after 8. A late shipment scores in the quarter it ships and does not fill the plan quarter.
+                  </Typography>
+                </Box>
+              </Collapse>
 
               <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center" sx={{ mb: 2 }}>
                 <Chip size="small" color="success" label={`Executed vs plan: ${sc.buckets.executed_vs_plan}`} />
@@ -722,36 +704,39 @@ export function PlanVsExecutedView() {
               </Stack>
 
               {(data?.volume_bias || data?.slip) && (
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }} data-testid="pve-bias-slip">
-                  <KpiTile
+                <Box sx={{ mb: 2 }} data-testid="pve-bias-slip">
+                  <HeadlineStrip>
+                  <HeadlineFigure
+                    compact
+                    testId="pve-slip"
                     label="Ship quarter slip"
-                    title="Mean signed quarter delta (ship quarter − plan quarter) on in-plan shipped lines. Uses ship_confirm_date then schedule_ship_date — never POD."
-                    primary={
+                    value={
                       data.slip?.mean_signed_quarter_delta == null
                         ? '—'
-                        : `${data.slip.mean_signed_quarter_delta > 0 ? '+' : ''}${data.slip.mean_signed_quarter_delta.toFixed(2)} Q`
+                        : `${data.slip.mean_signed_quarter_delta > 0 ? '+' : ''}${data.slip.mean_signed_quarter_delta.toFixed(2)}`
                     }
-                    secondary={
+                    unit={data.slip?.mean_signed_quarter_delta == null ? undefined : 'quarters'}
+                    caption={
                       data.slip
-                        ? `${data.slip.direction ?? 'n/a'} · ${data.slip.line_count_with_ship_date} lines w/ ship date${
+                        ? `${data.slip.direction ?? 'n/a'} · ${data.slip.line_count_with_ship_date} lines with a ship date${
                             data.slip.lines_missing_ship_date
                               ? ` · ${data.slip.lines_missing_ship_date} missing`
                               : ''
                           }`
                         : '—'
                     }
-                    tone="neutral"
-                    data-testid="pve-slip"
                   />
-                  <KpiTile
+                  <HeadlineFigure
+                    compact
+                    testId="pve-volume-bias"
                     label="Volume bias (by product line)"
-                    title="Mean signed (scored shipped − planned) / planned by product line. Shown after 6 closed quarters. May change a buy plan after 8. A late shipment scores in the ship quarter and does not fill the plan quarter."
-                    primary={
+                    value={
                       data.volume_bias?.by_bu?.[0]
-                        ? `${data.volume_bias.by_bu[0].product_line ?? data.volume_bias.by_bu[0].bu}: ${(data.volume_bias.by_bu[0].mean_signed_bias * 100).toFixed(1)}%`
+                        ? `${(data.volume_bias.by_bu[0].mean_signed_bias * 100).toFixed(1)}%`
                         : '—'
                     }
-                    secondary={
+                    unit={data.volume_bias?.by_bu?.[0]?.product_line ?? data.volume_bias?.by_bu?.[0]?.bu}
+                    caption={
                       data.volume_bias?.by_bu?.length
                         ? data.volume_bias.by_bu
                             .slice(0, 3)
@@ -760,18 +745,17 @@ export function PlanVsExecutedView() {
                                 b.closed_quarters == null
                                   ? ''
                                   : b.applies_to_buy_plan
-                                    ? `, ${b.closed_quarters} closed Q, changes buy plan`
-                                    : `, ${b.closed_quarters} closed Q, display only`;
-                              return `${b.product_line ?? b.bu} ${(b.mean_signed_bias * 100).toFixed(0)}% (${b.direction}, n=${b.line_count}${gate})`;
+                                    ? `, ${b.closed_quarters} closed quarters, changes the buy plan`
+                                    : `, ${b.closed_quarters} closed quarters, display only`;
+                              return `${b.product_line ?? b.bu} ${(b.mean_signed_bias * 100).toFixed(0)}% (${b.direction}, ${b.line_count} lines${gate})`;
                             })
                             .join(' · ')
                         : data.volume_bias?.pm_attribution === 'unavailable'
                           ? 'No product line has 6 closed quarters yet'
                           : '—'
                     }
-                    tone="neutral"
-                    data-testid="pve-volume-bias"
                   />
+                  </HeadlineStrip>
                   {data.volume_bias?.pm_attribution === 'business_line' ? (
                     <Typography variant="caption" color="text.secondary" sx={{ width: '100%' }} data-testid="pve-pm-bias-business-line">
                       Bias follows the product line — {data.volume_bias.pm_attribution_reason}
@@ -782,7 +766,7 @@ export function PlanVsExecutedView() {
                       PM volume bias: unavailable — {data.volume_bias.pm_attribution_reason}
                     </Typography>
                   ) : null}
-                </Stack>
+                </Box>
               )}
 
               {data?.trend?.length ? (
@@ -791,17 +775,16 @@ export function PlanVsExecutedView() {
                     <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 600 }}>
                       Fill rate by quarter
                     </Typography>
-                    <ResponsiveContainer width="100%" height={240}>
-                      <LineChart data={data.trend}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="period_label" />
-                        <YAxis domain={[0, 1]} tickFormatter={(v) => `${Math.round(v * 100)}%`} />
-                        <RechartsTooltip formatter={(v: number) => fmtPct(v)} />
-                        <Legend />
-                        <Line type="monotone" dataKey="fill_rate" name="Fill rate" stroke={theme.palette.primary.main} dot />
-                        <Line type="monotone" dataKey="line_hit_rate" name="Line-hit rate" stroke={theme.palette.secondary.main} dot />
-                      </LineChart>
-                    </ResponsiveContainer>
+                    <TrendChart
+                      data={data.trend as Record<string, unknown>[]}
+                      x="period_label"
+                      height={240}
+                      format={(v) => fmtPct(v)}
+                      series={[
+                        { key: 'fill_rate', label: 'Fill rate', kind: 'line' },
+                        { key: 'line_hit_rate', label: 'Line-hit rate', kind: 'line', tone: 'secondary' },
+                      ]}
+                    />
                   </CardContent>
                 </Card>
               ) : null}

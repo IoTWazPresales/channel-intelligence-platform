@@ -64,6 +64,33 @@ from app.worker.celery_app import celery_app
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# N-0086 role gates (reads stay sign-in only; the router already requires sign-in).
+# Steward writes: resolve / map / ignore candidates, bulk steward actions, resolution plans and the
+# DSI / CST / shipment pipeline steps. Admin always passes require_roles.
+_STEWARD_WRITE = [Depends(require_roles(Role.ADMIN, Role.STEWARD))]
+# Upload / process / cancel / retry: viewers never; planners only on the job templates they own
+# (checked per job by require_import_template_role); stewards and admins on every template.
+_IMPORT_RUNNER = [Depends(require_roles(Role.ADMIN, Role.STEWARD, Role.PLANNER))]
+# CPOR uploads only stage rows; every CPOR write after that is gated again on the CPOR routers (N-0038).
+PLANNER_UPLOAD_TEMPLATES = frozenset({"cpor_historical_cases", "cpor_payment_evidence"})
+# Lineup jobs are created by the commercial-planner routes; planners may cancel or retry them.
+PLANNER_RUN_TEMPLATES = PLANNER_UPLOAD_TEMPLATES | frozenset(
+    {"current_lineup", "unified_lineup", "bulk_lineup_backfill"}
+)
+_IMPORT_STEWARD_ROLES = frozenset({Role.ADMIN, Role.STEWARD})
+
+
+def require_import_template_role(
+    user: dict | None, template_slug: str | None, planner_templates: frozenset[str]
+) -> None:
+    """403 unless the user is steward/admin, or a planner acting on a template they own."""
+    role = (user or {}).get("role")
+    if role in _IMPORT_STEWARD_ROLES:
+        return
+    if role == Role.PLANNER and (template_slug or "").strip() in planner_templates:
+        return
+    raise HTTPException(status_code=403, detail="Insufficient role")
+
 
 async def _async_import_job_with_source(db: AsyncSession, job_id: int) -> ImportJob | None:
     """Load ``ImportJob`` with ``source`` + ``import_template`` eager (avoids lazy IO under ``AsyncSession``)."""
@@ -220,6 +247,35 @@ def _persist_pipeline_celery_task_id(job_id: int, task_id: str | None) -> None:
             return
         set_task_slot_on_job(j_meta, SLOT_MAIN, task_id=task_id)
         meta_db.commit()
+
+
+# Generic wizard must not store a file for these. Dedicated lineup flows keep their own slugs.
+STUB_IMPORT_REDIRECTS: dict[str, dict[str, str]] = {
+    "customer_channel_mapping": {
+        "message": "Customer and channel mapping is not an import. Set the channel on the customer master.",
+        "href": "/admin/customers",
+    },
+    "customer_inventory_sales": {
+        "message": "Customer stock and sales files use the retailer sell-through import.",
+        "href": "/admin/imports?template=customer_sell_through",
+    },
+    "pricing_support": {
+        "message": "List and net prices are recorded on Recorded prices. This import does not apply them.",
+        "href": "/pricing",
+    },
+    "lineup_plan": {
+        "message": "Lineup files use the lineup import on Import Center, not this template.",
+        "href": "/admin/imports?unified=1",
+    },
+    "promotion_plan": {
+        "message": "Promotion plans are promotion cases. This template does not apply.",
+        "href": "/commercial-planner/cpor-cases",
+    },
+    "cpor_claim_evidence": {
+        "message": "Claim evidence is uploaded on the case settlement desk.",
+        "href": "/commercial-planner/cpor-cases",
+    },
+}
 
 
 class ImportJobBulkIdsBody(BaseModel):
@@ -501,7 +557,7 @@ async def post_import_jobs_bulk_delete_confirm(
     return out
 
 
-@router.post("/jobs")
+@router.post("/jobs", dependencies=_IMPORT_RUNNER)
 async def create_job(
     source_id: int = Form(...),
     file: UploadFile = File(...),
@@ -525,6 +581,10 @@ async def create_job(
     tpl = source.import_template
     if not tpl or not tpl.enabled:
         raise HTTPException(status_code=400, detail="Source has no active import template")
+    redirect = STUB_IMPORT_REDIRECTS.get(tpl.slug)
+    if redirect is not None:
+        raise HTTPException(status_code=409, detail=redirect)
+    require_import_template_role(user, tpl.slug, PLANNER_UPLOAD_TEMPLATES)
 
     mode = (import_mode or "").strip().lower()
     if not mode:
@@ -610,7 +670,7 @@ async def create_job(
     return {"id": job.id, "status": job.status, "stage": job.stage, "template_slug": job.template_slug, "import_mode": job.import_mode}
 
 
-@router.post("/jobs/{job_id}/dsi-file-exclusions")
+@router.post("/jobs/{job_id}/dsi-file-exclusions", dependencies=_STEWARD_WRITE)
 async def set_dsi_file_exclusions(
     job_id: int,
     body: dict[str, Any] = Body(...),
@@ -644,7 +704,7 @@ async def set_dsi_file_exclusions(
         }
 
 
-@router.post("/jobs/{job_id}/dsi-file-distributors")
+@router.post("/jobs/{job_id}/dsi-file-distributors", dependencies=_STEWARD_WRITE)
 async def post_dsi_file_distributors(
     job_id: int,
     body: dict[str, Any] = Body(...),
@@ -692,7 +752,7 @@ async def post_dsi_file_distributors(
         }
 
 
-@router.post("/jobs/{job_id}/dsi-file-snapshot-periods")
+@router.post("/jobs/{job_id}/dsi-file-snapshot-periods", dependencies=_STEWARD_WRITE)
 async def post_dsi_file_snapshot_periods(
     job_id: int,
     body: dict[str, Any] = Body(...),
@@ -749,7 +809,7 @@ async def get_dsi_coverage(
         return compute_dsi_coverage(sync_db, source_id=source_id, weeks=weeks)
 
 
-@router.post("/dsi/batch-propose")
+@router.post("/dsi/batch-propose", dependencies=_STEWARD_WRITE)
 async def dsi_batch_propose(
     files: list[UploadFile] = File(...),
 ):
@@ -779,7 +839,7 @@ async def dsi_batch_propose(
     }
 
 
-@router.post("/dsi/batch-jobs")
+@router.post("/dsi/batch-jobs", dependencies=_STEWARD_WRITE)
 async def dsi_batch_create_jobs(
     source_id: int = Form(...),
     dsi_workflow_mode: str = Form(default="auto"),
@@ -875,7 +935,7 @@ async def dsi_batch_create_jobs(
     }
 
 
-@router.post("/cst/batch-propose")
+@router.post("/cst/batch-propose", dependencies=_STEWARD_WRITE)
 async def cst_batch_propose(
     files: list[UploadFile] = File(...),
 ):
@@ -905,7 +965,7 @@ async def cst_batch_propose(
     }
 
 
-@router.post("/cst/batch-jobs")
+@router.post("/cst/batch-jobs", dependencies=_STEWARD_WRITE)
 async def cst_batch_create_jobs(
     source_id: int = Form(...),
     files: list[UploadFile] = File(...),
@@ -1287,8 +1347,12 @@ async def list_background_tasks(
     return await list_import_background_tasks_for_ui(limit=limit)
 
 
-@router.post("/jobs/{job_id}/cancel")
-async def post_cancel_import_job(job_id: int, db: AsyncSession = Depends(get_db)):
+@router.post("/jobs/{job_id}/cancel", dependencies=_IMPORT_RUNNER)
+async def post_cancel_import_job(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     """Revoke Celery work, clear task metadata, mark job failed (works for stale queued refs too)."""
     import asyncio
 
@@ -1297,6 +1361,7 @@ async def post_cancel_import_job(job_id: int, db: AsyncSession = Depends(get_db)
     job = await db.get(ImportJob, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    require_import_template_role(user, job.template_slug, PLANNER_RUN_TEMPLATES)
 
     def _cancel() -> dict[str, Any]:
         with SessionLocal() as session:
@@ -1310,8 +1375,12 @@ async def post_cancel_import_job(job_id: int, db: AsyncSession = Depends(get_db)
         raise
 
 
-@router.post("/jobs/{job_id}/retry")
-async def post_retry_import_job(job_id: int, db: AsyncSession = Depends(get_db)):
+@router.post("/jobs/{job_id}/retry", dependencies=_IMPORT_RUNNER)
+async def post_retry_import_job(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     """Re-enqueue ``imports.process_job`` for a failed job (same pattern as validate/revalidate)."""
     import asyncio
 
@@ -1320,6 +1389,7 @@ async def post_retry_import_job(job_id: int, db: AsyncSession = Depends(get_db))
     job = await db.get(ImportJob, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    require_import_template_role(user, job.template_slug, PLANNER_RUN_TEMPLATES)
     if str(job.status or "").strip() != "failed":
         raise HTTPException(
             status_code=409,
@@ -1373,7 +1443,34 @@ async def get_shipment_mapping_state(job_id: int, db: AsyncSession = Depends(get
     return shipment_mapping_state_dict(job)
 
 
-@router.put("/jobs/{job_id}/shipment-field-mapping")
+@router.post("/jobs/{job_id}/shipment-sheets", dependencies=_STEWARD_WRITE)
+async def post_shipment_sheets(job_id: int, body: dict[str, Any] = Body(...), db: AsyncSession = Depends(get_db)):
+    """Operator picks workbook sheets. Mapping is rebuilt from that set only."""
+    job = await db.get(ImportJob, job_id)
+    if not job or job.template_slug != "inbound_shipments":
+        raise HTTPException(status_code=404, detail="Job not found")
+    sheets = body.get("sheets")
+    if not isinstance(sheets, list) or not all(isinstance(name, str) and name.strip() for name in sheets):
+        raise HTTPException(status_code=400, detail="sheets must be a non-empty list of sheet names")
+    meta = dict(job.staged_metadata or {})
+    available = [str(name) for name in meta.get("available_sheets") or []]
+    chosen = [name.strip() for name in sheets]
+    if available:
+        unknown = [name for name in chosen if name not in available]
+        if unknown:
+            raise HTTPException(status_code=400, detail=f"Unknown sheet: {unknown[0]}")
+    meta["selected_sheets"] = chosen
+    meta["sheet_selection_confirmed"] = True
+    job.staged_metadata = meta
+    await db.commit()
+    with SessionLocal() as sync_db:
+        infer_shipment_import_job_sync(sync_db, job_id)
+        sync_db.commit()
+    await db.refresh(job)
+    return shipment_mapping_state_dict(job)
+
+
+@router.put("/jobs/{job_id}/shipment-field-mapping", dependencies=_STEWARD_WRITE)
 async def put_shipment_field_mapping(job_id: int, body: dict[str, Any] = Body(...), db: AsyncSession = Depends(get_db)):
     job = await db.get(ImportJob, job_id)
     if not job or job.template_slug != "inbound_shipments":
@@ -1397,7 +1494,7 @@ async def put_shipment_field_mapping(job_id: int, body: dict[str, Any] = Body(..
     return shipment_mapping_state_dict(job)
 
 
-@router.post("/jobs/{job_id}/shipment-validate")
+@router.post("/jobs/{job_id}/shipment-validate", dependencies=_STEWARD_WRITE)
 async def post_shipment_validate(job_id: int, db: AsyncSession = Depends(get_db)):
     job = await db.get(ImportJob, job_id)
     if not job or job.template_slug != "inbound_shipments":
@@ -1487,7 +1584,7 @@ async def get_dsi_mapping_state(job_id: int, db: AsyncSession = Depends(get_db))
     return dsi_mapping_state_dict(job)
 
 
-@router.put("/jobs/{job_id}/dsi-field-mapping")
+@router.put("/jobs/{job_id}/dsi-field-mapping", dependencies=_STEWARD_WRITE)
 async def put_dsi_field_mapping(job_id: int, body: dict[str, Any] = Body(...), db: AsyncSession = Depends(get_db)):
     job = await _async_import_job_with_source(db, job_id)
     if not job or job.template_slug != "distributor_inventory":
@@ -1538,7 +1635,7 @@ async def put_dsi_field_mapping(job_id: int, body: dict[str, Any] = Body(...), d
     return dsi_mapping_state_dict(job)
 
 
-@router.post("/jobs/{job_id}/dsi-validate")
+@router.post("/jobs/{job_id}/dsi-validate", dependencies=_STEWARD_WRITE)
 async def post_dsi_validate(job_id: int, db: AsyncSession = Depends(get_db)):
     job = await db.get(ImportJob, job_id)
     if not job or job.template_slug != "distributor_inventory":
@@ -1610,7 +1707,7 @@ async def post_dsi_validate(job_id: int, db: AsyncSession = Depends(get_db)):
     return dsi_mapping_state_dict(job2) if job2 else {}
 
 
-@router.post("/jobs/{job_id}/dsi-apply")
+@router.post("/jobs/{job_id}/dsi-apply", dependencies=_STEWARD_WRITE)
 async def post_dsi_apply(
     job_id: int,
     confirm_destructive: str = Form(default=""),
@@ -1702,9 +1799,18 @@ async def post_dsi_apply(
     return dsi_mapping_state_dict(job2) if job2 else {}
 
 
-@router.post("/jobs/{job_id}/process")
-async def process_job(job_id: int):
+@router.post("/jobs/{job_id}/process", dependencies=_IMPORT_RUNNER)
+async def process_job(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     import asyncio
+
+    job = await db.get(ImportJob, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    require_import_template_role(user, job.template_slug, PLANNER_UPLOAD_TEMPLATES)
 
     def _work() -> tuple[bool, str | None]:
         claim_import_pipeline_dispatch(job_id)
@@ -1747,7 +1853,7 @@ class CstResolveCandidateBody(BaseModel):
     entity_id: int = Field(..., ge=1)
 
 
-@router.post("/jobs/{job_id}/cst-candidates/{candidate_id}/resolve", status_code=200)
+@router.post("/jobs/{job_id}/cst-candidates/{candidate_id}/resolve", status_code=200, dependencies=_STEWARD_WRITE)
 async def resolve_cst_candidate(
     job_id: int,
     candidate_id: int,
@@ -1775,7 +1881,7 @@ async def resolve_cst_candidate(
     return result
 
 
-@router.post("/jobs/{job_id}/cst-candidates/{candidate_id}/ignore", status_code=200)
+@router.post("/jobs/{job_id}/cst-candidates/{candidate_id}/ignore", status_code=200, dependencies=_STEWARD_WRITE)
 async def ignore_cst_candidate(
     job_id: int,
     candidate_id: int,
@@ -1808,7 +1914,7 @@ class CstStewardBulkBody(BaseModel):
     audit_note: str | None = None
 
 
-@router.post("/jobs/{job_id}/cst-steward-bulk-preview", status_code=200)
+@router.post("/jobs/{job_id}/cst-steward-bulk-preview", status_code=200, dependencies=_STEWARD_WRITE)
 def cst_steward_bulk_preview(job_id: int, body: CstStewardBulkBody) -> dict[str, Any]:
     from app.services.imports.cst_steward_bulk import preview_cst_steward_bulk
 
@@ -1826,7 +1932,7 @@ def cst_steward_bulk_preview(job_id: int, body: CstStewardBulkBody) -> dict[str,
             raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
-@router.post("/jobs/{job_id}/cst-steward-bulk-apply", status_code=200)
+@router.post("/jobs/{job_id}/cst-steward-bulk-apply", status_code=200, dependencies=_STEWARD_WRITE)
 def cst_steward_bulk_apply(
     job_id: int,
     body: CstStewardBulkBody,
@@ -1867,7 +1973,7 @@ def cst_steward_bulk_apply(
     return result
 
 
-@router.post("/jobs/{job_id}/cst-steward-bulk-ignore/apply-async", status_code=202)
+@router.post("/jobs/{job_id}/cst-steward-bulk-ignore/apply-async", status_code=202, dependencies=_STEWARD_WRITE)
 def cst_steward_bulk_ignore_apply_async(
     job_id: int,
     body: CstStewardBulkBody,
@@ -1910,7 +2016,11 @@ def cst_steward_bulk_ignore_apply_async(
     return {"import_job_id": job_id, "task_id": task_id, "async_poll": async_poll, "async": True}
 
 
-@router.post("/jobs/{job_id}/cst-steward-bulk-provisional-customers/apply-async", status_code=400)
+@router.post(
+    "/jobs/{job_id}/cst-steward-bulk-provisional-customers/apply-async",
+    status_code=400,
+    dependencies=_STEWARD_WRITE,
+)
 def cst_steward_bulk_provisional_not_supported(job_id: int) -> dict[str, Any]:
     raise HTTPException(
         status_code=400,
@@ -2045,7 +2155,7 @@ class CstResolutionPlanApplyBody(BaseModel):
     candidate_ids: list[int] = Field(min_length=1)
 
 
-@router.post("/jobs/{job_id}/cst-resolution-plan", status_code=200)
+@router.post("/jobs/{job_id}/cst-resolution-plan", status_code=200, dependencies=_STEWARD_WRITE)
 def cst_resolution_plan_generate(job_id: int, body: CstResolutionPlanGenerateBody) -> dict[str, Any]:
     """Synchronous CST resolution-plan generation — small jobs / tests."""
     from app.services.imports.cst_resolution_plan import build_cst_resolution_plan_sync
@@ -2058,7 +2168,7 @@ def cst_resolution_plan_generate(job_id: int, body: CstResolutionPlanGenerateBod
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.post("/jobs/{job_id}/cst-resolution-plan/compute-async", status_code=202)
+@router.post("/jobs/{job_id}/cst-resolution-plan/compute-async", status_code=202, dependencies=_STEWARD_WRITE)
 def cst_resolution_plan_compute_async(
     job_id: int,
     body: CstResolutionPlanGenerateBody,
@@ -2087,7 +2197,7 @@ def cst_resolution_plan_compute_async(
     return {"import_job_id": job_id, "task_id": task_id, "async_poll": async_poll, "async": True}
 
 
-@router.post("/jobs/{job_id}/cst-resolution-plan/apply-async", status_code=202)
+@router.post("/jobs/{job_id}/cst-resolution-plan/apply-async", status_code=202, dependencies=_STEWARD_WRITE)
 def cst_resolution_plan_apply_async(
     job_id: int,
     body: CstResolutionPlanApplyBody,

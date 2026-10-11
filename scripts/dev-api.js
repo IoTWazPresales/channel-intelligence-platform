@@ -10,6 +10,7 @@ const { spawn, execFileSync } = require('child_process');
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
+const { resolveApiBindHost, isLoopbackHost } = require('./api-bind-host.cjs');
 
 const pidDir = path.join(__dirname, '..', '.cip-dev-pids');
 const pidFile = path.join(pidDir, 'api.pid');
@@ -207,6 +208,11 @@ function preflightListenPort() {
     process.exit(1);
   }
 
+  const bindHost = resolveApiBindHost(process.env);
+  if (!isLoopbackHost(bindHost)) {
+    console.error('[cip-dev-api] CIP_API_HOST is not loopback: ' + bindHost);
+  }
+
   const child = spawn(
     py,
     [
@@ -215,7 +221,7 @@ function preflightListenPort() {
       'app.main:app',
       '--reload',
       '--host',
-      process.env.CIP_API_HOST || '0.0.0.0',
+      resolveApiBindHost(process.env),
       '--port',
       process.env.CIP_API_PORT || '8001',
     ],

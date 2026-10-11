@@ -14,6 +14,8 @@ export type SupplyOverview = {
   shipped_units: number;
   landed_lines: number;
   landed_units: number;
+  arrived_lines: number;
+  arrived_units: number;
   overdue_commercial_lines: number;
   po_observed: number;
   po_linked: number;
@@ -24,6 +26,14 @@ export type SupplyOverview = {
     distributor: string;
     observed_pos: number;
     linked_pos: number;
+    covered: number;
+  }[];
+  plan_unit_po_by_distributor: {
+    distributor_id: number | null;
+    distributor: string;
+    plan_units: number;
+    covered_units: number;
+    backlog_units: number;
     covered: number;
   }[];
   labels: Record<string, string>;

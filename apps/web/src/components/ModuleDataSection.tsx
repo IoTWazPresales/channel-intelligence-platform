@@ -19,7 +19,7 @@ export function ModuleDataSection({
   isEmpty,
   empty,
   children,
-  loadingLabel = 'Loading data…',
+  loadingLabel = 'Loading…',
 }: {
   intro?: ReactNode;
   introWhen?: 'always' | 'empty';

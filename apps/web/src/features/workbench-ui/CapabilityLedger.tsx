@@ -23,7 +23,7 @@ export function CapabilityLedger({
   subtitle?: string;
 }) {
   return (
-    <Panel title={title} subtitle={subtitle ?? 'Status per job on this surface — unmarked rows work today'} flush>
+    <Panel title={title} subtitle={subtitle ?? 'Rows with no chip are in use today'} flush>
       <Stack component="ul" spacing={0} sx={{ listStyle: 'none', m: 0, p: 0, pb: 0.5 }} data-testid="capability-ledger">
         {items.map((c) => (
           <Box

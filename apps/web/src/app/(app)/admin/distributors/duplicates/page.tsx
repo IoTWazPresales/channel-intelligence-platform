@@ -48,9 +48,9 @@ function AdminDistributorDuplicatesPageContent() {
   return (
     <>
       <Alert severity="warning" sx={{ mb: 2 }}>
-        <strong>Name-similarity merge</strong> consolidates whole <code>dim_distributor</code> records with runtime FK
-        discovery and PO row consolidation when <code>po_number_norm</code> collides. Preview always lists PO merge plans
-        before confirm.
+        <strong>Name-similarity merge</strong> combines two distributor records, including everything that
+        points at them. When two purchase orders would share the same number, the preview lists that plan
+        before you confirm.
       </Alert>
       <DistributorNameSimilarityMergeSection
         page={page}

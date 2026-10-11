@@ -158,13 +158,13 @@ const DEFAULT_INITIALLY_HIDDEN_CUSTOMER_FIELDS: readonly CustomerColumnField[] =
 ];
 
 const STATIC_CUSTOMER_COLUMN_GROUPS: { label: string; fields: CustomerColumnField[] }[] = [
-  { label: 'dim_customer — identity', fields: ['id', 'customer_code', 'customer_name', 'customer_status'] },
-  { label: 'dim_customer — foreign keys', fields: ['region_id', 'channel_id', 'preferred_distributor_id'] },
-  { label: 'Resolved codes (joins)', fields: ['region_code', 'channel_code', 'preferred_distributor_code'] },
-  { label: 'dim_customer — classification & notes', fields: ['partner_tier', 'account_owner_internal', 'notes_summary'] },
-  { label: 'Related counts (not on dim row)', fields: ['location_count', 'contact_count'] },
-  { label: 'Import & alias linkage', fields: ['alias_count', 'last_import_at', 'alias_link_status'] },
-  { label: 'dim_customer — timestamps', fields: ['created_at', 'updated_at'] },
+  { label: 'Customer — identity', fields: ['id', 'customer_code', 'customer_name', 'customer_status'] },
+  { label: 'Customer — links', fields: ['region_id', 'channel_id', 'preferred_distributor_id'] },
+  { label: 'Resolved codes', fields: ['region_code', 'channel_code', 'preferred_distributor_code'] },
+  { label: 'Customer — classification and notes', fields: ['partner_tier', 'account_owner_internal', 'notes_summary'] },
+  { label: 'Related counts', fields: ['location_count', 'contact_count'] },
+  { label: 'Import and alias linkage', fields: ['alias_count', 'last_import_at', 'alias_link_status'] },
+  { label: 'Customer — timestamps', fields: ['created_at', 'updated_at'] },
 ];
 const STATUS_OPTIONS = ['', 'active', 'inactive', 'onboarding', 'blocked', 'unverified', 'needs_review'];
 const PARTNER_TIER_OPTIONS = ['', 'strategic', 'tier_1', 'tier_2', 'tier_3', 'core', 'long_tail'];
@@ -866,8 +866,7 @@ function AdminCustomersPageContent() {
         onRetry={() => void refetchCustomers()}
         intro={
           <>
-            Master list is stored in <strong>dim_customer</strong>. Channel codes must match catalog
-            channels.
+            Customer records. Channel codes must match the channel list.
           </>
         }
         empty={{

@@ -304,7 +304,9 @@ export function CoverLensView() {
     return (
       <Box sx={{ p: 2 }} data-testid="stock-cover-empty">
         <Typography color="text.secondary" sx={{ fontSize: '13px' }}>
-          Cover distribution is not available yet — import distributor inventory (DSI) and run cover observations.
+          {isError
+            ? 'Cover could not be loaded. Refresh the page.'
+            : 'Cover is not available yet. Import distributor inventory, then refresh.'}
         </Typography>
       </Box>
     );

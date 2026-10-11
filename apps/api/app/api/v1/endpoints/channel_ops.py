@@ -31,6 +31,7 @@ from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.fact_customer_velocity import FactCustomerVelocity
 from app.models.fact_dsi_forecast import FactDsiForecast
 from app.models.facts import FactInboundShipment, FactInventoryReconciliation, FactSalesSellout
+from app.services.shipment_strict_pair import twin_remainder
 from app.services.channel_ops_config import REPLENISHMENT_WOC_THRESHOLD_WEEKS
 from app.services.channel_ops_derived_stock import (
     derived_stock_by_dist_product,
@@ -241,12 +242,18 @@ async def channel_ops_movement_lens(
     shipped_units = None
     if in_max is not None:
         ship_monday = in_max - timedelta(days=in_max.weekday())
+        # Counted quantity: a covered open twin is skipped, a partly shipped one adds its remainder (D-0065).
+        twin = twin_remainder(FactInboundShipment)
         shipped_units_val = await db.scalar(
-            select(func.coalesce(func.sum(FactInboundShipment.quantity), 0)).where(
+            select(func.coalesce(func.sum(twin.counted_quantity), 0))
+            .select_from(FactInboundShipment)
+            .outerjoin(twin.subquery, twin.onclause)
+            .where(
                 FactInboundShipment.tenant_id == tid,
                 in_date.is_not(None),
                 in_date >= ship_monday,
                 in_date < ship_monday + timedelta(days=7),
+                twin.kept,
             )
         )
         shipped_week = _iso_week_label(ship_monday)
@@ -1003,13 +1010,17 @@ async def _cover_weekly_flow(db: AsyncSession, tid: str, weeks: int = 13) -> dic
         )
     ).all()
     in_week = _iso_week_start_expr(in_date)
+    twin = twin_remainder(FactInboundShipment)  # counted quantity (D-0057 + D-0065)
     in_rows = (
         await db.execute(
-            select(in_week.label("wk"), func.coalesce(func.sum(FactInboundShipment.quantity), 0))
+            select(in_week.label("wk"), func.coalesce(func.sum(twin.counted_quantity), 0))
+            .select_from(FactInboundShipment)
+            .outerjoin(twin.subquery, twin.onclause)
             .where(FactInboundShipment.tenant_id == tid)
             .where(in_date.is_not(None))
             .where(in_date >= start)
             .where(in_date <= end)
+            .where(twin.kept)
             .group_by(in_week)
         )
     ).all()
@@ -1120,17 +1131,21 @@ async def channel_ops_cover_distribution(
             )
 
     inbound_open: dict[tuple[int, int], float] = {}
+    twin = twin_remainder(FactInboundShipment)  # counted quantity (D-0057 + D-0065)
     open_rows = (
         await db.execute(
             select(
                 FactInboundShipment.distributor_id,
                 FactInboundShipment.product_id,
-                func.coalesce(func.sum(FactInboundShipment.quantity), 0),
+                func.coalesce(func.sum(twin.counted_quantity), 0),
             )
+            .select_from(FactInboundShipment)
+            .outerjoin(twin.subquery, twin.onclause)
             .where(FactInboundShipment.tenant_id == tid)
             .where(FactInboundShipment.pod_date.is_(None))
             .where(FactInboundShipment.distributor_id.is_not(None))
             .where(FactInboundShipment.product_id.is_not(None))
+            .where(twin.kept)
             .group_by(FactInboundShipment.distributor_id, FactInboundShipment.product_id)
         )
     ).all()

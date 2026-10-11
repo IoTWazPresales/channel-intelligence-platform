@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Alert,
   Button,
   Dialog,
   DialogActions,
@@ -8,8 +9,6 @@ import {
   DialogTitle,
   Paper,
   Stack,
-  Tab,
-  Tabs,
   TextField,
   Typography,
 } from '@mui/material';
@@ -37,15 +36,6 @@ type PriceRow = {
   net_price: number;
   list_price: number;
   effective_date: string;
-};
-
-type RecRow = {
-  id: number;
-  sku: string | null;
-  sales_model_name: string | null;
-  suggested_state: string;
-  explanation_summary: string | null;
-  confidence: string | null;
 };
 
 const LINE_IDENTITY = { sku: 'sku', salesModel: 'sales_model_name' } as const;
@@ -94,8 +84,6 @@ export default function PricingPage() {
     lineIdentifier: LINE_IDENTITY,
     lineIdentifierColDef: PINNED_LEFT,
   });
-  const recFields = useFactColumns<RecRow>('pricing.recommendations', { lineIdentifier: LINE_IDENTITY });
-  const [tab, setTab] = useState(0);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [paste, setPaste] = useState('');
   const [addOpen, setAddOpen] = useState(false);
@@ -106,6 +94,7 @@ export default function PricingPage() {
   const [addCur, setAddCur] = useState('USD');
   const [addCust, setAddCust] = useState('');
   const [addCh, setAddCh] = useState('');
+  const [queueNote, setQueueNote] = useState<string | null>(null);
 
   const {
     data: facts,
@@ -117,29 +106,24 @@ export default function PricingPage() {
     queryKey: ['pricing-facts'],
     queryFn: ({ signal }) => apiGet<PriceRow[]>('/api/v1/pricing/facts', { signal }),
   });
-  const {
-    data: recs,
-    isLoading: recsLoading,
-    isError: recsIsError,
-    error: recsError,
-    refetch: refetchRecs,
-  } = useQuery({
-    queryKey: ['pricing-recs'],
-    queryFn: ({ signal }) => apiGet<RecRow[]>('/api/v1/pricing/recommendations', { signal }),
-  });
   const factChrome = useFactGridChrome('pricing.facts', {
     exportDisabled: (facts?.length ?? 0) === 0,
     layout: factGridLayout(factFields),
   });
-  const recChrome = useFactGridChrome('pricing.recommendations', {
-    exportDisabled: (recs?.length ?? 0) === 0,
-    layout: factGridLayout(recFields),
-  });
-
   const bulkFacts = useMutation({
-    mutationFn: (rows: PricingPasteRow[]) => apiPost<{ created: number }>('/api/v1/pricing/facts/bulk', { rows }),
-    onSuccess: () => {
+    mutationFn: (rows: PricingPasteRow[]) =>
+      apiPost<{ created: number; queued_skus?: string[] }>('/api/v1/pricing/facts/bulk', { rows }),
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['pricing-facts'] });
+      const queued = res.queued_skus ?? [];
+      const listed = queued.join(', ');
+      setQueueNote(
+        queued.length === 0
+          ? null
+          : queued.length === 1
+            ? `${listed} is not in the product master. It is on the product catalogue gaps queue. No product was created.`
+            : `${listed} are not in the product master. They are on the product catalogue gaps queue. No product was created.`,
+      );
       setPasteOpen(false);
       setPaste('');
     },
@@ -177,15 +161,6 @@ export default function PricingPage() {
     mutationFn: () => apiPost<{ deleted: number }>('/api/v1/pricing/facts/clear-all', { confirm: true }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pricing-facts'] }),
   });
-  const delRec = useMutation({
-    mutationFn: (id: number) => apiDelete(`/api/v1/pricing/recommendations/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['pricing-recs'] }),
-  });
-  const clearRecs = useMutation({
-    mutationFn: () => apiPost<{ deleted: number }>('/api/v1/pricing/recommendations/clear-all', { confirm: true }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['pricing-recs'] }),
-  });
-
   const factCols: ColDef<PriceRow>[] = useMemo(() => {
     const busyDel = delFact.isPending || clearFacts.isPending;
     return [
@@ -198,38 +173,23 @@ export default function PricingPage() {
     ];
   }, [delFact, delFact.isPending, clearFacts.isPending, factFields.identityColDefs, factFields.optionalColDefs]);
 
-  const recCols: ColDef<RecRow>[] = useMemo(() => {
-    const busyDel = delRec.isPending || clearRecs.isPending;
-    return [
-      ...recFields.identityColDefs,
-      { field: 'suggested_state', headerName: 'State' },
-      { field: 'explanation_summary', headerName: 'Explanation', flex: 1, minWidth: 240 },
-      { field: 'confidence', headerName: 'Confidence' },
-      ...recFields.optionalColDefs,
-      gridDeleteColumn<RecRow>((id) => void delRec.mutate(id), { busy: busyDel }),
-    ];
-  }, [delRec, delRec.isPending, clearRecs.isPending, recFields.identityColDefs, recFields.optionalColDefs]);
-
   const factRows = facts ?? [];
-  const recRows = recs ?? [];
 
   const busyFacts = bulkFacts.isPending || addFact.isPending || delFact.isPending || clearFacts.isPending;
-  const busyRecs = delRec.isPending || clearRecs.isPending;
 
   return (
     <>
-      <PageHeader crumbs={[{ label: 'Pricing' }]} title="Pricing & support" />
+      <PageHeader crumbs={[{ label: 'Planning' }, { label: 'Recorded prices' }]} title="Recorded prices" />
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1, maxWidth: 900 }}>
-        <strong>Price facts</strong> are stored in <code>fact_pricing</code>. <strong>Recommendations</strong> are derived
-        when the planning service has run against upstream facts.
+        List and net prices are kept here. A SKU that is not in the product master goes to product catalogue gaps.
+        No product is created from a price.
       </Typography>
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
-        <Tab label="Price facts" />
-        <Tab label="Rule-based recommendations" />
-      </Tabs>
+      {queueNote ? (
+        <Alert severity="warning" sx={{ mb: 1 }} data-testid="pricing-unknown-sku">
+          {queueNote}
+        </Alert>
+      ) : null}
       <Paper sx={{ p: 2 }}>
-        {tab === 0 ? (
-          <>
           <ScopeBar
             chips={[]}
             savedViews={factChrome.viewNames}
@@ -248,15 +208,15 @@ export default function PricingPage() {
             }
           />
           <ModuleDataSection
-            intro="Paste or add list/net prices per SKU (optional customer and channel codes). Unknown SKUs create placeholder products."
+            intro="Paste or add list and net prices per SKU. Optional customer and channel codes. An unknown SKU is queued for the product catalogue and does not create a product."
             isLoading={factsLoading}
             isError={factsIsError}
             error={toQueryError(factsError)}
             onRetry={() => void refetchFacts()}
             isEmpty={factRows.length === 0}
             empty={{
-              title: 'No price facts',
-              description: 'Use Add row or Paste upload to create price facts, or load data through Import Center.',
+              title: 'No recorded prices',
+              description: 'Use Add row or Paste upload to record a price, or load a file through Import Center.',
               primary: { label: 'Import Center', href: '/admin/imports' },
               secondary: { label: 'Attention', href: '/brief' },
             }}
@@ -276,59 +236,8 @@ export default function PricingPage() {
           >
             <EnterpriseDataGrid ref={factChrome.gridRef} quickFilterText={factChrome.query} rowData={factRows} columnDefs={factCols} />
           </ModuleDataSection>
-          </>
-        ) : (
-          <>
-          <ScopeBar
-            chips={[]}
-            savedViews={recChrome.viewNames}
-            savedView={recChrome.active}
-            onSavedView={recChrome.selectView}
-            filters={recChrome.filters}
-            trailing={
-              <>
-              {recChrome.trailing}
-              <FactColumnsButton
-                gridId="pricing.recommendations"
-                onClick={recFields.openPicker}
-                count={recFields.optionalFields.length}
-              />
-              </>
-            }
-          />
-          <ModuleDataSection
-            intro="Recommendations appear when the planning service has evaluated pricing against stock and competitor context."
-            isLoading={recsLoading}
-            isError={recsIsError}
-            error={toQueryError(recsError)}
-            onRetry={() => void refetchRecs()}
-            isEmpty={recRows.length === 0}
-            empty={{
-              title: 'No pricing recommendations',
-              description: 'Populate upstream facts (inventory, pricing, competition) and refresh.',
-              primary: { label: 'Cover', href: '/stock?lens=cover' },
-              secondary: { label: 'Attention', href: '/brief' },
-            }}
-            toolbar={
-              <ModuleGridToolbar
-                onRefresh={() => qc.invalidateQueries({ queryKey: ['pricing-recs'] })}
-                onClearAll={() => {
-                  if (!window.confirm('Delete every pricing recommendation row? This cannot be undone.')) return;
-                  void clearRecs.mutate();
-                }}
-                clearAllLabel="Clear all recommendations"
-                importsHref="/admin/imports"
-                busy={busyRecs}
-              />
-            }
-          >
-            <EnterpriseDataGrid ref={recChrome.gridRef} quickFilterText={recChrome.query} rowData={recRows} columnDefs={recCols} />
-          </ModuleDataSection>
-          </>
-        )}
       </Paper>
       <FactColumnPicker {...factFields.pickerProps} />
-      <FactColumnPicker {...recFields.pickerProps} />
 
       <BulkPasteDialog
         open={pasteOpen}
@@ -360,6 +269,11 @@ export default function PricingPage() {
             <TextField label="Currency" value={addCur} onChange={(e) => setAddCur(e.target.value)} fullWidth />
             <TextField label="Customer code (optional)" value={addCust} onChange={(e) => setAddCust(e.target.value)} fullWidth />
             <TextField label="Channel code (optional)" value={addCh} onChange={(e) => setAddCh(e.target.value)} fullWidth />
+            {addFact.isError ? (
+              <Alert severity="warning" data-testid="pricing-add-unknown-sku">
+                {toQueryError(addFact.error)?.message}
+              </Alert>
+            ) : null}
           </Stack>
         </DialogContent>
         <DialogActions>
