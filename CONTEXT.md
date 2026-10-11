@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-10-11 — **N-0065 closed** on `feat/ns-2-brief-nav-collapse`. Read-only cip probe: planner with no lines sees 0 current shipment-evidence rows; one line sees 0 rows from other product lines. N-0075 blocked: digest mailbox user and password are empty and send is off, so no invite was sent. N-0086, N-0078 and N-0079 stay open. Never main.
+- 2026-10-11 — **N-0065 closed** `5fc64c89` on `feat/ns-2-brief-nav-collapse`. Read-only cip probe: planner with no lines sees 0 current shipment-evidence rows; one line sees 0 rows from other product lines. N-0075 blocked: digest mailbox user and password are empty and send is off, so no invite was sent. N-0086, N-0078 and N-0079 stay open. Never main.
 - 2026-10-11 — **historical upload split** `df16847a` on `feat/ns-2-brief-nav-collapse`. Plan templates has Upload historical cases and Learn a new template. N-0109, N-0087, N-0092 and N-0068 closed. N-0065 and N-0086 stay open. Invite left unset. Never main.
 - 2026-10-11 — **acceptance** `200505db` on `feat/ns-2-brief-nav-collapse`. Warren accepted the live pages. N-0090, N-0093 and N-0091 are complete. N-0109 is accepted and still open: the design-experience gate has no target artifact class. Invite left unset. Never main.
 - 2026-10-11 — **dashboards** `687455d4` on `feat/ns-2-brief-nav-collapse`. Widget saved-report relationship declared; the overview dashboard list returns. Warren accepted the live Movement, Overview, Reports, CST slots, and shipment receipt pages. Invite left unset. Never main.
