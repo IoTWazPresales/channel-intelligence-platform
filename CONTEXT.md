@@ -16,6 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-10-11 — **dashboards** `687455d4` on `feat/ns-2-brief-nav-collapse`. Widget saved-report relationship declared; the overview dashboard list returns. Warren accepted the live Movement, Overview, Reports, CST slots, and shipment receipt pages. Invite left unset. Never main.
 - 2026-10-11 — **product commit** `eb230ccf` on `feat/ns-2-brief-nav-collapse`, pushed. Replenish flag is a KPI tile. Never main.
 - 2026-10-11 — **N-0109 execution guard** on `feat/ns-2-brief-nav-collapse` (uncommitted, HEAD `52571a24`). Build `SDZ5nGPgSzMvRHULFcpiV`. Listings, shipments, and execution vs plan stay up on a thin fixture. Not ledger-closed. Never main.
 - 2026-10-11 — **N-0109 fixture render** on `feat/ns-2-brief-nav-collapse` (uncommitted, HEAD `52571a24`). Reports at 1440 and 390, light and dark. Attention, audit log, and recorded prices also painted. Thin-fixture crashes guarded in source. Not ledger-closed. Never main.
