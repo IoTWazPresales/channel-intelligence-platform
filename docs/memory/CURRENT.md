@@ -6,7 +6,7 @@
 
 **Historical CPOR upload:** Promotions & Funding → Plan templates. **Upload historical cases** opens the workbook wizard. **Learn a new template from a workbook** stays the column-map action.
 
-**Closed this evening:** N-0109, N-0087, N-0092, N-0068. N-0065 stays in progress: the last behavioral check failed on shipment-evidence rows outside the user's product lines. N-0086 stays in progress: the pilot-password half depends on the invite, which stays unsent. N-0075 stays ready.
+**Closed this evening:** N-0109, N-0087, N-0092, N-0068, N-0065. N-0065 behavioral check was re-run read-only on cip: a planner with no lines sees 0 current shipment-evidence rows, and a planner on one line sees 0 rows from other product lines. N-0075 is blocked: `apps/api/.env` has no mailbox user, no mailbox password, and shipping-mailer send is off, so the invite was not sent and no set-password link was burned. N-0086 stays in progress: pilot passwords on the local accounts were not retired. N-0078 and N-0079 are in discovery and not built.
 
 **HEAD:** `687455d4` on `feat/ns-2-brief-nav-collapse`. Dashboard widgets declare the saved-report link, so the overview dashboard list no longer 500s. Product work through `dca2a682` is already pushed. Do not push main.
 
