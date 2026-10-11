@@ -16,6 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-10-11 — **acceptance** `200505db` on `feat/ns-2-brief-nav-collapse`. Warren accepted the live pages. N-0090, N-0093 and N-0091 are complete. N-0109 is accepted and still open: the design-experience gate has no target artifact class. Invite left unset. Never main.
 - 2026-10-11 — **dashboards** `687455d4` on `feat/ns-2-brief-nav-collapse`. Widget saved-report relationship declared; the overview dashboard list returns. Warren accepted the live Movement, Overview, Reports, CST slots, and shipment receipt pages. Invite left unset. Never main.
 - 2026-10-11 — **product commit** `eb230ccf` on `feat/ns-2-brief-nav-collapse`, pushed. Replenish flag is a KPI tile. Never main.
 - 2026-10-11 — **N-0109 execution guard** on `feat/ns-2-brief-nav-collapse` (uncommitted, HEAD `52571a24`). Build `SDZ5nGPgSzMvRHULFcpiV`. Listings, shipments, and execution vs plan stay up on a thin fixture. Not ledger-closed. Never main.
