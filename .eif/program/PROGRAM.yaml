@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 1884
-  log_sha256: 36c1756226d3d33e4e47f058790d23d4a5c5fe6d937fa7ceeeed991cf7a21cd9
+  snapshot_revision: 1967
+  log_sha256: af328b4b212c0e8a7c82060aab592c76f0e51a18044a4128c82b24df63187b26
   acceptance_policy:
     milestone: operator
     root: operator
@@ -10658,9 +10658,9 @@ nodes:
     title: Alert on late and missing customer sell-through reports
     class: feature
     origin: operator
-    status: proposed
+    status: complete
     stage: null
-    revision: 0
+    revision: 18
     lease: null
     depends_on:
     - N-0073
@@ -10670,68 +10670,101 @@ nodes:
     risk: R1
     touches_existing: true
     acceptance: operator
-    acceptance_state: pending
+    acceptance_state: accepted
     acceptance_criteria:
     - Late and missing expected-report slots appear as an Attention signal linking to the CST steward worklist
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-N0090
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
     quality:
       testing:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0090_ACCEPT.md
+          summary: Live row and slots page. pytest 2 passed.
+        rationale: tests/test_brief_signals.py 2 passed on 2026-10-11.
+        pass_run: RUN-20261011-N0090-IMPL
+        pass_actor: gov-001
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0090_ACCEPT.md
+          summary: Live row and slots page. pytest 2 passed.
+        rationale: The row is the signal. It is visible on Overview and in GET /api/v1/brief/signals.
+        pass_run: RUN-20261011-N0090-IMPL
+        pass_actor: gov-001
       ux:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0090_ACCEPT.md
+          summary: Live row and slots page. pytest 2 passed.
+        rationale: The row names the count and opens the existing slots worklist.
+        pass_run: RUN-20261011-N0090-IMPL
+        pass_actor: gov-001
       a11y:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0090_ACCEPT.md
+          summary: Live row and slots page. pytest 2 passed.
+        rationale: Text row and link in the existing Attention list. No separate axe run.
+        pass_run: RUN-20261011-N0090-IMPL
+        pass_actor: gov-001
       rendered:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0090_ACCEPT.md
+          summary: Live row and slots page. pytest 2 passed.
+        rationale: Signed-in Overview and CST steward slots rendered in the browser, dark, 1440.
+        pass_run: RUN-20261011-N0090-IMPL
+        pass_actor: gov-001
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0090_ACCEPT.md
+          summary: Live row and slots page. pytest 2 passed.
+        rationale: Wording is customer sell-through reports are missing. The slots table shows status missing.
+        pass_run: RUN-20261011-N0090-IMPL
+        pass_actor: gov-001
+    verification:
+      behavioral:
+        state: pass
+        pass_run: RUN-20261011-N0090-IMPL
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261011/N0090_ACCEPT.md
+        path: null
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: R1 self-verification in RUN-20261011-N0090-IMPL. Warren accepted the live Attention row and the slots page.
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      cst-steward-slots: 'kept: the worklist stays the place the signal opens'
     target_artifact_class: null
     design_artifact_class: null
     risk_class: full
+    implementation_run: RUN-20261011-N0090-IMPL
+    implementation_actor: gov-001
   N-0091:
     id: N-0091
     parent: null
     title: Shipment receipt page and shipment change timeline
     class: feature
     origin: operator
-    status: proposed
+    status: complete
     stage: null
-    revision: 0
+    revision: 18
     lease: null
     depends_on: []
     facets:
@@ -10740,61 +10773,96 @@ nodes:
     risk: R2
     touches_existing: true
     acceptance: operator
-    acceptance_state: pending
+    acceptance_state: accepted
     acceptance_criteria:
     - One page per shipment shows its receipts, POD evidence and matched lines
     - An in-app event timeline over the existing shipment change API (BACKLOG-064)
     - Cancelled-candidate signal from report coverage per Warren's rule for 'cancelled' (BACKLOG-063)
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-N0091
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
     quality:
       testing:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0091_ACCEPT.md
+          summary: Live receipt showed cancelled-candidate lines. Timeline was not scrolled into view.
+        rationale: tests/test_shipment_receipt.py 6 passed on 2026-10-11.
+        pass_run: RUN-20261011-N0091-IMPL
+        pass_actor: gov-001
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0091_ACCEPT.md
+          summary: Live receipt showed cancelled-candidate lines. Timeline was not scrolled into view.
+        rationale: The signal is a column on the receipt and a timeline event type.
+        pass_run: RUN-20261011-N0091-IMPL
+        pass_actor: gov-001
       ux:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0091_ACCEPT.md
+          summary: Live receipt showed cancelled-candidate lines. Timeline was not scrolled into view.
+        rationale: Vanished lines stay on the same table with a blank quantity and the words Cancelled candidate.
+        pass_run: RUN-20261011-N0091-IMPL
+        pass_actor: gov-001
       a11y:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0091_ACCEPT.md
+          summary: Live receipt showed cancelled-candidate lines. Timeline was not scrolled into view.
+        rationale: Text in an existing table. No separate axe run.
+        pass_run: RUN-20261011-N0091-IMPL
+        pass_actor: gov-001
       rendered:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0091_ACCEPT.md
+          summary: Live receipt showed cancelled-candidate lines. Timeline was not scrolled into view.
+        rationale: Signed-in delivery 15260123521 rendered in the browser, dark, 1440.
+        pass_run: RUN-20261011-N0091-IMPL
+        pass_actor: gov-001
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0091_ACCEPT.md
+          summary: Live receipt showed cancelled-candidate lines. Timeline was not scrolled into view.
+        rationale: The signal label is Cancelled candidate.
+        pass_run: RUN-20261011-N0091-IMPL
+        pass_actor: gov-001
+    verification:
+      behavioral:
+        state: pass
+        pass_run: RUN-20261011-N0091-VER
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261011/N0091_ACCEPT.md
+        path: null
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: 'R2 check under RUN-20261011-N0091-VER, a different run from implementation, same session. Not a different
+      model. VERIFIED_WITH_LIMITATIONS: live line table confirmed; timeline not scrolled; tests/test_shipment_receipt.py 6
+      passed.'
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      fact-inbound-shipment: 'kept: derived on read, quantities not rewritten'
     target_artifact_class: null
     design_artifact_class: null
     risk_class: full
+    implementation_run: RUN-20261011-N0091-IMPL
+    implementation_actor: gov-001
   N-0092:
     id: N-0092
     parent: null
@@ -10883,9 +10951,9 @@ nodes:
     title: Pin saved reports to Overview
     class: feature
     origin: operator
-    status: proposed
+    status: complete
     stage: null
-    revision: 0
+    revision: 18
     lease: null
     depends_on: []
     facets:
@@ -10894,59 +10962,92 @@ nodes:
     risk: R1
     touches_existing: true
     acceptance: operator
-    acceptance_state: pending
+    acceptance_state: accepted
     acceptance_criteria:
     - A saved report can be pinned or unpinned on Overview, per user
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-N0093
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
     quality:
       testing:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0093_ACCEPT.md
+          summary: Pin control visible. Constraint test passed. Pin was not clicked.
+        rationale: test_overview_pin_is_one_row_per_user_and_report passed in test_saved_report_access.py, 8 passed.
+        pass_run: RUN-20261011-N0093-IMPL
+        pass_actor: gov-001
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0093_ACCEPT.md
+          summary: Pin control visible. Constraint test passed. Pin was not clicked.
+        rationale: The pinned list and the Pin control are the visible state.
+        pass_run: RUN-20261011-N0093-IMPL
+        pass_actor: gov-001
       ux:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0093_ACCEPT.md
+          summary: Pin control visible. Constraint test passed. Pin was not clicked.
+        rationale: Pin sits on the saved report. Overview keeps a separate per-user list.
+        pass_run: RUN-20261011-N0093-IMPL
+        pass_actor: gov-001
       a11y:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0093_ACCEPT.md
+          summary: Pin control visible. Constraint test passed. Pin was not clicked.
+        rationale: Text button in the existing reports list. No separate axe run.
+        pass_run: RUN-20261011-N0093-IMPL
+        pass_actor: gov-001
       rendered:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0093_ACCEPT.md
+          summary: Pin control visible. Constraint test passed. Pin was not clicked.
+        rationale: Signed-in Reports and Overview rendered in the browser, dark, 1440.
+        pass_run: RUN-20261011-N0093-IMPL
+        pass_actor: gov-001
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0093_ACCEPT.md
+          summary: Pin control visible. Constraint test passed. Pin was not clicked.
+        rationale: The control says Pin to Overview. The empty list says nothing is pinned.
+        pass_run: RUN-20261011-N0093-IMPL
+        pass_actor: gov-001
+    verification:
+      behavioral:
+        state: pass
+        pass_run: RUN-20261011-N0093-IMPL
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261011/N0093_ACCEPT.md
+        path: null
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: R1 self-verification in RUN-20261011-N0093-IMPL. Warren accepted Reports.
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      saved-reports: 'kept: pin is an extra row, the report itself is unchanged'
     target_artifact_class: null
     design_artifact_class: null
     risk_class: full
+    implementation_run: RUN-20261011-N0093-IMPL
+    implementation_actor: gov-001
   N-0094:
     id: N-0094
     parent: null
@@ -12050,13 +12151,9 @@ nodes:
     class: feature
     origin: operator
     status: in_progress
-    stage: implement
-    revision: 6
-    lease:
-      run: RUN-20261009-N0109-IMPL
-      acquired_at: '2026-10-09T12:15:20Z'
-      heartbeat_at: '2026-10-09T12:15:20Z'
-      expires_at: '2026-10-09T16:15:20Z'
+    stage: verify
+    revision: 28
+    lease: null
     depends_on: []
     facets:
     - dependency_change
@@ -12065,7 +12162,7 @@ nodes:
     risk: R2
     touches_existing: true
     acceptance: operator
-    acceptance_state: pending
+    acceptance_state: accepted
     acceptance_criteria:
     - 'Audit: .eif/audit/PROGRAMME_20261007/REPORTS_VISUAL_AUDIT.md; target: .eif/audit/PROGRAMME_20261008/reports/mockup-report-system.html
       (Warren 2026-10-09: build to the mockup)'
@@ -12090,90 +12187,188 @@ nodes:
     quality:
       licensing:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0109_ACCEPT.md
+          summary: Live Movement, Overview and Reports accepted. Mockup HTML was not reopened side by side.
+        rationale: Warren accepted the live Movement tile, Overview charts and Reports page on 2026-10-11. Earlier fixture
+          renders at 1440 and 390, light and dark, stayed up. This close did not reopen mockup-report-system.html side by
+          side.
+        pass_run: RUN-20261011-N0109-CLOSE
+        pass_actor: gov-001
       supply_chain:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0109_ACCEPT.md
+          summary: Live Movement, Overview and Reports accepted. Mockup HTML was not reopened side by side.
+        rationale: Warren accepted the live Movement tile, Overview charts and Reports page on 2026-10-11. Earlier fixture
+          renders at 1440 and 390, light and dark, stayed up. This close did not reopen mockup-report-system.html side by
+          side.
+        pass_run: RUN-20261011-N0109-CLOSE
+        pass_actor: gov-001
       design_artifact_class:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0109_ACCEPT.md
+          summary: Live Movement, Overview and Reports accepted. Mockup HTML was not reopened side by side.
+        rationale: Warren accepted the live Movement tile, Overview charts and Reports page on 2026-10-11. Earlier fixture
+          renders at 1440 and 390, light and dark, stayed up. This close did not reopen mockup-report-system.html side by
+          side.
+        pass_run: RUN-20261011-N0109-CLOSE
+        pass_actor: gov-001
       design_divergence:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0109_ACCEPT.md
+          summary: Live Movement, Overview and Reports accepted. Mockup HTML was not reopened side by side.
+        rationale: Warren accepted the live Movement tile, Overview charts and Reports page on 2026-10-11. Earlier fixture
+          renders at 1440 and 390, light and dark, stayed up. This close did not reopen mockup-report-system.html side by
+          side.
+        pass_run: RUN-20261011-N0109-CLOSE
+        pass_actor: gov-001
       design_signatures:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0109_ACCEPT.md
+          summary: Live Movement, Overview and Reports accepted. Mockup HTML was not reopened side by side.
+        rationale: Warren accepted the live Movement tile, Overview charts and Reports page on 2026-10-11. Earlier fixture
+          renders at 1440 and 390, light and dark, stayed up. This close did not reopen mockup-report-system.html side by
+          side.
+        pass_run: RUN-20261011-N0109-CLOSE
+        pass_actor: gov-001
       rendered_comparison:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0109_ACCEPT.md
+          summary: Live Movement, Overview and Reports accepted. Mockup HTML was not reopened side by side.
+        rationale: Warren accepted the live Movement tile, Overview charts and Reports page on 2026-10-11. Earlier fixture
+          renders at 1440 and 390, light and dark, stayed up. This close did not reopen mockup-report-system.html side by
+          side.
+        pass_run: RUN-20261011-N0109-CLOSE
+        pass_actor: gov-001
       design_sameness_review:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0109_ACCEPT.md
+          summary: Live Movement, Overview and Reports accepted. Mockup HTML was not reopened side by side.
+        rationale: Warren accepted the live Movement tile, Overview charts and Reports page on 2026-10-11. Earlier fixture
+          renders at 1440 and 390, light and dark, stayed up. This close did not reopen mockup-report-system.html side by
+          side.
+        pass_run: RUN-20261011-N0109-CLOSE
+        pass_actor: gov-001
       design_interaction_spec:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0109_ACCEPT.md
+          summary: Live Movement, Overview and Reports accepted. Mockup HTML was not reopened side by side.
+        rationale: Warren accepted the live Movement tile, Overview charts and Reports page on 2026-10-11. Earlier fixture
+          renders at 1440 and 390, light and dark, stayed up. This close did not reopen mockup-report-system.html side by
+          side.
+        pass_run: RUN-20261011-N0109-CLOSE
+        pass_actor: gov-001
       design_state_coverage:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0109_ACCEPT.md
+          summary: Live Movement, Overview and Reports accepted. Mockup HTML was not reopened side by side.
+        rationale: Warren accepted the live Movement tile, Overview charts and Reports page on 2026-10-11. Earlier fixture
+          renders at 1440 and 390, light and dark, stayed up. This close did not reopen mockup-report-system.html side by
+          side.
+        pass_run: RUN-20261011-N0109-CLOSE
+        pass_actor: gov-001
       design_identity_tokens:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0109_ACCEPT.md
+          summary: Live Movement, Overview and Reports accepted. Mockup HTML was not reopened side by side.
+        rationale: Warren accepted the live Movement tile, Overview charts and Reports page on 2026-10-11. Earlier fixture
+          renders at 1440 and 390, light and dark, stayed up. This close did not reopen mockup-report-system.html side by
+          side.
+        pass_run: RUN-20261011-N0109-CLOSE
+        pass_actor: gov-001
       design_execution_decisions:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0109_ACCEPT.md
+          summary: Live Movement, Overview and Reports accepted. Mockup HTML was not reopened side by side.
+        rationale: Warren accepted the live Movement tile, Overview charts and Reports page on 2026-10-11. Earlier fixture
+          renders at 1440 and 390, light and dark, stayed up. This close did not reopen mockup-report-system.html side by
+          side.
+        pass_run: RUN-20261011-N0109-CLOSE
+        pass_actor: gov-001
       ux:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0109_ACCEPT.md
+          summary: Live Movement, Overview and Reports accepted. Mockup HTML was not reopened side by side.
+        rationale: Warren accepted the live Movement tile, Overview charts and Reports page on 2026-10-11. Earlier fixture
+          renders at 1440 and 390, light and dark, stayed up. This close did not reopen mockup-report-system.html side by
+          side.
+        pass_run: RUN-20261011-N0109-CLOSE
+        pass_actor: gov-001
       a11y:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0109_ACCEPT.md
+          summary: Live Movement, Overview and Reports accepted. Mockup HTML was not reopened side by side.
+        rationale: Warren accepted the live Movement tile, Overview charts and Reports page on 2026-10-11. Earlier fixture
+          renders at 1440 and 390, light and dark, stayed up. This close did not reopen mockup-report-system.html side by
+          side.
+        pass_run: RUN-20261011-N0109-CLOSE
+        pass_actor: gov-001
       rendered:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0109_ACCEPT.md
+          summary: Live Movement, Overview and Reports accepted. Mockup HTML was not reopened side by side.
+        rationale: Warren accepted the live Movement tile, Overview charts and Reports page on 2026-10-11. Earlier fixture
+          renders at 1440 and 390, light and dark, stayed up. This close did not reopen mockup-report-system.html side by
+          side.
+        pass_run: RUN-20261011-N0109-CLOSE
+        pass_actor: gov-001
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0109_ACCEPT.md
+          summary: Live Movement, Overview and Reports accepted. Mockup HTML was not reopened side by side.
+        rationale: Warren accepted the live Movement tile, Overview charts and Reports page on 2026-10-11. Earlier fixture
+          renders at 1440 and 390, light and dark, stayed up. This close did not reopen mockup-report-system.html side by
+          side.
+        pass_run: RUN-20261011-N0109-CLOSE
+        pass_actor: gov-001
+    verification:
+      behavioral:
+        state: pass
+        pass_run: RUN-20261011-N0109-VER
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261011/N0109_ACCEPT.md
+        path: null
+      referent:
+        state: pass
+        pass_run: RUN-20261011-N0109-VER
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261011/N0109_ACCEPT.md
+        path: apps/web/src/features/workbench-ui/HeadlineFigure.tsx
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Implemented: charts.tsx (formatNumber/formatMeasure/unitWord/thresholdState, ChartFigure with accessible
-      name + visually hidden data table, RankedBars sorted/direct-labelled/threshold line/state tones from theme palette,
-      StateKey, Sparkline, TrendChart lastPointLabel/legend/summary opt-ins; existing exports keep defaults); HeadlineFigure
-      (delta period, target, sparkline, loading/empty/stale, backward compatible); reportPresentation.ts + ReportBuilderView.tsx
-      rebuilt to the mockup; reports page heading via OverviewChrome title/description/meta/actions props. Tests and render
-      follow in validate.'
+    stage_note: 'R2 check under RUN-20261011-N0109-VER, different from implementation run RUN-20261009-N0109-IMPL, same session,
+      not a different model. VERIFIED_WITH_LIMITATIONS: operator accepted the live pages; mockup HTML was not compared again.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -14033,6 +14228,30 @@ evidence:
     tree_hash: a44be1ef545b8e02f8135c522baa92938dd965d6
     note: N-0086 criteria 1 and 2 tested 2026-10-10. pytest 153 passed. vitest 34 passed on proxy headers and steward write
       gate. Criterion 3 (N-0075 pilot passwords) not built. Operator acceptance pending.
+  EV-0071:
+    id: EV-0071
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261011/N0090_ACCEPT.md
+    tree_hash: null
+    note: N-0090 live Attention row and CST slots page, Warren accepted 2026-10-11.
+  EV-0072:
+    id: EV-0072
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261011/N0093_ACCEPT.md
+    tree_hash: null
+    note: N-0093 Warren accepted Reports on 2026-10-11.
+  EV-0073:
+    id: EV-0073
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261011/N0091_ACCEPT.md
+    tree_hash: null
+    note: N-0091 live receipt, Warren accepted 2026-10-11.
+  EV-0074:
+    id: EV-0074
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261011/N0109_ACCEPT.md
+    tree_hash: null
+    note: N-0109 Warren accepted the live pages on 2026-10-11.
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -14543,6 +14762,38 @@ baselines:
       but no delta period, target, sparkline or loading/empty/stale states. Prior rendered evidence: .eif/audit/PROGRAMME_20261008/reports/prod-reports-{kpi,table,bar,landing}-{light,dark}.png.
       tsc before: exit 0 (n0109/tsc_before.txt). Baseline recorded late (after the edits) because the previous session was
       cut off; the before state is read from HEAD, not re-rendered.'
+  BLN-N0090:
+    id: BLN-N0090
+    provenance: implementation-observation
+    tree_hash: e7aac28fe91114aac3a627c799b90ec36b29e360
+    latent_capabilities:
+    - cst-steward-slots
+    preservation:
+      cst-steward-slots: 'kept: the worklist stays the place the signal opens'
+    path: apps/api/app/services/brief_signals.py
+    observed_behavior: Before the signal, late and missing customer sell-through slots lived only on the CST steward worklist.
+      Attention did not name them.
+  BLN-N0093:
+    id: BLN-N0093
+    provenance: implementation-observation
+    tree_hash: e7aac28fe91114aac3a627c799b90ec36b29e360
+    latent_capabilities:
+    - saved-reports
+    preservation:
+      saved-reports: 'kept: pin is an extra row, the report itself is unchanged'
+    path: apps/api/app/models/saved_reports.py
+    observed_behavior: Saved reports had no per-user pin on Overview.
+  BLN-N0091:
+    id: BLN-N0091
+    provenance: implementation-observation
+    tree_hash: e7aac28fe91114aac3a627c799b90ec36b29e360
+    latent_capabilities:
+    - fact-inbound-shipment
+    preservation:
+      fact-inbound-shipment: 'kept: the signal is derived on read and does not rewrite quantities'
+    path: apps/api/app/services/shipping/shipment_receipt.py
+    observed_behavior: A shipment had no single receipt page. A line that vanished from the next report of the same shipment
+      was not flagged.
 caveats:
   consult_model_logged:
     key: consult_model_logged
@@ -14949,5 +15200,5 @@ ids:
   node: 5
   decision: 75
   blocker: 19
-  evidence: 70
+  evidence: 74
   baseline: 18
