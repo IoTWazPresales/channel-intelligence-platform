@@ -18,6 +18,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -249,18 +250,20 @@ export function PlanTemplatesSurface() {
               })}
               <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                 <Button
+                  component={Link}
+                  href="/commercial-planner/cpor-cases/historical-import?upload=1"
                   variant="contained"
                   size="small"
                   startIcon={<UploadFileOutlinedIcon />}
-                  onClick={() => router.push('/commercial-planner/cpor-cases/historical-import?upload=1')}
                   data-testid="historical-cases-upload"
                 >
                   Upload historical cases
                 </Button>
                 <Button
+                  component={Link}
+                  href="/commercial-planner/cpor-cases/historical-import?learn=1"
                   variant="outlined"
                   size="small"
-                  onClick={() => router.push('/commercial-planner/cpor-cases/historical-import?learn=1')}
                   data-testid="template-learn"
                 >
                   Learn a new template from a workbook
