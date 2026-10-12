@@ -6,13 +6,13 @@
 
 **Historical CPOR upload:** Promotions & Funding → Plan templates. **Upload historical cases** opens the workbook wizard. **Learn a new template from a workbook** stays the column-map action.
 
-**Closed 2026-10-12:** N-0075, N-0086, N-0078. The set-password invite was sent to warren_eliason@asus.com as admin. The mail has no password. admin@local and viewer@local were not retired. N-0086 is VERIFIED_WITH_LIMITATIONS (same session, not a different model). N-0078 checks the latest stored snapshot for Takealot and Evetech. Amazon is No data. Search position is deferred. N-0076 and N-0085 are still proposed. N-0079 is blocked: the migration file `20261012_0033` is not applied. `DATABASE_URL_SYNC_MIGRATE` is unset and the older postgres login was rejected, so the clone was not created and the historical load did not run. The Budgets page says the ledger is not available.
+**Closed 2026-10-12:** N-0075, N-0086, N-0078. The set-password invite was sent to warren_eliason@asus.com as admin. The mail has no password. admin@local and viewer@local were not retired. N-0086 is VERIFIED_WITH_LIMITATIONS (same session, not a different model). N-0078 checks the latest stored snapshot for Takealot and Evetech. Amazon is No data. Search position is deferred. N-0076 and N-0085 are still proposed.
 
-**HEAD:** `aef755c6` on `feat/ns-2-brief-nav-collapse`. Do not push main.
+**N-0079 in progress:** `20261012_0033` is on cip. Clone `cip_n0079` proved the historical load first (written 435, 4 lines skipped with no result, second load wrote 0, owner update and delete raised append-only). The same load then ran on cip. The Budgets page shows product line by quarter and a row click drills to `historical_import` consume rows. Remaining is negative on those rows because historical consumption has no reserve. The page has no pending column and no cap column. D-0059 still open for the campaign view switch, unplanned and unknown-quarter buckets, and an admin cap control. Caps flag and do not block. The node is not complete.
 
-**Alembic (code):** `20261012_0033` adds append-only `budget_ledger_entry`. Not applied. cip is still `20261011_0032`. `pricing_unknown_sku` remains. Role `cip` is not the table owner. Do not upgrade cip until a superuser migrate URL is set and the historical load has passed on a clone.
+**Branch:** `feat/ns-2-brief-nav-collapse`. Do not push main.
 
-**Alembic on cip:** `20261011_0032`. Role `cip` is not the table owner.
+**Alembic (code and cip):** `20261012_0033` append-only `budget_ledger_entry`. `pricing_unknown_sku` remains. Role `cip` is not the table owner of older tables. The app role can select and insert ledger rows only.
 
 ## Programme
 
