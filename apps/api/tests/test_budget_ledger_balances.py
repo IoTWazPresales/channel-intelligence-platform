@@ -9,6 +9,7 @@ from app.services.budget_ledger import (
     case_ledger_from_rows,
     describe_payment_link_coverage,
     fold_customer_amounts,
+    headroom_used_from_tagged,
     include_in_view,
     plan_transfer,
     position_with_pending,
@@ -237,3 +238,18 @@ def test_case_ledger_sums_commit_consume_and_usd_paid_only():
     assert totals["consumed_usd"] == 80
     assert totals["paid_usd"] == 40
     assert totals["paid_row_count"] == 2
+
+
+def test_campaign_draw_ignores_caps_non_campaign_and_a_cancelled_commitment():
+    cancelled = headroom_used_from_tagged(
+        [
+            ("commit", 40, None),
+            ("release", 40, None),
+            ("consume", 90, "non_campaign"),
+            ("reserve", 25, "non_campaign"),
+            ("cap", 1000, "line_cap"),
+        ]
+    )
+    assert cancelled == 0
+    assert headroom_used_from_tagged([("commit", 12, "campaign")]) == 12
+    assert headroom_used_from_tagged([("consume", 80, "historical_import"), ("cap", 5, "line_cap")]) == 80

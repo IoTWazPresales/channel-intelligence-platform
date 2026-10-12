@@ -80,10 +80,16 @@ def add_entry(session: Session, **fields: Any) -> BudgetLedgerEntry:
 
 
 def used_usd(session: Session, *, landed_quarter: str | None = None) -> float | None:
-    """Headroom used from the ledger. None when the table is not there yet."""
-    stmt = select(BudgetLedgerEntry.entry_type, func.coalesce(func.sum(BudgetLedgerEntry.amount_usd), 0)).group_by(
-        BudgetLedgerEntry.entry_type
-    )
+    """Campaign headroom from the ledger. None when the table is not there yet.
+
+    A cap is not money in the draw. A non-campaign reserve is not the campaign
+    budget. Draft and cancelled cases are not left as open commitment.
+    """
+    stmt = select(
+        BudgetLedgerEntry.entry_type,
+        func.coalesce(func.sum(BudgetLedgerEntry.amount_usd), 0),
+        BudgetLedgerEntry.source_tag,
+    ).group_by(BudgetLedgerEntry.entry_type, BudgetLedgerEntry.source_tag)
     if landed_quarter:
         stmt = stmt.where(BudgetLedgerEntry.landed_quarter == landed_quarter)
     nested = session.begin_nested()
@@ -93,8 +99,7 @@ def used_usd(session: Session, *, landed_quarter: str | None = None) -> float | 
     except ProgrammingError:
         nested.rollback()
         return None
-    balances = balances_from_amounts([(str(kind), float(amount)) for kind, amount in rows])
-    return balances["pending_headroom_used"]
+    return headroom_used_from_tagged([(str(kind), float(amount), tag) for kind, amount, tag in rows])
 
 
 def position_with_pending(
@@ -198,6 +203,18 @@ def include_in_view(source_tag: str | None, view: str) -> bool:
     if view == "non_campaign":
         return source_tag == "non_campaign"
     return source_tag != "non_campaign"
+
+
+def headroom_used_from_tagged(
+    rows: list[tuple[str, float | None, str | None]],
+) -> float:
+    """Campaign draw. Caps and the non-campaign reserve are not headroom."""
+    kept = [
+        (str(entry_type), float(amount or 0))
+        for entry_type, amount, source_tag in rows
+        if entry_type != "cap" and include_in_view(source_tag, "campaign")
+    ]
+    return balances_from_amounts(kept)["pending_headroom_used"]
 
 
 def plan_transfer(

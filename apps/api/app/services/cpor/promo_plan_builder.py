@@ -831,11 +831,13 @@ def build_promo_plan_draft(
             drawn_stmt = drawn_stmt.where(CporCaseLine.pod_quarter == period_label)
     drawn_usd, line_n = session.execute(drawn_stmt).one()
     drawn = float(drawn_usd or 0)
+    drawn_source = "case_lines"
     from app.services.budget_ledger import used_usd
 
     ledger_drawn = used_usd(session, landed_quarter=period_label)
     if ledger_drawn is not None:
         drawn = ledger_drawn
+        drawn_source = "budget_ledger"
     remaining = reserved - drawn
     support_pct = (reserved / planned_rev) if planned_rev > 0 and reserved else None
 
@@ -876,6 +878,7 @@ def build_promo_plan_draft(
                 "binding": tenant_profile.CONSTRAINT_AXIS in ("support_pct", "dual"),
             },
         },
+        "drawn_source": drawn_source,
         "cpor_line_count": int(line_n or 0),
         "period_label": period_label,
         "period_label_normalized": normalize_period_label(period_label),

@@ -42,6 +42,7 @@ type DraftPayload = {
     create_blocked?: boolean;
     planned_from_lineup_derived?: boolean;
     reservation_source?: string;
+    drawn_source?: string;
     tracks?: { money?: { status?: string; planned_reservation_usd?: number; drawn_cpor_usd?: number } };
   };
   comparables?: { count?: number };
@@ -462,8 +463,9 @@ export function PromoPlanBuilderPanel() {
           <Typography variant="body2" component="div" data-testid="b4-draft-summary" sx={{ mb: 1 }}>
             Lines: {rows.length} · source: {productSetSource ?? '—'} · same-customer comparables:{' '}
             {comparableCount} · budget status {String(budgetCheck?.tracks?.money?.status ?? '—')} ·
-            planned reservation USD {String(budgetCheck?.tracks?.money?.planned_reservation_usd ?? 0)} · drawn
-            USD {String(budgetCheck?.tracks?.money?.drawn_cpor_usd ?? 0)} · reservation source{' '}
+            planned reservation USD {String(budgetCheck?.tracks?.money?.planned_reservation_usd ?? 0)} ·{' '}
+            {budgetCheck?.drawn_source === 'budget_ledger' ? 'ledger drawn' : 'drawn'} USD{' '}
+            {String(budgetCheck?.tracks?.money?.drawn_cpor_usd ?? 0)} · reservation source{' '}
             {String(budgetCheck?.reservation_source ?? 'derived_from_profit')} · dirty cells survive Refresh
           </Typography>
           <EnterpriseDataGrid

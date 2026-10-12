@@ -268,6 +268,7 @@ async def build_budget_position(
     drawn_zar_f = 0.0
     line_count = 0
     cpor_ok = True
+    drawn_source = "case_lines"
     try:
         stmt = select(
             func.coalesce(func.sum(CporCaseLine.ttl_support_usd), 0),
@@ -282,11 +283,13 @@ async def build_budget_position(
                 stmt = stmt.where(CporCaseLine.pod_quarter == period_label)
         drawn_usd, drawn_zar, n = (await db.execute(stmt)).one()
         drawn_usd_f = float(drawn_usd or 0)
+        drawn_source = "case_lines"
         from app.services.budget_ledger import used_usd
 
         ledger_drawn = await db.run_sync(lambda sync: used_usd(sync, landed_quarter=period_label))
         if isinstance(ledger_drawn, (int, float)) and not isinstance(ledger_drawn, bool):
             drawn_usd_f = float(ledger_drawn)
+            drawn_source = "budget_ledger"
         drawn_zar_f = float(drawn_zar or 0)
         line_count = int(n or 0)
         cpor_ok = True
@@ -350,7 +353,15 @@ async def build_budget_position(
         "planned_line_count": len(planned),
         "planned_from_lineup_derived": derived,
         "derive_diagnostics": derive_diag,
+        "drawn_source": drawn_source if cpor_ok else "case_lines",
         "basis": (
+            "planned=fact_lineup_plan_item×SKU economics×lineup SRP evidence (Q-002); "
+            "drawn=campaign budget ledger headroom (consumed plus open commitment). "
+            "Caps and the non-campaign reserve are not in the draw. "
+            "Draft and cancelled cases are not left as open commitment."
+        )
+        if cpor_ok and drawn_source == "budget_ledger"
+        else (
             "planned=fact_lineup_plan_item×SKU economics×lineup SRP evidence (Q-002); "
             "drawn=cpor_case_line.ttl_support_usd filtered by pod_quarter≈period_label"
         ),
