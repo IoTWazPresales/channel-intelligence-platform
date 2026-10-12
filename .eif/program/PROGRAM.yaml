@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2122
-  log_sha256: 0bdc3c379bfc2f94c60bd878c9126d1273ea2d5bbe734d5c55856440fe8dd6b5
+  snapshot_revision: 2127
+  log_sha256: c62e0ba38b430bfe01f285a6d95ed41efb255515a6eadcf3a6b63c6dbe354da8
   acceptance_policy:
     milestone: operator
     root: operator
@@ -9796,9 +9796,9 @@ nodes:
       caps (spec section 9.7)'
     class: feature
     origin: operator
-    status: blocked
+    status: ready
     stage: discovery
-    revision: 9
+    revision: 13
     lease: null
     depends_on:
     - N-0073
@@ -9874,19 +9874,14 @@ nodes:
         rationale: null
     verification: {}
     evidence: []
-    blockers:
-    - id: BL-N0079-MIGRATE
-      type: environment
-      ref: apps/api/.env
-      opened: '2026-10-12T00:16:15Z'
-      note: DATABASE_URL_SYNC_MIGRATE is unset. Postgres login from the older clone scripts was rejected. Clone and cip upgrade
-        were not run.
+    blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: '2026-10-12 code is in the tree: append-only budget_ledger_entry migration 20261012_0033, writers, and the
-      Budgets page. Not applied. DATABASE_URL_SYNC_MIGRATE is unset and the postgres login used by older clone scripts was
-      rejected, so cip_n0079 was not created and the historical load did not run. The Budgets page says the ledger is not
-      available. Do not upgrade cip until a superuser migration URL is set and the clone load passes.'
+    stage_note: '2026-10-12 clone cip_n0079 from template cip. Historical load wrote 435, skipped 4 with no result, second
+      load wrote 0. Owner update and delete raised append-only and the row count stayed 435. cip is on 20261012_0033 with
+      the same counts. Budgets shows product line by quarter and a row click drills to historical_import consume rows. Not
+      complete: no pending column, no cap column, and the rest of D-0059 (campaign view switch, unplanned and unknown-quarter
+      buckets, an admin cap control) is still open. Caps flag and do not block.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -14552,6 +14547,12 @@ evidence:
     path: .eif/audit/PROGRAMME_20261011/N0078_QUALITY.md
     tree_hash: null
     note: N-0078 quality lens on stored snapshots.
+  EV-0081:
+    id: EV-0081
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261011/N0079_LEDGER.md
+    tree_hash: null
+    note: N-0079 clone proof then cip load. Counts only.
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -15540,5 +15541,5 @@ ids:
   node: 5
   decision: 75
   blocker: 19
-  evidence: 80
+  evidence: 81
   baseline: 18
