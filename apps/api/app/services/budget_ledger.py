@@ -12,7 +12,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
 
@@ -846,3 +846,51 @@ def record_paid_evidence(session: Session, evidence: Any, *, actor: str | None) 
         source_event_id=f"payment:{evidence.id}",
     )
     return True
+
+
+def describe_payment_link_coverage(counts: dict[str, int]) -> str:
+    """Name the link gap. Counts are not dollars, and this does not write paid rows."""
+    paid_rows = int(counts["paid_rows"])
+    paid_linked = int(counts["paid_linked"])
+    evidence_rows = int(counts["evidence_rows"])
+    linked_rows = int(counts["linked_rows"])
+    ledger_paid_rows = int(counts["ledger_paid_rows"])
+    return (
+        f"Payment link coverage: {paid_linked} of {paid_rows} paid evidence rows are linked to a case. "
+        f"{linked_rows} of {evidence_rows} evidence rows are linked. "
+        f"The Paid column has {ledger_paid_rows} ledger rows. Historical payments were not loaded."
+    )
+
+
+def payment_link_coverage(session: Session) -> dict[str, Any] | None:
+    """How many paid evidence rows point at a case, and how many paid rows the ledger holds.
+
+    Does not insert. None if the evidence table is missing.
+    """
+    from app.models.cpor_payment import CporPaymentEvidence
+    from app.services.cpor.payment_recon import PAID_STATUSES
+
+    paid_status = func.lower(CporPaymentEvidence.payment_status).in_(sorted(PAID_STATUSES))
+    evidence_stmt = select(
+        func.count(),
+        func.count().filter(CporPaymentEvidence.case_id.is_not(None)),
+        func.count().filter(paid_status),
+        func.count().filter(and_(paid_status, CporPaymentEvidence.case_id.is_not(None))),
+    ).select_from(CporPaymentEvidence)
+    ledger_stmt = select(func.count()).select_from(BudgetLedgerEntry).where(BudgetLedgerEntry.entry_type == "paid")
+    nested = session.begin_nested()
+    try:
+        evidence_rows, linked_rows, paid_rows, paid_linked = session.execute(evidence_stmt).one()
+        ledger_paid_rows = session.scalar(ledger_stmt) or 0
+        nested.commit()
+    except ProgrammingError:
+        nested.rollback()
+        return None
+    counts = {
+        "evidence_rows": int(evidence_rows or 0),
+        "linked_rows": int(linked_rows or 0),
+        "paid_rows": int(paid_rows or 0),
+        "paid_linked": int(paid_linked or 0),
+        "ledger_paid_rows": int(ledger_paid_rows or 0),
+    }
+    return {**counts, "sentence": describe_payment_link_coverage(counts)}

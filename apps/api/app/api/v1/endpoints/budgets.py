@@ -39,15 +39,22 @@ async def budget_ledger_position(
             "portfolio_cap_usd": None,
             "view": chosen,
             "grain": chosen_grain,
+            "payment_link_coverage": None,
         }
+    from app.services.budget_ledger import payment_link_coverage
     from app.services.cpor.budget_reapproval import money_ceiling_usd
 
+    try:
+        coverage = await db.run_sync(payment_link_coverage)
+    except Exception:
+        coverage = None
     return {
         "data_unavailable": False,
         "items": rows,
         "portfolio_cap_usd": money_ceiling_usd(),
         "view": chosen,
         "grain": chosen_grain,
+        "payment_link_coverage": coverage,
     }
 
 

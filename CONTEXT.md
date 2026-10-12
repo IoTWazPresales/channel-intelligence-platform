@@ -16,6 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-10-12 — **budget payment coverage** on `feat/ns-2-brief-nav-collapse`. The Budgets page counts linked payment evidence and does not load historical payments. The Paid column stays 0 ledger rows. N-0079 is not complete. Never main.
 - 2026-10-12 — **budget customer rollup** `030faf84` on `feat/ns-2-brief-nav-collapse`. Customer by quarter sums the same ledger. Caps stay on the product line. N-0079 is not complete: paid link coverage is not shown. Never main.
 - 2026-10-12 — **budget caps** `b154ab4d` on `feat/ns-2-brief-nav-collapse`. Alembic `20261012_0034` is on cip. A cap is an append-only ceiling per product line and quarter. It flags over-cap and does not change remaining. N-0079 is not complete. Never main.
 - 2026-10-12 — **budget transfers** `ed1338b0` on `feat/ns-2-brief-nav-collapse`. A campaign move writes two append-only rows. Over remaining warns and confirms. The same line and quarter is refused. N-0079 is not complete: no per-line cap, and no non-campaign rows until the next lineup approval. Never main.

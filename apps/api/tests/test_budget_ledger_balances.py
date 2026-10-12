@@ -6,6 +6,7 @@ from app.services.budget_ledger import (
     attach_caps,
     balances_from_amounts,
     current_cap,
+    describe_payment_link_coverage,
     fold_customer_amounts,
     include_in_view,
     plan_transfer,
@@ -189,3 +190,31 @@ def test_customer_quarter_sums_product_lines_and_skips_caps():
     assert unnamed["pending"] == 4
     assert unnamed["remaining"] == 0
     assert unnamed["cap"] is None
+
+
+def test_payment_link_coverage_is_a_count_not_a_paid_write():
+    sentence = describe_payment_link_coverage(
+        {
+            "paid_rows": 2718,
+            "paid_linked": 243,
+            "evidence_rows": 3375,
+            "linked_rows": 283,
+            "ledger_paid_rows": 0,
+        }
+    )
+    assert sentence == (
+        "Payment link coverage: 243 of 2718 paid evidence rows are linked to a case. "
+        "283 of 3375 evidence rows are linked. "
+        "The Paid column has 0 ledger rows. Historical payments were not loaded."
+    )
+    empty = describe_payment_link_coverage(
+        {
+            "paid_rows": 0,
+            "paid_linked": 0,
+            "evidence_rows": 0,
+            "linked_rows": 0,
+            "ledger_paid_rows": 0,
+        }
+    )
+    assert "0 of 0" in empty
+    assert "were not loaded" in empty

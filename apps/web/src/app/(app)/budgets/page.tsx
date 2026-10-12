@@ -67,7 +67,13 @@ export default function BudgetsPage() {
   const position = useQuery({
     queryKey: ['budgets', 'ledger', view, grain],
     queryFn: ({ signal }) =>
-      apiGet<{ data_unavailable: boolean; items: PositionRow[]; portfolio_cap_usd: number | null; view: string }>(
+      apiGet<{
+        data_unavailable: boolean;
+        items: PositionRow[];
+        portfolio_cap_usd: number | null;
+        view: string;
+        payment_link_coverage: { sentence: string } | null;
+      }>(
         `/api/v1/budgets/ledger?view=${view}&grain=${grain}`,
         { signal },
       ),
@@ -191,6 +197,11 @@ export default function BudgetsPage() {
             : ` Portfolio cap is ${position.data.portfolio_cap_usd}.`}{' '}
           Caps flag and do not block.
         </Typography>
+        {position.data?.payment_link_coverage?.sentence ? (
+          <Typography variant="body2" color="text.secondary">
+            {position.data.payment_link_coverage.sentence}
+          </Typography>
+        ) : null}
         <Stack direction="row" spacing={1}>
           <ToggleButtonGroup
             exclusive
