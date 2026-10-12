@@ -21,6 +21,8 @@ import { apiGet, apiPost } from '@/lib/api';
 
 type PositionRow = {
   product_line: string;
+  customer_id?: number | null;
+  customer_label?: string;
   landed_quarter: string;
   reserved: number;
   committed: number;
@@ -51,6 +53,7 @@ export default function BudgetsPage() {
   const queryClient = useQueryClient();
   const [picked, setPicked] = useState<PositionRow | null>(null);
   const [view, setView] = useState<'campaign' | 'non_campaign'>('campaign');
+  const [grain, setGrain] = useState<'line' | 'customer'>('line');
   const [bucket, setBucket] = useState<'all' | 'unplanned' | 'unknown'>('all');
   const [fromLine, setFromLine] = useState('');
   const [fromQuarter, setFromQuarter] = useState('');
@@ -62,25 +65,36 @@ export default function BudgetsPage() {
   const [capQuarter, setCapQuarter] = useState('');
   const [capAmount, setCapAmount] = useState('');
   const position = useQuery({
-    queryKey: ['budgets', 'ledger', view],
+    queryKey: ['budgets', 'ledger', view, grain],
     queryFn: ({ signal }) =>
       apiGet<{ data_unavailable: boolean; items: PositionRow[]; portfolio_cap_usd: number | null; view: string }>(
-        `/api/v1/budgets/ledger?view=${view}`,
+        `/api/v1/budgets/ledger?view=${view}&grain=${grain}`,
         { signal },
       ),
   });
   const entries = useQuery({
-    queryKey: ['budgets', 'entries', view, picked?.product_line, picked?.landed_quarter],
+    queryKey: ['budgets', 'entries', view, grain, picked?.product_line, picked?.customer_id, picked?.landed_quarter],
     enabled: picked != null,
-    queryFn: ({ signal }) =>
-      apiGet<{ items: EntryRow[] }>(
-        `/api/v1/budgets/ledger/entries?view=${view}&product_line=${encodeURIComponent(picked?.product_line ?? '')}&landed_quarter=${encodeURIComponent(picked?.landed_quarter ?? '')}`,
-        { signal },
-      ),
+    queryFn: ({ signal }) => {
+      const quarter = encodeURIComponent(picked?.landed_quarter ?? '');
+      const path =
+        grain === 'customer'
+          ? `/api/v1/budgets/ledger/entries?view=${view}&grain=customer&customer_id=${picked?.customer_id ?? ''}&landed_quarter=${quarter}`
+          : `/api/v1/budgets/ledger/entries?view=${view}&product_line=${encodeURIComponent(picked?.product_line ?? '')}&landed_quarter=${quarter}`;
+      return apiGet<{ items: EntryRow[] }>(path, { signal });
+    },
   });
-  const positionCols = useMemo<ColDef<PositionRow>[]>(
-    () => [
-      { field: 'line_label', headerName: 'Product line', flex: 1 },
+  const positionCols = useMemo<ColDef<PositionRow>[]>(() => {
+    const name: ColDef<PositionRow> = {
+      colId: 'grain',
+      headerName: grain === 'customer' ? 'Customer' : 'Product line',
+      flex: 1,
+      valueGetter: (params) =>
+        grain === 'customer'
+          ? params.data?.customer_label || 'No customer'
+          : params.data?.line_label || 'No product line',
+    };
+    const amounts: ColDef<PositionRow>[] = [
       { field: 'quarter_label', headerName: 'Quarter', width: 150 },
       { field: 'bucket', headerName: 'Bucket', width: 130, valueGetter: (params) => (params.data?.bucket === 'unplanned' ? 'Unplanned' : 'Planned') },
       { field: 'reserved', headerName: 'Reserved', width: 120 },
@@ -90,18 +104,19 @@ export default function BudgetsPage() {
       { field: 'released', headerName: 'Released', width: 120 },
       { field: 'paid', headerName: 'Paid', width: 110 },
       { field: 'remaining', headerName: 'Remaining', width: 130 },
-      {
-        colId: 'cap',
-        headerName: 'Cap',
-        width: 110,
-        valueGetter: (params) => {
-          if (params.data?.cap == null) return 'No cap';
-          return params.data.over_cap ? `${params.data.cap} · Over cap` : String(params.data.cap);
-        },
+    ];
+    if (grain !== 'line') return [name, ...amounts];
+    const cap: ColDef<PositionRow> = {
+      colId: 'cap',
+      headerName: 'Cap',
+      width: 110,
+      valueGetter: (params) => {
+        if (params.data?.cap == null) return 'No cap';
+        return params.data.over_cap ? `${params.data.cap} · Over cap` : String(params.data.cap);
       },
-    ],
-    [],
-  );
+    };
+    return [name, ...amounts, cap];
+  }, [grain]);
   const entryCols = useMemo<ColDef<EntryRow>[]>(
     () => [
       { field: 'created_at', headerName: 'When', flex: 1 },
@@ -124,12 +139,12 @@ export default function BudgetsPage() {
   const overRemaining =
     sourceRemaining != null && Number.isFinite(amountNumber) && amountNumber > sourceRemaining + 0.0001;
   useEffect(() => {
-    if (!picked) return;
+    if (!picked || grain !== 'line') return;
     setFromLine(picked.product_line);
     setFromQuarter(picked.landed_quarter);
     setCapLine(picked.product_line);
     setCapQuarter(picked.landed_quarter);
-  }, [picked]);
+  }, [picked, grain]);
   const move = useMutation({
     mutationFn: () =>
       apiPost<{ written: number }>('/api/v1/budgets/ledger/transfer', {
@@ -165,10 +180,12 @@ export default function BudgetsPage() {
     <FundingChrome>
       <Stack spacing={2} sx={{ mt: 2 }}>
         <Typography variant="body2" color="text.secondary">
-          Product line by quarter. The campaign view is the budget. Non-campaign is the other reserve and does not
-          reduce remaining. Pending is proposed-case support. Unplanned means consumed with no reserve. A blank
-          quarter is Unknown quarter. A move writes two transfer rows and does not delete anything. A cap is a
-          ceiling on that line and quarter. It flags when spend is over it and does not change remaining.
+          Product line by quarter is the budget limit. Customer by quarter is the same ledger, summed across
+          product lines. The campaign view is the budget. Non-campaign is the other reserve and does not reduce
+          remaining. Pending is proposed-case support. Unplanned means consumed with no reserve. A blank quarter is
+          Unknown quarter. A move writes two transfer rows and does not delete anything. A cap is a ceiling on a
+          product line and quarter. It flags when spend is over it and does not change remaining. Caps are not set
+          from the customer view.
           {position.data?.portfolio_cap_usd == null
             ? ' No portfolio cap is set.'
             : ` Portfolio cap is ${position.data.portfolio_cap_usd}.`}{' '}
@@ -193,6 +210,21 @@ export default function BudgetsPage() {
           <ToggleButtonGroup
             exclusive
             size="small"
+            value={grain}
+            onChange={(_event, next: 'line' | 'customer' | null) => {
+              if (next) {
+                setGrain(next);
+                setPicked(null);
+              }
+            }}
+            aria-label="Budget grain"
+          >
+            <ToggleButton value="line">Product line</ToggleButton>
+            <ToggleButton value="customer">Customer</ToggleButton>
+          </ToggleButtonGroup>
+          <ToggleButtonGroup
+            exclusive
+            size="small"
             value={bucket}
             onChange={(_event, next: 'all' | 'unplanned' | 'unknown' | null) => {
               if (next) setBucket(next);
@@ -204,7 +236,7 @@ export default function BudgetsPage() {
             <ToggleButton value="unknown">Unknown quarter</ToggleButton>
           </ToggleButtonGroup>
         </Stack>
-        {view === 'campaign' ? (
+        {view === 'campaign' && grain === 'line' ? (
           <Stack spacing={1} component="form" aria-label="Move campaign reserve" onSubmit={(event) => {
             event.preventDefault();
             move.mutate();
@@ -233,7 +265,7 @@ export default function BudgetsPage() {
             ) : null}
           </Stack>
         ) : null}
-        {view === 'campaign' ? (
+        {view === 'campaign' && grain === 'line' ? (
           <Stack spacing={1} aria-label="Set a cap">
             <Typography variant="subtitle2">Set a cap</Typography>
             <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
@@ -281,7 +313,10 @@ export default function BudgetsPage() {
         {picked ? (
           <Stack spacing={1}>
             <Typography variant="subtitle2">
-              {picked.line_label || 'No product line'} · {picked.quarter_label || 'Unknown quarter'}
+              {grain === 'customer'
+                ? picked.customer_label || 'No customer'
+                : picked.line_label || 'No product line'}{' '}
+              · {picked.quarter_label || 'Unknown quarter'}
             </Typography>
             <EnterpriseDataGrid<EntryRow>
               rowData={entries.data?.items ?? []}

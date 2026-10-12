@@ -8,7 +8,7 @@
 
 **Closed 2026-10-12:** N-0075, N-0086, N-0078. The set-password invite was sent to warren_eliason@asus.com as admin. The mail has no password. admin@local and viewer@local were not retired. N-0086 is VERIFIED_WITH_LIMITATIONS (same session, not a different model). N-0078 checks the latest stored snapshot for Takealot and Evetech. Amazon is No data. Search position is deferred. N-0076 and N-0085 are still proposed.
 
-**N-0079 in progress:** `20261012_0034` is on cip. An admin can set a cap per product line and quarter. The latest cap row is the ceiling. A later null row clears it. A cap does not change remaining. Spend over the cap is labelled Over cap and does not block. Live rows still show No cap. Campaign, Non-campaign, and Move campaign reserve are unchanged. Non-campaign reserves are written on the next lineup approval; none are stored yet. The node is not complete. Web build `tHaYjrXJ0HGPEppSjhlFM`.
+**N-0079 in progress:** `20261012_0034` is on cip. Budgets can show the same ledger by product line or by customer and quarter. Caps, moves, and the limit stay on the product line. Live rows still show No cap. Non-campaign reserves are written on the next lineup approval; none are stored yet. Paid link coverage is not shown. The node is not complete. Web build `gFeEsnEHEn-DP1-kyTS4n`.
 
 **Branch:** `feat/ns-2-brief-nav-collapse`. Do not push main.
 

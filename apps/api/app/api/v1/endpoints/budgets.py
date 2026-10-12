@@ -15,15 +15,31 @@ router = APIRouter()
 
 
 @router.get("/ledger")
-async def budget_ledger_position(view: str = "campaign", db: AsyncSession = Depends(get_db)):
-    """Product line by quarter. Sums of the append-only ledger."""
-    from app.services.budget_ledger import position_rows
+async def budget_ledger_position(
+    view: str = "campaign",
+    grain: str = "line",
+    db: AsyncSession = Depends(get_db),
+):
+    """Product line by quarter, or the same rows summed by customer and quarter."""
+    from app.services.budget_ledger import customer_position_rows, position_rows
 
     chosen = view if view in {"campaign", "non_campaign"} else "campaign"
+    chosen_grain = grain if grain in {"line", "customer"} else "line"
     try:
-        rows = await db.run_sync(lambda sync, selected=chosen: position_rows(sync, view=selected))
+        if chosen_grain == "customer":
+            rows = await db.run_sync(
+                lambda sync, selected=chosen: customer_position_rows(sync, view=selected)
+            )
+        else:
+            rows = await db.run_sync(lambda sync, selected=chosen: position_rows(sync, view=selected))
     except Exception:
-        return {"data_unavailable": True, "items": [], "portfolio_cap_usd": None, "view": chosen}
+        return {
+            "data_unavailable": True,
+            "items": [],
+            "portfolio_cap_usd": None,
+            "view": chosen,
+            "grain": chosen_grain,
+        }
     from app.services.cpor.budget_reapproval import money_ceiling_usd
 
     return {
@@ -31,6 +47,7 @@ async def budget_ledger_position(view: str = "campaign", db: AsyncSession = Depe
         "items": rows,
         "portfolio_cap_usd": money_ceiling_usd(),
         "view": chosen,
+        "grain": chosen_grain,
     }
 
 
@@ -39,6 +56,8 @@ async def budget_ledger_entries(
     product_line: str = "",
     landed_quarter: str = "",
     view: str = "campaign",
+    grain: str = "line",
+    customer_id: str = "",
     db: AsyncSession = Depends(get_db),
 ):
     from sqlalchemy import or_, select
@@ -46,9 +65,21 @@ async def budget_ledger_entries(
     from app.models.budget_ledger import BudgetLedgerEntry
 
     chosen = view if view in {"campaign", "non_campaign"} else "campaign"
+    chosen_grain = grain if grain in {"line", "customer"} else "line"
     stmt = select(BudgetLedgerEntry).order_by(BudgetLedgerEntry.id.desc()).limit(500)
-    stmt = stmt.where(BudgetLedgerEntry.product_line == product_line)
     stmt = stmt.where(BudgetLedgerEntry.landed_quarter == landed_quarter)
+    if chosen_grain == "customer":
+        raw_customer = customer_id.strip()
+        if raw_customer == "":
+            stmt = stmt.where(BudgetLedgerEntry.customer_id.is_(None))
+        else:
+            try:
+                stmt = stmt.where(BudgetLedgerEntry.customer_id == int(raw_customer))
+            except ValueError:
+                return {"data_unavailable": False, "items": []}
+        stmt = stmt.where(BudgetLedgerEntry.entry_type != "cap")
+    else:
+        stmt = stmt.where(BudgetLedgerEntry.product_line == product_line)
     if chosen == "non_campaign":
         stmt = stmt.where(BudgetLedgerEntry.source_tag == "non_campaign")
     else:

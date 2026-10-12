@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.models.budget_ledger import ENTRY_TYPES, BudgetLedgerEntry
 from app.models.cpor import CporCase, CporCaseLine
-from app.models.dimensions import DimProduct
+from app.models.dimensions import DimCustomer, DimProduct
 
 
 def balances_from_amounts(rows: list[tuple[str, float]]) -> dict[str, float]:
@@ -311,6 +311,123 @@ def position_rows(session: Session, *, view: str = "campaign") -> list[dict[str,
         return annotate_buckets(positioned)
     caps = latest_line_caps(session)
     return annotate_buckets(attach_caps(positioned, caps or []))
+
+
+def _customer_label(customer_id: int | None, names: dict[int, str]) -> str:
+    if customer_id is None:
+        return "No customer"
+    name = names.get(int(customer_id))
+    return name if name else "Unnamed customer"
+
+
+def fold_customer_amounts(
+    rows: list[tuple[int | None, str, str, float]],
+) -> dict[tuple[int | None, str], list[tuple[str, float]]]:
+    """Sum every product line into one customer and quarter. Cap rows are not money."""
+    grouped: dict[tuple[int | None, str], list[tuple[str, float]]] = {}
+    for customer_id, quarter, entry_type, amount in rows:
+        if entry_type == "cap":
+            continue
+        key = (customer_id, str(quarter or ""))
+        grouped.setdefault(key, []).append((entry_type, float(amount or 0)))
+    return grouped
+
+
+def assemble_customer_position(
+    grouped: dict[tuple[int | None, str], list[tuple[str, float]]],
+    pending: list[tuple[int | None, str, float]],
+    names: dict[int, str],
+) -> list[dict[str, Any]]:
+    """Customer by quarter. Pending does not change remaining. No line cap is applied."""
+    index: dict[tuple[int | None, str], dict[str, Any]] = {}
+    for (customer_id, quarter), pairs in grouped.items():
+        key = (customer_id, str(quarter or ""))
+        index[key] = {
+            "customer_id": customer_id,
+            "customer_label": _customer_label(customer_id, names),
+            "product_line": "",
+            "landed_quarter": key[1],
+            **balances_from_amounts(pairs),
+            "pending": 0.0,
+            "cap": None,
+            "over_cap": False,
+        }
+    for customer_id, quarter, amount in pending:
+        key = (customer_id, str(quarter or ""))
+        item = index.get(key)
+        if item is None:
+            item = {
+                "customer_id": customer_id,
+                "customer_label": _customer_label(customer_id, names),
+                "product_line": "",
+                "landed_quarter": key[1],
+                **balances_from_amounts([]),
+                "pending": 0.0,
+                "cap": None,
+                "over_cap": False,
+            }
+            index[key] = item
+        item["pending"] = round(float(amount or 0), 4)
+    ordered = sorted(
+        index.values(),
+        key=lambda item: (
+            str(item["customer_label"]).lower(),
+            str(item["landed_quarter"]),
+            -1 if item["customer_id"] is None else int(item["customer_id"]),
+        ),
+    )
+    return annotate_buckets(ordered)
+
+
+def proposed_pending_by_customer(session: Session) -> list[tuple[int | None, str, float]]:
+    """Proposed-case support by customer and landed quarter. Draft and cancelled are excluded."""
+    quarter_expr = func.coalesce(CporCaseLine.pod_quarter, "")
+    stmt = (
+        select(CporCase.customer_id, quarter_expr, func.coalesce(func.sum(CporCaseLine.ttl_support_usd), 0))
+        .select_from(CporCaseLine)
+        .join(CporCase, CporCase.id == CporCaseLine.case_id)
+        .where(CporCase.status == "proposed", CporCaseLine.ttl_support_usd.is_not(None))
+        .group_by(CporCase.customer_id, quarter_expr)
+    )
+    return [
+        (None if customer_id is None else int(customer_id), str(quarter or ""), float(amount or 0))
+        for customer_id, quarter, amount in session.execute(stmt).all()
+    ]
+
+
+def customer_position_rows(session: Session, *, view: str = "campaign") -> list[dict[str, Any]]:
+    """Same ledger, summed by customer and quarter. Caps stay on the product-line view."""
+    chosen = view if view in {"campaign", "non_campaign"} else "campaign"
+    stmt = select(
+        BudgetLedgerEntry.customer_id,
+        BudgetLedgerEntry.landed_quarter,
+        BudgetLedgerEntry.entry_type,
+        func.coalesce(func.sum(BudgetLedgerEntry.amount_usd), 0),
+    ).where(BudgetLedgerEntry.entry_type != "cap")
+    if chosen == "non_campaign":
+        stmt = stmt.where(BudgetLedgerEntry.source_tag == "non_campaign")
+    else:
+        stmt = stmt.where(
+            or_(BudgetLedgerEntry.source_tag.is_(None), BudgetLedgerEntry.source_tag != "non_campaign")
+        )
+    stmt = stmt.group_by(
+        BudgetLedgerEntry.customer_id,
+        BudgetLedgerEntry.landed_quarter,
+        BudgetLedgerEntry.entry_type,
+    )
+    raw = [
+        (None if customer_id is None else int(customer_id), str(quarter or ""), str(entry_type), float(amount or 0))
+        for customer_id, quarter, entry_type, amount in session.execute(stmt).all()
+    ]
+    grouped = fold_customer_amounts(raw)
+    pending = [] if chosen == "non_campaign" else proposed_pending_by_customer(session)
+    ids = {customer_id for customer_id, _quarter in grouped if customer_id is not None}
+    ids.update(customer_id for customer_id, _quarter, _amount in pending if customer_id is not None)
+    names: dict[int, str] = {}
+    if ids:
+        name_rows = session.execute(select(DimCustomer.id, DimCustomer.name).where(DimCustomer.id.in_(ids))).all()
+        names = {int(customer_id): str(name) for customer_id, name in name_rows}
+    return assemble_customer_position(grouped, pending, names)
 
 
 def latest_line_caps(session: Session) -> list[tuple[str, str, float | None]] | None:

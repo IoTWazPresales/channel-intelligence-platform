@@ -2,9 +2,11 @@
 
 from app.services.budget_ledger import (
     annotate_buckets,
+    assemble_customer_position,
     attach_caps,
     balances_from_amounts,
     current_cap,
+    fold_customer_amounts,
     include_in_view,
     plan_transfer,
     position_with_pending,
@@ -155,3 +157,35 @@ def test_transfer_pair_sums_to_zero_and_warns_when_over_remaining():
         assert "different" in str(exc)
     else:
         raise AssertionError("same cell must be refused")
+
+
+def test_customer_quarter_sums_product_lines_and_skips_caps():
+    grouped = fold_customer_amounts(
+        [
+            (7, "2026Q2", "consume", 30),
+            (7, "2026Q2", "consume", 50),
+            (7, "2026Q2", "cap", 10),
+            (None, "2026Q2", "consume", 5),
+        ]
+    )
+    rows = assemble_customer_position(
+        grouped,
+        [(7, "2026Q2", 12), (9, "2026Q1", 4)],
+        {7: "Takealot"},
+    )
+    by_key = {(row["customer_id"], row["landed_quarter"]): row for row in rows}
+    takealot = by_key[(7, "2026Q2")]
+    assert takealot["consumed"] == 80
+    assert takealot["remaining"] == -80
+    assert takealot["pending"] == 12
+    assert takealot["cap"] is None
+    assert takealot["over_cap"] is False
+    assert takealot["customer_label"] == "Takealot"
+    assert takealot["bucket"] == "unplanned"
+    assert by_key[(None, "2026Q2")]["customer_label"] == "No customer"
+    assert by_key[(None, "2026Q2")]["consumed"] == 5
+    unnamed = by_key[(9, "2026Q1")]
+    assert unnamed["customer_label"] == "Unnamed customer"
+    assert unnamed["pending"] == 4
+    assert unnamed["remaining"] == 0
+    assert unnamed["cap"] is None
