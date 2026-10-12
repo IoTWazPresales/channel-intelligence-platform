@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 1301
+**Snapshot revision:** 2154
 
 ## Outcome (verbatim)
 
@@ -57,40 +57,78 @@ _none_
 | N-0033 | Stage 3.1/3.5: session auth gate on every API route, production web on loopback, Cloudflare quick tunnel for a small pilot | feature | complete | complete | yes |  | full loop |
 | N-0034 | Stage 2.4 + grid parity | feature | complete | complete | yes |  | full loop |
 | N-0035 | Stage 2.2/2.3: grid-scoped 13px type token and density 40/40 (ran outside the ledger) | feature | complete | complete | yes | yes | full loop |
-| N-0036 | BACKLOG-206: API binds loopback, not 0.0.0.0:8001 | feature | blocked | blocked | yes |  | full loop |
+| N-0036 | BACKLOG-206: API binds loopback, not 0.0.0.0:8001 | feature | complete | complete | yes |  | full loop |
 | N-0037 | Stage 3.4: login rate limit and lockout | feature | complete | complete | yes |  | full loop |
 | N-0038 | Stage 3.2: CPOR role checks on the existing roles (BACKLOG-136/141) | feature | complete | complete | yes |  | full loop |
 | N-0039 | Listing links open the real product page (Market & Listings bug) | feature | complete | complete | yes |  | full loop |
 | N-0040 | D-g: sellable BU grain is every dim_product.product_line (five-line assumption sweep) | feature | complete | complete | yes |  | full loop |
 | N-0041 | D-b: shared grid search (workbench-ui) on Tier A grids | feature | complete | complete | yes |  | full loop |
 | N-0042 | D-b: shared saved grid views (workbench-ui) | feature | complete | complete | yes |  | full loop |
-| N-0043 | D-b: shared grid export (workbench-ui, community AG Grid) | feature | proposed | proposed | yes |  | full loop |
+| N-0043 | D-b: shared grid export (workbench-ui, community AG Grid) | feature | complete | complete | yes |  | full loop |
 | N-0044 | D-c + rest of 2.7: desk absorbs BACKLOG-202 pieces, CporCaseWorkspace retires, two orphan panels ruled | feature | complete | complete | yes |  | full loop |
 | N-0045 | D-d: archive untracked files outside the repo; commit only real source | feature | blocked | blocked | yes |  | full loop |
-| N-0046 | BACKLOG-143: worktrees and leftover-state hygiene | feature | blocked | blocked | yes |  | full loop |
+| N-0046 | BACKLOG-143: worktrees and leftover-state hygiene | feature | complete | complete | yes |  | full loop |
 | N-0047 | Stage 4.1: dim_product inverted launch/retire windows (BACKLOG-034), proven on a clone | feature | complete | complete | yes |  | full loop |
 | N-0048 | Stage 4.2: cpor_case status vs workflow_status drift (BACKLOG-139), proven on a clone | feature | complete | complete | yes |  | full loop |
 | N-0049 | Stage 4.3: MAC check reads customer sell-through, not the empty inventory fact (BACKLOG-135) | feature | complete | complete | yes |  | full loop |
 | N-0050 | Stage 4.4: cpor_case_line week-aligned window columns (BACKLOG-137), migration proven on cip_test only | feature | complete | complete | yes |  | full loop |
 | N-0051 | Stage 3.7: import completion asserts no merged-id leftovers (BACKLOG-133/134) | feature | complete | complete | yes |  | full loop |
-| N-0052 | Stage 3.6: ops safety net (restore proven on a clone, alerting, resolver fails loudly) | feature | proposed | proposed | yes |  | full loop |
+| N-0052 | Stage 3.6: ops safety net (restore proven on a clone, alerting, resolver fails loudly) | feature | complete | complete | yes |  | full loop |
 | N-0053 | Stage 2.5: line identifier 'both' as two columns | feature | complete | complete | yes |  | full loop |
 | N-0054 | Stage 2.9: design-lab as fixture skin over production primitives (BACKLOG-161/158) | feature | blocked | blocked | yes |  | full loop |
-| N-0055 | Stage 3.3: tenant scoping sweep | feature | proposed | proposed | yes |  | full loop |
-| N-0056 | Stage 5: analytics delivery (export, event-triggered refresh, calendar delivery, vintage on face) | feature | proposed | proposed | yes |  | full loop |
-| N-0057 | Stage 6.1/6.2: lineup authoring workbench and the B2 end-to-end PM run (BACKLOG-190) | feature | proposed | proposed | yes |  | full loop |
-| N-0058 | Stage 6.3/6.5: unified lineup import 1H fan-out and lineup data rules (BACKLOG-103/105/055/065) | feature | proposed | proposed | yes |  | full loop |
-| N-0059 | Stage 6.4: bulk-backfill completion UX (BACKLOG-060) | feature | proposed | proposed | yes |  | full loop |
+| N-0055 | Stage 3.3: tenant scoping sweep | feature | complete | complete | yes |  | full loop |
+| N-0056 | Stage 5: analytics delivery (export, event-triggered refresh, calendar delivery, vintage on face) | feature | complete | complete | yes |  | full loop |
+| N-0057 | Stage 6.1/6.2: lineup authoring workbench and the B2 end-to-end PM run (BACKLOG-190) | feature | complete | complete | yes |  | full loop |
+| N-0058 | Stage 6.3/6.5: unified lineup import 1H fan-out and lineup data rules (BACKLOG-103/105/055/065) | feature | complete | complete | yes |  | full loop |
+| N-0059 | Stage 6.4: bulk-backfill completion UX (BACKLOG-060) | feature | complete | complete | yes |  | full loop |
 | N-0060 | Historical lineup backfill (years before 2025 Q1) | feature | blocked | blocked | yes |  | full loop |
-| N-0061 | Stage 7.1-7.3: promotion intelligence v2 (listing/competitor evidence, observed cover, comparable scope) | feature | proposed | proposed | yes |  | full loop |
-| N-0062 | Stage 7.5: supply Arrived state and plan-unit PO coverage (BACKLOG-178/179) | feature | proposed | proposed | yes |  | full loop |
-| N-0063 | Stage 7.4: uplift from settled claims (BACKLOG-185), data-gated | feature | blocked | blocked | yes |  | full loop |
-| N-0064 | D-h: planning accuracy, deal-stock landing and PM planning bias on Plan vs Executed (chartered, not built) | feature | proposed | proposed | yes |  | full loop |
-| N-0065 | BU entitlements: user-to-product-line mapping over the D-g lines | feature | blocked | blocked | yes |  | full loop |
-| N-0066 | Naming and polish pass across containers, with outside buyers in mind | feature | proposed | proposed | yes |  | full loop |
-| N-0067 | Light/dark theme completion | feature | proposed | proposed | yes |  | full loop |
-| N-0068 | Multi-catalogue column sets (BACKLOG-198) | feature | blocked | blocked | yes |  | full loop |
+| N-0061 | Stage 7.1-7.3: promotion intelligence v2 (listing/competitor evidence, observed cover, comparable scope) | feature | complete | complete | yes |  | full loop |
+| N-0062 | Stage 7.5: supply Arrived state and plan-unit PO coverage (BACKLOG-178/179) | feature | complete | complete | yes |  | full loop |
+| N-0063 | Stage 7.4: uplift from settled claims (BACKLOG-185), data-gated | feature | deferred | deferred | yes |  | full loop |
+| N-0064 | D-h: planning accuracy, deal-stock landing and PM planning bias on Plan vs Executed (chartered, not built) | feature | complete | complete | yes |  | full loop |
+| N-0065 | BU entitlements: user-to-product-line mapping over the D-g lines | feature | complete | complete | yes |  | full loop |
+| N-0066 | Naming and polish pass across containers, with outside buyers in mind | feature | complete | complete | yes |  | full loop |
+| N-0067 | Light/dark theme completion | feature | complete | complete | yes |  | full loop |
+| N-0068 | Multi-catalogue column sets (BACKLOG-198) | feature | complete | complete | yes |  | full loop |
 | N-0069 | Stage 8: steward and import engine follow-ons (trigger-gated umbrella) | feature | proposed | proposed | yes |  | full loop |
 | N-0070 | Stage 10: multi-tenant productisation (P6) | feature | proposed | proposed | yes |  | full loop |
-| N-0071 | Stage 4.6: open->shipped fact double-count policy (BACKLOG-062), undecided | feature | blocked | blocked | yes |  | full loop |
+| N-0071 | Stage 4.6: open->shipped fact double-count policy (BACKLOG-062), undecided | feature | complete | complete | yes |  | full loop |
 | N-0072 | Stage 4.7: ACZA workbook non-operational sheets allowlist (BACKLOG-046), undecided | feature | blocked | blocked | yes |  | full loop |
+| N-0073 | Always-on stack on this PC: one supervisor starts and restarts Redis, worker+beat, API, web and the Cloudflare tunnel at logon | feature | complete | complete | yes |  | full loop |
+| N-0074 | Stable public address: named Cloudflare tunnel on a domain Warren owns (replaces the changing trycloudflare address) | feature | deferred | deferred | yes |  | full loop |
+| N-0075 | Account invite email: link to the system plus a first-login password | feature | complete | complete | yes |  | full loop |
+| N-0076 | Listing intelligence v1: price-change alert on every observed change, and promotion late-activation / early-deactivation detection (spec section 9.6) | feature | proposed | proposed | yes |  | full loop |
+| N-0077 | Competitor listing monitoring and price position: competitor product pages captured and tracked by CIP itself, suggested matches, impact on our price and sell-out (spec section 9.9) | feature | proposed | proposed | yes |  | full loop |
+| N-0078 | Listing quality and SEO across all reporting customers: cross-retailer parity, content floor, spec accuracy, freshness, sell-through beside quality, search position | feature | complete | complete | yes |  | full loop |
+| N-0079 | Budget ledger: derived reserve, commitment, consumption, payment and reconciliation, with transfers and optional caps (spec section 9.7) | feature | complete | complete | yes |  | full loop |
+| N-0080 | One profit definition: PM controlled cost, DAP and landed cost kept apart on lineup and CPOR margin (spec section 9.3) | feature | blocked | blocked | yes |  | full loop |
+| N-0081 | Distributor channel and New-DAP price protection: rebate and disti margin waterfall steps, DSI SOH cost capture, re-invoice (spec section 9.1) | feature | blocked | blocked | yes |  | full loop |
+| N-0082 | Customer approval link for settlement sign-off (spec section 9.2; trigger met: 211 cases settled manually) | feature | proposed | proposed | yes |  | full loop |
+| N-0083 | FX rate table and ROE governance: daily rates actually stored, case ROE drawn from the table (spec section 9.4) | feature | proposed | proposed | yes |  | full loop |
+| N-0084 | Price elasticity: what price a product would move at (spec section 9.8), data-gated on settled claims | feature | proposed | proposed | yes |  | full loop |
+| N-0085 | Listing coverage for all eight reporting customers: find, confirm and watch our product pages at Game, Makro, Computer Mania, Incredible Connection, HiFi Corp, Evetech, Takealot and Amazon | feature | proposed | proposed | no |  | full loop |
+| N-0086 | Security hardening before 24/7 exposure: proxy login-throttle address, steward-write role checks, pilot passwords | feature | complete | complete | yes |  | full loop |
+| N-0087 | Honest surfaces: pricing page stops creating products, stub routes and stub import templates resolved, legacy promotion scaffold and dead settlement code retired | feature | complete | complete | yes |  | full loop |
+| N-0088 | Promotion planner: suggested line quantities, and plans exported in the customer's own workbook layout | feature | proposed | proposed | yes |  | full loop |
+| N-0089 | Operations and data health: data-health page, vacuum runbook, CST apply progress, retry coverage, background-task parity, visible evidence-read failures | feature | proposed | proposed | yes |  | full loop |
+| N-0090 | Alert on late and missing customer sell-through reports | feature | complete | complete | yes |  | full loop |
+| N-0091 | Shipment receipt page and shipment change timeline | feature | complete | complete | yes |  | full loop |
+| N-0092 | Platform audit log for admin, user, settings and case-state actions | feature | complete | complete | yes |  | full loop |
+| N-0093 | Pin saved reports to Overview | feature | complete | complete | yes |  | full loop |
+| N-0094 | Product roadmap planning view: lifecycle phase and replacement candidates | feature | proposed | proposed | yes |  | full loop |
+| N-0095 | Customer merge completion: loser-name alias seal at confirm, resolvers follow merged_into, related-name worklist and repair scripts (BACKLOG-081 + 083, shipped as a pair) | feature | proposed | proposed | yes |  | full loop |
+| N-0096 | Test, CI and record honesty: self-seeding tests, live API in CI, backlog and context drift corrected | feature | proposed | proposed | yes |  | full loop |
+| N-0097 | Lineup follow-ons: PF quantity columns, workbench identifier split, supersession hardening, margin amounts | feature | proposed | proposed | yes |  | full loop |
+| N-0098 | Shipment evidence Plan D: stop the dual write, then drop redundant columns (BACKLOG-057 D4, 058 D5) | feature | proposed | proposed | yes |  | full loop |
+| N-0099 | Independent second-look verification of self-verified closed nodes before the branch goes to main | feature | proposed | proposed | yes |  | full loop |
+| N-0100 | CPOR duty separation: KAM, PM, Ken and Wayne responsibilities on cases (BACKLOG-136) | feature | proposed | proposed | yes |  | full loop |
+| N-0101 | N-0085 U1: listing polling on under the supervisor, restock seen again, dead-link back-off, per-site 403/429 pause, run time limit | feature | complete | complete | yes |  | full loop |
+| N-0102 | N-0085 U2: per-retailer page reader framework (Takealot, Evetech, Amazon), N-0078 fields, registry migrations, discovery for Takealot and Evetech | feature | proposed | proposed | yes |  | full loop |
+| N-0103 | N-0085 U6: Proposed listings steward worklist with bulk confirm, and a per-customer Coverage lens | feature | proposed | proposed | yes |  | full loop |
+| N-0104 | N-0085 U4: Computer Mania reader and discovery (Shopify search, sku/barcode corroboration) | feature | proposed | proposed | yes |  | full loop |
+| N-0105 | N-0085 U3: Game and Makro readers and discovery (Makro site search per D-0063) | feature | proposed | proposed | yes |  | full loop |
+| N-0106 | N-0085 U5: Incredible Connection and HiFi Corp shared reader and discovery | feature | proposed | proposed | yes |  | full loop |
+| N-0107 | Supervisor recognises a network that blocks the tunnel port and stops churning the quick tunnel | feature | complete | complete | yes |  | full loop |
+| N-0108 | Brief and Cover speed: stop sorting the whole weeks-of-cover table to keep the latest rows | feature | proposed | proposed | yes |  | full loop |
+| N-0109 | Reports, dashboards and KPI tiles on the design lab system: one chart system, one KPI tile, one table style (build to mockup-report-system) | feature | complete | complete | yes |  | full loop |
+| N-0110 | Customer sell-through stock gap: the customer report is on-hand, CIP flags the difference | feature | proposed | proposed | yes |  | full loop |
