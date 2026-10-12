@@ -8,7 +8,7 @@
 
 **Closed 2026-10-12:** N-0075, N-0086, N-0078. The set-password invite was sent to warren_eliason@asus.com as admin. The mail has no password. admin@local and viewer@local were not retired. N-0086 is VERIFIED_WITH_LIMITATIONS (same session, not a different model). N-0078 checks the latest stored snapshot for Takealot and Evetech. Amazon is No data. Search position is deferred. N-0076 and N-0085 are still proposed. N-0079 is blocked: the migration file `20261012_0033` is not applied. `DATABASE_URL_SYNC_MIGRATE` is unset and the older postgres login was rejected, so the clone was not created and the historical load did not run. The Budgets page says the ledger is not available.
 
-**HEAD:** `dac4f2ce` on `feat/ns-2-brief-nav-collapse` before this commit. Do not push main.
+**HEAD:** `aef755c6` on `feat/ns-2-brief-nav-collapse`. Do not push main.
 
 **Alembic (code):** `20261012_0033` adds append-only `budget_ledger_entry`. Not applied. cip is still `20261011_0032`. `pricing_unknown_sku` remains. Role `cip` is not the table owner. Do not upgrade cip until a superuser migrate URL is set and the historical load has passed on a clone.
 
