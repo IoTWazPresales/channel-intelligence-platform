@@ -30,6 +30,7 @@ type PositionRow = {
   remaining: number;
   pending: number;
   cap: number | null;
+  over_cap?: boolean;
   quarter_label: string;
   line_label: string;
   bucket: 'planned' | 'unplanned';
@@ -57,6 +58,9 @@ export default function BudgetsPage() {
   const [toQuarter, setToQuarter] = useState('');
   const [amount, setAmount] = useState('');
   const [confirmOver, setConfirmOver] = useState(false);
+  const [capLine, setCapLine] = useState('');
+  const [capQuarter, setCapQuarter] = useState('');
+  const [capAmount, setCapAmount] = useState('');
   const position = useQuery({
     queryKey: ['budgets', 'ledger', view],
     queryFn: ({ signal }) =>
@@ -90,7 +94,10 @@ export default function BudgetsPage() {
         colId: 'cap',
         headerName: 'Cap',
         width: 110,
-        valueGetter: (params) => (params.data?.cap == null ? 'No cap' : String(params.data.cap)),
+        valueGetter: (params) => {
+          if (params.data?.cap == null) return 'No cap';
+          return params.data.over_cap ? `${params.data.cap} · Over cap` : String(params.data.cap);
+        },
       },
     ],
     [],
@@ -120,6 +127,8 @@ export default function BudgetsPage() {
     if (!picked) return;
     setFromLine(picked.product_line);
     setFromQuarter(picked.landed_quarter);
+    setCapLine(picked.product_line);
+    setCapQuarter(picked.landed_quarter);
   }, [picked]);
   const move = useMutation({
     mutationFn: () =>
@@ -138,6 +147,19 @@ export default function BudgetsPage() {
       await queryClient.invalidateQueries({ queryKey: ['budgets'] });
     },
   });
+  const capNumber = Number(capAmount);
+  const setCap = useMutation({
+    mutationFn: (next: number | null) =>
+      apiPost<{ cap: number | null }>('/api/v1/budgets/ledger/cap', {
+        product_line: capLine,
+        landed_quarter: capQuarter,
+        amount_usd: next,
+      }),
+    onSuccess: async () => {
+      setCapAmount('');
+      await queryClient.invalidateQueries({ queryKey: ['budgets'] });
+    },
+  });
 
   return (
     <FundingChrome>
@@ -145,7 +167,8 @@ export default function BudgetsPage() {
         <Typography variant="body2" color="text.secondary">
           Product line by quarter. The campaign view is the budget. Non-campaign is the other reserve and does not
           reduce remaining. Pending is proposed-case support. Unplanned means consumed with no reserve. A blank
-          quarter is Unknown quarter. A move writes two transfer rows and does not delete anything.
+          quarter is Unknown quarter. A move writes two transfer rows and does not delete anything. A cap is a
+          ceiling on that line and quarter. It flags when spend is over it and does not change remaining.
           {position.data?.portfolio_cap_usd == null
             ? ' No portfolio cap is set.'
             : ` Portfolio cap is ${position.data.portfolio_cap_usd}.`}{' '}
@@ -206,6 +229,31 @@ export default function BudgetsPage() {
             {move.isError ? (
               <Typography variant="body2" color="error" role="alert">
                 {move.error instanceof Error ? move.error.message : 'The move was not written.'}
+              </Typography>
+            ) : null}
+          </Stack>
+        ) : null}
+        {view === 'campaign' ? (
+          <Stack spacing={1} aria-label="Set a cap">
+            <Typography variant="subtitle2">Set a cap</Typography>
+            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+              <TextField size="small" label="Cap product line" value={capLine} onChange={(event) => setCapLine(event.target.value)} />
+              <TextField size="small" label="Cap quarter" value={capQuarter} onChange={(event) => setCapQuarter(event.target.value)} />
+              <TextField size="small" label="Cap amount USD" value={capAmount} onChange={(event) => setCapAmount(event.target.value)} inputProps={{ inputMode: 'decimal' }} />
+              <Button
+                variant="outlined"
+                disabled={setCap.isPending || capAmount.trim() === '' || Number.isNaN(capNumber)}
+                onClick={() => setCap.mutate(capNumber)}
+              >
+                Set cap
+              </Button>
+              <Button variant="text" disabled={setCap.isPending} onClick={() => setCap.mutate(null)}>
+                Clear cap
+              </Button>
+            </Stack>
+            {setCap.isError ? (
+              <Typography variant="body2" color="error" role="alert">
+                {setCap.error instanceof Error ? setCap.error.message : 'The cap was not written.'}
               </Typography>
             ) : null}
           </Stack>

@@ -147,6 +147,38 @@ async def transfer_budget(
     }
 
 
+class CapBody(BaseModel):
+    product_line: str = ""
+    landed_quarter: str = ""
+    amount_usd: float | None = None
+
+
+@router.post("/ledger/cap")
+async def set_budget_cap(
+    body: CapBody,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_roles(Role.ADMIN)),
+):
+    """Append a cap for one product line and quarter. Null clears it. Never blocks spend."""
+    from app.services.budget_ledger import apply_line_cap
+
+    actor = user.get("display_name") or user.get("email") or user.get("id")
+    try:
+        result = await db.run_sync(
+            lambda sync: apply_line_cap(
+                sync,
+                product_line=body.product_line,
+                landed_quarter=body.landed_quarter,
+                amount_usd=body.amount_usd,
+                actor=str(actor) if actor else None,
+            )
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    await db.commit()
+    return result
+
+
 def _refuse_budget_delete():
     raise HTTPException(
         status_code=409,

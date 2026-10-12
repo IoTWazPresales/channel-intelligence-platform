@@ -11,7 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base
 
 ENTRY_TYPES = frozenset(
-    {"reserve", "transfer", "commit", "commit_adjust", "release", "consume", "paid"}
+    {"reserve", "transfer", "commit", "commit_adjust", "release", "consume", "paid", "cap"}
 )
 
 

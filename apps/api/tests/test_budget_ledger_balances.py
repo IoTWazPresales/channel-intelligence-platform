@@ -2,7 +2,9 @@
 
 from app.services.budget_ledger import (
     annotate_buckets,
+    attach_caps,
     balances_from_amounts,
+    current_cap,
     include_in_view,
     plan_transfer,
     position_with_pending,
@@ -82,6 +84,35 @@ def test_unplanned_and_unknown_quarter_are_labels_not_new_amounts():
     assert include_in_view("non_campaign", "campaign") is False
     assert include_in_view("non_campaign", "non_campaign") is True
     assert include_in_view("campaign", "non_campaign") is False
+
+
+def test_cap_does_not_change_remaining_and_latest_clears():
+    settled = balances_from_amounts([("consume", 80), ("cap", 50)])
+    assert settled["remaining"] == -80
+    assert settled["consumed"] == 80
+    assert "cap" not in settled
+    assert current_cap([100, None]) is None
+    assert current_cap([100, 40]) == 40.0
+    rows = attach_caps(
+        [
+            {
+                "product_line": "NB",
+                "landed_quarter": "2026Q2",
+                **balances_from_amounts([("consume", 80)]),
+                "pending": 25,
+                "cap": None,
+            }
+        ],
+        [("NB", "2026Q2", 50), ("NR", "2026Q1", 10)],
+    )
+    by_key = {(row["product_line"], row["landed_quarter"]): row for row in rows}
+    assert by_key[("NB", "2026Q2")]["remaining"] == -80
+    assert by_key[("NB", "2026Q2")]["pending"] == 25
+    assert by_key[("NB", "2026Q2")]["cap"] == 50
+    assert by_key[("NB", "2026Q2")]["over_cap"] is True
+    assert by_key[("NR", "2026Q1")]["cap"] == 10
+    assert by_key[("NR", "2026Q1")]["over_cap"] is False
+    assert by_key[("NR", "2026Q1")]["remaining"] == 0
 
 
 def test_transfer_pair_sums_to_zero_and_warns_when_over_remaining():

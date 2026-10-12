@@ -8,11 +8,11 @@
 
 **Closed 2026-10-12:** N-0075, N-0086, N-0078. The set-password invite was sent to warren_eliason@asus.com as admin. The mail has no password. admin@local and viewer@local were not retired. N-0086 is VERIFIED_WITH_LIMITATIONS (same session, not a different model). N-0078 checks the latest stored snapshot for Takealot and Evetech. Amazon is No data. Search position is deferred. N-0076 and N-0085 are still proposed.
 
-**N-0079 in progress:** `20261012_0033` is on cip. Budgets has Campaign and Non-campaign, plus Move campaign reserve. A move writes two transfer rows. Moving more than remaining asks for confirmation and does not block after that. A move onto the same line and quarter is refused and writes nothing. Non-campaign reserves are written on the next lineup approval; none are stored yet. Unplanned marks consumed rows with no reserve. Unknown quarter is empty on the loaded rows. Cap is still “No cap”; there is no per-line cap control. The node is not complete. Web build `sLVZ8vkPAJr2q72yhukru`.
+**N-0079 in progress:** `20261012_0034` is on cip. An admin can set a cap per product line and quarter. The latest cap row is the ceiling. A later null row clears it. A cap does not change remaining. Spend over the cap is labelled Over cap and does not block. Live rows still show No cap. Campaign, Non-campaign, and Move campaign reserve are unchanged. Non-campaign reserves are written on the next lineup approval; none are stored yet. The node is not complete. Web build `tHaYjrXJ0HGPEppSjhlFM`.
 
 **Branch:** `feat/ns-2-brief-nav-collapse`. Do not push main.
 
-**Alembic (code and cip):** `20261012_0033` append-only `budget_ledger_entry`. `pricing_unknown_sku` remains. Role `cip` is not the table owner of older tables. The app role can select and insert ledger rows only.
+**Alembic (code and cip):** `20261012_0034` append-only `budget_ledger_entry`, including cap rows. `pricing_unknown_sku` remains. Role `cip` is not the table owner of older tables. The app role can select and insert ledger rows only.
 
 ## Programme
 

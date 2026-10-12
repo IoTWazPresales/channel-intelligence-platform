@@ -103,8 +103,8 @@ def position_with_pending(
 ) -> list[dict[str, Any]]:
     """Add proposed-case support beside the ledger sums.
 
-    Pending does not change remaining. Cap stays empty: nobody types a pot
-    per product line.
+    Pending does not change remaining. A cap is attached afterwards from
+    cap rows. Nobody types a pot.
     """
     index: dict[tuple[str, str], dict[str, Any]] = {}
     for row in rows:
@@ -145,6 +145,52 @@ def annotate_buckets(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         item["bucket"] = "unplanned" if consumed > reserved + 0.0001 else "planned"
         named.append(item)
     return named
+
+
+def current_cap(amounts_in_order: list[float | None]) -> float | None:
+    """The latest cap wins. A null amount clears the cap. Absence means no cap."""
+    if not amounts_in_order:
+        return None
+    latest = amounts_in_order[-1]
+    if latest is None:
+        return None
+    return round(float(latest), 4)
+
+
+def attach_caps(
+    rows: list[dict[str, Any]],
+    caps: list[tuple[str, str, float | None]],
+) -> list[dict[str, Any]]:
+    """Put the current cap on each product line and quarter.
+
+    A cap does not change remaining. Spend over the cap is a flag.
+    """
+    index: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in rows:
+        item = dict(row)
+        item["cap"] = None
+        item["over_cap"] = False
+        index[(str(item.get("product_line") or ""), str(item.get("landed_quarter") or ""))] = item
+    for product_line, quarter, amount in caps:
+        key = (str(product_line or ""), str(quarter or ""))
+        cap = None if amount is None else round(float(amount), 4)
+        item = index.get(key)
+        if item is None:
+            if cap is None:
+                continue
+            item = {
+                "product_line": key[0],
+                "landed_quarter": key[1],
+                **balances_from_amounts([]),
+                "pending": 0.0,
+                "cap": None,
+                "over_cap": False,
+            }
+            index[key] = item
+        item["cap"] = cap
+        used = float(item.get("pending_headroom_used") or 0)
+        item["over_cap"] = cap is not None and used > cap + 0.0001
+    return [index[key] for key in sorted(index)]
 
 
 def include_in_view(source_tag: str | None, view: str) -> bool:
@@ -238,6 +284,7 @@ def position_rows(session: Session, *, view: str = "campaign") -> list[dict[str,
         BudgetLedgerEntry.entry_type,
         func.coalesce(func.sum(BudgetLedgerEntry.amount_usd), 0),
     )
+    stmt = stmt.where(BudgetLedgerEntry.entry_type != "cap")
     if chosen == "non_campaign":
         stmt = stmt.where(BudgetLedgerEntry.source_tag == "non_campaign")
     else:
@@ -259,7 +306,65 @@ def position_rows(session: Session, *, view: str = "campaign") -> list[dict[str,
         balances = balances_from_amounts(pairs)
         out.append({"product_line": product_line, "landed_quarter": quarter, **balances})
     pending = [] if chosen == "non_campaign" else proposed_pending(session)
-    return annotate_buckets(position_with_pending(out, pending))
+    positioned = position_with_pending(out, pending)
+    if chosen == "non_campaign":
+        return annotate_buckets(positioned)
+    caps = latest_line_caps(session)
+    return annotate_buckets(attach_caps(positioned, caps or []))
+
+
+def latest_line_caps(session: Session) -> list[tuple[str, str, float | None]] | None:
+    """Latest cap per product line and quarter. None if the table is missing."""
+    stmt = (
+        select(
+            BudgetLedgerEntry.product_line,
+            BudgetLedgerEntry.landed_quarter,
+            BudgetLedgerEntry.amount_usd,
+        )
+        .where(BudgetLedgerEntry.entry_type == "cap")
+        .distinct(BudgetLedgerEntry.product_line, BudgetLedgerEntry.landed_quarter)
+        .order_by(
+            BudgetLedgerEntry.product_line,
+            BudgetLedgerEntry.landed_quarter,
+            BudgetLedgerEntry.id.desc(),
+        )
+    )
+    nested = session.begin_nested()
+    try:
+        rows = list(session.execute(stmt).all())
+        nested.commit()
+    except ProgrammingError:
+        nested.rollback()
+        return None
+    return [
+        (str(line or ""), str(quarter or ""), None if amount is None else float(amount))
+        for line, quarter, amount in rows
+    ]
+
+
+def apply_line_cap(
+    session: Session,
+    *,
+    product_line: str,
+    landed_quarter: str,
+    amount_usd: float | None,
+    actor: str | None,
+) -> dict[str, Any]:
+    """Append a cap row. A null amount clears the cap. Does not commit."""
+    if amount_usd is not None and float(amount_usd) < 0:
+        raise ValueError("A cap cannot be negative.")
+    amount = None if amount_usd is None else round(float(amount_usd), 4)
+    add_entry(
+        session,
+        entry_type="cap",
+        product_line=product_line or "",
+        landed_quarter=landed_quarter or "",
+        amount_usd=amount,
+        actor=actor,
+        source_tag="line_cap",
+        source_event_id=f"cap:{uuid4()}",
+    )
+    return {"cap": amount}
 
 
 def campaign_remaining_usd(session: Session, product_line: str, landed_quarter: str) -> float | None:
