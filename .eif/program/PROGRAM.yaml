@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2127
-  log_sha256: c62e0ba38b430bfe01f285a6d95ed41efb255515a6eadcf3a6b63c6dbe354da8
+  snapshot_revision: 2130
+  log_sha256: 6c84d7785fe6180656bb38a1fef35fab32e748ace0d1145f99e07c8b604c8c74
   acceptance_policy:
     milestone: operator
     root: operator
@@ -9798,7 +9798,7 @@ nodes:
     origin: operator
     status: ready
     stage: discovery
-    revision: 13
+    revision: 14
     lease: null
     depends_on:
     - N-0073
@@ -9877,11 +9877,11 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: '2026-10-12 clone cip_n0079 from template cip. Historical load wrote 435, skipped 4 with no result, second
-      load wrote 0. Owner update and delete raised append-only and the row count stayed 435. cip is on 20261012_0033 with
-      the same counts. Budgets shows product line by quarter and a row click drills to historical_import consume rows. Not
-      complete: no pending column, no cap column, and the rest of D-0059 (campaign view switch, unplanned and unknown-quarter
-      buckets, an admin cap control) is still open. Caps flag and do not block.'
+    stage_note: '2026-10-12 the planner and the lineup budget position use the campaign ledger draw. Caps and the non-campaign
+      reserve are not in that draw. Promotion planner period 2026Q2 shows ledger drawn USD 103644.6669. Pushed b5799854 on
+      feat/ns-2-brief-nav-collapse. Desk, customer rollup, caps, transfers and payment coverage are already on the branch.
+      Not complete: non-campaign rows wait for a real lineup approval, quality gates are pending, operator acceptance is pending.
+      Do not close this node. N-0110 waits until this node is closed.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -12638,6 +12638,108 @@ nodes:
     risk_class: full
     implementation_run: RUN-20261009-N0109-IMPL
     implementation_actor: gov-001
+  N-0110:
+    id: N-0110
+    parent: null
+    title: 'Customer sell-through stock gap: the customer report is on-hand, CIP flags the difference'
+    class: feature
+    origin: operator
+    status: proposed
+    stage: null
+    revision: 0
+    lease: null
+    depends_on:
+    - N-0079
+    facets:
+    - api
+    - schema
+    - ui
+    risk: R3
+    touches_existing: true
+    acceptance: operator
+    acceptance_state: pending
+    acceptance_criteria:
+    - Starts only after N-0079 is closed. Do not build this during the budget ledger.
+    - The customer report's on-hand is the stock position. CIP stores an expected position beside it and flags the gap. Neither
+      number is rewritten to force a match.
+    - Expected position = previous reported on-hand + inbound receipts that have a proof-of-delivery date and this customer
+      already matched, minus units sold on this report. A shipment with no customer match stays out of the expected position.
+    - Gap = this report's on-hand minus the expected position. A shortfall flags stock not delivered, lost, or sold outside
+      the file. A surplus flags a receipt CIP does not have, a return, or overlapping periods.
+    - Use the sale date when the file has one, and store that row as a day. Otherwise store the week number and year as a
+      week. Do not invent days from a week. Fill a week-start date only when that customer's week calendar is known. A month
+      stays a month.
+    - Reported on-hand is required on a stock-bearing file. A sales-only file with units and no stock column is refused unless
+      Warren names an exception before implementation.
+    - In transit and on order are optional and stored apart from on-hand. In transit can explain a shortfall and is not added
+      into on-hand. On order is pipeline and is excluded from on-hand and from the loss flag.
+    - The unit gap is shown on every compared row. A highlighted flag uses a band Warren names before implementation. Do not
+      copy the distributor 10 percent variance.
+    - Labels that say CST are a separate later pass and are not part of this node.
+    baseline_ref: null
+    parity_source: []
+    parity_matrix: {}
+    parity_retire_decisions: {}
+    quality:
+      testing:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      observability:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      data_integrity:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      backup_recovery:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      migration_safety:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      ux:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      a11y:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      rendered:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+      content:
+        required: true
+        state: pending
+        evidence: null
+        rationale: null
+    verification: {}
+    evidence: []
+    blockers: []
+    conservation_tags: []
+    fingerprint: null
+    stage_note: null
+    debug_iterations: 0
+    split_into: null
+    deferred: null
+    rejected: null
+    preservation: {}
+    target_artifact_class: null
+    design_artifact_class: null
+    risk_class: full
 decisions:
   D-0001:
     id: D-0001
@@ -14553,6 +14655,13 @@ evidence:
     path: .eif/audit/PROGRAMME_20261011/N0079_LEDGER.md
     tree_hash: null
     note: N-0079 clone proof then cip load. Counts only.
+  EV-0082:
+    id: EV-0082
+    provenance: implementation-observation
+    path: apps/api/app/services/budget_ledger.py
+    tree_hash: null
+    note: N-0079 campaign headroom excludes caps and non-campaign rows. The promotion planner for 2026Q2 showed ledger drawn
+      USD 103644.6669. Commit b5799854.
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -15541,5 +15650,5 @@ ids:
   node: 5
   decision: 75
   blocker: 19
-  evidence: 81
+  evidence: 82
   baseline: 18
