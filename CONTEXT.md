@@ -16,6 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-10-12 — **campaign ledger draw** `b5799854` on `feat/ns-2-brief-nav-collapse`. The promotion planner and the lineup budget position use the campaign ledger. Caps and the non-campaign reserve are not in that draw. Period 2026Q2 shows ledger drawn USD 103644.6669. N-0110 waits until N-0079 is closed. N-0079 is not complete. Never main.
 - 2026-10-12 — **settlement ledger figures** `eb472092` on `feat/ns-2-brief-nav-collapse`. The case desk shows ledger committed, consumed, and paid in USD. Case C24A96486 consumed US$574.5956. Historical payments were not loaded. N-0079 is not complete. Never main.
 - 2026-10-12 — **budget payment coverage** `54173f0b` on `feat/ns-2-brief-nav-collapse`. The Budgets page counts linked payment evidence and does not load historical payments. The Paid column stays 0 ledger rows. N-0079 is not complete. Never main.
 - 2026-10-12 — **budget customer rollup** `030faf84` on `feat/ns-2-brief-nav-collapse`. Customer by quarter sums the same ledger. Caps stay on the product line. N-0079 is not complete: paid link coverage is not shown. Never main.
