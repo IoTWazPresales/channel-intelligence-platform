@@ -118,6 +118,8 @@ function redirectToLoginOn401(status: number, requestPath: string): void {
   if (requestPath.includes('/api/v1/auth/invites/accept')) return;
   if (window.location.pathname === '/login') return;
   if (window.location.pathname === '/set-password') return;
+  if (window.location.pathname === '/case-approval') return;
+  if (requestPath.includes('/api/v1/case-approval')) return;
   clearAuthToken();
   window.location.assign('/login');
 }

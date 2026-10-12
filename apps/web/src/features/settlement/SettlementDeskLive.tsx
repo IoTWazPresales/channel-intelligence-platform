@@ -19,6 +19,7 @@ import { apiGet, apiPost, apiPostFormData } from '@/lib/api';
 
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { SettlementCaseTabs } from './SettlementCaseTabs';
+import { CustomerApprovalLinkPanel } from './CustomerApprovalLinkPanel';
 import { SettlementDesk } from './SettlementDesk';
 import {
   mapSettlementDeskView,
@@ -213,6 +214,7 @@ export function SettlementDeskLive({ caseId, embedded = false }: Props) {
           {importClaims.data.import.out_of_window_rows}.
         </Alert>
       ) : null}
+      <CustomerApprovalLinkPanel caseId={caseId} />
       <SettlementDesk
         view={view}
         embedded={embedded}

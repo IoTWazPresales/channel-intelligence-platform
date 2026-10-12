@@ -77,6 +77,7 @@ from app.api.v1.endpoints import (
     channel_intelligence,
     channel_ops,
     commercial_planner,
+    case_approval,
     cpor_cases,
     cpor_fx,
     cpor_exports,
@@ -137,6 +138,8 @@ api_router = APIRouter(dependencies=[Depends(get_current_user), Depends(_bind_re
 # The one route that must answer without a bearer so a session can be created at all.
 public_router = APIRouter()
 public_router.include_router(auth.public_router, prefix="/auth", tags=["auth"])
+if commercial_planner_enabled():
+    public_router.include_router(case_approval.public_router, prefix="/case-approval", tags=["case-approval"])
 
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(brief.router, prefix="/brief", tags=["brief"])
@@ -176,6 +179,7 @@ if commercial_planner_enabled():
     api_router.include_router(po_management.router, prefix="/po-management", tags=["po-management"])
     api_router.include_router(plan_vs_executed.router, prefix="/plan-vs-executed", tags=["plan-vs-executed"])
     api_router.include_router(cpor_cases.router, prefix="/cpor", tags=["cpor"])
+    api_router.include_router(case_approval.router, prefix="/cpor", tags=["cpor"])
     api_router.include_router(cpor_fx.router, prefix="/cpor", tags=["cpor"])
     api_router.include_router(cpor_exports.router, prefix="/cpor", tags=["cpor"])
     api_router.include_router(cpor_historical_import.router, prefix="/cpor", tags=["cpor"])

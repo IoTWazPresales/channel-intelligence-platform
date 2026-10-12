@@ -8,11 +8,17 @@
 
 **Closed 2026-10-12:** N-0075, N-0086, N-0078. The set-password invite was sent to warren_eliason@asus.com as admin. The mail has no password. admin@local and viewer@local were not retired. N-0086 is VERIFIED_WITH_LIMITATIONS (same session, not a different model). N-0078 checks the latest stored snapshot for Takealot and Evetech. Amazon is No data. Search position is deferred. N-0076 and N-0085 are still proposed.
 
-**N-0079 complete (VERIFIED_WITH_LIMITATIONS):** `20261012_0034` is on cip. The planner and the lineup use the campaign ledger draw. Caps flag and do not block. Period 2026Q2 showed ledger drawn USD 103644.6669. Case C24A96486 showed consumed US$574.5956. The case-currency Paid tile stays R0. Historical payments were not loaded. The non-campaign view stays empty until the next lineup approval. Same session, not a different model. Web build `q6rBXD-TIVnQjZoCDI1me`. N-0110 is now on the frontier and is not started.
+**N-0079 complete (VERIFIED_WITH_LIMITATIONS):** `20261012_0034` is on cip. The planner and the lineup use the campaign ledger draw. Caps flag and do not block. Period 2026Q2 showed ledger drawn USD 103644.6669. Case C24A96486 showed consumed US$574.5956. The case-currency Paid tile stays R0. Historical payments were not loaded. The non-campaign view stays empty until the next lineup approval. Same session, not a different model. Web build `q6rBXD-TIVnQjZoCDI1me`.
+
+**N-0110 not started.** Warren 2026-10-12: a sell-through file with units and no on-hand is accepted only when the operator marks that upload as sales-only. The highlight threshold is an editable setting in absolute units. The distributor 10 percent variance is not used.
+
+**N-0080 unblocked, not built.** Headline margin is PM controlled cost. DAP and landed cost stay visible beside it and are not folded into that figure.
+
+**N-0082 in progress, not closed.** A planner can send one expiring case link. The customer sees that case's settlement summary and approves or rejects with a name and comment. The decision is a case event. Migration `20261012_0035` is in the tree and is not on cip.
 
 **Branch:** `feat/ns-2-brief-nav-collapse`. Do not push main.
 
-**Alembic (code and cip):** `20261012_0034` append-only `budget_ledger_entry`, including cap rows. `pricing_unknown_sku` remains. Role `cip` is not the table owner of older tables. The app role can select and insert ledger rows only.
+**Alembic (code):** `20261012_0035` adds `cpor_case_approval_link`. **Alembic (cip):** `20261012_0034`. Do not treat 0035 as applied.
 
 ## Programme
 
