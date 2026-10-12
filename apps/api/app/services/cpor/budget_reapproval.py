@@ -34,6 +34,20 @@ def case_support_usd(session: Session, case_id: int) -> float:
 
 
 def portfolio_committed_usd(session: Session, *, include_case_id: int | None = None) -> float:
+    """Sum support USD across cases in committed lifecycle statuses.
+
+    When the budget ledger exists, this is the ledger draw. Draft and cancelled
+    cases are not on that draw.
+    """
+    from app.services.budget_ledger import used_usd
+
+    ledger = used_usd(session)
+    if ledger is not None:
+        return ledger
+    return _portfolio_committed_from_cases(session, include_case_id=include_case_id)
+
+
+def _portfolio_committed_from_cases(session: Session, *, include_case_id: int | None = None) -> float:
     """Sum support USD across cases in committed lifecycle statuses."""
     cases = session.scalars(
         select(CporCase).where(CporCase.status.in_(sorted(_COMMITTED_STATUSES)))

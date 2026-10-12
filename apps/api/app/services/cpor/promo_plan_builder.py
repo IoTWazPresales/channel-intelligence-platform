@@ -831,6 +831,11 @@ def build_promo_plan_draft(
             drawn_stmt = drawn_stmt.where(CporCaseLine.pod_quarter == period_label)
     drawn_usd, line_n = session.execute(drawn_stmt).one()
     drawn = float(drawn_usd or 0)
+    from app.services.budget_ledger import used_usd
+
+    ledger_drawn = used_usd(session, landed_quarter=period_label)
+    if ledger_drawn is not None:
+        drawn = ledger_drawn
     remaining = reserved - drawn
     support_pct = (reserved / planned_rev) if planned_rev > 0 and reserved else None
 

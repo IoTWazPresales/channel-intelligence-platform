@@ -182,6 +182,13 @@ def run_cpor_payment_apply_sync(
         upserted += len(batch)
 
     db.flush()
+    from app.models.cpor_payment import CporPaymentEvidence
+    from app.services.budget_ledger import record_paid_evidence
+
+    for source_key in by_key:
+        evidence = db.scalar(select(CporPaymentEvidence).where(CporPaymentEvidence.source_key == source_key))
+        if evidence is not None:
+            record_paid_evidence(db, evidence, actor=actor)
     return {
         "upserted": upserted,
         "shell_cases_created": shells,

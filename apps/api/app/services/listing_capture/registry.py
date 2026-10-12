@@ -681,6 +681,25 @@ def reparse_observation(session: Session, observation: ListingObservation, *, ma
             listing_price=parsed.price,
             as_of=as_of_from_fetched_at(getattr(observation, "fetched_at", None)),
         )
+    product_view = None
+    if listing is not None and listing.product_id is not None:
+        dim = session.get(DimProduct, int(listing.product_id))
+        if dim is not None:
+            product_view = {
+                "model_name": dim.model_name,
+                "marketing_name": dim.marketing_name,
+                "sales_model_name": dim.sales_model_name,
+            }
+    from app.services.listing_capture.quality import evaluate_quality
+
+    flags["quality"] = evaluate_quality(
+        text,
+        marketplace=marketplace,
+        product=product_view,
+        price=float(parsed.price) if parsed.price is not None else None,
+        availability=parsed.availability,
+        parse_status=parsed.parse_status,
+    )
     observation.parser_version = PARSER_VERSION
     observation.extracted_price = parsed.price
     observation.extracted_availability = parsed.availability

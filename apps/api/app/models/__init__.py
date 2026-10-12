@@ -50,6 +50,7 @@ from app.models.customer_report_config import CustomerReportConfig
 from app.models.customer_article_alias import CustomerArticleAlias
 from app.models.customer_cst_report_slot import CustomerCstReportSlot
 from app.models.cst_listing_seed import CstListingSeed
+from app.models.budget_ledger import BudgetLedgerEntry
 from app.models.listing_capture import CustomerListing, ListingObservation
 from app.models.customer_code_mint_setting import CustomerCodeMintSetting
 from app.models.distributor_code_mint_setting import DistributorCodeMintSetting
@@ -164,6 +165,7 @@ __all__ = [
     "CustomerArticleAlias",
     "CustomerCstReportSlot",
     "CstListingSeed",
+    "BudgetLedgerEntry",
     "CustomerListing",
     "ListingObservation",
     "CustomerCodeMintSetting",

@@ -1,16 +1,16 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-10-11
+**Last updated:** 2026-10-12
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
 **Historical CPOR upload:** Promotions & Funding → Plan templates. **Upload historical cases** opens the workbook wizard. **Learn a new template from a workbook** stays the column-map action.
 
-**Closed this evening:** N-0109, N-0087, N-0092, N-0068, N-0065. N-0065 behavioral check was re-run read-only on cip: a planner with no lines sees 0 current shipment-evidence rows, and a planner on one line sees 0 rows from other product lines. N-0075 is blocked: `apps/api/.env` has no mailbox user, no mailbox password, and shipping-mailer send is off, so the invite was not sent and no set-password link was burned. N-0086 stays in progress: pilot passwords on the local accounts were not retired. N-0078 and N-0079 are in discovery and not built.
+**Closed 2026-10-12:** N-0075, N-0086, N-0078. The set-password invite was sent to warren_eliason@asus.com as admin. The mail has no password. admin@local and viewer@local were not retired. N-0086 is VERIFIED_WITH_LIMITATIONS (same session, not a different model). N-0078 checks the latest stored snapshot for Takealot and Evetech. Amazon is No data. Search position is deferred. N-0076 and N-0085 are still proposed. N-0079 is blocked: the migration file `20261012_0033` is not applied. `DATABASE_URL_SYNC_MIGRATE` is unset and the older postgres login was rejected, so the clone was not created and the historical load did not run. The Budgets page says the ledger is not available.
 
-**HEAD:** `687455d4` on `feat/ns-2-brief-nav-collapse`. Dashboard widgets declare the saved-report link, so the overview dashboard list no longer 500s. Product work through `dca2a682` is already pushed. Do not push main.
+**HEAD:** `dac4f2ce` on `feat/ns-2-brief-nav-collapse` before this commit. Do not push main.
 
-**Alembic (code):** `20261011_0032` drops the old promotion and pricing-recommendation tables. Applied on cip 2026-10-11 as `postgres` (`database=cip`). Lineup rows stayed 1647. Budget rows stayed 0. `pricing_unknown_sku` remains. `20261011_0031` (`platform_audit_event`) is applied. `20261011_0030`, `20261010_0029`, and `20261010_0028` are applied. These revisions are uncommitted.
+**Alembic (code):** `20261012_0033` adds append-only `budget_ledger_entry`. Not applied. cip is still `20261011_0032`. `pricing_unknown_sku` remains. Role `cip` is not the table owner. Do not upgrade cip until a superuser migrate URL is set and the historical load has passed on a clone.
 
 **Alembic on cip:** `20261011_0032`. Role `cip` is not the table owner.
 
@@ -46,7 +46,7 @@ Programme rev 1499. N-0036 and N-0046 are complete and pushed (`621a4a98`, `bfbf
 
 **N-0109 in progress (uncommitted):** Channel ops tiles now have About this figure. dashboard widgets no longer use ECharts (`WidgetChart` uses shared `CategoryBars` / `TrendChart`). A dashboard KPI is a `HeadlineFigure`. The widget definition and coverage line sit behind About this figure; a bare metric key is not printed. Home dashboard, channel-ops tiles, the weekly sell-out chart, plan-vs-executed headlines and fill chart, and the shipping arrival bars and tiles use the shared chart and headline components. `KpiCard.tsx` is deleted. `echarts` is removed from `apps/web/package.json` and from `pnpm-lock.yaml` (`pnpm install --lockfile-only`). `node_modules` may still contain the old package until the next full install. Shipping and plan-vs-executed definitions sit behind About this figure. Vitest: shipping summary 1, plan-vs-executed 1, widget card 1, widget editor 4. Not closed. No browser session. Operator acceptance still open.
 
-**N-0075 invite (applied, not ledger-closed, not committed):** admin create sends a one-time set-password link (72 hours) through the existing SMTP mailer. The mail has no password. Resend retires the previous link. Accept is `POST /api/v1/auth/invites/accept` (empty body returns 422 on the restarted API). Page `/set-password`. Four roles unchanged. pytest 3 passed. vitest 1 passed after the form was put in the first response. Web rebuilt and the web process was asked to restart. No browser session in this run. SMTP mailbox user and password are unset, so a real invite was not sent. Not committed.
+**N-0075 invite (ledger-closed 2026-10-12):** admin create sends a one-time set-password link (72 hours). The mail has no password. The invite to warren_eliason@asus.com as admin was sent. Local accounts were not retired. Listing quality is on Market & Listings → Listing quality / SEO (signed in, dark). Amazon rows say No data. Budgets → Budget ledger says the ledger is not available until `20261012_0033` is applied. Web build `CVXXlpW81hGEQCC6bxuO6`. API and web were restarted.
 
 **Decisions in the dirty tree, not ledger-closed:** N-0065 is in progress at stage validate (node rev 55, programme 1876, lease released). D-0056: every signed-in screen filters to assigned product lines; each line is read or read-and-edit; a non-admin with no assignment sees no product data; admin `*` sees all. Round 5 applied `20261009_0027` to cip (mismatches 0). Self-verified only. GOV-008 has not re-verified 0027. N-0068 — grain is product line, one row per business; `catalog_product` stays; EAN is not unique-indexed; at validate, not independently verified. N-0060 stays open. Do not start N-0069 or N-0070.
 

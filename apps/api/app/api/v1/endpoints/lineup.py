@@ -241,6 +241,20 @@ async def patch_lineup_item(
         raise HTTPException(status_code=400, detail="No fields to update")
     if approval_changed:
         note_snap = data["notes"] if "notes" in data else None
+        await db.flush()
+        from app.services.budget_ledger import apply_lineup_approval
+
+        item_id = int(row.id)
+        new_status = row.approval_status
+        await db.run_sync(
+            lambda sync: apply_lineup_approval(
+                sync,
+                sync.get(FactLineupPlanItem, item_id),
+                old_approval,
+                new_status,
+                actor=x_user_id,
+            )
+        )
         await record_lineup_approval_event(
             db,
             lineup_item_id=row.id,

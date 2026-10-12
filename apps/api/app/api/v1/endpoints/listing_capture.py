@@ -316,6 +316,53 @@ def post_poll(body: PollBody | None = None):
             ) from exc
 
 
+@router.get("/quality")
+def get_listing_quality():
+    """One row per listing from the latest stored snapshot. No fetch."""
+    from sqlalchemy import text
+
+    from app.services.listing_capture.quality import CHECK_KEYS
+
+    with SessionLocal() as session:
+        rows = session.execute(
+            text(
+                """
+                SELECT l.id, l.marketplace, l.product_id, o.fetched_at, o.parse_status, o.parse_flags
+                FROM customer_listing l
+                LEFT JOIN LATERAL (
+                    SELECT fetched_at, parse_status, parse_flags
+                    FROM listing_observation
+                    WHERE listing_id = l.id
+                      AND raw_snapshot IS NOT NULL
+                    ORDER BY fetched_at DESC
+                    LIMIT 1
+                ) o ON true
+                ORDER BY l.id
+                """
+            )
+        ).mappings().all()
+        items = []
+        for row in rows:
+            flags = row["parse_flags"] if isinstance(row["parse_flags"], dict) else {}
+            quality = flags.get("quality") if isinstance(flags.get("quality"), dict) else {}
+            checks = quality.get("checks") if isinstance(quality.get("checks"), dict) else {}
+            item = {
+                "listing_id": int(row["id"]),
+                "marketplace": row["marketplace"],
+                "product_id": row["product_id"],
+                "fetched_at": row["fetched_at"].isoformat() if row["fetched_at"] is not None else None,
+                "flag_count": int(quality.get("flag_count") or 0),
+                "rules_version": quality.get("rules_version"),
+                "search_position": "deferred",
+            }
+            for key in CHECK_KEYS:
+                cell = checks.get(key) if isinstance(checks.get(key), dict) else None
+                item[key] = cell["status"] if cell else "no_data"
+                item[f"{key}_evidence"] = cell["evidence"] if cell else "No data"
+            items.append(item)
+        return {"items": items, "retailers_checked": ["takealot", "evetech"], "search_position": "deferred"}
+
+
 @router.post("/observations/{observation_id}/reparse")
 def post_reparse(observation_id: int):
     with SessionLocal() as session:

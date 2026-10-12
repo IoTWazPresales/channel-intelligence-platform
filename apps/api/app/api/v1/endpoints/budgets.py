@@ -12,6 +12,63 @@ from app.models.facts import FactBudgetAllocation, FactBudgetRequest
 router = APIRouter()
 
 
+@router.get("/ledger")
+async def budget_ledger_position(db: AsyncSession = Depends(get_db)):
+    """Product line by quarter. Sums of the append-only ledger."""
+    from app.services.budget_ledger import position_rows
+
+    try:
+        rows = await db.run_sync(lambda sync: position_rows(sync))
+    except Exception:
+        return {"data_unavailable": True, "items": []}
+    return {"data_unavailable": False, "items": rows}
+
+
+@router.get("/ledger/entries")
+async def budget_ledger_entries(
+    product_line: str = "",
+    landed_quarter: str = "",
+    db: AsyncSession = Depends(get_db),
+):
+    from sqlalchemy import select
+
+    from app.models.budget_ledger import BudgetLedgerEntry
+
+    stmt = select(BudgetLedgerEntry).order_by(BudgetLedgerEntry.id.desc()).limit(500)
+    if product_line:
+        stmt = stmt.where(BudgetLedgerEntry.product_line == product_line)
+    if landed_quarter:
+        stmt = stmt.where(BudgetLedgerEntry.landed_quarter == landed_quarter)
+    try:
+        rows = (await db.scalars(stmt)).all()
+    except Exception:
+        return {"data_unavailable": True, "items": []}
+    return {
+        "data_unavailable": False,
+        "items": [
+            {
+                "id": int(row.id),
+                "entry_type": row.entry_type,
+                "product_line": row.product_line,
+                "landed_quarter": row.landed_quarter,
+                "amount_usd": float(row.amount_usd) if row.amount_usd is not None else None,
+                "case_id": row.case_id,
+                "case_line_id": row.case_line_id,
+                "source_tag": row.source_tag,
+                "created_at": row.created_at.isoformat() if row.created_at is not None else None,
+            }
+            for row in rows
+        ],
+    }
+
+
+def _refuse_budget_delete():
+    raise HTTPException(
+        status_code=409,
+        detail="Budget rows are not deleted. The ledger is append-only; a correction is a reversing row.",
+    )
+
+
 class ClearConfirmBody(BaseModel):
     confirm: bool = False
 
@@ -79,6 +136,7 @@ async def health(db: AsyncSession = Depends(get_db)):
 
 @router.delete("/allocations/{row_id}", status_code=204)
 async def delete_allocation(row_id: int, db: AsyncSession = Depends(get_db)):
+    _refuse_budget_delete()
     row = await db.get(FactBudgetAllocation, row_id)
     if not row:
         raise HTTPException(status_code=404, detail="Not found")
@@ -93,6 +151,7 @@ async def delete_allocation(row_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("/allocations/clear-all", status_code=200)
 async def clear_allocations(body: ClearConfirmBody, db: AsyncSession = Depends(get_db)):
+    _refuse_budget_delete()
     if not body.confirm:
         raise HTTPException(status_code=400, detail="Set confirm to true")
     try:
@@ -106,6 +165,7 @@ async def clear_allocations(body: ClearConfirmBody, db: AsyncSession = Depends(g
 
 @router.delete("/requests/{row_id}", status_code=204)
 async def delete_budget_request(row_id: int, db: AsyncSession = Depends(get_db)):
+    _refuse_budget_delete()
     row = await db.get(FactBudgetRequest, row_id)
     if not row:
         raise HTTPException(status_code=404, detail="Not found")
@@ -120,6 +180,7 @@ async def delete_budget_request(row_id: int, db: AsyncSession = Depends(get_db))
 
 @router.post("/requests/clear-all", status_code=200)
 async def clear_budget_requests(body: ClearConfirmBody, db: AsyncSession = Depends(get_db)):
+    _refuse_budget_delete()
     if not body.confirm:
         raise HTTPException(status_code=400, detail="Set confirm to true")
     try:
@@ -133,6 +194,7 @@ async def clear_budget_requests(body: ClearConfirmBody, db: AsyncSession = Depen
 
 @router.delete("/health/{row_id}", status_code=204)
 async def delete_budget_health(row_id: int, db: AsyncSession = Depends(get_db)):
+    _refuse_budget_delete()
     row = await db.get(BudgetHealth, row_id)
     if not row:
         raise HTTPException(status_code=404, detail="Not found")
@@ -147,6 +209,7 @@ async def delete_budget_health(row_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("/health/clear-all", status_code=200)
 async def clear_budget_health(body: ClearConfirmBody, db: AsyncSession = Depends(get_db)):
+    _refuse_budget_delete()
     if not body.confirm:
         raise HTTPException(status_code=400, detail="Set confirm to true")
     try:

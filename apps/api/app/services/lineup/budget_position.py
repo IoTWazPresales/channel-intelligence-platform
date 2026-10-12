@@ -282,6 +282,11 @@ async def build_budget_position(
                 stmt = stmt.where(CporCaseLine.pod_quarter == period_label)
         drawn_usd, drawn_zar, n = (await db.execute(stmt)).one()
         drawn_usd_f = float(drawn_usd or 0)
+        from app.services.budget_ledger import used_usd
+
+        ledger_drawn = await db.run_sync(lambda sync: used_usd(sync, landed_quarter=period_label))
+        if isinstance(ledger_drawn, (int, float)) and not isinstance(ledger_drawn, bool):
+            drawn_usd_f = float(ledger_drawn)
         drawn_zar_f = float(drawn_zar or 0)
         line_count = int(n or 0)
         cpor_ok = True

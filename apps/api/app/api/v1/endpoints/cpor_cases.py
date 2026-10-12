@@ -1402,8 +1402,6 @@ def transition_case(
         from app.services.cpor.budget_reapproval import (
             apply_reapproval_flag,
             evaluate_money_position,
-            gate_detail,
-            should_require_reapproval,
         )
 
         if action in ("propose", "resend"):
@@ -1414,17 +1412,7 @@ def transition_case(
         if action == "approve":
             pos = evaluate_money_position(session, case_id=case.id, include_this_case=True)
             apply_reapproval_flag(session, case, money_over=bool(pos.get("money_over")))
-            if (
-                tenant_profile_hard_enforce()
-                and should_require_reapproval(
-                    {**pos, "needs_reapproval": bool(case.needs_reapproval)}
-                )
-                and not body.confirm_over_budget_reapproval
-            ):
-                session.add(case)
-                session.commit()
-                pos = evaluate_money_position(session, case_id=case.id, include_this_case=True)
-                raise HTTPException(status_code=409, detail=gate_detail(pos, action="approve"))
+            # Caps flag and never block. The flag stays on the case for the operator.
 
         if action == "propose":
             case.status = "proposed"
@@ -1480,6 +1468,10 @@ def transition_case(
         # BACKLOG-139: one projection for every transition (activate/end/settle/cancel used to leave it stale).
         case.workflow_status = workflow_status_for(case.status)
         session.add(case)
+        if action in {"approve", "cancel", "settle"}:
+            from app.services.budget_ledger import apply_case_transition
+
+            apply_case_transition(session, case, action, actor=actor)
         _record_event(
             session,
             case_id=case.id,

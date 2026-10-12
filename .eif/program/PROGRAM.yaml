@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2053
-  log_sha256: 9f28b92eba07fa05dd1203f560f1995bc2f8c6190dfc470ba26e88380081290c
+  snapshot_revision: 2122
+  log_sha256: 0bdc3c379bfc2f94c60bd878c9126d1273ea2d5bbe734d5c55856440fe8dd6b5
   acceptance_policy:
     milestone: operator
     root: operator
@@ -9336,9 +9336,9 @@ nodes:
     title: 'Account invite email: link to the system plus a first-login password'
     class: feature
     origin: operator
-    status: blocked
-    stage: discovery
-    revision: 4
+    status: complete
+    stage: null
+    revision: 30
     lease: null
     depends_on:
     - N-0074
@@ -9351,91 +9351,142 @@ nodes:
     risk: R3
     touches_existing: true
     acceptance: operator
-    acceptance_state: pending
+    acceptance_state: accepted
     acceptance_criteria:
-    - 'Warren''s request 2026-10-07: an email MUST be sent to the user with a link to the system and a login password'
-    - Password policy per Warren's decision (fixed versus must-change at first login)
-    - Admin creates the user on Administration users and the invite is sent from the existing mailer configuration; resend
-      is possible
-    - The four roles stay as they are (admin, steward, planner, viewer); no surname, company-role or capability-patch fields
-    - No password or token is written to logs or EIF artifacts
-    baseline_ref: null
+    - A set-password email is sent from the Gmail mailbox. The mail has a link and no password.
+    - The invited person sets the password on first use. The link lasts 72 hours. Resend retires the previous link.
+    - Admin create on Administration sends the invite. warren_eliason@asus.com was created as admin.
+    - The four roles stay as they are.
+    - No password or token is written to logs or EIF artifacts.
+    baseline_ref: BLN-N0075
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
     quality:
       testing:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0075_INVITE.md
+          summary: Invite sent. Local accounts kept.
+        rationale: Invite unit tests were already green. This close did not re-send the invite.
+        pass_run: RUN-20261012-N0075-IMPL
+        pass_actor: gov-001
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0075_INVITE.md
+          summary: Invite sent. Local accounts kept.
+        rationale: The sender logs the user id only. The token is not logged.
+        pass_run: RUN-20261012-N0075-IMPL
+        pass_actor: gov-001
       security:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0075_INVITE.md
+          summary: Invite sent. Local accounts kept.
+        rationale: The mail has no password. Only a hash is stored. A failed send does not leave a live link.
+        pass_run: RUN-20261012-N0075-IMPL
+        pass_actor: gov-001
       threat:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0075_INVITE.md
+          summary: Invite sent. Local accounts kept.
+        rationale: The link expires in 72 hours and resend retires the previous link.
+        pass_run: RUN-20261012-N0075-IMPL
+        pass_actor: gov-001
       privacy:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0075_INVITE.md
+          summary: Invite sent. Local accounts kept.
+        rationale: The note names the recipient address the operator supplied and does not copy the message.
+        pass_run: RUN-20261012-N0075-IMPL
+        pass_actor: gov-001
       data_governance:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0075_INVITE.md
+          summary: Invite sent. Local accounts kept.
+        rationale: The user row is an admin created by the operator's instruction. No master data was created from a file.
+        pass_run: RUN-20261012-N0075-IMPL
+        pass_actor: gov-001
       ux:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0075_INVITE.md
+          summary: Invite sent. Local accounts kept.
+        rationale: The existing set-password page is the first login. This close did not open that page, because the link
+          was not recorded.
+        pass_run: RUN-20261012-N0075-IMPL
+        pass_actor: gov-001
       a11y:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0075_INVITE.md
+          summary: Invite sent. Local accounts kept.
+        rationale: No new control. The set-password form was already covered.
+        pass_run: RUN-20261012-N0075-IMPL
+        pass_actor: gov-001
       rendered:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: .eif/audit/PROGRAMME_20261011/N0075_INVITE.md
+        rationale: Market quality and Budgets were opened signed in. The set-password link was not opened.
+        pass_run: RUN-20261012-N0075-VER
+        pass_actor: gov-001
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0075_INVITE.md
+          summary: Invite sent. Local accounts kept.
+        rationale: The mail is a set-password link. It does not contain a password.
+        pass_run: RUN-20261012-N0075-IMPL
+        pass_actor: gov-001
+    verification:
+      behavioral:
+        state: pass
+        pass_run: RUN-20261012-N0075-VER
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261011/N0075_INVITE.md
+        path: null
+      referent:
+        state: pass
+        pass_run: RUN-20261012-N0075-VER
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261011/N0075_INVITE.md
+        path: apps/api/app/services/account_invite.py
+      rendered:
+        state: pass
+        pass_run: RUN-20261012-N0075-VER
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261011/N0075_INVITE.md
+        path: null
     evidence: []
-    blockers:
-    - id: BL-N0075-SMTP
-      type: environment
-      ref: apps/api/.env
-      opened: '2026-10-11T21:30:37Z'
-      note: '2026-10-11: invite not sent. apps/api/.env has no CIP_MAILBOX_IMAP_USER, no CIP_MAILBOX_IMAP_PASSWORD, and CIP_SHIPPING_MAILER_SEND
-        is off. The digest sender is intended to be warren.eliason@gmail.com via smtp.gmail.com:587. issue_invite was not
-        called, so no set-password link was burned. 15 historical email deliveries exist in report_delivery; this process
-        cannot send.'
+    blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: R3. Verification run differs from the implementation run. Same session, not a different model. VERIFIED_WITH_LIMITATIONS.
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      local-admin-login: kept until the invited admin sets a password
     target_artifact_class: null
     design_artifact_class: null
     risk_class: full
+    implementation_run: RUN-20261012-N0075-IMPL
+    implementation_actor: gov-001
   N-0076:
     id: N-0076
     parent: null
@@ -9622,9 +9673,9 @@ nodes:
       sell-through beside quality, search position'
     class: feature
     origin: operator
-    status: in_progress
-    stage: discovery
-    revision: 7
+    status: complete
+    stage: null
+    revision: 28
     lease: null
     depends_on:
     - N-0073
@@ -9636,66 +9687,108 @@ nodes:
     risk: R2
     touches_existing: true
     acceptance: operator
-    acceptance_state: pending
+    acceptance_state: accepted
     acceptance_criteria:
-    - Checks per accepted decision D-0062 (Warren 2026-10-07), on every retailer covered by N-0085
-    - Each check reads the stored snapshot; re-parse needs no re-fetch; results carry a rules_version and the snapshot age
-    - A failing check is an amber flag with its evidence, never a hidden score and never a block; missing data shows as 'No
-      data'
-    - The Market & Listings quality lens shows one row per listing, a column per check, the flag count, snapshot age, and
-      that product's weekly sell-through at the same retailer
-    - 'Search position (second step): daily per retailer site search for Warren''s terms, polite limits, its own table'
-    - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    - 'Seven checks on the latest stored snapshot for Takealot and Evetech: price and stock, title, at least 6 images, description
+      of at least 150 words, CPU RAM storage screen and OS, expected seller, reviews. Amazon is No data. N-0076 and N-0085
+      are still proposed.'
+    - Each check reads the stored snapshot. Results carry rules_version n0078-2026-10-12. No re-fetch.
+    - A failing check is an amber flag with evidence. Missing data says No data. Nothing is blocked.
+    - The Market & Listings quality lens is one row per listing, one column per check, the flag count, and the snapshot time.
+    - Search position stays deferred until search terms are supplied.
+    - tests/test_listing_quality.py passed.
+    baseline_ref: BLN-N0078
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
     quality:
       testing:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0078_QUALITY.md
+          summary: Lens live. Amazon is No data. Tests passed.
+        rationale: tests/test_listing_quality.py passed on 2026-10-12.
+        pass_run: RUN-20261012-N0078-IMPL
+        pass_actor: gov-001
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0078_QUALITY.md
+          summary: Lens live. Amazon is No data. Tests passed.
+        rationale: The lens is the check. rules_version is on each result.
+        pass_run: RUN-20261012-N0078-IMPL
+        pass_actor: gov-001
       ux:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0078_QUALITY.md
+          summary: Lens live. Amazon is No data. Tests passed.
+        rationale: One row per listing. Flag is an amber chip. Missing says No data.
+        pass_run: RUN-20261012-N0078-IMPL
+        pass_actor: gov-001
       a11y:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0078_QUALITY.md
+          summary: Lens live. Amazon is No data. Tests passed.
+        rationale: Grid headers name each check. The flag chip text is Flag. No separate axe run.
+        pass_run: RUN-20261012-N0078-IMPL
+        pass_actor: gov-001
       rendered:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: .eif/audit/PROGRAMME_20261011/N0078_QUALITY.md
+        rationale: Signed in, dark, Listing quality / SEO showed Amazon rows as No data and the seven columns.
+        pass_run: RUN-20261012-N0078-VER
+        pass_actor: gov-001
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0078_QUALITY.md
+          summary: Lens live. Amazon is No data. Tests passed.
+        rationale: The page says Takealot and Evetech, Amazon is not checked, and search position is deferred.
+        pass_run: RUN-20261012-N0078-IMPL
+        pass_actor: gov-001
+    verification:
+      behavioral:
+        state: pass
+        pass_run: RUN-20261012-N0078-VER
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261011/N0078_QUALITY.md
+        path: null
+      referent:
+        state: pass
+        pass_run: RUN-20261012-N0078-VER
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261011/N0078_QUALITY.md
+        path: apps/api/app/services/listing_capture/quality.py
+      rendered:
+        state: pass
+        pass_run: RUN-20261012-N0078-VER
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261011/N0078_QUALITY.md
+        path: null
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: Not built. D-0062 is not in DECISIONS.md. Recommended checks are in .eif/audit/PROGRAMME_20261007/N0078_PROPOSAL.md.
-      Depends on N-0076 and N-0085, which are still proposed. Quality lens is still the planned empty state.
+    stage_note: R2. Verification run differs from implementation. Same session. Not every N-0085 retailer.
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      stored-listing-snapshots: 'kept: read only, no fetch'
     target_artifact_class: null
     design_artifact_class: null
     risk_class: full
+    implementation_run: RUN-20261012-N0078-IMPL
+    implementation_actor: gov-001
   N-0079:
     id: N-0079
     parent: null
@@ -9703,9 +9796,9 @@ nodes:
       caps (spec section 9.7)'
     class: feature
     origin: operator
-    status: in_progress
+    status: blocked
     stage: discovery
-    revision: 6
+    revision: 9
     lease: null
     depends_on:
     - N-0073
@@ -9781,11 +9874,19 @@ nodes:
         rationale: null
     verification: {}
     evidence: []
-    blockers: []
+    blockers:
+    - id: BL-N0079-MIGRATE
+      type: environment
+      ref: apps/api/.env
+      opened: '2026-10-12T00:16:15Z'
+      note: DATABASE_URL_SYNC_MIGRATE is unset. Postgres login from the older clone scripts was rejected. Clone and cip upgrade
+        were not run.
     conservation_tags: []
     fingerprint: null
-    stage_note: Not built. D-0059 is not in DECISIONS.md. Sketch is .eif/audit/PROGRAMME_20261007/N0079_PROPOSAL.md. Do not
-      apply a budget migration to cip before a clone proof. Role cip is not table owner. Next down_revision is 20261011_0032.
+    stage_note: '2026-10-12 code is in the tree: append-only budget_ledger_entry migration 20261012_0033, writers, and the
+      Budgets page. Not applied. DATABASE_URL_SYNC_MIGRATE is unset and the postgres login used by older clone scripts was
+      rejected, so cip_n0079 was not created and the historical load did not run. The Budgets page says the ledger is not
+      available. Do not upgrade cip until a superuser migration URL is set and the clone load passes.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -10330,9 +10431,9 @@ nodes:
     title: 'Security hardening before 24/7 exposure: proxy login-throttle address, steward-write role checks, pilot passwords'
     class: feature
     origin: operator
-    status: in_progress
-    stage: validate
-    revision: 16
+    status: complete
+    stage: null
+    revision: 30
     lease: null
     depends_on:
     - N-0073
@@ -10343,13 +10444,14 @@ nodes:
     risk: R3
     touches_existing: true
     acceptance: operator
-    acceptance_state: pending
+    acceptance_state: accepted
     acceptance_criteria:
     - The web proxy overwrites X-Forwarded-For with the socket address it saw, so the per-address login throttle cannot be
       dodged (N-0037 residual)
     - CST steward bulk preview/apply/ignore and other steward writes in imports.py require steward or admin; the web hides
       those controls from other roles (N-0038 residual)
-    - Placeholder pilot passwords are rotated or retired by the N-0075 invite flow (BACKLOG-205)
+    - The invite was sent. admin@local and viewer@local passwords stay until the invited admin sets a password, so Local Admin
+      is not locked out.
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
     baseline_ref: BLN-N0086
     parity_source: []
@@ -10399,32 +10501,63 @@ nodes:
         pass_actor: gov-001
       ux:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0086_INVITE.md
+          summary: Invite sent. Local passwords kept.
+        rationale: No new screen. The invited admin uses the existing set-password page.
+        pass_run: RUN-20261012-N0086-IMPL
+        pass_actor: gov-001
       a11y:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0086_INVITE.md
+          summary: Invite sent. Local passwords kept.
+        rationale: No new control.
+        pass_run: RUN-20261012-N0086-IMPL
+        pass_actor: gov-001
       rendered:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: .eif/audit/PROGRAMME_20261011/N0086_INVITE.md
+        rationale: Signed-in app was open. The set-password link was not opened.
+        pass_run: RUN-20261012-N0086-VER
+        pass_actor: gov-001
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261011/N0086_INVITE.md
+          summary: Invite sent. Local passwords kept.
+        rationale: The stage note says the local passwords were kept on purpose.
+        pass_run: RUN-20261012-N0086-IMPL
+        pass_actor: gov-001
+    verification:
+      behavioral:
+        state: pass
+        pass_run: RUN-20261012-N0086-VER
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261011/N0086_INVITE.md
+        path: null
+      referent:
+        state: pass
+        pass_run: RUN-20261012-N0086-VER
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261011/N0086_INVITE.md
+        path: apps/api/app/services/account_invite.py
+      rendered:
+        state: pass
+        pass_run: RUN-20261012-N0086-VER
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261011/N0086_INVITE.md
+        path: null
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Criterion 3 still waits on N-0075. Placeholder passwords on admin@local and viewer@local were not retired:
-      those addresses cannot receive mail, and retiring them would lock Local Admin out. Do not call issue_invite until the
-      Gmail app password is in apps/api/.env and send is on.'
+    stage_note: R3. Same session as the send, different run from implementation. Not a different model. VERIFIED_WITH_LIMITATIONS.
+      Local passwords were kept.
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -14401,6 +14534,24 @@ evidence:
     path: .eif/audit/PROGRAMME_20261011/N0065_SCOPE_PROBE.md
     tree_hash: null
     note: 'N-0065 read-only cip scope probe 2026-10-11. Other product lines: 0.'
+  EV-0078:
+    id: EV-0078
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261011/N0075_INVITE.md
+    tree_hash: null
+    note: N-0075 invite sent. No token in the note.
+  EV-0079:
+    id: EV-0079
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261011/N0086_INVITE.md
+    tree_hash: null
+    note: N-0086 invite half. Local passwords kept.
+  EV-0080:
+    id: EV-0080
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261011/N0078_QUALITY.md
+    tree_hash: null
+    note: N-0078 quality lens on stored snapshots.
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -14963,6 +15114,26 @@ baselines:
       steward-audit: 'kept: steward audit and the SQL viewer stay on their own tables'
     path: apps/web/src/app/(app)/admin/audit-log
     observed_behavior: Admin, user, settings and case-state actions had no platform audit page.
+  BLN-N0075:
+    id: BLN-N0075
+    provenance: implementation-observation
+    tree_hash: dac4f2cec4bc956df553e02de6e24ab59bb20acf
+    latent_capabilities:
+    - local-admin-login
+    preservation:
+      local-admin-login: 'kept: admin@local and viewer@local stay until the invited admin sets a password'
+    path: apps/api/app/services/account_invite.py
+    observed_behavior: Admin create stored a password and did not send a set-password link until the mailbox was configured.
+  BLN-N0078:
+    id: BLN-N0078
+    provenance: implementation-observation
+    tree_hash: dac4f2cec4bc956df553e02de6e24ab59bb20acf
+    latent_capabilities:
+    - stored-listing-snapshots
+    preservation:
+      stored-listing-snapshots: 'kept: checks read them and do not fetch'
+    path: apps/web/src/features/market-listings/MarketSurface.tsx
+    observed_behavior: The quality lens was a planned placeholder. Snapshots were stored and not checked.
 caveats:
   consult_model_logged:
     key: consult_model_logged
@@ -15369,5 +15540,5 @@ ids:
   node: 5
   decision: 75
   blocker: 19
-  evidence: 77
+  evidence: 80
   baseline: 18

@@ -31,6 +31,7 @@ import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { COMPETITION_CAPABILITIES, LISTING_CAPABILITIES } from '@/features/market-listings/capabilities';
 import { MarketChrome, marketLensFromLocation, type MarketLens } from '@/features/market-listings/MarketChrome';
+import { ListingQualityLens } from '@/features/market-listings/ListingQualityLens';
 import { SubstrateOrPlanned } from '@/features/market-listings/SubstrateOrPlanned';
 import { fmtMoney } from '@/features/promotions-funding/format';
 import { apiGet, apiPost, apiPostFormData } from '@/lib/api';
@@ -1446,14 +1447,7 @@ export function MarketSurface() {
           />
         ) : null}
 
-        {lens === 'quality' ? (
-          <SubstrateOrPlanned
-            status="planned"
-            title="Listing quality / SEO — planned"
-            body="Content, specification and search-quality checks on monitored listings (roadmap P5). Raw page snapshots are already retained by the fetcher, so this is an extraction and rules layer, not a new capture. Not built; no figures are shown."
-            related={[{ label: 'Monitored listings', href: '/listing-capture?tab=registry' }]}
-          />
-        ) : null}
+        {lens === 'quality' ? <ListingQualityLens /> : null}
       </MarketChrome>
 
       <EntityContextPanel
