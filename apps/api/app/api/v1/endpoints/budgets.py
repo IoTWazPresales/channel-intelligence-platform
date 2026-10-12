@@ -5,6 +5,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
+from app.core.product_line_scope import request_editable_product_lines
+from app.core.security import Role, require_roles
 from app.models.dimensions import DimBudgetOwner
 from app.models.derived import BudgetHealth
 from app.models.facts import FactBudgetAllocation, FactBudgetRequest
@@ -73,6 +75,75 @@ async def budget_ledger_entries(
             }
             for row in rows
         ],
+    }
+
+
+class TransferBody(BaseModel):
+    source_product_line: str = ""
+    source_landed_quarter: str = ""
+    dest_product_line: str = ""
+    dest_landed_quarter: str = ""
+    amount_usd: float
+    confirm_over: bool = False
+
+
+def _may_transfer_line(product_line: str) -> bool:
+    """Admin edits every line. A planner needs can_edit on the named line."""
+    editable = request_editable_product_lines.get()
+    if not editable:
+        return False
+    if "*" in editable:
+        return True
+    line = (product_line or "").strip()
+    return bool(line) and line in editable
+
+
+@router.post("/ledger/transfer")
+async def transfer_budget(
+    body: TransferBody,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_roles(Role.PLANNER, Role.ADMIN)),
+):
+    """Move campaign headroom. Two append-only rows, one out and one in."""
+    if not _may_transfer_line(body.source_product_line) or not _may_transfer_line(body.dest_product_line):
+        raise HTTPException(
+            status_code=403,
+            detail="A transfer needs edit access on both product lines.",
+        )
+    from app.services.budget_ledger import apply_budget_transfer
+
+    actor = user.get("display_name") or user.get("email") or user.get("id")
+    try:
+        result = await db.run_sync(
+            lambda sync: apply_budget_transfer(
+                sync,
+                source_product_line=body.source_product_line,
+                source_landed_quarter=body.source_landed_quarter,
+                dest_product_line=body.dest_product_line,
+                dest_landed_quarter=body.dest_landed_quarter,
+                amount_usd=body.amount_usd,
+                actor=str(actor) if actor else None,
+                confirm_over=body.confirm_over,
+            )
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if result.get("needs_confirm"):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"This move is more than remaining ({result['source_remaining']}). "
+                "Confirm to move it anyway."
+            ),
+        )
+    await db.commit()
+    return {
+        "written": result["written"],
+        "source_event_id": result["entries"][0]["source_event_id"] if result["entries"] else None,
+        "over_remaining": result["over_remaining"],
+        "source_remaining": result["source_remaining"],
     }
 
 

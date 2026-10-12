@@ -8,7 +8,7 @@
 
 **Closed 2026-10-12:** N-0075, N-0086, N-0078. The set-password invite was sent to warren_eliason@asus.com as admin. The mail has no password. admin@local and viewer@local were not retired. N-0086 is VERIFIED_WITH_LIMITATIONS (same session, not a different model). N-0078 checks the latest stored snapshot for Takealot and Evetech. Amazon is No data. Search position is deferred. N-0076 and N-0085 are still proposed.
 
-**N-0079 in progress:** `20261012_0033` is on cip. Budgets has Campaign and Non-campaign. Campaign is the budget. Non-campaign reserves are written on the next lineup approval and do not reduce remaining; none are stored yet. Unplanned marks consumed rows with no reserve. Unknown quarter is the blank-quarter bucket; the loaded rows all have a quarter, so that filter is empty. Pending and Cap are unchanged. The node is not complete. Web build `SmQdUOaa7f8aeiW8e_IGO`.
+**N-0079 in progress:** `20261012_0033` is on cip. Budgets has Campaign and Non-campaign, plus Move campaign reserve. A move writes two transfer rows. Moving more than remaining asks for confirmation and does not block after that. A move onto the same line and quarter is refused and writes nothing. Non-campaign reserves are written on the next lineup approval; none are stored yet. Unplanned marks consumed rows with no reserve. Unknown quarter is empty on the loaded rows. Cap is still “No cap”; there is no per-line cap control. The node is not complete. Web build `sLVZ8vkPAJr2q72yhukru`.
 
 **Branch:** `feat/ns-2-brief-nav-collapse`. Do not push main.
 

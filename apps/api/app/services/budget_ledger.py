@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import ProgrammingError
@@ -153,6 +154,61 @@ def include_in_view(source_tag: str | None, view: str) -> bool:
     return source_tag != "non_campaign"
 
 
+def plan_transfer(
+    *,
+    amount: float,
+    source: tuple[str, str],
+    dest: tuple[str, str],
+    source_remaining: float,
+    confirm_over: bool,
+) -> dict[str, Any]:
+    """Two transfer rows that move campaign headroom. The pair sums to zero.
+
+    A move larger than remaining is refused until confirm_over is set. That
+    warning does not block once the caller confirms.
+    """
+    if amount is None or not (float(amount) > 0):
+        raise ValueError("Transfer amount must be greater than zero.")
+    source_key = (str(source[0] or ""), str(source[1] or ""))
+    dest_key = (str(dest[0] or ""), str(dest[1] or ""))
+    if source_key == dest_key:
+        raise ValueError("Choose a different product line or quarter.")
+    rounded = round(float(amount), 4)
+    over = rounded > float(source_remaining) + 0.0001
+    if over and not confirm_over:
+        return {
+            "needs_confirm": True,
+            "over_remaining": True,
+            "source_remaining": round(float(source_remaining), 4),
+            "entries": [],
+            "written": 0,
+        }
+    event_id = f"transfer:{uuid4()}"
+    entries = [
+        {
+            "entry_type": "transfer",
+            "product_line": source_key[0],
+            "landed_quarter": source_key[1],
+            "amount_usd": -rounded,
+            "source_event_id": event_id,
+        },
+        {
+            "entry_type": "transfer",
+            "product_line": dest_key[0],
+            "landed_quarter": dest_key[1],
+            "amount_usd": rounded,
+            "source_event_id": event_id,
+        },
+    ]
+    return {
+        "needs_confirm": False,
+        "over_remaining": over,
+        "source_remaining": round(float(source_remaining), 4),
+        "entries": entries,
+        "written": 0,
+    }
+
+
 def proposed_pending(session: Session) -> list[tuple[str, str, float]]:
     """Support on proposed cases, by product line and landed quarter.
 
@@ -204,6 +260,61 @@ def position_rows(session: Session, *, view: str = "campaign") -> list[dict[str,
         out.append({"product_line": product_line, "landed_quarter": quarter, **balances})
     pending = [] if chosen == "non_campaign" else proposed_pending(session)
     return annotate_buckets(position_with_pending(out, pending))
+
+
+def campaign_remaining_usd(session: Session, product_line: str, landed_quarter: str) -> float | None:
+    """Campaign remaining for one product line and quarter. None if the table is missing."""
+    stmt = select(
+        BudgetLedgerEntry.entry_type,
+        BudgetLedgerEntry.amount_usd,
+        BudgetLedgerEntry.source_tag,
+    ).where(
+        BudgetLedgerEntry.product_line == (product_line or ""),
+        BudgetLedgerEntry.landed_quarter == (landed_quarter or ""),
+    )
+    nested = session.begin_nested()
+    try:
+        rows = list(session.execute(stmt).all())
+        nested.commit()
+    except ProgrammingError:
+        nested.rollback()
+        return None
+    amounts = [
+        (str(kind), float(amount or 0))
+        for kind, amount, tag in rows
+        if include_in_view(tag, "campaign")
+    ]
+    return balances_from_amounts(amounts)["remaining"]
+
+
+def apply_budget_transfer(
+    session: Session,
+    *,
+    source_product_line: str,
+    source_landed_quarter: str,
+    dest_product_line: str,
+    dest_landed_quarter: str,
+    amount_usd: float,
+    actor: str | None,
+    confirm_over: bool,
+) -> dict[str, Any]:
+    """Write the transfer pair on this session. Does not commit."""
+    remaining = campaign_remaining_usd(session, source_product_line, source_landed_quarter)
+    if remaining is None:
+        raise RuntimeError("Budget ledger is not available.")
+    plan = plan_transfer(
+        amount=amount_usd,
+        source=(source_product_line, source_landed_quarter),
+        dest=(dest_product_line, dest_landed_quarter),
+        source_remaining=remaining,
+        confirm_over=confirm_over,
+    )
+    if plan["needs_confirm"]:
+        return plan
+    for entry in plan["entries"]:
+        add_entry(session, actor=actor, **entry)
+    plan["written"] = len(plan["entries"])
+    return plan
 
 
 def _product_line(session: Session, product_id: int | None) -> str:

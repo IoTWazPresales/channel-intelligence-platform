@@ -16,6 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-10-12 — **budget transfers** on `feat/ns-2-brief-nav-collapse`. A campaign move writes two append-only rows. Over remaining warns and confirms. The same line and quarter is refused. N-0079 is not complete: no per-line cap, and no non-campaign rows until the next lineup approval. Never main.
 - 2026-10-12 — **budget campaign view and buckets** `c6e3df3a` on `feat/ns-2-brief-nav-collapse`. Campaign is the budget. Non-campaign reserve is written on lineup approval and is empty until then. Unplanned labels consumption with no reserve. Unknown quarter is the blank-quarter filter. N-0079 is not complete. Never main.
 - 2026-10-12 — **budget pending and cap columns** `e9c0b203` on `feat/ns-2-brief-nav-collapse`. Pending is proposed-case support and does not reduce remaining. Cap shows No cap; no portfolio ceiling is set. N-0079 still open for the campaign view and the unplanned and unknown-quarter buckets. Never main.
 - 2026-10-12 — **invite and listing quality** `aef755c6` on `feat/ns-2-brief-nav-collapse`. N-0075 and N-0086 closed after the set-password invite. Local accounts kept. N-0078 closed for Takealot and Evetech stored snapshots. N-0079 blocked: migrate URL unset, clone not created, `20261012_0033` not applied. Never main.

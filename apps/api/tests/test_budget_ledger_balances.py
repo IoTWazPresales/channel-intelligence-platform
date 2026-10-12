@@ -1,6 +1,12 @@
 """Budget ledger sums. No database."""
 
-from app.services.budget_ledger import annotate_buckets, balances_from_amounts, include_in_view, position_with_pending
+from app.services.budget_ledger import (
+    annotate_buckets,
+    balances_from_amounts,
+    include_in_view,
+    plan_transfer,
+    position_with_pending,
+)
 
 
 def test_balances_net_commit_consume_and_cancel():
@@ -76,3 +82,45 @@ def test_unplanned_and_unknown_quarter_are_labels_not_new_amounts():
     assert include_in_view("non_campaign", "campaign") is False
     assert include_in_view("non_campaign", "non_campaign") is True
     assert include_in_view("campaign", "non_campaign") is False
+
+
+def test_transfer_pair_sums_to_zero_and_warns_when_over_remaining():
+    refused = plan_transfer(
+        amount=50,
+        source=("NB", "2026Q2"),
+        dest=("NR", "2026Q2"),
+        source_remaining=10,
+        confirm_over=False,
+    )
+    assert refused["needs_confirm"] is True
+    assert refused["entries"] == []
+
+    moved = plan_transfer(
+        amount=50,
+        source=("NB", "2026Q2"),
+        dest=("NR", "2026Q2"),
+        source_remaining=10,
+        confirm_over=True,
+    )
+    assert moved["needs_confirm"] is False
+    assert moved["over_remaining"] is True
+    assert sum(entry["amount_usd"] for entry in moved["entries"]) == 0
+    combined = balances_from_amounts(
+        [("reserve", 10)] + [(entry["entry_type"], entry["amount_usd"]) for entry in moved["entries"]]
+    )
+    assert combined["remaining"] == 10
+    source_only = balances_from_amounts([("reserve", 10), ("transfer", moved["entries"][0]["amount_usd"])])
+    assert source_only["remaining"] == -40
+
+    try:
+        plan_transfer(
+            amount=10,
+            source=("NB", "2026Q2"),
+            dest=("NB", "2026Q2"),
+            source_remaining=10,
+            confirm_over=True,
+        )
+    except ValueError as exc:
+        assert "different" in str(exc)
+    else:
+        raise AssertionError("same cell must be refused")
