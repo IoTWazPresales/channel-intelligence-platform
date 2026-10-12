@@ -6,6 +6,7 @@ from app.services.budget_ledger import (
     attach_caps,
     balances_from_amounts,
     current_cap,
+    case_ledger_from_rows,
     describe_payment_link_coverage,
     fold_customer_amounts,
     include_in_view,
@@ -218,3 +219,21 @@ def test_payment_link_coverage_is_a_count_not_a_paid_write():
     )
     assert "0 of 0" in empty
     assert "were not loaded" in empty
+
+
+def test_case_ledger_sums_commit_consume_and_usd_paid_only():
+    totals = case_ledger_from_rows(
+        [
+            ("commit", 100),
+            ("commit_adjust", 5),
+            ("consume", 80),
+            ("release", 25),
+            ("paid", 40),
+            ("paid", None),
+            ("cap", 10),
+        ]
+    )
+    assert totals["committed_usd"] == 105
+    assert totals["consumed_usd"] == 80
+    assert totals["paid_usd"] == 40
+    assert totals["paid_row_count"] == 2

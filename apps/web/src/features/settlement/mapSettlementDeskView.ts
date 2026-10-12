@@ -80,6 +80,12 @@ export type SettlementDeskApi = {
     cip_qty_grain: string;
     agreed_actor?: string | null;
   };
+  ledger?: {
+    committed_usd: number;
+    consumed_usd: number;
+    paid_usd: number;
+    paid_row_count: number;
+  } | null;
 };
 
 export function mapSettlementDeskView(
@@ -191,6 +197,11 @@ export function mapSettlementDeskView(
     outOfWindowClaimRows: settlement.out_of_window_claim_rows ?? 0,
     unresolvedProducts: settlement.unresolved_products ?? [],
     cstReconciliation: settlement.cst_reconciliation ?? null,
+    ledgerAvailable: settlement.ledger != null,
+    ledgerCommittedUsd: settlement.ledger?.committed_usd ?? null,
+    ledgerConsumedUsd: settlement.ledger?.consumed_usd ?? null,
+    ledgerPaidUsd: settlement.ledger?.paid_usd ?? null,
+    ledgerPaidRowCount: settlement.ledger?.paid_row_count ?? 0,
   };
 }
 

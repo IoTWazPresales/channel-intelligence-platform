@@ -197,4 +197,22 @@ describe('SettlementDesk', () => {
     expect(screen.getByText('Booked 18.78 · booked · by ken')).toBeInTheDocument();
     expect(screen.queryByTestId('settlement-desk-open-planner')).toBeNull();
   });
+
+  it('shows ledger commit, consume, and paid in USD', () => {
+    renderDesk(
+      <SettlementDesk
+        view={view({
+          ledgerAvailable: true,
+          ledgerCommittedUsd: 0,
+          ledgerConsumedUsd: 574.5956,
+          ledgerPaidUsd: 0,
+          ledgerPaidRowCount: 0,
+        })}
+      />,
+    );
+    expect(screen.getByTestId('settlement-desk-ledger')).toHaveTextContent('Ledger committed');
+    expect(screen.getByTestId('settlement-desk-ledger')).toHaveTextContent('US$574.5956');
+    expect(screen.getByText('Historical payments were not loaded')).toBeInTheDocument();
+    expect(screen.getByText(/Not in schema today/)).toBeInTheDocument();
+  });
 });

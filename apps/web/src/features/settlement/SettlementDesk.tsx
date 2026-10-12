@@ -112,6 +112,8 @@ export function SettlementDesk({
   );
 
   const money = (amount: number | null) => formatMoney(amount, view.currency);
+  const ledgerUsd = (amount: number | null | undefined) =>
+    amount == null || Number.isNaN(amount) ? '—' : `US$${amount}`;
   const moneyDual = (amount: number | null, testId: string) => (
     <DualMoney
       amount={amount}
@@ -432,6 +434,39 @@ export function SettlementDesk({
           caption={`${view.hqCreditLineCount} lines`}
         />
       </HeadlineStrip>
+
+      {view.ledgerAvailable ? (
+        <Box data-testid="settlement-desk-ledger">
+          <HeadlineStrip columns={3}>
+            <HeadlineFigure
+              label="Ledger committed"
+              value={ledgerUsd(view.ledgerCommittedUsd)}
+              compact
+              caption="Written when the case is approved"
+            />
+            <HeadlineFigure
+              label="Ledger consumed"
+              value={ledgerUsd(view.ledgerConsumedUsd)}
+              compact
+              caption="Written when the case is settled"
+            />
+            <HeadlineFigure
+              label="Ledger paid"
+              value={ledgerUsd(view.ledgerPaidUsd)}
+              compact
+              caption={
+                (view.ledgerPaidRowCount ?? 0) > 0
+                  ? 'Linked payment evidence'
+                  : 'Historical payments were not loaded'
+              }
+            />
+          </HeadlineStrip>
+        </Box>
+      ) : view.ledgerAvailable === false ? (
+        <Typography variant="body2" color="text.secondary" data-testid="settlement-desk-ledger">
+          Budget ledger is not available for this case.
+        </Typography>
+      ) : null}
 
       <Box data-testid="settlement-desk-overlap">
       <Panel

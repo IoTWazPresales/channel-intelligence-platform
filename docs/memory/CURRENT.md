@@ -8,7 +8,7 @@
 
 **Closed 2026-10-12:** N-0075, N-0086, N-0078. The set-password invite was sent to warren_eliason@asus.com as admin. The mail has no password. admin@local and viewer@local were not retired. N-0086 is VERIFIED_WITH_LIMITATIONS (same session, not a different model). N-0078 checks the latest stored snapshot for Takealot and Evetech. Amazon is No data. Search position is deferred. N-0076 and N-0085 are still proposed.
 
-**N-0079 in progress:** `20261012_0034` is on cip. Budgets shows payment link coverage: 243 of 2718 paid evidence rows are linked to a case, and 283 of 3375 evidence rows are linked. The Paid column has 0 ledger rows. Historical payments were not loaded. Customer and product-line views, caps, and moves are unchanged. Non-campaign reserves are written on the next lineup approval; none are stored yet. The node is not complete. Web build `v2QEAn6yCQNyq3Dgt7VMm`.
+**N-0079 in progress:** `20261012_0034` is on cip. A case settlement desk shows ledger committed, consumed, and paid in USD. Case C24A96486 shows committed US$0, consumed US$574.5956, paid US$0. The case-currency Paid tile stays R0. Historical payments were not loaded. Non-campaign reserves are written on the next lineup approval; none are stored yet. The node is not complete. Web build `XG9dHzWIDH6WPKcBNIJQc`.
 
 **Branch:** `feat/ns-2-brief-nav-collapse`. Do not push main.
 

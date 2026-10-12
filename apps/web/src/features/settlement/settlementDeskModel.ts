@@ -121,6 +121,12 @@ export type SettlementDeskView = {
   outOfWindowClaimRows?: number;
   unresolvedProducts?: { token: string; units: number }[];
   cstReconciliation?: { available: boolean; reason?: string; divergence_count?: number } | null;
+  /** Append-only ledger for this case, in USD. Absent on older payloads. */
+  ledgerAvailable?: boolean;
+  ledgerCommittedUsd?: number | null;
+  ledgerConsumedUsd?: number | null;
+  ledgerPaidUsd?: number | null;
+  ledgerPaidRowCount?: number;
 };
 
 export function stageFromCaseStatus(status: string, hasCip: boolean): SettleStage {

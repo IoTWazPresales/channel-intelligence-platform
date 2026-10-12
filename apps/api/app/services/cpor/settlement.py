@@ -378,7 +378,18 @@ def build_settlement_consolidation(session: Session, case_id: int) -> dict[str, 
             "cip_qty_grain": "product",
             "agreed_actor": case.decided_by if case.status == "settled" else None,
         },
+        "ledger": _case_ledger(session, case_id),
     }
+
+
+def _case_ledger(session: Session, case_id: int) -> dict[str, Any] | None:
+    """Read commit, consume, and paid for this case. A missing ledger does not fail the desk."""
+    try:
+        from app.services.budget_ledger import case_ledger_amounts
+
+        return case_ledger_amounts(session, case_id)
+    except Exception:
+        return None
 
 
 def compute_cst_divergence_flags(

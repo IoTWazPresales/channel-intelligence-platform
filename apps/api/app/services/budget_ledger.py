@@ -848,6 +848,46 @@ def record_paid_evidence(session: Session, evidence: Any, *, actor: str | None) 
     return True
 
 
+def case_ledger_from_rows(rows: list[tuple[str, float | None]]) -> dict[str, float | int]:
+    """Sum one case. Paid local amounts stay out of the USD total."""
+    committed = 0.0
+    consumed = 0.0
+    paid = 0.0
+    paid_rows = 0
+    for entry_type, amount in rows:
+        if entry_type in {"commit", "commit_adjust"} and amount is not None:
+            committed += float(amount)
+        elif entry_type == "consume" and amount is not None:
+            consumed += float(amount)
+        elif entry_type == "paid":
+            paid_rows += 1
+            if amount is not None:
+                paid += float(amount)
+    return {
+        "committed_usd": round(committed, 4),
+        "consumed_usd": round(consumed, 4),
+        "paid_usd": round(paid, 4),
+        "paid_row_count": paid_rows,
+    }
+
+
+def case_ledger_amounts(session: Session, case_id: int) -> dict[str, float | int] | None:
+    """Ledger commit, consume, and paid for one case. None if the table is missing. Does not write."""
+    stmt = select(BudgetLedgerEntry.entry_type, BudgetLedgerEntry.amount_usd).where(
+        BudgetLedgerEntry.case_id == int(case_id)
+    )
+    nested = session.begin_nested()
+    try:
+        rows = list(session.execute(stmt).all())
+        nested.commit()
+    except ProgrammingError:
+        nested.rollback()
+        return None
+    return case_ledger_from_rows(
+        [(str(entry_type), None if amount is None else float(amount)) for entry_type, amount in rows]
+    )
+
+
 def describe_payment_link_coverage(counts: dict[str, int]) -> str:
     """Name the link gap. Counts are not dollars, and this does not write paid rows."""
     paid_rows = int(counts["paid_rows"])
