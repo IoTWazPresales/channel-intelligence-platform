@@ -16,7 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
-- 2026-10-12 — **budget campaign view and buckets** on `feat/ns-2-brief-nav-collapse`. Campaign is the budget. Non-campaign reserve is written on lineup approval and is empty until then. Unplanned labels consumption with no reserve. Unknown quarter is the blank-quarter filter. N-0079 is not complete. Never main.
+- 2026-10-12 — **budget campaign view and buckets** `c6e3df3a` on `feat/ns-2-brief-nav-collapse`. Campaign is the budget. Non-campaign reserve is written on lineup approval and is empty until then. Unplanned labels consumption with no reserve. Unknown quarter is the blank-quarter filter. N-0079 is not complete. Never main.
 - 2026-10-12 — **budget pending and cap columns** `e9c0b203` on `feat/ns-2-brief-nav-collapse`. Pending is proposed-case support and does not reduce remaining. Cap shows No cap; no portfolio ceiling is set. N-0079 still open for the campaign view and the unplanned and unknown-quarter buckets. Never main.
 - 2026-10-12 — **invite and listing quality** `aef755c6` on `feat/ns-2-brief-nav-collapse`. N-0075 and N-0086 closed after the set-password invite. Local accounts kept. N-0078 closed for Takealot and Evetech stored snapshots. N-0079 blocked: migrate URL unset, clone not created, `20261012_0033` not applied. Never main.
 - 2026-10-11 — **N-0065 closed** `5fc64c89` on `feat/ns-2-brief-nav-collapse`. Read-only cip probe: planner with no lines sees 0 current shipment-evidence rows; one line sees 0 rows from other product lines. N-0075 blocked: digest mailbox user and password are empty and send is off, so no invite was sent. N-0086, N-0078 and N-0079 stay open. Never main.
