@@ -1,6 +1,6 @@
 """Append-only budget ledger.
 
-Nobody types a pot. A lineup approval reserves the campaign portion. A case
+Nobody types a pot. A lineup approval writes a campaign reserve and a non-campaign reserve. The campaign view is the budget. A case
 approval commits. Settlement consumes and releases the unused commitment.
 Payment is a separate paid row. Draft and cancelled cases are not left as
 open commitment. Caps flag and never block.
@@ -11,7 +11,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
 
@@ -127,6 +127,32 @@ def position_with_pending(
     return [index[key] for key in sorted(index)]
 
 
+def annotate_buckets(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Name the blank quarter and the spend that has no reserve.
+
+    The amounts stay on the same row. A bucket is a label, not a second copy.
+    """
+    named: list[dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        quarter = str(item.get("landed_quarter") or "")
+        product_line = str(item.get("product_line") or "")
+        item["quarter_label"] = "Unknown quarter" if not quarter else quarter
+        item["line_label"] = "No product line" if not product_line else product_line
+        reserved = float(item.get("reserved") or 0)
+        consumed = float(item.get("consumed") or 0)
+        item["bucket"] = "unplanned" if consumed > reserved + 0.0001 else "planned"
+        named.append(item)
+    return named
+
+
+def include_in_view(source_tag: str | None, view: str) -> bool:
+    """Non-campaign reserves stay out of the campaign budget. Everything else stays in."""
+    if view == "non_campaign":
+        return source_tag == "non_campaign"
+    return source_tag != "non_campaign"
+
+
 def proposed_pending(session: Session) -> list[tuple[str, str, float]]:
     """Support on proposed cases, by product line and landed quarter.
 
@@ -148,13 +174,21 @@ def proposed_pending(session: Session) -> list[tuple[str, str, float]]:
     ]
 
 
-def position_rows(session: Session) -> list[dict[str, Any]]:
+def position_rows(session: Session, *, view: str = "campaign") -> list[dict[str, Any]]:
+    chosen = view if view in {"campaign", "non_campaign"} else "campaign"
     stmt = select(
         BudgetLedgerEntry.product_line,
         BudgetLedgerEntry.landed_quarter,
         BudgetLedgerEntry.entry_type,
         func.coalesce(func.sum(BudgetLedgerEntry.amount_usd), 0),
-    ).group_by(
+    )
+    if chosen == "non_campaign":
+        stmt = stmt.where(BudgetLedgerEntry.source_tag == "non_campaign")
+    else:
+        stmt = stmt.where(
+            or_(BudgetLedgerEntry.source_tag.is_(None), BudgetLedgerEntry.source_tag != "non_campaign")
+        )
+    stmt = stmt.group_by(
         BudgetLedgerEntry.product_line,
         BudgetLedgerEntry.landed_quarter,
         BudgetLedgerEntry.entry_type,
@@ -168,7 +202,8 @@ def position_rows(session: Session) -> list[dict[str, Any]]:
     for (product_line, quarter), pairs in sorted(grouped.items()):
         balances = balances_from_amounts(pairs)
         out.append({"product_line": product_line, "landed_quarter": quarter, **balances})
-    return position_with_pending(out, proposed_pending(session))
+    pending = [] if chosen == "non_campaign" else proposed_pending(session)
+    return annotate_buckets(position_with_pending(out, pending))
 
 
 def _product_line(session: Session, product_id: int | None) -> str:
@@ -315,7 +350,8 @@ def load_historical_settled(session: Session, *, actor: str = "historical_import
     }
 
 
-def _campaign_reserve_usd(session: Session, item: Any) -> float | None:
+def _reserve_parts(session: Session, item: Any) -> tuple[float | None, float | None]:
+    """Campaign and non-campaign reserve from the same lineup economics."""
     from app.models.commercial_lineup import CommercialLineupLine
     from app.models.commercial_planner import CommercialSkuAssumption
     from app.services.lineup.profit_reservation import compute_profit_with_reservation
@@ -324,7 +360,7 @@ def _campaign_reserve_usd(session: Session, item: Any) -> float | None:
         select(CommercialSkuAssumption).where(CommercialSkuAssumption.product_id == int(item.product_id))
     )
     if sku is None:
-        return None
+        return None, None
     line = session.scalar(
         select(CommercialLineupLine)
         .where(CommercialLineupLine.product_id == int(item.product_id))
@@ -337,10 +373,10 @@ def _campaign_reserve_usd(session: Session, item: Any) -> float | None:
                 srp = float(raw)
                 break
     if srp is None:
-        return None
+        return None, None
     qty = float(item.planned_volume_units or 0)
     if qty <= 0:
-        return None
+        return None, None
     economics = compute_profit_with_reservation(
         net_requirement_units=qty,
         target_srp_local=srp,
@@ -351,14 +387,64 @@ def _campaign_reserve_usd(session: Session, item: Any) -> float | None:
         vat_rate_pct=float(sku.vat_rate_pct),
         fx_plan_currency_per_cost_currency=float(sku.fx_plan_currency_per_cost_currency),
     )
-    campaign = (economics.get("reservation") or {}).get("campaign_support")
-    if campaign is None:
-        return None
-    return round(float(campaign), 4)
+    reservation = economics.get("reservation") or {}
+
+    def _round(value: Any) -> float | None:
+        if value is None:
+            return None
+        return round(float(value), 4)
+
+    return _round(reservation.get("campaign_support")), _round(reservation.get("non_campaign"))
+
+
+def _reserve_net(session: Session, lineup_item_id: int, tag: str) -> tuple[float, int | None]:
+    stmt = select(BudgetLedgerEntry.id, BudgetLedgerEntry.amount_usd).where(
+        BudgetLedgerEntry.lineup_item_id == int(lineup_item_id),
+        BudgetLedgerEntry.entry_type == "reserve",
+    )
+    if tag == "non_campaign":
+        stmt = stmt.where(BudgetLedgerEntry.source_tag == "non_campaign")
+    else:
+        stmt = stmt.where(
+            or_(BudgetLedgerEntry.source_tag.is_(None), BudgetLedgerEntry.source_tag == "campaign")
+        )
+    rows = session.execute(stmt).all()
+    net = sum(float(amount or 0) for _row_id, amount in rows)
+    last_id = int(rows[-1][0]) if rows else None
+    return net, last_id
+
+
+def _sync_reserve_part(session: Session, common: dict[str, Any], lineup_item_id: int, tag: str, amount: float | None) -> int:
+    net, last_id = _reserve_net(session, lineup_item_id, tag)
+    if amount is None or amount == 0:
+        return 0
+    if abs(net - amount) < 0.0001:
+        return 0
+    written = 0
+    if net:
+        add_entry(
+            session,
+            entry_type="reserve",
+            amount_usd=-net,
+            reverses_entry_id=last_id,
+            source_tag=tag,
+            source_event_id=f"lineup-reverse:{lineup_item_id}:{tag}",
+            **common,
+        )
+        written += 1
+    add_entry(
+        session,
+        entry_type="reserve",
+        amount_usd=amount,
+        source_tag=tag,
+        source_event_id=f"lineup-approve:{lineup_item_id}:{tag}",
+        **common,
+    )
+    return written + 1
 
 
 def apply_lineup_approval(session: Session, item: Any, old_status: str | None, new_status: str, *, actor: str | None) -> int:
-    """Reserve on approve. Reverse that reserve when approval is taken away."""
+    """Write campaign and non-campaign reserves. Reverse both when approval is taken away."""
     product_line = _product_line(session, item.product_id)
     quarter = item.period_label or ""
     if not quarter and getattr(item, "period_start", None) is not None:
@@ -372,43 +458,30 @@ def apply_lineup_approval(session: Session, item: Any, old_status: str | None, n
         "lineup_item_id": item.id,
         "actor": actor,
     }
-    existing = session.execute(
-        select(BudgetLedgerEntry.id, BudgetLedgerEntry.amount_usd).where(
-            BudgetLedgerEntry.lineup_item_id == int(item.id),
-            BudgetLedgerEntry.entry_type == "reserve",
-        )
-    ).all()
-    net = sum(float(amount or 0) for _row_id, amount in existing)
-    last_id = int(existing[-1][0]) if existing else None
-    written = 0
     if new_status == "approved" and (old_status or "") != "approved":
-        amount = _campaign_reserve_usd(session, item)
-        if amount is None or amount == 0:
+        campaign, non_campaign = _reserve_parts(session, item)
+        if campaign is None and non_campaign is None:
             return 0
-        if abs(net - amount) < 0.0001:
-            return 0
-        if net:
+        written = _sync_reserve_part(session, common, int(item.id), "campaign", campaign)
+        written += _sync_reserve_part(session, common, int(item.id), "non_campaign", non_campaign)
+        return written
+    if (old_status or "") == "approved" and new_status != "approved":
+        written = 0
+        for tag in ("campaign", "non_campaign"):
+            net, last_id = _reserve_net(session, int(item.id), tag)
+            if not net:
+                continue
             add_entry(
                 session,
                 entry_type="reserve",
                 amount_usd=-net,
                 reverses_entry_id=last_id,
-                source_event_id=f"lineup-reverse:{item.id}",
+                source_tag=tag,
+                source_event_id=f"lineup-unapprove:{item.id}:{tag}",
                 **common,
             )
             written += 1
-        add_entry(session, entry_type="reserve", amount_usd=amount, source_event_id=f"lineup-approve:{item.id}", **common)
-        return written + 1
-    if (old_status or "") == "approved" and new_status != "approved" and net:
-        add_entry(
-            session,
-            entry_type="reserve",
-            amount_usd=-net,
-            reverses_entry_id=last_id,
-            source_event_id=f"lineup-unapprove:{item.id}",
-            **common,
-        )
-        return 1
+        return written
     return 0
 
 

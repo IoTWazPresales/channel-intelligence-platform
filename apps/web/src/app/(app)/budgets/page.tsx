@@ -1,7 +1,7 @@
 'use client';
 
 import type { ColDef } from 'ag-grid-community';
-import { Stack, Typography } from '@mui/material';
+import { Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
@@ -21,6 +21,9 @@ type PositionRow = {
   remaining: number;
   pending: number;
   cap: number | null;
+  quarter_label: string;
+  line_label: string;
+  bucket: 'planned' | 'unplanned';
 };
 
 type EntryRow = {
@@ -36,27 +39,30 @@ type EntryRow = {
 
 export default function BudgetsPage() {
   const [picked, setPicked] = useState<PositionRow | null>(null);
+  const [view, setView] = useState<'campaign' | 'non_campaign'>('campaign');
+  const [bucket, setBucket] = useState<'all' | 'unplanned' | 'unknown'>('all');
   const position = useQuery({
-    queryKey: ['budgets', 'ledger'],
+    queryKey: ['budgets', 'ledger', view],
     queryFn: ({ signal }) =>
-      apiGet<{ data_unavailable: boolean; items: PositionRow[]; portfolio_cap_usd: number | null }>(
-        '/api/v1/budgets/ledger',
+      apiGet<{ data_unavailable: boolean; items: PositionRow[]; portfolio_cap_usd: number | null; view: string }>(
+        `/api/v1/budgets/ledger?view=${view}`,
         { signal },
       ),
   });
   const entries = useQuery({
-    queryKey: ['budgets', 'entries', picked?.product_line, picked?.landed_quarter],
+    queryKey: ['budgets', 'entries', view, picked?.product_line, picked?.landed_quarter],
     enabled: picked != null,
     queryFn: ({ signal }) =>
       apiGet<{ items: EntryRow[] }>(
-        `/api/v1/budgets/ledger/entries?product_line=${encodeURIComponent(picked?.product_line ?? '')}&landed_quarter=${encodeURIComponent(picked?.landed_quarter ?? '')}`,
+        `/api/v1/budgets/ledger/entries?view=${view}&product_line=${encodeURIComponent(picked?.product_line ?? '')}&landed_quarter=${encodeURIComponent(picked?.landed_quarter ?? '')}`,
         { signal },
       ),
   });
   const positionCols = useMemo<ColDef<PositionRow>[]>(
     () => [
-      { field: 'product_line', headerName: 'Product line', flex: 1 },
-      { field: 'landed_quarter', headerName: 'Quarter', width: 120 },
+      { field: 'line_label', headerName: 'Product line', flex: 1 },
+      { field: 'quarter_label', headerName: 'Quarter', width: 150 },
+      { field: 'bucket', headerName: 'Bucket', width: 130, valueGetter: (params) => (params.data?.bucket === 'unplanned' ? 'Unplanned' : 'Planned') },
       { field: 'reserved', headerName: 'Reserved', width: 120 },
       { field: 'committed', headerName: 'Committed', width: 130 },
       { field: 'pending', headerName: 'Pending', width: 120 },
@@ -83,24 +89,66 @@ export default function BudgetsPage() {
     ],
     [],
   );
-  const rows = position.data?.items ?? [];
+  const rows = (position.data?.items ?? []).filter((row) => {
+    if (bucket === 'unplanned') return row.bucket === 'unplanned';
+    if (bucket === 'unknown') return !row.landed_quarter;
+    return true;
+  });
 
   return (
     <FundingChrome>
       <Stack spacing={2} sx={{ mt: 2 }}>
         <Typography variant="body2" color="text.secondary">
-          Product line by quarter. Pending is proposed-case support and does not reduce remaining.
+          Product line by quarter. The campaign view is the budget. Non-campaign is the other reserve and does not
+          reduce remaining. Pending is proposed-case support. Unplanned means consumed with no reserve. A blank
+          quarter is Unknown quarter.
           {position.data?.portfolio_cap_usd == null
             ? ' No portfolio cap is set.'
             : ` Portfolio cap is ${position.data.portfolio_cap_usd}.`}{' '}
-          No product line has its own cap. Caps flag and do not block.
+          Caps flag and do not block.
         </Typography>
+        <Stack direction="row" spacing={1}>
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={view}
+            onChange={(_event, next: 'campaign' | 'non_campaign' | null) => {
+              if (next) {
+                setView(next);
+                setPicked(null);
+              }
+            }}
+            aria-label="Reserve view"
+          >
+            <ToggleButton value="campaign">Campaign</ToggleButton>
+            <ToggleButton value="non_campaign">Non-campaign</ToggleButton>
+          </ToggleButtonGroup>
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={bucket}
+            onChange={(_event, next: 'all' | 'unplanned' | 'unknown' | null) => {
+              if (next) setBucket(next);
+            }}
+            aria-label="Budget buckets"
+          >
+            <ToggleButton value="all">All</ToggleButton>
+            <ToggleButton value="unplanned">Unplanned</ToggleButton>
+            <ToggleButton value="unknown">Unknown quarter</ToggleButton>
+          </ToggleButtonGroup>
+        </Stack>
         <ModuleDataSection
           isLoading={position.isLoading}
           isError={position.isError || position.data?.data_unavailable === true}
           error={position.isError || position.data?.data_unavailable ? new Error('Budget ledger is not available.') : null}
           isEmpty={!position.isLoading && rows.length === 0}
-          empty={{ title: 'No budget entries', description: 'Approved lineup reserves and settled cases will appear here.' }}
+          empty={{
+            title: view === 'non_campaign' ? 'No non-campaign reserve' : 'No budget entries',
+            description:
+              view === 'non_campaign'
+                ? 'A lineup approval writes the non-campaign reserve. Nothing has been written yet.'
+                : 'Approved lineup reserves and settled cases will appear here.',
+          }}
         >
           <EnterpriseDataGrid<PositionRow>
             rowData={rows}
@@ -112,7 +160,7 @@ export default function BudgetsPage() {
         {picked ? (
           <Stack spacing={1}>
             <Typography variant="subtitle2">
-              {picked.product_line || 'No product line'} · {picked.landed_quarter || 'No quarter'}
+              {picked.line_label || 'No product line'} · {picked.quarter_label || 'Unknown quarter'}
             </Typography>
             <EnterpriseDataGrid<EntryRow>
               rowData={entries.data?.items ?? []}

@@ -1,6 +1,6 @@
 """Budget ledger sums. No database."""
 
-from app.services.budget_ledger import balances_from_amounts, position_with_pending
+from app.services.budget_ledger import annotate_buckets, balances_from_amounts, include_in_view, position_with_pending
 
 
 def test_balances_net_commit_consume_and_cancel():
@@ -41,3 +41,38 @@ def test_pending_does_not_reduce_remaining_and_cap_stays_empty():
     assert by_key[("NR", "2026Q1")]["pending"] == 10
     assert by_key[("NR", "2026Q1")]["remaining"] == 0
     assert by_key[("NR", "2026Q1")]["cap"] is None
+
+
+def test_unplanned_and_unknown_quarter_are_labels_not_new_amounts():
+    rows = annotate_buckets(
+        [
+            {
+                "product_line": "NB",
+                "landed_quarter": "",
+                "reserved": 0,
+                "consumed": 10,
+                "remaining": -10,
+                "pending": 0,
+                "cap": None,
+            },
+            {
+                "product_line": "",
+                "landed_quarter": "2026Q2",
+                "reserved": 20,
+                "consumed": 5,
+                "remaining": 15,
+                "pending": 0,
+                "cap": None,
+            },
+        ]
+    )
+    assert rows[0]["quarter_label"] == "Unknown quarter"
+    assert rows[0]["bucket"] == "unplanned"
+    assert rows[0]["remaining"] == -10
+    assert rows[1]["line_label"] == "No product line"
+    assert rows[1]["bucket"] == "planned"
+    assert include_in_view(None, "campaign") is True
+    assert include_in_view("historical_import", "campaign") is True
+    assert include_in_view("non_campaign", "campaign") is False
+    assert include_in_view("non_campaign", "non_campaign") is True
+    assert include_in_view("campaign", "non_campaign") is False
