@@ -96,6 +96,58 @@ def used_usd(session: Session, *, landed_quarter: str | None = None) -> float | 
     return balances["pending_headroom_used"]
 
 
+def position_with_pending(
+    rows: list[dict[str, Any]],
+    pending: list[tuple[str, str, float]],
+) -> list[dict[str, Any]]:
+    """Add proposed-case support beside the ledger sums.
+
+    Pending does not change remaining. Cap stays empty: nobody types a pot
+    per product line.
+    """
+    index: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in rows:
+        item = dict(row)
+        item["pending"] = 0.0
+        item["cap"] = None
+        index[(str(item.get("product_line") or ""), str(item.get("landed_quarter") or ""))] = item
+    for product_line, quarter, amount in pending:
+        key = (str(product_line or ""), str(quarter or ""))
+        item = index.get(key)
+        if item is None:
+            item = {
+                "product_line": key[0],
+                "landed_quarter": key[1],
+                **balances_from_amounts([]),
+                "pending": 0.0,
+                "cap": None,
+            }
+            index[key] = item
+        item["pending"] = round(float(amount or 0), 4)
+    return [index[key] for key in sorted(index)]
+
+
+def proposed_pending(session: Session) -> list[tuple[str, str, float]]:
+    """Support on proposed cases, by product line and landed quarter.
+
+    Draft and cancelled cases are excluded. A missing result amount is skipped.
+    """
+    line_expr = func.coalesce(DimProduct.product_line, "")
+    quarter_expr = func.coalesce(CporCaseLine.pod_quarter, "")
+    stmt = (
+        select(line_expr, quarter_expr, func.coalesce(func.sum(CporCaseLine.ttl_support_usd), 0))
+        .select_from(CporCaseLine)
+        .join(CporCase, CporCase.id == CporCaseLine.case_id)
+        .outerjoin(DimProduct, DimProduct.id == CporCaseLine.product_id)
+        .where(CporCase.status == "proposed", CporCaseLine.ttl_support_usd.is_not(None))
+        .group_by(line_expr, quarter_expr)
+    )
+    return [
+        (str(product_line or ""), str(quarter or ""), float(amount or 0))
+        for product_line, quarter, amount in session.execute(stmt).all()
+    ]
+
+
 def position_rows(session: Session) -> list[dict[str, Any]]:
     stmt = select(
         BudgetLedgerEntry.product_line,
@@ -116,7 +168,7 @@ def position_rows(session: Session) -> list[dict[str, Any]]:
     for (product_line, quarter), pairs in sorted(grouped.items()):
         balances = balances_from_amounts(pairs)
         out.append({"product_line": product_line, "landed_quarter": quarter, **balances})
-    return out
+    return position_with_pending(out, proposed_pending(session))
 
 
 def _product_line(session: Session, product_id: int | None) -> str:

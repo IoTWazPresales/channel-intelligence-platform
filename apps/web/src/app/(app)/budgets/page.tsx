@@ -19,6 +19,8 @@ type PositionRow = {
   released: number;
   paid: number;
   remaining: number;
+  pending: number;
+  cap: number | null;
 };
 
 type EntryRow = {
@@ -36,7 +38,11 @@ export default function BudgetsPage() {
   const [picked, setPicked] = useState<PositionRow | null>(null);
   const position = useQuery({
     queryKey: ['budgets', 'ledger'],
-    queryFn: ({ signal }) => apiGet<{ data_unavailable: boolean; items: PositionRow[] }>('/api/v1/budgets/ledger', { signal }),
+    queryFn: ({ signal }) =>
+      apiGet<{ data_unavailable: boolean; items: PositionRow[]; portfolio_cap_usd: number | null }>(
+        '/api/v1/budgets/ledger',
+        { signal },
+      ),
   });
   const entries = useQuery({
     queryKey: ['budgets', 'entries', picked?.product_line, picked?.landed_quarter],
@@ -53,10 +59,17 @@ export default function BudgetsPage() {
       { field: 'landed_quarter', headerName: 'Quarter', width: 120 },
       { field: 'reserved', headerName: 'Reserved', width: 120 },
       { field: 'committed', headerName: 'Committed', width: 130 },
+      { field: 'pending', headerName: 'Pending', width: 120 },
       { field: 'consumed', headerName: 'Consumed', width: 130 },
       { field: 'released', headerName: 'Released', width: 120 },
       { field: 'paid', headerName: 'Paid', width: 110 },
       { field: 'remaining', headerName: 'Remaining', width: 130 },
+      {
+        colId: 'cap',
+        headerName: 'Cap',
+        width: 110,
+        valueGetter: (params) => (params.data?.cap == null ? 'No cap' : String(params.data.cap)),
+      },
     ],
     [],
   );
@@ -76,7 +89,11 @@ export default function BudgetsPage() {
     <FundingChrome>
       <Stack spacing={2} sx={{ mt: 2 }}>
         <Typography variant="body2" color="text.secondary">
-          Product line by quarter. Amounts are sums of ledger rows. A correction is a reversing row. Caps flag and do not block.
+          Product line by quarter. Pending is proposed-case support and does not reduce remaining.
+          {position.data?.portfolio_cap_usd == null
+            ? ' No portfolio cap is set.'
+            : ` Portfolio cap is ${position.data.portfolio_cap_usd}.`}{' '}
+          No product line has its own cap. Caps flag and do not block.
         </Typography>
         <ModuleDataSection
           isLoading={position.isLoading}

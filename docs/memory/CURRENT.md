@@ -8,7 +8,7 @@
 
 **Closed 2026-10-12:** N-0075, N-0086, N-0078. The set-password invite was sent to warren_eliason@asus.com as admin. The mail has no password. admin@local and viewer@local were not retired. N-0086 is VERIFIED_WITH_LIMITATIONS (same session, not a different model). N-0078 checks the latest stored snapshot for Takealot and Evetech. Amazon is No data. Search position is deferred. N-0076 and N-0085 are still proposed.
 
-**N-0079 in progress:** `20261012_0033` is on cip. Clone `cip_n0079` proved the historical load first (written 435, 4 lines skipped with no result, second load wrote 0, owner update and delete raised append-only). The same load then ran on cip. The Budgets page shows product line by quarter and a row click drills to `historical_import` consume rows. Remaining is negative on those rows because historical consumption has no reserve. The page has no pending column and no cap column. D-0059 still open for the campaign view switch, unplanned and unknown-quarter buckets, and an admin cap control. Caps flag and do not block. The node is not complete.
+**N-0079 in progress:** `20261012_0033` is on cip. Historical consume load wrote 435 rows. The Budgets page shows product line by quarter, including pending and cap. Pending is proposed-case support and does not reduce remaining. Visible rows are 0 pending because no case is proposed. Cap is “No cap” on every row: no portfolio ceiling is set and nobody types a pot per product line. A row click still drills to `historical_import` consume rows. Still open: campaign and non-campaign view, unplanned-spend and unknown-quarter buckets. The node is not complete. Web build `9Lkjrw_MQmZK-e_3eC4oz`.
 
 **Branch:** `feat/ns-2-brief-nav-collapse`. Do not push main.
 

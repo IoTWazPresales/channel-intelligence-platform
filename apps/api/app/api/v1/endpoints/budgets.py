@@ -20,8 +20,10 @@ async def budget_ledger_position(db: AsyncSession = Depends(get_db)):
     try:
         rows = await db.run_sync(lambda sync: position_rows(sync))
     except Exception:
-        return {"data_unavailable": True, "items": []}
-    return {"data_unavailable": False, "items": rows}
+        return {"data_unavailable": True, "items": [], "portfolio_cap_usd": None}
+    from app.services.cpor.budget_reapproval import money_ceiling_usd
+
+    return {"data_unavailable": False, "items": rows, "portfolio_cap_usd": money_ceiling_usd()}
 
 
 @router.get("/ledger/entries")
