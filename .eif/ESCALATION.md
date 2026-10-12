@@ -7,7 +7,6 @@
 - blocker **BL-0003** on N-0060 type=human ref=D-0020 Historical lineup backfill: Warren supplies the pre-2025 lineup archive and decides whether to load it into cip (a cip write). Options: (a) load all history via the existing bulk-backfill path after N-0058 rules land; (b) load only the years D-h needs; (c) do not load. Blocks D-h depth.
 - blocker **BL-0008** on N-0072 type=decision ref=D-0025 Stage 4.7 (BACKLOG-046) ACZA workbook non-operational sheets (BOM Not Ready) allowlist business rule. Not decided (D-e).
 - blocker **BL-0014** on N-0074 type=decision ref=D-0048 Warren picks the domain (own, buy, or stay on the quick tunnel) and runs the Cloudflare sign-in himself.
-- blocker **BL-0018** on N-0080 type=decision ref=D-0052 Warren names the headline cost basis for margin.
 - blocker **BL-0019** on N-0081 type=decision ref=D-0053 Warren walks one real distributor price-directive example through the steps.
 - decision **D-0020** scope=N-0060: Historical lineup backfill: Warren supplies the pre-2025 lineup archive and decides whether to load it into cip (a cip write). Options: (a) load all history via the existing bulk-backfill path after N-0058 rules land; (b) load only the years D-h needs; (c) do not load. Blocks D-h depth.
 - decision **D-0021** scope=N-0063: Uplift from settled claims needs claim-evidence rows (cpor_claim_evidence_line 0 vs 211 settled cases). Unlocked by Warren's customer/distributor data drive, not by code.

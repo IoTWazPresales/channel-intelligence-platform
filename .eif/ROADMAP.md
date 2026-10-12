@@ -81,7 +81,7 @@
 - N-0077 **Competitor listing monitoring and price position: competitor product pages captured and tracked by CIP itself, suggested matches, impact on our price and sell-out (spec section 9.9)** `proposed`/`proposed` (feature)
 - N-0078 **Listing quality and SEO across all reporting customers: cross-retailer parity, content floor, spec accuracy, freshness, sell-through beside quality, search position** `complete`/`complete` (feature)
 - N-0079 **Budget ledger: derived reserve, commitment, consumption, payment and reconciliation, with transfers and optional caps (spec section 9.7)** `complete`/`complete` (feature)
-- N-0080 **One profit definition: PM controlled cost, DAP and landed cost kept apart on lineup and CPOR margin (spec section 9.3)** `blocked`/`blocked` (feature)
+- N-0080 **One profit definition: PM controlled cost, DAP and landed cost kept apart on lineup and CPOR margin (spec section 9.3)** `ready`/`ready` (feature)
 - N-0081 **Distributor channel and New-DAP price protection: rebate and disti margin waterfall steps, DSI SOH cost capture, re-invoice (spec section 9.1)** `blocked`/`blocked` (feature)
 - N-0082 **Customer approval link for settlement sign-off (spec section 9.2; trigger met: 211 cases settled manually)** `proposed`/`proposed` (feature)
 - N-0083 **FX rate table and ROE governance: daily rates actually stored, case ROE drawn from the table (spec section 9.4)** `proposed`/`proposed` (feature)

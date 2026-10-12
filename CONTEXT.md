@@ -16,6 +16,7 @@
 
 For deferrals use **`docs/BACKLOG.md`**. For conflicts between docs, **ask Warren** before proceeding (see MEMORY_PALACE.md).
 
+- 2026-10-12 — **customer sign-off link** `9fc1413b` on `feat/ns-2-brief-nav-collapse`. Decisions `4e02ede7`: a sales-only upload must be marked, the stock-gap highlight is an editable unit setting, and the headline margin is PM controlled cost. N-0082 is not closed. Migration `20261012_0035` is not on cip. Never main.
 - 2026-10-12 — **N-0079 closed** `be4d8b2c` on `feat/ns-2-brief-nav-collapse`. Budget ledger node is complete, VERIFIED_WITH_LIMITATIONS (same session, not a different model). Non-campaign rows still wait for a real lineup approval. Historical payments were not loaded. N-0110 is on the frontier and is not started. Never main.
 - 2026-10-12 — **campaign ledger draw** `b5799854` on `feat/ns-2-brief-nav-collapse`. The promotion planner and the lineup budget position use the campaign ledger. Caps and the non-campaign reserve are not in that draw. Period 2026Q2 shows ledger drawn USD 103644.6669. N-0110 waits until N-0079 is closed. N-0079 is not complete. Never main.
 - 2026-10-12 — **settlement ledger figures** `eb472092` on `feat/ns-2-brief-nav-collapse`. The case desk shows ledger committed, consumed, and paid in USD. Case C24A96486 consumed US$574.5956. Historical payments were not loaded. N-0079 is not complete. Never main.

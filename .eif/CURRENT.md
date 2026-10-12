@@ -13,6 +13,7 @@
 
 ## Ready leaves
 
+- **N-0080** One profit definition: PM controlled cost, DAP and landed cost kept apart on lineup and CPOR margin (spec section 9.3) (feature, R3, stage=None)
 - **N-0082** Customer approval link for settlement sign-off (spec section 9.2; trigger met: 211 cases settled manually) (feature, R3, stage=None)
 - **N-0095** Customer merge completion: loser-name alias seal at confirm, resolvers follow merged_into, related-name worklist and repair scripts (BACKLOG-081 + 083, shipped as a pair) (feature, R3, stage=None)
 - **N-0098** Shipment evidence Plan D: stop the dual write, then drop redundant columns (BACKLOG-057 D4, 058 D5) (feature, R3, stage=None)
