@@ -9,6 +9,7 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { useTheme } from '@mui/material/styles';
 
+import { formatLocalMoney } from '@/features/cpor/fxDisplay';
 import { apiGet, apiPost, safeDisplayError } from '@/lib/api';
 
 type Line = {
@@ -34,11 +35,6 @@ type Summary = {
 function tokenFromLocation(): string {
   if (typeof window === 'undefined') return '';
   return new URLSearchParams(window.location.search).get('token') ?? '';
-}
-
-function money(currency: string, amount: number | null): string {
-  if (amount == null) return '—';
-  return `${currency} ${amount}`;
 }
 
 export default function CaseApprovalPage() {
@@ -125,13 +121,13 @@ export default function CaseApprovalPage() {
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {summary.window_start} to {summary.window_end}. Version {summary.export_version}. Support{' '}
-                {money(summary.currency, summary.support_total)}.
+                {formatLocalMoney(summary.support_total, summary.currency)}.
               </Typography>
               <Box component="ul" sx={{ m: 0, pl: 2 }} data-testid="case-approval-lines">
-                {summary.lines.map((line) => (
-                  <li key={line.product}>
+                {summary.lines.map((line, index) => (
+                  <li key={`${index}-${line.product}`}>
                     {line.product}: estimated {line.estimate_qty ?? '—'}, result {line.result_qty ?? '—'}, support{' '}
-                    {money(summary.currency, line.support_total)}
+                    {formatLocalMoney(line.support_total, summary.currency)}
                   </li>
                 ))}
               </Box>
@@ -163,7 +159,10 @@ export default function CaseApprovalPage() {
                   color="warning"
                   disabled={busy}
                   data-testid="case-approval-reject"
-                  onClick={(event) => decide('rejected', event)}
+                  onClick={(event) => {
+                    if (event.currentTarget.form?.reportValidity() === false) return;
+                    void decide('rejected', event);
+                  }}
                 >
                   Reject
                 </Button>

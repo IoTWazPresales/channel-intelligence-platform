@@ -10,6 +10,13 @@ import { useState } from 'react';
 
 import { apiGet, apiPost } from '@/lib/api';
 
+function when(iso: string | undefined): string {
+  if (!iso) return 'soon';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 type LinkView = {
   state: string;
   recipient_email?: string;
@@ -21,7 +28,7 @@ type LinkView = {
 function describe(view: LinkView | undefined): string {
   if (!view || view.state === 'none') return 'No sign-off link has been sent.';
   if (view.state === 'open') {
-    return `Waiting on ${view.recipient_email}. The link expires ${view.expires_at}.`;
+    return `Waiting on ${view.recipient_email}. The link expires ${when(view.expires_at)}.`;
   }
   if (view.state === 'decided') {
     return `${view.signer_name} ${view.decision} this version.`;

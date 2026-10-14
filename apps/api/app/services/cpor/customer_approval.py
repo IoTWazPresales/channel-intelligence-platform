@@ -183,9 +183,14 @@ def _revoke_open(session: Session, case_id: int, now: datetime) -> int:
     return len(rows)
 
 
-def load_case_customer(session: Session, case_id: int) -> tuple[CporCase, str]:
+def load_case_customer(
+    session: Session, case_id: int, tenant_id: str | None = None
+) -> tuple[CporCase, str]:
+    """Load the case. With a tenant, a case from another tenant reads as missing."""
     case = session.get(CporCase, case_id)
     if case is None:
+        raise LookupError("case")
+    if tenant_id is not None and (case.tenant_id or "default") != tenant_id:
         raise LookupError("case")
     customer = session.get(DimCustomer, case.customer_id)
     name = customer.name if customer is not None else "Customer"
@@ -227,7 +232,7 @@ def decide_public(
     comment = comment.strip()
     if not signer_name or not comment:
         raise ValueError("required")
-    link = _link_by_token(session, raw_token)
+    link = _link_by_token(session, raw_token, for_update=True)
     if link is None:
         raise PermissionError(PUBLIC_MISS)
     case = session.get(CporCase, link.case_id)
@@ -261,13 +266,14 @@ def issue_link(
     case_id: int,
     recipient_email: str,
     actor: str,
+    tenant_id: str | None = None,
     now: datetime | None = None,
     send=send_digest_email,
 ) -> dict[str, Any]:
     """Retire open links, store a new hash, and mail it. The return value has no token."""
     now = now or datetime.now(timezone.utc)
     email = recipient_email.strip().lower()
-    case, _customer = load_case_customer(session, case_id)
+    case, _customer = load_case_customer(session, case_id, tenant_id)
     origin = get_settings().cip_public_web_origin.strip()
     if not origin:
         raise RuntimeError("public_origin")
@@ -311,9 +317,16 @@ def issue_link(
     return planner_view(row, now=now, current_version=int(case.export_version))
 
 
-def revoke_open(session: Session, *, case_id: int, actor: str, now: datetime | None = None) -> dict[str, Any]:
+def revoke_open(
+    session: Session,
+    *,
+    case_id: int,
+    actor: str,
+    tenant_id: str | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
     now = now or datetime.now(timezone.utc)
-    case, _customer = load_case_customer(session, case_id)
+    case, _customer = load_case_customer(session, case_id, tenant_id)
     count = _revoke_open(session, case_id, now)
     if count:
         session.add(
@@ -327,14 +340,20 @@ def revoke_open(session: Session, *, case_id: int, actor: str, now: datetime | N
     return planner_view(_latest(session, case_id), now=now, current_version=int(case.export_version))
 
 
-def status_for_planner(session: Session, case_id: int, now: datetime | None = None) -> dict[str, Any]:
+def status_for_planner(
+    session: Session, case_id: int, tenant_id: str | None = None, now: datetime | None = None
+) -> dict[str, Any]:
     now = now or datetime.now(timezone.utc)
-    case, _customer = load_case_customer(session, case_id)
+    case, _customer = load_case_customer(session, case_id, tenant_id)
     return planner_view(_latest(session, case_id), now=now, current_version=int(case.export_version))
 
 
-def _link_by_token(session: Session, raw_token: str) -> CporCaseApprovalLink | None:
+def _link_by_token(
+    session: Session, raw_token: str, *, for_update: bool = False
+) -> CporCaseApprovalLink | None:
+    """Find a link by token hash. for_update locks the row so two submits cannot both decide."""
     token_hash = hash_session_token((raw_token or "").strip())
-    return session.scalars(
-        select(CporCaseApprovalLink).where(CporCaseApprovalLink.token_hash == token_hash)
-    ).first()
+    stmt = select(CporCaseApprovalLink).where(CporCaseApprovalLink.token_hash == token_hash)
+    if for_update:
+        stmt = stmt.with_for_update()
+    return session.scalars(stmt).first()

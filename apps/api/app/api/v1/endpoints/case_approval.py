@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.core.security import Role, require_roles
+from app.core.tenant_scope import tenant_id_from_user
 from app.db.session_sync import SessionLocal
 from app.services.cpor.customer_approval import (
     PUBLIC_MISS,
@@ -59,10 +60,9 @@ def _actor(user: dict) -> str:
 
 @router.get("/cases/{case_id}/approval-link")
 def get_approval_link(case_id: int, user: dict = Depends(_require_planner)):
-    del user
     with SessionLocal() as session:
         try:
-            return status_for_planner(session, case_id)
+            return status_for_planner(session, case_id, tenant_id_from_user(user))
         except LookupError:
             raise HTTPException(status_code=404, detail="Case not found") from None
 
@@ -76,6 +76,7 @@ def post_approval_link(case_id: int, body: SendLinkBody, user: dict = Depends(_r
                 case_id=case_id,
                 recipient_email=body.recipient_email,
                 actor=_actor(user),
+                tenant_id=tenant_id_from_user(user),
             )
         except LookupError:
             raise HTTPException(status_code=404, detail="Case not found") from None
@@ -92,7 +93,9 @@ def post_approval_link(case_id: int, body: SendLinkBody, user: dict = Depends(_r
 def post_revoke_approval_link(case_id: int, user: dict = Depends(_require_planner)):
     with SessionLocal() as session:
         try:
-            view = revoke_open(session, case_id=case_id, actor=_actor(user))
+            view = revoke_open(
+                session, case_id=case_id, actor=_actor(user), tenant_id=tenant_id_from_user(user)
+            )
         except LookupError:
             raise HTTPException(status_code=404, detail="Case not found") from None
         session.commit()
