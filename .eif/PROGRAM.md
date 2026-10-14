@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 2220
+**Snapshot revision:** 2264
 
 ## Outcome (verbatim)
 
@@ -131,4 +131,4 @@ _none_
 | N-0107 | Supervisor recognises a network that blocks the tunnel port and stops churning the quick tunnel | feature | complete | complete | yes |  | full loop |
 | N-0108 | Brief and Cover speed: stop sorting the whole weeks-of-cover table to keep the latest rows | feature | proposed | proposed | yes |  | full loop |
 | N-0109 | Reports, dashboards and KPI tiles on the design lab system: one chart system, one KPI tile, one table style (build to mockup-report-system) | feature | complete | complete | yes |  | full loop |
-| N-0110 | Customer sell-through stock gap: the customer report is on-hand, CIP flags the difference | feature | proposed | proposed | yes |  | full loop |
+| N-0110 | Customer sell-through stock gap: the customer report is on-hand, CIP flags the difference | feature | in_progress | in_progress | yes |  | full loop |

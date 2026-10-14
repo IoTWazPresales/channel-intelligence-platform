@@ -111,4 +111,4 @@
 - N-0107 **Supervisor recognises a network that blocks the tunnel port and stops churning the quick tunnel** `complete`/`complete` (feature)
 - N-0108 **Brief and Cover speed: stop sorting the whole weeks-of-cover table to keep the latest rows** `proposed`/`proposed` (feature)
 - N-0109 **Reports, dashboards and KPI tiles on the design lab system: one chart system, one KPI tile, one table style (build to mockup-report-system)** `complete`/`complete` (feature)
-- N-0110 **Customer sell-through stock gap: the customer report is on-hand, CIP flags the difference** `proposed`/`proposed` (feature)
+- N-0110 **Customer sell-through stock gap: the customer report is on-hand, CIP flags the difference** `in_progress`/`in_progress` (feature)

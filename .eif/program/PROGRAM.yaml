@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2220
-  log_sha256: c4cc86fdf36be3d1ef0e9f4fbac8d57c53616a5f60dbdc1c88916f47ab591b0d
+  snapshot_revision: 2264
+  log_sha256: 9038e8d8cb6baf3e1e89ff0512a531fa60e2fd13cbbdd476a6ace24b0f0aa6bf
   acceptance_policy:
     milestone: operator
     root: operator
@@ -12864,9 +12864,9 @@ nodes:
     title: 'Customer sell-through stock gap: the customer report is on-hand, CIP flags the difference'
     class: feature
     origin: operator
-    status: proposed
-    stage: null
-    revision: 0
+    status: in_progress
+    stage: verify
+    revision: 22
     lease: null
     depends_on:
     - N-0079
@@ -12896,70 +12896,145 @@ nodes:
     - The unit gap is shown on every compared row. A highlighted flag uses a band Warren names before implementation. Do not
       copy the distributor 10 percent variance.
     - Labels that say CST are a separate later pass and are not part of this node.
-    baseline_ref: null
+    baseline_ref: BLN-N0110
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
     quality:
       testing:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: apps/api/tests/test_customer_stock_gap.py
+          summary: pytest 245 passed on touched CST areas plus 119 on period read models (cip_test, incl. 1 DB test); vitest
+            13 passed on touched files; web tsc exit 0; next lint 0 errors on changed files.
+        rationale: pytest 245 passed on touched CST areas plus 119 on period read models (cip_test, incl. 1 DB test); vitest
+          13 passed on touched files; web tsc exit 0; next lint 0 errors on changed files.
+        pass_run: RUN-20261014-N0110-IMPL
+        pass_actor: gov-001
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: apps/api/app/services/channel_intelligence/customer_stock_gap.py
+          summary: A recompute failure after apply is logged and added to the apply summary errors; it never undoes the load.
+            Each position carries computed_at and the import job that reported it.
+        rationale: A recompute failure after apply is logged and added to the apply summary errors; it never undoes the load.
+          Each position carries computed_at and the import job that reported it.
+        pass_run: RUN-20261014-N0110-IMPL
+        pass_actor: gov-001
       data_integrity:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: apps/api/tests/test_customer_stock_gap_db.py
+          summary: Reported on-hand and units are never rewritten (DB test asserts fact on-hand unchanged). Positions are
+            derived and replaced per customer and product, never duplicated. Unmatched and open shipments sta
+        rationale: Reported on-hand and units are never rewritten (DB test asserts fact on-hand unchanged). Positions are
+          derived and replaced per customer and product, never duplicated. Unmatched and open shipments stay out.
+        pass_run: RUN-20261014-N0110-IMPL
+        pass_actor: gov-001
       backup_recovery:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: apps/api/app/services/channel_intelligence/customer_stock_gap.py
+          summary: 'customer_stock_position is derived: Recompute (or recompute_all_customer_stock_positions) rebuilds it
+            from facts and shipments. Downgrade drops it and the new columns without touching existing data.'
+        rationale: 'customer_stock_position is derived: Recompute (or recompute_all_customer_stock_positions) rebuilds it
+          from facts and shipments. Downgrade drops it and the new columns without touching existing data.'
+        pass_run: RUN-20261014-N0110-IMPL
+        pass_actor: gov-001
       migration_safety:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261014/N0110_CLONE_PROOF.md
+          summary: 'Clone proof on cip_n0110: upgrade, downgrade, upgrade and recompute with fact rows 1823, units 6159, on-hand
+            28812, staging 43472 unchanged; then applied to cip. cip_test round trip clean.'
+        rationale: 'Clone proof on cip_n0110: upgrade, downgrade, upgrade and recompute with fact rows 1823, units 6159, on-hand
+          28812, staging 43472 unchanged; then applied to cip. cip_test round trip clean.'
+        pass_run: RUN-20261014-N0110-IMPL
+        pass_actor: gov-001
       ux:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: apps/web/src/app/(app)/admin/cst-steward/CstStockGapSection.tsx
+          summary: 'Stock gap tab: Flag, Customer, Customer code, SKU, Product, Report period, Reported on-hand, Expected
+            position, Gap, Previous on-hand, Delivered (POD, matched), Units sold since, In transit, On order,'
+        rationale: 'Stock gap tab: Flag, Customer, Customer code, SKU, Product, Report period, Reported on-hand, Expected
+          position, Gap, Previous on-hand, Delivered (POD, matched), Units sold since, In transit, On order, What it can mean.
+          Threshold field with save, Highlighted only, Recompute, counts line.'
+        pass_run: RUN-20261014-N0110-IMPL
+        pass_actor: gov-001
       a11y:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: apps/web/src/app/(app)/admin/cst-steward/CstStockGapSection.tsx
+          summary: 'Highlight is not colour only: a Flag column says Over threshold and the gap cell is bold. Threshold input
+            is labelled with helper text; sales-only checkbox has a label and aria-describedby. Tests quer'
+        rationale: 'Highlight is not colour only: a Flag column says Over threshold and the gap cell is bold. Threshold input
+          is labelled with helper text; sales-only checkbox has a label and aria-describedby. Tests query by role. No axe
+          run.'
+        pass_run: RUN-20261014-N0110-IMPL
+        pass_actor: gov-001
       rendered:
         required: true
         state: pending
         evidence: null
-        rationale: null
+        rationale: 'UNABLE_TO_RENDER in the browser: /admin/cst-steward?tab=stock-gap on 127.0.0.1:3000 redirected to the
+          sign-in form and no account password may be entered by the agent. Web build ucxLixhJsBuG8OzYirAmF is live; /api/v1/cst-steward/stock-gap
+          answers 401 without a session (an unknown path answers 404). Component tests cover the tab.'
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: pass
+        evidence:
+          path: apps/api/app/services/channel_intelligence/customer_stock_gap.py
+          summary: 'Gap words: Short: stock not delivered, lost, or sold outside the file (with an in-transit hint); Over:
+            a receipt CIP does not have, a return, or overlapping periods. Refusal: This file has units sold '
+        rationale: 'Gap words: Short: stock not delivered, lost, or sold outside the file (with an in-transit hint); Over:
+          a receipt CIP does not have, a return, or overlapping periods. Refusal: This file has units sold and no on-hand
+          column.'
+        pass_run: RUN-20261014-N0110-IMPL
+        pass_actor: gov-001
+    verification:
+      behavioral:
+        state: pass
+        pass_run: RUN-20261014-N0110-VER
+        pass_actor: gov-001
+        evidence: apps/api/tests/test_customer_stock_gap.py
+        path: null
+      referent:
+        state: pass
+        pass_run: RUN-20261014-N0110-VER
+        pass_actor: gov-001
+        evidence: apps/api/tests/test_customer_stock_gap_db.py
+        path: apps/api/app/services/channel_intelligence/customer_stock_gap.py
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: 'VERIFIED_WITH_LIMITATIONS. Self-verified under RUN-20261014-N0110-VER, different from implementation run
+      RUN-20261014-N0110-IMPL; same session, same model, not independent. N-0099 does the second look. Limits: Stock gap tab
+      not rendered in the browser (sign-in); existing fact rows keep NULL grain; shipment loads do not trigger a recompute
+      (Recompute button); re-uploading an old file can add day rows beside its old Monday rows; highlight default 1 unit until
+      Warren sets one. Operator acceptance pending.'
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      cst-fact-rows: 'kept: fact_customer_sellthrough rows, units and reported on-hand unchanged (1823 rows, 6159 units, 28812
+        on-hand on cip)'
+      cst-read-models: 'kept: weekly/monthly read models; legacy rows keep NULL grain and are read by period_type'
+      distributor-derived-stock: 'kept: distributor derived stock and its 10 percent band untouched'
     target_artifact_class: null
     design_artifact_class: null
     risk_class: full
+    implementation_run: RUN-20261014-N0110-IMPL
+    implementation_actor: gov-001
 decisions:
   D-0001:
     id: D-0001
@@ -13835,7 +13910,7 @@ decisions:
       distributor margin x units. Stored plan lines keep their old figure until the line is recalculated; nothing was rewritten.
       Reversible: one line in calculator.py.'
     origin: implementation
-    status: proposed
+    status: accepted
     supersedes: null
   D-0081:
     id: D-0081
@@ -13843,6 +13918,58 @@ decisions:
     statement: CPOR case margin derives DAP from the line SRP, VAT and dealer margin with the customer rebate and distributor
       margin from trade terms, divided by the case ROE (USD). A missing term is used as 0 and flagged on the line; a SKU cost
       not in USD gives no margin and is flagged, never converted.
+    origin: implementation
+    status: accepted
+    supersedes: null
+  D-0082:
+    id: D-0082
+    scope: N-0110
+    statement: 'Warren 2026-10-12: a customer sell-through file with units and no reported on-hand is accepted only when the
+      operator marks that upload as sales-only. Every other such file is refused.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0083:
+    id: D-0083
+    scope: N-0110
+    statement: 'Warren 2026-10-12: the unit gap is shown on every compared row. Highlight is an editable setting in absolute
+      units. A row highlights when the absolute gap is at least the number the user has set. The distributor 10 percent variance
+      is not used.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0084:
+    id: D-0084
+    scope: N-0110
+    statement: 'A week with a number and year but no known customer calendar keeps period_start_date as the ISO Monday of
+      that number and year, as a sort and source-key bucket only; week_start_date stays empty. A date in a column whose header
+      names a week is a stated week start, not a sale day. Reversible: grain module only.'
+    origin: implementation
+    status: proposed
+    supersedes: null
+  D-0085:
+    id: D-0085
+    scope: N-0110
+    statement: The gap is compared per customer and product, summed across the customer's sites for each report period. Units
+      sold count when a period ends after the previous stock report and by this one (so a sales-only upload in between counts).
+      Receipts count when shipped, POD-dated after the previous report's end and by this report's end, and matched to the
+      customer.
+    origin: implementation
+    status: proposed
+    supersedes: null
+  D-0086:
+    id: D-0086
+    scope: N-0110
+    statement: Until Warren sets a number, the highlight threshold defaults to 1 unit (any whole-unit gap is highlighted).
+      It is editable in CST steward > Stock gap and stored in the tenant profile.
+    origin: implementation
+    status: proposed
+    supersedes: null
+  D-0087:
+    id: D-0087
+    scope: N-0110
+    statement: Day grain is read from flat files (row sale date or a one-day file-name range). Pivoted, multi-sheet, wide
+      and month-to-date layouts keep weeks or months. All layouts are refused without on-hand unless marked sales-only.
     origin: implementation
     status: proposed
     supersedes: null
@@ -14989,6 +15116,49 @@ evidence:
     path: apps/web/src/features/promotions-funding/CaseMarginPanel.tsx
     tree_hash: null
     note: N-0080 Margin vs PM controlled cost panel on the plan workspace.
+  EV-0091:
+    id: EV-0091
+    provenance: implementation-observation
+    path: apps/api/app/services/channel_intelligence/customer_stock_gap.py
+    tree_hash: null
+    note: N-0110 expected position and gap beside reported on-hand; customer_stock_position recomputed after apply.
+  EV-0092:
+    id: EV-0092
+    provenance: implementation-observation
+    path: apps/api/app/services/imports/parsers/customer_sell_through_grain.py
+    tree_hash: null
+    note: 'N-0110 period grain: day / week (number + year; start only with a known calendar) / month.'
+  EV-0093:
+    id: EV-0093
+    provenance: implementation-observation
+    path: apps/api/app/services/imports/customer_sell_through.py
+    tree_hash: null
+    note: 'N-0110 sales-only rule: units without on-hand refused unless the upload is marked sales-only.'
+  EV-0094:
+    id: EV-0094
+    provenance: implementation-observation
+    path: apps/api/alembic/versions/20261014_0037_customer_stock_gap.py
+    tree_hash: null
+    note: N-0110 migration 20261014_0037 (grain, in transit, on order, customer_stock_position with product-line RLS).
+  EV-0095:
+    id: EV-0095
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261014/N0110_CLONE_PROOF.md
+    tree_hash: null
+    note: N-0110 clone proof of 20261014_0037 on cip_n0110, then applied to cip. Fact and staging numbers unchanged; 701 positions,
+      314 compared.
+  EV-0096:
+    id: EV-0096
+    provenance: implementation-observation
+    path: apps/web/src/app/(app)/admin/cst-steward/CstStockGapSection.tsx
+    tree_hash: null
+    note: 'N-0110 CST steward Stock gap tab: unit gap on every compared row, editable absolute-unit highlight, recompute.'
+  EV-0097:
+    id: EV-0097
+    provenance: implementation-observation
+    path: apps/web/src/app/(app)/admin/imports/CstSalesOnlyToggle.tsx
+    tree_hash: null
+    note: N-0110 sales-only checkbox on Import Center and CST batch upload.
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -15626,6 +15796,24 @@ baselines:
     observed_behavior: Lineup profit was DAP minus PM controlled cost. Planner GP was distributor net minus controlled cost,
       and distributor net took the distributor margin off twice. CPOR showed no company margin. No landed cost was stored
       anywhere.
+  BLN-N0110:
+    id: BLN-N0110
+    provenance: implementation-observation
+    tree_hash: bc598f04
+    latent_capabilities:
+    - cst-fact-rows
+    - cst-read-models
+    - distributor-derived-stock
+    preservation:
+      cst-fact-rows: 'kept: fact_customer_sellthrough rows, units and reported on-hand unchanged (1823 rows, 6159 units, 28812
+        on-hand on cip)'
+      cst-read-models: 'kept: weekly/monthly read models; legacy rows keep NULL grain and are read by period_type'
+      distributor-derived-stock: 'kept: distributor derived stock and its 10 percent band untouched'
+    path: apps/api/app/services/imports/customer_sell_through.py
+    observed_behavior: Customer sell-through rows stored reported_soh but no expected position or gap. Every row date was
+      moved to its Monday and typed weekly, so two days in one week shared a source key and the last won. A file with units
+      and no on-hand loaded silently. In transit and on order were not read. The distributor side already had a derived-stock
+      flag with a 10 percent band.
 caveats:
   consult_model_logged:
     key: consult_model_logged
@@ -16060,9 +16248,56 @@ deferred_findings:
   run: RUN-20261014-N0080-VER
   actor: gov-001
   status: deferred
+- seq: 2258
+  code: DOES_NOT_FIT
+  note: 'N-0110: re-uploading a file loaded before 20261014_0037 can store day or stated-week rows beside its old Monday-keyed
+    rows (different source keys), so units could count twice. No detection was built.'
+  node: N-0110
+  run: RUN-20261014-N0110-VER
+  actor: gov-001
+  status: deferred
+- seq: 2259
+  code: DOES_NOT_FIT
+  note: 'N-0110: a shipment or POD load does not recompute customer stock positions. Late POD data needs CST steward > Stock
+    gap > Recompute.'
+  node: N-0110
+  run: RUN-20261014-N0110-VER
+  actor: gov-001
+  status: deferred
+- seq: 2260
+  code: DOES_NOT_FIT
+  note: 'N-0110: the 1823 fact rows on cip keep NULL grain; they are read by period_type (all weekly today). Not re-classified.'
+  node: N-0110
+  run: RUN-20261014-N0110-VER
+  actor: gov-001
+  status: deferred
+- seq: 2261
+  code: DOES_NOT_FIT
+  note: 'N-0110: a customer''s week calendar is set only through feed profile JSON (week_calendar iso, or fiscal with fiscal_year_start_month).
+    No dedicated control.'
+  node: N-0110
+  run: RUN-20261014-N0110-VER
+  actor: gov-001
+  status: deferred
+- seq: 2262
+  code: DOES_NOT_FIT
+  note: 'N-0110: pivoted, multi-sheet, wide and month-to-date CST files without on-hand are now refused unless marked sales-only;
+    existing feeds of those layouts may need the mark on the next upload.'
+  node: N-0110
+  run: RUN-20261014-N0110-VER
+  actor: gov-001
+  status: deferred
+- seq: 2263
+  code: DOES_NOT_FIT
+  note: 'N-0110: admin imports page.test.tsx has 5 failing historical_lineup mapping tests; the same 5 fail on HEAD before
+    this node.'
+  node: N-0110
+  run: RUN-20261014-N0110-VER
+  actor: gov-001
+  status: deferred
 ids:
   node: 5
-  decision: 81
+  decision: 87
   blocker: 19
-  evidence: 90
+  evidence: 97
   baseline: 18
