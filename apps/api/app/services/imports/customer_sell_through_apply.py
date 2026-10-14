@@ -47,6 +47,9 @@ class ApplySummary:
     applied: int = 0
     skipped_unresolved: int = 0
     errors: list[str] = field(default_factory=list)
+    # N-0110: older rows of the same file(s) moved aside because this load restated them.
+    superseded_rows: int = 0
+    superseded_units: float = 0.0
 
 
 def apply_customer_sellthrough_staging(
@@ -66,6 +69,9 @@ def apply_customer_sellthrough_staging(
     key twice in one statement. ``on_progress(current, total)`` reports per chunk (optional).
     ``recompute_stock_gap`` (N-0110) refreshes the expected stock position for the customers
     and products this load touched.
+
+    Re-loading the same file is idempotent (N-0110): older rows that file wrote under other
+    keys are superseded (see ``customer_sell_through_supersede``), so units are not counted twice.
     """
     from app.models.ingestion import ImportJob
     from app.services.imports.customer_sell_through import customer_sellthrough_source_key
@@ -159,6 +165,7 @@ def apply_customer_sellthrough_staging(
             order.append(sk)
 
     total = len(order)
+    written_keys: set[str] = set()
     for start in range(0, total, chunk_size):
         chunk_sks = order[start : start + chunk_size]
         rows = [grouped[sk]["values"] for sk in chunk_sks]
@@ -174,6 +181,7 @@ def apply_customer_sellthrough_staging(
             )
             returned = db.execute(stmt).all()
             id_by_sk = {r.source_key: int(r.id) for r in returned}
+            written_keys.update(id_by_sk)
             for sk in chunk_sks:
                 fid = id_by_sk.get(sk)
                 for line in grouped[sk]["lines"]:
@@ -195,6 +203,22 @@ def apply_customer_sellthrough_staging(
     for sk in order:
         vals = grouped[sk]["values"]
         touched.setdefault(int(vals["customer_id"]), set()).add(int(vals["product_id"]))
+
+    # N-0110: a re-upload of the same file supersedes the rows it wrote earlier under other
+    # keys. Skipped when any chunk failed, so a partial load never moves old rows aside.
+    if touched and written_keys and not summary.errors:
+        from app.services.imports.customer_sell_through_supersede import supersede_reloaded_rows
+
+        try:
+            with db.begin_nested():
+                moved = supersede_reloaded_rows(
+                    db, job_id=int(job_id), tenant_id=tid, written_keys=written_keys, restated=touched
+                )
+            summary.superseded_rows = moved.rows
+            summary.superseded_units = moved.units
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("customer sell-through supersede failed job_id=%s: %s", job_id, exc)
+            summary.errors.append(f"supersede of re-uploaded rows: {exc}")
     if recompute_stock_gap and touched and summary.applied:
         from app.services.channel_intelligence.customer_stock_gap import recompute_customer_stock_positions
 
