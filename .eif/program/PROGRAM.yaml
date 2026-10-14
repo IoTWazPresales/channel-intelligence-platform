@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2299
-  log_sha256: a8b8a0e85a8a7f58885ed9501e0ce5577fc5aa82362d5ab9653ec0753bd43ac3
+  snapshot_revision: 2303
+  log_sha256: 000cc2fa54add3203445f97dc6f573bd952803fa4eef807aa55002f38abb63d3
   acceptance_policy:
     milestone: operator
     root: operator
@@ -13992,7 +13992,7 @@ decisions:
       is not enough (a customer can resend ''ASUS WEEK 31.xlsx'' each year). A load whose old file is gone, or with a failed
       chunk, supersedes nothing. Reversible: drop the step; the moved rows can be copied back.'
     origin: implementation
-    status: proposed
+    status: superseded
     supersedes: null
   D-0089:
     id: D-0089
@@ -14007,7 +14007,27 @@ decisions:
       gaps. Impact: unexplained 206 -> 40. Reversible: classifier only, no number changes. Resolving experiment: ask Computer
       Mania whether those four reports were refreshed.'
     origin: implementation
-    status: proposed
+    status: accepted
+    supersedes: null
+  D-0090:
+    id: D-0090
+    scope: N-0110
+    statement: 'Warren 2026-10-15 (replaces D-0088): a newer customer sell-through load covering the same customer, product
+      and period supersedes the older stored rows for that customer, product and period, even when the older rows were stored
+      at a different site or day grain (e.g. old chain-level loc=0 rows vs new per-site rows), and whether or not the file
+      is byte-identical. Superseded rows move to fact_customer_sellthrough_superseded with the superseding load recorded;
+      raw staging is kept; nothing is hard-deleted. Same-key restatement stays with the source_key upsert and is not duplicated.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0091:
+    id: D-0091
+    scope: N-0110
+    statement: 'Warren 2026-10-15: repeated source rows sharing one source_key within a load. Rows that differ in any source
+      column are separate lines and their units are SUMMED into the one stored row. Rows identical in every source column
+      count once, and the extra copies carry a duplicate flag. Replaces the ''last wins'' grouping in customer_sell_through_apply.py.'
+    origin: operator
+    status: accepted
     supersedes: null
 evidence:
   EV-GOV008-REVIEW:
@@ -16421,7 +16441,7 @@ deferred_findings:
   status: deferred
 ids:
   node: 5
-  decision: 89
+  decision: 91
   blocker: 19
   evidence: 103
   baseline: 18
