@@ -1,6 +1,6 @@
 ﻿# CURRENT state
 
-**Last updated:** 2026-10-12
+**Last updated:** 2026-10-14
 
 **Branch:** `feat/ns-2-brief-nav-collapse`
 
@@ -14,11 +14,11 @@
 
 **N-0080 unblocked, not built.** Headline margin is PM controlled cost. DAP and landed cost stay visible beside it and are not folded into that figure.
 
-**N-0082 in progress, not closed.** A planner can send one expiring case link. The customer sees that case's settlement summary and approves or rejects with a name and comment. The decision is a case event. Migration `20261012_0035` is in the tree and is not on cip.
+**N-0082 at verify, VERIFIED_WITH_LIMITATIONS, operator acceptance pending (2026-10-14):** a planner sends one case link (7 days, bound to the case version). Only the token hash is stored. The customer sees that case's settlement summary and approves or rejects with a name and comment. The decision is a `customer_settlement_signoff` case event with signer, time, comment, and version, and it is written once. Revoke, a resend, expiry, or a newer case version closes the link. Planner routes treat another tenant's case as missing (`e2be2bfe`). pytest 11 passed (5 on cip_test) and the CPOR API tests 9 passed. Vitest: page 3, settlement 19. Web tsc exit 0. next lint is clean. In the browser only the not-valid state was checked, because the open state needs a real mailed link. The web build predates `e2be2bfe`. Same session, not independent. N-0099 does the second look. Deferred: no throttle on the public route.
 
 **Branch:** `feat/ns-2-brief-nav-collapse`. Do not push main.
 
-**Alembic (code):** `20261012_0035` adds `cpor_case_approval_link`. **Alembic (cip):** `20261012_0034`. Do not treat 0035 as applied.
+**Alembic (code):** `20261012_0035` adds `cpor_case_approval_link`. **Alembic (cip):** `20261012_0035` (found applied 2026-10-14; table matches; no clone proof was recorded). **cip_test:** `20261012_0035`.
 
 ## Programme
 
