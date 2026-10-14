@@ -727,7 +727,7 @@ def _ingest_parse_result(
 
     # Stamp steward/corroborated period onto staging lines.
     # Preserve pivoted / wide-week multi-period dates; overwrite single-period
-    # file_inferred (week-only filenames use date.today().year) when steward wins.
+    # file_inferred (a week-only filename takes the latest such week received by then) when steward wins.
     if effective_period is not None:
         distinct_periods = db.scalar(
             select(func.count(func.distinct(ImportCustomerSellthroughStagingLine.period_start_date))).where(
@@ -1005,7 +1005,7 @@ def _handle_flat(
         )
 
         # Wide-week unpivot emits multiple period dates — keep them. Single-period
-        # files often guess week year via date.today(); steward/corroborated wins.
+        # files guess a week's year from the receive date; steward/corroborated wins.
         row_periods = {
             r.get("period_start_date")
             for r in result.rows
@@ -1263,6 +1263,20 @@ def _write_parser_not_implemented(job: ImportJob, structure_type: str, message: 
     job.error_summary = message[:500]
 
 
+def job_received_on(job: ImportJob) -> date | None:
+    """The day a job's file was received: ``staged_metadata.received_on`` (a replay of an
+    older load keeps that load's day), else the day the job was created (N-0110)."""
+    meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+    raw = meta.get("received_on")
+    if isinstance(raw, str) and raw.strip():
+        try:
+            return date.fromisoformat(raw.strip()[:10])
+        except ValueError:
+            pass
+    created = getattr(job, "created_at", None)
+    return created.date() if created is not None else None
+
+
 def process_customer_sell_through(
     db: Session,
     job: ImportJob,
@@ -1299,8 +1313,11 @@ def process_customer_sell_through(
         _write_parser_not_implemented(job, structure_type, msg)
         return 1
 
+    from app.services.imports.parsers.customer_sell_through_grain import received_on_date
+
     try:
-        return handler(db, job, df, mapping, template, on_progress=on_progress)
+        with received_on_date(job_received_on(job)):
+            return handler(db, job, df, mapping, template, on_progress=on_progress)
     except NotImplementedError as exc:
         _write_parser_not_implemented(job, structure_type, str(exc))
         return 1

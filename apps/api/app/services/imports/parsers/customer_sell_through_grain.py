@@ -17,8 +17,10 @@ from __future__ import annotations
 
 import calendar as _calendar
 import re
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import date, datetime, timedelta
-from typing import Any
+from typing import Any, Iterator
 
 import pandas as pd
 
@@ -62,6 +64,41 @@ def _iso_monday(year: int, week: int) -> date | None:
         return date.fromisocalendar(int(year), int(week), 1)
     except ValueError:
         return None
+
+
+# The day the file being parsed was received. A week or month with no year resolves to the
+# latest one that had started by then, never to one that had not happened yet (N-0110).
+_RECEIVED_ON: ContextVar[date | None] = ContextVar("cst_received_on", default=None)
+
+
+def received_on() -> date:
+    return _RECEIVED_ON.get() or date.today()
+
+
+@contextmanager
+def received_on_date(day: date | None) -> Iterator[None]:
+    """Parse with ``day`` as the receive date (default: today)."""
+    token = _RECEIVED_ON.set(day)
+    try:
+        yield
+    finally:
+        _RECEIVED_ON.reset(token)
+
+
+def year_for_week(week: int, *, ref: date | None = None) -> int:
+    """Year of the latest ISO week ``week`` that started on or before the receive date."""
+    ref = ref or received_on()
+    for year in (ref.year, ref.year - 1, ref.year - 2):
+        start = _iso_monday(year, week)
+        if start is not None and start <= ref:
+            return year
+    return ref.year - 1
+
+
+def year_for_month(month: int, *, ref: date | None = None) -> int:
+    """Year of the latest month ``month`` that started on or before the receive date."""
+    ref = ref or received_on()
+    return ref.year if int(month) <= ref.month else ref.year - 1
 
 
 def _fiscal_week_start(year: int, week: int, fy_start_month: int) -> date | None:
@@ -198,7 +235,7 @@ def fields_from_token(
         return week_fields(int(m.group(2)), int(m.group(1)), week_calendar=week_calendar)
     m = _WEEK_ONLY.match(text)
     if m:
-        year = year_hint or date.today().year
+        year = year_hint or year_for_week(int(m.group(1)))
         if warnings is not None and year_hint is None:
             warnings.append(f"Week {text!r} has no year; {year} was used")
         return week_fields(year, int(m.group(1)), week_calendar=week_calendar)
@@ -207,7 +244,7 @@ def fields_from_token(
         month = _MONTH_MAP.get(m.group(1)[:3].lower())
         year_raw = m.group(2)
         if month:
-            year = int(year_raw) if year_raw else (year_hint or date.today().year)
+            year = int(year_raw) if year_raw else (year_hint or year_for_month(month))
             if year < 100:
                 year += 2000
             return month_fields(year, month)

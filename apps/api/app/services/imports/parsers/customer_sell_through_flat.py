@@ -18,6 +18,7 @@ from typing import Any
 import pandas as pd
 
 from app.services.imports.cst_d1 import apply_listing_seed_fields
+from app.services.imports.parsers.customer_sell_through_grain import year_for_week
 from app.services.imports.parsers.customer_sell_through_measures import (
     apply_unit_total_derivation,
     apply_unit_total_derivation_many,
@@ -694,7 +695,7 @@ def _extract_period(
     m_week = _WEEK_RE.search(base)
     if m_week:
         week_no = int(m_week.group(1) or m_week.group(2))
-        year = date.today().year
+        year = year_for_week(week_no)
         try:
             return date.fromisocalendar(year, week_no, 1)
         except ValueError:
@@ -715,7 +716,7 @@ def _extract_period(
             if m:
                 week_no = int(m.group(1) or m.group(2))
                 try:
-                    return date.fromisocalendar(date.today().year, week_no, 1)
+                    return date.fromisocalendar(year_for_week(week_no), week_no, 1)
                 except ValueError:
                     pass
 

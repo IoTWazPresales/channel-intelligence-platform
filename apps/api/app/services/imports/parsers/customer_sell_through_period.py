@@ -13,6 +13,7 @@ from typing import Any
 import pandas as pd
 
 from app.services.imports.parsers.customer_sell_through_flat import _monday_of_week, _normalize_text, _parse_date_value
+from app.services.imports.parsers.customer_sell_through_grain import received_on, year_for_month, year_for_week
 
 _ISO_WEEK_HEADER = re.compile(r"^(\d{4})-?W(\d{1,2})$", re.IGNORECASE)
 _WEEK_YEAR_HEADER = re.compile(r"^W(\d{1,2})[-/](\d{4})$", re.IGNORECASE)
@@ -85,7 +86,7 @@ def classify_period_header(header: str) -> tuple[str, date | None, str]:
     m = _WEEK_ONLY_HEADER.match(h)
     if m:
         week_no = int(m.group(1))
-        year = date.today().year
+        year = year_for_week(week_no)
         try:
             return "iso_week", date.fromisocalendar(year, week_no, 1), "weekly"
         except ValueError:
@@ -94,8 +95,10 @@ def classify_period_header(header: str) -> tuple[str, date | None, str]:
     m = _FW_HEADER.match(h)
     if m:
         fw = int(m.group(1))
-        year = date.today().year
+        year = received_on().year
         d = _fiscal_week_monday(year, fw, 1)
+        if d is not None and d > received_on():
+            d = _fiscal_week_monday(year - 1, fw, 1)
         if d:
             return "fiscal_week", d, "weekly"
         return "unknown", None, "weekly"
@@ -132,7 +135,7 @@ def classify_period_header(header: str) -> tuple[str, date | None, str]:
                 if yr < 100:
                     yr += 2000
             else:
-                yr = date.today().year
+                yr = year_for_month(month)
             try:
                 return "month", date(yr, month, 1), "monthly"
             except ValueError:
@@ -218,7 +221,7 @@ def parse_sheet_name_period(sheet_name: str) -> tuple[date | None, str, str | No
     week_m = re.search(r"(?:week|wk|w)[\s\-]*(\d{1,2})\b", name, re.IGNORECASE)
     if week_m:
         week_no = int(week_m.group(1))
-        year = date.today().year
+        year = year_for_week(week_no)
         try:
             return date.fromisocalendar(year, week_no, 1), "weekly", None
         except ValueError:
