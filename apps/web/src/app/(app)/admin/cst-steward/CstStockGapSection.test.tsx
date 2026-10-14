@@ -53,7 +53,12 @@ vi.mock('@/components/EnterpriseDataGrid', () => ({
 
 const payload: StockGapResponse = {
   threshold_units: 2,
-  counts: { compared: 2, highlighted: 1, first_report: 1 },
+  counts: {
+    compared: 3,
+    highlighted: 2,
+    first_report: 1,
+    highlighted_by_cause: { unexplained: 1, repeated_report: 1 },
+  },
   rows: [
     {
       id: 1,
@@ -80,6 +85,9 @@ const payload: StockGapResponse = {
       status: 'compared',
       highlighted: true,
       reason: 'Short: stock not delivered, lost, or sold outside the file. 2 in transit may explain part of it.',
+      gap_cause: 'unexplained',
+      gap_causes: ['unexplained'],
+      gap_cause_label: 'Stock difference: no data gap found',
     },
     {
       id: 2,
@@ -106,6 +114,38 @@ const payload: StockGapResponse = {
       status: 'compared',
       highlighted: false,
       reason: 'Over: a receipt CIP does not have, a return, or overlapping periods.',
+      gap_cause: 'unexplained',
+      gap_causes: ['unexplained'],
+      gap_cause_label: 'Stock difference: no data gap found',
+    },
+    {
+      id: 3,
+      customer_id: 7,
+      customer_code: 'C007',
+      customer_name: 'Retail Co',
+      product_id: 5,
+      sku: 'SKU-5',
+      product_name: 'Monitor 27',
+      period_grain: 'week',
+      period_start_date: '2026-07-20',
+      period_end_date: '2026-07-26',
+      period_week: 30,
+      period_year: 2026,
+      reported_on_hand: 20,
+      previous_on_hand: 20,
+      previous_period_end_date: '2026-07-19',
+      receipts_units: 0,
+      units_sold: 6,
+      expected_on_hand: 14,
+      gap_units: 6,
+      in_transit_units: null,
+      on_order_units: null,
+      status: 'compared',
+      highlighted: true,
+      reason: "Not read as the customer's stock until this is fixed. Over: a receipt CIP does not have.",
+      gap_cause: 'repeated_report',
+      gap_causes: ['repeated_report'],
+      gap_cause_label: "Data gap: this report repeats the previous report's figures",
     },
   ],
 };
@@ -134,19 +174,38 @@ describe('CstStockGapSection', () => {
 
   it('shows the unit gap on every compared row and flags only rows over the threshold', async () => {
     renderSection();
-    await waitFor(() => expect(screen.getByTestId('cst-stock-gap-counts')).toHaveTextContent('2 compared'));
-    expect(screen.getByTestId('cst-stock-gap-counts')).toHaveTextContent('1 at or over 2 units');
+    await waitFor(() => expect(screen.getByTestId('cst-stock-gap-counts')).toHaveTextContent('3 compared'));
+    expect(screen.getByTestId('cst-stock-gap-counts')).toHaveTextContent('2 at or over 2 units');
     const gaps = screen.getAllByText((_, el) => el?.getAttribute('data-col') === 'Gap (units)');
-    expect(gaps.map((g) => g.textContent)).toEqual(['−3', '+1']);
+    expect(gaps.map((g) => g.textContent)).toEqual(['−3', '+1', '+6']);
     expect(gaps[0]).toHaveClass('cip-gap-flag');
     expect(gaps[1]).not.toHaveClass('cip-gap-flag');
-    expect(screen.getByText('Over threshold')).toBeInTheDocument();
+    expect(screen.getByText('Stock difference')).toBeInTheDocument();
     expect(screen.getByText('Week 29, 2026')).toBeInTheDocument();
     expect(screen.getByText('2026-07-15')).toBeInTheDocument();
     expect(screen.getByText(/2 in transit may explain part of it/)).toBeInTheDocument();
     // Customer column carries the name; the code sits in its own column.
     const customerCells = screen.getAllByText((_, el) => el?.getAttribute('data-col') === 'Customer');
     expect(customerCells[0].textContent).toBe('Retail Co');
+  });
+
+  it('shows a data gap beside its gap and never as a stock difference', async () => {
+    renderSection();
+    await waitFor(() => expect(screen.getByTestId('cst-stock-gap-cause-counts')).toBeInTheDocument());
+    expect(screen.getByTestId('cst-stock-gap-cause-counts')).toHaveTextContent(
+      'Of those, 1 are data gaps in CIP and 1 have no data gap found.',
+    );
+    const gaps = screen.getAllByText((_, el) => el?.getAttribute('data-col') === 'Gap (units)');
+    expect(gaps[2]).toHaveClass('cip-gap-data');
+    expect(gaps[2]).not.toHaveClass('cip-gap-flag');
+    const flags = screen.getAllByText((_, el) => el?.getAttribute('data-col') === 'Flag');
+    expect(flags[2].textContent).toBe('Data gap');
+    const why = screen.getAllByText((_, el) => el?.getAttribute('data-col') === 'Why it differs');
+    expect(why[2].textContent).toBe("Data gap: this report repeats the previous report's figures");
+    expect(why[0].textContent).toBe('Stock difference: no data gap found');
+    // The cause sits right after the gap.
+    const headers = screen.getAllByRole('columnheader').map((h) => h.textContent);
+    expect(headers[headers.indexOf('Gap (units)') + 1]).toBe('Why it differs');
   });
 
   it('saves the threshold in absolute units', async () => {

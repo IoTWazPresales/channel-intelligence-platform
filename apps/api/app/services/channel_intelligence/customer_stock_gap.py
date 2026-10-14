@@ -382,4 +382,17 @@ def list_stock_positions(
                 "computed_at": pos.computed_at.isoformat() if pos.computed_at else None,
             }
         )
+
+    # Why each gap differs: a data gap in CIP is never shown as the customer's stock difference.
+    from app.services.channel_intelligence.customer_stock_gap_cause import classify_gap_causes
+
+    causes = classify_gap_causes(db, tenant_id=tid, positions=out)
+    for row in out:
+        c = causes.get(row["id"])
+        row["gap_cause"] = c.cause if c else None
+        row["gap_causes"] = c.causes if c else []
+        row["gap_cause_label"] = c.label if c else None
+        row["gap_cause_detail"] = c.detail if c else {}
+        if c is not None and c.is_data_gap:
+            row["reason"] = f"Not read as the customer's stock until this is fixed. {row['reason']}"
     return out

@@ -129,7 +129,10 @@ def test_expected_position_and_gap_are_stored_beside_on_hand(session: Session) -
     listed = list_stock_positions(session, tenant_id=TENANT, threshold_units=1)
     compared = [r for r in listed if r["status"] == "compared"]
     assert compared[0]["gap_units"] == 1.0 and compared[0]["highlighted"] is True
-    assert compared[0]["reason"].startswith("Over:")
+    assert "Over:" in compared[0]["reason"]
+    # The 50 shipped with no customer match is a data gap, so the row is not read as stock.
+    assert compared[0]["gap_cause"] == "unmatched_shipment"
+    assert compared[0]["reason"].startswith("Not read as the customer's stock")
     assert list_stock_positions(session, tenant_id=TENANT, threshold_units=2, highlighted_only=True) == []
 
     # Recompute replaces, never duplicates.

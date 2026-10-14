@@ -45,13 +45,42 @@ export type StockGapRow = {
   status: 'compared' | 'first_report';
   highlighted: boolean;
   reason: string;
+  /** Why the gap differs. Every cause but `unexplained` is a data gap in CIP, not the customer's stock. */
+  gap_cause?: GapCause | null;
+  gap_causes?: GapCause[];
+  gap_cause_label?: string | null;
 };
+
+export type GapCause =
+  | 'overwrite'
+  | 'unmatched_shipment'
+  | 'no_pod'
+  | 'no_prior_on_hand'
+  | 'repeated_report'
+  | 'unreported_weeks'
+  | 'unexplained';
 
 export type StockGapResponse = {
   threshold_units: number;
-  counts: { compared: number; highlighted: number; first_report: number };
+  counts: {
+    compared: number;
+    highlighted: number;
+    first_report: number;
+    highlighted_by_cause?: Partial<Record<GapCause, number>>;
+  };
   rows: StockGapRow[];
 };
+
+/** A gap CIP can trace to its own data: never shown as the customer's stock difference. */
+export function isDataGap(r: Pick<StockGapRow, 'gap_cause'>): boolean {
+  return r.gap_cause != null && r.gap_cause !== 'unexplained';
+}
+
+export function flagLabel(r: Pick<StockGapRow, 'status' | 'highlighted' | 'gap_cause'>): string {
+  if (r.status === 'first_report') return 'First report';
+  if (!r.highlighted) return '';
+  return isDataGap(r) ? 'Data gap' : 'Stock difference';
+}
 
 const units = (v: number | null | undefined) =>
   v == null ? '—' : v.toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -111,8 +140,7 @@ export function CstStockGapSection() {
       {
         headerName: 'Flag',
         width: 130,
-        valueGetter: (p) =>
-          p.data?.status === 'first_report' ? 'First report' : p.data?.highlighted ? 'Over threshold' : '',
+        valueGetter: (p) => (p.data ? flagLabel(p.data) : ''),
       },
       { field: 'customer_name', headerName: 'Customer', flex: 1, minWidth: 160 },
       { field: 'customer_code', headerName: 'Customer code', width: 130 },
@@ -139,7 +167,19 @@ export function CstStockGapSection() {
         width: 120,
         type: 'numericColumn',
         valueFormatter: (p) => formatGap(p.value),
-        cellClassRules: { 'cip-gap-flag': (p) => Boolean(p.data?.highlighted) },
+        cellClassRules: {
+          'cip-gap-flag': (p) => Boolean(p.data?.highlighted) && !isDataGap(p.data!),
+          'cip-gap-data': (p) => Boolean(p.data?.highlighted) && isDataGap(p.data!),
+        },
+      },
+      {
+        field: 'gap_cause_label',
+        headerName: 'Why it differs',
+        flex: 1,
+        minWidth: 260,
+        wrapText: true,
+        autoHeight: true,
+        valueFormatter: (p) => p.value ?? '',
       },
       {
         field: 'previous_on_hand',
@@ -237,6 +277,13 @@ export function CstStockGapSection() {
           {counts.first_report} first report{counts.first_report === 1 ? '' : 's'} (nothing to compare yet)
         </Typography>
       ) : null}
+      {counts?.highlighted_by_cause ? (
+        <Typography variant="body2" color="text.secondary" data-testid="cst-stock-gap-cause-counts">
+          Of those, {counts.highlighted - (counts.highlighted_by_cause.unexplained ?? 0)} are data gaps in CIP and{' '}
+          {counts.highlighted_by_cause.unexplained ?? 0} have no data gap found. Only a row marked Stock difference
+          is read as the customer&apos;s stock.
+        </Typography>
+      ) : null}
       {saveThreshold.isError ? <Alert severity="error">{String((saveThreshold.error as Error)?.message)}</Alert> : null}
       {recompute.isError ? <Alert severity="error">{String((recompute.error as Error)?.message)}</Alert> : null}
       {recompute.isSuccess ? (
@@ -263,6 +310,10 @@ export function CstStockGapSection() {
             '& .cip-gap-flag': {
               backgroundColor: (t) => alpha(t.palette.warning.main, 0.22),
               fontWeight: 700,
+            },
+            '& .cip-gap-data': {
+              backgroundColor: (t) => alpha(t.palette.text.primary, 0.06),
+              fontStyle: 'italic',
             },
           }}
         >

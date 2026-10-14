@@ -57,7 +57,20 @@ def test_get_returns_rows_counts_and_threshold(monkeypatch) -> None:
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["threshold_units"] == profile.DEFAULT_STOCK_GAP_HIGHLIGHT_UNITS
-    assert body["counts"] == {"compared": 2, "highlighted": 1, "first_report": 1}
+    assert body["counts"] == {
+        "compared": 2,
+        "highlighted": 1,
+        "first_report": 1,
+        "highlighted_by_cause": {
+            "overwrite": 0,
+            "unmatched_shipment": 0,
+            "no_pod": 0,
+            "no_prior_on_hand": 0,
+            "repeated_report": 0,
+            "unreported_weeks": 0,
+            "unexplained": 0,
+        },
+    }
     assert seen["customer_id"] == 5 and seen["highlighted_only"] is True
     assert seen["tenant_id"] == "default"
 

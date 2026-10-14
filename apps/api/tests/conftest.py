@@ -74,6 +74,9 @@ _WRITE_CAPABLE_TEST_MODULES: frozenset[str] = frozenset(
         # N-0110 repair: re-uploads a sell-through file (jobs, staging, fact rows) inside one
         # rolled-back transaction; cip_test only.
         "test_cst_reupload_supersede_db.py",
+        # N-0110 repair: seeds sell-through and shipment rows to name each gap cause inside one
+        # rolled-back transaction; cip_test only.
+        "test_customer_stock_gap_cause_db.py",
         "test_customer_alias_scope_merge.py",
         "test_customer_full_merge.py",
         "test_customers_delete.py",

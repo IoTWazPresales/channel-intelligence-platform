@@ -710,13 +710,18 @@ class StockGapSettingsBody(BaseModel):
 
 
 def _stock_gap_payload(rows: list[dict[str, Any]], threshold: float) -> dict:
+    from app.services.channel_intelligence.customer_stock_gap_cause import CAUSE_ORDER
+
     compared = [r for r in rows if r["status"] == "compared"]
+    highlighted = [r for r in compared if r["highlighted"]]
     return {
         "threshold_units": threshold,
         "counts": {
             "compared": len(compared),
-            "highlighted": sum(1 for r in compared if r["highlighted"]),
+            "highlighted": len(highlighted),
             "first_report": sum(1 for r in rows if r["status"] == "first_report"),
+            # Highlighted rows by first cause; only "unexplained" is a stock-difference signal.
+            "highlighted_by_cause": {c: sum(1 for r in highlighted if r.get("gap_cause") == c) for c in CAUSE_ORDER},
         },
         "rows": rows,
     }
