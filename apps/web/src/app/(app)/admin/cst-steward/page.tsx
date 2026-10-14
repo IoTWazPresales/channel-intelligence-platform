@@ -28,6 +28,7 @@ import { OPS_LIST_GRID_PAGINATION } from '@/features/shell/opsListGridPagination
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
 
 import { CstArticleAliasesSection } from './CstArticleAliasesSection';
+import { CstStockGapSection } from './CstStockGapSection';
 
 type KeyAccountRow = {
   id: number | null;
@@ -59,6 +60,7 @@ export default function CstStewardPage() {
     const requested = new URLSearchParams(window.location.search).get('tab');
     if (requested === 'slots') setTab(1);
     if (requested === 'aliases') setTab(2);
+    if (requested === 'stock-gap') setTab(3);
   }, []);
   const [filter, setFilter] = useState('');
   const [dlg, setDlg] = useState<KeyAccountRow | null>(null);
@@ -189,6 +191,7 @@ export default function CstStewardPage() {
         <Tab label="Key accounts & feed profile" />
         <Tab label={`Report slots${worklist ? ` (${worklist.counts?.due ?? 0}/${worklist.counts?.late ?? 0}/${worklist.counts?.missing ?? 0})` : ''}`} />
         <Tab label="Article aliases" />
+        <Tab label="Stock gap" data-testid="cst-tab-stock-gap" />
       </Tabs>
 
       {tab === 0 ? (
@@ -271,6 +274,8 @@ export default function CstStewardPage() {
 
       {tab === 2 ? <CstArticleAliasesSection /> : null}
 
+      {tab === 3 ? <CstStockGapSection /> : null}
+
       <Dialog open={dlg != null} onClose={() => !save.isPending && setDlg(null)} fullWidth maxWidth="sm">
         <DialogTitle>
           Edit CST config — {dlg?.customer_code} — {dlg?.customer_name}
@@ -340,7 +345,7 @@ export default function CstStewardPage() {
               fullWidth
               multiline
               minRows={6}
-              helperText="Declarative per-customer variance (vat_basis, sheet roles, column map). Empty clears."
+              helperText='Declarative per-customer variance (vat_basis, sheet roles, column map). A known week calendar: "week_calendar": "iso", or "fiscal" with "fiscal_year_start_month". Empty clears.'
               data-testid="cst-feed-profile-editor"
             />
             {save.isError ? <Alert severity="error">{String((save.error as Error)?.message)}</Alert> : null}

@@ -56,6 +56,8 @@ def _period_end(period_start: date, period_type: str) -> date:
         if period_start.month == 12:
             return date(period_start.year + 1, 1, 1) - timedelta(days=1)
         return date(period_start.year, period_start.month + 1, 1) - timedelta(days=1)
+    if pt.startswith("da"):
+        return period_start  # N-0110: a day row is that day
     return period_start + timedelta(days=6)
 
 

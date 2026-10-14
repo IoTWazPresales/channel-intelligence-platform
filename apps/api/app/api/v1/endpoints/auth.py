@@ -360,6 +360,7 @@ class TenantCommercialProfileUpdate(BaseModel):
     lineup_export_draft_sheet: str | None = None
     reporting_cadence: str | None = None
     woc_min_velocity_days: int | None = None
+    stock_gap_highlight_units: float | None = None
 
 
 @router.get("/tenant-commercial-profile")

@@ -158,7 +158,12 @@ TENANT_PROFILE_OVERRIDE_KEYS: tuple[str, ...] = (
     "semantic_overlay",
     "reporting_cadence",
     "woc_min_velocity_days",
+    "stock_gap_highlight_units",
 )
+
+# N-0110: customer stock gap highlight, absolute units (Warren 2026-10-12). Editable.
+DEFAULT_STOCK_GAP_HIGHLIGHT_UNITS = 1.0
+STOCK_GAP_HIGHLIGHT_UNITS_MAX = 1_000_000.0
 
 # Governed metric overlay (P3-1). Only label / hidden / allowed_grains persist;
 # formula / source_facts / owner_surface / new metric ids are never stored.
@@ -720,6 +725,17 @@ def save_tenant_profile_overrides(tenant_id: str, overrides: dict[str, object]) 
                 raise ValueError("woc_min_velocity_days: integer required") from exc
             clean[key] = max(WOC_MIN_VELOCITY_DAYS_LO, min(WOC_MIN_VELOCITY_DAYS_HI, days))
             continue
+        if key == "stock_gap_highlight_units":
+            if raw is None or str(raw).strip() == "":
+                continue
+            try:
+                units = float(str(raw).strip())
+            except (TypeError, ValueError) as exc:
+                raise ValueError("stock_gap_highlight_units: a number of units is required") from exc
+            if not (0 < units <= STOCK_GAP_HIGHLIGHT_UNITS_MAX):
+                raise ValueError("stock_gap_highlight_units: must be more than 0 units")
+            clean[key] = units
+            continue
         if raw is None or str(raw).strip() == "":
             continue
         val = str(raw).strip()
@@ -771,8 +787,22 @@ def profile_snapshot(tenant_id: str = "default") -> dict[str, object]:
         "protected_lineup_case_ids": sorted(protected_lineup_case_ids()),
         "reporting_cadence": reporting_cadence(tenant_id),
         "woc_min_velocity_days": woc_min_velocity_days(tenant_id),
+        "stock_gap_highlight_units": stock_gap_highlight_units(tenant_id),
         "reporting_timezone": REPORTING_TIMEZONE,
     }
+
+
+def stock_gap_highlight_units(tenant_id: str = "default") -> float:
+    """Absolute units at which a customer stock gap row is highlighted (N-0110)."""
+    overrides = load_tenant_profile_overrides(tenant_id)
+    raw = overrides.get("stock_gap_highlight_units", DEFAULT_STOCK_GAP_HIGHLIGHT_UNITS)
+    try:
+        units = float(str(raw).strip())
+    except (TypeError, ValueError):
+        return DEFAULT_STOCK_GAP_HIGHLIGHT_UNITS
+    if not (0 < units <= STOCK_GAP_HIGHLIGHT_UNITS_MAX):
+        return DEFAULT_STOCK_GAP_HIGHLIGHT_UNITS
+    return units
 
 
 def line_identifier_preference(tenant_id: str = "default") -> str:

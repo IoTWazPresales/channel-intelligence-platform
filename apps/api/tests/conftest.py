@@ -68,6 +68,9 @@ _WRITE_CAPABLE_TEST_MODULES: frozenset[str] = frozenset(
         # N-0082: issues, decides and revokes sign-off links on an existing case inside one
         # rolled-back transaction; cip_test only.
         "test_customer_approval_db.py",
+        # N-0110: inserts sell-through, shipment and stock-position rows inside one
+        # rolled-back transaction; cip_test only.
+        "test_customer_stock_gap_db.py",
         "test_customer_alias_scope_merge.py",
         "test_customer_full_merge.py",
         "test_customers_delete.py",

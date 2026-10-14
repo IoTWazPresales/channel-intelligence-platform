@@ -14,7 +14,8 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.core.security import Role, require_roles
+from app.core.security import Role, get_current_user, require_roles
+from app.core.tenant_scope import tenant_id_from_user
 from app.db.session_sync import SessionLocal
 from app.models.customer_article_alias import CustomerArticleAlias
 from app.models.customer_cst_report_slot import CustomerCstReportSlot
@@ -699,3 +700,97 @@ def reject_article_alias(
         cust = session.get(DimCustomer, row.customer_id)
         prod = session.get(DimProduct, row.product_id)
         return _alias_json(row, cust, prod)
+
+
+# --- N-0110: customer stock gap ------------------------------------------------------
+
+
+class StockGapSettingsBody(BaseModel):
+    highlight_units: float = Field(gt=0, le=1_000_000)
+
+
+def _stock_gap_payload(rows: list[dict[str, Any]], threshold: float) -> dict:
+    compared = [r for r in rows if r["status"] == "compared"]
+    return {
+        "threshold_units": threshold,
+        "counts": {
+            "compared": len(compared),
+            "highlighted": sum(1 for r in compared if r["highlighted"]),
+            "first_report": sum(1 for r in rows if r["status"] == "first_report"),
+        },
+        "rows": rows,
+    }
+
+
+@router.get("/stock-gap")
+def stock_gap(
+    customer_id: int | None = Query(default=None),
+    product_id: int | None = Query(default=None),
+    highlighted_only: bool = Query(default=False),
+    user: dict = Depends(get_current_user),
+):
+    """Reported on-hand beside the expected position, one row per customer, product and report."""
+    from app.services import commercial_tenant_profile
+    from app.services.channel_intelligence.customer_stock_gap import list_stock_positions
+
+    tenant_id = tenant_id_from_user(user)
+    threshold = commercial_tenant_profile.stock_gap_highlight_units(tenant_id)
+    with SessionLocal() as session:
+        rows = list_stock_positions(
+            session,
+            tenant_id=tenant_id,
+            threshold_units=threshold,
+            customer_id=customer_id,
+            product_id=product_id,
+            highlighted_only=highlighted_only,
+        )
+        return _stock_gap_payload(rows, threshold)
+
+
+@router.put("/stock-gap/settings", dependencies=_STEWARD_WRITE)
+def put_stock_gap_settings(
+    body: StockGapSettingsBody,
+    user: dict = Depends(get_current_user),
+):
+    """Set the highlight threshold in absolute units (tenant setting)."""
+    from app.services import commercial_tenant_profile
+    from app.services.platform_audit import record_platform_audit_committed
+
+    tenant_id = tenant_id_from_user(user)
+    try:
+        commercial_tenant_profile.save_tenant_profile_overrides(
+            tenant_id, {"stock_gap_highlight_units": body.highlight_units}
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    record_platform_audit_committed(
+        user,
+        area="settings",
+        action="tenant_profile",
+        target_type="tenant",
+        target_id=tenant_id,
+        detail={"fields": ["stock_gap_highlight_units"], "stock_gap_highlight_units": body.highlight_units},
+    )
+    return {"threshold_units": commercial_tenant_profile.stock_gap_highlight_units(tenant_id)}
+
+
+@router.post("/stock-gap/recompute", dependencies=_STEWARD_WRITE)
+def recompute_stock_gap(
+    customer_id: int | None = Query(default=None),
+    user: dict = Depends(get_current_user),
+):
+    """Recompute expected positions (for example after late proof-of-delivery data)."""
+    from app.services.channel_intelligence.customer_stock_gap import (
+        recompute_all_customer_stock_positions,
+        recompute_customer_stock_positions,
+    )
+
+    tenant_id = tenant_id_from_user(user)
+    with SessionLocal() as session:
+        if customer_id is not None:
+            written = recompute_customer_stock_positions(session, tenant_id=tenant_id, customer_id=customer_id)
+            result = {"customers": 1, "positions": written}
+        else:
+            result = recompute_all_customer_stock_positions(session, tenant_id=tenant_id)
+        session.commit()
+        return result

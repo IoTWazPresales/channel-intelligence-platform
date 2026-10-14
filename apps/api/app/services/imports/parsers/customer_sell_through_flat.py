@@ -43,7 +43,18 @@ CANONICAL_FIELDS = (
     "total_sell_amount",
     "total_cost_amount",
     "total_soh_value",
+    # N-0110: optional pipeline columns, stored apart from on-hand.
+    "in_transit_units",
+    "on_order_units",
 )
+
+# Built-in aliases for fields added after customer templates were seeded.
+_DEFAULT_ALIASES: dict[str, tuple[str, ...]] = {
+    "in_transit_units": ("in transit", "in_transit", "intransit", "in transit qty", "goods in transit"),
+    "on_order_units": ("on order", "on_order", "open order", "open orders", "on order qty"),
+    # A sale date column makes each row a day (N-0110).
+    "raw_period_ref": ("sale date", "sales date", "transaction date", "date sold"),
+}
 
 # Import-template / steward keys historically used synonyms; parsers resolve CANONICAL_FIELDS.
 _TEMPLATE_KEY_TO_CANONICAL = {
@@ -56,6 +67,7 @@ _PERIOD_RANGE_RE = re.compile(r"(\d{8})[_\-\s]+(\d{8})")
 _PERIOD_SINGLE_RE = re.compile(r"(\d{8})")
 _WEEK_RE = re.compile(r"week[\s_]*(\d{1,2})|w(\d{1,2})", re.IGNORECASE)
 _ISO_WEEK_RE = re.compile(r"(\d{4})-W(\d{1,2})", re.IGNORECASE)
+_WEEK_BAND_RE = re.compile(r"^(?P<measure>.+?)\s+(?P<band>\d{1,3}[./-]\d{4})$")
 
 
 @dataclass
@@ -173,6 +185,8 @@ def _aliases_for_canonical(
         for a in meta.get("aliases") or []:
             if isinstance(a, str) and a.strip():
                 _add(a)
+    for a in _DEFAULT_ALIASES.get(canonical, ()):
+        _add(a)
     _add(canonical)
     return ordered
 
@@ -709,6 +723,49 @@ def _extract_period(
     return None
 
 
+def _file_period_fields(
+    filename: str,
+    *,
+    week_calendar: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Grain fields the file name states (N-0110), or None.
+
+    A dated range: one day -> day; a whole calendar month -> month; otherwise a week
+    that starts on the first date. A single date -> the week it falls in, with no
+    week start unless the customer's calendar is known.
+    """
+    from app.services.imports.parsers.customer_sell_through_grain import (
+        day_fields,
+        fields_from_token,
+        month_fields,
+        period_end,
+        stated_week_fields,
+        week_fields,
+    )
+
+    base = filename or ""
+    m_range = _PERIOD_RANGE_RE.search(base)
+    if m_range:
+        d0 = _parse_yyyymmdd(m_range.group(1))
+        d1 = _parse_yyyymmdd(m_range.group(2))
+        if d0 is not None and d1 is not None and d1 >= d0:
+            if d0 == d1:
+                return day_fields(d0)
+            if d0.day == 1 and d1 == period_end(d0, "month"):
+                return month_fields(d0.year, d0.month)
+            return stated_week_fields(d0)
+    singles = _PERIOD_SINGLE_RE.findall(base)
+    if len(singles) == 1:
+        d = _parse_yyyymmdd(singles[0])
+        if d is not None:
+            iso = d.isocalendar()
+            return week_fields(iso[0], iso[1], week_calendar=week_calendar)
+    m_iso = _ISO_WEEK_RE.search(base)
+    if m_iso:
+        return fields_from_token(f"{m_iso.group(1)}-W{m_iso.group(2)}")
+    return None
+
+
 def _row_dict(series: pd.Series) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for k, v in series.items():
@@ -766,6 +823,14 @@ def parse_flat_report(
         df=df,
         warnings=warnings,
     )
+    from app.services.imports.parsers.customer_sell_through_grain import (
+        fields_from_token,
+        week_calendar_from_feed_profile,
+    )
+
+    week_calendar = week_calendar_from_feed_profile(feed_profile)
+    file_fields = _file_period_fields(filename, week_calendar=week_calendar)
+    year_hint = (file_fields or {}).get("period_year") or (period_start.year if period_start else None)
 
     units_aliases = list(_aliases_for_canonical("units_sold", fm, expected_columns))
     # Include mapped source header so dual-header bare measure always matches.
@@ -792,6 +857,8 @@ def parse_flat_report(
             warnings=warnings,
             file_bytes=file_bytes,
             filename=filename,
+            week_calendar=week_calendar,
+            file_fields=file_fields,
         )
 
     if col_map["units_sold"] is None:
@@ -802,6 +869,7 @@ def parse_flat_report(
 
     rows: list[dict[str, Any]] = []
     skipped = 0
+    period_warnings: list[str] = []
     for pos in range(len(df)):
         series = df.iloc[pos]
         source_row_number = first_data_row + pos
@@ -811,11 +879,22 @@ def parse_flat_report(
             skipped += 1
             continue
 
+        # N-0110: a sale date stays a day; a week number and year stay a week; a month a month.
         period_ref = None
+        row_fields: dict[str, Any] | None = None
         if col_map["raw_period_ref"]:
-            period_ref = _normalize_text(series.get(col_map["raw_period_ref"]))
-        row_period = _parse_date_value(series.get(col_map["raw_period_ref"])) if col_map["raw_period_ref"] else None
-        eff_period = row_period or period_start
+            period_cell = series.get(col_map["raw_period_ref"])
+            period_ref = _normalize_text(period_cell)
+            row_fields = fields_from_token(
+                period_ref if isinstance(period_cell, str) else period_cell,
+                header=col_map["raw_period_ref"],
+                week_calendar=week_calendar,
+                year_hint=year_hint,
+                warnings=period_warnings,
+            )
+        if row_fields is None and file_fields is not None:
+            row_fields = dict(file_fields)
+        eff_period = row_fields["period_start_date"] if row_fields else period_start
 
         loc_tok = None
         if col_map["raw_location_token"]:
@@ -831,7 +910,11 @@ def parse_flat_report(
             "raw_product_token": product_tok,
             "raw_period_ref": period_ref,
             "period_start_date": eff_period,
-            "period_type": "weekly",
+            "period_type": (row_fields or {}).get("period_type", "weekly"),
+            "period_grain": (row_fields or {}).get("period_grain"),
+            "period_week": (row_fields or {}).get("period_week"),
+            "period_year": (row_fields or {}).get("period_year"),
+            "week_start_date": (row_fields or {}).get("week_start_date"),
             "units_sold": units,
             "raw_mtd_units": None,
             "is_mtd_estimate": False,
@@ -852,6 +935,12 @@ def parse_flat_report(
             "total_soh_value": _parse_decimal(series.get(col_map["total_soh_value"]))
             if col_map.get("total_soh_value")
             else None,
+            "in_transit_units": _parse_decimal(series.get(col_map["in_transit_units"]))
+            if col_map.get("in_transit_units")
+            else None,
+            "on_order_units": _parse_decimal(series.get(col_map["on_order_units"]))
+            if col_map.get("on_order_units")
+            else None,
             "raw_article_token": _normalize_text(series.get(col_map["raw_article_token"]))
             if col_map.get("raw_article_token")
             else None,
@@ -868,6 +957,7 @@ def parse_flat_report(
 
     if skipped:
         warnings.append(f"Skipped {skipped} row(s) with missing product token or units_sold")
+    warnings.extend(dict.fromkeys(period_warnings))
 
     rows = enrich_flat_rows_from_companion_soh(
         file_bytes,
@@ -899,8 +989,21 @@ def _parse_flat_wide_week_unpivot(
     warnings: list[str],
     file_bytes: bytes,
     filename: str,
+    week_calendar: dict[str, Any] | None = None,
+    file_fields: dict[str, Any] | None = None,
 ) -> ParseResult:
     """Emit one staging row per product×week when dual-header exposes multiple unit weeks."""
+    from app.services.imports.parsers.customer_sell_through_grain import fields_from_token
+
+    # N-0110: a band such as ``027.2026`` is week 27 of 2026; its start is known only
+    # from the customer's calendar. The bare focus column takes the file-name period.
+    fields_by_col: dict[str, dict[str, Any] | None] = {}
+    for col_name, period_date, _ptype in week_unit_cols:
+        m_band = _WEEK_BAND_RE.match(str(col_name))
+        fields = fields_from_token(m_band.group("band"), week_calendar=week_calendar) if m_band else None
+        if fields is None and file_fields is not None and file_fields.get("period_start_date") == period_date:
+            fields = dict(file_fields)
+        fields_by_col[col_name] = fields
     latest_period = max((p for _, p, _ in week_unit_cols), default=None)
     rows: list[dict[str, Any]] = []
     skipped_products = 0
@@ -938,6 +1041,12 @@ def _parse_flat_wide_week_unpivot(
         total_soh = (
             _parse_decimal(series.get(col_map["total_soh_value"])) if col_map.get("total_soh_value") else None
         )
+        in_transit = (
+            _parse_decimal(series.get(col_map["in_transit_units"])) if col_map.get("in_transit_units") else None
+        )
+        on_order = (
+            _parse_decimal(series.get(col_map["on_order_units"])) if col_map.get("on_order_units") else None
+        )
         article_tok = (
             _normalize_text(series.get(col_map["raw_article_token"]))
             if col_map.get("raw_article_token")
@@ -959,7 +1068,9 @@ def _parse_flat_wide_week_unpivot(
             units = _parse_decimal(series.get(col_name))
             if units is None or units <= 0:
                 continue
-            reported_soh = soh_val if latest_period and period_date == latest_period else None
+            is_latest = bool(latest_period and period_date == latest_period)
+            reported_soh = soh_val if is_latest else None
+            col_fields = fields_by_col.get(col_name) or {}
             row = {
                 "import_job_id": int(job_id),
                 "source_row_number": int(source_row_number),
@@ -969,8 +1080,12 @@ def _parse_flat_wide_week_unpivot(
                 "site_label": loc_tok,
                 "raw_product_token": product_tok,
                 "raw_period_ref": str(col_name),
-                "period_start_date": period_date,
-                "period_type": period_type,
+                "period_start_date": col_fields.get("period_start_date", period_date),
+                "period_type": col_fields.get("period_type", period_type),
+                "period_grain": col_fields.get("period_grain"),
+                "period_week": col_fields.get("period_week"),
+                "period_year": col_fields.get("period_year"),
+                "week_start_date": col_fields.get("week_start_date"),
                 "units_sold": units,
                 "raw_mtd_units": None,
                 "is_mtd_estimate": False,
@@ -981,6 +1096,9 @@ def _parse_flat_wide_week_unpivot(
                 "total_sell_amount": total_sell,
                 "total_cost_amount": total_cost,
                 "total_soh_value": total_soh if reported_soh is not None else None,
+                # Stock-side columns describe the latest week only, like on-hand.
+                "in_transit_units": in_transit if is_latest else None,
+                "on_order_units": on_order if is_latest else None,
                 "raw_article_token": article_tok,
                 "listing_external_id": listing_ext_id,
                 "listing_marketplace": listing_mkt,

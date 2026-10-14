@@ -87,3 +87,19 @@ def test_lineup_export_columns_roundtrip_and_reject_unknown_field() -> None:
             "acme",
             {"lineup_export_columns": [{"field": "not_a_field", "header": "X"}]},
         )
+
+
+def test_stock_gap_highlight_units_default_save_and_reject() -> None:
+    """N-0110: the highlight is an editable setting in absolute units."""
+    assert profile.stock_gap_highlight_units("acme") == profile.DEFAULT_STOCK_GAP_HIGHLIGHT_UNITS
+    saved = profile.save_tenant_profile_overrides("acme", {"stock_gap_highlight_units": "12"})
+    assert saved["stock_gap_highlight_units"] == 12.0
+    assert profile.stock_gap_highlight_units("acme") == 12.0
+    assert profile.profile_snapshot("acme")["stock_gap_highlight_units"] == 12.0
+    # Another policy save keeps the threshold.
+    profile.save_tenant_profile_overrides("acme", {"constraint_axis": "money"})
+    assert profile.stock_gap_highlight_units("acme") == 12.0
+    with pytest.raises(ValueError, match="stock_gap_highlight_units"):
+        profile.save_tenant_profile_overrides("acme", {"stock_gap_highlight_units": "0"})
+    with pytest.raises(ValueError, match="stock_gap_highlight_units"):
+        profile.save_tenant_profile_overrides("acme", {"stock_gap_highlight_units": "ten"})

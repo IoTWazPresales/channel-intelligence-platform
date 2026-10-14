@@ -507,6 +507,37 @@ def _apply_ai_resolution_to_line(
     return product_ok, location_ok
 
 
+NO_ON_HAND_MESSAGE = (
+    "This file has units sold and no on-hand column. Upload it again marked Sales-only to load "
+    "the units without stock, or add the customer's on-hand column."
+)
+
+
+def job_is_sales_only(job: ImportJob) -> bool:
+    """N-0110: the operator marked this upload as sales-only (units, no stock position)."""
+    meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+    return bool(meta.get("cst_sales_only"))
+
+
+def rows_carry_on_hand(rows: list[dict[str, Any]] | None) -> bool:
+    return any(isinstance(r, dict) and r.get("reported_soh") is not None for r in (rows or []))
+
+
+def _period_fields_for(grain: str | None, eff: date, week_calendar: dict[str, Any] | None) -> dict[str, Any]:
+    """Grain fields when a steward-declared period replaces the file's period."""
+    from app.services.imports.parsers.customer_sell_through_grain import day_fields, month_fields, week_fields
+
+    if grain == "day":
+        return day_fields(eff)
+    if grain == "month":
+        return month_fields(eff.year, eff.month) or {}
+    iso = eff.isocalendar()
+    fields = week_fields(iso[0], iso[1], week_calendar=week_calendar) or {}
+    if fields.get("week_start_date") is None:
+        fields["period_start_date"] = eff
+    return fields
+
+
 def _ingest_parse_result(
     db: Session,
     job: ImportJob,
@@ -520,6 +551,9 @@ def _ingest_parse_result(
 ) -> int:
     if result.error:
         _write_parse_failed(job, result.error)
+        return 1
+    if result.rows and not rows_carry_on_hand(result.rows) and not job_is_sales_only(job):
+        _write_parse_failed(job, NO_ON_HAND_MESSAGE)
         return 1
 
     db.execute(
@@ -539,6 +573,12 @@ def _ingest_parse_result(
     cfg = db.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer_id))
     vat_basis = feed_profile_vat_basis(cfg)
     feed_profile = cfg.feed_profile_json if cfg and isinstance(cfg.feed_profile_json, dict) else None
+    from app.services.imports.parsers.customer_sell_through_grain import (
+        stamp_period_grain,
+        week_calendar_from_feed_profile,
+    )
+
+    week_calendar = week_calendar_from_feed_profile(feed_profile)
     resolved_n = 0
     unresolved_n = 0
     ai_assist_used = [False]
@@ -549,6 +589,7 @@ def _ingest_parse_result(
     for idx, row in enumerate(result.rows):
         if isinstance(row, dict):
             apply_listing_seed_fields(row, feed_profile)
+            stamp_period_grain(row, week_calendar)
         line = ImportCustomerSellthroughStagingLine(**row)
         line.resolved_customer_id = customer_id
         # D1: site_label first-class (verbatim); siteless reports stay NULL.
@@ -695,10 +736,15 @@ def _ingest_parse_result(
             )
         )
         if distinct_periods is None or int(distinct_periods) <= 1:
+            first = next((r for r in result.rows if isinstance(r, dict) and r.get("period_grain")), None)
+            fields: dict[str, Any] = {"period_start_date": effective_period}
+            if first is not None and first.get("period_start_date") != effective_period:
+                fields = _period_fields_for(first.get("period_grain"), effective_period, week_calendar)
+                fields["period_start_date"] = fields.get("period_start_date") or effective_period
             db.execute(
                 update(ImportCustomerSellthroughStagingLine)
                 .where(ImportCustomerSellthroughStagingLine.import_job_id == job.id)
-                .values(period_start_date=effective_period)
+                .values(**fields)
             )
         else:
             db.execute(
@@ -833,6 +879,13 @@ def _handle_flat(
     cfg = db.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer_id))
     feed_profile = cfg.feed_profile_json if cfg and isinstance(cfg.feed_profile_json, dict) else None
     vat_basis = feed_profile_vat_basis(cfg)
+    from app.services.imports.parsers.customer_sell_through_grain import (
+        stamp_period_grain,
+        week_calendar_from_feed_profile,
+    )
+
+    week_calendar = week_calendar_from_feed_profile(feed_profile)
+    sales_only = job_is_sales_only(job)
 
     # Job-level steward declare (fallback when a file has no inference).
     meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
@@ -900,6 +953,20 @@ def _handle_flat(
             )
             continue
 
+        # N-0110: on-hand is the stock position. Units without it load only as sales-only.
+        if result.rows and not rows_carry_on_hand(result.rows) and not sales_only:
+            parse_errors.append(f"{fname}: {NO_ON_HAND_MESSAGE}")
+            file_period_reports.append(
+                {
+                    "filename": fname,
+                    "excluded": False,
+                    "period_start_date": None,
+                    "flags": ["no_on_hand"],
+                    "error": NO_ON_HAND_MESSAGE,
+                }
+            )
+            continue
+
         drift_warnings = _format_drift_warnings(job, _sniff_file_headers(file_bytes, fname))
         if drift_warnings:
             all_warnings.extend(f"{fname}: {w}" for w in drift_warnings)
@@ -956,8 +1023,14 @@ def _handle_flat(
                 if is_wide_week:
                     if row.get("period_start_date") is None:
                         row["period_start_date"] = effective_period
-                else:
-                    row["period_start_date"] = effective_period
+                elif row.get("period_start_date") is None or (
+                    steward_period is not None and row.get("period_start_date") != effective_period
+                ):
+                    # A steward-declared period replaces the file's; otherwise the row keeps
+                    # its own period (the file-level guess is Monday-snapped).
+                    row.update(_period_fields_for(row.get("period_grain"), effective_period, week_calendar))
+                    row["period_start_date"] = row.get("period_start_date") or effective_period
+            stamp_period_grain(row, week_calendar)
             apply_listing_seed_fields(row, feed_profile)
 
             line = ImportCustomerSellthroughStagingLine(**row)

@@ -165,8 +165,12 @@ def create_cst_batch_job_sync(
     source_id: int,
     filenames_and_bytes: list[tuple[str, bytes]],
     import_mode: str = "validate",
+    sales_only: bool = False,
 ) -> ImportJob:
-    """Create one CST import job with N raw files; run process sync."""
+    """Create one CST import job with N raw files; run process sync.
+
+    ``sales_only`` (N-0110): the operator marked the upload as units without on-hand.
+    """
     if not filenames_and_bytes:
         raise ValueError("create_cst_batch_job_sync requires at least one file")
 
@@ -200,6 +204,8 @@ def create_cst_batch_job_sync(
     sm["cst_batch_filenames"] = filenames
     sm["cst_batch_display_name"] = _batch_job_display_name(filenames)
     sm.setdefault("report_structure_type", "flat")
+    if sales_only:
+        sm["cst_sales_only"] = True
     job.staged_metadata = to_jsonable(sm)
     db.add(job)
 

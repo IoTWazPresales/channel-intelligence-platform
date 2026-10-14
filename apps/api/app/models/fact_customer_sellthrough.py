@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy import Boolean, Date, ForeignKey, Index, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, Date, ForeignKey, Index, Integer, Numeric, SmallInteger, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -45,6 +45,15 @@ class FactCustomerSellthrough(Base, TimestampMixin):
     unit_cost: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
     unit_mac: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
     reported_soh: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    # N-0110: day / week / month as the file states it. A week keeps its number and year;
+    # week_start_date is set only when the customer's week calendar is known.
+    period_grain: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    period_week: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    period_year: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    week_start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Stored apart from on-hand: never added into it.
+    in_transit_units: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    on_order_units: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
     site_label: Mapped[str | None] = mapped_column(String(256), nullable=True)
     vat_basis: Mapped[str | None] = mapped_column(String(16), nullable=True)
     import_job_id: Mapped[int | None] = mapped_column(

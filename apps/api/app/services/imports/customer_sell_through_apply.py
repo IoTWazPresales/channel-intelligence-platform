@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable
@@ -22,6 +23,12 @@ _CONFLICT_SET = {
     "unit_cost": text("EXCLUDED.unit_cost"),
     "unit_mac": text("EXCLUDED.unit_mac"),
     "reported_soh": text("EXCLUDED.reported_soh"),
+    "period_grain": text("EXCLUDED.period_grain"),
+    "period_week": text("EXCLUDED.period_week"),
+    "period_year": text("EXCLUDED.period_year"),
+    "week_start_date": text("EXCLUDED.week_start_date"),
+    "in_transit_units": text("EXCLUDED.in_transit_units"),
+    "on_order_units": text("EXCLUDED.on_order_units"),
     "site_label": text("EXCLUDED.site_label"),
     "vat_basis": text("EXCLUDED.vat_basis"),
     "import_job_id": text("EXCLUDED.import_job_id"),
@@ -31,6 +38,8 @@ _CONFLICT_SET = {
 }
 
 _APPLY_CHUNK_SIZE = 500
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -46,6 +55,7 @@ def apply_customer_sellthrough_staging(
     *,
     on_progress: Callable[[int, int], None] | None = None,
     chunk_size: int = _APPLY_CHUNK_SIZE,
+    recompute_stock_gap: bool = True,
 ) -> ApplySummary:
     """Upsert fact rows for staging lines that are resolved and not yet applied.
 
@@ -54,6 +64,8 @@ def apply_customer_sellthrough_staging(
     rather than one round-trip per row. The conflict target/columns are unchanged. Dedup-by-source_key
     within a chunk is required: Postgres rejects an ``ON CONFLICT DO UPDATE`` that touches the same
     key twice in one statement. ``on_progress(current, total)`` reports per chunk (optional).
+    ``recompute_stock_gap`` (N-0110) refreshes the expected stock position for the customers
+    and products this load touched.
     """
     from app.models.ingestion import ImportJob
     from app.services.imports.customer_sell_through import customer_sellthrough_source_key
@@ -126,6 +138,12 @@ def apply_customer_sellthrough_staging(
             "unit_cost": line.unit_cost,
             "unit_mac": getattr(line, "unit_mac", None),
             "reported_soh": line.reported_soh,
+            "period_grain": getattr(line, "period_grain", None),
+            "period_week": getattr(line, "period_week", None),
+            "period_year": getattr(line, "period_year", None),
+            "week_start_date": getattr(line, "week_start_date", None),
+            "in_transit_units": getattr(line, "in_transit_units", None),
+            "on_order_units": getattr(line, "on_order_units", None),
             "site_label": site_label,
             "vat_basis": getattr(line, "vat_basis", None) or "ex_vat",
             "import_job_id": job_id,
@@ -170,5 +188,24 @@ def apply_customer_sellthrough_staging(
                     summary.errors.append(f"line {line.id}: {exc}")
         if on_progress is not None:
             on_progress(min(start + chunk_size, total), total)
+
+    # N-0110: recompute the expected stock position for what this load touched.
+    # A failure is logged and recorded on the summary; it never undoes the load.
+    touched: dict[int, set[int]] = {}
+    for sk in order:
+        vals = grouped[sk]["values"]
+        touched.setdefault(int(vals["customer_id"]), set()).add(int(vals["product_id"]))
+    if recompute_stock_gap and touched and summary.applied:
+        from app.services.channel_intelligence.customer_stock_gap import recompute_customer_stock_positions
+
+        for cust_id, product_ids in touched.items():
+            try:
+                with db.begin_nested():
+                    recompute_customer_stock_positions(
+                        db, tenant_id=tid, customer_id=cust_id, product_ids=sorted(product_ids)
+                    )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("customer stock gap recompute failed customer_id=%s: %s", cust_id, exc)
+                summary.errors.append(f"stock gap recompute customer {cust_id}: {exc}")
 
     return summary

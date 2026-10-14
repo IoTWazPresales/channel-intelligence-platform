@@ -73,7 +73,7 @@ def test_dedup_by_source_key_all_grouped_lines_applied(monkeypatch) -> None:
     ]
     db = _db_with_lines([a, b, c, d], returned)
 
-    summary = apply_mod.apply_customer_sellthrough_staging(db, 7)
+    summary = apply_mod.apply_customer_sellthrough_staging(db, 7, recompute_stock_gap=False)
 
     # a,b,c all applied (3); two unique keys -> one chunk -> one execute (no duplicate-key error).
     assert summary.applied == 3
@@ -93,7 +93,7 @@ def test_chunking_and_progress(monkeypatch) -> None:
     progress: list[tuple[int, int]] = []
 
     summary = apply_mod.apply_customer_sellthrough_staging(
-        db, 7, chunk_size=1, on_progress=lambda c, t: progress.append((c, t))
+        db, 7, chunk_size=1, on_progress=lambda c, t: progress.append((c, t)), recompute_stock_gap=False
     )
 
     assert summary.applied == 3
@@ -113,3 +113,53 @@ def test_chunk_failure_records_errors_not_raise(monkeypatch) -> None:
     assert len(summary.errors) == 1
     assert "line 1" in summary.errors[0] and "boom" in summary.errors[0]
     assert lines[0].apply_status is None
+
+
+def test_apply_recomputes_stock_gap_for_touched_products(monkeypatch) -> None:
+    """N-0110: after a load, the expected stock position is refreshed per customer for its products."""
+    import app.services.channel_intelligence.customer_stock_gap as gap_mod
+
+    _patch_source_key(monkeypatch)
+    lines = [
+        _line(1, cust=1, prod=10, period="P1", units=2),
+        _line(2, cust=1, prod=11, period="P1", units=3),
+        _line(3, cust=2, prod=10, period="P1", units=1),
+    ]
+    returned = [
+        SimpleNamespace(id=300, source_key="1-None-10-P1"),
+        SimpleNamespace(id=301, source_key="1-None-11-P1"),
+        SimpleNamespace(id=302, source_key="2-None-10-P1"),
+    ]
+    db = _db_with_lines(lines, returned)
+    db.get.return_value = None  # no job row: tenant falls back to default
+    calls: list[tuple[str, int, list[int]]] = []
+    monkeypatch.setattr(
+        gap_mod,
+        "recompute_customer_stock_positions",
+        lambda _db, *, tenant_id, customer_id, product_ids: calls.append((tenant_id, customer_id, product_ids)) or 0,
+    )
+
+    summary = apply_mod.apply_customer_sellthrough_staging(db, 7)
+
+    assert summary.applied == 3
+    assert sorted(calls) == [("default", 1, [10, 11]), ("default", 2, [10])]
+
+
+def test_stock_gap_recompute_failure_never_undoes_the_load(monkeypatch) -> None:
+    import app.services.channel_intelligence.customer_stock_gap as gap_mod
+
+    _patch_source_key(monkeypatch)
+    lines = [_line(1, cust=1, prod=10, period="P1", units=2)]
+    db = _db_with_lines(lines, [SimpleNamespace(id=400, source_key="1-None-10-P1")])
+    db.get.return_value = None
+
+    def boom(*_a, **_k):
+        raise RuntimeError("gap boom")
+
+    monkeypatch.setattr(gap_mod, "recompute_customer_stock_positions", boom)
+
+    summary = apply_mod.apply_customer_sellthrough_staging(db, 7)
+
+    assert summary.applied == 1
+    assert lines[0].apply_status == "applied"
+    assert any("stock gap recompute" in e and "gap boom" in e for e in summary.errors)

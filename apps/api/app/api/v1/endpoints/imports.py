@@ -557,6 +557,10 @@ async def post_import_jobs_bulk_delete_confirm(
     return out
 
 
+def _truthy_form(value: str | None) -> bool:
+    return str(value or "").strip().lower() in ("1", "true", "yes", "on")
+
+
 @router.post("/jobs", dependencies=_IMPORT_RUNNER)
 async def create_job(
     source_id: int = Form(...),
@@ -566,6 +570,7 @@ async def create_job(
     confirm_destructive: str = Form(default=""),
     mapping_override: str = Form(default=""),
     dsi_workflow_mode: str = Form(default="auto"),
+    cst_sales_only: str = Form(default=""),
     db: AsyncSession = Depends(get_db),
     user: dict | None = Depends(get_optional_current_user),
 ):
@@ -630,6 +635,13 @@ async def create_job(
             mode_explicit = "auto"
         sm = dict(job.staged_metadata or {})
         sm["dsi_workflow_mode_explicit"] = mode_explicit
+        job.staged_metadata = to_jsonable(sm)
+        db.add(job)
+
+    # N-0110: units with no on-hand load only when the operator marks the upload sales-only.
+    if tpl.slug == CST_TEMPLATE_SLUG and _truthy_form(cst_sales_only):
+        sm = dict(job.staged_metadata or {})
+        sm["cst_sales_only"] = True
         job.staged_metadata = to_jsonable(sm)
         db.add(job)
 
@@ -969,6 +981,7 @@ async def cst_batch_propose(
 async def cst_batch_create_jobs(
     source_id: int = Form(...),
     files: list[UploadFile] = File(...),
+    cst_sales_only: str = Form(default=""),
     db: AsyncSession = Depends(get_db),
 ):
     """Create CST import jobs from a multi-file upload.
@@ -1033,6 +1046,7 @@ async def cst_batch_create_jobs(
                     source_id=source_id,
                     filenames_and_bytes=group_payload,
                     import_mode="validate",
+                    sales_only=_truthy_form(cst_sales_only),
                 )
                 created.append(
                     {

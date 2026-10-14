@@ -27,6 +27,8 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { apiPostFormData, safeDisplayError } from '@/lib/api';
 
+import { CstSalesOnlyToggle } from './CstSalesOnlyToggle';
+
 const ACCEPT =
   '.csv,.xlsx,.xlsm,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.ms-excel,text/csv';
 
@@ -93,6 +95,7 @@ export function CstBulkUploadDialog({
   const [files, setFiles] = useState<File[]>([]);
   const [preview, setPreview] = useState<BatchProposeResponse | null>(null);
   const [results, setResults] = useState<BatchJobsResponse | null>(null);
+  const [salesOnly, setSalesOnly] = useState(false);
 
   const addFiles = useCallback((list: FileList | File[] | null) => {
     if (!list) return;
@@ -141,6 +144,7 @@ export function CstBulkUploadDialog({
       for (const file of files) {
         fd.append('files', file);
       }
+      if (salesOnly) fd.append('cst_sales_only', 'true');
       return apiPostFormData<BatchJobsResponse>('/api/v1/imports/cst/batch-jobs', fd);
     },
     onSuccess: (data) => {
@@ -292,6 +296,12 @@ export function CstBulkUploadDialog({
               })}
             </Stack>
           ) : null}
+          <CstSalesOnlyToggle
+            checked={salesOnly}
+            onChange={setSalesOnly}
+            disabled={upload.isPending}
+            testId="cst-bulk-sales-only"
+          />
           {upload.isPending ? <LinearProgress /> : null}
           {upload.isError ? <Alert severity="error">{safeDisplayError(upload.error)}</Alert> : null}
           {results ? (

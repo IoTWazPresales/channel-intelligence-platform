@@ -54,6 +54,7 @@ from app.models.budget_ledger import BudgetLedgerEntry
 from app.models.listing_capture import CustomerListing, ListingObservation
 from app.models.customer_code_mint_setting import CustomerCodeMintSetting
 from app.models.distributor_code_mint_setting import DistributorCodeMintSetting
+from app.models.customer_stock_position import CustomerStockPosition
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.fact_customer_velocity import FactCustomerVelocity
 from app.models.fact_demand_forecast import FactDemandForecast
@@ -161,6 +162,7 @@ __all__ = [
     "FactInventoryDistributor",
     "FactInventoryReconciliation",
     "FactCustomerSellthrough",
+    "CustomerStockPosition",
     "ImportCustomerSellthroughStagingLine",
     "CustomerReportConfig",
     "CustomerArticleAlias",

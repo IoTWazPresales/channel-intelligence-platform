@@ -495,7 +495,20 @@ IMPORT_TEMPLATE_ROWS: list[dict[str, Any]] = [
                     "period",
                     "report_week",
                     "week_no",
+                    "sale date",
+                    "sales date",
+                    "transaction date",
+                    "date sold",
                 ],
+                "required": False,
+            },
+            # N-0110: stored apart from on-hand; never added into it.
+            "in_transit_units": {
+                "aliases": ["in transit", "in_transit", "intransit", "in transit qty", "goods in transit"],
+                "required": False,
+            },
+            "on_order_units": {
+                "aliases": ["on order", "on_order", "open order", "open orders", "on order qty"],
                 "required": False,
             },
             "unit_sell_price": {

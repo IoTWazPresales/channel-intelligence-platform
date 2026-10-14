@@ -10,6 +10,10 @@ vi.mock('./CstArticleAliasesSection', () => ({
   CstArticleAliasesSection: () => <div data-testid="cst-article-aliases-section">aliases-section</div>,
 }));
 
+vi.mock('./CstStockGapSection', () => ({
+  CstStockGapSection: () => <div data-testid="cst-stock-gap-section">stock-gap-section</div>,
+}));
+
 vi.mock('@/components/EnterpriseDataGrid', () => ({
   EnterpriseDataGrid: () => <div data-testid="ops-grid-mock" />,
 }));
@@ -32,6 +36,7 @@ vi.mock('@/lib/api', () => ({
   }),
   apiPatch: vi.fn(async () => ({})),
   apiPost: vi.fn(async () => ({})),
+  apiPut: vi.fn(async () => ({})),
 }));
 
 describe('CST steward page Article aliases tab', () => {
@@ -55,5 +60,12 @@ describe('CST steward page Article aliases tab', () => {
     await waitFor(() => expect(screen.getByTestId('cst-article-aliases-section')).toBeInTheDocument());
     expect(screen.queryByTestId('customers-columns-open')).not.toBeInTheDocument();
     expect(document.body.innerHTML).not.toMatch(/MasterDataGridShell/);
+  });
+
+  it('mounts the stock gap section on its own tab (N-0110)', async () => {
+    renderPage();
+    expect(screen.queryByTestId('cst-stock-gap-section')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Stock gap' }));
+    await waitFor(() => expect(screen.getByTestId('cst-stock-gap-section')).toBeInTheDocument());
   });
 });

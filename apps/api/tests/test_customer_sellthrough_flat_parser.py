@@ -238,6 +238,13 @@ def test_all_output_rows_contain_required_keys() -> None:
         "listing_external_id",
         "listing_marketplace",
         "resolution_status",
+        # N-0110: grain and stock-side pipeline columns.
+        "period_grain",
+        "period_week",
+        "period_year",
+        "week_start_date",
+        "in_transit_units",
+        "on_order_units",
     }
     for row in result.rows:
         assert set(row.keys()) == required

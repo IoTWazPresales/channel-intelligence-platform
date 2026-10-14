@@ -66,6 +66,7 @@ import { mappingStateMatchesJob } from './importWizardMappingReset';
 import { BulkLineupBackfillDialog } from './BulkLineupBackfillDialog';
 import { DsiBulkUploadDialog } from './DsiBulkUploadDialog';
 import { CstBulkUploadDialog } from './CstBulkUploadDialog';
+import { CstSalesOnlyToggle } from './CstSalesOnlyToggle';
 import { CstFilePeriodStrip, type CstFilePeriodRow } from './CstFilePeriodStrip';
 import { DsiCoveragePanel } from './DsiCoveragePanel';
 import { DsiFileReviewStrip } from './DsiFileReviewStrip';
@@ -566,6 +567,7 @@ function AdminImportsPageContent() {
   const [dsiActiveLayoutSignature, setDsiActiveLayoutSignature] = useState<string | null>(null);
   const [dsiBulkUploadOpen, setDsiBulkUploadOpen] = useState(false);
   const [cstBulkUploadOpen, setCstBulkUploadOpen] = useState(false);
+  const [cstSalesOnly, setCstSalesOnly] = useState(false);
   const [jobsBulkSelectionMode, setJobsBulkSelectionMode] = useState<'normal' | 'selecting'>('normal');
   const [jobsSelectedCount, setJobsSelectedCount] = useState(0);
   const [jobsVisibleRowCount, setJobsVisibleRowCount] = useState(0);
@@ -1923,6 +1925,9 @@ function AdminImportsPageContent() {
       }
       if (selectedSlug === 'distributor_inventory') {
         fd.append('dsi_workflow_mode', dsiWorkflowMode);
+      }
+      if (selectedSlug === 'customer_sell_through' && cstSalesOnly) {
+        fd.append('cst_sales_only', 'true');
       }
       const res = await fetch(apiUrl('/api/v1/imports/jobs'), {
         method: 'POST',
@@ -4601,6 +4606,13 @@ function AdminImportsPageContent() {
               subtitle="Or choose a file. Pipeline runs according to import mode."
               testIdPrefix="generic-upload"
             />
+            {isCst ? (
+              <CstSalesOnlyToggle
+                checked={cstSalesOnly}
+                onChange={setCstSalesOnly}
+                disabled={upload.isPending}
+              />
+            ) : null}
             {isCst ? (
               <Button
                 variant="outlined"
