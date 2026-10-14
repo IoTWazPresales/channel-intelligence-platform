@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2190
-  log_sha256: 13585fee26442856ee9c2d786762870bbfa843d36ee29ddeb6c638a905cdf3d0
+  snapshot_revision: 2220
+  log_sha256: c4cc86fdf36be3d1ef0e9f4fbac8d57c53616a5f60dbdc1c88916f47ab591b0d
   acceptance_policy:
     milestone: operator
     root: operator
@@ -9973,9 +9973,9 @@ nodes:
       9.3)'
     class: feature
     origin: operator
-    status: ready
-    stage: null
-    revision: 2
+    status: in_progress
+    stage: verify
+    revision: 21
     lease: null
     depends_on:
     - N-0073
@@ -9990,55 +9990,108 @@ nodes:
     - Profit definition per Warren's decision (which cost basis is the margin, and where the other two are shown)
     - Lineup profitability and CPOR margin read the same definition; every figure names its cost basis
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-N0080
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
     quality:
       testing:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: apps/api/tests/test_profit_definition.py
+          summary: pytest 131 passed on touched areas (cip_test, incl. 3 DB tests); vitest 131 passed on touched files; web
+            tsc exit 0; next lint 0 errors on changed files.
+        rationale: pytest 131 passed on touched areas (cip_test, incl. 3 DB tests); vitest 131 passed on touched files; web
+          tsc exit 0; next lint 0 errors on changed files.
+        pass_run: RUN-20261014-N0080-IMPL
+        pass_actor: gov-001
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: apps/api/app/services/cpor/case_margin.py
+          summary: Read-only path. Every missing figure is a named flag on the line (no cost, no term, cost not USD, no ROE),
+            shown in words on the panel. No new job or write to log.
+        rationale: Read-only path. Every missing figure is a named flag on the line (no cost, no term, cost not USD, no ROE),
+          shown in words on the panel. No new job or write to log.
+        pass_run: RUN-20261014-N0080-IMPL
+        pass_actor: gov-001
       ux:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: apps/web/src/features/promotions-funding/CaseMarginPanel.tsx
+          summary: 'Headline names its basis. Per line: units, DAP, PM controlled cost, support, margin, margin total, landed
+            cost (Not recorded when empty), notes in words. Lineup columns and planner waterfall renamed t'
+        rationale: 'Headline names its basis. Per line: units, DAP, PM controlled cost, support, margin, margin total, landed
+          cost (Not recorded when empty), notes in words. Lineup columns and planner waterfall renamed to the same words.'
+        pass_run: RUN-20261014-N0080-IMPL
+        pass_actor: gov-001
       a11y:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: apps/web/src/features/promotions-funding/CaseMarginPanel.tsx
+          summary: Semantic table with column and row headers and an aria-label; landed cost input is labelled with helper
+            text. Component tests query by role. No axe run.
+        rationale: Semantic table with column and row headers and an aria-label; landed cost input is labelled with helper
+          text. Component tests query by role. No axe run.
+        pass_run: RUN-20261014-N0080-IMPL
+        pass_actor: gov-001
       rendered:
         required: true
         state: pending
         evidence: null
-        rationale: null
+        rationale: 'UNABLE_TO_RENDER in the browser: /promotions?plan=223 on 127.0.0.1:3000 opened the sign-in form and no
+          account password may be entered by the agent. Web build b2QCbedv2c--6me-VJRcg is live; /api/v1/cpor/cases/223/margin
+          answers 401 without a session. Component tests cover the panel.'
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: pass
+        evidence:
+          path: apps/api/app/services/profit_definition.py
+          summary: 'Labels: Margin vs PM controlled cost; DAP, price to distributor; PM controlled cost; Landed cost (not
+            in margin). Old Internal GP and Profit total labels replaced.'
+        rationale: 'Labels: Margin vs PM controlled cost; DAP, price to distributor; PM controlled cost; Landed cost (not
+          in margin). Old Internal GP and Profit total labels replaced.'
+        pass_run: RUN-20261014-N0080-IMPL
+        pass_actor: gov-001
+    verification:
+      behavioral:
+        state: pass
+        pass_run: RUN-20261014-N0080-VER
+        pass_actor: gov-001
+        evidence: apps/api/tests/test_profit_definition.py
+        path: null
+      referent:
+        state: pass
+        pass_run: RUN-20261014-N0080-VER
+        pass_actor: gov-001
+        evidence: apps/api/tests/test_cpor_case_margin_db.py
+        path: apps/api/app/services/cpor/case_margin.py
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: 'VERIFIED_WITH_LIMITATIONS. Self-verified under RUN-20261014-N0080-VER, different from implementation run
+      RUN-20261014-N0080-IMPL; same session, same model, not independent. N-0099 does the second look. Limits: margin panel
+      not rendered in the browser (sign-in); stored planner lines keep the old GP until recalculated; CPOR lines without customer
+      rebate or distributor margin terms use 0 (flagged); no SKU has a landed cost yet; ruff not installed; full API suite
+      has 19 failures and 10 errors in files this node does not touch. Operator acceptance pending.'
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      lineup-price-chain: 'kept: SRP to DAP chain and stored lineup profit numbers unchanged'
+      planner-reserves: 'kept: reserve pool and split math unchanged'
+      cpor-support-waterfall: 'kept: case lines are not written; margin is a read'
     target_artifact_class: null
     design_artifact_class: null
     risk_class: full
+    implementation_run: RUN-20261014-N0080-IMPL
+    implementation_actor: gov-001
   N-0081:
     id: N-0081
     parent: null
@@ -11852,7 +11905,7 @@ nodes:
     origin: operator
     status: proposed
     stage: null
-    revision: 0
+    revision: 1
     lease: null
     depends_on:
     - N-0065
@@ -11867,6 +11920,8 @@ nodes:
     acceptance_criteria:
     - Separation per Warren's mapping (D-0029 Q3); the four system roles stay unless Warren decides otherwise
     - PM edits pre-approval only; Ken cannot write MAC or terms (per the mapping)
+    - The public case-approval route (GET/POST /api/v1/case-approval) is throttled per client and per token so a token cannot
+      be brute-forced or the route flooded (finding from N-0082)
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
     baseline_ref: null
     parity_source: []
@@ -13770,6 +13825,25 @@ decisions:
       binding and revocation; a signature would add a key to manage and nothing a forger could not already be denied. Reversible:
       an HMAC prefix can be added later without a schema change.'
     origin: agent
+    status: accepted
+    supersedes: null
+  D-0080:
+    id: D-0080
+    scope: N-0080
+    statement: 'Planner line margin now starts from OEM sell-in (the DAP) minus PM controlled cost, less reserves. Before,
+      it started from distributor net, which took the distributor margin off a second time. Plan totals rise by sell-in x
+      distributor margin x units. Stored plan lines keep their old figure until the line is recalculated; nothing was rewritten.
+      Reversible: one line in calculator.py.'
+    origin: implementation
+    status: proposed
+    supersedes: null
+  D-0081:
+    id: D-0081
+    scope: N-0080
+    statement: CPOR case margin derives DAP from the line SRP, VAT and dealer margin with the customer rebate and distributor
+      margin from trade terms, divided by the case ROE (USD). A missing term is used as 0 and flagged on the line; a SKU cost
+      not in USD gives no margin and is flagged, never converted.
+    origin: implementation
     status: proposed
     supersedes: null
 evidence:
@@ -14891,6 +14965,30 @@ evidence:
     note: 'N-0082: cip already at 20261012_0035 before this session (owner postgres, grants SELECT/INSERT/UPDATE to cip; columns
       and constraints match the migration; 1 link sent and revoked). No clone proof was recorded before that apply. 0035 downgrade
       and re-upgrade proven on cip_test this session.'
+  EV-0087:
+    id: EV-0087
+    provenance: implementation-observation
+    path: apps/api/app/services/profit_definition.py
+    tree_hash: null
+    note: 'N-0080 one profit definition: margin vs PM controlled cost; DAP and landed cost beside it.'
+  EV-0088:
+    id: EV-0088
+    provenance: implementation-observation
+    path: apps/api/app/services/cpor/case_margin.py
+    tree_hash: null
+    note: 'N-0080 CPOR case margin read (GET /api/v1/cpor/cases/{id}/margin). Case 223 on cip: 1837.33 USD over 5 of 9 lines.'
+  EV-0089:
+    id: EV-0089
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261014/N0080_CLONE_PROOF.md
+    tree_hash: null
+    note: N-0080 clone proof of 20261014_0036 on cip_n0080, then applied to cip. sku_rows 31 and cost sum 17602.0 unchanged.
+  EV-0090:
+    id: EV-0090
+    provenance: implementation-observation
+    path: apps/web/src/features/promotions-funding/CaseMarginPanel.tsx
+    tree_hash: null
+    note: N-0080 Margin vs PM controlled cost panel on the plan workspace.
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -15512,6 +15610,22 @@ baselines:
     observed_behavior: Planner sends a 7-day single-case link by mail; only the token hash is stored. Customer sees a filtered
       settlement summary and approves or rejects with name and comment, written as a customer_settlement_signoff case event.
       Planner can withdraw an open link.
+  BLN-N0080:
+    id: BLN-N0080
+    provenance: implementation-observation
+    tree_hash: 5bce9b1c
+    latent_capabilities:
+    - lineup-price-chain
+    - planner-reserves
+    - cpor-support-waterfall
+    preservation:
+      lineup-price-chain: 'kept: SRP to DAP chain and stored lineup profit numbers unchanged'
+      planner-reserves: 'kept: reserve pool and split math unchanged'
+      cpor-support-waterfall: 'kept: case lines are not written; margin is a read'
+    path: apps/api/app/services/commercial_planner/lineup_pricing.py
+    observed_behavior: Lineup profit was DAP minus PM controlled cost. Planner GP was distributor net minus controlled cost,
+      and distributor net took the distributor margin off twice. CPOR showed no company margin. No landed cost was stored
+      anywhere.
 caveats:
   consult_model_logged:
     key: consult_model_logged
@@ -15930,9 +16044,25 @@ deferred_findings:
   run: RUN-20261014-N0082-VER
   actor: gov-008
   status: deferred
+- seq: 2218
+  code: DOES_NOT_FIT
+  note: 'N-0080: planner lines stored before 9fda9893 keep the old GP (distributor-net base) until recalculated. No bulk recompute
+    was run.'
+  node: N-0080
+  run: RUN-20261014-N0080-VER
+  actor: gov-001
+  status: deferred
+- seq: 2219
+  code: DOES_NOT_FIT
+  note: 'N-0080: full API suite on cip_test: 19 failed, 10 errors outside N-0080 files (platform_audit mock await, promo_plan_builder
+    FakeSession.begin_nested, open-channel copy, seed data, settle-clone test leaves settings on a dropped clone DB).'
+  node: N-0080
+  run: RUN-20261014-N0080-VER
+  actor: gov-001
+  status: deferred
 ids:
   node: 5
-  decision: 79
+  decision: 81
   blocker: 19
-  evidence: 86
+  evidence: 90
   baseline: 18
