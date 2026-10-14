@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -39,6 +41,43 @@ _CONFLICT_SET = {
 
 _APPLY_CHUNK_SIZE = 500
 
+# Flows summed over differing source rows of one key (D-0091).
+_SUMMED_FIELDS = ("units_sold", "raw_mtd_units")
+# Stock snapshots: a value every differing row repeats is one snapshot and is kept once (a week
+# split over two months repeats the week's on-hand on each line); values that differ are separate
+# holdings and are summed.
+_STOCK_FIELDS = ("reported_soh", "in_transit_units", "on_order_units")
+
+
+def _source_identity(line: ImportCustomerSellthroughStagingLine) -> str:
+    """Every source column of a row (``_`` keys are CIP's own notes), plus what was parsed from it."""
+    payload = line.raw_row_payload if isinstance(line.raw_row_payload, dict) else {}
+    source = {k: v for k, v in payload.items() if not str(k).startswith("_")}
+    parsed = [getattr(line, k, None) for k in ("raw_period_ref", "units_sold", "reported_soh", "period_start_date")]
+    return hashlib.sha256(json.dumps([source, parsed], sort_keys=True, default=str).encode("utf-8")).hexdigest()
+
+
+def _merge_into(group: dict[str, Any], values: dict[str, Any]) -> None:
+    """Add a differing source row of the same key to its group (D-0091)."""
+    merged = group["values"]
+    for key in _SUMMED_FIELDS:
+        if values.get(key) is not None:
+            merged[key] = (float(merged[key]) if merged.get(key) is not None else 0.0) + float(values[key])
+    merged["is_mtd_estimate"] = bool(merged.get("is_mtd_estimate")) or bool(values.get("is_mtd_estimate"))
+    for key in _STOCK_FIELDS:
+        group["stock"][key].append(values.get(key))
+        seen = [float(v) for v in group["stock"][key] if v is not None]
+        if not seen:
+            merged[key] = None
+        elif len(set(seen)) == 1:
+            merged[key] = seen[0]
+        else:
+            merged[key] = sum(seen)
+    # Prices and the source payload: the later row's, as before.
+    for key in ("unit_sell_price", "unit_cost", "unit_mac", "raw_source_row"):
+        if values.get(key) is not None:
+            merged[key] = values[key]
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,9 +86,12 @@ class ApplySummary:
     applied: int = 0
     skipped_unresolved: int = 0
     errors: list[str] = field(default_factory=list)
-    # N-0110: older rows of the same file(s) moved aside because this load restated them.
+    # N-0110 (D-0090): older rows for the same customer, product and period moved aside because
+    # this newer load restated them.
     superseded_rows: int = 0
     superseded_units: float = 0.0
+    # N-0110 (D-0091): extra copies of a source row identical in every source column.
+    duplicate_lines: int = 0
 
 
 def apply_customer_sellthrough_staging(
@@ -62,16 +104,19 @@ def apply_customer_sellthrough_staging(
 ) -> ApplySummary:
     """Upsert fact rows for staging lines that are resolved and not yet applied.
 
-    Batched: lines are grouped by ``source_key`` (last value wins — matching the prior sequential
-    last-write-wins) and upserted in chunked multi-row ``INSERT … ON CONFLICT DO UPDATE`` statements
-    rather than one round-trip per row. The conflict target/columns are unchanged. Dedup-by-source_key
-    within a chunk is required: Postgres rejects an ``ON CONFLICT DO UPDATE`` that touches the same
-    key twice in one statement. ``on_progress(current, total)`` reports per chunk (optional).
-    ``recompute_stock_gap`` (N-0110) refreshes the expected stock position for the customers
-    and products this load touched.
+    Batched: lines are grouped by ``source_key`` and upserted in chunked multi-row
+    ``INSERT … ON CONFLICT DO UPDATE`` statements rather than one round-trip per row. The conflict
+    target/columns are unchanged. Dedup-by-source_key within a chunk is required: Postgres rejects an
+    ``ON CONFLICT DO UPDATE`` that touches the same key twice in one statement.
+    ``on_progress(current, total)`` reports per chunk (optional). ``recompute_stock_gap`` (N-0110)
+    refreshes the expected stock position for the customers and products this load touched.
 
-    Re-loading the same file is idempotent (N-0110): older rows that file wrote under other
-    keys are superseded (see ``customer_sell_through_supersede``), so units are not counted twice.
+    Source rows sharing one key (N-0110, D-0091): rows that differ are separate lines and their
+    units are summed; a row identical in every source column to one already counted is kept once
+    and its copies are marked ``apply_status = "duplicate"`` (see ``_merge_into``).
+
+    A newer load supersedes older rows for the same customer, product and period, whatever their
+    site or day grain (N-0110, D-0090; see ``customer_sell_through_supersede``).
     """
     from app.models.ingestion import ImportJob
     from app.services.imports.customer_sell_through import customer_sellthrough_source_key
@@ -102,8 +147,8 @@ def apply_customer_sellthrough_staging(
 
     now = datetime.now(timezone.utc)
 
-    # Group by source_key: keep the last line's values (sequential last-wins), but remember every
-    # line in the group so they all get marked applied + pointed at the resulting fact id.
+    # Group by source_key (D-0091): differing lines are summed, identical copies count once. Every
+    # line in the group is remembered so it is marked and pointed at the resulting fact id.
     grouped: dict[str, dict[str, Any]] = {}
     order: list[str] = []
     for line in lines:
@@ -157,11 +202,23 @@ def apply_customer_sellthrough_staging(
             "tenant_id": tid,
             "updated_at": now,
         }
+        ident = _source_identity(line)
         if sk in grouped:
-            grouped[sk]["values"] = values  # last wins (matches sequential upsert)
-            grouped[sk]["lines"].append(line)
+            group = grouped[sk]
+            if ident in group["idents"]:
+                group["duplicates"].append(line)
+            else:
+                group["idents"].add(ident)
+                _merge_into(group, values)
+                group["lines"].append(line)
         else:
-            grouped[sk] = {"values": values, "lines": [line]}
+            grouped[sk] = {
+                "values": values,
+                "lines": [line],
+                "duplicates": [],
+                "idents": {ident},
+                "stock": {k: [values[k]] for k in _STOCK_FIELDS},
+            }
             order.append(sk)
 
     total = len(order)
@@ -190,6 +247,12 @@ def apply_customer_sellthrough_staging(
                         line.fact_sellthrough_row_id = fid
                     db.add(line)
                     summary.applied += 1
+                for line in grouped[sk]["duplicates"]:
+                    line.apply_status = "duplicate"
+                    if fid is not None:
+                        line.fact_sellthrough_row_id = fid
+                    db.add(line)
+                    summary.duplicate_lines += 1
         except Exception as exc:  # noqa: BLE001
             for sk in chunk_sks:
                 for line in grouped[sk]["lines"]:
@@ -204,15 +267,17 @@ def apply_customer_sellthrough_staging(
         vals = grouped[sk]["values"]
         touched.setdefault(int(vals["customer_id"]), set()).add(int(vals["product_id"]))
 
-    # N-0110: a re-upload of the same file supersedes the rows it wrote earlier under other
-    # keys. Skipped when any chunk failed, so a partial load never moves old rows aside.
+    # N-0110 (D-0090): this newer load supersedes older rows for the same customer, product and
+    # period stored under other keys. Skipped when any chunk failed, so a partial load never moves
+    # old rows aside.
     if touched and written_keys and not summary.errors:
-        from app.services.imports.customer_sell_through_supersede import supersede_reloaded_rows
+        from app.services.imports.customer_sell_through_supersede import supersede_restated_rows
 
+        restated = [grouped[sk]["values"] for sk in order]
         try:
             with db.begin_nested():
-                moved = supersede_reloaded_rows(
-                    db, job_id=int(job_id), tenant_id=tid, written_keys=written_keys, restated=touched
+                moved = supersede_restated_rows(
+                    db, job_id=int(job_id), tenant_id=tid, written_keys=written_keys, restated=restated
                 )
             summary.superseded_rows = moved.rows
             summary.superseded_units = moved.units

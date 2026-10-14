@@ -64,7 +64,7 @@ def _patch_source_key(monkeypatch):
 def test_dedup_by_source_key_all_grouped_lines_applied(monkeypatch) -> None:
     _patch_source_key(monkeypatch)
     a = _line(1, cust=1, prod=10, period="P1", units=2)
-    b = _line(2, cust=1, prod=10, period="P1", units=5)  # same key as a -> grouped, last wins
+    b = _line(2, cust=1, prod=10, period="P1", units=5)  # same key as a -> grouped and summed (D-0091)
     c = _line(3, cust=1, prod=11, period="P1", units=3)  # distinct key
     d = _line(4, cust=1, prod=12, period="P1", units=None)  # invalid -> skipped
     returned = [
