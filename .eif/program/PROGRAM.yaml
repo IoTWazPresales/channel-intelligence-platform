@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2158
-  log_sha256: 959afdd02a09bc8eb514a264d0363870e8181331360ac8d8ffd6d3cd4e30acc3
+  snapshot_revision: 2190
+  log_sha256: 13585fee26442856ee9c2d786762870bbfa843d36ee29ddeb6c638a905cdf3d0
   acceptance_policy:
     milestone: operator
     root: operator
@@ -10140,9 +10140,9 @@ nodes:
     title: 'Customer approval link for settlement sign-off (spec section 9.2; trigger met: 211 cases settled manually)'
     class: feature
     origin: operator
-    status: proposed
-    stage: null
-    revision: 0
+    status: in_progress
+    stage: verify
+    revision: 25
     lease: null
     depends_on:
     - N-0074
@@ -10160,80 +10160,174 @@ nodes:
     - The link is a signed, expiring, single-case token; it opens nothing else and is revocable
     - Approval is recorded as a case event with who, when and the version approved
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-N0082
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
     quality:
       security:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: apps/api/app/services/cpor/customer_approval.py
+          summary: Only the token hash is stored; planner routes now check the case tenant; decide locks the link row so one
+            decision wins; public payload is the PUBLIC_KEYS allowlist; every miss returns the same 404 te
+        rationale: Only the token hash is stored; planner routes now check the case tenant; decide locks the link row so one
+          decision wins; public payload is the PUBLIC_KEYS allowlist; every miss returns the same 404 text. No rate limit
+          on the public route (finding).
+        pass_run: RUN-20261014-N0082-IMPL
+        pass_actor: gov-001
       threat:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: apps/api/app/services/cpor/customer_approval.py
+          summary: 'Abuse cases: token guessing (256-bit, hash lookup), cross-tenant send (now not-found), replay after decision/revoke/expiry/version
+            change (blocked, tested), double submit (row lock), mail interception'
+        rationale: 'Abuse cases: token guessing (256-bit, hash lookup), cross-tenant send (now not-found), replay after decision/revoke/expiry/version
+          change (blocked, tested), double submit (row lock), mail interception (7-day expiry, revoke, resend retires old
+          link). Brute-force throttling not present.'
+        pass_run: RUN-20261014-N0082-IMPL
+        pass_actor: gov-001
       testing:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: apps/api/tests/test_customer_approval_db.py
+          summary: cip_test DB test 5 + unit 6 passed; page vitest 3; settlement vitest 19; test_cpor_cases_api 9; web tsc
+            exit 0; next lint clean on changed files.
+        rationale: cip_test DB test 5 + unit 6 passed; page vitest 3; settlement vitest 19; test_cpor_cases_api 9; web tsc
+          exit 0; next lint clean on changed files.
+        pass_run: RUN-20261014-N0082-IMPL
+        pass_actor: gov-001
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: apps/api/app/services/cpor/customer_approval.py
+          summary: Logs customer_approval sent and send_failed with case_id and error type, no token or address. Sent, revoked
+            and signoff are case events.
+        rationale: Logs customer_approval sent and send_failed with case_id and error type, no token or address. Sent, revoked
+          and signoff are case events.
+        pass_run: RUN-20261014-N0082-IMPL
+        pass_actor: gov-001
       api_dx:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: apps/api/app/api/v1/endpoints/case_approval.py
+          summary: 'Planner: GET/POST /api/v1/cpor/cases/{id}/approval-link and POST .../revoke (planner/admin). Public: GET/POST
+            /api/v1/case-approval (token only). Errors: 404 not found/not valid, 422 missing fields or'
+        rationale: 'Planner: GET/POST /api/v1/cpor/cases/{id}/approval-link and POST .../revoke (planner/admin). Public: GET/POST
+          /api/v1/case-approval (token only). Errors: 404 not found/not valid, 422 missing fields or public origin, 502 mail
+          not sent.'
+        pass_run: RUN-20261014-N0082-IMPL
+        pass_actor: gov-001
       docs_surface:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: docs/memory/CURRENT.md
+          summary: CURRENT.md N-0082 line states the link rules, the decision event and the migration state.
+        rationale: CURRENT.md N-0082 line states the link rules, the decision event and the migration state.
+        pass_run: RUN-20261014-N0082-IMPL
+        pass_actor: gov-001
       versioning:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: apps/api/alembic/versions/20261012_0035_case_approval_link.py
+          summary: Additive table via 20261012_0035; downgrade drops it. Round-trip proven on cip_test. cip already at 0035.
+            Link is bound to case export_version; a newer version makes the link stale.
+        rationale: Additive table via 20261012_0035; downgrade drops it. Round-trip proven on cip_test. cip already at 0035.
+          Link is bound to case export_version; a newer version makes the link stale.
+        pass_run: RUN-20261014-N0082-IMPL
+        pass_actor: gov-001
       ux:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: apps/web/src/app/case-approval/page.tsx
+          summary: Customer sees case, customer, window, version, per-line estimate/result/support and total in case currency,
+            then name, comment, Approve/Reject. Reject now checks required fields. Planner panel shows s
+        rationale: Customer sees case, customer, window, version, per-line estimate/result/support and total in case currency,
+          then name, comment, Approve/Reject. Reject now checks required fields. Planner panel shows state in words and a
+          formatted expiry.
+        pass_run: RUN-20261014-N0082-IMPL
+        pass_actor: gov-001
       a11y:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: apps/web/src/app/case-approval/page.tsx
+          summary: h1 heading, labelled required text fields, native form submit, alerts announce error and success, buttons
+            are real buttons.
+        rationale: h1 heading, labelled required text fields, native form submit, alerts announce error and success, buttons
+          are real buttons.
+        pass_run: RUN-20261014-N0082-IMPL
+        pass_actor: gov-001
       rendered:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence: apps/web/src/app/case-approval/page.test.tsx
+        rationale: 'Rendered on the running web build at 127.0.0.1:3000 (dark): invalid token shows the not-valid message
+          without a login redirect. The open-link and decided states were not rendered: issuing a link mails a real recipient.
+          Component test covers them.'
+        pass_run: RUN-20261014-N0082-VER
+        pass_actor: gov-008
       content:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: pass
+        evidence:
+          path: apps/web/src/app/case-approval/page.tsx
+          summary: Copy says what the link opens, that it expires in 7 days and can be withdrawn; miss text tells the customer
+            to ask for a new link.
+        rationale: Copy says what the link opens, that it expires in 7 days and can be withdrawn; miss text tells the customer
+          to ask for a new link.
+        pass_run: RUN-20261014-N0082-IMPL
+        pass_actor: gov-001
+    verification:
+      behavioral:
+        state: pass
+        pass_run: RUN-20261014-N0082-VER
+        pass_actor: gov-008
+        evidence: apps/api/tests/test_customer_approval_db.py
+        path: null
+      referent:
+        state: pass
+        pass_run: RUN-20261014-N0082-VER
+        pass_actor: gov-008
+        evidence: apps/api/tests/test_customer_approval_db.py
+        path: apps/api/app/services/cpor/customer_approval.py
+      rendered:
+        state: pass
+        pass_run: RUN-20261014-N0082-VER
+        pass_actor: gov-008
+        evidence: apps/web/src/app/case-approval/page.test.tsx
+        path: apps/web/src/app/case-approval/page.tsx
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: 'VERIFIED_WITH_LIMITATIONS. Self-verified under RUN-20261014-N0082-VER, different from implementation run
+      RUN-20261014-N0082-IMPL; same session, same model, not independent. N-0099 does the second look. Limits: open and decided
+      customer states were rendered only in the component test, not in the browser (issuing a link mails a real recipient);
+      running web build predates e2be2bfe; no rate limit on the public route; ruff not installed in the API venv; 0035 reached
+      cip before any recorded clone proof. Operator acceptance pending.'
     debug_iterations: 0
     split_into: null
     deferred: null
     rejected: null
-    preservation: {}
+    preservation:
+      token-hash-only: 'kept: raw token only in the mail'
+      public-summary-allowlist: 'kept: PUBLIC_KEYS unchanged'
+      case-event-append-only: 'kept: decisions add events, none rewritten'
+      settle-desk-unchanged: 'kept: Settle, End and Cancel untouched'
     target_artifact_class: null
     design_artifact_class: null
     risk_class: full
+    implementation_run: RUN-20261014-N0082-IMPL
+    implementation_actor: gov-001
   N-0083:
     id: N-0083
     parent: null
@@ -13668,6 +13762,16 @@ decisions:
     origin: operator
     status: accepted
     supersedes: null
+  D-0079:
+    id: D-0079
+    scope: N-0082
+    statement: 'The criterion ''signed token'' is met by an opaque 256-bit random token whose SHA-256 is stored and looked
+      up server-side, not by a self-contained HMAC/JWT. Server lookup already gives single-case binding, expiry, export-version
+      binding and revocation; a signature would add a key to manage and nothing a forger could not already be denied. Reversible:
+      an HMAC prefix can be added later without a schema change.'
+    origin: agent
+    status: proposed
+    supersedes: null
 evidence:
   EV-GOV008-REVIEW:
     id: EV-GOV008-REVIEW
@@ -14764,6 +14868,29 @@ evidence:
     path: .eif/audit/PROGRAMME_20261012/N0079_ACCEPT.md
     tree_hash: null
     note: N-0079 close. 15 tests passed, tsc 0, eslint 0. Non-campaign rows wait for a real lineup approval.
+  EV-0084:
+    id: EV-0084
+    provenance: implementation-observation
+    path: apps/api/tests/test_customer_approval_db.py
+    tree_hash: null
+    note: 'N-0082: cip_test DB test, 5 passed with 6 unit tests (11). Send stores only the hash; read returns PUBLIC_KEYS
+      for one case; other tenant gets not-found on send/status/revoke; decision event has signer, decided_at, export_version,
+      comment and is written once; revoked, expired, stale and superseded links open nothing. cip_test left with 0 link rows.'
+  EV-0085:
+    id: EV-0085
+    provenance: implementation-observation
+    path: apps/web/src/app/case-approval/page.test.tsx
+    tree_hash: null
+    note: 'N-0082: page vitest 3 passed; settlement vitest 19 passed; web tsc exit 0; next lint clean on page, test, planner
+      panel, desk and api.ts; tests/test_cpor_cases_api.py 9 passed on cip_test.'
+  EV-0086:
+    id: EV-0086
+    provenance: implementation-observation
+    path: apps/api/alembic/versions/20261012_0035_case_approval_link.py
+    tree_hash: null
+    note: 'N-0082: cip already at 20261012_0035 before this session (owner postgres, grants SELECT/INSERT/UPDATE to cip; columns
+      and constraints match the migration; 1 link sent and revoked). No clone proof was recorded before that apply. 0035 downgrade
+      and re-upgrade proven on cip_test this session.'
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -15367,6 +15494,24 @@ baselines:
     path: .eif/audit/PROGRAMME_20261012/N0079_ACCEPT.md
     observed_behavior: Campaign ledger draw is on the planner and the lineup. Caps flag and do not block. Non-campaign rows
       are written on the next lineup approval.
+  BLN-N0082:
+    id: BLN-N0082
+    provenance: implementation-observation
+    tree_hash: 918e20f78a4beff02326b87927c706c11ca75cd0
+    latent_capabilities:
+    - token-hash-only
+    - public-summary-allowlist
+    - case-event-append-only
+    - settle-desk-unchanged
+    preservation:
+      token-hash-only: 'kept: raw token only in the mail'
+      public-summary-allowlist: 'kept: PUBLIC_KEYS unchanged'
+      case-event-append-only: 'kept: decisions add events, none rewritten'
+      settle-desk-unchanged: 'kept: Settle, End and Cancel untouched'
+    path: apps/api/app/services/cpor/customer_approval.py
+    observed_behavior: Planner sends a 7-day single-case link by mail; only the token hash is stored. Customer sees a filtered
+      settlement summary and approves or rejects with name and comment, written as a customer_settlement_signoff case event.
+      Planner can withdraw an open link.
 caveats:
   consult_model_logged:
     key: consult_model_logged
@@ -15769,9 +15914,25 @@ deferred_findings:
   run: RUN-20261009-N0068-IMPL
   actor: gov-001
   status: deferred
+- seq: 2188
+  code: DOES_NOT_FIT
+  note: Public /api/v1/case-approval GET and POST have no rate limit or attempt throttle. Token space is 256-bit so guessing
+    is not practical, but a throttle would bound abuse. Not in N-0082 criteria; needs its own node.
+  node: N-0082
+  run: RUN-20261014-N0082-VER
+  actor: gov-008
+  status: deferred
+- seq: 2189
+  code: DOES_NOT_FIT
+  note: 20261012_0035 was on cip before this session with no recorded clone proof, and CURRENT.md said it was not applied.
+    The live table matches the migration. Process gap, not a data issue.
+  node: N-0082
+  run: RUN-20261014-N0082-VER
+  actor: gov-008
+  status: deferred
 ids:
   node: 5
-  decision: 78
+  decision: 79
   blocker: 19
-  evidence: 83
+  evidence: 86
   baseline: 18

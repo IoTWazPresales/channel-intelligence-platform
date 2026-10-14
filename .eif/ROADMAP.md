@@ -83,7 +83,7 @@
 - N-0079 **Budget ledger: derived reserve, commitment, consumption, payment and reconciliation, with transfers and optional caps (spec section 9.7)** `complete`/`complete` (feature)
 - N-0080 **One profit definition: PM controlled cost, DAP and landed cost kept apart on lineup and CPOR margin (spec section 9.3)** `ready`/`ready` (feature)
 - N-0081 **Distributor channel and New-DAP price protection: rebate and disti margin waterfall steps, DSI SOH cost capture, re-invoice (spec section 9.1)** `blocked`/`blocked` (feature)
-- N-0082 **Customer approval link for settlement sign-off (spec section 9.2; trigger met: 211 cases settled manually)** `proposed`/`proposed` (feature)
+- N-0082 **Customer approval link for settlement sign-off (spec section 9.2; trigger met: 211 cases settled manually)** `in_progress`/`in_progress` (feature)
 - N-0083 **FX rate table and ROE governance: daily rates actually stored, case ROE drawn from the table (spec section 9.4)** `proposed`/`proposed` (feature)
 - N-0084 **Price elasticity: what price a product would move at (spec section 9.8), data-gated on settled claims** `proposed`/`proposed` (feature)
 - N-0085 **Listing coverage for all eight reporting customers: find, confirm and watch our product pages at Game, Makro, Computer Mania, Incredible Connection, HiFi Corp, Evetech, Takealot and Amazon** `proposed`/`proposed` (feature)

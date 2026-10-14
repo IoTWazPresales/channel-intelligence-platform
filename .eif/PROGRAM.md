@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 2158
+**Snapshot revision:** 2190
 
 ## Outcome (verbatim)
 
@@ -103,7 +103,7 @@ _none_
 | N-0079 | Budget ledger: derived reserve, commitment, consumption, payment and reconciliation, with transfers and optional caps (spec section 9.7) | feature | complete | complete | yes |  | full loop |
 | N-0080 | One profit definition: PM controlled cost, DAP and landed cost kept apart on lineup and CPOR margin (spec section 9.3) | feature | ready | ready | yes |  | full loop |
 | N-0081 | Distributor channel and New-DAP price protection: rebate and disti margin waterfall steps, DSI SOH cost capture, re-invoice (spec section 9.1) | feature | blocked | blocked | yes |  | full loop |
-| N-0082 | Customer approval link for settlement sign-off (spec section 9.2; trigger met: 211 cases settled manually) | feature | proposed | proposed | yes |  | full loop |
+| N-0082 | Customer approval link for settlement sign-off (spec section 9.2; trigger met: 211 cases settled manually) | feature | in_progress | in_progress | yes |  | full loop |
 | N-0083 | FX rate table and ROE governance: daily rates actually stored, case ROE drawn from the table (spec section 9.4) | feature | proposed | proposed | yes |  | full loop |
 | N-0084 | Price elasticity: what price a product would move at (spec section 9.8), data-gated on settled claims | feature | proposed | proposed | yes |  | full loop |
 | N-0085 | Listing coverage for all eight reporting customers: find, confirm and watch our product pages at Game, Makro, Computer Mania, Incredible Connection, HiFi Corp, Evetech, Takealot and Amazon | feature | proposed | proposed | no |  | full loop |
