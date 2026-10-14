@@ -207,6 +207,8 @@ type CommercialLineupLine = {
   } | null;
   calc_dap_cost_currency?: number | null;
   calc_profit_total?: number | null;
+  /** N-0080: one profit definition — margin vs PM controlled cost; DAP and landed cost beside it. */
+  profit?: LineupProfitFigures | null;
   rebate_pct_evidence?: number | null;
   dealer_margin_pct_evidence?: number | null;
   distributor_margin_pct_evidence?: number | null;
@@ -263,6 +265,8 @@ const UNIFIED_LINEUP_CALC_DEFAULTS = [
   'calc:net_price',
   'calc:disti_cost',
   'calc:dap',
+  'calc:pm_cost',
+  'calc:landed_cost',
   'calc:profit',
 ] as const;
 
@@ -392,6 +396,8 @@ function mergeWorkbenchAllowedIds(meta: WorkbenchColumnMetadata | undefined, has
     'calc:net_price',
     'calc:disti_cost',
     'calc:dap',
+    'calc:pm_cost',
+    'calc:landed_cost',
     'calc:profit',
   ]);
   if (hasPlan) s.add('sync');
@@ -488,8 +494,10 @@ const CALC_COLUMN_LABELS: Record<string, string> = {
   'calc:dealer_price': 'Dealer price (calc)',
   'calc:net_price': 'Net price (calc)',
   'calc:disti_cost': 'Disti cost (calc)',
-  'calc:dap': 'DAP (calc)',
-  'calc:profit': 'Profit total (calc)',
+  'calc:dap': 'DAP, price to distributor (calc)',
+  'calc:pm_cost': 'PM controlled cost',
+  'calc:landed_cost': 'Landed cost (not in margin)',
+  'calc:profit': 'Margin vs PM controlled cost, total (calc)',
 };
 
 const PCT_EVIDENCE_FIELDS = new Set([
@@ -515,6 +523,27 @@ function formatMoneyWorkbenchValue(value: unknown): string {
   const n = Number(value);
   if (!Number.isFinite(n)) return String(value);
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+export type LineupProfitFigures = {
+  cost_basis: string;
+  cost_basis_label: string;
+  currency: string | null;
+  units: number | null;
+  margin_per_unit: number | null;
+  margin_total: number | null;
+  margin_pct: number | null;
+  dap_per_unit: number | null;
+  pm_controlled_cost_per_unit: number | null;
+  landed_cost_per_unit: number | null;
+  flags: string[];
+};
+
+/** PM controlled cost / landed cost per unit from the line's profit block (N-0080). */
+function profitFigure(ln: CommercialLineupLine, key: 'pm_cost' | 'landed_cost'): number | null {
+  const p = ln.profit;
+  if (!p) return null;
+  return key === 'pm_cost' ? p.pm_controlled_cost_per_unit : p.landed_cost_per_unit;
 }
 
 function calcChainOutput(ln: CommercialLineupLine, outputKey: string): number | null {
@@ -3197,6 +3226,11 @@ export function CurrentLineupSection({
           const v = ln.calc_profit_total ?? calcChainOutput(ln, 'calc_profit_total');
           return formatMoneyWorkbenchValue(v);
         }
+        if (key === 'pm_cost') return formatMoneyWorkbenchValue(profitFigure(ln, 'pm_cost'));
+        if (key === 'landed_cost') {
+          const v = profitFigure(ln, 'landed_cost');
+          return v == null ? 'Not recorded' : formatMoneyWorkbenchValue(v);
+        }
         const outputKey =
           key === 'dealer_price'
             ? 'calc_dealer_price_local'
@@ -3297,6 +3331,7 @@ export function CurrentLineupSection({
         const key = colId.slice(5);
         if (key === 'dap') return ln.calc_dap_cost_currency ?? calcChainOutput(ln, 'calc_dap_cost_currency');
         if (key === 'profit') return ln.calc_profit_total ?? calcChainOutput(ln, 'calc_profit_total');
+        if (key === 'pm_cost' || key === 'landed_cost') return profitFigure(ln, key);
         const outputKey =
           key === 'dealer_price'
             ? 'calc_dealer_price_local'

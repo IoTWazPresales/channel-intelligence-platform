@@ -21,6 +21,7 @@ from app.services.cpor.case_supersession import (
     restore_case_supersession,
     supersede_case,
 )
+from app.services.cpor.case_margin import build_case_margin
 from app.services.cpor.claim_evidence_apply import apply_claim_evidence_to_case
 from app.services.cpor.cost_suggestion import (
     CostSuggestion,
@@ -813,6 +814,14 @@ def get_case(case_id: int, user: dict = Depends(get_current_user)):
             evidence_basis=basis,
         )
         return out
+
+
+@router.get("/cases/{case_id}/margin")
+def get_case_margin(case_id: int, user: dict = Depends(get_current_user)):
+    """N-0080: margin vs PM controlled cost per line, with DAP and landed cost beside it. Read-only."""
+    with SessionLocal() as session:
+        case = _load_case(session, case_id, user=user)
+        return build_case_margin(session, case)
 
 
 @router.patch("/cases/{case_id}")

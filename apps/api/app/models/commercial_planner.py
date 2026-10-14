@@ -47,6 +47,8 @@ class CommercialSkuAssumption(Base, TimestampMixin):
     product_id: Mapped[int] = mapped_column(ForeignKey("dim_product.id"), nullable=False, unique=True)
     controlled_cost_amount: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False)
     controlled_cost_currency_code: Mapped[str] = mapped_column(String(8), nullable=False, default="USD")
+    # N-0080: shown beside PM controlled cost, never in the margin. Same currency; null = not recorded.
+    landed_cost_amount: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
     vat_rate_pct: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False, default=0.15)
     fx_plan_currency_per_cost_currency: Mapped[float] = mapped_column(Numeric(18, 6), nullable=False, default=1.0)
     reserve_total_pct: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False, default=0.10)

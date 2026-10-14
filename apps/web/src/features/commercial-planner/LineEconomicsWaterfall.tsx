@@ -39,6 +39,15 @@ export type WaterfallLine = {
   calc_campaign_support_reserve_amount: number | null;
   calc_non_campaign_reserve_amount: number | null;
   calc_internal_gp_amount: number | null;
+  /** N-0080: margin vs PM controlled cost; DAP (sell-in) and landed cost beside it, never in it. */
+  profit?: {
+    margin_per_unit: number | null;
+    margin_pct: number | null;
+    dap_per_unit: number | null;
+    pm_controlled_cost_per_unit: number | null;
+    landed_cost_per_unit: number | null;
+    currency: string | null;
+  } | null;
   economics_line_trust?: string;
   economics_line_trust_reasons?: string[];
   economics_field_provenance?: Record<string, { source: string; trusted?: boolean; detail?: string }>;
@@ -191,7 +200,7 @@ export function LineEconomicsWaterfall({
       <Typography variant="subtitle2">B. Commercial / economics outputs ({econCcy})</Typography>
       <Stack spacing={0.5}>
         <Typography variant="body2">
-          Estimated OEM/channel sell-in ({econCcy} / unit):{' '}
+          Estimated OEM/channel sell-in = DAP, price to distributor ({econCcy} / unit):{' '}
           {line.calc_oem_sell_in_amount != null
             ? fmtMoneyWithCcy(line.calc_oem_sell_in_amount, econCcy)
             : '— (recalculate)'}
@@ -203,12 +212,12 @@ export function LineEconomicsWaterfall({
           Estimated distributor net ({econCcy} / unit):{' '}
           {line.calc_distributor_net_amount != null ? fmtMoneyWithCcy(line.calc_distributor_net_amount, econCcy) : '—'}
           <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
-            (calculated output)
+            (calculated output; not the margin base)
           </Typography>
         </Typography>
       </Stack>
 
-      <Typography variant="subtitle2">C. Internal cost / GP ({costCcy} amounts where noted)</Typography>
+      <Typography variant="subtitle2">C. Margin vs PM controlled cost ({costCcy} amounts where noted)</Typography>
       <Stack spacing={0.5}>
         <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap>
           <Typography variant="body2">
@@ -222,12 +231,21 @@ export function LineEconomicsWaterfall({
             Line override controlled cost is set — overrides SKU assumption for this line.
           </Typography>
         ) : null}
-        <Alert severity="info" sx={{ py: 0.25 }}>
-          <Typography variant="caption">
-            Logistics, duties, freight, insurance, handling, and <strong>true landed / loaded cost</strong> are{' '}
-            <strong>not modeled</strong> here (deferred). Do not treat controlled cost as full landed cost.
-          </Typography>
-        </Alert>
+        <Typography variant="body2" data-testid="waterfall-landed-cost">
+          Landed cost ({costCcy} / unit, shown, not in margin):{' '}
+          {line.profit?.landed_cost_per_unit != null
+            ? fmtMoneyWithCcy(line.profit.landed_cost_per_unit, costCcy)
+            : 'Not recorded'}
+        </Typography>
+        <Typography variant="body2" data-testid="waterfall-margin-per-unit">
+          Margin vs PM controlled cost ({econCcy} / unit, before reserves):{' '}
+          {line.profit?.margin_per_unit != null ? fmtMoneyWithCcy(line.profit.margin_per_unit, econCcy) : '—'}
+          {line.profit?.margin_pct != null ? ` (${(line.profit.margin_pct * 100).toFixed(1)}% of DAP)` : ''}
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          Margin is DAP minus PM controlled cost. DAP and landed cost are shown as their own figures and are not
+          folded into it.
+        </Typography>
         <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap>
           <Typography variant="body2">
             Reserve total % (effective): {fmtMarginPct(line.effective_reserve_total_pct ?? null)}
@@ -253,7 +271,7 @@ export function LineEconomicsWaterfall({
             : '—'}
         </Typography>
         <Typography variant="body2">
-          Estimated internal GP ({econCcy}, total, after reserves):{' '}
+          Margin vs PM controlled cost ({econCcy}, total, after reserves):{' '}
           {line.calc_internal_gp_amount != null ? fmtMoneyWithCcy(line.calc_internal_gp_amount, econCcy) : '—'}
         </Typography>
       </Stack>

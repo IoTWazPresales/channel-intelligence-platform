@@ -4,7 +4,7 @@ import re
 from collections import Counter
 from datetime import date, datetime, timezone
 
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 
@@ -37,6 +37,7 @@ from app.models.historical_lineup import HistoricalLineupImportHeader, Historica
 from app.models.ingestion import ImportJob
 from app.models.purchase_order import PurchaseOrder
 from app.services.commercial_planner.calculator import CommercialCalcInputs, compute_line_economics
+from app.services.profit_definition import compute_profit, profit_payload
 from app.services.commercial_planner.economics_trust import (
     classify_line_economics_trust,
     plan_trust_from_line_tiers,
@@ -425,6 +426,7 @@ async def _line_payload_for_row(db: AsyncSession, line: CommercialPlanLine) -> d
                 CommercialSkuAssumption.promo_reserve_split_pct,
                 CommercialSkuAssumption.controlled_cost_amount,
                 CommercialSkuAssumption.controlled_cost_currency_code,
+                CommercialSkuAssumption.landed_cost_amount,
             )
             .select_from(CommercialPlanLine)
             .join(DimCustomer, DimCustomer.id == CommercialPlanLine.customer_id)
@@ -464,6 +466,7 @@ async def _line_payload_for_row(db: AsyncSession, line: CommercialPlanLine) -> d
         sa_pr,
         sa_cc,
         sa_ccy,
+        sa_landed,
     ) = r
     read_ext = plan_line_read_model_extensions(
         line,
@@ -477,6 +480,7 @@ async def _line_payload_for_row(db: AsyncSession, line: CommercialPlanLine) -> d
         sku_promo_reserve_split_pct=float(sa_pr) if sa_pr is not None else None,
         sku_controlled_cost_amount=float(sa_cc) if sa_cc is not None else None,
         sku_controlled_cost_currency_code=str(sa_ccy).strip() if sa_ccy is not None else None,
+        sku_landed_cost_amount=float(sa_landed) if sa_landed is not None else None,
         join_customer_term_present=ct_margin is not None,
         join_distributor_term_present=dt_margin is not None,
         join_sku_assumption_present=sa_cc is not None,
@@ -736,6 +740,7 @@ async def list_plan_lines(plan_id: int, db: AsyncSession = Depends(get_db)):
                 CommercialSkuAssumption.promo_reserve_split_pct.label("row_sa_pr"),
                 CommercialSkuAssumption.controlled_cost_amount.label("row_sa_cc"),
                 CommercialSkuAssumption.controlled_cost_currency_code.label("row_sa_ccy"),
+                CommercialSkuAssumption.landed_cost_amount.label("row_sa_landed"),
             )
             .join(DimCustomer, DimCustomer.id == CommercialPlanLine.customer_id)
             .join(DimDistributor, DimDistributor.id == CommercialPlanLine.distributor_id)
@@ -775,6 +780,7 @@ async def list_plan_lines(plan_id: int, db: AsyncSession = Depends(get_db)):
         sa_pr,
         sa_cc,
         sa_ccy,
+        sa_landed,
     ) in rows:
         read_ext = plan_line_read_model_extensions(
             line,
@@ -788,6 +794,7 @@ async def list_plan_lines(plan_id: int, db: AsyncSession = Depends(get_db)):
             sku_promo_reserve_split_pct=float(sa_pr) if sa_pr is not None else None,
             sku_controlled_cost_amount=float(sa_cc) if sa_cc is not None else None,
             sku_controlled_cost_currency_code=str(sa_ccy).strip() if sa_ccy is not None else None,
+            sku_landed_cost_amount=float(sa_landed) if sa_landed is not None else None,
             join_customer_term_present=ct_margin is not None,
             join_distributor_term_present=dt_margin is not None,
             join_sku_assumption_present=sa_cc is not None,
@@ -1422,6 +1429,7 @@ class SkuAssumptionCreate(BaseModel):
     product_id: int
     controlled_cost_amount: float = Field(gt=0)
     controlled_cost_currency_code: str = Field(default="USD", min_length=3, max_length=8)
+    landed_cost_amount: float | None = Field(default=None, gt=0)
     vat_rate_pct: float = Field(ge=0.0, le=1.0)
     fx_plan_currency_per_cost_currency: float = Field(gt=0)
     reserve_total_pct: float = Field(ge=0.0, le=1.0)
@@ -1431,6 +1439,8 @@ class SkuAssumptionCreate(BaseModel):
 class SkuAssumptionPatch(BaseModel):
     controlled_cost_amount: float | None = Field(default=None, gt=0)
     controlled_cost_currency_code: str | None = Field(default=None, min_length=3, max_length=8)
+    # Null clears it (not recorded). Never folded into the margin.
+    landed_cost_amount: float | None = Field(default=None, gt=0)
     vat_rate_pct: float | None = Field(default=None, ge=0.0, le=1.0)
     fx_plan_currency_per_cost_currency: float | None = Field(default=None, gt=0)
     reserve_total_pct: float | None = Field(default=None, ge=0.0, le=1.0)
@@ -1468,6 +1478,7 @@ def _sku_assumption_json(row: CommercialSkuAssumption, sku: str, product_name: s
         "product_name": product_name,
         "controlled_cost_amount": float(row.controlled_cost_amount),
         "controlled_cost_currency_code": str(row.controlled_cost_currency_code or "USD").strip(),
+        "landed_cost_amount": float(row.landed_cost_amount) if row.landed_cost_amount is not None else None,
         "vat_rate_pct": float(row.vat_rate_pct),
         "fx_plan_currency_per_cost_currency": float(row.fx_plan_currency_per_cost_currency),
         "reserve_total_pct": float(row.reserve_total_pct),
@@ -1704,6 +1715,7 @@ async def create_sku_assumption(body: SkuAssumptionCreate, db: AsyncSession = De
         product_id=body.product_id,
         controlled_cost_amount=body.controlled_cost_amount,
         controlled_cost_currency_code=(body.controlled_cost_currency_code or "USD").strip(),
+        landed_cost_amount=body.landed_cost_amount,
         vat_rate_pct=body.vat_rate_pct,
         fx_plan_currency_per_cost_currency=body.fx_plan_currency_per_cost_currency,
         reserve_total_pct=body.reserve_total_pct,
@@ -2442,14 +2454,42 @@ async def _validate_entity_resolution_items(db: AsyncSession, resolutions: list[
                 raise HTTPException(status_code=400, detail=f"Unknown distributor_id={item.dim_id}")
 
 
+def _lineup_line_profit(
+    ln: CommercialLineupLine,
+    sku_controlled_cost: Any,
+    sku_cost_currency: Any,
+    sku_landed_cost: Any,
+) -> dict[str, Any]:
+    """N-0080: the lineup profit figure under the one profit definition.
+
+    PM controlled cost is the one the stored calc used (pricing chain input), else the current SKU
+    value. DAP is the calculated DAP. Landed cost is the SKU value, shown and never subtracted.
+    """
+    chain = ln.pricing_chain_json if isinstance(ln.pricing_chain_json, dict) else {}
+    chain_inputs = chain.get("inputs") if isinstance(chain.get("inputs"), dict) else {}
+    pm_cost = chain_inputs.get("controlled_cost_amount")
+    if pm_cost is None and sku_controlled_cost is not None:
+        pm_cost = float(sku_controlled_cost)
+    fig = compute_profit(
+        dap_per_unit=float(ln.calc_dap_cost_currency) if ln.calc_dap_cost_currency is not None else None,
+        pm_controlled_cost=pm_cost,
+        landed_cost=float(sku_landed_cost) if sku_landed_cost is not None else None,
+        units=float(ln.quantity_units) if ln.quantity_units is not None else None,
+        currency=(str(sku_cost_currency).strip() or None) if sku_cost_currency is not None else None,
+    )
+    return profit_payload(fig)
+
+
 def _workbench_calc_field_metadata() -> list[dict[str, str]]:
     """Derived pricing chain outputs stored on lineup lines (pricing_chain_json.outputs)."""
     specs = [
         ("dealer_price", "Dealer price (calc)", "calc_dealer_price_local"),
         ("net_price", "Net price (calc)", "calc_net_price_local"),
         ("disti_cost", "Disti cost (calc)", "calc_disti_cost_local"),
-        ("dap", "DAP (calc)", "calc_dap_cost_currency"),
-        ("profit", "Profit total (calc)", "calc_profit_total"),
+        ("dap", "DAP, price to distributor (calc)", "calc_dap_cost_currency"),
+        ("pm_cost", "PM controlled cost", "pm_controlled_cost_per_unit"),
+        ("landed_cost", "Landed cost (not in margin)", "landed_cost_per_unit"),
+        ("profit", "Margin vs PM controlled cost, total (calc)", "calc_profit_total"),
     ]
     return [
         {"id": f"calc:{k}", "group": "calculated", "label": lab, "field": field} for k, lab, field in specs
@@ -3329,10 +3369,14 @@ async def list_lineup_case_lines(
             DimCustomer.name.label("customer_name"),
             DimDistributor.code.label("distributor_code"),
             DimDistributor.name.label("distributor_name"),
+            CommercialSkuAssumption.controlled_cost_amount.label("sku_controlled_cost"),
+            CommercialSkuAssumption.controlled_cost_currency_code.label("sku_cost_currency"),
+            CommercialSkuAssumption.landed_cost_amount.label("sku_landed_cost"),
         )
         .outerjoin(DimProduct, DimProduct.id == CommercialLineupLine.product_id)
         .outerjoin(DimCustomer, DimCustomer.id == CommercialLineupLine.customer_id)
         .outerjoin(DimDistributor, DimDistributor.id == CommercialLineupLine.distributor_id)
+        .outerjoin(CommercialSkuAssumption, CommercialSkuAssumption.product_id == CommercialLineupLine.product_id)
         .where(CommercialLineupLine.case_id == case_id)
         .order_by(CommercialLineupLine.source_row_number, CommercialLineupLine.id)
     )
@@ -3359,6 +3403,9 @@ async def list_lineup_case_lines(
         customer_name,
         distributor_code,
         distributor_name,
+        sku_controlled_cost,
+        sku_cost_currency,
+        sku_landed_cost,
     ) in rows:
         raw_payload = ln.raw_row_payload if isinstance(ln.raw_row_payload, dict) else {}
         distributor_token_raw = raw_payload.get("distributor_token")
@@ -3406,6 +3453,7 @@ async def list_lineup_case_lines(
             if ln.calc_dap_cost_currency is not None
             else None,
             "calc_profit_total": float(ln.calc_profit_total) if ln.calc_profit_total is not None else None,
+            "profit": _lineup_line_profit(ln, sku_controlled_cost, sku_cost_currency, sku_landed_cost),
             "staging_open_channel": raw_payload.get(STAGING_OPEN_CHANNEL_KEY) is True,
             "channel_route_uploaded_cell": raw_payload.get(CHANNEL_ROUTE_UPLOADED_CELL_KEY)
             if isinstance(raw_payload.get(CHANNEL_ROUTE_UPLOADED_CELL_KEY), str)

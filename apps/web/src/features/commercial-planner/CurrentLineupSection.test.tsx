@@ -1150,8 +1150,10 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
             { id: 'calc:dealer_price', group: 'calculated', label: 'Dealer price (calc)', field: 'calc_dealer_price_local' },
             { id: 'calc:net_price', group: 'calculated', label: 'Net price (calc)', field: 'calc_net_price_local' },
             { id: 'calc:disti_cost', group: 'calculated', label: 'Disti cost (calc)', field: 'calc_disti_cost_local' },
-            { id: 'calc:dap', group: 'calculated', label: 'DAP (calc)', field: 'calc_dap_cost_currency' },
-            { id: 'calc:profit', group: 'calculated', label: 'Profit total (calc)', field: 'calc_profit_total' },
+            { id: 'calc:dap', group: 'calculated', label: 'DAP, price to distributor (calc)', field: 'calc_dap_cost_currency' },
+            { id: 'calc:pm_cost', group: 'calculated', label: 'PM controlled cost', field: 'pm_controlled_cost_per_unit' },
+            { id: 'calc:landed_cost', group: 'calculated', label: 'Landed cost (not in margin)', field: 'landed_cost_per_unit' },
+            { id: 'calc:profit', group: 'calculated', label: 'Margin vs PM controlled cost, total (calc)', field: 'calc_profit_total' },
           ],
           sync_fields: [],
         };
@@ -1173,7 +1175,14 @@ describe('CurrentLineupSection — lineup workbench semantics', () => {
 
     expect(screen.queryByRole('columnheader', { name: /^SKU$/i })).not.toBeInTheDocument();
     expect(await screen.findByRole('columnheader', { name: /Dealer price \(calc\)/i })).toBeInTheDocument();
-    expect(await screen.findByRole('columnheader', { name: /DAP \(calc\)/i })).toBeInTheDocument();
+    expect(await screen.findByRole('columnheader', { name: /DAP, price to distributor \(calc\)/i })).toBeInTheDocument();
+    // N-0080: every money figure names its cost basis; landed cost is beside the margin, not in it.
+    expect(await screen.findByRole('columnheader', { name: /^PM controlled cost$/i })).toBeInTheDocument();
+    expect(await screen.findByRole('columnheader', { name: /Landed cost \(not in margin\)/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('columnheader', { name: /Margin vs PM controlled cost, total \(calc\)/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: /Profit total/i })).not.toBeInTheDocument();
     expect(await screen.findByText('6%')).toBeInTheDocument();
     expect(await screen.findByText('15%')).toBeInTheDocument();
     expect(await screen.findByText(/800/)).toBeInTheDocument();

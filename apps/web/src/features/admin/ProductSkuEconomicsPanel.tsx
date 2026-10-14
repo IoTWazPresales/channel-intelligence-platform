@@ -36,6 +36,8 @@ export type SkuAssumptionRow = {
   product_name: string;
   controlled_cost_amount: number;
   controlled_cost_currency_code: string;
+  /** N-0080: shown beside PM controlled cost, never in the margin. Same currency; null = not recorded. */
+  landed_cost_amount?: number | null;
   vat_rate_pct: number;
   fx_plan_currency_per_cost_currency: number;
   reserve_total_pct: number;
@@ -72,6 +74,7 @@ export function ProductSkuEconomicsPanel({ productId, productSku }: Props) {
   const row = data?.length === 1 ? data[0] : undefined;
   const [dlgOpen, setDlgOpen] = useState(false);
   const [controlled, setControlled] = useState('100');
+  const [landed, setLanded] = useState('');
   const [ccySelect, setCcySelect] = useState<string>('USD');
   const [ccyOther, setCcyOther] = useState('');
   const [vat, setVat] = useState('0.15');
@@ -84,6 +87,7 @@ export function ProductSkuEconomicsPanel({ productId, productSku }: Props) {
     if (row) {
       setEditId(row.id);
       setControlled(String(row.controlled_cost_amount));
+      setLanded(row.landed_cost_amount != null ? String(row.landed_cost_amount) : '');
       const sp = splitCostCurrencyForSelect(row.controlled_cost_currency_code);
       setCcySelect(sp.selectValue);
       setCcyOther(sp.otherIso);
@@ -94,6 +98,7 @@ export function ProductSkuEconomicsPanel({ productId, productSku }: Props) {
     } else {
       setEditId(null);
       setControlled('100');
+      setLanded('');
       setCcySelect('USD');
       setCcyOther('');
       setVat('0.15');
@@ -109,8 +114,10 @@ export function ProductSkuEconomicsPanel({ productId, productSku }: Props) {
     ? `FX: ${planCurrencyHint} per 1 ${resolvedCcy}`
     : 'FX: plan/local currency units per 1 controlled-cost currency';
 
+  const landedValue = landed.trim() === '' ? null : Number(landed);
+
   const validationErrors = useMemo(() => {
-    return validateSkuEconomicsInputs({
+    const errs = validateSkuEconomicsInputs({
       controlled_cost_amount: Number(controlled),
       controlled_cost_currency_code: resolvedCcy,
       fx_plan_currency_per_cost_currency: Number(fx),
@@ -118,13 +125,18 @@ export function ProductSkuEconomicsPanel({ productId, productSku }: Props) {
       reserve_total_pct: Number(resTot),
       promo_reserve_split_pct: Number(resSplit),
     });
-  }, [controlled, resolvedCcy, fx, vat, resTot, resSplit]);
+    if (landedValue != null && !(Number.isFinite(landedValue) && landedValue > 0)) {
+      errs.push('Landed cost must be greater than 0, or left empty when not recorded.');
+    }
+    return errs;
+  }, [controlled, resolvedCcy, fx, vat, resTot, resSplit, landedValue]);
 
   const save = useMutation({
     mutationFn: async () => {
       const payload = {
         controlled_cost_amount: Number(controlled),
         controlled_cost_currency_code: resolvedCcy,
+        landed_cost_amount: landedValue,
         vat_rate_pct: Number(vat),
         fx_plan_currency_per_cost_currency: Number(fx),
         reserve_total_pct: Number(resTot),
@@ -154,8 +166,8 @@ export function ProductSkuEconomicsPanel({ productId, productSku }: Props) {
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
         These SKU-level inputs feed Plans & line economics. They are <strong>not</strong> populated from DAP.
         Bulk edit all products in{' '}
-        <Link href="/commercial-planner">Plans & line economics</Link> → Planner defaults. True landed cost (logistics) is
-        handled separately later.
+        <Link href="/commercial-planner">Plans & line economics</Link> → Planner defaults. Margin is measured against
+        PM controlled cost. Landed cost is shown beside it and is not part of the margin.
       </Typography>
       {isLoading ? (
         <Typography variant="body2" color="text.secondary">
@@ -177,6 +189,12 @@ export function ProductSkuEconomicsPanel({ productId, productSku }: Props) {
           <Typography variant="body2">
             <strong>Controlled cost / PM bottom:</strong> {Number(row.controlled_cost_amount).toFixed(2)}{' '}
             {(row.controlled_cost_currency_code || 'USD').trim()}
+          </Typography>
+          <Typography variant="body2" data-testid="product-sku-economics-landed">
+            <strong>Landed cost (shown, not in margin):</strong>{' '}
+            {row.landed_cost_amount != null
+              ? `${Number(row.landed_cost_amount).toFixed(2)} ${(row.controlled_cost_currency_code || 'USD').trim()}`
+              : 'Not recorded'}
           </Typography>
           <Typography variant="body2">
             <strong>VAT % (decimal):</strong> {row.vat_rate_pct}
@@ -214,6 +232,15 @@ export function ProductSkuEconomicsPanel({ productId, productSku }: Props) {
               onChange={(e) => setControlled(e.target.value)}
               size="small"
               fullWidth
+            />
+            <TextField
+              label="Landed cost amount (optional, same currency)"
+              value={landed}
+              onChange={(e) => setLanded(e.target.value)}
+              size="small"
+              fullWidth
+              helperText="Cost into the country with logistics and duties. Shown beside the margin, never subtracted. Leave empty if not known."
+              inputProps={{ 'data-testid': 'product-sku-economics-landed-input' }}
             />
             <FormControl size="small" fullWidth data-testid="product-sku-economics-ccy-select">
               <InputLabel id="sku-ccy-label">Controlled cost currency</InputLabel>

@@ -70,7 +70,7 @@ def test_export_builds_xlsx_with_pricing_chain():
     assert filename == "lineup_case7_CUST-1001_26Q1.xlsx"
     ws = load_workbook(BytesIO(data)).active
     cells = [c for row in ws.iter_rows(values_only=True) for c in (row or [])]
-    assert "Calculated DAP (cost ccy)" in cells
+    assert "Calculated DAP, price to distributor (cost ccy)" in cells
     assert 39.6622 in cells  # calc DAP value
     assert 800.0 in cells  # dealer price from chain outputs
     assert "Need better price" in cells  # customer feedback

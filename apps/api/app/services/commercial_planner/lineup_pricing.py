@@ -16,6 +16,9 @@ workbook to the cent::
     profit/unit = dap - controlled_cost                     # PM bottom; flag if absent
     profit_total= profit/unit * quantity_units
 
+Profit is ``app.services.profit_definition.compute_profit`` (N-0080): margin against PM
+controlled cost, the same definition CPOR margin reads.
+
 Margins are margin-on-selling-price (``* (1 - pct)``) and applied sequentially (compounding),
 matching how the PM team's lineup spreadsheet builds the chain. Percentages are fractions
 (e.g. VAT 15% -> 0.15).
@@ -24,6 +27,8 @@ matching how the PM team's lineup spreadsheet builds the chain. Percentages are 
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+from app.services.profit_definition import compute_profit
 
 
 @dataclass(frozen=True)
@@ -114,19 +119,19 @@ def compute_lineup_pricing(inputs: LineupPricingInputs) -> LineupPricingResult:
     pre_dap = disti_cost / (1.0 + import_tax)
     dap = pre_dap / roe
 
-    controlled_cost = inputs.controlled_cost_amount
-    profit_per_unit: float | None = None
-    profit_total: float | None = None
-    if controlled_cost is None or controlled_cost <= 0:
+    profit = compute_profit(
+        dap_per_unit=dap,
+        pm_controlled_cost=inputs.controlled_cost_amount,
+        units=inputs.quantity_units,
+    )
+    profit_per_unit = profit.margin_per_unit
+    profit_total = profit.margin_total
+    if "missing_pm_controlled_cost" in profit.flags:
         flags.append("missing_pm_bottom")
     else:
-        profit_per_unit = dap - controlled_cost
-        if profit_per_unit < 0:
+        if "negative_margin" in profit.flags:
             flags.append("negative_profit")
-        units = inputs.quantity_units
-        if units is not None and units > 0:
-            profit_total = profit_per_unit * units
-        else:
+        if "missing_quantity" in profit.flags:
             flags.append("missing_quantity")
 
     explanation = (

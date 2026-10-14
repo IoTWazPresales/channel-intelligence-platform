@@ -514,13 +514,14 @@ export function PlannerDefaultsMaintenance() {
           <code>controlled_cost_currency_code</code>), <strong>VAT rate</strong> (0–1),{' '}
           <strong>FX: plan currency units per 1 controlled-cost currency</strong>, total <strong>reserve %</strong>, and{' '}
           <strong>campaign/support reserve split</strong> (share of the reserve bucket). These inputs feed Plans & line economics.{' '}
-          <strong>DAP evidence is not used as controlled cost.</strong> True landed cost (logistics, duties,
-          freight, etc.) will be handled in a later phase — not in this field.
+          <strong>DAP evidence is not used as controlled cost.</strong> Margin is measured against controlled cost.
+          Landed cost (logistics, duties, freight) is an optional separate figure per product (Admin → Products → SKU
+          economics). It is shown beside the margin and never subtracted.
         </Typography>
         <Alert severity="info" sx={{ mb: 1, py: 0.5 }} data-testid="planner-defaults-sku-economics-disclaimers">
           <Typography variant="caption" component="div">
-            DAP / sell-in evidence stays on the lineup and workbench — it does not populate SKU economics inputs. Logistics
-            and true landed cost are separate from PM bottom.
+            DAP / sell-in evidence stays on the lineup and workbench — it does not populate SKU economics inputs. Landed
+            cost (logistics, duties) is separate from PM bottom and is not part of the margin.
           </Typography>
         </Alert>
         <Alert severity="warning" sx={{ mb: 1, py: 0.5 }} data-testid="planner-defaults-sku-bulk-dap-copy">

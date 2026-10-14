@@ -309,6 +309,20 @@ describe('AdminProductsPage pass1 behaviors', () => {
     expect(await screen.findByTestId('product-sku-economics-fx-manual-notice')).toBeInTheDocument();
   });
 
+  it('SKU economics dialog takes an optional landed cost and refuses a non-positive one (N-0080)', async () => {
+    renderPage();
+    await screen.findByText('SKU-1');
+    fireEvent.click(await screen.findByTestId('admin-products-row-open'));
+    fireEvent.click(await screen.findByTestId('product-sku-economics-create'));
+    const landed = await screen.findByTestId('product-sku-economics-landed-input');
+    expect(screen.getByText(/Shown beside the margin, never subtracted/i)).toBeInTheDocument();
+    expect(screen.queryByTestId('product-sku-economics-validation')).not.toBeInTheDocument();
+    fireEvent.change(landed, { target: { value: '0' } });
+    expect(await screen.findByTestId('product-sku-economics-validation')).toHaveTextContent(
+      /Landed cost must be greater than 0/i,
+    );
+  });
+
   it('exports current filtered/sorted view through grid api', async () => {
     renderPage();
     const exportBtn = await screen.findByRole('button', { name: 'Export current filtered/sorted view' });

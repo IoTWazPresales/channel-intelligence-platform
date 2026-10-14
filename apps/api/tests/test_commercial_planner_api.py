@@ -140,6 +140,7 @@ def test_apply_suggestion_updates_line_units():
             0.50,
             420.0,
             "USD",
+            None,  # landed_cost_amount (N-0080)
         )
     )
 
@@ -727,6 +728,7 @@ def test_list_sku_assumptions_filters_by_product_id():
         product_id=5,
         controlled_cost_amount=120.0,
         controlled_cost_currency_code="USD",
+        landed_cost_amount=None,
         vat_rate_pct=0.15,
         fx_plan_currency_per_cost_currency=18.0,
         reserve_total_pct=0.1,
@@ -1204,6 +1206,7 @@ def test_plan_line_read_model_extensions_merges_specs_and_local_prices():
     from app.services.commercial_planner.read_model import plan_line_read_model_extensions
 
     line = SimpleNamespace(
+        target_units=10.0,
         calc_oem_sell_in_amount=10.0,
         calc_distributor_net_amount=8.0,
         calc_flags=[],
@@ -1251,6 +1254,7 @@ def test_plan_line_read_model_extensions_splits_processor_and_cpu_specs():
     from app.services.commercial_planner.read_model import plan_line_read_model_extensions
 
     line = SimpleNamespace(
+        target_units=10.0,
         calc_oem_sell_in_amount=None,
         calc_distributor_net_amount=None,
         calc_flags=[],
@@ -2829,6 +2833,9 @@ def test_list_lineup_lines_includes_sync_eligibility_when_plan_linked():
         "Cust",
         "D1",
         "Dist",
+        None,  # sku_controlled_cost (N-0080)
+        None,  # sku_cost_currency
+        None,  # sku_landed_cost
     )
 
     exec_n = {"n": 0}
@@ -2869,7 +2876,7 @@ def test_list_lineup_lines_include_line_uploaded():
         distributor_id=None,
         raw_row_payload={"uploaded": {"Dealer buy": "99"}},
     )
-    row_tuple = (ln, None, None, None, None, None, {},) + (None,) * 9 + (None, None, None, None)
+    row_tuple = (ln, None, None, None, None, None, {},) + (None,) * 9 + (None, None, None, None) + (None, None, None)
 
     async def _execute(stmt):
         res = MagicMock()
@@ -3042,6 +3049,7 @@ def test_list_lineup_lines_product_specs_flat_populated():
         None, None, None, None, None, None, None, None,
         "CUST-01", "Cust One",
         "DIST-01", "Dist One",
+        None, None, None,  # SKU cost, currency, landed (N-0080)
     )
 
     async def _execute(stmt):
@@ -3078,7 +3086,7 @@ def test_list_lineup_lines_product_specs_flat_empty_when_no_specs():
     """product_specs_flat must be an empty dict when product has no specs_json."""
     case = _make_case(id=71, commercial_plan_id=None, commercial_status="draft_imported")
     ln = _make_lineup_line(id=2, case_id=71, product_id=None, customer_id=None, distributor_id=None)
-    row_tuple = (ln, None, None, None, None, None, None,) + (None,) * 9 + (None, None, None, None)
+    row_tuple = (ln, None, None, None, None, None, None,) + (None,) * 9 + (None, None, None, None) + (None, None, None)
 
     async def _execute(stmt):
         res = MagicMock()

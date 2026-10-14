@@ -31,6 +31,7 @@ import { CporComparableCasesPanel } from '@/app/(app)/commercial-planner/cpor-ca
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { EntitySearchAutocomplete } from '@/features/commercial-planner/EntitySearchAutocomplete';
 import { DualMoney } from '@/features/cpor/DualMoney';
+import { CaseMarginPanel } from '@/features/promotions-funding/CaseMarginPanel';
 import { PLANNER_CAPABILITIES } from '@/features/promotions-funding/capabilities';
 import { fmtCompact, fmtInt, fmtMoney, fmtPct } from '@/features/promotions-funding/format';
 import {
@@ -594,6 +595,8 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
           </Box>
         )}
       </Panel>
+
+      <CaseMarginPanel caseId={caseId} />
 
       <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: 'minmax(0, 1fr)', xl: 'repeat(2, minmax(0, 1fr))' } }}>
         <Panel title="Comparable cases — same customer & family" subtitle="Ranked from stored cases (never a forecast)." flush>

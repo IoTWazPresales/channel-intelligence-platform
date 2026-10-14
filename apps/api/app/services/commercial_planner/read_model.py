@@ -8,6 +8,7 @@ from typing import Any
 from app.models.commercial_planner import CommercialPlanLine
 
 from app.services.commercial_planner.economics_trust import classify_line_economics_trust
+from app.services.profit_definition import compute_profit, profit_payload
 
 
 def _flatten_specs_json(specs_json: dict[str, Any] | None) -> dict[str, Any]:
@@ -320,6 +321,7 @@ def plan_line_read_model_extensions(
     sku_promo_reserve_split_pct: float | None,
     sku_controlled_cost_amount: float | None,
     sku_controlled_cost_currency_code: str | None,
+    sku_landed_cost_amount: float | None = None,
     join_customer_term_present: bool = False,
     join_distributor_term_present: bool = False,
     join_sku_assumption_present: bool = False,
@@ -365,6 +367,16 @@ def plan_line_read_model_extensions(
         "economics_line_trust": trust_tier,
         "economics_line_trust_reasons": trust_reasons,
         "economics_field_provenance": provenance,
+        # N-0080: margin vs PM controlled cost, with DAP (sell-in) and landed cost beside it.
+        "profit": profit_payload(
+            compute_profit(
+                dap_per_unit=sell_econ,
+                pm_controlled_cost=eff.get("effective_controlled_cost_amount"),
+                landed_cost=sku_landed_cost_amount,
+                units=float(line.target_units) if line.target_units is not None else None,
+                currency=(line.economics_calc_currency_code or "").strip() or None,
+            )
+        ),
     }
     return out
 

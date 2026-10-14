@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.services.profit_definition import compute_profit
+
 
 @dataclass(frozen=True)
 class CommercialCalcInputs:
@@ -62,7 +64,13 @@ def compute_line_economics(inputs: CommercialCalcInputs) -> CommercialCalcResult
     promo_reserve = reserve_pool * promo_reserve_split
     non_promo_reserve = reserve_pool - promo_reserve
 
-    internal_gp_per_unit = buy_price_econ - inputs.controlled_cost_amount
+    # N-0080: one profit definition. Margin is OEM sell-in (the DAP the company invoices) minus
+    # PM controlled cost. Distributor net already carries the distributor margin a second time,
+    # so it is reported, not used as the margin base.
+    internal_gp_per_unit = sell_in_econ - inputs.controlled_cost_amount
+    if sell_in_econ > 0 and inputs.controlled_cost_amount > 0:
+        margin = compute_profit(dap_per_unit=sell_in_econ, pm_controlled_cost=inputs.controlled_cost_amount)
+        internal_gp_per_unit = margin.margin_per_unit if margin.margin_per_unit is not None else internal_gp_per_unit
     internal_gp = internal_gp_per_unit * inputs.target_units - promo_reserve - non_promo_reserve
     if internal_gp_per_unit < 0:
         flags.append("margin_floor_breach")
@@ -74,7 +82,9 @@ def compute_line_economics(inputs: CommercialCalcInputs) -> CommercialCalcResult
     explanation = (
         f"Weighted list/campaign price local {weighted_srp_local:.2f} -> ex-VAT {net_ex_vat_local:.2f}; "
         f"sell-in (economics currency) {sell_in_econ:.2f} after customer+rebate+distributor stack {channel_take_pct:.2%}. "
-        f"Reserve split campaign-support / non-campaign {promo_reserve:.2f}/{non_promo_reserve:.2f}."
+        f"Reserve split campaign-support / non-campaign {promo_reserve:.2f}/{non_promo_reserve:.2f}. "
+        f"Margin vs PM controlled cost: sell-in (DAP) {sell_in_econ:.2f} - PM controlled cost "
+        f"{inputs.controlled_cost_amount:.2f} per unit, less reserves."
     )
     return CommercialCalcResult(
         calc_oem_sell_in_amount=round(sell_in_econ, 4),

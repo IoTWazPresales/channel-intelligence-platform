@@ -1579,7 +1579,7 @@ describe('CommercialPlannerPage — Workspace V1', () => {
     expect(summary).toHaveTextContent('Units:');
     expect(await screen.findByTestId('economics-incomplete-chip')).toBeInTheDocument();
     expect(summary).toHaveTextContent('Complete missing defaults, then Recalculate.');
-    expect(summary).not.toHaveTextContent('Estimated internal GP (USD, total, after reserves)');
+    expect(summary).not.toHaveTextContent('Margin vs PM controlled cost (USD, total, after reserves)');
   });
 
   it('plan summary strip shows OEM net margin label when economics are complete', async () => {
@@ -1588,7 +1588,7 @@ describe('CommercialPlannerPage — Workspace V1', () => {
     await screen.findByText(/Q3 Plan \(draft\)/i);
     await waitFor(() => expect(screen.queryByTestId('plan-summary-loading')).not.toBeInTheDocument());
     const summary = screen.getByTestId('plan-summary-panel');
-    expect(summary).toHaveTextContent('Estimated internal GP (USD, total, after reserves)');
+    expect(summary).toHaveTextContent('Margin vs PM controlled cost (USD, total, after reserves)');
     expect(summary).toHaveTextContent('Campaign support reserve (USD)');
     expect(summary).toHaveTextContent('Non-campaign reserve (USD)');
     expect(summary).not.toHaveTextContent('Economics incomplete');
@@ -1996,7 +1996,7 @@ describe('V4: Column metadata and label fixes', () => {
       expect(summaryPanel).not.toHaveTextContent('Loading plan…');
     });
     // New label should appear
-    expect(summaryPanel).toHaveTextContent('Estimated internal GP (USD, total, after reserves)');
+    expect(summaryPanel).toHaveTextContent('Margin vs PM controlled cost (USD, total, after reserves)');
     // Old label must not appear
     expect(summaryPanel).not.toHaveTextContent('Estimated internal margin USD');
     expect(summaryPanel).not.toHaveTextContent('/ unit');

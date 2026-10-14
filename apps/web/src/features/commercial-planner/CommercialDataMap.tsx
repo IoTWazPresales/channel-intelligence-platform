@@ -87,7 +87,7 @@ const ROWS: Row[] = [
     calculator: 'yes',
     currencyNote: 'Explicit cost currency; not logistics landed cost',
     notes:
-      'PM bottom / internal cost basis only. True landed cost adds logistics (deferred). Used by calculator + readiness. Never from DAP.',
+      'PM bottom / internal cost basis only. Margin is measured against it. Landed cost is a separate optional SKU figure shown beside the margin, never in it. Never from DAP.',
   },
   {
     concept: 'SKU VAT rate',

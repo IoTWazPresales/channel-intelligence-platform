@@ -41,9 +41,9 @@ _HEADERS = [
     "Dealer price",
     "Net price",
     "Disti cost",
-    "Calculated DAP (cost ccy)",
-    "Profit / unit",
-    "Profit total",
+    "Calculated DAP, price to distributor (cost ccy)",
+    "Margin vs PM controlled cost / unit",
+    "Margin vs PM controlled cost, total",
     "Customer feedback",
 ]
 

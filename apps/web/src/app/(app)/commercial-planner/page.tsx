@@ -454,7 +454,7 @@ const OPTIONAL_COLUMN_LABELS: Record<OptionalGridColField, string> = {
   calc_sell_in_price_local: 'Estimated OEM/channel sell-in (plan currency / unit)',
   calc_distributor_net_local: 'Estimated distributor net (plan currency / unit)',
   calc_oem_sell_in_amount: 'OEM/channel sell-in (economics output amount / unit)',
-  calc_internal_gp_amount: 'Internal GP (economics output currency, total, after reserves)',
+  calc_internal_gp_amount: 'Margin vs PM controlled cost (economics output currency, total, after reserves)',
   calc_distributor_net_amount: 'Distributor net (economics output amount / unit)',
   calc_campaign_support_reserve_amount: 'Campaign support reserve (economics output currency)',
   calc_non_campaign_reserve_amount: 'Non-campaign reserve (economics output currency)',
@@ -1593,7 +1593,7 @@ export default function CommercialPlannerPage() {
       },
       {
         field: 'calc_internal_gp_amount',
-        headerName: `Internal GP (${economicsSummaryCcy}, total)`,
+        headerName: `Margin vs PM controlled cost (${economicsSummaryCcy}, total)`,
         minWidth: 190,
         hide: !optionalVisible.calc_internal_gp_amount,
         tooltipValueGetter: (p) => economicsBlockingTooltip(p.data ?? undefined),
@@ -2400,7 +2400,7 @@ export default function CommercialPlannerPage() {
             {economicsComplete ? (
               <>
                 <Typography variant="body2">
-                  <strong>Estimated internal GP ({economicsSummaryCcy}, total, after reserves):</strong>{' '}
+                  <strong>Margin vs PM controlled cost ({economicsSummaryCcy}, total, after reserves):</strong>{' '}
                   {summary?.total_internal_gp_amount ?? 0}
                 </Typography>
                 <Typography variant="body2">
@@ -2430,7 +2430,7 @@ export default function CommercialPlannerPage() {
             )}
           </Stack>
               <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }} data-testid="plan-summary-currency-note">
-                Plan / customer-facing currency: <strong>{planCurrencyLabel}</strong>. Summary reserve and internal GP totals
+                Plan / customer-facing currency: <strong>{planCurrencyLabel}</strong>. Summary reserve and margin totals
                 above use <strong>{economicsSummaryCcy}</strong> from the plan summary API (first line’s economics currency
                 when present). If lines mix output currencies, treat totals as indicative until a multi-currency aggregation
                 rule exists.
