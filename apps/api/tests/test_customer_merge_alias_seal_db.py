@@ -120,6 +120,7 @@ def test_confirmed_merge_seals_loser_name_under_both_keys(db: Session) -> None:
     )
     assert event is not None and event.actor == "tester"
     assert event.detail_json["alias_seal"]["minted"] == 2
+    assert event.detail_json["rows_moved"] == {str(loser.id): 0}
 
 
 def test_seal_is_idempotent(db: Session) -> None:

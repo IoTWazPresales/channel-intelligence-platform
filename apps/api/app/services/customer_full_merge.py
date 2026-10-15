@@ -339,6 +339,11 @@ def confirm_customer_full_merge_sync(
             "similarity_key": similarity_key,
             "keeper_id": kid,
             "loser_ids": soft_redirected,
+            # Rows moved from each merged record, so a later keeper change can show each side.
+            "rows_moved": {
+                str(s["customer_id"]): sum(v for v in s.get("table_updates", {}).values() if isinstance(v, int))
+                for s in repoint_stats
+            },
             "alias_seal": seal_summary(seal),
             "audit_note": audit_note.strip()[:400],
         },
