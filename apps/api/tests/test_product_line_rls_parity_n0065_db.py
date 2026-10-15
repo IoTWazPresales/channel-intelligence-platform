@@ -63,6 +63,10 @@ LINEAGE = frozenset({"shipment_evidence_observation", "shipment_evidence_line", 
 # Round 5 (0027): rows with no product are admin (open) / steward only, no inheritance.
 NO_PRODUCT_STEWARD = frozenset(
     {"commercial_lineup_line", "cst_listing_seed", "customer_listing", "historical_lineup_import_line"})
+# N-0096: append-only audit tables have SELECT and INSERT policies and deliberately no UPDATE or DELETE
+# policy (N-0110 repair, 20261015_0038), so the update/delete/move cells of this matrix do not apply to
+# them. They are left out of the measured set and checked for their policy shape below.
+APPEND_ONLY = frozenset({"fact_customer_sellthrough_superseded"})
 STEWARD = "steward"
 ALL = "ALL"
 NULL_PID = None
@@ -272,7 +276,14 @@ def run_version(ver: int) -> dict:
             from alembic.runtime.migration import MigrationContext
 
             rev = conn.execute(text("select version_num from alembic_version")).scalar_one()
-            assert rev == "20261009_0027", f"cip_test must be at 0027 for the parity run, is {rev}"
+            # N-0096: cip_test moves on with every migration. The parity run needs 0027 applied, not
+            # to be the head: 0027 must be the head itself or an ancestor of it.
+            from alembic.config import Config
+            from alembic.script import ScriptDirectory
+
+            script = ScriptDirectory.from_config(Config(str(Path(__file__).resolve().parents[1] / "alembic.ini")))
+            lineage = {r.revision for r in script.walk_revisions(base="base", head=rev)}
+            assert "20261009_0027" in lineage, f"cip_test must have 0027 applied for the parity run, is {rev}"
             m25 = _load(_M25)
             m26 = _load(_M26)
             m27 = _load(_M27)
@@ -294,7 +305,7 @@ def run_version(ver: int) -> dict:
             ).scalar_one()
             definer_rls = not bool(definer)
             out["definer_bypasses_rls"] = bool(definer)
-            tables = m25.protected_tables(conn)
+            tables = [(t, c) for t, c in m25.protected_tables(conn) if t not in APPEND_ONLY]
             out["n_tables"] = len(tables) + 1
             tag = uuid.uuid4().hex[:6]
             names = {"A": f"N0065P-A-{tag}", "B": f"N0065P-B-{tag}", "C": f"N0065P-C-{tag}"}
@@ -580,7 +591,9 @@ def test_parity_0024_to_0027_every_protected_table() -> None:
         Path(out).write_text(json.dumps(report, indent=1, default=str), encoding="utf-8")
     print(json.dumps({k: v for k, v in report.items() if not k.startswith("per_table")}, indent=1,
                      default=str)[:20000])
-    assert r25["n_tables"] == 45 and r26["n_tables"] == 45 and r27["n_tables"] == 45
+    # 45 when written; N-0087 dropped four scaffold tables (20261011_0032), and the append-only
+    # superseded table is measured separately (APPEND_ONLY). A new protected table must be added here.
+    assert r25["n_tables"] == 42 and r26["n_tables"] == 42 and r27["n_tables"] == 42
     assert not s24["mismatches"], s24["mismatches"][:5]
     assert not s25["mismatches"], s25["mismatches"][:5]
     assert not s26["mismatches"], s26["mismatches"][:5]
@@ -616,3 +629,28 @@ def test_parity_0024_to_0027_every_protected_table() -> None:
     assert r25["view_reloptions"] and "security_invoker=true" in r25["view_reloptions"]
     plan25 = "\n".join(r25["plan_one_line"])
     assert "cip_product_id_visible" not in plan25 and "hashed SubPlan" in plan25, plan25
+
+
+def test_append_only_audit_tables_have_select_and_insert_policies_and_no_update_or_delete():
+    eng = _engine()
+    try:
+        with eng.connect() as conn:
+            if conn.execute(text("select current_database()")).scalar_one() != "cip_test":
+                pytest.skip("policy shape is read on cip_test only")
+            for table in sorted(APPEND_ONLY):
+                if not conn.execute(text("select to_regclass(:t)"), {"t": table}).scalar_one():
+                    pytest.skip(f"{table} is not on this database")
+                cmds = {
+                    r[0]: r[1]
+                    for r in conn.execute(
+                        text("select cmd, policyname from pg_policies where tablename = :t"), {"t": table}
+                    )
+                }
+                assert sorted(cmds) == ["INSERT", "SELECT"], (table, cmds)
+                rls = conn.execute(
+                    text("select relrowsecurity, relforcerowsecurity from pg_class where relname = :t"),
+                    {"t": table},
+                ).one()
+                assert tuple(rls) == (True, True), table
+    finally:
+        eng.dispose()
