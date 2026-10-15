@@ -96,6 +96,9 @@ _WRITE_MATRIX: dict[tuple[str, str], frozenset[Role]] = {
     ("POST", f"{_C}/article-aliases/reresolve-job-residuals"): _STEWARD,
     ("POST", f"{_C}/article-aliases/{{alias_id}}/confirm"): _STEWARD,
     ("POST", f"{_C}/article-aliases/{{alias_id}}/reject"): _STEWARD,
+    # N-0110 stock gap: the on-hand threshold setting and the recompute are steward writes
+    ("PUT", f"{_C}/stock-gap/settings"): _STEWARD,
+    ("POST", f"{_C}/stock-gap/recompute"): _STEWARD,
     # mappings.py
     ("POST", f"{_M}/queue/{{item_id}}/approve"): _STEWARD,
     ("POST", f"{_M}/queue/{{item_id}}/reject"): _STEWARD,

@@ -1,6 +1,8 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
 from app.services.cpor.promo_plan_builder import (
     COST_SOURCE_INTAKE_WEIGHTED,
     COST_SOURCE_MANUAL,
@@ -9,6 +11,66 @@ from app.services.cpor.promo_plan_builder import (
     derive_planned_reservation_sync,
     load_promotion_line_evidence,
 )
+
+
+@pytest.fixture(autouse=True)
+def _no_budget_ledger(monkeypatch):
+    """N-0079 draws the campaign headroom from the budget ledger (a savepoint query), which these
+    hand-built sessions cannot run. Pin the "no ledger" answer; the ledger path has its own test below."""
+    monkeypatch.setattr("app.services.budget_ledger.used_usd", lambda *_a, **_k: None)
+
+
+def test_draw_comes_from_the_budget_ledger_when_there_is_one(monkeypatch):
+    seen = {}
+
+    def ledger(session, *, landed_quarter=None):
+        seen["quarter"] = landed_quarter
+        return 123.5
+
+    monkeypatch.setattr("app.services.budget_ledger.used_usd", ledger)
+    monkeypatch.setattr(
+        "app.services.cpor.promo_plan_builder.build_comparable_cases",
+        lambda session, *, case_id, limit=10: {"case_id": case_id, "error": "case_not_found", "items": []},
+    )
+    monkeypatch.setattr(
+        "app.services.cpor.promo_plan_builder.derive_planned_reservation_sync",
+        lambda *_a, **_k: {
+            "planned_reservation_usd": 1000,
+            "planned_revenue_usd": 5000,
+            "planned_line_count": 1,
+            "sku_assumption_count": 1,
+            "skipped_missing_sku": 0,
+            "skipped_missing_srp": 0,
+            "reservation_source": "derived_from_profit",
+            "from_lineup_derived": False,
+        },
+    )
+
+    class R:
+        def scalar(self):
+            return 0
+
+        def one(self):
+            return (999, 3)  # case-line draw, which the ledger replaces
+
+        def all(self):
+            return []
+
+    class Session:
+        def execute(self, *_a, **_k):
+            return R()
+
+        def get(self, *_a, **_k):
+            return None
+
+        def scalars(self, *_a, **_k):
+            return MagicMock(all=MagicMock(return_value=[]))
+
+    out = build_promo_plan_draft(Session(), seed_case_id=1, period_label="26Q2")
+    check = out["budget_check"]
+    assert check["drawn_source"] == "budget_ledger"
+    assert check["tracks"]["money"]["drawn_cpor_usd"] == 123.5
+    assert seen["quarter"] == "26Q2"
 
 
 def test_build_promo_plan_draft_case_not_found(monkeypatch):

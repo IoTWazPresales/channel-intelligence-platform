@@ -37,6 +37,9 @@ def test_cleanup_soft_runs_one_delete_per_derived_table() -> None:
         db = MagicMock()
         db.execute = AsyncMock(return_value=MagicMock(rowcount=0))
         await cleanup_soft_product_references(db, 99)
-        assert len(db.execute.await_args_list) == 10
+        # N-0087 dropped the pricing-recommendation and promo-readiness scaffold tables, so 8 remain.
+        tables = [call.args[0].table.name for call in db.execute.await_args_list]
+        assert len(tables) == 8
+        assert not {"pricing_recommendation", "promo_readiness"} & set(tables)
 
     asyncio.run(run())

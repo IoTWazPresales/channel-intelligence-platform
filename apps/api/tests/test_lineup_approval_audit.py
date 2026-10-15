@@ -23,11 +23,17 @@ def test_patch_approval_change_invokes_audit_writer():
     row.approval_status = "draft"
     row.notes = None
 
+    holder: list = []
+
     async def fake_db():
         sess = MagicMock()
         sess.get = AsyncMock(return_value=row)
         sess.commit = AsyncMock()
         sess.refresh = AsyncMock()
+        # N-0079: an approval change flushes, then draws the budget ledger through run_sync.
+        sess.flush = AsyncMock()
+        sess.run_sync = AsyncMock()
+        holder.append(sess)
         yield sess
 
     app.dependency_overrides[get_db] = fake_db
@@ -40,6 +46,7 @@ def test_patch_approval_change_invokes_audit_writer():
         )
     assert r.status_code == 200
     audit.assert_awaited_once()
+    holder[0].run_sync.assert_awaited_once()
     kwargs = audit.await_args.kwargs
     assert kwargs["lineup_item_id"] == 7
     assert kwargs["old_status"] == "draft"

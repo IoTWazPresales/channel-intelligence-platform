@@ -59,8 +59,10 @@ def test_sync_eligibility_open_channel_missing_account():
     assert eligible is False
     assert reason == "open_channel_account_missing"
     detail = sync_skip_detail_message(ln, reason)
-    assert detail and "OPEN_CHANNEL" in detail
-    assert "Reference data" in detail
+    # Plain words, no internal code name (the wording was rewritten after this test was written).
+    assert detail and "The Open Channel account is missing" in detail
+    assert "reference data" in detail and "pnpm local:db:seed" in detail
+    assert "OPEN_CHANNEL" not in detail
 
 
 def test_sync_eligibility_managed_unresolved_customer_blocks():
@@ -140,4 +142,6 @@ def test_sync_skip_detail_unassigned_placeholder_reference_data():
         raw_row_payload={},
     )
     msg = sync_skip_detail_message(ln, "missing_distributor")
-    assert msg and "UNASSIGNED" in msg and "Reference data missing" in msg
+    assert msg and "The Unassigned distributor is missing" in msg
+    assert "left blank on purpose" in msg and "pnpm local:db:seed" in msg
+    assert "UNASSIGNED" not in msg

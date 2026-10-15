@@ -65,10 +65,31 @@ def test_apply_resolved_entities_syncs_stamped_ids():
         distributor_resolution_status="resolved",
     )
     db = MagicMock()
+    db.scalar.return_value = None  # customer 10 was not merged into another
     apply_resolved_entities_to_line(line, db, None)
     assert line.resolved_customer_id == 10
     assert line.resolved_distributor_id == 20
-    db.scalar.assert_not_called()
+    # Only the merge walk reads the database; the distributor and the token are not looked up.
+    assert db.scalar.call_count == 1
+
+
+def test_apply_resolved_entities_follows_a_merged_customer():
+    """The customer merge seal: a line stamped with a customer that was merged resolves to the survivor."""
+    line = ShipmentEvidenceLine(
+        import_job_id=1,
+        source_row_number=1,
+        report_type="shipped",
+        line_state="shipped",
+        source_key="k",
+        raw_source_row={},
+        customer_id=10,
+        distributor_id=20,
+    )
+    db = MagicMock()
+    db.scalar.side_effect = [11, None]  # 10 -> 11, and 11 is a survivor
+    apply_resolved_entities_to_line(line, db, None)
+    assert line.customer_id == 10  # the stamped id is kept
+    assert line.resolved_customer_id == 11
 
 
 def test_raw_tokens_unchanged_after_resolved_apply():

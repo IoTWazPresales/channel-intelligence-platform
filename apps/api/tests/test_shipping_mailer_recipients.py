@@ -69,6 +69,14 @@ class _RunSyncDb:
     async def commit(self):
         self._session.commit()
 
+    # N-0092: a recipient change writes a platform audit row (add + flush). The SQLite test
+    # database has no audit table, so the rows are collected here instead of stored.
+    def add(self, row):
+        self._session.info.setdefault("audit_rows", []).append(row)
+
+    async def flush(self):
+        return None
+
 
 def _stub_user(role: Role = Role.ADMIN):
     async def _fake_user():
@@ -285,6 +293,8 @@ def test_api_add_disable_delete(api_client, monkeypatch: pytest.MonkeyPatch) -> 
     assert deleted.status_code == 204
     leftover = {i["address"] for i in client.get("/api/v1/shipping-mailer/recipients").json()["items"]}
     assert "extra@example.com" not in leftover
+    audited = [r.action for r in _session.info.get("audit_rows", [])]
+    assert audited == ["mailer_recipient_add", "mailer_recipient_update", "mailer_recipient_delete"]
 
 
 def test_api_rejects_invalid_address(api_client) -> None:

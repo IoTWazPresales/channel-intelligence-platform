@@ -23,11 +23,17 @@ def test_patch_lineup_item_updates_approval_status():
     row.approval_status = "draft"
     row.notes = None
 
+    holder: list = []
+
     async def fake_db():
         sess = MagicMock()
         sess.get = AsyncMock(return_value=row)
         sess.commit = AsyncMock()
         sess.refresh = AsyncMock()
+        # N-0079: an approval change flushes, then draws the budget ledger through run_sync.
+        sess.flush = AsyncMock()
+        sess.run_sync = AsyncMock()
+        holder.append(sess)
         yield sess
 
     app.dependency_overrides[get_db] = fake_db
@@ -36,6 +42,7 @@ def test_patch_lineup_item_updates_approval_status():
     assert r.status_code == 200
     assert r.json() == {"id": 10, "approval_status": "pending_approval", "notes": None, "planned_volume_units": 1.0}
     assert row.approval_status == "pending_approval"
+    holder[0].run_sync.assert_awaited_once()
 
 
 def test_patch_lineup_item_rejects_invalid_status():

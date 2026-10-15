@@ -47,6 +47,9 @@ _CPOR_WRITE_MATRIX: dict[tuple[str, str], frozenset[Role]] = {
     ("POST", f"{_P}/intelligence/promo-plan-draft/create-case"): _PLANNER,
     ("POST", f"{_P}/cases/{{case_id}}/claim-evidence/import"): _PLANNER,
     ("POST", f"{_P}/cases/{{case_id}}/settlement/rollup"): _PLANNER,
+    # case_approval.py (N-0082) — the planner sends and revokes the customer's case link
+    ("POST", f"{_P}/cases/{{case_id}}/approval-link"): _PLANNER,
+    ("POST", f"{_P}/cases/{{case_id}}/approval-link/revoke"): _PLANNER,
     # cpor_exports.py
     ("POST", f"{_P}/cases/{{case_id}}/export"): _PLANNER,
     # cpor_fx.py
@@ -122,13 +125,46 @@ def test_no_cpor_write_admits_viewer():
         assert Role.VIEWER not in allowed, key
 
 
+# The only CPOR read that is not open to a viewer: the planner's view of a case's customer link
+# (recipient email, open/expired/revoked state). N-0082. Named here so a new gated read still fails.
+_PLANNER_ONLY_READS: dict[tuple[str, str], frozenset[Role]] = {
+    ("GET", f"{_P}/cases/{{case_id}}/approval-link"): _PLANNER,
+}
+
+
 def test_cpor_reads_stay_authentication_only():
-    gated_reads = [
-        _route_key(r)
+    gated_reads = {
+        _route_key(r): _allowed_roles(r)
         for r in _cpor_routes()
         if "GET" in (r.methods or ()) and _allowed_roles(r) is not None
+    }
+    assert set(gated_reads) == set(_PLANNER_ONLY_READS), (
+        f"CPOR GETs must stay readable by viewer: {sorted(set(gated_reads) - set(_PLANNER_ONLY_READS))}"
+    )
+    assert gated_reads == _PLANNER_ONLY_READS
+
+
+def test_the_customer_approval_link_route_is_the_one_public_case_route():
+    """N-0082 / D-0079: the customer opens one case with a random token and no sign-in, so the
+    route carries no get_current_user and no role gate. It is allowed here by name; every other
+    route under /api/v1/cpor still needs a session."""
+    public = [
+        r
+        for r in app.routes
+        if isinstance(r, APIRoute)
+        and r.path == "/api/v1/case-approval"
     ]
-    assert gated_reads == [], f"CPOR GETs must stay readable by viewer: {gated_reads}"
+    if not public:
+        pytest.skip("commercial planner routes are not mounted in this environment")
+    assert sorted(m for r in public for m in r.methods if m not in {"HEAD", "OPTIONS"}) == ["GET", "POST"]
+    for route in public:
+        calls = [getattr(c, "__name__", "") for c in _dependant_calls(route.dependant)]
+        assert "get_current_user" not in calls
+        assert _allowed_roles(route) is None
+    # nothing else outside /auth is public: every other CPOR route needs get_current_user
+    for route in _cpor_routes():
+        names = [getattr(c, "__name__", "") for c in _dependant_calls(route.dependant)]
+        assert "get_current_user" in names, route.path
 
 
 def test_shipment_evidence_gates_admit_steward_and_admin():

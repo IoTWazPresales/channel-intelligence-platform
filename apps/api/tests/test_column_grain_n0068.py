@@ -182,6 +182,7 @@ def _db_override(row):
     session.get = AsyncMock(return_value=row)
     session.commit = AsyncMock()
     session.add = MagicMock()
+    session.flush = AsyncMock()  # N-0092: a column-grain save writes an audit row (add + flush)
 
     async def _get_db():
         yield session
@@ -208,6 +209,8 @@ def test_column_grain_put_normalises_and_saves() -> None:
     assert r.json()["grain"] == "product_line"
     assert row.grain == "product_line"
     session.commit.assert_awaited()
+    audited = [c.args[0] for c in session.add.call_args_list if type(c.args[0]).__name__ == "PlatformAuditEvent"]
+    assert len(audited) == 1 and audited[0].area == "settings"
 
 
 @pytest.mark.parametrize("grain", ["", "   ", "product line", "1line", "line-code", "a" * 65, "x.y"])
