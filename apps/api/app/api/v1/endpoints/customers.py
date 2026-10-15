@@ -11,7 +11,7 @@ from sqlalchemy.orm import aliased
 
 from app.api.deps import get_db
 from app.api.v1.bulk_delete_sql_probe import apply_sql_probe_headers, bulk_delete_sql_probe
-from app.core.security import get_optional_current_user
+from app.core.security import Role, get_optional_current_user, require_roles
 from app.core.tenant_scope import tenant_id_from_user, where_tenant
 from app.models.dimensions import (
     CustomerContact,
@@ -681,7 +681,10 @@ async def customer_full_merge_bulk_preview_endpoint(body: CustomerFullMergeBulkP
 
 
 @router.post("/duplicate-groups/merge-confirm", status_code=202)
-async def customer_full_merge_confirm_endpoint(body: CustomerFullMergeBody):
+async def customer_full_merge_confirm_endpoint(
+    body: CustomerFullMergeBody,
+    user: dict | None = Depends(get_optional_current_user),
+):
     from app.services.customer_full_merge import CustomerFullMergeError
     from app.services.customer_full_merge_enqueue import enqueue_customer_full_merge_confirm
 
@@ -693,6 +696,8 @@ async def customer_full_merge_confirm_endpoint(body: CustomerFullMergeBody):
         "survivor_id": int(body.survivor_id),
         "audit_note": body.audit_note,
         "customer_ids": body.customer_ids,
+        # Names the steward on the merge note and the platform audit event.
+        "performed_by": str((user or {}).get("email") or (user or {}).get("id") or "steward"),
     }
     try:
         task_id, async_poll = enqueue_customer_full_merge_confirm(payload)
@@ -752,6 +757,91 @@ async def customer_full_merge_task_status(task_id: str):
     elif task_state == POLL_STATE_FAILURE:
         progress["error"] = str(info)[:800] if info is not None else "Task failed"
     return progress
+
+
+@router.get("/duplicate-groups/related")
+async def list_customer_related_master_groups_endpoint(
+    db: AsyncSession = Depends(get_db),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+    q: str | None = Query(default=None, max_length=200),
+):
+    """Read-only related-name worklist; merge a picked subset through ``merge-confirm`` with its ``related:`` key."""
+    from app.services.customer_related_master_groups import list_customer_related_master_groups
+
+    return await list_customer_related_master_groups(db, page=page, page_size=page_size, q=q)
+
+
+@router.get("/merge-history")
+async def list_customer_merge_history_endpoint(
+    db: AsyncSession = Depends(get_db),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+    q: str | None = Query(default=None, max_length=200),
+):
+    """Read-only: keepers with their merged records and the evidence now on each record."""
+    from app.services.customer_merge_keeper import list_past_merges
+
+    return await list_past_merges(db, page=page, page_size=page_size, q=q)
+
+
+class CustomerChangeKeeperBody(BaseModel):
+    current_keeper_id: int = Field(gt=0)
+    new_keeper_id: int = Field(gt=0)
+    audit_note: str = Field(min_length=1, max_length=2000)
+
+
+@router.post("/merge-history/change-keeper-preview")
+async def customer_change_keeper_preview_endpoint(
+    body: CustomerChangeKeeperBody,
+    _user: dict = Depends(require_roles(Role.STEWARD)),
+):
+    import asyncio
+
+    from app.db.session_sync import SessionLocal
+    from app.services.customer_merge_keeper import CustomerKeeperChangeError, preview_change_keeper
+
+    def _run() -> dict:
+        with SessionLocal() as db:
+            return preview_change_keeper(
+                db,
+                current_keeper_id=body.current_keeper_id,
+                new_keeper_id=body.new_keeper_id,
+                audit_note=body.audit_note,
+            )
+
+    try:
+        return await asyncio.to_thread(_run)
+    except CustomerKeeperChangeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/merge-history/change-keeper-confirm")
+async def customer_change_keeper_confirm_endpoint(
+    body: CustomerChangeKeeperBody,
+    user: dict = Depends(require_roles(Role.STEWARD)),
+):
+    import asyncio
+
+    from app.db.session_sync import SessionLocal
+    from app.services.customer_merge_keeper import CustomerKeeperChangeError, confirm_change_keeper
+
+    actor = str(user.get("email") or user.get("display_name") or user.get("id") or "steward")
+
+    def _run() -> dict:
+        with SessionLocal() as db:
+            return confirm_change_keeper(
+                db,
+                current_keeper_id=body.current_keeper_id,
+                new_keeper_id=body.new_keeper_id,
+                audit_note=body.audit_note,
+                performed_by=actor,
+            )
+
+    try:
+        return await asyncio.to_thread(_run)
+    except CustomerKeeperChangeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("", status_code=201)

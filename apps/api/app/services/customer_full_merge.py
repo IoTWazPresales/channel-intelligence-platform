@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from datetime import datetime, timezone
 from typing import Any
@@ -27,6 +28,9 @@ _LEGAL_FORM_PATTERN = re.compile(
     r"\b(?:pty|ltd|cc|inc|llc|corp|corporation|limited|proprietary)\b",
     re.IGNORECASE,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class CustomerFullMergeError(ValueError):
@@ -65,6 +69,49 @@ def _members_for_similarity_key(db: Session, similarity_key: str) -> list[_Custo
         if group["similarity_key"] == key:
             return list(group["members"])
     raise CustomerFullMergeError(f"No duplicate group found for similarity_key={key!r}")
+
+
+def _members_for_related_merge(
+    db: Session,
+    *,
+    similarity_key: str,
+    customer_ids: list[int] | None,
+) -> list[_CustomerRow]:
+    """``related:<anchor>`` keys: customer_ids must be a subset (2 or more) of the server-computed group."""
+    from app.services.customer_related_master_groups import (
+        RELATED_SIMILARITY_KEY_PREFIX,
+        related_group_members_for_key,
+    )
+
+    anchor_key = similarity_key[len(RELATED_SIMILARITY_KEY_PREFIX) :].strip()
+    if not anchor_key:
+        raise CustomerFullMergeError("related similarity_key requires an anchor key")
+    group_members = related_group_members_for_key(db, anchor_key)
+    if not group_members:
+        raise CustomerFullMergeError(f"No related group found for similarity_key={similarity_key!r}")
+    if customer_ids is None:
+        raise CustomerFullMergeError("customer_ids is required for a related-name merge")
+    provided = sorted({int(x) for x in customer_ids})
+    if len(provided) < 2:
+        raise CustomerFullMergeError("Pick at least 2 customers from the related group")
+    by_id = {m.id: m for m in group_members}
+    if any(pid not in by_id for pid in provided):
+        raise CustomerFullMergeError("customer_ids must be a subset of the related group")
+    return sorted((by_id[i] for i in provided), key=survivor_hint_sort_key)
+
+
+def _merge_members(db: Session, similarity_key: str, customer_ids: list[int] | None) -> list[_CustomerRow]:
+    from app.services.customer_related_master_groups import RELATED_SIMILARITY_KEY_PREFIX
+
+    key = (similarity_key or "").strip()
+    if key.startswith(RELATED_SIMILARITY_KEY_PREFIX):
+        return _members_for_related_merge(db, similarity_key=key, customer_ids=customer_ids)
+    members = _members_for_similarity_key(db, key)
+    if customer_ids is not None:
+        provided = sorted({int(x) for x in customer_ids})
+        if provided != sorted(m.id for m in members):
+            raise CustomerFullMergeError("customer_ids must match the duplicate group members")
+    return members
 
 
 def _default_survivor_id(members: list[_CustomerRow]) -> int:
@@ -127,12 +174,8 @@ def preview_customer_full_merge(
     if not note:
         raise CustomerFullMergeError("audit_note is required")
 
-    members = _members_for_similarity_key(db, similarity_key)
+    members = _merge_members(db, similarity_key, customer_ids)
     member_ids = [m.id for m in members]
-    if customer_ids is not None:
-        provided = sorted({int(x) for x in customer_ids})
-        if provided != sorted(member_ids):
-            raise CustomerFullMergeError("customer_ids must match the duplicate group members")
     _reject_non_customer_entities(member_ids)
 
     kid = int(survivor_id) if survivor_id is not None else _default_survivor_id(members)
@@ -154,6 +197,12 @@ def preview_customer_full_merge(
             }
         )
 
+    from app.services.customer_merge_alias_seal import seal_loser_display_name_aliases
+
+    seal_plan = seal_loser_display_name_aliases(
+        db, keeper_id=kid, loser_ids=losers, audit_note=note, dry_run=True
+    )
+
     return {
         "dry_run": True,
         "merge_kind": "customer_full",
@@ -162,6 +211,7 @@ def preview_customer_full_merge(
         "loser_ids": losers,
         "member_ids": member_ids,
         "loser_plans": loser_plans,
+        "alias_seal_plan": seal_plan,
         "ambiguity_flags": _legal_form_ambiguity_flags(members),
         "fk_enumeration": _fk_enumeration_report(db),
         "audit_note": note,
@@ -271,7 +321,33 @@ def confirm_customer_full_merge_sync(
         db.rollback()
         raise CustomerFullMergeError(str(exc)) from exc
 
+    # BACKLOG-081: seal each merged-away name to the keeper. Conflicts are reported, never fatal.
+    from app.services.customer_merge_alias_seal import seal_loser_display_name_aliases, seal_summary
+    from app.services.platform_audit import record_platform_audit_sync
+
+    seal = seal_loser_display_name_aliases(
+        db, keeper_id=kid, loser_ids=soft_redirected, audit_note=audit_note
+    )
+    record_platform_audit_sync(
+        db,
+        None,
+        area="admin",
+        action="customer_merge",
+        target_type="customer",
+        target_id=str(kid),
+        detail={
+            "similarity_key": similarity_key,
+            "keeper_id": kid,
+            "loser_ids": soft_redirected,
+            "alias_seal": seal_summary(seal),
+            "audit_note": audit_note.strip()[:400],
+        },
+        actor_label=actor,
+    )
     db.commit()
+    logger.info(
+        "customer_full_merge keeper=%s losers=%s alias_seal=%s", kid, soft_redirected, seal_summary(seal)
+    )
     return {
         "dry_run": False,
         "merge_kind": "customer_full",
@@ -281,4 +357,5 @@ def confirm_customer_full_merge_sync(
         "repoint_stats": repoint_stats,
         "soft_redirected_customer_ids": soft_redirected,
         "audit_note": audit_note.strip(),
+        **seal,
     }
