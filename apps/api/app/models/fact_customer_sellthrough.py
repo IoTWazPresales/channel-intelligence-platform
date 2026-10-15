@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy import Boolean, Date, ForeignKey, Index, Integer, Numeric, SmallInteger, String, Text
+from sqlalchemy import Boolean, Date, ForeignKey, Index, Integer, Numeric, SmallInteger, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -60,3 +60,8 @@ class FactCustomerSellthrough(Base, TimestampMixin):
         ForeignKey("import_job.id", ondelete="SET NULL"), nullable=True
     )
     raw_source_row: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # N-0111: the load that set each figure ({"units_sold": job, "reported_soh": job, ...}).
+    # Empty on rows stored before N-0111: every figure the row holds came from import_job_id.
+    figure_import_jobs: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )

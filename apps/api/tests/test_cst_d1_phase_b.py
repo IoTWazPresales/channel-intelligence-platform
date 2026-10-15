@@ -107,6 +107,12 @@ def test_apply_carries_site_label_and_unit_mac_unmapped_location(monkeypatch):
     exec_result = MagicMock()
     exec_result.all.return_value = returned
     db.execute.return_value = exec_result
+    # N-0111: the same-key figure check reads stored rows; this test has none.
+    import app.services.imports.customer_sell_through_supersede as supersede_mod
+
+    monkeypatch.setattr(
+        supersede_mod, "record_same_key_replacements", lambda _db, **_k: supersede_mod.SupersedeSummary()
+    )
 
     summary = apply_mod.apply_customer_sellthrough_staging(db, 7)
     assert summary.applied == 1

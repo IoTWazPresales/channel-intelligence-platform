@@ -52,6 +52,12 @@ def _db_with_lines(lines, returned_rows):
 
 
 def _patch_source_key(monkeypatch):
+    # N-0111: the same-key figure check reads stored rows; these tests have none.
+    import app.services.imports.customer_sell_through_supersede as supersede_mod
+
+    monkeypatch.setattr(
+        supersede_mod, "record_same_key_replacements", lambda _db, **_k: supersede_mod.SupersedeSummary()
+    )
     monkeypatch.setattr(
         cst,
         "customer_sellthrough_source_key",

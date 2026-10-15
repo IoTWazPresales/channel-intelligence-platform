@@ -862,7 +862,10 @@ def parse_flat_report(
             file_fields=file_fields,
         )
 
-    if col_map["units_sold"] is None:
+    # N-0111: a stock-only file (on-hand, no units column) parses; its rows carry no units and
+    # never wipe sales. The handler loads it only when the upload is marked Stock only.
+    stock_only_file = col_map["units_sold"] is None and col_map["reported_soh"] is not None
+    if col_map["units_sold"] is None and not stock_only_file:
         return ParseResult(
             error=f"Required field units_sold could not be mapped. Available columns: {available}",
             warnings=warnings,
@@ -876,7 +879,11 @@ def parse_flat_report(
         source_row_number = first_data_row + pos
         units = _parse_decimal(series.get(col_map["units_sold"])) if col_map["units_sold"] else None
         product_tok = _normalize_text(series.get(col_map["raw_product_token"])) if col_map["raw_product_token"] else None
-        if units is None or product_tok is None:
+        if stock_only_file:
+            if product_tok is None or _parse_decimal(series.get(col_map["reported_soh"])) is None:
+                skipped += 1
+                continue
+        elif units is None or product_tok is None:
             skipped += 1
             continue
 
@@ -957,7 +964,8 @@ def parse_flat_report(
         rows.append(row)
 
     if skipped:
-        warnings.append(f"Skipped {skipped} row(s) with missing product token or units_sold")
+        what = "on-hand" if stock_only_file else "units_sold"
+        warnings.append(f"Skipped {skipped} row(s) with missing product token or {what}")
     warnings.extend(dict.fromkeys(period_warnings))
 
     rows = enrich_flat_rows_from_companion_soh(

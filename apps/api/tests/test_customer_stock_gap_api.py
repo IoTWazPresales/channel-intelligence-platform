@@ -61,6 +61,8 @@ def test_get_returns_rows_counts_and_threshold(monkeypatch) -> None:
         "compared": 2,
         "highlighted": 1,
         "first_report": 1,
+        "no_on_hand": 0,
+        "chain_restart": 0,
         "highlighted_by_cause": {
             "overwrite": 0,
             "unmatched_shipment": 0,

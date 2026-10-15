@@ -13,7 +13,12 @@ from typing import Any
 import pandas as pd
 
 from app.services.imports.parsers.customer_sell_through_flat import _monday_of_week, _normalize_text, _parse_date_value
-from app.services.imports.parsers.customer_sell_through_grain import received_on, year_for_month, year_for_week
+from app.services.imports.parsers.customer_sell_through_grain import (
+    received_on,
+    year_for_fiscal_week,
+    year_for_month,
+    year_for_week,
+)
 
 _ISO_WEEK_HEADER = re.compile(r"^(\d{4})-?W(\d{1,2})$", re.IGNORECASE)
 _WEEK_YEAR_HEADER = re.compile(r"^W(\d{1,2})[-/](\d{4})$", re.IGNORECASE)
@@ -95,9 +100,10 @@ def classify_period_header(header: str) -> tuple[str, date | None, str]:
     m = _FW_HEADER.match(h)
     if m:
         fw = int(m.group(1))
-        year = received_on().year
+        confirmed = year_for_fiscal_week(fw)
+        year = confirmed or received_on().year
         d = _fiscal_week_monday(year, fw, 1)
-        if d is not None and d > received_on():
+        if confirmed is None and d is not None and d > received_on():
             d = _fiscal_week_monday(year - 1, fw, 1)
         if d:
             return "fiscal_week", d, "weekly"

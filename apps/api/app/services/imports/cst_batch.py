@@ -166,10 +166,14 @@ def create_cst_batch_job_sync(
     filenames_and_bytes: list[tuple[str, bytes]],
     import_mode: str = "validate",
     sales_only: bool = False,
+    stock_only: bool = False,
+    confirmed_year: int | None = None,
 ) -> ImportJob:
     """Create one CST import job with N raw files; run process sync.
 
     ``sales_only`` (N-0110): the operator marked the upload as units without on-hand.
+    ``stock_only`` (N-0111): on-hand without units sold; it never wipes sales.
+    ``confirmed_year`` (N-0111): the year of week numbers that carry none.
     """
     if not filenames_and_bytes:
         raise ValueError("create_cst_batch_job_sync requires at least one file")
@@ -206,6 +210,10 @@ def create_cst_batch_job_sync(
     sm.setdefault("report_structure_type", "flat")
     if sales_only:
         sm["cst_sales_only"] = True
+    if stock_only:
+        sm["cst_stock_only"] = True
+    if confirmed_year:
+        sm["cst_confirmed_year"] = int(confirmed_year)
     job.staged_metadata = to_jsonable(sm)
     db.add(job)
 
@@ -234,6 +242,8 @@ def create_cst_batch_job_sync(
 
 
 def batch_groups_preview_to_dict(groups: list[CstBatchGroupPreview]) -> list[dict[str, Any]]:
+    from app.services.imports.parsers.customer_sell_through_grain import suggest_year_from_names
+
     return [
         {
             "signature": g.signature,
@@ -245,6 +255,8 @@ def batch_groups_preview_to_dict(groups: list[CstBatchGroupPreview]) -> list[dic
                     "sheet_count": f.sheet_count,
                     "unmappable": f.unmappable,
                     "unmappable_reason": f.unmappable_reason,
+                    # N-0111: the year the file name states, to pre-fill the confirmed year.
+                    "suggested_year": suggest_year_from_names(f.filename),
                 }
                 for f in g.files
             ],

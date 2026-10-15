@@ -16,21 +16,45 @@ from sqlalchemy.orm import Session
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.import_customer_sellthrough_staging import ImportCustomerSellthroughStagingLine
 
-# Conflict-update column set — kept identical to the prior per-row upsert so the
-# transaction-immutable sell-out write semantics are unchanged; only the *mechanism*
-# (one statement per chunk instead of one per row) is batched.
+_T = "fact_customer_sellthrough"
+
+
+def _figure_update(fig: str) -> Any:
+    """A figure is replaced only when the incoming row carries it (N-0111)."""
+    return text(f"CASE WHEN EXCLUDED.figure_import_jobs ? '{fig}' THEN EXCLUDED.{fig} ELSE {_T}.{fig} END")
+
+
+# Rows stored before N-0111 have an empty map: units and each non-empty stock figure came from
+# import_job_id. The upsert spells that out before laying the incoming map over it.
+_STORED_FIGURE_JOBS = (
+    f"COALESCE(NULLIF({_T}.figure_import_jobs, '{{}}'::jsonb), jsonb_strip_nulls(jsonb_build_object("
+    f"'units_sold', {_T}.import_job_id, "
+    f"'reported_soh', CASE WHEN {_T}.reported_soh IS NOT NULL THEN {_T}.import_job_id END, "
+    f"'in_transit_units', CASE WHEN {_T}.in_transit_units IS NOT NULL THEN {_T}.import_job_id END, "
+    f"'on_order_units', CASE WHEN {_T}.on_order_units IS NOT NULL THEN {_T}.import_job_id END)))"
+)
+
+# Conflict-update column set (one statement per chunk). N-0111: units sold, on-hand, in-transit
+# and on-order are each replaced only when the incoming row carries them, so a stock-only load
+# never wipes sales and a sales-only load never wipes stock. Prices keep the stored value when
+# the incoming row has none.
 _CONFLICT_SET = {
-    "units_sold": text("EXCLUDED.units_sold"),
-    "unit_sell_price": text("EXCLUDED.unit_sell_price"),
-    "unit_cost": text("EXCLUDED.unit_cost"),
-    "unit_mac": text("EXCLUDED.unit_mac"),
-    "reported_soh": text("EXCLUDED.reported_soh"),
+    "units_sold": _figure_update("units_sold"),
+    "raw_mtd_units": text(f"COALESCE(EXCLUDED.raw_mtd_units, {_T}.raw_mtd_units)"),
+    "is_mtd_estimate": text(
+        f"CASE WHEN EXCLUDED.figure_import_jobs ? 'units_sold' THEN EXCLUDED.is_mtd_estimate ELSE {_T}.is_mtd_estimate END"
+    ),
+    "unit_sell_price": text(f"COALESCE(EXCLUDED.unit_sell_price, {_T}.unit_sell_price)"),
+    "unit_cost": text(f"COALESCE(EXCLUDED.unit_cost, {_T}.unit_cost)"),
+    "unit_mac": text(f"COALESCE(EXCLUDED.unit_mac, {_T}.unit_mac)"),
+    "reported_soh": _figure_update("reported_soh"),
+    "figure_import_jobs": text(f"{_STORED_FIGURE_JOBS} || EXCLUDED.figure_import_jobs"),
     "period_grain": text("EXCLUDED.period_grain"),
     "period_week": text("EXCLUDED.period_week"),
     "period_year": text("EXCLUDED.period_year"),
     "week_start_date": text("EXCLUDED.week_start_date"),
-    "in_transit_units": text("EXCLUDED.in_transit_units"),
-    "on_order_units": text("EXCLUDED.on_order_units"),
+    "in_transit_units": _figure_update("in_transit_units"),
+    "on_order_units": _figure_update("on_order_units"),
     "site_label": text("EXCLUDED.site_label"),
     "vat_basis": text("EXCLUDED.vat_basis"),
     "import_job_id": text("EXCLUDED.import_job_id"),
@@ -92,6 +116,10 @@ class ApplySummary:
     superseded_units: float = 0.0
     # N-0110 (D-0091): extra copies of a source row identical in every source column.
     duplicate_lines: int = 0
+    # N-0111: figures superseded on their own (rows that kept their other figures, and how many
+    # figures of each kind were superseded, same key or not).
+    superseded_partial_rows: int = 0
+    superseded_figures: dict[str, int] = field(default_factory=dict)
 
 
 def apply_customer_sellthrough_staging(
@@ -115,16 +143,31 @@ def apply_customer_sellthrough_staging(
     units are summed; a row identical in every source column to one already counted is kept once
     and its copies are marked ``apply_status = "duplicate"`` (see ``_merge_into``).
 
-    A newer load supersedes older rows for the same customer, product and period, whatever their
-    site or day grain (N-0110, D-0090; see ``customer_sell_through_supersede``).
+    A newer load supersedes the figures it carries in older rows for the same customer, product
+    and period, whatever their site or day grain (N-0110 D-0090, N-0111; see
+    ``customer_sell_through_supersede``). A figure the source line leaves empty is not carried.
+
+    N-0111: a job whose files carry week numbers without a year applies nothing until the
+    uploader confirms the year.
     """
     from app.models.ingestion import ImportJob
-    from app.services.imports.customer_sell_through import customer_sellthrough_source_key
+    from app.services.imports.customer_sell_through import (
+        YEAR_PENDING_APPLY_MESSAGE,
+        customer_sellthrough_source_key,
+        job_year_pending,
+    )
+    from app.services.imports.customer_sell_through_supersede import (
+        carried_figures,
+        record_same_key_replacements,
+    )
 
     summary = ApplySummary()
     tbl = FactCustomerSellthrough.__table__
     job = db.get(ImportJob, int(job_id))
     tid = (getattr(job, "tenant_id", None) or "default").strip() or "default" if job else "default"
+    if job is not None and job_year_pending(job):
+        summary.errors.append(YEAR_PENDING_APPLY_MESSAGE)
+        return summary
 
     lines = list(
         db.scalars(
@@ -156,7 +199,7 @@ def apply_customer_sellthrough_staging(
             line.resolved_customer_id is None
             or line.resolved_product_id is None
             or line.period_start_date is None
-            or line.units_sold is None
+            or (line.units_sold is None and all(getattr(line, k, None) is None for k in _STOCK_FIELDS))
         ):
             summary.skipped_unresolved += 1
             continue
@@ -182,7 +225,7 @@ def apply_customer_sellthrough_staging(
             "product_id": prod_id,
             "period_start_date": period,
             "period_type": line.period_type or "weekly",
-            "units_sold": float(line.units_sold),
+            "units_sold": float(line.units_sold) if line.units_sold is not None else None,
             "raw_mtd_units": line.raw_mtd_units,
             "is_mtd_estimate": bool(line.is_mtd_estimate),
             "unit_sell_price": line.unit_sell_price,
@@ -221,22 +264,39 @@ def apply_customer_sellthrough_staging(
             }
             order.append(sk)
 
+    def _row_for_insert(values: dict[str, Any]) -> dict[str, Any]:
+        # N-0111: the figures this row carries, and which load set them. Units not carried are
+        # stored as 0 (the column is required) and are not marked as set by this load.
+        row = dict(values)
+        row["figure_import_jobs"] = {f: int(job_id) for f in carried_figures(values)}
+        if row["units_sold"] is None:
+            row["units_sold"] = 0.0
+        return row
+
     total = len(order)
     written_keys: set[str] = set()
     for start in range(0, total, chunk_size):
         chunk_sks = order[start : start + chunk_size]
-        rows = [grouped[sk]["values"] for sk in chunk_sks]
+        rows = [_row_for_insert(grouped[sk]["values"]) for sk in chunk_sks]
         try:
-            stmt = (
-                pg_insert(tbl)
-                .values(rows)
-                .on_conflict_do_update(
-                    constraint="uq_fact_customer_sellthrough_source_key",
-                    set_=_CONFLICT_SET,
+            # The kept copies of replaced figures and the upsert land together or not at all.
+            with db.begin_nested():
+                kept = record_same_key_replacements(
+                    db, job_id=int(job_id), incoming={sk: grouped[sk]["values"] for sk in chunk_sks}
                 )
-                .returning(tbl.c.id, tbl.c.source_key)
-            )
-            returned = db.execute(stmt).all()
+                stmt = (
+                    pg_insert(tbl)
+                    .values(rows)
+                    .on_conflict_do_update(
+                        constraint="uq_fact_customer_sellthrough_source_key",
+                        set_=_CONFLICT_SET,
+                    )
+                    .returning(tbl.c.id, tbl.c.source_key)
+                )
+                returned = db.execute(stmt).all()
+            summary.superseded_partial_rows += kept.partial_rows
+            for fig, n in kept.figures.items():
+                summary.superseded_figures[fig] = summary.superseded_figures.get(fig, 0) + n
             id_by_sk = {r.source_key: int(r.id) for r in returned}
             written_keys.update(id_by_sk)
             for sk in chunk_sks:
@@ -281,6 +341,9 @@ def apply_customer_sellthrough_staging(
                 )
             summary.superseded_rows = moved.rows
             summary.superseded_units = moved.units
+            summary.superseded_partial_rows += moved.partial_rows
+            for fig, n in moved.figures.items():
+                summary.superseded_figures[fig] = summary.superseded_figures.get(fig, 0) + n
         except Exception as exc:  # noqa: BLE001
             logger.warning("customer sell-through supersede failed job_id=%s: %s", job_id, exc)
             summary.errors.append(f"supersede of re-uploaded rows: {exc}")

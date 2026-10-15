@@ -149,4 +149,12 @@ def test_repeated_report_and_unreported_weeks(session: Session) -> None:
     causes = _causes(session, customer, [p_rep, p_gap])
     assert causes[(p_rep, w2.isoformat())] == ["repeated_report"]
     assert causes[(p_gap, w2.isoformat())] == ["repeated_report"]
-    assert causes[(p_gap, later.isoformat())] == ["unreported_weeks"]
+    # N-0111: three weeks with no on-hand between the reports; the chain restarts at `later`,
+    # so it is not compared and has no cause. Each missing week is named.
+    assert (p_gap, later.isoformat()) not in causes
+    rows = list_stock_positions(session, tenant_id=TENANT, threshold_units=1, product_id=p_gap)
+    by_start = {r["period_start_date"]: r for r in rows}
+    assert by_start[later.isoformat()]["status"] == "chain_restart"
+    missing = sorted(d for d, r in by_start.items() if r["status"] == "no_on_hand")
+    assert missing == [(w2 + timedelta(days=7 * k)).isoformat() for k in (1, 2, 3)]
+    assert all(by_start[d]["reported_on_hand"] is None for d in missing)

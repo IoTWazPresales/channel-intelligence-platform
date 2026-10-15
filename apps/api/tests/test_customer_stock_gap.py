@@ -66,17 +66,62 @@ def test_receipt_on_or_before_previous_report_end_is_not_counted_again() -> None
     assert out[1].gap == D("0")
 
 
-def test_sales_only_period_between_stock_reports_reduces_expected() -> None:
+def test_week_without_on_hand_restarts_the_chain() -> None:
+    """N-0111 (Warren 2026-10-16): a week with no reported on-hand does not break the chain.
+
+    The week is named (no_on_hand, its units kept) and the next on-hand restarts the chain:
+    it is not compared with the report before the gap.
+    """
     periods = [
         _week(date(2026, 7, 6), units="1", on_hand="30"),
         _week(date(2026, 7, 13), units="4", on_hand=None),  # sales-only upload
         _week(date(2026, 7, 20), units="6", on_hand="20"),
+        _week(date(2026, 7, 27), units="5", on_hand="15"),
+    ]
+    out = compute_positions(periods, [])
+    assert [p.status for p in out] == ["first_report", "no_on_hand", "chain_restart", "compared"]
+    gap_week = out[1]
+    assert (gap_week.period.start, gap_week.period.end) == (date(2026, 7, 13), date(2026, 7, 19))
+    assert gap_week.period.units_sold == D("4") and gap_week.period.on_hand is None
+    assert gap_week.gap is None
+    assert out[2].gap is None and out[2].expected is None
+    assert out[3].previous_on_hand == D("20")
+    assert out[3].expected == D("15") and out[3].gap == D("0")
+
+
+def test_missing_weeks_with_no_report_at_all_are_each_named() -> None:
+    periods = [
+        _week(date(2026, 7, 6), units="0", on_hand="10"),
+        _week(date(2026, 8, 3), units="0", on_hand="10"),
+    ]
+    out = compute_positions(periods, [])
+    assert [p.status for p in out] == ["first_report", "no_on_hand", "no_on_hand", "no_on_hand", "chain_restart"]
+    assert [p.period.start for p in out if p.status == "no_on_hand"] == [
+        date(2026, 7, 13),
+        date(2026, 7, 20),
+        date(2026, 7, 27),
+    ]
+
+
+def test_day_lines_inside_contiguous_weeks_keep_the_chain() -> None:
+    """Day-dated sales roll into their Monday-Sunday week; weekly on-hand stays one chain."""
+    periods = [
+        _week(date(2026, 7, 6), units="0", on_hand="30"),
+        ReportPeriod(product_id=1, grain="day", start=date(2026, 7, 14), end=date(2026, 7, 14), units_sold=D("3")),
+        ReportPeriod(product_id=1, grain="day", start=date(2026, 7, 17), end=date(2026, 7, 17), units_sold=D("2")),
+        _week(date(2026, 7, 13), units="0", on_hand="25"),
     ]
     out = compute_positions(periods, [])
     assert [p.status for p in out] == ["first_report", "compared"]
-    assert out[1].units_sold_since == D("10")
-    assert out[1].expected == D("20")
-    assert out[1].gap == D("0")
+    assert out[1].units_sold_since == D("5") and out[1].gap == D("0")
+
+
+def test_month_on_hand_reports_touch_and_compare() -> None:
+    periods = [
+        ReportPeriod(product_id=1, grain="month", start=date(2026, 6, 1), end=date(2026, 6, 30), on_hand=D("10")),
+        ReportPeriod(product_id=1, grain="month", start=date(2026, 7, 1), end=date(2026, 7, 31), on_hand=D("10")),
+    ]
+    assert [p.status for p in compute_positions(periods, [])] == ["first_report", "compared"]
 
 
 def test_surplus_and_products_are_independent() -> None:

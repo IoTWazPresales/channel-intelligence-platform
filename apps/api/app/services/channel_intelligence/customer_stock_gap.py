@@ -10,7 +10,11 @@ beside it and flags the difference. Neither number is rewritten::
     gap      = this report's on-hand - expected
 
 A shipment with no customer match stays out. In transit and on order are carried
-beside on-hand and never added into it. The unit gap is shown on every compared row;
+beside on-hand and never added into it.
+
+A Monday-Sunday week with no reported on-hand does not break the chain (N-0111, Warren
+2026-10-16): that week is stored as its own row (status ``no_on_hand``, no on-hand, no gap) and
+the chain restarts at the next reported on-hand (status ``chain_restart``, nothing compared). The unit gap is shown on every compared row;
 a row is highlighted when ``|gap| >= stock_gap_highlight_units`` (tenant setting,
 absolute units). The distributor 10 percent variance is not used here.
 
@@ -20,7 +24,7 @@ Grain: customer x product, summed across the customer's sites for a report perio
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Iterable
 
@@ -33,6 +37,12 @@ from app.models.facts import FactInboundShipment
 from app.services.imports.parsers.customer_sell_through_grain import period_end
 
 ZERO = Decimal("0")
+
+STATUS_FIRST = "first_report"
+STATUS_COMPARED = "compared"
+# N-0111: a Monday-Sunday week with no reported on-hand, and the report the chain restarts at.
+STATUS_NO_ON_HAND = "no_on_hand"
+STATUS_RESTART = "chain_restart"
 
 
 @dataclass
@@ -89,11 +99,30 @@ def _add(a: Decimal | None, b: Any) -> Decimal | None:
     return (a or ZERO) + Decimal(str(b))
 
 
+def _monday(d: date) -> date:
+    return d - timedelta(days=d.weekday())
+
+
+def weeks_without_on_hand(prev_end: date, next_start: date) -> list[date]:
+    """Mondays of the whole Monday-Sunday weeks between two on-hand reports (none when they touch)."""
+    out: list[date] = []
+    week = _monday(prev_end) + timedelta(days=7)
+    stop = _monday(next_start)
+    while week < stop:
+        out.append(week)
+        week += timedelta(days=7)
+    return out
+
+
 def compute_positions(periods: Iterable[ReportPeriod], receipts: Iterable[Receipt]) -> list[Position]:
     """Pure: one position per report period that carries on-hand, in end-date order.
 
     Units sold count when a period ends after the previous report and by this one, so
     a sales-only period between two stock reports still reduces the expected position.
+
+    N-0111: when a whole Monday-Sunday week between two on-hand reports has no on-hand, each such
+    week gets a ``no_on_hand`` position and the later report restarts the chain
+    (``chain_restart``): it is not compared with the report before the gap.
     """
     by_product: dict[int, list[ReportPeriod]] = {}
     for p in periods:
@@ -109,7 +138,36 @@ def compute_positions(periods: Iterable[ReportPeriod], receipts: Iterable[Receip
         prev: ReportPeriod | None = None
         for point in stock_points:
             if prev is None:
-                out.append(Position(period=point, status="first_report"))
+                out.append(Position(period=point, status=STATUS_FIRST))
+                prev = point
+                continue
+            missing = weeks_without_on_hand(prev.end, point.start)
+            if missing:
+                for monday in missing:
+                    sunday = monday + timedelta(days=6)
+                    in_week = [p for p in plist if monday <= p.end <= sunday]
+                    iso = monday.isocalendar()
+                    jobs = [p.import_job_id for p in in_week if p.import_job_id is not None]
+                    week = ReportPeriod(
+                        product_id=product_id,
+                        grain="week",
+                        start=monday,
+                        end=sunday,
+                        units_sold=sum((p.units_sold for p in in_week), ZERO),
+                        period_week=iso[1],
+                        period_year=iso[0],
+                        import_job_id=max(jobs) if jobs else None,
+                    )
+                    out.append(Position(period=week, status=STATUS_NO_ON_HAND))
+                out.append(
+                    Position(
+                        period=point,
+                        status=STATUS_RESTART,
+                        previous_end=prev.end,
+                        previous_on_hand=prev.on_hand,
+                        notes=[f"no on-hand reported for {len(missing)} week(s) from {missing[0].isoformat()}"],
+                    )
+                )
                 prev = point
                 continue
             sold = sum(
@@ -125,7 +183,7 @@ def compute_positions(periods: Iterable[ReportPeriod], receipts: Iterable[Receip
             out.append(
                 Position(
                     period=point,
-                    status="compared",
+                    status=STATUS_COMPARED,
                     previous_end=prev.end,
                     previous_on_hand=prev.on_hand,
                     receipts=landed,
@@ -138,8 +196,17 @@ def compute_positions(periods: Iterable[ReportPeriod], receipts: Iterable[Receip
     return out
 
 
-def gap_reason(gap: Decimal | float | None, in_transit: Decimal | float | None = None) -> str:
+def gap_reason(
+    gap: Decimal | float | None,
+    in_transit: Decimal | float | None = None,
+    *,
+    status: str | None = None,
+) -> str:
     """Plain words for what a gap can mean. Never a verdict."""
+    if status == STATUS_NO_ON_HAND:
+        return "No on-hand reported for this week. The stock chain restarts at the next reported on-hand."
+    if status == STATUS_RESTART:
+        return "The stock chain restarts here: the week before had no on-hand reported. Nothing to compare."
     if gap is None:
         return "First report for this product. Nothing to compare yet."
     g = Decimal(str(gap))
@@ -377,7 +444,7 @@ def list_stock_positions(
                 "on_order_units": num(pos.on_order_units),
                 "status": pos.status,
                 "highlighted": is_highlighted(pos.gap_units, threshold_units),
-                "reason": gap_reason(pos.gap_units, pos.in_transit_units),
+                "reason": gap_reason(pos.gap_units, pos.in_transit_units, status=pos.status),
                 "report_import_job_id": pos.report_import_job_id,
                 "computed_at": pos.computed_at.isoformat() if pos.computed_at else None,
             }

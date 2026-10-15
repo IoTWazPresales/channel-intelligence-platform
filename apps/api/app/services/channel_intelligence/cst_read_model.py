@@ -140,13 +140,18 @@ def compute_entity_metrics(
 
     anchor = as_of or max(o.period_start for o in obs)
     # Count distinct ISO weeks covered by weekly rows + monthly as ~4 weeks each
+    # N-0111: day rows roll up into Monday-Sunday weeks; each such week counts once.
     observed_weeks = 0
+    day_weeks: set[date] = set()
     for o in obs:
         pt = o.period_type.lower()
         if pt.startswith("month"):
             observed_weeks += 4
+        elif pt.startswith("da"):
+            day_weeks.add(o.period_start - timedelta(days=o.period_start.weekday()))
         else:
             observed_weeks += 1
+    observed_weeks += len(day_weeks)
 
     sum4, n4 = sum_weekly_equiv_in_window(obs, as_of=anchor, window_weeks=4)
     sum13, n13 = sum_weekly_equiv_in_window(obs, as_of=anchor, window_weeks=13)

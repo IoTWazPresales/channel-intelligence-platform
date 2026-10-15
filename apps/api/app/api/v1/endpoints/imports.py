@@ -561,6 +561,20 @@ def _truthy_form(value: str | None) -> bool:
     return str(value or "").strip().lower() in ("1", "true", "yes", "on")
 
 
+def _confirmed_year_form(value: str | None) -> int | None:
+    """N-0111: the year the uploader confirmed for week numbers without a year (2000-2099)."""
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        year = int(raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="cst_confirmed_year must be a year such as 2024") from exc
+    if not 2000 <= year <= 2099:
+        raise HTTPException(status_code=400, detail="cst_confirmed_year must be between 2000 and 2099")
+    return year
+
+
 @router.post("/jobs", dependencies=_IMPORT_RUNNER)
 async def create_job(
     source_id: int = Form(...),
@@ -571,10 +585,13 @@ async def create_job(
     mapping_override: str = Form(default=""),
     dsi_workflow_mode: str = Form(default="auto"),
     cst_sales_only: str = Form(default=""),
+    cst_stock_only: str = Form(default=""),
+    cst_confirmed_year: str = Form(default=""),
     db: AsyncSession = Depends(get_db),
     user: dict | None = Depends(get_optional_current_user),
 ):
     run_inline = _wants_inline_import_processing(run_sync)
+    confirmed_year = _confirmed_year_form(cst_confirmed_year)
     source = await db.scalar(
         select(SourceDefinition)
         .options(joinedload(SourceDefinition.import_template))
@@ -639,9 +656,18 @@ async def create_job(
         db.add(job)
 
     # N-0110: units with no on-hand load only when the operator marks the upload sales-only.
-    if tpl.slug == CST_TEMPLATE_SLUG and _truthy_form(cst_sales_only):
+    # N-0111: on-hand with no units only when marked stock-only; week numbers without a year only
+    # with the year the uploader confirmed.
+    if tpl.slug == CST_TEMPLATE_SLUG and (
+        _truthy_form(cst_sales_only) or _truthy_form(cst_stock_only) or confirmed_year is not None
+    ):
         sm = dict(job.staged_metadata or {})
-        sm["cst_sales_only"] = True
+        if _truthy_form(cst_sales_only):
+            sm["cst_sales_only"] = True
+        if _truthy_form(cst_stock_only):
+            sm["cst_stock_only"] = True
+        if confirmed_year is not None:
+            sm["cst_confirmed_year"] = confirmed_year
         job.staged_metadata = to_jsonable(sm)
         db.add(job)
 
@@ -977,18 +1003,59 @@ async def cst_batch_propose(
     }
 
 
+class CstConfirmYearBody(BaseModel):
+    year: int = Field(ge=2000, le=2099)
+
+
+@router.post("/jobs/{job_id}/cst-confirm-year", dependencies=_STEWARD_WRITE)
+def cst_confirm_year(job_id: int, body: CstConfirmYearBody):
+    """N-0111: confirm the year of week numbers that carry none, then parse the job again.
+
+    The job's files load with that year; until it is confirmed nothing from them applies.
+    """
+    from app.services.imports.cst_batch import CST_TEMPLATE_SLUG
+
+    with SessionLocal() as sync_db:
+        job = sync_db.get(ImportJob, int(job_id))
+        if job is None:
+            raise HTTPException(status_code=404, detail="Import job not found")
+        if job.template_slug != CST_TEMPLATE_SLUG:
+            raise HTTPException(status_code=400, detail="Only customer sell-through jobs take a confirmed year")
+        sm = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
+        sm["cst_confirmed_year"] = int(body.year)
+        job.staged_metadata = to_jsonable(sm)
+        sync_db.add(job)
+        sync_db.commit()
+        process_import_job_sync(sync_db, int(job_id))
+        sync_db.commit()
+        job = sync_db.get(ImportJob, int(job_id))
+        meta = job.staged_metadata if job is not None and isinstance(job.staged_metadata, dict) else {}
+        return {
+            "id": int(job_id),
+            "status": job.status if job else None,
+            "stage": job.stage if job else None,
+            "cst_confirmed_year": meta.get("cst_confirmed_year"),
+            "cst_file_periods": meta.get("cst_file_periods"),
+        }
+
+
 @router.post("/cst/batch-jobs", dependencies=_STEWARD_WRITE)
 async def cst_batch_create_jobs(
     source_id: int = Form(...),
     files: list[UploadFile] = File(...),
     cst_sales_only: str = Form(default=""),
+    cst_stock_only: str = Form(default=""),
+    cst_confirmed_year: str = Form(default=""),
     db: AsyncSession = Depends(get_db),
 ):
     """Create CST import jobs from a multi-file upload.
 
     All CST-capable files become **one** job (per-file period + one steward pass).
     Unmappable files return an error outcome and are not attached to a job.
+    N-0111: ``cst_stock_only`` loads on-hand without units; ``cst_confirmed_year`` is the year of
+    week numbers that carry none (nothing with such numbers loads without it).
     """
+    confirmed_year = _confirmed_year_form(cst_confirmed_year)
     from app.services.imports.cst_batch import (
         CST_CAPABLE_GROUP_SIGNATURE,
         CST_TEMPLATE_SLUG,
@@ -1047,6 +1114,8 @@ async def cst_batch_create_jobs(
                     filenames_and_bytes=group_payload,
                     import_mode="validate",
                     sales_only=_truthy_form(cst_sales_only),
+                    stock_only=_truthy_form(cst_stock_only),
+                    confirmed_year=confirmed_year,
                 )
                 created.append(
                     {
@@ -1057,6 +1126,9 @@ async def cst_batch_create_jobs(
                         "filenames": [p.filename for p in group.files],
                         "file_count": len(group_payload),
                         "cst_file_periods": (job.staged_metadata or {}).get("cst_file_periods")
+                        if isinstance(job.staged_metadata, dict)
+                        else None,
+                        "cst_year_required": (job.staged_metadata or {}).get("cst_year_required")
                         if isinstance(job.staged_metadata, dict)
                         else None,
                     }

@@ -513,14 +513,73 @@ NO_ON_HAND_MESSAGE = (
 )
 
 
+NO_UNITS_MESSAGE = (
+    "This file has on-hand and no units sold column. Upload it again marked Stock only to load "
+    "the on-hand without touching sales, or add the customer's units sold column."
+)
+
+
+YEAR_PENDING_APPLY_MESSAGE = (
+    "Not applied: this load has week or month numbers without a year. Confirm the year first."
+)
+
+
+def year_required_message(suggested: int | None) -> str:
+    hint = f" The file name or folder suggests {suggested}." if suggested else ""
+    return (
+        "This file has week or month numbers without a year. Enter the year of the week numbers "
+        f"and tick Year confirmed; nothing from this file loads until then.{hint}"
+    )
+
+
 def job_is_sales_only(job: ImportJob) -> bool:
     """N-0110: the operator marked this upload as sales-only (units, no stock position)."""
     meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
     return bool(meta.get("cst_sales_only"))
 
 
+def job_is_stock_only(job: ImportJob) -> bool:
+    """N-0111: the operator marked this upload as stock-only (on-hand, no units sold)."""
+    meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+    return bool(meta.get("cst_stock_only"))
+
+
+def job_confirmed_year(job: ImportJob) -> int | None:
+    """N-0111: the year the uploader confirmed for week or month numbers without a year."""
+    meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+    try:
+        year = int(meta.get("cst_confirmed_year") or 0)
+    except (TypeError, ValueError):
+        return None
+    return year if 2000 <= year <= 2099 else None
+
+
+def job_year_pending(job: ImportJob) -> bool:
+    """N-0111: the job's files carry week numbers without a year and no year is confirmed yet."""
+    meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+    return bool(meta.get("cst_year_required")) and job_confirmed_year(job) is None
+
+
+def _mark_year_required(job: ImportJob, entries: list[dict[str, Any]]) -> None:
+    meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
+    meta["cst_year_required"] = to_jsonable(entries)
+    job.staged_metadata = to_jsonable(meta)
+
+
+def _job_feed_profile(cfg: CustomerReportConfig | None, job: ImportJob) -> dict[str, Any]:
+    """The customer's feed profile with the tenant default week calendar (N-0111)."""
+    from app.services.imports.parsers.customer_sell_through_grain import with_tenant_week_calendar
+
+    raw = cfg.feed_profile_json if cfg and isinstance(cfg.feed_profile_json, dict) else None
+    return with_tenant_week_calendar(raw, getattr(job, "tenant_id", None))
+
+
 def rows_carry_on_hand(rows: list[dict[str, Any]] | None) -> bool:
     return any(isinstance(r, dict) and r.get("reported_soh") is not None for r in (rows or []))
+
+
+def rows_carry_units(rows: list[dict[str, Any]] | None) -> bool:
+    return any(isinstance(r, dict) and r.get("units_sold") is not None for r in (rows or []))
 
 
 def _period_fields_for(grain: str | None, eff: date, week_calendar: dict[str, Any] | None) -> dict[str, Any]:
@@ -555,6 +614,21 @@ def _ingest_parse_result(
     if result.rows and not rows_carry_on_hand(result.rows) and not job_is_sales_only(job):
         _write_parse_failed(job, NO_ON_HAND_MESSAGE)
         return 1
+    if result.rows and not rows_carry_units(result.rows) and not job_is_stock_only(job):
+        _write_parse_failed(job, NO_UNITS_MESSAGE)
+        return 1
+    from app.services.imports.parsers.customer_sell_through_grain import (
+        current_year_guesses,
+        suggest_year_from_names,
+    )
+
+    # N-0111: week or month numbers without a year wait for the uploader to confirm the year.
+    if current_year_guesses() and job_confirmed_year(job) is None:
+        fname = getattr(job, "file_name", None)
+        suggested = suggest_year_from_names(fname)
+        _mark_year_required(job, [{"filename": fname, "suggested_year": suggested}])
+        _write_parse_failed(job, year_required_message(suggested))
+        return 1
 
     db.execute(
         delete(ImportCustomerSellthroughStagingLine).where(
@@ -572,7 +646,7 @@ def _ingest_parse_result(
     prod_idx = _load_product_resolution_index(db)
     cfg = db.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer_id))
     vat_basis = feed_profile_vat_basis(cfg)
-    feed_profile = cfg.feed_profile_json if cfg and isinstance(cfg.feed_profile_json, dict) else None
+    feed_profile = _job_feed_profile(cfg, job)
     from app.services.imports.parsers.customer_sell_through_grain import (
         stamp_period_grain,
         week_calendar_from_feed_profile,
@@ -877,15 +951,20 @@ def _handle_flat(
     storage = get_storage_backend()
     parse_mapping, _ = _build_parse_mapping(db, job, mapping, template)
     cfg = db.scalar(select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer_id))
-    feed_profile = cfg.feed_profile_json if cfg and isinstance(cfg.feed_profile_json, dict) else None
+    feed_profile = _job_feed_profile(cfg, job)
     vat_basis = feed_profile_vat_basis(cfg)
     from app.services.imports.parsers.customer_sell_through_grain import (
         stamp_period_grain,
+        suggest_year_from_names,
         week_calendar_from_feed_profile,
+        year_guess_log,
     )
 
     week_calendar = week_calendar_from_feed_profile(feed_profile)
     sales_only = job_is_sales_only(job)
+    stock_only = job_is_stock_only(job)
+    year_confirmed = job_confirmed_year(job) is not None
+    year_required: list[dict[str, Any]] = []
 
     # Job-level steward declare (fallback when a file has no inference).
     meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
@@ -933,13 +1012,14 @@ def _handle_flat(
             continue
 
         file_bytes = storage.read(raw.storage_key)
-        result = parse_flat_report(
-            file_bytes,
-            fname,
-            parse_mapping,
-            int(job.id),
-            feed_profile=feed_profile,
-        )
+        with year_guess_log() as guessed:
+            result = parse_flat_report(
+                file_bytes,
+                fname,
+                parse_mapping,
+                int(job.id),
+                feed_profile=feed_profile,
+            )
         if result.error:
             parse_errors.append(f"{fname}: {result.error}")
             file_period_reports.append(
@@ -963,6 +1043,39 @@ def _handle_flat(
                     "period_start_date": None,
                     "flags": ["no_on_hand"],
                     "error": NO_ON_HAND_MESSAGE,
+                }
+            )
+            continue
+
+        # N-0111: on-hand without units loads only as stock-only, and never wipes sales.
+        if result.rows and not rows_carry_units(result.rows) and not stock_only:
+            parse_errors.append(f"{fname}: {NO_UNITS_MESSAGE}")
+            file_period_reports.append(
+                {
+                    "filename": fname,
+                    "excluded": False,
+                    "period_start_date": None,
+                    "flags": ["no_units"],
+                    "error": NO_UNITS_MESSAGE,
+                }
+            )
+            continue
+
+        # N-0111: week or month numbers without a year wait for the uploader to confirm the year.
+        # A steward period stamp for the file states the full date and counts as confirmed.
+        if guessed and not year_confirmed and not period_stamps.get(fname) and job_steward_period is None:
+            suggested = suggest_year_from_names(fname)
+            message = year_required_message(suggested)
+            year_required.append({"filename": fname, "suggested_year": suggested})
+            parse_errors.append(f"{fname}: {message}")
+            file_period_reports.append(
+                {
+                    "filename": fname,
+                    "excluded": False,
+                    "period_start_date": None,
+                    "flags": ["year_required"],
+                    "error": message,
+                    "suggested_year": suggested,
                 }
             )
             continue
@@ -1117,6 +1230,8 @@ def _handle_flat(
             )
             periods_marked.add(effective_period)
 
+    if year_required:
+        _mark_year_required(job, year_required)
     if parse_errors and total_rows == 0:
         _write_parse_failed(job, "; ".join(parse_errors))
         return 1
@@ -1313,10 +1428,14 @@ def process_customer_sell_through(
         _write_parser_not_implemented(job, structure_type, msg)
         return 1
 
-    from app.services.imports.parsers.customer_sell_through_grain import received_on_date
+    from app.services.imports.parsers.customer_sell_through_grain import (
+        confirmed_year,
+        received_on_date,
+        year_guess_log,
+    )
 
     try:
-        with received_on_date(job_received_on(job)):
+        with received_on_date(job_received_on(job)), confirmed_year(job_confirmed_year(job)), year_guess_log():
             return handler(db, job, df, mapping, template, on_progress=on_progress)
     except NotImplementedError as exc:
         _write_parser_not_implemented(job, structure_type, str(exc))

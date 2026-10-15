@@ -5,7 +5,8 @@ A row is stored at the grain the file states:
 - a sale date -> ``day`` (the date itself, never moved to a Monday);
 - a week number and year -> ``week``; ``week_start_date`` only when the customer's
   week calendar is known (an ISO ``YYYY-Www`` label, a date the file gives as the week
-  start, or ``week_calendar`` in the customer's feed profile);
+  start, ``week_calendar`` in the customer's feed profile, or the tenant default:
+  Monday-Sunday, N-0111);
 - a month -> ``month``.
 
 ``period_start_date`` stays the sort and source-key date: the day, the known week
@@ -43,6 +44,8 @@ def week_calendar_from_feed_profile(feed_profile: dict[str, Any] | None) -> dict
     """The customer's declared week calendar, or None when it is not known.
 
     ``{"week_calendar": "iso"}`` or ``{"week_calendar": "fiscal", "fiscal_year_start_month": 3}``.
+    ``{"week_calendar": "none"}`` turns the tenant default off for one customer.
+    Use ``with_tenant_week_calendar`` first so the tenant default applies.
     """
     if not isinstance(feed_profile, dict):
         return None
@@ -57,6 +60,22 @@ def week_calendar_from_feed_profile(feed_profile: dict[str, Any] | None) -> dict
         if 1 <= month <= 12:
             return {"kind": "fiscal", "fiscal_year_start_month": month}
     return None
+
+
+def with_tenant_week_calendar(feed_profile: dict[str, Any] | None, tenant_id: str | None) -> dict[str, Any]:
+    """The feed profile with the tenant default week calendar filled in when it names none (N-0111).
+
+    Every customer reports Monday-Sunday weeks (Warren 2026-10-16), so the default is ``iso``
+    (ISO weeks run Monday to Sunday). A customer's own ``week_calendar`` always wins.
+    """
+    out = dict(feed_profile) if isinstance(feed_profile, dict) else {}
+    if str(out.get("week_calendar") or "").strip():
+        return out
+    from app.services.commercial_tenant_profile import week_calendar as tenant_week_calendar
+
+    if tenant_week_calendar((tenant_id or "default").strip() or "default") == "monday_sunday":
+        out["week_calendar"] = "iso"
+    return out
 
 
 def _iso_monday(year: int, week: int) -> date | None:
@@ -85,8 +104,55 @@ def received_on_date(day: date | None) -> Iterator[None]:
         _RECEIVED_ON.reset(token)
 
 
+# N-0111: a year is never guessed. The uploader confirms the year of a file that carries only
+# week (or month) numbers; until then every year the parser had to fill in is logged here and
+# the load does not apply (Warren 2026-10-16).
+_CONFIRMED_YEAR: ContextVar[int | None] = ContextVar("cst_confirmed_year", default=None)
+_YEAR_GUESSES: ContextVar[list[str] | None] = ContextVar("cst_year_guesses", default=None)
+
+
+@contextmanager
+def confirmed_year(year: int | None) -> Iterator[None]:
+    """Parse with ``year`` as the uploader-confirmed year for week or month numbers."""
+    token = _CONFIRMED_YEAR.set(int(year) if year else None)
+    try:
+        yield
+    finally:
+        _CONFIRMED_YEAR.reset(token)
+
+
+@contextmanager
+def year_guess_log() -> Iterator[list[str]]:
+    """Collect every label whose year the parser had to fill in without a confirmed year."""
+    log: list[str] = []
+    token = _YEAR_GUESSES.set(log)
+    try:
+        yield log
+    finally:
+        _YEAR_GUESSES.reset(token)
+
+
+def current_year_guesses() -> list[str]:
+    """Labels logged in the innermost ``year_guess_log`` (empty outside one)."""
+    return list(_YEAR_GUESSES.get() or [])
+
+
+def _note_guess(label: str) -> None:
+    log = _YEAR_GUESSES.get()
+    if log is not None:
+        log.append(label)
+
+
 def year_for_week(week: int, *, ref: date | None = None) -> int:
-    """Year of the latest ISO week ``week`` that started on or before the receive date."""
+    """The confirmed year; otherwise the latest ISO week ``week`` started by the receive date.
+
+    The fallback is a placeholder that is logged as a guess: a load with a guessed year
+    does not apply (N-0111).
+    """
+    year = _CONFIRMED_YEAR.get()
+    if year:
+        return year
+    _note_guess(f"week {int(week)}")
     ref = ref or received_on()
     for year in (ref.year, ref.year - 1, ref.year - 2):
         start = _iso_monday(year, week)
@@ -96,9 +162,37 @@ def year_for_week(week: int, *, ref: date | None = None) -> int:
 
 
 def year_for_month(month: int, *, ref: date | None = None) -> int:
-    """Year of the latest month ``month`` that started on or before the receive date."""
+    """The confirmed year; otherwise the latest month ``month`` started by the receive date (logged)."""
+    year = _CONFIRMED_YEAR.get()
+    if year:
+        return year
+    _note_guess(f"month {int(month)}")
     ref = ref or received_on()
     return ref.year if int(month) <= ref.month else ref.year - 1
+
+
+def year_for_fiscal_week(week: int) -> int | None:
+    """The confirmed year for a fiscal week number, or None after logging that it is unknown."""
+    year = _CONFIRMED_YEAR.get()
+    if year:
+        return year
+    _note_guess(f"fiscal week {int(week)}")
+    return None
+
+
+_YEAR_IN_NAME = re.compile(r"(?<!\d)(20\d{2})(?!\d)")
+
+
+def suggest_year_from_names(*names: str | None) -> int | None:
+    """The one year (2000-2099) the file name or its folder states, for the uploader to confirm.
+
+    A name with a full date (``20240318``) is not read as a year; two different years give None.
+    """
+    years: set[int] = set()
+    for name in names:
+        for m in _YEAR_IN_NAME.finditer(str(name or "")):
+            years.add(int(m.group(1)))
+    return years.pop() if len(years) == 1 else None
 
 
 def _fiscal_week_start(year: int, week: int, fy_start_month: int) -> date | None:
@@ -235,8 +329,8 @@ def fields_from_token(
         return week_fields(int(m.group(2)), int(m.group(1)), week_calendar=week_calendar)
     m = _WEEK_ONLY.match(text)
     if m:
-        year = year_hint or year_for_week(int(m.group(1)))
-        if warnings is not None and year_hint is None:
+        year = _CONFIRMED_YEAR.get() or year_hint or year_for_week(int(m.group(1)))
+        if warnings is not None and year_hint is None and not _CONFIRMED_YEAR.get():
             warnings.append(f"Week {text!r} has no year; {year} was used")
         return week_fields(year, int(m.group(1)), week_calendar=week_calendar)
     m = _MONTH.match(text)
@@ -244,7 +338,7 @@ def fields_from_token(
         month = _MONTH_MAP.get(m.group(1)[:3].lower())
         year_raw = m.group(2)
         if month:
-            year = int(year_raw) if year_raw else (year_hint or year_for_month(month))
+            year = int(year_raw) if year_raw else (_CONFIRMED_YEAR.get() or year_hint or year_for_month(month))
             if year < 100:
                 year += 2000
             return month_fields(year, month)

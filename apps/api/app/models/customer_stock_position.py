@@ -29,7 +29,8 @@ class CustomerStockPosition(Base):
     report_import_job_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("import_job.id", ondelete="SET NULL"), nullable=True
     )
-    reported_on_hand: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False)
+    # N-0111: NULL on a week with no reported on-hand (status no_on_hand).
+    reported_on_hand: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
     units_sold: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False, default=0)
     in_transit_units: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
     on_order_units: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)

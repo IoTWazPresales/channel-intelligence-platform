@@ -159,7 +159,13 @@ TENANT_PROFILE_OVERRIDE_KEYS: tuple[str, ...] = (
     "reporting_cadence",
     "woc_min_velocity_days",
     "stock_gap_highlight_units",
+    "week_calendar",
 )
+
+# N-0111: every customer and distributor reports Monday-Sunday weeks (Warren 2026-10-16).
+# The tenant default week calendar; a customer's feed profile ``week_calendar`` still overrides it.
+# ``none`` means no calendar is known (a week keeps its number and year, no start date).
+DEFAULT_WEEK_CALENDAR = "monday_sunday"
 
 # N-0110: customer stock gap highlight, absolute units (Warren 2026-10-12). Editable.
 DEFAULT_STOCK_GAP_HIGHLIGHT_UNITS = 1.0
@@ -178,6 +184,7 @@ _TENANT_PROFILE_VALID_VALUES: dict[str, frozenset[str]] = {
     "reservation_source": frozenset({"derived_from_profit", "explicit_column", "hybrid"}),
     "pm_attribution_mode": frozenset({"business_line", "person_field", "none"}),
     "line_identifier_preference": frozenset({"sku", "sales_model", "both"}),
+    "week_calendar": frozenset({"monday_sunday", "none"}),
     "reporting_cadence": frozenset(
         {
             "weekly_monday",
@@ -788,6 +795,7 @@ def profile_snapshot(tenant_id: str = "default") -> dict[str, object]:
         "reporting_cadence": reporting_cadence(tenant_id),
         "woc_min_velocity_days": woc_min_velocity_days(tenant_id),
         "stock_gap_highlight_units": stock_gap_highlight_units(tenant_id),
+        "week_calendar": week_calendar(tenant_id),
         "reporting_timezone": REPORTING_TIMEZONE,
     }
 
@@ -803,6 +811,15 @@ def stock_gap_highlight_units(tenant_id: str = "default") -> float:
     if not (0 < units <= STOCK_GAP_HIGHLIGHT_UNITS_MAX):
         return DEFAULT_STOCK_GAP_HIGHLIGHT_UNITS
     return units
+
+
+def week_calendar(tenant_id: str = "default") -> str:
+    """Tenant default week calendar (N-0111): ``monday_sunday`` unless set to ``none``."""
+    overrides = load_tenant_profile_overrides(tenant_id)
+    raw = str(overrides.get("week_calendar") or DEFAULT_WEEK_CALENDAR).strip()
+    if raw not in _TENANT_PROFILE_VALID_VALUES["week_calendar"]:
+        return DEFAULT_WEEK_CALENDAR
+    return raw
 
 
 def line_identifier_preference(tenant_id: str = "default") -> str:
