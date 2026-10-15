@@ -42,7 +42,8 @@ export type StockGapRow = {
   gap_units: number | null;
   in_transit_units: number | null;
   on_order_units: number | null;
-  status: 'compared' | 'first_report';
+  /** N-0111: no_on_hand = a Monday-Sunday week with no reported on-hand; chain_restart = the chain restarts here. */
+  status: 'compared' | 'first_report' | 'no_on_hand' | 'chain_restart';
   highlighted: boolean;
   reason: string;
   /** Why the gap differs. Every cause but `unexplained` is a data gap in CIP, not the customer's stock. */
@@ -66,6 +67,8 @@ export type StockGapResponse = {
     compared: number;
     highlighted: number;
     first_report: number;
+    no_on_hand?: number;
+    chain_restart?: number;
     highlighted_by_cause?: Partial<Record<GapCause, number>>;
   };
   rows: StockGapRow[];
@@ -78,6 +81,8 @@ export function isDataGap(r: Pick<StockGapRow, 'gap_cause'>): boolean {
 
 export function flagLabel(r: Pick<StockGapRow, 'status' | 'highlighted' | 'gap_cause'>): string {
   if (r.status === 'first_report') return 'First report';
+  if (r.status === 'no_on_hand') return 'No on-hand reported';
+  if (r.status === 'chain_restart') return 'Chain restarts';
   if (!r.highlighted) return '';
   return isDataGap(r) ? 'Data gap' : 'Stock difference';
 }
@@ -139,7 +144,7 @@ export function CstStockGapSection() {
     () => [
       {
         headerName: 'Flag',
-        width: 130,
+        width: 170,
         valueGetter: (p) => (p.data ? flagLabel(p.data) : ''),
       },
       { field: 'customer_name', headerName: 'Customer', flex: 1, minWidth: 160 },
@@ -275,6 +280,13 @@ export function CstStockGapSection() {
         <Typography variant="body2" data-testid="cst-stock-gap-counts">
           {counts.compared} compared · {counts.highlighted} at or over {units(data?.threshold_units)} units ·{' '}
           {counts.first_report} first report{counts.first_report === 1 ? '' : 's'} (nothing to compare yet)
+          {counts.no_on_hand ? (
+            <>
+              {' '}
+              · {counts.no_on_hand} week{counts.no_on_hand === 1 ? '' : 's'} with no on-hand reported (the chain
+              restarts at the next reported on-hand)
+            </>
+          ) : null}
         </Typography>
       ) : null}
       {counts?.highlighted_by_cause ? (

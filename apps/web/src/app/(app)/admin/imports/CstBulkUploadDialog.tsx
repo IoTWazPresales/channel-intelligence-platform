@@ -27,7 +27,13 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { apiPostFormData, safeDisplayError } from '@/lib/api';
 
-import { CstSalesOnlyToggle } from './CstSalesOnlyToggle';
+import {
+  appendCstUploadOptions,
+  CstUploadOptionsFields,
+  EMPTY_CST_UPLOAD_OPTIONS,
+  suggestYearFromNames,
+  type CstUploadOptions,
+} from './CstUploadOptions';
 
 const ACCEPT =
   '.csv,.xlsx,.xlsm,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.ms-excel,text/csv';
@@ -43,6 +49,8 @@ type BatchGroupPreview = {
     sheet_count: number;
     unmappable: boolean;
     unmappable_reason?: string | null;
+    /** N-0111: the year the file name states, to pre-fill Year of the week numbers. */
+    suggested_year?: number | null;
   }[];
 };
 
@@ -95,11 +103,16 @@ export function CstBulkUploadDialog({
   const [files, setFiles] = useState<File[]>([]);
   const [preview, setPreview] = useState<BatchProposeResponse | null>(null);
   const [results, setResults] = useState<BatchJobsResponse | null>(null);
-  const [salesOnly, setSalesOnly] = useState(false);
+  const [options, setOptions] = useState<CstUploadOptions>(EMPTY_CST_UPLOAD_OPTIONS);
 
   const addFiles = useCallback((list: FileList | File[] | null) => {
     if (!list) return;
     const incoming = Array.from(list).filter((f) => extOk(f.name));
+    // N-0111: pre-fill the year from the file names or their folder (never confirmed for the uploader).
+    const suggested = suggestYearFromNames(incoming.flatMap((f) => [f.name, f.webkitRelativePath ?? '']));
+    if (suggested != null) {
+      setOptions((o) => (o.year === '' ? { ...o, year: String(suggested), yearConfirmed: false } : o));
+    }
     setFiles((prev) => {
       const names = new Set(prev.map((f) => f.name.toLowerCase()));
       const next = [...prev];
@@ -133,7 +146,15 @@ export function CstBulkUploadDialog({
       }
       return apiPostFormData<BatchProposeResponse>('/api/v1/imports/cst/batch-propose', fd);
     },
-    onSuccess: (data) => setPreview(data),
+    onSuccess: (data) => {
+      setPreview(data);
+      const suggested = suggestYearFromNames(
+        data.groups.flatMap((g) => g.files.map((f) => (f.suggested_year != null ? String(f.suggested_year) : '')))
+      );
+      if (suggested != null) {
+        setOptions((o) => (o.year === '' ? { ...o, year: String(suggested), yearConfirmed: false } : o));
+      }
+    },
   });
 
   const upload = useMutation({
@@ -144,7 +165,7 @@ export function CstBulkUploadDialog({
       for (const file of files) {
         fd.append('files', file);
       }
-      if (salesOnly) fd.append('cst_sales_only', 'true');
+      appendCstUploadOptions(fd, options);
       return apiPostFormData<BatchJobsResponse>('/api/v1/imports/cst/batch-jobs', fd);
     },
     onSuccess: (data) => {
@@ -296,11 +317,11 @@ export function CstBulkUploadDialog({
               })}
             </Stack>
           ) : null}
-          <CstSalesOnlyToggle
-            checked={salesOnly}
-            onChange={setSalesOnly}
+          <CstUploadOptionsFields
+            value={options}
+            onChange={setOptions}
             disabled={upload.isPending}
-            testId="cst-bulk-sales-only"
+            testIdPrefix="cst-bulk"
           />
           {upload.isPending ? <LinearProgress /> : null}
           {upload.isError ? <Alert severity="error">{safeDisplayError(upload.error)}</Alert> : null}

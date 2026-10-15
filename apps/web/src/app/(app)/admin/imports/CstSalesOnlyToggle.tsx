@@ -29,8 +29,8 @@ export function CstSalesOnlyToggle({ checked, onChange, disabled, testId = 'cst-
         label="Sales-only file (units, no on-hand)"
       />
       <FormHelperText id={helpId} sx={{ mt: -0.5, ml: 4 }}>
-        A file without the customer&apos;s on-hand column is refused unless this is ticked. Sales-only
-        units count toward the expected stock position, but the file is not a stock report.
+        A file without the customer&apos;s on-hand column is refused unless this is ticked. Its units replace
+        only units; on-hand already loaded for those weeks stays.
       </FormHelperText>
     </Stack>
   );

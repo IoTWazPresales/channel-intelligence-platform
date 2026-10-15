@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderWithProviders } from '@/test-utils/renderWithProviders';
 
-import { CstStockGapSection, formatGap, periodLabel, type StockGapResponse } from './CstStockGapSection';
+import { CstStockGapSection, flagLabel, formatGap, periodLabel, type StockGapResponse } from './CstStockGapSection';
 
 type GridProps = {
   rowData: Array<Record<string, unknown>>;
@@ -237,6 +237,11 @@ describe('CstStockGapSection', () => {
 });
 
 describe('stock gap labels', () => {
+  it('names a week with no on-hand and the report the chain restarts at (N-0111)', () => {
+    expect(flagLabel({ status: 'no_on_hand', highlighted: false, gap_cause: null })).toBe('No on-hand reported');
+    expect(flagLabel({ status: 'chain_restart', highlighted: false, gap_cause: null })).toBe('Chain restarts');
+  });
+
   it('formats signed gaps', () => {
     expect(formatGap(null)).toBe('—');
     expect(formatGap(0)).toBe('0');
