@@ -77,6 +77,18 @@ def _scope(read, edit, role):
         request_role.reset(tokens[2])
 
 
+def _applied(rev: str, target: str) -> bool:
+    """N-0096: cip_test moves on with every migration; these tests need ``target`` applied, not to be
+    the head. True when ``target`` is ``rev`` or one of its ancestors."""
+    from pathlib import Path
+
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    script = ScriptDirectory.from_config(Config(str(Path(__file__).resolve().parents[1] / "alembic.ini")))
+    return target in {r.revision for r in script.walk_revisions(base="base", head=rev)}
+
+
 @pytest.fixture()
 def lineage():
     from app.core.config import get_settings
@@ -97,7 +109,7 @@ def lineage():
     conn.rollback()
     tx = conn.begin()
     try:
-        assert rev in ("20261009_0026", "20261009_0027"), f"cip_test must be at 0026 or 0027, is {rev}"
+        assert _applied(rev, "20261009_0026"), f"cip_test must have 0026 applied, is at {rev}"
         tag = uuid.uuid4().hex[:8]
         lines = {"A": f"N0065L-A-{tag}", "B": f"N0065L-B-{tag}"}
         for t in ("dim_product", *TABLES):
@@ -363,7 +375,7 @@ INDEX = "ix_shipment_ev_obs_identity_latest"
 
 def _require_0027(conn) -> None:
     rev = conn.execute(text("select version_num from alembic_version")).scalar_one()
-    assert rev == "20261009_0027", f"cip_test must be at 0027 for the round-5 tests, is {rev}"
+    assert _applied(rev, "20261009_0027"), f"cip_test must have 0027 applied for the round-5 tests, is at {rev}"
 
 
 @pytest.fixture()

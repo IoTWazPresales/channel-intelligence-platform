@@ -9,6 +9,9 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 from sqlalchemy import create_engine, select, text
+from sqlalchemy.exc import OperationalError
+
+pytestmark = pytest.mark.integration
 
 BULK_SMOKE_DB = os.environ.get("CIP_BULK_SMOKE_DATABASE", "cip_bulk_smoke")
 BULK_SMOKE_URL_SYNC = f"postgresql+psycopg://cip:cip@127.0.0.1:5432/{BULK_SMOKE_DB}"
@@ -117,49 +120,56 @@ def _spec_dump_xlsx() -> bytes:
 
 @pytest.fixture(scope="module")
 def bulk_smoke_env():
-    """Point both sync URLs at cip_bulk_smoke for the module."""
+    """Point both sync URLs at cip_bulk_smoke for the module, then put them back.
+
+    N-0096: the clone is optional. When it is absent the module is skipped, with the reason logged,
+    BEFORE the environment is touched; the old fixture rewrote os.environ for good and every later
+    DB test then failed against a database that did not exist.
+    """
     _assert_not_cip(BULK_SMOKE_URL_SYNC)
     _assert_not_cip(BULK_SMOKE_URL_ASYNC)
 
-    os.environ["DATABASE_URL"] = BULK_SMOKE_URL_ASYNC
-    os.environ["DATABASE_URL_SYNC"] = BULK_SMOKE_URL_SYNC
-    os.environ["DATABASE_URL_SYNC_MIGRATE"] = BULK_SMOKE_URL_SYNC
+    try:
+        with create_engine(BULK_SMOKE_URL_SYNC).connect() as conn:
+            db = conn.execute(text("SELECT current_database()")).scalar_one()
+            assert db == BULK_SMOKE_DB, db
+            rev = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
+            col = conn.execute(
+                text(
+                    """
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'commercial_lineup_case' AND column_name = 'superseded_by_case_id'
+                    """
+                )
+            ).first()
+    except OperationalError as exc:
+        pytest.skip(
+            f"SKIPPED (integration): disposable clone {BULK_SMOKE_DB} does not exist ({type(exc).__name__}); "
+            "create it with tests/_setup_bulk_smoke_db.py to run this test"
+        )
+    expected_tip = _alembic_script_head()
+    if rev != expected_tip:
+        pytest.skip(
+            f"{BULK_SMOKE_DB} alembic {rev} != script head {expected_tip}; "
+            "migrate the disposable smoke DB (never cip) before this integration test"
+        )
+    assert col is not None, "superseded_by_case_id missing"
 
     from app.core.config import get_settings
 
+    patch_env = pytest.MonkeyPatch()
+    patch_env.setenv("DATABASE_URL", BULK_SMOKE_URL_ASYNC)
+    patch_env.setenv("DATABASE_URL_SYNC", BULK_SMOKE_URL_SYNC)
+    patch_env.setenv("DATABASE_URL_SYNC_MIGRATE", BULK_SMOKE_URL_SYNC)
     get_settings.cache_clear()
-
-    settings = get_settings()
-    resolved_sync = settings.database_url_sync
-    resolved_migrate = settings.database_url_sync_migrate or settings.database_url_sync
-    print(f"resolved DATABASE_URL_SYNC={resolved_sync}")
-    print(f"resolved DATABASE_URL_SYNC_MIGRATE={resolved_migrate}")
-    _assert_not_cip(resolved_sync)
-    _assert_not_cip(resolved_migrate)
-
-    with create_engine(BULK_SMOKE_URL_SYNC).connect() as conn:
-        db = conn.execute(text("SELECT current_database()")).scalar_one()
-        assert db == BULK_SMOKE_DB, db
-        rev = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
-        expected_tip = _alembic_script_head()
-        if rev != expected_tip:
-            pytest.skip(
-                f"{BULK_SMOKE_DB} alembic {rev} != script head {expected_tip}; "
-                "migrate the disposable smoke DB (never cip) before this integration test"
-            )
-        col = conn.execute(
-            text(
-                """
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name = 'commercial_lineup_case' AND column_name = 'superseded_by_case_id'
-                """
-            )
-        ).first()
-        assert col is not None, "superseded_by_case_id missing"
-
-    yield
-
-    get_settings.cache_clear()
+    try:
+        settings = get_settings()
+        _assert_not_cip(settings.database_url_sync)
+        _assert_not_cip(settings.database_url_sync_migrate or settings.database_url_sync)
+        yield
+    finally:
+        patch_env.undo()
+        get_settings.cache_clear()
 
 
 def _clear_bulk_backfill_cases() -> None:

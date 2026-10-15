@@ -36,7 +36,9 @@ def carry_session():
     print("resolved current targets:", name, migrate_name)
     if name == "cip" or migrate_name == "cip":
         pytest.skip("refusing cip — point BOTH URLs at a disposable DB")
-    engine = create_engine(sync, pool_pre_ping=True)
+    from app.db.sync_url import sqlalchemy_sync_engine_url
+
+    engine = create_engine(sqlalchemy_sync_engine_url(sync), pool_pre_ping=True)
     Session = sessionmaker(bind=engine, autoflush=False, autocommit=False)
     with Session() as db:
         dbn = db.execute(text("SELECT current_database()")).scalar()

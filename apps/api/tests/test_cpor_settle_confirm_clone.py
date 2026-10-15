@@ -4,7 +4,6 @@ Exercises preview (settlement consolidation) → readiness → FX gate → trans
 """
 from __future__ import annotations
 
-import os
 import uuid
 from datetime import date
 from decimal import Decimal
@@ -13,9 +12,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select, text
 
-SETTLE_SMOKE_DB = os.environ.get("CIP_SETTLE_SMOKE_DATABASE", "cip_ns4_settle_clone")
-SETTLE_SMOKE_URL_SYNC = f"postgresql+psycopg://cip:cip@127.0.0.1:5432/{SETTLE_SMOKE_DB}"
-SETTLE_SMOKE_URL_ASYNC = f"postgresql+asyncpg://cip:cip@127.0.0.1:5432/{SETTLE_SMOKE_DB}"
+# N-0096: this ran on a named disposable clone (cip_ns4_settle_clone) that no longer exists, and its
+# fixture rewrote os.environ without restoring it, so every later DB test failed. It now runs on the
+# database the suite points at (cip_test), seeds its own two ended cases and deletes them again.
+# It never runs on cip.
 
 
 def _assert_not_cip(url: str) -> None:
@@ -23,45 +23,21 @@ def _assert_not_cip(url: str) -> None:
     assert db_name != "cip", f"Refusing writes against cip (url={url})"
 
 
-def _alembic_script_head() -> str:
-    from alembic.config import Config
-    from alembic.script import ScriptDirectory
+def _settle_url_sync() -> str:
+    from app.core.config import get_settings
+    from app.db.sync_url import sqlalchemy_sync_engine_url
 
-    heads = set(ScriptDirectory.from_config(Config("alembic.ini")).get_heads())
-    assert len(heads) == 1, f"expected single alembic head, got {sorted(heads)}"
-    return next(iter(heads))
+    return sqlalchemy_sync_engine_url(get_settings().database_url_sync)
 
 
 @pytest.fixture(scope="module")
 def settle_smoke_env():
-    _assert_not_cip(SETTLE_SMOKE_URL_SYNC)
-    _assert_not_cip(SETTLE_SMOKE_URL_ASYNC)
-
-    os.environ["DATABASE_URL"] = SETTLE_SMOKE_URL_ASYNC
-    os.environ["DATABASE_URL_SYNC"] = SETTLE_SMOKE_URL_SYNC
-    os.environ["DATABASE_URL_SYNC_MIGRATE"] = SETTLE_SMOKE_URL_SYNC
-
-    from app.core.config import get_settings
-
-    get_settings.cache_clear()
-    settings = get_settings()
-    resolved_sync = settings.database_url_sync
-    resolved_migrate = settings.database_url_sync_migrate or settings.database_url_sync
-    print(f"resolved DATABASE_URL_SYNC={resolved_sync}")
-    print(f"resolved DATABASE_URL_SYNC_MIGRATE={resolved_migrate}")
-    _assert_not_cip(resolved_sync)
-    _assert_not_cip(resolved_migrate)
-
-    with create_engine(SETTLE_SMOKE_URL_SYNC).connect() as conn:
+    url = _settle_url_sync()
+    _assert_not_cip(url)
+    with create_engine(url).connect() as conn:
         db = conn.execute(text("SELECT current_database()")).scalar_one()
-        assert db == SETTLE_SMOKE_DB, db
-        rev = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
-        expected_tip = _alembic_script_head()
-        if rev != expected_tip:
-            pytest.skip(
-                f"{SETTLE_SMOKE_DB} alembic {rev} != script head {expected_tip}; "
-                f"clone and migrate disposable DB before this test"
-            )
+        if db != "cip_test":
+            pytest.skip(f"settle confirm test runs on cip_test only (database is {db})")
         fx_col = conn.execute(
             text(
                 """
@@ -70,11 +46,11 @@ def settle_smoke_env():
                 """
             )
         ).first()
-        assert fx_col is not None, "fx_mode column missing — migrate disposable clone first"
-
+        if fx_col is None:
+            pytest.skip("cpor_case.fx_mode missing: cip_test is behind the migrations")
+        if conn.execute(text("SELECT 1 FROM dim_customer LIMIT 1")).first() is None:
+            pytest.skip("cip_test has no dim_customer row to hang a case on")
     yield
-
-    get_settings.cache_clear()
 
 
 def _unique_code(prefix: str) -> str:
@@ -110,7 +86,7 @@ def _insert_ended_case(*, fx_mode: str | None, roe: Decimal | None) -> int:
 
 
 def _count_settled() -> int:
-    with create_engine(SETTLE_SMOKE_URL_SYNC).connect() as conn:
+    with create_engine(_settle_url_sync()).connect() as conn:
         return int(
             conn.execute(text("SELECT count(*) FROM cpor_case WHERE status = 'settled'")).scalar_one()
         )
