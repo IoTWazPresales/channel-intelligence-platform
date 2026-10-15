@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2381
-  log_sha256: 847d1c84fa570be5e4c155270d5e6bf6dac500a17a7edc4bedf96d1970f52eb9
+  snapshot_revision: 2394
+  log_sha256: 02f2d1c8c775cec463d55ddf23ec76592db03855bb8e4a2fe839024b97b2cee3
   acceptance_policy:
     milestone: operator
     root: operator
@@ -11724,8 +11724,8 @@ nodes:
     class: feature
     origin: operator
     status: in_progress
-    stage: implement
-    revision: 5
+    stage: verify
+    revision: 18
     lease: null
     depends_on: []
     facets:
@@ -11747,23 +11747,48 @@ nodes:
     quality:
       testing:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261015/n0096/N0096_PROOF.md
+          summary: 'Full API pytest on cip_test 2977 passed, 21 skipped, 0 failed from a fresh run; full web vitest 860 passed,
+            0 failed (183 files in 4 batches: 248+202+176+234; vitest 2.1.9, forks pool, 2 workers); web'
+        rationale: 'Full API pytest on cip_test 2977 passed, 21 skipped, 0 failed from a fresh run; full web vitest 860 passed,
+          0 failed (183 files in 4 batches: 248+202+176+234; vitest 2.1.9, forks pool, 2 workers); web tsc exit 0; eslint
+          0 errors on changed files.'
+        pass_run: RUN-20261015-N0096-IMPL
+        pass_actor: gov-001
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261015/n0096/N0096_PROOF.md
+          summary: Every skip carries its reason in the pytest output; the integration marker is registered.
+        rationale: Every skip carries its reason in the pytest output; the integration marker is registered.
+        pass_run: RUN-20261015-N0096-IMPL
+        pass_actor: gov-001
+    verification:
+      behavioral:
+        state: pass
+        pass_run: RUN-20261015-N0096-VER
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261015/n0096/N0096_PROOF.md
+        path: null
+      referent:
+        state: pass
+        pass_run: RUN-20261015-N0096-VER
+        pass_actor: gov-001
+        evidence: .eif/audit/PROGRAMME_20261015/n0096/N0096_PROOF.md
+        path: apps/api/tests/test_cpor_settle_confirm_clone.py
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'N-0096 IN PROGRESS, NOT CLOSED. API full pytest on cip_test 2977 passed, 21 skipped, 0 failed. Web full vitest:
-      NOT COMPLETE (run 1: 852 passed, 8 failed, all 8 stale tests since fixed; the 3 fixed files re-ran 47 passed; the final
-      full run was stopped by memory pressure and has not been repeated). Quality and verification not recorded until a full
-      web run is green.'
+    stage_note: 'VERIFIED_WITH_LIMITATIONS. Self-verified under RUN-20261015-N0096-VER, different from build run RUN-20261015-N0096-IMPL;
+      same session, same model, not independent. N-0099 does the second look. Full API pytest on cip_test 2977 passed, 21
+      skipped, 0 failed (fresh run); full web vitest 860 passed, 0 failed (183 files in 4 batches: 248+202+176+234; vitest
+      2.1.9, forks pool, 2 workers); web tsc exit 0; eslint 0 errors on changed files. Limits: BACKLOG-099 (live API in CI)
+      deferred by Warren, trigger before a second developer pushes or before main promotion; BACKLOG-121 is product work and
+      not met by a test change; 21 API tests skip with logged reasons; no Python linter installed. Operator acceptance pending.'
     debug_iterations: 0
     split_into: null
     deferred: null
