@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2303
-  log_sha256: 000cc2fa54add3203445f97dc6f573bd952803fa4eef807aa55002f38abb63d3
+  snapshot_revision: 2322
+  log_sha256: 25e9dc314ffb6a31e8123662454a4d2ee3f98a992abe9e4a22f45d436e2f32eb
   acceptance_policy:
     milestone: operator
     root: operator
@@ -12866,7 +12866,7 @@ nodes:
     origin: operator
     status: blocked
     stage: verify
-    revision: 40
+    revision: 52
     lease: null
     depends_on:
     - N-0079
@@ -12906,12 +12906,11 @@ nodes:
         state: pass
         evidence:
           path: apps/api/tests/test_cst_reupload_supersede_db.py
-          summary: pytest 217 passed on CST, sell-through, stock gap, period grain and tenant profile tests (cip_test), incl.
-            new re-upload supersede DB tests (3) and gap-cause DB tests (2); vitest 13 passed in cst-stew
-        rationale: pytest 217 passed on CST, sell-through, stock gap, period grain and tenant profile tests (cip_test), incl.
-          new re-upload supersede DB tests (3) and gap-cause DB tests (2); vitest 13 passed in cst-steward; web tsc exit 0;
-          next lint clean on changed files. No Python linter available.
-        pass_run: RUN-20261014-N0110-REPAIR
+          summary: pytest 248 passed on CST, sell-through, stock gap, tenant profile and lineup period tests (cip_test), incl.
+            4 supersede/repeat DB tests and 3 week-year tests. No Python linter available.
+        rationale: pytest 248 passed on CST, sell-through, stock gap, tenant profile and lineup period tests (cip_test), incl.
+          4 supersede/repeat DB tests and 3 week-year tests. No Python linter available.
+        pass_run: RUN-20261015-N0110-REPAIR2
         pass_actor: gov-001
       observability:
         required: true
@@ -12928,13 +12927,16 @@ nodes:
         required: true
         state: pass
         evidence:
-          path: apps/api/app/services/imports/customer_sell_through_supersede.py
-          summary: 'Re-upload of the same file is idempotent: clone proof second re-upload changed nothing; superseded rows
-            are kept verbatim with the superseding load; staging rows untouched; no number in a stock positi'
-        rationale: 'Re-upload of the same file is idempotent: clone proof second re-upload changed nothing; superseded rows
-          are kept verbatim with the superseding load; staging rows untouched; no number in a stock position is changed by
-          the cause classifier.'
-        pass_run: RUN-20261014-N0110-REPAIR
+          path: .eif/audit/PROGRAMME_20261015/n0110_repair2/N0110_REPAIR2_PROOF.md
+          summary: 'Clone: second replay superseded 0 and changed no total; cip after equals clone after. Superseded rows
+            kept verbatim with the superseding load; staging kept; nothing hard-deleted. Units recovered on ci'
+        rationale: 'Clone: second replay superseded 0 and changed no total; cip after equals clone after. Superseded rows
+          kept verbatim with the superseding load; staging kept; nothing hard-deleted. Units recovered on cip: Makro Dispo
+          (15) +5434 (site-merged rows restored per site; 315 older rows, 595 u, superseded by newer loads for the same customer,
+          product and period), Takealot (20) +712 (week split over months summed), Game (57) +57 (differing repeats summed),
+          Computer Mania (18) +32 (repeated article rows summed). Week 40 rows dated 2026-09-28 from 2026-08-11 loads moved
+          to 2025-09-29: 75 rows, 529 u (18: 56/510, 57: 19/19). Clone run 2 identical; cip after equals clone after.'
+        pass_run: RUN-20261015-N0110-REPAIR2
         pass_actor: gov-001
       backup_recovery:
         required: true
@@ -13001,35 +13003,36 @@ nodes:
     verification:
       behavioral:
         state: pass
-        pass_run: RUN-20261015-N0110-VER2
+        pass_run: RUN-20261015-N0110-VER3
         pass_actor: gov-001
         evidence: apps/api/tests/test_cst_reupload_supersede_db.py
         path: null
       referent:
         state: pass
-        pass_run: RUN-20261015-N0110-VER2
+        pass_run: RUN-20261015-N0110-VER3
         pass_actor: gov-001
-        evidence: .eif/audit/PROGRAMME_20261014/n0110_repair/N0110_CAUSE_COUNTS.md
-        path: apps/api/app/services/channel_intelligence/customer_stock_gap_cause.py
+        evidence: .eif/audit/PROGRAMME_20261015/n0110_repair2/N0110_REPAIR2_PROOF.md
+        path: apps/api/app/services/imports/customer_sell_through_supersede.py
     evidence: []
     blockers:
-    - id: BL-N0110-CAUSES
+    - id: BL-N0110-ONHAND
       type: decision
-      ref: D-0089
-      opened: '2026-10-14T22:19:51Z'
-      note: 'Warren: accept or change the two added gap causes (repeated report, unreported weeks) and the sign rule. Built
-        as proposed; reversible in the classifier only.'
+      ref: D-0092
+      opened: '2026-10-15T00:04:29Z'
+      note: 'Warren: accept or change how on-hand combines when differing repeated rows are summed. Built as option 1.'
     conservation_tags: []
     fingerprint: null
-    stage_note: 'VERIFIED_WITH_LIMITATIONS (repair). Self-verified under RUN-20261015-N0110-VER2, different from repair run
-      RUN-20261014-N0110-REPAIR; same session, same model, not independent. N-0099 does the second look. Re-upload of the
-      same file is idempotent (clone proof: second re-upload no change; Dispo WK1 +886 was one row per site restored). 243
-      flagged of 314 compared (701 positions, threshold 1 unit), unchanged. First cause: (a) old overwrite 8 (by site 8, by
-      sale day 0); (b) unmatched shipment 0; (c) no POD 0; (d) no prior on-hand 29; (e) 206, split: repeated report 108, unreported
-      weeks 58, unexplained 40 (Computer Mania 28, Evetech 7, Takealot 5). Limits: Stock gap tab not rendered (sign-in); 366
-      site-collapsed rows on cip stay until their files are re-uploaded; a different file for the same week still adds rows;
-      two added causes await Warren; shipment loads do not recompute positions; highlight 1 unit (D-0086 accepted). Operator
-      acceptance pending.'
+    stage_note: 'VERIFIED_WITH_LIMITATIONS (repair 2). Self-verified under RUN-20261015-N0110-VER3, different from repair
+      run RUN-20261015-N0110-REPAIR2; same session, same model, not independent. N-0099 does the second look. Units recovered
+      on cip: Makro Dispo (15) +5434 (site-merged rows restored per site; 315 older rows, 595 u, superseded by newer loads
+      for the same customer, product and period), Takealot (20) +712 (week split over months summed), Game (57) +57 (differing
+      repeats summed), Computer Mania (18) +32 (repeated article rows summed). Week 40 rows dated 2026-09-28 from 2026-08-11
+      loads moved to 2025-09-29: 75 rows, 529 u (18: 56/510, 57: 19/19). Clone run 2 identical; cip after equals clone after.
+      243 flagged of 314 compared (701 positions, 1 unit). First cause: overwrite 0 (was 8), unmatched shipment 0, no POD
+      0, no prior on-hand 37 (was 29), repeated report 108, unreported weeks 58, unexplained 40 (Computer Mania 28, Evetech
+      7, Takealot 5). Limits: Loads with no stored file, not restated: jobs 903 (cust 15, 43 under-counted rows), 911 (57,
+      13), 912 (12, 24), 913 (11, 11), 917 (18, none), 918 (299, 1). On-hand combining for summed repeats awaits Warren (decision
+      blocker). Stock gap tab not rendered (sign-in). Shipment loads do not recompute positions. Operator acceptance pending.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -14028,6 +14031,19 @@ decisions:
       count once, and the extra copies carry a duplicate flag. Replaces the ''last wins'' grouping in customer_sell_through_apply.py.'
     origin: operator
     status: accepted
+    supersedes: null
+  D-0092:
+    id: D-0092
+    scope: N-0110
+    statement: 'On-hand when differing repeated rows of one key are summed (N-0110, D-0091 names units only). Question: how
+      do on-hand, in transit and on order combine? Options: (1) a value every line repeats is one snapshot and kept once,
+      different values are summed (built); (2) always sum; (3) keep the last line''s. Evidence on cip: 73 repeated rows carry
+      on-hand; 69 repeat one value (Takealot: a week split over two months, each line 336), 4 differ (Computer Mania, two
+      article rows per product: on-hand +168). Assumption: equal values on split lines are the same stock. Impact: option
+      2 would double Takealot on-hand. Reversible: re-apply the loads. Resolving experiment: ask Computer Mania whether its
+      two article rows hold separate stock.'
+    origin: implementation
+    status: proposed
     supersedes: null
 evidence:
   EV-GOV008-REVIEW:
@@ -15264,6 +15280,42 @@ evidence:
     tree_hash: null
     note: 'N-0110 repair: Stock gap tab shows Why it differs right after Gap; Flag reads Data gap or Stock difference; only
       a stock difference keeps the warning highlight; counts line splits data gaps from stock differences.'
+  EV-0104:
+    id: EV-0104
+    provenance: implementation-observation
+    path: apps/api/app/services/imports/customer_sell_through_supersede.py
+    tree_hash: null
+    note: 'N-0110 repair 2 (92340adb, D-0090): a newer load supersedes an older load''s rows for the same customer and product
+      whose period overlaps a period it wrote and lies in its span for that customer, whatever site or day grain; rows move
+      verbatim to fact_customer_sellthrough_superseded. Replaces the byte-identical rule (D-0088).'
+  EV-0105:
+    id: EV-0105
+    provenance: implementation-observation
+    path: apps/api/app/services/imports/customer_sell_through_apply.py
+    tree_hash: null
+    note: 'N-0110 repair 2 (92340adb, D-0091): source rows of one key that differ are summed; a row identical in every source
+      column counts once and its copies get apply_status ''duplicate''. On-hand/in transit/on order repeated with one value
+      is kept once, different values summed (proposed, D-0092).'
+  EV-0106:
+    id: EV-0106
+    provenance: implementation-observation
+    path: apps/api/app/services/imports/parsers/customer_sell_through_grain.py
+    tree_hash: null
+    note: 'N-0110 repair 2 (5e6bc4fd): a week or month with no year resolves to the latest one started by the receive day
+      (staged_metadata.received_on, else job created date), never a period not yet started.'
+  EV-0107:
+    id: EV-0107
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261015/n0110_repair2/N0110_REPAIR2_PROOF.md
+    tree_hash: null
+    note: 'N-0110 repair 2 proof: Units recovered on cip: Makro Dispo (15) +5434 (site-merged rows restored per site; 315
+      older rows, 595 u, superseded by newer loads for the same customer, product and period), Takealot (20) +712 (week split
+      over months summed), Game (57) +57 (differing repeats summed), Computer Mania (18) +32 (repeated article rows summed).
+      Week 40 rows dated 2026-09-28 from 2026-08-11 loads moved to 2025-09-29: 75 rows, 529 u (18: 56/510, 57: 19/19). Clone
+      run 2 identical; cip after equals clone after. 243 flagged of 314 compared (701 positions, 1 unit). First cause: overwrite
+      0 (was 8), unmatched shipment 0, no POD 0, no prior on-hand 37 (was 29), repeated report 108, unreported weeks 58, unexplained
+      40 (Computer Mania 28, Evetech 7, Takealot 5). Loads with no stored file, not restated: jobs 903 (cust 15, 43 under-counted
+      rows), 911 (57, 13), 912 (12, 24), 913 (11, 11), 917 (18, none), 918 (299, 1).'
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -16439,9 +16491,26 @@ deferred_findings:
   run: RUN-20261014-N0110-REPAIR
   actor: gov-001
   status: deferred
+- seq: 2312
+  code: DOES_NOT_FIT
+  note: 'N-0110 repair 2: Loads with no stored file, not restated: jobs 903 (cust 15, 43 under-counted rows), 911 (57, 13),
+    912 (12, 24), 913 (11, 11), 917 (18, none), 918 (299, 1). Their site-merged and repeated rows stay under-counted until
+    the files are uploaded again.'
+  node: N-0110
+  run: RUN-20261015-N0110-REPAIR2
+  actor: gov-001
+  status: deferred
+- seq: 2313
+  code: DOES_NOT_FIT
+  note: 'N-0110 repair 2: loads 955, 956 (Takealot) and 967 (Dispo WK26) stored no on-hand and were replayed marked sales-only;
+    the on-hand rule refuses them otherwise.'
+  node: N-0110
+  run: RUN-20261015-N0110-REPAIR2
+  actor: gov-001
+  status: deferred
 ids:
   node: 5
-  decision: 91
+  decision: 92
   blocker: 19
-  evidence: 103
+  evidence: 107
   baseline: 18
