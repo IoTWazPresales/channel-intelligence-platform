@@ -19,7 +19,7 @@ from app.services.channel_ops_config import REPLENISHMENT_WOC_THRESHOLD_WEEKS
 from app.services.channel_ops_derived_stock import replenishment_flag_v1, weeks_of_cover_or_none
 from app.services.cpor.intelligence_scope import where_commercial_intelligence
 from app.services.cpor.promotion_type_vocab import CPOR_CASE_STATUS_SET
-from app.services.cpor.settle_readiness import case_missing_roe
+from app.services.cpor.settle_readiness import case_missing_roe, fx_declared, fx_mode_valid
 from app.services.shipment_strict_pair import keep_counted_line
 from app.services.woc_observation_read import latest_woc_observations, observations_to_stock_vel
 
@@ -182,6 +182,7 @@ async def _settlement_aggregates(db: AsyncSession, user: dict | None) -> dict[st
         return {
             "open_cases": None,
             "fx_blocked_cases": None,
+            "fx_rate_missing_cases": None,
             "fx_blocked_zar": None,
             "missing_assumption_skus": None,
             "data_unavailable": True,
@@ -194,7 +195,10 @@ async def _settlement_aggregates(db: AsyncSession, user: dict | None) -> dict[st
         .where(where_commercial_intelligence())
     )
     cases = (await db.execute(open_q)).scalars().all()
-    fx_blocked = [c for c in cases if case_missing_roe(c)]
+    # N-0083: "FX blocked" means the case has a rate but no booked/floating mode.
+    # A case with no rate is a different gap and is counted on its own.
+    fx_blocked = [c for c in cases if fx_declared(c) and not fx_mode_valid(c)]
+    fx_rate_missing = [c for c in cases if case_missing_roe(c)]
     fx_blocked_zar = 0.0  # placeholder — owed amount needs recon batch; count is primary signal
 
     assumption_lines = (
@@ -211,6 +215,7 @@ async def _settlement_aggregates(db: AsyncSession, user: dict | None) -> dict[st
     return {
         "open_cases": len(cases),
         "fx_blocked_cases": len(fx_blocked),
+        "fx_rate_missing_cases": len(fx_rate_missing),
         "fx_blocked_zar": fx_blocked_zar if fx_blocked else None,
         "missing_assumption_skus": int(assumption_lines or 0),
         "data_unavailable": False,
@@ -354,19 +359,26 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
         )
         rank += 1
 
-    if settlement.get("fx_blocked_cases"):
-        blocked = int(settlement["fx_blocked_cases"])
+    if settlement.get("fx_blocked_cases") or settlement.get("fx_rate_missing_cases"):
+        blocked = int(settlement.get("fx_blocked_cases") or 0)
+        no_rate = int(settlement.get("fx_rate_missing_cases") or 0)
+        parts = []
+        if blocked:
+            parts.append(f"{blocked} case(s) with no FX mode")
+        if no_rate:
+            parts.append(f"{no_rate} case(s) with no rate")
+        total = blocked + no_rate
         signals.append(
             _signal_row(
                 id="settlement_blocked",
                 rank=rank,
                 title="Settlement blocked",
-                detail=f"{blocked} case(s) FX undeclared",
-                meta=f"{blocked} case" if blocked == 1 else f"{blocked} cases",
+                detail="; ".join(parts),
+                meta=f"{total} case" if total == 1 else f"{total} cases",
                 meta_hot=True,
                 action_label="Open Settlement",
                 action_href="/commercial-planner/cpor-cases",
-                figures={"fx_blocked_cases": blocked},
+                figures={"fx_blocked_cases": blocked, "fx_rate_missing_cases": no_rate},
             )
         )
         rank += 1

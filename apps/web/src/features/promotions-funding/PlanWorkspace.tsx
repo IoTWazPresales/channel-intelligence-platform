@@ -68,6 +68,22 @@ const ACTION_TARGET: Record<string, string> = {
   cancel: 'cancelled',
 };
 
+function fxBasisText(data: {
+  roe_snapshot?: number | null;
+  fx_booked_source?: string | null;
+  fx_booked_rate_date?: string | null;
+  fx_override_reason?: string | null;
+}): string {
+  const rate = data.roe_snapshot != null ? data.roe_snapshot.toFixed(2) : '—';
+  if (data.fx_booked_source === 'manual_override') {
+    return `Rate ${rate} is a manual override${data.fx_override_reason ? `: ${data.fx_override_reason}` : ''}`;
+  }
+  if (data.fx_booked_source === 'stored') {
+    return `Rate ${rate} is the stored daily rate${data.fx_booked_rate_date ? ` for ${data.fx_booked_rate_date}` : ''}`;
+  }
+  return `Rate ${rate} was carried over with the case`;
+}
+
 export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () => void }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -84,6 +100,7 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
   const [estimate, setEstimate] = useState('20');
   const [approveOpen, setApproveOpen] = useState(false);
   const [approveRate, setApproveRate] = useState('');
+  const [approveReason, setApproveReason] = useState('');
   const [proposedEdit, setProposedEdit] = useState('');
 
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -128,6 +145,7 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
       comment?: string;
       confirm_over_budget_reapproval?: boolean;
       fx_rate?: number | null;
+      fx_rate_reason?: string;
     }) => apiPost(`/api/v1/cpor/cases/${caseId}/transition`, payload),
     onSuccess: async (_r, vars) => {
       setRejectOpen(false);
@@ -350,7 +368,8 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
                 variant="contained"
                 disabled={transition.isPending}
                 onClick={() => {
-                  setApproveRate(String(data.fx_proposed_rate ?? data.roe_snapshot ?? ''));
+                  setApproveRate('');
+                  setApproveReason('');
                   setApproveOpen(true);
                 }}
                 data-testid="plan-approve"
@@ -476,6 +495,16 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
             </Typography>
           )}
         </Stack>
+        {data.roe_snapshot != null && !data.missing_roe ? (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: 'block', mt: 1 }}
+            data-testid="plan-fx-basis"
+          >
+            {fxBasisText(data)}
+          </Typography>
+        ) : null}
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
           Header fields are editable only in draft or rejected — the same rule as the settlement workspace.
         </Typography>
@@ -724,21 +753,36 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 1.5 }}>
-            The rate books at approval (default mode: booked). Proposed history is kept. Override here if
-            the fetched suggestion is wrong.
+            The rate books at approval from the stored daily rate for the case date
+            {data.window_start ? ` (${data.window_start})` : ''} and is not revisited afterwards
+            (default mode: booked). The proposed rate is kept apart. Leave the field empty to book the
+            stored rate, or enter a rate and say why.
           </Typography>
           <TextField
             size="small"
             type="number"
-            label="Booked ZAR per USD"
+            label="Manual rate, ZAR per USD (optional)"
             value={approveRate}
             onChange={(e) => setApproveRate(e.target.value)}
             fullWidth
+            placeholder={data.fx_proposed_rate != null ? `Stored rate · proposed ${data.fx_proposed_rate.toFixed(2)}` : 'Stored rate'}
             helperText={
-              data.needs_reapproval ? 'Over-budget reapproval will be confirmed with this rate.' : undefined
+              data.needs_reapproval ? 'Over-budget reapproval keeps the rate already booked.' : undefined
             }
             inputProps={{ 'data-testid': 'plan-approve-fx-rate', step: '0.01' }}
           />
+          {approveRate.trim() ? (
+            <TextField
+              size="small"
+              label="Reason for the manual rate"
+              value={approveReason}
+              onChange={(e) => setApproveReason(e.target.value)}
+              fullWidth
+              required
+              sx={{ mt: 1.5 }}
+              inputProps={{ 'data-testid': 'plan-approve-fx-reason' }}
+            />
+          ) : null}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setApproveOpen(false)} disabled={transition.isPending}>
@@ -746,12 +790,16 @@ export function PlanWorkspace({ caseId, onBack }: { caseId: number; onBack: () =
           </Button>
           <Button
             variant="contained"
-            disabled={transition.isPending}
+            disabled={
+              transition.isPending ||
+              (approveRate.trim() !== '' && (!(Number(approveRate) > 0) || !approveReason.trim()))
+            }
             onClick={() =>
               transition.mutate({
                 action: 'approve',
                 confirm_over_budget_reapproval: Boolean(data.needs_reapproval),
                 fx_rate: approveRate.trim() ? Number(approveRate) : null,
+                ...(approveRate.trim() ? { fx_rate_reason: approveReason.trim() } : {}),
               })
             }
             data-testid="plan-approve-confirm"

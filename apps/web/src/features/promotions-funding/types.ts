@@ -24,6 +24,9 @@ export type CporCaseListRow = {
   fx_declared_at?: string | null;
   fx_declared_by?: string | null;
   fx_booked?: boolean;
+  fx_booked_source?: 'stored' | 'manual_override' | 'existing' | null;
+  fx_booked_rate_date?: string | null;
+  fx_override_reason?: string | null;
   missing_roe?: boolean;
   line_count?: number;
   estimate_qty_sum?: number | null;
@@ -96,6 +99,9 @@ export type CporCaseDetail = {
   fx_declared_at?: string | null;
   fx_declared_by?: string | null;
   fx_booked?: boolean;
+  fx_booked_source?: 'stored' | 'manual_override' | 'existing' | null;
+  fx_booked_rate_date?: string | null;
+  fx_override_reason?: string | null;
   missing_roe: boolean;
   allowed_next: string[];
   lines: CporCaseLine[];

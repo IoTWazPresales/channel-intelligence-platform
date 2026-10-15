@@ -17,8 +17,9 @@ from app.services.cpor.fx_rate import (
     SOURCE_OPERATOR,
     confirm_backfill_suggestion,
     declare_fx_mode,
-    ensure_rate_for_date,
+    case_rate_date,
     ensure_today_rate,
+    rate_for_case_date,
 )
 from app.services.cpor.intelligence_scope import where_commercial_intelligence
 from app.services.cpor.settle_readiness import FX_MODES, case_missing_roe, fx_declared, fx_mode_valid
@@ -89,16 +90,16 @@ def fx_backfill_suggestions(user: dict = Depends(get_current_user)) -> dict[str,
         by_date: dict = {}
         items: list[dict[str, Any]] = []
         for case in missing_rate:
-            window = case.window_start
+            window = case_rate_date(case)
             if window not in by_date:
-                by_date[window] = ensure_rate_for_date(session, window)
+                by_date[window] = rate_for_case_date(session, window)
             quote = by_date[window]
             items.append(
                 {
                     "case_id": case.id,
                     "case_code": case.case_code,
                     "status": case.status,
-                    "window_start": window.isoformat() if window else None,
+                    "window_start": case.window_start.isoformat() if case.window_start else None,
                     "customer_id": case.customer_id,
                     "fx_proposed_rate": (
                         float(case.fx_proposed_rate) if case.fx_proposed_rate is not None else None
@@ -141,14 +142,16 @@ def fx_backfill_confirm(
                 continue
             rate = item.rate
             source = SOURCE_OPERATOR
+            rate_date = None
             if rate is None:
-                quote = ensure_rate_for_date(session, case.window_start)
-                rate = quote.rate
+                quote = rate_for_case_date(session, case_rate_date(case))
+                rate = quote.rate if quote.live else None
                 source = quote.source
+                rate_date = quote.rate_date
             if rate is None:
                 results.append({"case_id": case.id, "ok": False, "reason": "no_rate"})
                 continue
-            out = confirm_backfill_suggestion(case, float(rate), actor, source=source)
+            out = confirm_backfill_suggestion(case, float(rate), actor, source=source, rate_date=rate_date)
             out["case_id"] = case.id
             out["case_code"] = case.case_code
             if out.get("ok"):

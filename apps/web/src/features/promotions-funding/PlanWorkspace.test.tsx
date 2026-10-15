@@ -76,7 +76,7 @@ describe('PlanWorkspace approve / FX (N-0044, ported from CporCaseWorkspace)', (
     detail = baseCase;
   });
 
-  it('approves through the book-FX dialog carrying fx_rate and the over-budget reapproval', async () => {
+  it('approves with no rate typed: the stored rate for the case date books server-side', async () => {
     const { apiPost } = await import('@/lib/api');
     renderWorkspace();
     expect(await screen.findByTestId('plan-needs-reapproval')).toBeInTheDocument();
@@ -86,14 +86,34 @@ describe('PlanWorkspace approve / FX (N-0044, ported from CporCaseWorkspace)', (
     expect(vi.mocked(apiPost)).not.toHaveBeenCalled();
 
     const rate = screen.getByTestId('plan-approve-fx-rate') as HTMLInputElement;
-    expect(rate.value).toBe('18.42');
-    fireEvent.change(rate, { target: { value: '18.9' } });
+    expect(rate.value).toBe('');
+    expect(screen.queryByTestId('plan-approve-fx-reason')).toBeNull();
     fireEvent.click(screen.getByTestId('plan-approve-confirm'));
     await waitFor(() =>
       expect(vi.mocked(apiPost)).toHaveBeenCalledWith('/api/v1/cpor/cases/77/transition', {
         action: 'approve',
         confirm_over_budget_reapproval: true,
+        fx_rate: null,
+      }),
+    );
+  });
+
+  it('a manual rate needs a reason and carries it', async () => {
+    const { apiPost } = await import('@/lib/api');
+    renderWorkspace();
+    fireEvent.click(await screen.findByTestId('plan-approve'));
+    fireEvent.change(screen.getByTestId('plan-approve-fx-rate'), { target: { value: '18.9' } });
+    const confirm = screen.getByTestId('plan-approve-confirm');
+    expect(confirm).toBeDisabled();
+    fireEvent.change(screen.getByTestId('plan-approve-fx-reason'), { target: { value: 'Hedge contract' } });
+    expect(confirm).toBeEnabled();
+    fireEvent.click(confirm);
+    await waitFor(() =>
+      expect(vi.mocked(apiPost)).toHaveBeenCalledWith('/api/v1/cpor/cases/77/transition', {
+        action: 'approve',
+        confirm_over_budget_reapproval: true,
         fx_rate: 18.9,
+        fx_rate_reason: 'Hedge contract',
       }),
     );
   });
@@ -108,9 +128,37 @@ describe('PlanWorkspace approve / FX (N-0044, ported from CporCaseWorkspace)', (
       expect(vi.mocked(apiPost)).toHaveBeenCalledWith('/api/v1/cpor/cases/77/transition', {
         action: 'approve',
         confirm_over_budget_reapproval: false,
-        fx_rate: 18.42,
+        fx_rate: null,
       }),
     );
+  });
+
+  it('says how a booked rate was chosen', async () => {
+    detail = {
+      ...baseCase,
+      status: 'approved',
+      roe_snapshot: 18.22,
+      missing_roe: false,
+      fx_booked: true,
+      fx_booked_source: 'stored',
+      fx_booked_rate_date: '2026-10-01',
+    };
+    renderWorkspace();
+    expect(await screen.findByTestId('plan-fx-basis')).toHaveTextContent('stored daily rate for 2026-10-01');
+  });
+
+  it('shows the reason on a manual override', async () => {
+    detail = {
+      ...baseCase,
+      status: 'approved',
+      roe_snapshot: 17.8,
+      missing_roe: false,
+      fx_booked: true,
+      fx_booked_source: 'manual_override',
+      fx_override_reason: 'Hedge contract',
+    };
+    renderWorkspace();
+    expect(await screen.findByTestId('plan-fx-basis')).toHaveTextContent('manual override: Hedge contract');
   });
 
   it('edits FX mode and the proposed rate on a draft through the existing PATCH', async () => {

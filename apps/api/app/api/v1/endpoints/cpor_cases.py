@@ -65,9 +65,14 @@ from app.services.cpor.intelligence_scope import (
     where_test_data_only,
 )
 from app.services.cpor.fx_rate import (
+    BOOKED_OVERRIDE,
     SOURCE_OPERATOR,
+    FxOverrideReasonRequired,
+    FxRateFixed,
     apply_create_fx,
     book_on_approve,
+    book_rate,
+    case_rate_date,
     fx_fields_json,
     set_proposed,
 )
@@ -470,6 +475,7 @@ class CasePatch(BaseModel):
     roe_snapshot: float | None = None
     fx_proposed_rate: float | None = None
     fx_mode: str | None = None
+    fx_override_reason: str | None = None
     currency_code: str | None = None
     notes: str | None = None
 
@@ -514,6 +520,7 @@ class TransitionBody(BaseModel):
     comment: str | None = None
     confirm_over_budget_reapproval: bool = False
     fx_rate: float | None = None
+    fx_rate_reason: str | None = None
 
 
 class LayerSplitBody(BaseModel):
@@ -854,10 +861,34 @@ def patch_case(
                 case, float(proposed_val), actor, source=SOURCE_OPERATOR
             ):
                 raise HTTPException(status_code=400, detail="fx_proposed_rate must be a positive number")
+        override_reason = (data.pop("fx_override_reason", None) or "").strip()
         if "roe_snapshot" in data and not fx_declared(case):
             roe_val = data.pop("roe_snapshot")
             if roe_val is not None and not set_proposed(case, float(roe_val), actor, source=SOURCE_OPERATOR):
                 raise HTTPException(status_code=400, detail="roe_snapshot must be a positive number")
+        if "roe_snapshot" in data:
+            new_roe = data.pop("roe_snapshot")
+            if new_roe is None or float(new_roe) <= 0:
+                raise HTTPException(status_code=400, detail="roe_snapshot must be a positive number")
+            if abs(float(new_roe) - float(case.roe_snapshot)) >= 1e-6:
+                if not override_reason:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Changing a booked rate is a manual override and needs fx_override_reason",
+                    )
+                old_rate = float(case.roe_snapshot)
+                book_rate(
+                    case, float(new_roe), actor, source=BOOKED_OVERRIDE, reason=override_reason
+                )
+                _record_event(
+                    session,
+                    case_id=case.id,
+                    event_type="fx_override",
+                    actor=actor,
+                    payload={"from": old_rate, "to": float(new_roe), "reason": override_reason},
+                    user=user,
+                )
+                data["roe_snapshot"] = float(new_roe)
         roe_changed = "roe_snapshot" in data
         fx_mode_changed = "fx_mode" in data
         old_window = (case.window_start, case.window_end)
@@ -1433,7 +1464,22 @@ def transition_case(
             case.decided_by = actor
             case.last_comment = None
             case.needs_reapproval = False
-            book_on_approve(case, actor=actor, override=body.fx_rate)
+            try:
+                fx_outcome = book_on_approve(
+                    session, case, actor=actor, override=body.fx_rate, reason=body.fx_rate_reason
+                )
+            except FxOverrideReasonRequired as exc:
+                raise HTTPException(status_code=400, detail=str(exc))
+            except FxRateFixed as exc:
+                raise HTTPException(status_code=409, detail=str(exc))
+            _record_event(
+                session,
+                case_id=case.id,
+                event_type="fx_booked",
+                actor=actor,
+                payload={"case_date": case_rate_date(case).isoformat(), **fx_outcome.as_json()},
+                user=user,
+            )
             drifts = _run_drift_check(session, case, actor, user)
         elif action == "reject":
             case.status = "rejected"

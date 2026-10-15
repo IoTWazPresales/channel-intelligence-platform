@@ -40,6 +40,9 @@ def fetch_daily_fx_rate_safe(*, reason: str) -> dict:
             session.commit()
             payload = quote.as_json()
             payload["reason"] = reason
+            if quote.live and not quote.persisted:
+                # N-0083: the rate came back but the table refused it (grants), so no case can use it.
+                logger.error("fx daily rate fetched but not stored (%s)", reason)
             return payload
     except Exception:
         logger.exception("fx daily rate poll failed (%s)", reason)

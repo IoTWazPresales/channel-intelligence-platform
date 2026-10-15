@@ -77,6 +77,8 @@ _WRITE_CAPABLE_TEST_MODULES: frozenset[str] = frozenset(
         # N-0110 repair: seeds sell-through and shipment rows to name each gap cause inside one
         # rolled-back transaction; cip_test only.
         "test_customer_stock_gap_cause_db.py",
+        # N-0083: writes fx_daily_rate and case rows inside one rolled-back transaction; cip_test only.
+        "test_fx_case_rate_db.py",
         "test_customer_alias_scope_merge.py",
         "test_customer_full_merge.py",
         "test_customers_delete.py",
