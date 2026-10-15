@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2350
-  log_sha256: eae23f82aaab022335a3498f84165ea61aad75128d4cd637f7d41d5b713de1bb
+  snapshot_revision: 2381
+  log_sha256: 847d1c84fa570be5e4c155270d5e6bf6dac500a17a7edc4bedf96d1970f52eb9
   acceptance_policy:
     milestone: operator
     root: operator
@@ -10387,9 +10387,9 @@ nodes:
     title: 'FX rate table and ROE governance: daily rates actually stored, case ROE drawn from the table (spec section 9.4)'
     class: feature
     origin: operator
-    status: blocked
+    status: ready
     stage: validate
-    revision: 18
+    revision: 19
     lease: null
     depends_on:
     - N-0073
@@ -10502,12 +10502,7 @@ nodes:
         evidence: .eif/audit/PROGRAMME_20261015/n0083/N0083_PROOF.md
         path: apps/api/app/services/cpor/fx_rate.py
     evidence: []
-    blockers:
-    - id: BL-N0083-CASEDATE
-      type: decision
-      ref: D-0093
-      opened: '2026-10-15T07:48:50Z'
-      note: 'Warren: confirm the case date is the window start, the reason rule, and the 4-day stored-rate gap.'
+    blockers: []
     conservation_tags: []
     fingerprint: null
     stage_note: 'VERIFIED_WITH_LIMITATIONS. Self-verified under RUN-20261015-N0083-VER, different from build run RUN-20261015-N0083-IMPL;
@@ -11728,9 +11723,9 @@ nodes:
     title: 'Test, CI and record honesty: self-seeding tests, live API in CI, backlog and context drift corrected'
     class: feature
     origin: operator
-    status: proposed
-    stage: null
-    revision: 0
+    status: in_progress
+    stage: implement
+    revision: 5
     lease: null
     depends_on: []
     facets:
@@ -11745,7 +11740,7 @@ nodes:
     - GitHub Actions starts the API against cip_test and runs the live specs (BACKLOG-099)
     - BACKLOG.md and CONTEXT.md status lines that contradict the code are corrected (SWEEP_A/B/C contradiction lists)
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-N0096
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
@@ -11765,7 +11760,10 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: 'N-0096 IN PROGRESS, NOT CLOSED. API full pytest on cip_test 2977 passed, 21 skipped, 0 failed. Web full vitest:
+      NOT COMPLETE (run 1: 852 passed, 8 failed, all 8 stale tests since fixed; the 3 fixed files re-ran 47 passed; the final
+      full run was stopped by memory pressure and has not been repeated). Quality and verification not recorded until a full
+      web run is green.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -11774,6 +11772,8 @@ nodes:
     target_artifact_class: null
     design_artifact_class: null
     risk_class: full
+    implementation_run: RUN-20261015-N0096-IMPL
+    implementation_actor: gov-001
   N-0097:
     id: N-0097
     parent: null
@@ -12920,9 +12920,9 @@ nodes:
     title: 'Customer sell-through stock gap: the customer report is on-hand, CIP flags the difference'
     class: feature
     origin: operator
-    status: blocked
+    status: in_progress
     stage: verify
-    revision: 52
+    revision: 55
     lease: null
     depends_on:
     - N-0079
@@ -13070,12 +13070,7 @@ nodes:
         evidence: .eif/audit/PROGRAMME_20261015/n0110_repair2/N0110_REPAIR2_PROOF.md
         path: apps/api/app/services/imports/customer_sell_through_supersede.py
     evidence: []
-    blockers:
-    - id: BL-N0110-ONHAND
-      type: decision
-      ref: D-0092
-      opened: '2026-10-15T00:04:29Z'
-      note: 'Warren: accept or change how on-hand combines when differing repeated rows are summed. Built as option 1.'
+    blockers: []
     conservation_tags: []
     fingerprint: null
     stage_note: 'VERIFIED_WITH_LIMITATIONS (repair 2). Self-verified under RUN-20261015-N0110-VER3, different from repair
@@ -14116,7 +14111,26 @@ decisions:
       book every late approval at the approval-day rate. Reversible: yes, provenance columns record the basis. Resolving experiment:
       Warren names one approved case and the date its rate should come from.'
     origin: implementation
-    status: proposed
+    status: accepted
+    supersedes: null
+  D-0094:
+    id: D-0094
+    scope: N-0083
+    statement: 'D-0093 (decided by Warren 2026-10-15): the case''s FX date is the APPROVAL date, always. A stored daily rate
+      may be up to 4 days older than that date. A manual rate needs a reason. A rate chosen at create or carried from an import
+      is kept at approval. Supersedes the N-0083 build rule that dated the rate by the window start (or today if the window
+      has not started). Reversible: one date rule in the case FX service.'
+    origin: operator
+    status: superseded
+    supersedes: null
+  D-0095:
+    id: D-0095
+    scope: N-0110
+    statement: 'FACT (Warren 2026-10-15): every Takealot sell-through report covers exactly ONE week. Warren will later upload
+      about 2 years of weekly sales and stock-on-hand history for Amazon, Takealot and Pinnacle; that history is expected
+      to supersede what is stored for those customers.'
+    origin: operator
+    status: accepted
     supersedes: null
 evidence:
   EV-GOV008-REVIEW:
@@ -15417,6 +15431,67 @@ evidence:
     tree_hash: null
     note: 'N-0083 proof: clone cip_n0083 reproduced the denial and the fix with a clean round trip; cip applied; the poller
       stored USDZAR 16.47 for 2026-10-14 on cip.'
+  EV-0112:
+    id: EV-0112
+    provenance: implementation-observation
+    path: apps/api/app/services/cpor/fx_rate.py
+    tree_hash: null
+    note: 'N-0096 (4c25474e): the FX date is the approval date, always (D-0093); a stored rate up to 4 days older is accepted
+      when the fetch fails; case_rate_date no longer reads the window start.'
+  EV-0113:
+    id: EV-0113
+    provenance: implementation-observation
+    path: apps/api/alembic/versions/20261015_0040_stock_tables_rls_inline.py
+    tree_hash: null
+    note: 'N-0096 (c3dba532): customer_stock_position and fact_customer_sellthrough_superseded move to the inline product-line
+      policies. Clone proof, then cip and cip_test.'
+  EV-0114:
+    id: EV-0114
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261015/n0096/N0096_RLS_CLONE_PROOF.md
+    tree_hash: null
+    note: 'N-0096 clone proof (cip_n0096, dropped): policies and row counts printed before and after; upgrade, downgrade,
+      upgrade identical; 701 positions and 390 superseded rows unchanged.'
+  EV-0115:
+    id: EV-0115
+    provenance: implementation-observation
+    path: apps/api/tests/test_cpor_settle_confirm_clone.py
+    tree_hash: null
+    note: 'N-0096: the settle test runs on cip_test and seeds and deletes its own cases; no longer rewrites os.environ.'
+  EV-0116:
+    id: EV-0116
+    provenance: implementation-observation
+    path: apps/api/tests/test_lineup_distributor_as_customer_remediation.py
+    tree_hash: null
+    note: 'N-0096 (BACKLOG-144): four tests seed their own distributor, case and lines in a rolled-back transaction.'
+  EV-0117:
+    id: EV-0117
+    provenance: implementation-observation
+    path: apps/api/tests/test_product_line_rls_parity_n0065_db.py
+    tree_hash: null
+    note: 'N-0096: needs 0027 applied, not to be the head; counts 42 protected tables; append-only tables checked for SELECT+INSERT
+      policies; no exemption.'
+  EV-0118:
+    id: EV-0118
+    provenance: implementation-observation
+    path: apps/api/tests/test_cst_takealot_week_shape.py
+    tree_hash: null
+    note: 'N-0096 Part B: pins that a one-week Takealot file with a month-end split lands in its one week.'
+  EV-0119:
+    id: EV-0119
+    provenance: implementation-observation
+    path: apps/api/tests/test_rbac_n0038_cpor_roles.py
+    tree_hash: null
+    note: 'N-0096: approval-link routes in the matrix; the one public approval route allowed by name, not by loosening the
+      rule.'
+  EV-0120:
+    id: EV-0120
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261015/n0096/N0096_PROOF.md
+    tree_hash: null
+    note: 'N-0096 proof: full API pytest on cip_test 2977 passed, 21 skipped, 0 failed; web vitest NOT COMPLETE (run 1: 852
+      passed, 8 failed, all 8 stale tests since fixed; the 3 fixed files re-ran 47 passed; the final full run was stopped
+      by memory pressure and has not been repeated); web tsc exit 0; eslint 0 errors on the three changed files.'
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -16082,6 +16157,16 @@ baselines:
     observed_behavior: fx_daily_rate is owned by postgres and cip has no privilege on it, so the poller stored nothing (0
       rows on cip). Create booked today's fetched rate whatever the case dates were; approval never read the table; a booked
       draft's ROE could be overwritten by PATCH with no reason; the brief counted cases with no rate as FX blocked.
+  BLN-N0096:
+    id: BLN-N0096
+    provenance: implementation-observation
+    tree_hash: ebf6f9ea
+    latent_capabilities: []
+    preservation: {}
+    path: .eif/audit/PROGRAMME_20261015/n0096/BASELINE.md
+    observed_behavior: 'Full API pytest on cip_test: 20 failed and 34 errors. Two clone-dependent fixtures rewrote os.environ
+      for a database that no longer exists and never restored it, so every later DB test failed. Eight web vitest tests failed
+      on copy changes.'
 caveats:
   consult_model_logged:
     key: consult_model_logged
@@ -16644,9 +16729,94 @@ deferred_findings:
   run: RUN-20261015-N0083-IMPL
   actor: gov-001
   status: deferred
+- seq: 2370
+  code: DOES_NOT_FIT
+  note: 'N-0096: BACKLOG-099 (live API in GitHub Actions) DEFERRED by Warren 2026-10-15. Trigger: before a second developer
+    pushes or before main promotion. Recorded in docs/BACKLOG.md. .github was not touched.'
+  node: N-0096
+  run: RUN-20261015-N0096-IMPL
+  actor: gov-001
+  status: deferred
+- seq: 2371
+  code: DOES_NOT_FIT
+  note: 'N-0096: BACKLOG-121 (non-split sheets: preview row_count from parser #1 vs apply parser #2) is product work, not
+    test seeding, and no test refers to it. Limitation: the acceptance wording ''non-split-sheet tests'' is not met by a test
+    change; the bulk-backfill integration tests are marked integration and skip when the cip_bulk_smoke clone is absent.'
+  node: N-0096
+  run: RUN-20261015-N0096-IMPL
+  actor: gov-001
+  status: deferred
+- seq: 2372
+  code: DOES_NOT_FIT
+  note: 'N-0096: 21 tests skip on cip_test with a logged reason each (live cip data, ALLOW_TESTS_ON_DEV_DB, remote Supabase,
+    the cip_bulk_smoke clone, migration 0048 fixtures, session-mode e2e). Skips are not failures but they are not run.'
+  node: N-0096
+  run: RUN-20261015-N0096-IMPL
+  actor: gov-001
+  status: deferred
+- seq: 2373
+  code: DOES_NOT_FIT
+  note: 'N-0096: no Python linter (ruff) is installed in apps/api/.venv. The acceptance criteria call for tsc and eslint only,
+    so none was installed; API changes were not linted.'
+  node: N-0096
+  run: RUN-20261015-N0096-IMPL
+  actor: gov-001
+  status: deferred
+- seq: 2374
+  code: DOES_NOT_FIT
+  note: 'N-0096: cip holds eight ''RelAmazon ...'' customers (C-REL-A/B-*, ids 5195 to 5259) that look like test fixtures
+    from a run against cip. Not touched. Needs a decision before the Amazon history upload picks a customer.'
+  node: N-0096
+  run: RUN-20261015-N0096-IMPL
+  actor: gov-001
+  status: deferred
+- seq: 2375
+  code: DOES_NOT_FIT
+  note: 'N-0096: the full web vitest run takes about 27 minutes on this machine with the stack running (setup 2017 s of 1604
+    s wall); not investigated.'
+  node: N-0096
+  run: RUN-20261015-N0096-IMPL
+  actor: gov-001
+  status: deferred
+- seq: 2379
+  code: DOES_NOT_FIT
+  note: 'N-0110 Part B finding (Takealot one-week misread): the ''two months'' in repair 2 are not a second period. Every
+    Takealot file has ONE Transaction Week (the Monday) and a Transaction Month column. When the week crosses a month end,
+    each product that sold on both sides appears twice in the same week, once per calendar month, each row holding that month''s
+    share (cip loads 1648 Jul 427 + Aug 28 = 455; 1650 Dec 111 + Jan 108; 1651 Mar 70 + Apr 115; 1652 Jun 102 + Jul 184; 1649
+    has no split). Barcode and stock repeat on both halves (28 of 28 products in both halves carry the same stock). The parser
+    dates every row by Transaction Week (mapping Transaction Week -> period): 5 loads, 5 periods, grain week. The old ''last
+    row wins'' dropped one half; repair 2 sums the halves (Takealot 541 -> 1,253 units, which is every resolved staging unit
+    of the 5 loads). No parser or period fix was needed; a test now pins the shape (test_cst_takealot_week_shape.py). Stored
+    Takealot rows on cip are right for their week: 96 rows, 5 weeks, 100% of resolved units; 29 unresolved rows (30 units)
+    in loads 1648, 1650, 1652 are product matches, not periods. Nothing was changed on cip.'
+  node: N-0110
+  run: RUN-20261015-N0096-IMPL
+  actor: gov-001
+  status: deferred
+- seq: 2380
+  code: DOES_NOT_FIT
+  note: 'N-0110 Part B finding (history upload paths, read-only): Takealot (customer 20) -> customer sell-through; Amazon
+    -> customer sell-through; Pinnacle -> distributor sales/inventory (it is distributor 29 with 5,704 sell-out rows, 344
+    periods to 2026-06-12, and 13,784 inventory rows, 75 dates to 2026-06-08; customer 295 Pinnacle has no data). WOULD BREAK:
+    (1) customer sell-through supersedes whole rows by customer, product and period, so a sales file then a separate stock
+    file for the same week (Amazon style) cannot both load: a stock-only file is refused (units_sold required) and a later
+    sales-only file would replace the on-hand of the earlier one; sales and stock need one workbook (the companion soh sheet)
+    or a measure-wise merge. (2) Amazon has two customers (26 provisional TMP-CUST ''Amazon'', 299 ''Amazon Commercial Services
+    (South Africa)'') and eight RelAmazon test customers; the history must land on one. (3) A file whose period is only a
+    week number takes the year from the latest week started by the received date, so 2-year-old files without a date column
+    land in the wrong year; Takealot is safe (Transaction Week is a date), Amazon and Pinnacle formats are unseen. (4) Amazon
+    weeks may run Sunday to Saturday; no week calendar is set for Amazon or Pinnacle. (5) Weeks without on-hand break the
+    expected-position chain (today 37 no-prior-on-hand and 58 unreported-weeks gaps). (6) Load order: a newer load supersedes
+    older rows, so re-loading an old file after a newer one that covers the same week replaces it. (7) Not measured: cost
+    of recomputing stock positions after each of ~100 loads per customer, and DSI supersession for Pinnacle. Nothing was built.'
+  node: N-0110
+  run: RUN-20261015-N0096-IMPL
+  actor: gov-001
+  status: deferred
 ids:
   node: 5
-  decision: 93
+  decision: 95
   blocker: 19
-  evidence: 111
+  evidence: 120
   baseline: 18

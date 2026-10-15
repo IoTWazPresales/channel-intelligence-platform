@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 2350
+**Snapshot revision:** 2381
 
 ## Outcome (verbatim)
 
@@ -104,7 +104,7 @@ _none_
 | N-0080 | One profit definition: PM controlled cost, DAP and landed cost kept apart on lineup and CPOR margin (spec section 9.3) | feature | in_progress | in_progress | yes |  | full loop |
 | N-0081 | Distributor channel and New-DAP price protection: rebate and disti margin waterfall steps, DSI SOH cost capture, re-invoice (spec section 9.1) | feature | blocked | blocked | yes |  | full loop |
 | N-0082 | Customer approval link for settlement sign-off (spec section 9.2; trigger met: 211 cases settled manually) | feature | in_progress | in_progress | yes |  | full loop |
-| N-0083 | FX rate table and ROE governance: daily rates actually stored, case ROE drawn from the table (spec section 9.4) | feature | blocked | blocked | yes |  | full loop |
+| N-0083 | FX rate table and ROE governance: daily rates actually stored, case ROE drawn from the table (spec section 9.4) | feature | ready | ready | yes |  | full loop |
 | N-0084 | Price elasticity: what price a product would move at (spec section 9.8), data-gated on settled claims | feature | proposed | proposed | yes |  | full loop |
 | N-0085 | Listing coverage for all eight reporting customers: find, confirm and watch our product pages at Game, Makro, Computer Mania, Incredible Connection, HiFi Corp, Evetech, Takealot and Amazon | feature | proposed | proposed | no |  | full loop |
 | N-0086 | Security hardening before 24/7 exposure: proxy login-throttle address, steward-write role checks, pilot passwords | feature | complete | complete | yes |  | full loop |
@@ -117,7 +117,7 @@ _none_
 | N-0093 | Pin saved reports to Overview | feature | complete | complete | yes |  | full loop |
 | N-0094 | Product roadmap planning view: lifecycle phase and replacement candidates | feature | proposed | proposed | yes |  | full loop |
 | N-0095 | Customer merge completion: loser-name alias seal at confirm, resolvers follow merged_into, related-name worklist and repair scripts (BACKLOG-081 + 083, shipped as a pair) | feature | proposed | proposed | yes |  | full loop |
-| N-0096 | Test, CI and record honesty: self-seeding tests, live API in CI, backlog and context drift corrected | feature | proposed | proposed | yes |  | full loop |
+| N-0096 | Test, CI and record honesty: self-seeding tests, live API in CI, backlog and context drift corrected | feature | in_progress | in_progress | yes |  | full loop |
 | N-0097 | Lineup follow-ons: PF quantity columns, workbench identifier split, supersession hardening, margin amounts | feature | proposed | proposed | yes |  | full loop |
 | N-0098 | Shipment evidence Plan D: stop the dual write, then drop redundant columns (BACKLOG-057 D4, 058 D5) | feature | proposed | proposed | yes |  | full loop |
 | N-0099 | Independent second-look verification of self-verified closed nodes before the branch goes to main | feature | proposed | proposed | yes |  | full loop |
@@ -131,4 +131,4 @@ _none_
 | N-0107 | Supervisor recognises a network that blocks the tunnel port and stops churning the quick tunnel | feature | complete | complete | yes |  | full loop |
 | N-0108 | Brief and Cover speed: stop sorting the whole weeks-of-cover table to keep the latest rows | feature | proposed | proposed | yes |  | full loop |
 | N-0109 | Reports, dashboards and KPI tiles on the design lab system: one chart system, one KPI tile, one table style (build to mockup-report-system) | feature | complete | complete | yes |  | full loop |
-| N-0110 | Customer sell-through stock gap: the customer report is on-hand, CIP flags the difference | feature | blocked | blocked | yes |  | full loop |
+| N-0110 | Customer sell-through stock gap: the customer report is on-hand, CIP flags the difference | feature | in_progress | in_progress | yes |  | full loop |
