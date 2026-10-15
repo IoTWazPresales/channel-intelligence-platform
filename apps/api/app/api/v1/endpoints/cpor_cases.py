@@ -1477,7 +1477,7 @@ def transition_case(
                 case_id=case.id,
                 event_type="fx_booked",
                 actor=actor,
-                payload={"case_date": case_rate_date(case).isoformat(), **fx_outcome.as_json()},
+                payload={"fx_date": case_rate_date().isoformat(), **fx_outcome.as_json()},
                 user=user,
             )
             drifts = _run_drift_check(session, case, actor, user)

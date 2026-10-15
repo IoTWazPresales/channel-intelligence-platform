@@ -15,9 +15,9 @@ from app.db.session_sync import SessionLocal
 from app.models.cpor import CporCase
 from app.services.cpor.fx_rate import (
     SOURCE_OPERATOR,
+    approval_date,
     confirm_backfill_suggestion,
     declare_fx_mode,
-    case_rate_date,
     ensure_today_rate,
     rate_for_case_date,
 )
@@ -90,10 +90,10 @@ def fx_backfill_suggestions(user: dict = Depends(get_current_user)) -> dict[str,
         by_date: dict = {}
         items: list[dict[str, Any]] = []
         for case in missing_rate:
-            window = case_rate_date(case)
-            if window not in by_date:
-                by_date[window] = rate_for_case_date(session, window)
-            quote = by_date[window]
+            fx_date = approval_date(session, case)
+            if fx_date not in by_date:
+                by_date[fx_date] = rate_for_case_date(session, fx_date)
+            quote = by_date[fx_date]
             items.append(
                 {
                     "case_id": case.id,
@@ -144,7 +144,7 @@ def fx_backfill_confirm(
             source = SOURCE_OPERATOR
             rate_date = None
             if rate is None:
-                quote = rate_for_case_date(session, case_rate_date(case))
+                quote = rate_for_case_date(session, approval_date(session, case))
                 rate = quote.rate if quote.live else None
                 source = quote.source
                 rate_date = quote.rate_date

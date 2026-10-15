@@ -1,5 +1,5 @@
 """N-0083: the FX table is written and read by the app role, and a case rate is chosen from the
-stored rate for the case's own date (or an audited override) and fixed at first approval.
+stored rate for the case's APPROVAL date (D-0093; or an audited override) and fixed at first approval.
 
 One rolled-back transaction; cip_test only.
 """
@@ -85,8 +85,7 @@ def _case(db: Session, window_start: date, **kw) -> CporCase:
         promotion_type="Price Drop",
         window_start=window_start,
         window_end=window_start + timedelta(days=30),
-        status="proposed",
-        **kw,
+        **{"status": "proposed", **kw},
     )
     db.add(case)
     db.flush()
@@ -170,33 +169,77 @@ def test_a_fallback_row_is_not_used(db):
     assert quote.rate == 18.60
 
 
-def test_create_books_the_rate_stored_for_the_window_start(db):
-    _rate(db, DAY, 18.10)
+def test_create_books_the_rate_stored_for_today_not_the_window_start(db):
+    _rate(db, DAY, 18.10)  # the window start's rate must not be used
+    _rate(db, TODAY, 19.90)
     case = _case(db, DAY, suffix="create")
     with patch.object(fx_rate, "_utc_today", return_value=TODAY), patch.object(
         fx_rate, "fetch_frankfurter", _no_fetch
     ):
         apply_create_fx(db, case, actor="pm", proposed_override=None, explicit_roe=None)
     db.flush()
-    assert float(case.roe_snapshot) == 18.10 and case.fx_mode == "booked"
-    assert case.fx_booked_source == BOOKED_STORED and case.fx_booked_rate_date == DAY
-    assert float(case.fx_proposed_rate) == 18.10
+    assert float(case.roe_snapshot) == 19.90 and case.fx_mode == "booked"
+    assert case.fx_booked_source == BOOKED_STORED and case.fx_booked_rate_date == TODAY
+    assert float(case.fx_proposed_rate) == 19.90
 
 
-def test_approval_fixes_the_stored_rate_for_the_case_date_and_records_it(db):
-    _rate(db, DAY, 18.10)
-    _rate(db, TODAY, 19.90)  # today's rate must not leak into a case dated in March
+def test_approval_fixes_the_stored_rate_for_the_approval_date_and_records_it(db):
+    _rate(db, DAY, 18.10)  # a case whose window starts in March is still approved today
+    _rate(db, TODAY, 19.90)
     case = _case(db, DAY, suffix="approve")
     out = book_on_approve(db, case, actor="pm", override=None, today=TODAY)
     db.flush()
-    assert out.source == BOOKED_STORED and out.rate == 18.10 and out.rate_date == DAY
-    assert float(case.roe_snapshot) == 18.10
-    assert case.fx_booked_source == BOOKED_STORED and case.fx_booked_rate_date == DAY
+    assert out.source == BOOKED_STORED and out.rate == 19.90 and out.rate_date == TODAY
+    assert float(case.roe_snapshot) == 19.90
+    assert case.fx_booked_source == BOOKED_STORED and case.fx_booked_rate_date == TODAY
     assert case.fx_override_reason is None
 
 
+def test_approval_accepts_a_stored_rate_four_days_older_when_the_fetch_fails(db):
+    import urllib.error
+
+    _rate(db, TODAY - timedelta(days=4), 19.40)
+    case = _case(db, DAY, suffix="gap4")
+    with patch.object(fx_rate, "fetch_frankfurter", side_effect=urllib.error.URLError("down")):
+        out = book_on_approve(db, case, actor="pm", override=None, today=TODAY)
+    assert out.source == BOOKED_STORED and out.rate == 19.40
+    assert out.rate_date == TODAY - timedelta(days=4)
+
+
+def test_approval_refuses_a_stored_rate_five_days_older(db):
+    import urllib.error
+
+    _rate(db, TODAY - timedelta(days=5), 19.40)
+    case = _case(db, DAY, suffix="gap5")
+    with patch.object(fx_rate, "fetch_frankfurter", side_effect=urllib.error.URLError("down")):
+        out = book_on_approve(db, case, actor="pm", override=None, today=TODAY)
+    assert out.rate is None and case.roe_snapshot is None
+
+
+def test_a_rate_chosen_at_create_is_kept_at_approval(db):
+    _rate(db, TODAY, 19.90)
+    case = _case(db, DAY, suffix="kept", roe_snapshot=17.25, fx_booked_source=BOOKED_OVERRIDE,
+                 fx_override_reason="Rate entered when the case was created")
+    out = book_on_approve(db, case, actor="pm", override=None, today=TODAY)
+    assert out.source == BOOKED_OVERRIDE and float(case.roe_snapshot) == 17.25
+
+
+def test_the_fx_date_of_an_approved_case_is_its_first_approval_event(db):
+    case = _case(db, DAY, suffix="approved", status="approved")
+    db.add(
+        CporCaseEvent(case_id=case.id, event_type="transition_approve", actor="pm", payload_json={})
+    )
+    db.flush()
+    db.execute(
+        text("update cpor_case_event set created_at = :t where case_id = :c"),
+        {"c": case.id, "t": datetime(2031, 4, 2, 9, 0, tzinfo=timezone.utc)},
+    )
+    assert fx_rate.approval_date(db, case, TODAY) == date(2031, 4, 2)  # not DAY, not TODAY
+    assert fx_rate.approval_date(db, _case(db, DAY, suffix="draft"), TODAY) == TODAY
+
+
 def test_a_manual_override_needs_a_reason_and_is_audited_on_the_case(db):
-    _rate(db, DAY, 18.10)
+    _rate(db, TODAY, 18.10)
     case = _case(db, DAY, suffix="override")
     with pytest.raises(FxOverrideReasonRequired):
         book_on_approve(db, case, actor="pm", override=17.80, reason="", today=TODAY)
@@ -210,13 +253,13 @@ def test_a_manual_override_needs_a_reason_and_is_audited_on_the_case(db):
 
 
 def test_the_rate_is_never_revisited_after_the_first_approval(db):
-    _rate(db, DAY, 18.10)
+    _rate(db, TODAY, 18.10)
     case = _case(db, DAY, suffix="fixed")
     book_on_approve(db, case, actor="pm", override=None, today=TODAY)
     db.add(CporCaseEvent(case_id=case.id, event_type="transition_approve", actor="pm", payload_json={}))
     db.flush()
     # the table is corrected afterwards; the booked case does not move
-    db.execute(text("update fx_daily_rate set rate = 18.90 where rate_date = :d"), {"d": DAY})
+    db.execute(text("update fx_daily_rate set rate = 18.90 where rate_date = :d"), {"d": TODAY})
     out = book_on_approve(db, case, actor="pm", override=None, today=TODAY)
     assert out.source == BOOKED_KEPT and float(case.roe_snapshot) == 18.10
     with pytest.raises(FxRateFixed):

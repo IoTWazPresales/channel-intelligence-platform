@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -20,6 +20,7 @@ from app.services.cpor.fx_rate import (
     FxRateFixed,
     RateQuote,
     apply_create_fx,
+    approval_date,
     book_on_approve,
     book_rate,
     case_rate_date,
@@ -185,11 +186,49 @@ def test_reapproval_refuses_a_different_rate():
     assert float(case.roe_snapshot) == 18.22
 
 
-def test_case_rate_date_is_the_window_start_or_today_when_it_is_ahead():
+def test_case_rate_date_is_the_approval_date_never_the_window_start():
+    # D-0093: the FX date is the approval date. Not the window start, past or future.
     today = date(2026, 10, 15)
-    assert case_rate_date(_case(window_start=date(2026, 9, 1)), today) == date(2026, 9, 1)
-    assert case_rate_date(_case(window_start=date(2026, 12, 1)), today) == today
-    assert case_rate_date(_case(window_start=None), today) == today
+    assert case_rate_date(today) == today
+
+
+def test_book_on_approve_asks_for_the_rate_on_the_approval_date_not_the_window_start():
+    today = date(2026, 10, 15)
+    case = _case(window_start=date(2026, 9, 1))
+    with patch("app.services.cpor.fx_rate.rate_for_case_date", return_value=_stored()) as ask, patch(
+        "app.services.cpor.fx_rate.has_prior_approval", return_value=False
+    ):
+        book_on_approve(MagicMock(), case, actor="pm", override=None, today=today)
+    assert ask.call_args.args[1] == today
+    assert case.window_start == date(2026, 9, 1)
+
+
+def test_apply_create_fx_asks_for_the_rate_on_todays_date_not_the_window_start():
+    today = date(2026, 10, 15)
+    case = _case(fx_mode=None, window_start=date(2026, 9, 1))
+    with patch("app.services.cpor.fx_rate._utc_today", return_value=today), patch(
+        "app.services.cpor.fx_rate.rate_for_case_date", return_value=_stored()
+    ) as ask:
+        apply_create_fx(MagicMock(), case, actor="pm", proposed_override=None, explicit_roe=None)
+    assert ask.call_args.args[1] == today
+
+
+def test_approval_date_of_an_unapproved_case_is_today_whatever_its_window():
+    today = date(2026, 10, 15)
+    for window in (date(2026, 9, 1), date(2026, 12, 1), None):
+        case = _case(status="proposed", window_start=window)
+        assert approval_date(MagicMock(), case, today) == today
+
+
+def test_approval_date_of_an_approved_case_is_its_first_approval_event_not_its_window():
+    today = date(2026, 10, 15)
+    session = MagicMock()
+    session.scalar.return_value = datetime(2026, 9, 10, 23, 30, tzinfo=timezone.utc)
+    case = _case(status="ended", window_start=date(2026, 8, 1))
+    assert approval_date(session, case, today) == date(2026, 9, 10)
+    session.scalar.return_value = None
+    case.decided_at = datetime(2026, 9, 12, 8, 0, tzinfo=timezone.utc)
+    assert approval_date(session, case, today) == date(2026, 9, 12)
 
 
 def test_confirm_backfill_draft_does_not_book():

@@ -3,9 +3,10 @@
 ``cpor_case.roe_snapshot`` remains the booked/declared case rate (NS-1a).
 Proposed columns are a separate history; booking never overwrites them.
 
-N-0083 rules (Warren): a case's rate comes from the stored daily rate for the case's own
-date, or from an explicit manual override that carries a reason. It is fixed at the first
-approval and never revisited. Rates are fetched daily and can be refreshed.
+N-0083 rules (Warren, D-0093): a case's rate comes from the stored daily rate for its APPROVAL
+date (a stored rate up to 4 days older is accepted), or from an explicit manual override that
+carries a reason. A rate chosen at create or carried from an import is kept at approval. It is
+fixed at the first approval and never revisited. Rates are fetched daily and can be refreshed.
 
 Fetch source: Frankfurter (ECB daily reference, no API key, ZAR quoted).
 Failed fetches never block a case: the case stays unbooked and flagged. A last-known
@@ -248,13 +249,47 @@ def ensure_today_rate(session: Session) -> RateQuote:
     return ensure_rate_for_date(session, _utc_today())
 
 
-def case_rate_date(case: CporCase, today: date | None = None) -> date:
-    """The case's own date: its window start, or today when the window has not started yet."""
+def case_rate_date(today: date | None = None) -> date:
+    """The FX date of a case that is not yet approved (D-0093): the date it would be approved
+    today. The window start is not used; the rate is provisional until the first approval."""
+    return today or _utc_today()
+
+
+def approval_date(session: Session, case: CporCase, today: date | None = None) -> date:
+    """The FX date of a case (D-0093): its APPROVAL date, always.
+
+    A case already approved uses the date of its first approval event (or ``decided_at`` when
+    the event is missing); any other case uses today.
+    """
     now = today or _utc_today()
-    start = getattr(case, "window_start", None)
-    if start is None or start > now:
-        return now
-    return start
+    if (getattr(case, "status", None) or "").strip().lower() in POST_APPROVAL_STATUSES:
+        first = None
+        case_id = getattr(case, "id", None)
+        if case_id is not None:
+            first = session.scalar(
+                select(func.min(CporCaseEvent.created_at)).where(
+                    CporCaseEvent.case_id == case_id,
+                    CporCaseEvent.event_type == "transition_approve",
+                )
+            )
+        first = first or getattr(case, "decided_at", None)
+        if first is not None:
+            return first.astimezone(timezone.utc).date() if first.tzinfo else first.date()
+    return now
+
+
+def _usable(row: FxDailyRate | None) -> bool:
+    return row is not None and not row.is_fallback and _positive_rate(row.rate) is not None
+
+
+def _quote_from_row(row: FxDailyRate) -> RateQuote:
+    return RateQuote(
+        rate=float(row.rate),
+        rate_date=row.rate_date,
+        source=row.source,
+        is_fallback=False,
+        fetch_failed=False,
+    )
 
 
 def rate_for_case_date(session: Session, on_date: date, *, today: date | None = None) -> RateQuote:
@@ -262,8 +297,8 @@ def rate_for_case_date(session: Session, on_date: date, *, today: date | None = 
 
     Stored first: a row for the date, or for a past date the last row no more than
     ``STORED_GAP_DAYS`` earlier (weekend or bank holiday). Otherwise one ECB fetch, which is
-    stored under the date the ECB published. A failed fetch gives no rate; nothing older is
-    substituted.
+    stored under the date the ECB published. When that fetch fails, a stored row no more than
+    ``STORED_GAP_DAYS`` before the date is used (D-0093); nothing older is substituted.
     """
     now = today or _utc_today()
     row = load_rate_on_date(session, on_date)
@@ -271,15 +306,14 @@ def rate_for_case_date(session: Session, on_date: date, *, today: date | None = 
         earlier = load_rate_on_or_before(session, on_date)
         if earlier is not None and (on_date - earlier.rate_date).days <= STORED_GAP_DAYS:
             row = earlier
-    if row is not None and not row.is_fallback and _positive_rate(row.rate) is not None:
-        return RateQuote(
-            rate=float(row.rate),
-            rate_date=row.rate_date,
-            source=row.source,
-            is_fallback=False,
-            fetch_failed=False,
-        )
-    return ensure_rate_for_date(session, on_date)
+    if _usable(row):
+        return _quote_from_row(row)  # type: ignore[arg-type]
+    quote = ensure_rate_for_date(session, on_date)
+    if quote.fetch_failed:
+        earlier = load_rate_on_or_before(session, on_date)
+        if _usable(earlier) and (on_date - earlier.rate_date).days <= STORED_GAP_DAYS:  # type: ignore[union-attr]
+            return _quote_from_row(earlier)  # type: ignore[arg-type]
+    return quote
 
 
 def _same_rate(a: float | None, b: float | None) -> bool:
@@ -373,7 +407,7 @@ def apply_create_fx(
     proposed_override: float | None,
     explicit_roe: float | None,
 ) -> RateQuote:
-    """Seed FX at create from the stored rate for the case's own date.
+    """Seed FX at create from the stored rate for today, the date the case would be approved.
 
     The draft rate is provisional: it is booked again at approval from the same rule. A rate
     the operator supplies that differs from the stored rate is a manual override and is
@@ -381,7 +415,7 @@ def apply_create_fx(
     """
     override = _positive_rate(proposed_override)
     explicit = _positive_rate(explicit_roe)
-    quote = rate_for_case_date(session, case_rate_date(case))
+    quote = rate_for_case_date(session, case_rate_date())
     stored_rate = quote.rate if quote.live else None
 
     chosen = override if override is not None else explicit
@@ -480,7 +514,7 @@ def book_on_approve(
             rate_date=getattr(case, "fx_booked_rate_date", None),
         )
 
-    stored = rate_for_case_date(session, case_rate_date(case, today), today=today)
+    stored = rate_for_case_date(session, case_rate_date(today), today=today)
     stored_rate = stored.rate if stored.live else None
     stored_date = stored.rate_date if stored_rate is not None else None
     notes: list[str] = []
