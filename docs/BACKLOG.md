@@ -79,7 +79,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Code done + cip_test proven, cip `alembic upgrade head` pending Warren's "run"** (2026-09-24 N-0050: revision `20260924_0023` adds NOT NULL `window_start`/`window_end` backfilled verbatim from the case window; grain `uq_cpor_case_line_grain` + `window_start`; rollup uses line windows; Mon–Sun non-aligned windows flagged `window_week_straddle`, never snapped or pro-rated; API code needs the migration first; evidence `.eif/audit/PROGRAMME_20260924/n0050/IMPL.md`) · Confirmed open 2026-09-21 N-0030 · 2026-08-20 |
+| **Status / parked** | **Correction 2026-10-15 (N-0096, SWEEP_A): applied on cip.** `20260924_0023` is applied; cip is at `20261015_0040`. The "pending Warren's run" text below is out of date. **Code done + cip_test proven, cip `alembic upgrade head` pending Warren's "run"** (2026-09-24 N-0050: revision `20260924_0023` adds NOT NULL `window_start`/`window_end` backfilled verbatim from the case window; grain `uq_cpor_case_line_grain` + `window_start`; rollup uses line windows; Mon–Sun non-aligned windows flagged `window_week_straddle`, never snapped or pro-rated; API code needs the migration first; evidence `.eif/audit/PROGRAMME_20260924/n0050/IMPL.md`) · Confirmed open 2026-09-21 N-0030 · 2026-08-20 |
 | **Effort** | Medium (approved migration) |
 | **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` §3 / §9.3 / D-058. Warren: `cpor_case_line` has no effective window columns. |
 | **Idea** | Each line carries a week-aligned window + fixed rate. Supersession: old line closes end of prior week; new line from new week to case end. Unique grain today `(case_id, product_id, distributor_id, pod_quarter)` cannot hold two living lines for the same SKU. Settlement `_claim_in_window` currently uses **case** dates. |
@@ -130,7 +130,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Display half done on grids too** (2026-09-24 N-0034, D7: every Tier A fact grid shows customer / distributor **names** in identity cells; codes are their own default-hidden "Reference" columns in the one fact-grid column picker — BACKLOG-201. Not changed: filter-dropdown option labels, `admin/shipment-evidence`, `admin/distributors` code editor (D-0031). Mint half still open.) · **Updated** (2026-09-21 N-0030 audit: display half **done** — name-only, `SHOW_CUSTOMER_CODE=false` at `492795c`; mint half open; 14 TMP-coded active customers of 4,949 via `dim_customer.code`; Stage 4.5) · **Partial** · 2026-09-18 · settlement surfaces show name primary (CIP-minted code subordinate via `SHOW_CUSTOMER_CODE`). Do **not** bulk-promote the 14 unverified TMP rows or repoint 216 merged losers. Mint scheme still parked. |
+| **Status / parked** | **Correction 2026-10-15 (N-0096, SWEEP_A): the mint half is built.** `customer_code_mint.py`, `distributor_code_mint.py`, `customers.py` `mode: map|mint` and `CustomerBulkPromoteDialog.tsx` are on HEAD since `66003db9` (2026-07-10). Promoting TMP named accounts has not been run. Text below that says mint was never built or is open is out of date. **Display half done on grids too** (2026-09-24 N-0034, D7: every Tier A fact grid shows customer / distributor **names** in identity cells; codes are their own default-hidden "Reference" columns in the one fact-grid column picker — BACKLOG-201. Not changed: filter-dropdown option labels, `admin/shipment-evidence`, `admin/distributors` code editor (D-0031). Mint half still open.) · **Updated** (2026-09-21 N-0030 audit: display half **done** — name-only, `SHOW_CUSTOMER_CODE=false` at `492795c`; mint half open; 14 TMP-coded active customers of 4,949 via `dim_customer.code`; Stage 4.5) · **Partial** · 2026-09-18 · settlement surfaces show name primary (CIP-minted code subordinate via `SHOW_CUSTOMER_CODE`). Do **not** bulk-promote the 14 unverified TMP rows or repoint 216 merged losers. Mint scheme still parked. |
 | **Effort** | Medium (approved settings table / mint path) |
 | **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` §9.5 / D-065. Warren: named accounts still carry TMP-CUST; promote works but is unused because no code scheme exists; CIP will mint its own, updatable later. |
 | **Idea** | Mint CIP-owned codes on promote (research already in `docs/design/BACKLOG-061-U2a_customer_code_mint_research.md`). BACKLOG-061 promote **map** was pruned as shipped — operator-supplied `new_code`. Mint was never built. ERP/customer-file codes are an optional later mapping, not a blocker. |
@@ -198,7 +198,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-20 |
+| **Status / parked** | **Closed 2026-10-15 (N-0096):** the four tests seed their own distributor, case and lines in a rolled-back transaction on `cip_test` and assert the rule, not production ids. **Parked** · 2026-08-20 |
 | **Effort** | Small |
 | **Source** | Close-off GATE 2 / 2.7: `apps/api/tests/test_lineup_distributor_as_customer_remediation.py` fails on `cip_test` (distributor 50 missing; no syntech / smd lineup fixtures). Proven on unmerged `origin/main` @ `4ea1782` and on merged main; not caused by shipping-mailer or RBAC. |
 | **Idea** | Those four tests read live `dim_distributor` / `commercial_lineup_line` rows that exist on `cip` (distributor 50, syntech lines on OC+dist 51, unresolved `smd`) but were never seeded into `cip_test`. Decide whether the tests seed their own fixtures or are marked as requiring a populated DB. |
@@ -684,7 +684,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-08-03 |
+| **Status / parked** | **Correction 2026-10-15 (N-0096, SWEEP_A): superseded by BACKLOG-116**; N-0069 still lists it. **Parked** · 2026-08-03 |
 | **Effort** | Large |
 | **Source** | S1–S14 grade of `PoAutoLinkProposalsSection.tsx` (2026-08-03) |
 | **Idea** | Bring PO↔lineup link review to import-steward contract bar (or document permanent waivers). |
@@ -804,7 +804,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Confirmed open** (2026-09-21 N-0030 audit: no `uvicorn` in `.github/workflows`) · **Parked** · 2026-08-01 |
+| **Status / parked** | **Deferred 2026-10-15 by Warren (N-0096)** — skip for now; revisit before a second developer pushes or before main promotion. Confirmed open (2026-09-21 N-0030 audit: no `uvicorn` in `.github/workflows`) · **Parked** · 2026-08-01. Notes for whoever picks it up: the demo seed (`python scripts/seed.py --full`) is what puts `SKU-ALPHA-01` and its sell-out rows on the database; it wipes first, so run it on `cip_test` after the API tests. Unverified: whether the live spec still matches the current admin products page and sign-in. |
 | **Effort** | Medium (CI job wiring + seed/auth for live specs) |
 | **Source** | PR #13 CI — e2e red: Next proxy `ECONNREFUSED :8001`; wipe/products specs need live API (`CIP_E2E_API_URL` / `:8010`) |
 | **Idea** | Run FastAPI in GitHub Actions against already-migrated `cip_test`, point Next proxy + `CIP_E2E_API_URL` at it, enable `wipe-and-products-delete` (and future live specs). |
@@ -813,7 +813,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 | **Regression traps** | Do not point CI e2e at `cip`; keep `ALLOW_TESTS_ON_DEV_DB` unset; do not weaken steward/wipe safety flags. |
 | **Behavior to retain** | Mocked e2e (dashboard / getting-started / navigation) stay API-free and green without this. |
 | **Out of scope** | Full browser soak of Import Centre; required-check unlock (BACKLOG-087). |
-| **TRIGGER** | Warren asks for green live e2e on GitHub CI **or** live wipe/products specs start failing locally without a clear docker:e2e path. |
+| **TRIGGER** | Before a second developer pushes or before main promotion (Warren, 2026-10-15). Also: Warren asks for green live e2e on GitHub CI, or live wipe/products specs start failing locally without a clear docker:e2e path. |
 
 ---
 
@@ -945,7 +945,7 @@ debt untracked until charter v1.3 amendment 7 (2026-08-30). Close evidence:
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Resolved 2026-08-01** — UI label **Over-plan intake**; exception “Over-ships / over-plan intake”; API `over_plan_intake_*` aliases |
+| **Status / parked** | **Correction 2026-10-15 (N-0096, SWEEP_A): not Resolved.** The API `over_plan_intake_*` aliases stand, but `5e8c89fa` (2026-10-05) put the UI label back to "Deal-stock landing" (`PlanVsExecutedView.tsx`). Which name stands is Warren's call. **Resolved 2026-08-01** — UI label **Over-plan intake**; exception “Over-ships / over-plan intake”; API `over_plan_intake_*` aliases |
 | **Effort** | Trivial (UI string + tooltip; optional test ids) |
 | **Source** | `docs/COMMERCIAL_SEMANTICS.md` A1-02; Warren 2026-08-01 (end POD collision) |
 | **Idea** | Rename scorecard label “Deal-stock landing” to **Over-plan intake** (and exception copy “Over-ships / deal-stock” accordingly) so it cannot be read as POD landing. |
@@ -2066,7 +2066,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Closed — Superseded** (2026-09-21 N-0030 audit: six-container spine replaced by domain IA, N-0013 / D-0007 / D-0010; delivered as N-0004; no `/brief` route) · **Parked** · 2026-08-30 |
+| **Status / parked** | **Correction 2026-10-15 (N-0096, SWEEP_C):** the `/brief` route exists (`brief/page.tsx` mounts `OverviewHub`); the "no `/brief` route" note below is wrong. Delivered under the domain IA. **Closed — Superseded** (2026-09-21 N-0030 audit: six-container spine replaced by domain IA, N-0013 / D-0007 / D-0010; delivered as N-0004; no `/brief` route) · **Parked** · 2026-08-30 |
 | **Effort** | Large |
 | **Source** | `docs/design/IMPLEMENTATION_PLAN.md` NS-2; charter P2-4; `brief.html` exemplar |
 | **Idea** | Six-container spine (Brief · Lineup · Stock · Settlement · Response · Steward) + utilities; grammar 3 Brief replaces Dashboard/Control tower; retired routes redirect. |
@@ -2083,7 +2083,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Closed — Superseded** (2026-09-21 N-0030 audit: N-0013 IA; delivered as N-0007; no `/stock` container route) · **Parked** · 2026-08-30 |
+| **Status / parked** | **Correction 2026-10-15 (N-0096, SWEEP_C):** the `/stock` route exists (`stock/page.tsx` mounts `StockContainer`); the "no `/stock` container route" note below is wrong. Delivered under the domain IA. **Closed — Superseded** (2026-09-21 N-0030 audit: N-0013 IA; delivered as N-0007; no `/stock` container route) · **Parked** · 2026-08-30 |
 | **Effort** | Large (may split 3a Inbound / 3b Cover+Movement) |
 | **Source** | `docs/design/IMPLEMENTATION_PLAN.md` NS-3; `stock-cover.html`, `stock-inbound.html` |
 | **Idea** | One Stock container, grammar 2: lenses Sell-out · Fill vs plan · Cover · Inbound; absorb `/sell-out`, `/plan-vs-executed`, `/shipping`, `/admin/po-management`, CST/forecast context chips. |
@@ -2406,7 +2406,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-04 |
+| **Status / parked** | **Correction 2026-10-15 (N-0096, SWEEP_C, not re-checked against the engine since 2026-10-07):** the installed engine now has `caveat.resolve`, `node.retroactive_complete` and a debt-aware `health`. **Parked** · 2026-09-04 |
 | **Effort** | Medium (EIF repo — new event type; do not invent in CIP) |
 | **Source** | `.eif/runtime/programme/eif_program/engine.py` `apply_event` handlers (closed set); `h_quality` overwrites dim evidence; `PROGRAM_LOG.ndjson` seq 287 `consult_model_logged: UNVERIFIED` vs GOV-008 addendum VERIFIED; `.eif/audit/NS6_GOV008_R3_20260903/independent-rendered-review.md` ledger-divergence paragraph |
 | **Idea** | After a quality event is written, a later caveat resolution (here: CONSULT model identity) has no lawful append-only event that *points at the prior seq* without mutating the dim. The 2026-09-03 event stays UNVERIFIED in the ledger; the audit file holds VERIFIED. Those two sources must not be collapsed. |
@@ -2423,7 +2423,7 @@ NS-1a may start. **Out of scope:** Reports (grammar 6), Admin beyond spine utili
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Accepted** · 2026-09-04. Operator: N-0006 stays `proposed`. No synthetic `implementation_run`. FX enforcement is live in the product; the ledger gap is bookkeeping and waits for the EIF repair (BACKLOG-171). |
+| **Status / parked** | **Correction 2026-10-15 (N-0096, SWEEP_C, not re-checked against the engine since 2026-10-07):** the installed engine now has `caveat.resolve`, `node.retroactive_complete` and a debt-aware `health`; the bookkeeping gap may now be repairable. **Accepted** · 2026-09-04. Operator: N-0006 stays `proposed`. No synthetic `implementation_run`. FX enforcement is live in the product; the ledger gap is bookkeeping and waits for the EIF repair (BACKLOG-171). |
 | **Effort** | Medium (programme walk + independent R3 referent) once Warren accepts the post-hoc stamp **in writing** |
 | **Source** | `.eif/program/PROGRAM.yaml` N-0006 (`class: feature`, `status: proposed`, `stage: null`, `risk: R3`, `touches_existing: true`, `baseline_ref: null`, `quality: {}`, `verification: {}`, `depends_on: [N-0012]`); `.eif/runtime/programme/eif_program/engine.py` `stamp_implementation_boundary` / `h_stage` / `h_status` / `needs_baseline` / `gates_ok`; `.eif/runtime/programme/eif_program/independence.py` `verification_requires_independence` / `independence_issue`; product already ships `fx_mode` / `fx_settle_allowed` (Alembic `20260902_0020`). Same class as N-0013 synthetic `implementation_run` and BACKLOG-169 (no post-hoc event type). |
 | **Idea** | Reconcile the N-0006 ledger with shipped FX enforcement **only** via the engine’s closed event set — not by editing `PROGRAM.yaml` or inventing a “already shipped” event. |
@@ -2483,7 +2483,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Parked** · 2026-09-06. Record only. Do **not** fix in this CIP product session. |
+| **Status / parked** | **Correction 2026-10-15 (N-0096, SWEEP_C, not re-checked against the engine since 2026-10-07):** the installed engine now has `caveat.resolve`, `node.retroactive_complete` and a debt-aware `health`. **Parked** · 2026-09-06. Record only. Do **not** fix in this CIP product session. |
 | **Effort** | Medium (EIF programme `verify` / health reporting) |
 | **Source** | Operator 2026-09-06: `program.py verify` stays `ok:false` because five nodes are lawfully retroactive or independence-disclaimed (N-0006, N-0013, N-0014–16). |
 | **Idea** | `verify` currently collapses structural integrity, live failures, and acknowledged assurance debt into one red bit. After lawful retroactive completes and independence disclaimers, that bit stays red forever and hides new failures. |
@@ -2882,7 +2882,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Partial** · 2026-10-05 · Warren: keep multiple catalogs; do not retire `catalog_product`. Per-line maps already overlay `column_mapping_memory.mapping_profile.by_product_line`. Duplicate EAN stays FLAG. Sellable grain five vs sixteen is still open. |
+| **Status / parked** | **Correction 2026-10-15 (N-0096, SWEEP_C):** the sellable grain is settled. N-0040 (complete) set it as every `dim_product.product_line`, so "five vs sixteen is still open" below is out of date. D-0023 (does Warren's answer close it) is still open in the ledger. **Partial** · 2026-10-05 · Warren: keep multiple catalogs; do not retire `catalog_product`. Per-line maps already overlay `column_mapping_memory.mapping_profile.by_product_line`. Duplicate EAN stays FLAG. Sellable grain five vs sixteen is still open. |
 | **Effort** | Medium+; likely a catalogue-model decision before code |
 | **Source** | `apps/api/app/models/product_catalog.py`; `pm_commit_catalog.py`; `dim_product.product_line` counts on `cip` 2026-09-18. |
 | **Resume-context** | `product_line` grain is real (NB/NX/PF/NR/PT/LM/XB/…; 10 null). `business_unit` is a different axis (CONSUMER/COMMERCIAL/PHONE/DISPLAY/Gaming & Workspace Gear). `catalog_product` is live: 18157 rows, all linked to `dim_product`, 1 `product_catalog` (`default_master`), 1 `source_definition` (`product_catalog_default`). 192 `attribute_definition` rows are leftover staged-column defs; EAV values 0 because `pm_write_legacy_eav` default False. Recommendation (not implemented): nest per-line maps in `column_mapping_memory`; keep specs in `specs_json`; do not revive EAV for column sets. Catalogue axis is source/feed, not product line. |
@@ -2922,7 +2922,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **HELD** (2026-09-21 N-0030 audit: N-0029 AC — 'Do not unify MasterColumnPickerDialog and ColumnSelectorModal'; deleting the wrapper is that unification; N-0029 review rules) · **Open** · 2026-09-21 · found by the grid/column parity audit (§7.2) |
+| **Status / parked** | **Correction 2026-10-15 (N-0096, SWEEP_C):** `7656f67e` (2026-09-18) already unified the master and planner column pickers, so the hold on "do not unify the pickers" no longer has a reason. **HELD** (2026-09-21 N-0030 audit: N-0029 AC — 'Do not unify MasterColumnPickerDialog and ColumnSelectorModal'; deleting the wrapper is that unification; N-0029 review rules) · **Open** · 2026-09-21 · found by the grid/column parity audit (§7.2) |
 | **Effort** | Trivial |
 | **Source** | `apps/web/src/components/masterGrid/MasterColumnPickerDialog.tsx`; its only referent is `MasterColumnPickerDialog.test.tsx` |
 | **Idea** | Delete the wrapper, or re-point `MasterDataGridShell` at it — but do not leave a component whose only caller is its own test. |
@@ -2995,7 +2995,7 @@ Exact engine invariants (do not complete around them):
 
 | Field | Detail |
 |-------|--------|
-| **Status / parked** | **Open** · 2026-09-21 · surfaced by the first full no-`-x` suite run after the router-level auth gate (N-0033) |
+| **Status / parked** | **Closed on `cip_test` 2026-10-15 (N-0096):** all seven pass on a fresh `cip_test` run (full API suite 2973 passed); `test_apply_resolved_entities_syncs_stamped_ids` was a stale mock and was fixed. They are still not run against shared `cip`. **Open** · 2026-09-21 · surfaced by the first full no-`-x` suite run after the router-level auth gate (N-0033) |
 | **Effort** | Small per test; the decision (fixtures vs `cip_test`) is the real work |
 | **Source** | `tests/test_distributor_sales_inventory_import.py` ×4 (`…no_queue_spam`, `…approved_alias_resolves_customer`, `…merged_dealer_group_patterns`, `…missing_mapping_message_vs_unresolved_distributor`), `tests/test_shipment_resolved_entities.py::test_apply_resolved_entities_syncs_stamped_ids`, `tests/test_data_integrity_audit.py::test_audit_seeded_violations_on_db`, `tests/test_dsi_validate_bulk_staging.py::test_customer_candidates_from_cache_matches_db_filtering` |
 | **Idea** | These pass only on a database in a known state. Against production `cip` (4,949 customers, live aliases) they hit `UniqueViolation` on `uq_cust_src_token_alias_approved_scope` for a leftover `alias dealer token`, find 0 candidates where 1 is seeded, or compare cache vs DB sets that include real rows. They are environmental, not code defects — all fail on assertions, none on auth. |
