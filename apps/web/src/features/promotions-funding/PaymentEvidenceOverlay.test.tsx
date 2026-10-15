@@ -68,7 +68,8 @@ describe('PaymentEvidenceOverlayPanel', () => {
     expect(screen.getByTestId('cpor-payment-overlay')).toBeInTheDocument();
     expect(screen.getByText(/overclaim 75 units/i)).toBeInTheDocument();
     expect(screen.getByTestId('cpor-payment-paid-note')).toHaveTextContent(/does not move R0 paid/i);
-    expect(screen.getByText(/historical source attestation/i)).toBeInTheDocument();
+    // The unmatched file row is labelled by its evidence basis (evidenceBasis.ts): 'Source attested'.
+    expect(screen.getByText(/C19A50693 · Source attested/)).toBeInTheDocument();
     const unmatched = screen.getByRole('link', { name: /C19A50693/i });
     expect(unmatched).toHaveAttribute(
       'href',

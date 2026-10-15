@@ -498,9 +498,9 @@ describe('AdminProductsPage DSI delete maintenance', () => {
     fireEvent.click(await screen.findByTestId('admin-products-row-delete'));
     expect(await screen.findByText(/Product is still referenced/i)).toBeInTheDocument();
     expect(await screen.findByText(/Distributor inventory \(4\)/)).toBeInTheDocument();
-    expect(await screen.findByText(/Admin maintenance \/ dev cleanup/i)).toBeInTheDocument();
-    expect(await screen.findByText(/Distributor inventory facts:/)).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: 'Clear distributor inventory facts for this product' })).toBeInTheDocument();
+    expect(await screen.findByText(/^Maintenance$/)).toBeInTheDocument();
+    expect(await screen.findByText(/Distributor inventory:/)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Clear distributor inventory and sell-out for this product' })).toBeInTheDocument();
     expect(apiLib.apiGet).toHaveBeenCalledWith(
       '/api/v1/products/id/1/dependencies/distributor-inventory',
       expect.anything()
@@ -513,8 +513,8 @@ describe('AdminProductsPage DSI delete maintenance', () => {
     await screen.findByText('SKU-1');
     fireEvent.click(await screen.findByTestId('admin-products-row-delete'));
     expect(await screen.findByText(/Lineup \(2\)/)).toBeInTheDocument();
-    expect(screen.queryByText(/Admin maintenance \/ dev cleanup/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Clear distributor inventory facts for this product' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Maintenance$/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear distributor inventory and sell-out for this product' })).not.toBeInTheDocument();
   });
 
   it('requires typed confirm token before calling clear endpoint', async () => {
@@ -522,8 +522,8 @@ describe('AdminProductsPage DSI delete maintenance', () => {
     renderPage();
     await screen.findByText('SKU-1');
     fireEvent.click(await screen.findByTestId('admin-products-row-delete'));
-    fireEvent.click(await screen.findByRole('button', { name: 'Clear distributor inventory facts for this product' }));
-    expect(await screen.findByRole('dialog', { name: 'Confirm DSI fact removal' })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear distributor inventory and sell-out for this product' }));
+    expect(await screen.findByRole('dialog', { name: 'Confirm removal of sell-out and inventory' })).toBeInTheDocument();
     const removeBtn = screen.getByRole('button', { name: 'Remove DSI facts' });
     expect(removeBtn).toBeDisabled();
     fireEvent.change(screen.getByLabelText('Confirmation token'), {
@@ -538,7 +538,7 @@ describe('AdminProductsPage DSI delete maintenance', () => {
       );
     });
     await waitFor(() => {
-      expect(screen.queryByText(/Admin maintenance \/ dev cleanup/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/^Maintenance$/)).not.toBeInTheDocument();
     });
   });
 });

@@ -566,7 +566,7 @@ describe('AdminImportsPage historical_lineup mapping review panel', () => {
 
     // Map previously-unmapped Customer column → customer_token (creates override delta).
     await user.click(await screen.findByTestId('hl-map-Customer'));
-    const option = await screen.findByRole('option', { name: /Customer \(customer_token\)/i });
+    const option = await screen.findByRole('option', { name: /^Customer$/i });
     await user.click(option);
 
     const revalidateBtn = await screen.findByRole('button', { name: /Re-validate with corrections/i });
@@ -601,7 +601,7 @@ describe('AdminImportsPage historical_lineup mapping review panel', () => {
     await user.click(screen.getByRole('button', { name: /Show \/ edit/i }));
 
     await user.click(await screen.findByTestId('hl-map-Customer'));
-    const option = await screen.findByRole('option', { name: /Customer \(customer_token\)/i });
+    const option = await screen.findByRole('option', { name: /^Customer$/i });
     await user.click(option);
 
     const applyBtn = await screen.findByRole('button', { name: /Apply validated file/i });
@@ -698,8 +698,9 @@ describe('AdminImportsPage Phase 3B — mapping review label clarity', () => {
     await screen.findByText(/Column mapping review/i);
     await user.click(screen.getByRole('button', { name: /Show \/ edit/i }));
 
-    // Header-centric panel: sku_raw target label appears on the mapped Part Number chip.
-    expect(await screen.findByText(/Product identity \(SKU\) \(sku_raw\)/)).toBeInTheDocument();
+    // Header-centric panel: the sku_raw target label appears on the mapped Part Number chip, in plain words
+    // (the internal field name is no longer printed after it).
+    expect(await screen.findByText(/^Product identity \(SKU\)$/)).toBeInTheDocument();
     expect(screen.queryAllByText(/^SKU$/)).toHaveLength(0);
   });
 
@@ -715,7 +716,7 @@ describe('AdminImportsPage Phase 3B — mapping review label clarity', () => {
 
     await user.click(await screen.findByTestId('hl-map-Customer'));
     expect(
-      await screen.findByRole('option', { name: /Base unit \(descriptor\) \(base_unit_raw\)/i })
+      await screen.findByRole('option', { name: /^Base unit \(descriptor\)$/i })
     ).toBeInTheDocument();
   });
 
@@ -765,8 +766,8 @@ describe('AdminImportsPage Phase 3B — mapping review label clarity', () => {
     await screen.findByText(/Column mapping review/i);
     await user.click(screen.getByRole('button', { name: /Show \/ edit/i }));
 
-    expect(await screen.findByText(/Base unit \(descriptor\) \(base_unit_raw\)/)).toBeInTheDocument();
-    expect(screen.queryByText(/Product identity \(SKU\) \(sku_raw\)/)).not.toBeInTheDocument();
+    expect(await screen.findByText(/^Base unit \(descriptor\)$/)).toBeInTheDocument();
+    expect(screen.queryByText(/^Product identity \(SKU\)$/)).not.toBeInTheDocument();
 
     mockState.hlValidateJobDetail.field_mapping = savedMapping;
   });
