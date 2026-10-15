@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2394
-  log_sha256: 02f2d1c8c775cec463d55ddf23ec76592db03855bb8e4a2fe839024b97b2cee3
+  snapshot_revision: 2446
+  log_sha256: 50ba335a6d92f5985452661fe9056a260db6557487e170c0a6538996b8cc4267
   acceptance_policy:
     milestone: operator
     root: operator
@@ -9975,7 +9975,7 @@ nodes:
     origin: operator
     status: in_progress
     stage: verify
-    revision: 21
+    revision: 24
     lease: null
     depends_on:
     - N-0073
@@ -9985,7 +9985,7 @@ nodes:
     risk: R3
     touches_existing: true
     acceptance: operator
-    acceptance_state: pending
+    acceptance_state: accepted
     acceptance_criteria:
     - Profit definition per Warren's decision (which cost basis is the margin, and where the other two are shown)
     - Lineup profitability and CPOR margin read the same definition; every figure names its cost basis
@@ -10195,7 +10195,7 @@ nodes:
     origin: operator
     status: in_progress
     stage: verify
-    revision: 25
+    revision: 28
     lease: null
     depends_on:
     - N-0074
@@ -10206,7 +10206,7 @@ nodes:
     risk: R3
     touches_existing: true
     acceptance: operator
-    acceptance_state: pending
+    acceptance_state: accepted
     acceptance_criteria:
     - A planner sends a customer a single-case link; the customer sees only that case's settlement summary and approves or
       rejects with a comment
@@ -10387,9 +10387,9 @@ nodes:
     title: 'FX rate table and ROE governance: daily rates actually stored, case ROE drawn from the table (spec section 9.4)'
     class: feature
     origin: operator
-    status: ready
+    status: in_progress
     stage: validate
-    revision: 19
+    revision: 22
     lease: null
     depends_on:
     - N-0073
@@ -10401,7 +10401,7 @@ nodes:
     risk: R2
     touches_existing: true
     acceptance: operator
-    acceptance_state: pending
+    acceptance_state: accepted
     acceptance_criteria:
     - 'The FX poller writes fx_daily_rate on cip (today it cannot: role cip is not the table owner)'
     - A case ROE is chosen from the stored rate for its date or is an explicit, audited manual override
@@ -11657,9 +11657,9 @@ nodes:
       and repair scripts (BACKLOG-081 + 083, shipped as a pair)'
     class: feature
     origin: operator
-    status: proposed
-    stage: null
-    revision: 0
+    status: in_progress
+    stage: verify
+    revision: 19
     lease: null
     depends_on: []
     facets:
@@ -11673,42 +11673,98 @@ nodes:
     - A confirmed merge mints approved loser-name aliases to the keeper, so merged tokens stop returning as steward work
     - Resolvers follow merged_into; related-name worklist; repair/backfill scripts proven on a clone before cip
     - Tests green on touched areas, tsc exit 0, eslint clean on changed files
-    baseline_ref: null
+    baseline_ref: BLN-N0095
     parity_source: []
     parity_matrix: {}
     parity_retire_decisions: {}
     quality:
       testing:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: apps/api/tests/test_merge_resolvers_follow_db.py
+          summary: Full API pytest on cip_test 2998 passed, 21 skipped, 0 failed; full web vitest 185 files 864 passed (2
+            workers); 21 new N-0095 DB tests incl. one per resolver (DSI DB and cache, shipment, lineup, sell
+        rationale: Full API pytest on cip_test 2998 passed, 21 skipped, 0 failed; full web vitest 185 files 864 passed (2
+          workers); 21 new N-0095 DB tests incl. one per resolver (DSI DB and cache, shipment, lineup, sell-through); web
+          tsc exit 0; next lint clean on changed files.
+        pass_run: RUN-20261015-N0095-IMPL
+        pass_actor: gov-001
       observability:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: apps/api/app/services/customer_full_merge.py
+          summary: Merge and keeper change write platform audit events (customer_merge, customer_change_keeper) with steward,
+            records, rows moved and seal counts, and log one info line; conflicts are returned in the res
+        rationale: Merge and keeper change write platform audit events (customer_merge, customer_change_keeper) with steward,
+          records, rows moved and seal counts, and log one info line; conflicts are returned in the result and shown in the
+          panel.
+        pass_run: RUN-20261015-N0095-IMPL
+        pass_actor: gov-001
       data_integrity:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261015/n0095/N0095_CLONE_PROOF.md
+          summary: Seal never overwrites a third customer's alias; idempotent (second run mints 0); keeper change is one transaction
+            with zero-ref guard; clone swap 299->26 and back restored identical sell-out, sell-thr
+        rationale: Seal never overwrites a third customer's alias; idempotent (second run mints 0); keeper change is one transaction
+          with zero-ref guard; clone swap 299->26 and back restored identical sell-out, sell-through and case counts; test
+          fixtures untouched.
+        pass_run: RUN-20261015-N0095-IMPL
+        pass_actor: gov-001
       backup_recovery:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261015/n0095/N0095_CLONE_PROOF.md
+          summary: No schema change. Seal aliases carry the note prefix '[customer merge alias seal]' and can be listed or
+            removed; a keeper change is undone by changing the keeper back (proven on the clone).
+        rationale: No schema change. Seal aliases carry the note prefix '[customer merge alias seal]' and can be listed or
+          removed; a keeper change is undone by changing the keeper back (proven on the clone).
+        pass_run: RUN-20261015-N0095-IMPL
+        pass_actor: gov-001
       migration_safety:
         required: true
-        state: pending
-        evidence: null
-        rationale: null
-    verification: {}
+        state: pass
+        evidence:
+          path: .eif/audit/PROGRAMME_20261015/n0095/N0095_CIP_APPLY.md
+          summary: 'No migration. Backfill proven on clone cip_n0095 first (dry run, apply, re-apply 0, wrong --expect-db
+            refused), then cip: 112 minted, 0 conflicts, re-run plans 0. Scripts print current_database() and '
+        rationale: 'No migration. Backfill proven on clone cip_n0095 first (dry run, apply, re-apply 0, wrong --expect-db
+          refused), then cip: 112 minted, 0 conflicts, re-run plans 0. Scripts print current_database() and refuse --apply
+          without a matching --expect-db.'
+        pass_run: RUN-20261015-N0095-IMPL
+        pass_actor: gov-001
+    verification:
+      behavioral:
+        state: pass
+        pass_run: RUN-20261015-N0095-VER
+        pass_actor: gov-008
+        evidence: apps/api/tests/test_merge_resolvers_follow_db.py
+        path: null
+      referent:
+        state: pass
+        pass_run: RUN-20261015-N0095-VER
+        pass_actor: gov-008
+        evidence: .eif/audit/PROGRAMME_20261015/n0095/N0095_PROOF.md
+        path: apps/api/app/services/customer_merge_alias_seal.py
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: null
+    stage_note: 'VERIFIED_WITH_LIMITATIONS. Self-verified under RUN-20261015-N0095-VER, different from build run RUN-20261015-N0095-IMPL;
+      same session, same model, not independent. N-0099 does the second look. Built 694b46b8, 5b076b1d: confirmed merge seals
+      merged names as global aliases to the keeper (both resolver keys), audit event with rows moved; DB proof that DSI (DB
+      and cache), shipment, lineup and sell-through resolvers follow merged_into; Related names and Past merges tabs with
+      change keeper (steward); backfill and OPEN_CHANNEL repair scripts proven on clone cip_n0095 then cip (112 seal aliases,
+      0 conflicts, re-run 0). Full API pytest on cip_test 2998 passed, 21 skipped, 0 failed; full web vitest 185 files 864
+      passed; tsc exit 0; next lint clean. Amazon: 26 was merged into 299 on 2026-07-11; keeper not changed on cip; Warren
+      picks on /admin/customers/duplicates?tab=past_merges&q=amazon (Warren chose the change-keeper action in chat). Test
+      fixtures untouched (143 on cip, 28 in merges). Limits: tabs not rendered (sign-in); pre-merge row split for past merges
+      was never recorded; Compuspeed and Syntech merged into OPEN_CHANNEL (listed, not undone); cip_test alias indexes missing;
+      old merge endpoints check sign-in only; no Python linter. Operator acceptance pending.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -11717,6 +11773,8 @@ nodes:
     target_artifact_class: null
     design_artifact_class: null
     risk_class: full
+    implementation_run: RUN-20261015-N0095-IMPL
+    implementation_actor: gov-001
   N-0096:
     id: N-0096
     parent: null
@@ -11725,7 +11783,7 @@ nodes:
     origin: operator
     status: in_progress
     stage: verify
-    revision: 18
+    revision: 21
     lease: null
     depends_on: []
     facets:
@@ -11733,7 +11791,7 @@ nodes:
     risk: R1
     touches_existing: true
     acceptance: operator
-    acceptance_state: pending
+    acceptance_state: accepted
     acceptance_criteria:
     - Distributor-as-customer and non-split-sheet tests seed their own rows on cip_test (BACKLOG-144, 121)
     - The seven environment-dependent API tests seed and clean up or carry an integration mark (BACKLOG-203)
@@ -12947,7 +13005,7 @@ nodes:
     origin: operator
     status: in_progress
     stage: verify
-    revision: 55
+    revision: 58
     lease: null
     depends_on:
     - N-0079
@@ -12958,7 +13016,7 @@ nodes:
     risk: R3
     touches_existing: true
     acceptance: operator
-    acceptance_state: pending
+    acceptance_state: accepted
     acceptance_criteria:
     - Starts only after N-0079 is closed. Do not build this during the budget ledger.
     - The customer report's on-hand is the stock position. CIP stores an expected position beside it and flags the gap. Neither
@@ -14156,6 +14214,41 @@ decisions:
       to supersede what is stored for those customers.'
     origin: operator
     status: accepted
+    supersedes: null
+  D-0096:
+    id: D-0096
+    scope: N-0095
+    statement: 'N-0095 alias seal keys: a merged name is sealed under both keys resolvers look aliases up by, the punctuation-free
+      SSOT key (customer_source_token_alias_key) and the plain lowercased key (_norm_key), when they differ. Options: (a)
+      both keys, as built; (b) SSOT key only, relying on merge redirect for DSI and shipment lookups. Evidence: DSI _alias_customer_id
+      and shipment lookups use _norm_key; on cip 112 plain-key aliases were missing for 216 merged names whose SSOT key was
+      already sealed. Reversible: seal aliases carry the note prefix ''[customer merge alias seal]''.'
+    origin: implementation
+    status: proposed
+    supersedes: null
+  D-0097:
+    id: D-0097
+    scope: N-0095
+    statement: 'N-0095 keeper change: making a merged record the keeper moves every row from the current keeper to it, redirects
+      the current keeper''s other merged records to it, merges the current keeper into it and seals the old keeper''s name
+      to it. The new keeper keeps its own code and name and takes the old keeper''s status (active when that was merged/inactive).
+      Steward role required; reason required; one transaction; OPEN_CHANNEL always stays keeper (only the repair script may
+      restore it). Options: (a) as built; (b) copy the old keeper''s code/name onto the new keeper. Evidence: clone cip_n0095
+      Amazon 299->26 moved 10786 rows and swapping back restored identical counts. Reversible: yes, by changing the keeper
+      back.'
+    origin: implementation
+    status: proposed
+    supersedes: null
+  D-0098:
+    id: D-0098
+    scope: N-0095
+    statement: 'N-0095 test-fixture rule: a customer is real when its code is TMP-CUST-*, CUST-* or OPEN_CHANNEL and its name
+      is not a known fixture name (RelAmazon, Acme Retail <hex>, Merge Test ...); everything else (C-FULL, C-REL, C-SEAL,
+      KEEP-, DG-, MAP-, TECHGRP-1/2, PLAN-BULK, ILIKE-CUST-UNQ) is test data, left out of the related-name and past-merges
+      lists and the seal backfill, and never edited. Evidence: cip has 143 such rows, 28 of them in merges. Reversible: the
+      rule is one function (customer_test_fixtures.is_test_fixture_customer).'
+    origin: implementation
+    status: proposed
     supersedes: null
 evidence:
   EV-GOV008-REVIEW:
@@ -15517,6 +15610,69 @@ evidence:
     note: 'N-0096 proof: full API pytest on cip_test 2977 passed, 21 skipped, 0 failed; web vitest NOT COMPLETE (run 1: 852
       passed, 8 failed, all 8 stale tests since fixed; the 3 fixed files re-ran 47 passed; the final full run was stopped
       by memory pressure and has not been repeated); web tsc exit 0; eslint 0 errors on the three changed files.'
+  EV-0121:
+    id: EV-0121
+    provenance: implementation-observation
+    path: apps/api/app/services/customer_merge_alias_seal.py
+    tree_hash: null
+    note: 'N-0095 (694b46b8): seal mints global approved aliases loser name -> keeper under both resolver keys, moves an alias
+      left on the loser, reports third-party aliases as conflicts, skips OPEN_CHANNEL; backfill skips test fixtures.'
+  EV-0122:
+    id: EV-0122
+    provenance: implementation-observation
+    path: apps/api/app/services/customer_merge_keeper.py
+    tree_hash: null
+    note: 'N-0095 (694b46b8): past merges list with rows, sell-through, cases and aliases per record; change keeper previews
+      then moves every row to the chosen record and merges the old keeper into it (steward role); OPEN_CHANNEL stays keeper.'
+  EV-0123:
+    id: EV-0123
+    provenance: implementation-observation
+    path: apps/api/app/services/customer_related_master_groups.py
+    tree_hash: null
+    note: 'N-0095 (694b46b8): related-name worklist (name starts with another customer''s whole name, or same root); subset
+      merges through the full-merge confirm path with a related: key; test fixtures left out and counted.'
+  EV-0124:
+    id: EV-0124
+    provenance: implementation-observation
+    path: apps/api/tests/test_merge_resolvers_follow_db.py
+    tree_hash: null
+    note: 'N-0095: DB proof on cip_test that DSI (DB and cache), shipment (token and stamped line), lineup and sell-through
+      resolvers return the keeper for a merged record''s name, code and alias.'
+  EV-0125:
+    id: EV-0125
+    provenance: implementation-observation
+    path: apps/api/tests/test_customer_merge_alias_seal_db.py
+    tree_hash: null
+    note: 'N-0095: seal under both keys at confirm with audit event, idempotent, third-party conflict not overwritten, alias
+      moved off loser, OPEN_CHANNEL excluded, related subset merge, fixtures excluded, backfill once.'
+  EV-0126:
+    id: EV-0126
+    provenance: implementation-observation
+    path: apps/api/tests/test_customer_merge_keeper_db.py
+    tree_hash: null
+    note: 'N-0095: keeper change preview writes nothing, confirm moves rows/aliases/contacts and redirects other merged records,
+      swap back restores, refusals, OPEN_CHANNEL, past-merges evidence.'
+  EV-0127:
+    id: EV-0127
+    provenance: implementation-observation
+    path: apps/web/src/app/(app)/admin/customers/duplicates/PastMergesSection.tsx
+    tree_hash: null
+    note: 'N-0095 (694b46b8): Past merges tab with evidence per record and Make this the keeper (preview, reason, confirm);
+      Related names tab; ?q= search.'
+  EV-0128:
+    id: EV-0128
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261015/n0095/N0095_CLONE_PROOF.md
+    tree_hash: null
+    note: 'N-0095 clone proof cip_n0095: backfill minted 112, second run 0, wrong --expect-db refused, OPEN_CHANNEL already
+      keeper, Amazon 299->26 moved 10786 rows and back restored identical counts; clone dropped. PASS.'
+  EV-0129:
+    id: EV-0129
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261015/n0095/N0095_CIP_APPLY.md
+    tree_hash: null
+    note: 'N-0095 cip apply: backfill minted 112 global seal aliases (242 -> 354), 0 conflicts, 28 test-fixture merges untouched,
+      re-run plans 0; Amazon keeper not changed (Warren picks).'
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -16192,6 +16348,21 @@ baselines:
     observed_behavior: 'Full API pytest on cip_test: 20 failed and 34 errors. Two clone-dependent fixtures rewrote os.environ
       for a database that no longer exists and never restored it, so every later DB test failed. Eight web vitest tests failed
       on copy changes.'
+  BLN-N0095:
+    id: BLN-N0095
+    provenance: implementation-observation
+    tree_hash: 0506c9ed
+    latent_capabilities: []
+    preservation:
+      merge-repoint: 'kept: repoint_customer_footprint_full unchanged'
+      resolver-redirect: 'kept: merge_redirect helpers unchanged'
+      steward-initiated-only: 'kept: no merge or master record is created automatically'
+    path: .eif/audit/PROGRAMME_20261015/n0095/BASELINE.md
+    observed_behavior: 'Full customer merge repointed FKs and set merged_into_customer_id but minted no alias and wrote no
+      audit event; only name-similarity keys were accepted; the July seal and related-name worklist were parked off-tree.
+      Resolvers (DSI DB and cache, shipment, lineup, sell-through) already chase merged_into_customer_id, proven only by unit
+      tests with stand-in objects. cip: 244 merged customers (216 real, 28 test fixtures), 242 approved global aliases; Amazon
+      26 merged into 299 on 2026-07-11 with every row on 299.'
 caveats:
   consult_model_logged:
     key: consult_model_logged
@@ -16839,9 +17010,50 @@ deferred_findings:
   run: RUN-20261015-N0096-IMPL
   actor: gov-001
   status: deferred
+- seq: 2426
+  code: DOES_NOT_FIT
+  note: 'N-0095: cip_test has only the primary-key index on customer_source_token_alias; cip also has uq_cust_src_token_alias_approved_scope
+    and five lookup indexes (schema drift on the test database). The seal looks up before inserting, so it does not rely on
+    the unique index.'
+  node: N-0095
+  run: RUN-20261015-N0095-IMPL
+  actor: gov-001
+  status: deferred
+- seq: 2427
+  code: DOES_NOT_FIT
+  note: 'N-0095: the existing customer merge preview, bulk preview and confirm endpoints check sign-in only, not role. The
+    new keeper-change endpoints require steward. Gating the old merge endpoints is not in this node.'
+  node: N-0095
+  run: RUN-20261015-N0095-IMPL
+  actor: gov-001
+  status: deferred
+- seq: 2428
+  code: DOES_NOT_FIT
+  note: 'N-0095: Compuspeed LTD (1152) and SYNTECH DISTRIBUTION (PTY) LTD (4145) are merged INTO OPEN_CHANNEL on cip. repair_open_channel_wrong_merge.py
+    lists them and never undoes them; Warren to say whether those absorbs were intended.'
+  node: N-0095
+  run: RUN-20261015-N0095-IMPL
+  actor: gov-001
+  status: deferred
+- seq: 2429
+  code: DOES_NOT_FIT
+  note: 'N-0095: UNABLE_TO_RENDER the Related names and Past merges tabs: /admin/customers/duplicates?tab=past_merges&q=amazon
+    redirects to sign-in and the agent may not sign in. Component tests cover both tabs.'
+  node: N-0095
+  run: RUN-20261015-N0095-IMPL
+  actor: gov-001
+  status: deferred
+- seq: 2430
+  code: DOES_NOT_FIT
+  note: 'N-0095: no Python linter is installed in the API venv; changed Python files were not linted (web: tsc exit 0, next
+    lint clean).'
+  node: N-0095
+  run: RUN-20261015-N0095-IMPL
+  actor: gov-001
+  status: deferred
 ids:
   node: 5
-  decision: 95
+  decision: 98
   blocker: 19
-  evidence: 120
+  evidence: 129
   baseline: 18
