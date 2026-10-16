@@ -64,6 +64,7 @@ _WRITE_MATRIX: dict[tuple[str, str], frozenset[Role]] = {
     ("POST", f"{_I}/dsi/batch-jobs"): _STEWARD,
     ("POST", f"{_I}/cst/batch-propose"): _STEWARD,
     ("POST", f"{_I}/cst/batch-jobs"): _STEWARD,
+    ("PATCH", f"{_I}/cst/layouts/{{layout_id}}"): _STEWARD,  # N-0111 layouts
     ("POST", f"{_I}/jobs/{{job_id}}/cst-confirm-year"): _STEWARD,  # N-0111
     ("POST", f"{_I}/jobs/{{job_id}}/shipment-sheets"): _STEWARD,
     ("PUT", f"{_I}/jobs/{{job_id}}/shipment-field-mapping"): _STEWARD,

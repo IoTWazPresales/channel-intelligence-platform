@@ -162,22 +162,36 @@ def _batch_job_display_name(filenames: list[str]) -> str:
 def create_cst_batch_job_sync(
     db: Session,
     *,
-    source_id: int,
+    source_id: int | None = None,
     filenames_and_bytes: list[tuple[str, bytes]],
     import_mode: str = "validate",
     sales_only: bool = False,
     stock_only: bool = False,
     confirmed_year: int | None = None,
+    customer_id: int | None = None,
+    field_mapping: dict[str, str] | None = None,
+    layout_ids: list[int] | None = None,
+    report_structure_type: str | None = None,
 ) -> ImportJob:
     """Create one CST import job with N raw files; run process sync.
 
     ``sales_only`` (N-0110): the operator marked the upload as units without on-hand.
     ``stock_only`` (N-0111): on-hand without units sold; it never wipes sales.
     ``confirmed_year`` (N-0111): the year of week numbers that carry none.
+
+    A customer upload (N-0111, Warren 2026-10-16) passes ``customer_id`` and no source: the job hangs
+    on the one internal source, carries the customer, and uses the saved layout's ``field_mapping`` and
+    ``report_structure_type``. ``source_id`` alone is the former path (tests, scripts).
     """
     if not filenames_and_bytes:
         raise ValueError("create_cst_batch_job_sync requires at least one file")
 
+    if source_id is None:
+        if customer_id is None:
+            raise ValueError("create_cst_batch_job_sync needs a customer_id or a source_id")
+        from app.services.imports.cst_layouts import get_or_create_anchor_source
+
+        source_id = int(get_or_create_anchor_source(db).id)
     source = db.scalar(
         select(SourceDefinition)
         .options(joinedload(SourceDefinition.import_template))
@@ -199,6 +213,7 @@ def create_cst_batch_job_sync(
         stage="uploaded",
         file_name=filenames[0],
         content_type=None,
+        field_mapping=to_jsonable(dict(field_mapping)) if field_mapping else None,
     )
     db.add(job)
     db.flush()
@@ -207,7 +222,11 @@ def create_cst_batch_job_sync(
     sm["cst_multi_file"] = len(filenames_and_bytes) > 1
     sm["cst_batch_filenames"] = filenames
     sm["cst_batch_display_name"] = _batch_job_display_name(filenames)
-    sm.setdefault("report_structure_type", "flat")
+    sm.setdefault("report_structure_type", report_structure_type or "flat")
+    if customer_id is not None:
+        sm["customer_id"] = int(customer_id)
+    if layout_ids:
+        sm["cst_layout_ids"] = [int(i) for i in layout_ids]
     if sales_only:
         sm["cst_sales_only"] = True
     if stock_only:

@@ -48,6 +48,8 @@ class SourceDefinition(Base, TimestampMixin):
     column_mapping_memory: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     parser_module: Mapped[str | None] = mapped_column(String(256), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Soft hide (N-0111): a hidden source is never offered to users; its jobs and facts stay.
+    is_hidden: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     # When set, product imports for this source are materialized into this catalog (see `product_catalog`).
     product_catalog_id: Mapped[int | None] = mapped_column(ForeignKey("product_catalog.id"), nullable=True)
 

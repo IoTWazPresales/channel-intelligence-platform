@@ -66,12 +66,6 @@ import { mappingStateMatchesJob } from './importWizardMappingReset';
 import { BulkLineupBackfillDialog } from './BulkLineupBackfillDialog';
 import { DsiBulkUploadDialog } from './DsiBulkUploadDialog';
 import { CstBulkUploadDialog } from './CstBulkUploadDialog';
-import {
-  appendCstUploadOptions,
-  CstUploadOptionsFields,
-  EMPTY_CST_UPLOAD_OPTIONS,
-  type CstUploadOptions,
-} from './CstUploadOptions';
 import { CstFilePeriodStrip, type CstFilePeriodRow } from './CstFilePeriodStrip';
 import { DsiCoveragePanel } from './DsiCoveragePanel';
 import { DsiFileReviewStrip } from './DsiFileReviewStrip';
@@ -380,6 +374,9 @@ const HL_APPLY_BLOCKING_CODES = new Set([
 
 const stepsDefault = ['Import type', 'Data provider', 'Template details', 'Import mode', 'Upload & preview'];
 
+/** Customer sell-through: the upload picks a reporting customer, there is no source (N-0111). */
+const stepsCst = ['Import type', 'Reporting customer', 'Template details', 'Import mode', 'Upload & preview'];
+
 const stepsShipmentEvidence = [
   'Import type',
   'Data provider',
@@ -576,7 +573,6 @@ function AdminImportsPageContent() {
   const [dsiActiveLayoutSignature, setDsiActiveLayoutSignature] = useState<string | null>(null);
   const [dsiBulkUploadOpen, setDsiBulkUploadOpen] = useState(false);
   const [cstBulkUploadOpen, setCstBulkUploadOpen] = useState(false);
-  const [cstOptions, setCstOptions] = useState<CstUploadOptions>(EMPTY_CST_UPLOAD_OPTIONS);
   const [jobsBulkSelectionMode, setJobsBulkSelectionMode] = useState<'normal' | 'selecting'>('normal');
   const [jobsSelectedCount, setJobsSelectedCount] = useState(0);
   const [jobsVisibleRowCount, setJobsVisibleRowCount] = useState(0);
@@ -614,7 +610,15 @@ function AdminImportsPageContent() {
   const isDsi = selectedSlug === 'distributor_inventory';
   const isShipmentEvidence = selectedSlug === 'inbound_shipments';
   const isCst = selectedSlug === 'customer_sell_through';
-  const steps = isPm ? stepsPm : isDsi ? stepsDsi : isShipmentEvidence ? stepsShipmentEvidence : stepsDefault;
+  const steps = isPm
+    ? stepsPm
+    : isDsi
+      ? stepsDsi
+      : isShipmentEvidence
+        ? stepsShipmentEvidence
+        : isCst
+          ? stepsCst
+          : stepsDefault;
   const { data: templates } = useQuery({
     queryKey: ['import-templates'],
     queryFn: ({ signal }) => apiGet<ImportTemplate[]>('/api/v1/imports/templates', { signal }),
@@ -1935,9 +1939,6 @@ function AdminImportsPageContent() {
       if (selectedSlug === 'distributor_inventory') {
         fd.append('dsi_workflow_mode', dsiWorkflowMode);
       }
-      if (selectedSlug === 'customer_sell_through') {
-        appendCstUploadOptions(fd, cstOptions);
-      }
       const res = await fetch(apiUrl('/api/v1/imports/jobs'), {
         method: 'POST',
         body: fd,
@@ -2655,7 +2656,7 @@ function AdminImportsPageContent() {
 
   const canGoUploadGeneric =
     selectedSlug &&
-    (!selectedTemplate?.requires_provider || sourceId !== '') &&
+    (!selectedTemplate?.requires_provider || sourceId !== '' || isCst) &&
     (!selectedTemplate?.destructive_apply_requires_confirm || importMode === 'validate' || confirmDestructive);
 
   const canPmUpload =
@@ -2868,7 +2869,6 @@ function AdminImportsPageContent() {
       <CstBulkUploadDialog
         open={cstBulkUploadOpen}
         onClose={() => setCstBulkUploadOpen(false)}
-        sourceId={typeof sourceId === 'number' ? sourceId : null}
         onJobsCreated={(ids) => {
           if (ids[0] != null) {
             setLastJobId(ids[0]);
@@ -3033,7 +3033,14 @@ function AdminImportsPageContent() {
             <Typography variant="body2">
               Selected type: <strong>{selectedTemplate?.display_name}</strong>
             </Typography>
-            {selectedTemplate?.requires_provider ? (
+            {isCst ? (
+              <Alert severity="info" data-testid="cst-no-source-note">
+                A customer sell-through upload is for a <strong>reporting customer</strong>; there is no source to
+                pick. You choose the customer when you upload, tick Sales-only or Stock-only if the file has only
+                one of them, and map the columns the first time a file has headers that customer has not used
+                before. The layout is remembered for the next upload.
+              </Alert>
+            ) : selectedTemplate?.requires_provider ? (
               <FormControl size="small" sx={{ maxWidth: 420 }}>
                 <InputLabel id="prov-label">Data provider / feed</InputLabel>
                 <Select
@@ -3056,7 +3063,7 @@ function AdminImportsPageContent() {
               <Button onClick={() => setActiveStep(0)}>Back</Button>
               <Button
                 variant="contained"
-                disabled={Boolean(selectedTemplate?.requires_provider && sourceId === '')}
+                disabled={Boolean(selectedTemplate?.requires_provider && sourceId === '' && !isCst)}
                 onClick={() => setActiveStep(2)}
               >
                 Next
@@ -4598,10 +4605,18 @@ function AdminImportsPageContent() {
 
         {activeStep === 4 && !isPm && !isDsi && !isShipmentEvidence ? (
           <Stack spacing={2}>
-            <Typography variant="body2">
-              Upload for <strong>{selectedTemplate?.display_name}</strong> using provider{' '}
-              <strong>{(sources ?? []).find((s) => s.id === sourceId)?.name ?? '—'}</strong>.
-            </Typography>
+            {isCst ? (
+              <Typography variant="body2">
+                Upload for <strong>{selectedTemplate?.display_name}</strong>: pick the reporting customer, tick
+                Sales-only or Stock-only if the file has only one of them, then drop the files. Upload sales first,
+                then stock.
+              </Typography>
+            ) : (
+              <Typography variant="body2">
+                Upload for <strong>{selectedTemplate?.display_name}</strong> using provider{' '}
+                <strong>{(sources ?? []).find((s) => s.id === sourceId)?.name ?? '—'}</strong>.
+              </Typography>
+            )}
             {isJobRevisitMode && lastJobId != null ? (
               <Alert severity="info" data-testid="revisit-banner">
                 Viewing diagnostics for job <strong>#{lastJobId}</strong> in read-only mode. Upload a new file above to
@@ -4611,27 +4626,26 @@ function AdminImportsPageContent() {
             {!canGoUpload && !isJobRevisitMode ? (
               <Alert severity="warning">Complete provider, mode, and confirmations before uploading.</Alert>
             ) : null}
-            <ImportFileUploadZone
-              expanded
-              onExpandedChange={() => {}}
-              canUpload={!!canGoUpload}
-              pending={upload.isPending}
-              error={upload.isError ? safeDisplayError(upload.error) : null}
-              onFile={onFile}
-              subtitle="Or choose a file. Pipeline runs according to import mode."
-              testIdPrefix="generic-upload"
-            />
-            {isCst ? (
-              <CstUploadOptionsFields value={cstOptions} onChange={setCstOptions} disabled={upload.isPending} />
-            ) : null}
+            {isCst ? null : (
+              <ImportFileUploadZone
+                expanded
+                onExpandedChange={() => {}}
+                canUpload={!!canGoUpload}
+                pending={upload.isPending}
+                error={upload.isError ? safeDisplayError(upload.error) : null}
+                onFile={onFile}
+                subtitle="Or choose a file. Pipeline runs according to import mode."
+                testIdPrefix="generic-upload"
+              />
+            )}
             {isCst ? (
               <Button
-                variant="outlined"
-                disabled={!canGoUpload || upload.isPending}
+                variant="contained"
+                disabled={!canGoUpload}
                 onClick={() => setCstBulkUploadOpen(true)}
                 data-testid="cst-bulk-upload-open"
               >
-                Unified batch upload
+                Upload sell-through files
               </Button>
             ) : null}
             {upload.isSuccess && lastJobId != null && upload.data?.import_mode !== 'apply' ? (

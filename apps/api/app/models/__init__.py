@@ -49,6 +49,7 @@ from app.models.promo_export import PromoPlanExport, PromoPlanExportEvent
 from app.models.customer_report_config import CustomerReportConfig
 from app.models.customer_article_alias import CustomerArticleAlias
 from app.models.customer_cst_report_slot import CustomerCstReportSlot
+from app.models.customer_sellthrough_layout import CustomerSellthroughLayout
 from app.models.cst_listing_seed import CstListingSeed
 from app.models.budget_ledger import BudgetLedgerEntry
 from app.models.listing_capture import CustomerListing, ListingObservation
@@ -167,6 +168,7 @@ __all__ = [
     "CustomerReportConfig",
     "CustomerArticleAlias",
     "CustomerCstReportSlot",
+    "CustomerSellthroughLayout",
     "CstListingSeed",
     "BudgetLedgerEntry",
     "CustomerListing",

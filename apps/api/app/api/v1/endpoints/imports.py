@@ -368,7 +368,11 @@ async def list_sources(
         select(SourceDefinition)
         .options(joinedload(SourceDefinition.import_template))
         .join(ImportTemplate, SourceDefinition.import_template_id == ImportTemplate.id)
-        .where(SourceDefinition.is_active.is_(True), ImportTemplate.enabled.is_(True))
+        .where(
+            SourceDefinition.is_active.is_(True),
+            SourceDefinition.is_hidden.is_(False),
+            ImportTemplate.enabled.is_(True),
+        )
     )
     if not admin:
         stmt = stmt.where(ImportTemplate.hidden.is_(False), ImportTemplate.admin_only.is_(False))
@@ -594,14 +598,10 @@ async def create_job(
     confirm_destructive: str = Form(default=""),
     mapping_override: str = Form(default=""),
     dsi_workflow_mode: str = Form(default="auto"),
-    cst_sales_only: str = Form(default=""),
-    cst_stock_only: str = Form(default=""),
-    cst_confirmed_year: str = Form(default=""),
     db: AsyncSession = Depends(get_db),
     user: dict | None = Depends(get_optional_current_user),
 ):
     run_inline = _wants_inline_import_processing(run_sync)
-    confirmed_year = _confirmed_year_form(cst_confirmed_year)
     source = await db.scalar(
         select(SourceDefinition)
         .options(joinedload(SourceDefinition.import_template))
@@ -616,6 +616,16 @@ async def create_job(
     redirect = STUB_IMPORT_REDIRECTS.get(tpl.slug)
     if redirect is not None:
         raise HTTPException(status_code=409, detail=redirect)
+    if tpl.slug == CST_TEMPLATE_SLUG:
+        # N-0111 (Warren 2026-10-16): a sell-through upload picks a reporting customer, not a source.
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Customer sell-through is uploaded for a reporting customer, not a source. "
+                "Use Upload sell-through files on Import Center (POST /api/v1/imports/cst/batch-jobs).",
+                "href": "/admin/imports?template=customer_sell_through",
+            },
+        )
     require_import_template_role(user, tpl.slug, PLANNER_UPLOAD_TEMPLATES)
 
     mode = (import_mode or "").strip().lower()
@@ -662,22 +672,6 @@ async def create_job(
             mode_explicit = "auto"
         sm = dict(job.staged_metadata or {})
         sm["dsi_workflow_mode_explicit"] = mode_explicit
-        job.staged_metadata = to_jsonable(sm)
-        db.add(job)
-
-    # N-0110: units with no on-hand load only when the operator marks the upload sales-only.
-    # N-0111: on-hand with no units only when marked stock-only; week numbers without a year only
-    # with the year the uploader confirmed.
-    if tpl.slug == CST_TEMPLATE_SLUG and (
-        _truthy_form(cst_sales_only) or _truthy_form(cst_stock_only) or confirmed_year is not None
-    ):
-        sm = dict(job.staged_metadata or {})
-        if _truthy_form(cst_sales_only):
-            sm["cst_sales_only"] = True
-        if _truthy_form(cst_stock_only):
-            sm["cst_stock_only"] = True
-        if confirmed_year is not None:
-            sm["cst_confirmed_year"] = confirmed_year
         job.staged_metadata = to_jsonable(sm)
         db.add(job)
 
@@ -983,14 +977,72 @@ async def dsi_batch_create_jobs(
     }
 
 
+@router.get("/cst/reporting-customers")
+def cst_reporting_customers(user: dict = Depends(get_current_user)):
+    """Customers ticked as reporting customers - the only ones a sell-through upload can be for."""
+    from app.services.imports.cst_layouts import list_reporting_customers
+
+    with SessionLocal() as sync_db:
+        return list_reporting_customers(sync_db)
+
+
+@router.get("/cst/layouts")
+def cst_list_layouts(
+    customer_id: int = Query(...),
+    include_hidden: bool = Query(default=False),
+    user: dict = Depends(get_current_user),
+):
+    """A customer's saved column layouts."""
+    from app.services.imports.cst_layouts import layout_to_dict, list_layouts
+
+    with SessionLocal() as sync_db:
+        return [layout_to_dict(lay) for lay in list_layouts(sync_db, customer_id, include_hidden=include_hidden)]
+
+
+class CstLayoutPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=240)
+    is_hidden: bool | None = None
+
+
+@router.patch("/cst/layouts/{layout_id}", dependencies=_STEWARD_WRITE)
+def cst_patch_layout(layout_id: int, body: CstLayoutPatch):
+    """Rename a saved layout, or hide / bring back it (soft; nothing is deleted)."""
+    from app.models.customer_sellthrough_layout import CustomerSellthroughLayout
+    from app.services.imports.cst_layouts import layout_to_dict
+
+    with SessionLocal() as sync_db:
+        lay = sync_db.get(CustomerSellthroughLayout, int(layout_id))
+        if lay is None:
+            raise HTTPException(status_code=404, detail="Layout not found")
+        if body.name is not None:
+            clash = sync_db.scalar(
+                select(CustomerSellthroughLayout.id).where(
+                    CustomerSellthroughLayout.customer_id == lay.customer_id,
+                    CustomerSellthroughLayout.id != lay.id,
+                    func.lower(CustomerSellthroughLayout.name) == body.name.strip().lower(),
+                )
+            )
+            if clash is not None:
+                raise HTTPException(status_code=409, detail="This customer already has a layout with that name")
+            lay.name = body.name.strip()
+        if body.is_hidden is not None:
+            lay.is_hidden = bool(body.is_hidden)
+        sync_db.add(lay)
+        sync_db.commit()
+        sync_db.refresh(lay)
+        return layout_to_dict(lay)
+
+
 @router.post("/cst/batch-propose", dependencies=_STEWARD_WRITE)
 async def cst_batch_propose(
     files: list[UploadFile] = File(...),
+    customer_id: int | None = Form(default=None),
 ):
-    """Preview CST batch groups (no DB writes).
+    """Preview a CST upload (no DB writes).
 
-    All CST-capable files form one ``cst_capable`` group. Unmappable files are listed
-    separately and will not become jobs.
+    With ``customer_id`` (the upload picks a reporting customer): ``files`` lists, for each file, its
+    columns and either the customer's saved layout that matches them or the mapping the parser would
+    detect, for the column-mapping step. Without it: the former capability grouping.
     """
     from app.services.imports.cst_batch import (
         CST_CAPABLE_GROUP_SIGNATURE,
@@ -1006,11 +1058,27 @@ async def cst_batch_propose(
         payload.append((f.filename or "upload", raw))
     groups = propose_cst_batch_groups(payload)
     job_groups = [g for g in groups if g.signature == CST_CAPABLE_GROUP_SIGNATURE]
-    return {
+    out: dict[str, Any] = {
         "group_count": len(job_groups),
         "file_count": len(payload),
         "groups": batch_groups_preview_to_dict(groups),
     }
+    if customer_id is not None:
+        from app.services.imports.cst_layouts import (
+            CANONICAL_LABELS,
+            inspect_files_for_customer,
+            is_reporting_customer,
+        )
+        from app.services.merge_redirect import follow_customer_merge_redirect_sync
+
+        with SessionLocal() as sync_db:
+            cid = follow_customer_merge_redirect_sync(sync_db, int(customer_id)) or int(customer_id)
+            if not is_reporting_customer(sync_db, cid):
+                raise HTTPException(status_code=400, detail="This customer is not ticked as a reporting customer")
+            out["customer_id"] = cid
+            out["files"] = inspect_files_for_customer(sync_db, cid, payload)
+        out["targets"] = [{"value": k, "label": v} for k, v in CANONICAL_LABELS.items()]
+    return out
 
 
 class CstConfirmYearBody(BaseModel):
@@ -1051,113 +1119,59 @@ def cst_confirm_year(job_id: int, body: CstConfirmYearBody):
 
 @router.post("/cst/batch-jobs", dependencies=_STEWARD_WRITE)
 async def cst_batch_create_jobs(
-    source_id: int = Form(...),
+    customer_id: int = Form(...),
     files: list[UploadFile] = File(...),
+    layouts: str = Form(default=""),
     cst_sales_only: str = Form(default=""),
     cst_stock_only: str = Form(default=""),
     cst_confirmed_year: str = Form(default=""),
-    db: AsyncSession = Depends(get_db),
 ):
-    """Create CST import jobs from a multi-file upload.
+    """Upload sell-through files for one reporting customer (N-0111, Warren 2026-10-16).
 
-    All CST-capable files become **one** job (per-file period + one steward pass).
-    Unmappable files return an error outcome and are not attached to a job.
+    Each file takes the customer's saved layout that matches its headers. A file with no match must
+    come with a layout from the column-mapping step in ``layouts`` (JSON list of ``signature``,
+    ``name``, ``field_mapping``); it is saved for the customer before the job is made. Files that share
+    a report structure become **one** job (per-file period, one steward pass). A file that cannot be
+    placed returns an error outcome and is not attached to a job.
     N-0111: ``cst_stock_only`` loads on-hand without units; ``cst_confirmed_year`` is the year of
     week numbers that carry none (nothing with such numbers loads without it).
     """
     confirmed_year = _confirmed_year_form(cst_confirmed_year)
-    from app.services.imports.cst_batch import (
-        CST_CAPABLE_GROUP_SIGNATURE,
-        CST_TEMPLATE_SLUG,
-        batch_groups_preview_to_dict,
-        create_cst_batch_job_sync,
-        propose_cst_batch_groups,
-    )
-
-    source = await db.scalar(
-        select(SourceDefinition)
-        .options(joinedload(SourceDefinition.import_template))
-        .where(SourceDefinition.id == source_id)
-    )
-    if not source or not source.is_active:
-        raise HTTPException(status_code=400, detail="Unknown or inactive source_id")
-    tpl = source.import_template
-    if not tpl or tpl.slug != CST_TEMPLATE_SLUG:
-        raise HTTPException(
-            status_code=400, detail="CST batch upload requires a customer_sell_through source"
-        )
+    from app.services.imports.cst_layouts import create_customer_upload_jobs
 
     if not files:
         raise HTTPException(status_code=400, detail="At least one file is required")
+    new_layouts: list[dict[str, Any]] = []
+    if layouts.strip():
+        try:
+            parsed = json.loads(layouts)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="layouts must be valid JSON")
+        if not isinstance(parsed, list):
+            raise HTTPException(status_code=400, detail="layouts must be a JSON list")
+        new_layouts = [x for x in parsed if isinstance(x, dict)]
 
     payload: list[tuple[str, bytes]] = []
     for f in files:
         raw = await f.read()
         payload.append((f.filename or "upload", raw))
 
-    groups = propose_cst_batch_groups(payload)
-    name_to_bytes = dict(payload)
-    created: list[dict[str, Any]] = []
     with SessionLocal() as sync_db:
-        for group in groups:
-            group_payload = [
-                (p.filename, name_to_bytes[p.filename])
-                for p in group.files
-                if p.filename in name_to_bytes
-            ]
-            if not group_payload:
-                continue
-            if group.signature != CST_CAPABLE_GROUP_SIGNATURE or any(p.unmappable for p in group.files):
-                created.append(
-                    {
-                        "signature": group.signature,
-                        "outcome": "error",
-                        "error": "One or more files could not be mapped (no CST-like columns)",
-                        "filenames": [p.filename for p in group.files],
-                    }
-                )
-                continue
-            try:
-                job = create_cst_batch_job_sync(
-                    sync_db,
-                    source_id=source_id,
-                    filenames_and_bytes=group_payload,
-                    import_mode="validate",
-                    sales_only=_truthy_form(cst_sales_only),
-                    stock_only=_truthy_form(cst_stock_only),
-                    confirmed_year=confirmed_year,
-                )
-                created.append(
-                    {
-                        "signature": group.signature,
-                        "outcome": "created",
-                        "import_job_id": job.id,
-                        "stage": job.stage,
-                        "filenames": [p.filename for p in group.files],
-                        "file_count": len(group_payload),
-                        "cst_file_periods": (job.staged_metadata or {}).get("cst_file_periods")
-                        if isinstance(job.staged_metadata, dict)
-                        else None,
-                        "cst_year_required": (job.staged_metadata or {}).get("cst_year_required")
-                        if isinstance(job.staged_metadata, dict)
-                        else None,
-                    }
-                )
-            except Exception as exc:
-                created.append(
-                    {
-                        "signature": group.signature,
-                        "outcome": "error",
-                        "error": str(exc),
-                        "filenames": [p.filename for p in group.files],
-                    }
-                )
-
-    job_groups = [g for g in groups if g.signature == CST_CAPABLE_GROUP_SIGNATURE]
+        try:
+            outcomes = create_customer_upload_jobs(
+                sync_db,
+                customer_id=customer_id,
+                filenames_and_bytes=payload,
+                new_layouts=new_layouts,
+                sales_only=_truthy_form(cst_sales_only),
+                stock_only=_truthy_form(cst_stock_only),
+                confirmed_year=confirmed_year,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
     return {
-        "group_count": len(job_groups),
-        "groups_preview": batch_groups_preview_to_dict(groups),
-        "jobs": created,
+        "group_count": sum(1 for o in outcomes if o.get("outcome") == "created"),
+        "jobs": outcomes,
     }
 
 

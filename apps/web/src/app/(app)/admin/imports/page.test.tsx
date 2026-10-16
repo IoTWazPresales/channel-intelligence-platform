@@ -1324,3 +1324,58 @@ describe('AdminImportsPage steward write gating (N-0086)', () => {
     await waitFor(() => expect(screen.getByTestId('steward-write-area')).toBeDisabled());
   });
 });
+
+describe('AdminImportsPage customer sell-through (N-0111: a reporting customer, not a source)', () => {
+  const cstTemplate = {
+    id: 15,
+    slug: 'customer_sell_through',
+    display_name: 'Customer sell-through',
+    description: 'Retailer sell-through reports',
+    requires_provider: true,
+    accepted_file_types: ['.csv', '.xlsx'],
+    required_fields: [],
+    optional_fields: [],
+    pipeline_ready: true,
+    destructive_apply_requires_confirm: false,
+  };
+
+  function renderPage() {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return {
+      user: userEvent.setup(),
+      ...renderWithProviders(
+        <QueryClientProvider client={qc}>
+          <AdminImportsPage />
+        </QueryClientProvider>
+      ),
+    };
+  }
+
+  beforeEach(() => {
+    searchString = '';
+    mockRouterReplace.mockReset();
+    mockState.templates.push(cstTemplate);
+  });
+
+  afterEach(() => {
+    mockState.templates = mockState.templates.filter((t) => t.slug !== 'customer_sell_through');
+    searchString = '';
+  });
+
+  it('offers no source to pick and goes on without one', async () => {
+    const { user } = renderPage();
+    await user.click(await screen.findByText('Customer sell-through'));
+    expect(await screen.findByTestId('cst-no-source-note')).toHaveTextContent(/reporting customer/i);
+    expect(screen.queryByLabelText(/Data provider/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText('Reporting customer').length).toBeGreaterThan(0); // the step is named for the customer
+    const next = screen.getByRole('button', { name: /^Next$/i });
+    expect(next).toBeEnabled();
+    await user.click(next);
+    await user.click(await screen.findByRole('button', { name: /^Next$/i }));
+    await user.click(await screen.findByRole('button', { name: /^Next$/i }));
+    // Upload step: one customer upload button, no single-file zone that needs a source.
+    expect(await screen.findByTestId('cst-bulk-upload-open')).toHaveTextContent('Upload sell-through files');
+    expect(screen.getByTestId('cst-bulk-upload-open')).toBeEnabled();
+    expect(screen.queryByRole('button', { name: /Choose file$/i })).not.toBeInTheDocument();
+  });
+});
