@@ -9,9 +9,10 @@ row gets one reason from its staging line, using the same conditions as the appl
 - customer sell-through: applied (or an identical copy counted once) is loaded; otherwise product
   not matched, customer not set, no sale date or period, no figures, or waiting to apply;
 - distributor sales & inventory: a line that wrote a sale, return or stock fact is loaded; a line
-  whose sale or stock part did not load is partly loaded; a line a later line of the same load
-  replaced (same invoice, product, date and customer) did not load; otherwise not matched, no date,
-  no figures, or waiting to apply.
+  whose sale or stock part did not load is partly loaded; a line that repeats an earlier line of
+  the same load (same invoice, product, date and customer) is loaded: summed into it when it
+  differs, counted once when identical in every source column (D-0091); otherwise not matched, no
+  date, no figures, or waiting to apply.
 
 The counts come from the staging tables on every read; nothing is stored beyond what the CST
 parser records in ``staged_metadata.cst_load_parse``.
@@ -50,7 +51,6 @@ LABELS: dict[str, str] = {
     "no_date": "No transaction or snapshot date",
     "no_sale_date": "Sale with no transaction date",
     "no_snapshot_date": "Stock with no snapshot date",
-    "repeated_line": "Same invoice, product, date and customer again in this load; the later line replaced it (kept as superseded)",
     "partly_customer_not_matched": "Stock loaded; the sale did not (no matched customer)",
     "partly_no_sale_date": "Stock loaded; the sale did not (no transaction date)",
     "partly_no_snapshot_date": "Sale loaded; the stock did not (no snapshot date)",
@@ -72,15 +72,9 @@ WHERE import_job_id = ANY(:ids)
 GROUP BY 1, 2
 """
 
-_DSI_REPEATED = """
-    LEFT JOIN (SELECT DISTINCT previous_staging_line_id AS line_id FROM fact_distributor_line_superseded
-               WHERE superseded_by_import_job_id = ANY(:ids) AND previous_import_job_id = superseded_by_import_job_id) r
-        ON r.line_id = s.id
-"""
-
 _DSI_SQL = """
 SELECT s.import_job_id, CASE
-    WHEN {repeated} THEN 'repeated_line'
+    WHEN s.apply_status LIKE 'duplicate%' THEN 'duplicate'
     WHEN s.apply_status <> 'pending' AND coalesce(s.quantity_sold, 0) <> 0
          AND s.apply_status NOT LIKE '%sellout%' AND s.apply_status NOT LIKE '%return%'
         THEN CASE WHEN s.transaction_date IS NULL THEN 'partly_no_sale_date' ELSE 'partly_customer_not_matched' END
@@ -98,19 +92,9 @@ SELECT s.import_job_id, CASE
     WHEN coalesce(s.quantity_sold, 0) = 0 AND s.snapshot_date IS NULL THEN 'no_snapshot_date'
     ELSE 'waiting_to_apply' END AS reason, count(*)
 FROM import_distributor_si_staging_line s
-{join}
 WHERE s.import_job_id = ANY(:ids)
 GROUP BY 1, 2
 """
-
-
-def _dsi_sql(has_superseded: bool) -> str:
-    if has_superseded:
-        return _DSI_SQL.format(repeated="r.line_id IS NOT NULL", join=_DSI_REPEATED)
-    return _DSI_SQL.format(repeated="false", join="")
-
-
-_HAS_SUPERSEDED = "SELECT to_regclass('fact_distributor_line_superseded') IS NOT NULL"
 
 
 def display_status(status: str | None, report: dict[str, Any] | None) -> str:
@@ -186,7 +170,7 @@ def load_report_sync(db: Session, job: Any) -> dict[str, Any] | None:
     if kind == CST:
         rows = db.execute(text(_CST_SQL), ids).all()
     else:
-        rows = db.execute(text(_dsi_sql(bool(db.scalar(text(_HAS_SUPERSEDED))))), ids).all()
+        rows = db.execute(text(_DSI_SQL), ids).all()
     meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
     return build_report(kind, _group(rows).get(int(job.id), {}), meta.get("cst_load_parse"))
 
@@ -213,8 +197,7 @@ async def load_reports_async(db: AsyncSession, jobs: Iterable[tuple[int, str | N
         for jid in by_kind[CST]:
             out[jid] = build_report(CST, grouped.get(jid, {}), parses.get(jid))
     if by_kind[DSI]:
-        has = bool((await db.execute(text(_HAS_SUPERSEDED))).scalar())
-        grouped = _group((await db.execute(text(_dsi_sql(has)), {"ids": by_kind[DSI]})).all())
+        grouped = _group((await db.execute(text(_DSI_SQL), {"ids": by_kind[DSI]})).all())
         for jid in by_kind[DSI]:
             out[jid] = build_report(DSI, grouped.get(jid, {}))
     return out

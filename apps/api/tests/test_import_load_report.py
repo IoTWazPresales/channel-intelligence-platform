@@ -115,8 +115,12 @@ def test_distributor_load_report_names_each_reason(session: Session) -> None:
             "resolved_product_id": ids["product"], "resolution_status": "resolved"}
     lines = [
         {**full, "transaction_date": day, "invoice_no": "LR-1", "quantity_sold": 2},
-        {**full, "transaction_date": day, "invoice_no": "LR-2", "quantity_sold": 1},  # replaced by the next line
-        {**full, "transaction_date": day, "invoice_no": "LR-2", "quantity_sold": 5},
+        {**full, "transaction_date": day, "invoice_no": "LR-2", "quantity_sold": 1, "raw_row_payload": {"Qty": 1}},
+        # D-0091: differs from the line above, so it is summed into the same invoice line (loaded)
+        {**full, "transaction_date": day, "invoice_no": "LR-2", "quantity_sold": 5, "raw_row_payload": {"Qty": 5}},
+        {**full, "transaction_date": day, "invoice_no": "LR-6", "quantity_sold": 2, "raw_row_payload": {"Qty": 2}},
+        # identical to the line above in every source column: counted once, flagged duplicate
+        {**full, "transaction_date": day, "invoice_no": "LR-6", "quantity_sold": 2, "raw_row_payload": {"Qty": 2}},
         {**full, "resolved_product_id": None, "transaction_date": day, "invoice_no": "LR-3", "quantity_sold": 1},
         {**full, "transaction_date": None, "invoice_no": "LR-4", "quantity_sold": 1},
         {**full, "resolved_customer_id": None, "transaction_date": day, "invoice_no": "LR-5", "quantity_sold": 1,
@@ -130,10 +134,11 @@ def test_distributor_load_report_names_each_reason(session: Session) -> None:
 
     report = load_report_sync(db, job)
     reasons = {i["reason"]: i["rows"] for i in report["not_loaded"]}
-    assert report["rows_read"] == 6
-    assert report["rows_loaded"] == 2
-    assert reasons == {"repeated_line": 1, "product_not_matched": 1, "no_date": 1, "partly_customer_not_matched": 1}
-    assert display_status(job.status, report) == "Completed with rows not loaded (4)"
+    assert report["rows_read"] == 8
+    assert report["rows_loaded"] == 5  # LR-1, both LR-2 lines, LR-6 and its identical copy
+    assert report["identical_copies_counted_once"] == 1
+    assert reasons == {"product_not_matched": 1, "no_date": 1, "partly_customer_not_matched": 1}
+    assert display_status(job.status, report) == "Completed with rows not loaded (3)"
 
 
 def test_sell_through_load_report_names_each_reason(session: Session) -> None:

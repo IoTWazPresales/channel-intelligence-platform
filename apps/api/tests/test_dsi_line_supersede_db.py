@@ -2,8 +2,8 @@
 
 A line with a new invoice number is a new transaction and is added. Reloading the same invoice
 line keeps the replaced figures in ``fact_distributor_line_superseded`` instead of overwriting them
-silently; re-applying a load changes nothing. Lines of one load that repeat a key replace each
-other in file order and the earlier figures are kept the same way.
+silently; re-applying a load changes nothing. Lines of one load that repeat a key follow D-0091:
+lines that differ are summed, lines identical in every source column count once and are flagged.
 
 One rolled-back transaction; cip_test only.
 """
@@ -22,7 +22,6 @@ from app.models.dimensions import DimCustomer, DimDistributor, DimProduct
 from app.models.import_distributor_si import ImportDistributorSiStagingLine
 from app.models.ingestion import ImportJob, SourceDefinition
 from app.services.imports.distributor_sales_inventory import upsert_dsi_facts_for_staging_job
-from app.services.imports.dsi_line_supersede import replaced_within_load
 
 TENANT = "default"
 DAY = date(2024, 6, 3)
@@ -131,20 +130,77 @@ def test_a_new_invoice_number_is_added_unchanged(session: Session) -> None:
     assert _kept(db, ids) == []
 
 
-def test_a_repeated_line_in_one_load_is_kept_and_named(session: Session) -> None:
+def _statuses(db: Session, job: ImportJob) -> list[str]:
+    return list(db.scalars(select(ImportDistributorSiStagingLine.apply_status).where(
+        ImportDistributorSiStagingLine.import_job_id == job.id).order_by(
+        ImportDistributorSiStagingLine.source_row_number)).all())
+
+
+def test_repeated_lines_that_differ_in_one_load_are_summed(session: Session) -> None:
+    """D-0091 for Pinnacle (Warren 2026-10-16): lines of one load with the same key that differ are summed."""
     db = session
     ids = _ids(db)
-    job = _load(db, ids, [{"invoice_no": "N111-INV-R", "quantity_sold": 1},
-                          {"invoice_no": "N111-INV-R", "quantity_sold": 4}])
-    assert _sellout(db, ids, "N111-INV-R") == 4
-    kept = _kept(db, ids)
-    assert [(k[0], k[3], k[4]) for k in kept] == [("fact_sales_sellout", job.id, job.id)]
-    first_line = db.scalar(select(ImportDistributorSiStagingLine.id).where(
-        ImportDistributorSiStagingLine.import_job_id == job.id, ImportDistributorSiStagingLine.source_row_number == 1))
-    assert replaced_within_load(db, job.id) == {int(first_line): "fact_sales_sellout"}
+    job = _load(db, ids, [
+        {"invoice_no": "N111-INV-R", "quantity_sold": 1, "reported_revenue_amount": 10, "raw_row_payload": {"Qty": 1}},
+        {"invoice_no": "N111-INV-R", "quantity_sold": 4, "reported_revenue_amount": 40, "raw_row_payload": {"Qty": 4}},
+    ])
+    assert _sellout(db, ids, "N111-INV-R") == 5
+    revenue = db.scalar(text("select reported_revenue_amount from fact_sales_sellout where product_id = :p "
+                             "and invoice_no = 'N111-INV-R' and transaction_date = :t"), {"p": ids["product"], "t": DAY})
+    assert float(revenue) == 50.0
+    assert _kept(db, ids) == []  # nothing was replaced: both lines count
+    assert _statuses(db, job) == ["sellout", "sellout"]
+    assert job.staged_metadata["distributor_si"]["summed_lines"] == 1
+    assert job.staged_metadata["distributor_si"]["duplicate_lines"] == 0
+    fact_ids = set(db.scalars(select(ImportDistributorSiStagingLine.fact_sellout_row_id).where(
+        ImportDistributorSiStagingLine.import_job_id == job.id)).all())
+    assert len(fact_ids) == 1 and None not in fact_ids  # both lines point at the one stored row
+    # Re-applying the load changes nothing and keeps nothing.
     _apply(db, job)
-    assert _sellout(db, ids, "N111-INV-R") == 4
-    assert len(_kept(db, ids)) == 1
+    assert _sellout(db, ids, "N111-INV-R") == 5
+    assert _kept(db, ids) == []
+
+
+def test_repeated_lines_identical_in_every_source_column_count_once_and_are_flagged(session: Session) -> None:
+    db = session
+    ids = _ids(db)
+    same = {"invoice_no": "N111-INV-D", "quantity_sold": 3, "raw_row_payload": {"Qty": 3, "Ref": "A"}}
+    job = _load(db, ids, [same, dict(same), {**same, "raw_row_payload": {"Qty": 3, "Ref": "B"}}])
+    # Lines 1 and 2 are identical (counted once); line 3 differs in a source column (summed): 3 + 3.
+    assert _sellout(db, ids, "N111-INV-D") == 6
+    assert _statuses(db, job) == ["sellout", "duplicate", "sellout"]
+    assert job.staged_metadata["distributor_si"]["duplicate_lines"] == 1
+    assert job.staged_metadata["distributor_si"]["summed_lines"] == 1
+    _apply(db, job)
+    assert _sellout(db, ids, "N111-INV-D") == 6
+    assert _statuses(db, job) == ["sellout", "duplicate", "sellout"]
+    assert _kept(db, ids) == []
+
+
+def test_a_reload_of_a_summed_invoice_line_keeps_the_replaced_total(session: Session) -> None:
+    db = session
+    ids = _ids(db)
+    first = _load(db, ids, [{"invoice_no": "N111-INV-S", "quantity_sold": 2, "raw_row_payload": {"Q": 2}},
+                            {"invoice_no": "N111-INV-S", "quantity_sold": 3, "raw_row_payload": {"Q": 3}}])
+    assert _sellout(db, ids, "N111-INV-S") == 5
+    again = _load(db, ids, [{"invoice_no": "N111-INV-S", "quantity_sold": 9, "raw_row_payload": {"Q": 9}}])
+    assert _sellout(db, ids, "N111-INV-S") == 9
+    kept = _kept(db, ids)
+    assert [(k[0], k[3], k[4]) for k in kept] == [("fact_sales_sellout", first.id, again.id)]
+    assert kept[0][2]["units"] == {"old": 5.0, "new": 9.0}
+
+
+def test_repeated_return_lines_that_differ_are_summed(session: Session) -> None:
+    db = session
+    ids = _ids(db)
+    _load(db, ids, [
+        {"invoice_no": "N111-CR-R", "quantity_sold": -2, "unit_sellout_price_ex_tax_amount": 10, "raw_row_payload": {"Q": -2}},
+        {"invoice_no": "N111-CR-R", "quantity_sold": -3, "unit_sellout_price_ex_tax_amount": 10, "raw_row_payload": {"Q": -3}},
+    ])
+    qty = db.scalar(text("select return_quantity from fact_returns where product_id = :p and invoice_no = 'N111-CR-R' "
+                         "and transaction_date = :t"), {"p": ids["product"], "t": DAY})
+    assert float(qty) == 5.0
+    assert _kept(db, ids) == []
 
 
 def test_a_return_reload_keeps_the_replaced_quantity(session: Session) -> None:
