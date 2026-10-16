@@ -3307,3 +3307,18 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Behavior to retain** | OPEN_CHANNEL stays the keeper until Warren decides; records 1152 and 4145 stay `merged`. |
 | **Out of scope** | Customer-level (non-distributor) merges; the N-0095 change-keeper action. |
 | **TRIGGER** | Before distributor-level reporting is shown to users. |
+
+## BACKLOG-213 — Distributor upload: pick the distributor, named layouts remembered per distributor
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open, not built** · 2026-10-16 · N-0111 layouts (Warren: list the gap, do not build it). |
+| **Effort** | Medium: a per-distributor layout table (as `customer_sellthrough_layout`), the picker, and moving the existing header memory over (clone first). |
+| **Source** | N-0111 layouts, `.eif/audit/PROGRAMME_20261016/n0111_layouts/probe_dsi_cip.txt`. Customer sell-through now follows "pick the customer, layout remembered"; the distributor path does not yet. |
+| **Idea** | Pinnacle (and every distributor) keeps its own upload path. Bring it to the same rule: pick the distributor first; the column layout is the only per-distributor setting, saved the first time a header set is mapped and matched by headers after that. |
+| **Why it matters / deferrable** | Today (1) the distributor is detected and confirmed per file after upload, not picked first; (2) the column memory is one pool (`column_mapping_memory.by_header_norm`, 29 headers) on the single source "Distributor inventory feed" (id 12) shared by every distributor, so one header that means two things for two distributors would collide; (3) the wizard still shows "Data provider / feed"; (4) layouts are not named, listed, renamed or removable. Deferrable while Pinnacle files keep one header set. |
+| **What the work is** | Per-distributor layout storage and matching (reuse `cst_layouts` fingerprint rules: period-named columns and unit stubs are not part of a layout); a distributor picker in `DsiBulkUploadDialog`; migrate the shared memory into layouts of the distributors whose applied jobs used it; hide the source. |
+| **Regression traps** | Keep layout coalescing within a batch (U6); keep per-file distributor stamps for multi-distributor workbooks; never write `cip` before a clone proof. |
+| **Behavior to retain** | Pinnacle sell-out and inventory rules (D-0091, D-0110, D-0113); the Date column mapping. |
+| **Out of scope** | Customer sell-through (done); distributor expected-report slots. |
+| **TRIGGER** | A second distributor starts uploading files with its own header set, or Warren asks for the distributor picker. |
