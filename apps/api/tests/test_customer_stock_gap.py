@@ -66,11 +66,11 @@ def test_receipt_on_or_before_previous_report_end_is_not_counted_again() -> None
     assert out[1].gap == D("0")
 
 
-def test_week_without_on_hand_restarts_the_chain() -> None:
-    """N-0111 (Warren 2026-10-16): a week with no reported on-hand does not break the chain.
+def test_week_without_on_hand_but_with_sales_bridges_the_chain() -> None:
+    """N-0111 (Warren 2026-10-16, corrects D-0105): a week with sales but no on-hand is bridged.
 
-    The week is named (no_on_hand, its units kept) and the next on-hand restarts the chain:
-    it is not compared with the report before the gap.
+    The week is named (no_on_hand, its units kept, not compared) and the next on-hand is compared
+    with the last reported on-hand minus all sales in between.
     """
     periods = [
         _week(date(2026, 7, 6), units="1", on_hand="30"),
@@ -79,28 +79,83 @@ def test_week_without_on_hand_restarts_the_chain() -> None:
         _week(date(2026, 7, 27), units="5", on_hand="15"),
     ]
     out = compute_positions(periods, [])
-    assert [p.status for p in out] == ["first_report", "no_on_hand", "chain_restart", "compared"]
+    assert [p.status for p in out] == ["first_report", "no_on_hand", "compared", "compared"]
     gap_week = out[1]
     assert (gap_week.period.start, gap_week.period.end) == (date(2026, 7, 13), date(2026, 7, 19))
     assert gap_week.period.units_sold == D("4") and gap_week.period.on_hand is None
-    assert gap_week.gap is None
-    assert out[2].gap is None and out[2].expected is None
+    assert gap_week.gap is None and gap_week.expected is None  # the week itself is not compared
+    bridged = out[2]
+    assert bridged.previous_on_hand == D("30") and bridged.previous_end == date(2026, 7, 12)
+    assert bridged.units_sold_since == D("10")  # 4 in the missing week + 6 in the report week
+    assert bridged.expected == D("20") and bridged.gap == D("0")
     assert out[3].previous_on_hand == D("20")
     assert out[3].expected == D("15") and out[3].gap == D("0")
 
 
-def test_missing_weeks_with_no_report_at_all_are_each_named() -> None:
+def test_bridge_adds_matched_deliveries_across_the_missing_weeks_and_shows_a_real_gap() -> None:
+    periods = [
+        _week(date(2026, 7, 6), units="0", on_hand="30"),
+        _week(date(2026, 7, 13), units="3", on_hand=None),
+        _week(date(2026, 7, 20), units="2", on_hand=None),
+        _week(date(2026, 7, 27), units="5", on_hand="40"),
+    ]
+    receipts = [
+        Receipt(product_id=1, pod_date=date(2026, 7, 16), units=D("20")),  # inside a missing week
+        Receipt(product_id=1, pod_date=date(2026, 7, 10), units=D("9")),  # before the previous report ended
+    ]
+    out = compute_positions(periods, receipts)
+    assert [p.status for p in out] == ["first_report", "no_on_hand", "no_on_hand", "compared"]
+    last = out[3]
+    assert last.receipts == D("20") and last.units_sold_since == D("10")
+    assert last.expected == D("40")  # 30 + 20 - (3 + 2 + 5)
+    assert last.gap == D("0")
+    short = compute_positions(periods[:3] + [_week(date(2026, 7, 27), units="5", on_hand="35")], receipts)
+    assert short[-1].gap == D("-5")
+
+
+def test_missing_weeks_with_no_sales_either_are_unreported_weeks_and_not_compared() -> None:
     periods = [
         _week(date(2026, 7, 6), units="0", on_hand="10"),
         _week(date(2026, 8, 3), units="0", on_hand="10"),
     ]
     out = compute_positions(periods, [])
-    assert [p.status for p in out] == ["first_report", "no_on_hand", "no_on_hand", "no_on_hand", "chain_restart"]
-    assert [p.period.start for p in out if p.status == "no_on_hand"] == [
-        date(2026, 7, 13),
-        date(2026, 7, 20),
-        date(2026, 7, 27),
+    # Neither on-hand nor sales for the three weeks between: no row of their own, the next report
+    # starts a fresh chain and is named as a data gap.
+    assert [p.status for p in out] == ["first_report", "chain_restart"]
+    restart = out[1]
+    assert restart.gap is None and restart.expected is None
+    assert restart.previous_end == date(2026, 7, 12)
+    assert restart.notes == ["no sales or on-hand reported for 3 week(s) from 2026-07-13"]
+
+
+def test_one_unreported_week_among_sales_weeks_starts_a_fresh_chain() -> None:
+    """Sales for part of the window only: the sum of sales is incomplete, so nothing is compared."""
+    periods = [
+        _week(date(2026, 7, 6), units="0", on_hand="30"),
+        _week(date(2026, 7, 13), units="4", on_hand=None),
+        # 2026-07-20 week: nothing reported
+        _week(date(2026, 7, 27), units="6", on_hand="20"),
     ]
+    out = compute_positions(periods, [])
+    assert [p.status for p in out] == ["first_report", "no_on_hand", "chain_restart"]
+    assert out[1].period.start == date(2026, 7, 13) and out[1].period.units_sold == D("4")
+    assert out[2].notes == ["no sales or on-hand reported for 1 week(s) from 2026-07-20"]
+
+
+def test_month_sales_cover_the_weeks_they_span_and_stock_only_rows_do_not() -> None:
+    month_sales = ReportPeriod(product_id=1, grain="month", start=date(2026, 7, 1), end=date(2026, 7, 31), units_sold=D("8"))
+    stock_only_week = ReportPeriod(
+        product_id=1, grain="week", start=date(2026, 7, 13), end=date(2026, 7, 19), units_sold=D("0"), sales_reported=False
+    )
+    first = _week(date(2026, 6, 29), units="0", on_hand="20")  # ends 2026-07-05
+    last = _week(date(2026, 7, 27), units="0", on_hand="12")
+    out = compute_positions([first, month_sales, last], [])
+    # The July month row covers every missing week of July, so the chain bridges.
+    assert out[-1].status == "compared"
+    assert out[-1].expected == D("12") and out[-1].gap == D("0")
+    # A row that carries no units at all does not count as sales for its week.
+    only_stock_row = compute_positions([first, stock_only_week, _week(date(2026, 7, 20), units="0", on_hand="12")], [])
+    assert only_stock_row[-1].status == "chain_restart"
 
 
 def test_day_lines_inside_contiguous_weeks_keep_the_chain() -> None:

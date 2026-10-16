@@ -13,9 +13,14 @@ A shipment with no customer match stays out. In transit and on order are carried
 beside on-hand and never added into it.
 
 A Monday-Sunday week with no reported on-hand does not break the chain (N-0111, Warren
-2026-10-16): that week is stored as its own row (status ``no_on_hand``, no on-hand, no gap) and
-the chain restarts at the next reported on-hand (status ``chain_restart``, nothing compared). The unit gap is shown on every compared row;
-a row is highlighted when ``|gap| >= stock_gap_highlight_units`` (tenant setting,
+2026-10-16, correcting D-0105): the chain BRIDGES it. When on-hand is missing for some weeks but
+sales are reported for every one of them, the next reported on-hand is compared with the last
+reported on-hand plus matched deliveries minus all sales in between. Each such week is stored as
+its own row (status ``no_on_hand``, its units kept, no on-hand, no gap) and is not compared itself.
+The chain starts fresh only when sales are ALSO missing for a week in between: the next reported
+on-hand is stored as ``chain_restart`` (shown as "Unreported weeks", a data gap; nothing compared).
+A week with neither on-hand nor sales stores no row of its own. The unit gap is shown on every
+compared row; a row is highlighted when ``|gap| >= stock_gap_highlight_units`` (tenant setting,
 absolute units). The distributor 10 percent variance is not used here.
 
 Grain: customer x product, summed across the customer's sites for a report period.
@@ -40,7 +45,9 @@ ZERO = Decimal("0")
 
 STATUS_FIRST = "first_report"
 STATUS_COMPARED = "compared"
-# N-0111: a Monday-Sunday week with no reported on-hand, and the report the chain restarts at.
+# N-0111: a Monday-Sunday week with no reported on-hand (sales reported), and the report the chain
+# starts fresh at because sales were also missing in between. ``chain_restart`` is the stored value
+# (a CHECK constraint names it); the screens call it "Unreported weeks".
 STATUS_NO_ON_HAND = "no_on_hand"
 STATUS_RESTART = "chain_restart"
 
@@ -60,6 +67,8 @@ class ReportPeriod:
     period_week: int | None = None
     period_year: int | None = None
     import_job_id: int | None = None
+    # False when the stored rows of this period carry no units figure at all (stock-only rows).
+    sales_reported: bool = True
 
 
 @dataclass
@@ -114,15 +123,24 @@ def weeks_without_on_hand(prev_end: date, next_start: date) -> list[date]:
     return out
 
 
+def _sales_cover(plist: list[ReportPeriod], monday: date) -> bool:
+    """True when a period that reports units overlaps the Monday-Sunday week of ``monday``."""
+    sunday = monday + timedelta(days=6)
+    return any(p.sales_reported and p.start <= sunday and p.end >= monday for p in plist)
+
+
 def compute_positions(periods: Iterable[ReportPeriod], receipts: Iterable[Receipt]) -> list[Position]:
     """Pure: one position per report period that carries on-hand, in end-date order.
 
     Units sold count when a period ends after the previous report and by this one, so
     a sales-only period between two stock reports still reduces the expected position.
 
-    N-0111: when a whole Monday-Sunday week between two on-hand reports has no on-hand, each such
-    week gets a ``no_on_hand`` position and the later report restarts the chain
-    (``chain_restart``): it is not compared with the report before the gap.
+    N-0111: whole Monday-Sunday weeks between two on-hand reports that have no on-hand are not
+    compared themselves. If sales are reported for every one of them the chain bridges: each such
+    week gets a ``no_on_hand`` position and the later report is compared with the last reported
+    on-hand (plus matched deliveries, minus all sales in between). If sales are missing for any of
+    those weeks the sum of sales is incomplete, so the later report starts a fresh chain
+    (``chain_restart``, shown as "Unreported weeks") and is not compared.
     """
     by_product: dict[int, list[ReportPeriod]] = {}
     for p in periods:
@@ -142,30 +160,34 @@ def compute_positions(periods: Iterable[ReportPeriod], receipts: Iterable[Receip
                 prev = point
                 continue
             missing = weeks_without_on_hand(prev.end, point.start)
-            if missing:
-                for monday in missing:
-                    sunday = monday + timedelta(days=6)
-                    in_week = [p for p in plist if monday <= p.end <= sunday]
-                    iso = monday.isocalendar()
-                    jobs = [p.import_job_id for p in in_week if p.import_job_id is not None]
-                    week = ReportPeriod(
-                        product_id=product_id,
-                        grain="week",
-                        start=monday,
-                        end=sunday,
-                        units_sold=sum((p.units_sold for p in in_week), ZERO),
-                        period_week=iso[1],
-                        period_year=iso[0],
-                        import_job_id=max(jobs) if jobs else None,
-                    )
-                    out.append(Position(period=week, status=STATUS_NO_ON_HAND))
+            unreported = [m for m in missing if not _sales_cover(plist, m)]
+            bridged = [m for m in missing if m not in unreported]
+            for monday in bridged:
+                sunday = monday + timedelta(days=6)
+                in_week = [p for p in plist if monday <= p.end <= sunday]
+                iso = monday.isocalendar()
+                jobs = [p.import_job_id for p in in_week if p.import_job_id is not None]
+                week = ReportPeriod(
+                    product_id=product_id,
+                    grain="week",
+                    start=monday,
+                    end=sunday,
+                    units_sold=sum((p.units_sold for p in in_week), ZERO),
+                    period_week=iso[1],
+                    period_year=iso[0],
+                    import_job_id=max(jobs) if jobs else None,
+                )
+                out.append(Position(period=week, status=STATUS_NO_ON_HAND))
+            if unreported:
                 out.append(
                     Position(
                         period=point,
                         status=STATUS_RESTART,
                         previous_end=prev.end,
                         previous_on_hand=prev.on_hand,
-                        notes=[f"no on-hand reported for {len(missing)} week(s) from {missing[0].isoformat()}"],
+                        notes=[
+                            f"no sales or on-hand reported for {len(unreported)} week(s) from {unreported[0].isoformat()}"
+                        ],
                     )
                 )
                 prev = point
@@ -190,6 +212,11 @@ def compute_positions(periods: Iterable[ReportPeriod], receipts: Iterable[Receip
                     units_sold_since=sold,
                     expected=expected,
                     gap=gap,
+                    notes=(
+                        [f"bridged {len(bridged)} week(s) with no on-hand reported from {bridged[0].isoformat()}"]
+                        if bridged
+                        else []
+                    ),
                 )
             )
             prev = point
@@ -204,9 +231,12 @@ def gap_reason(
 ) -> str:
     """Plain words for what a gap can mean. Never a verdict."""
     if status == STATUS_NO_ON_HAND:
-        return "No on-hand reported for this week. The stock chain restarts at the next reported on-hand."
+        return "No on-hand reported for this week. It is not compared; the next reported on-hand is compared across it."
     if status == STATUS_RESTART:
-        return "The stock chain restarts here: the week before had no on-hand reported. Nothing to compare."
+        return (
+            "Unreported weeks: no on-hand and no sales were reported for some weeks since the previous "
+            "on-hand report, so nothing is compared here. A data gap; the stock chain starts fresh."
+        )
     if gap is None:
         return "First report for this product. Nothing to compare yet."
     g = Decimal(str(gap))
@@ -245,6 +275,7 @@ def load_report_periods(
         FactCustomerSellthrough.in_transit_units,
         FactCustomerSellthrough.on_order_units,
         FactCustomerSellthrough.import_job_id,
+        FactCustomerSellthrough.figure_import_jobs,
     ).where(
         FactCustomerSellthrough.tenant_id == tenant_id,
         FactCustomerSellthrough.customer_id == int(customer_id),
@@ -264,8 +295,14 @@ def load_report_periods(
                 end=period_end(row.period_start_date, grain),
                 period_week=row.period_week,
                 period_year=row.period_year,
+                sales_reported=False,
             )
             grouped[key] = rp
+        # units_sold is NOT NULL (a stock-only row stores 0), so the per-figure provenance says whether a
+        # load set it. Rows stored before N-0111 have no provenance: every figure came from the one load.
+        figures = row.figure_import_jobs or {}
+        if row.units_sold is not None and (not figures or "units_sold" in figures):
+            rp.sales_reported = True
         rp.units_sold += Decimal(str(row.units_sold or 0))
         rp.on_hand = _add(rp.on_hand, row.reported_soh)
         rp.in_transit = _add(rp.in_transit, row.in_transit_units)

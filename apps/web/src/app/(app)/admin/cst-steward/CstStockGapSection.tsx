@@ -42,7 +42,7 @@ export type StockGapRow = {
   gap_units: number | null;
   in_transit_units: number | null;
   on_order_units: number | null;
-  /** N-0111: no_on_hand = a Monday-Sunday week with no reported on-hand; chain_restart = the chain restarts here. */
+  /** N-0111: no_on_hand = a week with sales but no reported on-hand (bridged, not compared); chain_restart = unreported weeks (no sales either), nothing compared. */
   status: 'compared' | 'first_report' | 'no_on_hand' | 'chain_restart';
   highlighted: boolean;
   reason: string;
@@ -82,7 +82,7 @@ export function isDataGap(r: Pick<StockGapRow, 'gap_cause'>): boolean {
 export function flagLabel(r: Pick<StockGapRow, 'status' | 'highlighted' | 'gap_cause'>): string {
   if (r.status === 'first_report') return 'First report';
   if (r.status === 'no_on_hand') return 'No on-hand reported';
-  if (r.status === 'chain_restart') return 'Chain restarts';
+  if (r.status === 'chain_restart') return 'Unreported weeks';
   if (!r.highlighted) return '';
   return isDataGap(r) ? 'Data gap' : 'Stock difference';
 }
@@ -283,8 +283,15 @@ export function CstStockGapSection() {
           {counts.no_on_hand ? (
             <>
               {' '}
-              · {counts.no_on_hand} week{counts.no_on_hand === 1 ? '' : 's'} with no on-hand reported (the chain
-              restarts at the next reported on-hand)
+              · {counts.no_on_hand} week{counts.no_on_hand === 1 ? '' : 's'} with no on-hand reported (not compared;
+              the next report is compared across {counts.no_on_hand === 1 ? 'it' : 'them'})
+            </>
+          ) : null}
+          {counts.chain_restart ? (
+            <>
+              {' '}
+              · {counts.chain_restart} report{counts.chain_restart === 1 ? '' : 's'} after unreported weeks (no
+              sales or on-hand; a data gap, nothing compared)
             </>
           ) : null}
         </Typography>

@@ -237,9 +237,9 @@ describe('CstStockGapSection', () => {
 });
 
 describe('stock gap labels', () => {
-  it('names a week with no on-hand and the report the chain restarts at (N-0111)', () => {
+  it('names a week with no on-hand and the report after unreported weeks (N-0111)', () => {
     expect(flagLabel({ status: 'no_on_hand', highlighted: false, gap_cause: null })).toBe('No on-hand reported');
-    expect(flagLabel({ status: 'chain_restart', highlighted: false, gap_cause: null })).toBe('Chain restarts');
+    expect(flagLabel({ status: 'chain_restart', highlighted: false, gap_cause: null })).toBe('Unreported weeks');
   });
 
   it('formats signed gaps', () => {

@@ -149,12 +149,52 @@ def test_repeated_report_and_unreported_weeks(session: Session) -> None:
     causes = _causes(session, customer, [p_rep, p_gap])
     assert causes[(p_rep, w2.isoformat())] == ["repeated_report"]
     assert causes[(p_gap, w2.isoformat())] == ["repeated_report"]
-    # N-0111: three weeks with no on-hand between the reports; the chain restarts at `later`,
-    # so it is not compared and has no cause. Each missing week is named.
+    # N-0111: three weeks between the reports with neither on-hand nor sales; the chain starts fresh
+    # at `later` (unreported weeks), so it is not compared and has no cause. No filler rows.
     assert (p_gap, later.isoformat()) not in causes
     rows = list_stock_positions(session, tenant_id=TENANT, threshold_units=1, product_id=p_gap)
     by_start = {r["period_start_date"]: r for r in rows}
     assert by_start[later.isoformat()]["status"] == "chain_restart"
-    missing = sorted(d for d, r in by_start.items() if r["status"] == "no_on_hand")
-    assert missing == [(w2 + timedelta(days=7 * k)).isoformat() for k in (1, 2, 3)]
-    assert all(by_start[d]["reported_on_hand"] is None for d in missing)
+    assert by_start[later.isoformat()]["reason"].startswith("Unreported weeks")
+    assert not [d for d, r in by_start.items() if r["status"] == "no_on_hand"]
+
+
+def test_missing_on_hand_weeks_with_sales_are_bridged_and_stock_only_rows_are_not_sales(session: Session) -> None:
+    customer, (p_bridge, p_stock_only) = _ids(session, 2)
+    w2 = W1 + timedelta(days=7)
+    w3 = W1 + timedelta(days=14)
+    w4 = W1 + timedelta(days=21)
+    # p_bridge: on-hand 30, two sales-only weeks (4 and 6), then on-hand 20 = 30 - 4 - 6 (no gap).
+    _row(session, customer, p_bridge, W1, "0", "30")
+    _row(session, customer, p_bridge, w2, "4", None)
+    _row(session, customer, p_bridge, w3, "6", None)
+    _row(session, customer, p_bridge, w4, "0", "20")
+    # p_stock_only: a stock-only load for w2 stores units 0 with no units figure: not a sales week.
+    _row(session, customer, p_stock_only, W1, "0", "30")
+    _row(session, customer, p_stock_only, w3, "0", "30")
+    stock_only = FactCustomerSellthrough(
+        source_key=f"ct:{customer}:sl:S1:{p_stock_only}:{w2.isoformat()}:so",
+        tenant_id=TENANT,
+        customer_id=customer,
+        product_id=p_stock_only,
+        period_start_date=w2,
+        period_type="weekly",
+        period_grain="week",
+        units_sold=Decimal("0"),
+        reported_soh=None,
+        site_label="S1",
+        figure_import_jobs={"in_transit_units": 1},
+    )
+    session.add(stock_only)
+    session.flush()
+
+    recompute_customer_stock_positions(session, tenant_id=TENANT, customer_id=customer, product_ids=[p_bridge, p_stock_only])
+    rows = list_stock_positions(session, tenant_id=TENANT, threshold_units=1)
+    bridge = {r["period_start_date"]: r for r in rows if r["product_id"] == p_bridge}
+    assert bridge[w2.isoformat()]["status"] == "no_on_hand" and bridge[w3.isoformat()]["status"] == "no_on_hand"
+    assert bridge[w4.isoformat()]["status"] == "compared"
+    assert bridge[w4.isoformat()]["previous_on_hand"] == 30.0
+    assert bridge[w4.isoformat()]["expected_on_hand"] == 20.0 and bridge[w4.isoformat()]["gap_units"] == 0.0
+    # w3 has on-hand here, so w2 is the only week between: a row with no units figure leaves it unreported.
+    stock = {r["period_start_date"]: r for r in rows if r["product_id"] == p_stock_only}
+    assert stock[w3.isoformat()]["status"] == "chain_restart"

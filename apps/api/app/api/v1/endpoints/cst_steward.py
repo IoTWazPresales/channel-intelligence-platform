@@ -720,7 +720,8 @@ def _stock_gap_payload(rows: list[dict[str, Any]], threshold: float) -> dict:
             "compared": len(compared),
             "highlighted": len(highlighted),
             "first_report": sum(1 for r in rows if r["status"] == "first_report"),
-            # N-0111: weeks with no reported on-hand, and the reports the chain restarts at.
+            # N-0111: weeks with sales but no reported on-hand (bridged), and the reports after unreported
+            # weeks (no sales either; stored as chain_restart).
             "no_on_hand": sum(1 for r in rows if r["status"] == "no_on_hand"),
             "chain_restart": sum(1 for r in rows if r["status"] == "chain_restart"),
             # Highlighted rows by first cause; only "unexplained" is a stock-difference signal.
