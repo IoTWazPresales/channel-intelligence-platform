@@ -106,6 +106,7 @@ import { StewardWriteFieldset, StewardWriteNotice } from '@/components/StewardWr
 import { canRunImportTemplate, useStewardWriteAccess } from '@/features/shell/stewardAccess';
 
 import { CstImportJobResolutionSection } from './CstImportJobResolutionSection';
+import { ImportJobLoadReport } from './ImportJobLoadReport';
 import { DsiImportJobResolutionSection } from './DsiImportJobResolutionSection';
 import { DsiIntelligenceStatusPanel, type DsiIntelligenceState } from './DsiIntelligenceStatusPanel';
 import { ImportJobValidateProgressPanel } from '@/features/import-steward/ImportJobValidateProgressPanel';
@@ -181,6 +182,9 @@ type Source = {
 type Job = {
   id: number;
   status: string;
+  /** N-0111: never a plain "Completed" when rows did not load. */
+  display_status?: string | null;
+  rows_not_loaded?: number | null;
   stage: string;
   file_name: string;
   error_summary: string | null;
@@ -2541,7 +2545,12 @@ function AdminImportsPageContent() {
       },
       { field: 'import_mode', headerName: 'Mode', width: 100 },
       { field: 'file_name', headerName: 'File', flex: 1, minWidth: 160 },
-      { field: 'status', headerName: 'Status' },
+      {
+        field: 'status',
+        headerName: 'Status',
+        minWidth: 150,
+        valueGetter: (p) => p.data?.display_status || p.data?.status || '',
+      },
       { field: 'stage', headerName: 'Stage' },
       {
         field: 'archived_at',
@@ -4414,6 +4423,7 @@ function AdminImportsPageContent() {
                 ) : null}
               </Alert>
             ) : null}
+            {lastJobId != null && dsiValidationComplete ? <ImportJobLoadReport importJobId={lastJobId} /> : null}
             {lastJobId != null && dsiValidationComplete ? (
               <DsiImportJobResolutionSection
                 importJobId={lastJobId}
@@ -4632,6 +4642,7 @@ function AdminImportsPageContent() {
                 </Button>
               </Alert>
             ) : null}
+            {isCst && lastJobId != null ? <ImportJobLoadReport importJobId={lastJobId} /> : null}
             {isCst && lastJobId != null ? (
               <CstFilePeriodStrip
                 files={
