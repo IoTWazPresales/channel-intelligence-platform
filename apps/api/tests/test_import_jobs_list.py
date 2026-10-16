@@ -8,7 +8,16 @@ from unittest.mock import AsyncMock, MagicMock
 from app.api.v1.endpoints.imports import list_jobs
 
 
-def test_list_jobs_returns_paginated_items_without_jsonb_blobs() -> None:
+def test_list_jobs_returns_paginated_items_without_jsonb_blobs(monkeypatch) -> None:
+    import app.services.imports.import_load_report as load_report
+
+    async def _reports(_db, jobs):
+        # N-0111: the list reads per-reason staging counts in one grouped query per template.
+        assert [j for j, _slug in jobs] == [7]
+        return {7: load_report.build_report("distributor_inventory", {"loaded": 3, "no_date": 2})}
+
+    monkeypatch.setattr(load_report, "load_reports_async", _reports)
+
     async def _run() -> None:
         row = MagicMock()
         row.id = 7
@@ -40,5 +49,7 @@ def test_list_jobs_returns_paginated_items_without_jsonb_blobs() -> None:
         assert "inferred_schema" not in item
         assert "field_mapping" not in item
         assert "staged_metadata" not in item
+        assert item["display_status"] == "Completed with rows not loaded (2)"
+        assert (item["rows_read"], item["rows_loaded"], item["rows_not_loaded"]) == (5, 3, 2)
 
     asyncio.run(_run())

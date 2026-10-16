@@ -566,6 +566,13 @@ def _mark_year_required(job: ImportJob, entries: list[dict[str, Any]]) -> None:
     job.staged_metadata = to_jsonable(meta)
 
 
+def _store_load_parse(job: ImportJob, load_parse: dict[str, Any]) -> None:
+    """Rows the parser could not stage and files it refused (N-0111 repair; see ``import_load_report``)."""
+    meta = dict(job.staged_metadata or {}) if isinstance(job.staged_metadata, dict) else {}
+    meta["cst_load_parse"] = to_jsonable(load_parse)
+    job.staged_metadata = to_jsonable(meta)
+
+
 def _job_feed_profile(cfg: CustomerReportConfig | None, job: ImportJob) -> dict[str, Any]:
     """The customer's feed profile with the tenant default week calendar (N-0111)."""
     from app.services.imports.parsers.customer_sell_through_grain import with_tenant_week_calendar
@@ -842,6 +849,10 @@ def _ingest_parse_result(
     }
     if ai_assist_used[0]:
         summary["ai_assist_used"] = True
+    meta["cst_load_parse"] = to_jsonable(
+        {"rows_not_staged": dict(getattr(result, "skipped_rows", None) or {}), "file_rows_refused": {},
+         "files_not_read": [], "files_excluded": 0}
+    )
     meta[summary_key] = to_jsonable(summary)
     job.staged_metadata = to_jsonable(meta)
 
@@ -997,10 +1008,17 @@ def _handle_flat(
     total_rows = 0
     periods_marked: set[date] = set()
     parse_errors: list[str] = []
+    # N-0111 repair: what the parser could not stage, so the job reports every row it read.
+    load_parse: dict[str, Any] = {"rows_not_staged": {}, "file_rows_refused": {}, "files_not_read": [], "files_excluded": 0}
+
+    def _refuse(reason: str, rows: int) -> None:
+        refused = load_parse["file_rows_refused"]
+        refused[reason] = int(refused.get(reason, 0)) + int(rows)
 
     for file_idx, raw in enumerate(raws):
         fname = _raw_display_name(raw)
         if fname in excluded:
+            load_parse["files_excluded"] += 1
             file_period_reports.append(
                 {
                     "filename": fname,
@@ -1022,6 +1040,7 @@ def _handle_flat(
             )
         if result.error:
             parse_errors.append(f"{fname}: {result.error}")
+            load_parse["files_not_read"].append({"filename": fname, "reason": "parse_error", "error": result.error[:300]})
             file_period_reports.append(
                 {
                     "filename": fname,
@@ -1034,8 +1053,10 @@ def _handle_flat(
             continue
 
         # N-0110: on-hand is the stock position. Units without it load only as sales-only.
+        file_rows_read = len(result.rows) + sum(int(v) for v in (result.skipped_rows or {}).values())
         if result.rows and not rows_carry_on_hand(result.rows) and not sales_only:
             parse_errors.append(f"{fname}: {NO_ON_HAND_MESSAGE}")
+            _refuse("no_on_hand", file_rows_read)
             file_period_reports.append(
                 {
                     "filename": fname,
@@ -1050,6 +1071,7 @@ def _handle_flat(
         # N-0111: on-hand without units loads only as stock-only, and never wipes sales.
         if result.rows and not rows_carry_units(result.rows) and not stock_only:
             parse_errors.append(f"{fname}: {NO_UNITS_MESSAGE}")
+            _refuse("no_units", file_rows_read)
             file_period_reports.append(
                 {
                     "filename": fname,
@@ -1068,6 +1090,7 @@ def _handle_flat(
             message = year_required_message(suggested)
             year_required.append({"filename": fname, "suggested_year": suggested})
             parse_errors.append(f"{fname}: {message}")
+            _refuse("year_required", file_rows_read)
             file_period_reports.append(
                 {
                     "filename": fname,
@@ -1085,6 +1108,9 @@ def _handle_flat(
             all_warnings.extend(f"{fname}: {w}" for w in drift_warnings)
         if result.warnings:
             all_warnings.extend(f"{fname}: {w}" for w in result.warnings)
+        for reason, n in (result.skipped_rows or {}).items():
+            not_staged = load_parse["rows_not_staged"]
+            not_staged[reason] = int(not_staged.get(reason, 0)) + int(n)
 
         # Per-file steward stamp wins over job-level declare for corroboration.
         steward_period = job_steward_period
@@ -1232,6 +1258,7 @@ def _handle_flat(
 
     if year_required:
         _mark_year_required(job, year_required)
+    _store_load_parse(job, load_parse)
     if parse_errors and total_rows == 0:
         _write_parse_failed(job, "; ".join(parse_errors))
         return 1

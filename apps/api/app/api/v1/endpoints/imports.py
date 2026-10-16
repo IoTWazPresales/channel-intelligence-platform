@@ -425,21 +425,31 @@ async def list_jobs(
         stmt = stmt.where(*filters)
 
     rows = (await db.execute(stmt)).all()
-    items = [
-        {
-            "id": r.id,
-            "source_id": r.source_id,
-            "template_slug": r.template_slug,
-            "import_mode": r.import_mode,
-            "status": r.status,
-            "stage": r.stage,
-            "file_name": r.file_name,
-            "error_summary": r.error_summary,
-            "archived_at": r.archived_at,
-            "created_at": r.created_at,
-        }
-        for r in rows
-    ]
+    # N-0111 repair (D-0108): a sell-through or distributor job with rows not loaded says so.
+    from app.services.imports.import_load_report import display_status, load_reports_async
+
+    reports = await load_reports_async(db, [(r.id, r.template_slug) for r in rows])
+    items = []
+    for r in rows:
+        rep = reports.get(int(r.id))
+        items.append(
+            {
+                "id": r.id,
+                "source_id": r.source_id,
+                "template_slug": r.template_slug,
+                "import_mode": r.import_mode,
+                "status": r.status,
+                "display_status": display_status(r.status, rep),
+                "rows_read": rep["rows_read"] if rep else None,
+                "rows_loaded": rep["rows_loaded"] if rep else None,
+                "rows_not_loaded": (rep["rows_not_loaded"] + rep["rows_partly_loaded"]) if rep else None,
+                "stage": r.stage,
+                "file_name": r.file_name,
+                "error_summary": r.error_summary,
+                "archived_at": r.archived_at,
+                "created_at": r.created_at,
+            }
+        )
     return {
         "items": items,
         "total": total,
@@ -1224,14 +1234,32 @@ async def list_lineup_lines(job_id: int, db: AsyncSession = Depends(get_db)):
     return result
 
 
-@router.get("/jobs/{job_id}")
-async def get_job(job_id: int, db: AsyncSession = Depends(get_db)):
+@router.get("/jobs/{job_id}/load-report")
+async def get_job_load_report(job_id: int, db: AsyncSession = Depends(get_db)):
+    """Rows read, loaded and not loaded, with the reason per category (N-0111 repair, D-0108)."""
+    from app.services.imports.import_load_report import display_status, load_reports_async
+
     job = await db.get(ImportJob, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    report = (await load_reports_async(db, [(job.id, job.template_slug)])).get(int(job.id))
+    return {"job_id": job.id, "status": job.status, "display_status": display_status(job.status, report),
+            "report": report}
+
+
+@router.get("/jobs/{job_id}")
+async def get_job(job_id: int, db: AsyncSession = Depends(get_db)):
+    from app.services.imports.import_load_report import display_status, load_reports_async
+
+    job = await db.get(ImportJob, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    report = (await load_reports_async(db, [(job.id, job.template_slug)])).get(int(job.id))
     return {
         "id": job.id,
         "status": job.status,
+        "display_status": display_status(job.status, report),
+        "load_report": report,
         "stage": job.stage,
         "file_name": job.file_name,
         "error_summary": job.error_summary,
