@@ -53,8 +53,9 @@ CANONICAL_FIELDS = (
 _DEFAULT_ALIASES: dict[str, tuple[str, ...]] = {
     "in_transit_units": ("in transit", "in_transit", "intransit", "in transit qty", "goods in transit"),
     "on_order_units": ("on order", "on_order", "open order", "open orders", "on order qty"),
-    # A sale date column makes each row a day (N-0110).
-    "raw_period_ref": ("sale date", "sales date", "transaction date", "date sold"),
+    # A sale date column makes each row a day (N-0110). A column headed just "Date" is a
+    # sale date too (Warren 2026-10-16); template and mapped columns still win over it.
+    "raw_period_ref": ("sale date", "sales date", "transaction date", "date sold", "date"),
 }
 
 # Import-template / steward keys historically used synonyms; parsers resolve CANONICAL_FIELDS.
@@ -78,6 +79,8 @@ class ParseResult:
     period_type: str = "weekly"
     warnings: list[str] = field(default_factory=list)
     error: str | None = None
+    # N-0111 repair: source rows the parser could not stage, by reason (the job reports them).
+    skipped_rows: dict[str, int] = field(default_factory=dict)
 
 
 def _normalize_text(value: Any) -> str | None:
@@ -963,9 +966,16 @@ def parse_flat_report(
         apply_listing_seed_fields(row, feed_profile)
         rows.append(row)
 
+    # N-0111: a file running from week 52 into week 1 rolls the year forward (no manual split).
+    from app.services.imports.parsers.customer_sell_through_grain import roll_bare_week_years
+
+    rows = roll_bare_week_years(rows, year_hint=year_hint, week_calendar=week_calendar)
+
+    skipped_rows: dict[str, int] = {}
     if skipped:
         what = "on-hand" if stock_only_file else "units_sold"
         warnings.append(f"Skipped {skipped} row(s) with missing product token or {what}")
+        skipped_rows["missing_product_or_on_hand" if stock_only_file else "missing_product_or_units"] = skipped
     warnings.extend(dict.fromkeys(period_warnings))
 
     rows = enrich_flat_rows_from_companion_soh(
@@ -984,6 +994,7 @@ def parse_flat_report(
         period_type="weekly",
         warnings=warnings,
         error=None,
+        skipped_rows=skipped_rows,
     )
 
 
@@ -1140,4 +1151,5 @@ def _parse_flat_wide_week_unpivot(
         period_type="weekly",
         warnings=warnings,
         error=None,
+        skipped_rows={"no_positive_week_units": skipped_products} if skipped_products else {},
     )

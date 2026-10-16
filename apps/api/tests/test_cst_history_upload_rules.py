@@ -5,6 +5,8 @@
 - Week (or month) numbers without a year take the year the uploader confirmed; without one,
   every year the parser had to fill in is logged so the load is held. A year is never guessed.
 - A stock-only file (on-hand, no units column) parses; its rows carry no units.
+- A column headed just "Date" is the sale date (sell-through and distributor files).
+- A file running from week 52 into week 1 rolls the confirmed year forward; no manual split.
 """
 
 from __future__ import annotations
@@ -110,3 +112,80 @@ def test_stock_only_file_parses_with_no_units() -> None:
         ("A1", None, 10.0),
         ("A3", None, 7.0),
     ]
+
+
+def test_a_column_headed_date_is_the_sale_date() -> None:
+    # Warren 2026-10-16: "Date" is a sale-date column; no mapping or template alias needed.
+    data = b"SKU,Date,Units,SOH\nA1,2025-03-12,3,10\nA2,2025-03-13,1,4\n"
+    expected = {"units_sold": {"aliases": ["units"]}, "raw_product_token": {"aliases": ["sku"]},
+                "reported_soh": {"aliases": ["soh"]}}
+    mapping = {EXPECTED_COLUMNS_META_KEY: expected}
+    result = parse_flat_report(data, "amazon history.csv", mapping, 1)
+    assert result.error is None
+    assert [(r["period_grain"], r["period_start_date"]) for r in result.rows] == [
+        ("day", date(2025, 3, 12)),
+        ("day", date(2025, 3, 13)),
+    ]
+
+
+def test_a_mapped_week_column_still_wins_over_a_date_column() -> None:
+    data = b"SKU,Week,Date,Units,SOH\nA1,2025-W12,2025-03-20,3,10\n"
+    mapping = {"SKU": "raw_product_token", "Week": "raw_period_ref", "Units": "units_sold", "SOH": "reported_soh",
+               EXPECTED_COLUMNS_META_KEY: {}}
+    result = parse_flat_report(data, "amazon.csv", mapping, 1)
+    assert [(r["period_grain"], r["period_week"], r["period_year"]) for r in result.rows] == [("week", 12, 2025)]
+
+
+def test_week_52_into_week_1_rolls_the_confirmed_year_forward() -> None:
+    # Warren 2026-10-16: no manual split; the year rolls where the week number drops back.
+    data = (b"SKU,Week,Units,SOH\nA1,W51,1,9\nA2,W51,1,9\nA1,W52,2,8\nA1,W1,3,7\nA2,W1,1,8\nA1,W2,4,6\n")
+    mapping = {"SKU": "raw_product_token", "Week": "raw_period_ref", "Units": "units_sold", "SOH": "reported_soh",
+               EXPECTED_COLUMNS_META_KEY: EXPECTED}
+    with confirmed_year(2024), year_guess_log() as guessed:
+        result = parse_flat_report(data, "amazon.csv", mapping, 1)
+        again = parse_flat_report(data, "amazon.csv", mapping, 1)
+    assert guessed == []
+    got = [(r["period_week"], r["period_year"]) for r in result.rows]
+    assert got == [(51, 2024), (51, 2024), (52, 2024), (1, 2025), (1, 2025), (2, 2025)]
+    # Each file starts again from the confirmed year.
+    assert [(r["period_week"], r["period_year"]) for r in again.rows] == got
+    assert result.rows[3]["period_start_date"] == date(2024, 12, 30)
+
+
+def test_year_roll_reads_a_file_sorted_by_product_then_week() -> None:
+    data = b"SKU,Week,Units,SOH\nA1,W52,2,8\nA1,W1,3,7\nA2,W51,1,9\nA2,W1,1,8\n"
+    mapping = {"SKU": "raw_product_token", "Week": "raw_period_ref", "Units": "units_sold", "SOH": "reported_soh",
+               EXPECTED_COLUMNS_META_KEY: EXPECTED}
+    with confirmed_year(2024):
+        result = parse_flat_report(data, "amazon.csv", mapping, 1)
+    assert [(r["raw_product_token"], r["period_week"], r["period_year"]) for r in result.rows] == [
+        ("A1", 52, 2024), ("A1", 1, 2025), ("A2", 51, 2024), ("A2", 1, 2025),
+    ]
+
+
+def test_a_full_year_per_product_never_rolls() -> None:
+    # Sorted by product: A2 starting again at week 1 is the same year, not a roll-over.
+    data = b"SKU,Week,Units,SOH\nA1,W1,1,9\nA1,W30,1,9\nA1,W52,1,9\nA2,W1,1,9\nA2,W52,1,9\n"
+    mapping = {"SKU": "raw_product_token", "Week": "raw_period_ref", "Units": "units_sold", "SOH": "reported_soh",
+               EXPECTED_COLUMNS_META_KEY: EXPECTED}
+    with confirmed_year(2024):
+        result = parse_flat_report(data, "amazon.csv", mapping, 1)
+    assert {r["period_year"] for r in result.rows} == {2024}
+
+
+def test_a_product_first_seen_in_week_1_takes_the_new_year() -> None:
+    data = b"SKU,Week,Units,SOH\nA1,W52,1,9\nA2,W52,1,9\nA1,W1,1,9\nA2,W1,1,9\nA3,W1,5,9\n"
+    mapping = {"SKU": "raw_product_token", "Week": "raw_period_ref", "Units": "units_sold", "SOH": "reported_soh",
+               EXPECTED_COLUMNS_META_KEY: EXPECTED}
+    with confirmed_year(2024):
+        result = parse_flat_report(data, "amazon.csv", mapping, 1)
+    assert [(r["raw_product_token"], r["period_week"], r["period_year"]) for r in result.rows] == [
+        ("A1", 52, 2024), ("A2", 52, 2024), ("A1", 1, 2025), ("A2", 1, 2025), ("A3", 1, 2025),
+    ]
+
+
+def test_a_distributor_column_headed_date_maps_to_the_transaction_date() -> None:
+    from app.services.imports.dsi_mapping_workflow import build_initial_dsi_field_mapping
+
+    mapping = build_initial_dsi_field_mapping(None, ["Distributor", "SKU", "Qty", "Date", "Customer"], None, {})
+    assert mapping["Date"] == "transaction_date"

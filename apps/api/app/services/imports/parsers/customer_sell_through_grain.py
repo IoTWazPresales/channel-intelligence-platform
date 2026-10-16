@@ -345,6 +345,59 @@ def fields_from_token(
     return None
 
 
+def roll_bare_week_years(
+    rows: list[dict[str, Any]],
+    *,
+    year_hint: int | None = None,
+    week_calendar: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Roll the year of bare week numbers forward at the year end within one file (N-0111).
+
+    A file can run from week 52 or 53 into week 1 (Warren 2026-10-16: no manual split). Each
+    product and site is read in file order from the file's year (confirmed, else the file name's)
+    and moves one year on where its week number drops back. A product whose first row is a week
+    that every other product placed in one year takes that year, so a product with no sale in
+    week 52 still lands its week 1 in the new year. Rows with a stated year are not touched.
+    """
+    base = _CONFIRMED_YEAR.get() or year_hint
+    if not base:
+        return rows
+    bare: list[tuple[int, tuple[Any, Any], int]] = []
+    for i, row in enumerate(rows):
+        m = _WEEK_ONLY.match(str(row.get("raw_period_ref") or "").strip())
+        if m and row.get("period_grain") == "week":
+            bare.append((i, (row.get("raw_product_token"), row.get("raw_location_token")), int(m.group(1))))
+    if not bare:
+        return rows
+    last: dict[tuple[Any, Any], tuple[int, int]] = {}
+    offset: dict[int, int] = {}
+    first: dict[tuple[Any, Any], int] = {}
+    for i, key, week in bare:
+        if key in last:
+            prev_week, prev_off = last[key]
+            offset[i] = prev_off + (1 if week < prev_week else 0)
+        else:
+            offset[i] = 0
+            first[key] = i
+        last[key] = (week, offset[i])
+    later: dict[int, set[int]] = {}
+    firsts = set(first.values())
+    for i, _key, week in bare:
+        if i not in firsts:
+            later.setdefault(week, set()).add(offset[i])
+    shift: dict[tuple[Any, Any], int] = {}
+    for key, i in first.items():
+        week = next(w for j, _k, w in bare if j == i)
+        seen = later.get(week) or set()
+        if len(seen) == 1:
+            shift[key] = next(iter(seen))
+    for i, key, week in bare:
+        fields = week_fields(int(base) + offset[i] + shift.get(key, 0), week, week_calendar=week_calendar)
+        if fields is not None:
+            rows[i].update(fields)
+    return rows
+
+
 def stamp_period_grain(row: dict[str, Any], week_calendar: dict[str, Any] | None = None) -> dict[str, Any]:
     """Fill grain fields on a staging row a parser left without them.
 
