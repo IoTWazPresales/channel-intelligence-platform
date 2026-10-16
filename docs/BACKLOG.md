@@ -3292,3 +3292,18 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Behavior to retain** | The three nodes stay complete unless the second pass finds a real miss. A miss becomes a new node or a fix, not a silent reopen. |
 | **Out of scope** | Nodes that are still open (see CURRENT). Those are not "closed pending Opus". |
 | **TRIGGER** | Anthropic usage is available, or Warren asks a fresh session to do this pass without Opus. |
+
+## BACKLOG-212 — Un-merge Compuspeed (1152) and Syntech (4145) from OPEN_CHANNEL
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** · 2026-10-16 · Warren (N-0111 repair 2): no partial un-merge. |
+| **Effort** | A reviewed un-merge path (clone first) plus Warren naming which rows belong to each distributor. |
+| **Source** | N-0095 acceptance (Compuspeed LTD 1152 and SYNTECH DISTRIBUTION (PTY) LTD 4145 are real distributors, not OPEN_CHANNEL); N-0111 repair D-0111. Trace: `.eif/audit/PROGRAMME_20261016/n0111_repair/N0111_UNMERGE_TRACE.md`. Count: `.eif/audit/PROGRAMME_20261016/n0111_repair2/probe_unmerge_raw_cip.txt`. |
+| **Idea** | Give 1152 and 4145 back their own rows. The 2026-08-08 absorb recorded only the loser ids, so the pre-merge owner of most rows is not stored. |
+| **Why it matters / deferrable** | Distributor-level reporting would credit OPEN_CHANNEL with Compuspeed and Syntech volume. Deferrable until that reporting is shown to users. |
+| **What the work is** | Read-only count on `cip` (2026-10-16), OPEN_CHANNEL rows whose `raw_source_row` / raw customer text names Compuspeed or Syntech (text hits, not proof of owner; "SADC - Compuspeed" and similar were OPEN_CHANNEL's own segment aliases): shipments `fact_inbound_shipment` 214 of 5,499 (Compuspeed 163, Syntech 51); `shipment_evidence_line` 1,414 of 31,975 (1,057 / 357); `shipment_evidence_observation` 576 of 16,093 (429 / 147); `shipment_evidence_current` 198 of 5,662 (152 / 46); lineup `commercial_lineup_line` 52 of 92 (35 / 17). Exactly traceable earlier: 31 of 31 OPEN_CHANNEL sell-out facts (job 96 staging) and 16 lineup lines (steward audit 63). |
+| **Regression traps** | Do not move only the traceable rows. Do not treat a name in raw text as proof the row belonged to that company. Never touch `cip` before a clone proof. |
+| **Behavior to retain** | OPEN_CHANNEL stays the keeper until Warren decides; records 1152 and 4145 stay `merged`. |
+| **Out of scope** | Customer-level (non-distributor) merges; the N-0095 change-keeper action. |
+| **TRIGGER** | Before distributor-level reporting is shown to users. |
