@@ -66,7 +66,7 @@ NO_PRODUCT_STEWARD = frozenset(
 # N-0096: append-only audit tables have SELECT and INSERT policies and deliberately no UPDATE or DELETE
 # policy (N-0110 repair, 20261015_0038), so the update/delete/move cells of this matrix do not apply to
 # them. They are left out of the measured set and checked for their policy shape below.
-APPEND_ONLY = frozenset({"fact_customer_sellthrough_superseded"})
+APPEND_ONLY = frozenset({"fact_customer_sellthrough_superseded", "fact_distributor_line_superseded"})
 STEWARD = "steward"
 ALL = "ALL"
 NULL_PID = None

@@ -3678,6 +3678,29 @@ def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, 
     applied_sell = 0
     applied_inv = 0
     applied_ret = 0
+    # N-0111 (D-0110): a reload of the same invoice line keeps the figures it replaces.
+    from app.services.imports.dsi_line_supersede import RETURNS, SELLOUT, LineSupersede
+
+    keeper = LineSupersede(db, job_id=int(job.id), tenant_id=tid)
+    pre_keys: dict[str, list[str]] = {SELLOUT: [], RETURNS: []}
+    for line in lines:
+        q = float(line.quantity_sold) if line.quantity_sold is not None else None
+        if not (line.resolved_distributor_id and line.resolved_product_id and line.resolved_customer_id):
+            continue
+        if line.transaction_date is None or q is None or q == 0:
+            continue
+        key_fn = dsi_sellout_source_key if q > 0 else dsi_return_source_key
+        pre_keys[SELLOUT if q > 0 else RETURNS].append(
+            key_fn(
+                distributor_id=int(line.resolved_distributor_id),
+                customer_id=int(line.resolved_customer_id),
+                product_id=int(line.resolved_product_id),
+                transaction_date=line.transaction_date,
+                invoice_no=_invoice_no_for_staging_line(line),
+            )
+        )
+    for table, keys in pre_keys.items():
+        keeper.prefetch(table, keys)
     for line in lines:
         parts: list[str] = []
         qs = line.quantity_sold
@@ -3709,6 +3732,15 @@ def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, 
                     transaction_date=tx,
                     invoice_no=inv_no,
                 )
+                figures = {
+                    "units": qty_f,
+                    "revenue": float(eff),
+                    "unit_sellout_price_ex_tax_amount": line.unit_sellout_price_ex_tax_amount,
+                    "reported_revenue_amount": line.reported_revenue_amount,
+                    "computed_revenue_amount": line.computed_revenue_amount,
+                    "currency_code": line.currency_code,
+                }
+                keeper.before_write(SELLOUT, sk, figures, line_id=int(line.id))
                 stmt = (
                     pg_insert(sell_tbl)
                     .values(
@@ -3750,6 +3782,7 @@ def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, 
                     .returning(sell_tbl.c.id)
                 )
                 rid = db.execute(stmt).scalar_one()
+                keeper.after_write(SELLOUT, sk, figures, fact_id=rid, line_id=int(line.id))
                 line.fact_sellout_row_id = int(rid) if rid is not None else None
                 applied_sell += 1
                 parts.append("sellout")
@@ -3778,6 +3811,8 @@ def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, 
                     transaction_date=tx,
                     invoice_no=inv_no,
                 )
+                ret_figures = {"return_quantity": abs(qty_f), "unit_price": unit_px}
+                keeper.before_write(RETURNS, sk, ret_figures, line_id=int(line.id))
                 ret_stmt = (
                     pg_insert(ret_tbl)
                     .values(
@@ -3797,12 +3832,16 @@ def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, 
                         set_={
                             "return_quantity": text("EXCLUDED.return_quantity"),
                             "unit_price": text("EXCLUDED.unit_price"),
+                            # N-0111: the stored row names the line and load that last set it.
+                            "staging_line_id": text("EXCLUDED.staging_line_id"),
+                            "import_job_id": text("EXCLUDED.import_job_id"),
                             "updated_at": text("now()"),
                         },
                     )
                     .returning(ret_tbl.c.id)
                 )
-                db.execute(ret_stmt).scalar_one()
+                ret_id = db.execute(ret_stmt).scalar_one()
+                keeper.after_write(RETURNS, sk, ret_figures, fact_id=ret_id, line_id=int(line.id))
                 applied_ret += 1
                 parts.append("return")
             except Exception as exc:  # noqa: BLE001
@@ -3863,6 +3902,8 @@ def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, 
             "sellout_rows": applied_sell,
             "return_rows": applied_ret,
             "inventory_rows": applied_inv,
+            # N-0111: stored invoice lines whose figures this load replaced (kept, not overwritten).
+            "superseded_lines": keeper.recorded,
             "apply_errors": errors[:50],
         }
     )
