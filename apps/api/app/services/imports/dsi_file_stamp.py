@@ -131,7 +131,8 @@ def header_row_for_file(job: ImportJob, filename: str, *, default: int = 19) -> 
             continue
         if s.get("source_file") == filename or str(s.get("mapping_key") or "").startswith(filename):
             try:
-                return int(s.get("header_row") or default)
+                # 0 is a real answer (headers on the first row); only a missing value falls back.
+                return int(default if s.get("header_row") is None else s["header_row"])
             except (TypeError, ValueError):
                 return default
     return default

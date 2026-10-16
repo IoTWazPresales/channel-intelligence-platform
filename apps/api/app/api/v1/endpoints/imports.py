@@ -839,6 +839,35 @@ async def post_dsi_file_snapshot_periods(
         }
 
 
+@router.post("/jobs/{job_id}/dsi-header-row", dependencies=_STEWARD_WRITE)
+async def post_dsi_header_row(
+    job_id: int,
+    body: dict[str, Any] = Body(...),
+):
+    """Say which row holds the column names (1-based, as shown in the sheet); re-read that file."""
+    from app.services.imports.dsi_mapping_workflow import set_dsi_header_row_sync
+
+    try:
+        header_row = int(body.get("header_row"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="header_row must be a row number (1 or more)") from exc
+    filename = body.get("filename")
+    sheet_key = body.get("sheet_key")
+    with SessionLocal() as sync_db:
+        try:
+            job = set_dsi_header_row_sync(
+                sync_db,
+                job_id,
+                filename=filename if isinstance(filename, str) else None,
+                sheet_key=sheet_key if isinstance(sheet_key, str) else None,
+                header_row_number=header_row,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        sync_db.refresh(job)
+        return dsi_mapping_state_dict(job)
+
+
 @router.get("/dsi/coverage")
 async def get_dsi_coverage(
     source_id: int | None = Query(None),

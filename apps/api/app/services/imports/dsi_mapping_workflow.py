@@ -15,6 +15,7 @@ from app.services.imports.distributor_sales_inventory import CANONICAL as DSI_CA
 from app.services.imports.pm_mapping_memory import load_by_header_norm, norm_header_key
 from app.services.imports.template_definitions import IMPORT_TEMPLATE_ROWS
 from app.storage.local import get_storage_backend
+from app.utils.json_safe import to_jsonable
 
 # Targets persisted in column_mapping_memory (same JSON shape as PM: {target, confirmations}).
 DSI_MEMORY_TARGETS = frozenset(DSI_CANONICAL)
@@ -821,6 +822,7 @@ def infer_dsi_job_sync(db: Session, job_id: int) -> ImportJob:
         DSI_INFER_SAMPLE_ROWS,
         DSI_SINGLE_SHEET_KEY,
         build_dsi_workbook_structure,
+        header_row_overrides_for_file,
         load_dsi_workbook_sheet_frames,
         make_dsi_file_sheet_key,
         persist_dsi_workbook_on_job,
@@ -844,14 +846,19 @@ def infer_dsi_job_sync(db: Session, job_id: int) -> ImportJob:
         filename = raw_file_display_name(raw.storage_key)
         data = storage.read(raw.storage_key)
         # Bounded sample for mapping/automap — full sheet load happens at validate.
+        header_overrides = header_row_overrides_for_file(job, filename)
         sheet_frames = load_dsi_workbook_sheet_frames(
-            filename, data, max_data_rows=DSI_INFER_SAMPLE_ROWS
+            filename,
+            data,
+            max_data_rows=DSI_INFER_SAMPLE_ROWS,
+            header_row_overrides=header_overrides,
         )
         structure = build_dsi_workbook_structure(
             filename,
             data,
             max_data_rows=DSI_INFER_SAMPLE_ROWS,
             frames=sheet_frames,
+            header_row_overrides=header_overrides,
         )
         total_sheet_count += int(structure.get("sheet_count") or len(sheet_frames))
         if structure.get("multi_sheet"):
@@ -967,6 +974,82 @@ def infer_dsi_job_sync(db: Session, job_id: int) -> ImportJob:
     db.add(job)
     db.commit()
     db.refresh(job)
+    return job
+
+
+DSI_MAX_HEADER_ROW_NUMBER = 200
+
+
+def set_dsi_header_row_sync(
+    db: Session,
+    job_id: int,
+    *,
+    filename: str | None,
+    sheet_key: str | None,
+    header_row_number: int,
+) -> ImportJob:
+    """Uploader says which row holds the headers (1-based, as shown in the sheet); re-read that file.
+
+    Only that file/sheet's columns are re-read and re-suggested; other files' saved mappings stay.
+    """
+    from app.services.imports.dsi_batch import list_raw_files_for_job
+    from app.services.imports.dsi_workbook import (
+        DSI_FILE_SHEET_SEP,
+        DSI_HEADER_ROW_OVERRIDES_KEY,
+        DSI_SHEET_META_KEY,
+        DSI_SINGLE_SHEET_KEY,
+        is_nested_dsi_field_mapping,
+        raw_file_display_name,
+    )
+
+    job = db.get(ImportJob, job_id)
+    if not job or job.template_slug != "distributor_inventory":
+        raise ValueError("Job not found")
+    if not 1 <= int(header_row_number) <= DSI_MAX_HEADER_ROW_NUMBER:
+        raise ValueError(f"Header row must be between 1 and {DSI_MAX_HEADER_ROW_NUMBER}")
+    if job.stage == "loaded" or job.status == "running":
+        raise ValueError("This upload is already loaded or running; start a new upload to change the header row")
+
+    names = [raw_file_display_name(r.storage_key) for r in list_raw_files_for_job(db, job_id)]
+    if not names:
+        raise ValueError(f"DSI job {job_id} has no raw files")
+    target_file = (filename or "").strip() or (names[0] if len(names) == 1 else "")
+    if target_file not in names:
+        raise ValueError("filename is required and must be a file in this upload")
+
+    meta = dict(job.staged_metadata or {})
+    wb = meta.get(DSI_SHEET_META_KEY) if isinstance(meta.get(DSI_SHEET_META_KEY), dict) else {}
+    sheets_for_file = [
+        s
+        for s in (wb.get("sheets") or [])
+        if isinstance(s, dict) and (s.get("source_file") in (None, target_file))
+    ]
+    key = (sheet_key or "").strip()
+    if not key:
+        if len(sheets_for_file) > 1:
+            raise ValueError("sheet_key is required for a workbook with several sheets")
+        key = str(sheets_for_file[0].get("sheet_key")) if sheets_for_file else DSI_SINGLE_SHEET_KEY
+
+    overrides = dict(meta.get(DSI_HEADER_ROW_OVERRIDES_KEY) or {})
+    overrides[f"{target_file}{DSI_FILE_SHEET_SEP}{key}"] = int(header_row_number) - 1
+    meta[DSI_HEADER_ROW_OVERRIDES_KEY] = overrides
+    job.staged_metadata = to_jsonable(meta)
+
+    previous = job.field_mapping if is_nested_dsi_field_mapping(job.field_mapping) else None
+    db.add(job)
+    db.commit()
+
+    job = infer_dsi_job_sync(db, job_id)
+    if previous and is_nested_dsi_field_mapping(job.field_mapping):
+        touched = f"{target_file}{DSI_FILE_SHEET_SEP}{key}" if len(names) > 1 else key
+        merged = dict(job.field_mapping or {})
+        for map_key, saved in previous.items():
+            if map_key != touched and map_key in merged and isinstance(saved, dict):
+                merged[map_key] = saved
+        job.field_mapping = merged
+        db.add(job)
+        db.commit()
+        db.refresh(job)
     return job
 
 

@@ -237,10 +237,54 @@ def _detect_header_row(grid: pd.DataFrame) -> int | None:
     return None
 
 
+DSI_HEADER_ROW_OVERRIDES_KEY = "dsi_header_row_overrides"
+
+
+def _has_meaningful_headers(df: pd.DataFrame) -> bool:
+    return any(_cell_as_header_label(c) for c in df.columns)
+
+
+def _drop_blank_unnamed_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Drop leading/stray columns with no header and no values (e.g. an empty column A)."""
+    if df is None or df.shape[1] == 0:
+        return df
+    keep = [
+        i
+        for i, c in enumerate(df.columns)
+        if _cell_as_header_label(c) or not df.iloc[:, i].isna().all()
+    ]
+    return df if len(keep) == df.shape[1] else df.iloc[:, keep]
+
+
+def _fallback_header_row_in_grid(raw: pd.DataFrame) -> int | None:
+    """Header row when no row carries the DSI hint words: the CST layout reader's fullest-of-first-rows."""
+    from app.services.imports.cst_layouts import _fallback_header_row
+
+    return _fallback_header_row(raw)
+
+
+def header_row_overrides_for_file(job: ImportJob, filename: str) -> dict[str, int]:
+    """Uploader-set header rows for one file: ``{sheet_key: 0-based row}``."""
+    meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+    raw = meta.get(DSI_HEADER_ROW_OVERRIDES_KEY)
+    if not isinstance(raw, dict):
+        return {}
+    prefix = f"{filename}{DSI_FILE_SHEET_SEP}"
+    out: dict[str, int] = {}
+    for key, value in raw.items():
+        if isinstance(key, str) and key.startswith(prefix):
+            try:
+                out[key[len(prefix) :]] = max(0, int(value))
+            except (TypeError, ValueError):
+                continue
+    return out
+
+
 def _framed_sheet_read_csv(
     raw_bytes: bytes,
     *,
     max_data_rows: int | None = None,
+    header_override: int | None = None,
 ) -> tuple[pd.DataFrame, int]:
     """Return (dataframe, header_row). Corrective sniff only when header=0 is not DSI-mappable."""
     data_nrows = max_data_rows  # None = full file; int includes header row semantics in pandas
@@ -259,11 +303,17 @@ def _framed_sheet_read_csv(
             kwargs.pop("encoding", None)
             return pd.read_csv(io.BytesIO(raw_bytes), **kwargs)
 
+    if header_override is not None:
+        try:
+            return _drop_blank_unnamed_columns(_read_typed(header=int(header_override))), int(header_override)
+        except Exception:
+            return pd.DataFrame(), int(header_override)
+
     df0: pd.DataFrame | None = None
     try:
         df0 = _read_typed(header=0)
         if _sheet_looks_dsi_mappable(df0):
-            return df0, 0
+            return _drop_blank_unnamed_columns(df0), 0
     except Exception:
         df0 = None
 
@@ -299,15 +349,23 @@ def _framed_sheet_read_csv(
             return (df0 if df0 is not None else pd.DataFrame()), 0
 
     detected = _detect_header_row(raw)
+    if detected is None and df0 is not None and not _has_meaningful_headers(df0):
+        # Row 1 is blank and no row carries the DSI hint words: take the fullest of the first rows.
+        fallback = _fallback_header_row_in_grid(raw)
+        if fallback:
+            try:
+                return _drop_blank_unnamed_columns(_read_typed(header=int(fallback))), int(fallback)
+            except Exception:
+                pass
     if detected is None:
-        return (df0 if df0 is not None else pd.DataFrame()), 0
+        return (_drop_blank_unnamed_columns(df0) if df0 is not None else pd.DataFrame()), 0
     try:
         typed = _read_typed(header=int(detected))
     except Exception:
-        return (df0 if df0 is not None else pd.DataFrame()), 0
+        return (_drop_blank_unnamed_columns(df0) if df0 is not None else pd.DataFrame()), 0
     if _sheet_looks_dsi_mappable(typed):
-        return typed, int(detected)
-    return (df0 if df0 is not None else pd.DataFrame()), 0
+        return _drop_blank_unnamed_columns(typed), int(detected)
+    return (_drop_blank_unnamed_columns(df0) if df0 is not None else pd.DataFrame()), 0
 
 
 def _framed_sheet_read_excel(
@@ -315,30 +373,45 @@ def _framed_sheet_read_excel(
     sheet_name: str,
     *,
     max_data_rows: int | None = None,
+    header_override: int | None = None,
 ) -> tuple[pd.DataFrame, int] | None:
     """Return (dataframe, header_row) or None if sheet is empty."""
     read_kw: dict[str, Any] = {}
     if max_data_rows is not None:
         read_kw["nrows"] = max_data_rows
 
+    if header_override is not None:
+        forced = pd.read_excel(xls, sheet_name=sheet_name, header=int(header_override), **read_kw)
+        if forced.shape[1] == 0:
+            return None
+        return _drop_blank_unnamed_columns(forced), int(header_override)
+
     sdf0 = pd.read_excel(xls, sheet_name=sheet_name, **read_kw)
     if sdf0.empty or sdf0.shape[1] == 0:
         return None
     if _sheet_looks_dsi_mappable(sdf0):
-        return sdf0, 0
+        return _drop_blank_unnamed_columns(sdf0), 0
     try:
         raw = pd.read_excel(xls, sheet_name=sheet_name, header=None, nrows=SNIFF_ROWS)
     except Exception:
-        return sdf0, 0
+        return _drop_blank_unnamed_columns(sdf0), 0
     detected = _detect_header_row(raw)
+    if detected is None and not _has_meaningful_headers(sdf0):
+        # Row 1 is blank and no row carries the DSI hint words: take the fullest of the first rows.
+        detected = _fallback_header_row_in_grid(raw) or None
+        if detected:
+            typed = pd.read_excel(xls, sheet_name=sheet_name, header=detected, **read_kw)
+            if not typed.empty and typed.shape[1] > 0:
+                return _drop_blank_unnamed_columns(typed), int(detected)
+        return _drop_blank_unnamed_columns(sdf0), 0
     if detected is None:
-        return sdf0, 0
+        return _drop_blank_unnamed_columns(sdf0), 0
     typed = pd.read_excel(xls, sheet_name=sheet_name, header=detected, **read_kw)
     if typed.empty or typed.shape[1] == 0:
-        return sdf0, 0
+        return _drop_blank_unnamed_columns(sdf0), 0
     if _sheet_looks_dsi_mappable(typed):
-        return typed, int(detected)
-    return sdf0, 0
+        return _drop_blank_unnamed_columns(typed), int(detected)
+    return _drop_blank_unnamed_columns(sdf0), 0
 
 
 def _excel_engine_for_filename(filename: str) -> str | None:
@@ -356,22 +429,34 @@ def load_dsi_workbook_sheet_frames(
     raw_bytes: bytes,
     *,
     max_data_rows: int | None = None,
+    header_row_overrides: dict[str, int] | None = None,
 ) -> list[tuple[str | None, pd.DataFrame, int]]:
     """Load sheets as (sheet_name, dataframe, header_row).
 
     header_row is 0 for clean files; >0 when corrective sniff found a banner-offset header.
-    Pass max_data_rows for propose/infer (bounded) — omit for validate (full sheet).
+    ``header_row_overrides`` ({sheet_key: 0-based row}) is what the uploader set for this file; it
+    wins over detection. Pass max_data_rows for propose/infer (bounded) — omit for validate.
     """
+    overrides = header_row_overrides or {}
     lower = (filename or "").lower()
     if lower.endswith(".csv"):
-        df, header_row = _framed_sheet_read_csv(raw_bytes, max_data_rows=max_data_rows)
+        df, header_row = _framed_sheet_read_csv(
+            raw_bytes,
+            max_data_rows=max_data_rows,
+            header_override=overrides.get(DSI_SINGLE_SHEET_KEY),
+        )
         return [(None, df, header_row)]
     engine = _excel_engine_for_filename(filename)
     if engine is not None:
         xls = pd.ExcelFile(io.BytesIO(raw_bytes), engine=engine)
         out: list[tuple[str | None, pd.DataFrame, int]] = []
         for sheet in xls.sheet_names:
-            framed = _framed_sheet_read_excel(xls, sheet, max_data_rows=max_data_rows)
+            framed = _framed_sheet_read_excel(
+                xls,
+                sheet,
+                max_data_rows=max_data_rows,
+                header_override=overrides.get(sheet),
+            )
             if framed is None:
                 continue
             sdf, header_row = framed
@@ -388,10 +473,14 @@ def build_dsi_workbook_structure(
     field_mapping: dict[str, Any] | None = None,
     max_data_rows: int | None = None,
     frames: list[tuple[str | None, pd.DataFrame, int]] | None = None,
+    header_row_overrides: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     """Detect workbook sheets; classify mappable vs skipped."""
     frames = frames or load_dsi_workbook_sheet_frames(
-        filename, raw_bytes, max_data_rows=max_data_rows
+        filename,
+        raw_bytes,
+        max_data_rows=max_data_rows,
+        header_row_overrides=header_row_overrides,
     )
     mapped_sheets = set()
     if is_nested_dsi_field_mapping(field_mapping):
@@ -413,10 +502,13 @@ def build_dsi_workbook_structure(
             "user_mapped": key in mapped_sheets,
             "dsi_mappable": _sheet_looks_dsi_mappable(df),
             "header_row": int(header_row),
+            "header_row_user_set": key in (header_row_overrides or {}),
         }
-        if key in mapped_sheets or (len(frames) == 1 and _sheet_looks_dsi_mappable(df)):
+        # A lone sheet is always listed (even when no header row was found) so the uploader can
+        # point at the header row; ``dsi_mappable`` says whether the headers look right.
+        if key in mapped_sheets or len(frames) == 1:
             sheets.append(entry)
-        elif _sheet_looks_dsi_mappable(df):
+        elif _sheet_looks_dsi_mappable(df) or key in (header_row_overrides or {}):
             sheets.append(entry)
         else:
             skipped.append({"sheet_name": sheet_name or "(csv)", "reason": "not_dsi_mappable"})
@@ -565,7 +657,9 @@ def iter_dsi_dataframes_for_job(
     for raw in raws:
         filename = raw_file_display_name(raw.storage_key)
         data = storage.read(raw.storage_key)
-        sheets = load_dsi_workbook_sheet_frames(filename, data)
+        sheets = load_dsi_workbook_sheet_frames(
+            filename, data, header_row_overrides=header_row_overrides_for_file(job, filename)
+        )
         file_frames[filename] = {sn: frame for sn, frame, _header_row in sheets}
 
     multi_file = len(raws) > 1 or job_has_multi_file_mapping(job.field_mapping)
@@ -610,6 +704,52 @@ def iter_dsi_dataframes_for_job(
     if not out and mappings:
         return [(None, df_fallback, mappings[0][1], mappings[0][2])]
     return out
+
+
+def load_dsi_single_file_frame(job: ImportJob, filename: str, raw_bytes: bytes) -> pd.DataFrame:
+    """The one sheet of a single-file job, read the way the mapping step read it (header row and all)."""
+    sheets = load_dsi_workbook_sheet_frames(
+        filename, raw_bytes, header_row_overrides=header_row_overrides_for_file(job, filename)
+    )
+    return sheets[0][1] if sheets else pd.DataFrame()
+
+
+def describe_header_read(job: ImportJob, *, max_headers: int = 12) -> str:
+    """Plain-words account of which header row was read per file/sheet, for zero-row failures."""
+    meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+    wb = meta.get(DSI_SHEET_META_KEY) if isinstance(meta.get(DSI_SHEET_META_KEY), dict) else {}
+    parts: list[str] = []
+    for s in wb.get("sheets") or []:
+        if not isinstance(s, dict):
+            continue
+        where = str(s.get("source_file") or job.file_name or "the file")
+        if s.get("sheet_name"):
+            where += f" (sheet {s['sheet_name']})"
+        cols = [str(c) for c in (s.get("columns") or []) if _cell_as_header_label(c)]
+        if not cols:
+            parts.append(f"No header row found in {where}.")
+            continue
+        shown = ", ".join(cols[:max_headers]) + (f" and {len(cols) - max_headers} more" if len(cols) > max_headers else "")
+        try:
+            row_no = int(s.get("header_row") or 0) + 1
+        except (TypeError, ValueError):
+            row_no = 1
+        how = "set by you" if s.get("header_row_user_set") else "found automatically"
+        parts.append(f"Headers read from row {row_no} of {where} ({how}): {shown}.")
+    return " ".join(parts)
+
+
+def no_header_row_message(job: ImportJob) -> str | None:
+    """Plain-words reason when no sheet of the job has a readable header row; ``None`` otherwise."""
+    meta = job.staged_metadata if isinstance(job.staged_metadata, dict) else {}
+    wb = meta.get(DSI_SHEET_META_KEY) if isinstance(meta.get(DSI_SHEET_META_KEY), dict) else {}
+    sheets = [s for s in (wb.get("sheets") or []) if isinstance(s, dict)]
+    if not sheets or any(_cell_as_header_label(c) for s in sheets for c in (s.get("columns") or [])):
+        return None
+    return (
+        f"{describe_header_read(job)} Set \"Headers found on row\" to the row that holds the column names, "
+        "then map the columns again."
+    )
 
 
 def persist_dsi_workbook_on_job(job: ImportJob, structure: dict[str, Any]) -> None:

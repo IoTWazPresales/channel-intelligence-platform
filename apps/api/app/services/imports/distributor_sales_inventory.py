@@ -1838,12 +1838,28 @@ def process_distributor_sales_inventory(
     from app.services.imports.dsi_workbook import (
         DSI_SHEET_META_KEY,
         build_combined_dsi_dataframe,
+        describe_header_read,
         flatten_dsi_field_mapping,
         is_nested_dsi_field_mapping,
         iter_dsi_dataframes_for_job,
         job_has_multi_file_mapping,
+        no_header_row_message,
         persist_dsi_workbook_on_job,
     )
+
+    # A load that reads nothing must say why in plain words, before any mapping complaint.
+    no_header = no_header_row_message(job)
+    if no_header:
+        db.add(
+            ImportRowResult(
+                job_id=job.id,
+                row_number=0,
+                severity="error",
+                code="dsi_no_header_row",
+                message=no_header,
+            )
+        )
+        return 1
 
     # Nested multi-file / multi-sheet mappings are dict-of-dicts; flatten before required-target checks.
     flat_for_gates = flatten_dsi_field_mapping(mapping)
@@ -1879,7 +1895,10 @@ def process_distributor_sales_inventory(
                 row_number=0,
                 severity="error",
                 code="missing_product_identifier_mapping",
-                message="Required column mapping missing: product identifier (SKU / part number / model / product code).",
+                message=(
+                    "Required column mapping missing: product identifier (SKU / part number / model / product code). "
+                    + describe_header_read(job)
+                ).strip(),
             )
         )
         return 1
@@ -1939,7 +1958,10 @@ def process_distributor_sales_inventory(
                     row_number=0,
                     severity="error",
                     code="dsi_no_mapped_sheets",
-                    message="No mapped DSI sheets to process. Map at least one sheet with product and date/quantity columns.",
+                    message=(
+                        "No mapped DSI sheets to process. Map at least one sheet with product and date/quantity "
+                        "columns. " + describe_header_read(job)
+                    ).strip(),
                 )
             )
             return 1
@@ -1953,6 +1975,21 @@ def process_distributor_sales_inventory(
                     message=f"Sheet {skip['sheet_name']!r} skipped: {skip['reason']}",
                 )
             )
+
+    if df is None or df.empty:
+        db.add(
+            ImportRowResult(
+                job_id=job.id,
+                row_number=0,
+                severity="error",
+                code="dsi_no_data_rows",
+                message=(
+                    "No data rows were read from the file. " + describe_header_read(job)
+                    + " If that is not the row with the column names, change \"Headers found on row\"."
+                ).strip(),
+            )
+        )
+        return 1
 
     # Stamp distributor_token from confirmed per-file identity (banner) — single- and multi-file.
     df = apply_file_distributor_stamps_to_dataframe(job, df)

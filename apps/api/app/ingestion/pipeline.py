@@ -806,13 +806,22 @@ def process_import_job_sync(db: Session, job_id: int, on_progress: Any = None) -
             mapping = dict(job.field_mapping or {})
             job.stage = STAGE_MAPPED
         else:
-            df = read_tabular(job.file_name, data)
+            if (job.template_slug or "") == "distributor_inventory":
+                # Read the sheet exactly as the mapping step did (detected or uploader-set header
+                # row, blank columns dropped). A plain header=0 read turns every header into
+                # "Unnamed: N" for files with blank leading rows and wipes the saved mapping.
+                from app.services.imports.dsi_workbook import load_dsi_single_file_frame, raw_file_display_name
+
+                df = load_dsi_single_file_frame(job, raw_file_display_name(raw.storage_key), data)
+            else:
+                df = read_tabular(job.file_name, data)
             schema = infer_schema(df)
             job.inferred_schema = schema
             job.stage = STAGE_INFERRED
 
             cols = [c["name"] for c in schema["columns"]]
             template = effective_mapping_template(source)
+            saved_mapping = dict(job.field_mapping or {})
             mapping = job.field_mapping or default_field_mapping(cols, template)
             if job.template_slug == "distributor_inventory":
                 from app.services.imports.dsi_mapping_workflow import (
@@ -834,7 +843,9 @@ def process_import_job_sync(db: Session, job_id: int, on_progress: Any = None) -
                     mapping = apply_dsi_product_identifier_sample_inference(cols, mapping, samp)
                     mapping = apply_dsi_never_auto_map_denylist(cols, mapping)
                 mapping, _ = sanitize_dsi_field_mapping(cols, mapping)
-            job.field_mapping = mapping
+            # When none of the saved columns are in the headers just read, keep the saved mapping
+            # (the load reports why) rather than silently erasing the uploader's work.
+            job.field_mapping = mapping or saved_mapping
             job.stage = STAGE_MAPPED
 
         handlers = {

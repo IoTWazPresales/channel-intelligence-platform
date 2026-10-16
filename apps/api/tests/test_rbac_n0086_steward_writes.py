@@ -60,6 +60,7 @@ _WRITE_MATRIX: dict[tuple[str, str], frozenset[Role]] = {
     ("POST", f"{_I}/jobs/{{job_id}}/dsi-file-exclusions"): _STEWARD,
     ("POST", f"{_I}/jobs/{{job_id}}/dsi-file-distributors"): _STEWARD,
     ("POST", f"{_I}/jobs/{{job_id}}/dsi-file-snapshot-periods"): _STEWARD,
+    ("POST", f"{_I}/jobs/{{job_id}}/dsi-header-row"): _STEWARD,  # N-0111 header row finding
     ("POST", f"{_I}/dsi/batch-propose"): _STEWARD,
     ("POST", f"{_I}/dsi/batch-jobs"): _STEWARD,
     ("POST", f"{_I}/cst/batch-propose"): _STEWARD,

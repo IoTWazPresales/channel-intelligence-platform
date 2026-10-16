@@ -69,6 +69,7 @@ import { CstBulkUploadDialog } from './CstBulkUploadDialog';
 import { CstFilePeriodStrip, type CstFilePeriodRow } from './CstFilePeriodStrip';
 import { DsiCoveragePanel } from './DsiCoveragePanel';
 import { DsiFileReviewStrip } from './DsiFileReviewStrip';
+import { DsiHeaderRowStrip } from './DsiHeaderRowStrip';
 import { UnifiedLineupImportDialog } from './UnifiedLineupImportDialog';
 import { PmImportProgressPanel, type PmProgressSnapshot } from './PmImportProgressPanel';
 import {
@@ -971,6 +972,8 @@ function AdminImportsPageContent() {
         columns?: string[];
         column_samples?: Record<string, string[]>;
         dsi_mappable?: boolean;
+        header_row?: number;
+        header_row_user_set?: boolean;
       }>;
       skipped_sheets?: Array<{ sheet_name?: string; reason?: string }>;
     } | null;
@@ -4020,6 +4023,17 @@ function AdminImportsPageContent() {
                   void refetchDsiMapping();
                   void qc.invalidateQueries({ queryKey: ['import-job', lastJobId] });
                   void qc.invalidateQueries({ queryKey: ['dsi-job-intelligence', lastJobId] });
+                }}
+              />
+            ) : null}
+            {lastJobId != null && dsiMappingState?.dsi_workbook?.sheets?.length ? (
+              <DsiHeaderRowStrip
+                jobId={lastJobId}
+                sheets={dsiMappingState.dsi_workbook.sheets}
+                locked={String(dsiMappingState.stage ?? '') === 'loaded'}
+                onChanged={() => {
+                  void refetchDsiMapping();
+                  void qc.invalidateQueries({ queryKey: ['import-job', lastJobId] });
                 }}
               />
             ) : null}
