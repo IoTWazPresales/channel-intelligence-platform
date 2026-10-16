@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2574
-  log_sha256: 22ad2207eff6794b27b4d760f0822db5d2c200e6bfc6a386e40221c8c19d7c02
+  snapshot_revision: 2611
+  log_sha256: 0bd140d8246276ac3ac3f52d70c1718143274153c2d71624f3176b0858d065f6
   acceptance_policy:
     milestone: operator
     root: operator
@@ -13191,7 +13191,7 @@ nodes:
     origin: operator
     status: in_progress
     stage: verify
-    revision: 47
+    revision: 60
     lease: null
     depends_on:
     - N-0110
@@ -13232,13 +13232,12 @@ nodes:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/PROGRAMME_20261016/n0111_repair2/N0111R2_PROOF.md
-          summary: Full API pytest on cip_test 3041 passed, 21 skipped, 0 failed; full web vitest 187 files, 872 passed, 0
-            failed (2 workers); new pure and DB tests for the stock chain bridge and for Pinnacle repeated l
-        rationale: Full API pytest on cip_test 3041 passed, 21 skipped, 0 failed; full web vitest 187 files, 872 passed, 0
-          failed (2 workers); new pure and DB tests for the stock chain bridge and for Pinnacle repeated lines; web build
-          and restart done.
-        pass_run: RUN-20261016-N0111-REPAIR2
+          path: .eif/audit/PROGRAMME_20261016/n0111_layouts/N0111L_PROOF.md
+          summary: Full API pytest on cip_test 3068 passed, 21 skipped, 0 failed; full web vitest 188 files, 878 passed, 0
+            failed (2 workers); new pure, DB, API and component tests for customer layouts.
+        rationale: Full API pytest on cip_test 3068 passed, 21 skipped, 0 failed; full web vitest 188 files, 878 passed, 0
+          failed (2 workers); new pure, DB, API and component tests for customer layouts.
+        pass_run: RUN-20261016-N0111-LAYOUTS
         pass_actor: gov-001
       observability:
         required: true
@@ -13255,13 +13254,12 @@ nodes:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/PROGRAMME_20261016/n0111_repair2/recompute_stock_gap_output.txt
-          summary: 'cip stock positions recomputed once (derived table): compared 16, flagged 16, no on-hand 36, unreported
-            weeks 298, first report 387; no fact table written. Pinnacle repeated lines: re-apply changes no'
-        rationale: 'cip stock positions recomputed once (derived table): compared 16, flagged 16, no on-hand 36, unreported
-          weeks 298, first report 387; no fact table written. Pinnacle repeated lines: re-apply changes nothing, reload keeps
-          the replaced total.'
-        pass_run: RUN-20261016-N0111-REPAIR2
+          path: .eif/audit/PROGRAMME_20261016/n0111_layouts/N0111L_CLONE_PROOF.md
+          summary: '20261016_0043 and the source migration proved on a clone of cip: facts, jobs and sources unchanged; second
+            run changes nothing; downgrade with layouts present keeps every fact, job and source.'
+        rationale: '20261016_0043 and the source migration proved on a clone of cip: facts, jobs and sources unchanged; second
+          run changes nothing; downgrade with layouts present keeps every fact, job and source.'
+        pass_run: RUN-20261016-N0111-LAYOUTS
         pass_actor: gov-001
       backup_recovery:
         required: true
@@ -13278,32 +13276,34 @@ nodes:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/PROGRAMME_20261016/n0111_repair/N0111R_CLONE_PROOF.md
-          summary: '0042 additive: clone upgrade, downgrade, upgrade with every count equal; cip sell-out 35582, units 178195.85,
-            returns 3176, inventory 47411, DSI staging 183463, CST facts 3197 unchanged.'
-        rationale: '0042 additive: clone upgrade, downgrade, upgrade with every count equal; cip sell-out 35582, units 178195.85,
-          returns 3176, inventory 47411, DSI staging 183463, CST facts 3197 unchanged.'
-        pass_run: RUN-20261016-N0111-REPAIR
+          path: .eif/audit/PROGRAMME_20261016/n0111_layouts/N0111L_CLONE_PROOF.md
+          summary: '0043 additive (one table, one defaulted column): clone upgrade, downgrade, upgrade with every count equal;
+            applied to cip as the migration role and to cip_test.'
+        rationale: '0043 additive (one table, one defaulted column): clone upgrade, downgrade, upgrade with every count equal;
+          applied to cip as the migration role and to cip_test.'
+        pass_run: RUN-20261016-N0111-LAYOUTS
         pass_actor: gov-001
       ux:
         required: true
         state: pass
         evidence:
-          path: apps/web/src/app/(app)/admin/imports/ImportJobLoadReport.tsx
-          summary: Status column reads 'Completed with rows not loaded (N)'; the job panel lists each reason with its rows.
-        rationale: Status column reads 'Completed with rows not loaded (N)'; the job panel lists each reason with its rows.
-        pass_run: RUN-20261016-N0111-REPAIR
+          path: apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx
+          summary: 'Upload window: customer by name, saved layouts with rename / remove, per-file layout chip, mapping step
+            with required-column gate, error keeps the window open.'
+        rationale: 'Upload window: customer by name, saved layouts with rename / remove, per-file layout chip, mapping step
+          with required-column gate, error keeps the window open.'
+        pass_run: RUN-20261016-N0111-LAYOUTS
         pass_actor: gov-001
       a11y:
         required: true
         state: pass
         evidence:
-          path: apps/web/src/app/(app)/admin/imports/CstUploadOptions.test.tsx
-          summary: Every checkbox and the year field have a label and an accessible description; states are text, not colour.
-            No axe run.
-        rationale: Every checkbox and the year field have a label and an accessible description; states are text, not colour.
-          No axe run.
-        pass_run: RUN-20261016-N0111-IMPL
+          path: apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx
+          summary: Customer select, layout name and rename fields have labels; states are text, not colour; the shared mapping
+            panel is reused. No axe run.
+        rationale: Customer select, layout name and rename fields have labels; states are text, not colour; the shared mapping
+          panel is reused. No axe run.
+        pass_run: RUN-20261016-N0111-LAYOUTS
         pass_actor: gov-001
       rendered:
         required: true
@@ -13323,32 +13323,31 @@ nodes:
     verification:
       behavioral:
         state: pass
-        pass_run: RUN-20261016-N0111-VER3
+        pass_run: RUN-20261016-N0111-VER4
         pass_actor: gov-001
-        evidence: apps/api/tests/test_customer_stock_gap.py
+        evidence: apps/api/tests/test_cst_layouts_db.py
         path: null
       referent:
         state: pass
-        pass_run: RUN-20261016-N0111-VER3
+        pass_run: RUN-20261016-N0111-VER4
         pass_actor: gov-001
-        evidence: .eif/audit/PROGRAMME_20261016/n0111_repair2/N0111R2_PROOF.md
-        path: apps/api/app/services/channel_intelligence/customer_stock_gap.py
+        evidence: .eif/audit/PROGRAMME_20261016/n0111_layouts/N0111L_PROOF.md
+        path: apps/api/app/services/imports/cst_layouts.py
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'VERIFIED_WITH_LIMITATIONS (repair 2). Self-verified under RUN-20261016-N0111-VER3, different from repair
-      run RUN-20261016-N0111-REPAIR2; same session, same model, not independent. N-0099 does the second look. Per Warren D-0112..D-0114:
-      the stock chain bridges weeks with no on-hand when sales are reported for every week in between (last on-hand + matched
-      deliveries - all sales); the chain starts fresh only when sales are also missing (Unreported weeks, a data gap; stored
-      chain_restart). Repeated Pinnacle lines in one file follow D-0091: differing lines summed, identical lines counted once
-      and flagged duplicate. Un-merge parked (BACKLOG-212; read-only count recorded). cip positions recomputed once: compared
-      16 (was 16), flagged 16 (16), no on-hand reported 36 (3457), unreported weeks 298 (298), first report 387 (387): no
-      gap in the real data has sales for every missing week, so nothing new is compared. Full API pytest on cip_test 3041
-      passed, 21 skipped, 0 failed; full web vitest 187 files, 872 passed, 0 failed (2 workers). Commits 0aeffcbc, 045fd68a.
-      Limits: partial-coverage reading is mine; not rendered (sign-in); Pinnacle proof via the apply function, not the file
-      parser; summed lines keep the later price; wide week-column files and month labels do not roll. Operator acceptance
-      pending.'
+    stage_note: 'VERIFIED_WITH_LIMITATIONS (customer layouts). Self-verified under RUN-20261016-N0111-VER4, different from
+      build run RUN-20261016-N0111-LAYOUTS; same session, same model, not independent. N-0099 does the second look. Per Warren
+      (2026-10-16): a sell-through upload picks a reporting customer, not a source; every upload loads into the one sell-through
+      table; the only per-customer configuration is the column layout (first unknown layout opens the mapping step and is
+      saved; later files match by headers; several layouts per customer); build/test sources never shown. cip: 20261016_0043
+      applied after a clone proof; 7 layouts saved from applied jobs, all 26 sources hidden, nothing deleted, re-run changes
+      nothing. cip_test proof: unknown-layout file -> mapping -> saved -> a second file with the same headers matched by itself
+      and loaded identically -> re-upload changed nothing. Full API pytest on cip_test 3068 passed, 21 skipped, 0 failed;
+      full web vitest 188 files, 878 passed, 0 failed (2 workers). Commits df0841a4, 5fb57283. Limits: not rendered (sign-in);
+      the mapping step is new for sell-through (reuse of the shared panel); Pinnacle gaps listed, not built; hist/RAW sources
+      kept as layouts because their applied jobs are real; Amazon has no layout yet. Operator acceptance pending.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -14561,6 +14560,19 @@ decisions:
     statement: 'Warren 2026-10-16: the Compuspeed (1152) / Syntech (4145) un-merge from OPEN_CHANNEL is PARKED. No partial
       un-merge. One read-only count on cip is taken and written to docs/BACKLOG.md with the trace file path and the trigger
       ''before distributor-level reporting is shown to users''.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0115:
+    id: D-0115
+    scope: N-0111
+    statement: 'Warren 2026-10-16: the sell-through upload = pick a reporting customer, not a ''source''. (1) The upload picker
+      lists ONLY customers ticked as reporting customers (the same list that drives the late/missing report slots); there
+      is no user-facing ''source'' choice. (2) Every sell-through upload loads into the one sell-through table with its standard
+      columns. (3) The only per-customer configuration is the column layout: the first upload of an unrecognised layout opens
+      the existing column-mapping step to map headers to the standard sell-through columns, and the layout is saved for that
+      customer; later uploads match a saved layout by headers automatically; a customer may have several saved layouts (e.g.
+      weekly report, history file, wide-week). (4) Test/build-session sources never appear to users.'
     origin: operator
     status: accepted
     supersedes: null
@@ -16213,6 +16225,104 @@ evidence:
     tree_hash: null
     note: N-0111 repair 2 proof. Full API pytest on cip_test 3041 passed, 21 skipped, 0 failed; full web vitest 187 files,
       872 passed, 0 failed (2 workers).
+  EV-0166:
+    id: EV-0166
+    provenance: implementation-observation
+    path: apps/api/app/models/customer_sellthrough_layout.py
+    tree_hash: null
+    note: 'N-0111 layouts: the saved column layout (one per customer and header set).'
+  EV-0167:
+    id: EV-0167
+    provenance: implementation-observation
+    path: apps/api/alembic/versions/20261016_0043_cst_customer_layouts.py
+    tree_hash: null
+    note: 'N-0111 layouts: layout table and source_definition.is_hidden; clone proof.'
+  EV-0168:
+    id: EV-0168
+    provenance: implementation-observation
+    path: apps/api/app/services/imports/cst_layouts.py
+    tree_hash: null
+    note: 'N-0111 layouts: reporting customers, header sniffing and fingerprint, match, save, customer upload.'
+  EV-0169:
+    id: EV-0169
+    provenance: implementation-observation
+    path: apps/api/app/services/imports/cst_layout_migration.py
+    tree_hash: null
+    note: 'N-0111 layouts: sources with applied jobs become layouts; all sources hidden.'
+  EV-0170:
+    id: EV-0170
+    provenance: implementation-observation
+    path: apps/api/scripts/ops/migrate_cst_sources_to_layouts.py
+    tree_hash: null
+    note: 'N-0111 layouts: dry run by default, --apply needs --expect-db.'
+  EV-0171:
+    id: EV-0171
+    provenance: implementation-observation
+    path: apps/api/app/services/imports/cst_batch.py
+    tree_hash: null
+    note: 'N-0111 layouts: batch job takes a customer, a mapping and a structure.'
+  EV-0172:
+    id: EV-0172
+    provenance: implementation-observation
+    path: apps/api/app/api/v1/endpoints/imports.py
+    tree_hash: null
+    note: 'N-0111 layouts: reporting-customers, layouts, propose and batch-jobs by customer; hidden sources not listed.'
+  EV-0173:
+    id: EV-0173
+    provenance: implementation-observation
+    path: apps/api/tests/test_cst_layouts.py
+    tree_hash: null
+    note: 'N-0111 layouts: fingerprint, header sniffing, mapping checks (pure).'
+  EV-0174:
+    id: EV-0174
+    provenance: implementation-observation
+    path: apps/api/tests/test_cst_layouts_db.py
+    tree_hash: null
+    note: 'N-0111 layouts: unknown layout -> mapping -> saved -> automatic match -> identical load -> re-upload changes nothing;
+      migration; cip_test.'
+  EV-0175:
+    id: EV-0175
+    provenance: implementation-observation
+    path: apps/api/tests/test_cst_layouts_api.py
+    tree_hash: null
+    note: 'N-0111 layouts: endpoint contract.'
+  EV-0176:
+    id: EV-0176
+    provenance: implementation-observation
+    path: apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.tsx
+    tree_hash: null
+    note: 'N-0111 layouts: customer picker, layout match, mapping step (shared panel).'
+  EV-0177:
+    id: EV-0177
+    provenance: implementation-observation
+    path: apps/web/src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx
+    tree_hash: null
+    note: 'N-0111 layouts: dialog tests.'
+  EV-0178:
+    id: EV-0178
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261016/n0111_layouts/N0111L_CLONE_PROOF.md
+    tree_hash: null
+    note: 'N-0111 layouts: clone proof of 20261016_0043 and of the source migration.'
+  EV-0179:
+    id: EV-0179
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261016/n0111_layouts/source_migration_cip.md
+    tree_hash: null
+    note: 'N-0111 layouts: before / after table of the 26 sources on cip.'
+  EV-0180:
+    id: EV-0180
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261016/n0111_layouts/probe_dsi_cip.txt
+    tree_hash: null
+    note: 'N-0111 layouts: read-only look at the distributor path.'
+  EV-0181:
+    id: EV-0181
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261016/n0111_layouts/N0111L_PROOF.md
+    tree_hash: null
+    note: N-0111 layouts proof. Full API pytest on cip_test 3068 passed, 21 skipped, 0 failed; full web vitest 188 files,
+      878 passed, 0 failed (2 workers).
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -17759,9 +17869,86 @@ deferred_findings:
   run: RUN-20261016-N0111-REPAIR2
   actor: gov-001
   status: deferred
+- seq: 2593
+  code: DOES_NOT_FIT
+  note: 'N-0111 layouts (premise): customer sell-through had NO column-mapping step. The parser matched headers by template
+    aliases and the batch dialog never asked; the mapping steps that exist are DSI, shipments, Product Master and historical
+    lineup. Built by reuse, not a second system: the shared CanonicalColumnMappingPanel for the step, the job''s field_mapping
+    (header -> standard column, which the parser already gave priority over aliases) for the result. The only new storage
+    is the saved layout. Also removed: the gate that called a file ''unmappable'' when its headers did not look like sell-through,
+    which would have blocked every first upload of a new layout.'
+  node: N-0111
+  run: RUN-20261016-N0111-LAYOUTS
+  actor: gov-001
+  status: deferred
+- seq: 2594
+  code: DOES_NOT_FIT
+  note: 'N-0111 layouts (migration, for Warren): the brief hides ''hist'' and ''RAW'' sources as build/test, but cst_hist_v2_*
+    and cst_raw_* hold the real loaded files (15-26 Oct 2026, real customers, real fact rows, replay_of_job_id). Their applied
+    jobs gave the 7 layouts; every one of the 26 sources is hidden. The layouts are named ''Imported layout - <first file>'';
+    rename them under the customer in the upload window. Amazon (299) has no layout (its only source, cst_p4_amazon, has only
+    validated jobs): the first Amazon upload opens the mapping step. A layout keeps the stored mapping exactly, including
+    targets the parser ignores (''name'' on Computer Mania). Computer Mania keeps structure mtd_delta and Makro pivoted because
+    those jobs loaded that way. .eif/audit/PROGRAMME_20261016/n0111_layouts/source_migration_cip.md'
+  node: N-0111
+  run: RUN-20261016-N0111-LAYOUTS
+  actor: gov-001
+  status: deferred
+- seq: 2595
+  code: DOES_NOT_FIT
+  note: 'N-0111 layouts (Pinnacle / distributor path, listed, NOT built): (1) the distributor is not picked first - it is
+    detected and confirmed per file (dsi_file_distributor) after upload; (2) the layout memory is ONE pool on the single source
+    ''Distributor inventory feed'' (id 12, column_mapping_memory.by_header_norm, 29 headers) shared by every distributor,
+    so it is remembered by header, not per distributor, and one header meaning two things for two distributors would collide;
+    (3) the wizard still shows ''Data provider / feed'' with that one source; (4) layouts are not named, listed, renamed or
+    removable. .eif/audit/PROGRAMME_20261016/n0111_layouts/probe_dsi_cip.txt'
+  node: N-0111
+  run: RUN-20261016-N0111-LAYOUTS
+  actor: gov-001
+  status: deferred
+- seq: 2596
+  code: DOES_NOT_FIT
+  note: 'N-0111 layouts (reporting list): the picker lists customers with Reports expected on (customer_report_config.reports_expected).
+    advance_cst_report_slots also requires is_key_account, so Amazon (299) is ticked but not a key account and gets no late/missing
+    slots; and the slot job still opens slots for a merged-away customer that stays ticked (the picker never lists those).
+    Not changed.'
+  node: N-0111
+  run: RUN-20261016-N0111-LAYOUTS
+  actor: gov-001
+  status: deferred
+- seq: 2597
+  code: DOES_NOT_FIT
+  note: 'N-0111 layouts (matching): a layout matches by its header set with period-named columns (49-2025, 027.2026, week
+    14, Jan 2026) and unit stubs (ZAR, EA) left out. A file with one extra real column (Takealot week 39 has Supplier Stock)
+    is another layout: the mapping step opens once, started from the closest saved layout. A layout removed in the upload
+    window is hidden, not deleted; bringing one back is PATCH is_hidden=false (no button yet). Two layouts in one upload that
+    map one header two ways are refused (upload separately).'
+  node: N-0111
+  run: RUN-20261016-N0111-LAYOUTS
+  actor: gov-001
+  status: deferred
+- seq: 2598
+  code: DOES_NOT_FIT
+  note: 'N-0111 layouts (API): POST /imports/jobs for customer sell-through now answers 409 and names the new upload; POST
+    /imports/cst/batch-jobs takes customer_id (and layouts), no source_id. Jobs hang on one hidden internal source ''cst_customer_upload''
+    and carry the customer in staged_metadata. The former source path stays in create_cst_batch_job_sync for scripts and tests.
+    The load itself is unchanged: batch creates a validate job, steward resolves, apply loads.'
+  node: N-0111
+  run: RUN-20261016-N0111-LAYOUTS
+  actor: gov-001
+  status: deferred
+- seq: 2599
+  code: DOES_NOT_FIT
+  note: 'N-0111 layouts: not rendered (sign-in): the upload window and the mapping step are covered by component tests (customer
+    list by name only, saved layouts rename, match needs no mapping, new layout blocks until the product column is mapped,
+    error keeps the window open) and by a page test for the step. No browser session, no axe run.'
+  node: N-0111
+  run: RUN-20261016-N0111-LAYOUTS
+  actor: gov-001
+  status: deferred
 ids:
   node: 5
-  decision: 114
+  decision: 115
   blocker: 19
-  evidence: 165
+  evidence: 181
   baseline: 18
