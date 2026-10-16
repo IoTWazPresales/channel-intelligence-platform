@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2547
-  log_sha256: d5e56a305b76476fb82ddfae63ed62e4ef1b2f3f91dbbe50708f952f69e878ad
+  snapshot_revision: 2574
+  log_sha256: 22ad2207eff6794b27b4d760f0822db5d2c200e6bfc6a386e40221c8c19d7c02
   acceptance_policy:
     milestone: operator
     root: operator
@@ -13191,7 +13191,7 @@ nodes:
     origin: operator
     status: in_progress
     stage: verify
-    revision: 37
+    revision: 47
     lease: null
     depends_on:
     - N-0110
@@ -13232,13 +13232,13 @@ nodes:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/PROGRAMME_20261016/n0111_repair/N0111R_PROOF.md
-          summary: Full API pytest on cip_test 3034 passed, 21 skipped, 0 failed; full web vitest 187 files, 872 passed, 0
-            failed (2 workers); new DB tests for DSI supersede and the load report; parser tests for Date an
-        rationale: Full API pytest on cip_test 3034 passed, 21 skipped, 0 failed; full web vitest 187 files, 872 passed, 0
-          failed (2 workers); new DB tests for DSI supersede and the load report; parser tests for Date and the year roll;
-          web tsc exit 0.
-        pass_run: RUN-20261016-N0111-REPAIR
+          path: .eif/audit/PROGRAMME_20261016/n0111_repair2/N0111R2_PROOF.md
+          summary: Full API pytest on cip_test 3041 passed, 21 skipped, 0 failed; full web vitest 187 files, 872 passed, 0
+            failed (2 workers); new pure and DB tests for the stock chain bridge and for Pinnacle repeated l
+        rationale: Full API pytest on cip_test 3041 passed, 21 skipped, 0 failed; full web vitest 187 files, 872 passed, 0
+          failed (2 workers); new pure and DB tests for the stock chain bridge and for Pinnacle repeated lines; web build
+          and restart done.
+        pass_run: RUN-20261016-N0111-REPAIR2
         pass_actor: gov-001
       observability:
         required: true
@@ -13255,12 +13255,13 @@ nodes:
         required: true
         state: pass
         evidence:
-          path: .eif/audit/PROGRAMME_20261016/n0111_repair/N0111R_CLONE_PROOF.md
-          summary: 'Clone: Pinnacle reload kept 4+1 superseded records, correction 2 more, new invoice added; re-applying
-            the correction changed nothing; CST re-run of three files changed nothing; cip counts unchanged by'
-        rationale: 'Clone: Pinnacle reload kept 4+1 superseded records, correction 2 more, new invoice added; re-applying
-          the correction changed nothing; CST re-run of three files changed nothing; cip counts unchanged by 0042.'
-        pass_run: RUN-20261016-N0111-REPAIR
+          path: .eif/audit/PROGRAMME_20261016/n0111_repair2/recompute_stock_gap_output.txt
+          summary: 'cip stock positions recomputed once (derived table): compared 16, flagged 16, no on-hand 36, unreported
+            weeks 298, first report 387; no fact table written. Pinnacle repeated lines: re-apply changes no'
+        rationale: 'cip stock positions recomputed once (derived table): compared 16, flagged 16, no on-hand 36, unreported
+          weeks 298, first report 387; no fact table written. Pinnacle repeated lines: re-apply changes nothing, reload keeps
+          the replaced total.'
+        pass_run: RUN-20261016-N0111-REPAIR2
         pass_actor: gov-001
       backup_recovery:
         required: true
@@ -13322,32 +13323,31 @@ nodes:
     verification:
       behavioral:
         state: pass
-        pass_run: RUN-20261016-N0111-VER2
+        pass_run: RUN-20261016-N0111-VER3
         pass_actor: gov-001
-        evidence: apps/api/tests/test_import_load_report.py
+        evidence: apps/api/tests/test_customer_stock_gap.py
         path: null
       referent:
         state: pass
-        pass_run: RUN-20261016-N0111-VER2
+        pass_run: RUN-20261016-N0111-VER3
         pass_actor: gov-001
-        evidence: .eif/audit/PROGRAMME_20261016/n0111_repair/N0111R_CLONE_PROOF.md
-        path: apps/api/app/services/imports/dsi_line_supersede.py
+        evidence: .eif/audit/PROGRAMME_20261016/n0111_repair2/N0111R2_PROOF.md
+        path: apps/api/app/services/channel_intelligence/customer_stock_gap.py
     evidence: []
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'VERIFIED_WITH_LIMITATIONS (repair). Self-verified under RUN-20261016-N0111-VER2, different from repair run
-      RUN-20261016-N0111-REPAIR; same session, same model, not independent. N-0099 does the second look. Repair per Warren
-      D-0107..D-0111: ''Date'' is a sale-date column (CST alias; DSI already mapped it); every CST and DSI load reports rows
-      read / loaded / not loaded by reason and shows ''Completed with rows not loaded (N)''; bare week numbers roll the confirmed
-      year at week 52/53 -> 1; distributor reloads of the same invoice keep the replaced figures (20261016_0042, clone cip_n0111r
-      then cip, counts unchanged). Clone: CST Date file day grain, W51-W2 2024 -> 2024-W51, 2024-W52, 2025-W1, 2025-W2; dropped-rows
-      file ''Completed with rows not loaded (2)''; Pinnacle load / reload / correct superseded 0 -> 5 -> 7, re-apply changed
-      nothing. cip stock positions recomputed: 4158 (no_on_hand 3457, chain_restart 298, first_report 387, compared 16, all
-      no prior on-hand). Full API pytest on cip_test 3034 passed, 21 skipped, 0 failed; full web vitest 187 files, 872 passed,
-      0 failed (2 workers). Commits 21ea19a5, 26ee1b93, b5a4a342, fa305ce6. Limits: item 5 un-merge NOT done (rows not traceable
-      exactly; Warren to choose); not rendered (sign-in); Pinnacle proof via fact upsert, not the DSI parser; wide week-column
-      files and month labels do not roll; repeated same-key lines in one distributor load are not summed. Operator acceptance
+    stage_note: 'VERIFIED_WITH_LIMITATIONS (repair 2). Self-verified under RUN-20261016-N0111-VER3, different from repair
+      run RUN-20261016-N0111-REPAIR2; same session, same model, not independent. N-0099 does the second look. Per Warren D-0112..D-0114:
+      the stock chain bridges weeks with no on-hand when sales are reported for every week in between (last on-hand + matched
+      deliveries - all sales); the chain starts fresh only when sales are also missing (Unreported weeks, a data gap; stored
+      chain_restart). Repeated Pinnacle lines in one file follow D-0091: differing lines summed, identical lines counted once
+      and flagged duplicate. Un-merge parked (BACKLOG-212; read-only count recorded). cip positions recomputed once: compared
+      16 (was 16), flagged 16 (16), no on-hand reported 36 (3457), unreported weeks 298 (298), first report 387 (387): no
+      gap in the real data has sales for every missing week, so nothing new is compared. Full API pytest on cip_test 3041
+      passed, 21 skipped, 0 failed; full web vitest 187 files, 872 passed, 0 failed (2 workers). Commits 0aeffcbc, 045fd68a.
+      Limits: partial-coverage reading is mine; not rendered (sign-in); Pinnacle proof via the apply function, not the file
+      parser; summed lines keep the later price; wide week-column files and month labels do not roll. Operator acceptance
       pending.'
     debug_iterations: 0
     split_into: null
@@ -14534,6 +14534,33 @@ decisions:
     scope: N-0111
     statement: 'Warren 2026-10-16: Compuspeed LTD (1152) and SYNTECH DISTRIBUTION (PTY) LTD (4145) must be un-merged from
       OPEN_CHANNEL on cip.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0112:
+    id: D-0112
+    scope: N-0111
+    statement: 'Warren 2026-10-16 (corrects D-0105''s ''restart''): the stock chain BRIDGES missing on-hand weeks. When on-hand
+      is missing for some weeks but sales are reported for them, the next reported on-hand is compared with last reported
+      on-hand + matched deliveries - all sales in between. The chain starts fresh only when sales are ALSO missing for the
+      weeks in between (status ''unreported weeks'', a data gap). Weeks with no on-hand are not compared themselves.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0113:
+    id: D-0113
+    scope: N-0111
+    statement: 'Warren 2026-10-16: repeated Pinnacle (distributor) lines within one file follow D-0091: lines that differ
+      in any source column are summed; lines identical in every source column count once and carry a duplicate flag.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0114:
+    id: D-0114
+    scope: N-0111
+    statement: 'Warren 2026-10-16: the Compuspeed (1152) / Syntech (4145) un-merge from OPEN_CHANNEL is PARKED. No partial
+      un-merge. One read-only count on cip is taken and written to docs/BACKLOG.md with the trace file path and the trigger
+      ''before distributor-level reporting is shown to users''.'
     origin: operator
     status: accepted
     supersedes: null
@@ -16118,6 +16145,74 @@ evidence:
     tree_hash: null
     note: N-0111 repair proof. Full API pytest on cip_test 3034 passed, 21 skipped, 0 failed; full web vitest 187 files, 872
       passed, 0 failed (2 workers).
+  EV-0155:
+    id: EV-0155
+    provenance: implementation-observation
+    path: apps/api/app/services/channel_intelligence/customer_stock_gap.py
+    tree_hash: null
+    note: 'N-0111 repair 2: stock chain bridges weeks with no on-hand when sales are reported (D-0112); unreported weeks start
+      a fresh chain.'
+  EV-0156:
+    id: EV-0156
+    provenance: implementation-observation
+    path: apps/api/tests/test_customer_stock_gap.py
+    tree_hash: null
+    note: 'N-0111 repair 2: bridge, delivery, unreported-weeks and coverage tests.'
+  EV-0157:
+    id: EV-0157
+    provenance: implementation-observation
+    path: apps/api/tests/test_customer_stock_gap_cause_db.py
+    tree_hash: null
+    note: 'N-0111 repair 2: bridged chain and stock-only row on cip_test.'
+  EV-0158:
+    id: EV-0158
+    provenance: implementation-observation
+    path: apps/api/app/services/imports/dsi_line_supersede.py
+    tree_hash: null
+    note: 'N-0111 repair 2: RepeatedLines - differing repeated distributor lines summed, identical counted once (D-0113).'
+  EV-0159:
+    id: EV-0159
+    provenance: implementation-observation
+    path: apps/api/app/services/imports/distributor_sales_inventory.py
+    tree_hash: null
+    note: 'N-0111 repair 2: apply writes one row per repeated key.'
+  EV-0160:
+    id: EV-0160
+    provenance: implementation-observation
+    path: apps/api/app/services/imports/import_load_report.py
+    tree_hash: null
+    note: 'N-0111 repair 2: repeated lines loaded; identical copies counted once.'
+  EV-0161:
+    id: EV-0161
+    provenance: implementation-observation
+    path: apps/api/tests/test_dsi_line_supersede_db.py
+    tree_hash: null
+    note: 'N-0111 repair 2: Pinnacle repeated-line tests on cip_test.'
+  EV-0162:
+    id: EV-0162
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261016/n0111_repair2/recompute_stock_gap_output.txt
+    tree_hash: null
+    note: 'N-0111 repair 2: cip stock positions recomputed once; status table before and after.'
+  EV-0163:
+    id: EV-0163
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261016/n0111_repair2/probe_restarts_cip.txt
+    tree_hash: null
+    note: 'N-0111 repair 2: read-only probe of the remaining 298 unreported-weeks points.'
+  EV-0164:
+    id: EV-0164
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261016/n0111_repair2/probe_unmerge_raw_cip.txt
+    tree_hash: null
+    note: 'N-0111 repair 2: read-only count of OPEN_CHANNEL rows naming Compuspeed or Syntech.'
+  EV-0165:
+    id: EV-0165
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261016/n0111_repair2/N0111R2_PROOF.md
+    tree_hash: null
+    note: N-0111 repair 2 proof. Full API pytest on cip_test 3041 passed, 21 skipped, 0 failed; full web vitest 187 files,
+      872 passed, 0 failed (2 workers).
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -17634,9 +17729,39 @@ deferred_findings:
   run: RUN-20261016-N0111-REPAIR
   actor: gov-001
   status: deferred
+- seq: 2563
+  code: DOES_NOT_FIT
+  note: 'N-0111 repair 2 (D-0114): Compuspeed (1152) / Syntech (4145) un-merge PARKED by Warren; no partial un-merge. Read-only
+    count on cip of OPEN_CHANNEL rows whose raw text names them: fact_inbound_shipment 214 of 5499, shipment_evidence_line
+    1414 of 31975, shipment_evidence_observation 576 of 16093, shipment_evidence_current 198 of 5662, commercial_lineup_line
+    52 of 92 (text hits, not proof of owner). BACKLOG-212, trigger: before distributor-level reporting is shown to users.
+    .eif/audit/PROGRAMME_20261016/n0111_repair2/probe_unmerge_raw_cip.txt'
+  node: N-0111
+  run: RUN-20261016-N0111-REPAIR2
+  actor: gov-001
+  status: deferred
+- seq: 2564
+  code: DOES_NOT_FIT
+  note: 'N-0111 repair 2 (D-0112): the bridge compares only when sales are reported for EVERY whole week between two on-hand
+    reports; one uncovered week makes the later report ''Unreported weeks'' (stored chain_restart, no migration). That partial-coverage
+    reading is mine, not stated by Warren. On cip nothing new is compared: 289 of 298 report points after a gap have no sales
+    row of any kind between the reports, 9 have some. .eif/audit/PROGRAMME_20261016/n0111_repair2/probe_restarts_cip.txt'
+  node: N-0111
+  run: RUN-20261016-N0111-REPAIR2
+  actor: gov-001
+  status: deferred
+- seq: 2565
+  code: DOES_NOT_FIT
+  note: 'N-0111 repair 2 (D-0113): summed repeated distributor lines keep the later line''s unit price and currency; no price
+    is recomputed from the totals. Proof is through the real apply function on cip_test with staging lines built directly,
+    not the file parser, and no cip load was made.'
+  node: N-0111
+  run: RUN-20261016-N0111-REPAIR2
+  actor: gov-001
+  status: deferred
 ids:
   node: 5
-  decision: 111
+  decision: 114
   blocker: 19
-  evidence: 154
+  evidence: 165
   baseline: 18
