@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 2446
+**Snapshot revision:** 2509
 
 ## Outcome (verbatim)
 
@@ -121,7 +121,7 @@ _none_
 | N-0097 | Lineup follow-ons: PF quantity columns, workbench identifier split, supersession hardening, margin amounts | feature | proposed | proposed | yes |  | full loop |
 | N-0098 | Shipment evidence Plan D: stop the dual write, then drop redundant columns (BACKLOG-057 D4, 058 D5) | feature | proposed | proposed | yes |  | full loop |
 | N-0099 | Independent second-look verification of self-verified closed nodes before the branch goes to main | feature | proposed | proposed | yes |  | full loop |
-| N-0100 | CPOR duty separation: KAM, PM, Ken and Wayne responsibilities on cases (BACKLOG-136) | feature | proposed | proposed | yes |  | full loop |
+| N-0100 | CPOR duty separation: KAM, PM, Ken and Wayne responsibilities on cases (BACKLOG-136) | feature | in_progress | in_progress | yes |  | full loop |
 | N-0101 | N-0085 U1: listing polling on under the supervisor, restock seen again, dead-link back-off, per-site 403/429 pause, run time limit | feature | complete | complete | yes |  | full loop |
 | N-0102 | N-0085 U2: per-retailer page reader framework (Takealot, Evetech, Amazon), N-0078 fields, registry migrations, discovery for Takealot and Evetech | feature | proposed | proposed | yes |  | full loop |
 | N-0103 | N-0085 U6: Proposed listings steward worklist with bulk confirm, and a per-customer Coverage lens | feature | proposed | proposed | yes |  | full loop |
@@ -132,3 +132,4 @@ _none_
 | N-0108 | Brief and Cover speed: stop sorting the whole weeks-of-cover table to keep the latest rows | feature | proposed | proposed | yes |  | full loop |
 | N-0109 | Reports, dashboards and KPI tiles on the design lab system: one chart system, one KPI tile, one table style (build to mockup-report-system) | feature | complete | complete | yes |  | full loop |
 | N-0110 | Customer sell-through stock gap: the customer report is on-hand, CIP flags the difference | feature | in_progress | in_progress | yes |  | full loop |
+| N-0111 | Sell-through and distributor history upload readiness (2 years: Amazon, Takealot, Pinnacle) | feature | in_progress | in_progress | yes |  | full loop |
