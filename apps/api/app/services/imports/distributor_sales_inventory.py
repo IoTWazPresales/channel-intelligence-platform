@@ -3468,8 +3468,15 @@ def refresh_dsi_staging_line_resolution(
     job: ImportJob,
     line: ImportDistributorSiStagingLine,
     prod_idx: ProductResolutionIndex,
+    *,
+    corr_cache: Any = None,
+    steward_ignored_customer_keys: frozenset[str] | None = None,
 ) -> None:
-    """Recompute resolution fields from persisted staging row (canonical JSON + raw tokens)."""
+    """Recompute resolution fields from persisted staging row (canonical JSON + raw tokens).
+
+    A whole-job pass should hand in ``corr_cache`` and ``steward_ignored_customer_keys`` built once by
+    ``build_refresh_context``; without them each row runs its own shipment-evidence and candidate queries.
+    """
     source = job.source
     source_def_id = source.id if source else None
     historical_relaxed = dsi_historical_product_eligibility_relaxed_from_import_job(job)
@@ -3589,7 +3596,11 @@ def refresh_dsi_staging_line_resolution(
         dealer_group_raw=dg_raw,
         channel_raw=ch_raw,
         diag=diag,
-        steward_ignored_customer_keys=_refresh_ignored_customer_keys(db, job),
+        steward_ignored_customer_keys=(
+            steward_ignored_customer_keys
+            if steward_ignored_customer_keys is not None
+            else _refresh_ignored_customer_keys(db, job)
+        ),
     )
     sellout_blocked_no_tx = bool(qty_sold is not None and qty_sold != 0 and tx_date is None)
     inv_ready = bool(inv_attempt and snap_date is not None and soh is not None)
@@ -3682,6 +3693,7 @@ def refresh_dsi_staging_line_resolution(
         cust_raw=cust_raw,
         dg_raw=dg_raw,
         rcustomer_id=rcustomer_id,
+        cache=corr_cache,
     )
 
     line.resolved_distributor_id = rdistributor_id
@@ -3695,6 +3707,26 @@ def refresh_dsi_staging_line_resolution(
     db.add(line)
 
 
+def build_refresh_context(
+    db: Session, job: ImportJob, lines: list[ImportDistributorSiStagingLine]
+) -> dict[str, Any]:
+    """Per-pass lookups for refreshing many staging lines: shipment-evidence cache + ignored customers.
+
+    Loaded once so a 36k-line apply does not run a shipment-evidence count per row.
+    """
+    from app.services.imports.dsi_shipment_corroboration import ShipmentCorroborationCache
+
+    months: set[str] = set()
+    for ln in lines:
+        d = ln.transaction_date or ln.snapshot_date
+        if d is not None:
+            months.add(d.strftime("%Y-%m"))
+    return {
+        "corr_cache": ShipmentCorroborationCache.load(db, months),
+        "steward_ignored_customer_keys": _refresh_ignored_customer_keys(db, job),
+    }
+
+
 def refresh_dsi_staging_lines_for_job(db: Session, job: ImportJob) -> None:
     """Re-resolve every DSI staging line for a job (after steward-side mapping changes)."""
 
@@ -3706,8 +3738,9 @@ def refresh_dsi_staging_lines_for_job(db: Session, job: ImportJob) -> None:
             .order_by(ImportDistributorSiStagingLine.source_row_number)
         ).all()
     )
+    ctx = build_refresh_context(db, job, lines)
     for line in lines:
-        refresh_dsi_staging_line_resolution(db, job, line, prod_idx)
+        refresh_dsi_staging_line_resolution(db, job, line, prod_idx, **ctx)
 
 
 def _invoice_no_for_staging_line(line: ImportDistributorSiStagingLine) -> str:

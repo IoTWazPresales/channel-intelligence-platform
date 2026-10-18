@@ -143,3 +143,46 @@ def test_refresh_keeps_ignored_customer_excluded(dsi_source_id: int) -> None:
     statuses = {ln.raw_dealer_group_token or ln.raw_customer_dealer_token: ln.resolution_status for ln in _lines(job_id)}
     assert statuses["John Roe - STAFF"] == "staged_only"
     assert statuses["Jane Doe - STAFF"] == "blocked"
+
+
+def test_refresh_loads_shipment_evidence_and_ignored_customers_once(dsi_source_id: int) -> None:
+    """Apply re-checks every staged row; per-row shipment-evidence counts made a 36k-line apply run for hours."""
+    from sqlalchemy import event
+
+    from app.services.imports.distributor_sales_inventory import refresh_dsi_staging_lines_for_job
+
+    rows = "".join(f"DIST-01,SKU-ALPHA-01,2024-05-{d:02d},1,Jane Doe - STAFF\n" for d in range(1, 21))
+    csv = "distributor_code,sku,date,qty,customer_name\n" + rows
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="validate", filename="dsi_refresh_once.csv")
+    job_id = job.id
+
+    def snapshot() -> list[tuple[int, str, str, tuple]]:
+        return [
+            (ln.source_row_number, ln.severity, ln.resolution_status, tuple(ln.diagnostic_codes or []))
+            for ln in _lines(job_id)
+        ]
+
+    before = snapshot()
+    assert len(before) == 20
+
+    statements: list[str] = []
+    with SessionLocal() as db:
+        engine = db.get_bind()
+
+        def _capture(conn, cursor, statement, parameters, context, executemany):  # noqa: ANN001
+            statements.append(statement)
+
+        event.listen(engine, "before_cursor_execute", _capture)
+        try:
+            j = db.get(ImportJob, job_id)
+            refresh_dsi_staging_lines_for_job(db, j)
+            db.commit()
+        finally:
+            event.remove(engine, "before_cursor_execute", _capture)
+
+    evidence = [s for s in statements if "shipment_evidence" in s]
+    ignored = [s for s in statements if "import_entity_mapping_candidate" in s and "normalized_key" in s]
+    # One bulk load each, not one per staged row (20 rows here, 36,275 on the real file).
+    assert len(evidence) <= 4, len(evidence)
+    assert len(ignored) <= 2, len(ignored)
+    assert snapshot() == before

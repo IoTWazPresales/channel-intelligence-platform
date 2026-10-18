@@ -166,6 +166,10 @@ def test_complete_dsi_apply_raises_on_human_fixable_blocked(monkeypatch) -> None
         lambda *_a, **_k: None,
     )
     monkeypatch.setattr(
+        "app.services.imports.dsi_apply_completion.build_refresh_context",
+        lambda *_a, **_k: {},
+    )
+    monkeypatch.setattr(
         "app.services.imports.dsi_product_running_change.reapply_dsi_steward_ignored_product_staging_lines",
         lambda *_a, **_k: None,
     )

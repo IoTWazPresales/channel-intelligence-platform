@@ -15,6 +15,7 @@ from app.models.import_distributor_si import ImportDistributorSiStagingLine
 from app.models.ingestion import ImportJob
 from app.services.imports.distributor_sales_inventory import (
     _load_product_resolution_index,
+    build_refresh_context,
     refresh_dsi_staging_line_resolution,
     upsert_dsi_facts_for_staging_job,
 )
@@ -58,8 +59,14 @@ def complete_dsi_import_job_to_loaded(db: Session, job_id: int) -> dict[str, Any
     if not lines:
         raise DsiApplyCompletionError("No DSI staging lines for this job")
 
-    for line in lines:
-        refresh_dsi_staging_line_resolution(db, job, line, prod_idx)
+    # Shipment-evidence cache and ignored customers are loaded once for the whole job: a per-row
+    # shipment-evidence count took ~1 s each and made a 36k-line apply run for hours.
+    ctx = build_refresh_context(db, job, lines)
+    total = len(lines)
+    for i, line in enumerate(lines, start=1):
+        refresh_dsi_staging_line_resolution(db, job, line, prod_idx, **ctx)
+        if i % 5000 == 0:
+            logger.info("DSI apply refresh job_id=%s %d / %d lines", job.id, i, total)
 
     from app.services.imports.dsi_product_running_change import (
         build_dsi_apply_exclusion_summary,
