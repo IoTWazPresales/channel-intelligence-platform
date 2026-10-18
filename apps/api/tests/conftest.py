@@ -24,6 +24,13 @@ import pytest
 # reproducible without ambient .env.
 def pytest_configure(config) -> None:  # type: ignore[no-untyped-def]
     os.environ.setdefault("CIP_AUTH_MODE", "stub")
+    # Tests must never reach the live Celery broker: the always-on worker consumes the same Redis,
+    # so a test's `.delay(...)` ran on the real worker (2026-10-18 18:18: reports.fanout_import_complete
+    # with a MagicMock argument). Tasks sent in tests go to an in-process memory transport and are
+    # never consumed. CIP_TESTS_ALLOW_LIVE_BROKER=1 is the explicit opt-out for a deliberate e2e run.
+    if os.environ.get("CIP_TESTS_ALLOW_LIVE_BROKER") != "1":
+        os.environ["CELERY_BROKER_URL"] = "memory://"
+        os.environ["CELERY_RESULT_BACKEND"] = "cache+memory://"
     from app.core.config import get_settings
 
     get_settings.cache_clear()
