@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2611
-  log_sha256: 0bd140d8246276ac3ac3f52d70c1718143274153c2d71624f3176b0858d065f6
+  snapshot_revision: 2616
+  log_sha256: 2107a36417de15a128207b3cbfd0939b136127e4caed2e9192154bc6f8de1fc8
   acceptance_policy:
     milestone: operator
     root: operator
@@ -13191,7 +13191,7 @@ nodes:
     origin: operator
     status: in_progress
     stage: verify
-    revision: 60
+    revision: 63
     lease: null
     depends_on:
     - N-0110
@@ -13337,17 +13337,15 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'VERIFIED_WITH_LIMITATIONS (customer layouts). Self-verified under RUN-20261016-N0111-VER4, different from
-      build run RUN-20261016-N0111-LAYOUTS; same session, same model, not independent. N-0099 does the second look. Per Warren
-      (2026-10-16): a sell-through upload picks a reporting customer, not a source; every upload loads into the one sell-through
-      table; the only per-customer configuration is the column layout (first unknown layout opens the mapping step and is
-      saved; later files match by headers; several layouts per customer); build/test sources never shown. cip: 20261016_0043
-      applied after a clone proof; 7 layouts saved from applied jobs, all 26 sources hidden, nothing deleted, re-run changes
-      nothing. cip_test proof: unknown-layout file -> mapping -> saved -> a second file with the same headers matched by itself
-      and loaded identically -> re-upload changed nothing. Full API pytest on cip_test 3068 passed, 21 skipped, 0 failed;
-      full web vitest 188 files, 878 passed, 0 failed (2 workers). Commits df0841a4, 5fb57283. Limits: not rendered (sign-in);
-      the mapping step is new for sell-through (reuse of the shared panel); Pinnacle gaps listed, not built; hist/RAW sources
-      kept as layouts because their applied jobs are real; Amazon has no layout yet. Operator acceptance pending.'
+    stage_note: 'Finding + fix (header row, job 1669), at verify, still VERIFIED_WITH_LIMITATIONS, operator acceptance pending.
+      Self-verified in the build session, not independent. Cause proved read-only from job 1669 and its stored file: the mapping
+      step found headers on row 2, the load re-read single-file jobs from row 1 and erased the saved mapping. Fixed in f3e9b379
+      (header row detected per file/sheet, uploader-settable, stored; load uses the mapping step''s loader; zero-row loads
+      say why; banner layouts still row 20). cip_test proof: synthetic Pinnacle shape maps, loads, 8 sales (36) and 3 credit
+      notes (6) net to 30, re-upload changes nothing; same test fails on old code. Full API pytest on cip_test 3081 passed,
+      21 skipped, 0 failed; full web vitest 189 files 884 passed (2 workers). API and web restarted (health 200, login 200),
+      web build wJ2OcwNjYM3pg_UiBUB4R. Limits: not rendered (sign-in); the 36,275-line real file was not loaded by the agent.
+      Next: Warren re-uploads job 1669''s file as a new upload with Pinnacle selected.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -16323,6 +16321,14 @@ evidence:
     tree_hash: null
     note: N-0111 layouts proof. Full API pytest on cip_test 3068 passed, 21 skipped, 0 failed; full web vitest 188 files,
       878 passed, 0 failed (2 workers).
+  EV-0182:
+    id: EV-0182
+    provenance: implementation-observation
+    path: .eif/audit/PROGRAMME_20261016/n0111_header_row/N0111H_PROOF.md
+    tree_hash: null
+    note: N-0111 header-row finding and fix. Job 1669 cause proved; cip_test synthetic Pinnacle shape maps, loads, credit
+      notes net, re-upload changes nothing. Full API pytest on cip_test 3081 passed, 21 skipped, 0 failed; full web vitest
+      189 files, 884 passed (2 workers).
 baselines:
   BLN-0001:
     id: BLN-0001
@@ -17946,9 +17952,21 @@ deferred_findings:
   run: RUN-20261016-N0111-LAYOUTS
   actor: gov-001
   status: deferred
+- seq: 2614
+  code: DOES_NOT_FIT
+  note: 'N-0111 finding (job 1669, Pinnacle): the mapping step detected the headers on row 2 but the validate pipeline re-read
+    single-file DSI jobs with a plain header=0 read, saw only Unnamed columns, and erased the saved mapping (missing_product_identifier_mapping,
+    rows read 0). The suspected banner default header_row=19 was not the cause. Fixed in f3e9b379: single-file load uses the
+    mapping step''s loader; header row detected per file/sheet with a fullest-early-row fallback and blank columns dropped;
+    uploader can set the row (Headers found on row N); a mapping that matches no header is kept; zero-row loads say why. Banner
+    layouts still read row 20. Warren to re-upload job 1669''s file as a new upload; not loaded by the agent.'
+  node: N-0111
+  run: R20261018T105652Z
+  actor: gov-001
+  status: deferred
 ids:
   node: 5
   decision: 115
   blocker: 19
-  evidence: 181
+  evidence: 182
   baseline: 18
