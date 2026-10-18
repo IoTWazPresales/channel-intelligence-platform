@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2624
-  log_sha256: 30dd285e12a4ba65a6ad6bd0318260ed798c16229fa9c51e131b926a154071c2
+  snapshot_revision: 2628
+  log_sha256: 820a0ba2d25471ff4f9ff1ed38fc7c409abd6d04c5eb151512a50571de66b832
   acceptance_policy:
     milestone: operator
     root: operator
@@ -13191,7 +13191,7 @@ nodes:
     origin: operator
     status: in_progress
     stage: verify
-    revision: 69
+    revision: 72
     lease: null
     depends_on:
     - N-0110
@@ -13337,12 +13337,15 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Three findings fixed this session (header row f3e9b379; ignored customer c1aa223d; slow apply 330eaad3);
-      still at verify, VERIFIED_WITH_LIMITATIONS, operator acceptance pending. Self-verified in the build session, not independent.
-      Slow-apply fix: the apply re-check loads the shipment-evidence cache and ignored customers once per pass instead of
-      per staged line. Full API pytest on cip_test 3085 passed, 21 skipped, 0 failed; web unchanged since vitest 189 files
-      884 passed. API and worker restarted. Limits: not rendered (sign-in); the real 36,275-line apply was not run by the
-      agent (job 1670 is interrupted, nothing written). Next: Warren validates job 1670 again, then applies.'
+    stage_note: 'Pinnacle job 1670 loaded (status loaded, 2026-10-18 21:12): rows read 36275, loaded 26226, not loaded 10049;
+      sell-out 22546 rows / 222796 units, returns 3618 rows / 9265, inventory 0; loaded net 213531 units vs file net 256706
+      (difference 43175: 43028 product left out by the steward, 20 staff-customer lines, 127 identical duplicate copies).
+      Five findings fixed this session (header row, ignored customers, slow apply, apply/validate customer-alias mismatch,
+      tests reaching the live worker). Still at verify, VERIFIED_WITH_LIMITATIONS, operator acceptance pending. Self-verified
+      in the build session, not independent. Full API pytest on cip_test 3091 passed, 21 skipped, 0 failed; web unchanged
+      since vitest 189 files 884 passed. Limits: not rendered (sign-in); the apply and validate for job 1670 were started
+      by the agent at Warren''s instruction through the endpoint helpers, not the browser; load report label ''Sale with no
+      matched customer'' also counts the steward-ignored staff accounts.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -17984,6 +17987,22 @@ deferred_findings:
     task_run row still reads running (leftover).'
   node: N-0111
   run: R20261018T162012Z
+  actor: gov-001
+  status: deferred
+- seq: 2626
+  code: DOES_NOT_FIT
+  note: 'N-0111 finding (job 1670 apply): the apply''s re-check resolved rows differently from validate and was slow. (1)
+    Per-row evidence and customer queries (~1 s a row; 24 min and 0 facts written before the old apply was stopped) now loaded
+    once per pass. (2) Customer aliases were matched on a plain key, validate on customer_source_token_alias_key; 3,638 lines,
+    then after a partial fix 546 lines, came back customer_unresolved and blocked completion. The re-check now builds validate''s
+    DSIResolutionCache and resolves distributors, customers and alias conflicts from it; the single-line path compares canonical
+    keys on both sides. (3) Background tasks showed 0/0; it now shows real counts. (4) Tests reached the live Celery worker
+    (a bogus reports.fanout_import_complete ran on it); pytest now pins a memory broker. Result: job 1670 loaded in 217 s;
+    sell-out 22546 rows / 222796 units, returns 3618 rows / 9265, net 213531 of 256706 file net; difference 43175 = 43028
+    product left out by steward + 20 staff-customer lines + 127 identical duplicate copies. Full API pytest on cip_test 3091
+    passed, 21 skipped, 0 failed. Commits 5990418f a1274792 4a8bd627 71b12644.'
+  node: N-0111
+  run: R20261018T192512Z
   actor: gov-001
   status: deferred
 ids:
