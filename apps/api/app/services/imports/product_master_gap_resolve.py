@@ -402,10 +402,13 @@ def _repoint_cst_staging(session: Session, tok: str, product_id: int) -> int:
                 ImportCustomerSellthroughStagingLine.resolved_product_id.is_(None),
             )
         ).all()
+        from app.services.imports.customer_sell_through import line_primary_token
+
         for row in staging:
-            if _norm_token(row.raw_product_token) == tok:
+            if _norm_token(line_primary_token(row)) == tok:
                 row.resolved_product_id = int(product_id)
                 row.resolution_status = "resolved"
+                row.product_match_tier = "steward"
                 session.add(row)
     return n
 

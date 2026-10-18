@@ -1094,9 +1094,9 @@ async def cst_batch_propose(
     }
     if customer_id is not None:
         from app.services.imports.cst_layouts import (
-            CANONICAL_LABELS,
             inspect_files_for_customer,
             is_reporting_customer,
+            mapping_targets,
         )
         from app.services.merge_redirect import follow_customer_merge_redirect_sync
 
@@ -1106,7 +1106,7 @@ async def cst_batch_propose(
                 raise HTTPException(status_code=400, detail="This customer is not ticked as a reporting customer")
             out["customer_id"] = cid
             out["files"] = inspect_files_for_customer(sync_db, cid, payload)
-        out["targets"] = [{"value": k, "label": v} for k, v in CANONICAL_LABELS.items()]
+        out["targets"] = mapping_targets()
     return out
 
 

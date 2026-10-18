@@ -16,10 +16,13 @@ import pytest
 
 from app.services.imports.cst_layouts import (
     CANONICAL_LABELS,
+    LEGACY_PRODUCT_TARGET,
     _union_mapping,
     detect_mapping,
     layout_signature,
+    mapping_targets,
     sniff_columns,
+    uses_legacy_product_slot,
     validate_field_mapping,
 )
 from app.services.imports.parsers.customer_sell_through_flat import CANONICAL_FIELDS
@@ -78,12 +81,27 @@ def test_sniff_still_lists_columns_of_a_layout_the_aliases_do_not_recognise() ->
 
 
 def test_detect_mapping_uses_the_aliases_the_parser_would() -> None:
+    # N-0111 (2026-10-19): the older single product column is never suggested; a header whose name
+    # does not say what it is (SKU) is left for the uploader to map to a product identifier.
     assert detect_mapping(["SKU", "Week", "Units", "SOH", "Colour"], EXPECTED) == {
-        "SKU": "raw_product_token",
         "Week": "raw_period_ref",
         "Units": "units_sold",
         "SOH": "reported_soh",
     }
+
+
+def test_detect_mapping_suggests_an_identifier_slot_only_by_a_name_that_says_what_it_is() -> None:
+    cols = ["Part Number", "EAN/UPC", "Sales Model Name", "Units", "Description"]
+    assert detect_mapping(cols, EXPECTED) == {
+        "Part Number": "raw_part_number_token",
+        "EAN/UPC": "raw_barcode_token",
+        "Sales Model Name": "raw_sales_model_token",
+        "Units": "units_sold",
+    }
+    # A header the template used to read as the product column ("barcode") is now the barcode slot.
+    assert detect_mapping(["Barcode", "Units"], EXPECTED) == {"Barcode": "raw_barcode_token", "Units": "units_sold"}
+    # Each slot is suggested once.
+    assert detect_mapping(["EAN", "UPC", "Units"], EXPECTED) == {"EAN": "raw_barcode_token", "Units": "units_sold"}
 
 
 def test_sniff_returns_none_for_an_unreadable_file() -> None:
@@ -110,7 +128,53 @@ def test_validate_field_mapping_refuses_gaps(mapping: dict, message: str) -> Non
 
 
 def test_every_standard_column_has_a_label_in_the_mapping_step() -> None:
-    assert set(CANONICAL_LABELS) == set(CANONICAL_FIELDS)
+    # The older single product column is not offered for a new mapping; every other column is.
+    assert set(CANONICAL_LABELS) | {LEGACY_PRODUCT_TARGET} == set(CANONICAL_FIELDS)
+
+
+def test_the_mapping_step_offers_warrens_columns_main_list_then_more_columns() -> None:
+    assert list(CANONICAL_LABELS.values())[:13] == [
+        "Period (sale date, week or month)",
+        "Sales model / marketing name",
+        "Part number",
+        "Barcode (EAN or UPC)",
+        "Customer product code",
+        "Units sold",
+        "On-hand (stock)",
+        "Unit cost",
+        "Unit sell price",
+        "Total line cost",
+        "Total revenue",
+        "Store / site",
+        "Listing ID (website listing, e.g. ASIN/TSIN)",
+    ]
+    targets = {t["value"]: t for t in mapping_targets()}
+    more = sorted(t["label"] for t in targets.values() if t["group"] == "more" and not t.get("legacy"))
+    assert more == sorted(["Unit MAC", "Marketplace", "On-hand value", "In-transit units", "On-order units"])
+    # "Customer article code" is renamed in the UI only: the stored column keeps its name.
+    assert targets["raw_article_token"]["label"] == "Customer product code"
+    assert "Customer article code" not in CANONICAL_LABELS.values()
+    assert targets[LEGACY_PRODUCT_TARGET]["legacy"] is True
+
+
+@pytest.mark.parametrize(
+    "slot", ["raw_part_number_token", "raw_barcode_token", "raw_sales_model_token", "raw_article_token", "raw_product_token"]
+)
+def test_any_one_product_identifier_satisfies_the_product_gate(slot: str) -> None:
+    clean = validate_field_mapping(["Code", "Qty Sold"], {"Code": slot, "Qty Sold": "units_sold"})
+    assert clean == {"Code": slot, "Qty Sold": "units_sold"}
+
+
+def test_a_mapping_with_no_product_identifier_is_refused() -> None:
+    with pytest.raises(ValueError, match="at least one product identifier"):
+        validate_field_mapping(["Code", "Qty Sold"], {"Qty Sold": "units_sold"})
+
+
+def test_a_layout_with_only_the_older_product_column_is_flagged_for_re_mapping() -> None:
+    assert uses_legacy_product_slot({"A": "raw_product_token", "B": "units_sold"})
+    assert not uses_legacy_product_slot({"A": "raw_product_token", "C": "raw_barcode_token"})
+    assert not uses_legacy_product_slot({"A": "raw_barcode_token"})
+    assert not uses_legacy_product_slot({})
 
 
 def test_one_header_mapped_two_ways_is_refused_for_one_job() -> None:

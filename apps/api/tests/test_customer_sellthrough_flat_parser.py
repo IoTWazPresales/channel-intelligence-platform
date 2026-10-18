@@ -238,6 +238,10 @@ def test_all_output_rows_contain_required_keys() -> None:
         "listing_external_id",
         "listing_marketplace",
         "resolution_status",
+        # N-0111 (2026-10-19): each product identifier is stored apart.
+        "raw_part_number_token",
+        "raw_barcode_token",
+        "raw_sales_model_token",
         # N-0110: grain and stock-side pipeline columns.
         "period_grain",
         "period_week",

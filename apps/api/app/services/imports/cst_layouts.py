@@ -25,6 +25,8 @@ from app.models.customer_sellthrough_layout import CustomerSellthroughLayout
 from app.models.ingestion import ImportTemplate, SourceDefinition
 from app.services.imports.parsers.customer_sell_through_flat import (
     CANONICAL_FIELDS,
+    IDENTIFIER_SLOT_FIELDS,
+    PRODUCT_IDENTIFIER_FIELDS,
     _build_alias_index,
     _normalize_text,
     _read_workbook_sheets,
@@ -38,25 +40,61 @@ ANCHOR_SOURCE_CODE = "cst_customer_upload"
 ANCHOR_SOURCE_NAME = "Customer sell-through upload"
 DEFAULT_STRUCTURE = "flat"
 
-# Labels shown in the column-mapping step: the standard sell-through columns.
+# Labels shown in the column-mapping step: the standard sell-through columns (Warren 2026-10-19).
+# Main list first, then "More columns". The older single product column is not offered for a new
+# mapping; it is listed (LEGACY_PRODUCT_TARGET) only so a layout that uses it still reads.
 CANONICAL_LABELS: dict[str, str] = {
-    "raw_product_token": "Product (code, barcode or SKU)",
-    "raw_location_token": "Store / site",
-    "raw_period_ref": "Period (week, month or sale date)",
+    "raw_period_ref": "Period (sale date, week or month)",
+    "raw_sales_model_token": "Sales model / marketing name",
+    "raw_part_number_token": "Part number",
+    "raw_barcode_token": "Barcode (EAN or UPC)",
+    "raw_article_token": "Customer product code",
     "units_sold": "Units sold",
-    "unit_sell_price": "Unit sell price",
-    "unit_cost": "Unit cost",
-    "unit_mac": "Unit MAC",
     "reported_soh": "On-hand (stock)",
-    "raw_article_token": "Customer article code",
-    "listing_external_id": "Listing ID (ASIN, TSIN, web ID)",
+    "unit_cost": "Unit cost",
+    "unit_sell_price": "Unit sell price",
+    "total_cost_amount": "Total line cost",
+    "total_sell_amount": "Total revenue",
+    "raw_location_token": "Store / site",
+    "listing_external_id": "Listing ID (website listing, e.g. ASIN/TSIN)",
+    # More columns
+    "unit_mac": "Unit MAC",
     "listing_marketplace": "Marketplace",
-    "total_sell_amount": "Sales value",
-    "total_cost_amount": "Cost value",
     "total_soh_value": "On-hand value",
-    "in_transit_units": "In transit units",
-    "on_order_units": "On order units",
+    "in_transit_units": "In-transit units",
+    "on_order_units": "On-order units",
 }
+MORE_COLUMNS: frozenset[str] = frozenset(
+    {"unit_mac", "listing_marketplace", "total_soh_value", "in_transit_units", "on_order_units"}
+)
+LEGACY_PRODUCT_TARGET = "raw_product_token"
+LEGACY_PRODUCT_LABEL = "Product, any identifier (older layouts)"
+
+# Header names the mapping step suggests for the identifier columns. The parser itself never guesses
+# these: a column is a part number, barcode or sales model only because a layout maps it.
+SLOT_SUGGESTIONS: dict[str, frozenset[str]] = {
+    "raw_barcode_token": frozenset(
+        {"barcode", "bar code", "ean", "ean code", "ean13", "ean 13", "upc", "upc code", "ean/upc", "upc/ean", "gtin"}
+    ),
+    "raw_part_number_token": frozenset(
+        {"part number", "part no", "part no.", "partno", "part num", "part nr", "p/n", "mpn",
+         "manufacturer part number", "mfr part no", "oem part number"}
+    ),
+    "raw_sales_model_token": frozenset(
+        {"sales model", "sales model name", "model", "model name", "marketing name"}
+    ),
+}
+
+
+def mapping_targets() -> list[dict[str, Any]]:
+    """The targets the column-mapping step offers: the standard columns, ``group`` main or more."""
+    out = [
+        {"value": k, "label": v, "group": "more" if k in MORE_COLUMNS else "main"}
+        for k, v in CANONICAL_LABELS.items()
+    ]
+    out.append({"value": LEGACY_PRODUCT_TARGET, "label": LEGACY_PRODUCT_LABEL, "group": "more", "legacy": True})
+    return out
+
 
 _UNNAMED_RE = re.compile(r"^(unnamed:\s*\d+|col_\d+)$")
 # Currency / unit stubs under a measure label in dual-header exports: not part of a layout.
@@ -177,12 +215,25 @@ def sniff_columns(
 
 
 def detect_mapping(columns: list[str], expected_columns: dict[str, Any]) -> dict[str, str]:
-    """Header -> standard column, as the parser would resolve this file with no saved layout."""
+    """Header -> standard column, as the parser would resolve this file with no saved layout.
+
+    The mapping step starts from this. Product columns are suggested by name only where the name says
+    what the column is (barcode, part number, sales model); the older single product column is never
+    suggested, so a new layout names each identifier itself.
+    """
     resolved = _resolve_source_columns(list(columns), {}, normalize_cst_expected_columns(expected_columns))
     out: dict[str, str] = {}
     for canon, col in resolved.items():
-        if col is not None and col not in out:
+        if col is not None and col not in out and canon != LEGACY_PRODUCT_TARGET:
             out[col] = canon
+    taken = set(out.values())
+    for col in columns:
+        name = normalize_header(col).replace("_", " ")
+        for slot, names in SLOT_SUGGESTIONS.items():
+            if name in names and slot not in taken:
+                out[col] = slot
+                taken.add(slot)
+                break
     return out
 
 
@@ -200,8 +251,10 @@ def validate_field_mapping(columns: list[str], field_mapping: dict[str, str]) ->
             raise ValueError(f"Column '{header}' is not in the file")
         clean[file_header] = target
     targets = set(clean.values())
-    if "raw_product_token" not in targets:
-        raise ValueError("Map the product column (code, barcode or SKU) before uploading")
+    if not targets & set(PRODUCT_IDENTIFIER_FIELDS):
+        raise ValueError(
+            "Map at least one product identifier (part number, barcode, sales model or customer product code) before uploading"
+        )
     if not targets & {"units_sold", "reported_soh", "total_sell_amount"}:
         raise ValueError("Map at least units sold or on-hand before uploading")
     return clean
@@ -251,6 +304,12 @@ def is_reporting_customer(db: Session, customer_id: int) -> bool:
 
 # ---------------------------------------------------------------- layouts
 
+def uses_legacy_product_slot(field_mapping: dict[str, str] | None) -> bool:
+    """True for a layout that maps the older single product column and none of the identifier columns."""
+    targets = set((field_mapping or {}).values())
+    return LEGACY_PRODUCT_TARGET in targets and not targets & set(IDENTIFIER_SLOT_FIELDS)
+
+
 def layout_to_dict(layout: CustomerSellthroughLayout) -> dict[str, Any]:
     return {
         "id": int(layout.id),
@@ -262,6 +321,7 @@ def layout_to_dict(layout: CustomerSellthroughLayout) -> dict[str, Any]:
         "report_structure_type": layout.report_structure_type or DEFAULT_STRUCTURE,
         "origin": layout.origin,
         "is_hidden": bool(layout.is_hidden),
+        "uses_legacy_product_slot": uses_legacy_product_slot(layout.field_mapping),
     }
 
 
@@ -419,6 +479,7 @@ def inspect_files_for_customer(
         layout = find_matching_layout(db, customer_id, columns)
         detected: dict[str, str] = {}
         similar = None
+        layout_info = None
         if layout is None:
             detected = detect_mapping(columns, expected)
             similar = closest_layout(db, customer_id, columns)
@@ -426,8 +487,23 @@ def inspect_files_for_customer(
                 by_norm = {normalize_header(c): c for c in columns}
                 for header, target in (similar.field_mapping or {}).items():
                     present = by_norm.get(normalize_header(header))
-                    if present is not None and target in CANONICAL_FIELDS:
+                    # A new layout names each identifier itself; the older single column is not carried over.
+                    if present is not None and target in CANONICAL_FIELDS and target != LEGACY_PRODUCT_TARGET:
                         detected[present] = target
+        else:
+            by_norm = {normalize_header(c): c for c in columns}
+            layout_info = {
+                "id": int(layout.id),
+                "name": layout.name,
+                # N-0111: a layout that maps the older single product column can be re-mapped into the
+                # separate identifier columns; the mapping below is what it maps today, by this file's headers.
+                "legacy_product_slot": uses_legacy_product_slot(layout.field_mapping),
+                "mapping": {
+                    by_norm[normalize_header(h)]: t
+                    for h, t in (layout.field_mapping or {}).items()
+                    if normalize_header(h) in by_norm and t in CANONICAL_FIELDS
+                },
+            }
         out.append(
             {
                 "filename": filename,
@@ -435,7 +511,7 @@ def inspect_files_for_customer(
                 "unreadable_reason": None,
                 "columns": columns,
                 "layout_signature": layout_signature(columns),
-                "layout": {"id": int(layout.id), "name": layout.name} if layout else None,
+                "layout": layout_info,
                 "similar_layout": {"id": int(similar.id), "name": similar.name} if similar else None,
                 "detected_mapping": detected,
                 "samples": info["samples"],
@@ -500,8 +576,18 @@ def create_customer_upload_jobs(
             continue
         columns = info["columns"]
         layout = find_matching_layout(db, cid, columns)
+        spec = spec_by_sig.get(layout_signature(columns))
+        if layout is not None and spec is not None and spec.get("layout_id") == int(layout.id):
+            # N-0111: the uploader re-mapped a saved layout (e.g. into the separate identifier columns).
+            try:
+                clean = validate_field_mapping(columns, spec.get("field_mapping") or {})
+            except ValueError as exc:
+                outcomes.append({"outcome": "error", "filenames": [filename], "error": str(exc)})
+                continue
+            layout.field_mapping = clean
+            db.add(layout)
+            db.commit()
         if layout is None:
-            spec = spec_by_sig.get(layout_signature(columns))
             if spec is None:
                 outcomes.append(
                     {

@@ -163,7 +163,11 @@ def test_unknown_layout_is_mapped_saved_matched_next_time_and_a_reupload_changes
 
     # 3. A second file with the same headers matches by itself and loads the same way.
     info2 = inspect_files_for_customer(session, cid, [("week 2.csv", second)])[0]
-    assert info2["layout"] == {"id": layout.id, "name": "Weekly report"} and info2["detected_mapping"] == {}
+    assert info2["layout"]["id"] == layout.id and info2["layout"]["name"] == "Weekly report"
+    assert info2["detected_mapping"] == {}
+    # N-0111 (2026-10-19): a layout that maps the older single product column says so, so the
+    # mapping step can offer to re-map it into the separate identifier columns.
+    assert info2["layout"]["legacy_product_slot"] is True and info2["layout"]["mapping"] == MAPPING
     out = create_customer_upload_jobs(
         session, customer_id=cid, filenames_and_bytes=[("week 2.csv", second)], import_mode="apply"
     )
@@ -201,8 +205,9 @@ def test_another_header_set_is_another_layout_and_starts_from_the_closest_one(se
     info = inspect_files_for_customer(session, cid, [("history.csv", hist)])[0]
     assert info["layout"] is None
     assert info["similar_layout"]["name"] == "Weekly report"
-    # The mapping step starts from the closest layout: the four known columns arrive mapped.
-    assert info["detected_mapping"] == MAPPING
+    # The mapping step starts from the closest layout: the known columns arrive mapped. The older single
+    # product column is not carried into a new layout (N-0111, 2026-10-19): the uploader names the identifier.
+    assert info["detected_mapping"] == {k: v for k, v in MAPPING.items() if v != "raw_product_token"}
 
     out = create_customer_upload_jobs(
         session,

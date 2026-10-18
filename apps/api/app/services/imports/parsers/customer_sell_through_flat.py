@@ -29,7 +29,13 @@ from app.utils.json_safe import to_jsonable
 EXPECTED_COLUMNS_META_KEY = "__expected_columns__"
 
 CANONICAL_FIELDS = (
+    # Older layouts: one column that may hold any product identifier (resolved as before).
     "raw_product_token",
+    # N-0111 (Warren 2026-10-19): one slot per identifier, stored separately and resolved in the
+    # platform order Part number -> Barcode -> Sales model. Only ever read from an explicit mapping.
+    "raw_part_number_token",
+    "raw_barcode_token",
+    "raw_sales_model_token",
     "raw_location_token",
     "raw_period_ref",
     "units_sold",
@@ -48,6 +54,14 @@ CANONICAL_FIELDS = (
     "in_transit_units",
     "on_order_units",
 )
+
+# The identifier slots. They have no alias fallback when a file is read: a file only carries a part
+# number, barcode or sales model when the layout maps that column, so an older layout (one product
+# column) reads exactly as before. Suggested header names for the mapping step are in
+# ``cst_layouts.SLOT_SUGGESTIONS``.
+IDENTIFIER_SLOT_FIELDS = ("raw_part_number_token", "raw_barcode_token", "raw_sales_model_token")
+# Every column that names a product: the slots, the older single column, the customer's own code.
+PRODUCT_IDENTIFIER_FIELDS = ("raw_product_token", *IDENTIFIER_SLOT_FIELDS, "raw_article_token")
 
 # Built-in aliases for fields added after customer templates were seeded.
 _DEFAULT_ALIASES: dict[str, tuple[str, ...]] = {
@@ -98,6 +112,57 @@ def _normalize_text(value: Any) -> str | None:
             s = s[:-1].rstrip()
     s = s.strip()
     return s if s and s.lower() != "nan" else None
+
+
+def _identifier_text(value: Any, *, barcode: bool = False) -> str | None:
+    """An identifier cell as text: trimmed, Excel's trailing ``.0`` on a number dropped.
+
+    A barcode also loses inner spaces (``4 711 081 …``), as the shipment evidence import does.
+    """
+    s = _normalize_text(value)
+    if s is None:
+        return None
+    if barcode:
+        s = re.sub(r"\s+", "", s)
+    if s.endswith(".0") and s[:-2].isdigit():
+        s = s[:-2]
+    return s or None
+
+
+def _row_identifiers(series: pd.Series, col_map: dict[str, str | None]) -> dict[str, str | None]:
+    """Every product identifier one row carries, by target column (separate slots, never merged)."""
+
+    def cell(canon: str, *, barcode: bool = False) -> str | None:
+        col = col_map.get(canon)
+        return _identifier_text(series.get(col), barcode=barcode) if col else None
+
+    return {
+        "raw_product_token": _normalize_text(series.get(col_map["raw_product_token"]))
+        if col_map.get("raw_product_token")
+        else None,
+        "raw_part_number_token": cell("raw_part_number_token"),
+        "raw_barcode_token": cell("raw_barcode_token", barcode=True),
+        "raw_sales_model_token": cell("raw_sales_model_token"),
+        "raw_article_token": _normalize_text(series.get(col_map["raw_article_token"]))
+        if col_map.get("raw_article_token")
+        else None,
+    }
+
+
+def _identifier_columns_mapped(col_map: dict[str, str | None]) -> bool:
+    return any(col_map.get(c) for c in PRODUCT_IDENTIFIER_FIELDS)
+
+
+def _row_names_a_product(col_map: dict[str, str | None], ids: dict[str, str | None]) -> bool:
+    """A row can be staged when it carries an identifier.
+
+    A layout with the older single product column and no identifier slot keeps its former rule: that
+    column must be filled (a customer code alone does not stage a row).
+    """
+    slots_mapped = any(col_map.get(c) for c in IDENTIFIER_SLOT_FIELDS)
+    if not slots_mapped and col_map.get("raw_product_token"):
+        return ids["raw_product_token"] is not None
+    return any(ids[c] is not None for c in PRODUCT_IDENTIFIER_FIELDS)
 
 
 def _parse_decimal(value: Any) -> float | None:
@@ -208,7 +273,15 @@ def _build_alias_index(
 
 # Identity canons outweigh repeated measure hits (Game 2026 week band = 6× "Sales U TY").
 _HEADER_IDENTITY_CANONS = frozenset(
-    {"raw_product_token", "raw_location_token", "raw_article_token", "listing_external_id"}
+    {
+        "raw_product_token",
+        "raw_part_number_token",
+        "raw_barcode_token",
+        "raw_sales_model_token",
+        "raw_location_token",
+        "raw_article_token",
+        "listing_external_id",
+    }
 )
 
 
@@ -451,8 +524,13 @@ def _resolve_source_columns(
         if canon in resolved and src.strip().lower() in col_lower:
             resolved[canon] = col_lower[src.strip().lower()]
 
+    # N-0111: once a layout names a part number, barcode or sales model column, it names the
+    # product columns itself; the older single-column alias guess must not pick a second copy.
+    slots_mapped = any(resolved[c] is not None for c in IDENTIFIER_SLOT_FIELDS)
     for canon in CANONICAL_FIELDS:
         if resolved[canon] is not None:
+            continue
+        if canon in IDENTIFIER_SLOT_FIELDS or (canon == "raw_product_token" and slots_mapped):
             continue
         for alias in _aliases_for_canonical(canon, field_mapping, expected):
             if alias in col_lower:
@@ -589,9 +667,10 @@ def enrich_flat_rows_from_companion_soh(
     filled = 0
     for row in rows:
         candidates: list[str] = []
-        tok = _normalize_text(row.get("raw_product_token"))
-        if tok:
-            candidates.append(tok.strip().lower())
+        for slot in ("raw_product_token", "raw_barcode_token"):
+            tok = _normalize_text(row.get(slot))
+            if tok:
+                candidates.append(tok.strip().lower())
         payload = row.get("raw_row_payload")
         if isinstance(payload, dict):
             for key in ("Barcode", "barcode", "EAN", "ean", "EAN/UPC"):
@@ -815,7 +894,7 @@ def parse_flat_report(
     col_map = _resolve_source_columns(list(df.columns), fm, expected_columns)
     available = [str(c) for c in df.columns]
 
-    if col_map["raw_product_token"] is None:
+    if not _identifier_columns_mapped(col_map):
         return ParseResult(
             error=f"Required field product identifier could not be mapped. Available columns: {available}"
         )
@@ -881,12 +960,14 @@ def parse_flat_report(
         series = df.iloc[pos]
         source_row_number = first_data_row + pos
         units = _parse_decimal(series.get(col_map["units_sold"])) if col_map["units_sold"] else None
-        product_tok = _normalize_text(series.get(col_map["raw_product_token"])) if col_map["raw_product_token"] else None
+        ids = _row_identifiers(series, col_map)
+        product_tok = ids["raw_product_token"]
+        names_product = _row_names_a_product(col_map, ids)
         if stock_only_file:
-            if product_tok is None or _parse_decimal(series.get(col_map["reported_soh"])) is None:
+            if not names_product or _parse_decimal(series.get(col_map["reported_soh"])) is None:
                 skipped += 1
                 continue
-        elif units is None or product_tok is None:
+        elif units is None or not names_product:
             skipped += 1
             continue
 
@@ -919,6 +1000,9 @@ def parse_flat_report(
             "raw_location_token": loc_tok,
             "site_label": loc_tok,
             "raw_product_token": product_tok,
+            "raw_part_number_token": ids["raw_part_number_token"],
+            "raw_barcode_token": ids["raw_barcode_token"],
+            "raw_sales_model_token": ids["raw_sales_model_token"],
             "raw_period_ref": period_ref,
             "period_start_date": eff_period,
             "period_type": (row_fields or {}).get("period_type", "weekly"),
@@ -1031,10 +1115,9 @@ def _parse_flat_wide_week_unpivot(
     for pos in range(len(df)):
         series = df.iloc[pos]
         source_row_number = first_data_row + pos
-        product_tok = (
-            _normalize_text(series.get(col_map["raw_product_token"])) if col_map["raw_product_token"] else None
-        )
-        if not product_tok:
+        ids = _row_identifiers(series, col_map)
+        product_tok = ids["raw_product_token"]
+        if not _row_names_a_product(col_map, ids):
             skipped_products += 1
             continue
 
@@ -1099,6 +1182,9 @@ def _parse_flat_wide_week_unpivot(
                 "raw_location_token": loc_tok,
                 "site_label": loc_tok,
                 "raw_product_token": product_tok,
+                "raw_part_number_token": ids["raw_part_number_token"],
+                "raw_barcode_token": ids["raw_barcode_token"],
+                "raw_sales_model_token": ids["raw_sales_model_token"],
                 "raw_period_ref": str(col_name),
                 "period_start_date": col_fields.get("period_start_date", period_date),
                 "period_type": col_fields.get("period_type", period_type),

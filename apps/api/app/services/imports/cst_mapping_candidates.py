@@ -24,7 +24,11 @@ from app.services.imports.cst_candidate_suggestions import (
     build_cst_suggestions_for_candidate,
     load_product_index,
 )
-from app.services.imports.customer_sell_through import resolve_customer_id_for_job
+from app.services.imports.customer_sell_through import (
+    line_identifier_tokens,
+    line_primary_token,
+    resolve_customer_id_for_job,
+)
 from app.services.imports.distributor_sales_inventory import _product_token_key
 from app.utils.json_safe import to_jsonable
 
@@ -134,6 +138,20 @@ def enrich_cst_open_candidates(db: Session, job_id: int) -> None:
     db.flush()
 
 
+def _identifier_context(context: Any, data: dict[str, Any]) -> dict[str, Any]:
+    """The candidate's context with the identifiers its rows carried (N-0111); other keys kept."""
+    ctx = dict(context) if isinstance(context, dict) else {}
+    if data.get("identifier_rows"):
+        ctx["identifier_rows"] = data["identifier_rows"]
+    else:
+        ctx.pop("identifier_rows", None)
+    if data.get("conflict_rows"):
+        ctx["identifier_conflict_rows"] = int(data["conflict_rows"])
+    else:
+        ctx.pop("identifier_conflict_rows", None)
+    return ctx
+
+
 def upsert_cst_mapping_candidates(db: Session, job_id: int) -> None:
     """Aggregate unresolved staging tokens into ImportEntityMappingCandidate rows.
 
@@ -151,15 +169,36 @@ def upsert_cst_mapping_candidates(db: Session, job_id: int) -> None:
     location_agg: dict[str, dict[str, Any]] = {}
 
     for line in lines:
-        if line.resolved_product_id is None and line.raw_product_token:
-            key = _product_token_key(line.raw_product_token)
+        primary = line_primary_token(line)
+        if line.resolved_product_id is None and primary:
+            key = _product_token_key(primary)
             if key:
-                agg = product_agg.setdefault(key, {"row_count": 0, "total_units": None, "samples": []})
+                agg = product_agg.setdefault(
+                    key,
+                    {"row_count": 0, "total_units": None, "samples": [], "identifier_rows": [], "conflict_rows": 0},
+                )
                 agg["row_count"] += 1
                 if line.units_sold is not None:
                     agg["total_units"] = (agg["total_units"] or 0.0) + float(line.units_sold)
-                if len(agg["samples"]) < 5 and line.raw_product_token not in agg["samples"]:
-                    agg["samples"].append(line.raw_product_token)
+                if len(agg["samples"]) < 5 and primary not in agg["samples"]:
+                    agg["samples"].append(primary)
+                # N-0111: show the steward every identifier the row carried, and what each matched.
+                is_conflict = getattr(line, "product_match_tier", None) == "identifier_conflict"
+                if is_conflict:
+                    agg["conflict_rows"] += 1
+                ids = line_identifier_tokens(line)
+                shown = {"identifiers": ids, "tier": getattr(line, "product_match_tier", None)}
+                check = getattr(line, "product_identifier_check", None)
+                check = check if isinstance(check, dict) else None
+                if check:
+                    shown["matched"] = [
+                        {"slot": o.get("slot"), "token": o.get("token"), "status": o.get("status"),
+                         "tier": o.get("tier"), "product_ids": o.get("product_ids")}
+                        for o in (check.get("outcomes") or [])
+                    ]
+                if len(ids) > 1 or is_conflict:
+                    if len(agg["identifier_rows"]) < 5 and shown not in agg["identifier_rows"]:
+                        agg["identifier_rows"].append(shown)
 
         if line.resolved_location_id is None and line.raw_location_token:
             key = _location_token_key(line.raw_location_token)
@@ -191,12 +230,14 @@ def upsert_cst_mapping_candidates(db: Session, job_id: int) -> None:
                     total_units=data["total_units"],
                     sample_raw_values=to_jsonable(data["samples"]),
                     status="needs_review",
+                    context=to_jsonable(_identifier_context({}, data)),
                 )
             )
         elif ex.status not in _CST_TERMINAL_STATUSES:
             ex.row_count = data["row_count"]
             ex.total_units = data["total_units"]
             ex.sample_raw_values = to_jsonable(data["samples"])
+            ex.context = to_jsonable(_identifier_context(getattr(ex, "context", None), data))
 
     for (etype, key), ex in list(existing.items()):
         if etype == CST_PRODUCT_ENTITY and key not in product_agg and ex.status not in _CST_TERMINAL_STATUSES:
@@ -366,8 +407,9 @@ def _patch_staging_for_resolved_candidate(
         for line in lines:
             if line.resolved_product_id is not None:
                 continue
-            if _product_token_key(line.raw_product_token) == cand.normalized_key:
+            if _product_token_key(line_primary_token(line)) == cand.normalized_key:
                 line.resolved_product_id = int(entity_id)
+                line.product_match_tier = "steward"
     elif cand.entity_type == CST_LOCATION_ENTITY:
         for line in lines:
             if line.resolved_location_id is not None:

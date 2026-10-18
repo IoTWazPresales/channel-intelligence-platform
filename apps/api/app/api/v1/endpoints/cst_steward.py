@@ -608,7 +608,7 @@ def reresolve_job_residuals(
     _ = _actor(x_user_id)
     from app.models.import_customer_sellthrough_staging import ImportCustomerSellthroughStagingLine
     from app.models.ingestion import ImportJob
-    from app.services.imports.customer_sell_through import resolve_product_id_for_sellthrough
+    from app.services.imports.customer_sell_through import resolve_line_product
     from app.services.imports.customer_sell_through_apply import apply_customer_sellthrough_staging
     from app.services.imports.distributor_sales_inventory import _load_product_resolution_index
 
@@ -631,22 +631,18 @@ def reresolve_job_residuals(
             ).all()
         )
         newly = 0
+        alias_cache: dict = {}
         for line in lines:
-            payload = line.raw_row_payload if isinstance(line.raw_row_payload, dict) else None
-            pid = resolve_product_id_for_sellthrough(
-                idx,
-                line.raw_product_token,
-                session=session,
-                customer_id=customer_id,
-                article_token=getattr(line, "raw_article_token", None),
-                raw_row_payload=payload,
-                as_of=line.period_start_date,
+            pid, tier, check = resolve_line_product(
+                idx, line, session=session, customer_id=customer_id, alias_cache=alias_cache
             )
+            line.product_identifier_check = check
+            line.product_match_tier = tier
             if pid is not None:
                 line.resolved_product_id = int(pid)
                 line.resolution_status = "resolved"
-                session.add(line)
                 newly += 1
+            session.add(line)
         applied = None
         if apply and newly:
             session.flush()

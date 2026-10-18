@@ -21,7 +21,15 @@ from app.services.imports.distributor_sales_inventory import (
     _load_product_resolution_index,
     _product_token_key,
 )
-from app.services.imports.product_resolution_standard import resolve_product_id_single_match
+from app.services.imports.product_resolution_standard import (
+    SLOT_ANY,
+    SLOT_BARCODE,
+    SLOT_CUSTOMER_CODE,
+    SLOT_PART_NUMBER,
+    SLOT_SALES_MODEL,
+    resolve_product_by_identifiers,
+    resolve_product_id_single_match,
+)
 from app.services.imports.cst_d1 import (
     apply_listing_seed_fields,
     corroborate_period,
@@ -302,6 +310,118 @@ def _steward_resolved_product_id(
         raw_row_payload=raw_row_payload,
     ):
         key = _product_token_key(candidate)
+        if key and key in resolved_products:
+            return int(resolved_products[key])
+    return None
+
+
+# ---------------------------------------------------------------- identifier slots (N-0111, 2026-10-19)
+
+# A row's product identifiers, by resolver slot, and the staging column each is stored in.
+IDENTIFIER_STAGING_ATTRS: tuple[tuple[str, str], ...] = (
+    (SLOT_PART_NUMBER, "raw_part_number_token"),
+    (SLOT_BARCODE, "raw_barcode_token"),
+    (SLOT_SALES_MODEL, "raw_sales_model_token"),
+    (SLOT_ANY, "raw_product_token"),
+    (SLOT_CUSTOMER_CODE, "raw_article_token"),
+)
+_NEW_SLOT_ATTRS = ("raw_part_number_token", "raw_barcode_token", "raw_sales_model_token")
+
+
+def _line_value(line: Any, attr: str) -> str | None:
+    value = line.get(attr) if isinstance(line, dict) else getattr(line, attr, None)
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def line_uses_identifier_slots(line: Any) -> bool:
+    """True when the row is resolved from its own identifier columns.
+
+    A row from an older layout (the single product column, no part number / barcode / sales model
+    column) keeps the former resolution exactly; so does any row from a structure that has no slots.
+    """
+    return any(_line_value(line, a) for a in _NEW_SLOT_ATTRS) or not _line_value(line, "raw_product_token")
+
+
+def line_identifier_tokens(line: Any) -> dict[str, str]:
+    """Every identifier the row carried, by slot (blank ones left out)."""
+    out: dict[str, str] = {}
+    for slot, attr in IDENTIFIER_STAGING_ATTRS:
+        value = _line_value(line, attr)
+        if value:
+            out[slot] = value
+    return out
+
+
+def line_primary_token(line: Any) -> str | None:
+    """The token a steward candidate is keyed by: the older single column, else the first identifier
+    in the platform order (part number, barcode, sales model), else the customer's product code."""
+    for attr in ("raw_product_token", "raw_part_number_token", "raw_barcode_token", "raw_sales_model_token", "raw_article_token"):
+        value = _line_value(line, attr)
+        if value:
+            return value
+    return None
+
+
+def resolve_line_product(
+    idx: ProductResolutionIndex,
+    line: Any,
+    *,
+    session: Session | None,
+    customer_id: int | None,
+    alias_cache: dict[tuple[str, date | None], int | None] | None = None,
+) -> tuple[int | None, str | None, dict[str, Any] | None]:
+    """``(product_id, match tier, per-identifier check)`` for a staged row.
+
+    A row from an older layout resolves as before (``resolve_product_id_for_sellthrough``). A row with
+    identifier columns resolves through the shared resolver in the platform order, with the customer's
+    own product code looked up in that customer's confirmed aliases; identifiers that disagree give no
+    product (``identifier_conflict``) and the check records what each one matched.
+    """
+    as_of = line.get("period_start_date") if isinstance(line, dict) else getattr(line, "period_start_date", None)
+    payload = line.get("raw_row_payload") if isinstance(line, dict) else getattr(line, "raw_row_payload", None)
+    if not line_uses_identifier_slots(line):
+        pid = resolve_product_id_for_sellthrough(
+            idx,
+            _line_value(line, "raw_product_token"),
+            session=session,
+            customer_id=customer_id,
+            article_token=_line_value(line, "raw_article_token"),
+            raw_row_payload=payload if isinstance(payload, dict) else None,
+            as_of=as_of,
+        )
+        return pid, ("any_identifier" if pid is not None else None), None
+
+    cache = alias_cache if alias_cache is not None else {}
+
+    def customer_alias(token: str) -> int | None:
+        if session is None or customer_id is None:
+            return None
+        key = (_product_token_key(token), as_of)
+        if key not in cache:
+            cache[key] = resolve_customer_article_alias(
+                session, customer_id=customer_id, article_token=token, as_of=as_of
+            )
+        return cache[key]
+
+    match = resolve_product_by_identifiers(idx, line_identifier_tokens(line), customer_code_alias=customer_alias)
+    return match.product_id, match.tier, match.to_json()
+
+
+def _steward_resolved_product_id_for_line(resolved_products: dict[str, int], line: Any) -> int | None:
+    """A steward-resolved candidate for any identifier the row carries."""
+    if not line_uses_identifier_slots(line):
+        payload = line.get("raw_row_payload") if isinstance(line, dict) else getattr(line, "raw_row_payload", None)
+        return _steward_resolved_product_id(
+            resolved_products,
+            primary=_line_value(line, "raw_product_token"),
+            article_token=_line_value(line, "raw_article_token"),
+            raw_row_payload=payload if isinstance(payload, dict) else None,
+        )
+    for token in line_identifier_tokens(line).values():
+        key = _product_token_key(token)
         if key and key in resolved_products:
             return int(resolved_products[key])
     return None
@@ -1001,6 +1121,7 @@ def _handle_flat(
 
     resolved_products, resolved_locations = load_resolved_cst_candidates(db, job.id)
     prod_idx = _load_product_resolution_index(db)
+    alias_cache: dict[tuple[str, date | None], int | None] = {}
     resolved_n = 0
     unresolved_n = 0
     all_warnings: list[str] = []
@@ -1182,26 +1303,18 @@ def _handle_flat(
             product_ok = False
             article_tok = getattr(line, "raw_article_token", None)
             payload_dict = line.raw_row_payload if isinstance(line.raw_row_payload, dict) else None
-            if line.raw_product_token or payload_dict:
-                pid = resolve_product_id_for_sellthrough(
-                    prod_idx,
-                    line.raw_product_token,
-                    session=db,
-                    customer_id=customer_id,
-                    article_token=article_tok,
-                    raw_row_payload=payload_dict,
-                    as_of=getattr(line, "period_start_date", None),
+            if line.raw_product_token or payload_dict or line_identifier_tokens(line):
+                pid, tier, check = resolve_line_product(
+                    prod_idx, line, session=db, customer_id=customer_id, alias_cache=alias_cache
                 )
+                line.product_identifier_check = check
                 if pid is None:
-                    pid = _steward_resolved_product_id(
-                        resolved_products,
-                        primary=line.raw_product_token,
-                        article_token=article_tok,
-                        raw_row_payload=payload_dict,
-                    )
+                    pid = _steward_resolved_product_id_for_line(resolved_products, line)
+                    tier = "steward" if pid is not None else tier
                 if pid is not None:
                     line.resolved_product_id = pid
                     product_ok = True
+                line.product_match_tier = tier
 
             if line.raw_location_token:
                 loc_id = db.scalar(
@@ -1219,13 +1332,16 @@ def _handle_flat(
             if product_ok:
                 line.resolution_status = "resolved"
                 resolved_n += 1
-                if article_tok and line.resolved_product_id is not None:
+                if article_tok and line.resolved_product_id is not None and line.product_match_tier != "customer_alias":
                     propose_customer_article_alias(
                         db,
                         customer_id=customer_id,
                         article_token=article_tok,
                         product_id=int(line.resolved_product_id),
-                        evidence={"co_occurred_with": line.raw_product_token, "import_job_id": job.id},
+                        evidence={
+                            "co_occurred_with": line.raw_product_token or line_primary_token(line),
+                            "import_job_id": job.id,
+                        },
                     )
             else:
                 line.resolution_status = "unresolved"

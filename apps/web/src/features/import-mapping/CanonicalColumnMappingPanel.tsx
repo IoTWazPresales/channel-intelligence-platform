@@ -40,6 +40,8 @@ export type CanonicalTargetOption = {
   value: string;
   label: string;
   description?: string;
+  /** `more` lists the target under "More columns" instead of the main list. */
+  group?: string;
 };
 
 export type MappingBlockingError = { code: string; message: string };
@@ -110,6 +112,7 @@ const SECTION = {
   SELECTED: { label: 'Selected for this column', tier: 0 },
   STILL_NEEDED: { label: 'Still needed', tier: 10 },
   AVAILABLE: { label: 'Available to map', tier: 50 },
+  MORE: { label: 'More columns', tier: 60 },
   ALREADY_MAPPED: { label: 'Already mapped in this file', tier: 90 },
 } as const;
 
@@ -195,7 +198,7 @@ export function CanonicalColumnMappingPanel({
     ];
     for (const t of targetOptions) {
       const usedByOthers = (headersByTarget[t.value] ?? []).some((x) => x !== header);
-      let section: { label: string; tier: number } = SECTION.AVAILABLE;
+      let section: { label: string; tier: number } = t.group === 'more' ? SECTION.MORE : SECTION.AVAILABLE;
       if (t.value === current) section = SECTION.SELECTED;
       else if (usedByOthers) section = SECTION.ALREADY_MAPPED;
       else if (stillNeededTargets.has(t.value)) section = SECTION.STILL_NEEDED;
