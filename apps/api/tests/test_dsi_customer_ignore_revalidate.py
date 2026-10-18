@@ -294,3 +294,46 @@ def test_apply_reports_real_counts_for_refresh_and_fact_write(dsi_source_id: int
         n = db.scalar(select(func.count()).select_from(FactSalesSellout).where(FactSalesSellout.source_import_job_id == job_id))
         assert int(n or 0) == 12
 
+
+
+def test_refresh_resolves_aliases_stored_under_the_canonical_key(dsi_source_id: int) -> None:
+    """Job 1670: validate resolved 'WOOTWARE COMPUTERS (PTY) LTD' through the alias 'wootware computers pty ltd',
+    the apply's re-check did not, and 3,638 lines came back blocked. Refresh must agree with validate."""
+    from app.models.dimensions import DimCustomer
+    from app.models.import_distributor_si import CustomerSourceTokenAlias
+    from app.services.imports.distributor_sales_inventory import refresh_dsi_staging_lines_for_job
+
+    with SessionLocal() as db:
+        cust = db.scalars(select(DimCustomer).where(DimCustomer.code == "CUST-1001")).first()
+        assert cust is not None
+        cust_id = cust.id
+        if not db.scalar(
+            select(CustomerSourceTokenAlias.id).where(CustomerSourceTokenAlias.normalized_token == "acme widgets pty ltd")
+        ):
+            db.add(
+                CustomerSourceTokenAlias(
+                    customer_id=cust_id,
+                    source_definition_id=dsi_source_id,
+                    distributor_id=None,
+                    raw_token="ACME WIDGETS PTY LTD",
+                    normalized_token="acme widgets pty ltd",
+                    status="approved",
+                )
+            )
+            db.commit()
+
+    csv = (
+        "distributor_code,sku,date,qty,customer_name\n"
+        "DIST-01,SKU-ALPHA-01,2024-08-01,3,ACME WIDGETS (PTY) LTD\n"
+        "DIST-01,SKU-ALPHA-01,2024-08-02,-1,ACME WIDGETS (PTY) LTD\n"
+    )
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="validate", filename="dsi_alias_canonical.csv")
+    job_id = job.id
+    before = [(ln.source_row_number, ln.resolved_customer_id, ln.resolution_status, ln.severity) for ln in _lines(job_id)]
+    assert [b[1] for b in before] == [cust_id, cust_id]  # validate resolves it
+
+    with SessionLocal() as db:
+        refresh_dsi_staging_lines_for_job(db, db.get(ImportJob, job_id))
+        db.commit()
+    after = [(ln.source_row_number, ln.resolved_customer_id, ln.resolution_status, ln.severity) for ln in _lines(job_id)]
+    assert after == before  # the re-check agrees with validate

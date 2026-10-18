@@ -1281,11 +1281,22 @@ def _alias_customer_id(
     distributor_id: int | None,
     normalized_customer: str,
     dealer_group: str | None,
+    *,
+    canonical_key: str | None = None,
 ) -> int | None:
+    """Approved alias for a customer token.
+
+    Validate matches aliases on ``customer_source_token_alias_key`` (so ``(PTY)`` and ``PTY`` are the same
+    token). The steward writes aliases under that key, so this lookup must accept it as well as the plain
+    normalised key, or apply's re-check un-resolves customers that validate resolved (job 1670: 3,638 lines).
+    """
     if not normalized_customer:
         return None
+    keys = [normalized_customer]
+    if canonical_key and canonical_key != normalized_customer:
+        keys.append(canonical_key)
     q = select(CustomerSourceTokenAlias.customer_id).where(
-        CustomerSourceTokenAlias.normalized_token == normalized_customer,
+        CustomerSourceTokenAlias.normalized_token.in_(keys),
         CustomerSourceTokenAlias.status == "approved",
     )
     if source_id is not None:
@@ -1339,7 +1350,9 @@ def _resolve_customer(
 
     alias_id: int | None = None
     if not _customer_token_is_placeholder(nt, customer_raw):
-        alias_id = _alias_customer_id(db, source_id, distributor_id, nt, dg)
+        alias_id = _alias_customer_id(
+            db, source_id, distributor_id, nt, dg, canonical_key=customer_source_token_alias_key(customer_raw) or None
+        )
         if alias_id is not None:
             diagnostics.append("customer_resolved_alias")
             return alias_id, diagnostics
