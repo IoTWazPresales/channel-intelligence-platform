@@ -27,7 +27,7 @@ class DsiApplyCompletionError(ValueError):
     """Business-rule failure for DSI apply completion."""
 
 
-def complete_dsi_import_job_to_loaded(db: Session, job_id: int) -> dict[str, Any]:
+def complete_dsi_import_job_to_loaded(db: Session, job_id: int, *, on_progress: Any = None) -> dict[str, Any]:
     """Re-resolve staging lines, upsert facts, set job to ``loaded`` when rules pass.
 
     Completion rules:
@@ -65,6 +65,11 @@ def complete_dsi_import_job_to_loaded(db: Session, job_id: int) -> dict[str, Any
     total = len(lines)
     for i, line in enumerate(lines, start=1):
         refresh_dsi_staging_line_resolution(db, job, line, prod_idx, **ctx)
+        if on_progress is not None and (i % 500 == 0 or i == total):
+            try:
+                on_progress("refreshing_lines", "Re-checking staged rows", i, total)
+            except Exception:
+                pass
         if i % 5000 == 0:
             logger.info("DSI apply refresh job_id=%s %d / %d lines", job.id, i, total)
 
@@ -89,7 +94,7 @@ def complete_dsi_import_job_to_loaded(db: Session, job_id: int) -> dict[str, Any
     apply_exclusion = build_dsi_apply_exclusion_summary(db, int(job.id), lines)
 
     db.flush()
-    _sell, _inv, _ret, apply_errors = upsert_dsi_facts_for_staging_job(db, job)
+    _sell, _inv, _ret, apply_errors = upsert_dsi_facts_for_staging_job(db, job, on_progress=on_progress)
     if apply_errors:
         msg = "; ".join(apply_errors[:12])
         logger.warning("DSI fact apply reported errors job_id=%s: %s", job.id, msg)

@@ -81,7 +81,7 @@ def run_dsi_apply_sync(job_id: int, *, on_progress: ProgressFn | None = None) ->
             and (job.import_mode or "") == "apply"
         ):
             try:
-                complete_dsi_import_job_to_loaded(db, job_id)
+                complete_dsi_import_job_to_loaded(db, job_id, on_progress=_emit)
             except DsiApplyCompletionError as exc:
                 fail = db.get(ImportJob, job_id)
                 if fail is not None:

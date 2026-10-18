@@ -47,7 +47,7 @@ def test_run_dsi_apply_sync_happy_path(monkeypatch) -> None:
         lambda db, jid, on_progress=None: called.__setitem__("process", True),
     )
 
-    def _complete(db, jid):
+    def _complete(db, jid, on_progress=None):
         job.stage = STAGE_LOADED
         job.status = "completed"
         return {"ok": True}
@@ -82,7 +82,7 @@ def test_run_dsi_apply_sync_runs_pipeline_when_no_staging(monkeypatch) -> None:
         job.stage = STAGE_VALIDATED
 
     monkeypatch.setattr(apply_mod, "process_import_job_sync", _process)
-    monkeypatch.setattr(apply_mod, "complete_dsi_import_job_to_loaded", lambda db, jid: {"ok": True})
+    monkeypatch.setattr(apply_mod, "complete_dsi_import_job_to_loaded", lambda db, jid, on_progress=None: {"ok": True})
     monkeypatch.setattr(apply_mod, "persist_clear_background_task_metadata", lambda s, j: None)
 
     apply_mod.run_dsi_apply_sync(53)
@@ -118,7 +118,7 @@ def test_run_dsi_apply_sync_completion_error_marks_failed(monkeypatch) -> None:
     _install_fake_session(monkeypatch, job, staging_count=0)
     monkeypatch.setattr(apply_mod, "process_import_job_sync", lambda db, jid, on_progress=None: job)
 
-    def _boom(db, jid):
+    def _boom(db, jid, on_progress=None):
         raise DsiApplyCompletionError("3 staging line(s) still blocked after refresh")
 
     monkeypatch.setattr(apply_mod, "complete_dsi_import_job_to_loaded", _boom)

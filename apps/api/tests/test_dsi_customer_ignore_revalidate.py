@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.db.session_sync import SessionLocal
 from app.ingestion.pipeline import process_import_job_sync
@@ -186,3 +186,111 @@ def test_refresh_loads_shipment_evidence_and_ignored_customers_once(dsi_source_i
     assert len(evidence) <= 4, len(evidence)
     assert len(ignored) <= 2, len(ignored)
     assert snapshot() == before
+
+
+def _refresh_statement_counts(db, job_id: int, *, with_context: bool) -> dict[str, int]:
+    from sqlalchemy import event
+
+    from app.services.imports.distributor_sales_inventory import (
+        _load_product_resolution_index,
+        build_refresh_context,
+        refresh_dsi_staging_line_resolution,
+    )
+
+    job = db.get(ImportJob, job_id)
+    lines = list(
+        db.scalars(
+            select(ImportDistributorSiStagingLine)
+            .where(ImportDistributorSiStagingLine.import_job_id == job_id)
+            .order_by(ImportDistributorSiStagingLine.source_row_number)
+        ).all()
+    )
+    statements: list[str] = []
+    engine = db.get_bind()
+
+    def _capture(conn, cursor, statement, parameters, context, executemany):  # noqa: ANN001
+        statements.append(statement)
+
+    prod_idx = _load_product_resolution_index(db)
+    event.listen(engine, "before_cursor_execute", _capture)
+    try:
+        ctx = build_refresh_context(db, job, lines) if with_context else {}
+        for ln in lines:
+            refresh_dsi_staging_line_resolution(db, job, ln, prod_idx, **ctx)
+        db.commit()
+    finally:
+        event.remove(engine, "before_cursor_execute", _capture)
+    return {
+        "shipment_evidence": sum("shipment_evidence" in s for s in statements),
+        "customer_alias": sum("customer_source_token_alias" in s for s in statements),
+        "dim_distributor": sum("FROM dim_distributor" in s for s in statements),
+        "dim_customer": sum("FROM dim_customer" in s for s in statements),
+    }
+
+
+def test_refresh_pass_gives_same_results_with_far_fewer_queries(dsi_source_id: int) -> None:
+    """Shared lookups (evidence cache, distributor/product/customer memo) change cost, never results."""
+    rows = "".join(
+        f"DIST-01,SKU-ALPHA-01,2024-06-{d:02d},1,{'Jane Doe - STAFF' if d % 2 else 'Metro Market Group'}\n"
+        for d in range(1, 25)
+    )
+    csv = "distributor_code,sku,date,qty,customer_name\n" + rows
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="validate", filename="dsi_refresh_memo.csv")
+    job_id = job.id
+
+    def snapshot():
+        return [
+            (
+                ln.source_row_number,
+                ln.severity,
+                ln.resolution_status,
+                ln.resolved_distributor_id,
+                ln.resolved_product_id,
+                ln.resolved_customer_id,
+                tuple(ln.diagnostic_codes or []),
+            )
+            for ln in _lines(job_id)
+        ]
+
+    with SessionLocal() as db:
+        per_row = _refresh_statement_counts(db, job_id, with_context=False)
+    per_row_result = snapshot()
+    with SessionLocal() as db:
+        shared = _refresh_statement_counts(db, job_id, with_context=True)
+    shared_result = snapshot()
+
+    assert shared_result == per_row_result
+    assert len(shared_result) == 24
+    # Per-row path: queries grow with the row count. Shared path: bounded by distinct tokens, not rows.
+    assert per_row["shipment_evidence"] >= 24
+    assert shared["shipment_evidence"] <= 4
+    assert shared["dim_distributor"] <= 3
+    assert shared["customer_alias"] <= per_row["customer_alias"] // 4 + 2
+    assert shared["dim_customer"] <= per_row["dim_customer"] // 4 + 2
+
+
+def test_apply_reports_real_counts_for_refresh_and_fact_write(dsi_source_id: int) -> None:
+    from app.services.imports.dsi_apply_completion import complete_dsi_import_job_to_loaded
+
+    rows = "".join(f"DIST-01,SKU-ALPHA-01,2024-07-{d:02d},2,Metro Market Group\n" for d in range(1, 13))
+    csv = "distributor_code,sku,date,qty,customer_name\n" + rows
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="validate", filename="dsi_apply_progress.csv")
+    job_id = job.id
+    calls: list[tuple[str, str, int, int]] = []
+    with SessionLocal() as db:
+        j = db.get(ImportJob, job_id)
+        j.import_mode = "apply"
+        db.commit()
+        complete_dsi_import_job_to_loaded(db, job_id, on_progress=lambda *a: calls.append(a))
+
+    phases = {c[0] for c in calls}
+    assert {"refreshing_lines", "writing_facts"} <= phases
+    for phase in ("refreshing_lines", "writing_facts"):
+        last = [c for c in calls if c[0] == phase][-1]
+        assert (last[2], last[3]) == (12, 12), last  # real counts, not 0 / 0
+    from app.models.facts import FactSalesSellout
+
+    with SessionLocal() as db:
+        n = db.scalar(select(func.count()).select_from(FactSalesSellout).where(FactSalesSellout.source_import_job_id == job_id))
+        assert int(n or 0) == 12
+

@@ -3471,11 +3471,13 @@ def refresh_dsi_staging_line_resolution(
     *,
     corr_cache: Any = None,
     steward_ignored_customer_keys: frozenset[str] | None = None,
+    memo: dict[str, dict] | None = None,
 ) -> None:
     """Recompute resolution fields from persisted staging row (canonical JSON + raw tokens).
 
-    A whole-job pass should hand in ``corr_cache`` and ``steward_ignored_customer_keys`` built once by
-    ``build_refresh_context``; without them each row runs its own shipment-evidence and candidate queries.
+    A whole-job pass should hand in ``corr_cache``, ``steward_ignored_customer_keys`` and ``memo`` built once by
+    ``build_refresh_context``; without them each row runs its own shipment-evidence, candidate, distributor,
+    product and customer queries (the apply of a 36k-line job then takes hours).
     """
     source = job.source
     source_def_id = source.id if source else None
@@ -3514,19 +3516,32 @@ def refresh_dsi_staging_line_resolution(
 
     diag: list[str] = []
 
-    rdid, derr = _resolve_distributor(db, dist_raw, source_def_id)
+    dist_key = _norm_key(dist_raw) if dist_raw else ""
+    if memo is not None and dist_key in memo["dist"]:
+        rdid, derr = memo["dist"][dist_key]
+    else:
+        rdid, derr = _resolve_distributor(db, dist_raw, source_def_id)
+        if memo is not None:
+            memo["dist"][dist_key] = (rdid, derr)
     if derr:
         diag.append(derr)
 
     evidence_date = tx_date or snap_date
-    rpid, perr, presolve_tag, pev = _resolve_product(
-        prod_raw,
-        prod_idx,
-        evidence_date,
-        relax_inactive_dim_product_for_historical_dsi=historical_relaxed,
-        db=db,
-        distributor_id=rdid,
-    )
+    prod_key = (_norm_key(prod_raw) if prod_raw else "", evidence_date.isoformat() if evidence_date else None, rdid)
+    if memo is not None and prod_key[0] and prod_key in memo["prod"]:
+        rpid, perr, presolve_tag, pev = memo["prod"][prod_key]
+    else:
+        rpid, perr, presolve_tag, pev = _resolve_product(
+            prod_raw,
+            prod_idx,
+            evidence_date,
+            relax_inactive_dim_product_for_historical_dsi=historical_relaxed,
+            db=db,
+            distributor_id=rdid,
+            corr_cache=corr_cache,
+        )
+        if memo is not None and prod_key[0]:
+            memo["prod"][prod_key] = (rpid, perr, presolve_tag, pev)
     if perr:
         diag.append(perr)
     elif presolve_tag:
@@ -3545,31 +3560,50 @@ def refresh_dsi_staging_line_resolution(
         cust_res_raw, cust_res_notes = effective_dsi_customer_primary_for_resolution(cust_raw, dg_raw)
 
     if sellout_attempt:
-        rcustomer_id, cd = _resolve_customer(
-            db,
-            source_id=source_def_id,
-            distributor_id=rdistributor_id,
-            customer_raw=cust_res_raw,
-            dealer_group_raw=dg_raw,
-            channel_raw=ch_raw,
-            open_flag_raw=open_raw,
+        cust_key = (
+            rdistributor_id,
+            _norm_key(cust_res_raw or ""),
+            _norm_key(dg_raw or ""),
+            _norm_key(ch_raw or ""),
+            str(open_raw),
         )
-        cust_diag = list(cd)
-        diag.extend(cust_diag)
-        if rcustomer_id is None and cust_res_raw:
-            from app.services.imports.source_token_alias_conflicts import (
-                customer_alias_conflict_reason_from_db,
-            )
-
-            cust_alias_conflict = customer_alias_conflict_reason_from_db(
+        if memo is not None and cust_key in memo["cust"]:
+            rcustomer_id, cust_diag_memo, alias_conflict_memo = memo["cust"][cust_key]
+            cust_diag = list(cust_diag_memo)
+            diag.extend(cust_diag)
+            if alias_conflict_memo:
+                cust_diag.append(alias_conflict_memo)
+                diag.append(alias_conflict_memo)
+        else:
+            rcustomer_id, cd = _resolve_customer(
                 db,
-                source_definition_id=source_def_id,
+                source_id=source_def_id,
                 distributor_id=rdistributor_id,
-                raw_or_normalized_token=cust_res_raw,
+                customer_raw=cust_res_raw,
+                dealer_group_raw=dg_raw,
+                channel_raw=ch_raw,
+                open_flag_raw=open_raw,
             )
-            if cust_alias_conflict:
-                cust_diag.append(cust_alias_conflict)
-                diag.append(cust_alias_conflict)
+            cust_diag = list(cd)
+            diag.extend(cust_diag)
+            cust_alias_conflict = None
+            if rcustomer_id is None and cust_res_raw:
+                from app.services.imports.source_token_alias_conflicts import (
+                    customer_alias_conflict_reason_from_db,
+                )
+
+                cust_alias_conflict = customer_alias_conflict_reason_from_db(
+                    db,
+                    source_definition_id=source_def_id,
+                    distributor_id=rdistributor_id,
+                    raw_or_normalized_token=cust_res_raw,
+                )
+                if cust_alias_conflict:
+                    cust_diag.append(cust_alias_conflict)
+                    diag.append(cust_alias_conflict)
+            if memo is not None:
+                # cust_diag already holds the alias-conflict code when there is one (as the first path expects).
+                memo["cust"][cust_key] = (rcustomer_id, list(cd), cust_alias_conflict)
         diag.extend(cust_res_notes)
 
     from app.services.imports.dsi_product_running_change import (
@@ -3724,6 +3758,7 @@ def build_refresh_context(
     return {
         "corr_cache": ShipmentCorroborationCache.load(db, months),
         "steward_ignored_customer_keys": _refresh_ignored_customer_keys(db, job),
+        "memo": {"dist": {}, "prod": {}, "cust": {}},
     }
 
 
@@ -3790,8 +3825,17 @@ def _dsi_sale_target(line: ImportDistributorSiStagingLine) -> tuple[str, str, di
     return RETURNS, dsi_return_source_key(**key), {"return_quantity": abs(qty), "unit_price": unit_px}
 
 
-def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, int, int, list[str]]:
-    """Apply sell-out / returns / inventory fact upserts for staging lines (import_mode apply)."""
+def upsert_dsi_facts_for_staging_job(
+    db: Session,
+    job: ImportJob,
+    *,
+    on_progress: Any = None,
+) -> tuple[int, int, int, list[str]]:
+    """Apply sell-out / returns / inventory fact upserts for staging lines (import_mode apply).
+
+    ``on_progress(phase, label, current, total)`` gets real line counts (every 500 lines) for the
+    Background tasks screen; the log gets a line with the counts every 5,000 lines.
+    """
     errors: list[str] = []
     sell_tbl = FactSalesSellout.__table__
     ret_tbl = FactReturns.__table__
@@ -3828,7 +3872,24 @@ def upsert_dsi_facts_for_staging_job(db: Session, job: ImportJob) -> tuple[int, 
         repeats.add(table, sk, line, figures)
     for table, keys in pre_keys.items():
         keeper.prefetch(table, keys)
-    for line in lines:
+    total_lines = len(lines)
+    for line_no, line in enumerate(lines, start=1):
+        if line_no % 500 == 0 or line_no == total_lines:
+            if on_progress is not None:
+                try:
+                    on_progress("writing_facts", "Writing sales, returns and stock", line_no, total_lines)
+                except Exception:
+                    pass
+        if line_no % 5000 == 0:
+            logger.info(
+                "DSI apply fact write job_id=%s %d / %d lines (sell-out=%d returns=%d inventory=%d so far)",
+                job.id,
+                line_no,
+                total_lines,
+                applied_sell,
+                applied_ret,
+                applied_inv,
+            )
         parts: list[str] = []
         qs = line.quantity_sold
         qty_f = float(qs) if qs is not None else None
