@@ -337,3 +337,65 @@ def test_refresh_resolves_aliases_stored_under_the_canonical_key(dsi_source_id: 
         db.commit()
     after = [(ln.source_row_number, ln.resolved_customer_id, ln.resolution_status, ln.severity) for ln in _lines(job_id)]
     assert after == before  # the re-check agrees with validate
+
+
+def test_refresh_agrees_with_validate_on_alias_spellings(dsi_source_id: int) -> None:
+    """Spellings seen on job 1670 ('( PTY)', '(PTY)LTD', double spaces) resolve the same in validate and in the
+    apply's re-check, on both the shared-cache path (whole job) and the single-line database path."""
+    from app.models.dimensions import DimCustomer
+    from app.models.import_distributor_si import CustomerSourceTokenAlias
+    from app.services.imports.distributor_sales_inventory import (
+        _load_product_resolution_index,
+        refresh_dsi_staging_line_resolution,
+        refresh_dsi_staging_lines_for_job,
+    )
+
+    with SessionLocal() as db:
+        cust = db.scalars(select(DimCustomer).where(DimCustomer.code == "CUST-1001")).first()
+        assert cust is not None
+        cust_id = cust.id
+        for stored in ("frontosa tech pty ltd", "novicus dist (pty) ltd"):
+            if not db.scalar(select(CustomerSourceTokenAlias.id).where(CustomerSourceTokenAlias.normalized_token == stored)):
+                db.add(
+                    CustomerSourceTokenAlias(
+                        customer_id=cust_id,
+                        source_definition_id=dsi_source_id,
+                        distributor_id=None,
+                        raw_token=stored.upper(),
+                        normalized_token=stored,
+                        status="approved",
+                    )
+                )
+        db.commit()
+
+    csv = (
+        "distributor_code,sku,date,qty,customer_name\n"
+        "DIST-01,SKU-ALPHA-01,2024-09-01,1,FRONTOSA TECH ( PTY) LTD\n"
+        "DIST-01,SKU-ALPHA-01,2024-09-02,1,NOVICUS  DIST (PTY)LTD\n"
+        "DIST-01,SKU-ALPHA-01,2024-09-03,1,Nobody Known Ltd\n"
+    )
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(csv), import_mode="validate", filename="dsi_alias_spellings.csv")
+    job_id = job.id
+
+    def view():
+        return [(ln.source_row_number, ln.resolved_customer_id, ln.resolution_status) for ln in _lines(job_id)]
+
+    validated = view()
+    assert [v[1] for v in validated] == [cust_id, cust_id, None]  # validate resolves the two, not the third
+
+    with SessionLocal() as db:  # whole-job pass (shared resolution cache)
+        refresh_dsi_staging_lines_for_job(db, db.get(ImportJob, job_id))
+        db.commit()
+    assert view() == validated
+
+    with SessionLocal() as db:  # single-line path (database lookups)
+        j = db.get(ImportJob, job_id)
+        prod_idx = _load_product_resolution_index(db)
+        for ln in db.scalars(
+            select(ImportDistributorSiStagingLine)
+            .where(ImportDistributorSiStagingLine.import_job_id == job_id)
+            .order_by(ImportDistributorSiStagingLine.source_row_number)
+        ).all():
+            refresh_dsi_staging_line_resolution(db, j, ln, prod_idx)
+        db.commit()
+    assert view() == validated

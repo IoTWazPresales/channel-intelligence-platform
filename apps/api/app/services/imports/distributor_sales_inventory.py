@@ -1292,11 +1292,7 @@ def _alias_customer_id(
     """
     if not normalized_customer:
         return None
-    keys = [normalized_customer]
-    if canonical_key and canonical_key != normalized_customer:
-        keys.append(canonical_key)
-    q = select(CustomerSourceTokenAlias.customer_id).where(
-        CustomerSourceTokenAlias.normalized_token.in_(keys),
+    q = select(CustomerSourceTokenAlias.customer_id, CustomerSourceTokenAlias.normalized_token).where(
         CustomerSourceTokenAlias.status == "approved",
     )
     if source_id is not None:
@@ -1313,7 +1309,16 @@ def _alias_customer_id(
                 CustomerSourceTokenAlias.distributor_id == distributor_id,
             )
         )
-    rows = list(dict.fromkeys(int(x) for x in db.scalars(q).all()))
+    # Same match as validate's cache (``DSIResolutionCache``): the stored token and the incoming name are
+    # compared on ``customer_source_token_alias_key``, so '( PTY)', '(PTY)' and 'PTY' are one token.
+    wanted = canonical_key or customer_source_token_alias_key(normalized_customer)
+    rows = list(
+        dict.fromkeys(
+            int(cid)
+            for cid, tok in db.execute(q).all()
+            if tok == normalized_customer or (wanted and customer_source_token_alias_key(tok) == wanted)
+        )
+    )
     if not rows:
         return None
     from app.services.merge_redirect import follow_customer_merge_redirect_sync
@@ -3485,6 +3490,7 @@ def refresh_dsi_staging_line_resolution(
     corr_cache: Any = None,
     steward_ignored_customer_keys: frozenset[str] | None = None,
     memo: dict[str, dict] | None = None,
+    res_cache: Any = None,
 ) -> None:
     """Recompute resolution fields from persisted staging row (canonical JSON + raw tokens).
 
@@ -3533,7 +3539,10 @@ def refresh_dsi_staging_line_resolution(
     if memo is not None and dist_key in memo["dist"]:
         rdid, derr = memo["dist"][dist_key]
     else:
-        rdid, derr = _resolve_distributor(db, dist_raw, source_def_id)
+        if res_cache is not None:
+            rdid, derr = _resolve_distributor_from_cache(dist_raw, source_def_id, res_cache)
+        else:
+            rdid, derr = _resolve_distributor(db, dist_raw, source_def_id)
         if memo is not None:
             memo["dist"][dist_key] = (rdid, derr)
     if derr:
@@ -3588,29 +3597,52 @@ def refresh_dsi_staging_line_resolution(
                 cust_diag.append(alias_conflict_memo)
                 diag.append(alias_conflict_memo)
         else:
-            rcustomer_id, cd = _resolve_customer(
-                db,
-                source_id=source_def_id,
-                distributor_id=rdistributor_id,
-                customer_raw=cust_res_raw,
-                dealer_group_raw=dg_raw,
-                channel_raw=ch_raw,
-                open_flag_raw=open_raw,
-            )
+            if res_cache is not None:
+                rcustomer_id, cd = _resolve_customer_from_cache(
+                    source_id=source_def_id,
+                    distributor_id=rdistributor_id,
+                    customer_raw=cust_res_raw,
+                    dealer_group_raw=dg_raw,
+                    channel_raw=ch_raw,
+                    open_flag_raw=open_raw,
+                    res_cache=res_cache,
+                )
+            else:
+                rcustomer_id, cd = _resolve_customer(
+                    db,
+                    source_id=source_def_id,
+                    distributor_id=rdistributor_id,
+                    customer_raw=cust_res_raw,
+                    dealer_group_raw=dg_raw,
+                    channel_raw=ch_raw,
+                    open_flag_raw=open_raw,
+                )
             cust_diag = list(cd)
             diag.extend(cust_diag)
             cust_alias_conflict = None
             if rcustomer_id is None and cust_res_raw:
-                from app.services.imports.source_token_alias_conflicts import (
-                    customer_alias_conflict_reason_from_db,
-                )
+                if res_cache is not None:
+                    from app.services.imports.source_token_alias_conflicts import (
+                        customer_alias_conflict_reason_from_cache,
+                    )
 
-                cust_alias_conflict = customer_alias_conflict_reason_from_db(
-                    db,
-                    source_definition_id=source_def_id,
-                    distributor_id=rdistributor_id,
-                    raw_or_normalized_token=cust_res_raw,
-                )
+                    cust_alias_conflict = customer_alias_conflict_reason_from_cache(
+                        res_cache,
+                        source_definition_id=source_def_id,
+                        distributor_id=rdistributor_id,
+                        normalized_token=customer_source_token_alias_key(cust_res_raw) or "",
+                    )
+                else:
+                    from app.services.imports.source_token_alias_conflicts import (
+                        customer_alias_conflict_reason_from_db,
+                    )
+
+                    cust_alias_conflict = customer_alias_conflict_reason_from_db(
+                        db,
+                        source_definition_id=source_def_id,
+                        distributor_id=rdistributor_id,
+                        raw_or_normalized_token=cust_res_raw,
+                    )
                 if cust_alias_conflict:
                     cust_diag.append(cust_alias_conflict)
                     diag.append(cust_alias_conflict)
@@ -3772,6 +3804,9 @@ def build_refresh_context(
         "corr_cache": ShipmentCorroborationCache.load(db, months),
         "steward_ignored_customer_keys": _refresh_ignored_customer_keys(db, job),
         "memo": {"dist": {}, "prod": {}, "cust": {}},
+        # The same in-memory resolution cache validate uses, so the re-check cannot disagree with validate
+        # about distributors, customers or aliases.
+        "res_cache": _build_resolution_cache(db, job.source.id if job.source else None),
     }
 
 
