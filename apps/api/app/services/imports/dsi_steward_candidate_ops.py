@@ -453,11 +453,16 @@ async def preview_ignore_dsi_candidate(
     from app.services.imports.dsi_product_running_change import (
         DSI_IGNORE_REASON_CODES,
         build_steward_ignore_remap_context,
+        infer_dsi_customer_ignore_reason_code,
         infer_dsi_ignore_reason_code,
     )
 
     ctx = cand.context if isinstance(cand.context, dict) else {}
-    inferred = infer_dsi_ignore_reason_code(ctx) if cand.entity_type == "product_identifier" else None
+    inferred = None
+    if cand.entity_type == "product_identifier":
+        inferred = infer_dsi_ignore_reason_code(ctx)
+    elif cand.entity_type == "customer_dealer_token":
+        inferred = infer_dsi_customer_ignore_reason_code(cand.normalized_key, ctx)
     rc = (reason_code or inferred or "").strip() or None
     if rc is not None and rc not in DSI_IGNORE_REASON_CODES:
         return {
@@ -485,6 +490,7 @@ async def execute_ignore_dsi_candidate(
     from app.services.imports.dsi_product_running_change import (
         build_product_resolution_quality,
         build_steward_ignore_remap_context,
+        infer_dsi_customer_ignore_reason_code,
         infer_dsi_ignore_reason_code,
     )
 
@@ -493,6 +499,8 @@ async def execute_ignore_dsi_candidate(
     if notes:
         ctx["steward_ignore_notes"] = notes[:2000]
     rc = (reason_code or pv.get("reason_code") or infer_dsi_ignore_reason_code(ctx) or "").strip() or None
+    if rc is None and cand.entity_type == "customer_dealer_token":
+        rc = infer_dsi_customer_ignore_reason_code(cand.normalized_key, ctx)
     if rc:
         ctx["steward_ignore_reason_code"] = rc
     remap = build_steward_ignore_remap_context(ctx)
@@ -527,6 +535,17 @@ async def execute_ignore_dsi_candidate(
                 rc,
             )
             sync_db.commit()
+    if cand.entity_type == "customer_dealer_token" and rc:
+        from app.db.session_sync import SessionLocal
+        from app.services.imports.dsi_product_running_change import (
+            batch_demote_steward_ignored_customer_staging_lines,
+        )
+
+        nk = str(cand.normalized_key or "").strip().lower()
+        if nk:
+            with SessionLocal() as sync_db:
+                batch_demote_steward_ignored_customer_staging_lines(sync_db, int(cand.import_job_id), {nk: rc})
+                sync_db.commit()
     return {
         "ok": True,
         "candidate_id": cand.id,

@@ -1,0 +1,145 @@
+"""A customer the steward ignored stays ignored when the job is revalidated (N-0111, job 1670).
+
+Found on Pinnacle: 19 "<NAME> - STAFF" accounts were ignored, the tabs showed nothing to do, yet the
+revalidation counted their 22 rows as "still need steward mapping" because the ignore lived on the
+candidate only and the rebuilt rows blocked again.
+"""
+
+from __future__ import annotations
+
+import json
+
+import pytest
+from sqlalchemy import select
+
+from app.db.session_sync import SessionLocal
+from app.ingestion.pipeline import process_import_job_sync
+from app.models.import_distributor_si import ImportDistributorSiStagingLine, ImportEntityMappingCandidate
+from app.models.ingestion import ImportJob, ImportRowResult
+from app.services.imports.dsi_product_running_change import (
+    IGNORE_REASON_CUSTOMER_EXCLUDED,
+    IGNORE_REASON_NO_CUSTOMER,
+    infer_dsi_customer_ignore_reason_code,
+    load_steward_ignored_customer_keys,
+    parse_steward_ignored_line_reason,
+)
+from tests.test_distributor_sales_inventory_import import _csv_bytes, _run_dsi_job, _seed_dsi_catalog
+
+CSV = (
+    "distributor_code,sku,date,qty,customer_name\n"
+    "DIST-01,SKU-ALPHA-01,2024-04-01,1,Jane Doe - STAFF\n"
+    "DIST-01,SKU-ALPHA-01,2024-04-02,2,Jane Doe - STAFF\n"
+    "DIST-01,SKU-ALPHA-01,2024-04-03,1,John Roe - STAFF\n"
+)
+
+
+@pytest.fixture(scope="module")
+def dsi_source_id() -> int:
+    return _seed_dsi_catalog()
+
+
+def _summary(job_id: int) -> dict:
+    with SessionLocal() as db:
+        msgs = db.scalars(
+            select(ImportRowResult.message)
+            .where(ImportRowResult.job_id == job_id, ImportRowResult.code == "distributor_si_summary")
+            .order_by(ImportRowResult.id.desc())
+        ).all()
+        return json.loads(msgs[0].split("}", 1)[0] + "}")
+
+
+def _lines(job_id: int) -> list[ImportDistributorSiStagingLine]:
+    with SessionLocal() as db:
+        return list(
+            db.scalars(
+                select(ImportDistributorSiStagingLine)
+                .where(ImportDistributorSiStagingLine.import_job_id == job_id)
+                .order_by(ImportDistributorSiStagingLine.source_row_number)
+            ).all()
+        )
+
+
+def test_reason_codes_for_customer_ignore() -> None:
+    assert infer_dsi_customer_ignore_reason_code("__blank__") == IGNORE_REASON_NO_CUSTOMER
+    assert infer_dsi_customer_ignore_reason_code("jane doe - staff") == IGNORE_REASON_CUSTOMER_EXCLUDED
+    assert infer_dsi_customer_ignore_reason_code("") is None
+
+
+def test_ignored_customer_stays_excluded_after_revalidate(dsi_source_id: int) -> None:
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(CSV), import_mode="validate", filename="dsi_staff_ignore.csv")
+    job_id = job.id
+
+    # First validation: nobody has decided yet, so the staff rows block and the candidates are open.
+    assert _summary(job_id)["blocking_rows"] == 3
+    assert {ln.severity for ln in _lines(job_id)} == {"error"}
+
+    # The steward ignores Jane Doe (status only, as the bulk ignore did on job 1670: no reason code stored).
+    with SessionLocal() as db:
+        cands = db.scalars(
+            select(ImportEntityMappingCandidate).where(
+                ImportEntityMappingCandidate.import_job_id == job_id,
+                ImportEntityMappingCandidate.entity_type == "customer_dealer_token",
+            )
+        ).all()
+        by_key = {c.normalized_key: c for c in cands}
+        assert "jane doe - staff" in by_key and "john roe - staff" in by_key
+        by_key["jane doe - staff"].status = "ignored"
+        db.commit()
+        assert load_steward_ignored_customer_keys(db, job_id) == frozenset({"jane doe - staff"})
+
+    # Revalidate: Jane Doe's two rows are excluded (not blocking); John Roe's row still needs the steward.
+    with SessionLocal() as db:
+        process_import_job_sync(db, job_id)
+    summary = _summary(job_id)
+    assert summary["blocking_rows"] == 1
+    assert summary["steward_map_blocking_rows"] == 1
+    assert summary["auto_excluded_rows"] == 2
+    by_status = {}
+    for ln in _lines(job_id):
+        by_status.setdefault(ln.resolution_status, []).append(ln)
+    assert len(by_status["staged_only"]) == 2
+    assert len(by_status["blocked"]) == 1
+    for ln in by_status["staged_only"]:
+        assert ln.severity == "info"
+        assert parse_steward_ignored_line_reason(ln.diagnostic_codes) == IGNORE_REASON_CUSTOMER_EXCLUDED
+    assert by_status["blocked"][0].raw_customer_dealer_token == "John Roe - STAFF"
+
+    # The candidate stays ignored and now carries the reason, so a later re-apply knows it too.
+    with SessionLocal() as db:
+        cand = db.scalar(
+            select(ImportEntityMappingCandidate).where(
+                ImportEntityMappingCandidate.import_job_id == job_id,
+                ImportEntityMappingCandidate.normalized_key == "jane doe - staff",
+            )
+        )
+        assert cand is not None and cand.status == "ignored"
+        assert (cand.context or {}).get("steward_ignore_reason_code") == IGNORE_REASON_CUSTOMER_EXCLUDED
+
+    # Revalidating again changes nothing.
+    with SessionLocal() as db:
+        process_import_job_sync(db, job_id)
+    again = _summary(job_id)
+    assert (again["blocking_rows"], again["auto_excluded_rows"]) == (1, 2)
+
+
+def test_refresh_keeps_ignored_customer_excluded(dsi_source_id: int) -> None:
+    from app.services.imports.distributor_sales_inventory import refresh_dsi_staging_lines_for_job
+
+    job = _run_dsi_job(dsi_source_id, _csv_bytes(CSV), import_mode="validate", filename="dsi_staff_refresh.csv")
+    job_id = job.id
+    with SessionLocal() as db:
+        cand = db.scalar(
+            select(ImportEntityMappingCandidate).where(
+                ImportEntityMappingCandidate.import_job_id == job_id,
+                ImportEntityMappingCandidate.normalized_key == "john roe - staff",
+            )
+        )
+        assert cand is not None
+        cand.status = "ignored"
+        db.commit()
+        j = db.get(ImportJob, job_id)
+        refresh_dsi_staging_lines_for_job(db, j)
+        db.commit()
+    statuses = {ln.raw_dealer_group_token or ln.raw_customer_dealer_token: ln.resolution_status for ln in _lines(job_id)}
+    assert statuses["John Roe - STAFF"] == "staged_only"
+    assert statuses["Jane Doe - STAFF"] == "blocked"

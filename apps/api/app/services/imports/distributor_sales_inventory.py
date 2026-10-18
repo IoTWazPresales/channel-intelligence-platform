@@ -2039,6 +2039,12 @@ def process_distributor_sales_inventory(
         if preserved:
             preserved_candidate_steward[(existing.entity_type, existing.normalized_key)] = preserved
 
+    steward_ignored_customer_keys = frozenset(
+        str(nk).strip().lower()
+        for (et, nk), pv in preserved_candidate_steward.items()
+        if et == "customer_dealer_token" and pv.get("status") == "ignored" and str(nk).strip()
+    )
+
     db.execute(delete(ImportDistributorSiStagingLine).where(ImportDistributorSiStagingLine.import_job_id == job.id))
     db.execute(delete(ImportEntityMappingCandidate).where(ImportEntityMappingCandidate.import_job_id == job.id))
     db.flush()
@@ -2252,6 +2258,7 @@ def process_distributor_sales_inventory(
         compute_dsi_hard_row_with_product_auto_exclude,
         compute_dsi_sellout_block_with_customer_auto_exclude,
         IGNORE_REASON_MASTER_DATA_ALIAS_SCOPE_CONFLICT,
+        IGNORE_REASON_CUSTOMER_EXCLUDED,
         IGNORE_REASON_NO_CUSTOMER,
         is_dsi_data_quality_block_diag,
         new_product_running_change_stats_bucket,
@@ -2688,6 +2695,7 @@ def process_distributor_sales_inventory(
             dealer_group_raw=dg_raw,
             channel_raw=ch_raw,
             diag=diag,
+            steward_ignored_customer_keys=steward_ignored_customer_keys,
         )
         sellout_blocked_no_tx = bool(
             qty_f is not None and qty_f != 0 and tx_date is None
@@ -2794,7 +2802,7 @@ def process_distributor_sales_inventory(
             sev, res_status = product_auto_exclude_terminal_status()
             if customer_auto_exclude_reason == IGNORE_REASON_MASTER_DATA_ALIAS_SCOPE_CONFLICT:
                 master_merge_excluded_rows += 1
-            elif customer_auto_exclude_reason == IGNORE_REASON_NO_CUSTOMER:
+            elif customer_auto_exclude_reason in (IGNORE_REASON_NO_CUSTOMER, IGNORE_REASON_CUSTOMER_EXCLUDED):
                 auto_excluded_rows += 1
         elif product_auto_exclude_reason:
             sev, res_status = product_auto_exclude_terminal_status()
@@ -3290,6 +3298,8 @@ def process_distributor_sales_inventory(
                         pass
             elif is_dsi_mapping_candidate_terminal_status(pres_st):
                 cand_status = pres_st
+                if pres_st == "ignored" and etype == "customer_dealer_token":
+                    ctx.setdefault("steward_ignore_reason_code", IGNORE_REASON_CUSTOMER_EXCLUDED)
                 if pres.get("suggested_entity_id") is not None:
                     try:
                         suggested_entity_id = int(pres["suggested_entity_id"])
@@ -3447,6 +3457,12 @@ def _append_shipment_corroboration_signals_dsi(
         diag.append(SHIP_CORR_JSON_PREFIX + json.dumps(to_jsonable(cc))[:900])
 
 
+def _refresh_ignored_customer_keys(db: Session, job: ImportJob) -> frozenset[str]:
+    from app.services.imports.dsi_product_running_change import load_steward_ignored_customer_keys
+
+    return load_steward_ignored_customer_keys(db, int(job.id))
+
+
 def refresh_dsi_staging_line_resolution(
     db: Session,
     job: ImportJob,
@@ -3573,6 +3589,7 @@ def refresh_dsi_staging_line_resolution(
         dealer_group_raw=dg_raw,
         channel_raw=ch_raw,
         diag=diag,
+        steward_ignored_customer_keys=_refresh_ignored_customer_keys(db, job),
     )
     sellout_blocked_no_tx = bool(qty_sold is not None and qty_sold != 0 and tx_date is None)
     inv_ready = bool(inv_attempt and snap_date is not None and soh is not None)

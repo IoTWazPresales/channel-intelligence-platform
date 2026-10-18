@@ -12,9 +12,12 @@ IGNORE_REASON_NO_CATALOGUE = "ignore_no_catalogue"
 IGNORE_REASON_NO_RECEIPT_EVIDENCE = "ignore_no_receipt_evidence"
 IGNORE_REASON_NO_CUSTOMER = "ignore_no_customer"
 IGNORE_REASON_MASTER_DATA_ALIAS_SCOPE_CONFLICT = "master_data_alias_scope_conflict"
+# A real (non-blank) customer token the steward chose to leave out of this load, e.g. staff accounts.
+IGNORE_REASON_CUSTOMER_EXCLUDED = "ignore_customer_excluded"
 
 DSI_IGNORE_REASON_CODES = frozenset(
     {
+        IGNORE_REASON_CUSTOMER_EXCLUDED,
         IGNORE_REASON_SKU_INDETERMINATE,
         IGNORE_REASON_NO_CATALOGUE,
         IGNORE_REASON_NO_RECEIPT_EVIDENCE,
@@ -355,11 +358,12 @@ def infer_dsi_customer_ignore_reason_code(
     normalized_key: str | None,
     cand_context: dict[str, Any] | None = None,
 ) -> str | None:
-    """Steward-ignore reason for customer candidates (blank/placeholder bucket only)."""
+    """Steward-ignore reason for customer candidates: blank bucket, else a deliberately excluded customer."""
     _ = cand_context
-    if (normalized_key or "").strip().lower() == "__blank__":
+    key = (normalized_key or "").strip().lower()
+    if key == "__blank__":
         return IGNORE_REASON_NO_CUSTOMER
-    return None
+    return IGNORE_REASON_CUSTOMER_EXCLUDED if key else None
 
 
 def infer_validate_auto_exclude_alias_scope_reason(
@@ -387,8 +391,13 @@ def compute_dsi_sellout_block_with_customer_auto_exclude(
     dealer_group_raw: str | None,
     channel_raw: str | None = None,
     diag: list[str],
+    steward_ignored_customer_keys: frozenset[str] | set[str] | None = None,
 ) -> tuple[bool, str | None]:
-    """Returns (sellout_blocked_no_customer, auto_exclude_reason)."""
+    """Returns (sellout_blocked_no_customer, auto_exclude_reason).
+
+    ``steward_ignored_customer_keys``: normalized customer keys the steward already ignored on this
+    job; a rebuilt line for one of them stays excluded instead of blocking again.
+    """
     sellout_blocked_no_customer = bool(sellout_or_return_attempt and rcustomer_id is None)
     if not sellout_blocked_no_customer:
         return False, None
@@ -399,6 +408,10 @@ def compute_dsi_sellout_block_with_customer_auto_exclude(
     if alias_scope_reason:
         apply_product_auto_exclude_diagnostic(diag, alias_scope_reason)
         return False, alias_scope_reason
+    ignored_key = (normalized_candidate_key or "").strip().lower()
+    if ignored_key and ignored_key != "__blank__" and ignored_key in (steward_ignored_customer_keys or ()):
+        apply_product_auto_exclude_diagnostic(diag, IGNORE_REASON_CUSTOMER_EXCLUDED)
+        return False, IGNORE_REASON_CUSTOMER_EXCLUDED
     auto_reason = infer_validate_auto_exclude_customer_reason(
         sellout_or_return_attempt=sellout_or_return_attempt,
         rcustomer_id=rcustomer_id,
@@ -412,6 +425,22 @@ def compute_dsi_sellout_block_with_customer_auto_exclude(
         apply_product_auto_exclude_diagnostic(diag, auto_reason)
         return False, auto_reason
     return True, None
+
+
+def load_steward_ignored_customer_keys(db: Any, job_id: int) -> frozenset[str]:
+    """Normalized keys of customer candidates the steward ignored on this job (sync session)."""
+    from sqlalchemy import select
+
+    from app.models.import_distributor_si import ImportEntityMappingCandidate
+
+    rows = db.scalars(
+        select(ImportEntityMappingCandidate.normalized_key).where(
+            ImportEntityMappingCandidate.import_job_id == int(job_id),
+            ImportEntityMappingCandidate.entity_type == "customer_dealer_token",
+            ImportEntityMappingCandidate.status == "ignored",
+        )
+    ).all()
+    return frozenset(str(k).strip().lower() for k in rows if k and str(k).strip())
 
 
 def is_human_fixable_dsi_blocked_staging_line(line: Any) -> bool:
