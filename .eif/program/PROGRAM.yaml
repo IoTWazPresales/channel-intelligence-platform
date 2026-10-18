@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2616
-  log_sha256: 2107a36417de15a128207b3cbfd0939b136127e4caed2e9192154bc6f8de1fc8
+  snapshot_revision: 2620
+  log_sha256: 65ff9e96f1ca023c6eeaaa52917edc59c1fa1002e0b7e82c1111e4060cb3a204
   acceptance_policy:
     milestone: operator
     root: operator
@@ -13191,7 +13191,7 @@ nodes:
     origin: operator
     status: in_progress
     stage: verify
-    revision: 63
+    revision: 66
     lease: null
     depends_on:
     - N-0110
@@ -13337,15 +13337,12 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Finding + fix (header row, job 1669), at verify, still VERIFIED_WITH_LIMITATIONS, operator acceptance pending.
-      Self-verified in the build session, not independent. Cause proved read-only from job 1669 and its stored file: the mapping
-      step found headers on row 2, the load re-read single-file jobs from row 1 and erased the saved mapping. Fixed in f3e9b379
-      (header row detected per file/sheet, uploader-settable, stored; load uses the mapping step''s loader; zero-row loads
-      say why; banner layouts still row 20). cip_test proof: synthetic Pinnacle shape maps, loads, 8 sales (36) and 3 credit
-      notes (6) net to 30, re-upload changes nothing; same test fails on old code. Full API pytest on cip_test 3081 passed,
-      21 skipped, 0 failed; full web vitest 189 files 884 passed (2 workers). API and web restarted (health 200, login 200),
-      web build wJ2OcwNjYM3pg_UiBUB4R. Limits: not rendered (sign-in); the 36,275-line real file was not loaded by the agent.
-      Next: Warren re-uploads job 1669''s file as a new upload with Pinnacle selected.'
+    stage_note: 'Header-row finding and ignored-customer finding both fixed (f3e9b379, c1aa223d); still at verify, VERIFIED_WITH_LIMITATIONS,
+      operator acceptance pending. Self-verified in the build session, not independent. Ignored-customer fix: a steward-ignored
+      real customer now has reason ignore_customer_excluded; validate and refresh keep its rows excluded; single ignore demotes
+      rows. Full API pytest on cip_test 3084 passed, 21 skipped, 0 failed; web unchanged since vitest 189 files 884 passed.
+      API restarted (health ready). Limits: not rendered (sign-in); job 1670 itself not revalidated by the agent. Next: Warren
+      revalidates job 1670 (22 rows should become excluded) and loads when satisfied.'
     debug_iterations: 0
     split_into: null
     deferred: null
@@ -17962,6 +17959,18 @@ deferred_findings:
     layouts still read row 20. Warren to re-upload job 1669''s file as a new upload; not loaded by the agent.'
   node: N-0111
   run: R20261018T105652Z
+  actor: gov-001
+  status: deferred
+- seq: 2618
+  code: DOES_NOT_FIT
+  note: 'N-0111 finding (job 1670, Pinnacle): 22 rows from 19 ''<NAME> - STAFF'' debtor accounts, already ignored by the steward,
+    still counted as ''still need steward mapping'' after revalidate while the steward tabs showed nothing. Cause: a real
+    customer ignore stored status only (no reason code), so rebuilt staging rows blocked again and the re-apply (infer) only
+    knew the blank bucket. Fixed in c1aa223d: reason ignore_customer_excluded; validate and single-row refresh keep an ignored
+    customer''s rows excluded; single-candidate ignore demotes rows as the bulk ignore does; regenerated candidates keep the
+    reason. Full API pytest on cip_test 3084 passed, 21 skipped, 0 failed. Warren to revalidate job 1670 once.'
+  node: N-0111
+  run: R20261018T145713Z
   actor: gov-001
   status: deferred
 ids:
