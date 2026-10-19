@@ -66,6 +66,12 @@ def _config_json(
         "overdue_threshold_days": int(cfg.overdue_threshold_days) if cfg else 10,
         "notes": cfg.notes if cfg else None,
         "feed_profile_json": cfg.feed_profile_json if cfg else None,
+        "replen_min_weeks_of_cover": float(cfg.replen_min_weeks_of_cover)
+        if cfg and cfg.replen_min_weeks_of_cover is not None
+        else None,
+        "replen_target_weeks_of_cover": float(cfg.replen_target_weeks_of_cover)
+        if cfg and cfg.replen_target_weeks_of_cover is not None
+        else None,
     }
 
 
@@ -134,13 +140,16 @@ class KeyAccountPatch(BaseModel):
     notes: str | None = Field(default=None, max_length=512)
     feed_profile_json: dict[str, Any] | None = None
     feed_profile_raw: str | None = None  # optional JSON text from UI editor
+    # Empty string or null clears the value back to the default.
+    replen_min_weeks_of_cover: float | None = Field(default=None, gt=0, le=104)
+    replen_target_weeks_of_cover: float | None = Field(default=None, gt=0, le=104)
 
     @field_validator("expected_cadence")
     @classmethod
     def cadence_ok(cls, v: str | None) -> str | None:
         if v is None:
             return v
-        allowed = {"weekly", "monthly", "adhoc"}
+        allowed = {"daily", "weekly", "monthly", "adhoc"}
         if v.strip().lower() not in allowed:
             raise ValueError(f"expected_cadence must be one of {sorted(allowed)}")
         return v.strip().lower()
@@ -268,6 +277,8 @@ def patch_key_account_steward(
                 "overdue_threshold_days",
                 "notes",
                 "feed_profile_json",
+                "replen_min_weeks_of_cover",
+                "replen_target_weeks_of_cover",
             )
         )
         if cfg is None and needs_config:
@@ -285,6 +296,9 @@ def patch_key_account_steward(
                 cfg.overdue_threshold_days = int(data["overdue_threshold_days"])
             if "notes" in data:
                 cfg.notes = data["notes"]
+            for key in ("replen_min_weeks_of_cover", "replen_target_weeks_of_cover"):
+                if key in data:
+                    setattr(cfg, key, data[key])
             if "feed_profile_json" in data:
                 cfg.feed_profile_json = to_jsonable(data["feed_profile_json"]) if data["feed_profile_json"] else None
             session.add(cfg)
