@@ -297,3 +297,88 @@ def test_product_detail_across_customers(session: Session):
     assert rows[b]["latest_price"] == pytest.approx(100.0)  # 115 incl. VAT shown excl.
     assert rows[a]["rate_4w"] == pytest.approx(4)
     assert out["customers"][0]["customer_id"] == a  # most units first
+
+
+def _case(db, cid, pid, start, end, planned, code):
+    from app.models.cpor import CporCase, CporCaseLine
+
+    case = CporCase(case_code=code, customer_id=cid, promotion_type="Price promo", window_start=start, window_end=end, status="approved", tenant_id=TENANT)
+    db.add(case)
+    db.flush()
+    db.add(CporCaseLine(case_id=case.id, product_id=pid, window_start=start, window_end=end, srp=999, vat_rate=0.15, dealer_margin_pct=0.1, estimate_qty=planned))
+    db.flush()
+
+
+def test_existing_intelligence_feeds_cover_and_causes(session: Session):
+    """Warren 2026-10-19: weeks of cover takes upcoming promotions and shipments on their way into
+    account, and flagged SKUs show possible causes from data already in the platform."""
+    from datetime import datetime, timezone
+
+    from app.models.dimensions import DimDistributor
+    from app.models.facts import FactInboundShipment, FactInventoryDistributor
+    from app.models.listing_capture import CustomerListing, ListingObservation
+
+    db = session
+    a = _customer(db, "STO-IA")
+    b = _customer(db, "STO-IB")
+    p_promo = _product(db, "IP")  # 10 a week, 60 in stock: 6 weeks on sales, but a big promotion is coming
+    p_drop = _product(db, "ID")  # dropped after its price went up; cheaper at B; web page gone; promo ended
+    _weeks(db, a, p_promo, {i: 10 for i in range(26)}, soh_now=60)
+    _case(db, a, p_promo, date(2026, 10, 20), date(2026, 11, 2), 80, "STO-PROMO-1")
+    for i in range(26):
+        _row(db, a, p_drop, LAST_WEEK - timedelta(weeks=i), 2 if i < 4 else 10, price=120.0 if i < 6 else 100.0, soh=50 if i == 0 else None)
+        _row(db, b, p_drop, LAST_WEEK - timedelta(weeks=i), 5, price=90.0)
+    _case(db, a, p_drop, date(2026, 8, 1), date(2026, 9, 10), 50, "STO-PROMO-0")
+    lst = CustomerListing(customer_id=a, product_id=p_drop, url="https://example.test/gone", marketplace="test")
+    db.add(lst)
+    db.flush()
+    db.add(ListingObservation(listing_id=lst.id, fetched_at=datetime(2026, 10, 15, tzinfo=timezone.utc), parser_version="t", http_status=404))
+    dist = DimDistributor(code="STO-D1", name="Disti One")
+    db.add(dist)
+    db.flush()
+    db.get(DimCustomer, a).preferred_distributor_id = dist.id
+    db.add(FactInventoryDistributor(source_key="sto-inv-1", tenant_id=TENANT, product_id=p_promo, distributor_id=dist.id, as_of_date=date(2026, 10, 12), on_hand_units=300))
+    db.add(
+        FactInboundShipment(
+            tenant_id=TENANT, source_key="sto-ship-1", report_type="t", line_state="shipped", raw_source_row={},
+            product_resolution_status="resolved", distributor_resolution_status="resolved",
+            product_id=p_promo, resolved_customer_id=a, quantity=10, eta_date=date(2026, 11, 20),
+        )
+    )
+    db.flush()
+
+    f = OverviewFilters(date_from=date(2026, 7, 20), date_to=date(2026, 10, 18), tenant_id=TENANT, customer_ids=[a, b])
+    out = build_overview(db, f, BusinessCalendar(), today=TODAY, vat_rate=0.15)
+    rows = {(r["customer_id"], r["product_id"]): r for r in out["problems"]["rows"]}
+
+    promo = rows[(a, p_promo)]
+    assert promo["reason"] == "needs_replen"  # 6 weeks on sales alone would not flag it
+    assert promo["weeks_of_cover"] == pytest.approx(6.0)
+    assert promo["forward_weeks_of_cover"] < 4
+    assert "80 promotion units planned" in promo["detail"] and "10 on the way" in promo["detail"]
+    assert promo["suggested_qty"] == 10 * 6 + 80 - 60 - 10
+    keys = {c["key"] for c in promo["causes"]}
+    assert {"promo_ahead", "inbound", "distributor_stock"} <= keys
+
+    drop = rows[(a, p_drop)]
+    assert drop["reason"] == "dropped"
+    by_key = {c["key"]: c for c in drop["causes"]}
+    assert "100 → 120" in by_key["price_up"]["detail"]
+    assert "STO-IB Retail 90" in by_key["cheaper_elsewhere"]["detail"]
+    assert "HTTP 404" in by_key["no_page"]["detail"]
+    assert "STO-PROMO-0" in by_key["promo_ended"]["detail"]
+    assert any("search ranking" in n for n in drop["not_checked"])
+
+
+def test_no_intelligence_leaves_rules_unchanged(session: Session):
+    """Without promotions or shipments, cover and the suggested order are exactly stock / recent rate."""
+    db = session
+    a = _customer(db, "STO-NI")
+    p = _product(db, "NI")
+    _weeks(db, a, p, {i: 10 for i in range(26)}, soh_now=20)
+    db.flush()
+    f = OverviewFilters(date_from=date(2026, 7, 20), date_to=date(2026, 10, 18), tenant_id=TENANT, customer_ids=[a])
+    out = build_overview(db, f, BusinessCalendar(), today=TODAY, vat_rate=0.15)
+    row = out["problems"]["rows"][0]
+    assert row["reason"] == "needs_replen" and row["detail"] == "2.0 weeks of cover (replenish below 4)"
+    assert row["suggested_qty"] == 40 and row["forward_weeks_of_cover"] is None

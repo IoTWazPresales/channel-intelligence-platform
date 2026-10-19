@@ -50,6 +50,13 @@ export type ProblemRow = {
   weeks_of_cover: number | null;
   weeks_since_sale: number | null;
   suggested_qty: number | null;
+  forward_weeks_of_cover?: number | null;
+  promo_units_ahead?: number | null;
+  inbound_units?: number | null;
+  /** What existing data shows about this row, with evidence (Warren 2026-10-19). */
+  causes?: Array<{ key: string; label: string; detail: string }>;
+  /** Checks that could not run because the data is not loaded. */
+  not_checked?: string[];
   judged_to: string;
   weekly_units: number[];
 };

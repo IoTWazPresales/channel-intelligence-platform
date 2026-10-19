@@ -570,7 +570,24 @@ def build_overview(session: Session, f: OverviewFilters, cal: BusinessCalendar, 
             for c in selling
             if last_day.get(c) is None or date.fromisoformat(last_day[c]) < end
         )
-    problems = _problems(obs, products, customers, cfg_by_customer, stock, stock_dates, last_day, f.date_to)
+    # Existing intelligence for the SKU list: promotion cases and inbound shipments feed cover and the
+    # suggested order; checks on prices, listings, stores and distributors explain flagged rows.
+    from app.services.channel_intelligence.sell_through_causes import attach_causes, load_outlook
+
+    pairs = {(o.customer_id, o.product_id) for o in obs} | set(stock)
+    outlook = load_outlook(session, f.tenant_id, pairs, f.date_to)
+    problems = _problems(
+        obs, products, customers, cfg_by_customer, stock, stock_dates, last_day, f.date_to, outlook=outlook
+    )
+    attach_causes(
+        session,
+        tenant_id=f.tenant_id,
+        rows=problems["rows"],
+        outlook=outlook,
+        last_year_weeks=problems.pop("_last_year_weeks"),
+        vat=f.vat,
+        vat_rate=vat_rate,
+    )
 
     # Weeks of cover per customer: its stock against its own sales in the 4 weeks to its latest
     # figures, so a customer that reports late or holds old stock does not read as zero sales.
@@ -821,24 +838,31 @@ def _problems(
     stock_dates: dict[int, date],
     last_day: dict[int, str | None],
     as_of: date,
+    *,
+    outlook: dict | None = None,
 ) -> dict[str, Any]:
+    from app.services.channel_intelligence.sell_through_causes import forward_cover
+
+    outlook = outlook or {}
     anchors: dict[int, date] = {}
     for cid, d in last_day.items():
         anchors[cid] = min(as_of, date.fromisoformat(d)) if d else as_of
     weeks: dict[tuple[int, int], list[float]] = defaultdict(lambda: [0.0] * LOOKBACK_WEEKS)
+    last_year: dict[tuple[int, int], list[float]] = defaultdict(lambda: [0.0] * LOOKBACK_WEEKS)
     for o in obs:
-        anchor = anchors.get(o.customer_id, as_of)
-        first = anchor - timedelta(days=LOOKBACK_WEEKS * 7 - 1)
-        if o.end < first or o.start > anchor:
-            continue
-        series = weeks[(o.customer_id, o.product_id)]
-        lo = max(0, ((o.start - first).days) // 7)
-        hi = min(LOOKBACK_WEEKS - 1, ((min(o.end, anchor) - first).days) // 7)
-        for i in range(lo, hi + 1):
-            a = first + timedelta(days=7 * i)
-            sh = o.share(a, a + timedelta(days=6))
-            if sh > 0:
-                series[i] += o.units * sh
+        for shift, target in ((0, weeks), (52, last_year)):
+            anchor = anchors.get(o.customer_id, as_of) - timedelta(weeks=shift)
+            first = anchor - timedelta(days=LOOKBACK_WEEKS * 7 - 1)
+            if o.end < first or o.start > anchor:
+                continue
+            series = target[(o.customer_id, o.product_id)]
+            lo = max(0, ((o.start - first).days) // 7)
+            hi = min(LOOKBACK_WEEKS - 1, ((min(o.end, anchor) - first).days) // 7)
+            for i in range(lo, hi + 1):
+                a = first + timedelta(days=7 * i)
+                sh = o.share(a, a + timedelta(days=6))
+                if sh > 0:
+                    series[i] += o.units * sh
     for key in stock:
         weeks.setdefault(key, [0.0] * LOOKBACK_WEEKS)
 
@@ -870,17 +894,39 @@ def _problems(
         target_woc = float(cfg.replen_target_weeks_of_cover) if cfg and cfg.replen_target_weeks_of_cover else DEFAULT_REPLEN_TARGET_WEEKS_OF_COVER
         rate = recent_rate if recent_rate > 0 else (last8 / NO_SALES_WEEKS)
         woc = soh / rate if soh is not None and rate > 0 else None
+        fwd = None
+        if stock_current and soh is not None:
+            fwd = forward_cover(
+                stock=max(soh, 0.0),
+                rate=rate,
+                anchor=anchor,
+                outlook=outlook.get((cid, pid)),
+                reported_incoming=st["on_order"] + st["in_transit"],
+                target_weeks=target_woc,
+            )
+        # Cover counts planned promotion units and shipments on their way where they exist; with
+        # neither it equals stock / recent rate.
+        fwd_woc = fwd["weeks"] if fwd and (fwd["promo_units"] or fwd["inbound_units"]) else None
+        cover = min(x for x in (woc, fwd_woc) if x is not None) if (woc is not None or fwd_woc is not None) else None
 
         reason = detail = None
         suggested = None
         if stock_current and soh is not None and soh <= 0 and last8 > 0 and not ended:
             reason = "out_of_stock"
             detail = f"0 in stock; was selling {last8 / NO_SALES_WEEKS:,.1f} a week"
-            suggested = math.ceil(rate * target_woc - (st["on_order"] + st["in_transit"])) if st else None
-        elif stock_current and soh is not None and soh > 0 and rate > 0 and woc is not None and woc < min_woc and not ended:
+            suggested = fwd["suggested"] if fwd else None
+        elif stock_current and soh is not None and soh > 0 and rate > 0 and cover is not None and cover < min_woc and not ended:
             reason = "needs_replen"
-            detail = f"{woc:,.1f} weeks of cover (replenish below {min_woc:g})"
-            suggested = math.ceil(rate * target_woc - soh - st["on_order"] - st["in_transit"])
+            if fwd_woc is not None and woc is not None and fwd_woc < woc:
+                bits = []
+                if fwd["promo_units"]:
+                    bits.append(f"{fwd['promo_units']:,.0f} promotion units planned")
+                if fwd["inbound_units"]:
+                    bits.append(f"{fwd['inbound_units']:,.0f} on the way")
+                detail = f"{fwd_woc:,.1f} weeks of cover with {' and '.join(bits)} ({woc:,.1f} on recent sales; replenish below {min_woc:g})"
+            else:
+                detail = f"{cover:,.1f} weeks of cover (replenish below {min_woc:g})"
+            suggested = fwd["suggested"] if fwd else None
         elif prior_selling >= STREAK_MIN_SELLING_WEEKS and prior_rate >= DROP_MIN_UNITS_PER_WEEK and recent_rate <= prior_rate * DROP_RATIO:
             reason = "dropped"
             detail = f"{prior_rate:,.1f} a week for {STREAK_WEEKS} weeks, now {recent_rate:,.1f} a week"
@@ -921,6 +967,9 @@ def _problems(
                 "rate_recent": round(recent_rate, 2),
                 "rate_before": round(prior_rate, 2),
                 "weeks_of_cover": round(woc, 1) if woc is not None else None,
+                "forward_weeks_of_cover": fwd_woc,
+                "promo_units_ahead": fwd["promo_units"] if fwd else None,
+                "inbound_units": fwd["inbound_units"] if fwd else None,
                 "weeks_since_sale": weeks_since_sale,
                 "suggested_qty": suggested if suggested and suggested > 0 else None,
                 "judged_to": anchors.get(cid, as_of).isoformat(),
@@ -937,9 +986,11 @@ def _problems(
         return -(r["stock_on_hand"] or 0)
 
     rows.sort(key=lambda r: (order[r["reason"]], impact(r)))
+    shown = rows[:PROBLEM_ROW_LIMIT]
     return {
+        "_last_year_weeks": {(r["customer_id"], r["product_id"]): last_year.get((r["customer_id"], r["product_id"])) for r in shown},
         "counts": dict(counts),
-        "rows": rows[:PROBLEM_ROW_LIMIT],
+        "rows": shown,
         "total": len(rows),
         "rules": {
             "recent_weeks": RECENT_WEEKS,

@@ -66,6 +66,26 @@ export function SellThroughProblemsTable({
       { field: 'product', headerName: 'Product', flex: 1.2, minWidth: 220 },
       { field: 'detail', headerName: 'What we see', flex: 1.4, minWidth: 260 },
       {
+        headerName: 'Possible causes',
+        flex: 1.2,
+        minWidth: 240,
+        sortable: false,
+        valueGetter: (p) => (p.data?.causes ?? []).map((c) => c.label).join(', '),
+        cellRenderer: (p: ICellRendererParams<ProblemRow>) =>
+          p.data?.causes?.length ? (
+            <Stack direction="row" spacing={0.5} sx={{ overflow: 'hidden', pt: 0.5 }}>
+              {p.data.causes.slice(0, 3).map((c) => (
+                <Chip key={c.key + c.detail} size="small" variant="outlined" label={c.label} title={c.detail} />
+              ))}
+              {p.data.causes.length > 3 ? <Chip size="small" label={`+${p.data.causes.length - 3}`} /> : null}
+            </Stack>
+          ) : (
+            <Typography variant="caption" color="text.secondary">
+              None found
+            </Typography>
+          ),
+      },
+      {
         headerName: 'Last 26 weeks',
         width: 150,
         sortable: false,
@@ -98,6 +118,13 @@ export function SellThroughProblemsTable({
       { field: 'on_order', headerName: 'On order', width: 100, type: 'numericColumn', valueFormatter: (p) => num(p.value) },
       { field: 'rate_recent', headerName: 'Per week now', width: 120, type: 'numericColumn', valueFormatter: (p) => num(p.value, 1) },
       { field: 'rate_before', headerName: 'Per week before', width: 130, type: 'numericColumn', valueFormatter: (p) => num(p.value, 1) },
+      {
+        field: 'forward_weeks_of_cover',
+        headerName: 'Cover incl. promos & inbound',
+        width: 190,
+        type: 'numericColumn',
+        valueFormatter: (p) => num(p.value, 1),
+      },
       { field: 'weeks_of_cover', headerName: 'Weeks of cover', width: 130, type: 'numericColumn', valueFormatter: (p) => num(p.value, 1) },
       {
         field: 'suggested_qty',

@@ -27,7 +27,8 @@ _SYSTEM = (
     "You write the short summary at the top of a retail sell-through dashboard for a consumer "
     "electronics vendor's channel team. You are given a JSON fact sheet computed by the system. "
     "Write 4 to 6 plain sentences: what changed, what is selling, what needs action (restock, "
-    "sales drops, aged stock) and which customer reports are missing. Lead with the most important "
+    "sales drops, aged stock), the possible causes the facts list for them, and which customer "
+    "reports are missing. Lead with the most important "
     "point. Use only numbers and names that appear in the fact sheet; do not estimate or invent "
     "figures, causes or recommendations beyond what the facts support. No headings, no bullet "
     "points, no markdown."
@@ -68,7 +69,8 @@ def fact_sheet(overview: dict[str, Any]) -> dict[str, Any]:
         "sku_problem_counts": overview["problems"]["counts"],
         "most_urgent_skus": [
             {"why": p["reason_label"], "customer": p["customer_name"], "product": p["product"], "detail": p["detail"],
-             "suggested_order": p["suggested_qty"]}
+             "suggested_order": p["suggested_qty"],
+             "possible_causes": [f"{c['label']}: {c['detail']}" for c in (p.get("causes") or [])[:3]]}
             for p in problems[:8]
         ],
         "quarters_vs_last_year": [

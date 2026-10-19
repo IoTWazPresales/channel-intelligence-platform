@@ -101,6 +101,8 @@ const OVERVIEW = {
         customer_id: 299, customer_name: 'Amazon', product_id: 1, product: 'Model A (SKU-A)', sku: 'SKU-A', business_unit: 'NB',
         category: null, lifecycle: null, stock_on_hand: 20, on_order: 0, rate_recent: 10, rate_before: 10, weeks_of_cover: 2,
         weeks_since_sale: 0, suggested_qty: 40, judged_to: '2026-10-18', weekly_units: [10, 10, 10],
+        causes: [{ key: 'promo_ahead', label: 'Promotion coming', detail: 'Price promo from 2026-10-20, 80 units planned' }],
+        not_checked: ['search ranking (no data source)'],
       },
     ],
     total: 2,
@@ -217,6 +219,8 @@ describe('Sell-through tab (Warren 2026-10-19)', () => {
     expect(await screen.findByText(/reported 2025-06-15 \(490 days old\)/)).toBeInTheDocument();
     expect(screen.getByText('Stores: DC North 20')).toBeInTheDocument();
     expect(screen.getByText('16GB')).toBeInTheDocument();
+    expect(screen.getByTestId('sellthrough-panel-causes')).toHaveTextContent('Promotion coming: Price promo from 2026-10-20, 80 units planned');
+    expect(screen.getByText('Not checked: search ranking (no data source).')).toBeInTheDocument();
   });
 
   it('says why the AI summary is not available', async () => {

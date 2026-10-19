@@ -113,6 +113,23 @@ export function SellThroughProductPanel({
             {focus.reason_label} at {focus.customer_name}
           </Typography>
           <Typography variant="body2">{focus.detail}</Typography>
+          {focus.causes?.length ? (
+            <Box sx={{ mt: 1 }} data-testid="sellthrough-panel-causes">
+              <Typography variant="caption" color="text.secondary">
+                Possible causes from data in the system
+              </Typography>
+              {focus.causes.map((c) => (
+                <Typography key={c.key + c.detail} variant="body2">
+                  <strong>{c.label}</strong>: {c.detail}
+                </Typography>
+              ))}
+            </Box>
+          ) : null}
+          {focus.not_checked?.length ? (
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+              Not checked: {focus.not_checked.join('; ')}.
+            </Typography>
+          ) : null}
         </Box>
       ) : null}
       {d ? (
