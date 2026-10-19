@@ -327,7 +327,9 @@ class BusinessCalendar:
             "year": yr.as_dict(),
             "quarters": [b.as_dict() for b in self.buckets(yr.start, yr.end, "quarter")],
             "months": [b.as_dict() for b in self.buckets(yr.start, yr.end, "month")],
-            "weeks": len(self.buckets(yr.start, yr.end, "week")),
+            "days": yr.days,
+            # Whole weeks only mean something for week-based calendars.
+            "weeks": yr.days // 7 if self.type in _RETAIL_PATTERNS else None,
         }
 
 

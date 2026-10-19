@@ -38,3 +38,17 @@ describe('sell-through filters in the address', () => {
     expect(grainsFor({ dateFrom: '2026-09-01', dateTo: '2026-10-18' })).toContain('day');
   });
 });
+
+describe('incomplete periods', () => {
+  it('names the customers still to report for the trailing periods only', async () => {
+    const { incompleteNote } = await import('./SellThroughOverview');
+    expect(
+      incompleteNote([
+        { label: 'W40', incomplete_customers: ['Old'] },
+        { label: 'W41', incomplete_customers: [] },
+        { label: 'W42', incomplete_customers: ['HiFi Corp', 'Incredible'] },
+      ]),
+    ).toBe('W42 not complete: HiFi Corp, Incredible not reported yet.');
+    expect(incompleteNote([{ label: 'W42', incomplete_customers: [] }])).toBe('');
+  });
+});

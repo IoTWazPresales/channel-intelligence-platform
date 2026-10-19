@@ -161,6 +161,9 @@ def test_overview(session: Session):
     assert sum(t["units"] for t in out["trend"]) == pytest.approx(out["kpis"]["units"], abs=0.05)
     assert len(out["trend"]) == 13
     assert out["trend"][-1]["compare_units"] == pytest.approx(5)
+    # B reports monthly and has not sent October: the latest weeks are marked incomplete, A's are not.
+    assert out["trend"][-1]["incomplete_customers"] == ["STO-B Retail"]
+    assert out["trend"][0]["incomplete_customers"] == []
     assert len(out["quarters"]) == 5
     assert out["top_sellers"][0]["product_id"] == p1
 

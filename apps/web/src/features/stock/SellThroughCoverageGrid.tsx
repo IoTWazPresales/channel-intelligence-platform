@@ -134,7 +134,7 @@ export function SellThroughCoverageGrid({
                 <>
                   {r.last_reported_day}
                   <Typography variant="caption" color={r.missing ? 'error.main' : 'text.secondary'} display="block">
-                    {r.days_since_last != null ? `${r.days_since_last} days ago` : ''}
+                    {r.days_since_last != null ? (r.days_since_last === 1 ? '1 day ago' : r.days_since_last === 0 ? 'today' : `${r.days_since_last} days ago`) : ''}
                   </Typography>
                 </>
               ) : (

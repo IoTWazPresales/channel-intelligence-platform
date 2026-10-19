@@ -13,7 +13,7 @@ import type { ProblemReason, ProblemRow, SellThroughOverview } from './sellThrou
 
 export const REASON_ORDER: ProblemReason[] = ['out_of_stock', 'needs_replen', 'dropped', 'aged', 'stopped'];
 export const REASON_LABEL: Record<ProblemReason, string> = {
-  out_of_stock: 'Out of stock, was selling',
+  out_of_stock: 'Out of stock',
   needs_replen: 'Needs replenishing',
   dropped: 'Sales dropped',
   aged: 'Aged stock',

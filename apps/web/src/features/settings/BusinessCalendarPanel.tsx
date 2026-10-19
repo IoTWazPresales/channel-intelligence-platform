@@ -49,7 +49,8 @@ type Preview = {
   year: PreviewBucket;
   quarters: PreviewBucket[];
   months: PreviewBucket[];
-  weeks: number;
+  days: number;
+  weeks: number | null;
 };
 
 const TYPE_LABELS: Record<CalendarType, string> = {
@@ -306,7 +307,7 @@ export function BusinessCalendarPanel({ canEdit }: { canEdit: boolean }) {
           <Box data-testid="bc-preview">
             <Typography variant="body2" sx={{ mb: 0.5 }}>
               <strong>{preview.data.year.label}</strong>: {preview.data.year.start} to {preview.data.year.end} ·{' '}
-              {preview.data.weeks} weeks
+              {preview.data.weeks != null ? `${preview.data.weeks} weeks` : `${preview.data.days} days`}
             </Typography>
             <Table size="small">
               <TableHead>

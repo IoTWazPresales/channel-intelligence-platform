@@ -57,7 +57,7 @@ TOP_N = 10
 
 REASONS = ("out_of_stock", "needs_replen", "dropped", "aged", "stopped")
 REASON_LABELS = {
-    "out_of_stock": "Out of stock, was selling",
+    "out_of_stock": "Out of stock",
     "needs_replen": "Needs replenishing",
     "dropped": "Sales dropped",
     "aged": "Aged stock",
@@ -434,6 +434,16 @@ def build_overview(session: Session, f: OverviewFilters, cal: BusinessCalendar, 
         int(p.id): p for p in session.scalars(select(DimProduct).where(DimProduct.id.in_(product_ids or {-1})))
     }
 
+    # Where the comparison window starts before these customers' first figures, it is only part-loaded.
+    first_data = None
+    if cmp:
+        sft = FactCustomerSellthrough
+        q = select(func.min(sft.period_start_date)).where(sft.tenant_id == f.tenant_id)
+        if f.customer_ids:
+            q = q.where(sft.customer_id.in_(f.customer_ids))
+        first_data = session.scalar(q)
+    compare_partial = bool(cmp and first_data and cmp[0] < first_data)
+
     in_window = [o for o in obs if o.share(f.date_from, f.date_to) > 0]
     in_cmp = [o for o in obs if cmp and o.share(cmp[0], cmp[1]) > 0]
 
@@ -540,6 +550,16 @@ def build_overview(session: Session, f: OverviewFilters, cal: BusinessCalendar, 
 
     coverage = _coverage(cal, f, obs, customer_ids, customers, cfg_by_customer, today)
     last_day = {row["customer_id"]: row["last_reported_day"] for row in coverage["customers"]}
+    # A period is incomplete while a customer that sells in this view has not reported up to its end,
+    # so a late report does not read as a sales drop.
+    selling = {o.customer_id for o in in_window if o.units}
+    for t in trend:
+        end = min(date.fromisoformat(t["end"]), f.date_to)
+        t["incomplete_customers"] = sorted(
+            customers[c].name if c in customers else f"Customer {c}"
+            for c in selling
+            if last_day.get(c) is None or date.fromisoformat(last_day[c]) < end
+        )
     problems = _problems(obs, products, customers, cfg_by_customer, stock, last_day, f.date_to)
 
     out = {
@@ -562,6 +582,7 @@ def build_overview(session: Session, f: OverviewFilters, cal: BusinessCalendar, 
             "units_without_price": round(units_no_value, 2),
             "compare_units": round(c_units, 2) if cmp else None,
             "compare_value": round(c_value, 2) if cmp else None,
+            "compare_partial": compare_partial,
             "units_change_pct": _pct(units, c_units) if cmp else None,
             "value_change_pct": _pct(value, c_value) if cmp else None,
             "stock_on_hand": round(soh_total, 2) if stock_customers else None,
@@ -597,6 +618,10 @@ def build_overview(session: Session, f: OverviewFilters, cal: BusinessCalendar, 
     if finer and any(o.days > finer for o in in_window):
         out["notes"].append(
             "Some customers report by week or month; those figures are spread evenly over their days in this view."
+        )
+    if compare_partial:
+        out["notes"].append(
+            f"Figures in view start on {first_data.isoformat()}, so the comparison period is only partly loaded."
         )
     if units_no_value > 0:
         out["notes"].append(
@@ -833,17 +858,25 @@ def summarize(o: dict[str, Any]) -> list[str]:
     cmp_name = {"prior_year": "the same period last year", "prior_period": "the period before"}.get(o["filters"]["compare"])
     if cmp_name and k["units_change_pct"] is not None:
         direction = "up" if k["units_change_pct"] >= 0 else "down"
-        lines.append(f"Units sold {direction} {abs(k['units_change_pct']) * 100:.0f}% on {cmp_name} ({k['units']:,.0f} vs {k['compare_units']:,.0f}).")
+        caveat = " (that period is only partly loaded)" if k.get("compare_partial") else ""
+        lines.append(
+            f"Units sold {direction} {abs(k['units_change_pct']) * 100:.0f}% on {cmp_name}{caveat} "
+            f"({k['units']:,.0f} vs {k['compare_units']:,.0f})."
+        )
     elif k["units"]:
         lines.append(f"{k['units']:,.0f} units sold in this window.")
     if o["top_sellers"]:
         t = o["top_sellers"][0]
         lines.append(f"Best seller: {t['label']} with {t['units']:,.0f} units across {t['customers']} customer(s).")
     pc = o["problems"]["counts"]
-    parts = []
-    for key in ("out_of_stock", "needs_replen", "dropped", "aged", "stopped"):
-        if pc.get(key):
-            parts.append(f"{pc[key]} {REASON_LABELS[key].lower()}")
+    phrases = {
+        "out_of_stock": "out of stock while selling",
+        "needs_replen": "to replenish",
+        "dropped": "with sales dropping",
+        "aged": "with aged stock",
+        "stopped": "with no recent sales",
+    }
+    parts = [f"{pc[key]} {phrases[key]}" for key in REASONS if pc.get(key)]
     if parts:
         lines.append("SKUs needing attention: " + ", ".join(parts) + ".")
     drops = [r for r in o["problems"]["rows"] if r["reason"] == "dropped"]

@@ -60,6 +60,20 @@ function delta(pct: number | null | undefined, period: string) {
   };
 }
 
+/** Names the customers still to report for the trailing periods, so a late file is not read as a drop. */
+export function incompleteNote(trend: { label: string; incomplete_customers?: string[] }[]): string {
+  const tail: { label: string; names: string[] }[] = [];
+  for (let i = trend.length - 1; i >= 0; i--) {
+    const names = trend[i].incomplete_customers ?? [];
+    if (!names.length) break;
+    tail.unshift({ label: trend[i].label, names });
+  }
+  if (!tail.length) return '';
+  const names = Array.from(new Set(tail.flatMap((t) => t.names)));
+  const span = tail.length === 1 ? tail[0].label : `${tail[0].label} to ${tail[tail.length - 1].label}`;
+  return `${span} not complete: ${names.slice(0, 3).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''} not reported yet.`;
+}
+
 type GroupOption = { kind: 'Business unit' | 'Category' | 'Series'; value: string };
 
 function useFilterState() {
@@ -104,6 +118,7 @@ export function SellThroughOverview() {
   const data = overview.data;
   const vat: VatBasis = filters.vat ?? options.data?.vat ?? 'ex_vat';
   const compareName = COMPARE_LABEL[filters.compare].toLowerCase();
+  const comparePeriod = data?.kpis.compare_partial ? `${compareName} (partly loaded)` : compareName;
   const customersById = useMemo(
     () => new Map((options.data?.customers ?? []).map((c) => [c.id, c])),
     [options.data?.customers],
@@ -291,7 +306,7 @@ export function SellThroughOverview() {
             <HeadlineFigure
               label="Units sold"
               value={fmtCompact(data.kpis.units)}
-              delta={delta(data.kpis.units_change_pct, compareName)}
+              delta={delta(data.kpis.units_change_pct, comparePeriod)}
               caption={`${data.kpis.skus_selling.toLocaleString()} SKUs selling · ${fmtCompact(data.kpis.weekly_rate)} a week lately`}
               sparkline={{ values: data.trend.map((t) => t.units), label: 'Units by period' }}
               compact
@@ -300,7 +315,7 @@ export function SellThroughOverview() {
             <HeadlineFigure
               label={`Sales value ${vat === 'inc_vat' ? 'incl.' : 'excl.'} VAT`}
               value={fmtCompact(data.kpis.value)}
-              delta={delta(data.kpis.value_change_pct, compareName)}
+              delta={delta(data.kpis.value_change_pct, comparePeriod)}
               caption={
                 data.kpis.value_estimated > 0
                   ? `${fmtCompact(data.kpis.value_estimated)} from listing prices`
@@ -359,9 +374,12 @@ export function SellThroughOverview() {
             <Panel
               title={`Sell-through by ${GRAIN_LABEL[data.filters.grain].toLowerCase()}`}
               subtitle={
-                filters.compare !== 'none' && data.filters.compare_from
-                  ? `Line: ${compareName} (${data.filters.compare_from} to ${data.filters.compare_to})`
-                  : undefined
+                <>
+                  {filters.compare !== 'none' && data.filters.compare_from
+                    ? `Line: ${compareName} (${data.filters.compare_from} to ${data.filters.compare_to}). `
+                    : ''}
+                  {incompleteNote(data.trend)}
+                </>
               }
               actions={
                 <ToggleButtonGroup size="small" exclusive value={metric} onChange={(_e, m) => m && setMetric(m)}>
@@ -383,19 +401,24 @@ export function SellThroughOverview() {
                 summary={`${metric === 'units' ? 'Units' : 'Sales value'} by ${data.filters.grain}`}
               />
             </Panel>
-            <Panel title="Quarters against last year" subtitle={`${data.calendar.type === 'gregorian' ? 'Calendar' : 'Business'} quarters from Settings`}>
+            <Panel
+              title="Quarters against last year"
+              subtitle={`${data.calendar.type === 'gregorian' ? 'Calendar' : 'Business'} quarters from Settings${
+                data.quarters.some((q) => q.partial) ? ' · * quarter so far' : ''
+              }`}
+            >
               <PairedBars
                 data={data.quarters.map((q) => ({
                   ...q,
-                  label: q.partial ? `${q.label} (to date)` : q.label,
+                  label: q.partial ? `${q.label}*` : q.label,
                   cur: metric === 'units' ? q.units : q.value,
                   ly: metric === 'units' ? q.last_year_units : q.last_year_value,
                 }))}
                 x="label"
-                a="cur"
-                b="ly"
-                aLabel="This year"
-                bLabel="Last year"
+                a="ly"
+                b="cur"
+                aLabel="Last year"
+                bLabel="This year"
                 height={240}
                 format={fmtCompact}
               />

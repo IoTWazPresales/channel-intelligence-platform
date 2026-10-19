@@ -141,19 +141,19 @@ export function ChannelIntelligenceWorkspace() {
       },
       {
         field: 'velocity_4wk',
-        headerName: 'Vel 4wk',
+        headerName: 'Per week (4 wks)',
         width: 100,
         valueFormatter: (p) => (p.value == null ? '—' : Number(p.value).toFixed(2)),
       },
       {
         field: 'velocity_13wk',
-        headerName: 'Vel 13wk',
+        headerName: 'Per week (13 wks)',
         width: 100,
         valueFormatter: (p) => (p.value == null ? '—' : Number(p.value).toFixed(2)),
       },
       {
         field: 'weeks_of_cover',
-        headerName: 'WoC',
+        headerName: 'Weeks of cover',
         width: 90,
         valueFormatter: (p) => (p.value == null ? 'n/a' : Number(p.value).toFixed(1)),
       },

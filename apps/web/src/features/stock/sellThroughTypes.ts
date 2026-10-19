@@ -60,6 +60,8 @@ export type TrendPoint = {
   compare_units?: number;
   compare_value?: number;
   compare_label?: string;
+  /** Customers selling in this view that have not reported up to this period's end. */
+  incomplete_customers?: string[];
 };
 
 export type SellThroughOverview = {
@@ -81,6 +83,7 @@ export type SellThroughOverview = {
     units_without_price: number;
     compare_units: number | null;
     compare_value: number | null;
+    compare_partial?: boolean;
     units_change_pct: number | null;
     value_change_pct: number | null;
     stock_on_hand: number | null;
