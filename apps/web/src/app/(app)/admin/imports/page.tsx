@@ -743,6 +743,7 @@ function AdminImportsPageContent() {
   });
   const cstJobRunning = (cstJobDetail?.status ?? '').trim().toLowerCase() === 'running';
   const cstJobLoaded = importJobApplyIsLoaded(cstJobDetail?.stage ?? '', cstJobDetail?.status ?? '');
+  const cstJobCustomerId = Number(cstJobDetail?.staged_metadata?.customer_id) || null;
   const { data: cstLoadReport } = useImportJobLoadReport(
     lastJobId != null && selectedSlug === 'customer_sell_through' ? lastJobId : null
   );
@@ -2938,6 +2939,7 @@ function AdminImportsPageContent() {
         open={cstBulkUploadOpen}
         onClose={() => setCstBulkUploadOpen(false)}
         importMode={importMode}
+        initialCustomerId={Number(searchParams.get('customer')) || null}
         onJobsCreated={(ids) => {
           if (ids[0] != null) {
             setLastJobId(ids[0]);
@@ -4729,7 +4731,12 @@ function AdminImportsPageContent() {
                 stage={cstJobDetail?.stage ?? ''}
                 description={cstLoadedSummary}
                 unresolvedNotes={cstNotLoadedNotes}
-                viewLink={{ href: '/channel-intelligence', label: 'Open sell-through' }}
+                viewLink={{
+                  href: cstJobCustomerId
+                    ? `/channel-intelligence?customers=${cstJobCustomerId}&period=last_13_weeks`
+                    : '/channel-intelligence',
+                  label: 'Open sell-through for this customer',
+                }}
                 onStartNewImport={() => {
                   setActiveStep(0);
                   setSelectedSlug(null);

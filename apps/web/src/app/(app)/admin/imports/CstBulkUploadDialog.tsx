@@ -28,7 +28,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { apiGet, apiPatch, apiPostFormData, safeDisplayError } from '@/lib/api';
 import {
@@ -125,6 +125,8 @@ export type CstBulkUploadDialogProps = {
   onJobsCreated: (jobIds: number[]) => void;
   /** The import mode picked in the wizard: apply loads matched rows as each file is read. */
   importMode?: 'validate' | 'apply';
+  /** Reporting customer to start with (from a ?customer= link). */
+  initialCustomerId?: number | null;
 };
 
 /** The older single product column; offered only while a layout still uses it. */
@@ -243,9 +245,19 @@ function SavedLayouts({ customerId }: { customerId: number }) {
  * saved for the customer. All files then load into the one sell-through table with its standard columns:
  * files that share a report structure become one import job (per-file period, one steward pass).
  */
-export function CstBulkUploadDialog({ open, onClose, onJobsCreated, importMode = 'validate' }: CstBulkUploadDialogProps) {
+export function CstBulkUploadDialog({
+  open,
+  onClose,
+  onJobsCreated,
+  importMode = 'validate',
+  initialCustomerId = null,
+}: CstBulkUploadDialogProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [customerId, setCustomerId] = useState<number | ''>('');
+  // A "missing report" link from the Sell-through tab opens the upload for that customer.
+  useEffect(() => {
+    if (open && initialCustomerId != null) setCustomerId((c) => (c === '' ? initialCustomerId : c));
+  }, [open, initialCustomerId]);
   const [files, setFiles] = useState<File[]>([]);
   const [preview, setPreview] = useState<BatchProposeResponse | null>(null);
   const [results, setResults] = useState<BatchJobsResponse | null>(null);

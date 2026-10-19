@@ -350,6 +350,11 @@ def load_cst_read_model(
             "message": "No fact_customer_sellthrough rows for filters",
         }
 
+    # Warren 2026-10-19: every row is measured up to the same day (the latest figures in view), so
+    # a product with nothing since January reads as not selling now, not as "ok" in January.
+    if as_of is None:
+        as_of = max(r.period_start_date for r in rows)
+
     grouped: dict[tuple[int, int, str | None], list[Any]] = defaultdict(list)
     for r in rows:
         key = (int(r.customer_id), int(r.product_id), _site_key(r.site_label))
@@ -369,11 +374,16 @@ def load_cst_read_model(
                 "customer_id": cid,
                 "product_id": pid,
                 "site_label": site,
+                "last_period": max(o.period_start for o in obs).isoformat(),
                 **metrics,
             }
         )
 
-    items.sort(key=lambda x: (x["customer_id"], x["product_id"], x["site_label"] or ""))
+    # Most recently reported first, then the busiest sellers.
+    items.sort(
+        key=lambda x: (x["last_period"], x.get("velocity_4wk") or 0.0, -x["customer_id"], -x["product_id"]),
+        reverse=True,
+    )
     total = len(items)
     start = max(0, (page - 1) * page_size)
     page_items = items[start : start + page_size]
@@ -385,6 +395,7 @@ def load_cst_read_model(
         "page": page,
         "page_size": page_size,
         "data_unavailable": False,
+        "as_of": as_of.isoformat(),
         "grain_policy": GRAIN_POLICY,
         "thresholds": {
             "min_observed_weeks": min_observed_weeks,

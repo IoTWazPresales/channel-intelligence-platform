@@ -12,6 +12,7 @@ import {
 } from '@mui/material';
 import type { ColDef } from 'ag-grid-community';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
@@ -35,6 +36,7 @@ type IntelRow = {
   product_name?: string | null;
   sales_model_name?: string | null;
   site_label: string | null;
+  last_period?: string | null;
   data_state: string;
   reason: string | null;
   velocity_4wk: number | null;
@@ -53,6 +55,7 @@ type IntelResponse = {
   page: number;
   page_size: number;
   data_unavailable: boolean;
+  as_of?: string;
   grain_policy: string;
   message?: string;
   thresholds?: Record<string, unknown>;
@@ -73,6 +76,9 @@ function productLabel(row: Pick<IntelRow, 'product_id' | 'product_sku' | 'produc
 
 export function ChannelIntelligenceWorkspace() {
   const [customer, setCustomer] = useState<CustomerPick | null>(null);
+  // Links from the Sell-through tab carry ?customer_id=; cleared once a customer is picked here.
+  const search = useSearchParams();
+  const [linkedCustomerId, setLinkedCustomerId] = useState<string | null>(() => search.get('customer_id'));
   const [product, setProduct] = useState<ProductPick | null>(null);
   const [site, setSite] = useState('');
   const [selected, setSelected] = useState<IntelRow | null>(null);
@@ -81,12 +87,13 @@ export function ChannelIntelligenceWorkspace() {
 
   const params = new URLSearchParams();
   if (customer) params.set('customer_id', String(customer.id));
+  else if (linkedCustomerId) params.set('customer_id', linkedCustomerId);
   if (product) params.set('product_id', String(product.id));
   if (site.trim()) params.set('site_label', site.trim());
-  params.set('page_size', '200');
+  params.set('page_size', '500');
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['channel-intelligence', customer?.id ?? '', product?.id ?? '', site],
+    queryKey: ['channel-intelligence', customer?.id ?? linkedCustomerId ?? '', product?.id ?? '', site],
     queryFn: ({ signal }) =>
       apiGet<IntelResponse>(`/api/v1/channel-intelligence?${params.toString()}`, { signal }),
   });
@@ -124,7 +131,14 @@ export function ChannelIntelligenceWorkspace() {
         valueGetter: (p) => (p.data ? productLabel(p.data) : ''),
       },
       { field: 'site_label', headerName: 'Site', flex: 1, minWidth: 120 },
-      { field: 'data_state', headerName: 'State', width: 140 },
+      { field: 'last_period', headerName: 'Last figures', width: 120 },
+      {
+        field: 'data_state',
+        headerName: 'State',
+        width: 150,
+        valueFormatter: (p) =>
+          p.value === 'insufficient_data' ? 'Too little history' : p.value === 'ok' ? 'OK' : String(p.value ?? ''),
+      },
       {
         field: 'velocity_4wk',
         headerName: 'Vel 4wk',
@@ -150,7 +164,7 @@ export function ChannelIntelligenceWorkspace() {
         valueGetter: (p) => {
           const flags: string[] = [];
           if (p.data?.aged_dead_stock) flags.push('aged');
-          if (p.data?.data_state === 'insufficient_data') flags.push('sparse');
+          if (p.data?.data_state === 'insufficient_data') flags.push('under 4 weeks');
           return flags.join(', ') || '—';
         },
       },
@@ -162,9 +176,10 @@ export function ChannelIntelligenceWorkspace() {
   return (
     <Box data-testid="channel-intelligence-workspace">
       <Alert severity="info" variant="outlined" sx={{ mt: 2, mb: 2 }}>
-        Retailer sell-through and customer inventory from retailer files. Elasticity and competitor
-        pricing are out of scope. Grain policy: {data?.grain_policy ?? '…'}. Sparse CST →
-        insufficient_data (never false aged flags).
+        One row per customer, product and store, measured up to the latest figures loaded. Sales per week
+        are averaged over the last 4 and 13 weeks (monthly figures count as a weekly average). A row needs
+        at least {String(data?.thresholds?.min_observed_weeks ?? 4)} weeks of history before cover and trend are worked out.
+        For charts, missing reports and SKUs that need action, use the Sell-through tab.
       </Alert>
       <Box sx={{ mb: 2 }}>
       <ScopeBar
@@ -203,7 +218,23 @@ export function ChannelIntelligenceWorkspace() {
           onChange={(e) => setSite(e.target.value)}
           sx={{ width: 180 }}
         />
-        <Chip size="small" label={`rows: ${data?.total ?? '…'}`} />
+        {!customer && linkedCustomerId ? (
+          <Chip
+            size="small"
+            color="primary"
+            label={`Customer: ${data?.items?.[0]?.customer_name ?? linkedCustomerId}`}
+            onDelete={() => setLinkedCustomerId(null)}
+          />
+        ) : null}
+        <Chip
+          size="small"
+          label={
+            data && data.total > data.items.length
+              ? `showing ${data.items.length} of ${data.total} — filter to narrow`
+              : `rows: ${data?.total ?? '…'}`
+          }
+        />
+        {data?.as_of ? <Chip size="small" variant="outlined" label={`measured to ${data.as_of}`} /> : null}
         {data?.data_unavailable ? <Chip size="small" color="warning" label="Figures not available" /> : null}
       </Stack>
           </>
