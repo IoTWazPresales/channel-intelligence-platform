@@ -155,3 +155,47 @@ def test_a_layout_that_maps_only_the_customers_product_code_stages_its_rows() ->
     assert res.error is None
     assert [(r["raw_article_token"], r["raw_product_token"]) for r in res.rows] == [("ART-7", None)]
     assert res.skipped_rows == {"missing_product_or_units": 1}
+
+
+# --- N-0111 (Warren 2026-10-19): several columns mapped to one identifier target --------------------
+
+EAN_UPC = {
+    "EAN": "raw_barcode_token",
+    "UPC": "raw_barcode_token",
+    "ModelNumber": "raw_sales_model_token",
+    "ASIN": "raw_article_token",
+    "Units": "units_sold",
+}
+
+
+def test_ean_and_upc_both_mapped_to_barcode_use_the_first_one_that_has_a_value() -> None:
+    res = _parse(
+        _csv(
+            ["EAN", "UPC", "ModelNumber", "ASIN", "Units"],
+            [
+                ["4711000000011", "", "X1", "B0A", 2],  # EAN present
+                ["", "123456789012", "X1", "B0B", 3],  # only the UPC: used as the barcode
+                ["", "", "X1", "B0C", 4],  # neither: still staged on its sales model
+            ],
+        ),
+        EAN_UPC,
+    )
+    assert res.error is None and len(res.rows) == 3
+    assert [r["raw_barcode_token"] for r in res.rows] == ["4711000000011", "123456789012", None]
+    assert all(r["raw_sales_model_token"] == "X1" for r in res.rows)
+
+
+def test_the_barcode_column_that_comes_first_in_the_file_wins_when_both_are_filled() -> None:
+    mapping = {**EAN_UPC}
+    swapped = _parse(
+        _csv(["UPC", "EAN", "ModelNumber", "ASIN", "Units"], [["123456789012", "4711000000011", "X1", "B0A", 2]]),
+        mapping,
+    )
+    assert swapped.rows[0]["raw_barcode_token"] == "123456789012"
+
+
+def test_a_row_with_only_a_upc_is_staged_even_when_the_ean_column_is_the_resolved_one() -> None:
+    # Previously the later header overwrote the earlier one and the empty column hid the value.
+    res = _parse(_csv(["EAN", "UPC", "Units"], [["", "123456789012", 5]]), {"EAN": "raw_barcode_token", "UPC": "raw_barcode_token", "Units": "units_sold"})
+    assert res.error is None and len(res.rows) == 1
+    assert res.rows[0]["raw_barcode_token"] == "123456789012"
