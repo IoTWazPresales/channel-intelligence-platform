@@ -190,3 +190,33 @@ def get_overview(
             today=commercial_tenant_profile.reporting_today(tenant_id),
             vat_rate=commercial_tenant_profile.vat_rate_pct(tenant_id),
         )
+
+
+@router.get("/product/{product_id}")
+def get_product_detail(
+    product_id: int,
+    as_of: date | None = Query(default=None),
+    vat: str | None = Query(default=None),
+    customer_ids: str | None = Query(default=None),
+    user: dict = Depends(get_current_user),
+):
+    """One product across customers: weekly sales, stock with its date and stores, and prices."""
+    from app.services.channel_intelligence.sell_through_product import product_detail
+
+    tenant_id = tenant_id_from_user(user)
+    vat_basis = vat or commercial_tenant_profile.sales_value_vat_basis(tenant_id)
+    if vat_basis not in ("ex_vat", "inc_vat"):
+        raise HTTPException(status_code=400, detail="vat must be ex_vat or inc_vat")
+    with SessionLocal() as session:
+        out = product_detail(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            as_of=as_of or commercial_tenant_profile.reporting_today(tenant_id),
+            vat=vat_basis,
+            vat_rate=commercial_tenant_profile.vat_rate_pct(tenant_id),
+            customer_ids=_ints(customer_ids) or None,
+        )
+    if out is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return out

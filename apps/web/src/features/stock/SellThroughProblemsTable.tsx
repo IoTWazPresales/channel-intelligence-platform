@@ -2,7 +2,7 @@
 
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import { Box, Chip, Stack, Typography } from '@mui/material';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { Sparkline } from '@/features/workbench-ui/charts';
@@ -39,13 +39,15 @@ export function SellThroughProblemsTable({
   problems,
   reason,
   onReason,
+  onOpen,
 }: {
   problems: SellThroughOverview['problems'];
   reason: ProblemReason | null;
   onReason: (r: ProblemReason | null) => void;
+  /** Opens the product detail panel for a row. */
+  onOpen?: (row: ProblemRow) => void;
 }) {
   const gridChrome = useFactGridChrome('sell-through.problems');
-  const [selected, setSelected] = useState<ProblemRow | null>(null);
   const rows = useMemo(
     () => (reason ? problems.rows.filter((r) => r.reason === reason) : problems.rows),
     [problems.rows, reason],
@@ -159,16 +161,13 @@ export function SellThroughProblemsTable({
           height={Math.min(520, 56 + rows.length * 36)}
           gridOptions={{
             getRowId: (p) => `${p.data.customer_id}-${p.data.product_id}`,
-            onRowClicked: (e) => setSelected(e.data ?? null),
+            onRowClicked: (e) => {
+              if (e.data) onOpen?.(e.data);
+            },
           }}
         />
       )}
-      {selected ? (
-        <Typography variant="caption" color="text.secondary">
-          {selected.customer_name} · {selected.product}: judged on figures up to {selected.judged_to}
-          {selected.lifecycle ? ` · lifecycle ${selected.lifecycle}` : ''}.
-        </Typography>
-      ) : null}
+
     </Stack>
   );
 }

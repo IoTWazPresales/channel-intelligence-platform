@@ -39,7 +39,8 @@ import {
   type SellThroughGrain,
   type VatBasis,
 } from './sellThroughFilters';
-import type { ProblemReason, SellThroughFilterOptions, SellThroughOverview as Overview } from './sellThroughTypes';
+import { SellThroughProductPanel } from './SellThroughProductPanel';
+import type { ProblemReason, ProblemRow, SellThroughFilterOptions, SellThroughOverview as Overview } from './sellThroughTypes';
 
 const PAGE = '/channel-intelligence';
 const GRAIN_LABEL: Record<SellThroughGrain, string> = { day: 'Day', week: 'Week', month: 'Month', quarter: 'Quarter' };
@@ -99,6 +100,7 @@ export function SellThroughOverview() {
   const [filters, setFilters] = useFilterState();
   const [metric, setMetric] = useState<'units' | 'value'>('units');
   const [reason, setReason] = useState<ProblemReason | null>(null);
+  const [panel, setPanel] = useState<{ productId: number; focus: ProblemRow | null } | null>(null);
 
   const options = useQuery({
     queryKey: ['sell-through', 'filters'],
@@ -420,6 +422,7 @@ export function SellThroughOverview() {
                   labelHeader="Product"
                   valueHeader="Units"
                   labelWidth={260}
+                  onRowClick={(d) => d.key && setPanel({ productId: Number(d.key), focus: null })}
                   testId="sellthrough-top-sellers"
                 />
               ) : (
@@ -451,7 +454,12 @@ export function SellThroughOverview() {
             title="SKUs needing attention"
             subtitle="Per customer, judged on each customer's own latest figures. Replenishment weeks are set per customer in Sell-through steward → Key accounts."
           >
-            <SellThroughProblemsTable problems={data.problems} reason={reason} onReason={setReason} />
+            <SellThroughProblemsTable
+              problems={data.problems}
+              reason={reason}
+              onReason={setReason}
+              onOpen={(row) => setPanel({ productId: row.product_id, focus: row })}
+            />
           </Panel>
 
           <Box id="sellthrough-reports-grid" />
@@ -477,6 +485,13 @@ export function SellThroughOverview() {
               Detail table by customer, product and site
             </Button>
           </Stack>
+          <SellThroughProductPanel
+            productId={panel?.productId ?? null}
+            focus={panel?.focus}
+            asOf={data.filters.date_to}
+            vat={data.filters.vat}
+            onClose={() => setPanel(null)}
+          />
         </>
       ) : overview.isLoading ? (
         <Box sx={{ p: 3, display: 'flex', justifyContent: 'center' }}>

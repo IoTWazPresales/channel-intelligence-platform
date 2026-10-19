@@ -113,6 +113,24 @@ const OVERVIEW = {
 const apiGet = vi.fn(async (url: string) => {
   if (url.startsWith('/api/v1/sell-through/filters')) return FILTERS;
   if (url.startsWith('/api/v1/sell-through/overview')) return OVERVIEW;
+  if (url.startsWith('/api/v1/sell-through/product/1'))
+    return {
+      product: {
+        id: 1, label: 'Model A (SKU-A)', sku: 'SKU-A', name: 'Model A', sales_model_name: 'Model A', part_number: null,
+        ean: '600', upc: null, business_unit: 'NB', category: null, series: null, product_line: null, lifecycle: null,
+        launch_date: null, retired_date: null, price_band: null, specs: { RAM: '16GB' },
+      },
+      as_of: '2026-10-18',
+      vat: 'ex_vat',
+      customers: [
+        {
+          customer_id: 299, customer_name: 'Amazon', weekly_units: [10, 10], units_26w: 20, rate_4w: 10,
+          stock_on_hand: 20, stock_date: '2025-06-15', stock_age_days: 490, on_order: 0,
+          stock_sites: [{ site: 'DC North', soh: 20 }], price_history: [{ period: '2026-10-12', price: 999 }], latest_price: 999,
+        },
+      ],
+      lowest_price_customer: { customer_name: 'Amazon', price: 999 },
+    };
   if (url.startsWith('/api/v1/sell-through/narrative')) return { source: 'rules', text: 'x', reason: 'AI assist is off in this installation' };
   return {};
 });
@@ -188,6 +206,17 @@ describe('Sell-through tab (Warren 2026-10-19)', () => {
     const call = apiGet.mock.calls.map((c) => c[0]).find((u) => u.includes('/overview?'))!;
     expect(call).toContain('f.spec%3ARAM=16GB');
     expect(call).toContain('product_ids=9');
+  });
+
+  it('opens the product panel from a SKU needing attention', async () => {
+    renderPage();
+    const table = await screen.findByTestId('sellthrough-problems');
+    await userEvent.click(await within(table).findByText('Model A (SKU-A)'));
+    const panel = await screen.findByTestId('sellthrough-panel-focus');
+    expect(panel).toHaveTextContent('Needs replenishing at Amazon');
+    expect(await screen.findByText(/reported 2025-06-15 \(490 days old\)/)).toBeInTheDocument();
+    expect(screen.getByText('Stores: DC North 20')).toBeInTheDocument();
+    expect(screen.getByText('16GB')).toBeInTheDocument();
   });
 
   it('says why the AI summary is not available', async () => {

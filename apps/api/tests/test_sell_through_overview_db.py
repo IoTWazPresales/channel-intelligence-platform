@@ -276,3 +276,24 @@ def test_value_change_hidden_when_estimates_differ(session: Session):
     assert out["kpis"]["value_change_pct"] is None
     assert out["kpis"]["units_change_pct"] == pytest.approx(0)
     assert any("not like for like" in n for n in out["notes"])
+
+
+def test_product_detail_across_customers(session: Session):
+    from app.services.channel_intelligence.sell_through_product import product_detail
+
+    db = session
+    a = _customer(db, "STO-DA")
+    b = _customer(db, "STO-DB")
+    p = _product(db, "PD", specs_json={"RAM": "16GB"})
+    _weeks(db, a, p, {i: 4 for i in range(6)}, soh_now=20)
+    for i in range(6):
+        _row(db, b, p, LAST_WEEK - timedelta(weeks=i), 2, price=115.0, vat="inc_vat")
+    db.flush()
+    out = product_detail(db, tenant_id=TENANT, product_id=p, as_of=date(2026, 10, 18), vat="ex_vat", vat_rate=0.15)
+    assert out["product"]["specs"] == {"RAM": "16GB"}
+    rows = {r["customer_id"]: r for r in out["customers"]}
+    assert rows[a]["units_26w"] == pytest.approx(24) and rows[a]["stock_on_hand"] == 20
+    assert rows[a]["stock_date"] == LAST_WEEK.isoformat()
+    assert rows[b]["latest_price"] == pytest.approx(100.0)  # 115 incl. VAT shown excl.
+    assert rows[a]["rate_4w"] == pytest.approx(4)
+    assert out["customers"][0]["customer_id"] == a  # most units first
