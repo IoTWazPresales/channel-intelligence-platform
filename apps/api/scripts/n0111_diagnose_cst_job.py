@@ -10,7 +10,9 @@ from __future__ import annotations
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_API = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _API)
+os.chdir(_API)  # uploads are stored relative to apps/api
 
 from sqlalchemy import text  # noqa: E402
 
