@@ -493,3 +493,28 @@ def test_rows_mapped_before_the_fix_are_repaired_and_loaded(session: Session) ->
     loaded = load_steward_resolved_cst_lines(session, jid)
     assert loaded is not None and loaded["applied"] == 1
     assert _fact_products(session, cid) == [a.id]
+
+
+def test_an_upload_in_validate_mode_loads_nothing_until_load_matched_rows(session: Session) -> None:
+    """N-0111: the sell-through upload used to ignore the wizard's import mode (always validate) and
+    nothing on the page could load the matched rows. The load endpoint's steps load them once."""
+    from app.services.imports.cst_mapping_candidates import mark_steward_mapped_cst_lines_resolved
+    from app.services.imports.customer_sell_through_apply import apply_customer_sellthrough_staging
+
+    a, _b = _two_products(session)
+    cid = _customer(session, "N0111M-VALIDATE-LOAD")
+    data = _csv(HEADER, [[a.part_number, None, None, 3, 20, DAY]])
+    info = inspect_files_for_customer(session, cid, [("file.csv", data)])[0]
+    out = create_customer_upload_jobs(
+        session,
+        customer_id=cid,
+        filenames_and_bytes=[("file.csv", data)],
+        new_layouts=[{"signature": info["layout_signature"], "name": "L", "field_mapping": SLOTS}],
+        import_mode="validate",
+    )
+    jid = out[0]["import_job_id"]
+    assert _fact_products(session, cid) == []
+    mark_steward_mapped_cst_lines_resolved(session, jid)
+    assert apply_customer_sellthrough_staging(session, jid).applied == 1
+    assert _fact_products(session, cid) == [a.id]
+    assert apply_customer_sellthrough_staging(session, jid).applied == 0  # never twice

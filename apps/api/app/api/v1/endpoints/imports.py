@@ -1154,6 +1154,7 @@ async def cst_batch_create_jobs(
     cst_sales_only: str = Form(default=""),
     cst_stock_only: str = Form(default=""),
     cst_confirmed_year: str = Form(default=""),
+    import_mode: str = Form(default="validate"),
 ):
     """Upload sell-through files for one reporting customer (N-0111, Warren 2026-10-16).
 
@@ -1195,6 +1196,8 @@ async def cst_batch_create_jobs(
                 sales_only=_truthy_form(cst_sales_only),
                 stock_only=_truthy_form(cst_stock_only),
                 confirmed_year=confirmed_year,
+                # The import mode picked in the wizard: apply loads matched rows as the file is read.
+                import_mode="apply" if (import_mode or "").strip().lower() == "apply" else "validate",
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
@@ -2042,6 +2045,35 @@ async def resolve_cst_candidate(
         payload=result if isinstance(result, dict) else None,
     )
     return result
+
+
+@router.post("/jobs/{job_id}/cst-load", status_code=200, dependencies=_STEWARD_WRITE)
+def cst_load_matched_rows(job_id: int, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    """Load a sell-through job's matched rows into the facts (N-0111).
+
+    For a job uploaded in validate mode, and for rows matched in the steward. Only rows not loaded
+    yet are written; unmatched and ignored rows stay out. The job is switched to apply mode, so
+    later steward mappings load as they are made.
+    """
+    from app.services.imports.cst_mapping_candidates import mark_steward_mapped_cst_lines_resolved
+    from app.services.imports.customer_sell_through_apply import apply_customer_sellthrough_staging
+
+    with SessionLocal() as sync_db:
+        job = _get_cst_job_sync(sync_db, job_id)
+        marked = mark_steward_mapped_cst_lines_resolved(sync_db, job_id)
+        summary = apply_customer_sellthrough_staging(sync_db, job_id)
+        if not summary.errors:
+            job.import_mode = "apply"
+        sync_db.commit()
+    out = {
+        "import_job_id": job_id,
+        "marked_resolved": marked,
+        "applied": summary.applied,
+        "skipped_unresolved": summary.skipped_unresolved,
+        "errors": list(summary.errors or []),
+    }
+    record_steward_audit_sync(user, action="cst_load", importer="cst", import_job_id=job_id, payload=out)
+    return out
 
 
 @router.post("/jobs/{job_id}/cst-candidates/{candidate_id}/ignore", status_code=200, dependencies=_STEWARD_WRITE)

@@ -2872,6 +2872,7 @@ function AdminImportsPageContent() {
       <CstBulkUploadDialog
         open={cstBulkUploadOpen}
         onClose={() => setCstBulkUploadOpen(false)}
+        importMode={importMode}
         onJobsCreated={(ids) => {
           if (ids[0] != null) {
             setLastJobId(ids[0]);

@@ -54,6 +54,7 @@ import {
   type CstMappingState,
 } from './cstImportSteward.config';
 import { CST_IMPORT_ENGINE_CONFIG } from './cstImportSteward.engineConfig';
+import { importJobLoadReportQueryKey } from './ImportJobLoadReport';
 import { useCstCandidatesPage } from './useCstCandidatesPage';
 
 export type CstStewardRow = ImportStewardCandidateRowBase & {
@@ -212,6 +213,13 @@ export function CstImportJobResolutionSection({
     onInvalidateProp?.();
   }, [importJobId, onInvalidateProp, qc]);
 
+  /** After a map, ignore or load: refresh the candidates, the plan (no stale Ready count) and the load report. */
+  const refreshAfterSteward = useCallback(() => {
+    onInvalidate();
+    void qc.invalidateQueries({ queryKey: importJobLoadReportQueryKey(importJobId) });
+    void qc.refetchQueries({ queryKey: CST_IMPORT_ENGINE_CONFIG.resolutionSuggestionsQueryKeyPrefix(importJobId) });
+  }, [importJobId, onInvalidate, qc]);
+
   const candidatesPage = useCstCandidatesPage(importJobId, activeTab, statusParam);
 
   const mappingStateQuery = useQuery({
@@ -296,7 +304,7 @@ export function CstImportJobResolutionSection({
   const plan = useStewardResolutionPlan({
     importJobId,
     candidates: filteredRows,
-    onInvalidate,
+    onInvalidate: refreshAfterSteward,
     setSelectedIds,
     setPlanApplySummary,
     config: CST_IMPORT_ENGINE_CONFIG,
@@ -308,7 +316,7 @@ export function CstImportJobResolutionSection({
     selectedIds,
     setSelectedIds,
     setBulkMode,
-    onInvalidate,
+    onInvalidate: refreshAfterSteward,
     onPlanRefresh: () => plan.refreshSuggestions(),
     onEvictResolvedCandidates: plan.evictResolvedCandidates,
     onShrinkPlanScope: plan.shrinkPlanScope,
@@ -392,9 +400,9 @@ export function CstImportJobResolutionSection({
         entity_id: args.entityId,
       }),
     onSuccess: () => {
-      setActionMsg('Mapped candidate. Re-run process if staging counts look stale.');
+      setActionMsg('Mapped. Its rows are matched; use Load matched rows to put them in sell-through.');
       setActionFeedback(null);
-      onInvalidate();
+      refreshAfterSteward();
     },
     onError: (e) => setActionFeedback({ message: safeDisplayError(e), severity: 'error' }),
   });
@@ -405,12 +413,34 @@ export function CstImportJobResolutionSection({
     onSuccess: () => {
       setActionMsg('Ignored candidate.');
       setActionFeedback(null);
-      onInvalidate();
+      refreshAfterSteward();
+    },
+    onError: (e) => setActionFeedback({ message: safeDisplayError(e), severity: 'error' }),
+  });
+
+  const loadMutation = useMutation({
+    mutationFn: async () =>
+      apiPost<{ applied: number; skipped_unresolved: number; errors: string[] }>(
+        `/api/v1/imports/jobs/${importJobId}/cst-load`,
+        {}
+      ),
+    onSuccess: (r) => {
+      if (r.errors?.length) {
+        setActionFeedback({ message: r.errors.join(' · '), severity: 'error' });
+      } else {
+        setActionFeedback(null);
+        setActionMsg(
+          `Loaded ${r.applied.toLocaleString()} matched row(s) into sell-through. ` +
+            `${r.skipped_unresolved.toLocaleString()} row(s) stay out (not matched or ignored).`
+        );
+      }
+      refreshAfterSteward();
     },
     onError: (e) => setActionFeedback({ message: safeDisplayError(e), severity: 'error' }),
   });
 
   const busy =
+    loadMutation.isPending ||
     resolveMutation.isPending ||
     ignoreMutation.isPending ||
     bulk.bulkPreview.isPending ||
@@ -442,6 +472,22 @@ export function CstImportJobResolutionSection({
           {safeDisplayError(candidatesPage.query.error)}
         </Alert>
       ) : null}
+
+      <Stack direction="row" spacing={1} alignItems="center" data-testid="cst-load-matched">
+        <StewardPendingButton
+          variant="contained"
+          pending={loadMutation.isPending}
+          disabled={busy}
+          onClick={() => loadMutation.mutate()}
+          data-testid="cst-load-matched-button"
+        >
+          Load matched rows
+        </StewardPendingButton>
+        <Typography variant="caption" color="text.secondary">
+          Puts every matched row of this job into sell-through. Rows already loaded are not loaded twice;
+          unmatched and ignored rows stay out.
+        </Typography>
+      </Stack>
 
       <StewardResolutionPlanToolbar
         plan={{

@@ -123,6 +123,8 @@ export type CstBulkUploadDialogProps = {
   onClose: () => void;
   /** First created batch job id — wizard continues with CST steward. */
   onJobsCreated: (jobIds: number[]) => void;
+  /** The import mode picked in the wizard: apply loads matched rows as each file is read. */
+  importMode?: 'validate' | 'apply';
 };
 
 /** The older single product column; offered only while a layout still uses it. */
@@ -241,7 +243,7 @@ function SavedLayouts({ customerId }: { customerId: number }) {
  * saved for the customer. All files then load into the one sell-through table with its standard columns:
  * files that share a report structure become one import job (per-file period, one steward pass).
  */
-export function CstBulkUploadDialog({ open, onClose, onJobsCreated }: CstBulkUploadDialogProps) {
+export function CstBulkUploadDialog({ open, onClose, onJobsCreated, importMode = 'validate' }: CstBulkUploadDialogProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [customerId, setCustomerId] = useState<number | ''>('');
   const [files, setFiles] = useState<File[]>([]);
@@ -399,6 +401,7 @@ export function CstBulkUploadDialog({ open, onClose, onJobsCreated }: CstBulkUpl
         );
       }
       appendCstUploadOptions(fd, options);
+      fd.append('import_mode', importMode);
       return apiPostFormData<BatchJobsResponse>('/api/v1/imports/cst/batch-jobs', fd);
     },
     onSuccess: (data) => {

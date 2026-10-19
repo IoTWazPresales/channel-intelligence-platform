@@ -141,6 +141,8 @@ describe('CstBulkUploadDialog (N-0111: pick a reporting customer, not a source)'
     expect((fd as FormData).get('customer_id')).toBe('20');
     expect((fd as FormData).has('source_id')).toBe(false);
     expect((fd as FormData).has('layouts')).toBe(false);
+    // The wizard's import mode goes with the upload (validate unless the wizard says apply).
+    expect((fd as FormData).get('import_mode')).toBe('validate');
   });
 
   it('an unrecognised layout opens the mapping step, blocks upload until the product is mapped, then saves it', async () => {

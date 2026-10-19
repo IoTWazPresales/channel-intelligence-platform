@@ -28,6 +28,14 @@ def _empty_combined(job_id: int) -> dict[str, Any]:
     }
 
 
+def _already_done(session: Session, job_id: int, candidate_id: int) -> bool:
+    from app.models.import_distributor_si import ImportEntityMappingCandidate
+    from app.services.imports.cst_mapping_candidates import _CST_TERMINAL_STATUSES
+
+    cand = session.get(ImportEntityMappingCandidate, int(candidate_id))
+    return cand is not None and int(cand.import_job_id) == int(job_id) and cand.status in _CST_TERMINAL_STATUSES
+
+
 def run_cst_resolution_plan_apply_orchestrator(
     session: Session,
     job_id: int,
@@ -44,7 +52,13 @@ def run_cst_resolution_plan_apply_orchestrator(
 
     for idx, cid in enumerate(candidate_ids):
         row = rows_by_cid.get(cid)
-        if row is None:
+        if row is None and _already_done(session, job_id, cid):
+            # Mapped or ignored since the plan was shown (the page's plan was stale): nothing to do.
+            combined["skipped_not_ready"] += 1
+            combined["results"].append(
+                {"candidate_id": cid, "status": "skipped_not_ready", "detail": "already_done"}
+            )
+        elif row is None:
             combined["failed"] += 1
             combined["results"].append(
                 {"candidate_id": cid, "status": "failed", "detail": "candidate_not_found"}
