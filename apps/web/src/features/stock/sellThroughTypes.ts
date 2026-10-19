@@ -22,6 +22,8 @@ export type SellThroughFilterOptions = {
   calendar: { type: string; year: { label: string; start: string; end: string } };
   vat: VatBasis;
   vat_rate_pct: number;
+  dimensions?: Array<{ key: string; label: string; group: string; values: string[] }>;
+  max_dimensions?: number;
 };
 
 export type ProblemReason = 'out_of_stock' | 'needs_replen' | 'dropped' | 'aged' | 'stopped';

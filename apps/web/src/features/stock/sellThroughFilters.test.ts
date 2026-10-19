@@ -15,22 +15,34 @@ describe('sell-through filters in the address', () => {
     expect(resolveWindow(f, PRESETS)).toEqual({ dateFrom: '2026-07-20', dateTo: '2026-10-18', grain: 'week' });
   });
 
-  it('round-trips customers, product groups and custom dates', () => {
+  it('round-trips customers, one product, added filters and custom dates', () => {
     const f = readFilters(
-      new URLSearchParams('from=2026-01-01&to=2026-06-30&customers=299,12&bu=NB|Gaming&compare=none&vat=inc_vat'),
+      new URLSearchParams(
+        'from=2026-01-01&to=2026-06-30&customers=299,12&product=5&pl=X1400VA&f.spec%3ARAM=16GB&f.spec%3ARAM=32GB&f.site=&compare=none&vat=inc_vat',
+      ),
     );
     expect(f.preset).toBeNull();
     expect(f.customers).toEqual([299, 12]);
-    expect(f.businessUnits).toEqual(['NB', 'Gaming']);
-    expect(writeFilters(f).toString()).toBe(
-      'from=2026-01-01&to=2026-06-30&compare=none&vat=inc_vat&customers=299%2C12&bu=NB%7CGaming',
-    );
+    expect(f.product).toEqual({ id: 5, label: 'X1400VA' });
+    expect(f.dims).toEqual([
+      { key: 'spec:RAM', values: ['16GB', '32GB'] },
+      { key: 'site', values: [] },
+    ]);
+    const again = readFilters(writeFilters(f));
+    expect(again).toEqual(f);
     const w = resolveWindow(f, PRESETS);
     expect(w).toEqual({ dateFrom: '2026-01-01', dateTo: '2026-06-30', grain: 'week' });
     const q = new URLSearchParams(overviewQuery(f, w!));
     expect(q.get('customer_ids')).toBe('299,12');
-    expect(q.get('business_units')).toBe('NB|Gaming');
+    expect(q.get('product_ids')).toBe('5');
+    expect(q.getAll('f.spec:RAM')).toEqual(['16GB', '32GB']);
+    expect(q.has('f.site')).toBe(false); // an added filter with nothing picked does not filter
     expect(q.get('vat')).toBe('inc_vat');
+  });
+
+  it('reads links written before added filters', () => {
+    const f = readFilters(new URLSearchParams('bu=NB|Gaming'));
+    expect(f.dims).toEqual([{ key: 'prod:business_unit', values: ['NB', 'Gaming'] }]);
   });
 
   it('offers days only for windows up to 120 days', () => {

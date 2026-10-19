@@ -80,6 +80,7 @@ class OverviewFilters:
     categories: list[str] = field(default_factory=list)
     series: list[str] = field(default_factory=list)
     product_ids: list[int] = field(default_factory=list)
+    sites: list[str] = field(default_factory=list)
     tenant_id: str = "default"
 
 
@@ -226,6 +227,8 @@ def load_observations(
     )
     if f.customer_ids:
         stmt = stmt.where(s.customer_id.in_(f.customer_ids))
+    if f.sites:
+        stmt = stmt.where(s.site_label.in_(f.sites))
     pconds = _product_filter(f)
     if pconds:
         stmt = stmt.join(DimProduct, DimProduct.id == s.product_id).where(and_(*pconds))
@@ -443,6 +446,8 @@ def build_overview(session: Session, f: OverviewFilters, cal: BusinessCalendar, 
         q = select(func.min(sft.period_start_date)).where(sft.tenant_id == f.tenant_id)
         if f.customer_ids:
             q = q.where(sft.customer_id.in_(f.customer_ids))
+        if f.product_ids:
+            q = q.where(sft.product_id.in_(f.product_ids))
         first_data = session.scalar(q)
     compare_partial = bool(cmp and first_data and cmp[0] < first_data)
 
@@ -613,6 +618,7 @@ def build_overview(session: Session, f: OverviewFilters, cal: BusinessCalendar, 
             "vat": f.vat,
             "vat_rate_pct": vat_rate,
             "customer_ids": f.customer_ids,
+            "sites": f.sites,
         },
         "calendar": {"type": cal.type, "label": cal.year(f.date_to).label},
         "kpis": {
@@ -700,6 +706,8 @@ def load_stock_positions(
     )
     if f.customer_ids:
         latest_q = latest_q.where(s.customer_id.in_(f.customer_ids))
+    if f.sites:
+        latest_q = latest_q.where(s.site_label.in_(f.sites))
     latest = latest_q.subquery()
     stmt = (
         select(
@@ -715,6 +723,8 @@ def load_stock_positions(
         .where(s.tenant_id == f.tenant_id, s.reported_soh.is_not(None))
         .group_by(s.customer_id, s.product_id, s.site_label, latest.c.d)
     )
+    if f.sites:
+        stmt = stmt.where(s.site_label.in_(f.sites))
     pconds = _product_filter(f)
     if pconds:
         stmt = stmt.join(DimProduct, DimProduct.id == s.product_id).where(and_(*pconds))

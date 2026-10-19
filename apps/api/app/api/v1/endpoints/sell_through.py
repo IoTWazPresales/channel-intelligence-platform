@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.core.security import get_current_user
 from app.core.tenant_scope import tenant_id_from_user
@@ -23,8 +23,24 @@ from app.services.channel_intelligence.sell_through_overview import (
     filter_options,
     period_presets,
 )
+from app.services.channel_intelligence.sell_through_dimensions import (
+    MAX_FILTERS,
+    available_dimensions,
+    resolve_dimension_filters,
+)
 
 router = APIRouter()
+
+# Addable filters arrive as repeated ``f.<key>=<value>`` parameters, e.g. ``f.spec:RAM=16GB``.
+_DIM_PREFIX = "f."
+
+
+def _dimension_picks(request: Request) -> dict[str, list[str]]:
+    return {
+        k[len(_DIM_PREFIX) :]: [v for v in request.query_params.getlist(k) if v.strip()]
+        for k in request.query_params.keys()
+        if k.startswith(_DIM_PREFIX)
+    }
 
 
 def _ints(raw: str | None) -> list[int]:
@@ -50,8 +66,11 @@ def get_filters(user: dict = Depends(get_current_user)):
     today = commercial_tenant_profile.reporting_today(tenant_id)
     with SessionLocal() as session:
         opts = filter_options(session, tenant_id)
+        dims = available_dimensions(session, tenant_id)
     return {
         **opts,
+        "dimensions": dims,
+        "max_dimensions": MAX_FILTERS,
         "presets": period_presets(cal, today),
         "today": today.isoformat(),
         "calendar": {"type": cal.type, "year": cal.year(today).as_dict()},
@@ -62,6 +81,7 @@ def get_filters(user: dict = Depends(get_current_user)):
 
 @router.get("/overview")
 def get_overview_route(
+    request: Request,
     date_from: date = Query(...),
     date_to: date = Query(...),
     grain: str = Query(default="week"),
@@ -75,12 +95,14 @@ def get_overview_route(
     user: dict = Depends(get_current_user),
 ):
     return get_overview(
-        date_from, date_to, grain, compare, vat, customer_ids, business_units, categories, series, product_ids, user
+        date_from, date_to, grain, compare, vat, customer_ids, business_units, categories, series, product_ids, user,
+        picks=_dimension_picks(request),
     )
 
 
 @router.get("/narrative")
 def get_narrative(
+    request: Request,
     date_from: date = Query(...),
     date_to: date = Query(...),
     grain: str = Query(default="week"),
@@ -97,7 +119,8 @@ def get_narrative(
     from app.services.channel_intelligence.sell_through_narrative import narrate
 
     overview = get_overview(
-        date_from, date_to, grain, compare, vat, customer_ids, business_units, categories, series, product_ids, user
+        date_from, date_to, grain, compare, vat, customer_ids, business_units, categories, series, product_ids, user,
+        picks=_dimension_picks(request),
     )
     return narrate(overview, tenant_id=tenant_id_from_user(user))
 
@@ -114,6 +137,8 @@ def get_overview(
     series: str | None,
     product_ids: str | None,
     user: dict,
+    *,
+    picks: dict[str, list[str]] | None = None,
 ) -> dict:
     if grain not in GRAINS:
         raise HTTPException(status_code=400, detail=f"grain must be one of {list(GRAINS)}")
@@ -129,20 +154,35 @@ def get_overview(
     vat_basis = vat or commercial_tenant_profile.sales_value_vat_basis(tenant_id)
     if vat_basis not in ("ex_vat", "inc_vat"):
         raise HTTPException(status_code=400, detail="vat must be ex_vat or inc_vat")
-    f = OverviewFilters(
-        date_from=date_from,
-        date_to=date_to,
-        grain=grain,
-        compare=compare,
-        vat=vat_basis,
-        customer_ids=_ints(customer_ids),
-        business_units=_strs(business_units),
-        categories=_strs(categories),
-        series=_strs(series),
-        product_ids=_ints(product_ids),
-        tenant_id=tenant_id,
-    )
+    cust = _ints(customer_ids)
+    prods = _ints(product_ids)
+    sites: list[str] = []
     with SessionLocal() as session:
+        if picks:
+            try:
+                dim_products, dim_customers, sites = resolve_dimension_filters(session, tenant_id, picks)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            if dim_products is not None:
+                prods = sorted(set(prods) & dim_products) if prods else sorted(dim_products)
+                prods = prods or [-1]  # nothing matches: show nothing, not everything
+            if dim_customers is not None:
+                cust = sorted(set(cust) & dim_customers) if cust else sorted(dim_customers)
+                cust = cust or [-1]
+        f = OverviewFilters(
+            date_from=date_from,
+            date_to=date_to,
+            grain=grain,
+            compare=compare,
+            vat=vat_basis,
+            customer_ids=cust,
+            business_units=_strs(business_units),
+            categories=_strs(categories),
+            series=_strs(series),
+            product_ids=prods,
+            sites=sites,
+            tenant_id=tenant_id,
+        )
         return build_overview(
             session,
             f,

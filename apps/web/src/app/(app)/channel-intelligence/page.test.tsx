@@ -34,6 +34,11 @@ const FILTERS = {
   calendar: { type: 'gregorian', year: { label: '2026', start: '2026-01-01', end: '2026-12-31' } },
   vat: 'ex_vat',
   vat_rate_pct: 0.15,
+  dimensions: [
+    { key: 'prod:business_unit', label: 'Business unit', group: 'Product', values: ['NB'] },
+    { key: 'spec:RAM', label: 'RAM', group: 'Specs', values: ['8GB', '16GB'] },
+  ],
+  max_dimensions: 6,
 };
 
 const OVERVIEW = {
@@ -167,6 +172,22 @@ describe('Sell-through tab (Warren 2026-10-19)', () => {
     const presets = await screen.findByTestId('sellthrough-presets');
     await userEvent.click(within(presets).getByText('2026 to date'));
     expect(replace).toHaveBeenCalledWith('/channel-intelligence?period=year_to_date', { scroll: false });
+  });
+
+  it('adds a filter from the list and sends its picks', async () => {
+    renderPage();
+    await userEvent.click(await screen.findByTestId('sellthrough-add-filter'));
+    await userEvent.click(await screen.findByText('RAM'));
+    expect(replace).toHaveBeenLastCalledWith('/channel-intelligence?period=last_13_weeks&f.spec%3ARAM=', { scroll: false });
+  });
+
+  it('sends added filter picks from the address to the API', async () => {
+    search = new URLSearchParams('f.spec:RAM=16GB&product=9&pl=X1409VA');
+    renderPage();
+    expect(await screen.findByTestId('sellthrough-dim-spec:RAM')).toBeInTheDocument();
+    const call = apiGet.mock.calls.map((c) => c[0]).find((u) => u.includes('/overview?'))!;
+    expect(call).toContain('f.spec%3ARAM=16GB');
+    expect(call).toContain('product_ids=9');
   });
 
   it('says why the AI summary is not available', async () => {

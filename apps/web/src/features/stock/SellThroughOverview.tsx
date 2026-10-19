@@ -24,6 +24,7 @@ import { Panel } from '@/features/workbench-ui/Panel';
 import { apiGet, safeDisplayError } from '@/lib/api';
 
 import { SellThroughCoverageGrid } from './SellThroughCoverageGrid';
+import { SellThroughFilterFields } from './SellThroughFilterFields';
 import { SellThroughNarrative } from './SellThroughNarrative';
 import { SellThroughProblemsTable } from './SellThroughProblemsTable';
 import { SellThroughReportsStrip } from './SellThroughReportsStrip';
@@ -75,8 +76,6 @@ export function incompleteNote(trend: { label: string; incomplete_customers?: st
   return `${span} not complete: ${names.slice(0, 3).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''} not reported yet.`;
 }
 
-type GroupOption = { kind: 'Business unit' | 'Category' | 'Series'; value: string };
-
 function useFilterState() {
   const router = useRouter();
   const search = useSearchParams();
@@ -124,19 +123,6 @@ export function SellThroughOverview() {
     () => new Map((options.data?.customers ?? []).map((c) => [c.id, c])),
     [options.data?.customers],
   );
-  const groupOptions = useMemo<GroupOption[]>(
-    () => [
-      ...(options.data?.business_units ?? []).map((value) => ({ kind: 'Business unit' as const, value })),
-      ...(options.data?.categories ?? []).map((value) => ({ kind: 'Category' as const, value })),
-      ...(options.data?.series ?? []).map((value) => ({ kind: 'Series' as const, value })),
-    ],
-    [options.data],
-  );
-  const groupValue: GroupOption[] = [
-    ...filters.businessUnits.map((value) => ({ kind: 'Business unit' as const, value })),
-    ...filters.categories.map((value) => ({ kind: 'Category' as const, value })),
-    ...filters.series.map((value) => ({ kind: 'Series' as const, value })),
-  ];
   const toggleCustomer = (id: number) =>
     setFilters({ customers: filters.customers.includes(id) ? filters.customers.filter((c) => c !== id) : [...filters.customers, id] });
 
@@ -270,24 +256,11 @@ export function SellThroughOverview() {
           sx={{ minWidth: 260, flex: '1 1 260px' }}
           data-testid="sellthrough-customer-filter"
         />
-        <Autocomplete
-          multiple
-          size="small"
-          limitTags={2}
-          options={groupOptions}
-          value={groupValue}
-          groupBy={(o) => o.kind}
-          getOptionLabel={(o) => o.value}
-          isOptionEqualToValue={(a, b) => a.kind === b.kind && a.value === b.value}
-          onChange={(_e, vals) =>
-            setFilters({
-              businessUnits: vals.filter((v) => v.kind === 'Business unit').map((v) => v.value),
-              categories: vals.filter((v) => v.kind === 'Category').map((v) => v.value),
-              series: vals.filter((v) => v.kind === 'Series').map((v) => v.value),
-            })
-          }
-          renderInput={(p) => <TextField {...p} label="Products" placeholder={groupValue.length ? '' : 'All products'} />}
-          sx={{ minWidth: 220, flex: '1 1 220px' }}
+        <SellThroughFilterFields
+          filters={filters}
+          dimensions={opts.dimensions ?? []}
+          maxDimensions={opts.max_dimensions ?? 6}
+          onChange={setFilters}
         />
         {overview.isFetching ? <CircularProgress size={16} /> : null}
       </Box>

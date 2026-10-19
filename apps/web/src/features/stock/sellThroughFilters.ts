@@ -17,10 +17,19 @@ export type SellThroughFilterState = {
   compare: SellThroughCompare;
   vat: VatBasis | null;
   customers: number[];
-  businessUnits: string[];
-  categories: string[];
-  series: string[];
+  /** One SKU (Warren 2026-10-19: the Product box picks a single SKU; groups are added filters). */
+  product: { id: number; label: string } | null;
+  /** Added filters in the order added: key (prod:/spec:/cust:/site) → picked values. */
+  dims: Array<{ key: string; values: string[] }>;
 };
+
+/** Address parameters for added filters: ``f.<key>=<value>``, repeated; an empty value keeps an added filter with nothing picked. */
+const DIM_PREFIX = 'f.';
+const LEGACY_GROUPS: Array<[string, string]> = [
+  ['bu', 'prod:business_unit'],
+  ['category', 'prod:category'],
+  ['series', 'prod:series_name'],
+];
 
 export const DEFAULT_PRESET = 'last_13_weeks';
 const GRAINS: SellThroughGrain[] = ['day', 'week', 'month', 'quarter'];
@@ -43,10 +52,29 @@ export function readFilters(search: URLSearchParams): SellThroughFilterState {
       .split(',')
       .map((s) => Number(s))
       .filter((n) => Number.isInteger(n) && n > 0),
-    businessUnits: list(search.get('bu')),
-    categories: list(search.get('category')),
-    series: list(search.get('series')),
+    product: Number(search.get('product')) > 0 ? { id: Number(search.get('product')), label: search.get('pl') ?? `Product ${search.get('product')}` } : null,
+    dims: readDims(search),
   };
+}
+
+function readDims(search: URLSearchParams): SellThroughFilterState['dims'] {
+  const out: SellThroughFilterState['dims'] = [];
+  const seen = new Map<string, string[]>();
+  for (const [k, v] of search.entries()) {
+    if (!k.startsWith(DIM_PREFIX)) continue;
+    const key = k.slice(DIM_PREFIX.length);
+    if (!seen.has(key)) {
+      seen.set(key, []);
+      out.push({ key, values: seen.get(key)! });
+    }
+    if (v.trim()) seen.get(key)!.push(v);
+  }
+  // Links written before addable filters (bu=NB|Gaming) still work.
+  for (const [param, key] of LEGACY_GROUPS) {
+    const vals = list(search.get(param));
+    if (vals.length && !seen.has(key)) out.push({ key, values: vals });
+  }
+  return out;
 }
 
 export function writeFilters(f: SellThroughFilterState): URLSearchParams {
@@ -60,9 +88,14 @@ export function writeFilters(f: SellThroughFilterState): URLSearchParams {
   if (f.compare !== 'prior_year') p.set('compare', f.compare);
   if (f.vat) p.set('vat', f.vat);
   if (f.customers.length) p.set('customers', f.customers.join(','));
-  if (f.businessUnits.length) p.set('bu', f.businessUnits.join('|'));
-  if (f.categories.length) p.set('category', f.categories.join('|'));
-  if (f.series.length) p.set('series', f.series.join('|'));
+  if (f.product) {
+    p.set('product', String(f.product.id));
+    p.set('pl', f.product.label);
+  }
+  for (const d of f.dims) {
+    if (!d.values.length) p.append(`${DIM_PREFIX}${d.key}`, '');
+    for (const v of d.values) p.append(`${DIM_PREFIX}${d.key}`, v);
+  }
   return p;
 }
 
@@ -88,9 +121,8 @@ export function overviewQuery(
   const p = new URLSearchParams({ date_from: w.dateFrom, date_to: w.dateTo, grain: w.grain, compare: f.compare });
   if (f.vat) p.set('vat', f.vat);
   if (f.customers.length) p.set('customer_ids', f.customers.join(','));
-  if (f.businessUnits.length) p.set('business_units', f.businessUnits.join('|'));
-  if (f.categories.length) p.set('categories', f.categories.join('|'));
-  if (f.series.length) p.set('series', f.series.join('|'));
+  if (f.product) p.set('product_ids', String(f.product.id));
+  for (const d of f.dims) for (const v of d.values) p.append(`${DIM_PREFIX}${d.key}`, v);
   return p.toString();
 }
 
