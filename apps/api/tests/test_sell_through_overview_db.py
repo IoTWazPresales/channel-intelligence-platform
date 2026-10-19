@@ -216,3 +216,63 @@ def test_filter_options_lists_reporting_customers(session: Session):
     row = next(c for c in opts["customers"] if c["id"] == a)
     assert row["has_data"] and row["reports_expected"]
     assert "NB" in opts["business_units"]
+
+
+def test_old_stock_is_kept_and_aged(session: Session):
+    """Warren 2026-10-19: stock stays at customers for a long time. An old stock report still counts,
+    is shown with its date and stores, and is not used to call a SKU out of stock or low on cover."""
+    db = session
+    h = _customer(db, "STO-H")
+    p_old = _product(db, "PO")  # stock a year ago at two stores, no sales since
+    p_sell = _product(db, "PS")  # selling now, last stock report a year ago said 0
+    old = date(2025, 10, 13)
+    global _n
+    for site, units in (("Store North", 12), ("Store South", 3)):
+        _n += 1
+        db.add(
+            FactCustomerSellthrough(
+                source_key=f"st-overview-{_n}", tenant_id=TENANT, customer_id=h, product_id=p_old,
+                period_start_date=old, period_type="weekly", period_grain="week", units_sold=0,
+                reported_soh=units, site_label=site,
+            )
+        )
+    _row(db, h, p_sell, old, 0, soh=0)
+    for i in range(12):
+        _row(db, h, p_sell, LAST_WEEK - timedelta(weeks=i), 4)
+        _row(db, h, p_old, LAST_WEEK - timedelta(weeks=i), 0)
+    db.flush()
+    f = OverviewFilters(date_from=date(2026, 7, 20), date_to=date(2026, 10, 18), tenant_id=TENANT, customer_ids=[h])
+    out = build_overview(db, f, BusinessCalendar(), today=TODAY, vat_rate=0.15)
+
+    assert out["kpis"]["stock_on_hand"] == pytest.approx(15)
+    assert out["kpis"]["stock_old_customers"] == 1
+    assert out["kpis"]["stock_ages"][0]["stock_date"] == "2025-10-13"
+    rows = {r["product_id"]: r for r in out["problems"]["rows"]}
+    assert rows[p_old]["reason"] == "aged"
+    assert "2025-10-13" in rows[p_old]["detail"] and "Store North 12" in rows[p_old]["detail"]
+    assert rows[p_old]["stock_sites"] == [{"site": "Store North", "soh": 12.0}, {"site": "Store South", "soh": 3.0}]
+    assert p_sell not in rows  # a year-old 0 is not "out of stock" now
+
+
+def test_value_change_hidden_when_estimates_differ(session: Session):
+    db = session
+    a = _customer(db, "STO-V")
+    p = _product(db, "PV")
+    for i in range(13):
+        _row(db, a, p, LAST_WEEK - timedelta(weeks=i), 5, price=None)  # no sell price this year
+        _row(db, a, p, date(2025, 10, 13) - timedelta(weeks=i), 5)  # priced last year
+    from app.models.listing_capture import CustomerListing, ListingObservation
+    from datetime import datetime, timezone
+
+    lst = CustomerListing(customer_id=a, product_id=p, url="https://example.test/p", marketplace="test")
+    db.add(lst)
+    db.flush()
+    db.add(ListingObservation(listing_id=lst.id, fetched_at=datetime(2026, 10, 1, tzinfo=timezone.utc), parser_version="t", extracted_price=1150))
+    db.flush()
+    f = OverviewFilters(date_from=date(2026, 7, 20), date_to=date(2026, 10, 18), tenant_id=TENANT, customer_ids=[a])
+    out = build_overview(db, f, BusinessCalendar(), today=TODAY, vat_rate=0.15)
+    assert out["kpis"]["value_estimated"] > 0
+    assert out["kpis"]["value_comparable"] is False
+    assert out["kpis"]["value_change_pct"] is None
+    assert out["kpis"]["units_change_pct"] == pytest.approx(0)
+    assert any("not like for like" in n for n in out["notes"])

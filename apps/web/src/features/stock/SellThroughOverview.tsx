@@ -317,7 +317,9 @@ export function SellThroughOverview() {
               value={fmtCompact(data.kpis.value)}
               delta={delta(data.kpis.value_change_pct, comparePeriod)}
               caption={
-                data.kpis.value_estimated > 0
+                data.kpis.value_comparable === false && filters.compare !== 'none'
+                  ? `No change shown: ${fmtCompact(data.kpis.value_estimated)} is from listing prices`
+                  : data.kpis.value_estimated > 0
                   ? `${fmtCompact(data.kpis.value_estimated)} from listing prices`
                   : data.kpis.units_without_price > 0
                     ? `${fmtCompact(data.kpis.units_without_price)} units have no price`
@@ -331,7 +333,11 @@ export function SellThroughOverview() {
               unit="units"
               caption={
                 data.kpis.stock_customers
-                  ? `${data.kpis.stock_customers} customer(s) report stock`
+                  ? `${data.kpis.stock_customers} customer(s) report stock${
+                      data.kpis.stock_old_customers
+                        ? ` · ${data.kpis.stock_old_customers} last reported over 5 weeks ago`
+                        : ''
+                    }`
                   : 'No customer reports stock for these filters'
               }
               compact
@@ -340,7 +346,13 @@ export function SellThroughOverview() {
               label="Weeks of cover"
               value={data.kpis.weeks_of_cover != null ? data.kpis.weeks_of_cover.toFixed(1) : '—'}
               unit="weeks"
-              caption="Stock ÷ last 4 weeks' sales"
+              caption={
+                (data.kpis.stock_ages ?? []).some((a) => !a.selling && a.units > 0)
+                  ? `Each customer's stock ÷ its last 4 weeks' sales · ${
+                      (data.kpis.stock_ages ?? []).filter((a) => !a.selling && a.units > 0).length
+                    } with stock and no recent sales left out`
+                  : "Each customer's stock ÷ its last 4 weeks' sales"
+              }
               compact
             />
             <HeadlineFigure

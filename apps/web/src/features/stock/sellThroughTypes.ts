@@ -39,6 +39,9 @@ export type ProblemRow = {
   category: string | null;
   lifecycle: string | null;
   stock_on_hand: number | null;
+  stock_date: string | null;
+  stock_age_days: number | null;
+  stock_sites: Array<{ site: string; soh: number }>;
   on_order: number | null;
   rate_recent: number;
   rate_before: number;
@@ -86,8 +89,11 @@ export type SellThroughOverview = {
     compare_partial?: boolean;
     units_change_pct: number | null;
     value_change_pct: number | null;
+    value_comparable?: boolean;
     stock_on_hand: number | null;
     stock_customers: number;
+    stock_old_customers?: number;
+    stock_ages?: Array<{ customer_id: number; name: string; stock_date: string; age_days: number; units: number; selling: boolean }>;
     weekly_rate: number;
     weeks_of_cover: number | null;
     skus_selling: number;

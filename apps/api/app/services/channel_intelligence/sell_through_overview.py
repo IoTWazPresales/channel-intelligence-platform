@@ -52,7 +52,9 @@ DROP_MIN_UNITS_PER_WEEK = 1.0
 DROP_RATIO = 0.5
 NO_SALES_WEEKS = 8
 PROBLEM_ROW_LIMIT = 300
-STOCK_STALE_DAYS = 35
+# Stock reported within this many days of a customer's latest figures counts as current for
+# restock decisions; older stock still counts as stock (and as aged), with its age shown.
+STOCK_CURRENT_DAYS = 35
 TOP_N = 10
 
 REASONS = ("out_of_stock", "needs_replen", "dropped", "aged", "stopped")
@@ -449,18 +451,21 @@ def build_overview(session: Session, f: OverviewFilters, cal: BusinessCalendar, 
 
     # ---- headline numbers
     units, value, est_value = _sum_window(in_window, f.date_from, f.date_to)
-    c_units, c_value, _ = _sum_window(in_cmp, cmp[0], cmp[1]) if cmp else (0.0, 0.0, 0.0)
+    c_units, c_value, c_est = _sum_window(in_cmp, cmp[0], cmp[1]) if cmp else (0.0, 0.0, 0.0)
+    # Listing-price estimates on one side only make a value change meaningless (Warren 2026-10-19: +513%).
+    est_share = est_value / value if value else 0.0
+    c_est_share = c_est / c_value if c_value else 0.0
+    value_comparable = abs(est_share - c_est_share) <= 0.25
     units_no_value = sum(o.units * o.share(f.date_from, f.date_to) for o in in_window if o.value is None)
 
-    stock = _stock_positions(obs, f.date_to)
+    stock, stock_dates = load_stock_positions(session, f, f.date_to)
     soh_total = sum(v["soh"] for v in stock.values())
-    stock_customers = {c for (c, _p) in stock}
+    stock_customers = set(stock_dates)
     rate4_by_pair: dict[tuple[int, int], float] = defaultdict(float)
     for o in obs:
         sh = o.share(f.date_to - timedelta(days=RECENT_WEEKS * 7 - 1), f.date_to)
         if sh > 0:
             rate4_by_pair[(o.customer_id, o.product_id)] += o.units * sh / RECENT_WEEKS
-    rate4_stocked = sum(r for (c, _p), r in rate4_by_pair.items() if c in stock_customers)
 
     # ---- trend
     buckets = cal.buckets(f.date_from, f.date_to, f.grain)
@@ -560,7 +565,42 @@ def build_overview(session: Session, f: OverviewFilters, cal: BusinessCalendar, 
             for c in selling
             if last_day.get(c) is None or date.fromisoformat(last_day[c]) < end
         )
-    problems = _problems(obs, products, customers, cfg_by_customer, stock, last_day, f.date_to)
+    problems = _problems(obs, products, customers, cfg_by_customer, stock, stock_dates, last_day, f.date_to)
+
+    # Weeks of cover per customer: its stock against its own sales in the 4 weeks to its latest
+    # figures, so a customer that reports late or holds old stock does not read as zero sales.
+    soh_by_customer: dict[int, float] = defaultdict(float)
+    for (c, _p), v in stock.items():
+        soh_by_customer[c] += v["soh"]
+    rate_by_customer: dict[int, float] = defaultdict(float)
+    for o in obs:
+        if o.customer_id not in stock_customers:
+            continue
+        d = last_day.get(o.customer_id)
+        anchor = min(f.date_to, date.fromisoformat(d)) if d else f.date_to
+        sh = o.share(anchor - timedelta(days=RECENT_WEEKS * 7 - 1), anchor)
+        if sh > 0:
+            rate_by_customer[o.customer_id] += o.units * sh / RECENT_WEEKS
+    selling_stock = [c for c in stock_customers if rate_by_customer.get(c, 0) > 0]
+    woc = (
+        sum(soh_by_customer[c] for c in selling_stock) / sum(rate_by_customer[c] for c in selling_stock)
+        if selling_stock
+        else None
+    )
+    stock_ages = sorted(
+        (
+            {
+                "customer_id": c,
+                "name": customers[c].name if c in customers else f"Customer {c}",
+                "stock_date": stock_dates[c].isoformat(),
+                "age_days": (f.date_to - stock_dates[c]).days,
+                "units": round(soh_by_customer.get(c, 0.0), 2),
+                "selling": c in selling_stock,
+            }
+            for c in stock_customers
+        ),
+        key=lambda r: -r["age_days"],
+    )
 
     out = {
         "filters": {
@@ -584,11 +624,14 @@ def build_overview(session: Session, f: OverviewFilters, cal: BusinessCalendar, 
             "compare_value": round(c_value, 2) if cmp else None,
             "compare_partial": compare_partial,
             "units_change_pct": _pct(units, c_units) if cmp else None,
-            "value_change_pct": _pct(value, c_value) if cmp else None,
+            "value_change_pct": _pct(value, c_value) if cmp and value_comparable else None,
+            "value_comparable": value_comparable,
             "stock_on_hand": round(soh_total, 2) if stock_customers else None,
             "stock_customers": len(stock_customers),
+            "stock_old_customers": sum(1 for r in stock_ages if r["age_days"] > STOCK_CURRENT_DAYS),
+            "stock_ages": stock_ages,
             "weekly_rate": round(sum(rate4_by_pair.values()), 2),
-            "weeks_of_cover": round(soh_total / rate4_stocked, 1) if stock_customers and rate4_stocked > 0 else None,
+            "weeks_of_cover": round(woc, 1) if woc is not None else None,
             "skus_selling": sum(1 for d in by_product.values() if d["units"] > 0),
             "needs_replen": problems["counts"].get("needs_replen", 0),
             "out_of_stock": problems["counts"].get("out_of_stock", 0),
@@ -628,37 +671,69 @@ def build_overview(session: Session, f: OverviewFilters, cal: BusinessCalendar, 
             f"{units_no_value:,.0f} units have no sell price and no listing price, so they are not in sales value."
         )
     if est_value > 0:
-        out["notes"].append("Some sales value uses the latest captured listing price (marked as estimated).")
+        out["notes"].append(
+            f"{est_share * 100:.0f}% of sales value uses the latest captured listing price because the files had no sell price."
+        )
+    if cmp and not value_comparable:
+        out["notes"].append(
+            f"Sales value change not shown: listing-price estimates are {est_share * 100:.0f}% of this period "
+            f"and {c_est_share * 100:.0f}% of the comparison, so the two are not like for like."
+        )
     out["summary"] = summarize(out)
     return out
 
 
-def _stock_positions(obs: list[Obs], as_of: date) -> dict[tuple[int, int], dict[str, Any]]:
-    """Stock per (customer, product) on each customer's latest stock date on or before ``as_of``."""
-    latest: dict[int, date] = {}
-    last_row: dict[int, date] = {}
-    for o in obs:
-        if o.start > as_of:
-            continue
-        if o.customer_id not in last_row or o.end > last_row[o.customer_id]:
-            last_row[o.customer_id] = o.end
-        if o.soh is not None and (o.customer_id not in latest or o.start > latest[o.customer_id]):
-            latest[o.customer_id] = o.start
-    # A stock report older than five weeks before the customer's latest figures is no longer a position.
-    latest = {c: d for c, d in latest.items() if d >= last_row[c] - timedelta(days=STOCK_STALE_DAYS)}
+def load_stock_positions(
+    session: Session, f: OverviewFilters, as_of: date
+) -> tuple[dict[tuple[int, int], dict[str, Any]], dict[int, date]]:
+    """Stock per (customer, product) from each customer's latest stock report on or before ``as_of``.
+
+    Warren 2026-10-19: stock stays at customers for a long time, so a report is never dropped for its
+    age. Each position carries its report date so screens can show how old it is, and the stores
+    holding it. A product the customer did not list on that report holds 0.
+    """
+    s = FactCustomerSellthrough
+    latest_q = (
+        select(s.customer_id, func.max(s.period_start_date).label("d"))
+        .where(s.tenant_id == f.tenant_id, s.reported_soh.is_not(None), s.period_start_date <= as_of)
+        .group_by(s.customer_id)
+    )
+    if f.customer_ids:
+        latest_q = latest_q.where(s.customer_id.in_(f.customer_ids))
+    latest = latest_q.subquery()
+    stmt = (
+        select(
+            s.customer_id,
+            s.product_id,
+            s.site_label,
+            latest.c.d,
+            func.sum(s.reported_soh).label("soh"),
+            func.sum(func.coalesce(s.on_order_units, 0)).label("on_order"),
+            func.sum(func.coalesce(s.in_transit_units, 0)).label("in_transit"),
+        )
+        .join(latest, and_(latest.c.customer_id == s.customer_id, latest.c.d == s.period_start_date))
+        .where(s.tenant_id == f.tenant_id, s.reported_soh.is_not(None))
+        .group_by(s.customer_id, s.product_id, s.site_label, latest.c.d)
+    )
+    pconds = _product_filter(f)
+    if pconds:
+        stmt = stmt.join(DimProduct, DimProduct.id == s.product_id).where(and_(*pconds))
     out: dict[tuple[int, int], dict[str, Any]] = {}
-    # Every product the customer reported in the lookback holds 0 unless its latest stock row says otherwise.
-    for o in obs:
-        if o.customer_id in latest and o.start <= as_of:
-            out.setdefault((o.customer_id, o.product_id), {"soh": 0.0, "on_order": 0.0, "in_transit": 0.0, "date": latest[o.customer_id]})
-    for o in obs:
-        d = latest.get(o.customer_id)
-        if d is not None and o.start == d and o.soh is not None:
-            row = out[(o.customer_id, o.product_id)]
-            row["soh"] += o.soh
-            row["on_order"] += o.on_order
-            row["in_transit"] += o.in_transit
-    return out
+    report_dates: dict[int, date] = {}
+    for r in session.execute(stmt):
+        key = (int(r.customer_id), int(r.product_id))
+        report_dates[key[0]] = r.d
+        row = out.setdefault(
+            key, {"soh": 0.0, "on_order": 0.0, "in_transit": 0.0, "date": r.d, "sites": [], "reported": True}
+        )
+        row["soh"] += float(r.soh or 0)
+        row["on_order"] += float(r.on_order or 0)
+        row["in_transit"] += float(r.in_transit or 0)
+        if r.site_label and float(r.soh or 0):
+            row["sites"].append({"site": r.site_label, "soh": float(r.soh)})
+    for row in out.values():
+        row["sites"].sort(key=lambda x: -x["soh"])
+    return out, report_dates
 
 
 def _coverage(
@@ -733,6 +808,7 @@ def _problems(
     customers: dict[int, DimCustomer],
     cfgs: dict[int, CustomerReportConfig],
     stock: dict[tuple[int, int], dict[str, Any]],
+    stock_dates: dict[int, date],
     last_day: dict[int, str | None],
     as_of: date,
 ) -> dict[str, Any]:
@@ -761,7 +837,14 @@ def _problems(
     for (cid, pid), wk in weeks.items():
         prod = products.get(pid)
         st = stock.get((cid, pid))
+        if st is None and cid in stock_dates:
+            # The customer reports stock and did not list this product on its latest report.
+            st = {"soh": 0.0, "on_order": 0.0, "in_transit": 0.0, "date": stock_dates[cid], "sites": [], "reported": False}
         soh = st["soh"] if st else None
+        anchor = anchors.get(cid, as_of)
+        stock_age = (anchor - st["date"]).days if st else None
+        # Restock decisions need a current stock figure; old stock still counts as stock and as aged.
+        stock_current = st is not None and stock_age is not None and stock_age <= STOCK_CURRENT_DAYS
         recent = wk[-RECENT_WEEKS:]
         recent_rate = sum(recent) / RECENT_WEEKS
         prior = wk[-(RECENT_WEEKS + STREAK_WEEKS) : -RECENT_WEEKS]
@@ -780,11 +863,11 @@ def _problems(
 
         reason = detail = None
         suggested = None
-        if soh is not None and soh <= 0 and last8 > 0 and not ended:
+        if stock_current and soh is not None and soh <= 0 and last8 > 0 and not ended:
             reason = "out_of_stock"
             detail = f"0 in stock; was selling {last8 / NO_SALES_WEEKS:,.1f} a week"
             suggested = math.ceil(rate * target_woc - (st["on_order"] + st["in_transit"])) if st else None
-        elif soh is not None and soh > 0 and rate > 0 and woc is not None and woc < min_woc and not ended:
+        elif stock_current and soh is not None and soh > 0 and rate > 0 and woc is not None and woc < min_woc and not ended:
             reason = "needs_replen"
             detail = f"{woc:,.1f} weeks of cover (replenish below {min_woc:g})"
             suggested = math.ceil(rate * target_woc - soh - st["on_order"] - st["in_transit"])
@@ -795,6 +878,12 @@ def _problems(
             reason = "aged"
             since = f"{weeks_since_sale} weeks" if weeks_since_sale is not None else f"over {LOOKBACK_WEEKS} weeks"
             detail = f"{soh:,.0f} in stock, no sales for {since}"
+            if stock_age is not None and stock_age > STOCK_CURRENT_DAYS:
+                detail += f"; stock last reported {st['date'].isoformat()} ({stock_age} days before the latest figures)"
+            if st and st["sites"]:
+                top = ", ".join(f"{x['site']} {x['soh']:,.0f}" for x in st["sites"][:3])
+                more = f" and {len(st['sites']) - 3} more stores" if len(st["sites"]) > 3 else ""
+                detail += f"; at {top}{more}"
         elif last8 <= 0 and before > 0 and not ended:
             reason = "stopped"
             detail = f"No sales for {weeks_since_sale} weeks (sold {before:,.0f} before that)"
@@ -815,6 +904,9 @@ def _problems(
                 "category": prod.category if prod else None,
                 "lifecycle": prod.lifecycle_status if prod else None,
                 "stock_on_hand": round(soh, 2) if soh is not None else None,
+                "stock_date": st["date"].isoformat() if st else None,
+                "stock_age_days": stock_age,
+                "stock_sites": [{"site": x["site"], "soh": round(x["soh"], 2)} for x in st["sites"]] if st else [],
                 "on_order": round(st["on_order"] + st["in_transit"], 2) if st else None,
                 "rate_recent": round(recent_rate, 2),
                 "rate_before": round(prior_rate, 2),

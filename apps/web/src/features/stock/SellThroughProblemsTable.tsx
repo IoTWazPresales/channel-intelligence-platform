@@ -80,6 +80,19 @@ export function SellThroughProblemsTable({
           ) : null,
       },
       { field: 'stock_on_hand', headerName: 'Stock', width: 95, type: 'numericColumn', valueFormatter: (p) => num(p.value) },
+      {
+        field: 'stock_date',
+        headerName: 'Stock reported',
+        width: 140,
+        valueFormatter: (p) =>
+          p.value ? `${p.value}${p.data?.stock_age_days != null && p.data.stock_age_days > 35 ? ` (${p.data.stock_age_days}d old)` : ''}` : '—',
+      },
+      {
+        headerName: 'Stores with stock',
+        width: 170,
+        valueGetter: (p) =>
+          (p.data?.stock_sites ?? []).map((x) => `${x.site} ${num(x.soh)}`).join(', ') || '—',
+      },
       { field: 'on_order', headerName: 'On order', width: 100, type: 'numericColumn', valueFormatter: (p) => num(p.value) },
       { field: 'rate_recent', headerName: 'Per week now', width: 120, type: 'numericColumn', valueFormatter: (p) => num(p.value, 1) },
       { field: 'rate_before', headerName: 'Per week before', width: 130, type: 'numericColumn', valueFormatter: (p) => num(p.value, 1) },
