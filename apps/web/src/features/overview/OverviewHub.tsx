@@ -1,10 +1,11 @@
 'use client';
 
-import { Box, Button, Stack, Typography, useMediaQuery } from '@mui/material';
+import { Box, Button, Stack, ToggleButton, ToggleButtonGroup, Typography, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import NextLink from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 import type { BriefSignal } from '@/features/brief/BriefSignalRow';
 import { DashboardWidgetCard } from '@/features/dashboards/DashboardWidgetCard';
@@ -30,6 +31,30 @@ type SavedReportItem = {
   overview_pinned?: boolean;
 };
 
+const COLUMNS_KEY = 'cip.overview.dashboard.columns.v1';
+
+/** Charts per row on the Attention dashboard (Warren 2026-10-19): 1, 2 or 3, kept in this browser. */
+export function useDashboardColumns(): [1 | 2 | 3, (n: 1 | 2 | 3) => void] {
+  const [cols, setCols] = useState<1 | 2 | 3>(2);
+  useEffect(() => {
+    try {
+      const v = Number(window.localStorage.getItem(COLUMNS_KEY));
+      if (v === 1 || v === 2 || v === 3) setCols(v);
+    } catch {
+      /* storage unavailable: keep the default */
+    }
+  }, []);
+  const set = (n: 1 | 2 | 3) => {
+    setCols(n);
+    try {
+      window.localStorage.setItem(COLUMNS_KEY, String(n));
+    } catch {
+      /* storage unavailable: the choice lasts for this visit */
+    }
+  };
+  return [cols, set];
+}
+
 function signalSeverity(s: BriefSignal): 'danger' | 'warning' | 'info' | 'neutral' {
   if (s.severity === 'stop') return 'danger';
   if (s.severity === 'warn') return 'warning';
@@ -51,6 +76,7 @@ export function OverviewHub() {
     },
   });
   const attentionFirst = overviewAttentionFirst(isMobile, search?.get('zone'));
+  const [columns, setColumns] = useDashboardColumns();
 
   const briefQ = useQuery({
     queryKey: ['brief', 'signals'],
@@ -97,9 +123,25 @@ export function OverviewHub() {
           : 'Editor lives on the Business dashboard leaf. Lab fixture widgets are not copied.'
       }
       actions={
-        <Button size="small" variant="outlined" component={NextLink} href="/dashboards" data-testid="overview-edit-dashboard">
-          Edit
-        </Button>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={columns}
+            onChange={(_e, v: 1 | 2 | 3 | null) => v && setColumns(v)}
+            aria-label="Charts per row"
+            data-testid="overview-dashboard-columns"
+          >
+            {[1, 2, 3].map((n) => (
+              <ToggleButton key={n} value={n} sx={{ px: 1, py: 0 }} aria-label={`${n} per row`}>
+                {n}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+          <Button size="small" variant="outlined" component={NextLink} href="/dashboards" data-testid="overview-edit-dashboard">
+            Edit
+          </Button>
+        </Stack>
       }
       flush
     >
@@ -120,7 +162,14 @@ export function OverviewHub() {
             href="/dashboards"
           />
         ) : (
-          <Stack spacing={1.5}>
+          <Box
+            data-testid="dashboard-widget-grid"
+            sx={{
+              display: 'grid',
+              gap: 1.5,
+              gridTemplateColumns: { xs: '1fr', md: `repeat(${Math.min(columns, 2)}, minmax(0, 1fr))`, xl: `repeat(${columns}, minmax(0, 1fr))` },
+            }}
+          >
             {widgets.map((w) => (
               <DashboardWidgetCard
                 key={w.id}
@@ -131,7 +180,7 @@ export function OverviewHub() {
                 onPromote={() => router.push('/dashboards')}
               />
             ))}
-          </Stack>
+          </Box>
         )}
       </Box>
     </Panel>

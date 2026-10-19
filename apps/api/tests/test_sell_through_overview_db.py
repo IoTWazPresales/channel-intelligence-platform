@@ -382,3 +382,19 @@ def test_no_intelligence_leaves_rules_unchanged(session: Session):
     row = out["problems"]["rows"][0]
     assert row["reason"] == "needs_replen" and row["detail"] == "2.0 weeks of cover (replenish below 4)"
     assert row["suggested_qty"] == 40 and row["forward_weeks_of_cover"] is None
+
+
+def test_attention_counts(session: Session):
+    from app.services.channel_intelligence import sell_through_overview as sto
+
+    db = session
+    a = _customer(db, "STO-AT")
+    _customer(db, "STO-AT2")  # expected weekly, never reported
+    p = _product(db, "AT")
+    _weeks(db, a, p, {i: 10 for i in range(26)}, soh_now=20)
+    db.flush()
+    sto._BRIEF_CACHE.pop(TENANT, None)
+    out = sto.sell_through_attention(db, TENANT, TODAY)
+    sto._BRIEF_CACHE.pop(TENANT, None)
+    assert out["restock"] == 1 and out["needs_replen"] == 1
+    assert "STO-AT2 Retail" in out["customers_missing"]

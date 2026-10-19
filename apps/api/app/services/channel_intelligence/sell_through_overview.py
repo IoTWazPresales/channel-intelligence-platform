@@ -1117,3 +1117,45 @@ def period_presets(cal: BusinessCalendar, today: date) -> list[dict[str, str]]:
         p("last_year", prev_yr.label, prev_yr.start, prev_yr.end, "month"),
         p("last_52_weeks", "Last 52 weeks", last_full_week_end - timedelta(weeks=52) + timedelta(days=1), last_full_week_end, "month"),
     ]
+
+
+_BRIEF_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+BRIEF_CACHE_SECONDS = 300
+
+
+def sell_through_attention(session: Session, tenant_id: str, today: date) -> dict[str, Any]:
+    """Counts for the Attention page: SKUs to restock, slowing or stuck, and customers with reports
+    missing, over the last 13 weeks for all customers. Cached for five minutes per tenant."""
+    import time
+
+    now = time.time()
+    hit = _BRIEF_CACHE.get(tenant_id)
+    if hit and now - hit[0] < BRIEF_CACHE_SECONDS:
+        return hit[1]
+    from app.services.business_calendar import tenant_calendar
+    from app.services.commercial_tenant_profile import vat_rate_pct
+
+    cal = tenant_calendar(tenant_id)
+    week_start = cal.bucket(today, "week").start
+    f = OverviewFilters(
+        date_from=week_start - timedelta(weeks=13),
+        date_to=week_start - timedelta(days=1),
+        grain="week",
+        compare="none",
+        tenant_id=tenant_id,
+    )
+    o = build_overview(session, f, cal, today=today, vat_rate=vat_rate_pct(tenant_id))
+    pc = o["problems"]["counts"]
+    out = {
+        "restock": pc.get("out_of_stock", 0) + pc.get("needs_replen", 0),
+        "out_of_stock": pc.get("out_of_stock", 0),
+        "needs_replen": pc.get("needs_replen", 0),
+        "slowing": pc.get("dropped", 0) + pc.get("aged", 0) + pc.get("stopped", 0),
+        "dropped": pc.get("dropped", 0),
+        "aged": pc.get("aged", 0),
+        "stopped": pc.get("stopped", 0),
+        "customers_missing": o["coverage"]["customers_missing"],
+        "has_data": bool(o["kpis"]["units"] or o["kpis"]["stock_on_hand"]),
+    }
+    _BRIEF_CACHE[tenant_id] = (now, out)
+    return out

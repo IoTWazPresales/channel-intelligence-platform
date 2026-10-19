@@ -130,6 +130,84 @@ async def _cst_late_missing_counts(db: AsyncSession) -> tuple[int, int]:
     return counts.get("late", 0), counts.get("missing", 0)
 
 
+SELL_THROUGH_HREF = "/channel-intelligence"
+
+
+def sell_through_signals(st: dict[str, Any] | None, *, slot_signal_shown: bool) -> list[dict[str, Any]]:
+    """Attention rows from the Sell-through tab: SKUs to restock, SKUs slowing or stuck, and (when the
+    report-slot signal is not already shown) customers whose sell-through is missing."""
+    if not st:
+        return []
+    out: list[dict[str, Any]] = []
+    if st.get("restock"):
+        out.append(
+            _signal_row(
+                id="cst_restock",
+                rank=0,
+                title=f"{st['restock']} SKUs at customers need restocking",
+                detail=f"{st['out_of_stock']} out of stock while selling, {st['needs_replen']} below their customer's cover",
+                meta=f"{st['restock']} SKUs",
+                meta_hot=bool(st["out_of_stock"]),
+                action_label="Open Sell-through",
+                action_href=SELL_THROUGH_HREF,
+                figures={k: st[k] for k in ("out_of_stock", "needs_replen")},
+            )
+        )
+    if not slot_signal_shown and st.get("customers_missing"):
+        names = st["customers_missing"]
+        listed = ", ".join(names[:3]) + (f" and {len(names) - 3} more" if len(names) > 3 else "")
+        out.append(
+            _signal_row(
+                id="cst_reports_missing_window",
+                rank=0,
+                title=f"{len(names)} customers have sell-through missing in the last 13 weeks",
+                detail=listed,
+                meta=f"{len(names)} customers",
+                meta_hot=True,
+                action_label="Open Sell-through",
+                action_href=SELL_THROUGH_HREF,
+                figures={"customers": len(names)},
+            )
+        )
+    if st.get("slowing"):
+        out.append(
+            _signal_row(
+                id="cst_slowing",
+                rank=0,
+                title=f"{st['slowing']} SKUs at customers are slowing or stuck",
+                detail=f"{st['dropped']} sales dropped, {st['aged']} aged stock, {st['stopped']} no recent sales",
+                meta=f"{st['slowing']} SKUs",
+                meta_hot=False,
+                action_label="Open Sell-through",
+                action_href=SELL_THROUGH_HREF,
+                figures={k: st[k] for k in ("dropped", "aged", "stopped")},
+            )
+        )
+    return out
+
+
+async def _sell_through_attention(user: dict | None) -> dict[str, Any] | None:
+    """Sell-through counts for Attention; skipped (not an error) when they cannot be worked out."""
+    import asyncio
+    import logging
+
+    from app.db.session_sync import SessionLocal
+    from app.services.channel_intelligence.sell_through_overview import sell_through_attention
+    from app.services.commercial_tenant_profile import reporting_today
+
+    tid = tenant_id_from_user(user)
+
+    def _work() -> dict[str, Any]:
+        with SessionLocal() as session:
+            return sell_through_attention(session, tid, reporting_today(tid))
+
+    try:
+        return await asyncio.to_thread(_work)
+    except Exception:  # noqa: BLE001 - FLAG != BLOCK: Attention still loads without these rows
+        logging.getLogger(__name__).exception("sell-through attention counts failed")
+        return None
+
+
 async def _dsi_freshness(db: AsyncSession, user: dict | None) -> dict[str, Any] | None:
     row = (
         await db.execute(
@@ -325,6 +403,13 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
         signals.append(cst_signal)
         rank += 1
 
+    # Warren 2026-10-19: the Sell-through tab's SKU problems and missing reports on Attention.
+    st = await _sell_through_attention(user)
+    for sig in sell_through_signals(st, slot_signal_shown=cst_signal is not None):
+        sig["rank"] = rank
+        signals.append(sig)
+        rank += 1
+
     if cover["pairs_below_threshold"] > 0:
         mean = cover["book_mean_weeks"]
         mean_txt = f"{mean}w" if mean is not None else "n/a"
@@ -417,6 +502,8 @@ async def build_brief_payload(db: AsyncSession, user: dict | None) -> dict[str, 
         read_parts.append("SOH recon not run")
     if cst_late or cst_missing:
         read_parts.append(f"**{cst_late + cst_missing}** customer sell-through reports late or missing")
+    if st and st.get("restock"):
+        read_parts.append(f"**{st['restock']}** SKUs at customers need restocking")
     if cover["pairs_below_threshold"] > 0:
         read_parts.append(f"**{cover['pairs_below_threshold']}** pairs under {int(REPLENISHMENT_WOC_THRESHOLD_WEEKS)}w cover")
     if settlement.get("open_cases"):
