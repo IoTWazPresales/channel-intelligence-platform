@@ -1,6 +1,6 @@
 """N-0111: print the saved sell-through layouts and how the identifier slots treat each (read only).
 
-usage (API venv python, from apps/api): python scripts/n0111_print_layouts.py
+usage (API venv python, from anywhere): python apps/api/scripts/n0111_print_layouts.py
 Prints current_database() first. Writes nothing.
 """
 from __future__ import annotations
@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 import sys
 
-sys.path.insert(0, os.getcwd())
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import text  # noqa: E402
 

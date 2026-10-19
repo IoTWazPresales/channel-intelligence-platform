@@ -1,6 +1,6 @@
 """N-0111: why were a sell-through job's rows 'Missing product code or units'? (read only)
 
-usage (API venv python, from apps/api): python scripts/n0111_diagnose_cst_job.py [job_id]
+usage (API venv python, from anywhere): python apps/api/scripts/n0111_diagnose_cst_job.py [job_id]
 With no job id it takes the newest customer sell-through job. Prints current_database() first and
 writes nothing. Shows the mapping the job used, the columns the parser resolved from it, and for the
 file's rows how many have units, each identifier, and both.
@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 import sys
 
-sys.path.insert(0, os.getcwd())
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import text  # noqa: E402
 
