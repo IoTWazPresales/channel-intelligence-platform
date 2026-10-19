@@ -18,7 +18,8 @@ Possible causes (shown on a flagged SKU):
 - a promotion ended around the time sales dropped; one is running or coming up;
 - the same drop happened last year;
 - a competitor product mapped to this one is cheaper (competitor prices, when loaded);
-- the roadmap names a replacement model (when loaded).
+- the roadmap names a replacement model (when loaded);
+- reported stock does not add up against last stock, sales and deliveries (the N-0110 stock gap).
 """
 
 from __future__ import annotations
@@ -355,6 +356,40 @@ def _replacements(session: Session, products: Iterable[int]) -> tuple[dict[int, 
     return {int(r.product_id): (r.sales_model_name or r.sku) for r in rows}, True
 
 
+def _stock_gaps(session: Session, tenant_id: str, pairs: set[tuple[int, int]]) -> dict[tuple[int, int], dict[str, Any]]:
+    """Latest compared stock-gap row (N-0110: expected vs reported on-hand) per pair, when over the tenant highlight."""
+    from app.models.customer_stock_position import CustomerStockPosition as P
+    from app.services.commercial_tenant_profile import stock_gap_highlight_units
+
+    if not pairs:
+        return {}
+    limit = stock_gap_highlight_units(tenant_id)
+    ranked = (
+        select(
+            P.customer_id, P.product_id, P.period_start_date, P.reported_on_hand, P.expected_on_hand, P.gap_units,
+            func.row_number().over(partition_by=(P.customer_id, P.product_id), order_by=P.period_start_date.desc()).label("rn"),
+        )
+        .where(
+            P.tenant_id == tenant_id,
+            P.status == "compared",
+            P.customer_id.in_(sorted({c for c, _ in pairs})),
+            P.product_id.in_(sorted({p for _, p in pairs})),
+        )
+        .subquery()
+    )
+    out: dict[tuple[int, int], dict[str, Any]] = {}
+    for r in session.execute(select(ranked).where(ranked.c.rn == 1)):
+        key = (int(r.customer_id), int(r.product_id))
+        if key in pairs and r.gap_units is not None and abs(float(r.gap_units)) >= limit:
+            out[key] = {
+                "period": r.period_start_date.isoformat(),
+                "reported": float(r.reported_on_hand or 0),
+                "expected": float(r.expected_on_hand or 0),
+                "gap": float(r.gap_units),
+            }
+    return out
+
+
 def _pct(a: float, b: float) -> float:
     return (a - b) / b if b else 0.0
 
@@ -380,6 +415,7 @@ def attach_causes(
     dist_stock = _distributor_stock(session, tenant_id, customers, products)
     competitors, competitors_loaded = _competitor_prices(session, products)
     replacements, roadmap_loaded = _replacements(session, products)
+    gaps = _stock_gaps(session, tenant_id, {(r["customer_id"], r["product_id"]) for r in rows})
     cust_names = {int(c.id): c.name for c in session.scalars(select(DimCustomer).where(DimCustomer.id.in_({c for (c, _p) in prices} | set(customers))))}
 
     for r in rows:
@@ -444,6 +480,10 @@ def attach_causes(
                 causes.append({"key": "promo_ahead", "label": "Promotion coming", "detail": f"{pr['type']} from {pr['start'].isoformat()}, {pr['planned_units']:,.0f} units planned"})
         for x in (ol.inbound if ol else []):
             causes.append({"key": "inbound", "label": "On its way", "detail": f"{x['units']:,.0f} shipped, due {x['eta'].isoformat() if x['eta'] else 'date unknown'}"})
+
+        gap = gaps.get((c, p))
+        if gap:
+            causes.append({"key": "stock_gap", "label": "Stock does not add up", "detail": f"{gap['period']}: reported {gap['reported']:,.0f}, expected {gap['expected']:,.0f} from last stock, sales and deliveries ({gap['gap']:+,.0f})"})
 
         ly = last_year_weeks.get((c, p))
         if r["reason"] == "dropped" and ly and sum(ly[-12:-4]) > 0:

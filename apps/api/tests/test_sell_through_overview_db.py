@@ -398,3 +398,26 @@ def test_attention_counts(session: Session):
     sto._BRIEF_CACHE.pop(TENANT, None)
     assert out["restock"] == 1 and out["needs_replen"] == 1
     assert "STO-AT2 Retail" in out["customers_missing"]
+
+
+def test_stock_gap_shown_as_cause(session: Session):
+    from app.models.customer_stock_position import CustomerStockPosition
+
+    db = session
+    a = _customer(db, "STO-GP")
+    p = _product(db, "GP")
+    _weeks(db, a, p, {i: 10 for i in range(26)}, soh_now=0)
+    db.add(
+        CustomerStockPosition(
+            tenant_id=TENANT, customer_id=a, product_id=p, period_grain="week", period_start_date=LAST_WEEK,
+            period_end_date=LAST_WEEK + timedelta(days=6), units_sold=10, reported_on_hand=0, expected_on_hand=25,
+            gap_units=-25, status="compared",
+        )
+    )
+    db.flush()
+    f = OverviewFilters(date_from=date(2026, 7, 20), date_to=date(2026, 10, 18), tenant_id=TENANT, customer_ids=[a])
+    out = build_overview(db, f, BusinessCalendar(), today=TODAY, vat_rate=0.15)
+    row = out["problems"]["rows"][0]
+    assert row["reason"] == "out_of_stock"
+    gap = next(c for c in row["causes"] if c["key"] == "stock_gap")
+    assert "reported 0, expected 25" in gap["detail"]
