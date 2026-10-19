@@ -27,3 +27,15 @@ def test_missing_reports_not_repeated_when_slot_signal_shows():
 def test_nothing_when_no_counts():
     assert sell_through_signals(None, slot_signal_shown=False) == []
     assert sell_through_signals({**ST, "restock": 0, "slowing": 0, "customers_missing": []}, slot_signal_shown=False) == []
+
+
+def test_singular_wording():
+    rows = sell_through_signals(
+        {**ST, "restock": 1, "slowing": 1, "customers_missing": ["Pinnacle"]}, slot_signal_shown=False
+    )
+    assert [r["title"] for r in rows] == [
+        "1 SKU at a customer needs restocking",
+        "1 customer has sell-through missing in the last 13 weeks",
+        "1 SKU at a customer is slowing or stuck",
+    ]
+    assert rows[1]["meta"] == "1 customer"

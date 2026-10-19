@@ -53,7 +53,7 @@ export function SellThroughReportsStrip({ coverage }: { coverage: SellThroughOve
             component={NextLink}
             href={`/admin/imports?template=customer_sell_through&customer=${r.customer_id}`}
             clickable
-            label={`${r.name} · last ${ago(r.days_since_last)}`}
+            label={`${r.name} · ${r.days_since_last == null ? 'nothing loaded' : `last ${ago(r.days_since_last)}`}`}
             title={`Upload ${r.name}'s sell-through`}
           />
         ))}

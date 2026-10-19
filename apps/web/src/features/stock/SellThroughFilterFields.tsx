@@ -57,6 +57,7 @@ export function SellThroughFilterFields({
       <Box sx={{ minWidth: 240, flex: '1 1 240px' }} data-testid="sellthrough-product-filter">
         <EntitySearchAutocomplete<ProductPick>
           label="Product (one SKU)"
+          size="small"
           value={filters.product ? ({ id: filters.product.id, sku: filters.product.label, name: '' } as ProductPick) : null}
           onChange={(p) => onChange({ product: p ? { id: p.id, label: p.name ? productLabel(p) : p.sku } : null })}
           getOptionLabel={(o) => (o.name ? productLabel(o) : o.sku)}
@@ -67,7 +68,7 @@ export function SellThroughFilterFields({
         const dim = byKey.get(d.key);
         const label = dim?.label ?? d.key.replace(/^[a-z]+:/, '');
         return (
-          <Box key={d.key} sx={{ display: 'flex', alignItems: 'center', minWidth: 200, flex: '1 1 200px' }}>
+          <Box key={d.key} sx={{ display: 'flex', alignItems: 'center', minWidth: 200, maxWidth: 380, flex: '1 1 200px' }}>
             <Autocomplete
               multiple
               size="small"

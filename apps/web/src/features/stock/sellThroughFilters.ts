@@ -63,6 +63,7 @@ function readDims(search: URLSearchParams): SellThroughFilterState['dims'] {
   for (const [k, v] of search.entries()) {
     if (!k.startsWith(DIM_PREFIX)) continue;
     const key = k.slice(DIM_PREFIX.length);
+    if (!/^(prod|spec|cust):.+|^site$/.test(key)) continue; // a malformed link adds no filter
     if (!seen.has(key)) {
       seen.set(key, []);
       out.push({ key, values: seen.get(key)! });

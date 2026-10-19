@@ -14,6 +14,8 @@ export type EntitySearchAutocompleteProps<T extends { id: number }> = {
   disabled?: boolean;
   /** Shown under the field (e.g. operational hint for first-time users). */
   helperText?: string;
+  /** Field size; omitted keeps the default (medium). */
+  size?: 'small' | 'medium';
 };
 
 export function EntitySearchAutocomplete<T extends { id: number }>({
@@ -24,6 +26,7 @@ export function EntitySearchAutocomplete<T extends { id: number }>({
   getOptionLabel,
   disabled,
   helperText,
+  size,
 }: EntitySearchAutocompleteProps<T>) {
   const [input, setInput] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -71,6 +74,7 @@ export function EntitySearchAutocomplete<T extends { id: number }>({
   return (
     <Autocomplete<T, false, false, false>
       disabled={disabled}
+      size={size}
       options={options}
       loading={loading}
       value={value}

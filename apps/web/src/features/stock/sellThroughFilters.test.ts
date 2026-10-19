@@ -64,3 +64,9 @@ describe('incomplete periods', () => {
     expect(incompleteNote([{ label: 'W42', incomplete_customers: [] }])).toBe('');
   });
 });
+
+describe('malformed filter links', () => {
+  it('ignores filters without a field name', () => {
+    expect(readFilters(new URLSearchParams('f.spec%3A=&f.nope=1&f.site=North')).dims).toEqual([{ key: 'site', values: ['North'] }]);
+  });
+});

@@ -163,7 +163,7 @@ describe('Sell-through tab (Warren 2026-10-19)', () => {
     expect(await screen.findByText(/Units sold up 28%/)).toBeInTheDocument();
     const strip = screen.getByTestId('sellthrough-reports-strip');
     expect(within(strip).getByText('1 up to date')).toBeInTheDocument();
-    expect(within(strip).getByText('Pinnacle · last nothing loaded').closest('a')).toHaveAttribute(
+    expect(within(strip).getByText('Pinnacle · nothing loaded').closest('a')).toHaveAttribute(
       'href',
       '/admin/imports?template=customer_sell_through&customer=7',
     );

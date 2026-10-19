@@ -144,7 +144,11 @@ def sell_through_signals(st: dict[str, Any] | None, *, slot_signal_shown: bool) 
             _signal_row(
                 id="cst_restock",
                 rank=0,
-                title=f"{st['restock']} SKUs at customers need restocking",
+                title=(
+                    "1 SKU at a customer needs restocking"
+                    if st["restock"] == 1
+                    else f"{st['restock']} SKUs at customers need restocking"
+                ),
                 detail=f"{st['out_of_stock']} out of stock while selling, {st['needs_replen']} below their customer's cover",
                 meta=f"{st['restock']} SKUs",
                 meta_hot=bool(st["out_of_stock"]),
@@ -160,9 +164,13 @@ def sell_through_signals(st: dict[str, Any] | None, *, slot_signal_shown: bool) 
             _signal_row(
                 id="cst_reports_missing_window",
                 rank=0,
-                title=f"{len(names)} customers have sell-through missing in the last 13 weeks",
+                title=(
+                    "1 customer has sell-through missing in the last 13 weeks"
+                    if len(names) == 1
+                    else f"{len(names)} customers have sell-through missing in the last 13 weeks"
+                ),
                 detail=listed,
-                meta=f"{len(names)} customers",
+                meta="1 customer" if len(names) == 1 else f"{len(names)} customers",
                 meta_hot=True,
                 action_label="Open Sell-through",
                 action_href=SELL_THROUGH_HREF,
@@ -174,7 +182,11 @@ def sell_through_signals(st: dict[str, Any] | None, *, slot_signal_shown: bool) 
             _signal_row(
                 id="cst_slowing",
                 rank=0,
-                title=f"{st['slowing']} SKUs at customers are slowing or stuck",
+                title=(
+                    "1 SKU at a customer is slowing or stuck"
+                    if st["slowing"] == 1
+                    else f"{st['slowing']} SKUs at customers are slowing or stuck"
+                ),
                 detail=f"{st['dropped']} sales dropped, {st['aged']} aged stock, {st['stopped']} no recent sales",
                 meta=f"{st['slowing']} SKUs",
                 meta_hot=False,
