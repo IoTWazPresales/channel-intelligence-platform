@@ -738,7 +738,23 @@ function AdminImportsPageContent() {
     queryKey: ['import-job', lastJobId, 'cst'],
     queryFn: ({ signal }) => apiGet<Job>(`/api/v1/imports/jobs/${lastJobId}`, { signal }),
     enabled: lastJobId != null && selectedSlug === 'customer_sell_through',
+    // While Apply runs in the worker, follow the job until it is loaded (as the shipment apply poll).
+    refetchInterval: (q) => ((q.state.data?.status ?? '').trim().toLowerCase() === 'running' ? 2000 : false),
   });
+  const cstJobRunning = (cstJobDetail?.status ?? '').trim().toLowerCase() === 'running';
+
+  const cstWasRunningRef = useRef(false);
+  useEffect(() => {
+    if (cstJobRunning) {
+      cstWasRunningRef.current = true;
+      return;
+    }
+    if (!cstWasRunningRef.current || lastJobId == null) return;
+    cstWasRunningRef.current = false;
+    void qc.invalidateQueries({ queryKey: importJobLoadReportQueryKey(lastJobId) });
+    void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+    void qc.invalidateQueries({ queryKey: ['background-tasks-active'] });
+  }, [cstJobRunning, lastJobId, qc]);
 
   /** Job whose opening wizard step was set from ?job= (sell-through), so it is set once, not on every render. */
   const cstOpeningStepJobRef = useRef<number | null>(null);
@@ -748,19 +764,13 @@ function AdminImportsPageContent() {
   const cstApply = useMutation({
     mutationFn: async () => {
       if (lastJobId == null) throw new Error('No job');
-      const r = await apiPost<{ applied: number; skipped_unresolved: number; errors: string[] }>(
+      return apiPost<{ async: boolean; task_id: string | null; status: string | null; stage: string | null }>(
         `/api/v1/imports/jobs/${lastJobId}/cst-load`,
         {}
       );
-      if (r.errors?.length) throw new Error(r.errors.join(' · '));
-      return r;
     },
-    onSuccess: (r) => {
-      setCstApplyNote(
-        r.skipped_unresolved
-          ? `${r.skipped_unresolved.toLocaleString()} row(s) not loaded: product not matched or ignored.`
-          : null
-      );
+    onSuccess: () => {
+      setCstApplyNote(null);
       if (lastJobId == null) return;
       void qc.invalidateQueries({ queryKey: ['import-job', lastJobId, 'cst'] });
       void qc.invalidateQueries({ queryKey: importJobLoadReportQueryKey(lastJobId) });
@@ -4726,18 +4736,31 @@ function AdminImportsPageContent() {
               </Alert>
             )}
             {cstApply.isError ? <Alert severity="error">{safeDisplayError(cstApply.error)}</Alert> : null}
-            {cstApply.isPending ? <LinearProgress data-testid="cst-apply-running" /> : null}
+            {!cstJobRunning && (cstJobDetail?.error_summary ?? '').startsWith('Apply failed') ? (
+              <Alert severity="error" data-testid="cst-apply-error">
+                {cstJobDetail?.error_summary}
+              </Alert>
+            ) : null}
+            {cstApply.isPending || cstJobRunning ? (
+              <>
+                <LinearProgress data-testid="cst-apply-running" />
+                <Alert severity="info">
+                  Applying customer sell-through in the background. This can take a few minutes for large files; you
+                  can leave this page and the job will continue.
+                </Alert>
+              </>
+            ) : null}
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
               <Button onClick={() => setActiveStep(5)}>Back to validate &amp; resolve</Button>
               <Button
                 variant="contained"
                 color="primary"
                 size="large"
-                disabled={cstApply.isPending}
-                onClick={() => void cstApply.mutateAsync()}
+                disabled={cstApply.isPending || cstJobRunning}
+                onClick={() => void cstApply.mutateAsync().catch(() => {})}
                 data-testid="cst-apply-import"
               >
-                {cstApply.isPending
+                {cstApply.isPending || cstJobRunning
                   ? 'Applying…'
                   : importJobApplyIsLoaded(cstJobDetail?.stage ?? '', cstJobDetail?.status ?? '')
                     ? 'Apply again (rows matched since)'

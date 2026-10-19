@@ -209,8 +209,9 @@ vi.mock('@/lib/api', async (importOriginal) => {
     }),
     apiPost: vi.fn(async (url: string) => {
       if (url === '/api/v1/imports/jobs/77/cst-load') {
-        mockState.cstJobDetail = { ...mockState.cstJobDetail, stage: 'loaded', status: 'completed_with_errors' };
-        return { applied: 7650, skipped_unresolved: 4560, errors: [] };
+        // Broker unavailable in the test: apply ran inline, the job is already loaded.
+        mockState.cstJobDetail = { ...mockState.cstJobDetail, stage: 'loaded', status: 'completed' };
+        return { async: false, task_id: null, status: 'completed', stage: 'loaded' };
       }
       return {};
     }),
@@ -1461,5 +1462,51 @@ describe('AdminImportsPage customer sell-through finishes like the other importe
     mockState.cstJobDetail = { ...mockState.cstJobDetail, stage: 'loaded', status: 'completed' };
     renderPage();
     expect(await screen.findByTestId('cst-import-loaded-success')).toBeInTheDocument();
+  });
+});
+
+describe('AdminImportsPage customer sell-through Apply runs in the worker (import-parity rule 2)', () => {
+  const CST_TEMPLATE = {
+    id: 15,
+    slug: 'customer_sell_through',
+    display_name: 'Customer sell-through',
+    description: 'Retailer sell-through reports',
+    requires_provider: true,
+    accepted_file_types: ['.csv', '.xlsx'],
+    required_fields: [],
+    optional_fields: [],
+    pipeline_ready: true,
+    destructive_apply_requires_confirm: false,
+  };
+
+  beforeEach(() => {
+    mockRouterReplace.mockReset();
+    mockState.templates.push(CST_TEMPLATE);
+    searchString = 'job=77';
+  });
+
+  afterEach(() => {
+    mockState.templates = mockState.templates.filter((t) => t.slug !== 'customer_sell_through');
+    searchString = '';
+  });
+
+  it('shows progress while the worker applies and keeps Apply disabled', async () => {
+    mockState.cstJobDetail = {
+      id: 77,
+      template_slug: 'customer_sell_through',
+      file_name: 'amazon.xlsx',
+      stage: 'loaded',
+      status: 'running',
+      import_mode: 'apply',
+      staged_metadata: { customer_id: 299, cst_file_periods: [] },
+    };
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <AdminImportsPage />
+      </QueryClientProvider>
+    );
+    expect(await screen.findByTestId('cst-apply-running')).toBeInTheDocument();
+    expect(screen.getByTestId('cst-apply-import')).toBeDisabled();
   });
 });
