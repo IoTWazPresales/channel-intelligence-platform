@@ -66,6 +66,14 @@ class Settings(BaseSettings):
         description="Enable AI-assisted import mapping and resolution (env AI_ASSIST_ENABLED).",
     )
 
+    # Warren 2026-10-19: the sell-through AI summary. Off unless AI assist is on and a key is set;
+    # the screen then shows the rule-based summary. One short call per filter set, cached.
+    ai_narrative_model: str = Field(
+        default="claude-opus-5-5",
+        description="Model for the sell-through AI summary (env AI_NARRATIVE_MODEL), e.g. claude-haiku-5-5 to cut cost.",
+    )
+    ai_narrative_cache_minutes: int = Field(default=360, ge=0, le=10080)
+
     # Legacy EAV (product_attribute_value) write path during Product Master commit.
     # The canonical, read spec store is dim_product.specs_json; nothing reads
     # product_attribute_value. Default off so commit does not write ~1 row per

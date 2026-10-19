@@ -61,7 +61,7 @@ def get_filters(user: dict = Depends(get_current_user)):
 
 
 @router.get("/overview")
-def get_overview(
+def get_overview_route(
     date_from: date = Query(...),
     date_to: date = Query(...),
     grain: str = Query(default="week"),
@@ -74,6 +74,47 @@ def get_overview(
     product_ids: str | None = Query(default=None, description="comma-separated product ids"),
     user: dict = Depends(get_current_user),
 ):
+    return get_overview(
+        date_from, date_to, grain, compare, vat, customer_ids, business_units, categories, series, product_ids, user
+    )
+
+
+@router.get("/narrative")
+def get_narrative(
+    date_from: date = Query(...),
+    date_to: date = Query(...),
+    grain: str = Query(default="week"),
+    compare: str = Query(default="prior_year"),
+    vat: str | None = Query(default=None),
+    customer_ids: str | None = Query(default=None),
+    business_units: str | None = Query(default=None),
+    categories: str | None = Query(default=None),
+    series: str | None = Query(default=None),
+    product_ids: str | None = Query(default=None),
+    user: dict = Depends(get_current_user),
+):
+    """A short written summary of the same view: AI-worded when configured, otherwise the rules."""
+    from app.services.channel_intelligence.sell_through_narrative import narrate
+
+    overview = get_overview(
+        date_from, date_to, grain, compare, vat, customer_ids, business_units, categories, series, product_ids, user
+    )
+    return narrate(overview, tenant_id=tenant_id_from_user(user))
+
+
+def get_overview(
+    date_from: date,
+    date_to: date,
+    grain: str,
+    compare: str,
+    vat: str | None,
+    customer_ids: str | None,
+    business_units: str | None,
+    categories: str | None,
+    series: str | None,
+    product_ids: str | None,
+    user: dict,
+) -> dict:
     if grain not in GRAINS:
         raise HTTPException(status_code=400, detail=f"grain must be one of {list(GRAINS)}")
     if compare not in COMPARES:
