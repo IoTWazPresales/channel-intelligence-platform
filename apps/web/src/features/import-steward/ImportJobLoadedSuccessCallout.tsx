@@ -15,6 +15,10 @@ export type ImportJobLoadedSuccessCalloutProps = {
   unresolvedNotes?: string[];
   onStartNewImport?: () => void;
   testId?: string;
+  /** Where the loaded rows can be seen. Defaults to shipment evidence admin (the first importer to use this). */
+  viewLink?: { href: string; label: string };
+  /** Replaces the default sentence about applying the same file again, when it does not fit the importer. */
+  description?: string;
 };
 
 /** Job finished apply and promoted to terminal `loaded` stage. */
@@ -38,6 +42,8 @@ export function ImportJobLoadedSuccessCallout({
   unresolvedNotes = [],
   onStartNewImport,
   testId = 'import-job-loaded-success',
+  viewLink = { href: '/admin/shipment-evidence', label: 'Shipment evidence admin' },
+  description,
 }: ImportJobLoadedSuccessCalloutProps) {
   if (!importJobApplyIsLoaded(stage, status)) return null;
 
@@ -65,8 +71,9 @@ export function ImportJobLoadedSuccessCallout({
               · <em>{fileName}</em>
             </>
           ) : null}
-          ) is <strong>{stage}</strong>. Rows were written to {factLayerLabel}. Applying the same file again
-          updates those rows. The validation record stays on this import.
+          ) is <strong>{stage}</strong>.{' '}
+          {description ??
+            `Rows were written to ${factLayerLabel}. Applying the same file again updates those rows. The validation record stays on this import.`}
         </Typography>
         {unresolvedNotes.length > 0 ? (
           <Typography variant="body2" component="div">
@@ -98,10 +105,10 @@ export function ImportJobLoadedSuccessCallout({
             size="small"
             variant="text"
             component={Link}
-            href={`/admin/shipment-evidence`}
+            href={viewLink.href}
             data-testid={`${testId}-shipment-evidence`}
           >
-            Shipment evidence admin
+            {viewLink.label}
           </Button>
         </Stack>
       </Stack>

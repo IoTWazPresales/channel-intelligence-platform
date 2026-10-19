@@ -101,7 +101,7 @@ import { StewardWriteFieldset, StewardWriteNotice } from '@/components/StewardWr
 import { canRunImportTemplate, useStewardWriteAccess } from '@/features/shell/stewardAccess';
 
 import { CstImportJobResolutionSection } from './CstImportJobResolutionSection';
-import { ImportJobLoadReport, importJobLoadReportQueryKey } from './ImportJobLoadReport';
+import { ImportJobLoadReport, importJobLoadReportQueryKey, useImportJobLoadReport } from './ImportJobLoadReport';
 import { DsiImportJobResolutionSection } from './DsiImportJobResolutionSection';
 import { DsiIntelligenceStatusPanel, type DsiIntelligenceState } from './DsiIntelligenceStatusPanel';
 import { ImportJobValidateProgressPanel } from '@/features/import-steward/ImportJobValidateProgressPanel';
@@ -742,6 +742,19 @@ function AdminImportsPageContent() {
     refetchInterval: (q) => ((q.state.data?.status ?? '').trim().toLowerCase() === 'running' ? 2000 : false),
   });
   const cstJobRunning = (cstJobDetail?.status ?? '').trim().toLowerCase() === 'running';
+  const cstJobLoaded = importJobApplyIsLoaded(cstJobDetail?.stage ?? '', cstJobDetail?.status ?? '');
+  const { data: cstLoadReport } = useImportJobLoadReport(
+    lastJobId != null && selectedSlug === 'customer_sell_through' ? lastJobId : null
+  );
+  const cstLoadedSummary = cstLoadReport?.report
+    ? `${cstLoadReport.report.rows_loaded.toLocaleString()} of ${cstLoadReport.report.rows_read.toLocaleString()} rows were written to customer sell-through.`
+    : 'Matched rows were written to customer sell-through.';
+  const cstNotLoadedNotes = (cstLoadReport?.report?.not_loaded ?? []).map(
+    (r) =>
+      `Not loaded: ${r.rows.toLocaleString()} row${r.rows === 1 ? '' : 's'}, ${
+        r.reason === 'product_not_matched' ? 'product not matched or ignored in the steward' : r.label
+      }.`
+  );
 
   const cstWasRunningRef = useRef(false);
   useEffect(() => {
@@ -760,7 +773,6 @@ function AdminImportsPageContent() {
   const cstOpeningStepJobRef = useRef<number | null>(null);
 
   // The sell-through Apply step (N-0111): loads the matched rows and marks the job loaded.
-  const [cstApplyNote, setCstApplyNote] = useState<string | null>(null);
   const cstApply = useMutation({
     mutationFn: async () => {
       if (lastJobId == null) throw new Error('No job');
@@ -770,7 +782,6 @@ function AdminImportsPageContent() {
       );
     },
     onSuccess: () => {
-      setCstApplyNote(null);
       if (lastJobId == null) return;
       void qc.invalidateQueries({ queryKey: ['import-job', lastJobId, 'cst'] });
       void qc.invalidateQueries({ queryKey: importJobLoadReportQueryKey(lastJobId) });
@@ -4708,64 +4719,65 @@ function AdminImportsPageContent() {
         {activeStep === 6 && isCst && selectedTemplate && lastJobId != null ? (
           <Stack spacing={2} data-testid="cst-step-apply">
             <Typography variant="subtitle2">Apply customer sell-through</Typography>
-            <ImportJobLoadReport importJobId={lastJobId} />
-            {importJobApplyIsLoaded(cstJobDetail?.stage ?? '', cstJobDetail?.status ?? '') ? (
+            {cstJobLoaded && !cstJobRunning ? (
+              // As the shipment Apply step: once loaded, one result box and Back; no second Apply.
               <ImportJobLoadedSuccessCallout
                 importJobId={lastJobId}
                 templateLabel={selectedTemplate.display_name}
                 fileName={cstJobDetail?.file_name}
                 status={cstJobDetail?.status ?? ''}
                 stage={cstJobDetail?.stage ?? ''}
-                factLayerLabel="customer sell-through"
-                unresolvedNotes={cstApplyNote ? [cstApplyNote] : []}
+                description={cstLoadedSummary}
+                unresolvedNotes={cstNotLoadedNotes}
+                viewLink={{ href: '/channel-intelligence', label: 'Open sell-through' }}
                 onStartNewImport={() => {
                   setActiveStep(0);
                   setSelectedSlug(null);
                   setSourceId('');
                   setLastJobId(null);
                   setIsJobRevisitMode(false);
-                  setCstApplyNote(null);
                   void router.replace('/admin/imports');
                 }}
                 testId="cst-import-loaded-success"
               />
             ) : (
-              <Alert severity="warning">
-                Applying writes the matched rows to customer sell-through. A newer file replaces only the figures it
-                carries for the same customer, product and period. Unmatched and ignored rows are not loaded.
-              </Alert>
-            )}
-            {cstApply.isError ? <Alert severity="error">{safeDisplayError(cstApply.error)}</Alert> : null}
-            {!cstJobRunning && (cstJobDetail?.error_summary ?? '').startsWith('Apply failed') ? (
-              <Alert severity="error" data-testid="cst-apply-error">
-                {cstJobDetail?.error_summary}
-              </Alert>
-            ) : null}
-            {cstApply.isPending || cstJobRunning ? (
               <>
-                <LinearProgress data-testid="cst-apply-running" />
-                <Alert severity="info">
-                  Applying customer sell-through in the background. This can take a few minutes for large files; you
-                  can leave this page and the job will continue.
+                <ImportJobLoadReport importJobId={lastJobId} />
+                <Alert severity="warning">
+                  Applying writes the matched rows to customer sell-through. A newer file replaces only the figures
+                  it carries for the same customer, product and period. Unmatched and ignored rows are not loaded.
                 </Alert>
+                {cstApply.isError ? <Alert severity="error">{safeDisplayError(cstApply.error)}</Alert> : null}
+                {!cstJobRunning && (cstJobDetail?.error_summary ?? '').startsWith('Apply failed') ? (
+                  <Alert severity="error" data-testid="cst-apply-error">
+                    {cstJobDetail?.error_summary}
+                  </Alert>
+                ) : null}
+                {cstApply.isPending || cstJobRunning ? (
+                  <>
+                    <LinearProgress data-testid="cst-apply-running" />
+                    <Alert severity="info">
+                      Applying customer sell-through in the background. This can take a few minutes for large files;
+                      you can leave this page and the job will continue.
+                    </Alert>
+                  </>
+                ) : null}
               </>
-            ) : null}
+            )}
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
               <Button onClick={() => setActiveStep(5)}>Back to validate &amp; resolve</Button>
-              <Button
-                variant="contained"
-                color="primary"
-                size="large"
-                disabled={cstApply.isPending || cstJobRunning}
-                onClick={() => void cstApply.mutateAsync().catch(() => {})}
-                data-testid="cst-apply-import"
-              >
-                {cstApply.isPending || cstJobRunning
-                  ? 'Applying…'
-                  : importJobApplyIsLoaded(cstJobDetail?.stage ?? '', cstJobDetail?.status ?? '')
-                    ? 'Apply again (rows matched since)'
-                    : 'Apply import'}
-              </Button>
+              {cstJobLoaded && !cstJobRunning ? null : (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="large"
+                  disabled={cstApply.isPending || cstJobRunning}
+                  onClick={() => void cstApply.mutateAsync().catch(() => {})}
+                  data-testid="cst-apply-import"
+                >
+                  {cstApply.isPending || cstJobRunning ? 'Applying…' : 'Apply import'}
+                </Button>
+              )}
             </Stack>
           </Stack>
         ) : null}

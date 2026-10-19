@@ -235,17 +235,11 @@ export function CstImportJobResolutionSection({
     queryKey: ['imports', 'cst-candidate-counts', importJobId],
     enabled: importJobId > 0,
     queryFn: async ({ signal }) => {
-      const [productAll, productOpen, locationAll, locationOpen] = await Promise.all([
-        apiGet<{ total: number }>(
-          `/api/v1/imports/jobs/${importJobId}/cst-candidates?skip=0&limit=1&entity=product&status=all`,
-          { signal }
-        ),
+      // As the shipment tab counts: a tab counts the tokens still open (mapped and ignored ones drop
+      // out), so the number matches the list under it.
+      const [productOpen, locationOpen] = await Promise.all([
         apiGet<{ total: number }>(
           `/api/v1/imports/jobs/${importJobId}/cst-candidates?skip=0&limit=1&entity=product&status=open`,
-          { signal }
-        ),
-        apiGet<{ total: number }>(
-          `/api/v1/imports/jobs/${importJobId}/cst-candidates?skip=0&limit=1&entity=location&status=all`,
           { signal }
         ),
         apiGet<{ total: number }>(
@@ -254,8 +248,8 @@ export function CstImportJobResolutionSection({
         ),
       ]);
       const counts: CstEntityTabCounts = {
-        product: { total: productAll.total, needsWork: productOpen.total },
-        location: { total: locationAll.total, needsWork: locationOpen.total },
+        product: { total: productOpen.total, needsWork: productOpen.total },
+        location: { total: locationOpen.total, needsWork: locationOpen.total },
       };
       return counts;
     },

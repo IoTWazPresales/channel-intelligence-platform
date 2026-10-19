@@ -230,6 +230,24 @@ vi.mock('./CstImportJobResolutionSection', () => ({
 vi.mock('./ImportJobLoadReport', () => ({
   ImportJobLoadReport: () => <div data-testid="load-report-stub" />,
   importJobLoadReportQueryKey: (id: number) => ['import-job-load-report', id],
+  useImportJobLoadReport: () => ({
+    data: {
+      job_id: 77,
+      status: 'completed',
+      display_status: 'Loaded',
+      report: {
+        kind: 'customer_sell_through',
+        rows_read: 12210,
+        rows_loaded: 7650,
+        rows_partly_loaded: 0,
+        rows_not_loaded: 4560,
+        identical_copies_counted_once: 0,
+        not_loaded: [{ reason: 'product_not_matched', label: 'Product not matched', rows: 4560, partly_loaded: false }],
+        files_not_read: [],
+        files_excluded: 0,
+      },
+    },
+  }),
 }));
 
 describe('AdminImportsPage deferred template visibility', () => {
@@ -1461,7 +1479,11 @@ describe('AdminImportsPage customer sell-through finishes like the other importe
   it('a loaded job opens on Apply with its result', async () => {
     mockState.cstJobDetail = { ...mockState.cstJobDetail, stage: 'loaded', status: 'completed' };
     renderPage();
-    expect(await screen.findByTestId('cst-import-loaded-success')).toBeInTheDocument();
+    const done = await screen.findByTestId('cst-import-loaded-success');
+    expect(within(done).getByText(/7,650 of 12,210 rows were written to customer sell-through/)).toBeInTheDocument();
+    expect(within(done).getByText(/Not loaded: 4,560 rows, product not matched or ignored in the steward/)).toBeInTheDocument();
+    // As shipment: once loaded there is no second Apply on this step.
+    expect(screen.queryByTestId('cst-apply-import')).not.toBeInTheDocument();
   });
 });
 

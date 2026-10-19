@@ -83,13 +83,18 @@ export function ImportJobLoadReportView({ data }: { data: ImportLoadReportRespon
   );
 }
 
-export function ImportJobLoadReport({ importJobId }: { importJobId: number }) {
-  const { data } = useQuery({
-    queryKey: importJobLoadReportQueryKey(importJobId),
+export function useImportJobLoadReport(importJobId: number | null) {
+  return useQuery({
+    queryKey: importJobLoadReportQueryKey(importJobId ?? 0),
     queryFn: ({ signal }) =>
       apiGet<ImportLoadReportResponse>(`/api/v1/imports/jobs/${importJobId}/load-report`, { signal }),
+    enabled: importJobId != null && importJobId > 0,
     refetchInterval: 15_000,
   });
+}
+
+export function ImportJobLoadReport({ importJobId }: { importJobId: number }) {
+  const { data } = useImportJobLoadReport(importJobId);
   if (!data) return null;
   return <ImportJobLoadReportView data={data} />;
 }
