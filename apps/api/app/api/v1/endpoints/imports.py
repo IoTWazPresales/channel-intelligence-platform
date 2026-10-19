@@ -2025,12 +2025,6 @@ async def resolve_cst_candidate(
             result = resolve_cst_candidate_sync(
                 sync_db, job_id, candidate_id, body.entity_id
             )
-            # Load the rows this mapping resolved (a job in apply mode), so they reach the facts.
-            from app.services.imports.cst_mapping_candidates import load_steward_resolved_cst_lines
-
-            loaded = load_steward_resolved_cst_lines(sync_db, job_id)
-            if isinstance(result, dict):
-                result = {**result, "loaded": loaded}
             sync_db.commit()
         except CstCandidateOpError as exc:
             sync_db.rollback()
@@ -2049,12 +2043,14 @@ async def resolve_cst_candidate(
 
 @router.post("/jobs/{job_id}/cst-load", status_code=200, dependencies=_STEWARD_WRITE)
 def cst_load_matched_rows(job_id: int, user: dict = Depends(get_current_user)) -> dict[str, Any]:
-    """Load a sell-through job's matched rows into the facts (N-0111).
+    """The sell-through wizard's Apply step (N-0111), as Apply is for distributor and shipment imports.
 
-    For a job uploaded in validate mode, and for rows matched in the steward. Only rows not loaded
-    yet are written; unmatched and ignored rows stay out. The job is switched to apply mode, so
-    later steward mappings load as they are made.
+    Loads every matched row not loaded yet (rows matched in the steward included) and marks the job
+    loaded. Unmatched and ignored rows stay out and are reported. Applying again loads only rows
+    matched since.
     """
+    from datetime import datetime, timezone
+
     from app.services.imports.cst_mapping_candidates import mark_steward_mapped_cst_lines_resolved
     from app.services.imports.customer_sell_through_apply import apply_customer_sellthrough_staging
 
@@ -2064,6 +2060,9 @@ def cst_load_matched_rows(job_id: int, user: dict = Depends(get_current_user)) -
         summary = apply_customer_sellthrough_staging(sync_db, job_id)
         if not summary.errors:
             job.import_mode = "apply"
+            job.stage = "loaded"
+            job.status = "completed_with_errors" if summary.skipped_unresolved else "completed"
+            job.completed_at = datetime.now(timezone.utc)
         sync_db.commit()
     out = {
         "import_job_id": job_id,
@@ -2153,10 +2152,6 @@ def cst_steward_bulk_apply(
                 candidate_ids=body.candidate_ids,
                 product_id=body.product_id,
             )
-            if body.action == "resolve_product" and result.get("applied"):
-                from app.services.imports.cst_mapping_candidates import load_steward_resolved_cst_lines
-
-                result["loaded"] = load_steward_resolved_cst_lines(sync_db, job_id)
             sync_db.commit()
         except CstCandidateOpError as exc:
             sync_db.rollback()

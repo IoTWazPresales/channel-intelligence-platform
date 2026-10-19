@@ -101,7 +101,7 @@ import { StewardWriteFieldset, StewardWriteNotice } from '@/components/StewardWr
 import { canRunImportTemplate, useStewardWriteAccess } from '@/features/shell/stewardAccess';
 
 import { CstImportJobResolutionSection } from './CstImportJobResolutionSection';
-import { ImportJobLoadReport } from './ImportJobLoadReport';
+import { ImportJobLoadReport, importJobLoadReportQueryKey } from './ImportJobLoadReport';
 import { DsiImportJobResolutionSection } from './DsiImportJobResolutionSection';
 import { DsiIntelligenceStatusPanel, type DsiIntelligenceState } from './DsiIntelligenceStatusPanel';
 import { ImportJobValidateProgressPanel } from '@/features/import-steward/ImportJobValidateProgressPanel';
@@ -376,7 +376,16 @@ const HL_APPLY_BLOCKING_CODES = new Set([
 const stepsDefault = ['Import type', 'Data provider', 'Template details', 'Import mode', 'Upload & preview'];
 
 /** Customer sell-through: the upload picks a reporting customer, there is no source (N-0111). */
-const stepsCst = ['Import type', 'Reporting customer', 'Template details', 'Import mode', 'Upload & preview'];
+/** Same finish as the distributor and shipment imports: validate & resolve in the steward, then Apply. */
+const stepsCst = [
+  'Import type',
+  'Reporting customer',
+  'Template details',
+  'Import mode',
+  'Upload files',
+  'Validate & resolve',
+  'Apply',
+];
 
 const stepsShipmentEvidence = [
   'Import type',
@@ -731,6 +740,34 @@ function AdminImportsPageContent() {
     enabled: lastJobId != null && selectedSlug === 'customer_sell_through',
   });
 
+  /** Job whose opening wizard step was set from ?job= (sell-through), so it is set once, not on every render. */
+  const cstOpeningStepJobRef = useRef<number | null>(null);
+
+  // The sell-through Apply step (N-0111): loads the matched rows and marks the job loaded.
+  const [cstApplyNote, setCstApplyNote] = useState<string | null>(null);
+  const cstApply = useMutation({
+    mutationFn: async () => {
+      if (lastJobId == null) throw new Error('No job');
+      const r = await apiPost<{ applied: number; skipped_unresolved: number; errors: string[] }>(
+        `/api/v1/imports/jobs/${lastJobId}/cst-load`,
+        {}
+      );
+      if (r.errors?.length) throw new Error(r.errors.join(' · '));
+      return r;
+    },
+    onSuccess: (r) => {
+      setCstApplyNote(
+        r.skipped_unresolved
+          ? `${r.skipped_unresolved.toLocaleString()} row(s) not loaded: product not matched or ignored.`
+          : null
+      );
+      if (lastJobId == null) return;
+      void qc.invalidateQueries({ queryKey: ['import-job', lastJobId, 'cst'] });
+      void qc.invalidateQueries({ queryKey: importJobLoadReportQueryKey(lastJobId) });
+      void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+    },
+  });
+
   const {
     data: jobDetail,
     isError: jobDetailIsError,
@@ -822,6 +859,13 @@ function AdminImportsPageContent() {
           status: jobDetail.status ?? '',
         });
         if (derived != null) setActiveStep(derived);
+      } else if (jobDetail.template_slug === 'customer_sell_through') {
+        // Same as shipments: a loaded job opens on Apply (its result), any other on Validate & resolve.
+        // Only the opening step: moving between Validate & resolve and Apply is left to the user.
+        if (cstOpeningStepJobRef.current !== jobDetail.id) {
+          cstOpeningStepJobRef.current = jobDetail.id;
+          setActiveStep((jobDetail.stage ?? '').trim() === 'loaded' ? 6 : 5);
+        }
       } else if (jobDetail.template_slug === 'historical_lineup') {
         setActiveStep(4);
         if (jobDetail.import_mode === 'validate' && jobDetail.stage === 'validated') {
@@ -2877,6 +2921,7 @@ function AdminImportsPageContent() {
           if (ids[0] != null) {
             setLastJobId(ids[0]);
             void qc.invalidateQueries({ queryKey: ['import-job', ids[0], 'cst'] });
+            setActiveStep(5);
           }
           void qc.invalidateQueries({ queryKey: ['import-jobs'] });
         }}
@@ -4618,6 +4663,90 @@ function AdminImportsPageContent() {
           </Stack>
         ) : null}
 
+        {activeStep === 5 && isCst && selectedTemplate && lastJobId != null ? (
+          <Stack spacing={2} data-testid="cst-step-resolve">
+            <Typography variant="subtitle2">Validate &amp; resolve</Typography>
+            <ImportJobLoadReport importJobId={lastJobId} />
+            <CstFilePeriodStrip
+              files={
+                (Array.isArray(
+                  (cstJobDetail?.staged_metadata as { cst_file_periods?: unknown } | null)?.cst_file_periods
+                )
+                  ? (cstJobDetail?.staged_metadata as { cst_file_periods: CstFilePeriodRow[] }).cst_file_periods
+                  : []) as CstFilePeriodRow[]
+              }
+            />
+            <Alert severity="info">
+              Map or ignore the product tokens below, then continue to Apply. Nothing reaches sell-through until you
+              apply.
+            </Alert>
+            <CstImportJobResolutionSection
+              importJobId={lastJobId}
+              onInvalidate={() => {
+                void refetchPreview();
+              }}
+            />
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
+              <Button onClick={() => setActiveStep(4)}>Back</Button>
+              <Button variant="outlined" onClick={() => setActiveStep(6)} data-testid="cst-continue-apply">
+                Continue to apply
+              </Button>
+            </Stack>
+          </Stack>
+        ) : null}
+
+        {activeStep === 6 && isCst && selectedTemplate && lastJobId != null ? (
+          <Stack spacing={2} data-testid="cst-step-apply">
+            <Typography variant="subtitle2">Apply customer sell-through</Typography>
+            <ImportJobLoadReport importJobId={lastJobId} />
+            {importJobApplyIsLoaded(cstJobDetail?.stage ?? '', cstJobDetail?.status ?? '') ? (
+              <ImportJobLoadedSuccessCallout
+                importJobId={lastJobId}
+                templateLabel={selectedTemplate.display_name}
+                fileName={cstJobDetail?.file_name}
+                status={cstJobDetail?.status ?? ''}
+                stage={cstJobDetail?.stage ?? ''}
+                factLayerLabel="customer sell-through"
+                unresolvedNotes={cstApplyNote ? [cstApplyNote] : []}
+                onStartNewImport={() => {
+                  setActiveStep(0);
+                  setSelectedSlug(null);
+                  setSourceId('');
+                  setLastJobId(null);
+                  setIsJobRevisitMode(false);
+                  setCstApplyNote(null);
+                  void router.replace('/admin/imports');
+                }}
+                testId="cst-import-loaded-success"
+              />
+            ) : (
+              <Alert severity="warning">
+                Applying writes the matched rows to customer sell-through. A newer file replaces only the figures it
+                carries for the same customer, product and period. Unmatched and ignored rows are not loaded.
+              </Alert>
+            )}
+            {cstApply.isError ? <Alert severity="error">{safeDisplayError(cstApply.error)}</Alert> : null}
+            {cstApply.isPending ? <LinearProgress data-testid="cst-apply-running" /> : null}
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
+              <Button onClick={() => setActiveStep(5)}>Back to validate &amp; resolve</Button>
+              <Button
+                variant="contained"
+                color="primary"
+                size="large"
+                disabled={cstApply.isPending}
+                onClick={() => void cstApply.mutateAsync()}
+                data-testid="cst-apply-import"
+              >
+                {cstApply.isPending
+                  ? 'Applying…'
+                  : importJobApplyIsLoaded(cstJobDetail?.stage ?? '', cstJobDetail?.status ?? '')
+                    ? 'Apply again (rows matched since)'
+                    : 'Apply import'}
+              </Button>
+            </Stack>
+          </Stack>
+        ) : null}
+
         {activeStep === 4 && !isPm && !isDsi && !isShipmentEvidence ? (
           <Stack spacing={2}>
             {isCst ? (
@@ -4671,26 +4800,15 @@ function AdminImportsPageContent() {
                 </Button>
               </Alert>
             ) : null}
-            {isCst && lastJobId != null ? <ImportJobLoadReport importJobId={lastJobId} /> : null}
             {isCst && lastJobId != null ? (
-              <CstFilePeriodStrip
-                files={
-                  (Array.isArray(
-                    (cstJobDetail?.staged_metadata as { cst_file_periods?: unknown } | null)?.cst_file_periods
-                  )
-                    ? (cstJobDetail?.staged_metadata as { cst_file_periods: CstFilePeriodRow[] })
-                        .cst_file_periods
-                    : []) as CstFilePeriodRow[]
-                }
-              />
-            ) : null}
-            {isCst && lastJobId != null ? (
-              <CstImportJobResolutionSection
-                importJobId={lastJobId}
-                onInvalidate={() => {
-                  void refetchPreview();
-                }}
-              />
+              <Stack direction="row" spacing={1} alignItems="center" data-testid="cst-upload-done">
+                <Alert severity="success" sx={{ flex: 1 }}>
+                  Job <strong>#{lastJobId}</strong> created.
+                </Alert>
+                <Button variant="contained" onClick={() => setActiveStep(5)} data-testid="cst-next-resolve">
+                  Next: validate &amp; resolve
+                </Button>
+              </Stack>
             ) : null}
             {selectedTemplate?.slug === 'historical_lineup' && historicalValidatedJobId != null && hlSheetDetail ? (
               <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5 }}>

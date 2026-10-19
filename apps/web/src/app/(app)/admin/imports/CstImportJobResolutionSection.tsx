@@ -400,7 +400,7 @@ export function CstImportJobResolutionSection({
         entity_id: args.entityId,
       }),
     onSuccess: () => {
-      setActionMsg('Mapped. Its rows are matched; use Load matched rows to put them in sell-through.');
+      setActionMsg('Mapped. Its rows are matched and load when you apply.');
       setActionFeedback(null);
       refreshAfterSteward();
     },
@@ -418,29 +418,7 @@ export function CstImportJobResolutionSection({
     onError: (e) => setActionFeedback({ message: safeDisplayError(e), severity: 'error' }),
   });
 
-  const loadMutation = useMutation({
-    mutationFn: async () =>
-      apiPost<{ applied: number; skipped_unresolved: number; errors: string[] }>(
-        `/api/v1/imports/jobs/${importJobId}/cst-load`,
-        {}
-      ),
-    onSuccess: (r) => {
-      if (r.errors?.length) {
-        setActionFeedback({ message: r.errors.join(' · '), severity: 'error' });
-      } else {
-        setActionFeedback(null);
-        setActionMsg(
-          `Loaded ${r.applied.toLocaleString()} matched row(s) into sell-through. ` +
-            `${r.skipped_unresolved.toLocaleString()} row(s) stay out (not matched or ignored).`
-        );
-      }
-      refreshAfterSteward();
-    },
-    onError: (e) => setActionFeedback({ message: safeDisplayError(e), severity: 'error' }),
-  });
-
   const busy =
-    loadMutation.isPending ||
     resolveMutation.isPending ||
     ignoreMutation.isPending ||
     bulk.bulkPreview.isPending ||
@@ -472,22 +450,6 @@ export function CstImportJobResolutionSection({
           {safeDisplayError(candidatesPage.query.error)}
         </Alert>
       ) : null}
-
-      <Stack direction="row" spacing={1} alignItems="center" data-testid="cst-load-matched">
-        <StewardPendingButton
-          variant="contained"
-          pending={loadMutation.isPending}
-          disabled={busy}
-          onClick={() => loadMutation.mutate()}
-          data-testid="cst-load-matched-button"
-        >
-          Load matched rows
-        </StewardPendingButton>
-        <Typography variant="caption" color="text.secondary">
-          Puts every matched row of this job into sell-through. Rows already loaded are not loaded twice;
-          unmatched and ignored rows stay out.
-        </Typography>
-      </Stack>
 
       <StewardResolutionPlanToolbar
         plan={{

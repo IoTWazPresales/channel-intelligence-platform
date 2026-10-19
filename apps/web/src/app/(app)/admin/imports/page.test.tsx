@@ -11,6 +11,7 @@ import AdminImportsPage from './page';
 let searchString = '';
 
 const mockState = vi.hoisted(() => ({
+  cstJobDetail: null as any,
   templates: [
     {
       id: 10,
@@ -195,6 +196,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
         return [];
       }
       if (url === '/api/v1/imports/jobs/42') return mockState.jobDetail;
+      if (url === '/api/v1/imports/jobs/77') return mockState.cstJobDetail;
       if (url === '/api/v1/imports/jobs/42/rows') return mockState.jobRows;
       if (url === '/api/v1/imports/jobs/50') return mockState.hlValidateJobDetail;
       if (url === '/api/v1/imports/jobs/50/rows') return mockState.hlValidateJobRows;
@@ -205,6 +207,13 @@ vi.mock('@/lib/api', async (importOriginal) => {
       if (url.match(/\/api\/v1\/imports\/jobs\/\d+$/)) return null;
       return [];
     }),
+    apiPost: vi.fn(async (url: string) => {
+      if (url === '/api/v1/imports/jobs/77/cst-load') {
+        mockState.cstJobDetail = { ...mockState.cstJobDetail, stage: 'loaded', status: 'completed_with_errors' };
+        return { applied: 7650, skipped_unresolved: 4560, errors: [] };
+      }
+      return {};
+    }),
     apiUrl: (path: string) => path,
     readFetchError: async () => 'error',
     safeDisplayError: () => 'error',
@@ -212,6 +221,15 @@ vi.mock('@/lib/api', async (importOriginal) => {
 });
 
 vi.mock('@/lib/queryError', () => ({ toQueryError: () => null }));
+
+vi.mock('./CstImportJobResolutionSection', () => ({
+  CstImportJobResolutionSection: () => <div data-testid="cst-steward-stub" />,
+}));
+
+vi.mock('./ImportJobLoadReport', () => ({
+  ImportJobLoadReport: () => <div data-testid="load-report-stub" />,
+  importJobLoadReportQueryKey: (id: number) => ['import-job-load-report', id],
+}));
 
 describe('AdminImportsPage deferred template visibility', () => {
   function renderPage() {
@@ -1377,5 +1395,71 @@ describe('AdminImportsPage customer sell-through (N-0111: a reporting customer, 
     expect(await screen.findByTestId('cst-bulk-upload-open')).toHaveTextContent('Upload sell-through files');
     expect(screen.getByTestId('cst-bulk-upload-open')).toBeEnabled();
     expect(screen.queryByRole('button', { name: /Choose file$/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('AdminImportsPage customer sell-through finishes like the other importers (N-0111)', () => {
+  const CST_TEMPLATE = {
+    id: 15,
+    slug: 'customer_sell_through',
+    display_name: 'Customer sell-through',
+    description: 'Retailer sell-through reports',
+    requires_provider: true,
+    accepted_file_types: ['.csv', '.xlsx'],
+    required_fields: [],
+    optional_fields: [],
+    pipeline_ready: true,
+    destructive_apply_requires_confirm: false,
+  };
+
+  function renderPage() {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    return {
+      user: userEvent.setup(),
+      ...renderWithProviders(
+        <QueryClientProvider client={qc}>
+          <AdminImportsPage />
+        </QueryClientProvider>
+      ),
+    };
+  }
+
+  beforeEach(() => {
+    mockRouterReplace.mockReset();
+    mockState.templates.push(CST_TEMPLATE);
+    mockState.cstJobDetail = {
+      id: 77,
+      template_slug: 'customer_sell_through',
+      file_name: 'amazon.xlsx',
+      stage: 'validated',
+      status: 'completed_with_errors',
+      import_mode: 'validate',
+      staged_metadata: { customer_id: 299, cst_file_periods: [] },
+    };
+    searchString = 'job=77';
+  });
+
+  afterEach(() => {
+    mockState.templates = mockState.templates.filter((t) => t.slug !== 'customer_sell_through');
+    searchString = '';
+  });
+
+  it('opens a stewarded job on Validate & resolve, then Apply loads it and shows it loaded', async () => {
+    const { user } = renderPage();
+    const resolve = await screen.findByTestId('cst-step-resolve');
+    expect(within(resolve).getByTestId('cst-steward-stub')).toBeInTheDocument();
+    expect(screen.getAllByText('Validate & resolve').length).toBeGreaterThan(0);
+
+    await user.click(screen.getByTestId('cst-continue-apply'));
+    const apply = await screen.findByTestId('cst-step-apply');
+    await user.click(within(apply).getByTestId('cst-apply-import'));
+
+    expect(await screen.findByTestId('cst-import-loaded-success')).toBeInTheDocument();
+  });
+
+  it('a loaded job opens on Apply with its result', async () => {
+    mockState.cstJobDetail = { ...mockState.cstJobDetail, stage: 'loaded', status: 'completed' };
+    renderPage();
+    expect(await screen.findByTestId('cst-import-loaded-success')).toBeInTheDocument();
   });
 });

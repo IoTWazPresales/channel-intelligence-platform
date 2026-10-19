@@ -449,13 +449,19 @@ def test_a_job_row_that_is_unresolved_is_counted_in_the_candidate_with_all_its_i
     assert job.staged_metadata["customer_sellthrough_flat"]["unresolved"] == 2
 
 
-def test_a_token_mapped_in_the_steward_loads_its_rows_into_the_facts(session: Session) -> None:
-    """N-0111: mapping a token marks its rows resolved and loads them (job in apply mode), without a
-    re-process. Before, the rows kept their unresolved status and the load step never took them."""
-    from app.services.imports.cst_mapping_candidates import (
-        load_steward_resolved_cst_lines,
-        mark_steward_mapped_cst_lines_resolved,
-    )
+def _apply_step(db: Session, job_id: int):
+    """What the wizard's Apply step (POST /jobs/{id}/cst-load) runs."""
+    from app.services.imports.cst_mapping_candidates import mark_steward_mapped_cst_lines_resolved
+    from app.services.imports.customer_sell_through_apply import apply_customer_sellthrough_staging
+
+    mark_steward_mapped_cst_lines_resolved(db, job_id)
+    return apply_customer_sellthrough_staging(db, job_id)
+
+
+def test_a_token_mapped_in_the_steward_loads_its_rows_on_apply(session: Session) -> None:
+    """N-0111: mapping a token marks its rows resolved, so Apply loads them without a re-process.
+    Before, the rows kept their unresolved status and the load step never took them."""
+    from app.services.imports.cst_mapping_candidates import mark_steward_mapped_cst_lines_resolved
 
     a, _b = _two_products(session)
     cid = _customer(session, "N0111M-STEWARD-LOAD")
@@ -472,16 +478,14 @@ def test_a_token_mapped_in_the_steward_loads_its_rows_into_the_facts(session: Se
 
     resolve_cst_candidate_sync(session, jid, int(cand.id), int(a.id))
     assert {(ln.resolved_product_id, ln.resolution_status) for ln in _lines(session, jid)} == {(a.id, "resolved")}
-    loaded = load_steward_resolved_cst_lines(session, jid)
-    assert loaded is not None and loaded["applied"] >= 1
+    assert _apply_step(session, jid).applied >= 1
     assert set(_fact_products(session, cid)) == {a.id}
     # Nothing left to repair or load a second time.
     assert mark_steward_mapped_cst_lines_resolved(session, jid) == 0
+    assert _apply_step(session, jid).applied == 0
 
 
-def test_rows_mapped_before_the_fix_are_repaired_and_loaded(session: Session) -> None:
-    from app.services.imports.cst_mapping_candidates import load_steward_resolved_cst_lines
-
+def test_rows_mapped_before_the_fix_are_repaired_and_loaded_on_apply(session: Session) -> None:
     a, _b = _two_products(session)
     cid = _customer(session, "N0111M-STEWARD-OLD")
     out = _upload(session, cid, _csv(HEADER, [["N0111M-Z1", None, None, 4, 20, DAY]]), SLOTS)
@@ -490,17 +494,13 @@ def test_rows_mapped_before_the_fix_are_repaired_and_loaded(session: Session) ->
         ln.resolved_product_id = int(a.id)
         ln.resolution_status = "unresolved"
     session.flush()
-    loaded = load_steward_resolved_cst_lines(session, jid)
-    assert loaded is not None and loaded["applied"] == 1
+    assert _apply_step(session, jid).applied == 1
     assert _fact_products(session, cid) == [a.id]
 
 
-def test_an_upload_in_validate_mode_loads_nothing_until_load_matched_rows(session: Session) -> None:
+def test_an_upload_in_validate_mode_loads_nothing_until_apply(session: Session) -> None:
     """N-0111: the sell-through upload used to ignore the wizard's import mode (always validate) and
-    nothing on the page could load the matched rows. The load endpoint's steps load them once."""
-    from app.services.imports.cst_mapping_candidates import mark_steward_mapped_cst_lines_resolved
-    from app.services.imports.customer_sell_through_apply import apply_customer_sellthrough_staging
-
+    the wizard had no Apply step. Apply loads the matched rows once."""
     a, _b = _two_products(session)
     cid = _customer(session, "N0111M-VALIDATE-LOAD")
     data = _csv(HEADER, [[a.part_number, None, None, 3, 20, DAY]])
@@ -514,7 +514,6 @@ def test_an_upload_in_validate_mode_loads_nothing_until_load_matched_rows(sessio
     )
     jid = out[0]["import_job_id"]
     assert _fact_products(session, cid) == []
-    mark_steward_mapped_cst_lines_resolved(session, jid)
-    assert apply_customer_sellthrough_staging(session, jid).applied == 1
+    assert _apply_step(session, jid).applied == 1
     assert _fact_products(session, cid) == [a.id]
-    assert apply_customer_sellthrough_staging(session, jid).applied == 0  # never twice
+    assert _apply_step(session, jid).applied == 0  # never twice

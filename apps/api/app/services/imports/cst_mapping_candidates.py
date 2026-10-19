@@ -519,32 +519,11 @@ def list_cst_mapping_candidates_sync(
     }
 
 
-def load_steward_resolved_cst_lines(session: Session, job_id: int) -> dict[str, Any] | None:
-    """Load the rows a steward mapping has just resolved, when the job loads (import mode apply).
-
-    Called once after a steward resolve (single map, bulk map, resolution-plan apply) so mapped rows
-    reach the sell-through facts without re-processing the file. Only rows not yet applied are
-    written. A job in validate mode is left for its own Apply step. Returns the apply summary or None.
-    """
-    from app.services.imports.customer_sell_through_apply import apply_customer_sellthrough_staging
-
-    job = session.get(ImportJob, int(job_id))
-    if job is None or (job.import_mode or "").strip().lower() != "apply":
-        return None
-    mark_steward_mapped_cst_lines_resolved(session, int(job_id))
-    summary = apply_customer_sellthrough_staging(session, int(job_id))
-    return {
-        "applied": summary.applied,
-        "skipped_unresolved": summary.skipped_unresolved,
-        "errors": list(summary.errors or []),
-    }
-
-
 def mark_steward_mapped_cst_lines_resolved(session: Session, job_id: int) -> int:
-    """Rows that carry a product (steward-mapped before the fix above) but were never marked resolved.
+    """Rows that carry a product but were never marked resolved (steward-mapped before the fix above).
 
-    Earlier steward mappings set the product without the status, so those rows could not load.
-    Marks them resolved, as a re-process would; returns how many.
+    Earlier steward mappings set the product without the status, so those rows could not load. The
+    Apply step calls this first and marks them resolved, as a re-process would; returns how many.
     """
     from sqlalchemy import update
 
