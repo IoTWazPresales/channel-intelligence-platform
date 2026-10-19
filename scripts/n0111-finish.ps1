@@ -22,6 +22,16 @@ git status --short
 git log --oneline -1 HEAD
 git log --oneline -1 origin/feat/ns-2-brief-nav-collapse
 
+# The app reads apps/api/.env; load the database URLs from it when this shell has none.
+$envFile = Join-Path $api '.env'
+if (Test-Path $envFile) {
+    foreach ($line in Get-Content $envFile) {
+        if ($line -match '^\s*(DATABASE_URL(?:_SYNC)?)\s*=\s*(.+?)\s*$') {
+            if (-not [Environment]::GetEnvironmentVariable($Matches[1])) { Set-Item -Path ("Env:" + $Matches[1]) -Value ($Matches[2].Trim('"').Trim("'")) }
+        }
+    }
+}
+
 Step '2. database names (passwords never printed)'
 foreach ($n in 'DATABASE_URL', 'DATABASE_URL_SYNC', 'DATABASE_URL_SYNC_MIGRATE') {
     $v = [Environment]::GetEnvironmentVariable($n)
@@ -48,15 +58,19 @@ if (-not $SkipTests) {
     if ($env:DATABASE_URL)      { $env:DATABASE_URL      = ($env:DATABASE_URL -replace '/cip(\?|$)', '/cip_test$1') }
     if ($env:DATABASE_URL_SYNC) { $env:DATABASE_URL_SYNC = ($env:DATABASE_URL_SYNC -replace '/cip(\?|$)', '/cip_test$1') }
     Write-Host "tests use: $($env:DATABASE_URL_SYNC -replace '://[^@]*@', '://***@')"
-    Push-Location $api
-    & $py -m pytest tests -q -p no:cacheprovider 2>&1 | Select-Object -Last 40
-    Pop-Location
+    if (($env:DATABASE_URL_SYNC -notmatch '/cip_test(\?|$)') -or ($env:DATABASE_URL -notmatch '/cip_test(\?|$)')) {
+        Write-Host 'ABORT: the API tests would not run on cip_test (DATABASE_URL / DATABASE_URL_SYNC not found or not ending /cip). Skipping them.' -ForegroundColor Red
+    } else {
+        Push-Location $api
+        & $py -m pytest tests -q -p no:cacheprovider 2>&1 | Select-Object -Last 40
+        Pop-Location
+    }
     $env:DATABASE_URL = $saveA; $env:DATABASE_URL_SYNC = $saveS
 
-    Step '6. full web: typecheck and vitest (2 workers)'
+    Step '6. full web: typecheck and vitest'
     pnpm --filter "@cip/web" typecheck
     Push-Location (Join-Path $repo 'apps\web')
-    pnpm exec vitest run --maxWorkers=2 2>&1 | Select-Object -Last 15
+    pnpm exec vitest run 2>&1 | Select-Object -Last 15
     Pop-Location
 }
 
