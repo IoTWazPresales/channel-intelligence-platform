@@ -37,16 +37,22 @@ foreach ($n in 'DATABASE_URL', 'DATABASE_URL_SYNC', 'DATABASE_URL_SYNC_MIGRATE')
     if ($v) { Write-Host ("{0} -> {1}" -f $n, ($v -replace '://[^@]*@', '://***@')) } else { Write-Host "$n not set in this shell (the app .env is used)" }
 }
 
-Step '3. migration state: cip and cip_test must both be at 20261019_0044'
+Step '3. migrations: bring cip and cip_test to head (20261019_0045 adds two nullable replenishment columns)'
 Push-Location $api
+& $py -m alembic upgrade head
+if ($LASTEXITCODE -ne 0) { Write-Host 'alembic upgrade failed on cip: if it says "must be owner", set DATABASE_URL_SYNC_MIGRATE to the postgres owner URL and re-run.' }
 & $py -m alembic current
 $sync = $env:DATABASE_URL_SYNC
+$mig = $env:DATABASE_URL_SYNC_MIGRATE
 if ($sync) {
     $env:DATABASE_URL_SYNC = ($sync -replace '/cip(\?|$)', '/cip_test$1')
+    if ($mig) { $env:DATABASE_URL_SYNC_MIGRATE = ($mig -replace '/cip(\?|$)', '/cip_test$1') }
     Write-Host '-- cip_test --'
+    & $py -m alembic upgrade head
     & $py -m alembic current
     $env:DATABASE_URL_SYNC = $sync
-} else { Write-Host 'DATABASE_URL_SYNC not set: set it, then re-run, to check cip_test too.' }
+    if ($mig) { $env:DATABASE_URL_SYNC_MIGRATE = $mig }
+} else { Write-Host 'DATABASE_URL_SYNC not set: set it, then re-run, to migrate cip_test too.' }
 Step '4. saved layouts and how each is treated (read only, cip)'
 & $py scripts\n0111_print_layouts.py
 Pop-Location
