@@ -38,6 +38,8 @@ CST_PRODUCT_ENTITY = "cst_product_token"
 CST_LOCATION_ENTITY = "cst_location_token"
 _CST_ENTITY_TYPES = (CST_PRODUCT_ENTITY, CST_LOCATION_ENTITY)
 _CST_TERMINAL_STATUSES = frozenset({"resolved", "ignored"})
+# Staging-line statuses a steward mapping turns into "resolved" (the same ones a re-process would).
+_STEWARD_RESOLVABLE_STATUSES = frozenset({"pending", "unresolved", "ai_suggested", "ai_auto_resolved"})
 _CST_READY_SCORE_THRESHOLD = 0.90
 
 
@@ -410,6 +412,10 @@ def _patch_staging_for_resolved_candidate(
             if _product_token_key(line_primary_token(line)) == cand.normalized_key:
                 line.resolved_product_id = int(entity_id)
                 line.product_match_tier = "steward"
+                # The load step takes only rows marked resolved; a steward-mapped row is one (as a
+                # re-process would mark it). Without this, mapped rows never reached the facts.
+                if line.resolution_status in _STEWARD_RESOLVABLE_STATUSES:
+                    line.resolution_status = "resolved"
     elif cand.entity_type == CST_LOCATION_ENTITY:
         for line in lines:
             if line.resolved_location_id is not None:
@@ -511,3 +517,47 @@ def list_cst_mapping_candidates_sync(
         "skip": skip,
         "limit": limit,
     }
+
+
+def load_steward_resolved_cst_lines(session: Session, job_id: int) -> dict[str, Any] | None:
+    """Load the rows a steward mapping has just resolved, when the job loads (import mode apply).
+
+    Called once after a steward resolve (single map, bulk map, resolution-plan apply) so mapped rows
+    reach the sell-through facts without re-processing the file. Only rows not yet applied are
+    written. A job in validate mode is left for its own Apply step. Returns the apply summary or None.
+    """
+    from app.services.imports.customer_sell_through_apply import apply_customer_sellthrough_staging
+
+    job = session.get(ImportJob, int(job_id))
+    if job is None or (job.import_mode or "").strip().lower() != "apply":
+        return None
+    mark_steward_mapped_cst_lines_resolved(session, int(job_id))
+    summary = apply_customer_sellthrough_staging(session, int(job_id))
+    return {
+        "applied": summary.applied,
+        "skipped_unresolved": summary.skipped_unresolved,
+        "errors": list(summary.errors or []),
+    }
+
+
+def mark_steward_mapped_cst_lines_resolved(session: Session, job_id: int) -> int:
+    """Rows that carry a product (steward-mapped before the fix above) but were never marked resolved.
+
+    Earlier steward mappings set the product without the status, so those rows could not load.
+    Marks them resolved, as a re-process would; returns how many.
+    """
+    from sqlalchemy import update
+
+    res = session.execute(
+        update(ImportCustomerSellthroughStagingLine)
+        .where(
+            ImportCustomerSellthroughStagingLine.import_job_id == int(job_id),
+            ImportCustomerSellthroughStagingLine.resolved_product_id.is_not(None),
+            ImportCustomerSellthroughStagingLine.resolved_customer_id.is_not(None),
+            ImportCustomerSellthroughStagingLine.resolution_status.in_(tuple(_STEWARD_RESOLVABLE_STATUSES)),
+        )
+        .values(resolution_status="resolved")
+        .execution_options(synchronize_session="fetch")
+    )
+    session.flush()
+    return int(res.rowcount or 0)

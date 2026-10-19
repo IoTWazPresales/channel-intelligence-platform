@@ -447,3 +447,49 @@ def test_a_job_row_that_is_unresolved_is_counted_in_the_candidate_with_all_its_i
     assert "identifier_conflict_rows" not in cand.context
     job = session.get(ImportJob, out["import_job_id"])
     assert job.staged_metadata["customer_sellthrough_flat"]["unresolved"] == 2
+
+
+def test_a_token_mapped_in_the_steward_loads_its_rows_into_the_facts(session: Session) -> None:
+    """N-0111: mapping a token marks its rows resolved and loads them (job in apply mode), without a
+    re-process. Before, the rows kept their unresolved status and the load step never took them."""
+    from app.services.imports.cst_mapping_candidates import (
+        load_steward_resolved_cst_lines,
+        mark_steward_mapped_cst_lines_resolved,
+    )
+
+    a, _b = _two_products(session)
+    cid = _customer(session, "N0111M-STEWARD-LOAD")
+    data = _csv(HEADER, [["N0111M-Y1", "5550001110002", None, 3, 20, DAY], ["N0111M-Y1", "5550001110002", None, 2, 5, "2026-03-09"]])
+    out = _upload(session, cid, data, SLOTS)
+    jid = out["import_job_id"]
+    assert _fact_products(session, cid) == []
+    cand = session.scalar(
+        select(ImportEntityMappingCandidate).where(
+            ImportEntityMappingCandidate.import_job_id == jid,
+            ImportEntityMappingCandidate.entity_type == "cst_product_token",
+        )
+    )
+
+    resolve_cst_candidate_sync(session, jid, int(cand.id), int(a.id))
+    assert {(ln.resolved_product_id, ln.resolution_status) for ln in _lines(session, jid)} == {(a.id, "resolved")}
+    loaded = load_steward_resolved_cst_lines(session, jid)
+    assert loaded is not None and loaded["applied"] >= 1
+    assert set(_fact_products(session, cid)) == {a.id}
+    # Nothing left to repair or load a second time.
+    assert mark_steward_mapped_cst_lines_resolved(session, jid) == 0
+
+
+def test_rows_mapped_before_the_fix_are_repaired_and_loaded(session: Session) -> None:
+    from app.services.imports.cst_mapping_candidates import load_steward_resolved_cst_lines
+
+    a, _b = _two_products(session)
+    cid = _customer(session, "N0111M-STEWARD-OLD")
+    out = _upload(session, cid, _csv(HEADER, [["N0111M-Z1", None, None, 4, 20, DAY]]), SLOTS)
+    jid = out["import_job_id"]
+    for ln in _lines(session, jid):  # what an earlier steward mapping left behind
+        ln.resolved_product_id = int(a.id)
+        ln.resolution_status = "unresolved"
+    session.flush()
+    loaded = load_steward_resolved_cst_lines(session, jid)
+    assert loaded is not None and loaded["applied"] == 1
+    assert _fact_products(session, cid) == [a.id]

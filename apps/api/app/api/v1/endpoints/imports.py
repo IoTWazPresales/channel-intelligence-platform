@@ -2022,6 +2022,12 @@ async def resolve_cst_candidate(
             result = resolve_cst_candidate_sync(
                 sync_db, job_id, candidate_id, body.entity_id
             )
+            # Load the rows this mapping resolved (a job in apply mode), so they reach the facts.
+            from app.services.imports.cst_mapping_candidates import load_steward_resolved_cst_lines
+
+            loaded = load_steward_resolved_cst_lines(sync_db, job_id)
+            if isinstance(result, dict):
+                result = {**result, "loaded": loaded}
             sync_db.commit()
         except CstCandidateOpError as exc:
             sync_db.rollback()
@@ -2115,6 +2121,10 @@ def cst_steward_bulk_apply(
                 candidate_ids=body.candidate_ids,
                 product_id=body.product_id,
             )
+            if body.action == "resolve_product" and result.get("applied"):
+                from app.services.imports.cst_mapping_candidates import load_steward_resolved_cst_lines
+
+                result["loaded"] = load_steward_resolved_cst_lines(sync_db, job_id)
             sync_db.commit()
         except CstCandidateOpError as exc:
             sync_db.rollback()

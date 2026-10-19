@@ -480,6 +480,31 @@ def test_resolve_cst_candidate_sets_resolved_status():
     session.flush.assert_called()
 
 
+def test_resolve_marks_the_mapped_rows_resolved_so_they_can_load():
+    # N-0111: the load step takes only rows marked resolved. A steward mapping used to set the
+    # product but leave the row unresolved, so mapped rows never reached the facts.
+    from app.services.imports.distributor_sales_inventory import _product_token_key
+
+    cand = _full_candidate(normalized_key=_product_token_key("199291021372"))
+    blank = dict(raw_product_token=None, raw_part_number_token=None, raw_sales_model_token=None, raw_article_token=None)
+    mapped = SimpleNamespace(
+        **blank, raw_barcode_token="199291021372", resolved_product_id=None, resolution_status="unresolved",
+        product_match_tier=None,
+    )
+    other = SimpleNamespace(
+        **blank, raw_barcode_token="4711000000011", resolved_product_id=None, resolution_status="unresolved",
+        product_match_tier=None,
+    )
+    session = MagicMock()
+    session.get.return_value = cand
+    session.scalars.return_value.all.return_value = [mapped, other]
+
+    resolve_cst_candidate_sync(session, job_id=5, candidate_id=100, entity_id=55)
+
+    assert (mapped.resolved_product_id, mapped.resolution_status, mapped.product_match_tier) == (55, "resolved", "steward")
+    assert (other.resolved_product_id, other.resolution_status) == (None, "unresolved")
+
+
 def test_ignore_cst_candidate_idempotent():
     cand = _full_candidate(status="ignored")
     session = MagicMock()

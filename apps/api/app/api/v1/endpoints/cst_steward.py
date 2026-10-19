@@ -644,8 +644,12 @@ def reresolve_job_residuals(
                 newly += 1
             session.add(line)
         applied = None
-        if apply and newly:
+        if apply:
+            # Rows mapped in the steward count too (N-0111), not only rows this pass resolved.
+            from app.services.imports.cst_mapping_candidates import mark_steward_mapped_cst_lines_resolved
+
             session.flush()
+            mark_steward_mapped_cst_lines_resolved(session, int(job_id))
             summary = apply_customer_sellthrough_staging(session, int(job_id))
             applied = {"applied": summary.applied, "skipped_unresolved": summary.skipped_unresolved}
         session.commit()

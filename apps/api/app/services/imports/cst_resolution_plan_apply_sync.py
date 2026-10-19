@@ -79,6 +79,11 @@ def run_cst_resolution_plan_apply_orchestrator(
         if on_progress is not None:
             on_progress(idx + 1, total or 1)
 
+    if combined["applied"]:
+        # Load the rows these mappings resolved (a job in apply mode), so they reach the facts.
+        from app.services.imports.cst_mapping_candidates import load_steward_resolved_cst_lines
+
+        combined["loaded"] = load_steward_resolved_cst_lines(session, job_id)
     session.commit()
     combined["processed"] = total
     combined["partial_success"] = False
