@@ -22,14 +22,13 @@ git status --short
 git log --oneline -1 HEAD
 git log --oneline -1 origin/feat/ns-2-brief-nav-collapse
 
-# The app reads apps/api/.env; load the database URLs from it when this shell has none.
-$envFile = Join-Path $api '.env'
-if (Test-Path $envFile) {
-    foreach ($line in Get-Content $envFile) {
-        if ($line -match '^\s*(DATABASE_URL(?:_SYNC)?)\s*=\s*(.+?)\s*$') {
-            if (-not [Environment]::GetEnvironmentVariable($Matches[1])) { Set-Item -Path ("Env:" + $Matches[1]) -Value ($Matches[2].Trim('"').Trim("'")) }
-        }
-    }
+# Ask the app itself which database URLs it uses (env, apps/api/.env, or its built-in defaults).
+Push-Location $api
+$urls = & $py -c "from app.core.config import get_settings as g; s=g(); print(s.database_url); print(s.database_url_sync)" 2>$null
+Pop-Location
+if ($urls -and $urls.Count -ge 2) {
+    if (-not $env:DATABASE_URL)      { $env:DATABASE_URL      = $urls[0].Trim() }
+    if (-not $env:DATABASE_URL_SYNC) { $env:DATABASE_URL_SYNC = $urls[1].Trim() }
 }
 
 Step '2. database names (passwords never printed)'
