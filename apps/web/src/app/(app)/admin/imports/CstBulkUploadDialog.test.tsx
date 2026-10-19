@@ -266,6 +266,50 @@ describe('CstBulkUploadDialog (N-0111: pick a reporting customer, not a source)'
     ]);
   });
 
+  it('a saved layout that already uses the new columns can still be edited', async () => {
+    apiPostMock.mockImplementation(async (path: string) => {
+      if (path.endsWith('/batch-propose')) {
+        return {
+          group_count: 1,
+          file_count: 1,
+          customer_id: 20,
+          targets: TARGETS,
+          files: [
+            {
+              filename: 'amazon.csv',
+              readable: true,
+              columns: ['EAN', 'UPC', 'Units'],
+              layout_signature: 'sigNEW',
+              layout: {
+                id: 9,
+                name: 'Amazon daily',
+                legacy_product_slot: false,
+                mapping: { EAN: 'raw_barcode_token', UPC: 'raw_barcode_token', Units: 'units_sold' },
+              },
+              detected_mapping: {},
+              samples: { EAN: ['4711'], UPC: ['1234'], Units: ['3'] },
+            },
+          ],
+        };
+      }
+      return { group_count: 1, jobs: [{ outcome: 'created', import_job_id: 58, filenames: ['amazon.csv'] }] };
+    });
+    const { user } = renderDialog();
+    await pickCustomer(user, 'Takealot');
+    await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, file());
+    await user.click(screen.getByTestId('cst-bulk-preview-groups'));
+
+    expect(await screen.findByText(/Every file matches a saved layout/)).toBeInTheDocument();
+    const offer = screen.getByTestId('cst-saved-layout-sigNEW');
+    expect(offer).toHaveTextContent('is saved for this customer');
+    expect(screen.queryByTestId('cst-legacy-layout-sigNEW')).toBeNull();
+
+    // Editing opens the mapping step on what the layout maps today and updates that layout.
+    await user.click(within(offer).getByTestId('cst-remap-sigNEW'));
+    const card = await screen.findByTestId('cst-new-layout-sigNEW');
+    expect(within(card).getByText(/Re-map column layout/)).toBeInTheDocument();
+  });
+
   it('does not send a re-map unless the uploader asks for one', async () => {
     apiPostMock.mockImplementation(async (path: string) => {
       if (path.endsWith('/batch-propose')) {

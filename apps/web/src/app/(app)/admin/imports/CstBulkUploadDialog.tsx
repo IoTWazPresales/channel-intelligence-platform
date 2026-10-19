@@ -347,14 +347,17 @@ export function CstBulkUploadDialog({ open, onClose, onJobsCreated }: CstBulkUpl
     return [...bySig.values()];
   }, [preview, remapped]);
 
-  /** Saved layouts that still map the older single product column: they load as before; re-map is offered. */
+  /**
+   * Saved layouts the files matched. Every one can be edited (its columns re-mapped); the ones that still
+   * map the older single product column load as before and are offered a re-map into the separate slots.
+   */
   const legacyLayouts = useMemo(() => {
     const bySig = new Map<
       string,
-      { signature: string; name: string; mapping: Record<string, string>; filenames: string[] }
+      { signature: string; name: string; mapping: Record<string, string>; filenames: string[]; legacy: boolean }
     >();
     for (const f of preview?.files ?? []) {
-      if (!f.readable || !f.layout?.legacy_product_slot || !f.layout_signature) continue;
+      if (!f.readable || !f.layout || !f.layout_signature) continue;
       const cur = bySig.get(f.layout_signature);
       if (cur) cur.filenames.push(f.filename);
       else
@@ -363,6 +366,7 @@ export function CstBulkUploadDialog({ open, onClose, onJobsCreated }: CstBulkUpl
           name: f.layout.name,
           mapping: f.layout.mapping ?? {},
           filenames: [f.filename],
+          legacy: !!f.layout.legacy_product_slot,
         });
     }
     return [...bySig.values()];
@@ -574,7 +578,7 @@ export function CstBulkUploadDialog({ open, onClose, onJobsCreated }: CstBulkUpl
                   <Alert
                     key={l.signature}
                     severity="info"
-                    data-testid={`cst-legacy-layout-${l.signature}`}
+                    data-testid={l.legacy ? `cst-legacy-layout-${l.signature}` : `cst-saved-layout-${l.signature}`}
                     action={
                       <Button
                         size="small"
@@ -586,12 +590,13 @@ export function CstBulkUploadDialog({ open, onClose, onJobsCreated }: CstBulkUpl
                           setLayoutNames((p) => ({ ...p, [l.signature]: l.name }));
                         }}
                       >
-                        Re-map product columns
+                        {l.legacy ? 'Re-map product columns' : 'Edit column mapping'}
                       </Button>
                     }
                   >
-                    Layout {l.name} maps one product column that may hold any identifier. It keeps loading as before.
-                    You can re-map it into Part number, Barcode, Sales model and Customer product code.
+                    {l.legacy
+                      ? `Layout ${l.name} maps one product column that may hold any identifier. It keeps loading as before. You can re-map it into Part number, Barcode, Sales model and Customer product code.`
+                      : `Layout ${l.name} is saved for this customer. Change how its columns are mapped, and the layout is updated.`}
                   </Alert>
                 ))}
               {newLayouts.map((l) => {
