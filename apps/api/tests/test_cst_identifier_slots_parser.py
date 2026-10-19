@@ -67,7 +67,7 @@ def test_a_row_needs_only_one_identifier_and_a_row_with_none_is_not_staged() -> 
         SLOTS,
     )
     assert [r["raw_barcode_token"] for r in res.rows] == ["4711000000011", None]
-    assert res.skipped_rows == {"missing_product_or_units": 1}
+    assert res.skipped_rows == {"missing_product": 1}
 
 
 def test_a_barcode_cell_loses_excels_point_zero_and_inner_spaces() -> None:
@@ -103,7 +103,7 @@ def test_an_older_layout_keeps_its_row_rule_the_product_cell_must_be_filled() ->
     mapping = {"Item": "raw_product_token", "Kode": "raw_article_token", "Stuks": "units_sold", "Voorraad": "reported_soh"}
     res = _parse(_csv(["Item", "Kode", "Stuks", "Voorraad"], [["90NB1", "A1", 3, 20], [None, "A2", 4, 20]]), mapping)
     assert [r["raw_product_token"] for r in res.rows] == ["90NB1"]
-    assert res.skipped_rows == {"missing_product_or_units": 1}
+    assert res.skipped_rows == {"missing_product": 1}
 
 
 def test_unit_price_and_cost_are_derived_from_the_totals_and_marked() -> None:
@@ -154,7 +154,7 @@ def test_a_layout_that_maps_only_the_customers_product_code_stages_its_rows() ->
     res = _parse(_csv(["Kode", "Stuks", "Voorraad"], [["ART-7", 3, 20], [None, 2, 5]]), mapping)
     assert res.error is None
     assert [(r["raw_article_token"], r["raw_product_token"]) for r in res.rows] == [("ART-7", None)]
-    assert res.skipped_rows == {"missing_product_or_units": 1}
+    assert res.skipped_rows == {"missing_product": 1}
 
 
 # --- N-0111 (Warren 2026-10-19): several columns mapped to one identifier target --------------------
@@ -199,3 +199,23 @@ def test_a_row_with_only_a_upc_is_staged_even_when_the_ean_column_is_the_resolve
     res = _parse(_csv(["EAN", "UPC", "Units"], [["", "123456789012", 5]]), {"EAN": "raw_barcode_token", "UPC": "raw_barcode_token", "Units": "units_sold"})
     assert res.error is None and len(res.rows) == 1
     assert res.rows[0]["raw_barcode_token"] == "123456789012"
+
+
+def test_an_empty_units_column_is_reported_as_missing_units_and_names_the_column() -> None:
+    # Pinnacle's Amazon file (job 1685): OrderedUnits is blank on every row; ShippedUnits holds the units.
+    res = _parse(
+        _csv(["EAN", "OrderedUnits", "ShippedUnits"], [["4711000000011", None, 2], ["4711000000028", None, 0]]),
+        {"EAN": "raw_barcode_token", "OrderedUnits": "units_sold"},
+    )
+    assert res.rows == []
+    assert res.skipped_rows == {"missing_units": 2}
+    assert any("OrderedUnits" in w and "no number in any row" in w for w in res.warnings)
+
+
+def test_missing_units_and_missing_product_are_counted_apart() -> None:
+    res = _parse(
+        _csv(["EAN", "Units"], [["4711000000011", None], [None, 3], ["4711000000028", 1]]),
+        {"EAN": "raw_barcode_token", "Units": "units_sold"},
+    )
+    assert len(res.rows) == 1
+    assert res.skipped_rows == {"missing_product": 1, "missing_units": 1}

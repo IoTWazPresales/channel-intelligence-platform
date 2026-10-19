@@ -999,6 +999,8 @@ def parse_flat_report(
 
     rows: list[dict[str, Any]] = []
     skipped = 0
+    skipped_no_product = 0
+    skipped_no_units = 0
     period_warnings: list[str] = []
     for pos in range(len(df)):
         series = df.iloc[pos]
@@ -1013,6 +1015,11 @@ def parse_flat_report(
                 continue
         elif units is None or not names_product:
             skipped += 1
+            # Say which one was missing, so a mapped column that is empty in the file is visible.
+            if not names_product:
+                skipped_no_product += 1
+            else:
+                skipped_no_units += 1
             continue
 
         # N-0110: a sale date stays a day; a week number and year stay a week; a month a month.
@@ -1100,10 +1107,23 @@ def parse_flat_report(
     rows = roll_bare_week_years(rows, year_hint=year_hint, week_calendar=week_calendar)
 
     skipped_rows: dict[str, int] = {}
-    if skipped:
-        what = "on-hand" if stock_only_file else "units_sold"
-        warnings.append(f"Skipped {skipped} row(s) with missing product token or {what}")
-        skipped_rows["missing_product_or_on_hand" if stock_only_file else "missing_product_or_units"] = skipped
+    if skipped and stock_only_file:
+        warnings.append(f"Skipped {skipped} row(s) with missing product token or on-hand")
+        skipped_rows["missing_product_or_on_hand"] = skipped
+    elif skipped:
+        if skipped_no_product:
+            warnings.append(f"Skipped {skipped_no_product} row(s) with no product identifier")
+            skipped_rows["missing_product"] = skipped_no_product
+        if skipped_no_units:
+            units_col = col_map["units_sold"]
+            if not rows and skipped_no_product == 0:
+                warnings.append(
+                    f"The column mapped to Units sold ({units_col}) has no number in any row; "
+                    "check the mapping (another column may hold the units)"
+                )
+            else:
+                warnings.append(f"Skipped {skipped_no_units} row(s) with no number in {units_col}")
+            skipped_rows["missing_units"] = skipped_no_units
     warnings.extend(dict.fromkeys(period_warnings))
 
     rows = enrich_flat_rows_from_companion_soh(

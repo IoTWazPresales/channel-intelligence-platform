@@ -34,6 +34,8 @@ COMPLETED = ("completed", "completed_with_errors")
 LABELS: dict[str, str] = {
     # parser, customer sell-through
     "missing_product_or_units": "Missing product code or units",
+    "missing_product": "No product identifier in the mapped product columns",
+    "missing_units": "No units: the column mapped to Units sold is empty on these rows",
     "missing_product_or_on_hand": "Missing product code or on-hand (stock-only file)",
     "no_positive_week_units": "Missing product code, or no units above 0 in any week",
     "year_required": "Week numbers without a confirmed year (tick Year confirmed)",
