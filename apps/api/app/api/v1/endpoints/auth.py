@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import re
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator
@@ -361,6 +362,31 @@ class TenantCommercialProfileUpdate(BaseModel):
     reporting_cadence: str | None = None
     woc_min_velocity_days: int | None = None
     stock_gap_highlight_units: float | None = None
+    business_calendar: dict[str, Any] | None = None
+    vat_rate_pct: float | None = None
+    sales_value_vat_basis: str | None = None
+
+
+class BusinessCalendarPreviewRequest(BaseModel):
+    business_calendar: dict[str, Any] = Field(default_factory=dict)
+    on: date | None = None
+
+
+@router.post("/business-calendar/preview")
+async def preview_business_calendar(
+    body: BusinessCalendarPreviewRequest,
+    user: dict = Depends(get_current_user),
+):
+    """The year containing ``on`` (default today) under a calendar setting, before it is saved."""
+    from app.services.business_calendar import BusinessCalendar, normalize_calendar_config
+
+    try:
+        cfg = normalize_calendar_config(body.business_calendar, strict=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    tenant_id = (user.get("tenant_id") or "default").strip() or "default"
+    on = body.on or commercial_tenant_profile.reporting_today(tenant_id)
+    return {"business_calendar": cfg, **BusinessCalendar(cfg).describe_year(on)}
 
 
 @router.get("/tenant-commercial-profile")

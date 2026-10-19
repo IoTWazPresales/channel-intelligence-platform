@@ -22,6 +22,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
 import { AdminChrome } from '@/features/administration/AdminChrome';
+import { BusinessCalendarPanel } from '@/features/settings/BusinessCalendarPanel';
 import { SemanticCatalogOverlayPanel } from '@/features/settings/SemanticCatalogOverlayPanel';
 import { ShippingDigestRecipientsPanel } from '@/features/shipping-mailer';
 import { useCurrentUser } from '@/features/shell/useCurrentUser';
@@ -457,6 +458,8 @@ export default function SettingsPage() {
 
         {isAdmin ? (
           <>
+            <Divider sx={{ my: 3 }} />
+            <BusinessCalendarPanel canEdit={isAdmin} />
             <Divider sx={{ my: 3 }} />
             <ShippingDigestRecipientsPanel />
             <Divider sx={{ my: 3 }} />
