@@ -64,11 +64,11 @@ export function SellThroughCoverageGrid({
         aria-label="Reports received per customer and period"
         sx={{
           display: 'grid',
-          gridTemplateColumns: `minmax(160px, 220px) repeat(${cols.length}, minmax(18px, 1fr)) 120px`,
+          gridTemplateColumns: `minmax(180px, 260px) repeat(${cols.length}, minmax(14px, 1fr)) 170px`,
           alignItems: 'center',
           columnGap: '3px',
-          rowGap: '4px',
-          minWidth: 160 + cols.length * 21 + 120,
+          rowGap: '2px',
+          minWidth: 180 + cols.length * 17 + 170,
         }}
       >
         <Box role="columnheader" />
@@ -92,13 +92,14 @@ export function SellThroughCoverageGrid({
                 type="button"
                 underline="hover"
                 onClick={() => onCustomer?.(r.customer_id)}
-                sx={{ fontSize: 13, textAlign: 'left', color: 'text.primary', display: 'block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                sx={{ fontSize: 12.5, textAlign: 'left', color: 'text.primary', display: 'block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                title={`${r.name} · ${r.reports_expected ? r.cadence : 'not expected'}`}
               >
                 {r.name}
+                <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.75 }}>
+                  {r.reports_expected ? r.cadence : 'not expected'}
+                </Typography>
               </Link>
-              <Typography variant="caption" color="text.secondary">
-                {r.reports_expected ? r.cadence : 'not expected'}
-              </Typography>
             </Box>
             {r.cells.map((cell, i) => {
               const col = cols[i];
@@ -110,7 +111,7 @@ export function SellThroughCoverageGrid({
                   role="cell"
                   aria-label={tip}
                   sx={{
-                    height: 18,
+                    height: 12,
                     borderRadius: 0.5,
                     bgcolor: color(cell.status),
                     cursor: cell.status === 'missing' || cell.status === 'partial' ? 'pointer' : 'default',
@@ -129,11 +130,11 @@ export function SellThroughCoverageGrid({
                 </Tooltip>
               );
             })}
-            <Box sx={{ pl: 1, fontSize: 12 }}>
+            <Box sx={{ pl: 1, fontSize: 12, whiteSpace: 'nowrap' }}>
               {r.last_reported_day ? (
                 <>
-                  {r.last_reported_day}
-                  <Typography variant="caption" color={r.missing ? 'error.main' : 'text.secondary'} display="block">
+                  {r.last_reported_day}{' · '}
+                  <Typography component="span" variant="caption" color={r.missing ? 'error.main' : 'text.secondary'}>
                     {r.days_since_last != null ? (r.days_since_last === 1 ? '1 day ago' : r.days_since_last === 0 ? 'today' : `${r.days_since_last} days ago`) : ''}
                   </Typography>
                 </>

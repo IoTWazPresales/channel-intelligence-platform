@@ -26,6 +26,7 @@ import { apiGet, safeDisplayError } from '@/lib/api';
 import { SellThroughCoverageGrid } from './SellThroughCoverageGrid';
 import { SellThroughNarrative } from './SellThroughNarrative';
 import { SellThroughProblemsTable } from './SellThroughProblemsTable';
+import { SellThroughReportsStrip } from './SellThroughReportsStrip';
 import {
   grainsFor,
   overviewQuery,
@@ -375,12 +376,7 @@ export function SellThroughOverview() {
             />
           </HeadlineStrip>
 
-          <Panel
-            title="Reports received"
-            subtitle={`Each reporting customer by ${data.coverage.grain}, ${data.filters.date_from} to ${data.filters.date_to}. Click a customer to filter the page.`}
-          >
-            <SellThroughCoverageGrid coverage={data.coverage} onCustomer={toggleCustomer} />
-          </Panel>
+          <SellThroughReportsStrip coverage={data.coverage} />
 
           <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', lg: '3fr 2fr' } }}>
             <Panel
@@ -483,6 +479,14 @@ export function SellThroughOverview() {
             subtitle="Per customer, judged on each customer's own latest figures. Replenishment weeks are set per customer in Sell-through steward → Key accounts."
           >
             <SellThroughProblemsTable problems={data.problems} reason={reason} onReason={setReason} />
+          </Panel>
+
+          <Box id="sellthrough-reports-grid" />
+          <Panel
+            title="Reports received"
+            subtitle={`Each reporting customer by ${data.coverage.grain}, ${data.filters.date_from} to ${data.filters.date_to}. Click a customer to filter the page.`}
+          >
+            <SellThroughCoverageGrid coverage={data.coverage} onCustomer={toggleCustomer} />
           </Panel>
 
           <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
