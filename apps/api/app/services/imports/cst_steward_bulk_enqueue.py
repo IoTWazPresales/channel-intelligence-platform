@@ -8,7 +8,7 @@ from typing import Any, Callable
 
 from app.core.config import get_settings
 from app.core.dev_celery_logging import DEV_CELERY_LOGGER
-from app.db.session import SessionLocal
+from app.db.session_sync import SessionLocal
 from app.services.imports.cst_steward_bulk import apply_cst_steward_bulk
 from app.services.task_run_ledger import (
     ENTITY_IMPORT_JOB,
