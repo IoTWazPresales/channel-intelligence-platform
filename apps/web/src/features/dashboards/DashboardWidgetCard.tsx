@@ -14,9 +14,10 @@ import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { HeadlineFigure } from '@/features/workbench-ui/HeadlineFigure';
 import { apiPost, safeDisplayError } from '@/lib/api';
 
-import { formatMetricValue, formatVintage } from './formatters';
+import { formatVintage } from './formatters';
 import type { DashboardWidget, QueryResult, SemanticMetric } from './types';
 import { WidgetChart } from './WidgetChart';
+import { effectiveVisual, formatValue, metricUnit, tableColumns } from './widgetModel';
 
 type Props = {
   widget: DashboardWidget;
@@ -57,16 +58,18 @@ export function DashboardWidgetCard({ widget, metric, onEdit, onDelete, onPromot
   const refused = q.data && !q.data.ok;
   const definition = plainDefinition(metric?.formula ?? q.data?.data_vintage?.formula, widget.metric_key);
   const vintage = q.data ? formatVintage(q.data.data_vintage) : null;
-  const colDefs = useMemo<ColDef[]>(() => {
-    const rows = q.data?.rows ?? [];
-    const keys = new Set<string>();
-    for (const row of rows) Object.keys(row).forEach((k) => keys.add(k));
-    return [...keys].map((field) => ({
-      field,
-      headerName: field.replaceAll('_', ' '),
-      flex: 1,
-    }));
-  }, [q.data?.rows]);
+  const unit = metricUnit(widget.metric_key, metric?.formula);
+  // A saved visual that does not suit the breakdown (e.g. a line over customers) falls back to one that does.
+  const visual = effectiveVisual(widget.visual, widget.grains);
+  const colDefs = useMemo<ColDef[]>(
+    () =>
+      tableColumns(q.data?.rows ?? null).map((c) => ({
+        ...c,
+        flex: c.field === 'value' ? 0.6 : 1,
+        ...(c.field === 'value' ? { type: 'numericColumn', valueFormatter: (p: { value: unknown }) => formatValue(p.value, unit) } : {}),
+      })),
+    [q.data?.rows, unit],
+  );
 
   return (
     <Paper
@@ -137,19 +140,19 @@ export function DashboardWidgetCard({ widget, metric, onEdit, onDelete, onPromot
             {q.data?.message || q.data?.validation?.message || q.data?.status}
           </Alert>
         )}
-        {q.data?.ok && widget.visual === 'kpi' && (
+        {q.data?.ok && visual === 'kpi' && (
           <HeadlineFigure
             compact
             label={metric?.label && metric.label !== widget.metric_key ? metric.label : widget.title}
-            value={formatMetricValue(q.data.value)}
+            value={formatValue(q.data.value, unit)}
             testId={`dashboard-widget-value-${widget.id}`}
           />
         )}
-        {q.data?.ok && widget.visual === 'table' && (
+        {q.data?.ok && visual === 'table' && (
           <EnterpriseDataGrid rowData={q.data.rows ?? []} columnDefs={colDefs} height="100%" />
         )}
-        {q.data?.ok && (widget.visual === 'bar' || widget.visual === 'line' || widget.visual === 'area') && (
-          <WidgetChart visual={widget.visual} series={q.data.series} rows={q.data.rows} />
+        {q.data?.ok && visual !== 'kpi' && visual !== 'table' && (
+          <WidgetChart visual={visual} grains={widget.grains} series={q.data.series} rows={q.data.rows} unit={unit} />
         )}
       </Box>
     </Paper>

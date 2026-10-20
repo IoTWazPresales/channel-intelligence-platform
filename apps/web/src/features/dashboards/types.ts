@@ -1,4 +1,4 @@
-export type WidgetVisual = 'kpi' | 'table' | 'bar' | 'line' | 'area';
+export type WidgetVisual = 'kpi' | 'table' | 'bar' | 'hbar' | 'stacked_bar' | 'line' | 'area' | 'pie' | 'donut';
 export type PeriodGrain = 'week' | 'month' | 'quarter';
 
 export type DashboardWidget = {

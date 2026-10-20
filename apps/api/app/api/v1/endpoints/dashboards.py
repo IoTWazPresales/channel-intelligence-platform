@@ -32,7 +32,7 @@ from app.services.saved_report_access import (
 router = APIRouter()
 
 Visibility = Literal["personal", "published"]
-Visual = Literal["kpi", "table", "bar", "line", "area"]
+Visual = Literal["kpi", "table", "bar", "hbar", "stacked_bar", "line", "area", "pie", "donut"]
 PeriodGrain = Literal["week", "month", "quarter"]
 
 

@@ -26,7 +26,7 @@ from app.semantics.registry import validate_metric_grain
 
 router = APIRouter()
 
-Visual = Literal["kpi", "table", "bar", "line", "area"]
+Visual = Literal["kpi", "table", "bar", "hbar", "stacked_bar", "line", "area", "pie", "donut"]
 Visibility = Literal["personal", "published"]
 PeriodGrain = Literal["week", "month", "quarter"]
 
