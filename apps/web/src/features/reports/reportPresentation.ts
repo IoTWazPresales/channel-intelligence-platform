@@ -27,6 +27,7 @@ export type SemanticMetric = {
   formula: string;
   allowed_grains: string[][];
   refuse_all?: boolean;
+  handler_backed?: boolean;
   refuse_reason?: string | null;
   owner_surface?: string | null;
   calendar_period?: boolean | null;

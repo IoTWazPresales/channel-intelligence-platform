@@ -95,7 +95,9 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   const queryableMetrics = useMemo(() => {
-    const metrics = (catalogQ.data?.metrics ?? []).filter((m) => m.status === 'implemented' && !m.refuse_all);
+    const metrics = (catalogQ.data?.metrics ?? []).filter(
+      (m) => m.status === 'implemented' && !m.refuse_all && m.handler_backed !== false,
+    );
     const volume = VOLUME_METRIC_KEYS.map((k) => metrics.find((m) => m.key === k)).filter(Boolean) as SemanticMetric[];
     const rest = metrics.filter((m) => !VOLUME_METRIC_KEYS.includes(m.key as (typeof VOLUME_METRIC_KEYS)[number]));
     const combined = [...volume, ...rest];

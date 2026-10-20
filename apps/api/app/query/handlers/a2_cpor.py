@@ -85,7 +85,7 @@ async def handle_a2(
             rows.append({**item, "value": item.get(value_key)})
     elif grains == {"promo_type"} or "promo_type" in grains:
         for item in payload.get("by_promotion_type") or []:
-            rows.append({**item, "value": item.get(value_key)})
+            rows.append({**item, "promo_type": item.get("promotion_type"), "value": item.get(value_key)})
     elif grains in ({"customer", "bu"}, {"period", "customer", "bu"}):
         # Portfolio service lacks customer×BU cross-tab — honest not_implemented
         return HandlerResult(

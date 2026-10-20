@@ -1202,6 +1202,11 @@ async def plan_vs_executed_read_model(
         return {"data_unavailable": True}
 
     scorecard = compute_scorecard_from_execution_rows(rows)
+    # Per product line, for the governed query's [period, bu] grain (Warren 2026-10-20).
+    by_line: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for r in rows:
+        by_line[_bias_product_line(r)].append(r)
+    scorecard_by_bu = {pl: compute_scorecard_from_execution_rows(group) for pl, group in sorted(by_line.items())}
     await attach_ship_quarters(db, rows)
     volume_bias = compute_volume_bias(rows)
     slip = compute_slip_summary(rows)
@@ -1279,6 +1284,7 @@ async def plan_vs_executed_read_model(
         "drill": drill_context,
         "available_periods": all_periods,
         "scorecard": scorecard,
+        "scorecard_by_bu": scorecard_by_bu,
         "volume_bias": volume_bias,
         "slip": slip,
         "exceptions": exceptions,

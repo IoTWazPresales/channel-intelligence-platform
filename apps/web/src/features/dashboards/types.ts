@@ -32,6 +32,8 @@ export type SemanticMetric = {
   formula: string;
   allowed_grains: string[][];
   refuse_all?: boolean;
+  /** False when no query handler serves this metric yet: builders leave it out. */
+  handler_backed?: boolean;
   calendar_period?: boolean;
   notes?: string | null;
 };
