@@ -35,6 +35,8 @@ export type SemanticMetric = {
   /** False when no query handler serves this metric yet: builders leave it out. */
   handler_backed?: boolean;
   calendar_period?: boolean;
+  /** Catalog area (e.g. channel-ops); the metric list groups by it. */
+  owner_surface?: string | null;
   notes?: string | null;
 };
 

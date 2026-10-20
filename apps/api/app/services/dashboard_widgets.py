@@ -8,7 +8,8 @@ from fastapi import HTTPException
 
 from app.semantics.registry import validate_metric_grain
 
-WIDGET_VISUALS = frozenset({"kpi", "table", "bar", "line", "area"})
+# Same set as the ck_dashboard_widget_visual check (migration 0046) and the endpoint Visual literal.
+WIDGET_VISUALS = frozenset({"kpi", "table", "bar", "hbar", "stacked_bar", "line", "area", "pie", "donut"})
 
 
 def default_layout(index: int) -> dict[str, int]:

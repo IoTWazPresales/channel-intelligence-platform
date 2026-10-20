@@ -5,19 +5,15 @@ import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
-import { Alert, Box, Button, Collapse, IconButton, Paper, Stack, Tooltip, Typography } from '@mui/material';
-import type { ColDef } from 'ag-grid-community';
-import { useMemo, useState } from 'react';
+import { Box, Button, Collapse, IconButton, Paper, Stack, Tooltip, Typography } from '@mui/material';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
-import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
-import { HeadlineFigure } from '@/features/workbench-ui/HeadlineFigure';
-import { apiPost, safeDisplayError } from '@/lib/api';
+import { apiPost } from '@/lib/api';
 
 import { formatVintage } from './formatters';
 import type { DashboardWidget, QueryResult, SemanticMetric } from './types';
-import { WidgetChart } from './WidgetChart';
-import { effectiveVisual, formatValue, metricUnit, tableColumns } from './widgetModel';
+import { WidgetBody } from './WidgetBody';
 
 type Props = {
   widget: DashboardWidget;
@@ -55,21 +51,8 @@ export function DashboardWidgetCard({ widget, metric, onEdit, onDelete, onPromot
       }),
   });
 
-  const refused = q.data && !q.data.ok;
   const definition = plainDefinition(metric?.formula ?? q.data?.data_vintage?.formula, widget.metric_key);
   const vintage = q.data ? formatVintage(q.data.data_vintage) : null;
-  const unit = metricUnit(widget.metric_key, metric?.formula);
-  // A saved visual that does not suit the breakdown (e.g. a line over customers) falls back to one that does.
-  const visual = effectiveVisual(widget.visual, widget.grains);
-  const colDefs = useMemo<ColDef[]>(
-    () =>
-      tableColumns(q.data?.rows ?? null).map((c) => ({
-        ...c,
-        flex: c.field === 'value' ? 0.6 : 1,
-        ...(c.field === 'value' ? { type: 'numericColumn', valueFormatter: (p: { value: unknown }) => formatValue(p.value, unit) } : {}),
-      })),
-    [q.data?.rows, unit],
-  );
 
   return (
     <Paper
@@ -133,27 +116,17 @@ export function DashboardWidgetCard({ widget, metric, onEdit, onDelete, onPromot
         </Collapse>
       </Box>
       <Box sx={{ flex: 1, px: 1.5, pb: 1.5, minHeight: 0 }}>
-        {q.isLoading && <Typography variant="body2">Loading…</Typography>}
-        {q.isError && <Alert severity="error">{safeDisplayError(q.error)}</Alert>}
-        {refused && (
-          <Alert severity="warning" data-testid={`dashboard-widget-refused-${widget.id}`}>
-            {q.data?.message || q.data?.validation?.message || q.data?.status}
-          </Alert>
-        )}
-        {q.data?.ok && visual === 'kpi' && (
-          <HeadlineFigure
-            compact
-            label={metric?.label && metric.label !== widget.metric_key ? metric.label : widget.title}
-            value={formatValue(q.data.value, unit)}
-            testId={`dashboard-widget-value-${widget.id}`}
-          />
-        )}
-        {q.data?.ok && visual === 'table' && (
-          <EnterpriseDataGrid rowData={q.data.rows ?? []} columnDefs={colDefs} height="100%" />
-        )}
-        {q.data?.ok && visual !== 'kpi' && visual !== 'table' && (
-          <WidgetChart visual={visual} grains={widget.grains} series={q.data.series} rows={q.data.rows} unit={unit} />
-        )}
+        <WidgetBody
+          metricKey={widget.metric_key}
+          metricLabel={metric?.label && metric.label !== widget.metric_key ? metric.label : widget.title}
+          formula={metric?.formula}
+          visual={widget.visual}
+          grains={widget.grains}
+          result={q.data}
+          loading={q.isLoading}
+          error={q.isError ? q.error : null}
+          testKey={widget.id}
+        />
       </Box>
     </Paper>
   );

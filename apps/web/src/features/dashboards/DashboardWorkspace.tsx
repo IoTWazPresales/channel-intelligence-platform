@@ -8,7 +8,6 @@ import {
   useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import { arrayMove } from '@dnd-kit/sortable';
 import {
   Alert,
   Box,
@@ -28,13 +27,14 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
 import { navPageChrome } from '@/features/shell/navPageChrome';
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut, safeDisplayError } from '@/lib/api';
 
-import { CanvasDropTarget, MetricPalette } from './MetricPalette';
+import { CanvasDropTarget } from './CanvasDropTarget';
+import { MetricBrowser } from './MetricBrowser';
 import { DashboardWidgetCard } from './DashboardWidgetCard';
 import { WidgetEditorDialog, type WidgetEditorValue } from './WidgetEditorDialog';
 import {
@@ -44,28 +44,12 @@ import {
   type DashboardWidget,
   type SemanticMetric,
 } from './types';
+import { visualsFor } from './widgetModel';
 
 const DashboardGrid = dynamic(() => import('./DashboardGrid').then((m) => m.DashboardGrid), {
   ssr: false,
   loading: () => <Typography variant="body2">Loading canvas…</Typography>,
 });
-
-const PALETTE_ORDER_KEY = 'cip.dashboards.paletteOrder.v1';
-
-function loadPaletteOrder(): string[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = window.localStorage.getItem(PALETTE_ORDER_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.map(String) : [];
-  } catch {
-    return [];
-  }
-}
-
-function savePaletteOrder(keys: string[]) {
-  window.localStorage.setItem(PALETTE_ORDER_KEY, JSON.stringify(keys));
-}
 
 export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?: boolean }) {
   const qc = useQueryClient();
@@ -86,11 +70,6 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorInitial, setEditorInitial] = useState<Partial<WidgetEditorValue> & { widgetId?: number }>({});
   const [editorError, setEditorError] = useState<string | null>(null);
-  const [paletteOrder, setPaletteOrder] = useState<string[]>([]);
-
-  useEffect(() => {
-    setPaletteOrder(loadPaletteOrder());
-  }, []);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -100,11 +79,8 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
     );
     const volume = VOLUME_METRIC_KEYS.map((k) => metrics.find((m) => m.key === k)).filter(Boolean) as SemanticMetric[];
     const rest = metrics.filter((m) => !VOLUME_METRIC_KEYS.includes(m.key as (typeof VOLUME_METRIC_KEYS)[number]));
-    const combined = [...volume, ...rest];
-    if (!paletteOrder.length) return combined;
-    const rank = new Map(paletteOrder.map((k, i) => [k, i]));
-    return [...combined].sort((a, b) => (rank.get(a.key) ?? 999) - (rank.get(b.key) ?? 999));
-  }, [catalogQ.data, paletteOrder]);
+    return [...volume, ...rest];
+  }, [catalogQ.data]);
 
   const createMut = useMutation({
     mutationFn: () =>
@@ -185,10 +161,12 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
 
   const openAdd = (metricKey?: string) => {
     const metric = queryableMetrics.find((m) => m.key === metricKey);
+    const grains = metric?.allowed_grains[0] ? [...metric.allowed_grains[0]] : [];
     setEditorInitial({
       metric_key: metricKey,
-      grains: metric?.allowed_grains[0] ? [...metric.allowed_grains[0]] : [],
-      visual: metricKey === 'sellout_units' ? 'line' : metricKey === 'cst_sellthrough_units' ? 'bar' : 'kpi',
+      grains,
+      // Start from the chart that best fits the metric's first breakdown; the editor previews it live.
+      visual: visualsFor(grains)[0],
       period_grain: metricKey === 'sellout_units' ? 'week' : null,
     });
     setEditorError(null);
@@ -207,17 +185,6 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
     if (over.id === 'dashboard-canvas' && metricKey) {
       openAdd(metricKey);
       return;
-    }
-    const overKey = String(over.id).startsWith('metric:') ? String(over.id).slice('metric:'.length) : null;
-    if (metricKey && overKey && metricKey !== overKey) {
-      const keys = queryableMetrics.map((m) => m.key);
-      const oldIndex = keys.indexOf(metricKey);
-      const newIndex = keys.indexOf(overKey);
-      if (oldIndex >= 0 && newIndex >= 0) {
-        const next = arrayMove(keys, oldIndex, newIndex);
-        setPaletteOrder(next);
-        savePaletteOrder(next);
-      }
     }
   };
 
@@ -249,7 +216,8 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="flex-start">
-        <Paper sx={{ p: 2, width: { md: 260 }, flexShrink: 0 }}>
+        <Stack spacing={2} sx={{ width: { xs: '100%', md: 280 }, flexShrink: 0 }}>
+        <Paper sx={{ p: 2 }}>
           <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
             Yours
           </Typography>
@@ -274,8 +242,20 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
             )}
           </Stack>
         </Paper>
+        {active && (
+          <Paper sx={{ p: 2 }}>
+            <Typography variant="subtitle1" fontWeight={700}>
+              Metrics
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+              Click to build a widget, or drag onto the canvas.
+            </Typography>
+            <MetricBrowser metrics={queryableMetrics} onPick={(k) => openAdd(k)} draggable maxHeight="60vh" />
+          </Paper>
+        )}
+        </Stack>
 
-        <Box sx={{ flex: 1, width: '100%' }}>
+        <Box sx={{ flex: 1, width: '100%', minWidth: 0 }}>
           {active ? (
             <Stack spacing={2}>
               <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -289,10 +269,9 @@ export function DashboardWorkspace({ hidePageHeader = false }: { hidePageHeader?
                   Add widget
                 </Button>
               </Stack>
-              <MetricPalette metrics={queryableMetrics} />
               <CanvasDropTarget>
                 {(active.widgets || []).length === 0 ? (
-                  <Alert severity="info">Drop a metric here, or Add widget. No SQL.</Alert>
+                  <Alert severity="info">Pick a metric on the left (or drag it here) to add your first widget.</Alert>
                 ) : (
                   <DashboardGrid
                     widgets={active.widgets}
