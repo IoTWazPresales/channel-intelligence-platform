@@ -1,0 +1,13 @@
+current_database() = cip | read_only = on
+scope=None   original=1392 ms narrow=1476 ms rows=2481/2481 same_ids=True
+scope='*'    original=1399 ms narrow=1361 ms rows=2481/2481 same_ids=True
+scope='NB'   original=649 ms narrow=784 ms rows=1099/1099 same_ids=True
+    Sort Method: quicksort  Memory: 1595kB
+    ->  Unique  (cost=48173.24..48901.93 rows=15887 width=28) (actual time=316.433..346.738 rows=2481.00 loops=1)
+    Sort Method: external merge  Disk: 8008kB
+    ->  Seq Scan on weeks_of_cover_observation w_1  (cost=1964.27..37797.06 rows=97159 width=28) (actual time=0.561..182.002 rows=194349.00 loops=1)
+    ->  Seq Scan on dim_product p  (cost=0.00..1952.92 rows=4542 width=4) (never executed)
+    ->  Hash Join  (cost=45783.66..53765.11 rows=8023 width=604) (actual time=694.385..1131.842 rows=2481.00 loops=1)
+    ->  Seq Scan on weeks_of_cover_observation w  (cost=1964.27..37073.18 rows=97159 width=604) (actual time=0.525..132.288 rows=194349.00 loops=1)
+    ->  Seq Scan on dim_product p_1  (cost=0.00..1952.92 rows=4542 width=4) (never executed)
+    Execution Time: 1145.269 ms

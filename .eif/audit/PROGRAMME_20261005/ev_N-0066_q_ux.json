@@ -1,0 +1,1 @@
+{"node": "N-0066", "expected_revision": 5, "dim": "ux", "state": "pass", "evidence": "EV-N0066", "rationale": "Signed in on localhost:3000. Administration shows Running now, Failed in the last 24 hours, and Queries run in the SQL viewer. Planning shows lineup lines on active cases. The overview widget caption is Sum of distributor sell-out units."}

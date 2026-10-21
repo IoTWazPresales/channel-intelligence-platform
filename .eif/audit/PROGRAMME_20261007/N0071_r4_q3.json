@@ -1,0 +1,1 @@
+{"node": "N-0071", "expected_revision": 36, "dim": "migration_safety", "state": "na", "evidence": {"path": ".eif/audit/PROGRAMME_20261007/N0071_IMPL.md", "summary": "Round 4: no Alembic migration, no index, no fact rewrite. One read-side service file and its test changed."}, "rationale": "No migration in this node."}

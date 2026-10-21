@@ -1,0 +1,1 @@
+{"node":"N-0065","expected_revision":8,"stage":"implement","stage_note":"Implementation run RUN-20261007-N0065-IMPL: admin bypass in the router scope dependency (admin binds * for read and edit), docstring and admin UI copy, tests for admin-no-rows, non-admin-no-rows, read-only line, worker/unset path."}

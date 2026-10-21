@@ -1,0 +1,1 @@
+{"node":"N-0068","expected_revision":8,"path":"apps/api/app/services/imports/pm_mapping_memory.py","note":"N-0068 change: DEFAULT_COLUMN_GRAIN and tenant_column_grain_sync; load_by_header_norm and merge_memory_from_pm_save take a grain so suggestions read the axis the save wrote (G1). Callers: product_master_workflow.py suggest_mapping_decisions(grain=) and save_mapping_sync."}

@@ -1,0 +1,80 @@
+DATABASE_URL=postgresql+asyncpg://cip:***@localhost:5432/cip
+DATABASE_URL_SYNC=postgresql://cip:***@localhost:5432/cip
+DATABASE_URL_SYNC_MIGRATE=postgresql://cip:***@localhost:5432/cip
+current_database()=cip
+current_database()=cip
+## Before (plan)
+
+| slug | customer | applied jobs | outcome |
+|---|---|---|---|
+| cst_unit_e_verify_smoke | Metro Market Group | 0 | hidden (no applied jobs) |
+| takealot_cst_week | Takealot | 2 | layout saved: Imported layout - ASUS WEEK 31; source hidden |
+| cst_p4_evetech | Evetech | 0 | hidden (no applied jobs) |
+| cst_p4_amazon | AMAZON COMMERCIAL SERVICES (SOUTH AFRICA) | 0 | hidden (no applied jobs) |
+| cst_p4_game | Game | 0 | hidden (no applied jobs) |
+| cst_p4_computer_mania | Computer Mania | 0 | hidden (no applied jobs) |
+| cst_p4_incredible_connection | Incredible Connection | 0 | hidden (no applied jobs) |
+| cst_p4_makro | Makro | 0 | hidden (no applied jobs) |
+| cst_p4_hifi_corp | Hifi | 0 | hidden (no applied jobs) |
+| cst_soak_52 | Evetech | 0 | hidden (no applied jobs) |
+| cst_soak_57 | Game | 0 | hidden (no applied jobs) |
+| cst_raw_20_takealot_w31 | Takealot | 1 | same header set as layout Imported layout - ASUS WEEK 31; source hidden |
+| cst_raw_52_evetech_sales | Evetech | 1 | layout saved: Imported layout - EveX_ASUS_LAPTOPS_Reports_Sales_20260727_20260802; source hidden |
+| cst_raw_57_game_w27_wide-week | Game | 0 | hidden (no applied jobs) |
+| cst_hist_20 | Takealot | 0 | hidden (no applied jobs) |
+| cst_hist_52 | Evetech | 0 | hidden (no applied jobs) |
+| cst_hist_18 | Computer Mania | 0 | hidden (no applied jobs) |
+| cst_hist_15 | Makro | 0 | hidden (no applied jobs) |
+| cst_hist_57 | Game | 0 | hidden (no applied jobs) |
+| cst_hist_12 | Incredible Connection | 0 | hidden (no applied jobs) |
+| cst_hist_11 | Hifi | 0 | hidden (no applied jobs) |
+| cst_hist_v2_20 | Takealot | 4 | layout saved: Imported layout - ASUS WEEK 39; source hidden |
+| cst_hist_v2_52 | Evetech | 3 | same header set as layout Imported layout - EveX_ASUS_LAPTOPS_Reports_Sales_20260727_20260802; source hidden |
+| cst_hist_v2_18 | Computer Mania | 4 | layout saved: Imported layout - Computer Mania week 40; source hidden |
+| cst_hist_v2_15 | Makro | 4 | layout saved: Imported layout - Asus Dispo WK1; source hidden |
+| cst_hist_v2_57 | Game | 4 | layout saved: Imported layout - ASUS Week 40, Imported layout - Asus Sales W27; source hidden |
+
+### Layouts to save
+
+- customer 20: **Imported layout - ASUS WEEK 31** (flat; 14 headers; jobs [796, 797, 1648, 1652]; headers from stored file; job 1648 replaces job 796 (its mapping or structure differed)); mapping {'sales': 'units_sold', 'Barcode': 'raw_product_token', 'Product ID': 'listing_external_id', 'Transaction Week': 'raw_period_ref'}
+- customer 52: **Imported layout - EveX_ASUS_LAPTOPS_Reports_Sales_20260727_20260802** (flat; 8 headers; jobs [1647, 1653, 1654, 1666]; headers from stored file); mapping {'Web ID': 'listing_external_id', 'Qty Sold': 'units_sold', 'Item Code': 'raw_product_token', 'Current Stock': 'reported_soh'}
+- customer 20: **Imported layout - ASUS WEEK 39** (flat; 15 headers; jobs [1649, 1650, 1651]; headers from stored file); mapping {'sales': 'units_sold', 'Barcode': 'raw_product_token', 'Product ID': 'listing_external_id', 'Transaction Week': 'raw_period_ref'}
+- customer 18: **Imported layout - Computer Mania week 40** (mtd_delta; 11 headers; jobs [1655, 1656, 1657, 1658]; headers from stored file); mapping {'COST': 'unit_cost', 'ITEMNO': 'raw_product_token', 'Unnamed: 0': 'name', 'DESCRIPTION': 'name'}
+- customer 15: **Imported layout - Asus Dispo WK1** (pivoted; 51 headers; jobs [1659, 1660, 1661, 1665]; headers from stored file); mapping {'MAC': 'unit_mac', 'SOH': 'reported_soh', 'Site': 'raw_location_token', 'Article': 'raw_article_token', 'Vendor Prod Code': 'raw_product_token'}
+- customer 57: **Imported layout - ASUS Week 40** (flat; 8 headers; jobs [1662, 1663, 1667]; headers from stored file); mapping {'Site': 'raw_location_token', 'Article': 'raw_article_token', 'EAN/UPC': 'raw_product_token', 'Sales R TY': 'total_sell_amount', 'Sales U TY': 'units_sold'}
+- customer 57: **Imported layout - Asus Sales W27** (flat; 13 headers; jobs [1664]; headers from stored file); mapping {'Site': 'raw_location_token', 'Article': 'raw_article_token', 'EAN/UPC': 'raw_product_token', 'Sales R TY': 'total_sell_amount', 'Sales U TY': 'units_sold'}
+
+## Applied: {'layouts_created': 7, 'layouts_already_there': 0, 'sources_hidden': 26}
+Second run (must change nothing): {'layouts_created': 0, 'layouts_already_there': 7, 'sources_hidden': 0}
+
+## After
+
+| slug | customer | applied jobs | source hidden | layouts of the customer |
+|---|---|---|---|---|
+| cst_unit_e_verify_smoke | Metro Market Group | 0 | True | - |
+| takealot_cst_week | Takealot | 2 | True | Imported layout - ASUS WEEK 31 (flat); Imported layout - ASUS WEEK 39 (flat) |
+| cst_p4_evetech | Evetech | 0 | True | Imported layout - EveX_ASUS_LAPTOPS_Reports_Sales_20260727_20260802 (flat) |
+| cst_p4_amazon | AMAZON COMMERCIAL SERVICES (SOUTH AFRICA) | 0 | True | - |
+| cst_p4_game | Game | 0 | True | Imported layout - ASUS Week 40 (flat); Imported layout - Asus Sales W27 (flat) |
+| cst_p4_computer_mania | Computer Mania | 0 | True | Imported layout - Computer Mania week 40 (mtd_delta) |
+| cst_p4_incredible_connection | Incredible Connection | 0 | True | - |
+| cst_p4_makro | Makro | 0 | True | Imported layout - Asus Dispo WK1 (pivoted) |
+| cst_p4_hifi_corp | Hifi | 0 | True | - |
+| cst_soak_52 | Evetech | 0 | True | Imported layout - EveX_ASUS_LAPTOPS_Reports_Sales_20260727_20260802 (flat) |
+| cst_soak_57 | Game | 0 | True | Imported layout - ASUS Week 40 (flat); Imported layout - Asus Sales W27 (flat) |
+| cst_raw_20_takealot_w31 | Takealot | 1 | True | Imported layout - ASUS WEEK 31 (flat); Imported layout - ASUS WEEK 39 (flat) |
+| cst_raw_52_evetech_sales | Evetech | 1 | True | Imported layout - EveX_ASUS_LAPTOPS_Reports_Sales_20260727_20260802 (flat) |
+| cst_raw_57_game_w27_wide-week | Game | 0 | True | Imported layout - ASUS Week 40 (flat); Imported layout - Asus Sales W27 (flat) |
+| cst_hist_20 | Takealot | 0 | True | Imported layout - ASUS WEEK 31 (flat); Imported layout - ASUS WEEK 39 (flat) |
+| cst_hist_52 | Evetech | 0 | True | Imported layout - EveX_ASUS_LAPTOPS_Reports_Sales_20260727_20260802 (flat) |
+| cst_hist_18 | Computer Mania | 0 | True | Imported layout - Computer Mania week 40 (mtd_delta) |
+| cst_hist_15 | Makro | 0 | True | Imported layout - Asus Dispo WK1 (pivoted) |
+| cst_hist_57 | Game | 0 | True | Imported layout - ASUS Week 40 (flat); Imported layout - Asus Sales W27 (flat) |
+| cst_hist_12 | Incredible Connection | 0 | True | - |
+| cst_hist_11 | Hifi | 0 | True | - |
+| cst_hist_v2_20 | Takealot | 4 | True | Imported layout - ASUS WEEK 31 (flat); Imported layout - ASUS WEEK 39 (flat) |
+| cst_hist_v2_52 | Evetech | 3 | True | Imported layout - EveX_ASUS_LAPTOPS_Reports_Sales_20260727_20260802 (flat) |
+| cst_hist_v2_18 | Computer Mania | 4 | True | Imported layout - Computer Mania week 40 (mtd_delta) |
+| cst_hist_v2_15 | Makro | 4 | True | Imported layout - Asus Dispo WK1 (pivoted) |
+| cst_hist_v2_57 | Game | 4 | True | Imported layout - ASUS Week 40 (flat); Imported layout - Asus Sales W27 (flat) |
+- cip after the source migration: db cip, rev 20261016_0043, cst_fact_rows 3197, cst_units 12394.0000, cst_onhand 30832.0000, cst_superseded 390, import_jobs 610, sources 43, sellout_rows 35582, layout_table True, layouts 7, is_hidden_column True, sources_hidden 26

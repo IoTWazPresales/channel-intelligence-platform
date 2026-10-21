@@ -1,0 +1,50 @@
+current_database() = cip | read_only = on
+line_identity_key nullable: NO
+null keys: 0
+current_ids              [(15807,)] best of 3: 476 ms
+obs_inherit_cte          [(5876, 4133)] best of 3: 452 ms
+obs_inherit_lateral      [(5876, 4133)] best of 3: 111 ms
+Traceback (most recent call last):
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\psycopg\cursor.py", line 97, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.QueryCanceled: canceling statement due to statement timeout
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\warren_eliason\channel-intelligence-platform\.eif\audit\PROGRAMME_20261007\N0065_r4_discover2.py", line 65, in <module>
+    res = c.execute(sa.text(sql)).all()
+          ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1421, in execute
+    return meth(
+           ^^^^^
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1643, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1848, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1988, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2365, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\psycopg\cursor.py", line 97, in execute
+    raise ex.with_traceback(None)
+sqlalchemy.exc.OperationalError: (psycopg.errors.QueryCanceled) canceling statement due to statement timeout
+[SQL: select count(*), count(i.product_id) from shipment_evidence_line s
+        left join lateral (select r.product_id from shipment_evidence_observation o
+           join shipment_evidence_observation r on r.line_identity_key = o.line_identity_key and r.product_id is not null
+           where o.evidence_line_id = s.id
+           order by r.valid_from desc nulls last, r.id desc limit 1) i on true where s.product_id is null]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)

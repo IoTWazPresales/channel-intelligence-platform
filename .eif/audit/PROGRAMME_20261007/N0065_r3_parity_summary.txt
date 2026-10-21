@@ -1,0 +1,67 @@
+tables: 45 | 0024 definer bypasses RLS: False
+cells 0024: 720 mismatches vs model: 0
+cells 0025: 720 mismatches vs model: 0
+cross-version differing cells: 266
+  by label: {"read ''": 45, "edit r='' e=''": 45, 'edit r=None e=None': 44, 'read None': 44, "read '*'": 44, "edit r='*' e='*'": 44}
+  designed-scope flag: {True: 90, False: 176}
+view counts 0024: {'read None': 3, "read ''": 2, "read '!'": 2, "read '*'": 3, "read 'A'": 2, "read 'A,B'": 2, "read 'NOPE'": 2}
+view counts 0025: {'read None': 3, "read ''": 3, "read '!'": 2, "read '*'": 3, "read 'A'": 2, "read 'A,B'": 2, "read 'NOPE'": 2}
+view reloptions 0024/0025: None ['security_invoker=true']
+plan 0024:
+    Aggregate
+      ->  Seq Scan on fact_sales_sellout
+            Filter: cip_product_id_visible((product_id)::bigint)
+plan 0025:
+    Aggregate
+      ->  Seq Scan on fact_sales_sellout
+            Filter: ((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((product_id)::bigint = (hashed SubPlan 1).col1)))
+            SubPlan 1
+              ->  Seq Scan on dim_product p
+                    Filter: (CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END AND CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END)
+0025 visible / updated rows per table (cip_test, seeded):
+table                              Er=None e=None | RNone | R'' | R'!' | R'*' | R'A' | R'A,B' | R'NOPE' | Er='*' e='*' | Er='A,B' e='A' | Er='A,B' e='A,B' | Er='A' e='!' | Er='!' e='!' | Er='' e='' | Er='*' e='A' | Er='!' e='A'
+buy_recommendation                   8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+catalog_product                      8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+commercial_lineup_line              14  14  14   1  14   3   5   1  14   3   5   1   1  14   3   1
+commercial_plan_line                 8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+commercial_sku_assumption            8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+competitive_positioning              8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+cpor_case_line                      12  12  12   1  12   3   5   1  12   3   5   1   1  12   3   1
+cpor_claim_evidence_line             8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+cst_listing_seed                     8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+customer_article_alias               8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+customer_listing                     8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+dim_product                         21  21  21   0  21   2   4   0  21   2   4   0   0  21   2   0
+exception_inbox_item                 8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+fact_activation                      8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+fact_buy_plan                        8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+fact_competitor_mapping              8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+fact_customer_sellthrough            8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+fact_customer_velocity               9   9   9   1   9   3   5   1   9   3   5   1   1   9   3   1
+fact_demand_forecast                21  21  21   1  21   3   5   1  21   3   5   1   1  21   3   1
+fact_dsi_forecast                    8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+fact_forecast                        8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+fact_inbound_shipment               22  22  22   8  22  10  12   8  22  10  12   8   8  22  10   8
+fact_inventory_customer              8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+fact_inventory_distributor          22  22  22   1  22   3   5   1  22   3   5   1   1  22   3   1
+fact_inventory_reconciliation        8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+fact_lineup_plan_item                8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+fact_pricing                         8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+fact_product_roadmap                 8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+fact_promotion_performance           8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+fact_promotion_plan                  8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+fact_returns                         9   9   9   1   9   3   5   1   9   3   5   1   1   9   3   1
+fact_sales_sellin                    8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+fact_sales_sellout                  39  39  39   1  39   3   5   1  39   3   5   1   1  39   3   1
+fact_support                         8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+forecast_summary                     8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+historical_lineup_import_line       64  64  64  25  64  27  29  25  64  27  29  25  25  64  27  25
+pricing_recommendation               8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+product_alias                        8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+promo_readiness                      8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+shipment_evidence_line              34  34  34  22  34  24  26  22  34  24  26  22  22  34  24  22
+shipment_evidence_observation       20  20  20   8  20  10  12   8  20  10  12   8   8  20  10   8
+stock_health                         8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+stock_risk                           8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+weeks_of_cover_observation           8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1
+weeks_of_stock                       8   8   8   1   8   3   5   1   8   3   5   1   1   8   3   1

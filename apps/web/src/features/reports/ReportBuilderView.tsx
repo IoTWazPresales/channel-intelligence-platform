@@ -181,11 +181,11 @@ export function ReportBuilderView() {
 
   const allMetrics = useMemo(() => catalogQ.data?.metrics ?? [], [catalogQ.data]);
   const queryableMetrics = useMemo(
-    () => allMetrics.filter((m) => m.status === 'implemented' && !m.refuse_all),
+    () => allMetrics.filter((m) => m.status === 'implemented' && !m.refuse_all && m.handler_backed !== false),
     [allMetrics],
   );
   const notRunnable = useMemo(
-    () => allMetrics.filter((m) => !(m.status === 'implemented' && !m.refuse_all)),
+    () => allMetrics.filter((m) => !(m.status === 'implemented' && !m.refuse_all && m.handler_backed !== false)),
     [allMetrics],
   );
   const families = useMemo(() => groupMetricsByFamily(queryableMetrics), [queryableMetrics]);

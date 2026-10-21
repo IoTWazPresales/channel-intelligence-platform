@@ -116,6 +116,7 @@ from app.api.v1.endpoints import (
     report_exports,
     roadmap,
     saved_reports,
+    sell_through,
     sellout,
     semantics,
     shipment_evidence,
@@ -160,6 +161,7 @@ api_router.include_router(grid_fields.router, prefix="/grid-fields", tags=["grid
 api_router.include_router(
     channel_intelligence.router, prefix="/channel-intelligence", tags=["channel-intelligence"]
 )
+api_router.include_router(sell_through.router, prefix="/sell-through", tags=["sell-through"])
 api_router.include_router(listing_capture.router, prefix="/listing-capture", tags=["listing-capture"])
 api_router.include_router(inbound_shipments.router, prefix="/inbound-shipments", tags=["inbound-shipments"])
 api_router.include_router(shipment_evidence.router, prefix="/shipment-evidence", tags=["shipment-evidence"])

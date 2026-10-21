@@ -28,7 +28,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { apiGet, apiPatch, apiPostFormData, safeDisplayError } from '@/lib/api';
 import {
@@ -123,6 +123,10 @@ export type CstBulkUploadDialogProps = {
   onClose: () => void;
   /** First created batch job id — wizard continues with CST steward. */
   onJobsCreated: (jobIds: number[]) => void;
+  /** The import mode picked in the wizard: apply loads matched rows as each file is read. */
+  importMode?: 'validate' | 'apply';
+  /** Reporting customer to start with (from a ?customer= link). */
+  initialCustomerId?: number | null;
 };
 
 /** The older single product column; offered only while a layout still uses it. */
@@ -241,9 +245,19 @@ function SavedLayouts({ customerId }: { customerId: number }) {
  * saved for the customer. All files then load into the one sell-through table with its standard columns:
  * files that share a report structure become one import job (per-file period, one steward pass).
  */
-export function CstBulkUploadDialog({ open, onClose, onJobsCreated }: CstBulkUploadDialogProps) {
+export function CstBulkUploadDialog({
+  open,
+  onClose,
+  onJobsCreated,
+  importMode = 'validate',
+  initialCustomerId = null,
+}: CstBulkUploadDialogProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [customerId, setCustomerId] = useState<number | ''>('');
+  // A "missing report" link from the Sell-through tab opens the upload for that customer.
+  useEffect(() => {
+    if (open && initialCustomerId != null) setCustomerId((c) => (c === '' ? initialCustomerId : c));
+  }, [open, initialCustomerId]);
   const [files, setFiles] = useState<File[]>([]);
   const [preview, setPreview] = useState<BatchProposeResponse | null>(null);
   const [results, setResults] = useState<BatchJobsResponse | null>(null);
@@ -347,14 +361,17 @@ export function CstBulkUploadDialog({ open, onClose, onJobsCreated }: CstBulkUpl
     return [...bySig.values()];
   }, [preview, remapped]);
 
-  /** Saved layouts that still map the older single product column: they load as before; re-map is offered. */
+  /**
+   * Saved layouts the files matched. Every one can be edited (its columns re-mapped); the ones that still
+   * map the older single product column load as before and are offered a re-map into the separate slots.
+   */
   const legacyLayouts = useMemo(() => {
     const bySig = new Map<
       string,
-      { signature: string; name: string; mapping: Record<string, string>; filenames: string[] }
+      { signature: string; name: string; mapping: Record<string, string>; filenames: string[]; legacy: boolean }
     >();
     for (const f of preview?.files ?? []) {
-      if (!f.readable || !f.layout?.legacy_product_slot || !f.layout_signature) continue;
+      if (!f.readable || !f.layout || !f.layout_signature) continue;
       const cur = bySig.get(f.layout_signature);
       if (cur) cur.filenames.push(f.filename);
       else
@@ -363,6 +380,7 @@ export function CstBulkUploadDialog({ open, onClose, onJobsCreated }: CstBulkUpl
           name: f.layout.name,
           mapping: f.layout.mapping ?? {},
           filenames: [f.filename],
+          legacy: !!f.layout.legacy_product_slot,
         });
     }
     return [...bySig.values()];
@@ -395,6 +413,7 @@ export function CstBulkUploadDialog({ open, onClose, onJobsCreated }: CstBulkUpl
         );
       }
       appendCstUploadOptions(fd, options);
+      fd.append('import_mode', importMode);
       return apiPostFormData<BatchJobsResponse>('/api/v1/imports/cst/batch-jobs', fd);
     },
     onSuccess: (data) => {
@@ -574,7 +593,7 @@ export function CstBulkUploadDialog({ open, onClose, onJobsCreated }: CstBulkUpl
                   <Alert
                     key={l.signature}
                     severity="info"
-                    data-testid={`cst-legacy-layout-${l.signature}`}
+                    data-testid={l.legacy ? `cst-legacy-layout-${l.signature}` : `cst-saved-layout-${l.signature}`}
                     action={
                       <Button
                         size="small"
@@ -586,12 +605,13 @@ export function CstBulkUploadDialog({ open, onClose, onJobsCreated }: CstBulkUpl
                           setLayoutNames((p) => ({ ...p, [l.signature]: l.name }));
                         }}
                       >
-                        Re-map product columns
+                        {l.legacy ? 'Re-map product columns' : 'Edit column mapping'}
                       </Button>
                     }
                   >
-                    Layout {l.name} maps one product column that may hold any identifier. It keeps loading as before.
-                    You can re-map it into Part number, Barcode, Sales model and Customer product code.
+                    {l.legacy
+                      ? `Layout ${l.name} maps one product column that may hold any identifier. It keeps loading as before. You can re-map it into Part number, Barcode, Sales model and Customer product code.`
+                      : `Layout ${l.name} is saved for this customer. Change how its columns are mapped, and the layout is updated.`}
                   </Alert>
                 ))}
               {newLayouts.map((l) => {

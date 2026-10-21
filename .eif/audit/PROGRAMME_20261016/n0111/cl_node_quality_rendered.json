@@ -1,0 +1,1 @@
+{"dim": "rendered", "state": "pending", "evidence": null, "rationale": "UNABLE_TO_RENDER: the admin screens need sign-in and the agent may not sign in. Component tests cover the upload options and the gap tab labels.", "node": "N-0111", "expected_revision": 14}

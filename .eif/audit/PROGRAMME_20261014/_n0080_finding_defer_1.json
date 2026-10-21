@@ -1,0 +1,1 @@
+{"note": "N-0080: planner lines stored before 9fda9893 keep the old GP (distributor-net base) until recalculated. No bulk recompute was run.", "code": "DOES_NOT_FIT", "node": "N-0080", "expected_revision": 20}

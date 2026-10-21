@@ -1,0 +1,25 @@
+{
+  "id": "N-0111",
+  "parent": null,
+  "title": "Sell-through and distributor history upload readiness (2 years: Amazon, Takealot, Pinnacle)",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": ["api", "schema", "ui"],
+  "risk": "R3",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": ["N-0110", "N-0095"],
+  "acceptance": "operator",
+  "acceptance_criteria": [
+    "Monday-Sunday is the tenant default week calendar for every customer and distributor; a per-customer override stays possible.",
+    "A history line with a full sale date loads at day grain and rolls up into Monday-Sunday weeks for weekly views.",
+    "A file that carries only week numbers does not apply until the uploader confirms the year at upload (pre-filled from the file name or folder). The year is never guessed.",
+    "A newer load replaces only the figures it carries: units sold, on-hand, in-transit and on-order are superseded independently. A stock-only file never wipes sales; a sales-only file never wipes stock. Superseded figures are kept with the superseding load; nothing is hard-deleted. Refines D-0090; cross-grain supersession stays.",
+    "A week with no reported on-hand does not break the stock chain: the chain restarts at the next reported on-hand and the gap tab names that week 'no on-hand reported'.",
+    "Built for customer sell-through (Amazon, Takealot). Pinnacle on the distributor sales/inventory path gets the same rules where it has the same gap; differences are listed.",
+    "Clone proof: a synthetic 2-year set per source (day-dated lines, a week-number-only file with a confirmed year, sales-only and stock-only files for one week, a re-upload, an overlapping correction) prints per-customer units and on-hand before / after / after re-running the whole set; the re-run changes nothing. No writes to cip except migrations after their clone proof.",
+    "Test and fixture data is out of scope.",
+    "Full API pytest and full web vitest green on cip_test."
+  ]
+}

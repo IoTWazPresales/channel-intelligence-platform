@@ -1,0 +1,2512 @@
+[
+ {
+  "path": "/api/v1/sellout/commercial-lines",
+  "captured_ms": 1675.4,
+  "sql_head": "SELECT fact_sales_sellout.id, fact_sales_sellout.source_key, fact_sales_sellout.staging_line_id, fact_sales_sellout.tenant_id, fact_sales_sellout.product_id, fact_sales_sellout.customer_id, fact_sales_sellout.channel_id, fact_sales_sellout.distributor_id, fact_sales_sellout.period_start, fact_sales_sellout.transaction_date, fact_sales_sellout.invoice_no, fact_sales_sellout.units, fact_sales_sellou",
+  "runs": {
+   "unset": {
+    "guc": null,
+    "exec_ms": 2399.0,
+    "plan_ms": 271.7,
+    "rows": 50.0,
+    "rls_calls": 35626.92,
+    "top_nodes": [
+     {
+      "node": "Bitmap Index Scan",
+      "rel": null,
+      "self_ms": 1114.0,
+      "loops": 882,
+      "rows": 35733.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Member"
+     },
+     {
+      "node": "Bitmap Heap Scan",
+      "rel": "fact_sales_sellout",
+      "self_ms": 763.4,
+      "loops": 18177,
+      "rows": 1.96,
+      "removed": 0,
+      "rls_calls": 35626.92,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Index Scan",
+      "rel": "dim_customer",
+      "self_ms": 142.3,
+      "loops": 35582,
+      "rows": 1.0,
+      "removed": 0,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Nested Loop",
+      "rel": null,
+      "self_ms": 107.3,
+      "loops": 1,
+      "rows": 35582.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Index Scan",
+      "rel": "dim_distributor",
+      "self_ms": 71.2,
+      "loops": 35582,
+      "rows": 1.0,
+      "removed": 0,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Nested Loop",
+      "rel": null,
+      "self_ms": 45.8,
+      "loops": 1,
+      "rows": 35582.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     }
+    ]
+   },
+   "star": {
+    "guc": "*",
+    "exec_ms": 1924.5,
+    "plan_ms": 1.0,
+    "rows": 50.0,
+    "rls_calls": 35626.92,
+    "top_nodes": [
+     {
+      "node": "Bitmap Index Scan",
+      "rel": null,
+      "self_ms": 985.2,
+      "loops": 882,
+      "rows": 35733.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Member"
+     },
+     {
+      "node": "Bitmap Heap Scan",
+      "rel": "fact_sales_sellout",
+      "self_ms": 527.1,
+      "loops": 18177,
+      "rows": 1.96,
+      "removed": 0,
+      "rls_calls": 35626.92,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Index Scan",
+      "rel": "dim_customer",
+      "self_ms": 106.7,
+      "loops": 35582,
+      "rows": 1.0,
+      "removed": 0,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Nested Loop",
+      "rel": null,
+      "self_ms": 96.1,
+      "loops": 1,
+      "rows": 35582.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Index Scan",
+      "rel": "dim_distributor",
+      "self_ms": 71.2,
+      "loops": 35582,
+      "rows": 1.0,
+      "removed": 0,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Bitmap Index Scan",
+      "rel": null,
+      "self_ms": 36.4,
+      "loops": 18177,
+      "rows": 2.02,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Member"
+     }
+    ]
+   },
+   "NB": {
+    "guc": "NB",
+    "exec_ms": 1549.8,
+    "plan_ms": 0.8,
+    "rows": 50.0,
+    "rls_calls": 16024.32,
+    "top_nodes": [
+     {
+      "node": "Bitmap Index Scan",
+      "rel": null,
+      "self_ms": 437.2,
+      "loops": 364,
+      "rows": 35733.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Member"
+     },
+     {
+      "node": "Bitmap Heap Scan",
+      "rel": "fact_sales_sellout",
+      "self_ms": 376.6,
+      "loops": 6848,
+      "rows": 2.34,
+      "removed": 0,
+      "rls_calls": 16024.32,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "dim_distributor",
+      "self_ms": 335.9,
+      "loops": 15995,
+      "rows": 68.75,
+      "removed": 0,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Nested Loop",
+      "rel": null,
+      "self_ms": 192.4,
+      "loops": 1,
+      "rows": 15995.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Index Scan",
+      "rel": "dim_customer",
+      "self_ms": 64.0,
+      "loops": 15995,
+      "rows": 1.0,
+      "removed": 0,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Nested Loop",
+      "rel": null,
+      "self_ms": 39.0,
+      "loops": 1,
+      "rows": 15995.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "path": "/api/v1/sellout/commercial-summary",
+  "captured_ms": 394.2,
+  "sql_head": "SELECT max(fact_sales_sellout.period_start) AS max_1 FROM fact_sales_sellout WHERE fact_sales_sellout.tenant_id = %(tenant_id_1)s::VARCHAR AND fact_sales_sellout.tenant_id = %(tid_1)s::VARCHAR",
+  "runs": {
+   "unset": {
+    "guc": null,
+    "exec_ms": 419.4,
+    "plan_ms": 23.7,
+    "rows": 1.0,
+    "rls_calls": 35582.0,
+    "top_nodes": [
+     {
+      "node": "Bitmap Heap Scan",
+      "rel": "fact_sales_sellout",
+      "self_ms": 411.5,
+      "loops": 1,
+      "rows": 35582.0,
+      "removed": 0,
+      "rls_calls": 35582.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Aggregate",
+      "rel": null,
+      "self_ms": 6.8,
+      "loops": 1,
+      "rows": 1.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     },
+     {
+      "node": "Bitmap Index Scan",
+      "rel": null,
+      "self_ms": 1.0,
+      "loops": 1,
+      "rows": 35733.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     }
+    ]
+   },
+   "star": {
+    "guc": "*",
+    "exec_ms": 278.4,
+    "plan_ms": 0.3,
+    "rows": 1.0,
+    "rls_calls": 35582.0,
+    "top_nodes": [
+     {
+      "node": "Bitmap Heap Scan",
+      "rel": "fact_sales_sellout",
+      "self_ms": 272.6,
+      "loops": 1,
+      "rows": 35582.0,
+      "removed": 0,
+      "rls_calls": 35582.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Aggregate",
+      "rel": null,
+      "self_ms": 4.9,
+      "loops": 1,
+      "rows": 1.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     },
+     {
+      "node": "Bitmap Index Scan",
+      "rel": null,
+      "self_ms": 0.9,
+      "loops": 1,
+      "rows": 35733.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     }
+    ]
+   },
+   "NB": {
+    "guc": "NB",
+    "exec_ms": 255.5,
+    "plan_ms": 0.3,
+    "rows": 1.0,
+    "rls_calls": 35582.0,
+    "top_nodes": [
+     {
+      "node": "Bitmap Heap Scan",
+      "rel": "fact_sales_sellout",
+      "self_ms": 252.8,
+      "loops": 1,
+      "rows": 15995.0,
+      "removed": 19587,
+      "rls_calls": 35582.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Aggregate",
+      "rel": null,
+      "self_ms": 1.9,
+      "loops": 1,
+      "rows": 1.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     },
+     {
+      "node": "Bitmap Index Scan",
+      "rel": null,
+      "self_ms": 0.7,
+      "loops": 1,
+      "rows": 35733.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "path": "/api/v1/channel-ops/sell-out",
+  "captured_ms": 3119.3,
+  "sql_head": "SELECT fact_sales_sellout.id, fact_sales_sellout.source_key, fact_sales_sellout.staging_line_id, fact_sales_sellout.tenant_id, fact_sales_sellout.product_id, fact_sales_sellout.customer_id, fact_sales_sellout.channel_id, fact_sales_sellout.distributor_id, fact_sales_sellout.period_start, fact_sales_sellout.transaction_date, fact_sales_sellout.invoice_no, fact_sales_sellout.units, fact_sales_sellou",
+  "runs": {
+   "unset": {
+    "guc": null,
+    "exec_ms": 1133.2,
+    "plan_ms": 52.7,
+    "rows": 50.0,
+    "rls_calls": 35626.92,
+    "top_nodes": [
+     {
+      "node": "Bitmap Index Scan",
+      "rel": null,
+      "self_ms": 594.5,
+      "loops": 882,
+      "rows": 35733.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Member"
+     },
+     {
+      "node": "Bitmap Heap Scan",
+      "rel": "fact_sales_sellout",
+      "self_ms": 290.8,
+      "loops": 18177,
+      "rows": 1.96,
+      "removed": 0,
+      "rls_calls": 35626.92,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Index Scan",
+      "rel": "dim_customer",
+      "self_ms": 71.2,
+      "loops": 35582,
+      "rows": 1.0,
+      "removed": 0,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Nested Loop",
+      "rel": null,
+      "self_ms": 61.4,
+      "loops": 1,
+      "rows": 35582.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Index Scan",
+      "rel": "dim_distributor",
+      "self_ms": 35.6,
+      "loops": 35582,
+      "rows": 1.0,
+      "removed": 0,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Sort",
+      "rel": null,
+      "self_ms": 20.3,
+      "loops": 1,
+      "rows": 50.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     }
+    ]
+   },
+   "star": {
+    "guc": "*",
+    "exec_ms": 1316.8,
+    "plan_ms": 0.8,
+    "rows": 50.0,
+    "rls_calls": 35626.92,
+    "top_nodes": [
+     {
+      "node": "Bitmap Index Scan",
+      "rel": null,
+      "self_ms": 644.7,
+      "loops": 882,
+      "rows": 35733.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Member"
+     },
+     {
+      "node": "Bitmap Heap Scan",
+      "rel": "fact_sales_sellout",
+      "self_ms": 381.7,
+      "loops": 18177,
+      "rows": 1.96,
+      "removed": 0,
+      "rls_calls": 35626.92,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Index Scan",
+      "rel": "dim_customer",
+      "self_ms": 71.2,
+      "loops": 35582,
+      "rows": 1.0,
+      "removed": 0,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Nested Loop",
+      "rel": null,
+      "self_ms": 59.4,
+      "loops": 1,
+      "rows": 35582.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Index Scan",
+      "rel": "dim_distributor",
+      "self_ms": 35.6,
+      "loops": 35582,
+      "rows": 1.0,
+      "removed": 0,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Nested Loop",
+      "rel": null,
+      "self_ms": 27.5,
+      "loops": 1,
+      "rows": 35582.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     }
+    ]
+   },
+   "NB": {
+    "guc": "NB",
+    "exec_ms": 1394.7,
+    "plan_ms": 1.6,
+    "rows": 50.0,
+    "rls_calls": 16024.32,
+    "top_nodes": [
+     {
+      "node": "Bitmap Index Scan",
+      "rel": null,
+      "self_ms": 411.7,
+      "loops": 364,
+      "rows": 35733.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Member"
+     },
+     {
+      "node": "Bitmap Heap Scan",
+      "rel": "fact_sales_sellout",
+      "self_ms": 321.9,
+      "loops": 6848,
+      "rows": 2.34,
+      "removed": 0,
+      "rls_calls": 16024.32,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "dim_distributor",
+      "self_ms": 303.9,
+      "loops": 15995,
+      "rows": 68.75,
+      "removed": 0,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Nested Loop",
+      "rel": null,
+      "self_ms": 177.8,
+      "loops": 1,
+      "rows": 15995.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Index Scan",
+      "rel": "dim_customer",
+      "self_ms": 64.0,
+      "loops": 15995,
+      "rows": 1.0,
+      "removed": 0,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Nested Loop",
+      "rel": null,
+      "self_ms": 34.2,
+      "loops": 1,
+      "rows": 15995.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "path": "/api/v1/shipping/lines",
+  "captured_ms": 12398.8,
+  "sql_head": "SELECT commercial_lineup_line.id, commercial_lineup_line.case_id, commercial_lineup_line.source_row_number, commercial_lineup_line.product_id, commercial_lineup_line.customer_id, commercial_lineup_line.distributor_id, commercial_lineup_line.distributor_attribution_status, commercial_lineup_line.customer_token, commercial_lineup_line.sku_raw, commercial_lineup_line.part_number_raw, commercial_lineu",
+  "runs": {
+   "unset": {
+    "guc": null,
+    "exec_ms": 1314.1,
+    "plan_ms": 108.7,
+    "rows": 54172.0,
+    "rls_calls": 2484.09,
+    "top_nodes": [
+     {
+      "node": "Index Scan",
+      "rel": "commercial_lineup_line",
+      "self_ms": 62.5,
+      "loops": 21,
+      "rows": 116.29,
+      "removed": 2,
+      "rls_calls": 2484.09,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Nested Loop",
+      "rel": null,
+      "self_ms": 30.7,
+      "loops": 1,
+      "rows": 54172.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     },
+     {
+      "node": "Memoize",
+      "rel": null,
+      "self_ms": 10.9,
+      "loops": 335,
+      "rows": 161.71,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Hash Join",
+      "rel": null,
+      "self_ms": 0.7,
+      "loops": 1,
+      "rows": 335.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "commercial_lineup_case_po",
+      "self_ms": 0.4,
+      "loops": 1,
+      "rows": 365.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "commercial_lineup_case",
+      "self_ms": 0.1,
+      "loops": 1,
+      "rows": 29.0,
+      "removed": 7,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     }
+    ]
+   },
+   "star": {
+    "guc": "*",
+    "exec_ms": 1008.7,
+    "plan_ms": 0.5,
+    "rows": 54172.0,
+    "rls_calls": 2484.09,
+    "top_nodes": [
+     {
+      "node": "Index Scan",
+      "rel": "commercial_lineup_line",
+      "self_ms": 24.1,
+      "loops": 21,
+      "rows": 116.29,
+      "removed": 2,
+      "rls_calls": 2484.09,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Nested Loop",
+      "rel": null,
+      "self_ms": 23.3,
+      "loops": 1,
+      "rows": 54172.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     },
+     {
+      "node": "Memoize",
+      "rel": null,
+      "self_ms": 8.7,
+      "loops": 335,
+      "rows": 161.71,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Hash Join",
+      "rel": null,
+      "self_ms": 0.5,
+      "loops": 1,
+      "rows": 335.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "commercial_lineup_case_po",
+      "self_ms": 0.2,
+      "loops": 1,
+      "rows": 365.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Hash",
+      "rel": null,
+      "self_ms": 0.0,
+      "loops": 1,
+      "rows": 29.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     }
+    ]
+   },
+   "NB": {
+    "guc": "NB",
+    "exec_ms": 829.0,
+    "plan_ms": 0.4,
+    "rows": 39723.0,
+    "rls_calls": 2489.97,
+    "top_nodes": [
+     {
+      "node": "Index Scan",
+      "rel": "commercial_lineup_line",
+      "self_ms": 26.1,
+      "loops": 21,
+      "rows": 74.57,
+      "removed": 44,
+      "rls_calls": 2489.97,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Nested Loop",
+      "rel": null,
+      "self_ms": 19.2,
+      "loops": 1,
+      "rows": 39723.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     },
+     {
+      "node": "Memoize",
+      "rel": null,
+      "self_ms": 6.4,
+      "loops": 335,
+      "rows": 118.58,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Hash Join",
+      "rel": null,
+      "self_ms": 0.4,
+      "loops": 1,
+      "rows": 335.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "commercial_lineup_case_po",
+      "self_ms": 0.2,
+      "loops": 1,
+      "rows": 365.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Hash",
+      "rel": null,
+      "self_ms": 0.0,
+      "loops": 1,
+      "rows": 29.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "path": "/api/v1/shipping/summary",
+  "captured_ms": 476.0,
+  "sql_head": "SELECT fact_inbound_shipment.line_state, count(*) AS count_1 FROM fact_inbound_shipment WHERE fact_inbound_shipment.tenant_id = %(tenant_id_1)s::VARCHAR AND (lower(fact_inbound_shipment.line_state) != %(lower_1)s::VARCHAR OR NOT (trim(coalesce(fact_inbound_shipment.order_no, %(coalesce_1)s::VARCHAR)) != %(trim_1)s::VARCHAR AND trim(coalesce(fact_inbound_shipment.item_code, %(coalesce_2)s::VARCHAR)",
+  "runs": {
+   "unset": {
+    "guc": null,
+    "exec_ms": 275.0,
+    "plan_ms": 60.4,
+    "rows": 2.0,
+    "rls_calls": 30510.0,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 135.6,
+      "loops": 1,
+      "rows": 13468.0,
+      "removed": 1787,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 1"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 134.7,
+      "loops": 1,
+      "rows": 14703.0,
+      "removed": 552,
+      "rls_calls": 15255.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Aggregate",
+      "rel": null,
+      "self_ms": 4.2,
+      "loops": 1,
+      "rows": 2.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Sort",
+      "rel": null,
+      "self_ms": 0.0,
+      "loops": 1,
+      "rows": 2.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     }
+    ]
+   },
+   "star": {
+    "guc": "*",
+    "exec_ms": 244.2,
+    "plan_ms": 0.3,
+    "rows": 2.0,
+    "rls_calls": 30510.0,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 121.3,
+      "loops": 1,
+      "rows": 14703.0,
+      "removed": 552,
+      "rls_calls": 15255.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 118.7,
+      "loops": 1,
+      "rows": 13468.0,
+      "removed": 1787,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 1"
+     },
+     {
+      "node": "Aggregate",
+      "rel": null,
+      "self_ms": 3.7,
+      "loops": 1,
+      "rows": 2.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Sort",
+      "rel": null,
+      "self_ms": 0.0,
+      "loops": 1,
+      "rows": 2.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     }
+    ]
+   },
+   "NB": {
+    "guc": "NB",
+    "exec_ms": 269.7,
+    "plan_ms": 0.3,
+    "rows": 2.0,
+    "rls_calls": 30510.0,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 139.8,
+      "loops": 1,
+      "rows": 7698.0,
+      "removed": 7557,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 1"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 127.2,
+      "loops": 1,
+      "rows": 8562.0,
+      "removed": 6693,
+      "rls_calls": 15255.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Aggregate",
+      "rel": null,
+      "self_ms": 2.3,
+      "loops": 1,
+      "rows": 2.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Sort",
+      "rel": null,
+      "self_ms": 0.0,
+      "loops": 1,
+      "rows": 2.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     }
+    ]
+   }
+  }
+ },
+ {
+  "path": "/api/v1/shipping/commercial-summary",
+  "captured_ms": 2409.7,
+  "sql_head": "SELECT count(*) AS count_1 FROM (SELECT anon_2.source_key AS source_key, anon_2.sales_model_name AS sales_model_name, anon_2.quantity AS quantity, anon_2.bill_to_raw AS bill_to_raw, anon_2.customer_dealer_token AS customer_dealer_token, coalesce(anon_2.est_pod, anon_2.promise) AS current_effective, coalesce(anon_2.prev_est_pod, anon_2.prev_promise) AS previous_effective, anon_2.est_pod AS current_",
+  "runs": {
+   "unset": {
+    "guc": null,
+    "exec_ms": 1037.2,
+    "plan_ms": 45.8,
+    "rows": 1.0,
+    "rls_calls": 124385.84,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "shipment_evidence_observation",
+      "self_ms": 533.9,
+      "loops": 1,
+      "rows": 87171.0,
+      "removed": 0,
+      "rls_calls": 87171.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 146.0,
+      "loops": 1,
+      "rows": 13468.0,
+      "removed": 1787,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 1"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 134.1,
+      "loops": 1,
+      "rows": 13468.0,
+      "removed": 1787,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 2"
+     },
+     {
+      "node": "Unique",
+      "rel": null,
+      "self_ms": 51.0,
+      "loops": 895,
+      "rows": 520.69,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Bitmap Heap Scan",
+      "rel": "shipment_evidence_observation",
+      "self_ms": 44.9,
+      "loops": 681,
+      "rows": 3.64,
+      "removed": 0,
+      "rls_calls": 2478.84,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Bitmap Heap Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 32.1,
+      "loops": 1,
+      "rows": 681.0,
+      "removed": 1432,
+      "rls_calls": 2113.0,
+      "subplan": "Outer"
+     }
+    ]
+   },
+   "star": {
+    "guc": "*",
+    "exec_ms": 1012.7,
+    "plan_ms": 0.9,
+    "rows": 1.0,
+    "rls_calls": 124385.84,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "shipment_evidence_observation",
+      "self_ms": 562.9,
+      "loops": 1,
+      "rows": 87171.0,
+      "removed": 0,
+      "rls_calls": 87171.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 134.6,
+      "loops": 1,
+      "rows": 13468.0,
+      "removed": 1787,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 1"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 132.0,
+      "loops": 1,
+      "rows": 13468.0,
+      "removed": 1787,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 2"
+     },
+     {
+      "node": "Unique",
+      "rel": null,
+      "self_ms": 51.0,
+      "loops": 895,
+      "rows": 520.69,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Nested Loop",
+      "rel": null,
+      "self_ms": 27.3,
+      "loops": 1,
+      "rows": 358.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Bitmap Heap Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 22.1,
+      "loops": 1,
+      "rows": 681.0,
+      "removed": 1432,
+      "rls_calls": 2113.0,
+      "subplan": "Outer"
+     }
+    ]
+   },
+   "NB": {
+    "guc": "NB",
+    "exec_ms": 1013.9,
+    "plan_ms": 1.1,
+    "rows": 1.0,
+    "rls_calls": 123698.0,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "shipment_evidence_observation",
+      "self_ms": 626.8,
+      "loops": 1,
+      "rows": 51028.0,
+      "removed": 36143,
+      "rls_calls": 87171.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 134.4,
+      "loops": 1,
+      "rows": 7698.0,
+      "removed": 7557,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 2"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 131.1,
+      "loops": 1,
+      "rows": 7698.0,
+      "removed": 7557,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 1"
+     },
+     {
+      "node": "Unique",
+      "rel": null,
+      "self_ms": 23.6,
+      "loops": 655,
+      "rows": 354.53,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Bitmap Heap Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 22.3,
+      "loops": 1,
+      "rows": 450.0,
+      "removed": 1663,
+      "rls_calls": 2113.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Bitmap Heap Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 21.1,
+      "loops": 1,
+      "rows": 450.0,
+      "removed": 1663,
+      "rls_calls": 2113.0,
+      "subplan": "Outer"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "path": "/api/v1/supply/overview",
+  "captured_ms": 983.5,
+  "sql_head": "SELECT %(tenant)s AS tenant_id, count(*) FILTER ( WHERE status IS DISTINCT FROM 'received' AND NOT ( lower(line_state) = 'open_order' AND ( trim(coalesce(fact_inbound_shipment.order_no, '')) <> '' AND trim(coalesce(fact_inbound_shipment.item_code, '')) <> '' AND lower(fact_inbound_shipment.line_state) <> 'shipped' AND ( fact_inbound_shipment.tenant_id, lower(trim(coalesce(fact_inbound_shipment.ope",
+  "runs": {
+   "unset": {
+    "guc": null,
+    "exec_ms": 674.0,
+    "plan_ms": 12.2,
+    "rows": 1.0,
+    "rls_calls": 76275.0,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 142.0,
+      "loops": 1,
+      "rows": 13468.0,
+      "removed": 1787,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 4"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 125.3,
+      "loops": 1,
+      "rows": 13468.0,
+      "removed": 1787,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 3"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 122.4,
+      "loops": 1,
+      "rows": 13468.0,
+      "removed": 1787,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 1"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 117.1,
+      "loops": 1,
+      "rows": 15255.0,
+      "removed": 0,
+      "rls_calls": 15255.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 101.7,
+      "loops": 1,
+      "rows": 13468.0,
+      "removed": 1787,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 2"
+     },
+     {
+      "node": "Aggregate",
+      "rel": null,
+      "self_ms": 64.5,
+      "loops": 1,
+      "rows": 1.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     }
+    ]
+   },
+   "star": {
+    "guc": "*",
+    "exec_ms": 683.0,
+    "plan_ms": 0.5,
+    "rows": 1.0,
+    "rls_calls": 76275.0,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 134.0,
+      "loops": 1,
+      "rows": 13468.0,
+      "removed": 1787,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 3"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 131.6,
+      "loops": 1,
+      "rows": 13468.0,
+      "removed": 1787,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 2"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 127.4,
+      "loops": 1,
+      "rows": 13468.0,
+      "removed": 1787,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 1"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 127.1,
+      "loops": 1,
+      "rows": 13468.0,
+      "removed": 1787,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 4"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 100.7,
+      "loops": 1,
+      "rows": 15255.0,
+      "removed": 0,
+      "rls_calls": 15255.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Aggregate",
+      "rel": null,
+      "self_ms": 61.2,
+      "loops": 1,
+      "rows": 1.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     }
+    ]
+   },
+   "NB": {
+    "guc": "NB",
+    "exec_ms": 659.3,
+    "plan_ms": 0.5,
+    "rows": 1.0,
+    "rls_calls": 76275.0,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 128.3,
+      "loops": 1,
+      "rows": 7698.0,
+      "removed": 7557,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 3"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 127.9,
+      "loops": 1,
+      "rows": 7698.0,
+      "removed": 7557,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 4"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 125.0,
+      "loops": 1,
+      "rows": 7698.0,
+      "removed": 7557,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 1"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 123.4,
+      "loops": 1,
+      "rows": 7698.0,
+      "removed": 7557,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 2"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 115.3,
+      "loops": 1,
+      "rows": 8851.0,
+      "removed": 6404,
+      "rls_calls": 15255.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Aggregate",
+      "rel": null,
+      "self_ms": 38.7,
+      "loops": 1,
+      "rows": 1.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     }
+    ]
+   }
+  }
+ },
+ {
+  "path": "/api/v1/channel-ops/cover-distribution",
+  "captured_ms": 3381.7,
+  "sql_head": "SELECT DISTINCT ON (weeks_of_cover_observation.distributor_id, weeks_of_cover_observation.product_id) weeks_of_cover_observation.id, weeks_of_cover_observation.tenant_id, weeks_of_cover_observation.distributor_id, weeks_of_cover_observation.product_id, weeks_of_cover_observation.snapshot_date, weeks_of_cover_observation.cover_as_of_date, weeks_of_cover_observation.observed_at, weeks_of_cover_obser",
+  "runs": {
+   "unset": {
+    "guc": null,
+    "exec_ms": 2358.9,
+    "plan_ms": 15.3,
+    "rows": 2481.0,
+    "rls_calls": 194349.0,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "weeks_of_cover_observation",
+      "self_ms": 1367.7,
+      "loops": 1,
+      "rows": 194349.0,
+      "removed": 0,
+      "rls_calls": 194349.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Sort",
+      "rel": null,
+      "self_ms": 937.0,
+      "loops": 1,
+      "rows": 194349.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Unique",
+      "rel": null,
+      "self_ms": 18.2,
+      "loops": 1,
+      "rows": 2481.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     }
+    ]
+   },
+   "star": {
+    "guc": "*",
+    "exec_ms": 4194.1,
+    "plan_ms": 0.2,
+    "rows": 2481.0,
+    "rls_calls": 194349.0,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "weeks_of_cover_observation",
+      "self_ms": 2629.3,
+      "loops": 1,
+      "rows": 194349.0,
+      "removed": 0,
+      "rls_calls": 194349.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Sort",
+      "rel": null,
+      "self_ms": 1491.8,
+      "loops": 1,
+      "rows": 194349.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Unique",
+      "rel": null,
+      "self_ms": 26.7,
+      "loops": 1,
+      "rows": 2481.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     }
+    ]
+   },
+   "NB": {
+    "guc": "NB",
+    "exec_ms": 3699.7,
+    "plan_ms": 0.2,
+    "rows": 1099.0,
+    "rls_calls": 194349.0,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "weeks_of_cover_observation",
+      "self_ms": 3021.3,
+      "loops": 1,
+      "rows": 87899.0,
+      "removed": 106450,
+      "rls_calls": 194349.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Sort",
+      "rel": null,
+      "self_ms": 622.6,
+      "loops": 1,
+      "rows": 87899.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Unique",
+      "rel": null,
+      "self_ms": 23.2,
+      "loops": 1,
+      "rows": 1099.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     }
+    ]
+   }
+  }
+ },
+ {
+  "path": "/api/v1/channel-ops/summary",
+  "captured_ms": 5181.1,
+  "sql_head": "SELECT DISTINCT ON (weeks_of_cover_observation.distributor_id, weeks_of_cover_observation.product_id) weeks_of_cover_observation.id, weeks_of_cover_observation.tenant_id, weeks_of_cover_observation.distributor_id, weeks_of_cover_observation.product_id, weeks_of_cover_observation.snapshot_date, weeks_of_cover_observation.cover_as_of_date, weeks_of_cover_observation.observed_at, weeks_of_cover_obser",
+  "runs": {
+   "unset": {
+    "guc": null,
+    "exec_ms": 3554.4,
+    "plan_ms": 6.9,
+    "rows": 2481.0,
+    "rls_calls": 194349.0,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "weeks_of_cover_observation",
+      "self_ms": 2184.4,
+      "loops": 1,
+      "rows": 194349.0,
+      "removed": 0,
+      "rls_calls": 194349.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Sort",
+      "rel": null,
+      "self_ms": 1310.4,
+      "loops": 1,
+      "rows": 194349.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Unique",
+      "rel": null,
+      "self_ms": 20.0,
+      "loops": 1,
+      "rows": 2481.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     }
+    ]
+   },
+   "star": {
+    "guc": "*",
+    "exec_ms": 3597.0,
+    "plan_ms": 0.2,
+    "rows": 2481.0,
+    "rls_calls": 194349.0,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "weeks_of_cover_observation",
+      "self_ms": 2204.2,
+      "loops": 1,
+      "rows": 194349.0,
+      "removed": 0,
+      "rls_calls": 194349.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Sort",
+      "rel": null,
+      "self_ms": 1280.8,
+      "loops": 1,
+      "rows": 194349.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Unique",
+      "rel": null,
+      "self_ms": 40.8,
+      "loops": 1,
+      "rows": 2481.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     }
+    ]
+   },
+   "NB": {
+    "guc": "NB",
+    "exec_ms": 3424.9,
+    "plan_ms": 0.3,
+    "rows": 1099.0,
+    "rls_calls": 194349.0,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "weeks_of_cover_observation",
+      "self_ms": 2906.1,
+      "loops": 1,
+      "rows": 87899.0,
+      "removed": 106450,
+      "rls_calls": 194349.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Sort",
+      "rel": null,
+      "self_ms": 487.0,
+      "loops": 1,
+      "rows": 87899.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Unique",
+      "rel": null,
+      "self_ms": 11.3,
+      "loops": 1,
+      "rows": 1099.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     }
+    ]
+   }
+  }
+ },
+ {
+  "path": "/api/v1/plan-vs-executed",
+  "captured_ms": 1418.4,
+  "sql_head": "SELECT shipment_evidence_current.resolved_customer_id, shipment_evidence_current.product_id, coalesce(sum(shipment_evidence_current.quantity), %(coalesce_2)s::INTEGER) AS coalesce_1, coalesce(sum(coalesce(shipment_evidence_current.amount, coalesce(shipment_evidence_current.quantity, %(coalesce_4)s::INTEGER) * coalesce(shipment_evidence_current.unit_price, %(coalesce_5)s::INTEGER))), %(coalesce_6)s",
+  "runs": {
+   "unset": {
+    "guc": null,
+    "exec_ms": 632.8,
+    "plan_ms": 32.5,
+    "rows": 7.0,
+    "rls_calls": 0,
+    "top_nodes": [
+     {
+      "node": "Index Scan",
+      "rel": "shipment_evidence_line",
+      "self_ms": 342.2,
+      "loops": 85544,
+      "rows": 1.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Index Scan",
+      "rel": "shipment_evidence_observation",
+      "self_ms": 212.4,
+      "loops": 3,
+      "rows": 28514.67,
+      "removed": 542,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Incremental Sort",
+      "rel": null,
+      "self_ms": 88.2,
+      "loops": 3,
+      "rows": 28514.67,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Nested Loop",
+      "rel": null,
+      "self_ms": 87.0,
+      "loops": 3,
+      "rows": 28514.67,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Unique",
+      "rel": null,
+      "self_ms": 13.3,
+      "loops": 1,
+      "rows": 15807.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Subquery"
+     },
+     {
+      "node": "Subquery Scan",
+      "rel": null,
+      "self_ms": 3.7,
+      "loops": 1,
+      "rows": 7.0,
+      "removed": 15800,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     }
+    ]
+   },
+   "star": {
+    "guc": "*",
+    "exec_ms": 454.8,
+    "plan_ms": 0.7,
+    "rows": 7.0,
+    "rls_calls": 0,
+    "top_nodes": [
+     {
+      "node": "Index Scan",
+      "rel": "shipment_evidence_line",
+      "self_ms": 171.1,
+      "loops": 85544,
+      "rows": 1.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Nested Loop",
+      "rel": null,
+      "self_ms": 112.9,
+      "loops": 3,
+      "rows": 28514.67,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Index Scan",
+      "rel": "shipment_evidence_observation",
+      "self_ms": 96.4,
+      "loops": 3,
+      "rows": 28514.67,
+      "removed": 542,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Incremental Sort",
+      "rel": null,
+      "self_ms": 80.0,
+      "loops": 3,
+      "rows": 28514.67,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Unique",
+      "rel": null,
+      "self_ms": 12.4,
+      "loops": 1,
+      "rows": 15807.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Subquery"
+     },
+     {
+      "node": "Subquery Scan",
+      "rel": null,
+      "self_ms": 3.2,
+      "loops": 1,
+      "rows": 7.0,
+      "removed": 15800,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     }
+    ]
+   },
+   "NB": {
+    "guc": "NB",
+    "exec_ms": 421.6,
+    "plan_ms": 0.5,
+    "rows": 7.0,
+    "rls_calls": 0,
+    "top_nodes": [
+     {
+      "node": "Index Scan",
+      "rel": "shipment_evidence_line",
+      "self_ms": 171.1,
+      "loops": 85544,
+      "rows": 1.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Nested Loop",
+      "rel": null,
+      "self_ms": 100.6,
+      "loops": 3,
+      "rows": 28514.67,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Index Scan",
+      "rel": "shipment_evidence_observation",
+      "self_ms": 83.3,
+      "loops": 3,
+      "rows": 28514.67,
+      "removed": 542,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Incremental Sort",
+      "rel": null,
+      "self_ms": 78.4,
+      "loops": 3,
+      "rows": 28514.67,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Unique",
+      "rel": null,
+      "self_ms": 12.7,
+      "loops": 1,
+      "rows": 15807.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Subquery"
+     },
+     {
+      "node": "Subquery Scan",
+      "rel": null,
+      "self_ms": 3.2,
+      "loops": 1,
+      "rows": 7.0,
+      "removed": 15800,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "path": "/api/v1/lineup/net-requirement",
+  "captured_ms": 51691.7,
+  "sql_head": "SELECT inv_latest.distributor_id, inv_latest.product_id, inv_latest.snapshot_date, inv_latest.on_hand_units, coalesce(sell_since.sell_out, %(coalesce_2)s::INTEGER) AS coalesce_1, coalesce(land_since.landed, %(coalesce_4)s::INTEGER) AS coalesce_3 FROM (SELECT fact_inventory_distributor.distributor_id AS distributor_id, fact_inventory_distributor.product_id AS product_id, fact_inventory_distributor.",
+  "runs": {
+   "unset": {
+    "guc": null,
+    "error": "(psycopg.errors.QueryCanceled) canceling statement due to statement timeout"
+   },
+   "star": {
+    "guc": "*",
+    "error": "(psycopg.errors.QueryCanceled) canceling statement due to statement timeout"
+   },
+   "NB": {
+    "guc": "NB",
+    "exec_ms": 16950.9,
+    "plan_ms": 1.0,
+    "rows": 1099.0,
+    "rls_calls": 439835.31999999995,
+    "top_nodes": [
+     {
+      "node": "Index Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 7153.6,
+      "loops": 1192274,
+      "rows": 0.18,
+      "removed": 0,
+      "rls_calls": 214609.31999999998,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Aggregate",
+      "rel": null,
+      "self_ms": 4529.0,
+      "loops": 1099,
+      "rows": 1084.87,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Sort",
+      "rel": null,
+      "self_ms": 2177.4,
+      "loops": 1099,
+      "rows": 20733.22,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Bitmap Heap Scan",
+      "rel": "fact_inventory_distributor",
+      "self_ms": 643.3,
+      "loops": 1,
+      "rows": 21047.0,
+      "removed": 26364,
+      "rls_calls": 47411.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Bitmap Heap Scan",
+      "rel": "fact_inventory_distributor",
+      "self_ms": 539.1,
+      "loops": 1,
+      "rows": 21047.0,
+      "removed": 26364,
+      "rls_calls": 47411.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Bitmap Heap Scan",
+      "rel": "fact_inventory_distributor",
+      "self_ms": 452.9,
+      "loops": 1,
+      "rows": 21047.0,
+      "removed": 26364,
+      "rls_calls": 47411.0,
+      "subplan": "Outer"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "path": "/api/v1/commercial-planner/lineup-cases/119/lines",
+  "captured_ms": 1593.9,
+  "sql_head": "SELECT commercial_lineup_line.id, commercial_lineup_line.case_id, commercial_lineup_line.source_row_number, commercial_lineup_line.product_id, commercial_lineup_line.customer_id, commercial_lineup_line.distributor_id, commercial_lineup_line.distributor_attribution_status, commercial_lineup_line.customer_token, commercial_lineup_line.sku_raw, commercial_lineup_line.part_number_raw, commercial_lineu",
+  "runs": {
+   "unset": {
+    "guc": null,
+    "exec_ms": 1273.0,
+    "plan_ms": 89.6,
+    "rows": 289.0,
+    "rls_calls": 289.0,
+    "top_nodes": [
+     {
+      "node": "Materialize",
+      "rel": null,
+      "self_ms": 814.9,
+      "loops": 289,
+      "rows": 9144.41,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Nested Loop",
+      "rel": null,
+      "self_ms": 351.0,
+      "loops": 1,
+      "rows": 289.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Bitmap Heap Scan",
+      "rel": "commercial_lineup_line",
+      "self_ms": 24.5,
+      "loops": 1,
+      "rows": 289.0,
+      "removed": 0,
+      "rls_calls": 289.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Bitmap Heap Scan",
+      "rel": "dim_product",
+      "self_ms": 12.6,
+      "loops": 1,
+      "rows": 17209.0,
+      "removed": 0,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Sort",
+      "rel": null,
+      "self_ms": 1.9,
+      "loops": 1,
+      "rows": 289.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     },
+     {
+      "node": "Nested Loop",
+      "rel": null,
+      "self_ms": 1.0,
+      "loops": 1,
+      "rows": 289.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     }
+    ]
+   },
+   "star": {
+    "guc": "*",
+    "exec_ms": 1529.5,
+    "plan_ms": 0.9,
+    "rows": 289.0,
+    "rls_calls": 289.0,
+    "top_nodes": [
+     {
+      "node": "Materialize",
+      "rel": null,
+      "self_ms": 994.6,
+      "loops": 289,
+      "rows": 9144.41,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Nested Loop",
+      "rel": null,
+      "self_ms": 437.4,
+      "loops": 1,
+      "rows": 289.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Bitmap Heap Scan",
+      "rel": "commercial_lineup_line",
+      "self_ms": 26.5,
+      "loops": 1,
+      "rows": 289.0,
+      "removed": 0,
+      "rls_calls": 289.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Bitmap Heap Scan",
+      "rel": "dim_product",
+      "self_ms": 20.0,
+      "loops": 1,
+      "rows": 17209.0,
+      "removed": 0,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Sort",
+      "rel": null,
+      "self_ms": 2.0,
+      "loops": 1,
+      "rows": 289.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     },
+     {
+      "node": "Nested Loop",
+      "rel": null,
+      "self_ms": 1.3,
+      "loops": 1,
+      "rows": 289.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     }
+    ]
+   },
+   "NB": {
+    "guc": "NB",
+    "exec_ms": 78.7,
+    "plan_ms": 1.2,
+    "rows": 289.0,
+    "rls_calls": 289.0,
+    "top_nodes": [
+     {
+      "node": "Bitmap Heap Scan",
+      "rel": "dim_product",
+      "self_ms": 29.7,
+      "loops": 1,
+      "rows": 6848.0,
+      "removed": 11329,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Hash",
+      "rel": null,
+      "self_ms": 5.8,
+      "loops": 1,
+      "rows": 6848.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Bitmap Heap Scan",
+      "rel": "commercial_lineup_line",
+      "self_ms": 4.8,
+      "loops": 1,
+      "rows": 289.0,
+      "removed": 0,
+      "rls_calls": 289.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Sort",
+      "rel": null,
+      "self_ms": 0.8,
+      "loops": 1,
+      "rows": 289.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     },
+     {
+      "node": "Bitmap Index Scan",
+      "rel": null,
+      "self_ms": 0.7,
+      "loops": 1,
+      "rows": 18208.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Hash Join",
+      "rel": null,
+      "self_ms": 0.5,
+      "loops": 1,
+      "rows": 289.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "path": "/api/v1/cpor/settlement/book",
+  "captured_ms": 172.2,
+  "sql_head": "SELECT cpor_case.id, cpor_case.case_code, cpor_case.case_name, cpor_case.tenant_id, cpor_case.customer_id, cpor_case.promotion_type, cpor_case.window_start, cpor_case.window_end, cpor_case.status, cpor_case.roe_snapshot, cpor_case.fx_mode, cpor_case.fx_declared_at, cpor_case.fx_declared_by, cpor_case.fx_proposed_rate, cpor_case.fx_proposed_at, cpor_case.fx_proposed_by, cpor_case.fx_proposed_source",
+  "runs": {
+   "unset": {
+    "guc": null,
+    "exec_ms": 20.7,
+    "plan_ms": 93.1,
+    "rows": 652.0,
+    "rls_calls": 658.0,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "cpor_case_line",
+      "self_ms": 15.9,
+      "loops": 1,
+      "rows": 658.0,
+      "removed": 0,
+      "rls_calls": 658.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Hash Join",
+      "rel": null,
+      "self_ms": 0.8,
+      "loops": 1,
+      "rows": 652.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "cpor_case",
+      "self_ms": 0.6,
+      "loops": 1,
+      "rows": 304.0,
+      "removed": 7,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Hash",
+      "rel": null,
+      "self_ms": 0.2,
+      "loops": 1,
+      "rows": 304.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     }
+    ]
+   },
+   "star": {
+    "guc": "*",
+    "exec_ms": 9.4,
+    "plan_ms": 0.4,
+    "rows": 652.0,
+    "rls_calls": 658.0,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "cpor_case_line",
+      "self_ms": 5.3,
+      "loops": 1,
+      "rows": 658.0,
+      "removed": 0,
+      "rls_calls": 658.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Hash Join",
+      "rel": null,
+      "self_ms": 0.6,
+      "loops": 1,
+      "rows": 652.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     },
+     {
+      "node": "Hash",
+      "rel": null,
+      "self_ms": 0.2,
+      "loops": 1,
+      "rows": 304.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "cpor_case",
+      "self_ms": 0.2,
+      "loops": 1,
+      "rows": 304.0,
+      "removed": 7,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     }
+    ]
+   },
+   "NB": {
+    "guc": "NB",
+    "exec_ms": 8.8,
+    "plan_ms": 0.4,
+    "rows": 540.0,
+    "rls_calls": 658.0,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "cpor_case_line",
+      "self_ms": 5.6,
+      "loops": 1,
+      "rows": 450.0,
+      "removed": 208,
+      "rls_calls": 658.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Hash Join",
+      "rel": null,
+      "self_ms": 0.5,
+      "loops": 1,
+      "rows": 540.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     },
+     {
+      "node": "Hash",
+      "rel": null,
+      "self_ms": 0.2,
+      "loops": 1,
+      "rows": 304.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Inner"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "cpor_case",
+      "self_ms": 0.2,
+      "loops": 1,
+      "rows": 304.0,
+      "removed": 7,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "path": "/api/v1/dashboard/summary",
+  "captured_ms": 683.3,
+  "sql_head": "SELECT count(*) AS count_1 FROM fact_inbound_shipment WHERE fact_inbound_shipment.status != %(status_1)s::VARCHAR AND fact_inbound_shipment.tenant_id = %(tenant_id_1)s::VARCHAR AND (lower(fact_inbound_shipment.line_state) != %(lower_1)s::VARCHAR OR NOT (trim(coalesce(fact_inbound_shipment.order_no, %(coalesce_1)s::VARCHAR)) != %(trim_1)s::VARCHAR AND trim(coalesce(fact_inbound_shipment.item_code, ",
+  "runs": {
+   "unset": {
+    "guc": null,
+    "exec_ms": 458.2,
+    "plan_ms": 80.9,
+    "rows": 1.0,
+    "rls_calls": 30510.0,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 387.8,
+      "loops": 1,
+      "rows": 13468.0,
+      "removed": 1787,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 1"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 65.8,
+      "loops": 1,
+      "rows": 1561.0,
+      "removed": 13694,
+      "rls_calls": 15255.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Aggregate",
+      "rel": null,
+      "self_ms": 0.3,
+      "loops": 1,
+      "rows": 1.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     }
+    ]
+   },
+   "star": {
+    "guc": "*",
+    "exec_ms": 278.3,
+    "plan_ms": 0.4,
+    "rows": 1.0,
+    "rls_calls": 30510.0,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 218.2,
+      "loops": 1,
+      "rows": 13468.0,
+      "removed": 1787,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 1"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 59.4,
+      "loops": 1,
+      "rows": 1561.0,
+      "removed": 13694,
+      "rls_calls": 15255.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Aggregate",
+      "rel": null,
+      "self_ms": 0.3,
+      "loops": 1,
+      "rows": 1.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     }
+    ]
+   },
+   "NB": {
+    "guc": "NB",
+    "exec_ms": 319.7,
+    "plan_ms": 0.4,
+    "rows": 1.0,
+    "rls_calls": 30510.0,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 272.1,
+      "loops": 1,
+      "rows": 7698.0,
+      "removed": 7557,
+      "rls_calls": 15255.0,
+      "subplan": "SubPlan 1"
+     },
+     {
+      "node": "Seq Scan",
+      "rel": "fact_inbound_shipment",
+      "self_ms": 47.2,
+      "loops": 1,
+      "rows": 1032.0,
+      "removed": 14223,
+      "rls_calls": 15255.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Aggregate",
+      "rel": null,
+      "self_ms": 0.2,
+      "loops": 1,
+      "rows": 1.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     }
+    ]
+   }
+  }
+ },
+ {
+  "path": "/api/v1/brief/signals",
+  "captured_ms": 4080.4,
+  "sql_head": "SELECT DISTINCT ON (weeks_of_cover_observation.distributor_id, weeks_of_cover_observation.product_id) weeks_of_cover_observation.id, weeks_of_cover_observation.tenant_id, weeks_of_cover_observation.distributor_id, weeks_of_cover_observation.product_id, weeks_of_cover_observation.snapshot_date, weeks_of_cover_observation.cover_as_of_date, weeks_of_cover_observation.observed_at, weeks_of_cover_obser",
+  "runs": {
+   "unset": {
+    "guc": null,
+    "exec_ms": 3480.4,
+    "plan_ms": 48.0,
+    "rows": 2481.0,
+    "rls_calls": 194349.0,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "weeks_of_cover_observation",
+      "self_ms": 2104.7,
+      "loops": 1,
+      "rows": 194349.0,
+      "removed": 0,
+      "rls_calls": 194349.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Sort",
+      "rel": null,
+      "self_ms": 1300.0,
+      "loops": 1,
+      "rows": 194349.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Unique",
+      "rel": null,
+      "self_ms": 27.5,
+      "loops": 1,
+      "rows": 2481.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     }
+    ]
+   },
+   "star": {
+    "guc": "*",
+    "exec_ms": 5226.2,
+    "plan_ms": 0.2,
+    "rows": 2481.0,
+    "rls_calls": 194349.0,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "weeks_of_cover_observation",
+      "self_ms": 3362.1,
+      "loops": 1,
+      "rows": 194349.0,
+      "removed": 0,
+      "rls_calls": 194349.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Sort",
+      "rel": null,
+      "self_ms": 1760.1,
+      "loops": 1,
+      "rows": 194349.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Unique",
+      "rel": null,
+      "self_ms": 41.2,
+      "loops": 1,
+      "rows": 2481.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     }
+    ]
+   },
+   "NB": {
+    "guc": "NB",
+    "exec_ms": 2933.4,
+    "plan_ms": 0.2,
+    "rows": 1099.0,
+    "rls_calls": 194349.0,
+    "top_nodes": [
+     {
+      "node": "Seq Scan",
+      "rel": "weeks_of_cover_observation",
+      "self_ms": 2431.9,
+      "loops": 1,
+      "rows": 87899.0,
+      "removed": 106450,
+      "rls_calls": 194349.0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Sort",
+      "rel": null,
+      "self_ms": 473.1,
+      "loops": 1,
+      "rows": 87899.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": "Outer"
+     },
+     {
+      "node": "Unique",
+      "rel": null,
+      "self_ms": 9.3,
+      "loops": 1,
+      "rows": 1099.0,
+      "removed": null,
+      "rls_calls": 0,
+      "subplan": null
+     }
+    ]
+   }
+  }
+ }
+]

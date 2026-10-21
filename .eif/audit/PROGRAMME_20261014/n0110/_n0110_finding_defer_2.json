@@ -1,0 +1,1 @@
+{"note": "N-0110: a shipment or POD load does not recompute customer stock positions. Late POD data needs CST steward > Stock gap > Recompute.", "code": "DOES_NOT_FIT", "node": "N-0110", "expected_revision": 21}

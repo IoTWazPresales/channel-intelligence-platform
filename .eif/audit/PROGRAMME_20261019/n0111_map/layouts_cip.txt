@@ -1,0 +1,31 @@
+current_database()=cip
+current_database()=cip
+layouts: 7
+- layout 1 | customer 20 Takealot | 'Imported layout - ASUS WEEK 31' | origin migrated_source | hidden True
+    mapping: {'sales': 'units_sold', 'Barcode': 'raw_product_token', 'Product ID': 'listing_external_id', 'Transaction Week': 'raw_period_ref'}
+    old product column: ['Barcode'] | customer code column: []
+    treated as: old single product column -> 'any identifier' (resolves as before); mapping step offers re-map
+- layout 2 | customer 52 Evetech | 'Imported layout - EveX_ASUS_LAPTOPS_Reports_Sales_20260727_20260802' | origin migrated_source | hidden False
+    mapping: {'Web ID': 'listing_external_id', 'Qty Sold': 'units_sold', 'Item Code': 'raw_product_token', 'Current Stock': 'reported_soh'}
+    old product column: ['Item Code'] | customer code column: []
+    treated as: old single product column -> 'any identifier' (resolves as before); mapping step offers re-map
+- layout 3 | customer 20 Takealot | 'Imported layout - ASUS WEEK 39' | origin migrated_source | hidden True
+    mapping: {'sales': 'units_sold', 'Barcode': 'raw_product_token', 'Product ID': 'listing_external_id', 'Transaction Week': 'raw_period_ref'}
+    old product column: ['Barcode'] | customer code column: []
+    treated as: old single product column -> 'any identifier' (resolves as before); mapping step offers re-map
+- layout 4 | customer 18 Computer Mania | 'Imported layout - Computer Mania week 40' | origin migrated_source | hidden False
+    mapping: {'COST': 'unit_cost', 'ITEMNO': 'raw_product_token', 'Unnamed: 0': 'name', 'DESCRIPTION': 'name'}
+    old product column: ['ITEMNO'] | customer code column: []
+    treated as: old single product column -> 'any identifier' (resolves as before); mapping step offers re-map
+- layout 5 | customer 15 Makro | 'Imported layout - Asus Dispo WK1' | origin migrated_source | hidden False
+    mapping: {'MAC': 'unit_mac', 'SOH': 'reported_soh', 'Site': 'raw_location_token', 'Article': 'raw_article_token', 'Vendor Prod Code': 'raw_product_token'}
+    old product column: ['Vendor Prod Code'] | customer code column: ['Article']
+    treated as: old single product column -> 'any identifier' (resolves as before); mapping step offers re-map
+- layout 6 | customer 57 Game | 'Imported layout - ASUS Week 40' | origin migrated_source | hidden False
+    mapping: {'Site': 'raw_location_token', 'Article': 'raw_article_token', 'EAN/UPC': 'raw_product_token', 'Sales R TY': 'total_sell_amount', 'Sales U TY': 'units_sold'}
+    old product column: ['EAN/UPC'] | customer code column: ['Article']
+    treated as: old single product column -> 'any identifier' (resolves as before); mapping step offers re-map
+- layout 7 | customer 57 Game | 'Imported layout - Asus Sales W27' | origin migrated_source | hidden False
+    mapping: {'Site': 'raw_location_token', 'Article': 'raw_article_token', 'EAN/UPC': 'raw_product_token', 'Sales R TY': 'total_sell_amount', 'Sales U TY': 'units_sold'}
+    old product column: ['EAN/UPC'] | customer code column: ['Article']
+    treated as: old single product column -> 'any identifier' (resolves as before); mapping step offers re-map

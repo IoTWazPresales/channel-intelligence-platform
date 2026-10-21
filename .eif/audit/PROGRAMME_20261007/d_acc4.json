@@ -1,0 +1,1 @@
+{"scope": "N-0071", "status": "accepted", "origin": "operator", "supersedes": "D-0024", "statement": "Warren 2026-10-07, open-versus-shipped policy: accept as built. Shipment totals skip an open line when its strict shipped twin exists (shipment_strict_pair.py); fact rows are not rewritten and stay as imported (reversible). No cip data write."}

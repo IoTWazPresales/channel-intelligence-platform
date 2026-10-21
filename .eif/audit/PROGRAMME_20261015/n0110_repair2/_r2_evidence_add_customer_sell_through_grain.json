@@ -1,0 +1,1 @@
+{"path": "apps/api/app/services/imports/parsers/customer_sell_through_grain.py", "note": "N-0110 repair 2 (5e6bc4fd): a week or month with no year resolves to the latest one started by the receive day (staged_metadata.received_on, else job created date), never a period not yet started.", "provenance": "implementation-observation", "node": "N-0110", "expected_revision": 42}

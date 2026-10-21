@@ -1,0 +1,7 @@
+current_database()=cip
+current_database()=cip (read only)
+staging lines on cip: 46718; checking the newest 30000
+older-layout lines checked: 30000; new resolver == former resolver: 30000; different: 0
+lines on the identifier-slot path (new layouts): 0
+resolved by the resolver and also stored resolved: same product 20203, different 0
+PARITY PASS

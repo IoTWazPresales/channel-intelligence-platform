@@ -1,0 +1,11 @@
+current_database = cip
+impact_new_predicate {'rows': [['552', '4a4aef0453e6f1ad4c6e78d3e4df2a57', '42956.0000', '27833737.9200', '552', '552', '42956.0000', '32591.0000', '552', '42956.0000', '552', '0', '32591.0000', '32548.0000', '31560.0000']], 'seconds': 2.617}
+status_of_pair_opens {'rows': [['received', '0', '0'], ['scheduled', '552', '42956.0000']], 'seconds': 0.495}
+qty_compare {'rows': [['552', '471', '71', '10', '46', '552', '0', '42956.0000', '51453.0000', '904.0000', '0']], 'seconds': 0.357}
+open_rows_with_pod_any {'rows': [['0']], 'seconds': 0.101}
+old {'error': 'OperationalError', 'seconds': 240.013}
+Traceback (most recent call last):
+  File "C:\Users\warren_eliason\channel-intelligence-platform\.eif\audit\PROGRAMME_20261007\N0071_probe_new.py", line 125, in <module>
+    plan = c.execute(text("EXPLAIN " + RAW["supply_overview_style_filter"])).all()
+                                       ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: 'supply_overview_style_filter'

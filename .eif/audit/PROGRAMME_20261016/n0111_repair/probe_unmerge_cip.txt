@@ -1,0 +1,198 @@
+current_database() cip (read-only)
+OPEN_CHANNEL [(1, 'OPEN_CHANNEL', 'Open Channel', None)]
+record E
+record R
+record R
+record  
+record c
+record o
+record l
+record u
+record m
+record n
+record  
+record "
+record s
+record t
+record a
+record t
+record u
+record s
+record "
+record  
+record d
+record o
+record e
+record s
+record  
+record n
+record o
+record t
+record  
+record e
+record x
+record i
+record s
+record t
+record 
+
+record L
+record I
+record N
+record E
+record  
+record 1
+record :
+record  
+record s
+record e
+record l
+record e
+record c
+record t
+record  
+record i
+record d
+record ,
+record  
+record c
+record o
+record d
+record e
+record ,
+record  
+record n
+record a
+record m
+record e
+record ,
+record  
+record m
+record e
+record r
+record g
+record e
+record d
+record _
+record i
+record n
+record t
+record o
+record _
+record c
+record u
+record s
+record t
+record o
+record m
+record e
+record r
+record _
+record i
+record d
+record ,
+record  
+record s
+record t
+record a
+record t
+record u
+record s
+record ,
+record  
+record l
+record e
+record f
+record t
+record .
+record .
+record .
+record 
+
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record  
+record ^
+OPEN_CHANNEL notes merge lines []
+platform audit []
+aliases on 1152/4145/OC matching names [(80, 1, None, 'Q1 Compuspeed', 'approved', 32, 'Alias from provisional customer create (shipment evidence candidate 1162)'), (84, 1, None, 'Q1 Open Channel Syntech', 'approved', 32, 'Alias from provisional customer create (shipment evidence candidate 1162)'), (86, 1, None, 'Q2 COMPUSPEED', 'approved', 32, 'Alias from provisional customer create (shipment evidence candidate 1162)'), (93, 1, None, 'Q2 Open Channel Syntech', 'approved', 32, 'Alias from provisional customer create (shipment evidence candidate 1162)'), (97, 1, None, 'Q3 Compuspeed', 'approved', 32, 'Alias from provisional customer create (shipment evidence candidate 1162)'), (103, 1, None, 'Q4 COMPUSPEED', 'approved', 32, 'Alias from provisional customer create (shipment evidence candidate 1162)'), (111, 1, None, 'Q4 Open Channel Syntech', 'approved', 32, 'Alias from provisional customer create (shipment evidence candidate 1162)'), (119, 1, None, 'SADC - COMPUSPEED Q3', 'approved', 32, 'Alias from provisional customer create (shipment evidence candidate 1162)'), (120, 1, None, 'SADC - Compuspeed Q1', 'approved', 32, 'Alias from provisional customer create (shipment evidence candidate 1162)'), (121, 1, None, 'SADC - Compuspeed Q2', 'approved', 32, 'Alias from provisional customer create (shipment evidence candidate 1162)'), (124, 1, None, 'SADC - Q2 COMPUSPEED', 'approved', 32, 'Alias from provisional customer create (shipment evidence candidate 1162)'), (1406, 1, None, 'Compuspeed LTD', 'revoked', 43, 'Alias from provisional customer create (candidate 3786)'), (4400, 1, None, 'SYNTECH DISTRIBUTION (PTY) LTD', 'revoked', 43, 'Alias from provisional customer create (candidate 8480)'), (4740, 1, None, 'Syntech Distribution Pty Ltd', 'revoked', 43, 'Alias from provisional customer create (candidate 9629)'), (5371, 1, None, 'Q3 Open Channel Syntech', 'approved', 153, 'Mapped from shipment evidence candidate 16714 (job 153)'), (5439, 1, None, 'Syntech Distribution Pty Ltd', 'revoked', 96, 'Mapped from import candidate 22111 (job 96)'), (5769, 1, None, 'SADC - Compuspeed', 'approved', None, 'lineup_customer_token_stamp:unit6c D3 W1 sadc - compuspeed'), (5774, 1, None, 'Channel Syntech', 'approved', None, 'lineup_customer_token_stamp:unit6c D4 W1 channel syntech'), (5781, 1, None, 'Syntech', 'approved', None, 'lineup_customer_token_stamp:BACKLOG-125/126 Warren lock 2026-08-08')]
+FK columns to dim_customer: 39
+  commercial_lineup_line.customer_id: OPEN_CHANNEL=92  1152/4145=0
+  cpor_case.customer_id: OPEN_CHANNEL=1  1152/4145=0
+  cpor_payment_evidence.customer_id: OPEN_CHANNEL=3  1152/4145=0
+  customer_source_token_alias.customer_id: OPEN_CHANNEL=83  1152/4145=0
+  dim_customer.merged_into_customer_id: OPEN_CHANNEL=4  1152/4145=0
+  fact_customer_velocity.customer_id: OPEN_CHANNEL=2  1152/4145=0
+  fact_inbound_shipment.customer_id: OPEN_CHANNEL=5451  1152/4145=0
+  fact_inbound_shipment.resolved_customer_id: OPEN_CHANNEL=5499  1152/4145=0
+  fact_inventory_reconciliation.customer_id: OPEN_CHANNEL=12  1152/4145=0
+  fact_returns.customer_id: OPEN_CHANNEL=4  1152/4145=0
+  fact_sales_sellout.customer_id: OPEN_CHANNEL=31  1152/4145=0
+  import_cpor_historical_staging_line.resolved_customer_id: OPEN_CHANNEL=11  1152/4145=0
+  import_cpor_payment_staging_line.resolved_customer_id: OPEN_CHANNEL=3  1152/4145=0
+  import_distributor_si_staging_line.resolved_customer_id: OPEN_CHANNEL=215  1152/4145=0
+  shipment_evidence_line.customer_id: OPEN_CHANNEL=31829  1152/4145=0
+  shipment_evidence_line.resolved_customer_id: OPEN_CHANNEL=31975  1152/4145=0
+  shipment_evidence_observation.customer_id: OPEN_CHANNEL=16093  1152/4145=0
+DSI staging by raw customer token [(1, 'compuspeed', 203, 28, 0, Decimal('667.0000')), (1, 'syntech', 8, 6, 0, Decimal('42.0000'))]
+DSI staging distinct tokens [('Compuspeed LTD', 1, 201), ('Syntech Distribution Pty Ltd', 1, 7), ('COMPUSPEED LTD', 1, 2), ('SYNTECH DISTRIBUTION (PTY) LTD', 1, 1)]
+sellout facts on OC linked from those staging lines [(1, 34, Decimal('613.0000'))]
+sellout facts on OC total [(31, Decimal('570.0000'))]
+sellout facts on OC with no staging line [(0,)]
+fact_inbound_shipment customer/raw columns [('customer_dealer_token',), ('customer_id',), ('customer_item',), ('customer_po',), ('customer_resolution_status',), ('raw_source_row',), ('resolved_customer_id',)]
+shipment staging tables []
+--- CST files with a plain 'Date' column
+[]

@@ -1,0 +1,6 @@
+{"ts":"2026-10-12T00:00:56Z","kind":"programme.event","event":"node.verification","seq":2091}
+{"ts":"2026-10-12T00:01:26Z","kind":"programme.event","event":"node.verification","seq":2092}
+{"ts":"2026-10-12T00:01:52Z","kind":"programme.event","event":"node.verification","seq":2093}
+{"ts":"2026-10-12T00:02:20Z","kind":"programme.event","event":"node.stage","seq":2094}
+{"ts":"2026-10-12T00:03:04Z","kind":"programme.event","event":"node.accept","seq":2095}
+{"ts":"2026-10-12T00:03:37Z","kind":"programme.event","event":"node.status","seq":2096}

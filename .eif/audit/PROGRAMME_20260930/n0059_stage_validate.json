@@ -1,0 +1,1 @@
+{"node": "N-0059", "expected_revision": 5, "to": "validate", "stage_note": "vitest BulkLineupBackfillDialog.test.tsx: 2 passed. The Apply test shows the dialog staying open, then Applied 1, skipped 2, Link POs, and Review lineup cases. eslint on the dialog and its test reported no findings. Browser Apply was not clicked. cip was not written."}

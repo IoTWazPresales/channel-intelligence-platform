@@ -1,0 +1,26 @@
+{
+  "id": "N-0096",
+  "parent": null,
+  "title": "Test, CI and record honesty: self-seeding tests, live API in CI, backlog and context drift corrected",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": [
+    "api"
+  ],
+  "risk": "R1",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": [],
+  "acceptance_criteria": [
+    "Distributor-as-customer and non-split-sheet tests seed their own rows on cip_test (BACKLOG-144, 121)",
+    "The seven environment-dependent API tests seed and clean up or carry an integration mark (BACKLOG-203)",
+    "GitHub Actions starts the API against cip_test and runs the live specs (BACKLOG-099)",
+    "BACKLOG.md and CONTEXT.md status lines that contradict the code are corrected (SWEEP_A/B/C contradiction lists)",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

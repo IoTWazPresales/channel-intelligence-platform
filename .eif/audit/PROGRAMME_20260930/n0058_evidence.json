@@ -1,0 +1,6 @@
+{
+  "id": "EV-N0058",
+  "path": ".eif/audit/PROGRAMME_20260930/N-0058.md",
+  "note": "N-0058 refuses a quarter write that was not derived from month columns",
+  "provenance": "implementation-observation"
+}

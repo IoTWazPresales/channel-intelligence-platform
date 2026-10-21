@@ -1,0 +1,1 @@
+{"permission":"deny","reason_code":"HOOK_INPUT_INVALID","user_message":"HOOK_INPUT_INVALID: cannot parse Cursor hook input: ValueError: empty Cursor hook stdin","agent_message":"EIF harness fault; authorization could not be completed. HOOK_INPUT_INVALID: cannot parse Cursor hook input: ValueError: empty Cursor hook stdin","decision_kind":"harness_fault"}

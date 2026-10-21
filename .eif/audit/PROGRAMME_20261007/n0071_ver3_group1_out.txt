@@ -1,0 +1,436 @@
+........................................................................ [ 30%]
+........................................................................ [ 61%]
+..........................................EEEEEE........EEEEEEE......... [ 91%]
+...................                                                      [100%]
+=================================== ERRORS ====================================
+___________________ ERROR at setup of test_normalize_cohort ___________________
+
+item = <Function test_normalize_cohort>
+
+    def pytest_runtest_setup(item) -> None:  # type: ignore[no-untyped-def]
+        if os.environ.get("ALLOW_TESTS_ON_DEV_DB", "").strip() == "1":
+            return
+    
+        node_file = item.nodeid.split("::", 1)[0].replace("\\", "/")
+        basename = Path(node_file).name
+        if basename not in _WRITE_CAPABLE_TEST_MODULES:
+            return
+        if basename in _CIP_WRITE_ALLOWLIST:
+            return
+    
+        from app.core.config import get_settings
+    
+        settings = get_settings()
+        async_name = _sqlalchemy_db_name(settings.database_url)
+        sync_name = _sqlalchemy_db_name(settings.database_url_sync)
+        if async_name == "cip" or sync_name == "cip":
+>           pytest.fail(
+                f"Refusing write-capable test module {basename!r}: database name is 'cip' "
+                "(default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable "
+                "database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes "
+                "to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a "
+                "justification comment if it genuinely requires cip."
+            )
+E           Failed: Refusing write-capable test module 'test_shipping_commercial_kpis.py': database name is 'cip' (default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a justification comment if it genuinely requires cip.
+
+tests\conftest.py:165: Failed
+_________ ERROR at setup of test_current_incoming_predicate_sql_shape _________
+
+item = <Function test_current_incoming_predicate_sql_shape>
+
+    def pytest_runtest_setup(item) -> None:  # type: ignore[no-untyped-def]
+        if os.environ.get("ALLOW_TESTS_ON_DEV_DB", "").strip() == "1":
+            return
+    
+        node_file = item.nodeid.split("::", 1)[0].replace("\\", "/")
+        basename = Path(node_file).name
+        if basename not in _WRITE_CAPABLE_TEST_MODULES:
+            return
+        if basename in _CIP_WRITE_ALLOWLIST:
+            return
+    
+        from app.core.config import get_settings
+    
+        settings = get_settings()
+        async_name = _sqlalchemy_db_name(settings.database_url)
+        sync_name = _sqlalchemy_db_name(settings.database_url_sync)
+        if async_name == "cip" or sync_name == "cip":
+>           pytest.fail(
+                f"Refusing write-capable test module {basename!r}: database name is 'cip' "
+                "(default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable "
+                "database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes "
+                "to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a "
+                "justification comment if it genuinely requires cip."
+            )
+E           Failed: Refusing write-capable test module 'test_shipping_commercial_kpis.py': database name is 'cip' (default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a justification comment if it genuinely requires cip.
+
+tests\conftest.py:165: Failed
+____ ERROR at setup of test_overdue_excludes_stale_and_requires_eta_window ____
+
+item = <Function test_overdue_excludes_stale_and_requires_eta_window>
+
+    def pytest_runtest_setup(item) -> None:  # type: ignore[no-untyped-def]
+        if os.environ.get("ALLOW_TESTS_ON_DEV_DB", "").strip() == "1":
+            return
+    
+        node_file = item.nodeid.split("::", 1)[0].replace("\\", "/")
+        basename = Path(node_file).name
+        if basename not in _WRITE_CAPABLE_TEST_MODULES:
+            return
+        if basename in _CIP_WRITE_ALLOWLIST:
+            return
+    
+        from app.core.config import get_settings
+    
+        settings = get_settings()
+        async_name = _sqlalchemy_db_name(settings.database_url)
+        sync_name = _sqlalchemy_db_name(settings.database_url_sync)
+        if async_name == "cip" or sync_name == "cip":
+>           pytest.fail(
+                f"Refusing write-capable test module {basename!r}: database name is 'cip' "
+                "(default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable "
+                "database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes "
+                "to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a "
+                "justification comment if it genuinely requires cip."
+            )
+E           Failed: Refusing write-capable test module 'test_shipping_commercial_kpis.py': database name is 'cip' (default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a justification comment if it genuinely requires cip.
+
+tests\conftest.py:165: Failed
+_________________ ERROR at setup of test_arriving_week_bounds _________________
+
+item = <Function test_arriving_week_bounds>
+
+    def pytest_runtest_setup(item) -> None:  # type: ignore[no-untyped-def]
+        if os.environ.get("ALLOW_TESTS_ON_DEV_DB", "").strip() == "1":
+            return
+    
+        node_file = item.nodeid.split("::", 1)[0].replace("\\", "/")
+        basename = Path(node_file).name
+        if basename not in _WRITE_CAPABLE_TEST_MODULES:
+            return
+        if basename in _CIP_WRITE_ALLOWLIST:
+            return
+    
+        from app.core.config import get_settings
+    
+        settings = get_settings()
+        async_name = _sqlalchemy_db_name(settings.database_url)
+        sync_name = _sqlalchemy_db_name(settings.database_url_sync)
+        if async_name == "cip" or sync_name == "cip":
+>           pytest.fail(
+                f"Refusing write-capable test module {basename!r}: database name is 'cip' "
+                "(default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable "
+                "database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes "
+                "to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a "
+                "justification comment if it genuinely requires cip."
+            )
+E           Failed: Refusing write-capable test module 'test_shipping_commercial_kpis.py': database name is 'cip' (default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a justification comment if it genuinely requires cip.
+
+tests\conftest.py:165: Failed
+__ ERROR at setup of test_cip_current_incoming_pipeline_below_all_scheduled ___
+
+item = <Function test_cip_current_incoming_pipeline_below_all_scheduled>
+
+    def pytest_runtest_setup(item) -> None:  # type: ignore[no-untyped-def]
+        if os.environ.get("ALLOW_TESTS_ON_DEV_DB", "").strip() == "1":
+            return
+    
+        node_file = item.nodeid.split("::", 1)[0].replace("\\", "/")
+        basename = Path(node_file).name
+        if basename not in _WRITE_CAPABLE_TEST_MODULES:
+            return
+        if basename in _CIP_WRITE_ALLOWLIST:
+            return
+    
+        from app.core.config import get_settings
+    
+        settings = get_settings()
+        async_name = _sqlalchemy_db_name(settings.database_url)
+        sync_name = _sqlalchemy_db_name(settings.database_url_sync)
+        if async_name == "cip" or sync_name == "cip":
+>           pytest.fail(
+                f"Refusing write-capable test module {basename!r}: database name is 'cip' "
+                "(default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable "
+                "database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes "
+                "to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a "
+                "justification comment if it genuinely requires cip."
+            )
+E           Failed: Refusing write-capable test module 'test_shipping_commercial_kpis.py': database name is 'cip' (default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a justification comment if it genuinely requires cip.
+
+tests\conftest.py:165: Failed
+__________ ERROR at setup of test_cip_overdue_contracted_lte_legacy ___________
+
+item = <Function test_cip_overdue_contracted_lte_legacy>
+
+    def pytest_runtest_setup(item) -> None:  # type: ignore[no-untyped-def]
+        if os.environ.get("ALLOW_TESTS_ON_DEV_DB", "").strip() == "1":
+            return
+    
+        node_file = item.nodeid.split("::", 1)[0].replace("\\", "/")
+        basename = Path(node_file).name
+        if basename not in _WRITE_CAPABLE_TEST_MODULES:
+            return
+        if basename in _CIP_WRITE_ALLOWLIST:
+            return
+    
+        from app.core.config import get_settings
+    
+        settings = get_settings()
+        async_name = _sqlalchemy_db_name(settings.database_url)
+        sync_name = _sqlalchemy_db_name(settings.database_url_sync)
+        if async_name == "cip" or sync_name == "cip":
+>           pytest.fail(
+                f"Refusing write-capable test module {basename!r}: database name is 'cip' "
+                "(default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable "
+                "database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes "
+                "to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a "
+                "justification comment if it genuinely requires cip."
+            )
+E           Failed: Refusing write-capable test module 'test_shipping_commercial_kpis.py': database name is 'cip' (default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a justification comment if it genuinely requires cip.
+
+tests\conftest.py:165: Failed
+_________ ERROR at setup of test_public_eta_shift_contract_constants __________
+
+item = <Function test_public_eta_shift_contract_constants>
+
+    def pytest_runtest_setup(item) -> None:  # type: ignore[no-untyped-def]
+        if os.environ.get("ALLOW_TESTS_ON_DEV_DB", "").strip() == "1":
+            return
+    
+        node_file = item.nodeid.split("::", 1)[0].replace("\\", "/")
+        basename = Path(node_file).name
+        if basename not in _WRITE_CAPABLE_TEST_MODULES:
+            return
+        if basename in _CIP_WRITE_ALLOWLIST:
+            return
+    
+        from app.core.config import get_settings
+    
+        settings = get_settings()
+        async_name = _sqlalchemy_db_name(settings.database_url)
+        sync_name = _sqlalchemy_db_name(settings.database_url_sync)
+        if async_name == "cip" or sync_name == "cip":
+>           pytest.fail(
+                f"Refusing write-capable test module {basename!r}: database name is 'cip' "
+                "(default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable "
+                "database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes "
+                "to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a "
+                "justification comment if it genuinely requires cip."
+            )
+E           Failed: Refusing write-capable test module 'test_shipping_newly_landed.py': database name is 'cip' (default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a justification comment if it genuinely requires cip.
+
+tests\conftest.py:165: Failed
+___________ ERROR at setup of test_observation_field_lag_is_window ____________
+
+item = <Function test_observation_field_lag_is_window>
+
+    def pytest_runtest_setup(item) -> None:  # type: ignore[no-untyped-def]
+        if os.environ.get("ALLOW_TESTS_ON_DEV_DB", "").strip() == "1":
+            return
+    
+        node_file = item.nodeid.split("::", 1)[0].replace("\\", "/")
+        basename = Path(node_file).name
+        if basename not in _WRITE_CAPABLE_TEST_MODULES:
+            return
+        if basename in _CIP_WRITE_ALLOWLIST:
+            return
+    
+        from app.core.config import get_settings
+    
+        settings = get_settings()
+        async_name = _sqlalchemy_db_name(settings.database_url)
+        sync_name = _sqlalchemy_db_name(settings.database_url_sync)
+        if async_name == "cip" or sync_name == "cip":
+>           pytest.fail(
+                f"Refusing write-capable test module {basename!r}: database name is 'cip' "
+                "(default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable "
+                "database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes "
+                "to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a "
+                "justification comment if it genuinely requires cip."
+            )
+E           Failed: Refusing write-capable test module 'test_shipping_newly_landed.py': database name is 'cip' (default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a justification comment if it genuinely requires cip.
+
+tests\conftest.py:165: Failed
+_ ERROR at setup of test_newly_landed_module_uses_shared_lag_not_landed_week __
+
+item = <Function test_newly_landed_module_uses_shared_lag_not_landed_week>
+
+    def pytest_runtest_setup(item) -> None:  # type: ignore[no-untyped-def]
+        if os.environ.get("ALLOW_TESTS_ON_DEV_DB", "").strip() == "1":
+            return
+    
+        node_file = item.nodeid.split("::", 1)[0].replace("\\", "/")
+        basename = Path(node_file).name
+        if basename not in _WRITE_CAPABLE_TEST_MODULES:
+            return
+        if basename in _CIP_WRITE_ALLOWLIST:
+            return
+    
+        from app.core.config import get_settings
+    
+        settings = get_settings()
+        async_name = _sqlalchemy_db_name(settings.database_url)
+        sync_name = _sqlalchemy_db_name(settings.database_url_sync)
+        if async_name == "cip" or sync_name == "cip":
+>           pytest.fail(
+                f"Refusing write-capable test module {basename!r}: database name is 'cip' "
+                "(default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable "
+                "database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes "
+                "to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a "
+                "justification comment if it genuinely requires cip."
+            )
+E           Failed: Refusing write-capable test module 'test_shipping_newly_landed.py': database name is 'cip' (default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a justification comment if it genuinely requires cip.
+
+tests\conftest.py:165: Failed
+___________________ ERROR at setup of test_sh04_documented ____________________
+
+item = <Function test_sh04_documented>
+
+    def pytest_runtest_setup(item) -> None:  # type: ignore[no-untyped-def]
+        if os.environ.get("ALLOW_TESTS_ON_DEV_DB", "").strip() == "1":
+            return
+    
+        node_file = item.nodeid.split("::", 1)[0].replace("\\", "/")
+        basename = Path(node_file).name
+        if basename not in _WRITE_CAPABLE_TEST_MODULES:
+            return
+        if basename in _CIP_WRITE_ALLOWLIST:
+            return
+    
+        from app.core.config import get_settings
+    
+        settings = get_settings()
+        async_name = _sqlalchemy_db_name(settings.database_url)
+        sync_name = _sqlalchemy_db_name(settings.database_url_sync)
+        if async_name == "cip" or sync_name == "cip":
+>           pytest.fail(
+                f"Refusing write-capable test module {basename!r}: database name is 'cip' "
+                "(default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable "
+                "database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes "
+                "to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a "
+                "justification comment if it genuinely requires cip."
+            )
+E           Failed: Refusing write-capable test module 'test_shipping_newly_landed.py': database name is 'cip' (default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a justification comment if it genuinely requires cip.
+
+tests\conftest.py:165: Failed
+____________ ERROR at setup of test_newly_landed_null_to_set_only _____________
+
+item = <Function test_newly_landed_null_to_set_only>
+
+    def pytest_runtest_setup(item) -> None:  # type: ignore[no-untyped-def]
+        if os.environ.get("ALLOW_TESTS_ON_DEV_DB", "").strip() == "1":
+            return
+    
+        node_file = item.nodeid.split("::", 1)[0].replace("\\", "/")
+        basename = Path(node_file).name
+        if basename not in _WRITE_CAPABLE_TEST_MODULES:
+            return
+        if basename in _CIP_WRITE_ALLOWLIST:
+            return
+    
+        from app.core.config import get_settings
+    
+        settings = get_settings()
+        async_name = _sqlalchemy_db_name(settings.database_url)
+        sync_name = _sqlalchemy_db_name(settings.database_url_sync)
+        if async_name == "cip" or sync_name == "cip":
+>           pytest.fail(
+                f"Refusing write-capable test module {basename!r}: database name is 'cip' "
+                "(default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable "
+                "database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes "
+                "to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a "
+                "justification comment if it genuinely requires cip."
+            )
+E           Failed: Refusing write-capable test module 'test_shipping_newly_landed.py': database name is 'cip' (default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a justification comment if it genuinely requires cip.
+
+tests\conftest.py:165: Failed
+_ ERROR at setup of test_eta_shift_uncapped_over_public_cap_with_line_columns _
+
+item = <Function test_eta_shift_uncapped_over_public_cap_with_line_columns>
+
+    def pytest_runtest_setup(item) -> None:  # type: ignore[no-untyped-def]
+        if os.environ.get("ALLOW_TESTS_ON_DEV_DB", "").strip() == "1":
+            return
+    
+        node_file = item.nodeid.split("::", 1)[0].replace("\\", "/")
+        basename = Path(node_file).name
+        if basename not in _WRITE_CAPABLE_TEST_MODULES:
+            return
+        if basename in _CIP_WRITE_ALLOWLIST:
+            return
+    
+        from app.core.config import get_settings
+    
+        settings = get_settings()
+        async_name = _sqlalchemy_db_name(settings.database_url)
+        sync_name = _sqlalchemy_db_name(settings.database_url_sync)
+        if async_name == "cip" or sync_name == "cip":
+>           pytest.fail(
+                f"Refusing write-capable test module {basename!r}: database name is 'cip' "
+                "(default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable "
+                "database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes "
+                "to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a "
+                "justification comment if it genuinely requires cip."
+            )
+E           Failed: Refusing write-capable test module 'test_shipping_newly_landed.py': database name is 'cip' (default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a justification comment if it genuinely requires cip.
+
+tests\conftest.py:165: Failed
+________ ERROR at setup of test_newly_landed_skips_zero_pod_prior_job _________
+
+item = <Function test_newly_landed_skips_zero_pod_prior_job>
+
+    def pytest_runtest_setup(item) -> None:  # type: ignore[no-untyped-def]
+        if os.environ.get("ALLOW_TESTS_ON_DEV_DB", "").strip() == "1":
+            return
+    
+        node_file = item.nodeid.split("::", 1)[0].replace("\\", "/")
+        basename = Path(node_file).name
+        if basename not in _WRITE_CAPABLE_TEST_MODULES:
+            return
+        if basename in _CIP_WRITE_ALLOWLIST:
+            return
+    
+        from app.core.config import get_settings
+    
+        settings = get_settings()
+        async_name = _sqlalchemy_db_name(settings.database_url)
+        sync_name = _sqlalchemy_db_name(settings.database_url_sync)
+        if async_name == "cip" or sync_name == "cip":
+>           pytest.fail(
+                f"Refusing write-capable test module {basename!r}: database name is 'cip' "
+                "(default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable "
+                "database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes "
+                "to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a "
+                "justification comment if it genuinely requires cip."
+            )
+E           Failed: Refusing write-capable test module 'test_shipping_newly_landed.py': database name is 'cip' (default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a justification comment if it genuinely requires cip.
+
+tests\conftest.py:165: Failed
+============================== warnings summary ===============================
+tests/test_plan_vs_executed.py::test_available_periods_independent_of_period_filter
+tests/test_plan_vs_executed.py::test_plan_vs_executed_read_model_wires_scorecard
+tests/test_plan_vs_executed.py::test_golden_scorecard_tie_out_all_clean_periods
+tests/test_plan_vs_executed.py::test_backlog_066_flag_instead_of_golden_assertion[25Q1]
+tests/test_plan_vs_executed.py::test_backlog_066_flag_instead_of_golden_assertion[24Q4]
+tests/test_plan_vs_executed.py::test_drill_filter_does_not_change_scorecard
+  C:\Users\warren_eliason\channel-intelligence-platform\apps\api\app\services\grid_fields.py:369: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    return {int(r[0]): (r[1], r[2]) for r in res.all()}
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+ERROR tests/test_shipping_commercial_kpis.py::test_normalize_cohort - Failed:...
+ERROR tests/test_shipping_commercial_kpis.py::test_current_incoming_predicate_sql_shape
+ERROR tests/test_shipping_commercial_kpis.py::test_overdue_excludes_stale_and_requires_eta_window
+ERROR tests/test_shipping_commercial_kpis.py::test_arriving_week_bounds - Fai...
+ERROR tests/test_shipping_commercial_kpis.py::test_cip_current_incoming_pipeline_below_all_scheduled
+ERROR tests/test_shipping_commercial_kpis.py::test_cip_overdue_contracted_lte_legacy
+ERROR tests/test_shipping_newly_landed.py::test_public_eta_shift_contract_constants
+ERROR tests/test_shipping_newly_landed.py::test_observation_field_lag_is_window
+ERROR tests/test_shipping_newly_landed.py::test_newly_landed_module_uses_shared_lag_not_landed_week
+ERROR tests/test_shipping_newly_landed.py::test_sh04_documented - Failed: Ref...
+ERROR tests/test_shipping_newly_landed.py::test_newly_landed_null_to_set_only
+ERROR tests/test_shipping_newly_landed.py::test_eta_shift_uncapped_over_public_cap_with_line_columns
+ERROR tests/test_shipping_newly_landed.py::test_newly_landed_skips_zero_pod_prior_job
+222 passed, 6 warnings, 13 errors in 73.89s (0:01:13)

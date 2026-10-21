@@ -1,0 +1,1 @@
+{"stage_note": "Layouts built (df0841a4, 5fb57283): upload picks a reporting customer; layout is the only per-customer configuration (first unknown layout -> mapping step -> saved; later files match by headers); 26 sources hidden, 7 layouts migrated from applied jobs. Verification is a different run.", "node": "N-0111", "expected_revision": 53}

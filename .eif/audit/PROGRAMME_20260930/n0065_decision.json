@@ -1,0 +1,6 @@
+{
+  "scope": "N-0065",
+  "origin": "operator",
+  "status": "accepted",
+  "statement": "Warren 2026-10-01: a user with no product-line assignment sees no product lines until an admin assigns some. Admin sees every line. A person cannot write a line they cannot see. The filter applies on lineup, settlement, stock, and reports."
+}

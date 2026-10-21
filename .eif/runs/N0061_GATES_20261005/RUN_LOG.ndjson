@@ -1,0 +1,13 @@
+{"ts":"2026-10-05T12:37:10Z","kind":"programme.event","event":"node.lease.acquire","seq":1437}
+{"ts":"2026-10-05T12:37:39Z","kind":"programme.event","event":"baseline.add","seq":1438}
+{"ts":"2026-10-05T12:38:00Z","kind":"programme.event","event":"evidence.add","seq":1439}
+{"ts":"2026-10-05T12:38:17Z","kind":"programme.event","event":"node.baseline","seq":1440}
+{"ts":"2026-10-05T12:38:34Z","kind":"programme.event","event":"node.quality","seq":1441}
+{"ts":"2026-10-05T12:38:53Z","kind":"programme.event","event":"node.quality","seq":1442}
+{"ts":"2026-10-05T12:39:19Z","kind":"programme.event","event":"node.quality","seq":1443}
+{"ts":"2026-10-05T12:39:37Z","kind":"programme.event","event":"node.quality","seq":1444}
+{"ts":"2026-10-05T12:39:57Z","kind":"programme.event","event":"node.quality","seq":1445}
+{"ts":"2026-10-05T12:40:15Z","kind":"programme.event","event":"node.quality","seq":1446}
+{"ts":"2026-10-05T12:40:32Z","kind":"programme.event","event":"node.stage_note","seq":1447}
+{"ts":"2026-10-05T12:40:51Z","kind":"programme.event","event":"finding.defer","seq":1448}
+{"ts":"2026-10-05T12:41:08Z","kind":"programme.event","event":"node.lease.release","seq":1449}

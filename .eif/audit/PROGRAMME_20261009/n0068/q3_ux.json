@@ -1,0 +1,1 @@
+{"node":"N-0068","expected_revision":10,"dim":"ux","state":"pending","rationale":"Not reviewed on a rendered page. Finding from source: the grain is a free-text field although only product_line has meaning under D-0060; a select of supported grains would prevent typos that silently start a new by_grain bucket."}

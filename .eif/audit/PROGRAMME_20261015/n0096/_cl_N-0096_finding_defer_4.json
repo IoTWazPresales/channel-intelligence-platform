@@ -1,0 +1,1 @@
+{"note": "N-0096: no Python linter (ruff) is installed in apps/api/.venv. The acceptance criteria call for tsc and eslint only, so none was installed; API changes were not linted.", "code": "DOES_NOT_FIT", "node": "N-0096", "expected_revision": 3}

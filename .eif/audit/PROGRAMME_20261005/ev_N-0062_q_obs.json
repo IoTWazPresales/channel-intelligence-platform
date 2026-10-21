@@ -1,0 +1,1 @@
+{"node": "N-0062", "expected_revision": 6, "dim": "observability", "state": "pass", "evidence": "EV-N0062", "rationale": "A failed supply overview headline, purchase-order coverage, plan-unit coverage, or purchase-order total read logs the exception and still returns an empty or unavailable result."}

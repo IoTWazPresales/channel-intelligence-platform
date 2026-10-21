@@ -1,0 +1,7 @@
+patched session refs: 35
+database: cip
+tenant: default lineup case: 119
+unset 200    3455ms stmts=  7 rows=200 commits=0 top=1378.2ms /api/v1/lineup/net-requirement  []
+star  200    2160ms stmts=  9 rows=200 commits=0 top=1058.0ms /api/v1/lineup/net-requirement  []
+NB    200    2353ms stmts=  9 rows=200 commits=0 top=1296.3ms /api/v1/lineup/net-requirement  []
+wrote C:\Users\warren_eliason\channel-intelligence-platform\.eif\audit\PROGRAMME_20261007\N0065_r3_cap_cip_0024_fix4b.json

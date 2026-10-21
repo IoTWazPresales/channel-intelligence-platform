@@ -1,0 +1,23 @@
+{
+  "id": "N-0079",
+  "parent": null,
+  "title": "Budget ledger: allocation, commitment, consumption and reconciliation (spec section 9.7)",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": ["api", "ui", "schema"],
+  "risk": "R3",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": ["N-0073"],
+  "acceptance_criteria": [
+    "Budget rules per Warren's decision (who allocates, at what grain, the 50/50 policy question)",
+    "Allocation, commitment from approved cases, consumption from settled claims, and the reconciliation gap are recorded rows, not recomputed guesses",
+    "The Budgets page shows real rows; the planner budget check reads the ledger instead of the lineup-derived reservation",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

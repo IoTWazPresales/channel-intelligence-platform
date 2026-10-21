@@ -1,0 +1,25 @@
+{
+  "id": "N-0094",
+  "parent": null,
+  "title": "Product roadmap planning view: lifecycle phase and replacement candidates",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": [
+    "ui",
+    "api",
+    "schema"
+  ],
+  "risk": "R2",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": [],
+  "acceptance_criteria": [
+    "Lifecycle phase and replacement candidates have a writer (import or edit) and a planning view that lineup and forecast read",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

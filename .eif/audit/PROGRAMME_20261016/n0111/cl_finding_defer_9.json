@@ -1,0 +1,1 @@
+{"note": "N-0111: no Python linter in the API venv; Python changes not linted. Web tsc exit 0, next lint 0 errors on changed files.", "code": "DOES_NOT_FIT", "node": "N-0111", "expected_revision": 5}

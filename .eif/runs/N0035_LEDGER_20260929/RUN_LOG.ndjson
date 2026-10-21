@@ -1,0 +1,8 @@
+{"ts":"2026-09-29T14:02:03Z","kind":"programme.event","event":"node.lease.acquire","seq":1254}
+{"ts":"2026-09-29T14:02:13Z","kind":"programme.event","event":"baseline.add","seq":1255}
+{"ts":"2026-09-29T14:02:24Z","kind":"programme.event","event":"node.baseline","seq":1256}
+{"ts":"2026-09-29T14:02:34Z","kind":"programme.event","event":"node.stage","seq":1257}
+{"ts":"2026-09-29T14:02:43Z","kind":"programme.event","event":"node.stage","seq":1258}
+{"ts":"2026-09-29T14:02:54Z","kind":"programme.event","event":"node.accept","seq":1259}
+{"ts":"2026-09-29T14:03:04Z","kind":"programme.event","event":"node.status","seq":1260}
+{"ts":"2026-09-29T14:03:16Z","kind":"programme.event","event":"node.lease.release","seq":1261}

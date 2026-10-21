@@ -1,0 +1,107 @@
+{
+  "label": "before",
+  "pre_fix_expression_in_memory": true,
+  "probe_utc": "2026-10-08T13:18:29+00:00",
+  "current_database": "cip",
+  "transaction_read_only": "on",
+  "row_security": "on",
+  "evidence_model": "shipment_evidence_current",
+  "cases": 36,
+  "elapsed_s": 168.19,
+  "suggest_pos": {
+    "cases_with_suggestions": 33,
+    "suggestions": 2697,
+    "total_shipped_units": 775204.0,
+    "indep_shipped_only": 725145.0,
+    "indep_all_states": 775204.0,
+    "rows_equal_shipped_only": 2441,
+    "rows_equal_all_states": 2697,
+    "rows_zero_shipped": 0,
+    "mismatch_vs_shipped_only_examples": [
+      {
+        "case": 9,
+        "po": 8859,
+        "reader": 1697.0,
+        "shipped_only": 1462.0,
+        "all_states": 1697.0
+      },
+      {
+        "case": 9,
+        "po": 8942,
+        "reader": 371.0,
+        "shipped_only": 352.0,
+        "all_states": 371.0
+      },
+      {
+        "case": 9,
+        "po": 8843,
+        "reader": 694.0,
+        "shipped_only": 548.0,
+        "all_states": 694.0
+      },
+      {
+        "case": 9,
+        "po": 8910,
+        "reader": 627.0,
+        "shipped_only": 571.0,
+        "all_states": 627.0
+      },
+      {
+        "case": 9,
+        "po": 8834,
+        "reader": 282.0,
+        "shipped_only": 246.0,
+        "all_states": 282.0
+      }
+    ]
+  },
+  "suggest_distributors": {
+    "cases_with_suggestions": 33,
+    "suggestions": 232,
+    "total_shipped_units": 1041463.0,
+    "indep_shipped_only": 985821.0,
+    "indep_all_states": 1041463.0,
+    "rows_equal_shipped_only": 156,
+    "rows_equal_all_states": 232,
+    "rows_zero_shipped": 0,
+    "mismatch_vs_shipped_only_examples": [
+      {
+        "case": 9,
+        "distributor": 21,
+        "reader": 8972.0,
+        "shipped_only": 7400.0,
+        "all_states": 8972.0
+      },
+      {
+        "case": 9,
+        "distributor": 29,
+        "reader": 18800.0,
+        "shipped_only": 14604.0,
+        "all_states": 18800.0
+      },
+      {
+        "case": 9,
+        "distributor": 26,
+        "reader": 16070.0,
+        "shipped_only": 14604.0,
+        "all_states": 16070.0
+      },
+      {
+        "case": 9,
+        "distributor": 38,
+        "reader": 3084.0,
+        "shipped_only": 2505.0,
+        "all_states": 3084.0
+      },
+      {
+        "case": 9,
+        "distributor": 22,
+        "reader": 1480.0,
+        "shipped_only": 1372.0,
+        "all_states": 1480.0
+      }
+    ],
+    "order_follows_matched_then_units": true,
+    "cases_where_all_states_key_orders_differently": 5
+  }
+}

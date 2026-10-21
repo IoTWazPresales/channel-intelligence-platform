@@ -1,0 +1,1 @@
+{"scope": "N-0111", "origin": "operator", "status": "accepted", "statement": "Warren 2026-10-16: repeated Pinnacle (distributor) lines within one file follow D-0091: lines that differ in any source column are summed; lines identical in every source column count once and carry a duplicate flag."}

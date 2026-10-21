@@ -1,0 +1,1 @@
+{"note": "N-0096: cip holds eight 'RelAmazon ...' customers (C-REL-A/B-*, ids 5195 to 5259) that look like test fixtures from a run against cip. Not touched. Needs a decision before the Amazon history upload picks a customer.", "code": "DOES_NOT_FIT", "node": "N-0096", "expected_revision": 3}

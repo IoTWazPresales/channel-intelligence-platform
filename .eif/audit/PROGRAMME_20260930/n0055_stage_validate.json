@@ -1,0 +1,1 @@
+{"node": "N-0055", "expected_revision": 7, "to": "validate", "stage_note": "Unit test switches alpha and beta. cip read-only dim_product: beta 0, default 18177, beta again 0. current_database=cip. No write."}

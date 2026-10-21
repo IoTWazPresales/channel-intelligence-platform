@@ -1,0 +1,1 @@
+{"path": "apps/api/tests/test_rbac_n0038_cpor_roles.py", "note": "N-0096: approval-link routes in the matrix; the one public approval route allowed by name, not by loosening the rule.", "provenance": "implementation-observation", "node": "N-0096", "expected_revision": 3}

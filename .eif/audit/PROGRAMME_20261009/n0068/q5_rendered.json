@@ -1,0 +1,1 @@
+{"node":"N-0068","expected_revision":12,"dim":"rendered","state":"pending","rationale":"UNABLE_TO_RENDER in this run: no browser inspection of the Users grain panel or the PM product-line chips was attempted (no restarts allowed). jsdom vitest only."}

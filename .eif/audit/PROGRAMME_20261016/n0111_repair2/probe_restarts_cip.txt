@@ -1,0 +1,29 @@
+DATABASE_URL=postgresql+asyncpg://cip:***@localhost:5432/cip
+DATABASE_URL_SYNC=postgresql://cip:***@localhost:5432/cip
+DATABASE_URL_SYNC_MIGRATE=postgresql://cip:***@localhost:5432/cip
+current_database()=cip
+current_database() cip (read-only)
+restart rows by customer: [('Computer Mania', 209, 71, 85.0, 85), ('Evetech', 59, 22, 85.0, 260), ('Game', 13, 8, 50.0, 120), ('Takealot', 9, 92, 92.0, 204), ('Makro', 8, 85, 141.0, 141)]
+restarts, rows between (all grains) -> (restarts, no_row_at_all, rows_but_no_units, some_units, gap<=8d): (298, 289, 0, 9, 1)
+sample restart rows (customer, product, prev_end, start, days, fact rows between):
+   ('Computer Mania', 3033, datetime.date(2025, 7, 20), datetime.date(2025, 9, 29), 71, 0)
+   ('Computer Mania', 4245, datetime.date(2025, 7, 20), datetime.date(2025, 9, 29), 71, 0)
+   ('Computer Mania', 2434, datetime.date(2025, 7, 20), datetime.date(2025, 9, 29), 71, 0)
+   ('Computer Mania', 2688, datetime.date(2025, 7, 20), datetime.date(2025, 9, 29), 71, 0)
+   ('Computer Mania', 3559, datetime.date(2025, 7, 20), datetime.date(2025, 9, 29), 71, 0)
+   ('Computer Mania', 3568, datetime.date(2025, 7, 20), datetime.date(2025, 9, 29), 71, 0)
+   ('Computer Mania', 279, datetime.date(2025, 7, 20), datetime.date(2025, 9, 29), 71, 0)
+   ('Computer Mania', 1431, datetime.date(2025, 7, 20), datetime.date(2025, 9, 29), 71, 0)
+   ('Computer Mania', 373, datetime.date(2025, 7, 20), datetime.date(2025, 9, 29), 71, 0)
+   ('Computer Mania', 1576, datetime.date(2025, 7, 20), datetime.date(2025, 9, 29), 71, 0)
+   ('Computer Mania', 2149, datetime.date(2025, 7, 20), datetime.date(2025, 9, 29), 71, 0)
+   ('Computer Mania', 4576, datetime.date(2025, 7, 20), datetime.date(2025, 9, 29), 71, 0)
+fact rows by customer: total / with on-hand / without on-hand / without on-hand and units>0 / no units provenance:
+   ('Makro', 1736, 138, 1598, 1598, 0)
+   ('Game', 769, 761, 8, 8, 0)
+   ('Computer Mania', 302, 302, 0, 0, 0)
+   ('Evetech', 130, 130, 0, 0, 0)
+   ('Takealot', 96, 58, 38, 38, 0)
+   ('Incredible Connection', 82, 82, 0, 0, 0)
+   ('Hifi', 51, 51, 0, 0, 0)
+   ('AMAZON COMMERCIAL SERVICES (SOUTH AFRICA)', 31, 0, 31, 31, 0)

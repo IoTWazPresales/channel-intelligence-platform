@@ -1,0 +1,1 @@
+{"node": "N-0056", "expected_revision": 12, "dim": "content", "state": "pass", "evidence": "EV-N0056", "rationale": "The line reads Vintage plus the as-of timestamp. Missing vintage reads Vintage unavailable. A vintage without an as-of timestamp reads Vintage recorded."}

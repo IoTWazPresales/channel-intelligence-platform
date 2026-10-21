@@ -1,0 +1,1 @@
+{"node": "N-0052", "expected_revision": 4, "to": "design", "stage_note": "Dump only tables cip can SELECT. Restore with the existing smoke script. emit_task_failure_alert before the ledger failure write. Raise when AI is on and the client is missing."}

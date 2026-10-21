@@ -1,0 +1,16 @@
+{
+  "id": "BLN-N0086",
+  "provenance": "implementation-observation",
+  "tree_hash": "1714b78d9f281457aa66b320bb5fb2cb99603a66",
+  "path": ".eif/audit/PROGRAMME_20261009/N0086_route_table_before.txt",
+  "observed_behavior": "Before N-0086: the Next same-origin proxy copied every incoming header except hop-by-hop, so a visitor-supplied X-Forwarded-For reached the API; Next 15 fills X-Forwarded-For only when the client sent none; the API login throttle keyed on the right-most X-Forwarded-For entry from a loopback peer, so the per-address limit could be dodged by rotating the header. Every write on /imports (except admin bulk delete and PM import), /cst-steward, /mappings, /product-master-gaps and /exceptions required only sign-in (route table before). Web hides Data & Stewardship nav for planner/viewer but the pages themselves had no role gating.",
+  "latent_capabilities": ["planner-cpor-upload-via-imports-jobs", "planner-lineup-job-cancel-retry", "admin-passes-every-gate", "reads-open-to-signed-in", "per-account-throttle-independent-of-address", "lineup-dialogs-in-import-center"],
+  "preservation": {
+    "planner-cpor-upload-via-imports-jobs": "kept: planners may create/process jobs for cpor_historical_cases and cpor_payment_evidence",
+    "planner-lineup-job-cancel-retry": "kept: planners may cancel/retry lineup and CPOR template jobs",
+    "admin-passes-every-gate": "kept (require_roles semantics unchanged)",
+    "reads-open-to-signed-in": "kept: no GET gained a role gate",
+    "per-account-throttle-independent-of-address": "kept unchanged",
+    "lineup-dialogs-in-import-center": "kept: unified lineup import and bulk backfill cards stay usable for planners"
+  }
+}

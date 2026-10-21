@@ -1,0 +1,5 @@
+node.lease.acquire 0 rev 2123 
+node.blocker.close 0 rev 2124 
+evidence.add 0 rev 2125 
+node.stage_note 0 rev 2126 
+node.lease.release 0 rev 2127 

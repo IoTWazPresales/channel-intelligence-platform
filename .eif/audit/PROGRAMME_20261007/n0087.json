@@ -1,0 +1,31 @@
+{
+  "id": "N-0087",
+  "parent": null,
+  "title": "Honest surfaces: pricing page stops creating products, stub routes and stub import templates resolved, legacy promotion scaffold and dead settlement code retired",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": [
+    "ui",
+    "api"
+  ],
+  "risk": "R2",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": [],
+  "acceptance_criteria": [
+    "Recording a price for an unknown SKU goes to the steward queue and never creates a dim_product row (standing rule: never auto-create masters)",
+    "/pricing is wired into the nav with a real recommendation writer, or retired",
+    "/market and /api/v1/market/placeholders are removed or given a written feed contract",
+    "Each stub_noop Import Center template is hidden, routed to its real path, or built; no upload silently goes nowhere",
+    "The duplicate 'Audit log' nav leaf is removed until N-0092 lands",
+    "The legacy /promotions plans API and promo_exports DimPromotion path are removed or pointed at CPOR cases; dropping tables is a separate Warren decision",
+    "The unmounted SettlementContainer subtree is deleted if Warren confirms D-0032(2)",
+    "CIP_DESIGN_LANGUAGE.md states the rule: an inert control is disabled or labelled unavailable",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

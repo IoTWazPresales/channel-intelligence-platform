@@ -1,0 +1,1 @@
+{"node": "N-0073", "expected_revision": 2, "stage": "challenge", "stage_note": "Discovery recorded (BLN-N0073, N0073_DISCOVERY.md). Only Postgres survives a reboot; Redis/WSL stopped; web on 0.0.0.0. Convening feature-definition panel for challenge and design."}

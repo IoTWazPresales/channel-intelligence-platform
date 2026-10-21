@@ -1,0 +1,15 @@
+current_database() cip_n0110r2
+site_merged: rows 163 stored units 92 source units 1498 (+1406) {}
+   customer 11: rows 40 stored 1 source 91
+   customer 12: rows 80 stored 3 source 196
+   customer 15: rows 43 stored 88 source 1211
+repeated_identical: rows 0 stored units 0 source units 0 (+0) {'extra_copies': 0}
+repeated_differing: rows 202 stored units 2110 source units 2126 (+16) {'with_on_hand': 80}
+   customer 15: rows 103 stored 877 source 877
+   customer 18: rows 4 stored 60 source 60
+   customer 20: rows 49 stored 1064 source 1064
+   customer 57: rows 45 stored 108 source 122
+   customer 299: rows 1 stored 1 source 3
+wrong_year: rows 0 units 0
+totals (customer: rows, units, on-hand) {'11': [51, 1.0, 15.0], '12': [82, 3.0, 31.0], '15': [1736, 6122.0, 2053.0], '18': [302, 2331.0, 5397.0], '20': [96, 1253.0, 3357.0], '52': [130, 690.0, 14265.0], '57': [769, 1579.0, 5714.0], '299': [31, 415.0, 0.0]}
+superseded table rows 390

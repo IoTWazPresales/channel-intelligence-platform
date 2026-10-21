@@ -1,0 +1,26 @@
+{
+  "id": "N-0073",
+  "parent": null,
+  "title": "Always-on stack on this PC: one supervisor starts and restarts Redis, worker+beat, API, web and the Cloudflare tunnel at logon",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": ["infra"],
+  "risk": "R2",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": ["N-0033", "N-0036"],
+  "acceptance_criteria": [
+    "Warren's request 2026-10-07: 'lets start with getting the system ALWAYS ON using cloud flare like we were doing which did work'",
+    "One supervisor script starts every missing component (WSL Redis, Celery worker with beat, API on 127.0.0.1:8001, production web on 127.0.0.1:3000, cloudflared) and restarts any that die, checking at least every 60 seconds",
+    "Starts at Windows logon without admin rights (per-user Startup entry); Postgres stays the existing automatic service",
+    "Web binds 127.0.0.1, never 0.0.0.0; the tunnel refuses to start unless CIP_AUTH_MODE=session and /api/v1/auth/me answers 401",
+    "The current public address is read from the cloudflared metrics endpoint and written to one local status file; no bracketed URL pattern appears in any shell command",
+    "Measured: kill each component once and see it return; public /login 200 and unauthenticated /api/v1/auth/me 401 after the restart",
+    "Nothing writes to cip business tables; no Docker; no admin-only system setting is changed by the agent"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

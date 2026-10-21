@@ -1,0 +1,1 @@
+{"node": "N-0055", "expected_revision": 9, "dim": "observability", "state": "pass", "evidence": "EV-N0055", "rationale": "Authenticated requests log tenant_scope bound tenant=<id>. The select path logs the same tenant at debug."}

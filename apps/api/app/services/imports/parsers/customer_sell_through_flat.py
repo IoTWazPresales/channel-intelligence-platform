@@ -129,12 +129,25 @@ def _identifier_text(value: Any, *, barcode: bool = False) -> str | None:
     return s or None
 
 
-def _row_identifiers(series: pd.Series, col_map: dict[str, str | None]) -> dict[str, str | None]:
-    """Every product identifier one row carries, by target column (separate slots, never merged)."""
+def _row_identifiers(
+    series: pd.Series,
+    col_map: dict[str, str | None],
+    extra: dict[str, list[str]] | None = None,
+) -> dict[str, str | None]:
+    """Every product identifier one row carries, by target column (separate slots, never merged).
 
-    def cell(canon: str, *, barcode: bool = False) -> str | None:
-        col = col_map.get(canon)
-        return _identifier_text(series.get(col), barcode=barcode) if col else None
+    A report may carry the same kind of identifier in more than one column (an EAN column and a UPC
+    column, both mapped to Barcode): the first of them, in file order, that has a value is used.
+    """
+
+    def cell(canon: str, *, barcode: bool = False, plain: bool = False) -> str | None:
+        for col in [col_map.get(canon), *((extra or {}).get(canon) or [])]:
+            if not col:
+                continue
+            value = _normalize_text(series.get(col)) if plain else _identifier_text(series.get(col), barcode=barcode)
+            if value is not None:
+                return value
+        return None
 
     return {
         "raw_product_token": _normalize_text(series.get(col_map["raw_product_token"]))
@@ -143,10 +156,28 @@ def _row_identifiers(series: pd.Series, col_map: dict[str, str | None]) -> dict[
         "raw_part_number_token": cell("raw_part_number_token"),
         "raw_barcode_token": cell("raw_barcode_token", barcode=True),
         "raw_sales_model_token": cell("raw_sales_model_token"),
-        "raw_article_token": _normalize_text(series.get(col_map["raw_article_token"]))
-        if col_map.get("raw_article_token")
-        else None,
+        # The customer's own code keeps its former cleaning (no trailing ``.0`` rule).
+        "raw_article_token": cell("raw_article_token", plain=True),
     }
+
+
+def _extra_identifier_columns(columns: list[str], field_mapping: dict[str, str]) -> dict[str, list[str]]:
+    """Other file columns mapped to the same identifier target, beyond the one ``col_map`` names.
+
+    ``_resolve_source_columns`` keeps one column per target; this returns the rest (file order) so a
+    row can fall back to them when the first is empty.
+    """
+    targets = set(IDENTIFIER_SLOT_FIELDS) | {"raw_article_token"}
+    col_lower = {str(c).strip().lower(): str(c) for c in columns}
+    mapped: dict[str, set[str]] = {}
+    for src, canon in (field_mapping or {}).items():
+        if src == EXPECTED_COLUMNS_META_KEY or canon not in targets:
+            continue
+        real = col_lower.get(str(src).strip().lower())
+        if real is not None:
+            mapped.setdefault(canon, set()).add(real)
+    order = {str(c): i for i, c in enumerate(columns)}
+    return {canon: sorted(cols, key=lambda c: order[c]) for canon, cols in mapped.items() if len(cols) > 1}
 
 
 def _identifier_columns_mapped(col_map: dict[str, str | None]) -> bool:
@@ -518,11 +549,22 @@ def _resolve_source_columns(
     col_lower = {str(c).strip().lower(): str(c) for c in columns}
     resolved: dict[str, str | None] = {c: None for c in CANONICAL_FIELDS}
 
+    file_order = {str(c).strip().lower(): i for i, c in enumerate(columns)}
     for src, canon in field_mapping.items():
         if src == EXPECTED_COLUMNS_META_KEY:
             continue
-        if canon in resolved and src.strip().lower() in col_lower:
-            resolved[canon] = col_lower[src.strip().lower()]
+        key = src.strip().lower()
+        if canon in resolved and key in col_lower:
+            current = resolved[canon]
+            # Several headers may map to one identifier (EAN and UPC -> Barcode): keep the first in
+            # file order (the others are read as fallbacks). Any other target keeps the former rule.
+            if (
+                canon in IDENTIFIER_SLOT_FIELDS
+                and current is not None
+                and file_order[key] > file_order[str(current).strip().lower()]
+            ):
+                continue
+            resolved[canon] = col_lower[key]
 
     # N-0111: once a layout names a part number, barcode or sales model column, it names the
     # product columns itself; the older single-column alias guess must not pick a second copy.
@@ -892,6 +934,7 @@ def parse_flat_report(
         return ParseResult(error="Could not detect header row")
 
     col_map = _resolve_source_columns(list(df.columns), fm, expected_columns)
+    identifier_extra = _extra_identifier_columns(list(df.columns), fm)
     available = [str(c) for c in df.columns]
 
     if not _identifier_columns_mapped(col_map):
@@ -942,6 +985,7 @@ def parse_flat_report(
             filename=filename,
             week_calendar=week_calendar,
             file_fields=file_fields,
+            identifier_extra=identifier_extra,
         )
 
     # N-0111: a stock-only file (on-hand, no units column) parses; its rows carry no units and
@@ -955,12 +999,14 @@ def parse_flat_report(
 
     rows: list[dict[str, Any]] = []
     skipped = 0
+    skipped_no_product = 0
+    skipped_no_units = 0
     period_warnings: list[str] = []
     for pos in range(len(df)):
         series = df.iloc[pos]
         source_row_number = first_data_row + pos
         units = _parse_decimal(series.get(col_map["units_sold"])) if col_map["units_sold"] else None
-        ids = _row_identifiers(series, col_map)
+        ids = _row_identifiers(series, col_map, identifier_extra)
         product_tok = ids["raw_product_token"]
         names_product = _row_names_a_product(col_map, ids)
         if stock_only_file:
@@ -969,6 +1015,11 @@ def parse_flat_report(
                 continue
         elif units is None or not names_product:
             skipped += 1
+            # Say which one was missing, so a mapped column that is empty in the file is visible.
+            if not names_product:
+                skipped_no_product += 1
+            else:
+                skipped_no_units += 1
             continue
 
         # N-0110: a sale date stays a day; a week number and year stay a week; a month a month.
@@ -1056,10 +1107,23 @@ def parse_flat_report(
     rows = roll_bare_week_years(rows, year_hint=year_hint, week_calendar=week_calendar)
 
     skipped_rows: dict[str, int] = {}
-    if skipped:
-        what = "on-hand" if stock_only_file else "units_sold"
-        warnings.append(f"Skipped {skipped} row(s) with missing product token or {what}")
-        skipped_rows["missing_product_or_on_hand" if stock_only_file else "missing_product_or_units"] = skipped
+    if skipped and stock_only_file:
+        warnings.append(f"Skipped {skipped} row(s) with missing product token or on-hand")
+        skipped_rows["missing_product_or_on_hand"] = skipped
+    elif skipped:
+        if skipped_no_product:
+            warnings.append(f"Skipped {skipped_no_product} row(s) with no product identifier")
+            skipped_rows["missing_product"] = skipped_no_product
+        if skipped_no_units:
+            units_col = col_map["units_sold"]
+            if not rows and skipped_no_product == 0:
+                warnings.append(
+                    f"The column mapped to Units sold ({units_col}) has no number in any row; "
+                    "check the mapping (another column may hold the units)"
+                )
+            else:
+                warnings.append(f"Skipped {skipped_no_units} row(s) with no number in {units_col}")
+            skipped_rows["missing_units"] = skipped_no_units
     warnings.extend(dict.fromkeys(period_warnings))
 
     rows = enrich_flat_rows_from_companion_soh(
@@ -1095,6 +1159,7 @@ def _parse_flat_wide_week_unpivot(
     filename: str,
     week_calendar: dict[str, Any] | None = None,
     file_fields: dict[str, Any] | None = None,
+    identifier_extra: dict[str, list[str]] | None = None,
 ) -> ParseResult:
     """Emit one staging row per product×week when dual-header exposes multiple unit weeks."""
     from app.services.imports.parsers.customer_sell_through_grain import fields_from_token
@@ -1115,7 +1180,7 @@ def _parse_flat_wide_week_unpivot(
     for pos in range(len(df)):
         series = df.iloc[pos]
         source_row_number = first_data_row + pos
-        ids = _row_identifiers(series, col_map)
+        ids = _row_identifiers(series, col_map, identifier_extra)
         product_tok = ids["raw_product_token"]
         if not _row_names_a_product(col_map, ids):
             skipped_products += 1

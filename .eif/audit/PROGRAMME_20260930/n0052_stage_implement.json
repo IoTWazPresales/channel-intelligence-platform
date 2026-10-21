@@ -1,0 +1,1 @@
+{"node": "N-0052", "expected_revision": 5, "to": "implement", "stage_note": "Alert module and LedgerTask hook shipped. Resolver raises AiResolverUnavailable. Dump and restore proof recorded in docs/BACKUP_AND_DR.md."}

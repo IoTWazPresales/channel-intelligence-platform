@@ -1,0 +1,78 @@
+PHASE 4 — Steward + CPOR queue depth, so the next session has numbers ║
+╚═══════════════════════════════════════════════════════════════════════╝
+New branch off the NEW main: feat/steward-queue-depth. Read-only script.
+
+  4.1  Build scripts/ops/steward_queue_depth.py. READ-ONLY: SELECT only, no ORM commits.
+       Print `current_database()` first; if not exactly `cip`, exit.
+  4.2  RESOLVE EVERY TABLE AND COLUMN FROM THE MODELS — the names below are hints, not
+       facts. If a name does not resolve, print NOT FOUND: <what you looked for> and
+       continue. An empty queue and a broken query must look DIFFERENT in the output.
+
+       Steward queues:
+         a) import_entity_mapping_candidate — by entity_type × status (default
+            'needs_review'). Join import_job and separate live jobs from
+            applied/closed ones; a candidate on a dead job is not a decision.
+         b) commercial_lineup_case.distributor_attribution_status — count by value
+            including NULL.
+         c) dim_customer.code LIKE 'TMP-CUST%' and dim_distributor.code LIKE 'TMP-DIST%',
+            excluding merged losers (merged_into_* IS NOT NULL). Report excluded
+            separately.
+         d) customer_code_mint_setting — row count; if a row exists print prefix /
+            pattern_template / next_seq. BACKLOG-140 claims no mint scheme exists but
+            this model file does. Report what is true; do not amend the backlog.
+         e) DSI unresolved product tokens / catalogue gap — find the real table from the
+            DSI resolution code, not from memory.
+         f) CST hydration — raw_file_metadata for CST jobs, stubs vs hydrated. If there
+            is no stub flag, say so rather than inventing one.
+         g) Merged-customer leftovers — fact/FK rows still pointing at a dim_customer or
+            dim_distributor with merged_into_* set. Expected 0. Reuse the existing
+            leftover query logic (customer_leftover_repair.py); no parallel scan.
+
+       CPOR queues — this is what the next session works on, so get them right:
+         h) cpor_case by `status` AND by `workflow_status`, and the count where the two
+            DISAGREE (BACKLOG-139 estimated ~4 and never re-counted — count it).
+         i) cpor_case rows past window_end that are not settled — the settlement backlog.
+         j) cpor_case where superseded_by_case_id IS NOT NULL — expected 0, because
+            BACKLOG-138 says seven readers filter on a pointer nothing writes.
+         k) cpor_case whose customer still carries a TMP-CUST code (spec §9.5).
+         l) cpor_case_event rows with a NULL actor — the §7 audit defect, pre-R1 rows.
+
+  4.3  Output: one table — queue · count · where the decision is made (URL path or
+       "no UI") · one line on what a single decision looks like. Then a short list of
+       queues that came back zero.
+  4.4  Run it against cip and paste the FULL output.
+  4.5  Housekeeping, no destructive acts:
+         - Delete .tmp_lf_rerun.txt (untracked, has survived five units).
+         - Amend BACKLOG-143: cip_test is now real test infrastructure, not leftover —
+           remove it from the disposal list.
+         - Report cip_merged_leftover_repair's size and age. DO NOT DROP IT. Dropping a
+           database needs Warren's explicit word and is not part of this unit.
+  4.6  Update CURRENT.md `Next` to point at the CPOR module — docs/CPOR_SETTLEMENT_SPEC.md
+       §8 (four UI surfaces, not built) and BACKLOG-135–140 — with the queue numbers from
+       4.4 recorded so the next session starts from evidence, not from a doc.
+       Append one CONTEXT.md line. Add-only.
+  4.7  Commit and push feat/steward-queue-depth. Do NOT merge it to main — that is
+       Warren's call once he has read the numbers.
+
+  GATE 4: full script output pasted; every count either a real number or an explicit
+  NOT FOUND; zero writes to cip.
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║ DONE-STATE                                                            ║
+╚═══════════════════════════════════════════════════════════════════════╝
+[ ] Phase 1: six GETs 200 as a real logged-in admin against the running app on cip
+[ ] Phase 2: shipping-mailer on main; single alembic head 20260818_0019; CONTEXT.md union
+[ ] Phase 3: RBAC on main; suite green; CURRENT.md Branch: main; RBAC program CLOSED
+[ ] Phase 4: queue script on its own branch, full output pasted, cip read-only throughout
+[ ] No Alembic revision authored, no model change, no cip write, no .env edit
+[ ] CONTEXT.md never lost a line in either merge (line counts printed both times)
+[ ] .tmp_lf_rerun.txt gone; cip_merged_leftover_repair reported, NOT dropped
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║ SELF-CHECK                                                            ║
+╚═══════════════════════════════════════════════════════════════════════╝
+Paste the command and its output for every claim. Do not reconcile your findings to any
+number in this prompt — if the repo disagrees with me, the repo is right and you say so
+loudly. If a phase gate fails, stop at that phase and report; do not carry on to the
+next one because the remaining work "looks independent."
+</user_query>

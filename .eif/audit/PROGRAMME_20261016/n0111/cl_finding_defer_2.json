@@ -1,0 +1,1 @@
+{"note": "N-0111: one confirmed year covers every week number in a file; a file running from week 52 into week 1 must be split.", "code": "DOES_NOT_FIT", "node": "N-0111", "expected_revision": 5}

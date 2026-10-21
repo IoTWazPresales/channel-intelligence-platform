@@ -1,0 +1,1 @@
+{"path": ".eif/audit/PROGRAMME_20261015/n0083/N0083_PROOF.md", "note": "N-0083 proof: clone cip_n0083 reproduced the denial and the fix with a clean round trip; cip applied; the poller stored USDZAR 16.47 for 2026-10-14 on cip.", "provenance": "implementation-observation", "node": "N-0083", "expected_revision": 3}

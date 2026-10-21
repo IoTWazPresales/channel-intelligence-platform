@@ -1,0 +1,1 @@
+{"stage": "discovery", "stage_note": "N-0079 closed. CST facts carry reported_soh; fact_inbound_shipment has pod_date, line_state and resolved_customer_id; the distributor derived-stock formula is the pattern.", "node": "N-0110", "expected_revision": 2}

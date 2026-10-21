@@ -1,0 +1,1 @@
+{"path": ".eif/audit/PROGRAMME_20261016/n0111/N0111_PROOF.md", "note": "N-0111 proof: rules, Pinnacle comparison, findings. Full API pytest on cip_test 3017 passed, 21 skipped, 0 failed; full web vitest 186 files, 869 passed, 0 failed (2 workers).", "provenance": "implementation-observation", "node": "N-0111", "expected_revision": 5}

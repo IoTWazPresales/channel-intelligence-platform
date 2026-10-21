@@ -1,0 +1,1 @@
+{"path": "apps/api/app/services/channel_intelligence/customer_stock_gap.py", "note": "N-0111 repair 2: stock chain bridges weeks with no on-hand when sales are reported (D-0112); unreported weeks start a fresh chain.", "provenance": "implementation-observation", "node": "N-0111", "expected_revision": 38}

@@ -1,0 +1,55 @@
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mC:/Users/warren_eliason/channel-intelligence-platform/apps/web[39m
+
+ [32m✓[39m src/features/reports/inboxVintage.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 23[2mms[22m[39m
+ [32m✓[39m src/features/reports/reportPresentation.test.ts [2m([22m[2m14 tests[22m[2m)[22m[90m 178[2mms[22m[39m
+ [32m✓[39m src/features/workbench-ui/HeadlineFigure.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 1983[2mms[22m[39m
+   [33m[2m✓[22m[39m HeadlineFigure[2m > [22mrenders existing callers unchanged (label, value, unit, delta, caption) [33m328[2mms[22m[39m
+   [33m[2m✓[22m[39m HeadlineFigure[2m > [22mshows delta period, target and sparkline for the mockup tile [33m1095[2mms[22m[39m
+[90mstderr[2m | src/features/workbench-ui/charts.test.tsx[2m > [22m[2maccessible chart output[2m > [22m[2mRankedBars lists sorted, capped values in its data table
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[90mstderr[2m | src/features/workbench-ui/charts.test.tsx[2m > [22m[2maccessible chart output[2m > [22m[2mTrendChart without summary renders as before; with summary it is named
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+The width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+ [32m✓[39m src/features/workbench-ui/charts.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 2149[2mms[22m[39m
+   [33m[2m✓[22m[39m accessible chart output[2m > [22mChartFigure gives the drawing a name and a hidden data table [33m1238[2mms[22m[39m
+   [33m[2m✓[22m[39m accessible chart output[2m > [22mTrendChart without summary renders as before; with summary it is named [33m406[2mms[22m[39m
+[90mstderr[2m | src/features/reports/ReportBuilderView.test.tsx[2m > [22m[2mReportBuilderView[2m > [22m[2mbar view: sorted low to high, direct values, threshold and state key
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[90mstderr[2m | src/features/reports/ReportBuilderView.test.tsx[2m > [22m[2mReportBuilderView[2m > [22m[2mperiod breakdown offers a trend with the latest point labelled
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+ [32m✓[39m src/features/reports/ReportBuilderView.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 31451[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22msummary tiles, saved reports and recent runs come from the API [33m3643[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22mruns the same governed query and shows the KPI tile with unit, target and state counts [33m3919[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22mbar view: sorted low to high, direct values, threshold and state key [33m3887[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22mtable view shows the grid only once [33m4556[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22mno engineering vocabulary on screen; formula and scope sit behind "About this figure" [33m3450[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22mdistributor is a picker of names; the payload keeps the id filter [33m3780[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22msend and schedule explain why they are disabled until the report is saved [33m2661[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22mperiod breakdown offers a trend with the latest point labelled [33m5551[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m5 passed[39m[22m[90m (5)[39m
+[2m      Tests [22m [1m[32m41 passed[39m[22m[90m (41)[39m
+[2m   Start at [22m 14:37:21
+[2m   Duration [22m 209.82s[2m (transform 5.98s, setup 75.43s, collect 393.79s, tests 35.78s, environment 179.00s, prepare 60.44s)[22m
+

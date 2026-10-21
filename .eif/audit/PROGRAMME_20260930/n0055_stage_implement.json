@@ -1,0 +1,1 @@
+{"node": "N-0055", "expected_revision": 6, "to": "implement", "stage_note": "install_tenant_select_scope on Session. Router dependency logs tenant_scope bound. Workers stay unscoped when the context var is unset."}

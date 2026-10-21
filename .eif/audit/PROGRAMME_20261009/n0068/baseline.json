@@ -1,0 +1,9 @@
+{
+  "id": "BLN-N0068",
+  "provenance": "implementation-observation",
+  "tree_hash": "7361868d606a4bc2b60b539e3442cea00adf6d85",
+  "path": ".eif/audit/PROGRAMME_20261009/N0068_IMPL.md",
+  "observed_behavior": "HEAD 1714b78d plus dirty tree. Committed (b1696b02): per-line PM maps nest under source_definition.column_mapping_memory.mapping_profile.by_product_line; PM state offers sellable product-line chips; validate flags duplicate EAN on import_job.staged_metadata (FLAG not BLOCK). Dirty tree: tenant_column_grain table (migration 20261006_0024, one row per tenant, default product_line), TenantColumnGrain model, admin-only GET/PUT /api/v1/auth/column-grain, UsersWorkspace grain panel, save_mapping_sync reads the tenant grain and merge_memory writes by_grain for non-product_line grains. cip read-only: tenant_column_grain = [default, product_line]; no dim_product index mentions ean; only unique constraints are part_number and sku; catalog_product 18157 rows, product_catalog 1; 56 duplicate EAN values; no source has a mapping_profile yet.",
+  "latent_capabilities": [],
+  "preservation": {}
+}

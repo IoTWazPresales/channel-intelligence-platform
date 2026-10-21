@@ -1,0 +1,1 @@
+{"note": "N-0110: the 1823 fact rows on cip keep NULL grain; they are read by period_type (all weekly today). Not re-classified.", "code": "DOES_NOT_FIT", "node": "N-0110", "expected_revision": 21}

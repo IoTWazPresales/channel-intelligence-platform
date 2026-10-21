@@ -1,0 +1,1 @@
+{"node": "N-0057", "expected_revision": 9, "dim": "ux", "state": "pass", "evidence": "EV-N0057", "rationale": "An empty plan still shows Next quarter, Import a lineup file, and Export, so the PM is not sent only to Steward imports."}

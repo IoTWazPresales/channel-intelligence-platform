@@ -1,0 +1,1 @@
+{"path": "apps/api/app/services/imports/customer_sell_through_apply.py", "note": "N-0111 (d61e5af0): upsert replaces only carried figures (figure_import_jobs); stock-only lines apply; a job with an unconfirmed year applies nothing.", "provenance": "implementation-observation", "node": "N-0111", "expected_revision": 5}

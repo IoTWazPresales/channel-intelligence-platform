@@ -1,0 +1,1 @@
+{"path": "apps/api/app/services/channel_intelligence/customer_stock_gap.py", "note": "N-0111 (d61e5af0): a Monday-Sunday week with no on-hand is a no_on_hand position; the chain restarts at the next on-hand.", "provenance": "implementation-observation", "node": "N-0111", "expected_revision": 5}

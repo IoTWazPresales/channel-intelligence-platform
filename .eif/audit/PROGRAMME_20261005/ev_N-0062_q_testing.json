@@ -1,0 +1,1 @@
+{"node": "N-0062", "expected_revision": 5, "dim": "testing", "state": "pass", "evidence": "EV-N0062", "rationale": "pytest tests/test_supply_plan_unit_coverage.py and tests/test_plan_vs_executed.py: 30 passed. Includes the failed headline read, which logs and returns an empty unavailable result. Arrived and plan-unit coverage stay derived. No cip write."}

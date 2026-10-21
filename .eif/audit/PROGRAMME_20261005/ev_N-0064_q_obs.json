@@ -1,0 +1,1 @@
+{"node": "N-0064", "expected_revision": 10, "dim": "observability", "state": "pass", "evidence": "EV-N0064", "rationale": "volume_bias_by_bu already logs volume_bias_by_bu failed and returns an empty map. The buy-plan filter does not add a silent failure path."}

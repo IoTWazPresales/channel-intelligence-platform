@@ -1,0 +1,1 @@
+{"node": "N-0059", "expected_revision": 2, "to": "challenge", "stage_note": "Do not close the dialog when Apply is accepted. Counts arrive later on the session job. Do not click Apply against cip, because that writes cases. Poll the existing preview GET."}

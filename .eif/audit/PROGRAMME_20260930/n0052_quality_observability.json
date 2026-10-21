@@ -1,0 +1,1 @@
+{"node": "N-0052", "expected_revision": 9, "dim": "observability", "state": "pass", "evidence": "EV-N0052", "rationale": "Forced LedgerTask failure emits task_failure with task, run, and error before the ledger failure write. The test mocks ledger writers so cip is not opened."}

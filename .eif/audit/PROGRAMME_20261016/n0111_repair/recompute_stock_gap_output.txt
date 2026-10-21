@@ -1,0 +1,36 @@
+current_database()=cip
+positions by status before: {'compared': 314, 'first_report': 387}
+recompute tenant default: {'customers': 7, 'positions': 4158}
+positions by status after: {'chain_restart': 298, 'compared': 16, 'first_report': 387, 'no_on_hand': 3457}
+{
+ "tenant": "default",
+ "threshold_units": 1.0,
+ "positions": 4158,
+ "by_status": {
+  "first_report": 387,
+  "chain_restart": 298,
+  "no_on_hand": 3457,
+  "compared": 16
+ },
+ "compared": 16,
+ "flagged": 16,
+ "flagged_by_first_cause": {
+  "overwrite": 0,
+  "unmatched_shipment": 0,
+  "no_pod": 0,
+  "no_prior_on_hand": 16,
+  "repeated_report": 0,
+  "unreported_weeks": 0,
+  "unexplained": 0
+ },
+ "flagged_with_cause_anywhere": {
+  "overwrite": 0,
+  "unmatched_shipment": 0,
+  "no_pod": 0,
+  "no_prior_on_hand": 16,
+  "repeated_report": 0,
+  "unreported_weeks": 0,
+  "unexplained": 0
+ },
+ "unexplained_by_customer": {}
+}

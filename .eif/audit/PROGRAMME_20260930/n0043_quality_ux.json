@@ -1,0 +1,1 @@
+{"node": "N-0043", "expected_revision": 6, "dim": "ux", "state": "pass", "evidence": "EV-N0043", "rationale": "Export sits with Find and Columns. It is enabled on the populated cover grid and disabled when roadmap has no rows."}

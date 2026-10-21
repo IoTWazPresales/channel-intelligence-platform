@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -25,3 +25,10 @@ class CustomerReportConfig(Base, TimestampMixin):
     overdue_threshold_days: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
     notes: Mapped[str | None] = mapped_column(String(512), nullable=True)
     feed_profile_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Warren 2026-10-19: replenishment is judged per customer. Empty means the defaults below.
+    replen_min_weeks_of_cover: Mapped[float | None] = mapped_column(Numeric(6, 2), nullable=True)
+    replen_target_weeks_of_cover: Mapped[float | None] = mapped_column(Numeric(6, 2), nullable=True)
+
+
+DEFAULT_REPLEN_MIN_WEEKS_OF_COVER = 4.0
+DEFAULT_REPLEN_TARGET_WEEKS_OF_COVER = 6.0

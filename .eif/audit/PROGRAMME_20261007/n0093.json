@@ -1,0 +1,24 @@
+{
+  "id": "N-0093",
+  "parent": null,
+  "title": "Pin saved reports to Overview",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": [
+    "ui",
+    "api"
+  ],
+  "risk": "R1",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": [],
+  "acceptance_criteria": [
+    "A saved report can be pinned or unpinned on Overview, per user",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

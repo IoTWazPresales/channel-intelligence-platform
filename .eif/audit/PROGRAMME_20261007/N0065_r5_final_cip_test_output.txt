@@ -1,0 +1,50 @@
+test files: 55 missing: []
+DATABASE_URL db = cip_test
+DATABASE_URL_SYNC db = cip_test
+current_database() = cip_test
+role = cip super = False bypassrls = False
+.....................................F.................................. [ 14%]
+........................................................................ [ 28%]
+........................................................................ [ 43%]
+........................................................................ [ 57%]
+........................................................................ [ 72%]
+........................................................................ [ 86%]
+..................................................................       [100%]
+================================== FAILURES ===================================
+_________________ test_current_pick_walks_the_index_in_order __________________
+
+lineage = (<sqlalchemy.engine.base.Connection object at 0x0000021BAFBAB110>, {'A': 'N0065L-A-80461a60', 'B': 'N0065L-B-80461a60'...L2': 6577, 'L3': 6578, ...}, 'shipment_evidence_observation': {'O1n': 6159, 'O1o': 6158, 'O2': 6160, 'O3': 6161, ...}})
+
+    def test_current_pick_walks_the_index_in_order(lineage) -> None:
+        """0027 (a): the pick's own query, planned under the function's own settings, is an
+        ordered index-only scan of ix_shipment_ev_obs_identity_latest with no Sort node."""
+        conn, lines, keys, fx = lineage
+        _require_0027(conn)
+        cfg, query = _pick_query(conn)
+    
+        def plan(with_function_config: bool) -> list[str]:
+            # cip_test is small, so the default costs already favour the index here. A high
+            # random_page_cost reproduces cip's choice (seq scan + sort) so that the function's
+            # own setting is what decides the plan (the control below proves the test bites).
+            sp = conn.begin_nested()
+            try:
+                conn.execute(text("select set_config('cip.product_lines', '*', true)"))
+                conn.execute(text("set local random_page_cost = 1000"))
+                for item in cfg if with_function_config else []:
+                    name, value = item.split("=", 1)
+                    conn.execute(text("select set_config(:n, :v, true)"), {"n": name, "v": value})
+                rows = [r[0] for r in conn.execute(text("explain (costs off) " + query)).all()]
+            finally:
+                sp.rollback()
+            return [ln.strip().removeprefix("->").strip() for ln in rows]
+    
+        control = plan(with_function_config=False)
+        assert any(n.startswith(("Sort", "Incremental Sort")) for n in control), control
+        nodes = plan(with_function_config=True)
+>       assert any(n.startswith(f"Index Only Scan using {INDEX}") for n in nodes), nodes
+E       AssertionError: ['Subquery Scan on c', 'Unique', 'Incremental Sort', 'Sort Key: o.line_identity_key, o.valid_from DESC NULLS LAST, o.i...Key: o.line_identity_key', 'Index Scan using ix_shipment_ev_obs_line_identity on shipment_evidence_observation o', ...]
+E       assert False
+E        +  where False = any(<generator object test_current_pick_walks_the_index_in_order.<locals>.<genexpr> at 0x0000021BAFC33220>)
+
+tests\test_shipment_evidence_lineage_rls_n0065_db.py:547: AssertionError
+1 failed, 497 passed in 396.82s (0:06:36)

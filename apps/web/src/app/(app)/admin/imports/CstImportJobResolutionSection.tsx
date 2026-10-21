@@ -54,6 +54,7 @@ import {
   type CstMappingState,
 } from './cstImportSteward.config';
 import { CST_IMPORT_ENGINE_CONFIG } from './cstImportSteward.engineConfig';
+import { importJobLoadReportQueryKey } from './ImportJobLoadReport';
 import { useCstCandidatesPage } from './useCstCandidatesPage';
 
 export type CstStewardRow = ImportStewardCandidateRowBase & {
@@ -212,6 +213,13 @@ export function CstImportJobResolutionSection({
     onInvalidateProp?.();
   }, [importJobId, onInvalidateProp, qc]);
 
+  /** After a map, ignore or load: refresh the candidates, the plan (no stale Ready count) and the load report. */
+  const refreshAfterSteward = useCallback(() => {
+    onInvalidate();
+    void qc.invalidateQueries({ queryKey: importJobLoadReportQueryKey(importJobId) });
+    void qc.refetchQueries({ queryKey: CST_IMPORT_ENGINE_CONFIG.resolutionSuggestionsQueryKeyPrefix(importJobId) });
+  }, [importJobId, onInvalidate, qc]);
+
   const candidatesPage = useCstCandidatesPage(importJobId, activeTab, statusParam);
 
   const mappingStateQuery = useQuery({
@@ -227,17 +235,11 @@ export function CstImportJobResolutionSection({
     queryKey: ['imports', 'cst-candidate-counts', importJobId],
     enabled: importJobId > 0,
     queryFn: async ({ signal }) => {
-      const [productAll, productOpen, locationAll, locationOpen] = await Promise.all([
-        apiGet<{ total: number }>(
-          `/api/v1/imports/jobs/${importJobId}/cst-candidates?skip=0&limit=1&entity=product&status=all`,
-          { signal }
-        ),
+      // As the shipment tab counts: a tab counts the tokens still open (mapped and ignored ones drop
+      // out), so the number matches the list under it.
+      const [productOpen, locationOpen] = await Promise.all([
         apiGet<{ total: number }>(
           `/api/v1/imports/jobs/${importJobId}/cst-candidates?skip=0&limit=1&entity=product&status=open`,
-          { signal }
-        ),
-        apiGet<{ total: number }>(
-          `/api/v1/imports/jobs/${importJobId}/cst-candidates?skip=0&limit=1&entity=location&status=all`,
           { signal }
         ),
         apiGet<{ total: number }>(
@@ -246,8 +248,8 @@ export function CstImportJobResolutionSection({
         ),
       ]);
       const counts: CstEntityTabCounts = {
-        product: { total: productAll.total, needsWork: productOpen.total },
-        location: { total: locationAll.total, needsWork: locationOpen.total },
+        product: { total: productOpen.total, needsWork: productOpen.total },
+        location: { total: locationOpen.total, needsWork: locationOpen.total },
       };
       return counts;
     },
@@ -296,7 +298,7 @@ export function CstImportJobResolutionSection({
   const plan = useStewardResolutionPlan({
     importJobId,
     candidates: filteredRows,
-    onInvalidate,
+    onInvalidate: refreshAfterSteward,
     setSelectedIds,
     setPlanApplySummary,
     config: CST_IMPORT_ENGINE_CONFIG,
@@ -308,7 +310,7 @@ export function CstImportJobResolutionSection({
     selectedIds,
     setSelectedIds,
     setBulkMode,
-    onInvalidate,
+    onInvalidate: refreshAfterSteward,
     onPlanRefresh: () => plan.refreshSuggestions(),
     onEvictResolvedCandidates: plan.evictResolvedCandidates,
     onShrinkPlanScope: plan.shrinkPlanScope,
@@ -392,9 +394,9 @@ export function CstImportJobResolutionSection({
         entity_id: args.entityId,
       }),
     onSuccess: () => {
-      setActionMsg('Mapped candidate. Re-run process if staging counts look stale.');
+      setActionMsg('Mapped. Its rows are matched and load when you apply.');
       setActionFeedback(null);
-      onInvalidate();
+      refreshAfterSteward();
     },
     onError: (e) => setActionFeedback({ message: safeDisplayError(e), severity: 'error' }),
   });
@@ -405,7 +407,7 @@ export function CstImportJobResolutionSection({
     onSuccess: () => {
       setActionMsg('Ignored candidate.');
       setActionFeedback(null);
-      onInvalidate();
+      refreshAfterSteward();
     },
     onError: (e) => setActionFeedback({ message: safeDisplayError(e), severity: 'error' }),
   });

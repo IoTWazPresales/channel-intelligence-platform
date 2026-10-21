@@ -1,0 +1,1 @@
+{"dim": "content", "state": "pass", "evidence": {"path": ".eif/audit/PROGRAMME_20261011/N0075_INVITE.md", "summary": "Invite sent. Local accounts kept."}, "rationale": "The mail is a set-password link. It does not contain a password.", "node": "N-0075", "expected_revision": 21}

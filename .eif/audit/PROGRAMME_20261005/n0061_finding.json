@@ -1,0 +1,1 @@
+{"node": "N-0061", "code": "DOES_NOT_FIT", "note": "load_promotion_line_evidence swallows Exception into the same Not listed / No competitor price shape and does not log. A failed read is indistinguishable from an honest empty. Observability stays blocked. Not fixed this session."}

@@ -1,0 +1,3 @@
+{"ts":"2026-10-12T00:15:19Z","kind":"programme.event","event":"node.lease.acquire","seq":2120}
+{"ts":"2026-10-12T00:15:48Z","kind":"programme.event","event":"node.stage_note","seq":2121}
+{"ts":"2026-10-12T00:16:15Z","kind":"programme.event","event":"node.blocker.open","seq":2122}

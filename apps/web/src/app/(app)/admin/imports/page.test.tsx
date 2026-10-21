@@ -11,6 +11,7 @@ import AdminImportsPage from './page';
 let searchString = '';
 
 const mockState = vi.hoisted(() => ({
+  cstJobDetail: null as any,
   templates: [
     {
       id: 10,
@@ -195,6 +196,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
         return [];
       }
       if (url === '/api/v1/imports/jobs/42') return mockState.jobDetail;
+      if (url === '/api/v1/imports/jobs/77') return mockState.cstJobDetail;
       if (url === '/api/v1/imports/jobs/42/rows') return mockState.jobRows;
       if (url === '/api/v1/imports/jobs/50') return mockState.hlValidateJobDetail;
       if (url === '/api/v1/imports/jobs/50/rows') return mockState.hlValidateJobRows;
@@ -205,6 +207,14 @@ vi.mock('@/lib/api', async (importOriginal) => {
       if (url.match(/\/api\/v1\/imports\/jobs\/\d+$/)) return null;
       return [];
     }),
+    apiPost: vi.fn(async (url: string) => {
+      if (url === '/api/v1/imports/jobs/77/cst-load') {
+        // Broker unavailable in the test: apply ran inline, the job is already loaded.
+        mockState.cstJobDetail = { ...mockState.cstJobDetail, stage: 'loaded', status: 'completed' };
+        return { async: false, task_id: null, status: 'completed', stage: 'loaded' };
+      }
+      return {};
+    }),
     apiUrl: (path: string) => path,
     readFetchError: async () => 'error',
     safeDisplayError: () => 'error',
@@ -212,6 +222,33 @@ vi.mock('@/lib/api', async (importOriginal) => {
 });
 
 vi.mock('@/lib/queryError', () => ({ toQueryError: () => null }));
+
+vi.mock('./CstImportJobResolutionSection', () => ({
+  CstImportJobResolutionSection: () => <div data-testid="cst-steward-stub" />,
+}));
+
+vi.mock('./ImportJobLoadReport', () => ({
+  ImportJobLoadReport: () => <div data-testid="load-report-stub" />,
+  importJobLoadReportQueryKey: (id: number) => ['import-job-load-report', id],
+  useImportJobLoadReport: () => ({
+    data: {
+      job_id: 77,
+      status: 'completed',
+      display_status: 'Loaded',
+      report: {
+        kind: 'customer_sell_through',
+        rows_read: 12210,
+        rows_loaded: 7650,
+        rows_partly_loaded: 0,
+        rows_not_loaded: 4560,
+        identical_copies_counted_once: 0,
+        not_loaded: [{ reason: 'product_not_matched', label: 'Product not matched', rows: 4560, partly_loaded: false }],
+        files_not_read: [],
+        files_excluded: 0,
+      },
+    },
+  }),
+}));
 
 describe('AdminImportsPage deferred template visibility', () => {
   function renderPage() {
@@ -1377,5 +1414,121 @@ describe('AdminImportsPage customer sell-through (N-0111: a reporting customer, 
     expect(await screen.findByTestId('cst-bulk-upload-open')).toHaveTextContent('Upload sell-through files');
     expect(screen.getByTestId('cst-bulk-upload-open')).toBeEnabled();
     expect(screen.queryByRole('button', { name: /Choose file$/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('AdminImportsPage customer sell-through finishes like the other importers (N-0111)', () => {
+  const CST_TEMPLATE = {
+    id: 15,
+    slug: 'customer_sell_through',
+    display_name: 'Customer sell-through',
+    description: 'Retailer sell-through reports',
+    requires_provider: true,
+    accepted_file_types: ['.csv', '.xlsx'],
+    required_fields: [],
+    optional_fields: [],
+    pipeline_ready: true,
+    destructive_apply_requires_confirm: false,
+  };
+
+  function renderPage() {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    return {
+      user: userEvent.setup(),
+      ...renderWithProviders(
+        <QueryClientProvider client={qc}>
+          <AdminImportsPage />
+        </QueryClientProvider>
+      ),
+    };
+  }
+
+  beforeEach(() => {
+    mockRouterReplace.mockReset();
+    mockState.templates.push(CST_TEMPLATE);
+    mockState.cstJobDetail = {
+      id: 77,
+      template_slug: 'customer_sell_through',
+      file_name: 'amazon.xlsx',
+      stage: 'validated',
+      status: 'completed_with_errors',
+      import_mode: 'validate',
+      staged_metadata: { customer_id: 299, cst_file_periods: [] },
+    };
+    searchString = 'job=77';
+  });
+
+  afterEach(() => {
+    mockState.templates = mockState.templates.filter((t) => t.slug !== 'customer_sell_through');
+    searchString = '';
+  });
+
+  it('opens a stewarded job on Validate & resolve, then Apply loads it and shows it loaded', async () => {
+    const { user } = renderPage();
+    const resolve = await screen.findByTestId('cst-step-resolve');
+    expect(within(resolve).getByTestId('cst-steward-stub')).toBeInTheDocument();
+    expect(screen.getAllByText('Validate & resolve').length).toBeGreaterThan(0);
+
+    await user.click(screen.getByTestId('cst-continue-apply'));
+    const apply = await screen.findByTestId('cst-step-apply');
+    await user.click(within(apply).getByTestId('cst-apply-import'));
+
+    expect(await screen.findByTestId('cst-import-loaded-success')).toBeInTheDocument();
+  });
+
+  it('a loaded job opens on Apply with its result', async () => {
+    mockState.cstJobDetail = { ...mockState.cstJobDetail, stage: 'loaded', status: 'completed' };
+    renderPage();
+    const done = await screen.findByTestId('cst-import-loaded-success');
+    expect(within(done).getByText(/7,650 of 12,210 rows were written to customer sell-through/)).toBeInTheDocument();
+    expect(within(done).getByText(/Not loaded: 4,560 rows, product not matched or ignored in the steward/)).toBeInTheDocument();
+    // As shipment: once loaded there is no second Apply on this step.
+    expect(screen.queryByTestId('cst-apply-import')).not.toBeInTheDocument();
+  });
+});
+
+describe('AdminImportsPage customer sell-through Apply runs in the worker (import-parity rule 2)', () => {
+  const CST_TEMPLATE = {
+    id: 15,
+    slug: 'customer_sell_through',
+    display_name: 'Customer sell-through',
+    description: 'Retailer sell-through reports',
+    requires_provider: true,
+    accepted_file_types: ['.csv', '.xlsx'],
+    required_fields: [],
+    optional_fields: [],
+    pipeline_ready: true,
+    destructive_apply_requires_confirm: false,
+  };
+
+  beforeEach(() => {
+    mockRouterReplace.mockReset();
+    mockState.templates.push(CST_TEMPLATE);
+    searchString = 'job=77';
+  });
+
+  afterEach(() => {
+    mockState.templates = mockState.templates.filter((t) => t.slug !== 'customer_sell_through');
+    searchString = '';
+  });
+
+  it('shows progress while the worker applies and keeps Apply disabled', async () => {
+    mockState.cstJobDetail = {
+      id: 77,
+      template_slug: 'customer_sell_through',
+      file_name: 'amazon.xlsx',
+      stage: 'loaded',
+      status: 'running',
+      import_mode: 'apply',
+      staged_metadata: { customer_id: 299, cst_file_periods: [] },
+    };
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithProviders(
+      <QueryClientProvider client={qc}>
+        <AdminImportsPage />
+      </QueryClientProvider>
+    );
+    expect(await screen.findByTestId('cst-apply-running')).toBeInTheDocument();
+    expect(screen.getByTestId('cst-apply-import')).toBeDisabled();
   });
 });

@@ -1,0 +1,23 @@
+{
+  "id": "N-0107",
+  "parent": null,
+  "title": "Supervisor recognises a network that blocks the tunnel port and stops churning the quick tunnel",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": ["infra"],
+  "risk": "R1",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": ["N-0073"],
+  "acceptance_criteria": [
+    "Observed 2026-10-08: after sleep on a network that blocks outbound TCP 7844, the supervisor restarted cloudflared every 10 minutes (6 launches), changing the public link each time while no tunnel could connect",
+    "When the cloudflared log shows repeated 'dial tcp ...:7844: i/o timeout' with no registered connection, the supervisor marks the tunnel 'network blocks tunnel port (7844)' on status.json and link.html and stops restarting it; it retries with a long back-off (e.g. 30 minutes) and resumes normal checks as soon as a connection registers",
+    "No other component behaviour changes; parse check 0 errors; unit test of the detector on recorded log lines",
+    "Measured live on the blocking network: no restarts while blocked; status shows the reason"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "auto"
+}

@@ -1,0 +1,1 @@
+{"stage_note": "Repair built (21ea19a5, 26ee1b93, b5a4a342, fa305ce6): Date header, rows-not-loaded report, week 52 -> 1 roll, same-invoice distributor supersede (0042 on cip), stock positions recomputed on cip. Item 5 (un-merge) stopped for Warren: not traceable. Verification is a different run.", "node": "N-0111", "expected_revision": 30}

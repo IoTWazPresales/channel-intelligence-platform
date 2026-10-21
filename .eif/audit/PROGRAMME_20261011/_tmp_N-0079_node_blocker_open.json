@@ -1,0 +1,1 @@
+{"id": "BL-N0079-MIGRATE", "type": "environment", "ref": "apps/api/.env", "note": "DATABASE_URL_SYNC_MIGRATE is unset. Postgres login from the older clone scripts was rejected. Clone and cip upgrade were not run.", "node": "N-0079", "expected_revision": 8}

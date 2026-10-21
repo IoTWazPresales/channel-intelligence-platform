@@ -1,0 +1,9 @@
+{
+  "id": "BLN-N0061",
+  "provenance": "implementation-observation",
+  "tree_hash": "7a8edef95b68d75ea255f52b57a7c98b3918238c",
+  "path": ".eif/audit/PROGRAMME_20261005/N-0061.md",
+  "observed_behavior": "Dirty tree at 7a8edef9. Create promotion plan, seed case 309, period 2025Q2, Propose from evidence, 3 lines. Evidence is pinned and starts Not listed · No competitor price. Create draft was not clicked. Competitor price stays an honest empty. window_start is still absent on cip.",
+  "latent_capabilities": [],
+  "preservation": {}
+}

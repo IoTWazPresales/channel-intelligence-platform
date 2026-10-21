@@ -1,0 +1,1 @@
+{"node": "N-0110", "id": "BL-N0110-ONHAND", "expected_revision": 52, "note": "Resolved by D-0092 (Warren accepted 2026-10-15 as built: on-hand repeated with one value is kept once, different values are summed)."}

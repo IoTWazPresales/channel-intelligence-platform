@@ -1,0 +1,1 @@
+{"path": "apps/api/app/services/imports/import_load_report.py", "note": "N-0111 repair: rows read / loaded / not loaded by reason; 'Completed with rows not loaded (N)' (D-0108).", "provenance": "implementation-observation", "node": "N-0111", "expected_revision": 24}

@@ -1,0 +1,9 @@
+{
+  "current_database": "cip",
+  "transaction_read_only": "on",
+  "open_lines_multi": 46.0,
+  "shipped_rows": 92.0,
+  "covered_by_sum": 46.0,
+  "partial_if_one_twin_only": 0.0,
+  "units_if_one_twin_only": 0.0
+}

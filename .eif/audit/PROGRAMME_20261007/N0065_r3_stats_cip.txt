@@ -1,0 +1,10 @@
+current_database() = cip | read_only = on
+('dim_product', 0, 36, None, None, 18168)
+('fact_demand_forecast', 0, 0, None, None, 38625)
+('fact_inbound_shipment', 15255, 26, None, datetime.datetime(2026, 9, 14, 9, 45, 32, 210415, tzinfo=zoneinfo.ZoneInfo(key='Africa/Johannesburg')), 15252)
+('fact_inventory_distributor', 0, 106, None, None, 47411)
+('fact_sales_sellout', 0, 138, None, None, 35608)
+('shipment_evidence_line', 87191, 597, None, datetime.datetime(2026, 9, 14, 9, 45, 24, 293621, tzinfo=zoneinfo.ZoneInfo(key='Africa/Johannesburg')), 87181)
+('shipment_evidence_observation', 87171, 225, None, datetime.datetime(2026, 9, 21, 18, 0, 22, 369, tzinfo=zoneinfo.ZoneInfo(key='Africa/Johannesburg')), 87170)
+('weeks_of_cover_observation', 192395, 0, None, datetime.datetime(2026, 9, 14, 9, 46, 27, 105584, tzinfo=zoneinfo.ZoneInfo(key='Africa/Johannesburg')), 192395)
+tenant_id stats: []

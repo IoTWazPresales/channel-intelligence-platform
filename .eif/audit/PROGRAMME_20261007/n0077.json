@@ -1,0 +1,25 @@
+{
+  "id": "N-0077",
+  "parent": null,
+  "title": "Competitor listing monitoring and price position: competitor listings captured in CIP, external scraper feed ingest, suggested matches (spec section 9.9)",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": ["api", "ui", "schema"],
+  "risk": "R2",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": ["N-0073", "N-0061"],
+  "acceptance_criteria": [
+    "Warren 2026-10-07: CIP must make a side competitor-price scraper unnecessary",
+    "Competitor product pages are registered and polled by the same capture scheduler as our listings, with polite per-marketplace limits",
+    "An ingest endpoint and file template accept an external scraper's competitor price points into fact_competitor_price, keyed to approved our-SKU to competitor-SKU matches",
+    "Suggested competitor matches are offered for steward approval; nothing auto-approves",
+    "Competition screen and the promotion line show the latest competitor price and our price position; empty means no rows, not zero",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

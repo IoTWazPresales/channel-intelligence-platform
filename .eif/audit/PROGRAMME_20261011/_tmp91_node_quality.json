@@ -1,0 +1,1 @@
+{"dim": "content", "state": "pass", "evidence": {"path": ".eif/audit/PROGRAMME_20261011/N0091_ACCEPT.md", "summary": "Live receipt showed cancelled-candidate lines. Timeline was not scrolled into view."}, "rationale": "The signal label is Cancelled candidate.", "node": "N-0091", "expected_revision": 11}

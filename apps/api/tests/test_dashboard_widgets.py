@@ -98,3 +98,26 @@ def test_validate_widget_refuses_unknown_visual():
         )
     assert ei.value.status_code == 400
     assert "visual" in str(ei.value.detail).lower()
+
+
+@pytest.mark.parametrize("visual", ["hbar", "stacked_bar", "pie", "donut"])
+def test_validate_widget_accepts_every_chart_the_builder_offers(visual):
+    """Matches migration 0046's check constraint and the endpoint Visual literal."""
+    v = validate_widget_query(
+        metric="cst_sellthrough_units",
+        grains=["customer"],
+        period_grain=None,
+        visual=visual,
+        tenant_id="default",
+    )
+    assert v.ok is True
+
+
+def test_widget_visual_whitelists_agree():
+    from typing import get_args
+
+    from app.api.v1.endpoints import dashboards, saved_reports
+    from app.services.dashboard_widgets import WIDGET_VISUALS
+
+    assert set(get_args(dashboards.Visual)) == set(WIDGET_VISUALS)
+    assert set(get_args(saved_reports.Visual)) == set(WIDGET_VISUALS)

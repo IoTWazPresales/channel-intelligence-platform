@@ -1,0 +1,1 @@
+{"node": "N-0071", "expected_revision": 40, "kind": "referent", "state": "pass", "evidence": ".eif/audit/PROGRAMME_20261007/N0071_VERIFY.md", "path": "apps/api/app/services/commercial_planner/lineup_case_suggested_pos.py"}

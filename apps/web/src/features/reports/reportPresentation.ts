@@ -27,6 +27,7 @@ export type SemanticMetric = {
   formula: string;
   allowed_grains: string[][];
   refuse_all?: boolean;
+  handler_backed?: boolean;
   refuse_reason?: string | null;
   owner_surface?: string | null;
   calendar_period?: boolean | null;
@@ -91,8 +92,8 @@ export function familyLabel(m: Pick<SemanticMetric, 'owner_surface'>): string {
   return FAMILY_LABEL[String(m.owner_surface ?? '')] ?? 'Other';
 }
 
-export function groupMetricsByFamily(metrics: SemanticMetric[]): { family: string; metrics: SemanticMetric[] }[] {
-  const by = new Map<string, SemanticMetric[]>();
+export function groupMetricsByFamily<M extends Pick<SemanticMetric, 'owner_surface'>>(metrics: M[]): { family: string; metrics: M[] }[] {
+  const by = new Map<string, M[]>();
   for (const m of metrics) {
     const f = familyLabel(m);
     by.set(f, [...(by.get(f) ?? []), m]);

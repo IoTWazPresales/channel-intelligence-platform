@@ -1,0 +1,1 @@
+{"node": "N-0095", "expected_revision": 14, "code": "DOES_NOT_FIT", "note": "N-0095: Compuspeed LTD (1152) and SYNTECH DISTRIBUTION (PTY) LTD (4145) are merged INTO OPEN_CHANNEL on cip. repair_open_channel_wrong_merge.py lists them and never undoes them; Warren to say whether those absorbs were intended."}

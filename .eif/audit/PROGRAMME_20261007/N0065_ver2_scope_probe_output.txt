@@ -1,0 +1,67 @@
+settings.cip_auth_mode = session
+current_database() = cip
+alembic = ['20261007_0025']
+role = cip super = False bypassrls = False
+functions = [('cip_product_line_editable', False, 's'), ('cip_product_line_visible', False, 's')]
+view reloptions = ['security_invoker=true']
+policy kinds = [('inline_0025', 'DELETE', 44), ('inline_0025', 'SELECT', 44), ('inline_0025', 'UPDATE', 44), ('line_fn', 'DELETE', 1), ('line_fn', 'INSERT', 45), ('line_fn', 'SELECT', 1), ('line_fn', 'UPDATE', 1)]
+grant rows = 0
+unset count of line NB (all visible) = 6848
+[non-admin viewer, no grant rows (router)] bound read=frozenset() edit=frozenset()
+  [non-admin viewer, no grant rows (router) async get_db] read='!' edit='!' dim_product=0 forecast=0 rows_not_NB=0 editable(fn)=0 shipment_evidence_current=2532
+  [non-admin viewer, no grant rows (router) sync SessionLocal] backend=49756 read='!' edit='!' dim_product=0 forecast=0 rows_not_NB=0 editable(fn)=0 shipment_evidence_current=2532
+  [non-admin viewer, no grant rows (router) sync after commit] read='!' edit='!' dim_product=0
+[non-admin viewer, no grant rows (router)] after request: read ctx=None
+[admin (router)] bound read=frozenset({'*'}) edit=frozenset({'*'})
+  [admin (router) async get_db] read='*' edit='*' dim_product=18177 forecast=38625 rows_not_NB=11329 editable(fn)=18177 shipment_evidence_current=15807
+  [admin (router) sync SessionLocal] backend=49756 read='*' edit='*' dim_product=18177 forecast=38625 rows_not_NB=11329 editable(fn)=18177 shipment_evidence_current=15807
+  [admin (router) sync after commit] read='*' edit='*' dim_product=18177
+[admin (router)] after request: read ctx=None
+[non-numeric id, admin role (router -> unset)] bound read=None edit=None
+  [non-numeric id, admin role (router -> unset) async get_db] read=None edit=None dim_product=18177 forecast=38625 rows_not_NB=11329 editable(fn)=18177 shipment_evidence_current=15807
+  [non-numeric id, admin role (router -> unset) sync SessionLocal] backend=49756 read='*' edit='*' dim_product=18177 forecast=38625 rows_not_NB=11329 editable(fn)=18177 shipment_evidence_current=15807
+  [non-numeric id, admin role (router -> unset) sync after commit] read='*' edit='*' dim_product=18177
+[non-numeric id, admin role (router -> unset)] after request: read ctx=None
+[non-admin NB read-only (helper)] bound read=frozenset({'NB'}) edit=frozenset()
+  [non-admin NB read-only (helper) sync SessionLocal] backend=49756 read='NB' edit='!' dim_product=6848 forecast=29187 rows_not_NB=0 editable(fn)=0 shipment_evidence_current=10225
+  [non-admin NB read-only (helper) sync after commit] read='NB' edit='!' dim_product=6848
+[non-admin NB read+edit (helper)] bound read=frozenset({'NB'}) edit=frozenset({'NB'})
+  [non-admin NB read+edit (helper) sync SessionLocal] backend=49756 read='NB' edit='NB' dim_product=6848 forecast=29187 rows_not_NB=0 editable(fn)=6848 shipment_evidence_current=10225
+  [non-admin NB read+edit (helper) sync after commit] read='NB' edit='NB' dim_product=6848
+  [unscoped worker (no contextvars) sync SessionLocal] backend=49756 read='*' edit='*' dim_product=18177 forecast=38625 rows_not_NB=11329 editable(fn)=18177 shipment_evidence_current=15807
+  [unscoped worker (no contextvars) sync after commit] read='*' edit='*' dim_product=18177
+  [NB read-only EXPLAIN UPDATE dim_product]
+      Update on dim_product
+      Filter: CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NU
+      Filter: (CASE WHEN (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.editable_product_lines'::text, true) = '!'::text) THEN false ELSE (((product_li
+  [NB read-only EXPLAIN UPDATE fact_sales_sellout]
+      Update on fact_sales_sellout
+      Filter: ((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((product_id)::bigint = (hashed SubPlan 5).col1)))
+      SubPlan 5
+      Filter: (CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT N
+      Filter: (((product_id IS NULL) OR (COALESCE(current_setting('cip.editable_product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((product_id)::bigint = (hashed SubPlan 3).col1))) AND ((product_id IS NULL) OR (COALESCE(cur
+      SubPlan 3
+      Filter: (CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT N
+      SubPlan 4
+      Filter: (CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT N
+      SubPlan 1
+      Filter: (CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT N
+      SubPlan 2
+      Filter: (CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT N
+[pool] sync pool status: Pool size: 5  Connections in pool: 1 Current Overflow: -4 Current Checked out connections: 0
+  [scoped NB read-only request] backend=49756 in-tx read='NB' edit='!' dim_product=6848
+  [raw Core connection, unscoped] backend=49756 same_backend=True read='' edit='' dim_product=18177
+  [unscoped worker SessionLocal] backend=49756 in-tx read='*' edit='*' dim_product=18177
+  [scoped non-admin no rows] backend=49756 in-tx read='!' edit='!' dim_product=0
+  [scoped NB again] backend=49756 in-tx read='NB' edit='!' dim_product=6848
+  [scoped admin] backend=49756 in-tx read='*' edit='*' dim_product=18177
+  [unscoped worker again] backend=49756 in-tx read='*' edit='*' dim_product=18177
+[pool] sync pool status: Pool size: 5  Connections in pool: 1 Current Overflow: -4 Current Checked out connections: 0
+
+SUMMARY
+  nonadmin_empty   async dim=0 sync dim=0 sync after-commit dim=0 forecast a/s=0/0 editable a/s=0/0 view a/s=2532/2532
+  admin            async dim=18177 sync dim=18177 sync after-commit dim=18177 forecast a/s=38625/38625 editable a/s=18177/18177 view a/s=15807/15807
+  worker_forged    async dim=18177 sync dim=18177 sync after-commit dim=18177 forecast a/s=38625/38625 editable a/s=18177/18177 view a/s=15807/15807
+  one_line_ro      sync dim=6848 after-commit dim=6848 forecast=29187 other-line=0 editable=0 view=10225
+  one_line_rw      sync dim=6848 after-commit dim=6848 forecast=29187 other-line=0 editable=6848 view=10225
+  unscoped         sync dim=18177 after-commit dim=18177 forecast=38625 other-line=11329 editable=18177 view=15807

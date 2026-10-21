@@ -1,0 +1,157 @@
+======================================================================
+N-0065 round 5 apply UPGRADE 2026-10-09 14:19:45
+[app]   current_database() = cip | role = cip super=False bypassrls=False | alembic = ['20261009_0026']
+[app]   pick proconfig = ['search_path=pg_catalog, public'] | four-table policy md5 = 0933b362704b3b553abc66f85931371a
+[owner] current_database() = cip | role = postgres super=True bypassrls=True | alembic = ['20261009_0026'] | 18.3
+preflight OK. No app code changed this round: the API is not restarted.
+--- BEFORE (0026): rows per scope as the app role, got/expected (rule 0026); view best of 3
+  worker (unset)         view=15807/15807 sev_observation=87171/87171 sev_line=87191/87191 inbound=15255/15255 cl_line=3454/3454 cst_listing_seed=281/281 customer_listing=218/218 hist_line=34/34
+                         view 1262 ms | setting_after=None enable_sort/incremental_after=on/on | pick: ->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (never executed)
+  admin '*'              view=15807/15807 sev_observation=87171/87171 sev_line=87191/87191 inbound=15255/15255 cl_line=3454/3454 cst_listing_seed=281/281 customer_listing=218/218 hist_line=34/34
+                         view 839 ms | setting_after='*' enable_sort/incremental_after=on/on | pick: ->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (never executed)
+  planner NB             view=8758/8758 sev_observation=47314/47314 sev_line=47314/47314 inbound=8307/8307 cl_line=2371/2371 cst_listing_seed=194/194 customer_listing=152/152 hist_line=15/15
+                         view 2298 ms | setting_after='NB' enable_sort/incremental_after=on/on | pick: ->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (actual time=1704.443..1709.982 rows=15807.00 loops=1)
+  steward NB             view=9253/9253 sev_observation=49057/49057 sev_line=49077/49077 inbound=8851/8851 cl_line=2371/2371 cst_listing_seed=194/194 customer_listing=152/152 hist_line=15/15
+                         view 3615 ms | setting_after='NB' enable_sort/incremental_after=on/on | pick: ->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (actual time=1624.177..1628.398 rows=15807.00 loops=1)
+  planner NB,NR          view=12016/12016 sev_observation=65148/65148 sev_line=65148/65148 inbound=11470/11470 cl_line=3131/3131 cst_listing_seed=246/246 customer_listing=188/188 hist_line=15/15
+                         view 4652 ms | setting_after='NB,NR' enable_sort/incremental_after=on/on | pick: ->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (actual time=1905.384..1923.491 rows=15807.00 loops=1)
+  planner no lines '!'   view=0/0 sev_observation=0/0 sev_line=0/0 inbound=0/0 cl_line=61/61 cst_listing_seed=103/103 customer_listing=91/91 hist_line=15/15
+                         view 740 ms | setting_after='!' enable_sort/incremental_after=on/on | pick: ->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (never executed)
+  steward no lines '!'   view=495/495 sev_observation=1743/1743 sev_line=1763/1763 inbound=544/544 cl_line=61/61 cst_listing_seed=103/103 customer_listing=91/91 hist_line=15/15
+                         view 3162 ms | setting_after='!' enable_sort/incremental_after=on/on | pick: ->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (actual time=2061.894..2066.706 rows=15807.00 loops=1)
+before: mismatches against the 0026 rule = 0
+--- BEFORE (0026): helper timings as the app role under NB (count(*), best of 3)
+  cip_sev_current_observation_ids    rows= 15807 2069 ms
+  cip_sev_observation_lineage        rows=  5876 375 ms
+  cip_sev_line_lineage               rows=  5896 627 ms
+  cip_inbound_shipment_lineage       rows=   546 387 ms
+--- BEFORE (0026): nested plan of the pick (auto_explain, role cip, read_only=on, NB)
+    Query Text: SELECT c.id::bigint, NULL::bigint
+    Subquery Scan on c  (cost=15987.19..16383.11 rows=13834 width=16) (actual rows=15807.00 loops=1)
+      ->  Unique  (cost=15987.19..16210.19 rows=13834 width=53) (actual rows=15807.00 loops=1)
+            ->  Sort  (cost=15987.19..16098.69 rows=44600 width=53) (actual rows=85544.00 loops=1)
+                  Sort Key: o.line_identity_key, o.valid_from DESC NULLS LAST, o.id DESC
+                  Sort Method: external merge  Disk: 5536kB
+                  ->  Seq Scan on shipment_evidence_observation o  (cost=3948.73..12543.00 rows=44600 width=53) (actual rows=85544.00 loops=1)
+                          ->  Seq Scan on dim_product p  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+                          ->  Function Scan on cip_sev_observation_lineage m  (cost=1965.11..1982.61 rows=500 width=8) (never executed)
+                                  ->  Seq Scan on dim_product p_1  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+heavy-path capture before_0027 run 1 (unset, '*', NB; READ ONLY, statement_timeout 60 s) ...
+  database: cip
+  unset 200   70667ms stmts= 58 rows=None commits=0 top=6024.5ms /api/v1/plan-vs-executed  []
+  unset 200    8239ms stmts= 14 rows=None commits=0 top=5484.1ms /api/v1/channel-ops/summary  []
+  unset 200   10532ms stmts=  9 rows=2481 commits=0 top=6207.9ms /api/v1/channel-ops/cover-distribution  []
+  unset 200    9053ms stmts=  9 rows=None commits=0 top=6065.3ms /api/v1/brief/signals  []
+  unset 200    3637ms stmts=  7 rows=200 commits=0 top=1147.2ms /api/v1/lineup/net-requirement  []
+  star  200   71508ms stmts= 60 rows=None commits=0 top=6293.9ms /api/v1/plan-vs-executed  []
+  star  200    7290ms stmts= 16 rows=None commits=0 top=5764.5ms /api/v1/channel-ops/summary  []
+  star  200    7693ms stmts= 11 rows=2481 commits=0 top=4763.5ms /api/v1/channel-ops/cover-distribution  []
+  star  200    6604ms stmts= 11 rows=None commits=0 top=4994.3ms /api/v1/brief/signals  []
+  star  200    3765ms stmts=  9 rows=200 commits=0 top=1145.2ms /api/v1/lineup/net-requirement  []
+  NB    200   88958ms stmts= 54 rows=None commits=0 top=8344.3ms /api/v1/plan-vs-executed  []
+  NB    200    3492ms stmts= 16 rows=None commits=0 top=2397.5ms /api/v1/channel-ops/summary  []
+  NB    200   10646ms stmts= 11 rows=1099 commits=0 top=4176.9ms /api/v1/channel-ops/cover-distribution  []
+  NB    200    6243ms stmts= 11 rows=None commits=0 top=2536.6ms /api/v1/brief/signals  []
+  NB    200    4317ms stmts=  9 rows=200 commits=0 top=1802.1ms /api/v1/lineup/net-requirement  []
+heavy-path capture before_0027 run 2 (unset, '*', NB; READ ONLY, statement_timeout 60 s) ...
+  database: cip
+  unset 200   85276ms stmts= 58 rows=None commits=0 top=7029.3ms /api/v1/plan-vs-executed  []
+  unset 200    9304ms stmts= 14 rows=None commits=0 top=6563.5ms /api/v1/channel-ops/summary  []
+  unset 200    8138ms stmts=  9 rows=2481 commits=0 top=4586.7ms /api/v1/channel-ops/cover-distribution  []
+  unset 200    4595ms stmts=  9 rows=None commits=0 top=3023.5ms /api/v1/brief/signals  []
+  unset 200    2445ms stmts=  7 rows=200 commits=0 top=1075.9ms /api/v1/lineup/net-requirement  []
+  star  200   79221ms stmts= 60 rows=None commits=0 top=5607.8ms /api/v1/plan-vs-executed  []
+  star  200    6820ms stmts= 16 rows=None commits=0 top=5267.4ms /api/v1/channel-ops/summary  []
+  star  200    6947ms stmts= 11 rows=2481 commits=0 top=3962.1ms /api/v1/channel-ops/cover-distribution  []
+  star  200    7279ms stmts= 11 rows=None commits=0 top=4346.1ms /api/v1/brief/signals  []
+  star  200    3538ms stmts=  9 rows=200 commits=0 top=855.5ms /api/v1/lineup/net-requirement  []
+  NB    200  108934ms stmts= 54 rows=None commits=0 top=10202.1ms /api/v1/plan-vs-executed  []
+  NB    200    5034ms stmts= 16 rows=None commits=0 top=2743.8ms /api/v1/channel-ops/summary  []
+  NB    200   13290ms stmts= 11 rows=1099 commits=0 top=3090.9ms /api/v1/channel-ops/cover-distribution  []
+  NB    200    5862ms stmts= 11 rows=None commits=0 top=2398.0ms /api/v1/brief/signals  []
+  NB    200    4259ms stmts=  9 rows=200 commits=0 top=1683.2ms /api/v1/lineup/net-requirement  []
+14:35:29 alembic upgrade 20261009_0027 ...
+  done in 4.3 s
+[owner] current_database() = cip | alembic now = ['20261009_0027']
+  pick proconfig: ['search_path=pg_catalog, public', 'enable_sort=off', 'enable_incremental_sort=off']
+  commercial_lineup_line policies (cmd, using has steward rule, check has steward rule): [('DELETE', True, False), ('INSERT', False, False), ('SELECT', True, False), ('UPDATE', True, False)]
+  cst_listing_seed policies (cmd, using has steward rule, check has steward rule): [('DELETE', True, False), ('INSERT', False, False), ('SELECT', True, False), ('UPDATE', True, False)]
+  customer_listing policies (cmd, using has steward rule, check has steward rule): [('DELETE', True, False), ('INSERT', False, False), ('SELECT', True, False), ('UPDATE', True, False)]
+  historical_lineup_import_line policies (cmd, using has steward rule, check has steward rule): [('DELETE', True, False), ('INSERT', False, False), ('SELECT', True, False), ('UPDATE', True, False)]
+  md5 of the four tables' policy texts: cb949aa426a1d6c53c8f9f919ccddf9d
+  view uses current pick: True
+--- AFTER (0027): rows per scope as the app role, got/expected (rule 0027); view best of 3
+  worker (unset)         view=15807/15807 sev_observation=87171/87171 sev_line=87191/87191 inbound=15255/15255 cl_line=3454/3454 cst_listing_seed=281/281 customer_listing=218/218 hist_line=34/34
+                         view 1034 ms | setting_after=None enable_sort/incremental_after=on/on | pick: ->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (never executed)
+  admin '*'              view=15807/15807 sev_observation=87171/87171 sev_line=87191/87191 inbound=15255/15255 cl_line=3454/3454 cst_listing_seed=281/281 customer_listing=218/218 hist_line=34/34
+                         view 858 ms | setting_after='*' enable_sort/incremental_after=on/on | pick: ->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (never executed)
+  planner NB             view=8758/8758 sev_observation=47314/47314 sev_line=47314/47314 inbound=8307/8307 cl_line=2310/2310 cst_listing_seed=91/91 customer_listing=61/61 hist_line=0/0
+                         view 1243 ms | setting_after='NB' enable_sort/incremental_after=on/on | pick: ->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (actual time=326.831..332.153 rows=15807.00 loops=1)
+  steward NB             view=9253/9253 sev_observation=49057/49057 sev_line=49077/49077 inbound=8851/8851 cl_line=2371/2371 cst_listing_seed=194/194 customer_listing=152/152 hist_line=15/15
+                         view 1870 ms | setting_after='NB' enable_sort/incremental_after=on/on | pick: ->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (actual time=384.129..392.769 rows=15807.00 loops=1)
+  planner NB,NR          view=12016/12016 sev_observation=65148/65148 sev_line=65148/65148 inbound=11470/11470 cl_line=3070/3070 cst_listing_seed=143/143 customer_listing=97/97 hist_line=0/0
+                         view 2242 ms | setting_after='NB,NR' enable_sort/incremental_after=on/on | pick: ->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (actual time=264.664..274.901 rows=15807.00 loops=1)
+  planner no lines '!'   view=0/0 sev_observation=0/0 sev_line=0/0 inbound=0/0 cl_line=0/0 cst_listing_seed=0/0 customer_listing=0/0 hist_line=0/0
+                         view 1201 ms | setting_after='!' enable_sort/incremental_after=on/on | pick: ->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (never executed)
+  steward no lines '!'   view=495/495 sev_observation=1743/1743 sev_line=1763/1763 inbound=544/544 cl_line=61/61 cst_listing_seed=103/103 customer_listing=91/91 hist_line=15/15
+                         view 1627 ms | setting_after='!' enable_sort/incremental_after=on/on | pick: ->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (actual time=372.112..378.586 rows=15807.00 loops=1)
+after 0027: every per-scope cell matches the decision
+--- AFTER (0027): helper timings as the app role under NB (count(*), best of 3)
+  cip_sev_current_observation_ids    rows= 15807 249 ms
+  cip_sev_observation_lineage        rows=  5876 653 ms
+  cip_sev_line_lineage               rows=  5896 718 ms
+  cip_inbound_shipment_lineage       rows=   546 850 ms
+--- AFTER (0027): nested plan of the pick (auto_explain, role cip, read_only=on, NB)
+    Query Text: SELECT c.id::bigint, NULL::bigint
+    Subquery Scan on c  (cost=3949.15..16847.85 rows=13834 width=16) (actual rows=15807.00 loops=1)
+      ->  Unique  (cost=3949.15..16674.92 rows=13834 width=53) (actual rows=15807.00 loops=1)
+            ->  Index Only Scan using ix_shipment_ev_obs_identity_latest on shipment_evidence_observation o  (cost=3949.15..16563.42 rows=44600 width=53) (actual rows=85544.0
+                  Heap Fetches: 19901
+                    ->  Seq Scan on dim_product p  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+                    ->  Function Scan on cip_sev_observation_lineage m  (cost=1965.11..1982.61 rows=500 width=8) (never executed)
+                            ->  Seq Scan on dim_product p_1  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+heavy-path capture after_0027 run 1 (unset, '*', NB; READ ONLY, statement_timeout 60 s) ...
+  database: cip
+  unset 200  101593ms stmts= 58 rows=None commits=0 top=7533.2ms /api/v1/plan-vs-executed  []
+  unset 200    9496ms stmts= 14 rows=None commits=0 top=7152.2ms /api/v1/channel-ops/summary  []
+  unset 200    7805ms stmts=  9 rows=2481 commits=0 top=4695.7ms /api/v1/channel-ops/cover-distribution  []
+  unset 200    8717ms stmts=  9 rows=None commits=0 top=5810.2ms /api/v1/brief/signals  []
+  unset 200    3022ms stmts=  7 rows=200 commits=0 top=1013.0ms /api/v1/lineup/net-requirement  []
+  star  200   81376ms stmts= 60 rows=None commits=0 top=6834.5ms /api/v1/plan-vs-executed  []
+  star  200   18649ms stmts= 16 rows=None commits=0 top=16245.7ms /api/v1/channel-ops/summary  []
+  star  200   15018ms stmts= 11 rows=2481 commits=0 top=9299.1ms /api/v1/channel-ops/cover-distribution  []
+  star  200   14675ms stmts= 11 rows=None commits=0 top=10546.9ms /api/v1/brief/signals  []
+  star  200    3468ms stmts=  9 rows=200 commits=0 top=943.5ms /api/v1/lineup/net-requirement  []
+  NB    200   64205ms stmts= 54 rows=None commits=0 top=6308.9ms /api/v1/plan-vs-executed  []
+  NB    200    3650ms stmts= 16 rows=None commits=0 top=2153.5ms /api/v1/channel-ops/summary  []
+  NB    200    6053ms stmts= 11 rows=1099 commits=0 top=1769.3ms /api/v1/channel-ops/cover-distribution  []
+  NB    200    5563ms stmts= 11 rows=None commits=0 top=2172.8ms /api/v1/brief/signals  []
+  NB    200    7929ms stmts=  9 rows=200 commits=0 top=3215.7ms /api/v1/lineup/net-requirement  []
+heavy-path capture after_0027 run 2 (unset, '*', NB; READ ONLY, statement_timeout 60 s) ...
+  database: cip
+  unset 200   94941ms stmts= 58 rows=None commits=0 top=11472.5ms /api/v1/plan-vs-executed  []
+  unset 200   11921ms stmts= 14 rows=None commits=0 top=8608.0ms /api/v1/channel-ops/summary  []
+  unset 200   10502ms stmts=  9 rows=2481 commits=0 top=6275.8ms /api/v1/channel-ops/cover-distribution  []
+  unset 200   10816ms stmts=  9 rows=None commits=0 top=7142.7ms /api/v1/brief/signals  []
+  unset 200    5190ms stmts=  7 rows=200 commits=0 top=1187.0ms /api/v1/lineup/net-requirement  []
+  star  200   72238ms stmts= 60 rows=None commits=0 top=5884.6ms /api/v1/plan-vs-executed  []
+  star  200    4487ms stmts= 16 rows=None commits=0 top=3325.3ms /api/v1/channel-ops/summary  []
+  star  200    5439ms stmts= 11 rows=2481 commits=0 top=2908.2ms /api/v1/channel-ops/cover-distribution  []
+  star  200    6359ms stmts= 11 rows=None commits=0 top=4388.1ms /api/v1/brief/signals  []
+  star  200    3530ms stmts=  9 rows=200 commits=0 top=880.7ms /api/v1/lineup/net-requirement  []
+  NB    200   53774ms stmts= 54 rows=None commits=0 top=5789.2ms /api/v1/plan-vs-executed  []
+  NB    200    4086ms stmts= 16 rows=None commits=0 top=2608.3ms /api/v1/channel-ops/summary  []
+  NB    200    6422ms stmts= 11 rows=1099 commits=0 top=1875.7ms /api/v1/channel-ops/cover-distribution  []
+  NB    200    4867ms stmts= 11 rows=None commits=0 top=2231.7ms /api/v1/brief/signals  []
+  NB    200    4477ms stmts=  9 rows=200 commits=0 top=2172.5ms /api/v1/lineup/net-requirement  []
+[restart worker] 14:51:37 before: pid=37264
+Asked the supervisor to restart 'worker'. Watch link.html or status.json.
+[restart worker] 14:52:05 state=starting pid=43760
+[restart worker] 14:52:21 state=starting pid=43760
+[restart worker] 14:52:35 state=healthy pid=43760
+[restart worker] healthy.
+  worker  healthy    pid=43760  adopted=False launches=5 last_healthy=2026-10-09T14:52:24 wrapper pid 43760; worker=1 beat=1
+  api     healthy    pid=27356  adopted=False launches=3 last_healthy=2026-10-09T14:52:24 /health 200; pid 27356
+  tunnel  blocked    pid=41292  adopted=False launches=30 last_healthy=2026-10-09T08:19:43 network blocks tunnel port 7844 (outbound TCP); not restarting. Blocked since 2026-10-09T08:44:17; next fresh attempt 2026-10-09T15:18:18; /ready 503; public /login 530, /auth/me 530; pid 41292
+  14:52:38 local api /health=200 api /auth/me=401 web /login=200 web proxy /auth/me=401
+finished 14:52:40 - mismatches: 0

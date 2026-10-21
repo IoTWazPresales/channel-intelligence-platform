@@ -1,0 +1,21 @@
+{
+  "id": "N-0084",
+  "parent": null,
+  "title": "Price elasticity: what price a product would move at (spec section 9.8), data-gated on settled claims",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": ["api", "ui"],
+  "risk": "R2",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": ["N-0063"],
+  "acceptance_criteria": [
+    "Starts only when at least 5 to 10 settled cases carry claim evidence across at least 3 customers (cip claim rows are 0 on 2026-10-07)",
+    "Every estimate shows the cases it came from; no estimate is shown without them"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

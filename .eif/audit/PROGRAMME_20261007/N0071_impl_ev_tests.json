@@ -1,0 +1,1 @@
+{"node": "N-0071", "expected_revision": 7, "path": "apps/api/tests/test_shipment_strict_pair.py", "note": "N-0071 tests: 19 SQLite in-memory tests, no cip; rule edge cases and one per changed reader; mutant control n0071_mutant_plugin.py makes the 5 reader tests fail.", "provenance": "implementation-observation", "tree_hash": "9c28bdcf9bc7e4bcdf366cc70ef923168aecdd82"}

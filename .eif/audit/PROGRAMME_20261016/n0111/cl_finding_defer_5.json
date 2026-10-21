@@ -1,0 +1,1 @@
+{"note": "N-0111: confirming the year of an already-uploaded job is API-only (POST /api/v1/imports/jobs/{id}/cst-confirm-year); no screen button.", "code": "DOES_NOT_FIT", "node": "N-0111", "expected_revision": 5}

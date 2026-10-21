@@ -1,0 +1,1 @@
+{"kind": "referent", "state": "pass", "evidence": ".eif/audit/PROGRAMME_20261011/N0109_ACCEPT.md", "path": "apps/web/src/features/workbench-ui/HeadlineFigure.tsx", "node": "N-0109", "expected_revision": 25}

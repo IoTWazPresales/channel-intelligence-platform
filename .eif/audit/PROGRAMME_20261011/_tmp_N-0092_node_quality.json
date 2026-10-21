@@ -1,0 +1,1 @@
+{"dim": "content", "state": "pass", "evidence": {"path": ".eif/audit/PROGRAMME_20261011/N0092_ACCEPT.md", "summary": "Audit log page and append-only trail."}, "rationale": "The leaf is Audit log. The rows name the action, not a secret.", "node": "N-0092", "expected_revision": 14}

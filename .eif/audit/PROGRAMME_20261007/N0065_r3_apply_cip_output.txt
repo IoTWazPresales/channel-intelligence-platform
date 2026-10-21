@@ -1,0 +1,71 @@
+======================================================================
+N-0065 apply UPGRADE 2026-10-08 20:49:22
+STOPPED: the owner URL does not name database cip
+======================================================================
+N-0065 apply UPGRADE 2026-10-08 21:15:34
+[owner] current_database() = cip | role = postgres super=True bypassrls=True | alembic = ['20261006_0024']
+[app]   current_database() = cip | role = cip super=False bypassrls=False
+[restart api] before: pid=25352
+Asked the supervisor to restart 'api'. Watch link.html or status.json.
+[restart api] 21:16:07 state=starting pid=28016
+[restart api] 21:16:23 state=starting pid=28016
+[restart api] 21:16:39 state=starting pid=28016
+[restart api] 21:16:52 state=starting pid=28016
+[restart api] 21:17:04 state=starting pid=28016
+[restart api] 21:17:16 state=healthy pid=28016
+[restart api] healthy. 21:17:16 local api /health=200 api /auth/me=401 web /login=200 web proxy /auth/me=401
+alembic upgrade 20261007_0025 ...
+  done in 2.5 s
+[owner] current_database() = cip | alembic now = ['20261007_0025']
+  select policies: [('inline_0025', 44), ('line_fn', 1)]
+  shipment_evidence_current reloptions: ['security_invoker=true']
+  functions (name, security definer): [('cip_product_id_editable', True), ('cip_product_id_visible', True), ('cip_product_line_editable', False), ('cip_product_line_visible', False)]
+  [owner] fact_sales_sellout: total=35582 null_product=0 orphan_product=0
+  [owner] fact_inventory_distributor: total=47411 null_product=0 orphan_product=0
+  [owner] weeks_of_cover_observation: total=194349 null_product=0 orphan_product=0
+parity spot check as app role (one line = 'NB'):
+  scope='unset'  setting=None     dim_product                  got=  18177 expected=  18177 OK
+  scope='unset'  setting=None     fact_sales_sellout           got=  35582 expected=  35582 OK
+  scope='unset'  setting=None     fact_inventory_distributor   got=  47411 expected=  47411 OK
+  scope='unset'  setting=None     weeks_of_cover_observation   got= 194349 expected= 194349 OK
+  scope='unset'  shipment_evidence_current rows=15807
+  scope='*'      setting='*'      dim_product                  got=  18177 expected=  18177 OK
+  scope='*'      setting='*'      fact_sales_sellout           got=  35582 expected=  35582 OK
+  scope='*'      setting='*'      fact_inventory_distributor   got=  47411 expected=  47411 OK
+  scope='*'      setting='*'      weeks_of_cover_observation   got= 194349 expected= 194349 OK
+  scope='*'      shipment_evidence_current rows=15807
+  scope='NB'     setting='NB'     dim_product                  got=   6848 expected=   6848 OK
+  scope='NB'     setting='NB'     fact_sales_sellout           got=  15995 expected=  15995 OK
+  scope='NB'     setting='NB'     fact_inventory_distributor   got=  21047 expected=  21047 OK
+  scope='NB'     setting='NB'     weeks_of_cover_observation   got=  87899 expected=  87899 OK
+  scope='NB'     shipment_evidence_current rows=10225
+  scope='!'      setting='!'      dim_product                  got=      0 expected=      0 OK
+  scope='!'      setting='!'      fact_sales_sellout           got=      0 expected=      0 OK
+  scope='!'      setting='!'      fact_inventory_distributor   got=      0 expected=      0 OK
+  scope='!'      setting='!'      weeks_of_cover_observation   got=      0 expected=      0 OK
+  scope='!'      shipment_evidence_current rows=2532
+parity spot check: all cells match
+timings (unset, '*', NB) for the heavy paths ...
+  database: cip
+  unset 200    8264ms stmts=  9 rows=None commits=0 top=4689.9ms /api/v1/brief/signals  []
+  unset 200    7713ms stmts=  9 rows=2481 commits=0 top=4613.3ms /api/v1/channel-ops/cover-distribution  []
+  unset 200    2561ms stmts=  9 rows=None commits=0 top=999.8ms /api/v1/supply/overview  []
+  unset 200    3670ms stmts=  7 rows=200 commits=0 top=1269.4ms /api/v1/lineup/net-requirement  []
+  star  200    7361ms stmts= 11 rows=None commits=0 top=5015.9ms /api/v1/brief/signals  []
+  star  200    8106ms stmts= 11 rows=2481 commits=0 top=5175.9ms /api/v1/channel-ops/cover-distribution  []
+  star  200    2429ms stmts= 11 rows=None commits=0 top=998.0ms /api/v1/supply/overview  []
+  star  200    3355ms stmts=  9 rows=200 commits=0 top=1345.5ms /api/v1/lineup/net-requirement  []
+  NB    200    4618ms stmts= 11 rows=None commits=0 top=2306.8ms /api/v1/brief/signals  []
+  NB    200    5274ms stmts= 11 rows=1099 commits=0 top=2423.0ms /api/v1/channel-ops/cover-distribution  []
+  NB    200    2319ms stmts= 11 rows=None commits=0 top=920.2ms /api/v1/supply/overview  []
+  NB    200    3078ms stmts=  9 rows=200 commits=0 top=1186.6ms /api/v1/lineup/net-requirement  []
+[restart worker] before: pid=44720
+Asked the supervisor to restart 'worker'. Watch link.html or status.json.
+[restart worker] 21:19:45 state=starting pid=47680
+[restart worker] 21:20:00 state=starting pid=47680
+[restart worker] 21:20:13 state=healthy pid=47680
+[restart worker] healthy. 21:20:12 local api /health=200 api /auth/me=401 web /login=200 web proxy /auth/me=401
+  worker  healthy    pid=47680  adopted=False launches=3 last_healthy=2026-10-08T21:20:08 wrapper pid 47680; worker=1 beat=1
+  api     healthy    pid=28016  adopted=False launches=2 last_healthy=2026-10-08T21:20:08 /health 200; pid 28016
+  21:20:16 local api /health=200 api /auth/me=401 web /login=200 web proxy /auth/me=401
+finished 21:20:17 - mismatches: 0

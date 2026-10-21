@@ -1,0 +1,24 @@
+{
+  "evidence_model": "shipment_evidence_current",
+  "current_database": "cip",
+  "transaction_read_only": "on",
+  "po_linked_by_state": {
+    "open_order": {
+      "rows": 404,
+      "units": 25509.0
+    },
+    "shipped": {
+      "rows": 14137,
+      "units": 1303321.0
+    }
+  },
+  "po_linked_open_covered_by_twin": {
+    "rows": 110,
+    "units": 6810.0
+  },
+  "po_linked_open_partial": {
+    "rows": 0,
+    "stored_units": 0.0,
+    "remainder": 0.0
+  }
+}

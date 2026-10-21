@@ -1,0 +1,1 @@
+{"dim": "content", "state": "pass", "evidence": {"path": ".eif/audit/PROGRAMME_20260929/n0041/MATCH.md", "summary": "The label is Find. Shipment search keeps its own placeholder because it queries shipment lines, not the fact-grid Find."}, "node": "N-0041", "expected_revision": 7}

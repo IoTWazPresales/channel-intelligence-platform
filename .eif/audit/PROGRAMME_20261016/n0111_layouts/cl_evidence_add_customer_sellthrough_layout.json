@@ -1,0 +1,1 @@
+{"path": "apps/api/app/models/customer_sellthrough_layout.py", "note": "N-0111 layouts: the saved column layout (one per customer and header set).", "provenance": "implementation-observation", "node": "N-0111", "expected_revision": 48}

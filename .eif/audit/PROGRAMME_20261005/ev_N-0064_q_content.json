@@ -1,0 +1,1 @@
+{"node": "N-0064", "expected_revision": 14, "dim": "content", "state": "pass", "evidence": "EV-N0064", "rationale": "Copy says product line, 6 closed quarters to show, 8 to change a buy plan. Buy-plan writers now keep only applies_to_buy_plan and use the caller period, which is the full history when no period is passed."}

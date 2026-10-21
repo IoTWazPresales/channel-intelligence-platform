@@ -1,0 +1,23 @@
+{
+  "id": "N-0078",
+  "parent": null,
+  "title": "SEO and listing-quality monitoring on our listings (was a listing-capture v0 non-goal; requested by Warren 2026-10-07)",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": ["api", "ui"],
+  "risk": "R2",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": ["N-0073", "N-0076"],
+  "acceptance_criteria": [
+    "The checks are the ones Warren names (decision): for example title, image count, description, key attributes, search position for named terms",
+    "Each check is read from the stored listing snapshot; a re-parse needs no re-fetch",
+    "A failing check is a finding on the listing with its evidence, not a score with hidden weights",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

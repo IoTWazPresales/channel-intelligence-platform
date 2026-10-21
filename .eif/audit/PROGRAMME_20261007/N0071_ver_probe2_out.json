@@ -1,0 +1,7 @@
+{
+  "today_utc": "2026-10-07",
+  "current_database": "cip",
+  "transaction_read_only": "on",
+  "overdue_without_rule": 375,
+  "overdue_with_rule_shipping_kpi": 364
+}

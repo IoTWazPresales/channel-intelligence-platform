@@ -1,0 +1,1 @@
+{"path": "apps/api/app/services/cpor/fx_rate.py", "note": "N-0096 (4c25474e): the FX date is the approval date, always (D-0093); a stored rate up to 4 days older is accepted when the fetch fails; case_rate_date no longer reads the window start.", "provenance": "implementation-observation", "node": "N-0096", "expected_revision": 3}

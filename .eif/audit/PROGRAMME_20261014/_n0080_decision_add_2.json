@@ -1,0 +1,1 @@
+{"scope": "N-0080", "origin": "implementation", "status": "proposed", "statement": "CPOR case margin derives DAP from the line SRP, VAT and dealer margin with the customer rebate and distributor margin from trade terms, divided by the case ROE (USD). A missing term is used as 0 and flagged on the line; a SKU cost not in USD gives no margin and is flagged, never converted."}

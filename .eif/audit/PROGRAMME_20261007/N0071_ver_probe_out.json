@@ -1,0 +1,86 @@
+{
+  "current_database": "cip",
+  "transaction_read_only": "on",
+  "rls_product_lines_setting": null,
+  "fact_rows": 15255,
+  "line_state_counts": {
+    "open_order": 1775,
+    "shipped": 13480
+  },
+  "null_tenant_rows": 0,
+  "null_line_state_rows": 0,
+  "independent_join_ids": 552,
+  "independent_join_md5": "4a4aef0453e6f1ad4c6e78d3e4df2a57",
+  "independent_join_s": 47.42,
+  "helper_twin_ids": 552,
+  "helper_twin_md5": "4a4aef0453e6f1ad4c6e78d3e4df2a57",
+  "helper_twin_s": 35.78,
+  "sets_equal": true,
+  "in_indep_not_helper": 0,
+  "in_helper_not_indep": 0,
+  "exclude_filter_s": 0.57,
+  "exclude_filter_dropped": 552,
+  "exclude_dropped_equals_indep": true,
+  "dropped_line_states": {
+    "open_order": 552
+  },
+  "indep_rows_units_amount": [
+    552,
+    42956.0,
+    27833737.92
+  ],
+  "blank_key_open_rows": 0,
+  "max_updated_at": "2026-09-21 18:15:13.551273+02:00",
+  "max_created_at": "2026-09-21 18:15:13.551273+02:00",
+  "rows_updated_since_20261007_0000_sast": 0,
+  "rows_updated_since_20261007_1300_sast": 0,
+  "twin_rows_updated_since_20261007_0000_sast": 0,
+  "pg_stat_cumulative": {
+    "n_tup_upd": 609,
+    "n_tup_del": 6337,
+    "n_tup_ins": 6563,
+    "n_tup_hot_upd": 0,
+    "last_autovacuum": "2026-09-14 09:45:30.467369+02:00",
+    "last_autoanalyze": "2026-09-14 09:45:32.210415+02:00"
+  },
+  "now_db": "2026-10-07 16:35:04.083866+02:00",
+  "check5_supply_overview_sql": {
+    "eta_past_no_pod_all": 1218,
+    "eta_past_no_pod_twins": 532,
+    "overdue_commercial_twins": 11,
+    "supply_open_lines_equiv": 1561,
+    "brief_not_received_equiv": 1561,
+    "null_status_rows": 0
+  },
+  "tenants": [
+    "default"
+  ],
+  "reader_paths": {
+    "current_database": "cip",
+    "transaction_read_only": "on",
+    "summary_s": 2.07,
+    "summary_total_lines": 14703,
+    "summary_open_lines_skipped_shipped_twin": 552,
+    "summary_by_line_state": {
+      "open_order": 1223,
+      "shipped": 13480
+    },
+    "grid_total_all_s": 11.57,
+    "grid_total_all": 14703,
+    "grid_total_by_state": {
+      "open_order": 1223,
+      "shipped": 13480
+    },
+    "brief_dashboard_not_received": 1561,
+    "supply_overview_keys": {
+      "open_lines": 1561,
+      "open_units": 114496.0,
+      "pipeline_lines": 1223,
+      "pipeline_units": 84914.0,
+      "shipped_lines": 338,
+      "eta_past_no_pod_lines": 1218,
+      "overdue_commercial_lines": 375,
+      "data_unavailable": false
+    }
+  }
+}

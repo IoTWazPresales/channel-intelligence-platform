@@ -1,0 +1,64 @@
+........................................................................ [  3%]
+........................................................................ [  6%]
+........................................................................ [  9%]
+........................................................................ [ 13%]
+........................................................................ [ 16%]
+........................................................................ [ 19%]
+........................................................................ [ 23%]
+........................................................................ [ 26%]
+...............s........................................................ [ 29%]
+...............................................................ssssss... [ 33%]
+........................................................................ [ 36%]
+........................................................................ [ 39%]
+........................................................................ [ 43%]
+........................................................................ [ 46%]
+........................................................................ [ 49%]
+...................................................s.................... [ 53%]
+........................................................................ [ 56%]
+........................................................................ [ 59%]
+.........ss............................................................. [ 63%]
+.....ss...........ssssssssF.FF.......................................... [ 66%]
+................................................................s..s.... [ 69%]
+........................................................................ [ 73%]
+........................................................................ [ 76%]
+........................................................................ [ 79%]
+........................................................................ [ 83%]
+...s.................................................................... [ 86%]
+............................................................s........... [ 89%]
+.........................s....s...ss..............F.s................... [ 92%]
+............................ss.......................................... [ 96%]
+........................................................................ [ 99%]
+........                                                                 [100%]
+================================== FAILURES ===================================
+C:\Users\warren_eliason\channel-intelligence-platform\apps\api\tests\test_lineup_distributor_as_customer_remediation.py:23: assert None is not None
+C:\Users\warren_eliason\channel-intelligence-platform\apps\api\tests\test_lineup_distributor_as_customer_remediation.py:75: AssertionError: expected syntech lines
+C:\Users\warren_eliason\channel-intelligence-platform\apps\api\tests\test_lineup_distributor_as_customer_remediation.py:98: assert 0 >= 1
+C:\Users\warren_eliason\channel-intelligence-platform\apps\api\tests\test_shipment_resolved_entities.py:69: assert 1 == 10
+============================== warnings summary ===============================
+tests\test_data_integrity_audit.py:92
+  C:\Users\warren_eliason\channel-intelligence-platform\apps\api\tests\test_data_integrity_audit.py:92: PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.integration
+
+tests\test_lineup_case_supersession_delete.py:27
+  C:\Users\warren_eliason\channel-intelligence-platform\apps\api\tests\test_lineup_case_supersession_delete.py:27: PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.integration
+
+tests\test_lineup_case_supersession_delete.py:78
+  C:\Users\warren_eliason\channel-intelligence-platform\apps\api\tests\test_lineup_case_supersession_delete.py:78: PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.integration
+
+tests/test_distributors_contract.py::test_distributor_create_and_patch_contract_uses_phase1_field_names
+  c:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py:2274: UnsupportedFieldAttributeWarning: The 'alias' attribute with value 'code' was provided to the `Field()` function, which has no effect in the context it was used. 'alias' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+    warnings.warn(
+
+tests/test_distributors_contract.py::test_distributor_create_and_patch_contract_uses_phase1_field_names
+  c:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py:2274: UnsupportedFieldAttributeWarning: The 'alias' attribute with value 'name' was provided to the `Field()` function, which has no effect in the context it was used. 'alias' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_lineup_distributor_as_customer_remediation.py::test_preview_backlog_125_126_shape[asyncio]
+FAILED tests/test_lineup_distributor_as_customer_remediation.py::test_syntech_lines_are_oc_plus_syntech_dist[asyncio]
+FAILED tests/test_lineup_distributor_as_customer_remediation.py::test_smd_left_unresolved[asyncio]
+FAILED tests/test_shipment_resolved_entities.py::test_apply_resolved_entities_syncs_stamped_ids
+4 failed, 2133 passed, 31 skipped, 5 warnings in 64.29s (0:01:04)

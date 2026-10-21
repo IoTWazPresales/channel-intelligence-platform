@@ -1,0 +1,1 @@
+{"note": "N-0111 repair: the week 52 -> 1 year roll reads row-level week labels (a Week column). A wide file with one column per week (W51, W52, W1 headers) still takes one year for every column; month labels (Dec -> Jan) do not roll.", "code": "DOES_NOT_FIT", "node": "N-0111", "expected_revision": 24}

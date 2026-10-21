@@ -1,0 +1,1 @@
+{"dim": "content", "state": "pass", "evidence": {"path": "apps/web/src/features/promotions-funding/PlanWorkspace.tsx", "summary": "Dialog and basis wording reviewed in source and asserted in vitest; not rendered."}, "rationale": "Dialog and basis wording reviewed in source and asserted in vitest; not rendered.", "node": "N-0083", "expected_revision": 10}

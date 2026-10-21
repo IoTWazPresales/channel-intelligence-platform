@@ -1,0 +1,15 @@
+{'n_tables': 45, 'definer_bypasses_rls': False, 'cells_0024': 1215, 'mismatches_0024': 0, 'cells_0025': 1215, 'mismatches_0025': 0, 'cells_0026': 1215, 'mismatches_0026': 0, 'cells_0027': 1215, 'mismatches_0027': 0}
+cross_0025_0026: 45 cells; tables ['fact_inbound_shipment', 'shipment_evidence_line', 'shipment_evidence_observation']
+   labels: ["edit r='!' e='!'", "edit r='!' e='!' role=planner", "edit r='!' e='A'", "edit r='*' e='A'", "edit r='A' e='!'", "edit r='A,B' e='A'", "edit r='A,B' e='A' role=planner", "edit r='A,B' e='A,B'", "read '!'", "read '!' role=planner", "read 'A'", "read 'A' role=planner", "read 'A,B'", "read 'A,B' role=viewer", "read 'NOPE'"]
+cross_0026_0027: 60 cells; tables ['commercial_lineup_line', 'cst_listing_seed', 'customer_listing', 'historical_lineup_import_line']
+   labels: ["edit r='!' e='!'", "edit r='!' e='!' role=planner", "edit r='!' e='A'", "edit r='*' e='A'", "edit r='A' e='!'", "edit r='A,B' e='A'", "edit r='A,B' e='A' role=planner", "edit r='A,B' e='A,B'", "read '!'", "read '!' role=planner", "read 'A'", "read 'A' role=planner", "read 'A,B'", "read 'A,B' role=viewer", "read 'NOPE'"]
+view_counts_0026 {'read None': 3, "read ''": 3, "read '!'": 0, "read '*'": 3, "read 'A'": 0, "read 'A,B'": 0, "read 'NOPE'": 0, "read '!' role=steward": 2, "read 'A' role=steward": 2, "read 'A' role=planner": 0, "read '*' role=admin": 3, "read '!' role=planner": 0, "read 'A,B' role=viewer": 0}
+view_counts_0027 {'read None': 3, "read ''": 3, "read '!'": 0, "read '*'": 3, "read 'A'": 0, "read 'A,B'": 0, "read 'NOPE'": 0, "read '!' role=steward": 2, "read 'A' role=steward": 2, "read 'A' role=planner": 0, "read '*' role=admin": 3, "read '!' role=planner": 0, "read 'A,B' role=viewer": 0}
+view_reloptions_0027 ['security_invoker=true']
+pick_config_0026 ['search_path=pg_catalog, public']
+pick_config_0027 ['search_path=pg_catalog, public', 'enable_sort=off']
+cross 0024/0025: 354 designed: 90
+0027 commercial_lineup_line: {'read None': 14, "read ''": 14, "read '!'": 0, "read '*'": 14, "read 'A'": 2, "read 'A,B'": 4, "read 'NOPE'": 0, "read '!' role=steward": 1, "read 'A' role=steward": 3, "read 'A' role=planner": 2, "read '*' role=admin": 14, "read '!' role=planner": 0, "read 'A,B' role=viewer": 4}
+0027 cst_listing_seed: {'read None': 8, "read ''": 8, "read '!'": 0, "read '*'": 8, "read 'A'": 2, "read 'A,B'": 4, "read 'NOPE'": 0, "read '!' role=steward": 1, "read 'A' role=steward": 3, "read 'A' role=planner": 2, "read '*' role=admin": 8, "read '!' role=planner": 0, "read 'A,B' role=viewer": 4}
+0027 customer_listing: {'read None': 8, "read ''": 8, "read '!'": 0, "read '*'": 8, "read 'A'": 2, "read 'A,B'": 4, "read 'NOPE'": 0, "read '!' role=steward": 1, "read 'A' role=steward": 3, "read 'A' role=planner": 2, "read '*' role=admin": 8, "read '!' role=planner": 0, "read 'A,B' role=viewer": 4}
+0027 historical_lineup_import_line: {'read None': 64, "read ''": 64, "read '!'": 0, "read '*'": 64, "read 'A'": 2, "read 'A,B'": 4, "read 'NOPE'": 0, "read '!' role=steward": 25, "read 'A' role=steward": 27, "read 'A' role=planner": 2, "read '*' role=admin": 64, "read '!' role=planner": 0, "read 'A,B' role=viewer": 4}

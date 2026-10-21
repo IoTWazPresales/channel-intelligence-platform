@@ -1,0 +1,22 @@
+{
+  "id": "N-0083",
+  "parent": null,
+  "title": "FX rate table and ROE governance: daily rates actually stored, case ROE drawn from the table (spec section 9.4)",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": ["api", "ui", "schema"],
+  "risk": "R2",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": ["N-0073", "N-0006"],
+  "acceptance_criteria": [
+    "The FX poller writes fx_daily_rate on cip (today it cannot: role cip is not the table owner)",
+    "A case ROE is chosen from the stored rate for its date or is an explicit, audited manual override",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

@@ -1,0 +1,1 @@
+{"node": "N-0055", "expected_revision": 5, "to": "design", "stage_note": "api_router binds request_tenant_id. ORM do_orm_execute adds tenant_id equality for the 24 tenant-owned classes. The closure value is part of the statement cache key."}

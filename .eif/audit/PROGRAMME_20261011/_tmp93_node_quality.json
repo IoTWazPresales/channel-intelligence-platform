@@ -1,0 +1,1 @@
+{"dim": "content", "state": "pass", "evidence": {"path": ".eif/audit/PROGRAMME_20261011/N0093_ACCEPT.md", "summary": "Pin control visible. Constraint test passed. Pin was not clicked."}, "rationale": "The control says Pin to Overview. The empty list says nothing is pinned.", "node": "N-0093", "expected_revision": 11}

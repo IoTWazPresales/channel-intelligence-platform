@@ -1,0 +1,1 @@
+{"path": "apps/api/tests/test_cpor_settle_confirm_clone.py", "note": "N-0096: the settle test runs on cip_test and seeds and deletes its own cases; no longer rewrites os.environ.", "provenance": "implementation-observation", "node": "N-0096", "expected_revision": 3}

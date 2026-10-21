@@ -1,0 +1,5 @@
+{"ts":"2026-10-18T22:12:08Z","kind":"programme.event","event":"node.lease.acquire","seq":2629}
+{"ts":"2026-10-18T22:12:45Z","kind":"programme.event","event":"decision.add","seq":2630}
+{"ts":"2026-10-18T22:13:19Z","kind":"programme.event","event":"decision.add","seq":2631}
+{"ts":"2026-10-18T22:13:53Z","kind":"programme.event","event":"decision.add","seq":2632}
+{"ts":"2026-10-18T22:14:25Z","kind":"programme.event","event":"decision.add","seq":2633}

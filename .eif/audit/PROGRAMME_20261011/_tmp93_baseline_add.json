@@ -1,0 +1,1 @@
+{"id": "BLN-N0093", "provenance": "implementation-observation", "tree_hash": "e7aac28fe91114aac3a627c799b90ec36b29e360", "path": "apps/api/app/models/saved_reports.py", "observed_behavior": "Saved reports had no per-user pin on Overview.", "latent_capabilities": ["saved-reports"], "preservation": {"saved-reports": "kept: pin is an extra row, the report itself is unchanged"}}

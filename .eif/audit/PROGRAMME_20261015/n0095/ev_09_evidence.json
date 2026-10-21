@@ -1,0 +1,1 @@
+{"node": "N-0095", "expected_revision": 8, "path": "apps/api/tests/test_customer_merge_keeper_db.py", "note": "N-0095: keeper change preview writes nothing, confirm moves rows/aliases/contacts and redirects other merged records, swap back restores, refusals, OPEN_CHANNEL, past-merges evidence.", "provenance": "implementation-observation"}

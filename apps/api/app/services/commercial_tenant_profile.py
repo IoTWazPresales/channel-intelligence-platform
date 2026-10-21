@@ -160,12 +160,20 @@ TENANT_PROFILE_OVERRIDE_KEYS: tuple[str, ...] = (
     "woc_min_velocity_days",
     "stock_gap_highlight_units",
     "week_calendar",
+    "business_calendar",
+    "vat_rate_pct",
+    "sales_value_vat_basis",
 )
 
 # N-0111: every customer and distributor reports Monday-Sunday weeks (Warren 2026-10-16).
 # The tenant default week calendar; a customer's feed profile ``week_calendar`` still overrides it.
 # ``none`` means no calendar is known (a week keeps its number and year, no start date).
 DEFAULT_WEEK_CALENDAR = "monday_sunday"
+
+# Warren 2026-10-19: sales value on sell-through screens is units x the reported sell price,
+# shown excluding or including VAT (screens can switch). Rows carry the basis the customer reports in.
+DEFAULT_VAT_RATE_PCT = 0.15
+DEFAULT_SALES_VALUE_VAT_BASIS = "ex_vat"
 
 # N-0110: customer stock gap highlight, absolute units (Warren 2026-10-12). Editable.
 DEFAULT_STOCK_GAP_HIGHLIGHT_UNITS = 1.0
@@ -185,6 +193,7 @@ _TENANT_PROFILE_VALID_VALUES: dict[str, frozenset[str]] = {
     "pm_attribution_mode": frozenset({"business_line", "person_field", "none"}),
     "line_identifier_preference": frozenset({"sku", "sales_model", "both"}),
     "week_calendar": frozenset({"monday_sunday", "none"}),
+    "sales_value_vat_basis": frozenset({"ex_vat", "inc_vat"}),
     "reporting_cadence": frozenset(
         {
             "weekly_monday",
@@ -681,6 +690,12 @@ def load_tenant_profile_overrides(tenant_id: str = "default") -> dict[str, Any]:
             except ValueError:
                 continue
             continue
+        if key == "business_calendar":
+            from app.services.business_calendar import normalize_calendar_config
+
+            if isinstance(value, dict):
+                out[key] = normalize_calendar_config(value, strict=False)
+            continue
         if key == "semantic_overlay":
             try:
                 normalized = _normalize_semantic_overlay(value, strict=False)
@@ -722,6 +737,26 @@ def save_tenant_profile_overrides(tenant_id: str, overrides: dict[str, object]) 
             if raw is None or raw == "" or raw == []:
                 continue
             clean[key] = _normalize_lineup_export_columns(raw)
+            continue
+        if key == "business_calendar":
+            if raw is None or raw == "" or raw == {}:
+                continue
+            from app.services.business_calendar import normalize_calendar_config
+
+            clean[key] = normalize_calendar_config(raw, strict=True)
+            continue
+        if key == "vat_rate_pct":
+            if raw is None or str(raw).strip() == "":
+                continue
+            try:
+                rate = float(str(raw).strip())
+            except (TypeError, ValueError) as exc:
+                raise ValueError("vat_rate_pct: a rate such as 0.15 is required") from exc
+            if rate > 1:
+                rate = rate / 100.0
+            if not (0 <= rate < 1):
+                raise ValueError("vat_rate_pct: must be between 0 and 1 (0.15 for 15%)")
+            clean[key] = rate
             continue
         if key == "woc_min_velocity_days":
             if raw is None or str(raw).strip() == "":
@@ -796,6 +831,9 @@ def profile_snapshot(tenant_id: str = "default") -> dict[str, object]:
         "woc_min_velocity_days": woc_min_velocity_days(tenant_id),
         "stock_gap_highlight_units": stock_gap_highlight_units(tenant_id),
         "week_calendar": week_calendar(tenant_id),
+        "business_calendar": business_calendar_config(tenant_id),
+        "vat_rate_pct": vat_rate_pct(tenant_id),
+        "sales_value_vat_basis": sales_value_vat_basis(tenant_id),
         "reporting_timezone": REPORTING_TIMEZONE,
     }
 
@@ -811,6 +849,27 @@ def stock_gap_highlight_units(tenant_id: str = "default") -> float:
     if not (0 < units <= STOCK_GAP_HIGHLIGHT_UNITS_MAX):
         return DEFAULT_STOCK_GAP_HIGHLIGHT_UNITS
     return units
+
+
+def business_calendar_config(tenant_id: str = "default") -> dict[str, Any]:
+    """The tenant's business calendar setting (see ``app.services.business_calendar``)."""
+    from app.services.business_calendar import normalize_calendar_config
+
+    return normalize_calendar_config(load_tenant_profile_overrides(tenant_id).get("business_calendar"), strict=False)
+
+
+def vat_rate_pct(tenant_id: str = "default") -> float:
+    raw = load_tenant_profile_overrides(tenant_id).get("vat_rate_pct", DEFAULT_VAT_RATE_PCT)
+    try:
+        rate = float(str(raw).strip())
+    except (TypeError, ValueError):
+        return DEFAULT_VAT_RATE_PCT
+    return rate if 0 <= rate < 1 else DEFAULT_VAT_RATE_PCT
+
+
+def sales_value_vat_basis(tenant_id: str = "default") -> str:
+    raw = str(load_tenant_profile_overrides(tenant_id).get("sales_value_vat_basis") or DEFAULT_SALES_VALUE_VAT_BASIS).strip()
+    return raw if raw in _TENANT_PROFILE_VALID_VALUES["sales_value_vat_basis"] else DEFAULT_SALES_VALUE_VAT_BASIS
 
 
 def week_calendar(tenant_id: str = "default") -> str:

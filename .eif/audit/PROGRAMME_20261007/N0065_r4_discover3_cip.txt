@@ -1,0 +1,94 @@
+current_database() = cip | read_only = on
+obs size/pages/allvisible: [('301 MB', 6415, 5034)]
+obs stats: [(87171, 528, None, None, None, datetime.datetime(2026, 9, 21, 18, 0, 22, 369, tzinfo=zoneinfo.ZoneInfo(key='Africa/Johannesburg')))]
+work_mem: 4MB
+--- current pick (553 ms)
+    Unique  (cost=13687.34..13917.47 rows=13865 width=53) (actual time=482.221..514.385 rows=15807.00 loops=1)
+      Buffers: shared hit=6424, temp read=692 written=693
+      ->  Sort  (cost=13687.34..13802.40 rows=46025 width=53) (actual time=482.215..504.417 rows=85544.00 loops=1)
+            Sort Key: shipment_evidence_observation.line_identity_key, shipment_evidence_observation.valid_from DESC NULLS LAST, shipment_evidence_observation.id DESC
+            Sort Method: external merge  Disk: 5536kB
+            Buffers: shared hit=6424, temp read=692 written=693
+            ->  Seq Scan on shipment_evidence_observation  (cost=1964.27..10122.67 rows=46025 width=53) (actual time=0.048..83.707 rows=85544.00 loops=1)
+                  Filter: ((superseded_by_id IS NULL) AND ((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((product_id)::bigint = (hashed SubPlan 1).col1))))
+                  Rows Removed by Filter: 1627
+                  Buffers: shared hit=6415
+                  SubPlan 1
+                    ->  Seq Scan on dim_product p  (cost=0.00..1952.92 rows=4542 width=4) (never executed)
+                          Filter: (CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END AND CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END)
+    Planning:
+      Buffers: shared hit=233
+    Planning Time: 26.245 ms
+    Execution Time: 524.003 ms
+--- line inherit (hash) (534 ms)
+    Hash Left Join  (cost=25031.46..33321.50 rows=3215 width=8) (actual time=436.109..500.501 rows=5896.00 loops=1)
+      Hash Cond: ((o.line_identity_key)::text = (i.line_identity_key)::text)
+      Buffers: shared hit=13456 read=1403, temp read=698 written=700
+      ->  Hash Right Join  (cost=11005.35..19286.95 rows=3215 width=45) (actual time=12.691..74.542 rows=5896.00 loops=1)
+            Hash Cond: (o.evidence_line_id = s.id)
+            Buffers: shared hit=7041 read=1403
+            ->  Seq Scan on shipment_evidence_observation o  (cost=1964.27..10122.67 rows=46928 width=45) (actual time=0.046..52.294 rows=87171.00 loops=1)
+                  Filter: ((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((product_id)::bigint = (hashed SubPlan 2).col1)))
+                  Buffers: shared hit=6415
+                  SubPlan 2
+                    ->  Seq Scan on dim_product p_1  (cost=0.00..1952.92 rows=4542 width=4) (never executed)
+                          Filter: (CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END AND CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END)
+            ->  Hash  (cost=9000.89..9000.89 rows=3215 width=4) (actual time=12.617..12.619 rows=5896.00 loops=1)
+                  Buckets: 8192 (originally 4096)  Batches: 1 (originally 1)  Memory Usage: 272kB
+                  Buffers: shared hit=626 read=1403
+                  ->  Bitmap Heap Scan on shipment_evidence_line s  (cost=2054.12..9000.89 rows=3215 width=4) (actual time=0.742..11.778 rows=5896.00 loops=1)
+                        Recheck Cond: (product_id IS NULL)
+                        Filter: ((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((product_id)::bigint = (hashed SubPlan 1).col1)))
+                        Heap Blocks: exact=2013
+                        Buffers: shared hit=626 read=1403
+                        ->  Bitmap Index Scan on ix_shipment_evidence_line_product_id  (cost=0.00..89.04 rows=5966 width=0) (actual time=0.479..0.480 rows=6114.00 loops=1)
+                              Index Cond: (product_id IS NULL)
+                              Index Searches: 1
+                              Buffers: shared hit=16
+                        SubPlan 1
+                          ->  Seq Scan on dim_product p  (cost=0.00..1952.92 rows=4542 width=4) (never executed)
+                                Filter: (CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END AND CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END)
+      ->  Hash  (cost=13853.45..13853.45 rows=13813 width=45) (actual time=423.348..423.350 rows=15713.00 loops=1)
+            Buckets: 16384  Batches: 1  Memory Usage: 1311kB
+            Buffers: shared hit=6415, temp read=698 written=700
+            ->  Subquery Scan on i  (cost=13496.49..13853.45 rows=13813 width=45) (actual time=378.128..418.883 rows=15713.00 loops=1)
+                  Buffers: shared hit=6415, temp read=698 written=700
+                  ->  Unique  (cost=13496.49..13715.32 rows=13813 width=57) (actual time=378.124..416.977 rows=15713.00 loops=1)
+                        Buffers: shared hit=6415, temp read=698 written=700
+                        ->  Sort  (cost=13496.49..13605.91 rows=43766 width=57) (actual time=378.119..408.670 rows=81295.00 loops=1)
+                              Sort Key: r.line_identity_key, r.valid_from DESC NULLS LAST, r.id DESC
+                              Sort Method: external merge  Disk: 5584kB
+                              Buffers: shared hit=6415, temp read=698 written=700
+                              ->  Seq Scan on shipment_evidence_observation r  (cost=1964.27..10122.67 rows=43766 width=57) (actual time=0.012..56.453 rows=81295.00 loops=1)
+                                    Filter: ((product_id IS NOT NULL) AND ((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((product_id)::bigint = (hashed SubPlan 3).col1))))
+                                    Rows Removed by Filter: 5876
+                                    Buffers: shared hit=6415
+                                    SubPlan 3
+                                      ->  Seq Scan on dim_product p_2  (cost=0.00..1952.92 rows=4542 width=4) (never executed)
+                                            Filter: (CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END AND CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END)
+    Planning:
+      Buffers: shared hit=263
+    Planning Time: 22.184 ms
+    Execution Time: 509.704 ms
+--- view count '*' (196 ms)
+    Aggregate  (cost=32932.74..32932.75 rows=1 width=8) (actual time=192.581..192.583 rows=1.00 loops=1)
+      Buffers: shared hit=85520 read=68
+      ->  Unique  (cost=1966.84..32759.43 rows=13865 width=7573) (actual time=0.139..191.739 rows=15807.00 loops=1)
+            Buffers: shared hit=85520 read=68
+            ->  Incremental Sort  (cost=1966.84..32644.37 rows=46025 width=7573) (actual time=0.139..183.597 rows=85544.00 loops=1)
+                  Sort Key: o.line_identity_key, o.valid_from DESC NULLS LAST, o.id DESC
+                  Presorted Key: o.line_identity_key
+                  Full-sort Groups: 2427  Sort Method: quicksort  Average Memory: 27kB  Peak Memory: 27kB
+                  Buffers: shared hit=85520 read=68
+                  ->  Index Scan using ix_shipment_ev_obs_line_identity on shipment_evidence_observation o  (cost=1964.69..31393.41 rows=46025 width=7573) (actual time=0.025..115.355 rows=85544.00 loops=1)
+                        Filter: ((superseded_by_id IS NULL) AND ((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((product_id)::bigint = (hashed SubPlan 1).col1))))
+                        Rows Removed by Filter: 1627
+                        Index Searches: 1
+                        Buffers: shared hit=85520 read=68
+                        SubPlan 1
+                          ->  Seq Scan on dim_product p  (cost=0.00..1952.92 rows=4542 width=4) (never executed)
+                                Filter: (CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END AND CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END)
+    Planning:
+      Buffers: shared hit=6
+    Planning Time: 0.661 ms
+    Execution Time: 192.680 ms

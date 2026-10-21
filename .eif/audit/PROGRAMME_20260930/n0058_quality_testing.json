@@ -1,0 +1,1 @@
+{"node": "N-0058", "expected_revision": 14, "dim": "testing", "state": "pass", "evidence": "EV-N0058", "rationale": "pytest tests/test_lineup_1h_rederivation.py and tests/test_lineup_month_derived_allocation.py: 24 passed, including test_rederivation_refuses_split_without_month_columns. cip was not written."}

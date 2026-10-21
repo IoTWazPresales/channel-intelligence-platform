@@ -1,0 +1,1 @@
+{"node": "N-0059", "expected_revision": 4, "to": "implement", "stage_note": "load_backfill_session_view returns preview, apply, job_status, and job_stage. BulkLineupBackfillDialog keeps Apply open and polls that view. Apply no longer calls onClose."}

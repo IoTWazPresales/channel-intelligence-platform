@@ -1,0 +1,1 @@
+{"note": "N-0111: stock positions on cip were not recomputed (no cip data writes in this node); the restart rule shows after Recompute on the Stock gap tab.", "code": "DOES_NOT_FIT", "node": "N-0111", "expected_revision": 5}

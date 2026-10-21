@@ -1,0 +1,1 @@
+{"node": "N-0056", "expected_revision": 8, "dim": "observability", "state": "pass", "evidence": "EV-N0056", "rationale": "Delivery failures log and call emit_task_failure_alert. The alert appends CIP_TASK_FAILURE_ALERT_PATH when set and does not open a database session."}

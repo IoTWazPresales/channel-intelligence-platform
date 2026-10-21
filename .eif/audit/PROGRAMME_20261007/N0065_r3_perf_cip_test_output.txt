@@ -1,0 +1,28 @@
+current_database() = cip_test
+products: 18182 | PERF-NB products: 6052 | fact rows: 200031
+ver   scope      statement          best of 3 ms    rows
+0024  None       scan count               1728.6     1.0
+0024  None       group by product         2013.2 18169.0
+0024  '*'        scan count               1887.6     1.0
+0024  '*'        group by product         2298.2 18169.0
+0024  'PERF-NB'  scan count               2087.8     1.0
+0024  'PERF-NB'  group by product         2553.5  6052.0
+0024  '!'        scan count               2631.0     1.0
+0024  '!'        group by product         2671.3     0.0
+0025  None       scan count                 87.3     1.0
+0025  None       group by product          140.3 18169.0
+0025  '*'        scan count                 78.0     1.0
+0025  '*'        group by product          171.1 18169.0
+0025  'PERF-NB'  scan count                115.8     1.0
+0025  'PERF-NB'  group by product          142.4  6052.0
+0025  '!'        scan count                 54.4     1.0
+0025  '!'        group by product           58.3     0.0
+speed-up 0024/0025:
+  None       scan count            1728.6 ->      87.3 ms  x19.8
+  None       group by product      2013.2 ->     140.3 ms  x14.3
+  '*'        scan count            1887.6 ->      78.0 ms  x24.2
+  '*'        group by product      2298.2 ->     171.1 ms  x13.4
+  'PERF-NB'  scan count            2087.8 ->     115.8 ms  x18.0
+  'PERF-NB'  group by product      2553.5 ->     142.4 ms  x17.9
+  '!'        scan count            2631.0 ->      54.4 ms  x48.4
+  '!'        group by product      2671.3 ->      58.3 ms  x45.8

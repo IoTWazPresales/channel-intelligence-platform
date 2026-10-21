@@ -1,0 +1,23 @@
+{
+  "id": "N-0081",
+  "parent": null,
+  "title": "Distributor channel and New-DAP price protection: rebate and disti margin waterfall steps, DSI SOH cost capture, re-invoice (spec section 9.1)",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": ["api", "ui", "schema"],
+  "risk": "R3",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": ["N-0080"],
+  "acceptance_criteria": [
+    "Waterfall steps and the New-DAP re-invoice mechanism per Warren's domain decision",
+    "DSI SOH cost column is parsed and stored; missing cost is flagged, never defaulted",
+    "A distributor price-directive case can be raised and settled in CIP",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

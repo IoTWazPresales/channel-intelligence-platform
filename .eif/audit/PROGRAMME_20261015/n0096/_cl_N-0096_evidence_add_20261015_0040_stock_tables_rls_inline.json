@@ -1,0 +1,1 @@
+{"path": "apps/api/alembic/versions/20261015_0040_stock_tables_rls_inline.py", "note": "N-0096 (c3dba532): customer_stock_position and fact_customer_sellthrough_superseded move to the inline product-line policies. Clone proof, then cip and cip_test.", "provenance": "implementation-observation", "node": "N-0096", "expected_revision": 3}

@@ -1,0 +1,1 @@
+{"path": "apps/api/app/services/imports/cst_batch.py", "note": "N-0111 layouts: batch job takes a customer, a mapping and a structure.", "provenance": "implementation-observation", "node": "N-0111", "expected_revision": 48}

@@ -1,0 +1,1 @@
+{"node": "N-0059", "expected_revision": 6, "dim": "ux", "state": "pass", "evidence": "EV-N0059", "rationale": "Apply no longer closes the dialog. The operator sees Applying session while the job runs, then Applied and skipped counts, with Link POs and Review lineup cases as the next steps."}

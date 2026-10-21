@@ -1,0 +1,47 @@
+current_database() = cip | read_only = on
+  autovacuum = on
+  autovacuum_analyze_threshold = 50
+  autovacuum_analyze_scale_factor = 0.1
+  work_mem = 4MB
+  shared_buffers = 128MB
+  effective_cache_size = 4GB
+  jit = on
+  jit_above_cost = 100000
+  random_page_cost = 4
+  default_statistics_target = 100
+  max_parallel_workers_per_gather = 2
+
+pg_stat_user_tables (n_live_tup, n_mod_since_analyze, last_analyze, last_autoanalyze, reltuples, relpages, cols with pg_stats, threshold)
+  dim_product                    live=      0 mod_since_analyze=    36 last_analyze=None last_autoanalyze=None reltuples=    18168 relpages=   772 pg_stats_cols=  0 autoanalyze_count=0 analyze_count=0 threshold~1867 reloptions=None
+  weeks_of_cover_observation     live= 192395 mod_since_analyze=     0 last_analyze=None last_autoanalyze=2026-09-14 09:46:27.105584+02:00 reltuples=   192395 relpages= 31261 pg_stats_cols=  0 autoanalyze_count=1 analyze_count=0 threshold~19290 reloptions=None
+  fact_inbound_shipment          live=  15255 mod_since_analyze=    26 last_analyze=None last_autoanalyze=2026-09-14 09:45:32.210415+02:00 reltuples=    15252 relpages=  4629 pg_stats_cols=  0 autoanalyze_count=1 analyze_count=0 threshold~1575 reloptions=None
+  shipment_evidence_observation  live=  87171 mod_since_analyze=   225 last_analyze=None last_autoanalyze=2026-09-21 18:00:22.000369+02:00 reltuples=    87170 relpages=  6415 pg_stats_cols=  0 autoanalyze_count=1 analyze_count=0 threshold~8767 reloptions=None
+  shipment_evidence_line         live=  87191 mod_since_analyze=   597 last_analyze=None last_autoanalyze=2026-09-14 09:45:24.293621+02:00 reltuples=    87181 relpages=  6744 pg_stats_cols=  0 autoanalyze_count=1 analyze_count=0 threshold~8768 reloptions=None
+  fact_sales_sellout             live=      0 mod_since_analyze=   138 last_analyze=None last_autoanalyze=None reltuples=    35608 relpages=  1185 pg_stats_cols=  0 autoanalyze_count=0 analyze_count=0 threshold~3611 reloptions=None
+  fact_inventory_distributor     live=      0 mod_since_analyze=   106 last_analyze=None last_autoanalyze=None reltuples=    47411 relpages=   730 pg_stats_cols=  0 autoanalyze_count=0 analyze_count=0 threshold~4791 reloptions=None
+  fact_demand_forecast           live=      0 mod_since_analyze=     0 last_analyze=None last_autoanalyze=None reltuples=    38625 relpages=  1641 pg_stats_cols=  0 autoanalyze_count=0 analyze_count=0 threshold~3912 reloptions=None
+  fact_inventory_reconciliation  live=      0 mod_since_analyze=     0 last_analyze=None last_autoanalyze=None reltuples=       42 relpages=     3 pg_stats_cols=  0 autoanalyze_count=0 analyze_count=0 threshold~54 reloptions=None
+  cpor_case                      live=      0 mod_since_analyze=     0 last_analyze=None last_autoanalyze=None reltuples=      311 relpages=    21 pg_stats_cols= 33 autoanalyze_count=0 analyze_count=0 threshold~81 reloptions=None
+  cpor_case_line                 live=    658 mod_since_analyze=     0 last_analyze=None last_autoanalyze=2026-10-07 09:16:05.643240+02:00 reltuples=      658 relpages=    85 pg_stats_cols=  0 autoanalyze_count=1 analyze_count=0 threshold~116 reloptions=None
+  dim_distributor                live=    139 mod_since_analyze=     3 last_analyze=None last_autoanalyze=2026-09-21 18:15:19.823177+02:00 reltuples=      140 relpages=     3 pg_stats_cols= 10 autoanalyze_count=1 analyze_count=0 threshold~64 reloptions=None
+
+indexes on weeks_of_cover_observation:
+   CREATE INDEX ix_weeks_of_cover_observation_tenant_id ON public.weeks_of_cover_observation USING btree (tenant_id)
+   CREATE INDEX ix_woc_observation_current ON public.weeks_of_cover_observation USING btree (tenant_id, distributor_id, product_id, cover_as_of_date DESC)
+   CREATE UNIQUE INDEX pk_weeks_of_cover_observation ON public.weeks_of_cover_observation USING btree (id)
+   CREATE UNIQUE INDEX uq_weeks_of_cover_observation_source_key ON public.weeks_of_cover_observation USING btree (source_key)
+table size weeks_of_cover_observation = 244 MB | avg row width (pg_stats sum) = None
+
+estimate vs actual (EXPLAIN ANALYZE, as role cip under '*'):
+   select count(*) from dim_product where tenant_id = 'default'
+      ->  Bitmap Heap Scan on dim_product  (cost=4.98..266.51 rows=45 width=0) (actual rows=18177.00 loops=1)
+   select count(*) from dim_product where product_line = 'NB'
+      ->  Seq Scan on dim_product  (cost=0.00..1498.72 rows=3422 width=0) (actual rows=6848.00 loops=1)
+   select count(*) from weeks_of_cover_observation where tenant_id = 'default'
+      ->  Index Only Scan using ix_woc_observation_current on weeks_of_cover_observation  (cost=1964.69..14491.56 rows=97159 width=0) (actual rows=194349.00 loops=1)
+   select count(*) from fact_inbound_shipment where tenant_id = 'default' and status <> 'received'
+      ->  Seq Scan on fact_inbound_shipment  (cost=1964.27..6974.57 rows=1103 width=0) (actual rows=2113.00 loops=1)
+
+per-row predicate cost over the 194k product ids of weeks_of_cover_observation (best of 3 wall ms; the base read itself passes the table's own policy under the given setting):
+  setting='*': rows=194349 base=63 ms | 0025 inline predicate: pass=194349 +70 ms (0.36 us/row) | 0024 definer function: pass=194349 +1942 ms (9.99 us/row)
+  setting='NB': rows=87899 base=133 ms | 0025 inline predicate: pass=87899 +166 ms (1.89 us/row) | 0024 definer function: pass=87899 +1927 ms (21.92 us/row)

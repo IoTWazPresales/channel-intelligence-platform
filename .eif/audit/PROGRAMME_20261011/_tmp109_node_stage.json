@@ -1,0 +1,1 @@
+{"stage": "verify", "stage_note": "R2 check under RUN-20261011-N0109-VER, different from implementation run RUN-20261009-N0109-IMPL, same session, not a different model. VERIFIED_WITH_LIMITATIONS: operator accepted the live pages; mockup HTML was not compared again.", "node": "N-0109", "expected_revision": 26}

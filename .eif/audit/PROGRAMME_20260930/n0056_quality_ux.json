@@ -1,0 +1,1 @@
+{"node": "N-0056", "expected_revision": 9, "dim": "ux", "state": "pass", "evidence": "EV-N0056", "rationale": "Each inbox card shows the data vintage on its own line under the timestamp, metric, and format. The operator does not open the export to see when the numbers were computed."}

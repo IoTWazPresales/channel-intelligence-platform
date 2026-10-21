@@ -1,0 +1,1 @@
+{"node": "N-0061", "expected_revision": 6, "dim": "observability", "state": "blocked", "evidence": "EV-N0061", "rationale": "load_promotion_line_evidence catches Exception and returns the same not-listed and no-price shape, with no log. A failed read looks like an honest empty. Gate stays blocked."}

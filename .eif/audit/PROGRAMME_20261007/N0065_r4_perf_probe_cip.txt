@@ -1,0 +1,29 @@
+current_database() = cip | read_only = on
+cip_sev_current_observation_ids    rows= 15807 best of 3 420 ms; setting after = 'NB'
+cip_sev_observation_lineage        rows=  5876 best of 3 82 ms; setting after = 'NB'
+cip_sev_line_lineage               rows=  5896 best of 3 114 ms; setting after = 'NB'
+cip_inbound_shipment_lineage       rows=   546 best of 3 113 ms; setting after = 'NB'
+--- pick inner query plan ('*')
+    Unique  (cost=15987.19..16210.19 rows=13834 width=53) (actual time=432.242..474.443 rows=15807.00 loops=1)
+      Buffers: shared hit=6415, temp read=692 written=693
+      ->  Sort  (cost=15987.19..16098.69 rows=44600 width=53) (actual time=432.237..461.523 rows=85544.00 loops=1)
+            Sort Key: shipment_evidence_observation.line_identity_key, shipment_evidence_observation.valid_from DESC NULLS LAST, shipment_evidence_observation.id DESC
+            Sort Method: external merge  Disk: 5536kB
+            Buffers: shared hit=6415, temp read=692 written=693
+            ->  Seq Scan on shipment_evidence_observation  (cost=3948.73..12543.00 rows=44600 width=53) (actual time=0.032..49.843 rows=85544.00 loops=1)
+                  Filter: ((superseded_by_id IS NULL) AND ((COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((product_id)::bigint = (hashed SubPlan 1).col1)) OR ((product_id IS NULL) AND (ANY ((id)::bigint = (hashed SubPlan 3).col1)))))
+                  Rows Removed by Filter: 1627
+                  Buffers: shared hit=6415
+                  SubPlan 1
+                    ->  Seq Scan on dim_product p  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+                          Filter: (CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END AND CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END)
+                  SubPlan 3
+                    ->  Function Scan on cip_sev_observation_lineage m  (cost=1965.11..1982.61 rows=500 width=8) (never executed)
+                          Filter: ((ANY (inherited_product_id = (hashed SubPlan 2).col1)) OR ((inherited_product_id IS NULL) AND (COALESCE(current_setting('cip.request_role'::text, true), ''::text) = 'steward'::text)))
+                          SubPlan 2
+                            ->  Seq Scan on dim_product p_1  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+                                  Filter: (CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END AND CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END)
+    Planning Time: 0.776 ms
+    Execution Time: 486.672 ms
+--- work_mem=32MB: best of 3 491 ms; top nodes: ['Unique  (cost=15987.19..16210.19 rows=13834 width=53) (actual time=575.899..594.294 rows=1', 'Buffers: shared hit=6415', '->  Sort  (cost=15987.19..16098.69 rows=44600 width=53) (actual time=575.894..581.249 rows']
+--- enable_sort=off (index order, diagnostic): best of 3 77 ms; top nodes: ['Unique  (cost=3949.15..16674.92 rows=13834 width=53) (actual time=0.014..83.487 rows=15807', 'Buffers: shared hit=14469', '->  Index Only Scan using ix_shipment_ev_obs_identity_latest on shipment_evidence_observat']

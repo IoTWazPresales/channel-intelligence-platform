@@ -1,0 +1,1 @@
+{"scope": "N-0110", "origin": "implementation", "status": "proposed", "statement": "Day grain is read from flat files (row sale date or a one-day file-name range). Pivoted, multi-sheet, wide and month-to-date layouts keep weeks or months. All layouts are refused without on-hand unless marked sales-only."}

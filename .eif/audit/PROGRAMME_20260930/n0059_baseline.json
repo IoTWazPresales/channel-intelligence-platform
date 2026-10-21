@@ -1,0 +1,9 @@
+{
+  "id": "BLN-N0059",
+  "provenance": "implementation-observation",
+  "tree_hash": "9d8a07c339d3a5de62480ef4119280fa3042edd2",
+  "path": ".eif/audit/PROGRAMME_20260930/N-0059.md",
+  "observed_behavior": "Bulk historical lineup backfill Apply registered the activity-bell task and closed the dialog as soon as the job was accepted, before applied and skipped counts existed.",
+  "latent_capabilities": [],
+  "preservation": {}
+}

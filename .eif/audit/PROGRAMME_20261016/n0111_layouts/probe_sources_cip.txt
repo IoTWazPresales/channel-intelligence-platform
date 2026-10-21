@@ -1,0 +1,47 @@
+DATABASE_URL=postgresql+asyncpg://cip:***@localhost:5432/cip
+DATABASE_URL_SYNC=postgresql://cip:***@localhost:5432/cip
+DATABASE_URL_SYNC_MIGRATE=postgresql://cip:***@localhost:5432/cip
+current_database()=cip
+current_database() cip (read-only)
+
+== templates
+(15, 'customer_sell_through', True, False, False)
+(3, 'distributor_inventory', True, False, False)
+
+== CST sources: id, code, name, active, expected_template(customer_id), memory keys, jobs by status
+17 'cst_unit_e_verify_smoke' 'CST Unit E VERIFY smoke feed' True file {"customer_id": 2, "report_structure_type": "flat"} | mem keys: [] | jobs: []
+18 'takealot_cst_week' 'Takealot CST WEEK' True file {"customer_id": 20, "report_structure_type": "flat"} | mem keys: [] | jobs: [('completed', 'loaded', 2), ('completed', 'validated', 1), ('completed_with_errors', 'failed', 1), ('failed', 'failed', 1)]
+20 'cst_p4_evetech' 'Evetech CST P4 pilot' True file {"customer_id": 52, "report_structure_type": "flat"} | mem keys: [] | jobs: [('completed', 'validated', 1)]
+21 'cst_p4_amazon' 'Amazon CST P4 pilot' True file {"customer_id": 26, "report_structure_type": "flat"} | mem keys: [] | jobs: [('completed', 'validated', 4)]
+22 'cst_p4_game' 'Game CST P4 pilot' True file {"customer_id": 57, "report_structure_type": "flat"} | mem keys: [] | jobs: [('completed', 'validated', 3), ('failed', 'failed', 1)]
+23 'cst_p4_computer_mania' 'Computer Mania CST P4 pilot' True file {"customer_id": 18, "report_structure_type": "mtd_delta"} | mem keys: [] | jobs: [('completed', 'validated', 7)]
+24 'cst_p4_incredible_connection' 'Incredible Connection CST P4 pilot' True file {"customer_id": 12, "report_structure_type": "flat"} | mem keys: [] | jobs: [('completed', 'validated', 3)]
+25 'cst_p4_makro' 'Makro CST P4 pilot' True file {"customer_id": 15, "report_structure_type": "pivoted"} | mem keys: [] | jobs: [('failed', 'failed', 2), ('completed', 'validated', 1)]
+26 'cst_p4_hifi_corp' 'HiFi Corp CST P4 pilot' True file {"customer_id": 11, "report_structure_type": "flat"} | mem keys: [] | jobs: [('completed', 'validated', 2)]
+27 'cst_soak_52' 'CST soak 52' True file {"customer_id": 52, "report_structure_type": "flat"} | mem keys: [] | jobs: [('completed', 'validated', 2)]
+28 'cst_soak_57' 'CST soak 57' True file {"customer_id": 57, "report_structure_type": "flat"} | mem keys: [] | jobs: [('completed', 'validated', 3)]
+29 'cst_raw_20_takealot_w31' 'CST RAW Takealot W31' True file {"customer_id": 20, "report_structure_type": "flat"} | mem keys: [] | jobs: [('completed', 'loaded', 1), ('completed', 'validated', 1), ('failed', 'failed', 1)]
+30 'cst_raw_52_evetech_sales' 'CST RAW Evetech Sales' True file {"customer_id": 52, "report_structure_type": "flat"} | mem keys: [] | jobs: [('completed', 'loaded', 1), ('completed', 'validated', 1)]
+31 'cst_raw_57_game_w27_wide-week' 'CST RAW Game W27 wide-week' True file {"customer_id": 57, "report_structure_type": "flat"} | mem keys: [] | jobs: [('completed', 'validated', 2)]
+32 'cst_hist_20' 'CST hist customer 20' True file {"customer_id": 20, "report_structure_type": "flat"} | mem keys: [] | jobs: [('completed', 'validated', 4)]
+33 'cst_hist_52' 'CST hist customer 52' True file {"customer_id": 52, "report_structure_type": "flat"} | mem keys: [] | jobs: [('completed', 'validated', 3)]
+34 'cst_hist_18' 'CST hist customer 18' True file {"customer_id": 18, "report_structure_type": "mtd_delta"} | mem keys: [] | jobs: [('completed', 'validated', 4)]
+35 'cst_hist_15' 'CST hist customer 15' True file {"customer_id": 15, "report_structure_type": "pivoted"} | mem keys: [] | jobs: [('completed_with_errors', 'failed', 1)]
+36 'cst_hist_57' 'CST hist customer 57' True file {"customer_id": 57, "report_structure_type": "flat"} | mem keys: [] | jobs: [('completed_with_errors', 'failed', 4)]
+37 'cst_hist_12' 'CST hist customer 12' True file {"customer_id": 12, "report_structure_type": "flat"} | mem keys: [] | jobs: [('completed_with_errors', 'failed', 4)]
+38 'cst_hist_11' 'CST hist customer 11' True file {"customer_id": 11, "report_structure_type": "flat"} | mem keys: [] | jobs: [('completed_with_errors', 'failed', 4)]
+39 'cst_hist_v2_20' 'CST hist v2 customer 20' True file {"customer_id": 20, "report_structure_type": "flat"} | mem keys: [] | jobs: [('completed', 'loaded', 4), ('completed', 'validated', 4)]
+40 'cst_hist_v2_52' 'CST hist v2 customer 52' True file {"customer_id": 52, "report_structure_type": "flat"} | mem keys: [] | jobs: [('completed', 'validated', 4), ('completed', 'loaded', 3)]
+41 'cst_hist_v2_18' 'CST hist v2 customer 18' True file {"customer_id": 18, "report_structure_type": "mtd_delta"} | mem keys: [] | jobs: [('completed', 'loaded', 4), ('completed', 'validated', 4)]
+42 'cst_hist_v2_15' 'CST hist v2 customer 15' True file {"customer_id": 15, "report_structure_type": "pivoted"} | mem keys: [] | jobs: [('completed', 'loaded', 4), ('completed', 'validated', 4), ('completed_with_errors', 'failed', 1)]
+43 'cst_hist_v2_57' 'CST hist v2 customer 57' True file {"customer_id": 57, "report_structure_type": "flat"} | mem keys: [] | jobs: [('completed', 'validated', 5), ('completed', 'loaded', 4), ('completed_with_errors', 'failed', 1)]
+
+== reporting customers (reports_expected) with key-account flag
+(299, 'AMAZON COMMERCIAL SERVICES (SOUTH AFRICA)', False, True, 'weekly')
+(18, 'Computer Mania', True, True, 'weekly')
+(52, 'Evetech', True, True, 'weekly')
+(57, 'Game', True, True, 'weekly')
+(11, 'Hifi', True, True, 'weekly')
+(12, 'Incredible Connection', True, True, 'weekly')
+(15, 'Makro', True, True, 'weekly')
+(20, 'Takealot', True, True, 'weekly')

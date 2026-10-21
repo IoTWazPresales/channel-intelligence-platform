@@ -1,0 +1,1 @@
+{"stage_note": "N-0096 built. API 2977 passed, 21 skipped, 0 failed; web 860 passed, 0 failed (183 files in 4 batches: 248+202+176+234; vitest 2.1.9, forks pool, 2 workers). Verification is a different run.", "node": "N-0096", "expected_revision": 9}

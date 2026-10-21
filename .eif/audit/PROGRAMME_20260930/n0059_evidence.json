@@ -1,0 +1,6 @@
+{
+  "id": "EV-N0059",
+  "path": ".eif/audit/PROGRAMME_20260930/N-0059.md",
+  "note": "N-0059 bulk backfill Apply stays open and shows applied and skipped counts",
+  "provenance": "implementation-observation"
+}

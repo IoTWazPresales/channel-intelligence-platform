@@ -1,0 +1,1 @@
+{"note": "N-0111: a day column headed only 'Date' is not read as the sale date by the CST template; rows stage with no period, are not applied, and the job still reads completed with a warning. Working headers: Sale Date, Sales Date, Transaction Date, Date Sold. Found in the clone proof.", "code": "DOES_NOT_FIT", "node": "N-0111", "expected_revision": 5}

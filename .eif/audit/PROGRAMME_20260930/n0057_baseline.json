@@ -1,0 +1,9 @@
+{
+  "id": "BLN-N0057",
+  "provenance": "implementation-observation",
+  "tree_hash": "bee87e0f0a709b4a1086ae29bcf02c09c935a7b5",
+  "path": ".eif/audit/PROGRAMME_20260930/N-0057.md",
+  "observed_behavior": "LineupPlanActionBar hardcoded period 2026-04-01 / 2026Q2 and rendered only when plan rows existed, so an empty tenant hid next-quarter authoring, unified import, and tenant export.",
+  "latent_capabilities": [],
+  "preservation": {}
+}

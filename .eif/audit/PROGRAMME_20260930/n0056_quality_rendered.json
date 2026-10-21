@@ -1,0 +1,1 @@
+{"node": "N-0056", "expected_revision": 11, "dim": "rendered", "state": "pass", "evidence": "EV-N0056", "rationale": "Same-session browser check on http://localhost:3000/inbox. Signed-in cards show a Vintage line and the xlsx format. Self-verification, not an independent session."}

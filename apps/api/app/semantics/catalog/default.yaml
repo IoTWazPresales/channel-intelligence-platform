@@ -213,16 +213,12 @@ metrics:
     owner_surface: cpor-cases
     formula: "Σ ttl_support_usd (compute) + Σ ttl_support ZAR (display); voided excluded"
     source_facts: [cpor_case_line]
+    # Audit 2026-10-20: the portfolio service is all-time and has no cross-tabs; only the grains it
+    # serves are offered (period and two-way splits returned unrelated rows).
     allowed_grains:
       - [customer]
       - [bu]
       - [promo_type]
-      - [customer, bu]
-      - [period, customer]
-      - [period, bu]
-      - [customer, promo_type]
-      - [bu, promo_type]
-      - [period, customer, bu]
 
   - id: A2-02
     key: delivery_rate
@@ -234,9 +230,7 @@ metrics:
     allowed_grains:
       - [customer]
       - [bu]
-      - [customer, bu]
-      - [period, customer]
-      - [period, bu]
+      - [promo_type]
 
   - id: A2-03
     key: claim_rate
@@ -288,9 +282,7 @@ metrics:
     allowed_grains:
       - [customer]
       - [bu]
-      - [customer, bu]
-      - [period, customer]
-      - [period, bu]
+      - [promo_type]
 
   - id: A2-X
     key: cost_per_incremental_unit

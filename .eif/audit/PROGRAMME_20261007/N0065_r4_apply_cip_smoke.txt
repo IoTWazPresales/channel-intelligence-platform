@@ -1,0 +1,14 @@
+======================================================================
+N-0065 round 4 apply SMOKE (read only) 2026-10-09 02:25:17
+[app]   current_database() = cip | role = cip super=False bypassrls=False | alembic = ['20261007_0025']
+code on disk binds cip.request_role: yes
+--- SMOKE (expected computed as the app role under '*'; owner not used): rows per scope as the app role (expected = Warren 2026-10-08 decision)
+  worker (unset)         setting_after=None     view=15807/15807 sev_observation=87171/87171 sev_line=87191/87191 fact_inbound_shipment=15255/15255 | view 333 ms
+  admin '*'              setting_after='*'      view=15807/15807 sev_observation=87171/87171 sev_line=87191/87191 fact_inbound_shipment=15255/15255 | view 231 ms
+  planner NB             setting_after='NB'     view=10225/8758 (differs) sev_observation=51028/47314 (differs) sev_line=51048/47314 (differs) fact_inbound_shipment=8851/8307 (differs) | view 241 ms
+  steward NB             setting_after='NB'     view=10225/9253 (differs) sev_observation=51028/49057 (differs) sev_line=51048/49077 (differs) fact_inbound_shipment=8851/8851 | view 224 ms
+  planner NB,NR          setting_after='NB,NR'  view=13192/12016 (differs) sev_observation=68277/65148 (differs) sev_line=68297/65148 (differs) fact_inbound_shipment=12014/11470 (differs) | view 275 ms
+  planner no lines '!'   setting_after='!'      view=2532/0 (differs) sev_observation=5876/0 (differs) sev_line=5896/0 (differs) fact_inbound_shipment=546/0 (differs) | view 131 ms
+  steward no lines '!'   setting_after='!'      view=2532/495 (differs) sev_observation=5876/1743 (differs) sev_line=5896/1763 (differs) fact_inbound_shipment=546/544 (differs) | view 124 ms
+  (0025 rule: rows with no product visible to every scope: {'shipment_evidence_observation': 5876, 'shipment_evidence_line': 5896, 'fact_inbound_shipment': 546})
+supervisor parse: api ('healthy', '28016') worker ('healthy', '47680')

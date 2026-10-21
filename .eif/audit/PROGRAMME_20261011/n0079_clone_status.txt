@@ -1,0 +1,26 @@
+migrate_url_set False
+sync_db_is_cip True
+admin_source registry_owner
+resume_existing_clone
+clone_db_is_cip_n0079 True
+clone_revision 20261012_0033
+written 0
+skipped_present 435
+skipped_no_result 4
+second_written 0
+second_skipped_present 435
+ledger_has_row True
+ledger_rows 435
+update_blocked True
+update_reason append-only
+delete_blocked True
+delete_reason append-only
+ledger_rows_after 435
+alembic_cip_ok
+cip_db_is_cip True
+cip_revision 20261012_0033
+cip_written 435
+cip_skipped_present 0
+cip_skipped_no_result 4
+cip_second_written 0
+done

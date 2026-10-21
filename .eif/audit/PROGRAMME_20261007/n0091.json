@@ -1,0 +1,26 @@
+{
+  "id": "N-0091",
+  "parent": null,
+  "title": "Shipment receipt page and shipment change timeline",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": [
+    "ui",
+    "api"
+  ],
+  "risk": "R2",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": [],
+  "acceptance_criteria": [
+    "One page per shipment shows its receipts, POD evidence and matched lines",
+    "An in-app event timeline over the existing shipment change API (BACKLOG-064)",
+    "Cancelled-candidate signal from report coverage per Warren's rule for 'cancelled' (BACKLOG-063)",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

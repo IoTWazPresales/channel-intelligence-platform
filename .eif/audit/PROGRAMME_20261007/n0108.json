@@ -1,0 +1,23 @@
+{
+  "id": "N-0108",
+  "parent": null,
+  "title": "Brief and Cover speed: stop sorting the whole weeks-of-cover table to keep the latest rows",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": ["api"],
+  "risk": "R2",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": ["N-0065"],
+  "acceptance_criteria": [
+    "GOV-008 RUN-20261008-N0065-VER2 P2/P3: after migration 0025, brief/signals and channel-ops/cover-distribution spend ~1.6 s in a DISTINCT ON sort of 194k wide weeks_of_cover_observation rows to keep ~2,481 (N0065_VERIFY.md 'Re-verification on cip')",
+    "The latest-observation selection reads only what it needs (e.g. a narrow keyed subquery or index on the latest-row key, or a maintained latest table), with identical results on cip (row-for-row comparison)",
+    "brief/signals and channel-ops/cover-distribution each under 1.5 s end to end for unset, '*' and one line on cip, measured read-only",
+    "Tests green on touched areas; any index migration proven on cip_test before cip"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "auto"
+}

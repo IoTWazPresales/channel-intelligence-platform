@@ -1,0 +1,126 @@
+current_database()=cip
+--- status table BEFORE (stored positions, previous rule) ---
+{
+ "default": {
+  "threshold_units": 1.0,
+  "positions": 4158,
+  "compared": 16,
+  "flagged (compared, |gap| >= threshold)": 16,
+  "no on-hand reported (no_on_hand)": 3457,
+  "unreported weeks (stored chain_restart)": 298,
+  "first report": 387,
+  "by customer [compared, no_on_hand, unreported(chain_restart), first_report]": {
+   "Computer Mania": [
+    0,
+    2426,
+    209,
+    93
+   ],
+   "Evetech": [
+    0,
+    648,
+    59,
+    71
+   ],
+   "Game": [
+    16,
+    114,
+    13,
+    13
+   ],
+   "Hifi": [
+    0,
+    0,
+    0,
+    51
+   ],
+   "Incredible Connection": [
+    0,
+    0,
+    0,
+    82
+   ],
+   "Makro": [
+    0,
+    136,
+    8,
+    28
+   ],
+   "Takealot": [
+    0,
+    133,
+    9,
+    49
+   ]
+  },
+  "flagged by first cause": {
+   "no_prior_on_hand": 16
+  },
+  "flagged by customer": {
+   "Game": 16
+  }
+ }
+}
+recompute tenant default: {'customers': 7, 'positions': 737}
+--- status table AFTER (bridge rule) ---
+{
+ "default": {
+  "threshold_units": 1.0,
+  "positions": 737,
+  "compared": 16,
+  "flagged (compared, |gap| >= threshold)": 16,
+  "no on-hand reported (no_on_hand)": 36,
+  "unreported weeks (stored chain_restart)": 298,
+  "first report": 387,
+  "by customer [compared, no_on_hand, unreported(chain_restart), first_report]": {
+   "Computer Mania": [
+    0,
+    0,
+    209,
+    93
+   ],
+   "Evetech": [
+    0,
+    0,
+    59,
+    71
+   ],
+   "Game": [
+    16,
+    0,
+    13,
+    13
+   ],
+   "Hifi": [
+    0,
+    0,
+    0,
+    51
+   ],
+   "Incredible Connection": [
+    0,
+    0,
+    0,
+    82
+   ],
+   "Makro": [
+    0,
+    34,
+    8,
+    28
+   ],
+   "Takealot": [
+    0,
+    2,
+    9,
+    49
+   ]
+  },
+  "flagged by first cause": {
+   "no_prior_on_hand": 16
+  },
+  "flagged by customer": {
+   "Game": 16
+  }
+ }
+}

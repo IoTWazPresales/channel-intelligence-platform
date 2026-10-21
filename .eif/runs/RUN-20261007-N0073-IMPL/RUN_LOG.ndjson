@@ -1,0 +1,12 @@
+{"ts":"2026-10-07T11:42:50Z","kind":"programme.event","event":"node.lease.acquire","seq":1547}
+{"ts":"2026-10-07T11:43:33Z","kind":"programme.event","event":"node.stage","seq":1548}
+{"ts":"2026-10-07T12:39:40Z","kind":"programme.event","event":"node.lease.acquire","seq":1550}
+{"ts":"2026-10-07T13:10:40Z","kind":"programme.event","event":"evidence.add","seq":1580}
+{"ts":"2026-10-07T13:11:53Z","kind":"programme.event","event":"evidence.add","seq":1584}
+{"ts":"2026-10-07T13:12:13Z","kind":"programme.event","event":"evidence.add","seq":1585}
+{"ts":"2026-10-07T13:12:30Z","kind":"programme.event","event":"evidence.add","seq":1586}
+{"ts":"2026-10-07T13:12:59Z","kind":"programme.event","event":"node.quality","seq":1587}
+{"ts":"2026-10-07T13:13:29Z","kind":"programme.event","event":"node.quality","seq":1588}
+{"ts":"2026-10-07T13:13:56Z","kind":"programme.event","event":"node.quality","seq":1589}
+{"ts":"2026-10-07T13:14:22Z","kind":"programme.event","event":"node.stage","seq":1590}
+{"ts":"2026-10-07T13:14:47Z","kind":"programme.event","event":"node.lease.release","seq":1591}

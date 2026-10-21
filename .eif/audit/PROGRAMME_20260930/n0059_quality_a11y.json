@@ -1,0 +1,1 @@
+{"node": "N-0059", "expected_revision": 7, "dim": "a11y", "state": "pass", "evidence": "EV-N0059", "rationale": "The testing-library tree exposes the dialog heading Bulk historical lineup backfill, the review checkbox, Apply, and after completion the links Link POs and Review lineup cases. The status alert is in the dialog, not only the activity bell."}

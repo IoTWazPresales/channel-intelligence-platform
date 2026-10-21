@@ -1,0 +1,12 @@
+{
+  "node": "N-0085",
+  "expected_revision": 0,
+  "acceptance_criteria": [
+    "Warren 2026-10-07 (D-0061, D-0063): listing coverage for every reporting customer's site, including Amazon and Makro",
+    "Discovery basis: products each customer reported selling in its sell-through files in the last 6 months; exact keys only (normalised EAN, part number, feed id); a page counts only if it shows the EAN or part number; a steward confirms; nothing auto-registers",
+    "One page reader per retailer extracts price, stock, promo, title, brand, images, description length, specs, seller/buy box, rating, reviews, page EAN/part number for N-0078",
+    "Ordinary browser user agent; polite per-site spacing; per-site pause on 403/429 with back-off; per-run time limit; no CAPTCHA solving or block evasion; a paused site shows on screen",
+    "Coverage view per customer: products reported vs listings watched vs awaiting steward vs failing vs not found",
+    "Complete when child units N-0101..N-0106 are complete"
+  ]
+}

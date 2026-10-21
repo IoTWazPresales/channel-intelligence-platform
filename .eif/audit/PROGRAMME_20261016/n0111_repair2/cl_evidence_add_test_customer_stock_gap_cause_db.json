@@ -1,0 +1,1 @@
+{"path": "apps/api/tests/test_customer_stock_gap_cause_db.py", "note": "N-0111 repair 2: bridged chain and stock-only row on cip_test.", "provenance": "implementation-observation", "node": "N-0111", "expected_revision": 38}

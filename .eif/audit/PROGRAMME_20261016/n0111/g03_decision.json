@@ -1,0 +1,1 @@
+{"scope": "N-0111", "origin": "operator", "status": "accepted", "statement": "Warren 2026-10-16: a file that carries only week numbers (no full dates) needs the uploader to confirm the year at upload, pre-filled from the file name or folder; the load does not apply until the year is confirmed. A year is never guessed."}

@@ -1,0 +1,8 @@
+current_database() = cip | read_only = on
+[*] shipment_evidence_observation: total=87171 null_product=5876
+[*] shipment_evidence_line: total=87191 null_product=5896
+[*] observations with NULL product whose identity has a resolved observation = 4133
+[*] observations with superseded_by_id NULL = 85544 | identities = 15807
+['!'] shipment_evidence_observation: visible=5876
+['!'] shipment_evidence_line: visible=5896
+['!'] shipment_evidence_current: 2532

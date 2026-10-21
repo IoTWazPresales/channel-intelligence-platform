@@ -1,0 +1,10 @@
+current_database() cip (read-only)
+shipment_evidence_line on OC with the company names (not the Q/SADC segment names) []
+fact_inbound_shipment on OC with the company names []
+lineup lines on OC by token naming compuspeed/syntech [('Channel Syntech', 1), ('SADC - Compuspeed', 35), ('Syntech', 16)]
+lineup lines on OC total [(92,)]
+cpor_case on OC [(174, '{"id":174,"case_code":"C25440974","customer_id":1,"promotion_type":"Sell out PP","window_start":"2025-04-16","window_end":"2025-04-30","status":"settled","roe_snapshot":19.470000,"currency_code":"ZAR"')]
+fact_returns on OC columns [('id',), ('source_key',), ('staging_line_id',), ('distributor_id',), ('product_id',), ('customer_id',), ('transaction_date',), ('invoice_no',), ('return_quantity',), ('unit_price',), ('import_job_id',), ('created_at',), ('updated_at',)]
+fact_inventory_reconciliation on OC by distributor [(29, 12)]
+DSI facts on OC: staging token vs fact count (exact link via staging_line_id) [(31, 31)]
+job 96 resolved before or after the absorb [(43, 'failed', datetime.datetime(2026, 6, 5, 22, 46, 11, 776612, tzinfo=zoneinfo.ZoneInfo(key='Africa/Johannesburg')), datetime.datetime(2026, 6, 21, 18, 41, 50, 445320, tzinfo=zoneinfo.ZoneInfo(key='Africa/Johannesburg'))), (96, 'completed', datetime.datetime(2026, 6, 21, 19, 40, 22, 621661, tzinfo=zoneinfo.ZoneInfo(key='Africa/Johannesburg')), datetime.datetime(2026, 9, 16, 23, 3, 0, 753260, tzinfo=zoneinfo.ZoneInfo(key='Africa/Johannesburg')))]

@@ -1,0 +1,13 @@
+clone
+database=cip_n0079 revision=20261012_0034
+latest_cleared=True
+update_append_only=True
+delete_append_only=True
+proof_rows=3
+cip
+database=cip revision=20261012_0034
+latest_cleared=True
+update_append_only=True
+delete_append_only=True
+proof_rows=0
+done

@@ -1,0 +1,1 @@
+{"path": "apps/api/tests/test_cst_history_upload_rules.py", "note": "N-0111 repair: Date header and week 52 -> 1 roll tests.", "provenance": "implementation-observation", "node": "N-0111", "expected_revision": 24}

@@ -1,0 +1,13 @@
+{
+  "node": "N-0079",
+  "expected_revision": 1,
+  "title": "Budget ledger: derived reserve, commitment, consumption, payment and reconciliation, with transfers and optional caps (spec section 9.7)",
+  "acceptance_criteria": [
+    "Rules per accepted decision D-0059 (Warren 2026-10-07): derived reserve, commit at approve, consume at settle, paid separate with link coverage, audited transfers, campaign/non-campaign reserve rows with a view switch, historical settled cases loaded as consumption, unplanned-spend and unknown-quarter buckets, optional admin caps that flag and never block",
+    "Every ledger row is written in the same transaction as its source event; no updates or deletes; balances are sums; corrections are reversing rows",
+    "The planner budget check, lineup budget position and reapproval gate read the ledger; draft and cancelled cases no longer count",
+    "The historical load is proven on a clone of cip before it runs on cip",
+    "Budgets page shows product line x quarter with reserved, committed, pending, consumed, released, paid, remaining, cap, and drills to entries",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ]
+}

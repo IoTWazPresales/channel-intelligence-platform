@@ -1,0 +1,7 @@
+{"ts":"2026-10-14T19:38:13Z","kind":"programme.event","event":"node.lease.acquire","seq":2214}
+{"ts":"2026-10-14T19:38:37Z","kind":"programme.event","event":"node.verification","seq":2215}
+{"ts":"2026-10-14T19:39:01Z","kind":"programme.event","event":"node.verification","seq":2216}
+{"ts":"2026-10-14T19:39:26Z","kind":"programme.event","event":"node.stage","seq":2217}
+{"ts":"2026-10-14T19:39:50Z","kind":"programme.event","event":"finding.defer","seq":2218}
+{"ts":"2026-10-14T19:40:16Z","kind":"programme.event","event":"finding.defer","seq":2219}
+{"ts":"2026-10-14T19:40:46Z","kind":"programme.event","event":"node.lease.release","seq":2220}

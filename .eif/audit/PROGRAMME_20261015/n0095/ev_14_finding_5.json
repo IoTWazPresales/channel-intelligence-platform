@@ -1,0 +1,1 @@
+{"node": "N-0095", "expected_revision": 16, "code": "DOES_NOT_FIT", "note": "N-0095: no Python linter is installed in the API venv; changed Python files were not linted (web: tsc exit 0, next lint clean)."}

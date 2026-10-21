@@ -1,0 +1,82 @@
+DATABASE_URL=postgresql+asyncpg://cip:***@localhost:5432/cip_test
+DATABASE_URL_SYNC=postgresql://cip:***@localhost:5432/cip_test
+DATABASE_URL_SYNC_MIGRATE=postgresql://cip:***@localhost:5432/cip_test
+current_database()=cip_test
+........................................................................ [  2%]
+........................................................................ [  4%]
+........................................................................ [  7%]
+........................................................................ [  9%]
+........................................................................ [ 11%]
+........................................................................ [ 14%]
+........................................................................ [ 16%]
+........................................................................ [ 18%]
+........................................................................ [ 21%]
+........................................................................ [ 23%]
+........................................................................ [ 26%]
+........................................................................ [ 28%]
+..........s............................................................. [ 30%]
+..........................................................ssssss........ [ 33%]
+........................................................................ [ 35%]
+........................................................................ [ 37%]
+........................................................................ [ 40%]
+........................................................................ [ 42%]
+........................................................................ [ 45%]
+...............................................s........................ [ 47%]
+........................................................................ [ 49%]
+........................................................................ [ 52%]
+........................................................................ [ 54%]
+.....................................ss................................. [ 56%]
+..........................................ss............................ [ 59%]
+........................................................................ [ 61%]
+..............................s......................................... [ 64%]
+........................................................................ [ 66%]
+........................................................................ [ 68%]
+........................................................................ [ 71%]
+........................................................................ [ 73%]
+........................................................................ [ 75%]
+........................................................................ [ 78%]
+..............F......................................................... [ 80%]
+........................................................................ [ 83%]
+.................s...................................................... [ 85%]
+........................................................................ [ 87%]
+..............................................s......................... [ 90%]
+...........s....s...s........................s.......................... [ 92%]
+........................................................................ [ 94%]
+.......ss............................................................... [ 97%]
+........................................................................ [ 99%]
+............                                                             [100%]
+================================== FAILURES ===================================
+_____________ test_every_steward_router_write_matches_the_matrix ______________
+
+    def test_every_steward_router_write_matches_the_matrix():
+        seen: dict[tuple[str, str], frozenset[Role] | None] = {}
+        for route in _scoped_routes():
+            if set(route.methods or ()) & _WRITE_METHODS:
+                seen[_route_key(route)] = _allowed_roles(route)
+        ungated = sorted(k for k, v in seen.items() if v is None)
+        assert ungated == [], f"write routes without require_roles: {ungated}"
+        unlisted = sorted(set(seen) - set(_WRITE_MATRIX))
+>       assert unlisted == [], f"new write route missing from the N-0086 matrix: {unlisted}"
+E       AssertionError: new write route missing from the N-0086 matrix: [('POST', '/api/v1/imports/jobs/{job_id}/cst-confirm-year')]
+E       assert [('POST', '/a...onfirm-year')] == []
+E         
+E         Left contains one more item: ('POST', '/api/v1/imports/jobs/{job_id}/cst-confirm-year')
+E         Use -v to get more diff
+
+tests\test_rbac_n0086_steward_writes.py:198: AssertionError
+============================== warnings summary ===============================
+tests/test_plan_vs_executed.py::test_available_periods_independent_of_period_filter
+tests/test_plan_vs_executed.py::test_plan_vs_executed_read_model_wires_scorecard
+tests/test_plan_vs_executed.py::test_golden_scorecard_tie_out_all_clean_periods
+tests/test_plan_vs_executed.py::test_backlog_066_flag_instead_of_golden_assertion[25Q1]
+tests/test_plan_vs_executed.py::test_backlog_066_flag_instead_of_golden_assertion[24Q4]
+tests/test_plan_vs_executed.py::test_drill_filter_does_not_change_scorecard
+  C:\Users\warren_eliason\channel-intelligence-platform\apps\api\app\services\grid_fields.py:361: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    return {int(r[0]): (r[1], r[2]) for r in res.all()}
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_rbac_n0086_steward_writes.py::test_every_steward_router_write_matches_the_matrix
+1 failed, 3014 passed, 21 skipped, 6 warnings in 189.07s (0:03:09)

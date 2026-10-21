@@ -1,0 +1,1 @@
+{"node":"N-0086","expected_revision":10,"dim":"observability","state":"pass","evidence":{"path":".eif/audit/PROGRAMME_20261009/N0086_IMPL.md","summary":"No new metric. The address key and the role gate are asserted in tests. Existing auth failures are unchanged."},"rationale":"An operator can re-run the named tests. There is no new alert on throttle decisions."}

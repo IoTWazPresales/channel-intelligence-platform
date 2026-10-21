@@ -1,0 +1,266 @@
+
+/api/v1/imports
+
+| # | Method | Path | Handler | Role required |
+|---|--------|------|---------|---------------|
+| 1 | GET | `/api/v1/imports/templates` | `imports.list_import_templates` | any signed-in user |
+| 2 | GET | `/api/v1/imports/templates/{slug}` | `imports.get_import_template` | any signed-in user |
+| 3 | GET | `/api/v1/imports/templates/{slug}/sample` | `imports.download_sample_template` | any signed-in user |
+| 4 | GET | `/api/v1/imports/sources` | `imports.list_sources` | any signed-in user |
+| 5 | GET | `/api/v1/imports/jobs` | `imports.list_jobs` | any signed-in user |
+| 6 | GET | `/api/v1/imports/stewardship-summary` | `imports.get_stewardship_summary` | any signed-in user |
+| 7 | GET | `/api/v1/imports/steward-queue` | `imports.get_steward_failure_queue` | any signed-in user |
+| 8 | POST | `/api/v1/imports/jobs/bulk-delete-preview` | `imports.post_import_jobs_bulk_delete_preview` | admin |
+| 9 | POST | `/api/v1/imports/jobs/bulk-delete-confirm` | `imports.post_import_jobs_bulk_delete_confirm` | admin |
+| 10 | POST | `/api/v1/imports/jobs` | `imports.create_job` | any signed-in user |
+| 11 | POST | `/api/v1/imports/jobs/{job_id}/dsi-file-exclusions` | `imports.set_dsi_file_exclusions` | any signed-in user |
+| 12 | POST | `/api/v1/imports/jobs/{job_id}/dsi-file-distributors` | `imports.post_dsi_file_distributors` | any signed-in user |
+| 13 | POST | `/api/v1/imports/jobs/{job_id}/dsi-file-snapshot-periods` | `imports.post_dsi_file_snapshot_periods` | any signed-in user |
+| 14 | GET | `/api/v1/imports/dsi/coverage` | `imports.get_dsi_coverage` | any signed-in user |
+| 15 | POST | `/api/v1/imports/dsi/batch-propose` | `imports.dsi_batch_propose` | any signed-in user |
+| 16 | POST | `/api/v1/imports/dsi/batch-jobs` | `imports.dsi_batch_create_jobs` | any signed-in user |
+| 17 | POST | `/api/v1/imports/cst/batch-propose` | `imports.cst_batch_propose` | any signed-in user |
+| 18 | POST | `/api/v1/imports/cst/batch-jobs` | `imports.cst_batch_create_jobs` | any signed-in user |
+| 19 | GET | `/api/v1/imports/jobs/{job_id}/rows` | `imports.list_job_rows` | any signed-in user |
+| 20 | GET | `/api/v1/imports/jobs/{job_id}/lineup-lines` | `imports.list_lineup_lines` | any signed-in user |
+| 21 | GET | `/api/v1/imports/jobs/{job_id}` | `imports.get_job` | any signed-in user |
+| 22 | GET | `/api/v1/imports/jobs/{job_id}/dsi-progress` | `imports.get_dsi_job_progress` | any signed-in user |
+| 23 | GET | `/api/v1/imports/background-tasks` | `imports.list_background_tasks` | any signed-in user |
+| 24 | POST | `/api/v1/imports/jobs/{job_id}/cancel` | `imports.post_cancel_import_job` | any signed-in user |
+| 25 | POST | `/api/v1/imports/jobs/{job_id}/retry` | `imports.post_retry_import_job` | any signed-in user |
+| 26 | GET | `/api/v1/imports/jobs/{job_id}/shipment-mapping-state` | `imports.get_shipment_mapping_state` | any signed-in user |
+| 27 | POST | `/api/v1/imports/jobs/{job_id}/shipment-sheets` | `imports.post_shipment_sheets` | any signed-in user |
+| 28 | PUT | `/api/v1/imports/jobs/{job_id}/shipment-field-mapping` | `imports.put_shipment_field_mapping` | any signed-in user |
+| 29 | POST | `/api/v1/imports/jobs/{job_id}/shipment-validate` | `imports.post_shipment_validate` | any signed-in user |
+| 30 | GET | `/api/v1/imports/jobs/{job_id}/dsi-mapping-state` | `imports.get_dsi_mapping_state` | any signed-in user |
+| 31 | PUT | `/api/v1/imports/jobs/{job_id}/dsi-field-mapping` | `imports.put_dsi_field_mapping` | any signed-in user |
+| 32 | POST | `/api/v1/imports/jobs/{job_id}/dsi-validate` | `imports.post_dsi_validate` | any signed-in user |
+| 33 | POST | `/api/v1/imports/jobs/{job_id}/dsi-apply` | `imports.post_dsi_apply` | any signed-in user |
+| 34 | POST | `/api/v1/imports/jobs/{job_id}/process` | `imports.process_job` | any signed-in user |
+| 35 | GET | `/api/v1/imports/jobs/{job_id}/cst-mapping-state` | `imports.get_cst_mapping_state` | any signed-in user |
+| 36 | GET | `/api/v1/imports/jobs/{job_id}/cst-candidates` | `imports.list_cst_candidates` | any signed-in user |
+| 37 | POST | `/api/v1/imports/jobs/{job_id}/cst-candidates/{candidate_id}/resolve` | `imports.resolve_cst_candidate` | any signed-in user |
+| 38 | POST | `/api/v1/imports/jobs/{job_id}/cst-candidates/{candidate_id}/ignore` | `imports.ignore_cst_candidate` | any signed-in user |
+| 39 | POST | `/api/v1/imports/jobs/{job_id}/cst-steward-bulk-preview` | `imports.cst_steward_bulk_preview` | any signed-in user |
+| 40 | POST | `/api/v1/imports/jobs/{job_id}/cst-steward-bulk-apply` | `imports.cst_steward_bulk_apply` | any signed-in user |
+| 41 | POST | `/api/v1/imports/jobs/{job_id}/cst-steward-bulk-ignore/apply-async` | `imports.cst_steward_bulk_ignore_apply_async` | any signed-in user |
+| 42 | POST | `/api/v1/imports/jobs/{job_id}/cst-steward-bulk-provisional-customers/apply-async` | `imports.cst_steward_bulk_provisional_not_supported` | any signed-in user |
+| 43 | GET | `/api/v1/imports/jobs/{job_id}/cst-steward-bulk-task/{task_id}` | `imports.cst_steward_bulk_task_status` | any signed-in user |
+| 44 | POST | `/api/v1/imports/jobs/{job_id}/cst-resolution-plan` | `imports.cst_resolution_plan_generate` | any signed-in user |
+| 45 | POST | `/api/v1/imports/jobs/{job_id}/cst-resolution-plan/compute-async` | `imports.cst_resolution_plan_compute_async` | any signed-in user |
+| 46 | POST | `/api/v1/imports/jobs/{job_id}/cst-resolution-plan/apply-async` | `imports.cst_resolution_plan_apply_async` | any signed-in user |
+| 47 | GET | `/api/v1/imports/jobs/{job_id}/cst-resolution-plan-task/{task_id}` | `imports.cst_resolution_plan_task_status` | any signed-in user |
+| 48 | POST | `/api/v1/imports/product-master/jobs` | `imports_product_master.create_product_master_job` | admin |
+| 49 | GET | `/api/v1/imports/product-master/jobs/{job_id}/state` | `imports_product_master.get_product_master_job_state` | admin |
+| 50 | PUT | `/api/v1/imports/product-master/jobs/{job_id}/mapping` | `imports_product_master.put_product_master_mapping` | admin |
+| 51 | POST | `/api/v1/imports/product-master/jobs/{job_id}/validate` | `imports_product_master.post_product_master_validate` | admin |
+| 52 | POST | `/api/v1/imports/product-master/jobs/{job_id}/commit` | `imports_product_master.post_product_master_commit` | admin |
+
+/api/v1/cst-steward
+
+| # | Method | Path | Handler | Role required |
+|---|--------|------|---------|---------------|
+| 1 | GET | `/api/v1/cst-steward/key-accounts` | `cst_steward.list_key_account_steward` | any signed-in user |
+| 2 | GET | `/api/v1/cst-steward/key-accounts/{customer_id}` | `cst_steward.get_key_account_steward` | any signed-in user |
+| 3 | PATCH | `/api/v1/cst-steward/key-accounts/{customer_id}` | `cst_steward.patch_key_account_steward` | any signed-in user |
+| 4 | GET | `/api/v1/cst-steward/report-slots/worklist` | `cst_steward.report_slot_worklist` | any signed-in user |
+| 5 | POST | `/api/v1/cst-steward/report-slots/advance` | `cst_steward.advance_report_slots` | any signed-in user |
+| 6 | POST | `/api/v1/cst-steward/p4-bootstrap-configs` | `cst_steward.p4_bootstrap_configs` | admin |
+| 7 | GET | `/api/v1/cst-steward/article-aliases` | `cst_steward.list_article_aliases` | any signed-in user |
+| 8 | POST | `/api/v1/cst-steward/article-aliases/import` | `cst_steward.import_article_aliases` | any signed-in user |
+| 9 | POST | `/api/v1/cst-steward/article-aliases/confirm-import` | `cst_steward.confirm_imported_article_aliases` | any signed-in user |
+| 10 | PATCH | `/api/v1/cst-steward/article-aliases/{alias_id}` | `cst_steward.patch_article_alias` | any signed-in user |
+| 11 | POST | `/api/v1/cst-steward/article-aliases/derive-eras-from-shipping` | `cst_steward.derive_eras_from_shipping` | any signed-in user |
+| 12 | POST | `/api/v1/cst-steward/article-aliases/confirm-shipping-derived` | `cst_steward.confirm_shipping_derived_eras` | any signed-in user |
+| 13 | POST | `/api/v1/cst-steward/article-aliases/reresolve-job-residuals` | `cst_steward.reresolve_job_residuals` | any signed-in user |
+| 14 | POST | `/api/v1/cst-steward/article-aliases/{alias_id}/confirm` | `cst_steward.confirm_article_alias` | any signed-in user |
+| 15 | POST | `/api/v1/cst-steward/article-aliases/{alias_id}/reject` | `cst_steward.reject_article_alias` | any signed-in user |
+
+/api/v1/mappings
+
+| # | Method | Path | Handler | Role required |
+|---|--------|------|---------|---------------|
+| 1 | GET | `/api/v1/mappings/queue` | `mappings.mapping_queue` | any signed-in user |
+| 2 | POST | `/api/v1/mappings/queue/{item_id}/approve` | `mappings.approve` | any signed-in user |
+| 3 | POST | `/api/v1/mappings/queue/{item_id}/reject` | `mappings.reject` | any signed-in user |
+| 4 | DELETE | `/api/v1/mappings/queue/{item_id}` | `mappings.delete_queue_item` | any signed-in user |
+| 5 | POST | `/api/v1/mappings/queue/clear-all` | `mappings.clear_mapping_queue` | any signed-in user |
+| 6 | GET | `/api/v1/mappings/import-jobs/{job_id}/distributor-si-candidates` | `mappings.list_distributor_si_mapping_candidates` | any signed-in user |
+| 7 | GET | `/api/v1/mappings/import-jobs/{job_id}/distributor-si-candidates/tab-counts` | `mappings.distributor_si_mapping_candidate_tab_counts` | any signed-in user |
+| 8 | POST | `/api/v1/mappings/import-candidates/{candidate_id}/resolve-product` | `mappings.resolve_dsi_product_candidate` | any signed-in user |
+| 9 | POST | `/api/v1/mappings/import-candidates/{candidate_id}/map-customer` | `mappings.map_dsi_candidate_to_customer` | any signed-in user |
+| 10 | POST | `/api/v1/mappings/import-candidates/{candidate_id}/duplicate-review/different-entity` | `mappings.acknowledge_dsi_duplicate_different_entity` | any signed-in user |
+| 11 | POST | `/api/v1/mappings/import-candidates/{candidate_id}/duplicate-review/same-entity` | `mappings.resolve_dsi_duplicate_same_entity` | any signed-in user |
+| 12 | POST | `/api/v1/mappings/import-jobs/{job_id}/duplicate-review/cluster-same-entity` | `mappings.resolve_dsi_duplicate_cluster_same_entity` | any signed-in user |
+| 13 | POST | `/api/v1/mappings/import-candidates/{candidate_id}/create-provisional-customer` | `mappings.create_provisional_customer_from_dsi_candidate` | any signed-in user |
+| 14 | POST | `/api/v1/mappings/import-candidates/{candidate_id}/mark-open-channel` | `mappings.mark_dsi_candidate_open_channel` | any signed-in user |
+| 15 | POST | `/api/v1/mappings/import-candidates/{candidate_id}/ignore` | `mappings.ignore_dsi_candidate` | any signed-in user |
+| 16 | POST | `/api/v1/mappings/import-candidates/{candidate_id}/map-distributor` | `mappings.map_dsi_candidate_to_distributor` | any signed-in user |
+| 17 | POST | `/api/v1/mappings/import-candidates/{candidate_id}/create-provisional-distributor` | `mappings.create_provisional_distributor_from_dsi_candidate` | any signed-in user |
+| 18 | POST | `/api/v1/mappings/import-jobs/{job_id}/dsi-steward-bulk-preview` | `mappings.dsi_steward_bulk_preview` | any signed-in user |
+| 19 | POST | `/api/v1/mappings/import-jobs/{job_id}/dsi-steward-bulk-provisional-customers/apply-async` | `mappings.dsi_steward_bulk_provisional_apply_async` | any signed-in user |
+| 20 | POST | `/api/v1/mappings/import-jobs/{job_id}/dsi-steward-bulk-ignore/apply-async` | `mappings.dsi_steward_bulk_ignore_apply_async` | any signed-in user |
+| 21 | GET | `/api/v1/mappings/import-jobs/{job_id}/dsi-steward-bulk-task/{task_id}` | `mappings.dsi_steward_bulk_task_status` | any signed-in user |
+| 22 | POST | `/api/v1/mappings/import-jobs/{job_id}/dsi-steward-bulk-apply` | `mappings.dsi_steward_bulk_apply` | any signed-in user |
+| 23 | POST | `/api/v1/mappings/import-jobs/{job_id}/dsi-resolution-plan/compute-async` | `mappings.dsi_resolution_plan_compute_async` | any signed-in user |
+| 24 | POST | `/api/v1/mappings/import-jobs/{job_id}/dsi-resolution-plan` | `mappings.dsi_resolution_plan_generate` | any signed-in user |
+| 25 | POST | `/api/v1/mappings/import-jobs/{job_id}/dsi-resolution-plan/effective` | `mappings.dsi_resolution_plan_effective` | any signed-in user |
+| 26 | POST | `/api/v1/mappings/import-jobs/{job_id}/dsi-resolution-plan/apply-async` | `mappings.dsi_resolution_plan_apply_async` | any signed-in user |
+| 27 | POST | `/api/v1/mappings/import-jobs/{job_id}/dsi-resolution-plan/apply` | `mappings.dsi_resolution_plan_apply_endpoint` | any signed-in user |
+| 28 | POST | `/api/v1/mappings/import-jobs/{job_id}/dsi-apply-complete` | `mappings.dsi_apply_complete_to_loaded` | admin |
+| 29 | POST | `/api/v1/mappings/import-jobs/{job_id}/revalidate-distributor-sales-inventory` | `mappings.revalidate_dsi_import_job` | any signed-in user |
+| 30 | GET | `/api/v1/mappings/import-jobs/{job_id}/dsi-channel-geographic-evidence` | `mappings.dsi_channel_geographic_evidence` | any signed-in user |
+| 31 | GET | `/api/v1/mappings/import-jobs/{job_id}/dsi-unresolved-geo-tokens` | `mappings.dsi_unresolved_geo_tokens` | any signed-in user |
+| 32 | POST | `/api/v1/mappings/import-jobs/{job_id}/dsi-geo-steward/channel-create` | `mappings.dsi_geo_steward_channel_create` | admin |
+| 33 | POST | `/api/v1/mappings/import-jobs/{job_id}/dsi-geo-steward/channel-alias` | `mappings.dsi_geo_steward_channel_alias` | admin |
+| 34 | POST | `/api/v1/mappings/import-jobs/{job_id}/dsi-geo-steward/region-create` | `mappings.dsi_geo_steward_region_create` | admin |
+| 35 | POST | `/api/v1/mappings/import-jobs/{job_id}/dsi-geo-steward/region-alias` | `mappings.dsi_geo_steward_region_alias` | admin |
+| 36 | GET | `/api/v1/mappings/import-jobs/{job_id}/dsi-geo-steward/create-prefill` | `mappings.dsi_geo_steward_create_prefill` | any signed-in user |
+| 37 | POST | `/api/v1/mappings/import-jobs/{job_id}/dsi-geo-steward/region-register-from-hint` | `mappings.dsi_geo_steward_region_register_from_hint` | admin |
+| 38 | POST | `/api/v1/mappings/import-jobs/{job_id}/dsi-geo-steward/bulk-apply` | `mappings.dsi_geo_steward_bulk_apply` | admin |
+| 39 | POST | `/api/v1/mappings/customer-source-token-aliases` | `mappings.create_customer_source_token_alias` | any signed-in user |
+
+/api/v1/product-master-gaps
+
+| # | Method | Path | Handler | Role required |
+|---|--------|------|---------|---------------|
+| 1 | GET | `/api/v1/product-master-gaps/worklist` | `product_master_gaps.get_product_master_gap_worklist` | any signed-in user |
+| 2 | POST | `/api/v1/product-master-gaps/scan` | `product_master_gaps.post_gap_scan` | any signed-in user |
+| 3 | POST | `/api/v1/product-master-gaps/preview` | `product_master_gaps.post_gap_preview` | any signed-in user |
+| 4 | POST | `/api/v1/product-master-gaps/apply` | `product_master_gaps.post_gap_apply` | any signed-in user |
+
+/api/v1/exceptions
+
+| # | Method | Path | Handler | Role required |
+|---|--------|------|---------|---------------|
+| 1 | GET | `/api/v1/exceptions` | `exceptions.list_exceptions` | any signed-in user |
+| 2 | DELETE | `/api/v1/exceptions/{item_id}` | `exceptions.delete_exception` | any signed-in user |
+| 3 | POST | `/api/v1/exceptions/clear-all` | `exceptions.clear_exceptions` | any signed-in user |
+
+/api/v1/shipment-evidence
+
+| # | Method | Path | Handler | Role required |
+|---|--------|------|---------|---------------|
+| 1 | GET | `/api/v1/shipment-evidence/raw-column-keys` | `shipment_evidence.list_shipment_evidence_raw_column_keys` | admin + steward |
+| 2 | GET | `/api/v1/shipment-evidence/import-jobs/{job_id}/mapping-candidates` | `shipment_evidence.list_shipment_import_job_mapping_candidates` | admin + steward |
+| 3 | GET | `/api/v1/shipment-evidence/import-jobs/{job_id}/mapping-candidates/paginated` | `shipment_evidence.list_shipment_import_job_mapping_candidates_paginated` | admin + steward |
+| 4 | GET | `/api/v1/shipment-evidence/import-jobs/{job_id}/mapping-candidates/tab-counts` | `shipment_evidence.shipment_mapping_candidate_tab_counts` | admin + steward |
+| 5 | POST | `/api/v1/shipment-evidence/import-jobs/{job_id}/resolution-plan/compute-async` | `shipment_evidence.shipment_resolution_plan_compute_async` | admin + steward |
+| 6 | POST | `/api/v1/shipment-evidence/import-jobs/{job_id}/resolution-plan` | `shipment_evidence.shipment_resolution_plan_generate` | admin + steward |
+| 7 | POST | `/api/v1/shipment-evidence/import-jobs/{job_id}/resolution-plan/effective` | `shipment_evidence.shipment_resolution_plan_effective` | admin + steward |
+| 8 | POST | `/api/v1/shipment-evidence/import-jobs/{job_id}/resolution-plan/apply-async` | `shipment_evidence.shipment_resolution_plan_apply_async` | admin + steward |
+| 9 | POST | `/api/v1/shipment-evidence/import-jobs/{job_id}/bulk-apply-confirmed-plans` | `shipment_evidence.shipment_import_job_bulk_apply_confirmed_plans` | admin + steward |
+| 10 | POST | `/api/v1/shipment-evidence/import-candidates/bulk-map-customer` | `shipment_evidence.shipment_import_candidates_bulk_map_customer` | admin + steward |
+| 11 | POST | `/api/v1/shipment-evidence/import-candidates/{candidate_id}/map-distributor` | `shipment_evidence.shipment_import_candidate_map_distributor` | admin + steward |
+| 12 | POST | `/api/v1/shipment-evidence/import-candidates/{candidate_id}/create-provisional-distributor` | `shipment_evidence.shipment_import_candidate_create_provisional_distributor` | admin + steward |
+| 13 | POST | `/api/v1/shipment-evidence/import-candidates/{candidate_id}/map-customer` | `shipment_evidence.shipment_import_candidate_map_customer` | admin + steward |
+| 14 | POST | `/api/v1/shipment-evidence/import-candidates/{candidate_id}/manual-special-category` | `shipment_evidence.shipment_import_candidate_manual_special_category` | admin + steward |
+| 15 | POST | `/api/v1/shipment-evidence/import-candidates/{candidate_id}/clear-special-category` | `shipment_evidence.shipment_import_candidate_clear_special_category` | admin + steward |
+| 16 | POST | `/api/v1/shipment-evidence/import-candidates/{candidate_id}/reject` | `shipment_evidence.shipment_import_candidate_reject` | admin + steward |
+| 17 | POST | `/api/v1/shipment-evidence/import-candidates/{candidate_id}/duplicate-review/different-entity` | `shipment_evidence.shipment_import_candidate_duplicate_different_entity` | admin + steward |
+| 18 | POST | `/api/v1/shipment-evidence/import-candidates/{candidate_id}/duplicate-review/same-entity` | `shipment_evidence.shipment_import_candidate_duplicate_same_entity` | admin + steward |
+| 19 | POST | `/api/v1/shipment-evidence/import-candidates/{candidate_id}/create-provisional-customer` | `shipment_evidence.shipment_import_candidate_create_provisional_customer` | admin + steward |
+| 20 | POST | `/api/v1/shipment-evidence/import-jobs/{job_id}/bulk-create-provisional-customers` | `shipment_evidence.shipment_import_job_bulk_create_provisional_customers` | admin + steward |
+| 21 | POST | `/api/v1/shipment-evidence/import-jobs/{job_id}/shipment-steward-bulk-provisional-customers/apply-async` | `shipment_evidence.shipment_steward_bulk_provisional_apply_async` | admin + steward |
+| 22 | POST | `/api/v1/shipment-evidence/import-jobs/{job_id}/shipment-steward-bulk-preview` | `shipment_evidence.shipment_steward_bulk_preview` | admin + steward |
+| 23 | POST | `/api/v1/shipment-evidence/import-jobs/{job_id}/shipment-steward-bulk-apply` | `shipment_evidence.shipment_steward_bulk_apply` | admin + steward |
+| 24 | POST | `/api/v1/shipment-evidence/import-jobs/{job_id}/shipment-steward-bulk-ignore/apply-async` | `shipment_evidence.shipment_steward_bulk_ignore_apply_async` | admin + steward |
+| 25 | GET | `/api/v1/shipment-evidence/import-jobs/{job_id}/shipment-bulk-task/{task_id}` | `shipment_evidence.shipment_bulk_task_status` | any signed-in user |
+| 26 | POST | `/api/v1/shipment-evidence/jobs/{job_id}/apply` | `shipment_evidence.apply_shipment_import_job` | admin + steward |
+| 27 | GET | `/api/v1/shipment-evidence` | `shipment_evidence.list_shipment_evidence` | admin + steward |
+| 28 | GET | `/api/v1/shipment-evidence/change-events` | `shipment_evidence.list_shipment_change_events` | admin + steward |
+| 29 | GET | `/api/v1/shipment-evidence/{line_id}` | `shipment_evidence.get_shipment_evidence_line` | admin + steward |
+
+/api/v1/listing-capture
+
+| # | Method | Path | Handler | Role required |
+|---|--------|------|---------|---------------|
+| 1 | GET | `/api/v1/listing-capture/meta` | `listing_capture.listing_meta` | any signed-in user |
+| 2 | GET | `/api/v1/listing-capture/listings` | `listing_capture.list_listings` | any signed-in user |
+| 3 | POST | `/api/v1/listing-capture/listings` | `listing_capture.post_listing` | any signed-in user |
+| 4 | PATCH | `/api/v1/listing-capture/listings/{listing_id}/status` | `listing_capture.patch_status` | any signed-in user |
+| 5 | POST | `/api/v1/listing-capture/listings/import-csv` | `listing_capture.post_import_csv` | any signed-in user |
+| 6 | GET | `/api/v1/listing-capture/proposals` | `listing_capture.get_proposals` | any signed-in user |
+| 7 | POST | `/api/v1/listing-capture/proposals/confirm-suggested` | `listing_capture.post_confirm_suggested` | any signed-in user |
+| 8 | POST | `/api/v1/listing-capture/proposals/{seed_id}/confirm` | `listing_capture.post_confirm_proposal` | any signed-in user |
+| 9 | POST | `/api/v1/listing-capture/proposals/{seed_id}/reject` | `listing_capture.post_reject_proposal` | any signed-in user |
+| 10 | GET | `/api/v1/listing-capture/observations` | `listing_capture.get_observations` | any signed-in user |
+| 11 | GET | `/api/v1/listing-capture/intelligence` | `listing_capture.get_listing_intelligence` | any signed-in user |
+| 12 | POST | `/api/v1/listing-capture/poll` | `listing_capture.post_poll` | any signed-in user |
+| 13 | POST | `/api/v1/listing-capture/observations/{observation_id}/reparse` | `listing_capture.post_reparse` | any signed-in user |
+
+/api/v1/customers
+
+| # | Method | Path | Handler | Role required |
+|---|--------|------|---------|---------------|
+| 1 | GET | `/api/v1/customers` | `customers.list_customers` | any signed-in user |
+| 2 | GET | `/api/v1/customers/duplicate-groups` | `customers.list_customer_duplicate_groups_endpoint` | any signed-in user |
+| 3 | GET | `/api/v1/customers/alias-scope-conflicts` | `customers.list_customer_alias_scope_conflicts_endpoint` | any signed-in user |
+| 4 | POST | `/api/v1/customers/alias-scope-conflicts/merge-preview` | `customers.customer_alias_scope_merge_preview_endpoint` | any signed-in user |
+| 5 | POST | `/api/v1/customers/alias-scope-conflicts/merge-confirm` | `customers.customer_alias_scope_merge_confirm_endpoint` | any signed-in user |
+| 6 | GET | `/api/v1/customers/alias-scope-conflicts/merge-task/{task_id}` | `customers.customer_alias_scope_merge_task_status` | any signed-in user |
+| 7 | POST | `/api/v1/customers/duplicate-groups/merge-preview` | `customers.customer_full_merge_preview_endpoint` | any signed-in user |
+| 8 | POST | `/api/v1/customers/duplicate-groups/merge-preview-bulk` | `customers.customer_full_merge_bulk_preview_endpoint` | any signed-in user |
+| 9 | POST | `/api/v1/customers/duplicate-groups/merge-confirm` | `customers.customer_full_merge_confirm_endpoint` | any signed-in user |
+| 10 | GET | `/api/v1/customers/duplicate-groups/merge-task/{task_id}` | `customers.customer_full_merge_task_status` | any signed-in user |
+| 11 | POST | `/api/v1/customers` | `customers.create_customer` | any signed-in user |
+| 12 | POST | `/api/v1/customers/bulk-delete-preview` | `customers.post_customers_bulk_delete_preview` | any signed-in user |
+| 13 | POST | `/api/v1/customers/bulk-delete-confirm` | `customers.post_customers_bulk_delete_confirm` | any signed-in user |
+| 14 | PATCH | `/api/v1/customers/{customer_id}` | `customers.patch_customer` | any signed-in user |
+| 15 | POST | `/api/v1/customers/disposition/batch` | `customers.disposition_customers_batch` | any signed-in user |
+| 16 | POST | `/api/v1/customers/promote/batch` | `customers.promote_customers_batch` | any signed-in user |
+| 17 | POST | `/api/v1/customers/{customer_id}/promote` | `customers.promote_customer` | any signed-in user |
+| 18 | POST | `/api/v1/customers/bulk` | `customers.bulk_upsert_customers` | any signed-in user |
+| 19 | GET | `/api/v1/customers/{customer_id}/locations` | `customers.list_customer_locations` | any signed-in user |
+| 20 | POST | `/api/v1/customers/{customer_id}/locations` | `customers.create_customer_location` | any signed-in user |
+| 21 | PATCH | `/api/v1/customers/{customer_id}/locations/{location_id}` | `customers.patch_customer_location` | any signed-in user |
+| 22 | GET | `/api/v1/customers/references` | `customers.get_customer_references_by_query` | any signed-in user |
+| 23 | GET | `/api/v1/customers/id/{customer_id}/refs` | `customers.get_customer_refs_for_delete_ux` | any signed-in user |
+| 24 | GET | `/api/v1/customers/{customer_id}/references` | `customers.get_customer_references` | any signed-in user |
+| 25 | DELETE | `/api/v1/customers/{customer_id}/locations/{location_id}` | `customers.delete_customer_location` | any signed-in user |
+| 26 | GET | `/api/v1/customers/{customer_id}/contacts` | `customers.list_customer_contacts` | any signed-in user |
+| 27 | POST | `/api/v1/customers/{customer_id}/contacts` | `customers.create_customer_contact` | any signed-in user |
+| 28 | PATCH | `/api/v1/customers/{customer_id}/contacts/{contact_id}` | `customers.patch_customer_contact` | any signed-in user |
+| 29 | DELETE | `/api/v1/customers/{customer_id}/contacts/{contact_id}` | `customers.delete_customer_contact` | any signed-in user |
+| 30 | DELETE | `/api/v1/customers/{customer_id}` | `customers.delete_customer` | any signed-in user |
+
+/api/v1/distributors
+
+| # | Method | Path | Handler | Role required |
+|---|--------|------|---------|---------------|
+| 1 | POST | `/api/v1/distributors/bulk-delete-preview` | `distributors.post_distributors_bulk_delete_preview` | any signed-in user |
+| 2 | POST | `/api/v1/distributors/bulk-delete-confirm` | `distributors.post_distributors_bulk_delete_confirm` | any signed-in user |
+| 3 | GET | `/api/v1/distributors/duplicate-groups` | `distributors.list_distributor_duplicate_groups_endpoint` | any signed-in user |
+| 4 | POST | `/api/v1/distributors/duplicate-groups/merge-preview` | `distributors.distributor_full_merge_preview_endpoint` | any signed-in user |
+| 5 | POST | `/api/v1/distributors/duplicate-groups/merge-preview-bulk` | `distributors.distributor_full_merge_bulk_preview_endpoint` | any signed-in user |
+| 6 | POST | `/api/v1/distributors/duplicate-groups/merge-confirm` | `distributors.distributor_full_merge_confirm_endpoint` | any signed-in user |
+| 7 | GET | `/api/v1/distributors/duplicate-groups/merge-task/{task_id}` | `distributors.distributor_full_merge_task_status` | any signed-in user |
+| 8 | GET | `/api/v1/distributors` | `distributors.list_distributors` | any signed-in user |
+| 9 | GET | `/api/v1/distributors/{distributor_id}` | `distributors.get_distributor_detail` | any signed-in user |
+| 10 | POST | `/api/v1/distributors` | `distributors.create_distributor` | any signed-in user |
+| 11 | PATCH | `/api/v1/distributors/{distributor_id}` | `distributors.patch_distributor` | any signed-in user |
+| 12 | POST | `/api/v1/distributors/disposition/batch` | `distributors.disposition_distributors_batch` | any signed-in user |
+| 13 | POST | `/api/v1/distributors/promote/batch` | `distributors.promote_distributors_batch` | any signed-in user |
+| 14 | POST | `/api/v1/distributors/{distributor_id}/promote` | `distributors.promote_distributor` | any signed-in user |
+| 15 | GET | `/api/v1/distributors/references` | `distributors.get_distributor_references_by_query` | any signed-in user |
+| 16 | GET | `/api/v1/distributors/id/{distributor_id}/refs` | `distributors.get_distributor_refs_for_delete_ux` | any signed-in user |
+| 17 | GET | `/api/v1/distributors/{distributor_id}/references` | `distributors.get_distributor_references` | any signed-in user |
+| 18 | DELETE | `/api/v1/distributors/{distributor_id}` | `distributors.delete_distributor` | any signed-in user |
+| 19 | GET | `/api/v1/distributors/{distributor_id}/locations` | `distributors.list_distributor_locations` | any signed-in user |
+| 20 | POST | `/api/v1/distributors/{distributor_id}/locations` | `distributors.create_distributor_location` | any signed-in user |
+| 21 | PATCH | `/api/v1/distributors/{distributor_id}/locations/{location_id}` | `distributors.patch_distributor_location` | any signed-in user |
+| 22 | DELETE | `/api/v1/distributors/{distributor_id}/locations/{location_id}` | `distributors.delete_distributor_location` | any signed-in user |
+| 23 | GET | `/api/v1/distributors/{distributor_id}/contacts` | `distributors.list_distributor_contacts` | any signed-in user |
+| 24 | POST | `/api/v1/distributors/{distributor_id}/contacts` | `distributors.create_distributor_contact` | any signed-in user |
+| 25 | PATCH | `/api/v1/distributors/{distributor_id}/contacts/{contact_id}` | `distributors.patch_distributor_contact` | any signed-in user |
+| 26 | DELETE | `/api/v1/distributors/{distributor_id}/contacts/{contact_id}` | `distributors.delete_distributor_contact` | any signed-in user |
+
+/api/v1/admin
+
+| # | Method | Path | Handler | Role required |
+|---|--------|------|---------|---------------|
+| 1 | GET | `/api/v1/admin/steward-audit` | `steward_audit.list_steward_audit` | admin + steward |
+| 2 | GET | `/api/v1/admin/sql-viewer/tables` | `sql_viewer.sql_viewer_tables` | admin |
+| 3 | POST | `/api/v1/admin/sql-viewer/execute` | `sql_viewer.sql_viewer_execute` | admin |
+| 4 | GET | `/api/v1/admin/sql-viewer/audit` | `sql_viewer.sql_viewer_audit_list` | admin |
+| 5 | GET | `/api/v1/admin/ops/overview` | `ops.ops_overview` | admin + steward |

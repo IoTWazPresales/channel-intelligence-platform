@@ -1,0 +1,1 @@
+{"path": "apps/web/src/app/(app)/admin/cst-steward/CstStockGapSection.tsx", "note": "N-0111 (d7807c8b): Flag reads No on-hand reported / Chain restarts; counts name the weeks.", "provenance": "implementation-observation", "node": "N-0111", "expected_revision": 5}

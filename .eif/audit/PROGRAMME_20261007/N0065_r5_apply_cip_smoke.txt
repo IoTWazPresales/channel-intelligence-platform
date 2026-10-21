@@ -1,0 +1,25 @@
+======================================================================
+N-0065 round 5 apply SMOKE (read only) 2026-10-09 09:25:53
+[app]   current_database() = cip | role = cip super=False bypassrls=False | alembic = ['20261009_0026']
+[app]   pick proconfig = ['search_path=pg_catalog, public'] | four-table policy md5 = 0933b362704b3b553abc66f85931371a
+--- SMOKE (expected computed as the app role under '*'): rows per scope as the app role, got/expected (rule 0026); view best of 3
+  worker (unset)         view=15807/15807 sev_observation=87171/87171 sev_line=87191/87191 inbound=15255/15255 cl_line=3454/3454 cst_listing_seed=281/281 customer_listing=218/218 hist_line=34/34
+                         view 269 ms | setting_after=None enable_sort_after=on | pick: ->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (never executed)
+  admin '*'              view=15807/15807 sev_observation=87171/87171 sev_line=87191/87191 inbound=15255/15255 cl_line=3454/3454 cst_listing_seed=281/281 customer_listing=218/218 hist_line=34/34
+                         view 306 ms | setting_after='*' enable_sort_after=on | pick: ->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (never executed)
+  planner NB             view=8758/8758 sev_observation=47314/47314 sev_line=47314/47314 inbound=8307/8307 cl_line=2371/2371 cst_listing_seed=194/194 customer_listing=152/152 hist_line=15/15
+                         view 2574 ms | setting_after='NB' enable_sort_after=on | pick: ->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (actual time=2086.280..2091.765 rows=15807.00 loops=1)
+  steward NB             view=9253/9253 sev_observation=49057/49057 sev_line=49077/49077 inbound=8851/8851 cl_line=2371/2371 cst_listing_seed=194/194 customer_listing=152/152 hist_line=15/15
+                         view 2533 ms | setting_after='NB' enable_sort_after=on | pick: ->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (actual time=1585.248..1588.463 rows=15807.00 loops=1)
+  planner NB,NR          view=12016/12016 sev_observation=65148/65148 sev_line=65148/65148 inbound=11470/11470 cl_line=3131/3131 cst_listing_seed=246/246 customer_listing=188/188 hist_line=15/15
+                         view 2857 ms | setting_after='NB,NR' enable_sort_after=on | pick: ->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (actual time=1588.621..1592.349 rows=15807.00 loops=1)
+  planner no lines '!'   view=0/0 sev_observation=0/0 sev_line=0/0 inbound=0/0 cl_line=61/61 cst_listing_seed=103/103 customer_listing=91/91 hist_line=15/15
+                         view 560 ms | setting_after='!' enable_sort_after=on | pick: ->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (never executed)
+  steward no lines '!'   view=495/495 sev_observation=1743/1743 sev_line=1763/1763 inbound=544/544 cl_line=61/61 cst_listing_seed=103/103 customer_listing=91/91 hist_line=15/15
+                         view 2514 ms | setting_after='!' enable_sort_after=on | pick: ->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (actual time=1704.357..1708.868 rows=15807.00 loops=1)
+--- SMOKE: helper timings as the app role under NB (count(*), best of 3)
+  cip_sev_current_observation_ids    rows= 15807 563 ms
+  cip_sev_observation_lineage        rows=  5876 154 ms
+  cip_sev_line_lineage               rows=  5896 447 ms
+  cip_inbound_shipment_lineage       rows=   546 422 ms
+supervisor parse: api ('healthy', '27356') worker ('healthy', '37264')

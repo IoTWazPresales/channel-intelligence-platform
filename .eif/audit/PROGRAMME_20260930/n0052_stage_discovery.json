@@ -1,0 +1,1 @@
+{"node": "N-0052", "expected_revision": 2, "to": "discovery", "stage_note": "Role cip cannot read fx_daily_rate. Restore target stays cip_alembic_smoke. Alert channel is a log line plus an optional file, never a cip write."}

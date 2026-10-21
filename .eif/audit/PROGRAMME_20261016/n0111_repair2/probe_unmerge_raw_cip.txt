@@ -1,0 +1,8 @@
+current_database() cip (read-only)
+fact_inbound_shipment raw only: (compuspeed, syntech, either, rows_on_OPEN_CHANNEL) = (163, 51, 214, 5499)
+fact_inbound_shipment raw + token: (compuspeed, syntech, either, rows_on_OPEN_CHANNEL) = (163, 51, 214, 5499)
+shipment_evidence_line raw + token: (compuspeed, syntech, either, rows_on_OPEN_CHANNEL) = (1057, 357, 1414, 31975)
+shipment_evidence_observation raw: (compuspeed, syntech, either, rows_on_OPEN_CHANNEL) = (429, 147, 576, 16093)
+shipment_evidence_current raw: (compuspeed, syntech, either, rows_on_OPEN_CHANNEL) = (152, 46, 198, 5662)
+commercial_lineup_line raw payload + token: (compuspeed, syntech, either, rows_on_OPEN_CHANNEL) = (35, 17, 52, 92)
+commercial_lineup_line token only: (compuspeed, syntech, either, rows_on_OPEN_CHANNEL) = (35, 17, 52, 92)

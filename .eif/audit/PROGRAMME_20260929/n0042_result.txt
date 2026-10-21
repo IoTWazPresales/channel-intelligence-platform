@@ -1,0 +1,11 @@
+node.lease.acquire ok
+baseline.add ok
+node.baseline ok
+node.stage ok
+node.stage ok
+node.quality ok
+node.quality ok
+node.quality ok
+node.quality ok
+evidence.add ok
+node.status ok

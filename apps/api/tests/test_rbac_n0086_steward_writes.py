@@ -77,6 +77,7 @@ _WRITE_MATRIX: dict[tuple[str, str], frozenset[Role]] = {
     ("POST", f"{_I}/jobs/{{job_id}}/cst-candidates/{{candidate_id}}/ignore"): _STEWARD,
     ("POST", f"{_I}/jobs/{{job_id}}/cst-steward-bulk-preview"): _STEWARD,
     ("POST", f"{_I}/jobs/{{job_id}}/cst-steward-bulk-apply"): _STEWARD,
+    ("POST", f"{_I}/jobs/{{job_id}}/cst-load"): _STEWARD,
     ("POST", f"{_I}/jobs/{{job_id}}/cst-steward-bulk-ignore/apply-async"): _STEWARD,
     ("POST", f"{_I}/jobs/{{job_id}}/cst-steward-bulk-provisional-customers/apply-async"): _STEWARD,
     ("POST", f"{_I}/jobs/{{job_id}}/cst-resolution-plan"): _STEWARD,

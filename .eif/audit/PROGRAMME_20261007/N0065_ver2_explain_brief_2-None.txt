@@ -1,0 +1,39 @@
+current_database() = cip | read_only = on | jit = on | work_mem = 4MB | server = 18.3
+captured: unset /api/v1/brief/signals 857.5 ms | engine: async | setting: None | sets: []
+SQL: SELECT count(*) AS count_1 FROM fact_inbound_shipment WHERE fact_inbound_shipment.status != %(status_1)s::VARCHAR AND fact_inbound_shipment.tenant_id = %(tenant_id_1)s::VARCHAR AND (fact_inbound_shipment.id NOT IN (SELECT anon_1.fact_id FROM (SELECT fact_inbound_shipment_1.id AS fact_id, lower(fact_inbound_shipment_1.line_state) AS state, coalesce(fact_inbound_shipment_1.quantity, %(coalesce_1)s::INTEGER) AS open_qty, sum(CASE WHEN (lower(fact_inbound_shipment_1.line_state) = %(lower_1)s::VARCHAR) THEN coalesce(fact_inbound_shipment_1.quantity, %(coalesce_2)s::INTEGER) ELSE %(param_1)s::INTEGER END) OVER (PARTITION BY fact_inbound_shipment_1.tenant_id, lower(trim(coalesce(fact_inbound_shipment_1.operating_unit, ''))), lower(trim(fact_inbound_shipment_1.order_no)), lower(trim(fact_inbound_shipment_1.item_code))) AS shipped_qty, sum(CASE WHEN (lower(fact_inbound_shipment_1.line_state) = %(lower_1)s::VARCHAR) THEN %(param_2)s::INTEGER ELSE %(param_3)s::INTEGER END) OVER (PARTITION BY fact_inbound_shipment_1.tenant_id, lower(trim(coalesce(fact_inbound_shipment_1.operating_unit, ''))), lower(trim(fact_inbound_shipment_1.order_no)), lower(trim(fact_inbound_shipment_1.item_code))) AS n_shipped FROM fact_inbound_shipment AS fact_inbound_shipment_1 WHERE fact_inbound_shipment_1.order_no IS NOT NULL AND fact_inbound_shipment_1.item_code IS NOT NULL AND trim(fact_inbound_shipment_1.order_no) != '' AND trim(fact_inbound_shipment_1.item_code) != '' AND lower(fact_inbound_shipment_1.line_state) IN (%(lower_2_1)s::VARCHAR, %(lower_2_2)s::VARCHAR) AND fact_inbound_shipment_1.tenant_id = %(tid_1)s::VARCHAR) AS anon_1 WHERE anon_1.state = %(state_1)s::VARCHAR AND anon_1.n_shipped > %(n_shipped_1)s::INTEGER AND anon_1.open_qty <= anon_1.shipped_qty)) AND fact_inbound_shipment.tenant_id = %(tid_1)s::VARCHAR
+PARAMS: {'status_1': 'received', 'tenant_id_1': 'default', 'coalesce_1': 0, 'lower_1': 'shipped', 'coalesce_2': 0, 'param_1': 0, 'param_2': 1, 'param_3': 0, 'tid_1': 'default', 'state_1': 'open_order', 'n_shipped_1': 0, 'lower_2_1': 'shipped', 'lower_2_2': 'open_order'}
+explain wall ms: 314
+Aggregate  (cost=14188.51..14188.52 rows=1 width=8) (actual time=280.582..280.587 rows=1.00 loops=1)
+  Buffers: shared hit=7423 read=1838
+  ->  Seq Scan on fact_inbound_shipment  (cost=9138.71..14187.14 rows=551 width=0) (actual time=250.767..280.415 rows=1571.00 loops=1)
+        Filter: (((status)::text <> 'received'::text) AND (tenant_id = 'default'::text) AND ((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((product_id)::bigint = (hashed SubPlan 3).col1))) AND (NOT (ANY (id = (hashed SubPlan 2).col1))))
+        Rows Removed by Filter: 13684
+        Buffers: shared hit=7423 read=1838
+        SubPlan 3
+          ->  Seq Scan on dim_product p_1  (cost=0.00..1952.92 rows=4542 width=4) (never executed)
+                Filter: (CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END AND CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END)
+        SubPlan 2
+          ->  Subquery Scan on anon_1  (cost=7168.90..7174.43 rows=1 width=4) (actual time=236.857..250.276 rows=542.00 loops=1)
+                Filter: ((anon_1.n_shipped > 0) AND (anon_1.open_qty <= anon_1.shipped_qty) AND (anon_1.state = 'open_order'::text))
+                Rows Removed by Filter: 14701
+                Buffers: shared hit=3666 read=966
+                ->  WindowAgg  (cost=7168.90..7173.05 rows=79 width=213) (actual time=193.629..246.390 rows=15243.00 loops=1)
+                      Window: w1 AS (PARTITION BY (lower(TRIM(BOTH FROM COALESCE(fact_inbound_shipment_1.operating_unit, ''::character varying)))), (lower(TRIM(BOTH FROM fact_inbound_shipment_1.order_no))), (lower(TRIM(BOTH FROM fact_inbound_shipment_1.item_code))))
+                      Storage: Memory  Maximum Storage: 17kB
+                      Buffers: shared hit=3666 read=966
+                      ->  Sort  (cost=7168.90..7169.10 rows=79 width=122) (actual time=193.582..196.556 rows=15243.00 loops=1)
+                            Sort Key: (lower(TRIM(BOTH FROM COALESCE(fact_inbound_shipment_1.operating_unit, ''::character varying)))), (lower(TRIM(BOTH FROM fact_inbound_shipment_1.order_no))), (lower(TRIM(BOTH FROM fact_inbound_shipment_1.item_code)))
+                            Sort Method: quicksort  Memory: 1575kB
+                            Buffers: shared hit=3666 read=966
+                            ->  Seq Scan on fact_inbound_shipment fact_inbound_shipment_1  (cost=1964.27..7166.41 rows=79 width=122) (actual time=0.019..62.184 rows=15243.00 loops=1)
+                                  Filter: ((order_no IS NOT NULL) AND (item_code IS NOT NULL) AND (tenant_id = 'default'::text) AND ((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((product_id)::bigint = (hashed SubPlan 1).col1))) AND (TRIM(BOTH FROM order_no) <> ''::text) AND (TRIM(BOTH FROM item_code) <> ''::text) AND (lower((line_state)::text) = ANY ('{shipped,open_order}'::text[])))
+                                  Rows Removed by Filter: 12
+                                  Buffers: shared hit=3663 read=966
+                                  SubPlan 1
+                                    ->  Seq Scan on dim_product p  (cost=0.00..1952.92 rows=4542 width=4) (never executed)
+                                          Filter: (CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END AND CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END)
+Planning:
+  Buffers: shared hit=378
+Planning Time: 28.101 ms
+Execution Time: 281.152 ms
+plain execution wall ms: 280 rows=1

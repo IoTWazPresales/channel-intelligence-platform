@@ -1,0 +1,32 @@
+======================================================================
+N-0065 apply script SMOKE (read only, no changes) 2026-10-08 09:24:45
+[app] current_database() = cip | alembic = ['20261006_0024'] | read_only = on
+  select policies: [('definer_fn_0024', 44), ('line_fn', 1)]
+  shipment_evidence_current reloptions: None
+  functions (name, security definer): [('cip_product_id_editable', True), ('cip_product_id_visible', True), ('cip_product_line_editable', False), ('cip_product_line_visible', False)]
+supervisor parse: api ('healthy', '24948') worker ('healthy', '37116')
+  [owner] fact_sales_sellout: total=35582 null_product=0 orphan_product=0
+  [owner] fact_inventory_distributor: total=47411 null_product=0 orphan_product=0
+  [owner] weeks_of_cover_observation: total=194349 null_product=0 orphan_product=0
+parity spot check as app role (one line = 'NB'):
+  scope='unset'  setting=None     dim_product                  got=  18177 expected=  18177 OK
+  scope='unset'  setting=None     fact_sales_sellout           got=  35582 expected=  35582 OK
+  scope='unset'  setting=None     fact_inventory_distributor   got=  47411 expected=  47411 OK
+  scope='unset'  setting=None     weeks_of_cover_observation   got= 194349 expected= 194349 OK
+  scope='unset'  shipment_evidence_current rows=15807
+  scope='*'      setting='*'      dim_product                  got=  18177 expected=  18177 OK
+  scope='*'      setting='*'      fact_sales_sellout           got=  35582 expected=  35582 OK
+  scope='*'      setting='*'      fact_inventory_distributor   got=  47411 expected=  47411 OK
+  scope='*'      setting='*'      weeks_of_cover_observation   got= 194349 expected= 194349 OK
+  scope='*'      shipment_evidence_current rows=15807
+  scope='NB'     setting='NB'     dim_product                  got=   6848 expected=   6848 OK
+  scope='NB'     setting='NB'     fact_sales_sellout           got=  15995 expected=  15995 OK
+  scope='NB'     setting='NB'     fact_inventory_distributor   got=  21047 expected=  21047 OK
+  scope='NB'     setting='NB'     weeks_of_cover_observation   got=  87899 expected=  87899 OK
+  scope='NB'     shipment_evidence_current rows=15807
+  scope='!'      setting='!'      dim_product                  got=      0 expected=      0 OK
+  scope='!'      setting='!'      fact_sales_sellout           got=      0 expected=      0 OK
+  scope='!'      setting='!'      fact_inventory_distributor   got=      0 expected=      0 OK
+  scope='!'      setting='!'      weeks_of_cover_observation   got=      0 expected=      0 OK
+  scope='!'      shipment_evidence_current rows=15807
+parity spot check: all cells match

@@ -1,0 +1,5 @@
+{
+  "path": "apps/api/app/services/budget_ledger.py",
+  "provenance": "implementation-observation",
+  "note": "N-0079 campaign headroom excludes caps and non-campaign rows. The promotion planner for 2026Q2 showed ledger drawn USD 103644.6669. Commit b5799854."
+}

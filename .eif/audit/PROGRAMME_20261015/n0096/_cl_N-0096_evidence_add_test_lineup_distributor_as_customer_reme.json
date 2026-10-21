@@ -1,0 +1,1 @@
+{"path": "apps/api/tests/test_lineup_distributor_as_customer_remediation.py", "note": "N-0096 (BACKLOG-144): four tests seed their own distributor, case and lines in a rolled-back transaction.", "provenance": "implementation-observation", "node": "N-0096", "expected_revision": 3}

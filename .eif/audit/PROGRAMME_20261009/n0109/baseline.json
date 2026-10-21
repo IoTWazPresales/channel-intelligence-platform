@@ -1,0 +1,9 @@
+{
+  "id": "BLN-N0109",
+  "provenance": "implementation-observation",
+  "tree_hash": "7361868d606a4bc2b60b539e3442cea00adf6d85",
+  "path": ".eif/audit/PROGRAMME_20261009/N0109_IMPL.md",
+  "observed_behavior": "HEAD 1714b78d (tree 7361868d) plus a dirty tree from other runs. Before N-0109 unit 1 (git diff of HEAD versions): ReportBuilderView rendered its own Recharts bar/line inline, a single number without unit/target, free-text 'Distributor id (optional)' and 'BU filter (optional)' inputs, 'Allowed: {distributor, product}' grain text, 'Formula: <expression>' and raw invariants_applied codes on screen; the Reports page had no own heading (OverviewChrome default title, description paragraph). charts.tsx exported ChartFrame/CategoryBars/PairedBars/TrendChart/ProportionBar only (no state colour, threshold line, direct labels, sparkline or text alternative). HeadlineFigure had label/value/unit/delta/caption but no delta period, target, sparkline or loading/empty/stale states. Prior rendered evidence: .eif/audit/PROGRAMME_20261008/reports/prod-reports-{kpi,table,bar,landing}-{light,dark}.png. tsc before: exit 0 (n0109/tsc_before.txt). Baseline recorded late (after the edits) because the previous session was cut off; the before state is read from HEAD, not re-rendered.",
+  "latent_capabilities": [],
+  "preservation": {}
+}
