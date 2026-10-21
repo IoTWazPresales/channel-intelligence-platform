@@ -4,15 +4,23 @@ Import-pipeline integration tests create `import_job` rows, staging lines, and s
 under `imports/test/...` using the same `DATABASE_URL` / `DATABASE_URL_SYNC` as local dev.
 When that URL targets the default database name `cip`, those tests pollute the shared dev DB.
 
-Guard posture (deny-by-default): when settings resolve to database name `cip` and
-`ALLOW_TESTS_ON_DEV_DB` is unset, refuse ANY write-capable test module unless it appears
-in `_CIP_WRITE_ALLOWLIST`. Fixture-local guards (e.g. `_assert_not_cip` in bulk smoke)
-remain in force and are not weakened by this allowlist.
+Guard posture (deny-by-default), unless `ALLOW_TESTS_ON_DEV_DB=1` or the module is in
+`_CIP_WRITE_ALLOWLIST`:
+
+1. Setup: when settings resolve to database name `cip`, refuse every test whose module source
+   names a way to open a real DB session (`_DB_ENTRY_POINT`) before any fixture runs.
+2. Connect: refuse every SQLAlchemy connection to a database named `cip`, whatever path opened
+   it (app services, helpers, a module the scan missed), before any SQL is sent.
+
+There is no hand-kept list of write-capable modules: the 2026-10 leak (Import Center jobs
+1672-1675 from test_dsi_customer_ignore_revalidate.py) came from modules missing from one.
+Fixture-local guards (e.g. `_assert_not_cip` in bulk smoke) remain in force.
 """
 
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -34,6 +42,7 @@ def pytest_configure(config) -> None:  # type: ignore[no-untyped-def]
     from app.core.config import get_settings
 
     get_settings.cache_clear()
+    _install_cip_connect_veto()
 
 
 def pytest_report_header(config) -> list[str]:  # type: ignore[no-untyped-def]
@@ -43,121 +52,7 @@ def pytest_report_header(config) -> list[str]:  # type: ignore[no-untyped-def]
         )
     ]
 
-# Historical hand-maintained frozenset (pre-deny-by-default). Kept as documentation of the
-# original five import-pipeline modules; the live gate uses `_WRITE_CAPABLE_TEST_MODULES`.
-_IMPORT_PIPELINE_DB_TEST_MODULES: frozenset[str] = frozenset(
-    {
-        "test_distributor_sales_inventory_import.py",
-        "test_dsi_batch.py",
-        "test_dsi_validate_bulk_staging.py",
-        "test_historical_lineup_import.py",
-        "test_historical_lineup_resolution.py",
-    }
-)
-
-# Modules that open SessionLocal / AsyncSessionLocal / create_engine, or execute
-# DELETE / TRUNCATE / INSERT / UPDATE / ORM .delete( against a real session.
-# Enumerated 2026-08-02 via static scan of apps/api/tests/test_*.py.
-_WRITE_CAPABLE_TEST_MODULES: frozenset[str] = frozenset(
-    {
-        "test_async_broker_dispatch.py",
-        "test_backfill_shipment_customer_po.py",
-        "test_background_tasks.py",
-        "test_catalog_product_lines.py",
-        "test_commercial_planner_api.py",
-        "test_commercial_planner_reference_bootstrap.py",
-        "test_cpor_cases_api.py",
-        "test_cpor_historical_unit_c.py",
-        # N-0068: seeds tenant/tenant_column_grain/dim_product/import_job fixtures inside one
-        # rolled-back transaction; cip_test only.
-        "test_column_grain_n0068_db.py",
-        "test_cst_mapping_candidates.py",
-        # N-0082: issues, decides and revokes sign-off links on an existing case inside one
-        # rolled-back transaction; cip_test only.
-        "test_customer_approval_db.py",
-        # N-0110: inserts sell-through, shipment and stock-position rows inside one
-        # rolled-back transaction; cip_test only.
-        "test_customer_stock_gap_db.py",
-        # N-0110 repair: re-uploads a sell-through file (jobs, staging, fact rows) inside one
-        # rolled-back transaction; cip_test only.
-        "test_cst_reupload_supersede_db.py",
-        # N-0111 layouts: uploads sell-through files for a seeded reporting customer and saves layouts inside
-        # one rolled-back transaction; cip_test only.
-        "test_cst_layouts_db.py",
-        "test_cst_layouts_api.py",
-        # N-0110 repair: seeds sell-through and shipment rows to name each gap cause inside one
-        # rolled-back transaction; cip_test only.
-        "test_customer_stock_gap_cause_db.py",
-        # N-0083: writes fx_daily_rate and case rows inside one rolled-back transaction; cip_test only.
-        "test_fx_case_rate_db.py",
-        # N-0095: seeds customers, aliases and merges, runs merge, seal, keeper change and backfill
-        # inside one rolled-back transaction; cip_test only.
-        "test_customer_merge_alias_seal_db.py",
-        "test_customer_merge_keeper_db.py",
-        "test_merge_resolvers_follow_db.py",
-        "test_customer_alias_scope_merge.py",
-        "test_customer_full_merge.py",
-        "test_customers_delete.py",
-        "test_dashboard_widget_persist.py",
-        "test_data_integrity_audit.py",
-        "test_distributor_full_merge.py",
-        "test_distributor_sales_inventory_import.py",
-        "test_dsi_apply_background.py",
-        "test_dsi_batch.py",
-        "test_dsi_bulk_map_customers_scope.py",
-        "test_dsi_bulk_provisional_customers_reuse.py",
-        "test_dsi_file_distributor.py",
-        "test_dsi_resolution_cache_plain.py",
-        "test_dsi_resolution_plan_apply_sync.py",
-        "test_dsi_validate_bulk_staging.py",
-        "test_dsi_validate_remote_supabase.py",
-        "test_historical_lineup_import.py",
-        "test_historical_lineup_resolution.py",
-        "test_import_background_slots.py",
-        "test_import_job_bulk_delete.py",
-        "test_imports_templates.py",
-        "test_lineup_bulk_backfill_apply_integration.py",
-        "test_lineup_business_unit_resolution.py",
-        "test_lineup_case_supersession_delete.py",
-        "test_lineup_customer_token_stamp.py",
-        "test_lineup_po_link_carry_supersession.py",
-        "test_lineup_po_auto_link.py",
-        "test_lineup_po_auto_link_actions.py",
-        "test_master_bulk_delete_sql_integration.py",
-        "test_pipeline_failure_writeback.py",
-        "test_product_dsi_maintenance.py",
-        # N-0065: applies 20261006_0024, inserts fixture dim_product rows, always rolled back; cip_test only.
-        "test_product_line_rls_n0065_db.py",
-        # N-0065 round 3/4: swaps 0024/0025/0026 policies and seeds rows in every protected
-        # table inside one rolled-back transaction per version; cip_test only.
-        "test_product_line_rls_parity_n0065_db.py",
-        # N-0065 round 4: seeds shipment evidence lineage fixtures inside one rolled-back
-        # transaction; cip_test only.
-        "test_shipment_evidence_lineage_rls_n0065_db.py",
-        "test_product_resolution_index_plain.py",
-        "test_rbac_r1d_session_e2e.py",
-        "test_products_delete.py",
-        "test_purchase_order.py",
-        "test_running_import_job_reaper.py",
-        "test_shipment_apply_hardening.py",
-        "test_shipment_change_events.py",
-        "test_shipment_evidence_observations.py",
-        "test_shipment_evidence_orphan_purge.py",
-        "test_shipment_invoice_graduation.py",
-        "test_shipment_null_distributor_po_merge.py",
-        "test_shipment_null_distributor_sibling_po_merge.py",
-        "test_shipment_purchase_order_materialize.py",
-        "test_shipment_resolved_entities.py",
-        "test_shipment_steward_bulk_preview.py",
-        "test_shipping_commercial_kpis.py",
-        "test_shipping_newly_landed.py",
-        "test_sql_viewer.py",
-        "test_task_run_ledger.py",
-        "test_unified_lineup_import.py",
-    }
-)
-
-# Modules allowed to run when settings resolve to `cip` without ALLOW_TESTS_ON_DEV_DB.
+# Modules allowed to reach `cip` without ALLOW_TESTS_ON_DEV_DB.
 # Every entry must have an inline why-comment; keep this set minimal.
 _CIP_WRITE_ALLOWLIST: frozenset[str] = frozenset(
     {
@@ -166,8 +61,20 @@ _CIP_WRITE_ALLOWLIST: frozenset[str] = frozenset(
     }
 )
 
-# Invariant: historical import-pipeline modules remain covered by the write-capable set.
-assert _IMPORT_PIPELINE_DB_TEST_MODULES <= _WRITE_CAPABLE_TEST_MODULES
+# Names in a test module's source that can open a real DB session: the app's session factories
+# and engines, a raw engine or driver, or the real app behind an HTTP test client.
+_DB_ENTRY_POINT = re.compile(
+    r"\b(?:Async)?SessionLocal\b|\bcreate(?:_async)?_engine\b|\bsync_engine\b|\bget_sync_session\b"
+    r"|\bapp\.db\.session\b|\bTestClient\b|\bASGITransport\b|\bapp\.main\b|\bpsycopg\b|\basyncpg\b"
+)
+_opens_db_cache: dict[Path, bool] = {}
+
+# False only while the running test's module is allowlisted; read by the connect veto.
+_cip_connect_refused = True
+
+
+class CipTestDatabaseRefused(pytest.fail.Exception):  # type: ignore[misc,name-defined]
+    """Raised instead of connecting to `cip`. A BaseException, so app code catching Exception cannot swallow it."""
 
 
 def _sqlalchemy_db_name(url: str) -> str:
@@ -181,30 +88,72 @@ def _sqlalchemy_db_name(url: str) -> str:
     return db.split("?", 1)[0].strip()
 
 
-def pytest_runtest_setup(item) -> None:  # type: ignore[no-untyped-def]
-    if os.environ.get("ALLOW_TESTS_ON_DEV_DB", "").strip() == "1":
-        return
+def _cip_allowed() -> bool:
+    return os.environ.get("ALLOW_TESTS_ON_DEV_DB", "").strip() == "1"
 
-    node_file = item.nodeid.split("::", 1)[0].replace("\\", "/")
-    basename = Path(node_file).name
-    if basename not in _WRITE_CAPABLE_TEST_MODULES:
-        return
-    if basename in _CIP_WRITE_ALLOWLIST:
-        return
 
+def _settings_resolve_to_cip() -> bool:
     from app.core.config import get_settings
 
     settings = get_settings()
-    async_name = _sqlalchemy_db_name(settings.database_url)
-    sync_name = _sqlalchemy_db_name(settings.database_url_sync)
-    if async_name == "cip" or sync_name == "cip":
+    return "cip" in (_sqlalchemy_db_name(settings.database_url), _sqlalchemy_db_name(settings.database_url_sync))
+
+
+def _module_opens_db(path: Path) -> bool:
+    if path not in _opens_db_cache:
+        try:
+            source = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            source = ""
+        # A module that cannot be read counts as able to open a session.
+        _opens_db_cache[path] = not source or bool(_DB_ENTRY_POINT.search(source))
+    return _opens_db_cache[path]
+
+
+def _install_cip_connect_veto() -> None:
+    """Refuse every SQLAlchemy connection to a database named `cip` unless the running test may use it.
+
+    Listening on the Engine class covers every engine, sync and async, including ones built before
+    this runs. Raising in `do_connect` stops before the driver connects, so no SQL reaches `cip`.
+    """
+    from sqlalchemy import event
+    from sqlalchemy.engine import Engine
+
+    @event.listens_for(Engine, "do_connect")
+    def _refuse_cip(dialect, conn_rec, cargs, cparams):  # type: ignore[no-untyped-def]
+        if _cip_allowed() or not _cip_connect_refused:
+            return None
+        name = cparams.get("dbname") or cparams.get("database")
+        if name == "cip" or (not name and _settings_resolve_to_cip()):
+            raise CipTestDatabaseRefused(
+                "Refusing a test connection to database 'cip' (shared dev DB). Point DATABASE_URL / "
+                "DATABASE_URL_SYNC at a disposable database (e.g. .../cip_test), or set "
+                "ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes to cip.",
+                pytrace=False,
+            )
+        return None
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_setup(item) -> None:  # type: ignore[no-untyped-def]
+    global _cip_connect_refused
+
+    if _cip_allowed():
+        return
+    path = Path(str(getattr(item, "path", None) or item.nodeid.split("::", 1)[0]))
+    _cip_connect_refused = path.name not in _CIP_WRITE_ALLOWLIST
+    if not _cip_connect_refused:
+        return
+    if _settings_resolve_to_cip() and _module_opens_db(path):
         pytest.fail(
-            f"Refusing write-capable test module {basename!r}: database name is 'cip' "
-            "(default shared dev DB). Point DATABASE_URL / DATABASE_URL_SYNC at a disposable "
-            "database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge writes "
-            "to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a "
-            "justification comment if it genuinely requires cip."
+            f"Refusing test module {path.name!r}: database name is 'cip' (default shared dev DB) and "
+            "the module can open a real DB session. Point DATABASE_URL / DATABASE_URL_SYNC at a "
+            "disposable database (e.g. .../cip_test), or set ALLOW_TESTS_ON_DEV_DB=1 to acknowledge "
+            "writes to the current database, or add the module to _CIP_WRITE_ALLOWLIST with a "
+            "justification comment if it genuinely requires cip.",
+            pytrace=False,
         )
+
 
 # ---------------------------------------------------------------------------------------------
 # Router-level auth (2026-09-21): app/api/v1/router.py puts get_current_user on every route.
