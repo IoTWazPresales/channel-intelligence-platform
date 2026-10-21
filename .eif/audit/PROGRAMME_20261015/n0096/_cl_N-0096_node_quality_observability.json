@@ -1,0 +1,1 @@
+{"dim": "observability", "state": "pass", "evidence": {"path": ".eif/audit/PROGRAMME_20261015/n0096/N0096_PROOF.md", "summary": "Every skip carries its reason in the pytest output; the integration marker is registered."}, "rationale": "Every skip carries its reason in the pytest output; the integration marker is registered.", "node": "N-0096", "expected_revision": 8}

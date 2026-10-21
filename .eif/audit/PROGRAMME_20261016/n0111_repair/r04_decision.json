@@ -1,0 +1,1 @@
+{"scope": "N-0111", "origin": "operator", "status": "accepted", "statement": "Warren 2026-10-16: Pinnacle/distributor lines with a NEW invoice number are real new transactions and are added (unchanged). Reloading the SAME invoice lines keeps the replaced figures in a superseded record instead of overwriting them."}

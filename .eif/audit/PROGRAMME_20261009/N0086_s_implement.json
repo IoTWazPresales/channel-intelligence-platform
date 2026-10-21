@@ -1,0 +1,1 @@
+{"node": "N-0086", "expected_revision": 5, "stage": "implement", "stage_note": "Implementing under RUN-20261009-N0086-IMPL: proxy + throttle and API gates done in the first session; this session adds RBAC tests, web gating and tests, pilot-account count, and runs suites."}

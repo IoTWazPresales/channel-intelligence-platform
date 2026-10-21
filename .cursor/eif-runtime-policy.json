@@ -33,6 +33,7 @@
     "apps/web/**",
     "packages/ui/**",
     "docs/**",
+    "scripts/**",
     "CONTEXT.md",
     "AGENTS.md"
   ],
@@ -140,6 +141,7 @@
     "apps/web/**",
     "packages/ui/**",
     "docs/**",
+    "scripts/**",
     "CONTEXT.md",
     "AGENTS.md"
   ],
@@ -172,7 +174,7 @@
   "sources": {
     "autonomy_policy": {
       "path": ".eif/AUTONOMY_POLICY.md",
-      "sha256": "24702288ffb4a878cc2205e420ec7181446b0a582825e9f8e7ab0bfee939fe6d"
+      "sha256": "9e652a6f4bd65e694ff477088c7564be7d72d6bb22378d2be3c67498748b0842"
     },
     "environment_policy": {
       "path": ".eif/ENVIRONMENT_POLICY.md",

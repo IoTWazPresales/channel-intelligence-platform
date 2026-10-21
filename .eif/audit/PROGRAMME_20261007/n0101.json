@@ -1,0 +1,32 @@
+{
+  "id": "N-0101",
+  "parent": "N-0085",
+  "title": "N-0085 U1: listing polling on under the supervisor, restock seen again, dead-link back-off, per-site 403/429 pause, run time limit",
+  "class": "feature",
+  "origin": "decomposition",
+  "status": "proposed",
+  "facets": [
+    "api",
+    "infra"
+  ],
+  "risk": "R2",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": [
+    "N-0073"
+  ],
+  "acceptance_criteria": [
+    "The supervisor's worker environment sets CIP_LISTING_CAPTURE_SCHEDULE and CIP_LISTING_LIVE_FETCH; status shows both present",
+    "A beat run records new Takealot and Evetech observations on cip",
+    "An out_of_stock listing seen in stock returns to active (restocked); out_of_stock listings keep being polled",
+    "consecutive failures drive the dead-link back-off; a 403/429 pauses only that site (1 h doubling to 24 h) and is recorded",
+    "Each poll run takes the oldest-due listings first, mixes retailers and stops at 10 minutes",
+    "Market ledger copy 'Checked on a schedule' is true, or changed to what is true",
+    "Design: .eif/audit/PROGRAMME_20261007/N0085_DESIGN.md; decisions D-0061 and D-0063",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "auto"
+}

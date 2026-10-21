@@ -1,0 +1,11 @@
+{"node": "N-0101", "expected_revision": 1, "baseline_ref": "BLN-N0101", "preservation": {
+  "parse-and-price-extraction-unchanged": "parser modules untouched",
+  "takealot-rest-and-ean-recovery-unchanged": "fetch_takealot_listing untouched",
+  "dead-link-on-404-410": "same rule; also counted in meta_json.consecutive_failures",
+  "out-of-stock-on-availability": "same rule; out_of_stock now polled",
+  "verified-url-write-back": "untouched",
+  "cpor-activation-per-observation": "still per observation",
+  "beat-and-env-gates": "task gates unchanged",
+  "manual-poll-endpoint": "same call",
+  "supervisor-adopt-healthy-components": "only worker env, comment, log line, status env block change"
+}}

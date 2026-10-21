@@ -1,0 +1,14 @@
+{
+  "id": "BLN-N0073",
+  "provenance": "implementation-observation",
+  "tree_hash": "cc7b4f2eac7bb8b42fbfcbb14635b06f81446ff3",
+  "path": ".eif/audit/PROGRAMME_20261007/N0073_DISCOVERY.md",
+  "observed_behavior": "Only Postgres starts by itself. Redis (WSL Ubuntu) stopped, worker not running, API on 127.0.0.1:8001 and web on 0.0.0.0:3000 run as manual processes, quick tunnel pid 9960 live with a changing address read from metrics /quicktunnel.",
+  "latent_capabilities": ["pilot-tunnel-auth-gates", "restart-dev-stack", "stop-dev-pid-files", "dev-worker-single-consumer"],
+  "preservation": {
+    "pilot-tunnel-auth-gates": "kept and reused by the supervisor",
+    "restart-dev-stack": "unchanged; dev mode stays separate",
+    "stop-dev-pid-files": "unchanged",
+    "dev-worker-single-consumer": "supervisor starts the worker through dev-worker.js so the orphan kill and Redis preflight still apply"
+  }
+}

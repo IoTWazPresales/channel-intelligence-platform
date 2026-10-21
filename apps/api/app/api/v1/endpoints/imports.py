@@ -1154,6 +1154,7 @@ async def cst_batch_create_jobs(
     cst_sales_only: str = Form(default=""),
     cst_stock_only: str = Form(default=""),
     cst_confirmed_year: str = Form(default=""),
+    import_mode: str = Form(default="validate"),
 ):
     """Upload sell-through files for one reporting customer (N-0111, Warren 2026-10-16).
 
@@ -1195,6 +1196,8 @@ async def cst_batch_create_jobs(
                 sales_only=_truthy_form(cst_sales_only),
                 stock_only=_truthy_form(cst_stock_only),
                 confirmed_year=confirmed_year,
+                # The import mode picked in the wizard: apply loads matched rows as the file is read.
+                import_mode="apply" if (import_mode or "").strip().lower() == "apply" else "validate",
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
@@ -2036,6 +2039,65 @@ async def resolve_cst_candidate(
         payload=result if isinstance(result, dict) else None,
     )
     return result
+
+
+@router.post("/jobs/{job_id}/cst-load", status_code=200, dependencies=_STEWARD_WRITE)
+def cst_load_matched_rows(job_id: int, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    """The sell-through wizard's Apply step (N-0111), dispatched as shipment / DSI apply are.
+
+    Marks the job running, hands ``imports.cst_apply`` to the worker and returns ``{async, task_id}``
+    at once (no long write in the request). The worker loads every matched row not loaded yet
+    (steward-mapped rows included) and moves the job to ``loaded``. A job already loaded can be
+    applied again: only rows matched since are written.
+    """
+    from app.services.imports.cst_apply_sync import run_cst_apply_sync
+    from app.services.imports.import_dispatch import enqueue_import_worker_task
+    from app.services.imports.import_job_background_metadata import persist_pipeline_queued_at
+
+    with SessionLocal() as sync_db:
+        job = _get_cst_job_sync(sync_db, job_id)
+        if (job.status or "").strip().lower() == "running":
+            raise HTTPException(
+                status_code=409,
+                detail={"error": "job_running", "message": "This import is already running. Wait for it to finish."},
+            )
+        if (job.stage or "").strip() not in ("validated", "loaded"):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "invalid_job_stage",
+                    "message": f"Job must be validated to apply; current stage is {job.stage!r}.",
+                },
+            )
+        job.status = "running"
+        persist_pipeline_queued_at(sync_db, job)
+        sync_db.commit()
+
+    dispatched, task_id = enqueue_import_worker_task(
+        job_id,
+        task_name="imports.cst_apply",
+        log_label="CST apply",
+        in_process_thread_name=f"cst-apply-{job_id}",
+        sync_work=run_cst_apply_sync,
+    )
+    if dispatched and task_id:
+        with SessionLocal() as meta_db:
+            j_meta = meta_db.get(ImportJob, job_id)
+            if j_meta is not None:
+                set_task_slot_on_job(j_meta, SLOT_MAIN, task_id=task_id)
+                meta_db.commit()
+    record_steward_audit_sync(
+        user, action="cst_apply", importer="cst", import_job_id=job_id, payload={"task_id": task_id}
+    )
+    with SessionLocal() as sync_db:
+        j = sync_db.get(ImportJob, job_id)
+        return {
+            "async": bool(dispatched),
+            "task_id": task_id,
+            "import_job_id": job_id,
+            "status": j.status if j else None,
+            "stage": j.stage if j else None,
+        }
 
 
 @router.post("/jobs/{job_id}/cst-candidates/{candidate_id}/ignore", status_code=200, dependencies=_STEWARD_WRITE)

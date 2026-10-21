@@ -1,0 +1,171 @@
+current_database() = cip_test | alembic = ['20261009_0026']
+  pick proconfig: ['search_path=pg_catalog, public']
+  commercial_lineup_line           (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  cst_listing_seed                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  customer_listing                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  historical_lineup_import_line    (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+=== upgrade 20261009_0027
+Traceback (most recent call last):
+  File "C:\Users\warren_eliason\channel-intelligence-platform\.eif\audit\PROGRAMME_20261007\N0065_r3_alembic_cip_test.py", line 18, in <module>
+    from app.core.config import get_settings
+ModuleNotFoundError: No module named 'app'
+exit 1; stopping
+current_database() = cip_test | alembic = ['20261009_0026']
+  pick proconfig: ['search_path=pg_catalog, public']
+  commercial_lineup_line           (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  cst_listing_seed                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  customer_listing                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  historical_lineup_import_line    (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+=== upgrade 20261009_0027
+[before] current_database() = cip_test  alembic = ['20261009_0026']
+[after] current_database() = cip_test  alembic = ['20261009_0027']
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade 20261009_0026 -> 20261009_0027, Current-row pick in index order; rows with no product in four tables for admins and stewards only.
+current_database() = cip_test | alembic = ['20261009_0027']
+  pick proconfig: ['search_path=pg_catalog, public', 'enable_sort=off']
+  commercial_lineup_line           (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  cst_listing_seed                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  customer_listing                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  historical_lineup_import_line    (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+=== downgrade 20261009_0026
+[before] current_database() = cip_test  alembic = ['20261009_0027']
+[after] current_database() = cip_test  alembic = ['20261009_0026']
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running downgrade 20261009_0027 -> 20261009_0026, Current-row pick in index order; rows with no product in four tables for admins and stewards only.
+current_database() = cip_test | alembic = ['20261009_0026']
+  pick proconfig: ['search_path=pg_catalog, public']
+  commercial_lineup_line           (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  cst_listing_seed                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  customer_listing                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  historical_lineup_import_line    (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+=== upgrade 20261009_0027
+[before] current_database() = cip_test  alembic = ['20261009_0026']
+[after] current_database() = cip_test  alembic = ['20261009_0027']
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade 20261009_0026 -> 20261009_0027, Current-row pick in index order; rows with no product in four tables for admins and stewards only.
+current_database() = cip_test | alembic = ['20261009_0027']
+  pick proconfig: ['search_path=pg_catalog, public', 'enable_sort=off']
+  commercial_lineup_line           (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  cst_listing_seed                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  customer_listing                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  historical_lineup_import_line    (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+=== downgrade 20261009_0026
+[before] current_database() = cip_test  alembic = ['20261009_0027']
+[after] current_database() = cip_test  alembic = ['20261009_0026']
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running downgrade 20261009_0027 -> 20261009_0026, Current-row pick in index order; rows with no product in four tables for admins and stewards only.
+current_database() = cip_test | alembic = ['20261009_0026']
+  pick proconfig: ['search_path=pg_catalog, public']
+  commercial_lineup_line           (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  cst_listing_seed                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  customer_listing                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  historical_lineup_import_line    (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+=== upgrade 20261009_0027
+[before] current_database() = cip_test  alembic = ['20261009_0026']
+[after] current_database() = cip_test  alembic = ['20261009_0027']
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade 20261009_0026 -> 20261009_0027, Current-row pick in index order; rows with no product in four tables for admins and stewards only.
+current_database() = cip_test | alembic = ['20261009_0027']
+  pick proconfig: ['search_path=pg_catalog, public', 'enable_sort=off']
+  commercial_lineup_line           (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  cst_listing_seed                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  customer_listing                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  historical_lineup_import_line    (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+current_database() = cip_test | alembic = ['20261009_0027']
+  pick proconfig: ['search_path=pg_catalog, public', 'enable_sort=off']
+  commercial_lineup_line           (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  cst_listing_seed                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  customer_listing                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  historical_lineup_import_line    (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  md5 of the four tables' policy texts: cb949aa426a1d6c53c8f9f919ccddf9d
+=== downgrade 20261009_0026
+[before] current_database() = cip_test  alembic = ['20261009_0027']
+[after] current_database() = cip_test  alembic = ['20261009_0026']
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running downgrade 20261009_0027 -> 20261009_0026, Current-row pick in index order; rows with no product in four tables for admins and stewards only.
+current_database() = cip_test | alembic = ['20261009_0026']
+  pick proconfig: ['search_path=pg_catalog, public']
+  commercial_lineup_line           (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  cst_listing_seed                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  customer_listing                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  historical_lineup_import_line    (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  md5 of the four tables' policy texts: 0933b362704b3b553abc66f85931371a
+=== upgrade 20261009_0027
+[before] current_database() = cip_test  alembic = ['20261009_0026']
+[after] current_database() = cip_test  alembic = ['20261009_0027']
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade 20261009_0026 -> 20261009_0027, Current-row pick in index order; rows with no product in four tables for admins and stewards only.
+current_database() = cip_test | alembic = ['20261009_0027']
+  pick proconfig: ['search_path=pg_catalog, public', 'enable_sort=off']
+  commercial_lineup_line           (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  cst_listing_seed                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  customer_listing                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  historical_lineup_import_line    (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  md5 of the four tables' policy texts: cb949aa426a1d6c53c8f9f919ccddf9d
+######## resumed session: 0027 now also sets enable_incremental_sort = off (finding F5-1); down/up/down/up
+current_database() = cip_test | alembic = ['20261009_0027']
+  pick proconfig: ['search_path=pg_catalog, public', 'enable_sort=off']
+  commercial_lineup_line           (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  cst_listing_seed                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  customer_listing                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  historical_lineup_import_line    (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  md5 of the four tables' policy texts: cb949aa426a1d6c53c8f9f919ccddf9d
+=== downgrade 20261009_0026
+[before] current_database() = cip_test  alembic = ['20261009_0027']
+[after] current_database() = cip_test  alembic = ['20261009_0026']
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running downgrade 20261009_0027 -> 20261009_0026, Current-row pick in index order; rows with no product in four tables for admins and stewards only.
+current_database() = cip_test | alembic = ['20261009_0026']
+  pick proconfig: ['search_path=pg_catalog, public']
+  commercial_lineup_line           (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  cst_listing_seed                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  customer_listing                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  historical_lineup_import_line    (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  md5 of the four tables' policy texts: 0933b362704b3b553abc66f85931371a
+=== upgrade 20261009_0027
+[before] current_database() = cip_test  alembic = ['20261009_0026']
+[after] current_database() = cip_test  alembic = ['20261009_0027']
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade 20261009_0026 -> 20261009_0027, Current-row pick in index order; rows with no product in four tables for admins and stewards only.
+current_database() = cip_test | alembic = ['20261009_0027']
+  pick proconfig: ['search_path=pg_catalog, public', 'enable_sort=off', 'enable_incremental_sort=off']
+  commercial_lineup_line           (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  cst_listing_seed                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  customer_listing                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  historical_lineup_import_line    (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  md5 of the four tables' policy texts: cb949aa426a1d6c53c8f9f919ccddf9d
+=== downgrade 20261009_0026
+[before] current_database() = cip_test  alembic = ['20261009_0027']
+[after] current_database() = cip_test  alembic = ['20261009_0026']
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running downgrade 20261009_0027 -> 20261009_0026, Current-row pick in index order; rows with no product in four tables for admins and stewards only.
+current_database() = cip_test | alembic = ['20261009_0026']
+  pick proconfig: ['search_path=pg_catalog, public']
+  commercial_lineup_line           (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  cst_listing_seed                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  customer_listing                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  historical_lineup_import_line    (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', False, False, True), ('INSERT', False, False, False), ('SELECT', False, False, True), ('UPDATE', False, False, True)]
+  md5 of the four tables' policy texts: 0933b362704b3b553abc66f85931371a
+=== upgrade 20261009_0027
+[before] current_database() = cip_test  alembic = ['20261009_0026']
+[after] current_database() = cip_test  alembic = ['20261009_0027']
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade 20261009_0026 -> 20261009_0027, Current-row pick in index order; rows with no product in four tables for admins and stewards only.
+current_database() = cip_test | alembic = ['20261009_0027']
+  pick proconfig: ['search_path=pg_catalog, public', 'enable_sort=off', 'enable_incremental_sort=off']
+  commercial_lineup_line           (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  cst_listing_seed                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  customer_listing                 (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  historical_lineup_import_line    (cmd, using has steward rule, check has steward rule, using has 0025 null-open): [('DELETE', True, False, False), ('INSERT', False, False, False), ('SELECT', True, False, False), ('UPDATE', True, False, False)]
+  md5 of the four tables' policy texts: cb949aa426a1d6c53c8f9f919ccddf9d

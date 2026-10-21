@@ -1,0 +1,6 @@
+{
+  "scope": "N-0068",
+  "origin": "operator",
+  "status": "accepted",
+  "statement": "Warren 2026-10-01: multiple catalogs stay. Different product types in a business can have their own catalog. catalog_product is not retired and is not collapsed into a single Product Master catalogue."
+}

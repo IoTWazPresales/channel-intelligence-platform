@@ -1,0 +1,1 @@
+{"stage": "verify", "stage_note": "R3 check under RUN-20261012-N0079-VER, different from implementation run RUN-20261012-N0079-CLOSE, same session, not a different model. VERIFIED_WITH_LIMITATIONS. Non-campaign view stays empty until the next lineup approval. Historical payments were not loaded.", "node": "N-0079", "expected_revision": 33}

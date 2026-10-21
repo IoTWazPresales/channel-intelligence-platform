@@ -1,0 +1,9 @@
+DATABASE_URL=postgresql+asyncpg://cip:***@localhost:5432/cip
+DATABASE_URL_SYNC=postgresql://cip:***@localhost:5432/cip
+DATABASE_URL_SYNC_MIGRATE=postgresql://cip:***@localhost:5432/cip
+current_database()=cip
+current_database() cip (read-only)
+12 'distributor_inventory' 'Distributor inventory feed' True null | memory keys: ['by_header_norm', 'dsi_mapping', 'schema_version'] | by_header_norm: 29 | jobs: [('completed', 'validated', 138), ('pending', 'dsi_mapping_ready', 62), ('validated', 'validated', 24), ('completed_with_errors', 'validated', 18), ('completed', 'loaded', 1), ('failed', 'fields_mapped', 1)]
+
+Pinnacle distributor 29 name: Pinnacle
+distributors that have DSI sell-out rows: [('Rectron', 15179), ('Mustek', 12191), ('Pinnacle', 5704), ('Brandhouse', 947), ('Compuspeed', 786), ('Dgstore', 513), ('Syntech', 178), ('HV', 53)]

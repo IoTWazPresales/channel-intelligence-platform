@@ -1,0 +1,1 @@
+{"node": "N-0036", "expected_revision": 8, "dim": "observability", "state": "pass", "evidence": "EV-N0036", "rationale": "dev-api.js logs when CIP_API_HOST is not loopback. The listening address is visible to netstat. Health remains on the existing local process."}

@@ -1,0 +1,1 @@
+{"note": "N-0096: the full web vitest run takes about 27 minutes on this machine with the stack running (setup 2017 s of 1604 s wall); not investigated.", "code": "DOES_NOT_FIT", "node": "N-0096", "expected_revision": 3}

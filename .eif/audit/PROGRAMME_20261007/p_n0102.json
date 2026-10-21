@@ -1,0 +1,13 @@
+{
+  "node": "N-0102",
+  "expected_revision": 0,
+  "acceptance_criteria": [
+    "listing_capture/adapters/<site>.py contract: find(keys), fetch(listing), parse() with the N-0078 field set into parse_flags.fields",
+    "Migrations M1-M4 per the design, proven on cip_test before cip; marketplace vocab and status lifecycle (restocked, retired) extended; listing_site_state makes the N-0101 Redis site pause durable",
+    "The stored snapshots re-parse with zero fetches and the same price/stock as before",
+    "Discovery job (daily) proposes only corroborated pages (EAN or part number shown) for reported products with no listing, and re-finds the 42 Takealot dead links found on 2026-10-07; Amazon's 51 listings linked to products by feed id or flagged",
+    "A detected CAPTCHA or bot-check page (HTTP 200 included, as Amazon served on 40 of 51 requests on 2026-10-07) counts as a refusal: that site pauses on the same back-off as 403/429 and the page is never solved or worked around (D-0063)",
+    "Design: .eif/audit/PROGRAMME_20261007/N0085_DESIGN.md; decisions D-0061 and D-0063",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ]
+}

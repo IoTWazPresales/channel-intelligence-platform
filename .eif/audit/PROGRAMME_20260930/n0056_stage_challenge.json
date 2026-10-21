@@ -1,0 +1,1 @@
+{"node": "N-0056", "expected_revision": 3, "to": "challenge", "stage_note": "Do not rebuild export, calendar, or fan-out. Close the cache-before-notify gap, route delivery failures through the N-0052 alert, and put vintage on every inbox card. No dependents graph exists to extend."}

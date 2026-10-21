@@ -1,0 +1,51 @@
+current_database()=cip_n0111r
+products [(2, '90NR0381-M08090'), (3, '90XB06MN-MPW000'), (4, '90NX0AD1-M00260')]
+
+### Customer sell-through, round 1
+  amazon date header.csv (job 1668): status completed -> shown as 'Completed'; read 9, loaded 9, not loaded 0, partly 0; reasons: none
+  amazon 2024 W51-W2.csv (job 1669): status completed -> shown as 'Completed'; read 12, loaded 12, not loaded 0, partly 0; reasons: none
+  amazon with dropped rows.csv (job 1670): status completed -> shown as 'Completed with rows not loaded (2)'; read 3, loaded 1, not loaded 2, partly 0; reasons: missing_product_or_units 1, product_not_matched 1
+  Amazon synthetic products: rows 22, units 69.0, on-hand rows sum 953.0
+    grain day, year None, week None, start 2024-03-04: rows 3, units 6.0
+    grain day, year None, week None, start 2024-03-05: rows 3, units 9.0
+    grain day, year None, week None, start 2024-03-06: rows 3, units 12.0
+    grain day, year None, week None, start 2024-03-11: rows 1, units 6.0
+    grain week, year 2024, week 51, start 2024-12-16: rows 3, units 9.0
+    grain week, year 2024, week 52, start 2024-12-23: rows 3, units 9.0
+    grain week, year 2025, week 1, start 2024-12-30: rows 3, units 9.0
+    grain week, year 2025, week 2, start 2025-01-06: rows 3, units 9.0
+
+### Customer sell-through, round 2 (same three files again)
+  amazon date header.csv (job 1671): status completed -> shown as 'Completed'; read 9, loaded 9, not loaded 0, partly 0; reasons: none
+  amazon 2024 W51-W2.csv (job 1672): status completed -> shown as 'Completed'; read 12, loaded 12, not loaded 0, partly 0; reasons: none
+  amazon with dropped rows.csv (job 1673): status completed -> shown as 'Completed with rows not loaded (2)'; read 3, loaded 1, not loaded 2, partly 0; reasons: missing_product_or_units 1, product_not_matched 1
+  Amazon synthetic products: rows 22, units 69.0, on-hand rows sum 953.0
+    grain day, year None, week None, start 2024-03-04: rows 3, units 6.0
+    grain day, year None, week None, start 2024-03-05: rows 3, units 9.0
+    grain day, year None, week None, start 2024-03-06: rows 3, units 12.0
+    grain day, year None, week None, start 2024-03-11: rows 1, units 6.0
+    grain week, year 2024, week 51, start 2024-12-16: rows 3, units 9.0
+    grain week, year 2024, week 52, start 2024-12-23: rows 3, units 9.0
+    grain week, year 2025, week 1, start 2024-12-30: rows 3, units 9.0
+    grain week, year 2025, week 2, start 2025-01-06: rows 3, units 9.0
+  re-running the three files changed nothing: True
+
+### Pinnacle (29), distributor sell-out and returns
+  before: {'sellout_rows': 0, 'units': 0.0, 'revenue': 0.0, 'return_rows': 0, 'returned': 0.0, 'superseded_sellout': 0, 'superseded_returns': 0}
+  load (job 1674): applied sell/ret/inv 10/1/0, errors 0 -> {'sellout_rows': 10, 'units': 30.0, 'revenue': 3000.0, 'return_rows': 1, 'returned': 1.0, 'superseded_sellout': 0, 'superseded_returns': 0}
+    load report: status completed -> shown as 'Completed'; read 11, loaded 11, not loaded 0, partly 0; reasons: none
+  reload same invoices (4 lines and the credit changed) (job 1675): applied sell/ret/inv 10/1/0, errors 0 -> {'sellout_rows': 10, 'units': 38.0, 'revenue': 3800.0, 'return_rows': 1, 'returned': 2.0, 'superseded_sellout': 4, 'superseded_returns': 1}
+    load report: status completed -> shown as 'Completed'; read 11, loaded 11, not loaded 0, partly 0; reasons: none
+  correction (2 lines back to 4) plus new invoice N111R-INV-11 (job 1676): applied sell/ret/inv 11/1/0, errors 0 -> {'sellout_rows': 11, 'units': 38.0, 'revenue': 3800.0, 'return_rows': 1, 'returned': 2.0, 'superseded_sellout': 6, 'superseded_returns': 1}
+    load report: status completed -> shown as 'Completed'; read 12, loaded 12, not loaded 0, partly 0; reasons: none
+  re-apply the correction (job 1676): applied sell/ret/inv 11/1/0, errors 0 -> {'sellout_rows': 11, 'units': 38.0, 'revenue': 3800.0, 'return_rows': 1, 'returned': 2.0, 'superseded_sellout': 6, 'superseded_returns': 1}
+    load report: status completed -> shown as 'Completed'; read 12, loaded 12, not loaded 0, partly 0; reasons: none
+  re-applying the correction changed nothing (totals and superseded counts): True
+  re-run of the whole set (the three loads applied again in order):
+  re-run: load (job 1674): applied sell/ret/inv 10/1/0, errors 0 -> {'sellout_rows': 11, 'units': 32.0, 'revenue': 3200.0, 'return_rows': 1, 'returned': 1.0, 'superseded_sellout': 10, 'superseded_returns': 2}
+    load report: status completed -> shown as 'Completed'; read 11, loaded 11, not loaded 0, partly 0; reasons: none
+  re-run: reload same invoices (4 lines and the credit changed) (job 1675): applied sell/ret/inv 10/1/0, errors 0 -> {'sellout_rows': 11, 'units': 40.0, 'revenue': 4000.0, 'return_rows': 1, 'returned': 2.0, 'superseded_sellout': 10, 'superseded_returns': 2}
+    load report: status completed -> shown as 'Completed'; read 11, loaded 11, not loaded 0, partly 0; reasons: none
+  re-run: correction (2 lines back to 4) plus new invoice N111R-INV-11 (job 1676): applied sell/ret/inv 11/1/0, errors 0 -> {'sellout_rows': 11, 'units': 38.0, 'revenue': 3800.0, 'return_rows': 1, 'returned': 2.0, 'superseded_sellout': 10, 'superseded_returns': 2}
+    load report: status completed -> shown as 'Completed'; read 12, loaded 12, not loaded 0, partly 0; reasons: none
+  re-run of the whole set left the totals unchanged: True; superseded sell-out 6 -> 10, returns 1 -> 2 (re-applying an older load replaces the newer figures again, and keeps them)

@@ -1,0 +1,423 @@
+"""Sell-through overview (Warren 2026-10-19). One rolled-back transaction; cip_test only.
+
+- headline units and value, VAT converted from each customer's basis, against last year;
+- weekly and monthly reporters together; monthly figures spread over their days by week;
+- which reports arrived, are partial, due or missing per customer;
+- SKU problems: needs replenishing (per-customer weeks of cover), out of stock while selling,
+  a selling streak that dropped, aged stock, and SKUs with no recent sales;
+- a customer whose latest report has not arrived is judged up to its last reported day.
+"""
+
+from __future__ import annotations
+
+from datetime import date, timedelta
+
+import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session
+
+from app.core.config import get_settings
+from app.db.sync_url import sqlalchemy_sync_engine_url
+from app.models.customer_report_config import CustomerReportConfig
+from app.models.dimensions import DimCustomer, DimProduct
+from app.models.fact_customer_sellthrough import FactCustomerSellthrough
+from app.services.business_calendar import BusinessCalendar
+from app.services.channel_intelligence.sell_through_overview import OverviewFilters, build_overview, filter_options
+
+TODAY = date(2026, 10, 19)  # Monday, W43
+LAST_WEEK = date(2026, 10, 12)  # the latest reported week
+TENANT = "st-overview-test"
+
+
+@pytest.fixture
+def session():
+    engine = create_engine(sqlalchemy_sync_engine_url(get_settings().database_url_sync))
+    with engine.connect() as conn:
+        if conn.execute(text("select current_database()")).scalar() != "cip_test":
+            pytest.skip("cip_test only")
+        if not conn.execute(
+            text(
+                "select count(*) from information_schema.columns where table_name = "
+                "'customer_report_config' and column_name = 'replen_min_weeks_of_cover'"
+            )
+        ).scalar():
+            pytest.skip("20261019_0045 is not applied")
+        conn.rollback()
+        outer = conn.begin()
+        db = Session(bind=conn, join_transaction_mode="create_savepoint")
+        try:
+            yield db
+        finally:
+            db.close()
+            outer.rollback()
+    engine.dispose()
+
+
+def _customer(db: Session, code: str, *, cadence: str = "weekly", replen_min: float | None = None) -> int:
+    c = DimCustomer(code=code, name=f"{code} Retail", is_key_account=True)
+    db.add(c)
+    db.flush()
+    db.add(
+        CustomerReportConfig(
+            customer_id=c.id,
+            reports_expected=True,
+            expected_cadence=cadence,
+            overdue_threshold_days=10,
+            replen_min_weeks_of_cover=replen_min,
+        )
+    )
+    db.flush()
+    return int(c.id)
+
+
+def _product(db: Session, tag: str, **kw) -> int:
+    p = DimProduct(sku=f"STO-{tag}", name=f"Overview {tag}", sales_model_name=f"Model {tag}", business_unit="NB", **kw)
+    db.add(p)
+    db.flush()
+    return int(p.id)
+
+
+_n = 0
+
+
+def _row(db, cid, pid, start, units, *, grain="week", price=100.0, vat="ex_vat", soh=None):
+    global _n
+    _n += 1
+    db.add(
+        FactCustomerSellthrough(
+            source_key=f"st-overview-{_n}",
+            tenant_id=TENANT,
+            customer_id=cid,
+            product_id=pid,
+            period_start_date=start,
+            period_type="monthly" if grain == "month" else "weekly",
+            period_grain=grain,
+            units_sold=units,
+            unit_sell_price=price,
+            vat_basis=vat,
+            reported_soh=soh,
+        )
+    )
+
+
+def _weeks(db, cid, pid, units_by_week_ago: dict[int, float], *, soh_now=None):
+    """units_by_week_ago[0] is the latest reported week (LAST_WEEK)."""
+    for ago, units in units_by_week_ago.items():
+        start = LAST_WEEK - timedelta(weeks=ago)
+        _row(db, cid, pid, start, units, soh=soh_now if ago == 0 else None)
+
+
+def test_overview(session: Session):
+    db = session
+    a = _customer(db, "STO-A", replen_min=3)
+    b = _customer(db, "STO-B", cadence="monthly")
+    c = _customer(db, "STO-C")  # expected weekly, never reported
+    p1 = _product(db, "P1")  # steady seller
+    p2 = _product(db, "P2")  # streak then drop
+    p3 = _product(db, "P3")  # low cover
+    p4 = _product(db, "P4")  # sold out
+    p5 = _product(db, "P5")  # stock not moving
+    p6 = _product(db, "P6")  # stopped selling, no stock figures (customer B)
+    p7 = _product(db, "P7", lifecycle_status="EOL")  # ended product: not a "stopped" problem
+
+    _weeks(db, a, p1, {i: 10 for i in range(26)}, soh_now=100)
+    _weeks(db, a, p2, {i: (2 if i < 4 else 10) for i in range(26)}, soh_now=50)
+    _weeks(db, a, p3, {i: 10 for i in range(26)}, soh_now=20)
+    _weeks(db, a, p4, {i: 5 for i in range(26)}, soh_now=0)
+    _weeks(db, a, p5, {i: (0 if i < 12 else 3) for i in range(26)}, soh_now=30)
+    # Last year, same weeks: P1 sold 5 a week.
+    for i in range(13):
+        _row(db, a, p1, date(2025, 10, 13) - timedelta(weeks=i), 5)  # 52 weeks before
+
+    # Customer B reports monthly, prices including VAT, no stock.
+    for m in range(1, 10):
+        _row(db, b, p1, date(2026, m, 1), 40, grain="month", price=115.0, vat="inc_vat")
+    for m in range(1, 8):
+        _row(db, b, p6, date(2026, m, 1), 8, grain="month", price=115.0, vat="inc_vat")
+        _row(db, b, p7, date(2026, m, 1), 8, grain="month", price=115.0, vat="inc_vat")
+    db.flush()
+
+    f = OverviewFilters(
+        date_from=LAST_WEEK - timedelta(weeks=12),
+        date_to=LAST_WEEK + timedelta(days=6),
+        grain="week",
+        compare="prior_year",
+        vat="ex_vat",
+        tenant_id=TENANT,
+        customer_ids=[a, b, c],
+    )
+    out = build_overview(db, f, BusinessCalendar(), today=TODAY, vat_rate=0.15)
+
+    # Headline: 13 weeks of customer A plus B's months spread over the days in the window.
+    a_units = 13 * (10 + 10 + 5) + (4 * 2 + 9 * 10) + 0 + 1 * 3  # P1+P3+P4, P2, P5 (week 12 ago only)
+    window_days_in = {7: 31 - 20 + 1, 8: 31, 9: 30}  # 2026-07-20 .. 2026-10-18 covers part of July
+    b_units = sum(40 * d / {7: 31, 8: 31, 9: 30}[m] for m, d in window_days_in.items())
+    b_units += 8 * (12 / 31)  # P6 in July
+    b_units += 8 * (12 / 31)  # P7 in July
+    assert out["kpis"]["units"] == pytest.approx(a_units + b_units, abs=0.05)
+    assert out["kpis"]["compare_units"] == pytest.approx(13 * 5, abs=0.05)
+    # B's prices are incl. VAT: 115 / 1.15 = 100 excl.
+    assert out["kpis"]["value"] == pytest.approx(out["kpis"]["units"] * 100, abs=1)
+    assert sum(t["units"] for t in out["trend"]) == pytest.approx(out["kpis"]["units"], abs=0.05)
+    assert len(out["trend"]) == 13
+    assert out["trend"][-1]["compare_units"] == pytest.approx(5)
+    # B reports monthly and has not sent October: the latest weeks are marked incomplete, A's are not.
+    assert out["trend"][-1]["incomplete_customers"] == ["STO-B Retail"]
+    assert out["trend"][0]["incomplete_customers"] == []
+    assert len(out["quarters"]) == 5
+    assert out["top_sellers"][0]["product_id"] == p1
+
+    # Stock: A reports on its latest week; B never reports stock.
+    assert out["kpis"]["stock_on_hand"] == pytest.approx(100 + 50 + 20 + 0 + 30)
+    assert out["kpis"]["stock_customers"] == 1
+
+    reasons = {(r["customer_id"], r["product_id"]): r for r in out["problems"]["rows"]}
+    assert reasons[(a, p3)]["reason"] == "needs_replen"  # 2 weeks of cover, A replenishes below 3
+    assert reasons[(a, p3)]["suggested_qty"] == 10 * 6 - 20
+    assert reasons[(a, p4)]["reason"] == "out_of_stock"
+    assert reasons[(a, p2)]["reason"] == "dropped"
+    assert reasons[(a, p5)]["reason"] == "aged"
+    assert reasons[(b, p6)]["reason"] == "stopped"
+    assert (b, p7) not in reasons  # ended product
+    assert (a, p1) not in reasons
+    assert out["problems"]["counts"] == {"needs_replen": 1, "out_of_stock": 1, "dropped": 1, "aged": 1, "stopped": 1}
+
+    cov = {r["customer_id"]: r for r in out["coverage"]["customers"]}
+    assert cov[a]["missing"] == 0 and cov[a]["cells"][-1]["status"] == "received"
+    assert cov[c]["missing"] == 11 and cov[c]["last_reported_day"] is None  # the last two weeks are still due
+    # B's September month arrived; October weeks are not due for a monthly reporter yet.
+    assert cov[b]["cells"][-1]["status"] == "due"
+    assert "STO-C Retail" in out["coverage"]["customers_missing"]
+    assert any("STO-C" in s for s in out["summary"])
+
+
+def test_customer_judged_to_its_last_report(session: Session):
+    """A weekly reporter whose last two weeks have not arrived is not flagged as a sales drop."""
+    db = session
+    a = _customer(db, "STO-L")
+    p = _product(db, "PL")
+    _weeks(db, a, p, {i: 10 for i in range(2, 26)}, soh_now=None)
+    db.flush()
+    f = OverviewFilters(date_from=date(2026, 7, 20), date_to=date(2026, 10, 18), tenant_id=TENANT, customer_ids=[a])
+    out = build_overview(db, f, BusinessCalendar(), today=TODAY, vat_rate=0.15)
+    assert out["problems"]["rows"] == []
+    cov = out["coverage"]["customers"][0]
+    # Not yet late: each week is due 10 days after it ends.
+    assert [c["status"] for c in cov["cells"][-3:]] == ["received", "due", "due"]
+
+
+def test_filter_options_lists_reporting_customers(session: Session):
+    db = session
+    a = _customer(db, "STO-F")
+    p = _product(db, "PF")
+    _row(db, a, p, LAST_WEEK, 3)
+    db.flush()
+    opts = filter_options(db, TENANT)
+    row = next(c for c in opts["customers"] if c["id"] == a)
+    assert row["has_data"] and row["reports_expected"]
+    assert "NB" in opts["business_units"]
+
+
+def test_old_stock_is_kept_and_aged(session: Session):
+    """Warren 2026-10-19: stock stays at customers for a long time. An old stock report still counts,
+    is shown with its date and stores, and is not used to call a SKU out of stock or low on cover."""
+    db = session
+    h = _customer(db, "STO-H")
+    p_old = _product(db, "PO")  # stock a year ago at two stores, no sales since
+    p_sell = _product(db, "PS")  # selling now, last stock report a year ago said 0
+    old = date(2025, 10, 13)
+    global _n
+    for site, units in (("Store North", 12), ("Store South", 3)):
+        _n += 1
+        db.add(
+            FactCustomerSellthrough(
+                source_key=f"st-overview-{_n}", tenant_id=TENANT, customer_id=h, product_id=p_old,
+                period_start_date=old, period_type="weekly", period_grain="week", units_sold=0,
+                reported_soh=units, site_label=site,
+            )
+        )
+    _row(db, h, p_sell, old, 0, soh=0)
+    for i in range(12):
+        _row(db, h, p_sell, LAST_WEEK - timedelta(weeks=i), 4)
+        _row(db, h, p_old, LAST_WEEK - timedelta(weeks=i), 0)
+    db.flush()
+    f = OverviewFilters(date_from=date(2026, 7, 20), date_to=date(2026, 10, 18), tenant_id=TENANT, customer_ids=[h])
+    out = build_overview(db, f, BusinessCalendar(), today=TODAY, vat_rate=0.15)
+
+    assert out["kpis"]["stock_on_hand"] == pytest.approx(15)
+    assert out["kpis"]["stock_old_customers"] == 1
+    assert out["kpis"]["stock_ages"][0]["stock_date"] == "2025-10-13"
+    rows = {r["product_id"]: r for r in out["problems"]["rows"]}
+    assert rows[p_old]["reason"] == "aged"
+    assert "2025-10-13" in rows[p_old]["detail"] and "Store North 12" in rows[p_old]["detail"]
+    assert rows[p_old]["stock_sites"] == [{"site": "Store North", "soh": 12.0}, {"site": "Store South", "soh": 3.0}]
+    assert p_sell not in rows  # a year-old 0 is not "out of stock" now
+
+
+def test_value_change_hidden_when_estimates_differ(session: Session):
+    db = session
+    a = _customer(db, "STO-V")
+    p = _product(db, "PV")
+    for i in range(13):
+        _row(db, a, p, LAST_WEEK - timedelta(weeks=i), 5, price=None)  # no sell price this year
+        _row(db, a, p, date(2025, 10, 13) - timedelta(weeks=i), 5)  # priced last year
+    from app.models.listing_capture import CustomerListing, ListingObservation
+    from datetime import datetime, timezone
+
+    lst = CustomerListing(customer_id=a, product_id=p, url="https://example.test/p", marketplace="test")
+    db.add(lst)
+    db.flush()
+    db.add(ListingObservation(listing_id=lst.id, fetched_at=datetime(2026, 10, 1, tzinfo=timezone.utc), parser_version="t", extracted_price=1150))
+    db.flush()
+    f = OverviewFilters(date_from=date(2026, 7, 20), date_to=date(2026, 10, 18), tenant_id=TENANT, customer_ids=[a])
+    out = build_overview(db, f, BusinessCalendar(), today=TODAY, vat_rate=0.15)
+    assert out["kpis"]["value_estimated"] > 0
+    assert out["kpis"]["value_comparable"] is False
+    assert out["kpis"]["value_change_pct"] is None
+    assert out["kpis"]["units_change_pct"] == pytest.approx(0)
+    assert any("not like for like" in n for n in out["notes"])
+
+
+def test_product_detail_across_customers(session: Session):
+    from app.services.channel_intelligence.sell_through_product import product_detail
+
+    db = session
+    a = _customer(db, "STO-DA")
+    b = _customer(db, "STO-DB")
+    p = _product(db, "PD", specs_json={"RAM": "16GB"})
+    _weeks(db, a, p, {i: 4 for i in range(6)}, soh_now=20)
+    for i in range(6):
+        _row(db, b, p, LAST_WEEK - timedelta(weeks=i), 2, price=115.0, vat="inc_vat")
+    db.flush()
+    out = product_detail(db, tenant_id=TENANT, product_id=p, as_of=date(2026, 10, 18), vat="ex_vat", vat_rate=0.15)
+    assert out["product"]["specs"] == {"RAM": "16GB"}
+    rows = {r["customer_id"]: r for r in out["customers"]}
+    assert rows[a]["units_26w"] == pytest.approx(24) and rows[a]["stock_on_hand"] == 20
+    assert rows[a]["stock_date"] == LAST_WEEK.isoformat()
+    assert rows[b]["latest_price"] == pytest.approx(100.0)  # 115 incl. VAT shown excl.
+    assert rows[a]["rate_4w"] == pytest.approx(4)
+    assert out["customers"][0]["customer_id"] == a  # most units first
+
+
+def _case(db, cid, pid, start, end, planned, code):
+    from app.models.cpor import CporCase, CporCaseLine
+
+    case = CporCase(case_code=code, customer_id=cid, promotion_type="Price promo", window_start=start, window_end=end, status="approved", tenant_id=TENANT)
+    db.add(case)
+    db.flush()
+    db.add(CporCaseLine(case_id=case.id, product_id=pid, window_start=start, window_end=end, srp=999, vat_rate=0.15, dealer_margin_pct=0.1, estimate_qty=planned))
+    db.flush()
+
+
+def test_existing_intelligence_feeds_cover_and_causes(session: Session):
+    """Warren 2026-10-19: weeks of cover takes upcoming promotions and shipments on their way into
+    account, and flagged SKUs show possible causes from data already in the platform."""
+    from datetime import datetime, timezone
+
+    from app.models.dimensions import DimDistributor
+    from app.models.facts import FactInboundShipment, FactInventoryDistributor
+    from app.models.listing_capture import CustomerListing, ListingObservation
+
+    db = session
+    a = _customer(db, "STO-IA")
+    b = _customer(db, "STO-IB")
+    p_promo = _product(db, "IP")  # 10 a week, 60 in stock: 6 weeks on sales, but a big promotion is coming
+    p_drop = _product(db, "ID")  # dropped after its price went up; cheaper at B; web page gone; promo ended
+    _weeks(db, a, p_promo, {i: 10 for i in range(26)}, soh_now=60)
+    _case(db, a, p_promo, date(2026, 10, 20), date(2026, 11, 2), 80, "STO-PROMO-1")
+    for i in range(26):
+        _row(db, a, p_drop, LAST_WEEK - timedelta(weeks=i), 2 if i < 4 else 10, price=120.0 if i < 6 else 100.0, soh=50 if i == 0 else None)
+        _row(db, b, p_drop, LAST_WEEK - timedelta(weeks=i), 5, price=90.0)
+    _case(db, a, p_drop, date(2026, 8, 1), date(2026, 9, 10), 50, "STO-PROMO-0")
+    lst = CustomerListing(customer_id=a, product_id=p_drop, url="https://example.test/gone", marketplace="test")
+    db.add(lst)
+    db.flush()
+    db.add(ListingObservation(listing_id=lst.id, fetched_at=datetime(2026, 10, 15, tzinfo=timezone.utc), parser_version="t", http_status=404))
+    dist = DimDistributor(code="STO-D1", name="Disti One")
+    db.add(dist)
+    db.flush()
+    db.get(DimCustomer, a).preferred_distributor_id = dist.id
+    db.add(FactInventoryDistributor(source_key="sto-inv-1", tenant_id=TENANT, product_id=p_promo, distributor_id=dist.id, as_of_date=date(2026, 10, 12), on_hand_units=300))
+    db.add(
+        FactInboundShipment(
+            tenant_id=TENANT, source_key="sto-ship-1", report_type="t", line_state="shipped", raw_source_row={},
+            product_resolution_status="resolved", distributor_resolution_status="resolved",
+            product_id=p_promo, resolved_customer_id=a, quantity=10, eta_date=date(2026, 11, 20),
+        )
+    )
+    db.flush()
+
+    f = OverviewFilters(date_from=date(2026, 7, 20), date_to=date(2026, 10, 18), tenant_id=TENANT, customer_ids=[a, b])
+    out = build_overview(db, f, BusinessCalendar(), today=TODAY, vat_rate=0.15)
+    rows = {(r["customer_id"], r["product_id"]): r for r in out["problems"]["rows"]}
+
+    promo = rows[(a, p_promo)]
+    assert promo["reason"] == "needs_replen"  # 6 weeks on sales alone would not flag it
+    assert promo["weeks_of_cover"] == pytest.approx(6.0)
+    assert promo["forward_weeks_of_cover"] < 4
+    assert "80 promotion units planned" in promo["detail"] and "10 on the way" in promo["detail"]
+    assert promo["suggested_qty"] == 10 * 6 + 80 - 60 - 10
+    keys = {c["key"] for c in promo["causes"]}
+    assert {"promo_ahead", "inbound", "distributor_stock"} <= keys
+
+    drop = rows[(a, p_drop)]
+    assert drop["reason"] == "dropped"
+    by_key = {c["key"]: c for c in drop["causes"]}
+    assert "100 → 120" in by_key["price_up"]["detail"]
+    assert "STO-IB Retail 90" in by_key["cheaper_elsewhere"]["detail"]
+    assert "HTTP 404" in by_key["no_page"]["detail"]
+    assert "STO-PROMO-0" in by_key["promo_ended"]["detail"]
+    assert any("search ranking" in n for n in drop["not_checked"])
+
+
+def test_no_intelligence_leaves_rules_unchanged(session: Session):
+    """Without promotions or shipments, cover and the suggested order are exactly stock / recent rate."""
+    db = session
+    a = _customer(db, "STO-NI")
+    p = _product(db, "NI")
+    _weeks(db, a, p, {i: 10 for i in range(26)}, soh_now=20)
+    db.flush()
+    f = OverviewFilters(date_from=date(2026, 7, 20), date_to=date(2026, 10, 18), tenant_id=TENANT, customer_ids=[a])
+    out = build_overview(db, f, BusinessCalendar(), today=TODAY, vat_rate=0.15)
+    row = out["problems"]["rows"][0]
+    assert row["reason"] == "needs_replen" and row["detail"] == "2.0 weeks of cover (replenish below 4)"
+    assert row["suggested_qty"] == 40 and row["forward_weeks_of_cover"] is None
+
+
+def test_attention_counts(session: Session):
+    from app.services.channel_intelligence import sell_through_overview as sto
+
+    db = session
+    a = _customer(db, "STO-AT")
+    _customer(db, "STO-AT2")  # expected weekly, never reported
+    p = _product(db, "AT")
+    _weeks(db, a, p, {i: 10 for i in range(26)}, soh_now=20)
+    db.flush()
+    sto._BRIEF_CACHE.pop(TENANT, None)
+    out = sto.sell_through_attention(db, TENANT, TODAY)
+    sto._BRIEF_CACHE.pop(TENANT, None)
+    assert out["restock"] == 1 and out["needs_replen"] == 1
+    assert "STO-AT2 Retail" in out["customers_missing"]
+
+
+def test_stock_gap_shown_as_cause(session: Session):
+    from app.models.customer_stock_position import CustomerStockPosition
+
+    db = session
+    a = _customer(db, "STO-GP")
+    p = _product(db, "GP")
+    _weeks(db, a, p, {i: 10 for i in range(26)}, soh_now=0)
+    db.add(
+        CustomerStockPosition(
+            tenant_id=TENANT, customer_id=a, product_id=p, period_grain="week", period_start_date=LAST_WEEK,
+            period_end_date=LAST_WEEK + timedelta(days=6), units_sold=10, reported_on_hand=0, expected_on_hand=25,
+            gap_units=-25, status="compared",
+        )
+    )
+    db.flush()
+    f = OverviewFilters(date_from=date(2026, 7, 20), date_to=date(2026, 10, 18), tenant_id=TENANT, customer_ids=[a])
+    out = build_overview(db, f, BusinessCalendar(), today=TODAY, vat_rate=0.15)
+    row = out["problems"]["rows"][0]
+    assert row["reason"] == "out_of_stock"
+    gap = next(c for c in row["causes"] if c["key"] == "stock_gap")
+    assert "reported 0, expected 25" in gap["detail"]

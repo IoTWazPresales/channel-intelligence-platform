@@ -1,0 +1,1 @@
+{"node": "N-0056", "expected_revision": 10, "dim": "a11y", "state": "pass", "evidence": "EV-N0056", "rationale": "Vintage is text in the card, not colour alone. The caption uses the secondary text colour on the existing inbox surface and stays in the document flow."}

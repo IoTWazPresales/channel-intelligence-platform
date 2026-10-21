@@ -1,0 +1,1 @@
+{"node": "N-0062", "expected_revision": 9, "dim": "migration_safety", "state": "na", "evidence": "EV-N0062", "rationale": "No migration. Arrived and plan-unit coverage are derived reads."}

@@ -1,0 +1,1 @@
+{"node": "N-0057", "expected_revision": 14, "stage_note": "2026-10-01 cip_test browser: Next quarter 2027Q1. Apply returned inserted 0, updated 0 because net requirement is 0. Unified import dialog opened. A bare export link returned 401; the authenticated download returned 200. eslint exit 0, tsc exit 0. Same-session check. cip was not written."}

@@ -84,10 +84,13 @@ def test_fill_rate_valid_period_bu():
     assert r.ok is True
 
 
-def test_support_spend_valid_customer_bu():
-    r = validate_metric_grain("support_spend", ["customer", "bu"])
-    assert r.ok is True
-    assert r.metric_id == "A2-01"
+def test_support_spend_grains_are_the_ones_served():
+    """Audit 2026-10-20: the portfolio service has no customer x BU cross-tab or period split."""
+    for grains in (["customer"], ["bu"], ["promo_type"]):
+        r = validate_metric_grain("support_spend", grains)
+        assert r.ok is True and r.metric_id == "A2-01"
+    assert validate_metric_grain("support_spend", ["customer", "bu"]).ok is False
+    assert validate_metric_grain("delivery_rate", ["period", "customer"]).ok is False
 
 
 def test_incremental_cost_refused():

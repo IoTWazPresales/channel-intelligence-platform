@@ -1,0 +1,25 @@
+{
+  "id": "N-0088",
+  "parent": null,
+  "title": "Promotion planner: suggested line quantities, and plans exported in the customer's own workbook layout",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": [
+    "ui",
+    "api"
+  ],
+  "risk": "R2",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": [],
+  "acceptance_criteria": [
+    "'Use CIP quantities' fills each line from cover, forecast and that customer's history, with the evidence shown; flag only, never block",
+    "A mapped customer plan template is read on import and written on export; a template can be learned from an example file",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

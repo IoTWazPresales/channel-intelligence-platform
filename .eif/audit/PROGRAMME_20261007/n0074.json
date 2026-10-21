@@ -1,0 +1,24 @@
+{
+  "id": "N-0074",
+  "parent": null,
+  "title": "Stable public address: named Cloudflare tunnel on a domain Warren owns (replaces the changing trycloudflare address)",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": ["infra"],
+  "risk": "R2",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": ["N-0073"],
+  "acceptance_criteria": [
+    "One fixed https hostname reaches CIP /login after any reboot or tunnel restart",
+    "Company managed Chrome can open it (it blocks *.trycloudflare.com by policy, PILOT_TUNNEL_RUNBOOK section H)",
+    "The supervisor from N-0073 runs the named tunnel; the quick tunnel stays as the fallback",
+    "Warren performs the Cloudflare sign-in and domain step himself; no Cloudflare credential is stored in the repo",
+    "Measured: public /login 200, unauthenticated /api/v1/auth/me 401, /docs not reachable"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

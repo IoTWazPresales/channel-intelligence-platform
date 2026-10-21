@@ -17,6 +17,7 @@ change_paths:
 - apps/web/**
 - packages/ui/**
 - docs/**
+- scripts/**
 - CONTEXT.md
 - AGENTS.md
 artifact_paths:

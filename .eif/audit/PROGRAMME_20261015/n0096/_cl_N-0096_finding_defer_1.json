@@ -1,0 +1,1 @@
+{"note": "N-0096: BACKLOG-099 (live API in GitHub Actions) DEFERRED by Warren 2026-10-15. Trigger: before a second developer pushes or before main promotion. Recorded in docs/BACKLOG.md. .github was not touched.", "code": "DOES_NOT_FIT", "node": "N-0096", "expected_revision": 3}

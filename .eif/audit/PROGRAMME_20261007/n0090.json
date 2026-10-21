@@ -1,0 +1,26 @@
+{
+  "id": "N-0090",
+  "parent": null,
+  "title": "Alert on late and missing customer sell-through reports",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": [
+    "api",
+    "ui"
+  ],
+  "risk": "R1",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": [
+    "N-0073"
+  ],
+  "acceptance_criteria": [
+    "Late and missing expected-report slots appear as an Attention signal linking to the CST steward worklist",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

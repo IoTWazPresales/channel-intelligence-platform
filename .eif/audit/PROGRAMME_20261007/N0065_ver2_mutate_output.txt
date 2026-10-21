@@ -1,0 +1,17 @@
+before sha256 = e62275a504483125
+mutated: scope_csv(empty) -> ''
+   test files (plus the DB module added by the runner): 2 missing: []
+   DATABASE_URL db = cip_test
+   DATABASE_URL_SYNC db = cip_test
+   current_database() = cip_test
+   role = cip super = False bypassrls = False
+   ..F.........F....................                                        [100%]
+   ================================== FAILURES ===================================
+   C:\Users\warren_eliason\channel-intelligence-platform\apps\api\tests\test_product_line_rls_n0065_db.py:124: assert 18 == 0
+   C:\Users\warren_eliason\channel-intelligence-platform\apps\api\tests\test_product_line_scope_n0065.py:49: AssertionError: assert '' == '!'
+   =========================== short test summary info ===========================
+   FAILED tests/test_product_line_rls_n0065_db.py::test_db_non_admin_with_no_rows_sees_no_products
+   FAILED tests/test_product_line_scope_n0065.py::test_non_admin_with_no_rows_sees_nothing
+   2 failed, 31 passed in 19.99s
+exit = 1
+after sha256 = e62275a504483125 restored = True

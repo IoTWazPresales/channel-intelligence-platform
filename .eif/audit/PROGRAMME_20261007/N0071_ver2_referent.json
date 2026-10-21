@@ -1,0 +1,1 @@
+{"node": "N-0071", "expected_revision": 30, "kind": "referent", "state": "pass", "evidence": ".eif/audit/PROGRAMME_20261007/N0071_VERIFY.md", "path": "apps/api/app/services/shipment_strict_pair.py"}

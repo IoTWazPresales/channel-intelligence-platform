@@ -1,0 +1,1 @@
+{"scope": "N-0111", "origin": "operator", "status": "accepted", "statement": "Warren 2026-10-19: when a unit cost or unit sell price is missing but the total and units are present (units != 0), the unit figure is derived as total / units and marked derived; the stored totals stay as given."}

@@ -1,0 +1,627 @@
+==== buy_plans.py
+22:def buy_plan_row_dict(
+41:async def list_buy_plans(db: AsyncSession = Depends(get_db)):
+42:    res = await db.execute(select(FactBuyPlan))
+47:        prod = await db.get(DimProduct, b.product_id)
+53:async def get_buy_plan_references_query(plan_id: int = Query(..., ge=1), db: AsyncSession = Depends(get_db)):
+55:    row = await db.get(FactBuyPlan, plan_id)
+59:    prod = await db.get(DimProduct, row.product_id)
+64:async def get_buy_plan_references(plan_id: int, db: AsyncSession = Depends(get_db)):
+66:    row = await db.get(FactBuyPlan, plan_id)
+70:    prod = await db.get(DimProduct, row.product_id)
+75:async def clear_buy_plans(body: ClearConfirmBody, db: AsyncSession = Depends(get_db)):
+78:    plan_ids = (await db.execute(select(FactBuyPlan.id))).scalars().all()
+100:async def delete_buy_plan(plan_id: int, db: AsyncSession = Depends(get_db)):
+101:    row = await db.get(FactBuyPlan, plan_id)
+==== commercial_planner.py
+173:async def _require_commercial_planner_enabled() -> None:
+182:def _coerce_float(v) -> float | None:
+191:def _sku_assumption_invalid_controlled_cost(sku: CommercialSkuAssumption | None) -> bool:
+198:def _sku_assumption_invalid_fx(sku: CommercialSkuAssumption | None) -> bool:
+205:def _sku_assumption_invalid_vat(sku: CommercialSkuAssumption | None) -> bool:
+215:def _sku_assumption_invalid_reserve(sku: CommercialSkuAssumption | None) -> bool:
+232:async def compute_plan_readiness_payload(db: AsyncSession, plan_id: int) -> dict:
+262:    def normalize_currency_code(cls, v):
+272:    def normalize_country_code(cls, v):
+324:def _line_payload(
+399:async def _line_payload_for_row(db: AsyncSession, line: CommercialPlanLine) -> dict:
+402:            select(
+506:async def _resolve_terms_and_calc(
+514:        await db.execute(select(CommercialCustomerTerm).where(CommercialCustomerTerm.customer_id == line.customer_id))
+518:            select(CommercialDistributorTerm).where(CommercialDistributorTerm.distributor_id == line.distributor_id)
+522:        await db.execute(select(CommercialSkuAssumption).where(CommercialSkuAssumption.product_id == line.product_id))
+582:def _commercial_plan_api_item(p: CommercialPlan, line_count: int) -> dict:
+599:async def list_plans(db: AsyncSession = Depends(get_db)):
+600:    plans = (await db.execute(select(CommercialPlan).order_by(CommercialPlan.id.desc()))).scalars().all()
+604:            await db.execute(select(func.count(CommercialPlanLine.id)).where(CommercialPlanLine.commercial_plan_id == p.id))
+611:async def create_plan(body: PlanCreate, db: AsyncSession = Depends(get_db)):
+620:async def patch_plan(plan_id: int, body: PlanPatch, db: AsyncSession = Depends(get_db)):
+621:    plan = await db.get(CommercialPlan, plan_id)
+639:        await db.execute(select(func.count(CommercialPlanLine.id)).where(CommercialPlanLine.commercial_plan_id == plan.id))
+645:async def delete_plan(
+657:    plan = await db.get(CommercialPlan, plan_id)
+669:        await db.execute(select(CommercialPlanLine).where(CommercialPlanLine.commercial_plan_id == plan_id))
+683:            select(CommercialLineupLine).where(
+709:async def list_plan_lines(plan_id: int, db: AsyncSession = Depends(get_db)):
+712:            select(
+821:async def create_plan_line(plan_id: int, body: PlanLineCreate, db: AsyncSession = Depends(get_db)):
+822:    if not await db.get(CommercialPlan, plan_id):
+829:        if not await db.get(model, pk):
+839:async def patch_plan_line(line_id: int, body: PlanLinePatch, db: AsyncSession = Depends(get_db)):
+840:    row = await db.get(CommercialPlanLine, line_id)
+851:        if field in data and data[field] is not None and not await db.get(model, data[field]):
+861:async def delete_plan_line(line_id: int, db: AsyncSession = Depends(get_db)):
+862:    row = await db.get(CommercialPlanLine, line_id)
+871:async def recalculate_plan(plan_id: int, db: AsyncSession = Depends(get_db)):
+873:        await db.execute(select(CommercialPlanLine).where(CommercialPlanLine.commercial_plan_id == plan_id))
+961:async def get_plan_summary(plan_id: int, db: AsyncSession = Depends(get_db)):
+963:        await db.execute(select(CommercialPlanLine).where(CommercialPlanLine.commercial_plan_id == plan_id))
+990:async def get_plan_suggestions(plan_id: int, db: AsyncSession = Depends(get_db)):
+1000:            select(CommercialPlanLine)
+1014:            select(
+1030:            select(
+1048:        select(
+1063:            select(forecast_sq.c.product_id, forecast_sq.c.forecast_units).where(forecast_sq.c.rn == 1)
+1070:        select(
+1082:            select(pricing_sq.c.product_id, pricing_sq.c.net_price).where(pricing_sq.c.rn == 1)
+1089:        select(func.max(HistoricalLineupImportHeader.import_job_id))
+1101:            select(
+1129:                select(
+1242:async def get_plan_readiness(plan_id: int, db: AsyncSession = Depends(get_db)):
+1248:async def get_customer_product_rankings(
+1256:    if not await db.get(CommercialPlan, plan_id):
+1258:    if not await db.get(DimCustomer, customer_id):
+1260:    if not await db.get(DimDistributor, distributor_id):
+1278:async def get_lineup_evidence(
+1289:        select(func.max(HistoricalLineupImportHeader.import_job_id))
+1308:            select(
+1362:async def apply_suggestion(body: ApplySuggestionBody, db: AsyncSession = Depends(get_db)):
+1363:    row = await db.get(CommercialPlanLine, body.line_id)
+1400:    def margin_stack(self):
+1440:def _customer_term_json(row: CommercialCustomerTerm, customer_code: str, customer_name: str) -> dict:
+1453:def _distributor_term_json(row: CommercialDistributorTerm, distributor_code: str, distributor_name: str) -> dict:
+1463:def _sku_assumption_json(row: CommercialSkuAssumption, sku: str, product_name: str) -> dict:
+1479:async def list_customer_terms(
+1485:        select(CommercialCustomerTerm, DimCustomer.code, DimCustomer.name)
+1498:def customer_term_grid_row_dict(row: CommercialCustomerTerm, customer_code: str, customer_name: str) -> dict:
+1504:async def create_customer_term(body: CustomerTermCreate, db: AsyncSession = Depends(get_db)):
+1505:    if not await db.get(DimCustomer, body.customer_id):
+1508:        await db.execute(select(CommercialCustomerTerm).where(CommercialCustomerTerm.customer_id == body.customer_id))
+1525:    cust = await db.get(DimCustomer, row.customer_id)
+1531:async def patch_customer_term(term_id: int, body: CustomerTermPatch, db: AsyncSession = Depends(get_db)):
+1532:    row = await db.get(CommercialCustomerTerm, term_id)
+1549:    cust = await db.get(DimCustomer, row.customer_id)
+1555:async def delete_customer_term(term_id: int, db: AsyncSession = Depends(get_db)):
+1556:    row = await db.get(CommercialCustomerTerm, term_id)
+1565:async def list_distributor_terms(
+1571:        select(CommercialDistributorTerm, DimDistributor.code, DimDistributor.name)
+1585:async def create_distributor_term(body: DistributorTermCreate, db: AsyncSession = Depends(get_db)):
+1586:    if not await db.get(DimDistributor, body.distributor_id):
+1590:            select(CommercialDistributorTerm).where(CommercialDistributorTerm.distributor_id == body.distributor_id)
+1603:    dist = await db.get(DimDistributor, row.distributor_id)
+1609:async def patch_distributor_term(term_id: int, body: DistributorTermPatch, db: AsyncSession = Depends(get_db)):
+1610:    row = await db.get(CommercialDistributorTerm, term_id)
+1620:    dist = await db.get(DimDistributor, row.distributor_id)
+1626:async def delete_distributor_term(term_id: int, db: AsyncSession = Depends(get_db)):
+1627:    row = await db.get(CommercialDistributorTerm, term_id)
+1636:async def sku_economics_import_template():
+1645:async def sku_economics_import_preview(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+1653:async def sku_economics_import_apply(
+1675:async def list_sku_assumptions(
+1681:        select(CommercialSkuAssumption, DimProduct.sku, DimProduct.name)
+1695:async def create_sku_assumption(body: SkuAssumptionCreate, db: AsyncSession = Depends(get_db)):
+1696:    if not await db.get(DimProduct, body.product_id):
+1699:        await db.execute(select(CommercialSkuAssumption).where(CommercialSkuAssumption.product_id == body.product_id))
+1719:    prod = await db.get(DimProduct, row.product_id)
+1725:async def patch_sku_assumption(assumption_id: int, body: SkuAssumptionPatch, db: AsyncSession = Depends(get_db)):
+1726:    row = await db.get(CommercialSkuAssumption, assumption_id)
+1736:    prod = await db.get(DimProduct, row.product_id)
+1742:async def delete_sku_assumption(assumption_id: int, db: AsyncSession = Depends(get_db)):
+1743:    row = await db.get(CommercialSkuAssumption, assumption_id)
+1769:async def list_lineup_jobs(db: AsyncSession = Depends(get_db)):
+1776:        select(
+1820:async def get_lineup_coverage(
+1831:        select(HistoricalLineupImportHeader)
+1848:        select(
+1936:async def get_lineup_product_gaps(
+1951:        select(HistoricalLineupImportHeader)
+1966:        select(
+2217:    def _validate_action(self) -> EntityResolutionItem:
+2244:    def _require_scope(self) -> BulkEntityResolutionApplyBody:
+2266:    def _validate(self) -> AssignDistributorBody:
+2278:def _case_payload(
+2310:async def list_lineup_cases(
+2318:    stmt = select(CommercialLineupCase).order_by(CommercialLineupCase.id.desc())
+2341:                select(func.count(CommercialLineupLine.id)).where(CommercialLineupLine.case_id == case.id)
+2349:async def create_lineup_case(body: LineupCaseCreate, db: AsyncSession = Depends(get_db)):
+2350:    if body.commercial_plan_id is not None and not await db.get(CommercialPlan, body.commercial_plan_id):
+2369:async def get_lineup_case(case_id: int, db: AsyncSession = Depends(get_db)):
+2370:    case = await db.get(CommercialLineupCase, case_id)
+2375:            select(func.count(CommercialLineupLine.id)).where(CommercialLineupLine.case_id == case_id)
+2383:async def get_lineup_entity_resolution_candidates(case_id: int, db: AsyncSession = Depends(get_db)):
+2384:    case = await db.get(CommercialLineupCase, case_id)
+2393:async def get_plan_entity_resolution_candidates(
+2412:    if plan_id is not None and not await db.get(CommercialPlan, plan_id):
+2419:async def _validate_entity_resolution_items(db: AsyncSession, resolutions: list[EntityResolutionItem]) -> None:
+2426:                exists = await db.scalar(select(func.count()).select_from(DimCustomer).where(DimCustomer.code == code[:64]))
+2431:                    select(func.count()).select_from(DimDistributor).where(DimDistributor.code == code[:32])
+2438:            if not await db.get(DimCustomer, item.dim_id):
+2441:            if not await db.get(DimDistributor, item.dim_id):
+2445:def _workbench_calc_field_metadata() -> list[dict[str, str]]:
+2459:def _workbench_parsed_field_metadata() -> list[dict[str, str]]:
+2486:def _workbench_sync_field_metadata() -> list[dict[str, str]]:
+2501:def _workbench_catalogue_product_field_metadata() -> list[dict[str, str]]:
+2525:async def get_lineup_workbench_column_metadata(case_id: int, db: AsyncSession = Depends(get_db)):
+2527:    case = await db.get(CommercialLineupCase, case_id)
+2531:        (await db.execute(select(CommercialLineupLine).where(CommercialLineupLine.case_id == case_id)))
+2545:            await db.execute(select(DimProduct.specs_json).where(DimProduct.id.in_(list(product_ids))))
+2564:async def post_lineup_entity_resolutions_apply(
+2570:    case = await db.get(CommercialLineupCase, case_id)
+2590:async def post_plan_entity_resolutions_apply(
+2595:    if body.plan_id is not None and not await db.get(CommercialPlan, body.plan_id):
+2615:async def patch_lineup_case_status(case_id: int, body: LineupCaseStatusPatch, db: AsyncSession = Depends(get_db)):
+2616:    case = await db.get(CommercialLineupCase, case_id)
+2648:            select(func.count(CommercialLineupLine.id)).where(CommercialLineupLine.case_id == case_id)
+2655:async def patch_lineup_case_plan(
+2663:    case = await db.get(CommercialLineupCase, case_id)
+2666:    if body.commercial_plan_id is not None and not await db.get(CommercialPlan, body.commercial_plan_id):
+2675:            select(func.count(CommercialLineupLine.id)).where(CommercialLineupLine.case_id == case_id)
+2682:async def get_lineup_case_suggested_pos(case_id: int, db: AsyncSession = Depends(get_db)):
+2691:async def close_lineup_case_work(case_id: int, db: AsyncSession = Depends(get_db)):
+2697:    case = await db.get(CommercialLineupCase, case_id)
+2718:            select(func.count(CommercialLineupLine.id)).where(CommercialLineupLine.case_id == case_id)
+2726:async def confirm_lineup_case_with_po(
+2766:async def get_lineup_case_suggested_distributors(case_id: int, db: AsyncSession = Depends(get_db)):
+2779:async def post_lineup_case_assign_distributor(
+2816:async def get_po_reconciliation(
+2833:async def get_po_gap_worklist(
+2842:async def dismiss_po_gap(body: GapDismissBody, db: AsyncSession = Depends(get_db)):
+2850:async def restore_po_gap(
+2860:async def get_po_auto_link_proposals(
+2880:async def get_po_auto_link_exact_po(
+2889:        await db.scalars(select(PurchaseOrder).where(PurchaseOrder.po_number_norm == norm))
+2904:async def post_po_auto_link_dismiss(body: PoAutoLinkDismissBody, db: AsyncSession = Depends(get_db)):
+2919:async def post_po_auto_link_restore(
+2933:async def post_po_auto_link_apply(body: PoAutoLinkApplyBody, db: AsyncSession = Depends(get_db)):
+2946:async def get_case_po_links(
+2956:async def post_case_po_unlink(body: CasePoUnlinkBody, db: AsyncSession = Depends(get_db)):
+2997:async def get_customer_token_worklist(
+3007:async def get_minted_customer_token_aliases(
+3015:async def post_customer_token_stamp_preview(
+3027:async def post_customer_token_stamp_apply(
+3054:async def post_customer_token_alias_revoke(
+3066:async def post_tokenless_customer_stamp_preview(
+3079:async def post_tokenless_customer_stamp_apply(
+3096:async def get_distributor_attribution_review(
+3106:async def post_distributor_confirmer_preview(
+3115:async def post_distributor_confirmer_apply(
+3124:async def post_accept_ship_corroborated(
+3140:async def post_distributor_soft_clear(
+3152:async def post_distributor_override(
+3168:async def post_backfill_token_proposed(db: AsyncSession = Depends(get_db)):
+3173:async def post_case_po_attribution_gap_preview(
+3186:async def post_case_po_attribution_gap_apply(
+3209:def _lineup_row_needs_resolution(ln: CommercialLineupLine, raw_payload: dict) -> bool:
+3221:def _is_duplicate_in_planner(d: dict, *, need_eligibility: bool) -> bool:
+3228:def _workbench_counts_payload(
+3258:def _workbench_scope_keep_line(d: dict, scope: str, *, need_eligibility: bool) -> bool:
+3281:async def list_lineup_case_lines(
+3294:    case = await db.get(CommercialLineupCase, case_id)
+3311:        select(
+3467:        existing_stmt = select(
+3536:async def patch_lineup_case_line(
+3544:    case = await db.get(CommercialLineupCase, case_id)
+3571:    ln = await db.get(CommercialLineupLine, line_id)
+3590:        select(
+3669:async def export_lineup_case_customer_slice(
+3697:async def delete_lineup_case_preview(case_id: int, db: AsyncSession = Depends(get_db)):
+3701:    case = await db.get(CommercialLineupCase, case_id)
+3711:            select(CommercialLineupCase).where(CommercialLineupCase.superseded_by_case_id == case_id)
+3729:async def delete_lineup_case(
+3737:    case = await db.get(CommercialLineupCase, case_id)
+3748:                select(CommercialLineupCase).where(CommercialLineupCase.superseded_by_case_id == case_id)
+3758:                select(func.count()).select_from(CommercialLineupLine).where(CommercialLineupLine.case_id == case_id)
+3766:                select(func.count())
+3790:async def parse_lineup_case_preview(
+3796:    case = await db.get(CommercialLineupCase, case_id)
+3822:async def parse_lineup_case_apply(
+3839:async def unified_lineup_import(
+3876:async def bulk_lineup_backfill_preview(
+3915:async def bulk_lineup_backfill_apply(
+3932:    def _parse_keys(raw: str | None) -> list[str] | None:
+3943:    def _parse_confirmations(raw: str | None) -> dict[str, str] | None:
+3968:async def bulk_lineup_backfill_get_preview(
+3983:async def bulk_lineup_1h_rederivation_preview(
+4005:async def bulk_lineup_1h_rederivation_apply(
+4028:    def _parse_keys(raw: str | None) -> list[str] | None:
+4039:    def _parse_map(raw: str | None) -> dict[str, str] | None:
+4051:    def _run_sync() -> dict[str, Any]:
+4072:    job = await db.get(ImportJob, session_import_job_id)
+4090:async def parse_lineup_case_upload(
+4109:async def get_plan_column_metadata(
+4118:    if not await db.get(CommercialPlan, plan_id):
+4123:            select(func.count(CommercialPlanLine.id)).where(CommercialPlanLine.commercial_plan_id == plan_id)
+4127:    total_stmt = select(func.count(distinct(CommercialPlanLine.product_id))).where(
+4143:        select(distinct(CommercialPlanLine.product_id))
+4148:    cat_stmt = select(
+4174:        await db.execute(select(DimProduct.specs_json).where(DimProduct.id.in_(product_ids_subq)))
+4196:def _sync_eligibility(
+4250:async def preview_sync_lineup_case_to_plan(
+4260:    case = await db.get(CommercialLineupCase, case_id)
+4270:    if not await db.get(CommercialPlan, plan_id):
+4282:        select(CommercialLineupLine).where(CommercialLineupLine.case_id == case_id)
+4286:    existing_stmt = select(
+4365:async def sync_lineup_case_to_plan(
+4379:    case = await db.get(CommercialLineupCase, case_id)
+4389:    plan = await db.get(CommercialPlan, plan_id)
+4394:        select(CommercialLineupLine).where(CommercialLineupLine.case_id == case_id)
+4398:    existing_stmt = select(
+==== commercial_planner_intelligence_routes.py
+23:async def save_product_rankings_snapshot(
+31:    if not await db.get(CommercialPlan, plan_id):
+33:    if not await db.get(DimCustomer, customer_id):
+35:    if not await db.get(DimDistributor, distributor_id):
+54:async def list_plan_intelligence_snapshots(plan_id: int, db: AsyncSession = Depends(get_db)):
+55:    if not await db.get(CommercialPlan, plan_id):
+61:async def get_product_rankings_snapshot(
+67:    if not await db.get(CommercialPlan, plan_id):
+==== competition.py
+19:async def list_mappings(db: AsyncSession = Depends(get_db)):
+20:    res = await db.execute(select(FactCompetitorMapping))
+24:        prod = await db.get(DimProduct, m.product_id)
+25:        comp = await db.get(DimCompetitorProduct, m.competitor_product_id)
+26:        brand = await db.get(DimCompetitorBrand, comp.brand_id) if comp else None
+45:async def list_comp_prices(db: AsyncSession = Depends(get_db)):
+46:    res = await db.execute(select(FactCompetitorPrice).order_by(FactCompetitorPrice.observed_at.desc()))
+50:        comp = await db.get(DimCompetitorProduct, p.competitor_product_id)
+64:async def approve_mapping(mapping_id: int, db: AsyncSession = Depends(get_db)):
+65:    m = await db.get(FactCompetitorMapping, mapping_id)
+74:async def reject_mapping(mapping_id: int, db: AsyncSession = Depends(get_db)):
+75:    m = await db.get(FactCompetitorMapping, mapping_id)
+84:async def delete_mapping(mapping_id: int, db: AsyncSession = Depends(get_db)):
+85:    row = await db.get(FactCompetitorMapping, mapping_id)
+98:async def clear_mappings(body: ClearConfirmBody, db: AsyncSession = Depends(get_db)):
+111:async def delete_comp_price(price_id: int, db: AsyncSession = Depends(get_db)):
+112:    row = await db.get(FactCompetitorPrice, price_id)
+125:async def clear_comp_prices(body: ClearConfirmBody, db: AsyncSession = Depends(get_db)):
+==== cpor_exports.py
+24:def _actor(user: dict) -> str:
+33:def _actor_trail(user: dict) -> dict[str, Any]:
+44:def _load_case(session, case_id: int) -> CporCase:
+45:    case = session.get(CporCase, case_id)
+51:def _storage_key(case_id: int, version: int, case_code: str) -> str:
+56:def _file_name(case_code: str, version: int) -> str:
+62:def generate_export(case_id: int, user: dict = Depends(_require_cpor_planner)):
+122:def list_exports(case_id: int):
+126:            select(CporCaseEvent)
+154:def download_export(case_id: int, version: int):
+159:            select(CporCaseEvent)
+==== cpor_historical_import.py
+89:def _get_job_sync(db: Session, job_id: int) -> ImportJob:
+90:    job = db.get(ImportJob, job_id)
+96:def _actor(user: dict) -> str:
+110:def _cpor_resolution_plan_task_id(job: ImportJob) -> str | None:
+119:def _assert_cpor_resolution_plan_dispatch_allowed(job: ImportJob) -> None:
+153:def _write_cpor_resolution_plan_slot(job_id: int, task_id: str, *, async_poll: bool, label: str) -> None:
+156:        job = meta_db.get(ImportJob, job_id)
+164:def _clear_cpor_resolution_plan_slot(job_id: int) -> None:
+172:def _dispatch_cpor_historical_apply(job_id: int) -> tuple[bool, str | None]:
+198:            def _in_process() -> None:
+225:async def list_mapping_profiles(
+234:        await db.scalars(select(CporHistoricalMappingProfile).order_by(CporHistoricalMappingProfile.id))
+254:def historical_job_summary(
+262:                select(func.count())
+272:                select(ImportCporHistoricalStagingLine).where(
+307:def historical_candidates(
+350:def historical_map_token(
+376:def historical_bulk_map_token(
+409:def historical_validate(
+427:            job = db.get(ImportJob, job_id)
+440:def historical_apply(
+481:            job = db.get(ImportJob, job_id)
+494:def historical_progress(
+590:def historical_resolution_plan_generate(
+606:def historical_resolution_plan_compute_async(
+636:def historical_resolution_plan_apply_async(
+667:def historical_resolution_plan_task_status(
+==== cpor_payment_evidence.py
+62:def _sync_db() -> Session:
+74:def _job_or_404(db: Session, job_id: int) -> ImportJob:
+75:    job = db.get(ImportJob, job_id)
+82:def list_profiles(
+87:    rows = list(db.scalars(select(CporPaymentMappingProfile).order_by(CporPaymentMappingProfile.id)).all())
+104:def payment_evidence_overlay(
+122:def job_summary(
+140:def candidates(
+152:def map_token(
+182:def mark_shell(
+206:def re_resolve(
+217:def apply_job(
+240:def list_case_payment_evidence(
+247:            select(CporPaymentEvidence)
+255:    case = db.get(CporCase, case_id)
+259:                select(CporPaymentEvidence).where(
+270:    def _row(r: CporPaymentEvidence) -> dict[str, Any]:
+==== cst_steward.py
+41:def _actor(x_user_id: str | None) -> str | None:
+45:def _config_json(
+68:def article_alias_q_match(q: str):
+84:def _alias_json(row: CustomerArticleAlias, customer: DimCustomer | None, product: DimProduct | None) -> dict:
+105:def _slot_json(slot: CustomerCstReportSlot, customer: DimCustomer | None) -> dict:
+136:    def cadence_ok(cls, v: str | None) -> str | None:
+146:    def structure_ok(cls, v: str | None) -> str | None:
+171:    def status_ok(cls, v: str | None) -> str | None:
+189:def list_key_account_steward(
+196:            select(DimCustomer, CustomerReportConfig)
+213:def get_key_account_steward(customer_id: int):
+215:        cust = session.get(DimCustomer, customer_id)
+219:            select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer_id)
+225:def patch_key_account_steward(
+248:        cust = session.get(DimCustomer, customer_id)
+256:            select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer_id)
+294:                select(CustomerReportConfig).where(CustomerReportConfig.customer_id == customer_id)
+300:def report_slot_worklist(
+315:            for c in session.scalars(select(DimCustomer).where(DimCustomer.id.in_(cust_ids))).all():
+330:def advance_report_slots(
+344:def p4_bootstrap_configs(
+359:def list_article_aliases(
+366:            select(CustomerArticleAlias)
+383:            for c in session.scalars(select(DimCustomer).where(DimCustomer.id.in_(cust_ids or {0}))).all()
+387:            for p in session.scalars(select(DimProduct).where(DimProduct.id.in_(prod_ids or {0}))).all()
+395:async def import_article_aliases(
+444:def confirm_imported_article_aliases(
+460:def patch_article_alias(
+468:        row = session.get(CustomerArticleAlias, alias_id)
+471:        prod = session.get(DimProduct, int(body.product_id)) if body.product_id else session.get(
+512:        cust = session.get(DimCustomer, row.customer_id)
+513:        prod = session.get(DimProduct, row.product_id)
+518:def derive_eras_from_shipping(
+547:def confirm_shipping_derived_eras(
+558:                select(CustomerArticleAlias).where(CustomerArticleAlias.status == "proposed")
+594:def reresolve_job_residuals(
+612:        job = session.get(ImportJob, int(job_id))
+623:                select(ImportCustomerSellthroughStagingLine).where(
+662:def confirm_article_alias(
+673:        cust = session.get(DimCustomer, row.customer_id)
+674:        prod = session.get(DimProduct, row.product_id)
+679:def reject_article_alias(
+696:        cust = session.get(DimCustomer, row.customer_id)
+697:        prod = session.get(DimProduct, row.product_id)
+==== imports_product_master.py
+68:    def strip_target(cls, v: str | None) -> str | None:
+76:    def strip_disp(cls, v: str | None) -> str | None:
+89:async def create_product_master_job(
+97:        select(SourceDefinition)
+138:async def get_product_master_job_state(
+146:            select(ImportJob)
+153:            sync_job = sync_db.get(ImportJob, job_id)
+164:            select(ImportRowResult.severity, func.count(ImportRowResult.id))
+202:async def put_product_master_mapping(
+208:    job = await db.get(ImportJob, job_id)
+222:async def post_product_master_validate(
+239:        job = await db.get(ImportJob, job_id)
+274:            def _in_process_pm_validate() -> None:
+336:    job = await db.get(ImportJob, job_id)
+349:async def post_product_master_commit(
+388:            def _in_process_pm_commit() -> None:
+447:    job = await db.get(ImportJob, job_id)
+==== lineup.py
+106:    def _cap_rows(self) -> LineupBulkBody:
+113:async def list_lineup_items(
+119:    stmt = select(FactLineupPlanItem).options(
+177:async def list_lineup_item_events(item_id: int, db: AsyncSession = Depends(get_db)):
+178:    parent = await db.get(FactLineupPlanItem, item_id)
+182:        select(LineupPlanItemEvent)
+202:async def bulk_import_lineup_items(body: LineupBulkBody, db: AsyncSession = Depends(get_db)):
+213:async def patch_lineup_item(
+220:    row = await db.get(FactLineupPlanItem, item_id)
+263:async def delete_lineup_item(item_id: int, db: AsyncSession = Depends(get_db)):
+264:    row = await db.get(FactLineupPlanItem, item_id)
+277:async def clear_lineup_items(body: ClearConfirmBody, db: AsyncSession = Depends(get_db)):
+290:async def get_lineup_net_requirement(
+315:            select(DimProduct.id, DimProduct.product_line, DimProduct.business_unit)
+352:async def post_lineup_builder_economics(
+362:            select(CommercialSkuAssumption).where(
+389:async def get_lineup_budget_position(
+398:async def post_lineup_budget_position(
+411:async def export_lineup_net_requirement_csv(
+422:        await db.execute(select(DimProduct.id, DimProduct.product_line, DimProduct.business_unit))
+450:async def export_lineup_net_requirement_xlsx(
+479:async def get_half_year_periods(
+494:async def post_apply_net_requirement(
+==== mappings.py
+105:async def mapping_queue(db: AsyncSession = Depends(get_db)):
+106:    res = await db.execute(select(EntityMappingQueue).order_by(EntityMappingQueue.id.desc()))
+126:async def approve(
+129:    item = await db.get(EntityMappingQueue, item_id)
+140:async def reject(item_id: int, db: AsyncSession = Depends(get_db)):
+141:    item = await db.get(EntityMappingQueue, item_id)
+150:async def delete_queue_item(item_id: int, db: AsyncSession = Depends(get_db)):
+151:    row = await db.get(EntityMappingQueue, item_id)
+164:async def clear_mapping_queue(body: ClearConfirmBody, db: AsyncSession = Depends(get_db)):
+177:async def list_distributor_si_mapping_candidates(
+210:    def _work(sess: Session) -> dict:
+217:async def distributor_si_mapping_candidate_tab_counts(job_id: int, db: AsyncSession = Depends(get_db)):
+221:    def _work(sess: Session) -> dict:
+227:def _blank_customer_normalized_key(norm: str) -> bool:
+232:async def _open_channel_customer_id(db: AsyncSession) -> int:
+233:    r = await db.execute(select(DimCustomer.id).where(DimCustomer.code == OPEN_CHANNEL_CUSTOMER_CODE))
+243:async def _get_dsi_candidate_or_404(candidate_id: int, db: AsyncSession) -> ImportEntityMappingCandidate:
+244:    row = await db.get(ImportEntityMappingCandidate, candidate_id)
+250:async def _bulk_effective_provisional_geo(
+260:    def work(sess: Session) -> tuple[int | None, int | None]:
+327:async def resolve_dsi_product_candidate(
+363:async def map_dsi_candidate_to_customer(
+412:async def acknowledge_dsi_duplicate_different_entity(
+428:async def resolve_dsi_duplicate_same_entity(
+448:async def resolve_dsi_duplicate_cluster_same_entity(
+466:async def create_provisional_customer_from_dsi_candidate(
+474:    def _geo(sess: Session) -> dict[str, Any]:
+518:async def mark_dsi_candidate_open_channel(
+570:async def ignore_dsi_candidate(
+596:async def map_dsi_candidate_to_distributor(
+625:async def create_provisional_distributor_from_dsi_candidate(
+658:async def _assert_dsi_import_job(db: AsyncSession, job_id: int) -> ImportJob:
+659:    job = await db.get(ImportJob, job_id)
+701:    def _payload_for_action(self) -> Self:
+724:def _dsi_bulk_totals_from_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
+739:async def dsi_steward_bulk_preview(job_id: int, body: DsiBulkStewardBody, db: AsyncSession = Depends(get_db)):
+742:        select(ImportEntityMappingCandidate).where(
+832:def _dsi_bulk_provisional_payload_from_body(body: DsiBulkStewardBody) -> dict[str, Any]:
+843:def _enqueue_dsi_bulk_provisional_customers(
+861:    def _run_sync() -> dict[str, Any]:
+890:            def _in_process() -> None:
+929:        def _inline() -> dict[str, Any]:
+938:def _dsi_bulk_ignore_payload_from_body(body: DsiBulkStewardBody) -> dict[str, Any]:
+945:def _enqueue_dsi_bulk_ignore(
+963:    def _run_sync() -> dict[str, Any]:
+995:            def _in_process() -> None:
+1034:        def _inline() -> dict[str, Any]:
+1044:async def dsi_steward_bulk_provisional_apply_async(
+1056:    job = await db.get(ImportJob, job_id)
+1075:async def dsi_steward_bulk_ignore_apply_async(
+1087:    job = await db.get(ImportJob, job_id)
+1106:async def dsi_steward_bulk_task_status(job_id: int, task_id: str) -> dict[str, Any]:
+1126:    def _read() -> tuple[str, Any]:
+1152:        def _clear_bulk_meta() -> None:
+1168:async def dsi_steward_bulk_apply(
+1201:        cand = await db.get(ImportEntityMappingCandidate, cid)
+1313:def _enqueue_dsi_resolution_plan_compute(
+1322:def _dsi_resolution_plan_compute_payload_from_body(body: DsiResolutionPlanGenerateBody) -> dict[str, Any]:
+1331:async def dsi_resolution_plan_compute_async(
+1336:    job = await db.get(ImportJob, job_id)
+1351:    def _assert_allowed(sess: Session) -> None:
+1381:async def dsi_resolution_plan_generate(
+1387:    def _work(sess: Session) -> dict[str, Any]:
+1403:async def dsi_resolution_plan_effective(
+1409:    def _work(sess: Session) -> dict[str, Any]:
+1426:def _dsi_resolution_plan_apply_payload_from_body(body: DsiResolutionPlanApplyBody) -> dict[str, Any]:
+1439:def _enqueue_dsi_resolution_plan_apply(
+1450:async def dsi_resolution_plan_apply_async(
+1455:    job = await db.get(ImportJob, job_id)
+1459:    def _assert_allowed(sess: Session) -> None:
+1489:async def dsi_resolution_plan_apply_endpoint(
+1505:    job = await db.get(ImportJob, job_id)
+1508:        def _assert_allowed(sess: Session) -> None:
+1524:async def dsi_apply_complete_to_loaded(
+1532:    def _work() -> dict[str, Any]:
+1543:async def revalidate_dsi_import_job(job_id: int, db: AsyncSession = Depends(get_db)):
+1564:    job = await db.get(ImportJob, job_id)
+1594:async def dsi_channel_geographic_evidence(job_id: int, db: AsyncSession = Depends(get_db)):
+1602:    def _work(sess: Session) -> dict[str, Any]:
+1615:async def dsi_unresolved_geo_tokens(job_id: int, db: AsyncSession = Depends(get_db)):
+1618:    def _work(sess: Session) -> dict[str, Any]:
+1657:async def dsi_geo_steward_channel_create(
+1665:    def _work(sess: Session) -> dict[str, Any]:
+1684:async def dsi_geo_steward_channel_alias(
+1692:    def _work(sess: Session) -> dict[str, Any]:
+1710:async def dsi_geo_steward_region_create(
+1718:    def _work(sess: Session) -> dict[str, Any]:
+1737:async def dsi_geo_steward_region_alias(
+1745:    def _work(sess: Session) -> dict[str, Any]:
+1769:async def dsi_geo_steward_create_prefill(
+1781:    def _work(_sess: Session) -> dict[str, str]:
+1797:async def dsi_geo_steward_region_register_from_hint(
+1806:    def _work(sess: Session) -> dict[str, Any]:
+1839:async def dsi_geo_steward_bulk_apply(
+1850:    def _work(sess: Session) -> dict[str, Any]:
+1880:async def create_customer_source_token_alias(body: CustomerSourceTokenAliasCreate, db: AsyncSession = Depends(get_db)):
+==== pricing.py
+37:def _parse_iso_date(s: str) -> date:
+49:async def list_pricing_facts(db: AsyncSession = Depends(get_db)):
+50:    res = await db.execute(select(FactPricing).order_by(FactPricing.effective_date.desc()))
+55:        prod = await db.get(DimProduct, p.product_id)
+60:def pricing_fact_row_dict(
+77:def pricing_recommendation_row_dict(r: PricingRecommendation, prod: DimProduct | None) -> dict:
+93:async def create_pricing_fact(row: PricingFactRowIn, db: AsyncSession = Depends(get_db)):
+121:async def bulk_create_pricing_facts(body: PricingFactsBulkBody, db: AsyncSession = Depends(get_db)):
+151:async def list_pricing_recommendations(db: AsyncSession = Depends(get_db)):
+152:    res = await db.execute(select(PricingRecommendation))
+156:        prod = await db.get(DimProduct, r.product_id)
+162:async def delete_pricing_fact(fact_id: int, db: AsyncSession = Depends(get_db)):
+163:    row = await db.get(FactPricing, fact_id)
+176:async def clear_pricing_facts(body: ClearConfirmBody, db: AsyncSession = Depends(get_db)):
+189:async def delete_pricing_recommendation(rec_id: int, db: AsyncSession = Depends(get_db)):
+190:    row = await db.get(PricingRecommendation, rec_id)
+203:async def clear_pricing_recommendations(body: ClearConfirmBody, db: AsyncSession = Depends(get_db)):
+==== roadmap.py
+19:def roadmap_row_dict(r: FactProductRoadmap, prod: DimProduct | None) -> dict:
+34:async def list_roadmap(db: AsyncSession = Depends(get_db)):
+35:    res = await db.execute(select(FactProductRoadmap))
+39:        prod = await db.get(DimProduct, r.product_id)
+45:async def delete_roadmap_row(row_id: int, db: AsyncSession = Depends(get_db)):
+46:    row = await db.get(FactProductRoadmap, row_id)
+59:async def clear_roadmap(body: ClearConfirmBody, db: AsyncSession = Depends(get_db)):
+==== shipment_evidence.py
+83:async def _unresolved_shipment_mapping_candidate_count(db: AsyncSession, job_id: int, entity_type: str) -> int:
+85:        select(func.count())
+97:def _dispatch_shipment_apply(job_id: int) -> tuple[bool, str | None]:
+110:def _line_to_dict(
+169:def _apply_filters(stmt: Any, model: Any, **kwargs: Any) -> Any:
+203:async def list_shipment_evidence_raw_column_keys(
+227:async def list_shipment_import_job_mapping_candidates(
+233:    job = await db.get(ImportJob, job_id)
+237:        select(ImportEntityMappingCandidate)
+252:        dr = await db.execute(select(DimDistributor).where(DimDistributor.id.in_(sug_dist_ids)))
+256:        cr = await db.execute(select(DimCustomer).where(DimCustomer.id.in_(sug_cust_ids)))
+295:async def list_shipment_import_job_mapping_candidates_paginated(
+310:    job = await db.get(ImportJob, job_id)
+328:    def _work(sess: Session) -> dict[str, Any]:
+338:async def shipment_mapping_candidate_tab_counts(
+343:    job = await db.get(ImportJob, job_id)
+350:    def _work(sess: Session) -> dict[str, Any]:
+383:async def shipment_resolution_plan_compute_async(
+411:async def shipment_resolution_plan_generate(
+418:    def _work(sess: Session) -> dict[str, Any]:
+429:async def shipment_resolution_plan_effective(
+436:    def _work(sess: Session) -> dict[str, Any]:
+452:async def shipment_resolution_plan_apply_async(
+555:    def _payload_for_action(self) -> Self:
+575:def _shipment_bulk_totals_from_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
+579:def _assert_shipment_import_job_sync(session: Session, job_id: int) -> ImportJob:
+580:    job = session.get(ImportJob, job_id)
+586:def _shipment_bulk_ignore_payload_from_body(body: ShipmentBulkStewardBody) -> dict[str, Any]:
+590:def _shipment_bulk_provisional_payload_from_steward_body(body: ShipmentBulkStewardBody) -> dict[str, Any]:
+597:def _shipment_candidate_meta(cand: ImportEntityMappingCandidate) -> dict[str, Any]:
+612:def _write_shipment_bulk_slot(job_id: int, task_id: str, *, async_poll: bool, label: str) -> None:
+616:        job = meta_db.get(ImportJob, job_id)
+623:async def shipment_import_job_bulk_apply_confirmed_plans(
+650:async def shipment_import_candidates_bulk_map_customer(
+692:async def shipment_import_candidate_map_distributor(
+724:async def shipment_import_candidate_create_provisional_distributor(
+760:async def shipment_import_candidate_map_customer(
+796:async def shipment_import_candidate_manual_special_category(
+814:async def shipment_import_candidate_clear_special_category(
+829:async def shipment_import_candidate_reject(
+857:async def shipment_import_candidate_duplicate_different_entity(
+891:async def shipment_import_candidate_duplicate_same_entity(
+925:async def shipment_import_candidate_create_provisional_customer(
+964:async def shipment_import_job_bulk_create_provisional_customers(
+975:    job = await db.get(ImportJob, job_id)
+997:async def _enqueue_shipment_bulk_provisional_customers(
+1011:async def shipment_steward_bulk_provisional_apply_async(
+1018:    job = await db.get(ImportJob, job_id)
+1046:async def shipment_steward_bulk_preview(
+1054:            select(ImportEntityMappingCandidate).where(
+1117:async def shipment_steward_bulk_apply(
+1239:async def shipment_steward_bulk_ignore_apply_async(
+1246:    job = await db.get(ImportJob, job_id)
+1269:async def shipment_bulk_task_status(job_id: int, task_id: str) -> dict[str, Any]:
+1292:    def _read() -> tuple[str, Any]:
+1316:def _clear_shipment_bulk_slot(job_id: int) -> None:
+1326:async def apply_shipment_import_job(
+1338:    job = await db.get(ImportJob, job_id)
+1368:        j = sync_db.get(ImportJob, job_id)
+1380:            j_meta = meta_db.get(ImportJob, job_id)
+1415:async def list_shipment_evidence(
+1438:        _apply_filters(select(func.count()).select_from(EV), EV, **filt),
+1444:        _apply_filters(select(EV).order_by(EV.id.desc()), EV, **filt),
+1455:        pr = await db.execute(select(DimProduct).where(DimProduct.id.in_(prod_ids)))
+1459:        dr = await db.execute(select(DimDistributor).where(DimDistributor.id.in_(dist_ids)))
+1476:async def list_shipment_change_events(
+1494:    def _run() -> dict[str, Any]:
+1516:async def get_shipment_evidence_line(
+1522:    row = await db.get(EV, line_id)
+1525:    job = await db.get(ImportJob, row.import_job_id)
+1529:        p = await db.get(DimProduct, row.product_id)
+1532:        d = await db.get(DimDistributor, row.distributor_id)

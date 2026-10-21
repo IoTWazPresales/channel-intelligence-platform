@@ -1,0 +1,30 @@
+{
+  "id": "N-0102",
+  "parent": "N-0085",
+  "title": "N-0085 U2: per-retailer page reader framework (Takealot, Evetech, Amazon), N-0078 fields, registry migrations, discovery for Takealot and Evetech",
+  "class": "feature",
+  "origin": "decomposition",
+  "status": "proposed",
+  "facets": [
+    "api",
+    "schema"
+  ],
+  "risk": "R2",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": [
+    "N-0101"
+  ],
+  "acceptance_criteria": [
+    "listing_capture/adapters/<site>.py contract: find(keys), fetch(listing), parse() with the N-0078 field set into parse_flags.fields",
+    "Migrations M1-M4 per the design, proven on cip_test before cip; marketplace vocab and status lifecycle (restocked, retired) extended",
+    "The 168 stored snapshots re-parse with zero fetches and the same price/stock as before",
+    "Discovery job (daily) proposes only corroborated pages (EAN or part number shown) for reported products with no listing; Amazon's 51 listings linked to products by feed id or flagged",
+    "Design: .eif/audit/PROGRAMME_20261007/N0085_DESIGN.md; decisions D-0061 and D-0063",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "auto"
+}

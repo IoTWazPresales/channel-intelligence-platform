@@ -1,0 +1,1 @@
+{"path": "apps/api/alembic/versions/20261015_0038_cst_superseded_rows.py", "note": "N-0110 repair: 20261015_0038 adds fact_customer_sellthrough_superseded (product-line RLS, no update/delete policy). Clone round trip clean; applied to cip; fact rows 1823, units 6159, on-hand 28812 unchanged.", "provenance": "implementation-observation", "node": "N-0110", "expected_revision": 23}

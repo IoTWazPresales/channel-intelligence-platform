@@ -1,0 +1,1 @@
+{"node": "N-0052", "expected_revision": 6, "to": "validate", "stage_note": "Clone dim_product 18177 equals live cip 18177. Restore 202.7s. Forced failure appended the alert file. Resolver tests cover the missing client."}

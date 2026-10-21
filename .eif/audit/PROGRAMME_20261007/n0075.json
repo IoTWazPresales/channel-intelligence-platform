@@ -1,0 +1,24 @@
+{
+  "id": "N-0075",
+  "parent": null,
+  "title": "Account invite email: link to the system plus a first-login password",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": ["auth", "personal_data", "api", "ui"],
+  "risk": "R3",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": ["N-0074", "N-0065"],
+  "acceptance_criteria": [
+    "Warren's request 2026-10-07: an email MUST be sent to the user with a link to the system and a login password",
+    "Password policy per Warren's decision (fixed versus must-change at first login)",
+    "Admin creates the user on Administration users and the invite is sent from the existing mailer configuration; resend is possible",
+    "The four roles stay as they are (admin, steward, planner, viewer); no surname, company-role or capability-patch fields",
+    "No password or token is written to logs or EIF artifacts"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

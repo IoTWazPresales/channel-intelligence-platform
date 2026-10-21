@@ -1,0 +1,6 @@
+{
+  "scope": "N-0072",
+  "origin": "operator",
+  "status": "accepted",
+  "statement": "Warren 2026-10-01: import only ACZA sheets that match the shipment template. Skip BOM Not Ready and any other non-shipment sheet. Show the skipped sheet names. Do not load those sheets as shipments."
+}

@@ -1,0 +1,1 @@
+{"node": "N-0071", "expected_revision": 18, "dim": "backup_recovery", "state": "na", "evidence": {"path": ".eif/audit/PROGRAMME_20261007/N0071_IMPL.md", "summary": "Round 2: still no data write and no schema change; cip was only read (read-only transactions, rolled back). Undo is a code revert."}, "rationale": "Nothing to back up or recover: no data written."}

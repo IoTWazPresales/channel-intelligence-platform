@@ -1,0 +1,1 @@
+{"node": "N-0046", "expected_revision": 5, "id": "BL-0011", "note": "Warren authorised the leftover database drops. The 16 named smoke and clone databases are gone. cip and cip_test remain. In-repo and outside worktrees were already removed. window_start was not applied."}

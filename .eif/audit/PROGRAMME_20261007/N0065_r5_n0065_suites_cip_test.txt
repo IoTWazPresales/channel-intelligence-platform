@@ -1,0 +1,74 @@
+test files: 4 missing: []
+DATABASE_URL db = cip_test
+DATABASE_URL_SYNC db = cip_test
+current_database() = cip_test
+role = cip super = False bypassrls = False
+.................................................................        [100%]
+=================================== PASSES ====================================
+=========================== short test summary info ===========================
+PASSED tests/test_product_line_rls_n0065_db.py::test_db_unset_scope_still_sees_every_product
+PASSED tests/test_product_line_rls_n0065_db.py::test_db_admin_with_no_rows_sees_and_edits_every_line
+PASSED tests/test_product_line_rls_n0065_db.py::test_db_non_admin_with_no_rows_sees_no_products
+PASSED tests/test_product_line_rls_n0065_db.py::test_db_read_only_line_is_visible_but_not_editable
+PASSED tests/test_product_line_rls_n0065_db.py::test_db_unassigned_line_is_hidden
+PASSED tests/test_product_line_rls_n0065_db.py::test_db_sessionlocal_follows_the_bound_request_scope
+PASSED tests/test_product_line_rls_n0065_db.py::test_db_sessionlocal_read_only_line_cannot_be_written
+PASSED tests/test_product_line_rls_n0065_db.py::test_db_sessionlocal_rebinds_after_commit
+PASSED tests/test_product_line_rls_n0065_db.py::test_db_real_commit_keeps_scope_and_does_not_leak_through_the_pool
+PASSED tests/test_product_line_rls_n0065_db.py::test_db_async_session_keeps_scope_across_commit
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_lineage_visibility_per_scope[admin]
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_lineage_visibility_per_scope[steward A]
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_lineage_visibility_per_scope[steward, no lines]
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_lineage_visibility_per_scope[planner A]
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_lineage_visibility_per_scope[planner B]
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_lineage_visibility_per_scope[viewer A,B]
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_lineage_visibility_per_scope[planner, no lines]
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_lineage_visibility_per_scope[viewer, no lines, no role]
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_worker_and_pooled_leftover_are_open
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_lineage_edit_per_scope
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_insert_of_unresolved_row_still_allowed_without_returning
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_current_pick_runs_once_and_only_when_scoped
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_view_refresh_keeps_the_current_pick
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_no_product_rows_admin_and_steward_only[admin]
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_no_product_rows_admin_and_steward_only[steward A]
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_no_product_rows_admin_and_steward_only[steward, no lines]
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_no_product_rows_admin_and_steward_only[planner A]
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_no_product_rows_admin_and_steward_only[planner, no lines]
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_no_product_rows_admin_and_steward_only[viewer A,B]
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_no_product_rows_admin_and_steward_only[viewer, no lines, no role]
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_no_product_rows_open_for_workers_and_pooled_leftover
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_no_product_rows_edit_per_scope
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_no_product_insert_check_unchanged_returning_fails_closed[commercial_lineup_line]
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_no_product_insert_check_unchanged_returning_fails_closed[cst_listing_seed]
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_no_product_insert_check_unchanged_returning_fails_closed[customer_listing]
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_no_product_insert_check_unchanged_returning_fails_closed[historical_lineup_import_line]
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_current_pick_walks_the_index_in_order
+PASSED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_current_pick_rows_unchanged_by_the_setting
+PASSED tests/test_product_line_session_listener_n0065.py::test_scoped_bind_also_writes_the_request_role
+PASSED tests/test_product_line_session_listener_n0065.py::test_scoped_bind_without_a_role_writes_empty_role
+PASSED tests/test_product_line_session_listener_n0065.py::test_listener_is_registered_for_sync_and_async_sessions
+PASSED tests/test_product_line_session_listener_n0065.py::test_sessionlocal_under_empty_scope_issues_set_config
+PASSED tests/test_product_line_session_listener_n0065.py::test_half_set_scope_binds_the_missing_side_as_no_lines
+PASSED tests/test_product_line_session_listener_n0065.py::test_sessionlocal_read_only_line_binds_read_and_edit_separately
+PASSED tests/test_product_line_session_listener_n0065.py::test_scope_is_rebound_after_commit
+PASSED tests/test_product_line_session_listener_n0065.py::test_savepoint_is_not_rebound
+PASSED tests/test_product_line_session_listener_n0065.py::test_worker_with_unset_scope_issues_nothing
+PASSED tests/test_product_line_session_listener_n0065.py::test_worker_on_a_previously_scoped_pooled_connection_is_bound_open
+PASSED tests/test_product_line_session_listener_n0065.py::test_threadpool_handoffs_carry_the_scope
+PASSED tests/test_product_line_session_listener_n0065.py::test_plain_thread_starts_unscoped_like_a_worker
+PASSED tests/test_product_line_session_listener_n0065.py::test_sync_fastapi_endpoint_sees_scope_bound_by_async_dependency
+PASSED tests/test_product_line_scope_n0065.py::test_admin_with_no_rows_gets_every_line_for_read_and_edit
+PASSED tests/test_product_line_scope_n0065.py::test_admin_ignores_assignment_rows
+PASSED tests/test_product_line_scope_n0065.py::test_non_admin_with_no_rows_sees_nothing
+PASSED tests/test_product_line_scope_n0065.py::test_non_admin_sentinel_row_is_ignored
+PASSED tests/test_product_line_scope_n0065.py::test_non_admin_read_only_line_is_not_editable
+PASSED tests/test_product_line_scope_n0065.py::test_non_admin_star_or_comma_row_never_widens_scope
+PASSED tests/test_product_line_scope_n0065.py::test_dependency_admin_without_rows_binds_star_and_skips_lookup
+PASSED tests/test_product_line_scope_n0065.py::test_dependency_admin_role_as_plain_string_is_admin
+PASSED tests/test_product_line_scope_n0065.py::test_dependency_non_admin_without_rows_binds_empty
+PASSED tests/test_product_line_scope_n0065.py::test_dependency_non_admin_read_only_line_is_not_editable
+PASSED tests/test_product_line_scope_n0065.py::test_dependency_forged_or_worker_identity_leaves_scope_unset
+PASSED tests/test_product_line_scope_n0065.py::test_dependency_binds_the_server_side_role
+PASSED tests/test_product_line_scope_n0065.py::test_dependency_forged_identity_binds_no_role
+PASSED tests/test_product_line_scope_n0065.py::test_apply_guc_with_unset_scope_issues_nothing
+65 passed in 58.70s

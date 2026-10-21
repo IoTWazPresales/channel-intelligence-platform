@@ -1,0 +1,29 @@
+{
+  "id": "BLN-N0101",
+  "provenance": "implementation-observation",
+  "tree_hash": "a86eff9489c859f885ef35aaa80b80a3a2fca52b",
+  "path": ".eif/audit/PROGRAMME_20261007/N0101_IMPL.md",
+  "observed_behavior": "Poller selects status='active' only (registry.py poll_active_listings), ordered by id, one global sleep between fetches, no time limit, no 403/429 handling; record_observation is called without consecutive_dead so the 3x/24 h dead-link back-off never fires; nothing sets a listing back to active. UA 'CIP-listing-capture/1.0'. Beat listing-capture-poll every 30 min is gated by CIP_LISTING_CAPTURE_SCHEDULE and CIP_LISTING_LIVE_FETCH (1/true/on); the supervisor worker env sets neither and status.json reports the supervisor's own env. cip (read-only): 218 listings all active (amazon 51, evetech 88, takealot 79); 168 observations, none since 2026-08-13.",
+  "latent_capabilities": [
+    "parse-and-price-extraction-unchanged",
+    "takealot-rest-and-ean-recovery-unchanged",
+    "dead-link-on-404-410",
+    "out-of-stock-on-availability",
+    "verified-url-write-back",
+    "cpor-activation-per-observation",
+    "beat-and-env-gates",
+    "manual-poll-endpoint",
+    "supervisor-adopt-healthy-components"
+  ],
+  "preservation": {
+    "parse-and-price-extraction-unchanged": "parse_snapshot_text and Takealot parser untouched; existing parser tests stay green",
+    "takealot-rest-and-ean-recovery-unchanged": "fetch_takealot_listing untouched; test_takealot_listing_fetch stays green",
+    "dead-link-on-404-410": "same link_dead rule; now also counted in meta_json.consecutive_failures",
+    "out-of-stock-on-availability": "same rule; out_of_stock listings now keep being polled",
+    "verified-url-write-back": "_write_back_verified_url untouched",
+    "cpor-activation-per-observation": "evaluate_cpor_activation still called per observation",
+    "beat-and-env-gates": "task gates unchanged; supervisor now supplies the two flags to the worker only",
+    "manual-poll-endpoint": "POST /poll still calls poll_active_listings with the same arguments",
+    "supervisor-adopt-healthy-components": "only the worker ExtraEnv, header comment, launch log line and status env block change"
+  }
+}

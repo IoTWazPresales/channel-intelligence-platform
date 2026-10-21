@@ -1,0 +1,21 @@
+{
+  "id": "BLN-N0071",
+  "provenance": "implementation-observation",
+  "tree_hash": "9c28bdcf9bc7e4bcdf366cc70ef923168aecdd82",
+  "path": ".eif/audit/PROGRAMME_20261007/N0071_DISCOVERY.md",
+  "observed_behavior": "Dirty tree on 9c28bdcf: shipment_strict_pair.py (correlated EXISTS) is wired into supply overview, the shipping fact filter (grid, KPIs, cohorts), channel ops, net requirement, PO auto-link, PO reconciliation and 1H rederivation. Not wired: brief not-received count, dashboard late_risk, lineup quarter summary, shipping /summary, ETA-shift no-filter scope, CPOR intake MAC. cip (read-only, current_database printed): 552 open rows (42,956 units, all scheduled, none with pod_date) have a strict shipped twin; 10 of them have open qty above the twin's shipped qty (904 open units). The correlated form times out (120 s ORM, 240 s FILTER form) under N-0065 RLS.",
+  "latent_capabilities": [
+    "stored-open-twin-rows-unchanged",
+    "readers-already-wired-same-result",
+    "shipped-and-arrived-rows-never-dropped",
+    "sheet-picker-default-shipped-unship",
+    "landed-readers-shipped-only"
+  ],
+  "preservation": {
+    "stored-open-twin-rows-unchanged": "no write path touched; every change is a read predicate; fact rows stay as imported (D-0057)",
+    "readers-already-wired-same-result": "new predicate drops the same 552 ids (md5 equal to an independent key join; count, units, amount equal to the old predicate)",
+    "shipped-and-arrived-rows-never-dropped": "rule only drops open_order rows; unit tests pin it",
+    "sheet-picker-default-shipped-unship": "N-0072 area, unchanged",
+    "landed-readers-shipped-only": "derived stock, PO management, PO gap, WOC observation unchanged (no open rows to drop)"
+  }
+}

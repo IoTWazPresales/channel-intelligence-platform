@@ -1,0 +1,31 @@
+{
+  "id": "N-0089",
+  "parent": null,
+  "title": "Operations and data health: data-health page, vacuum runbook, CST apply progress, retry coverage, background-task parity, visible evidence-read failures",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": [
+    "api",
+    "ui",
+    "infra"
+  ],
+  "risk": "R2",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": [
+    "N-0073"
+  ],
+  "acceptance_criteria": [
+    "Read-only /admin/data-health shows table counts and staging vs fact per import job (BACKLOG-031)",
+    "A targeted VACUUM runbook/script exists for after large deletes (BACKLOG-032)",
+    "CST apply shows a progress panel; every commit path uses transient retry",
+    "One as-built matrix of dispatch, slot, poll and cancel per importer, with no orphan slots (BACKLOG-048)",
+    "load_promotion_line_evidence logs failures and returns a state distinct from 'Not listed' (N-0061 residual)",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

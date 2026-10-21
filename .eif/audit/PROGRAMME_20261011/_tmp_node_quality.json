@@ -1,0 +1,1 @@
+{"dim": "content", "state": "pass", "evidence": {"path": ".eif/audit/PROGRAMME_20261011/N0090_ACCEPT.md", "summary": "Live row and slots page. pytest 2 passed."}, "rationale": "Wording is customer sell-through reports are missing. The slots table shows status missing.", "node": "N-0090", "expected_revision": 11}

@@ -1,0 +1,1 @@
+{"baseline_ref": "BLN-N0080", "preservation": {"lineup-price-chain": "kept: SRP to DAP chain and stored lineup profit numbers unchanged", "planner-reserves": "kept: reserve pool and split math unchanged", "cpor-support-waterfall": "kept: case lines are not written; margin is a read"}, "node": "N-0080", "expected_revision": 3}

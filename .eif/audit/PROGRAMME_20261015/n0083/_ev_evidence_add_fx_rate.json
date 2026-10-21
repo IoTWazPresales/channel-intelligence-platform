@@ -1,0 +1,1 @@
+{"path": "apps/api/app/services/cpor/fx_rate.py", "note": "N-0083 (5104f59c): rate_for_case_date (stored first, fetch only when none stored), book_on_approve fixes the rate at first approval, manual override needs a reason, reapproval keeps the rate, persisted flag on a fetched rate.", "provenance": "implementation-observation", "node": "N-0083", "expected_revision": 3}

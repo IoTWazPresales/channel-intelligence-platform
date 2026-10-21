@@ -1,0 +1,1 @@
+{"node": "N-0095", "expected_revision": 12, "code": "DOES_NOT_FIT", "note": "N-0095: cip_test has only the primary-key index on customer_source_token_alias; cip also has uq_cust_src_token_alias_approved_scope and five lookup indexes (schema drift on the test database). The seal looks up before inserting, so it does not rely on the unique index."}

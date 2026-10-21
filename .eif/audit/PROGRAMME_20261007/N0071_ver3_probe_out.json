@@ -1,0 +1,116 @@
+{
+  "probe_utc": "2026-10-08T18:59:36+00:00",
+  "evidence_relation": "shipment_evidence_current",
+  "reader_model": "shipment_evidence_current",
+  "current_database": "cip",
+  "transaction_read_only": "on",
+  "statement_timeout": "1min",
+  "row_security": "on",
+  "line_state_values": [
+    {
+      "value": "open_order",
+      "rows": 1298,
+      "units": 87527.0
+    },
+    {
+      "value": "shipped",
+      "rows": 14509,
+      "units": 1347348.0
+    }
+  ],
+  "po_linked_by_state": [
+    {
+      "value": "open_order",
+      "rows": 528,
+      "units": 34571.0
+    },
+    {
+      "value": "shipped",
+      "rows": 14382,
+      "units": 1324451.0
+    }
+  ],
+  "independent_sql_s": 4.6,
+  "independent_case_po_pairs": 3763,
+  "independent_case_po_pairs_with_open_units": 304,
+  "sample_cases": [
+    123,
+    9,
+    122,
+    119,
+    144,
+    120,
+    7,
+    90
+  ],
+  "sample_open_units_by_case": {
+    "123": 13650.0,
+    "9": 7926.0,
+    "122": 7926.0,
+    "119": 5379.0,
+    "144": 5379.0,
+    "120": 4083.0,
+    "7": 0.0,
+    "90": 349.0
+  },
+  "reader_calls_s": 24.27,
+  "suggest_pos": {
+    "rows": 881,
+    "eq_shipped_only": 881,
+    "eq_all_states": 725,
+    "matched_eq": 881,
+    "zero": 17,
+    "reader_total": 285433.0,
+    "indep_shipped_only_total": 285433.0,
+    "indep_all_states_total": 324975.0,
+    "mismatches": []
+  },
+  "suggest_distributors": {
+    "rows": 73,
+    "eq_shipped_only": 73,
+    "eq_all_states": 36,
+    "matched_eq": 73,
+    "po_count_eq": 73,
+    "zero": 1,
+    "reader_total": 413664.0,
+    "indep_shipped_only_total": 413664.0,
+    "indep_all_states_total": 458356.0,
+    "order_ok_cases": 8,
+    "order_cases": 8,
+    "all_states_would_reorder_cases": 2,
+    "mismatches": []
+  },
+  "pg_stat": [
+    {
+      "table": "commercial_lineup_case_po",
+      "ins": 22,
+      "upd": 2,
+      "del": 22
+    },
+    {
+      "table": "fact_inbound_shipment",
+      "ins": 6563,
+      "upd": 609,
+      "del": 6337
+    },
+    {
+      "table": "purchase_order",
+      "ins": 84,
+      "upd": 7086,
+      "del": 51
+    },
+    {
+      "table": "shipment_evidence_line",
+      "ins": 7930,
+      "upd": 21035,
+      "del": 282
+    },
+    {
+      "table": "shipment_evidence_observation",
+      "ins": 7864,
+      "upd": 304,
+      "del": 224
+    }
+  ],
+  "transaction_read_only_end": "on"
+}

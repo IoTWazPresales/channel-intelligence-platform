@@ -1,0 +1,1 @@
+{"node": "N-0073", "expected_revision": 1, "baseline_ref": "BLN-N0073", "preservation": {"pilot-tunnel-auth-gates": "kept and reused by the supervisor", "restart-dev-stack": "unchanged; dev mode stays separate", "stop-dev-pid-files": "unchanged", "dev-worker-single-consumer": "supervisor starts the worker through dev-worker.js"}}

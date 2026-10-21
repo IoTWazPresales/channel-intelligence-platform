@@ -1,0 +1,9 @@
+{
+  "id": "BLN-N0055",
+  "provenance": "implementation-observation",
+  "tree_hash": "17920fba4d5abe977710b2f6b35193a1a1f66ff1",
+  "path": ".eif/audit/PROGRAMME_20260930/N-0055.md",
+  "observed_behavior": "Fourteen endpoint modules read tenant-owned models without a tenant_id predicate. where_tenant existed and was used by twenty other modules. Login loads the user before any tenant is known.",
+  "latent_capabilities": [],
+  "preservation": {}
+}

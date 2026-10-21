@@ -1,0 +1,1930 @@
+﻿# Backlog ÔÇö intentionally deferred work
+
+**Scope:** Intentionally deferred / future work. Each entry has a **trigger condition** for when to resume. Distinct from **`docs/memory/CURRENT.md`** (what is true now), **`docs/ROADMAP.md`** (phase-level path ÔÇö authoritative for what's next), and **`CONTEXT.md`** (changelog router). Legacy phased notes may still exist under `docs/memory/ROADMAP.md` ÔÇö prefer `docs/ROADMAP.md`.
+
+**Entry template:** ID + title ┬À status/parked-date ┬À effort ┬À the idea ┬À why it matters (and why deferrable) ┬À what the work is ┬À regression traps / hard constraints ┬À behavior to retain ┬À out-of-scope ┬À **TRIGGER**
+
+---
+
+## BACKLOG-135 ÔÇö Land customer SOH (CST) into a usable fact for CPOR MAC check
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-08-20 |
+| **Effort** | Medium |
+| **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` ┬º9.1 / D-062. Warren: `fact_inventory_customer` is empty; customer SOH is arriving and not landing. |
+| **Idea** | Customer weekly SOH (actual cost) is the **check** on derived customer MAC, not the input. Evetech has no SOH file. Tree today: CST apply writes `reported_soh` / `unit_cost` / `unit_mac` to **`fact_customer_sellthrough`**. `fact_inventory_customer` has no writer; `/inventory` still names that table. Decide whether the MAC check reads CST facts or a real `fact_inventory_customer` writer is required ÔÇö then implement **one** landing path. |
+| **Why it matters / deferrable** | Without a landed SOH cost, D-062 cannot run. Deferrable until settlement unit starts; CST ingest already exists. |
+| **What the work is** | (1) Confirm grain: customer├ùSKU├ùweek cost on CST vs inventory fact. (2) If CST is canonical, point the MAC-check at `fact_customer_sellthrough` and stop claiming `fact_inventory_customer`. (3) If inventory fact is required, add a set-based writer from CST ÔÇö no second parse. |
+| **Regression traps** | SOH is derived-not-stored for **channel** stock; retailer-reported SOH is a checkpoint only. Never treat CST SOH as the MAC author (D-062). Never silently pro-rate a boundary week. |
+| **Behavior to retain** | CST apply to `fact_customer_sellthrough`; Evetech exemption. |
+| **Out of scope** | Building the MAC master; customer portal. |
+| **TRIGGER** | Settlement / customer-MAC unit starts, or Warren picks CST vs `fact_inventory_customer` as the SOH check source. |
+
+---
+
+## BACKLOG-136 ÔÇö CPOR routers: session auth + KAM / PM / Ken / Wayne enforcement
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-08-20 |
+| **Effort** | Medium |
+| **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` ┬º2 / ┬º9.2. Warren: CPOR routers have no authentication or role enforcement. |
+| **Idea** | Stamp a real actor on every CPOR write (null actor is a defect, ┬º7). Enforce: KAM proposes/amends/owns terms; PM amends **pre-approval only**; Ken compiles/settles and must not touch MAC/terms; MDM+Wayne approve; Wayne re-approves. |
+| **Why it matters / deferrable** | Tree: some GETs use `get_current_user`; most writes use nullable `X-User-Id`; `require_roles` unused on `/cpor`; stub mode forges `admin`; Role enum has no these four roles. Deferrable until settlement/amendment units, but any new CPOR write should not extend the header-actor pattern. |
+| **What the work is** | (1) Map KAM/PM/Ken/Wayne onto IAM (new roles vs compose on planner/steward/admin) ÔÇö CONSULT, do not invent. (2) `require_roles` (or equivalent) on every CPOR write including export. (3) Actor from session user, never null. |
+| **Regression traps** | Do not leave stub-admin as production. Do not give PM post-approval writes (D-059). Do not give Ken MAC/term writes. R1/R1b replaced the forgeable `_require_admin(X-User-Role)` admin gate on the CPOR historical-import router (11 routes incl. `/apply`) with authentication only. Until R2 lands, any authenticated user can run historical validate/apply/resolution-plan. R2 must restore an equivalent or stronger check on these routes specifically. R1c restored the 41 non-CPOR header gates (`shipment_evidence` 25, `mappings` 7, `imports_product_master` 5, `products` 2, `imports` 2) to a **real** admin check: `Depends(require_roles(Role.ADMIN))`. CPOR routes remain authentication-only pending R2 ÔÇö do not copy `require_roles` onto CPOR in R1c. `scripts/e2e_dsi_phase1_phase2_validate.py` forges `X-User-Role: admin` and breaks under session mode ÔÇö fix when R3 or the mode flip lands. |
+| **Behavior to retain** | Lifecycle actions in `lifecycle.py`; Wayne as re-approval actor (D-059). |
+| **Out of scope** | Customer portal login. |
+| **TRIGGER** | Next CPOR write-path unit, or session-auth hardening of `/cpor`. |
+
+---
+
+## BACKLOG-137 ÔÇö `cpor_case_line` week-aligned effective windows
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-08-20 |
+| **Effort** | Medium (approved migration) |
+| **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` ┬º3 / ┬º9.3 / D-058. Warren: `cpor_case_line` has no effective window columns. |
+| **Idea** | Each line carries a week-aligned window + fixed rate. Supersession: old line closes end of prior week; new line from new week to case end. Unique grain today `(case_id, product_id, distributor_id, pod_quarter)` cannot hold two living lines for the same SKU. Settlement `_claim_in_window` currently uses **case** dates. |
+| **Why it matters / deferrable** | Blocks D-058 mid-case supersede and line-window expected. Deferrable until amendment/settlement unit; needs an approved Alembic. |
+| **What the work is** | (1) Add line `window_start` / `window_end` (week-aligned). (2) Change unique grain so two windows for the same SKU coexist. (3) Point claim rollup at **line** windows. (4) Flag, never pro-rate, a week that straddles a boundary. |
+| **Regression traps** | Do not mutate approved terms in place (D-058). Do not silently pro-rate. Migration requires Warren approval. Case-level window remains the case span. |
+| **Behavior to retain** | `support_unit` as the rate (D-027 / D-063). `cap_qty` stays per line. |
+| **Out of scope** | Customer notification; IAM roles (136). |
+| **TRIGGER** | Mid-case amendment or settlement-expected unit is scheduled; Warren approves the migration. |
+
+---
+
+## BACKLOG-138 ÔÇö Writer for `cpor_case.superseded_by_case_id`
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-08-20 |
+| **Effort** | SmallÔÇômedium |
+| **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` ┬º9.4. Warren: `superseded_by_case_id` is read by three modules and written by none. |
+| **Idea** | Soft-supersede a CPOR case (re-issue / replace) by writing `cpor_case.superseded_by_case_id`. Readers already filter `IS NULL`: serialize, `incremental_unit_cost`, `payment_recon`, `portfolio_intelligence`, `support_bias`, `norms_and_comparable`, `cpor_activation` (seven, not three). LineupÔÇÖs column on `commercial_lineup_case` is a **different** writer ÔÇö do not reuse it. |
+| **Why it matters / deferrable** | Filters are dead: nothing ever sets the pointer, so ÔÇ£exclude supersededÔÇØ is a no-op. Deferrable until a CPOR re-issue path exists. In-case **line** supersession (D-058) is BACKLOG-137, not this pointer. |
+| **What the work is** | One canonical CPOR supersede writer (preview ÔåÆ confirm); set pointer + status; never hard-delete. Port lineup copy-not-move lessons only where CPOR has a twin child table. |
+| **Regression traps** | Do not write lineup `superseded_by_case_id` from a CPOR path or vice versa. Do not treat line supersession as case supersession. |
+| **Behavior to retain** | Soft everything; readersÔÇÖ `IS NULL` filter once writes exist. |
+| **Out of scope** | Line-window supersession (137); leftover FK repair. |
+| **TRIGGER** | A CPOR case needs to be re-issued / replaced, or a unit is scheduled to make the pointer real. |
+
+---
+
+## BACKLOG-139 ÔÇö Repair `cpor_case.status` vs `workflow_status` drift
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-08-20 |
+| **Effort** | Small |
+| **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` ┬º9.6. Warren: status and workflow_status have drifted on ~4 rows. |
+| **Idea** | `cpor_case` has both `status` (lifecycle.py) and `workflow_status` (promo-export-shaped). They can disagree. Count, explain, and either (a) make `workflow_status` a projection of `status` or (b) document two distinct machines and stop writing both from uncoordinated paths. Then repair the drifted rows on a clone, then cip. |
+| **Why it matters / deferrable** | Dual columns invite silent filter bugs (list-by-status vs list-by-workflow). Deferrable while ~4 rows; becomes a blocker if filters disagree on approve/settle. **This session did not re-count the rows.** |
+| **What the work is** | (1) `SELECT` the disagreeing rows on cip (read-only). (2) Pick one owner column. (3) Clone repair then cip. (4) One writer going forward. |
+| **Regression traps** | Do not dual-write forever. Lifecycle transitions stay on `status` unless explicitly moved. Clone first. |
+| **Behavior to retain** | `draft ÔåÆ proposed ÔåÆ approved ÔåÆ active ÔåÆ ended ÔåÆ settled` on `status`. |
+| **Out of scope** | Inventing new lifecycle states; IAM (136). |
+| **TRIGGER** | Next CPOR list/filter bug, or Warren asks to reconcile the ~4 rows. |
+
+---
+
+## BACKLOG-140 ÔÇö CIP mints customer codes (named accounts off `TMP-CUST`)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-08-20 |
+| **Effort** | Medium (approved settings table / mint path) |
+| **Source** | `docs/CPOR_SETTLEMENT_SPEC.md` ┬º9.5 / D-065. Warren: named accounts still carry TMP-CUST; promote works but is unused because no code scheme exists; CIP will mint its own, updatable later. |
+| **Idea** | Mint CIP-owned codes on promote (research already in `docs/design/BACKLOG-061-U2a_customer_code_mint_research.md`). BACKLOG-061 promote **map** was pruned as shipped ÔÇö operator-supplied `new_code`. Mint was never built. ERP/customer-file codes are an optional later mapping, not a blocker. |
+| **Why it matters / deferrable** | CPOR cases display TMP codes on named accounts. Promote-map is unusable without a scheme to type. Deferrable until Warren schedules a mint pass; D-065 is locked so a future unit does not wait on ERP. |
+| **What the work is** | (1) Settings + collision-safe sequence (U2a Candidate A unless Warren picks otherwise). (2) Promote `mode=mint` on the existing promote endpoint ÔÇö no second writer. (3) Codes append-only; later scheme does not rewrite history. |
+| **Regression traps** | Never auto-create `dim_customer`. Never invent a global hard-coded format in code (settings). FLAGÔëáBLOCK on collision. Do not mass-rename after a later ERP mapping. |
+| **Behavior to retain** | CSV/paste map path; single-row promote; TMP reuse rules. |
+| **Out of scope** | Distributor mint; ERP sync. |
+| **TRIGGER** | Warren schedules named-account promote, or CPOR settlement work needs stable non-TMP codes on the case customer. |
+
+---
+
+## BACKLOG-141 ÔÇö Shipment steward panel is gated on Role.ADMIN (R2 decision)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-08-20 |
+| **Effort** | Small (role-matrix consult) then small code |
+| **Source** | RBAC R1c on `feat/rbac-r1-session-actor`: `shipment_evidence.py` previously 403'd unless `X-User-Role: admin`. R1c preserved that intent as `require_roles(Role.ADMIN)`. |
+| **Idea** | Decide whether shipment (and sibling import) steward panels should accept `Role.STEWARD` as well as `Role.ADMIN`. Today a logged-in steward session 403s those routes. |
+| **Why it matters / deferrable** | Operators on steward accounts cannot run the shipment steward UI after R1 removed forged headers. Deferrable until R2 role matrix; do not silently widen ADMINÔåÆSTEWARD in a sweep. |
+| **What the work is** | CONSULT the role matrix; if steward panels should be STEWARD+ADMIN, change the allowed set on those routes only ÔÇö do not widen bulk-delete / product-master commit without a separate decision. |
+| **Regression traps** | Preserve admin-only for import-job bulk delete and Product Master commit unless explicitly reopened. Do not put `require_roles` on CPOR (still R2). Do not invent new Role enum values here. |
+| **Behavior to retain** | Session actor from `get_current_user`; no forged `X-User-*` from `apps/web/src`. |
+| **Out of scope** | CPOR KAM/PM/Ken/Wayne; the ~213 still-unauthenticated non-CPOR writes (R3). |
+| **TRIGGER** | R2 role-enforcement CONSULT, or Warren says steward accounts must operate shipment/DSI steward panels. |
+
+---
+
+## BACKLOG-142 ÔÇö `apps/web` typecheck is red on main (blocks verify-gate)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-08-20 |
+| **Effort** | Small |
+| **Source** | RBAC R1c unit prompt: typecheck already red on main at `CstArticleAliasesSection.test.tsx` and `SemanticCatalogOverlayPanel.tsx`. |
+| **Idea** | Fix the two typecheck failures so `pnpm` / verify-gate typecheck can actually prove web changes. |
+| **Why it matters / deferrable** | While red, typecheck cannot verify RBAC or anything else. Pre-existing; not caused by R1c. Deferrable until a web typecheck / CST overlay unit. |
+| **What the work is** | Make `CstArticleAliasesSection.test.tsx` and `SemanticCatalogOverlayPanel.tsx` typecheck-clean; do not paper over with `any` if a real type bug exists. |
+| **Regression traps** | Do not treat a green typecheck as proof of RBAC. Do not expand into overlay behaviour changes unless the types require it. |
+| **Behavior to retain** | Existing CST alias + semantic catalog overlay UI. |
+| **Out of scope** | R1c API sweep; ESLint flat-config (BACKLOG-070). |
+| **TRIGGER** | Next web typecheck / CST overlay / verify-gate unit, or Warren asks to restore typecheck as a merge gate. |
+
+---
+
+## BACKLOG-143 ÔÇö Disposable leftover state to clear
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-08-20 |
+| **Effort** | Small (ops) |
+| **Source** | `docs/memory/CURRENT.md` Next on `main` (`cip_merged_leftover_repair` drop pointer) plus R1c/R1d leftovers that had no home after CURRENT Next was replaced: clone DB `cip_test`, untracked `.tmp_lf_rerun.txt`, unmerged `feat/shipping-mailer-recipients`. |
+| **Idea** | One ops sweep to drop or keep, on purpose, leftover local state that is not application code. |
+| **Why it matters / deferrable** | None of these block R1d merge. They do confuse the next agent (wrong DB, mystery file, 0019-only branch). Deferrable until Warren wants a clean machine / before the next migration. |
+| **What the work is** | (1) Drop clone DB `cip_merged_leftover_repair` if leftover repair will not be re-run. (2) Keep or drop `cip_test` (R1c/R1d disposable; OWNER cip; stamped `20260818_0018`). (3) Delete untracked `.tmp_lf_rerun.txt` or commit it only if it is still a needed artefact. (4) Promote or close `feat/shipping-mailer-recipients` (`b5cf3a0`) ÔÇö this is also the 0019 migration blocker. |
+| **Regression traps** | Do not drop `cip`. Do not `alembic upgrade` cip from a branch that lacks `0019`. Do not force-push `main`. |
+| **Behavior to retain** | Live `cip` data; R1d session e2e remains runnable against `cip_test` until that DB is dropped. |
+| **Out of scope** | R2 role CONSULT; authoring a new Alembic revision. |
+| **TRIGGER** | Warren asks to tidy local DBs / working tree, or immediately before authoring any new migration. |
+
+---
+
+## BACKLOG-133 ÔÇö Assert zero leftover FKs to merged customer/distributor ids on import completion
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-08-20 |
+| **Effort** | SmallÔÇômedium |
+| **Source** | Warren 2026-08-20 after merge of `fix/merged-customer-resolver-guard`: periodic assertion that no fact/FK still points at a merged loser, checked on import completion. |
+| **Idea** | After each successful import apply/complete, assert leftover row count is zero for every `dim_customer` / `dim_distributor` id that has `merged_into_*` set. Fail loudly (FLAG the job / activity feed) rather than silently re-accumulating loser FKs. Reuse leftover-query logic from `customer_leftover_repair.py` / `repoint_customer_footprint_full` discovery ÔÇö do not invent a parallel scan. |
+| **Why it matters / deferrable** | Unit 1 now follows redirects; Unit 2 cleaned cip to leftover=0. Without a recurring check, the next importer regression will only be noticed in an ad-hoc audit. Deferrable until the next importer-completion / data-integrity pass is scheduled. |
+| **What the work is** | (1) Shared leftover-count helper covering customer **and** distributor merged ids. (2) Call it from the existing import-complete / `on_import_complete` rail (or `data_integrity_audit`) ÔÇö not a new pipeline. (3) Surface a non-zero count as FLAGÔëáBLOCK so apply still succeeds. |
+| **Regression traps** | Do not skip `dim_*.merged_into_*` itself (that column *should* point at the winner). Do not auto-repoint from the assertion. Do not query `cip` from tests without `ALLOW_TESTS_ON_DEV_DB=1`. Never auto-create master rows. |
+| **Behavior to retain** | Resolver follow/exclude; leftover repair remains an explicit ops script; FLAGÔëáBLOCK. |
+| **Out of scope** | Re-running leftover repair; mint/promote; changing DSI resolution order. |
+| **TRIGGER** | Next importer apply/completion work, or Warren schedules a data-integrity check on import complete. |
+
+---
+
+## BACKLOG-134 ÔÇö Assert no `customer_source_token_alias` points at a merged customer id
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-08-20 |
+| **Effort** | Small |
+| **Source** | Warren 2026-08-20 after leftover repair on cip: verify no `customer_source_token_alias` row still points at a merged loser id. |
+| **Idea** | Post-repair (and periodically) query `customer_source_token_alias.customer_id` against `dim_customer.merged_into_customer_id IS NOT NULL`. Expected count is 0. If any remain, follow the merge chain and repoint the alias to the survivor via the existing alias-write path ÔÇö do not add a second writer. Same check for distributor aliases if a twin table exists. |
+| **Why it matters / deferrable** | Resolver follow already collapses alias targets at read time (`customer_redirect`). A loser-pointing alias is still a stored-truth bug: the next steward edit or a path that skips redirect would write the loser again. Deferrable because read paths now follow; this is stored-integrity, not an open operator incident. |
+| **What the work is** | (1) Read-only count query (customer, then distributor alias twin). (2) If non-zero: one-shot repoint through the canonical alias update, not a new SQL loop. (3) Optional: include in BACKLOG-133 import-complete assertion. |
+| **Regression traps** | Do not delete aliases; do not auto-create dims; keep unique-token / source-scope rules; cycle-safe follow via `merge_redirect`. |
+| **Behavior to retain** | Unique alias collapse to survivor at resolve time; steward still confirms ambiguous tokens. |
+| **Out of scope** | Re-audit of leftover fact FKs (already 0 on cip); mint/promote. |
+| **TRIGGER** | Next alias-integrity audit, or after another leftover-repair / merge campaign. |
+
+---
+
+## BACKLOG-132 ÔÇö Post-apply shipping mailer to a mailing list (M365)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Shipped** ┬À 2026-08-18 ┬À Gmail SMTP digest after shipment apply (job 1159 mailed to the five ASUS addresses). Graph `Mail.Send` From-ASUS still blocked (app registration). Reopen only for Graph-from-ASUS or recipient-list change. |
+| **Effort** | MediumÔÇôlarge (Graph send as `warren_eliason@asus.com` or SMTP; list of recipients; content from existing SH-01/SH-02 + consecutive-job/observation diffs) |
+| **Source** | Warren 2026-08-18 after mailbox CONSULT READY: ÔÇ£The whole point is to send mailers to a mailing list with the details.ÔÇØ Watched mailbox `warren_eliason@asus.com`; report From `Jess_Mah@asus.com`. |
+| **Idea** | After a successful shipping apply, send one digest to a governed mailing list using the **existing** inbox/`on_import_complete` rail for in-app copy **and** Microsoft 365 send (Graph `Mail.Send`) so it lands in Outlook. Do **not** invent a second shipping mailer beside `dispatch_import_complete_report_fanout`. Change-diff (last vs this file) needs D-024 halt + `COMMERCIAL_SEMANTICS` owner before new tiles. |
+| **Why it matters / deferrable** | This is the operator-facing payoff. Deferrable until Graph intake is proven (job appears from JessÔÇÖs attachment). Graph app registration can cover **read + send** (`Mail.ReadWrite` + later `Mail.Send`). |
+| **What the work is** | (1) Recipient list (CIP users vs SMTP addresses). (2) CONSULT lock inbox vs real email (098 left SMTP out). (3) Content = reuse `shipping_commercial_kpis.py` + evidence/observation history ÔÇö no duplicate KPI math. (4) Graph send from WarrenÔÇÖs ASUS mailbox if IT allows. |
+| **Regression traps** | No second notification pipeline; no new mail schema; D-024/D-025 for new metrics; never send secrets; FLAG send failures. |
+| **Behavior to retain** | Unit 1 Graph/IMAP intake into existing `inbound_shipments`; `on_import_complete` fan-out; `/shipping` as SH-01/SH-02 owner. |
+| **Out of scope** | DSI/CST mailbox; IMAP-only send. |
+| **TRIGGER** | Fired 2026-08-18: Unit 1 job 1159 completed **and** Warren asked to send mailers to email addresses. |
+
+---
+
+## BACKLOG-130 ÔÇö Listing Ôåö CPOR activation check (live price vs case)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Proven live (current window)** ┬À 2026-08-13 ÔÇö CPOR job 978 + Takealot poll 24/24. Today vs C26759823: 6 `price_consistent`, 4 `not_activated`; 11 still `no_case_detected` (SKU not on those cases); 3 `no_product_link` (listings 55ÔÇô57). |
+| **Effort** | Medium |
+| **Source** | Warren (2026-08-10): does **not** need multi-week observation history. Live listing price should reflect the CPOR case price for the period; if higher ÔåÆ case not activated by the customer. |
+| **Idea** | On poll: compare `listing_observation.extracted_price` to `cpor_case_line.srp` for customer├ùproduct with window covering observation date. Persist result on `parse_flags.cpor_activation` (`no_case_detected` / `not_activated` / `price_consistent` / ÔÇª). Observations tab on `/listing-capture`. |
+| **Why it matters / deferrable** | Core channel-execution signal. Current-window residual closed 2026-08-13 (job 978 + re-poll). |
+| **What the work is** | Evaluator + poll + Observations UI + Takealot REST. Historical-window proof: C26113297 / C25B00340. Current-window proof: C26759823 covering 2026-08-13. |
+| **Regression traps** | Do **not** gate on ÔëÑ14 days of observations. VAT ex/inc must match case basis. Steward still confirms listing URLs. No auto-create listings. No Google search. **Sell out PP** is Disti sell-in ÔÇö only the bar when no Sell-Through **line** covers the SKU/day. Do not apply dated SRPs (e.g. FNB Day) via the case-header window. |
+| **Behavior to retain** | Registry + proposals + poll; Amazon/Takealot/Evetech auto-finder confirm path. |
+| **Out of scope** | Google search URL finder; multi-week promo-effectiveness analytics (separate later if needed). |
+| **TRIGGER** | Fired and closed 2026-08-13 (job 978 + Takealot re-poll). Reopen only if activation join/VAT rule changes. |
+
+---
+
+## BACKLOG-131 ÔÇö P3 widget canvas (governed metrics, Power-BI-like, not a query form)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** ┬À 2026-08-14 ┬À Unit 14 VERIFY PASS (14A series ┬À 14B `dashboard_widget` ┬À 14C ECharts canvas). |
+| **Effort** | Large (canvas + query engine grains + chart library) |
+| **Source** | Warren 2026-08-13 (P3 product direction after P5 residual) |
+| **Idea** | Dashboard canvas of widgets. Each widget: visual type ÔåÆ one or more **governed** metrics from the semantic catalog ÔåÆ legal grain/filters. Invalid grains refused with an explanation. Not raw-column BI. |
+| **Why it matters / deferrable** | Current `/reports` + `/dashboards` cannot express sales-by-week vs by-customer as first-class widgets. Deferrable until Unit 13 (092 recon) ships ÔÇö different surface; do not merge into one mega-unit. |
+| **What the work is** | (1) Canvas: `react-grid-layout` + `@dnd-kit`. (2) Charts: Apache ECharts (or Plotly) ÔÇö replace Recharts as the chart engine; keep AG Grid for tables. (3) Extend `/query/execute` grains: week / month / quarter / customer where the metric allows. (4) Widget persist on dashboard (not ÔÇ£saved report tile onlyÔÇØ). (5) Every widget shows formula + data vintage. |
+| **Regression traps** | Do not embed Power BI. Do not let widgets query arbitrary columns. Metrics not in `COMMERCIAL_SEMANTICS.md` are not built. SOH latest-per-snapshot invariant; fill shipped-only. |
+| **Behavior to retain** | Semantic catalog; refuse-all grains; scheduled delivery (P3-5) still works. |
+| **Out of scope** | SQL viewer for non-admins (P3-6); inventing elasticity; 092 recon grid. |
+| **TRIGGER** | Fired ÔÇö Unit 13 complete; Unit 14 VERIFY PASS 2026-08-14. Reopen only if canvas regresses to a query form. |
+
+---
+
+## BACKLOG-129 ÔÇö CST unmappable products ÔåÆ catalogue-gap worklist (`ignore_no_catalogue`)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Closed** ┬À 2026-08-08 ┬À CST source on catalogue-gap worklist + ignore_no_catalogue stamp |
+| **Effort** | Medium |
+| **Source** | Warren (2026-08-08 Takealot WEEK pilot): unmappable CST tokens must be ignored and filed into the missing-PM / Product catalogue gaps surface ÔÇö same as DSI `ignore_no_catalogue`, not left as permanent open steward on the import job. |
+| **Idea** | Extend `product_master_gap_worklist` with `source=cst` (CST `ImportEntityMappingCandidate` product tokens status `needs_review`/`ignored`); CST Bulk ignore stamps `context.steward_ignore_reason_code=ignore_no_catalogue` (and optional `catalogue_gap=true`); gap Confirm-resolve can clear them after PM lands. |
+| **Why it matters / deferrable** | Without this, CST ignore is job-local only ÔÇö operators lose the token when the job scrolls away. Deferrable while WEEK pilot uses job Bulk ignore; wire before multi-retailer CST scale. |
+| **What the work is** | (1) `ignore_cst_candidate_sync` / bulk ignore accept reason code default `ignore_no_catalogue`; (2) `_merge_cst_tokens` in `product_master_gap_worklist.py` + API `source=cst`; (3) UI filter chip on `/admin/product-master-gaps`; (4) gap resolve applies to CST candidates + re-opens staging when PM matches. |
+| **Regression traps** | Never auto-create dim_product from CST; FLAGÔëáBLOCK ÔÇö ignored tokens must not block apply of resolved lines; do not fork DSI ignore UI ÔÇö reuse gap worklist. |
+| **Behavior to retain** | Job steward Bulk ignore still works; resolved CST lines still apply; multi-token resolve (sales model / barcode / sku) unchanged. |
+| **Out of scope** | PM catalogue load itself; auto-map accessories; changing DSI/shipment gap sources. |
+| **TRIGGER** | ÔÇö closed (Warren continue 2026-08-08). |
+
+---
+
+**Prune note (2026-07-20):** Removed shipped items (001, 005, 007, 012, 015, 022ÔÇô024, 028, 030, 033, 035ÔÇô036, 038ÔÇô042, 043, 050, 056, 061, 061-U2, 069, 072) and ignored Supabase/deploy items (002, 003). Plan D follow-ons renumbered **057-D4** / **058-D5** to end the 057/058 ID collision with bulk-backfill entries. Full disposition archive: `.tmp/backlog_prune_consult_opus_response.md`.
+
+**ID remap (2026-07-27 merge):** On merge of `feat/dsi-unified-multifile`, that branchÔÇÖs **074** (email ingest) and **075** (layout-coalesce) were renumbered to **077** / **078** because this branch already used 074/075 for CST E2 / Unit F (shipped) and **076** for amount-scale junk.
+
+**P0 extract (2026-07-29 / D-021 / D-022):** From `feat/ops-master-grid-shell-parity` + stash `park-dsi-asus-dealer-name-automap` ÔÇö BACKLOG-**079**ÔÇô**086**. Branch **deleted** local + remote after fuller extract (D-021). Channel-ops KPI cards + `shippingUtcDates.ts` **not** backloged (superseded by main commercial KPI rebuild).
+
+
+## BACKLOG-123 ÔÇö Migrate promote/merge surfaces onto ResolutionWorklist
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-08-05 |
+| **Effort** | Large |
+| **Source** | PROGRAM-A Unit 5a / D-036; Phase-0 seam rows 2ÔÇô6; CONSULT mandate that distributor-merge auto-link grid is the **2nd consumer** validating the non-PO contract seams (target selection + async slot). |
+| **Idea** | After PO pilot (Unit 5b) proves the presentation contract, migrate (in order): (1) distributor-merge auto-link grid when built ÔÇö exercises `requiresTarget` + `ResolutionAsyncApplyAdapter`; (2) CustomerPromoteDialog; (3) CustomerBulkPromoteDialog; (4) DistributorPromoteDialog; (5) DistributorBulkPromoteDialog. |
+| **Why it matters / deferrable** | Four promote dialogs + merge grid are bespoke today; leaving them off the shared worklist re-fossils PO-shaped naming. Deferrable until 5b VERIFY PASS and merge grid exists (or promote UX rewrite is scheduled). |
+| **What the work is** | Mount `ResolutionWorklist` with promote/merge actions (`requiresTarget`, `targets`, `renderTargetPicker`); wire sync adapters (chunk 500 for bulk) or async Celery for merge; retire bespoke dialog shells once parity proven. |
+| **Regression traps** | Do not genericize `importJobId` engine; never auto-create master on promote/merge; do not invent importer-prefixed files under `features/import-steward/`; keep Unit-2 protection semantics if any contested rows appear. |
+| **Behavior to retain** | PreviewÔåÆPromote confirm falseÔåÆtrue; TMP visibility; merge survivor selection; FLAGÔëáBLOCK. |
+| **Out of scope** | Migrating promote/merge inside Unit 5a or 5b; absorbing DSI into this contract. |
+| **TRIGGER** | Unit 5b VERIFY PASS **and** (distributor-merge auto-link grid is built **or** Warren schedules promote-dialog UX rewrite). Also resume S10 slot build when merge grid needs Celery, or if PO batch >500 / p95 apply >30s. |
+| **Note** | Unit 6b is the **first live** `opts.target` consumer (customer-token stamp). Promote/merge migration remains parked per TRIGGER. |
+
+---
+
+## BACKLOG-124 ÔÇö Tokenless customer acquisition for blank lineup customer_token
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Closed** ┬À 2026-08-08 ┬À Mechanism D on `feat/backlog-124-empty-token` |
+| **Effort** | Medium |
+| **Source** | PROGRAM-A Unit 6 CONSULT Q0/D6; Unit 6b scope ÔÇö empty_token bucket (esp. case 127 matched-null lines) |
+| **Idea** | Acquisition path for lineup lines with blank/null `customer_token` that still need a customer stamp (cannot mint `CustomerSourceTokenAlias` without a token). Hint: D6 showed 13/13 medium POs were single-customer on ship side. |
+| **Why it matters / deferrable** | Blocks residual `customer_unresolved` where ship is resolved but lineup token is empty. Stamp (C) cannot run. Deferrable while stampable tokens (clean/specificity) clear first. |
+| **What the work is** | Steward stamps `customer_id` by `line_ids` with explicit confirm; ship/PO customers are hints only; never invent `customer_token`; never mint alias; never auto-create dims. API: `ÔÇª/tokenless/preview|apply`. Worklist: per-case empty_token items with free pick. |
+| **Regression traps** | Never auto-create dim_customer; never invent tokens silently; FLAGÔëáBLOCK; do not use Mechanism C stamp path for blank tokens. |
+| **Behavior to retain** | Empty-token rows remain visible in worklist; stamp enabled via tokenless path only after explicit target pick + reason + confirm. |
+| **Out of scope** | Unit 6b stamp/alias path for non-empty tokens; Drive Control rename; DAP confirmer. |
+| **TRIGGER** | ÔÇö closed. |
+
+---
+
+## BACKLOG-122 ÔÇö W2 same-customer predicate uses majority line customer (no case.customer_id)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-08-05 |
+| **Effort** | SmallÔÇôMedium |
+| **Source** | PROGRAM-A Unit 4 discovery: `commercial_lineup_case` has no `customer_id` column; W2 A1 same-customer hard predicate resolves via majority `commercial_lineup_line.customer_id`. A mixed-customer case could pass on majority alone. W2=0 today so not live. |
+| **Idea** | Strengthen W2 customer equality: require identical customer *sets* (or explicit single-customer cases only), and/or add a case-level customer identity when the domain warrants it ÔÇö without inventing silent auto-create. |
+| **Why it matters / deferrable** | Majority-only can mis-classify a multi-customer file as same-customer for prefix supersession. Deferrable while no W2 candidates exist. |
+| **What the work is** | When W2 fires: compare full customer distributions (or refuse W2 when either case has >1 non-null customer); optional schema only if Warren approves. |
+| **Regression traps** | Do not treat null-majority open-channel as a shared customer without OPEN_CHANNEL canon rules; do not weaken A1 hard predicate. |
+| **Behavior to retain** | A1: same stripped base + same period + SAME CUSTOMER; differing ÔåÆ leave_live accept-both. |
+| **Out of scope** | Fixing this before the first real W2 candidate pair. |
+| **TRIGGER** | First time Unit 4 / contested residual W2 produces a candidate pair. |
+
+---
+
+## BACKLOG-121 ÔÇö Non-split sheets: preview row_count from parser #1 vs apply parser #2
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-08-05 |
+| **Effort** | Medium |
+| **Source** | PROGRAM-A Unit 3 CONSULT latent finding: even for non-split sheets, preview `row_count` historically came from parser #1 while apply persists parser #2 rows ÔÇö they can disagree; NB 221==221 was coincidence. D-034 fixed multi-BU identity only. |
+| **Idea** | For all bulk-backfill proposals (including single-BU sheets), derive `row_count` from apply-parser (#2) rows when `parser_ctx` is present so preview totals always match apply. |
+| **Why it matters / deferrable** | Silent preview/apply count drift on non-split sheets misleads steward review. Deferrable while multi-BU identity (108/D-034) is the active corpus risk. |
+| **What the work is** | Extend D-034 identity_rows path to non-split proposals; regression tests with engineered header/summary divergence. |
+| **Regression traps** | Do not reintroduce cross-parser aligner; do not fuzzy-match. |
+| **Behavior to retain** | D-034 multi-BU native `source_row_number`; subset-sheet exclusion. |
+| **Out of scope** | Unifying the two parsers into one module. |
+| **TRIGGER** | Steward reports preview vs applied line-count mismatch on a single-BU sheet, or next bulk-backfill corpus restore. |
+
+---
+
+## BACKLOG-119 ÔÇö Competition detector flags multi-BU shared POs as conflicts (phantom)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Closed** ┬À 2026-08-05 ┬À shipped D-033 |
+| **Effort** | Medium |
+| **Source** | 9ÔåÆ122 unit Phase D: 33 competing PO norms; refined vs shipment productÔê®lineup: **25** class (a) multi-BU legitimate (NB+NR both hit shipped products), **7** cross-period, **1** same-BU same-period (`PURMIDR26009979` / 9┬À121┬À122┬À128). Detector = residual classifier `len(cases for po_norm)>1` (`.tmp/clear_211_queue.py` ~524ÔÇô536); propose engine emits multi-case proposals without shipment consult |
+| **Idea** | When classifying ÔÇ£competitionÔÇØ, consult shipment product evidence: if ÔëÑ2 claiming cases each overlap shipped products on that PO and BUs differ, treat as multi-BU share (not a pick-one conflict). Keep genuine same-BU / cross-period queues. |
+| **Why it matters / deferrable** | 25/33 residual ÔÇ£conflictsÔÇØ are phantom under WarrenÔÇÖs multi-BU-share-PO rule. Inflates steward queue. Deferrable until carry (118) + 9ÔåÆ122 land. |
+| **What the work is** | Classification helper for residual/UI chips; **do not** change match key (BU stays out). Optional UI badge ÔÇ£multi-BU sharedÔÇØ. |
+| **Regression traps** | Do not auto-accept both without steward; FLAGÔëáBLOCK for over-plan. Do not fold cross-period into (a). |
+| **Behavior to retain** | CRAD-primary key; BU not in key; multiple proposals per PO allowed. |
+| **Out of scope** | Changing propose SQL; bulk-select guard (115/110). |
+| **TRIGGER** | Immediate ÔÇö 118 + 9ÔåÆ122 landed; or Warren starts residual competition triage. |
+| **Closed** | Live re-derive after 9ÔåÆ122: 35 multi-case ÔåÆ **13 contested** / **22 multi_bu_shared** / 0 indeterminate. `lineup_po_competition.py` + wire in `po_auto_link_proposals`. D-033. Residual decision list in CONTEXT. UI chip polish still optional (BACKLOG-113). |
+
+---
+
+## BACKLOG-120 ÔÇö Dedicated supersession_carry provenance column (optional)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-08-04 |
+| **Effort** | Small |
+| **Source** | BACKLOG-118 B1: carry records provenance in existing `commercial_lineup_case_po.notes` (`supersession_carry:from_case=<id>`). No schema change this unit. |
+| **Idea** | If notes collide with steward free-text, add a dedicated nullable provenance column (or JSONB) for carry/auto-link origin. |
+| **Why it matters / deferrable** | Notes work today; only matters if operators routinely edit link notes and overwrite carry markers. |
+| **What the work is** | Migration + backfill from notes prefix; update carry writer. |
+| **Regression traps** | Do not migrate without Warren approval; never delete loser links. |
+| **Behavior to retain** | Copy-not-move carry; unique (case_id, purchase_order_id). |
+| **Out of scope** | Changing carry semantics. |
+| **TRIGGER** | Steward reports notes overwrite / needs structured provenance filter. |
+
+---
+
+## BACKLOG-118 ÔÇö Supersession must carry commercial_lineup_case_po to winner
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Closed** ┬À 2026-08-04 ┬À shipped D-032 |
+| **Effort** | Medium |
+| **Source** | 9ÔåÆ122 unit A2 STOP: `lineup_bulk_backfill_apply.py` 377ÔÇô382 only sets `superseded_by_case_id` + `commercial_status='superseded'`; no carry/move of `commercial_lineup_case_po`. Case 9 has **28** PO links; case 122 has **0**. Active filters would orphan links if 9 superseded without carry. D-031. |
+| **Idea** | On soft-supersession of a loserÔåÆwinner, copy (or reassign) `commercial_lineup_case_po` rows to the winner idempotently on `(case_id, purchase_order_id)`; leave audit trail; do not delete PO master rows. Prefer a named service used by bulk apply + steward ops. |
+| **Why it matters / deferrable** | Without carry, superseding po_issued cases silently unlinks POs from active planned/coverage consumers. Not deferrable for D2 ÔÇö **blocked**. |
+| **What the work is** | Service + call from supersession path; steward audit; test with real case_po rows; then resume 9ÔåÆ122 + f3 apply. |
+| **Regression traps** | Never hard-delete cases; never drop PO numbers; unique (case_id, purchase_order_id); survivors 7/90 untouched unless Warren says. |
+| **Behavior to retain** | Soft-supersede via existing fields; `link_case_to_existing_po` idempotency semantics. |
+| **Out of scope** | Hand-written SQL inserts as one-off; changing competition detector. |
+| **TRIGGER** | Immediate ÔÇö next unit before any 9ÔåÆ122 / po_issued D-030 supersession. |
+| **Closed** | `soft_supersede_lineup_case` + `carry_case_po_links_on_supersession`; wired bulk apply; clone C2ÔÇôC6; cip 9ÔåÆ122 (28/28); f3ÔåÆcase 145 2025 Q4; D-032. Provenance via notes ÔåÆ BACKLOG-120. |
+
+---
+
+## BACKLOG-117 ÔÇö PO auto-link Review dialog omits case id / source file / competitors
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Shipped 2026-08-10** ÔÇö confirm dialog shows case id, file/version chips, competing-case alert (`PoAutoLinkConfirmDialog`) |
+| **Effort** | Small |
+| **Source** | Browser queue unit: Review on `P2605495` / OPEN_CHANNEL showed customer, period, confidence, reason, PO units, matched products ÔÇö **no case_id, no `file_name`, no competing-case list** (`PoAutoLinkConfirmDialog` ~L259ÔÇô370) |
+| **Idea** | Show case id + source file + sibling competing proposals for the same PO before Confirm. |
+| **TRIGGER** | ~~Next browser accept session~~ ÔÇö fired Unit 2 arc. |
+
+---
+
+## BACKLOG-116 ÔÇö PO auto-link panel is not on STEWARD_EXPERIENCE_CONTRACT S1ÔÇôS14
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Closed (VERIFY PASS + Unit 2 surface)** ┬À 2026-08-10 ÔÇö Unit 5b PASS via `ResolutionWorklist`; Unit 2 ships competition/file/case chips on list+confirm. S10 async remains Warren-waived (sync chunk-100). S11 bell not required. |
+| **Effort** | Large |
+| **Source** | Browser queue unit grading vs `docs/STEWARD_EXPERIENCE_CONTRACT.md`: panel is bespoke `PoAutoLinkProposalsSection` cards, not `import-steward` engine |
+| **Idea** | Level PO auto-link triage to steward engine slots (or explicitly Warren-waive rows with dated waiver lines). |
+| **What shipped** | Stay on `ResolutionWorklist` + commercial-planner section; no new `Po*` under `import-steward/`. |
+| **TRIGGER** | ~~Warren prioritizes steward-engine parity~~ ÔÇö fired Unit 2 arc (Q4=B). |
+
+---
+
+## BACKLOG-115 ÔÇö Select-all-high / bulk Link ignores competition + survivor policy
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** ┬À 2026-08-05 (PROGRAM-A Unit 2) |
+| **Effort** | Medium |
+| **Source** | Browser unit: **Select all high** selected **81** including competing POs and survivor cases **7/9/90**; no competition warning; bulk confirm breakdown is customer counts only (`openBulkConfirm` / `bulkConfirmBreakdown` ~L978ÔÇô995) |
+| **Idea** | Exclude survivors/`po_issued` from select-all; flag or block multi-case same-PO selections; preview competing case ids before apply. |
+| **Why it matters / deferrable** | One click would decide Warren conflicts + mutate survivors (policy). Deferrable while agents refuse bulk on residual. |
+| **What the work is** | Selection filters + bulk preview conflict rows; wire BACKLOG-110 guard. |
+| **Regression traps** | Do not auto-pick winners; FLAGÔëáBLOCK for over-ship stays. |
+| **Behavior to retain** | Select-all-high for clean solo queues. |
+| **Out of scope** | Auto-supersede from UI. |
+| **TRIGGER** | Before any production bulk accept of residual 92, or with BACKLOG-110. |
+| **Done note** | Property-based `bulk_protection` on proposals; select-all excludes selection_protected; bulk confirm lists excluded; competition chips via payload. |
+
+---
+
+## BACKLOG-114 ÔÇö Period filter defaults to current quarter and hides residual queue
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done (code already)** ┬À 2026-08-10 ÔÇö initial period is `''` (residual-inclusive); ÔÇ£This quarterÔÇØ chip optional; vitest covers empty default. |
+| **Effort** | Small |
+| **Source** | Browser unit: expand panel ÔåÆ Period=`26Q3` via `useState(() => currentQuarterLabel())` at `PoAutoLinkProposalsSection.tsx:797`; Select all high disabled until period cleared; residual 2025/Q1ÔÇôQ2 proposals invisible |
+| **Idea** | Default period empty (or ÔÇ£allÔÇØ) when opening triage; keep optional current-quarter quick chip. |
+| **TRIGGER** | ~~Next PO auto-link UX polish unit~~ ÔÇö verified in Unit 2. |
+
+---
+
+## BACKLOG-113 ÔÇö PO auto-link has no competition / version-prefix signal in the list
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Shipped 2026-08-10** ÔÇö proposal payload adds `file_name` / `file_base` / `version_prefix`; list chips show case + file + competing case ids |
+| **Effort** | Medium |
+| **Source** | Browser residual: 33 competing PO norms all RULE-DOES-NOT-APPLY (NBÔåöNR / different base / survivor); UI shows per-customer cards with no ÔÇ£competes with case XÔÇØ chip; D-030 winners already applied offline |
+| **Idea** | Surface `conflicts` / competing case ids + file base/prefix on rows and group headers so operators can apply D-030 / leave Warren conflicts. |
+| **TRIGGER** | ~~Warren wants browser-led residual triage~~ ÔÇö fired Unit 2 arc. |
+
+---
+
+## BACKLOG-112 ÔÇö Auto-link `customer_unresolved` when ship is resolved but lineup line customer is null
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Closed steward-complete** ┬À 2026-08-07 ┬À Unit 6c (D-038/D-039). Distributor-token residual stamped OC+`line.distributor_id`; W4 false stamps 5767/5768 revoked+restamped; free-picker residual remains for retailer/no-dim tokens; empty_token ÔåÆ BACKLOG-124. Count need not be 0. |
+| **Effort** | Medium |
+| **Source** | Clear-211 unit: all 17 medium proposals have `fact_inbound_shipment.resolved_customer_id` + exact `customer_source_token_alias` hits; align still `unresolved` because matched lineup lines lack `customer_id` |
+| **Idea** | Steward path to stamp lineup line customer from the already-resolved shipment customer (exact, no fuzzy) then re-propose/accept; or surface this as a distinct reason (`lineup_customer_missing`). |
+| **Why it matters / deferrable** | Blocks ~8ÔÇô17 residual proposals that look ÔÇ£unresolvedÔÇØ but are not alias misses. Deferrable while Warren clears NBÔåöNR competitions first. |
+| **What the work is** | Lineup steward customer apply for matched products; do not auto-create dims. |
+| **Regression traps** | Exact match only; FLAGÔëáBLOCK for over-ship; never touch survivors without override. |
+| **Behavior to retain** | CRAD-primary match key; BU not in key. |
+| **Out of scope** | Fuzzy customer match; ZA legal-form auto-merge as blocker. |
+| **TRIGGER** | ÔÇö closed. Free-picker leftovers + 124 empty_token are separate. |
+| **Closed** | Unit 6c: classifier + dual-write stamp; clone C1ÔÇôC9; cip D1ÔÇôD7. Residual free-picker: `jd furn`, `pick & pay`, `sadc - superdisti`, `sadc homeless`, `smd`, `88`. |
+
+---
+
+## BACKLOG-125 ÔÇö Distributor-as-customer masters (dim_customer 1152 / 4145 / syntechÔåÆ4145)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Closed** ┬À 2026-08-08 ┬À Warren lock + cip absorb on `feat/backlog-125-126-masters-stems` |
+| **Effort** | Medium |
+| **Source** | Unit 6c Phase A E12: approved customer alias `syntech`ÔåÆ`dim_customer` 4145; related distributor-as-customer master pollution (also noted around 1152). Masters problem ÔÇö not a lineup stamp rule. |
+| **Idea** | Steward masters cleanup: retire/merge distributor-named `dim_customer` rows; revoke misleading customer aliases; ensure Syntech identity lives only on `dim_distributor` 51 + OPEN_CHANNEL for channel tokens. |
+| **Why it matters / deferrable** | Customer alias can pre-select wrong named customers for tokens that should be distributor-parked. Deferrable while D-038 stamp path correctly forces OC for distributor tokens. |
+| **What the work is** | Revoke aliases to 4145/1152; stamp SyntechÔåÆOC+dist 51; absorb 4145+1152 into OPEN_CHANNEL via `open_channel_absorb`; ship evidence: Compuspeed dist 12 ÔåÆ OC majority. |
+| **Regression traps** | Never auto-create dims; do not change D-038 strip/match; Compuspeed-as-customer = OC (Warren). |
+| **Behavior to retain** | D-038 distributor-token dual-write; OPEN_CHANNEL canon; Channel Syntech = OC + Syntech. |
+| **Out of scope** | Rectron/Pinnacle/Mustek twin masters (separate if TRIGGER); inventing distributors. |
+| **TRIGGER** | ÔÇö closed. |
+
+---
+
+## BACKLOG-126 ÔÇö No-dim distributor stems in customer column (`smd` / `superdisti` / `sadc homeless`)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Closed (partial residual SMD)** ┬À 2026-08-08 ┬À Warren lock |
+| **Effort** | Small |
+| **Source** | Unit 6c A1 + D5 residual: tokens with no `dim_distributor` exact match after strip; free-picker only under D-038. |
+| **Idea** | Either mint/approve real `dim_distributor` (+ aliases) for these stems, or steward free-pick retailer/OC with reason ÔÇö do not invent fuzzy distributor match. `sadc homeless` can Accept OC+Stylus via ship corroboration when sole+exact qty (D-040). |
+| **Why it matters / deferrable** | Leaves unresolved free-picker stems without ship sole. Deferrable while planning is not blocked. |
+| **What the work is** | **Done:** `superdisti`ÔåÆdist **50** Superdist alias; `sadc - superdisti` stamped OC+50; homeless already Stylus 45. **Residual:** `SMD` is a **customer** token (Warren) ÔÇö no ship customer named SMD; product 5376 ships multi-customer ÔåÆ leave free-picker (2 lines). |
+| **Regression traps** | No substring/fuzzy distributor match; no auto-create from stamp; do not treat SMD as distributor. |
+| **Behavior to retain** | Free picker + preview-first; D-040 Accept ship-corroborated. |
+| **Out of scope** | Expanding D-038 strip patterns without Warren lock; inventing SMD dim_customer. |
+| **TRIGGER** | ÔÇö closed for distributor stems. Reopen only if Warren names an SMD customer target or ship evidence appears. |
+
+---
+
+## BACKLOG-127 ÔÇö Shipment DAP (or priced confirm) for distributor attribution
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** ┬À 2026-08-08 ┬À `feat/backlog-127-128-dap-case-po` |
+| **Effort** | Medium |
+| **Source** | Unit 6d/6e discovery: `fact_inbound_shipment` has `unit_price`/`amount` only ÔÇö no DAP field; qty-only confirmer cannot collapse multi-dist INDETERMINATE tokens. |
+| **Idea** | Persist DAP (or a defined map to ship price + currency rules) on shipment facts so confirmer Phase 2 can confirm/conflict on price as well as product+period+qty. |
+| **Why it matters / deferrable** | Raises confirmation hit-rate for OC distributor tokens. Deferrable while Phase-1 sole-qty confirmer + steward review work. |
+| **What the work is** | Schema/contract for DAP on ship facts or evidenceÔåÆfact mapping; currency rules; extend D-040 confirmer; never invent DAP from margin. |
+| **Regression traps** | Do not conflate DAP with PM bottom / landed cost; do not use marginÔåÆdistributor. |
+| **Behavior to retain** | D-040 Phase-1 rules; exact token match. |
+| **Out of scope** | Drive Control rename; DSI resolution order. |
+| **TRIGGER** | Warren opens priced shipment confirmation or multi-dist unproven volume blocks planning. |
+| **Resolution** | D-041: reuse ship `unit_price` as DAP-evidence (no migration); Phase-2 unique within 2% of `dap_evidence_local` ÔåÆ confirm_price / conflict_price / offer_accept_price. |
+
+---
+
+## BACKLOG-128 ÔÇö PO-linkage gap: Stylus / case_po incomplete vs shipment sole
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** ┬À 2026-08-08 ┬À `feat/backlog-127-128-dap-case-po` |
+| **Effort** | SmallÔÇôMedium |
+| **Source** | Unit 6e: `sadc homeless` ships sole Stylus 45 with exact qty; Stylus absent from some case_po sets (e.g. case 114) ÔÇö PO-linkage gap, not cancel. |
+| **Idea** | Worklist / auto-link repair so shipment-resolved distributors appear on case_po when commercially linked. |
+| **Why it matters / deferrable** | Attribution can be correct while case_po still incomplete. Deferrable after D-040 Accept. |
+| **What the work is** | Diagnose missing case_po for Stylus; steward or auto-link path without treating case_po as attribution oracle. |
+| **Regression traps** | Do not use case_po absence to revoke D-038/D-040 stamps. |
+| **Behavior to retain** | D-040 propose/confirm; PO auto-link competition rules. |
+| **Out of scope** | Changing auto-link key / D-033 / D-034. |
+| **TRIGGER** | After D-040 Accept for homeless, or case_po gaps block planning for Stylus volume. |
+| **Resolution** | `ÔÇª/case-po-attribution-gap/preview|apply` ÔÇö unique PO covering attributed products via PO-bearing ships; never clears attribution. cip: case 114 Ôåö PO 10473 (Stylus). |
+
+---
+
+## BACKLOG-111 ÔÇö Lineup parse Celery worker can run stale code (uniform_half after D-028)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** ┬À 2026-08-16 ÔÇö worker boot logs git SHA + `lineup_case_parser` mtime; `DEV_TOPOLOGY.md` restart checklist. Parse path still refuses `uniform_half` (D-028). |
+| **Effort** | Small |
+| **Source** | f4 apply created case 144 via job 790 with `allocation=uniform_half` / null `month_split_json`; re-parse in-process with current tree ÔåÆ month_derived 289/289 |
+| **Idea** | Ensure worker restart / version pin after parse-path commits so enqueued jobs cannot invent retired allocations. |
+| **Why it matters / deferrable** | Silent wrong quantities until re-parse. Deferrable while operators re-parse after code deploy. |
+| **What the work is** | Dev topology note + optional worker bootstrap hash check; document restart in apply checklist. |
+| **Regression traps** | Do not re-introduce uniform_half on parse path. |
+| **Behavior to retain** | D-028 month-derived / refuse. |
+| **Out of scope** | Rederivation path uniform_half. |
+| **TRIGGER** | Next bulk lineup apply that enqueues parse jobs after a parser commit. |
+
+---
+
+## BACKLOG-110 ÔÇö Auto-link apply has no survivor / po_issued guard
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** ┬À 2026-08-05 (PROGRAM-A Unit 2) |
+| **Effort** | Small |
+| **Source** | Steward PO-link unit: acceptable apply linked `PURMIDR26009976` onto survivor case **7** (pols 1ÔåÆ2); reverted by deleting `commercial_lineup_case_po.id=657` |
+| **Idea** | Refuse (or require explicit confirm) auto-link apply when target case is `po_issued` / survivor, unless Warren opts in. |
+| **Why it matters / deferrable** | Hard constraint ÔÇ£do not modify survivors 7/9/90ÔÇØ is operator policy; API currently allows any confirmable status. Deferrable while Warren reviews competing proposals manually. |
+| **What the work is** | Gate in `apply_auto_link_proposals` / `link_case_to_existing_po` or UI exclude list; audit log. |
+| **Regression traps** | Do not block draft_imported linking; FLAGÔëáBLOCK for over-ship stays. |
+| **Behavior to retain** | Idempotent re-link no-op; multi-PO append on drafts. |
+| **Out of scope** | Changing match engine. |
+| **TRIGGER** | Next auto-link bulk accept session, or Warren asks for survivor protection. |
+| **Done note** | `evaluate_case_bulk_protection` + `allow_protected` override; bulk never sets override. Case 145 (`draft_imported`, 0 links) needs `CIP_LINEUP_PROTECTED_CASE_IDS`. |
+
+---
+
+## BACKLOG-109 ÔÇö No steward unlink/undo for commercial_lineup_case_po
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Closed** ┬À 2026-08-07 (PROGRAM-A Unit 6a VERIFY PASS) |
+| **Effort** | Medium |
+| **Source** | Revert of mistaken case-7 link required direct SQL DELETE ÔÇö no API/UI unlink |
+| **Idea** | Steward-facing unlink (or undo last apply) that deletes `commercial_lineup_case_po` and adjusts status ladder safely. |
+| **Why it matters / deferrable** | Mistakes and survivor policy need reversible workflow without raw SQL. |
+| **What the work is** | Endpoint + panel action; steward audit; status recompute when last PO removed. |
+| **Regression traps** | Never cascade-delete POs; never touch shipment facts. |
+| **Behavior to retain** | Link idempotency on (case_id, purchase_order_id). |
+| **Out of scope** | Dismiss/restore of *proposals* (already exists). |
+| **TRIGGER** | First production need to reverse a bad link, or BACKLOG-110 ships. |
+| **Done note** | Unit 6a: `lineup_case_po_unlink` + `PoCaseLinkWorklistSection` on ResolutionWorklist; W6-2 refuse superseded; W6-3 DELETE+audit; Unit 2 `allow_protected`; clone C1ÔÇôC4 on `cip_unit6a_smoke`. Close after VERIFY PASS. |
+
+---
+
+## BACKLOG-108 ÔÇö Multi-BU slice_row_mapping_failed blocks full NR sheets
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Closed** ┬À 2026-08-05 (PROGRAM-A Unit 3 / D-034) |
+| **Effort** | Medium |
+| **Source** | Session 752: `f15:Sheet1:NR:2026 Q2`, `f16:NR:NR:2026 Q3` status `needs_attention` / `slice_row_mapping_failed`; only thin NB slices applied (cases 128/129/131) |
+| **Idea** | Fix sliceÔåÆsource_row mapping for the residual BU group after multi-BU split so the primary NR body can apply. |
+| **Why it matters / deferrable** | Explains NR 2026 thinness vs 2025 (131ÔÇô141 lines): files are full (~147/131 rows); corpus missing the NR body cases. Not a silent parser drop on applied slices. |
+| **What the work is** | Reproduce on disposable DB; fix `map_slice_rows_to_source_row_numbers` / preview grouping; re-apply those keys only. |
+| **Regression traps** | Do not auto-create dims; do not re-apply whole session 752. |
+| **Behavior to retain** | Multi-BU sheet ÔåÆ per-BU proposals with `slice_source_rows`. |
+| **Out of scope** | Relabeling NB-from-NR cases (product-derived BU is intentional). |
+| **TRIGGER** | Warren wants full NR 2026 Q2/Q3 corpus before linking those periods. |
+| **Resolution** | D-034: identity from apply-parser rows; Sheet1 Ôèå NR excluded. cip case **146** NR 2026 Q3 = **120** lines (was case 130 Sheet1 = 14). Evidence-pack "~126" was sheet rows before BU split. |
+
+---
+
+## BACKLOG-107 ÔÇö Auto-link UI does not surface PO competition across cases
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Shipped 2026-08-10** ÔÇö competition chip lists rival case ids; confirm dialog warns before link |
+| **Effort** | SmallÔÇôMedium |
+| **Source** | 211 Warren-queued proposals; 87 competing PO norms (e.g. cases 119 vs 120 for same PO; 118 vs 125 NB vs NR) |
+| **Idea** | Show ÔÇ£also proposed for case XÔÇØ on each row / confirm dialog so steward does not accept both sides blindly. |
+| **TRIGGER** | ~~Warren starts clearing the 211-queue~~ ÔÇö fired Unit 2 arc. |
+
+---
+
+## BACKLOG-106 ÔÇö PoAutoLink steward surface is PARTIAL vs S1ÔÇôS14
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-08-03 |
+| **Effort** | Large |
+| **Source** | S1ÔÇôS14 grade of `PoAutoLinkProposalsSection.tsx` (2026-08-03) |
+| **Idea** | Bring POÔåölineup link review to import-steward contract bar (or document permanent waivers). |
+| **Why it matters / deferrable** | Works as card UI; gaps are shell/tabs/plan/async. Deferrable while HTTP apply path works. |
+| **What the work is** | See grade table in CONTEXT 2026-08-03; extract shared drawer/bulk where slots apply. |
+| **Regression traps** | Do not invent importer-prefixed files under `features/import-steward/`. |
+| **Behavior to retain** | Chunked POST `/lineup/po-auto-link/apply`; dismiss/restore; over-plan expected copy. |
+| **Out of scope** | Match-engine rewrite. |
+| **TRIGGER** | Steward UX parity pass for commercial PO linking, or VERIFY unit for this surface. |
+
+---
+
+## BACKLOG-105 ÔÇö PF 1H Gaming Desktop Qty column is not unit totals
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-08-03 |
+| **Effort** | Small |
+| **Source** | STATE_AUDIT ┬º6 Q3; file `Copy of ACZA 1H 2025 Consumer Lineup - Gaming Desktop PD 13 Feb 2025.xlsx` (cases 134/135) |
+| **Idea** | Workbook maps header `Qty` ÔåÆ `quantity_units` via alias, but cell values are ~0.15 while real units live in `Total Qty` / `May\n(TBC)`. Alias map must not be broadened blindly. |
+| **Why it matters / deferrable** | Month-derived half now uses month columns (correct for May), but any path that still trusts `Qty` as units is wrong for this file. Deferrable while month columns drive 1H quantity. |
+| **What the work is** | Steward/mapping decision: prefer `Total Qty` for this template family, or file-specific override ÔÇö without breaking NB files where `Qty` is correct. |
+| **Regression traps** | Do not change global `quantity_units` aliases without archive-wide proof. |
+| **Behavior to retain** | Month-derived 1H from real month columns (D-028). |
+| **Out of scope** | Re-apply session 752; changing historical_lineup. |
+| **TRIGGER** | Next PF/desktop lineup import or Warren asks to fix Qty vs Total Qty mapping. |
+
+---
+
+## BACKLOG-104 ÔÇö Bulk existing_case_collisions miss when case.notes is null (sheet)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** ┬À 2026-08-16 ÔÇö null/missing sheet in notes is a wildcard match; `winner_member_key` stays `existing:{id}`. |
+| **Effort** | Small |
+| **Source** | Corpus restore preview session_import_job_id=752; surviving cases 7/9/90 have `notes=NULL` so `_sheet_from_case_notes` ÔåÆ None while proposals use sheet `Sheet1`/`NB` ÔåÆ `existing_case_collisions=0` despite same `file_name` |
+| **Idea** | When existing case has no sheet in notes, treat sheet match as wildcard (or compare file_name+BU+period only) so po_issued / unified survivors are surfaced as collisions instead of silent duplicate-ready proposals. |
+| **Why it matters / deferrable** | Apply of ready proposals for filenames of cases 9/90 (and period-shifted 7) would create parallel draft cases without superseding survivors ÔÇö corpus duplication, not wipe. Deferrable until Warren picks exclude keys or detector fix before apply. |
+| **What the work is** | Adjust `detect_existing_case_collisions` sheet equality; add regression covering notes=NULL vs Sheet1; do not auto-pick winner for po_issued (keep existing-as-default-winner). |
+| **Regression traps** | Do not hard-delete; do not silently supersede po_issued; steward confirmations remain WarrenÔÇÖs. |
+| **Behavior to retain** | Default `winner_member_key=existing:{id}` skip path. |
+| **Out of scope** | Corpus apply itself; BACKLOG-101 terminal status. |
+| **TRIGGER** | Before next bulk lineup apply that overlaps unified_lineup_import survivors **or** Warren asks to resume corpus restore apply. |
+
+---
+
+## BACKLOG-103 ÔÇö Unified lineup import has no 1H ÔåÆ Q1+Q2 fan-out
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-08-02 |
+| **Effort** | Medium |
+| **Source** | `docs/STATE_AUDIT_2026-08-02.md` ┬º5 Q3; corpus restore preview 2026-08-02 (bulk path fans via `half_year_allocation_half`) |
+| **Idea** | Port bulkÔÇÖs 1H ÔåÆ Q1+Q2 fan-out (`period_half_split_q*` + `half_year_allocation_half` / `allocation=uniform_half`) into the unified lineup import path so a single 1H workbook does not land as one half-plan case. |
+| **Why it matters / deferrable** | Silent half-plan loss on unified imports. Bulk already implements fan-out; unified creates one case per file. Deferrable while restores use bulk backfill. |
+| **What the work is** | Resume-context: bulk path in `lineup_bulk_period_inference` / apply parse options; wire equivalent into unified dispatch/parser without changing DSI rules. |
+| **Regression traps** | Do not double-count quantities across Q1+Q2; preserve steward supersession confirmations. |
+| **Behavior to retain** | Bulk fan-out semantics already live. |
+| **Out of scope** | Changing COMMERCIAL_SEMANTICS formulas. |
+| **TRIGGER** | Next 1H import via the **unified** lineup path (not bulk backfill). |
+
+---
+
+## BACKLOG-102 ÔÇö Lineup corpus restore apply (await collision exclusions)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Shipped** ┬À 2026-08-02 (verify complete) |
+| **Effort** | Medium (apply + D1ÔÇôD4 validation) |
+| **Source** | Preview job 752 on cip; archive copy under `.tmp/ProductLineupArchive`; A3 stop gate passed but Phase B unexplained overlap with cases 7/9/90 |
+| **Idea** | Resume Phase CÔÇôD: apply ready proposals from session 752 (or re-preview), excluding or steward-confirming overlaps with surviving po_issued cases 7/9/90; then pct/PO/reader/PvE checks. |
+| **Why it matters / deferrable** | ~~Preview complete; apply blocked on exclusions.~~ **Done:** Warren exclusion set applied (30 applied / 5 skipped); worker drained parse jobs 753ÔÇô779; D1ÔÇôD4 verification recorded in CONTEXT. |
+| **What the work is** | Apply with `excluded_proposal_keys` or confirmations; verify 7/9/90 unchanged; D1ÔÇôD4; CONTEXT append counts. |
+| **Regression traps** | Never modify cases 7/9/90; no migration; expect session job left `running` (BACKLOG-101). |
+| **Behavior to retain** | Preview session 752 payload; default existing-wins if collisions appear. |
+| **Out of scope** | Fixing BACKLOG-101 in the same unit. |
+| **TRIGGER** | ~~Warren supplies exclude/confirm list~~ ÔÇö fired and completed. Residual steward work is not this entry (auto-link proposals; failed parses 759/760; period flags on needs_attention). |
+| **Outcome** | Cases 33 (30 active + 3 superseded shells); lines 2450; po_links 52 (unchanged). Survivors 7/9/90 unchanged. Session 752 still `running` (BACKLOG-101). Child parses: 25 completed / 2 failed (`Promo R19999` on `2. ACZA 1H 2026ÔÇª`, cases 120/121 empty). D1: 0 implausible pct rows (stored fraction-ish 0ÔÇô1). D2: linked still 52; 355 auto-link proposals waiting. D4: PvE lineup-linked quarters still 2026 Q1+Q2 only (no new PO links). |
+
+---
+
+## BACKLOG-101 ÔÇö Lineup delete audit actor + bulk apply terminal status
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** ┬À 2026-08-16 ÔÇö DELETE uses `get_optional_current_user`; bulk apply sets `completed` / `completed_with_errors` instead of leaving `running`. |
+| **Effort** | Small |
+| **Source** | Corpus-safety unit 2AÔÇô2D (2026-08-02); `delete_lineup_case` still has no auth dependency; `apply_bulk_lineup_batch_sync` leaves `import_job.status='running'` after apply |
+| **Idea** | (1) Wire `get_current_user` (or optional user) on `DELETE /lineup-cases/{id}` so steward_audit actor is not always `anonymous`. (2) Set bulk lineup session job to an existing terminal status (`completed` / `completed_with_errors`) when apply finishes so reaper/UI do not treat finished applies as live work. |
+| **Why it matters / deferrable** | Audit trail now exists (2B) but actor is weak without auth. Job 255 was stuck `running` partly because apply never terminals the session job. Deferrable while corpus rebuild proceeds; anonymous audit + manual failed clear already unblock rebuild. |
+| **What the work is** | Auth dependency + tests; terminal status write at end of `apply_bulk_lineup_batch_sync` matching lifecycle vocabulary; do not invent new statuses. |
+| **Regression traps** | Do not change draft_imported-only delete gate; do not auto-create masters; keep steward_audit in same transaction as delete. |
+| **Behavior to retain** | steward_audit row on every lineup case delete path; payload carries case_id/source_context/period/BU/line_count/po_link_count/reason. |
+| **Out of scope** | Schema change to steward_audit; corpus rebuild itself. |
+| **TRIGGER** | Next commercial-planner auth pass **or** next bulk lineup backfill session after corpus rebuild. |
+
+---
+
+## BACKLOG-100 ÔÇö Make `pnpm test:api` on cip_test a hard CI merge gate
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Shipped** ┬À 2026-08-01 ┬À PR #15 |
+| **Effort** | Large (batch-fix known defect classes on disposable DB) |
+| **Source** | `docs/CI_API_DEFECT_LOG_2026-07-29.md`; CI run on PR #14 (~87 failed / 30 errors); workflow had a hard `exit 1` after record-only API step which blocked merge despite green e2e/build |
+| **Idea** | Fix API suite against ephemeral `cip_test` so CI can hard-fail on API regressions (restore real merge gate for backend). |
+| **Why it matters / deferrable** | ~~Today API runs with `continue-on-error` + artifact log~~ ÔÇö suite green on cip_test (1760 passed); hard gate restored. |
+| **What the work is** | Batch-fix defect classes in the 2026-07-29 log; drop continue-on-error; restore hard fail step; keep `ALLOW_TESTS_ON_DEV_DB` unset in CI. |
+| **Regression traps** | Do not point CI API tests at `cip`; do not set `ALLOW_TESTS_ON_DEV_DB=1` in Actions. |
+| **Behavior to retain** | Alembic migrate assert tip == sole `ScriptDirectory` head (tracks migrations); upload pytest log on API failure. |
+| **Out of scope** | Live e2e API wiring (BACKLOG-099); required-check unlock (BACKLOG-087). |
+| **TRIGGER** | ÔÇö shipped ÔÇö |
+
+---
+
+## BACKLOG-099 ÔÇö Wire live API into GitHub Actions e2e
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-08-01 |
+| **Effort** | Medium (CI job wiring + seed/auth for live specs) |
+| **Source** | PR #13 CI ÔÇö e2e red: Next proxy `ECONNREFUSED :8001`; wipe/products specs need live API (`CIP_E2E_API_URL` / `:8010`) |
+| **Idea** | Run FastAPI in GitHub Actions against already-migrated `cip_test`, point Next proxy + `CIP_E2E_API_URL` at it, enable `wipe-and-products-delete` (and future live specs). |
+| **Why it matters / deferrable** | Live wipe/delete e2e currently skipped in CI (`CIP_E2E_LIVE_API` gate). Mocked/static e2e still run. Deferrable while docker:e2e / local API cover the live path. |
+| **What the work is** | CI step: start uvicorn on :8001 with `cip_test` URLs + `CIP_AUTH_MODE=stub` (or session + login helper); seed minimal products (`SKU-ALPHA-01`); set `CIP_E2E_LIVE_API=1` / `CIP_E2E_API_URL`; unset `CIP_DISABLE_NEXT_API_PROXY` for webServer. |
+| **Regression traps** | Do not point CI e2e at `cip`; keep `ALLOW_TESTS_ON_DEV_DB` unset; do not weaken steward/wipe safety flags. |
+| **Behavior to retain** | Mocked e2e (dashboard / getting-started / navigation) stay API-free and green without this. |
+| **Out of scope** | Full browser soak of Import Centre; required-check unlock (BACKLOG-087). |
+| **TRIGGER** | Warren asks for green live e2e on GitHub CI **or** live wipe/products specs start failing locally without a clear docker:e2e path. |
+
+---
+
+## BACKLOG-098 ÔÇö P3-5 Celery beat + import-complete report schedules
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Shipped 2026-08-17** ÔÇö API lifespan poller claims overdue `report_schedule` rows on startup and every `CIP_REPORT_SCHEDULE_POLL_SECONDS` (default 60s). Celery beat, when enabled, uses the same interval instead of crontab 07:00 UTC only. Cadence remains `next_run_at`. Claim-first so API poll + beat cannot double-deliver. Statement timeout (default 90s) writes a **failed** inbox row rather than hanging the process. **Do not** turn on Windows `CIP_ENABLE_DEV_BEAT` just for 098. **097 closed the WoC hang:** schedule 1 delivery **#6** `status=ok` in 0.61s (`woc_source=observations`). Reconnect 2026-08-17: poller started, `due_count: 0` (next_run already 2026-08-24). |
+| **Effort** | Medium (beat task + import hook; small) |
+| **Source** | P3-5 authored 2026-08-01 ÔÇö `report_schedule` + `run-now` inbox path; ROADMAP P3-5 calendar + event delivery |
+| **Idea** | Wire Celery beat for `weekly_monday_0700` / `daily_0700` and fan-out `on_import_complete` schedules after DSI/shipment apply completes. |
+| **Caveat** | Catch-up is ÔÇ£fire as soon as the API is up if `next_run_at` is already dueÔÇØ. Overnight Monday WoC now reads observations (BACKLOG-097). Windows beat remains off by default (BACKLOG-038). **2026-08-17:** inbox **#6** WoC smoke ok. |
+| **What the work is** | Done ÔÇö due-list + claim-first runner; API startup/interval catch-up; beat interval when beat is enabled; import apply hook for `on_import_complete`. email_stub remains a separate idea. |
+| **Regression traps** | Never skip delivery when metric returns empty ÔÇö missing data is the alert; always stamp `data_vintage`. |
+| **Behavior to retain** | Inbox channel + missing_data_alert + tenant scope. |
+| **Out of scope** | External SMTP productization; P3-6 SQL viewer. |
+| **TRIGGER** | Reopen only if catch-up does not fire overdue rows after an API restart. |
+
+---
+
+## BACKLOG-097 ÔÇö P3-2 materialised aggregates / set-based A3 stock
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Shipped 2026-08-17** ÔÇö `weeks_of_cover_observation` derived series (Alembic `20260817_0017`). Set-based reconstruct at DSI/shipment apply; Channel Ops + A3 + Monday schedule 1 read latest observation per pair. Live calculator only `woc_source=live` / `recompute=1`. Cold query 0.61s (was hang >5 min). Inbox **#6** WoC smoke ok. |
+| **Effort** | MediumÔÇôLarge (SQL rewrite + optional refresh job; maybe MV) |
+| **Source** | P3-2 live soak 2026-08-01 ÔÇö cold `weeks_of_cover` full portfolio ~7.4s / `fill_rate` ~5.7s vs ROADMAP report render &lt;5s p95; warm cache &lt;1ms OK |
+| **Idea** | Replace per-pair scalar sell-out/landed loops in `derived_stock_by_dist_product` with set-based CTEs; optionally Postgres MATERIALIZED VIEW + refresh on import apply; keep latest-per-(distributor,product) invariant. |
+| **Why it matters / deferrable** | Meets NFR for cold governed report without relying only on 60s result cache. Deferrable while warm-cache path + report builder (P3-3) are primary; P3-2 ships process-local/Redis TTL cache. |
+| **What the work is** | Done ÔÇö observation table + fact indexes; apply-time reconstruct; read cutover; ops replay of the same SQL. |
+| **Regression traps** | Never sum SOH snapshot history; pipeline/open_order must stay out; tenant_id filter required. |
+| **Behavior to retain** | Formula: latest reported ÔêÆ sell-out since + POD-landed shipped since; WoC at distributor├ùproduct only. |
+| **Out of scope** | Report builder UI (P3-3); changing COMMERCIAL_SEMANTICS formulas. |
+| **TRIGGER** | ÔÇö shipped ÔÇö |
+
+---
+
+## BACKLOG-096 ÔÇö Commercial tenant profile onboarding UI
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done / shipped 2026-08-08** (P6) |
+| **Effort** | Medium (settings/onboarding form + persistence) |
+| **Source** | Warren 2026-08-01 Q-resolve ÔÇö answers are current-tenant defaults; must stay TENANT-VARIABLE |
+| **Idea** | Expose `commercial_tenant_profile` keys in Getting Started / tenant settings: `constraint_axis`, `over_budget_action`, `reservation_source`, `pm_attribution_mode`. Persist per tenant; stop relying on module-level defaults alone. |
+| **Shipped 2026-08-08** | File-persistence (no migration): `apps/api/app/services/commercial_tenant_profile.py` ÔÇö `load_tenant_profile_overrides` / `save_tenant_profile_overrides` read/write `{local_storage_path}/tenant_profiles/{tenant_id}.json`; `profile_snapshot(tenant_id="default")` merges file overrides over module defaults (back-compat ÔÇö existing no-arg call sites unaffected). API: `GET`/`PUT /api/v1/auth/tenant-commercial-profile` (GET any authenticated role, PUT admin-only via `require_roles(Role.ADMIN)`). UI: new "Commercial tenant profile" section on `/settings` (`apps/web/src/app/(app)/settings/page.tsx`) ÔÇö four selects + save, `data-testid="tenant-profile-*"`, read-only for non-admins. |
+| **Why it matters / deferrable** | Second customer / multi-tenant readiness (P6); ASUS SA answers must not be baked into application law. Now editable per tenant without a migration. |
+| **What the work is** | Done ÔÇö settings form; API read/write; file persistence keyed by `tenant_id`; module defaults remain the fallback when no override file exists. |
+| **Regression traps** | Do not hardcode NB/NR/NV/NX or ZAR-only assumptions in UI copy as the only options. |
+| **Behavior to retain** | Profile stub defaults remain valid until overridden. |
+| **Out of scope** | Full multi-tenant IAM; hosting (Q-003); moving these keys into a DB table (file persistence chosen deliberately ÔÇö no migration). |
+| **TRIGGER** | ÔÇö shipped ÔÇö |
+
+---
+
+## BACKLOG-095 ÔÇö CPOR over-money-ceiling reapproval
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Resolved 2026-08-01** ÔÇö `needs_reapproval` on `cpor_case` (alembic `20260801_0002`); gates on approve/export; UI reapprove CTA; `HARD_ENFORCE_BUDGET=true`; optional `MONEY_CEILING_USD` |
+| **Effort** | MediumÔÇôLarge (case lifecycle + gate) |
+| **Source** | Warren Q-001 2026-08-01 ÔÇö money ceiling binding; over ÔåÆ case must be reapproved |
+| **Idea** | When drawn/planned spend exceeds money reservation, mark CPOR case as needing **reapproval** (and eventually block approve/export until reapproved). Honour `over_budget_action` from commercial tenant profile. |
+| **Why it matters / deferrable** | Prevents silent overspend vs target reservation. |
+| **What the work is** | Done: flag + `confirm_over_budget_reapproval` on approve; export 409 while flagged/over; banner on case detail. |
+| **Regression traps** | Do not block on support-% when `constraint_axis=money`. Ceiling optional ÔÇö without `MONEY_CEILING_USD`, gate is flag-only. |
+| **Behavior to retain** | Dual-track explainability; cancel frees budget (domain ┬º1.6). |
+| **Out of scope** | Hosting; support-% as binding axis (unless profile changes). |
+| **TRIGGER** | ÔÇö shipped ÔÇö |
+
+---
+
+## BACKLOG-094 ÔÇö Promo planning: auto MAC + price-delta sales forecast
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** ┬À 2026-08-14 ┬À Unit 15C Opus `VERDICT: PASS` (D-051ÔÇôD-056). |
+| **Effort** | Large (planning write-path + cost/forecast contracts) |
+| **Source** | Warren 2026-08-01 A-lane wrap; locks 2026-08-13 |
+| **Idea** | Promo planner computes **suggested** MAC and units; **every field is editable** in the UI. Suggestions never silently overwrite operator edits (dirty-flag / explicit Reset). |
+| **Locked ÔÇö weighted MAC (intake-aware average)** | Suggested MAC = weighted average of (a) current channel SOH at latest reported CST MAC and (b) units **that will be taken in** during the promo window (buy-plan / in-transit that lands in window) at their intake cost. Units **not** taken in during the window are **excluded** from the average. Show qty and cost of each bucket + as-of dates. Approved case cost is never auto-rewritten ÔÇö recompute flags `cost_basis_drift`. |
+| **Locked ÔÇö units** | CIP suggests units from **history as benchmark** (same customer ├ù product velocity / comparable promo windows ÔÇö A2 comps). No elasticity curve. No forecast-file ingest. Operator may override any suggested qty. |
+| **Why it matters / deferrable** | Funding + volume truth for promo cases. Deferrable until Unit 15 (B1 history forecast + B4 planner) starts. |
+| **What the work is** | Semantics rows + planner UI/API; explainable MAC buckets; history-benchmark units; edit + reset; DAP Ôëá MAC Ôëá controlled_cost. |
+| **Regression traps** | Do not auto-rewrite **approved** cost basis. Do not invent elasticity. Do not merge suggestions into actuals. |
+| **Behavior to retain** | Cost-basis as-of dates; `cost_basis_drift` flag; steward approval for master creates. |
+| **Out of scope** | Distributor **paid** recon (BACKLOG-092); customer promo-load recon (BACKLOG-093). |
+| **TRIGGER** | Lane B Unit 15 starts (history forecast + editable promo planner). |
+
+---
+
+## BACKLOG-093 ÔÇö Case-scoped customer sales recon for promo load correctness
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** ┬À 2026-08-08 ┬À `feat/a-lane-residual-closeout` |
+| **Effort** | Large (CST/customer-file join ├ù CPOR case window) |
+| **Source** | Warren 2026-08-01 A-lane wrap ÔÇö automated promo verification path |
+| **Idea** | For a specific CPOR case, reconcile **customer sales / sell-through files** against the caseÔÇÖs promo window and products to check whether the **customer loaded the promotion correctly** (price/units/timing vs approved support). |
+| **Why it matters / deferrable** | Closes the loop between approved CPOR and what the retailer actually ran. Deferrable until automated promo-ops path is prioritized; not needed to close A-lane. |
+| **What the work is** | Case-scoped recon surface: expected promo terms vs customer-file observed sell-through; exception buckets (missing load, wrong price, wrong window). Prefer shared import/steward patterns ÔÇö no one-off sync scripts as smoke. |
+| **Regression traps** | Sell-out (distiÔåÆreseller) Ôëá sell-through (retailerÔåÆend user). Do not treat DSI sell-out as customer promo load proof. |
+| **Behavior to retain** | CPOR case truth for approved support; CST facts as evidence; no auto-create masters. |
+| **Out of scope** | Distributor payment paid-vs-owed (BACKLOG-092); inventing claim ÔÇ£owedÔÇØ. |
+| **TRIGGER** | Warren starts automated promo-ops / asks for case-level customer-file promo recon **after** payment path is separate. |
+| **Resolution** | `GET /cpor/cases/{id}/promo-load-recon` + case detail **Promo load** tab; CST-only; buckets ok/missing_load/wrong_window/wrong_price/price_unknown/no_cst; 2% price tol. |
+
+---
+
+## BACKLOG-092 ÔÇö CPOR ÔÇ£paidÔÇØ vs owed ÔÇö distributor payment reconciliation
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** ┬À 2026-08-14 ┬À Unit 13 VERIFY PASS ÔÇö recon read model + Cases list/detail. Import path already shipped (`cpor_payment_evidence` + mapping profiles). |
+| **Effort** | Large (recon read model + Cases Payments/Recon grid; import already generic) |
+| **Source** | Warren 2026-08-01 (owed vs paid); 2026-08-12 payment evidence import; 2026-08-13 recon ask |
+| **Idea** | Tenant workbooks map onto **canonical CIP columns** (already: `PAYMENT_COLUMN_MAP` / `cpor_payment_mapping_profile`). Recon grid is those canonical fields, not Ken headers. Compare **paid** (evidence) vs **owed** (approved case support outstanding). |
+| **Locked ÔÇö owed (interim)** | Owed = approved case `ttl_support` (case currency) for non-cancelled cases. Paid = sum of `cpor_payment_evidence.amount` linked to the case with status in paid/processed/closed (tenant value-map). Outstanding = owed ÔêÆ paid. Declare FX when evidence currency Ôëá case currency ÔÇö never silent convert. FLAG rows with no approved support (owed unknown) rather than inventing `result_qty ├ù support_unit` as owed. |
+| **Why it matters / deferrable** | Paid Ôëá owed. File supply is done; recon is the remaining product. |
+| **What the work is** | Unit 13: recon API + Cases recon grid (canonical columns); profile mapper already exists ÔÇö extend if a new owed column appears in tenant files; partial-success; no auto-create masters. |
+| **Regression traps** | Do not rename ÔÇ£owedÔÇØ to ÔÇ£paidÔÇØ; do not use claim-evidence units as paid. |
+| **Behavior to retain** | Delivery rate; computed `ttl_result`; Payments tab; profile-mapped import. |
+| **Out of scope** | Inventing paid from result_qty ├ù support_unit; P3 widget canvas (Unit 14). |
+| **TRIGGER** | Fired ÔÇö Unit 13 VERIFY PASS. Reopen if owed formula changes (e.g. settlement-distinct owed) or line-grain paid recon is required. |
+
+---
+
+## BACKLOG-091 ÔÇö Rename PvE ÔÇ£Deal-stock landingÔÇØ tile ÔåÆ ÔÇ£Over-plan intakeÔÇØ
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Resolved 2026-08-01** ÔÇö UI label **Over-plan intake**; exception ÔÇ£Over-ships / over-plan intakeÔÇØ; API `over_plan_intake_*` aliases |
+| **Effort** | Trivial (UI string + tooltip; optional test ids) |
+| **Source** | `docs/COMMERCIAL_SEMANTICS.md` A1-02; Warren 2026-08-01 (end POD collision) |
+| **Idea** | Rename scorecard label ÔÇ£Deal-stock landingÔÇØ to **Over-plan intake** (and exception copy ÔÇ£Over-ships / deal-stockÔÇØ accordingly) so it cannot be read as POD landing. |
+| **Why it matters / deferrable** | Docs already renamed; live UI still says landing. Deferrable to next A1 touch. |
+| **What the work is** | `PlanVsExecutedView.tsx` (+ tests if they assert the string). |
+| **Regression traps** | Do not change the formula (still ╬ú max(SÔêÆP,0)); do not add POD. |
+| **Behavior to retain** | Same units/value secondary line. |
+| **Out of scope** | Shipping POD tiles. |
+| **TRIGGER** | **Next A1 unit** that touches Plan vs Executed UI. |
+
+---
+
+## BACKLOG-090 ÔÇö Channel Ops summary WoC mixes customer-grain velocity with channel stock
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Resolved 2026-08-01** ÔÇö sell-out velocity at distributor├ùproduct; portfolio ╬ústock/╬úvelocity |
+| **Effort** | Medium (need dist├ùproduct velocity or sell-out-derived velocity at same grain) |
+| **Source** | `docs/COMMERCIAL_SEMANTICS.md` A3-02; live code audit 2026-08-01 |
+| **Idea** | Fix Channel Ops weeks-of-cover so numerator and denominator share **distributor ├ù product** grain. |
+| **Evidence (wrong today)** | `GET /api/v1/channel-ops/summary` (`channel_ops.py` ~165ÔÇô181): `total_inv` = `sum_derived_channel_stock` (dist├ùproduct); `weeks_of_cover` = that stock ├À `avg(FactCustomerVelocity.velocity_52wk)`. `FactCustomerVelocity` is keyed **distributor ├ù product ├ù customer** (`fact_customer_velocity.py`). Averaging customer-grain rows against channel stock is a grain mismatch. Inventory tab (~360ÔÇô383) picks **max** customer `velocity_52wk` per product ÔÇö still customer-grain, not dist├ùproduct sell-out velocity. |
+| **Why it matters / deferrable** | Summary ÔÇ£weeks of coverÔÇØ on `/sell-out` is wrong on screen. Deferrable until A3 unit; do not patch with another mismatched average. |
+| **What the work is** | Define/implement velocity at dist├ùproduct (or document sell-out rate at that grain); wire summary + inventory WoC; zero velocity ÔåÆ undefined. |
+| **Regression traps** | Do not ÔÇ£fixÔÇØ by averaging harder; do not use CST `/channel-intelligence` customer├ùsite grain for Channel Ops. |
+| **Behavior to retain** | Derived stock latest-per-pair; `weeks_of_cover_or_none` near-zero ÔåÆ None. |
+| **Out of scope** | Replenishment engine (flag v1 only). |
+| **TRIGGER** | A3 weeks-of-cover / replenishment unit starts. |
+
+---
+
+## BACKLOG-089 ÔÇö Cost per incremental unit (promo) vs baseline
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Closed 2026-08-17** ÔÇö default `prior_window_same_sku_customer`; residual methods `comparable_median` and `velocity_extrapolate` implemented (tenant profile / `CIP_INCREMENTAL_BASELINE_METHOD`). Weak baseline still null + FLAG. |
+| **Effort** | Medium |
+| **Source** | Warren 2026-08-10 arc: proceed with best-practice baseline; `docs/COMMERCIAL_SEMANTICS.md` A2-X |
+| **Idea** | `cost_per_incremental_unit = support / max(0, result ÔêÆ baseline)` with tenant-configurable lookback; never alias A2-06. |
+| **Why it matters / deferrable** | Core promo effectiveness beyond support├Àqty. Richer methods now exist; default stays prior-window so sparse CST does not invent lift. |
+| **What the work is** | Done: semantics + `incremental_unit_cost.py` + portfolio payload + UI tile + tests. |
+| **Regression traps** | Do not ship placeholder that is just support├Àqty under another name. FLAG when baseline weak. |
+| **Behavior to retain** | A2-06 support├Àresult_qty remains separate. |
+| **Out of scope** | Inventing lift without sell-through history. |
+| **TRIGGER** | ÔÇö closed 2026-08-17 ÔÇö reopen only if a new baseline identity is required (do not alias A2-06). |
+
+---
+
+## BACKLOG-088 ÔÇö Propagate evidence `pod_date` to current view / facts (P1-D004)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Resolved** ┬À 2026-08-02 ┬À sticky POD write-path + view `20260802_0009` + fact backfill (5961 rows; 156 remain without evidence POD) on `fix/commercial-foundation-pod` |
+| **Effort** | Medium (apply-path / view COALESCE / optional fact backfill ÔÇö may need approved migration for view redefine) |
+| **Source** | `docs/P1_LOAD_DEFECT_LOG.md` P1-D004; Shipping owns POD (`docs/SURFACE_OWNERSHIP.md`); apply already copies `pod_date` on new writes (`shipment_inbound_facts.py`) |
+| **Idea** | Make Shipping landed/POD KPIs truthful: `shipment_evidence_current` and `fact_inbound_shipment` must expose the same `pod_date` as active `shipment_evidence_line` for shipped rows (COALESCE or rewrite observation/fact). |
+| **Why it matters / deferrable** | Landed-week / awaiting-POD cohorts under-count when fact/current omit POD that evidence has. Blocks truthful B2 landed-basis budget. |
+| **What the work is** | (1) Root-cause why current observation / older facts lack POD while evidence has it. (2) Fix write path and/or redefine current view. (3) Backfill facts only with approved data repair (clone-proof if destructive). (4) Prove Shipping `/shipping` landed/POD cohorts match evidence. |
+| **Regression traps** | Do **not** put POD completeness tiles on Plan vs Executed; do not gate fill on POD; do not invent a second lifecycle owner. |
+| **Behavior to retain** | Shipping = lifecycle authority; evidence is source of truth for POD; fill = shipped-basis. Sticky POD: later null snapshots must not clear a prior POD. |
+| **Out of scope** | Landing-quarter reattribution KPI (BACKLOG-068); PvE rebuild. |
+| **TRIGGER** | Warren prioritized 2026-08-02 (mapping-audit Q6). **Done:** observation sticky + fact sticky + view COALESCE + backfill script. |
+
+---
+
+## BACKLOG-087 ÔÇö ~~GitHub required status check~~ ÔÇö REMOVED
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Removed** ┬À 2026-08-09 ┬À Warren: will not purchase GitHub Pro; do not track |
+| **Note** | Process gate stays discipline-only: CI + `scripts/verify-gate`; no required status check on `main`. |
+
+---
+
+## BACKLOG-086 ÔÇö PM bulk upsert `channel_id` CASE + typed cast (redo `558d088`)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Closed ÔÇö not needed** ┬À 2026-08-16 ÔÇö `product_import_sync.py` VALUES/CASE has no `channel_id` (that column is on `dim_customer`, not the PM upsert). Date staging columns already use `cast(..., Date)`. The psycopg3 typeless-NULL `channel_id` CASE hazard cannot fire on this path. |
+| **Effort** | SmallÔÇôMedium |
+| **Source** | `fix/pm-bulk-upsert-coercion-and-sql-types` @ `558d088`; ROADMAP P0 item 3; hygiene session conflict abort |
+| **Idea** | Re-apply the psycopg3 typeless-NULL fix: typed casts on VALUES staging columns mixed with ORM columns in CASE (notably `channel_id`), plus any still-needed tabular coercion from that commit. |
+| **Why it matters / deferrable** | Untyped `None` ÔåÆ PostgreSQL `text` NULL; CASE vs Integer/Date ORM columns raises `DatatypeMismatch`. Real hazard on PM bulk upsert. Deferrable until next PM bulk-write / import-apply touch. |
+| **What the work is** | Redo natively on current `main` `product_import_sync.py` ÔÇö do **not** force-merge the old branch tip. Cherry-pick `558d088` already **conflicted** there (abort). |
+| **Conflict location** | `apps/api/app/services/catalog/product_import_sync.py` (main already has some date `cast()` work; `channel_id` CASE still missing / diverged). |
+| **Regression traps** | Project gotcha: wrap non-text VALUES staging columns in `cast(col, Type)` inside CASE/SELECT mixing ORM columns; string columns usually OK. Must prove with real DB execution (SQL validation rule), not mocks only. |
+| **Behavior to retain** | Existing PM upsert semantics / source keys; do not broaden into unrelated coercion unless still required after conflict resolve. |
+| **Out of scope** | Landing the whole `fix/pm-bulk-upsert-coercion-and-sql-types` branch; schema migrations. |
+| **TRIGGER** | Next PM bulk upsert / product-import-sync change; **or** a live `DatatypeMismatch` on `channel_id` CASE; **or** Warren prioritizes P0 item 3. |
+
+---
+
+## BACKLOG-085 ÔÇö Ops-list pagination chrome (fold into phase ÔÇö not standalone)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** ┬À 2026-08-15 fold on `feat/finish-roadmap` ÔÇö client AG Grid pagination (`OPS_LIST_GRID_PAGINATION`, page size 25) on CST steward, PO gap grid, and PM-gaps worklist. CPOR Cases already had URL `page`/`page_size` via `MasterDataGridShell`. PVE exception lists already had AG Grid pagination. Did not pull BACKLOG-084 URL helpers. |
+| **Effort** | Small (mechanical per page) |
+| **Source** | D-021 fuller diff; CST steward / CPOR / PM gaps / PO gap / PVE list paging chrome on ops-master |
+| **Idea** | When touching those ops list pages, bring skip/limit (or equivalent) pagination UX to the current route layout ÔÇö same fold-in rule as BACKLOG-079. |
+| **Why it matters / deferrable** | Consistency for long ops queues. **Do not schedule standalone.** |
+| **What the work is** | Native pagination on current postÔÇôUnit F routes; may use BACKLOG-084 helpers if still missing. |
+| **Regression traps** | Do not revive preÔÇôUnit F paths; do not pull channel-ops KPI or shippingUtcDates from ops-master (D-021 supersede). |
+| **Behavior to retain** | Existing filter/query contracts; Enterprise AG Grid pattern. |
+| **Out of scope** | Standalone pagination epic; ops-master merge. |
+| **TRIGGER** | Phase work that already edits the named ops list pages; **or** Warren asks for paging on a named page. |
+
+---
+
+## BACKLOG-084 ÔÇö Shared URL helpers (`useDebouncedUrlQuery` + `skipLimitSearchParams`)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Closed ÔÇö not needed** ┬À 2026-08-16 ÔÇö TRIGGER (fold with BACKLOG-079/085) already fired; 085 shipped client AG Grid paging without these helpers. No consumer needs a new shared URL skip/limit module; ops lists already use per-page `searchParams` or AG Grid paging. |
+| **Effort** | Small (mechanical) |
+| **Source** | D-021; ops-master shared helper modules used by ops list paging |
+| **Idea** | Debounced URL query sync + skip/limit search-param helpers for list pages. |
+| **Why it matters / deferrable** | Reduces duplicated URLÔåöfilter glue. Cheap to redo natively when a consuming page needs them. |
+| **What the work is** | Re-implement on `main` against current App Router patterns when first consumer needs them (often with BACKLOG-079/085). |
+| **Regression traps** | Do not import from deleted ops-master tip; keep debounce UX (~300ms) consistent with steward search where applicable. |
+| **Behavior to retain** | Shareable URL state for filters/paging. |
+| **Out of scope** | Pulling unrelated ops-master chrome. |
+| **TRIGGER** | First ops/list page change that needs URL-synced skip/limit or debounced query; **or** fold-in with BACKLOG-079/085. |
+
+---
+
+## BACKLOG-083 ÔÇö Customer merge companions (redirect, related-name, repair/backfill)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-07-29 ┬À extracted from `feat/ops-master-grid-shell-parity` per D-021 |
+| **Effort** | MediumÔÇôLarge |
+| **Source** | D-021 fuller diff; `customer_merge_redirect.py`, `customer_related_master_groups.py`, RelatedName UI, ops scripts `backfill_merged_customer_alias_seals.py` / `repair_open_channel_wrong_merge.py` (and peers on tip) |
+| **Idea** | Merge-engine adjacent surfaces: follow redirects after merge, related-name worklist for subset merges, repair/backfill scripts for wrong OPEN_CHANNEL / seal gaps. |
+| **Why it matters / deferrable** | Completes alias-seal (BACKLOG-081) into a safe merge story. Deferrable until merge-heavy steward wave. |
+| **What the work is** | Rebuild against current `main` merge APIs; **clone-proven end-to-end** before claiming done (project clone-gate / disposable DB rule ÔÇö not mock-only). |
+| **Regression traps** | Merge-engine adjacent ÔÇö wrong redirect or related-name mapping corrupts identity; OPEN_CHANNEL must not absorb wrong merges; scripts must verify `current_database() = cip` (or disposable clone) before writes. |
+| **Behavior to retain** | Steward-initiated merges only; no auto-create dims from import evidence. |
+| **Out of scope** | Alias seal core (BACKLOG-081); ops-master wholesale merge. |
+| **TRIGGER** | Pairs with BACKLOG-081 when customer-duplicate cleanup is prioritized; **or** Warren schedules merge-engine wave. |
+
+---
+
+## BACKLOG-082 ÔÇö DSI header vocabulary ÔåÆ template config (ASUS seed + denylist; D-022)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** ┬À 2026-08-01 ┬À P1-1 ÔÇö `20260730_0075` applied on cip; `_policy` on `distributor_inventory`; precedence memory>alias>heuristic; pytest header suite 20/20. **Re-verified in tree 2026-08-15** (`template_definitions.py` `_policy`; `build_initial_dsi_field_mapping` memory last; no tenant header literals in `dsi_mapping_workflow.py`). Do not re-implement. |
+| **Effort** | Medium |
+| **Source** | D-022; ROADMAP P0 item 1 ÔåÆ pulled into P1 as DSI load-blocker; stash `park-dsi-asus-dealer-name-automap` (knowledge only ÔÇö implementation dropped) |
+| **Idea** | Retire hardcoded header strings in `dsi_mapping_workflow.py`. Per-template header-alias map + never-auto-map denylist. Precedence: **confirmed memory > template alias > heuristic** (today `apply_exact_raw_customer_header_overrides` beats memory ÔÇö backwards). |
+| **Why it matters / deferrable** | Mis-mapped identity columns poison customer resolution / aliases permanently. **Not deferrable inside P1** ÔÇö blocks clean ASUS weekly load (P1-2). |
+| **What the work is** | Config surface for template aliases + denylist; migrate RAW/ASUS seeds; fix precedence; remove literal tenant headers from workflow heuristics (config lives in `template_definitions`). |
+| **ASUS template seed (from stash ÔÇö domain knowledge only)** | **Map:** `Dealer Name` ÔåÆ `customer_dealer_token` (Source customer name); prefer RAW `Customer name` when both present; `Dealer Name Group` ÔåÆ `dealer_group_token`; `ASUS Part No.` ÔåÆ `product_identifier`; prefer `Unit Price` over `Total Price` / line totals. **Never auto-map (denylist):** `Customer Code (Dealer Code)`; `Dealer Name 1` (and `dealer_name_1` / `dealer-name-N` pattern). Also treat distributor dealer-code headers (`dealer code`, `customer code`+`dealer`) as non-identity. |
+| **Regression traps** | Do not land stash implementation as constants; do not let heuristic override confirmed memory; denylist must clear prior wrong maps on those columns. |
+| **Behavior to retain** | Steward-confirmed mapping memory wins; FLAGÔëáBLOCK leftovers stay reviewable. |
+| **Out of scope** | Landing `park-dsi-asus-dealer-name-automap` as written; new importer surfaces. |
+| **TRIGGER** | **Fired** ÔÇö P1 entered; implement as P1-1 before P1-2 DSI weekly. |
+
+---
+
+## BACKLOG-081 ÔÇö Customer merge alias seal
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-07-29 ┬À extracted from `feat/ops-master-grid-shell-parity` per D-021 |
+| **Effort** | MediumÔÇôLarge |
+| **Source** | D-021 extract; branch tip `customer_merge_alias_seal.py` |
+| **Idea** | On full customer merge, mint approved aliases from loser display names ÔåÆ keeper so future DSI resolution does not re-steward merged tokens. |
+| **Why it matters / deferrable** | Without seal, merged customers keep reappearing as unresolved steward work. Deferrable until a merge-heavy steward wave or P1 entity-resolution volume forces it. |
+| **What the work is** | Port/rebuild seal against current `main` (postÔÇôUnit F / postÔÇôBACKLOG-061). Companions ÔåÆ BACKLOG-083. |
+| **Regression traps** | Never overwrite third-party aliases; never abort merge on conflict; OPEN_CHANNEL must not absorb wrong merges; idempotent seal; clone-proven E2E when paired with BACKLOG-083. |
+| **Behavior to retain** | Steward-initiated merges only; no auto-create dims from import evidence. |
+| **Out of scope** | Redirect / related-name / repair scripts (BACKLOG-083); ops-master wholesale merge. |
+| **TRIGGER** | P1 steward volume shows re-open tokens after merges; **or** Warren prioritizes customer-duplicate cleanup. |
+
+---
+
+## BACKLOG-080 ÔÇö CST article-alias batch Confirm/Reject (partial-success envelope)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-07-29 ┬À extracted from `feat/ops-master-grid-shell-parity` @ `bf2afd4` per D-021 |
+| **Effort** | SmallÔÇôMedium |
+| **Source** | D-021; commit `bf2afd4` ÔÇö `cst_steward.py` batch endpoints + `/admin/cst-steward` UI |
+| **Idea** | Batch Confirm/Reject for CST article aliases with partial-success envelope (not only per-row). |
+| **Why it matters / deferrable** | Operators waste time confirming aliases one-by-one before P3. Deferrable until CST ops volume rises; import-steward CST E1/E2 already shipped separately. |
+| **What the work is** | Re-implement batch confirm/reject + UI against current `cst_steward` on `main` (do not merge ops-master wholesale). |
+| **Regression traps** | Partial success must surface per-id failures; do not confuse with CST **import** token steward (`D-018` ÔÇö Import Centre path). |
+| **Behavior to retain** | Per-row confirm/reject still works; no silent apply to facts. |
+| **Out of scope** | CST historical backfill; import-job resolution plan (already BACKLOG-074 shipped). |
+| **TRIGGER** | P3 CST forward pilot; **or** `/admin/cst-steward` alias queue volume justifies batch. |
+
+---
+
+## BACKLOG-079 ÔÇö Ops-list MasterDataGridShell parity (fold into phase ÔÇö not standalone)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Partial** ┬À 2026-08-15 ÔÇö PageHeader crumbs/titles on COMMERCIAL_SEMANTICS owning routes shipped (`navPageChrome` from `navConfig`; group hub hrefs). CPOR Cases list remains on `MasterDataGridShell`. **Do not** wrap PvE scorecard or PM-gaps worklist in that shell (D-021 / Warren 2026-08-15). Shipment evidence already has `ModuleGridToolbar` + Enterprise AG Grid. Remaining shell wrap is not a standalone project. |
+| **Effort** | Medium (mechanical per page) |
+| **Source** | D-021; commits `ddb712c`ÔÇª`d789ad9` ÔÇö shell on CPOR cases, PM gaps, shipment evidence, PVE |
+| **Idea** | Re-apply `MasterDataGridShell` / ops list chrome to CPOR cases, product-master gaps, shipment evidence, PVE exception lists when those pages are touched. |
+| **Why it matters / deferrable** | Masters already have the shell (BACKLOG-061 Theme B on main). Ops lists lag for consistency. **Do not schedule as a standalone project** ÔÇö fold into whichever phase next edits those pages (P1 / A-lane touch CPOR and PM gaps). |
+| **What the work is** | Native re-application on current routes (postÔÇôUnit F `shipment-evidence/` paths). Pagination ÔåÆ BACKLOG-085; URL helpers ÔåÆ BACKLOG-084. |
+| **Regression traps** | Do not revive preÔÇôUnit F paths; do not force community AG Grid (`fix/web-grid-community-stabilization` rejected). Per D-021: **do not resurrect** channel-ops KPI cards or `shippingUtcDates.ts` from ops-master ÔÇö superseded by mainÔÇÖs commercial KPI rebuild. |
+| **Behavior to retain** | Enterprise AG Grid pattern; existing filters/paging contracts. |
+| **Out of scope** | Standalone ÔÇ£ops shell parityÔÇØ epic; KPI/shippingUtcDates from ops-master; merging the whole ops-master branch. |
+| **TRIGGER** | Phase work that already edits CPOR cases / PM gaps / shipment evidence / PVE pages; **or** Warren asks for chrome parity on a named page. |
+
+---
+
+## BACKLOG-075 ÔÇö Unit F remainder (DSI relocate + inboundEvidence + rename shared helpers)
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Shipped** ┬À Unit F Tiers 1ÔÇô3 ┬À 2026-07-27 |
+| **Effort** | Large (Tier 1ÔÇô3 from `.tmp/unit_f_inventory.md`) |
+| **Source** | Steward contract Known-gap Unit F; inventory 2026-07-27; Tier 0 orphan retire shipped same day |
+| **Shipped as** | `inboundEvidence*` ÔåÆ `shipment-evidence/`; DSI cluster ÔåÆ `admin/imports/dsi/`; shared helpers ÔåÆ `steward*` in `import-steward/`; DSI filter logic ÔåÆ `dsi/dsiStewardCandidateFilterLogic` |
+| **TRIGGER** | ~~After E2 commit lands; **or** Warren prioritizes import-steward barrel cleanup before next importer.~~ **Fired** ÔÇö Warren finished Unit F. |
+
+---
+
+## BACKLOG-074 ÔÇö CST import steward E2 (resolution-plan compute/apply-async)
+
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Shipped** ┬À Unit E2 ┬À 2026-07-27 |
+| **Effort** | Medium (mirror CPOR D-013 plan path + web toolbar) |
+| **Source** | Unit E CONSULT NEED_HUMAN + Warren no-Opus E1 authorization; D-018; contract v1.5 Known-gap |
+| **Shipped as** | `cst_resolution_plan*.py` + `/jobs/{id}/cst-resolution-plan*` endpoints + `CST_IMPORT_ENGINE_CONFIG` + `SLOT_CST_RESOLUTION_PLAN` (D-019) |
+| **TRIGGER** | ~~Unit E1 Opus VERIFY PASS (or Warren waives VERIFY); or Warren prioritizes CST plan async before Unit F.~~ **Fired** ÔÇö Warren prioritized E2 (VERIFY waived). |
+
+---
+
+## BACKLOG-078 ÔÇö DSI layout-coalesce follow-ons (templates, fuzzy match, sheet-exclude UI)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-07-20 ┬À renumbered from multifile **075** on 2026-07-27 merge |
+| **Effort** | MediumÔÇôLarge |
+| **Source** | Fable CONSULT U6 READY (2026-07-20) + browser smoke job 553: presentation layout tabs shipped; API `dsi_excluded_mapping_keys` works; UI still lacks Exclude-sheet control on layout tab. |
+| **Idea** | (1) Cross-batch layout memory/templates so next weekÔÇÖs same layouts auto-map. (2) Fuzzy/near-match layout grouping (superset headers). (3) Mapping-step UI to exclude undateable sheets (calls existing exclusions endpoint). (4) Optional per-member stamp chips inside a layout group. |
+| **Why it matters / deferrable** | Operators still re-map weekly and must API/hack sheet exclude for junk Sell out sheets. Core coalesce + stamps soak first. |
+| **What the work is** | UI exclude sheet; persist layoutÔåÆmapping templates per source; optional fuzzy signature; stamp chips in group panel. |
+| **Regression traps** | Do not re-key `field_mapping` away from `file::sheet`; do not auto-apply facts; stamps stay confirm-always. |
+| **Behavior to retain** | One capable job; layout tabs with fan-out; detach/map separately; Dist/Period file stamps. |
+| **Out of scope** | Exact-header batch splits (capability-merge locked). |
+| **TRIGGER** | After job 553 (or successor) weekly soak completes stewardÔåÆapply; **or** Warren hits undateable sheet again without API; **or** operators ask for ÔÇ£remember this layoutÔÇØ. |
+
+---
+
+## BACKLOG-077 ÔÇö DSI weekly email-attachment auto-ingest (mailbox ÔåÆ propose queue)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-07-18 ┬À **Shipping slice in progress** 2026-08-18 on `feat/mailbox-ingest-shipping` (Graph ÔåÆ `inbound_shipments` after IMAP basic auth disabled on ASUS M365; not DSI batch-propose). DSI/CST retain original ÔÇ£review-queue only / never silent applyÔÇØ trap until re-consulted. |
+| **Effort** | Large (mailbox connector + allowlist + activity-feed failures + same propose/batch path) |
+| **Source** | Warren product discussion (2026-07-18): weekly DSI ops speed ÔÇö email attach ÔåÆ app auto-upload; agree not silly, but premature until unified multi-file batch + mapping autosave + per-file distributor stamps soak-stable. |
+| **Idea** | Inbound mailbox (allowlisted senders) drops attachments into the existing DSI **batch-propose** path: capability merge (one job for all mappable files), mapping memory, file stamps, steward queue. Never silent apply to facts. |
+| **Why it matters / deferrable** | Removes manual DownloadsÔåÆupload friction for weekly MUSTEK/PINNACLE/etc. Deferrable while batch UX still soaking; email would amplify wipe/gate/automap breakages. |
+| **What the work is** | (1) Mailbox/poll or webhook + attachment extract. (2) Sender/subject/filename ÔåÆ source_id rules. (3) Call same `batch-propose` / `batch-jobs` as UI. (4) Land jobs in Import Centre review (mapping/stamps/steward). (5) Activity-feed FLAG on parse/auth failures ÔÇö no silent drop. (6) Ops runbook for mailbox credentials. |
+| **Regression traps** | No auto-create masters; no skip steward; no auto-apply; do not invent a second ingest pipeline; respect weekly vs historical mode; FLAGÔëáBLOCK leftovers stay reviewable. |
+| **Behavior to retain** | Unified multi-file capability batch (not exact-header splits); per-file distributor stamps; durable mapping autosave; one steward surface for sell-out + SOH. |
+| **Out of scope** | Silent fact apply from email; arbitrary public inbox; splitting sell-out vs SOH into separate steward products. |
+| **TRIGGER** | Weekly multi-file batch soak passes (stamps + autosave + no mapping wipe) **and** Warren prioritizes mailbox ingest; **or** operators request email drop as the weekly intake path. |
+
+---
+
+## BACKLOG-073 ÔÇö Import-job fact rollback / purge (test-junk cleanup; not park/exclude)
+
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-07-10 |
+| **Effort** | Large (per-importer fact contracts + audited purge + UI gate) |
+| **Source** | Warren U-G2 smoke (2026-07-10) + Fable CONSULT: customers blocked from hard-delete by sell-out refs are **test import junk**, not bad production data. Park/exclude makes the master look messy and is the wrong tool (TMP provisional workflow only). Cheap default-hide of dispositioned rows **refused**. |
+| **Idea** | Governed **import-job rollback/purge**: remove the junk **facts** (and related staging) that a test import wrote, so orphaned `dim_customer` / `dim_product` / `dim_distributor` hard-delete unblocks via existing usage guards ÔÇö without weakening fact immutability for real sell-out. |
+| **Why it matters / deferrable** | Test junk masters clutter admin grids and cannot be deleted while facts remain; operators need a clean path. Deferrable while real commercial data is healthy and junk is confined to known test jobs on cip/dev. |
+| **What the work is** | (1) Discovery: which importers/jobs mint facts that block master delete (DSI sell-out first). (2) Preview: job ÔåÆ fact counts by table + affected dim ids. (3) Confirm purge: audited, chunked deletes of **that jobÔÇÖs** facts/staging only (respect latest-job-wins vs transaction-immutable contracts). (4) Then steward may hard-delete unreferenced dims. (5) Hard gate: never available as casual ÔÇ£delete customer with historyÔÇØ ÔÇö job-scoped only. |
+| **Regression traps** | Do **not** delete sell-out from the customer master delete UI; do not reassign FKs to OPEN_CHANNEL/sink to fake-clean; do not loosen `customer_usage` blockers for prod convenience; do not use park/exclude as archive; FLAGÔëáBLOCK leftovers must stay reviewable. |
+| **Behavior to retain** | Hard-delete blocked while refs exist; park/exclude stays TMP no-code disposition only; merge soft-redirect for real duplicate identity. |
+| **Out of scope** | Default-hiding parked/excluded rows as a substitute; prod cascade-purge tool; inventing `archived` status until a real-facts/no-merge case appears. |
+| **TRIGGER** | Warren prioritizes cleaning test-import junk from cip/admin masters; **or** operators cannot promote/steward because TMP/test dims dominate lists; **or** after BACKLOG-061 Theme B (U-G2/U-B2) when master UX cleanup is next. |
+
+---
+
+## BACKLOG-070 ÔÇö Frontend ESLint v9 flat-config gap (repo-wide lint broken)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Shipped 2026-08-15** ÔÇö CI + local lint gate via `ESLINT_USE_FLAT_CONFIG=false` (legacy eslintrc shim). `pnpm lint` is 0 errors; 51 `react-hooks/exhaustive-deps` warnings remain and are **not** a mass-fix. Full ESLint 9 `eslint.config.js` migration is still out of scope. |
+| **Effort** | SmallÔÇômedium (web + root lint wiring) |
+| **Source** | Agent session (2026-07-08): shipment apply hardening gate; `eslint` v9 installed; no `eslint.config.js` / flat config; `eslint .` fails repo-wide; `ESLINT_USE_FLAT_CONFIG=false` required for Next.js only; zero enforced frontend lint in default dev path. |
+| **Idea** | Restore a single working lint entrypoint for `apps/web` and shared packages ÔÇö either adopt ESLint 9 flat config (Next.js-compatible) or pin/document the legacy config path in CI and `pnpm lint`. |
+| **Why it matters / deferrable** | Drift accumulates without lint gate; deferrable while Vitest + typecheck cover critical paths. |
+| **What the work is** | Done as the legacy-shim path: job env `ESLINT_USE_FLAT_CONFIG=false`; CI `pnpm lint` + `pnpm typecheck`; root `typecheck` script. Do not mass-fix hook warnings. |
+| **Regression traps** | Breaking Next.js 15 ESLint plugin; duplicate configs; CI false greens. |
+| **Behavior to retain** | `pnpm test:web` unchanged; no rule thrash without cause. |
+| **Out of scope** | Full design-system lint overhaul; ESLint 9 flat-config rewrite. |
+| **TRIGGER** | ÔÇö shipped ÔÇö reopen only for a dedicated `eslint.config.js` migration or if CI lint runs without the legacy env and fails. |
+
+---
+
+## BACKLOG-071 ÔÇö Clone-gate tooling: pg_dump/pg_restore not on shell PATH
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** ┬À 2026-08-16 ÔÇö `scripts/ops/clone_cip_db.py` resolves `PG_BIN`, refuses clone target `cip`; documented in LOCAL_DEV_WINDOWS + docker README. |
+| **Effort** | Small (docs + helper script) |
+| **Source** | Agent session (2026-07-08): shipment apply clone gate; `pg_dump` not on PATH in PowerShell; binaries at `C:\Program Files\PostgreSQL\18\bin\`; gate used explicit full paths; prior session used `CREATE DATABASE ÔÇª TEMPLATE cip` (not pg_dump proof). |
+| **Idea** | Standardize disposable clone creation for destructive-class gates: `scripts/ops/clone_cip_db.py` wrapping explicit `pg_dump`/`pg_restore` paths (Windows + Linux), env override for bin dir, refuse `current_database()='cip'` writes. |
+| **Why it matters / deferrable** | Agents substitute synthetic/template clones when PATH fails ÔÇö invalid proof. Deferrable until next clone gate. |
+| **What the work is** | (1) Document `PG_BIN` / `SMOKE_ADMIN_PASSWORD` in ops README. (2) Shared clone helper used by Plan D + shipment gates. (3) Optional: add PostgreSQL bin to dev PATH in onboarding doc. |
+| **Regression traps** | Cloning while cip has active connections; wrong admin creds; partial restore. |
+| **Behavior to retain** | Never write to `cip` from gate scripts; drop clone after proof. |
+| **Out of scope** | Cloud/Supabase clone automation. |
+| **TRIGGER** | Any future clone-gate or destructive-class apply proof task. |
+
+---
+
+## BACKLOG-068 ÔÇö Landing-quarter attribution for landed-basis KPI (pod_date)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** ┬À 2026-08-12 ┬À Unit 7 on `feat/backlog-068-landed-quarter` ÔÇö Shipping lineup-quarter summary exposes `landed_this_quarter_units` (pod_date quarter) + `shipped_not_landed_units`; PvE fill unchanged. |
+| **Effort** | Medium (recon read model gains a landed sub-state + landing-quarter reattribution; new KPI surface; no schema ÔÇö `pod_date` already on evidence + fact) |
+| **Source** | PvE shipped/pipeline taxonomy fix (2026-07-07). Fill rate now correctly counts `line_state='shipped'` only, but recon still has **no landed gate**: `reconcile_case` reads `resolved_customer_id, product_id, quantity, amount, unit_price` ÔÇö never `pod_date`. Confirmed on cip: of shipped-state units on linked POs, ~3% (88 rows / 5,331 units) have `pod_date IS NULL` (shipped, in-transit, not yet delivered) yet are credited as executed in the plan quarter. `docs/PLAN_VS_EXECUTED_SHIPPED_TAXONOMY.md` ┬ºLanded. |
+| **Idea** | Add **Landed** as a sub-state of Shipped (`pod_date IS NOT NULL`) and, for a **landed-basis sales KPI**, attribute landed units to the **quarter they landed** (pod_date quarter), not the plan quarter. PvE v1 fill deliberately stays plan-quarter shipped-basis; landed is an additional lens, not a replacement. |
+| **Why it matters / deferrable** | Sales/finance care about stock that actually **arrived** in a period (revenue recognition, sell-in timing). Deferrable because v1 fill (shipped-basis) is now correct and the shipped-not-landed gap is small (~3%); becomes material when landed-basis reporting or DSI landing attribution is scoped, or when transit times lengthen. |
+| **What the work is** | (1) ~~Decide the KPI contract~~ **Decided 2026-07-30:** A1 v1 stays shipped-basis ungated; form = separate "Landed this quarter" tile + shipped-not-landed sub-signal (not landed-basis fill). (2) `reconcile_case` (or a sibling read) reads `pod_date`; split shipped into shipped-not-landed vs landed; optionally reattribute landed units to pod_date quarter. (3) Surface a Landed tile + shipped-not-landed pending sub-signal. (4) Tests: landed excluded from a plan-quarter landed KPI until pod_date present; reattribution to landing quarter. **P1 obligation:** shipment census reports `pod_date` present vs NULL % (measurement only ÔÇö not this build). |
+| **Regression traps** | Do NOT gate v1 shipped-basis fill on landed (keep the two lenses distinct); do not double-count a unit in both plan quarter (shipped) and landing quarter (landed) within the same KPI; `pod_date` is nullable ÔÇö null must mean "not landed yet", never "excluded"; no migration (fields exist). |
+| **Behavior to retain** | Shipped-basis fill = `line_state='shipped'` (BACKLOG-068 does not change it); pipeline = `open_order`; shipping module remains lifecycle authority for `pod_date`. |
+| **Out of scope** | Cancellation modeling (BACKLOG-063); sell-through/velocity (DSI); changing the shipped/pipeline gate; branch/location tagging; re-opening A1 fill gating (settled ungated). |
+| **TRIGGER** | When **Shipping** (not PvE) scopes landing-quarter reattribution / budget consumption lens; **or** transit lag makes shipped-not-landed gap material. Prerequisite: BACKLOG-088 POD propagation so measurement is truthful. |
+
+---
+
+## BACKLOG-067 ÔÇö Backfill file-provenance gap (unified_lineup / bulk_backfill paths)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-07-06 |
+| **Effort** | Medium (wire `RawFileMetadata` + `StorageBackend.save` on unified/bulk paths **or** document intentional omission + archive path contract) |
+| **Source** | PO Management identical-BU-pairs forensic audit (2026-07-06): implicated cases from `unified_lineup` and `bulk_lineup_backfill` have **empty** `raw_file_metadata`; original `.xlsx` bytes **not recoverable** from disk. Standard `imports.py` upload path persists bytes via `StorageBackend.save()` + `RawFileMetadata.storage_key`. Evidence: `.tmp/audit_po_recon_identical_bu_pairs_output.json` provenance samples. |
+| **Idea** | Close the auditability hole: backfill/unified lineup imports should retain original uploaded bytes (or a durable archive pointer) the same way the standard import pipeline does. |
+| **Why it matters / deferrable** | `CommercialLineupLine.raw_row_payload` + `source_row_number` suffice for **DB-only** fingerprint/duplication audits today. Deferrable until file-level re-audit or compliance requires source retention. Critical for a product whose wedge is auditability when stewards must re-open the workbook. |
+| **What the work is** | (1) Trace unified-import and bulk-backfill dispatch ÔÇö where file bytes go after parse. (2) Either persist via existing `RawFileMetadata` pattern or formalize external archive path + DB pointer. (3) Verify read path for steward re-download. (4) Document which paths guarantee retention vs heuristic `file_name` only. |
+| **Regression traps** | Do not break async parse fan-out; do not store secrets in `staged_metadata`; large archive backfills may need size guards; disposable-smoke DBs should not inherit prod storage keys. |
+| **Behavior to retain** | `raw_row_payload` on parsed lines; `import_job_id` + `file_name` on cases; standard import path retention unchanged. |
+| **Out of scope** | Re-parsing all historic cases; changing rollup projection (`1586f1e`). |
+| **TRIGGER** | When **file-level re-audit or re-ingest of backfill cases** is needed; **or** before **multi-tenant onboarding** where source retention is a compliance expectation. |
+
+---
+
+## BACKLOG-066 ÔÇö #39/#40 duplicate-ingestion repair (ACZA Q1 2025 Consumer Lineup)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-07-06 |
+| **Effort** | Small (steward supersession of duplicate case; disposable-clone proof before apply) |
+| **Source** | `check_lineup_duplicate_ingestion` on cip (2026-07-06): one workbook `Product Lineup/NB/2025/Q1/1. ACZA Q1 2025 Consumer Lineup - Sales.xlsx` parsed into **two** active cases ÔÇö **#39** (NR) and **#40** (NV) ÔÇö identical 72-line fingerprint (`source_row_number`, `product_id`, `quantity_units`). Pre-`6b84187` fan-out; forward fix did not repair existing rows. Evidence: identical-BU-pairs audit JSON in `.tmp/`. |
+| **Idea** | Repair via **steward panel** ÔÇö soft-supersede the duplicate case (`commercial_status=superseded`, `superseded_by_case_id` on keeper), never raw SQL delete. Test on disposable clone before apply on `cip`. |
+| **Why it matters / deferrable** | After rollup projection (`1586f1e`), duplicated lines **double-count within a BU group** wherever both cases link into the same period├ùproduct_line group (e.g. 24Q4 PF/NR share cases 39+40). Deferrable until data-hygiene unit or before intelligence view is trusted on affected periods. |
+| **What the work is** | (1) Confirm keeper case (correct BU label for workbook intent). (2) Supersede loser via existing supersession workflow. (3) Re-run `check_lineup_duplicate_ingestion` ÔåÆ 0 clusters. (4) Verify PO Management backlog for 24Q4/25Q1 affected groups. |
+| **Regression traps** | Do not delete cases or lines; do not break `commercial_lineup_case_po` links without steward review; preserve `raw_row_payload` on keeper; no special-case filters in `backlog()` ÔÇö fix data not projection. |
+| **Behavior to retain** | Latest-wins supersession semantics (`20260701_0065`); PO links on keeper case; projection logic unchanged. |
+| **Out of scope** | Bulk repair of all historical duplicate-ingestion clusters; changing parse fan-out for new imports (separate if still needed). |
+| **TRIGGER** | **Next data-hygiene unit**; **or** before **intelligence view** is trusted on periods where cases **#39** / **#40** (or successor duplicates) participate in linked PO reconciliation. |
+
+---
+
+## BACKLOG-054 ÔÇö Disposable-smoke migrate safety gap (`DATABASE_URL_SYNC_MIGRATE` fall-through)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** ┬À 2026-08-16 ÔÇö alembic `resolve_alembic_migrate_url` hard-fails when migrate URL is `cip` while sync URL is not; `CIP_SMOKE_MIGRATE=1` requires both URLs set to the same non-`cip` DB. Ordinary `cip` upgrades unchanged. |
+| **Effort** | Small (env override checklist + optional guard in alembic preflight or smoke helper script) |
+| **Source** | Spec C Step A session (2026-07-01): disposable `cip_alembic_smoke` migration smoke briefly applied `20260701_0064` to `cip` because `DATABASE_URL_SYNC` alone was overridden while `DATABASE_URL_SYNC_MIGRATE` in `.env` still pointed at `cip`. Caught and downgraded before review; approved apply to `cip` followed in a separate step. |
+| **Idea** | Disposable-smoke migrate runs must **never** fall through to `.env`'s `DATABASE_URL_SYNC_MIGRATE` (which points at `cip` for local dev). Require **both** `DATABASE_URL_SYNC` and `DATABASE_URL_SYNC_MIGRATE` in the smoke override set; optionally refuse `alembic upgrade` when a smoke-run marker is set and the resolved migrate DB is `cip`. |
+| **Why it matters / deferrable** | A single missed override can mutate the shared dev DB during what was meant to be a read-only or disposable clone test. Deferrable until the next disposable-smoke migration ÔÇö but the inverse mistake (smoke env left set ÔåÆ downgrade hits wrong DB) is equally dangerous. |
+| **What the work is** | (1) Document in `AGENTS.md` / dev notes: smoke migrate requires **both** sync URLs overridden to the disposable DB name. (2) Optional: `scripts/ops/` or `.tmp/` helper that prints resolved migrate URL + `current_database()` and aborts if target is `cip` when `CIP_SMOKE_MIGRATE=1`. (3) Update migration smoke test docs to set `DATABASE_URL_SYNC_MIGRATE` explicitly. |
+| **Regression traps** | Do not block legitimate `cip` upgrades when env is clean; do not change default `.env` migrate URL semantics for normal dev; `get_settings()` LRU cache must be cleared or subprocess used when testing overrides. |
+| **Behavior to retain** | `database_url_sync_migrate` optional override for postgres-superuser migrations on `cip`; disposable clone workflow via `cip_alembic_smoke` template. |
+| **Out of scope** | Changing Alembic revision chain; auto-creating smoke DB in CI. |
+| **TRIGGER** | Before the **next** disposable-smoke migration run; **or** any session that runs `alembic upgrade` with partial env overrides. |
+
+---
+
+## BACKLOG-055 ÔÇö Lineup BU resolver thresholds provisional (25% / 5% guesses)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-07-01 |
+| **Effort** | Small (distribution audit + constant retune + tests; no schema) |
+| **Source** | Spec C Step A (`lineup_business_unit_resolution.py`): `PRODUCT_DERIVED_MIN_RESOLVED_FRACTION = 0.25` and `LIKELY_NOT_LINEUP_RESOLUTION_RATE = 0.05` mirror product-line inference guesses, not empirical lineup-archive rates. |
+| **Idea** | Retune product-tier win threshold and `bu_likely_not_lineup` cutoff from **real** resolution-rate distribution after bulk backfill ÔÇö thin-catalogue BUs (accessories, networking) may legitimately resolve low without being PF spec-dumps. |
+| **Why it matters / deferrable** | Wrong thresholds either false-flag real lineups as `bu_likely_not_lineup` or let spec-dumps through on sheet/folder fallback. Deferrable until Step C produces a resolution-rate histogram across ~30+ archive files. |
+| **What the work is** | (1) After Step C backfill, aggregate per-sheet `product_resolution_rate` + flag rates by BU/folder. (2) Adjust `PRODUCT_DERIVED_MIN_RESOLVED_FRACTION` / `LIKELY_NOT_LINEUP_RESOLUTION_RATE` with documented percentiles. (3) Add regression tests for thin-catalogue BU files if any exist in archive sample. |
+| **Regression traps** | Do not block linking/reconcile on low resolution (flags only); do not conflate `product_line` majority with `business_unit`; preserve multi-BU and label-mismatch flags independent of threshold retune. |
+| **Behavior to retain** | BU derivation tier order (product ÔåÆ shipment ÔåÆ sheet ÔåÆ folder ÔåÆ manual); flag Ôëá block. |
+| **Out of scope** | Changing product resolution tiers; DSI eligibility. |
+| **TRIGGER** | After **first full lineup backfill** (Spec C Step C) produces a resolution-rate distribution; **or** steward reports systematic false `bu_likely_not_lineup` / wrong product-tier wins on thin-catalogue files. |
+
+---
+
+### Q4 ÔÇö Supersession retention
+
+**RESOLVED 2026-07-01.** Soft latest-wins ÔÇö superseded case retained + flagged, not deleted. See ┬º7.
+
+---
+
+## BACKLOG-059 ÔÇö Catalogue upload: explicit column semantic mapping + cross-check fallback
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-07-01 |
+| **Effort** | Medium (mapping UI + validation + fallback cross-check rules) |
+| **Source** | Spec C production-ready pass (2026-07-01): `dim_product.business_unit` (division) vs `product_line` (folder-grain BU) trap exposed by bulk backfill BU resolver fix; same class of error one level up on catalogue import column mapping. |
+| **Idea** | On catalogue (Product Master) import, each source column must be **explicitly mapped** to its semantic role ÔÇö product line / folder-grain BU vs division (`business_unit`) vs series vs other attributes ÔÇö so relationships build correctly. Add a **fallback cross-check** against a second mapped column when the primary mapped column looks mislabelled or gamed (e.g. division values in a product_line slot). |
+| **Why it matters / deferrable** | Silent mis-mapping poisons entity resolution, BU inference, and lineup backfill product-tier corroboration. Deferrable until second-tenant catalogue onboarding when column layouts may diverge from ACZA conventions. |
+| **What the work is** | (1) Extend catalogue import mapping to require semantic role per column (not just field name). (2) Post-map validation: flag when mapped `product_line` values look like division codes or vice versa. (3) Optional second-column majority cross-check when primary column fails sanity rules. (4) Steward surface to confirm/correct before commit. |
+| **Regression traps** | Do not auto-rewrite mapped values; do not conflate `product_line` with `business_unit` in persistence; preserve existing PM upsert keys and steward governance. |
+| **Behavior to retain** | PM owns products; import evidence is evidence; no auto-create without steward approval. |
+| **Out of scope** | Lineup bulk backfill resolver; DSI product tiers. |
+| **TRIGGER** | Before **second-tenant catalogue onboarding**; **or** steward reports division/product_line mis-mapping on a new catalogue file layout. |
+
+---
+
+## BACKLOG-060 ÔÇö Bulk backfill post-apply completion UX (progress, summary, next-step CTAs)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-07-02 |
+| **Effort** | Medium (dialog apply-step state machine + read-only session status endpoint + activity-feed registration fix; optional bell aggregation) |
+| **Source** | Warren session (2026-07-02): first live bulk backfill apply on `cip` ÔÇö 31 `parse_lineup_case` tasks succeeded in Celery worker, but `BulkLineupBackfillDialog` closed immediately with no success signal; operator had to read worker logs. Chat proposal (same session): layered completion UX vs `UnifiedLineupImportDialog` (stays open with per-file results + bell guidance). Paths: `BulkLineupBackfillDialog.tsx`, `lineup_bulk_backfill_api.py`, `lineup_bulk_backfill_apply.py`, `backgroundTaskRegistry.ts`, `GlobalBackgroundTasksIndicator.tsx`, `PoManagementView.tsx` / `/admin/po-management`. |
+| **Idea** | After bulk backfill **Apply**, steward must see **in-app** progress and a **completion summary** with explicit **next steps** ÔÇö not silence + dialog close. Minimum: applying/parsing/done phases in dialog (or persistent snackbar), counts (cases created, parses ok/failed, superseded), primary CTA **Link POs** ÔåÆ `/admin/po-management`, secondary **Review lineup cases** ÔåÆ Commercial Planner. Activity bell should show one aggregated session job (`importJobId` = session job) with parse progress; fix current `registerClientBackgroundTask` call missing `importJobId`. Optional read-only `GET ÔÇª/bulk-backfill/sessions/{id}/status` aggregating `staged_metadata.bulk_lineup_backfill_apply` + child parse outcomes. **No auto-redirect** to PO Management. |
+| **Why it matters / deferrable** | Without completion UX, operators cannot tell apply succeeded, how many cases parsed, or that Spec C Step C continues with period-by-period PO link-apply. Deferrable immediately after first successful apply proved the pipeline works ÔÇö but before a second steward session or onboarding another operator. |
+| **What the work is** | (1) **Apply step UI** ÔÇö replace instant `onClose()` with dispatched ÔåÆ parsing ÔåÆ complete/failed; optional "run in background". (2) **Completion panel** ÔÇö case id range, applied/superseded/unresolved line counts, collision losers noted. (3) **Next-step CTAs** ÔÇö PO auto-link (primary), lineup cases, import session `job_id`. (4) **Bell parity** ÔÇö register session with `importJobId`; poll aggregated status; label e.g. `Bulk lineup backfill ┬À 18/31 parsed`. (5) **Status endpoint** (read-only) for dialog + bell poll. Reference bar: `UnifiedLineupImportDialog` post-upload results table + `ImportJobLoadedSuccessCallout` pattern on other importers. |
+| **Regression traps** | Do not block navigation; do not auto-run PO link-apply; do not spam 31 separate bell entries; preserve async apply + per-case parse enqueue; fix `registerClientBackgroundTask` without breaking DSI/shipment kinds. |
+| **Behavior to retain** | Preview-first apply; soft supersession; parse jobs async via worker; PO link-apply remains separate steward workflow on PO Management page. |
+| **Out of scope** | Auto-filter PO Management by earliest period; email/push notifications; post-apply reconciliation report (see BACKLOG-051). |
+| **TRIGGER** | Before **second** steward bulk backfill session **or** onboarding another operator to backfill; **or** any report of "did apply work?" without checking Celery logs; **or** when starting PO link-apply UX polish (pair with Spec C Step C). |
+
+---
+
+## BACKLOG-057 ÔÇö Bulk preview persists ImportJob on live API (not read-only)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Closed ÔÇö documented, persist kept** ┬À 2026-08-16 ÔÇö apply/poll/`session_import_job_id` consumers depend on the coordinator `ImportJob`. Stopping persist would break dispatch. Loud docstring on `persist_preview_session`. |
+| **Effort** | Small (in-memory preview session **or** loud docs + size guard) |
+| **Source** | Step B `persist_preview_session` ÔÇö writes `ImportJob.staged_metadata` + base64 file manifest; ~60 files may be heavy. |
+| **Idea** | "Preview is read-only" is false against lineup tables but still writes coordinator `ImportJob` rows on live API. Fix: non-persisting preview **or** document loudly + optional manifest externalization. |
+| **TRIGGER** | Before first live-API backfill session. |
+
+---
+
+## BACKLOG-058 ÔÇö Bulk apply `import_background_slots` dedicated registry entry
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** ┬À 2026-08-16 ÔÇö `SLOT_BULK_LINEUP_APPLY` / `bulk_lineup_apply_task` registered; cancel/retry clears it via `TASK_SLOTS`. No longer uses `SLOT_MAIN`. |
+| **Effort** | Small |
+| **Source** | `lineup_bulk_backfill_api.py` uses `SLOT_MAIN`; DSI apply uses dedicated slot + registry. |
+| **Idea** | Dedicated slot/registry entry for bulk lineup apply to match DSI parity and avoid orphan-slot clears. |
+| **TRIGGER** | If bulk apply contends with DSI for the main slot. |
+
+---
+
+## BACKLOG-053 ÔÇö Per-line ROE (rate of exchange) override on lineup lines
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-06-28 |
+| **Effort** | Small (explicit override field on `commercial_lineup_line` + pricing-chain source tag + UI affordance + tests; migration if persisted) |
+| **Source** | Warren session (2026-06-28) lineup workbench review. Question raised: "should rate of exchange be editable?" Current behaviour: ROE is resolved (file evidence ÔåÆ trade-term defaults) and stored in `pricing_chain_json`, edited only via Planner defaults. Code: `apps/api/app/services/commercial_planner/lineup_pricing_resolution.py` (`roe_local_per_cost_currency`, `_pick(file_roe, defaults.roe_local_per_cost_currency, normalise_pct=False)`); defaults editable in `PlannerDefaultsMaintenance.tsx`. Deferred explicitly by Warren: "PUT ROE on backlog because we are still working on what's already approved/shipped." |
+| **Idea** | Allow a **deliberate, labelled** per-line ROE override (e.g. a deal locked at a specific FX rate) instead of the resolved default. Recorded in the pricing chain as `source: line_override` so it stays auditable. NOT an anonymous editable cell. |
+| **Why it matters / deferrable** | Real deals sometimes lock an FX rate that differs from the standing default. Deferrable because: (1) no confirmed business case yet that a per-line locked rate is needed; (2) a free-typed per-line ROE invites silent inconsistency across a lineup and can undermine the value-reconciliation FX bridge (`commercial_sku_assumption.fx_plan_currency_per_cost_currency`); (3) current work is focused on already-approved/shipped scope (confirm-with-PO, suggested POs, distributor suggestion, grid migration). |
+| **What the work is** | (1) Add an explicit override input (and, if persisted, a nullable `roe_override_local_per_cost_currency` column on `commercial_lineup_line` ÔÇö STOP/report before migration). (2) `resolve_line_pricing` prefers the override and records `sources["roe_local_per_cost_currency"] = "line_override"` in `pricing_chain_json`. (3) UI: an explicit "Override ROE" action on the line that visibly marks the line as overridden and shows the default it replaced ÔÇö never a silently-editable number. (4) Tests: override wins over default + file; chain records `line_override`; clearing override falls back to resolved value. |
+| **Regression traps** | Don't turn ROE into an unlabelled editable cell (breaks explainability); don't `/100` or otherwise mutate the rate; don't break the FX-bridge value reconciliation when an override is present; preserve trade-term default fallback when no override. |
+| **Behavior to retain** | ROE default-driven by Planner defaults; every pricing input carries its source in the chain; DAP evidence-only; value reconciliation FX bridge intact. |
+| **Out of scope** | Changing the standing default editing surface; per-line overrides of other pricing inputs (margins/rebate) ÔÇö those follow their own decision; any change to the value-reconciliation bridge itself. |
+| **TRIGGER** | Business confirms a real need for per-deal locked FX on a lineup (a deal negotiated at a fixed rate that must override the standing default); **or** Warren explicitly approves building the override. |
+
+---
+
+## BACKLOG-052 ÔÇö Lineup margin-amount evidence capture (when a margin column holds currency, not a %)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-06-28 |
+| **Effort** | Small (migration: 3 nullable Numeric columns on `commercial_lineup_line` + parser routing + tests) |
+| **Source** | Warren session (2026-06-28) lineup fix pass. Guard shipped: `apps/api/app/services/commercial_planner/lineup_pricing_resolution.py` (`sanitize_pct_evidence`) + `lineup_case_parser.py` (`_PCT_EVIDENCE_FIELDS`, `pct_evidence_out_of_range` diagnostic). Discovery DB evidence: in live cases #3/#4/#5 the `Dealer margin` / `Disti margin` / `Rebate` columns are genuine fractions (`0.08`, `0.0724`, `0.06`); the only currency-in-margin-column case was the corrupt case #6 file (now ignored). No live file pairs a margin **pct** with a margin **amount**, so building amount-capture now has no real driver. |
+| **Idea** | When a margin/rebate column value is out-of-range for a percentage (the `sanitize_pct_evidence` trigger), route the **amount** to a dedicated `*_amount_evidence` column instead of only dropping it. Today the guard drops it (keeping it in `raw_row_payload` + flags `pct_evidence_out_of_range`) to prevent `Numeric(8,4)` overflow. |
+| **Why it matters / deferrable** | Captures real Rand margin evidence without overflow and without it silently becoming a pct. Deferrable because **no current real file** carries margin amounts in the margin columns (they carry pct + separate price columns `Dealer price` / `Net price` / `Disti Cost`). Acting now risks adding columns + a migration to capture values that only appeared in a known-corrupt file. |
+| **What the work is** | (1) **Migration (STOP/report first):** add `dealer_margin_amount_evidence`, `rebate_amount_evidence`, `distributor_margin_amount_evidence` (Numeric(18,4), nullable, local currency) on `commercial_lineup_line`. (2) **Parser:** in `lineup_case_parser`, when `sanitize_pct_evidence` rejects a value as a pct, write the amount to the matching `*_amount_evidence` column instead of only dropping; keep `sanitize` as the overflow guard; genuine pcts still populate the `*_pct_evidence` columns. (3) **Tests:** Rand amount in margin column ÔåÆ amount lands in `*_amount_evidence`, pct column null, no overflow; true pct ÔåÆ pct populated, amount null. |
+| **Regression traps** | Do not let an amount silently become a pct (no `/100`); keep `sanitize_pct_evidence` as the guard; do not change trade-term fallback (pricing still falls back to `commercial_customer_term` / `commercial_distributor_term` when pct absent); preserve `raw_row_payload` audit. |
+| **Behavior to retain** | `pct_evidence_out_of_range` diagnostic; overflow-safe parse; pricing chain fallback to trade-term defaults; DAP evidence-only. |
+| **Out of scope** | Header detection / wrong-header-row fixes for malformed workbooks (that is a per-file data issue, e.g. case #6); changing the pct normalisation rule; any qty mapping change for files without a separate `Total Qty` column. |
+| **TRIGGER** | A real lineup workbook arrives that carries margin/rebate **amounts** (Rand) in the margin columns (with or without a separate pct), **and** Warren wants those amounts persisted as evidence; **or** pricing needs amount-based margin evidence for a customer/period where pct is unavailable. |
+
+---
+
+## BACKLOG-051 ÔÇö Post-apply import reconciliation report (file vs facts)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-06-28 |
+| **Effort** | Medium (API read model + DSI UI panel + export); small follow-on per importer |
+| **Source** | Warren session (2026-06-28): manual RAW.xlsx vs `import_job #96` facts audit after large-volume DSI apply. Script: `.tmp/audit_raw_vs_db.py` / `.tmp/audit_raw_vs_db_summary.json`. Job #96: 178,067 staged rows; 20,618 Excel rows expected facts but not applied (mostly unresolved product; 111 unresolved customer). Distributor SOH snapshots (no customer name + disti + SOH): 63,408 rows, 54,435 applied inventory, 8,275 blocked on product. Chat: Warren asked whether system should automate this ÔÇö agreed good feature, deferred to backlog. |
+| **Idea** | **Post-apply reconciliation** on an import job: compare stored raw file + staging lines + committed facts; report what from the file did **not** land as facts and **why** (unresolved product/customer, auto-excluded, deduped by `source_key`, staged-only). Aggregated by default; CSV export for steward action. |
+| **Why it matters / deferrable** | Operators need trust after large applies (ÔÇ£did my SOH / sell-out actually load?ÔÇØ). Data already exists on the job (raw bytes, `import_distributor_si_staging_line`, facts). Deferrable while one-off script + steward workflow closes job #96 gaps; becomes essential at volume and for on-prem handoff. |
+| **What the work is** | (1) **API** `GET /import-jobs/{id}/reconciliation` (DSI first): row counts by expectation type (sell-out, return, disti SOH snapshot), applied vs missing, top blocked tokens, volume sums. (2) **Semantics:** document disti SOH snapshot rule (no customer + distributor + SOH ÔåÆ `fact_inventory_distributor` at `as_of_date`); separate row-level from `source_key` dedup. (3) **UI** on DSI apply-complete / loaded step: summary panel + ÔÇ£Download gap reportÔÇØ. (4) **Reuse raw on job** ÔÇö no re-upload. (5) Port pattern to shipment after DSI proves shape. |
+| **Regression traps** | Treating `source_key` dedup as data loss; comparing Excel tokens to fact IDs without staging join; loading 178k-row detail in browser (aggregate + export only); conflating validate blockers with apply gaps. |
+| **Behavior to retain** | Staging `source_row_number` as join key; `apply_status` + `diagnostic_codes` as reason source; transaction-immutable / latest-job-wins fact semantics unchanged. |
+| **Out of scope** | Auto-fixing unresolved entities; re-apply; changing resolution tiers; BACKLOG-049 unresolved worklist (complementary ÔÇö reconciliation is per-job, worklist is cross-job). |
+| **TRIGGER** | Warren requests reconciliation UI; **or** second large DSI apply needs gap audit; **or** BACKLOG-049 unresolved worklist starts (reconciliation feeds worklist inputs). |
+
+---
+
+## BACKLOG-049 ÔÇö Unresolved module (ignore ÔåÆ unresolved worklist)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-06-25 |
+| **Effort** | Medium (read model + steward UI worklist surface) |
+| **Source** | Warren session (2026-06-25): DSI steward legibility + auto-exclude at validate. `apps/api/app/services/imports/dsi_product_running_change.py` (`steward_ignored_line:<reason>`, `build_dsi_apply_exclusion_summary`); `dsi_apply_completion.py` (`apply_exclusion` in completion payload); candidate `context.steward_ignore_reason_code` JSONB; `docs/BACKLOG.md` TRIGGER defers full module until PM catalogue or operational reporting need |
+| **Idea** | **Reader** over reasoned exclusions (`apply_exclusion` summary + candidate `steward_ignore_reason_code` / staging `steward_ignored_line:<reason>`). Surfaces excluded volume as a **tracked worklist**, grouped by reason: `ignore_no_catalogue` ÔåÆ re-attempt when PM catalogue loads; `ignore_no_receipt_evidence` ÔåÆ re-attempt as shipment coverage grows; `ignore_sku_indeterminate` ÔåÆ stays parked (genuinely undecidable; needs SKU in feed). |
+| **Why it matters / deferrable** | Excluded lines carry real units/value; this is the path to reclaim them, not lose them. Reason codes are the contract ÔÇö already split three ways. Deferrable until PM consolidated catalogue loads or first operational need to report/action excluded volume. |
+| **What the work is** | (1) Read model aggregating `apply_exclusion` + per-job excluded tokens from staging diagnostics and ignored candidates. (2) Worklist UI (module or steward tab) with reason-grouped rows, units, value, dominant month, re-attempt triggers. (3) Wire `apply_exclusion` into imports wizard apply-complete step (API-only today). (4) Optional: reverse ignore ÔåÆ needs_review using `steward_ignore_remap_context`. |
+| **Regression traps** | Treating auto-excluded-at-validate lines as silent (must stay in `apply_exclusion`); conflating parked indeterminate with reclaimable no-catalogue; migration for reason codes (not needed ÔÇö JSONB + diagnostics). |
+| **Behavior to retain** | Reason codes in candidate `context` + staging diagnostics; no fact write for `rpid is None`; steward-ignore demotion semantics; apply_exclusion as honest counterpart to resolution-quality denominator. |
+| **Out of scope** | Resolver tier/eligibility edits; new facts; auto-exclude logic itself (shipped separately on validate). |
+| **TRIGGER** | PM consolidated catalogue loaded; **or** first need to report/action excluded volume operationally; **or** build **after** job #96 applied (need real exclusion data to read). |
+
+---
+
+## BACKLOG-048 ÔÇö Import Celery + background-task parity audit (dispatch, slots, polls, cancel)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-06-24 |
+| **Effort** | MediumÔÇôlarge (audit doc + phased fixes); overlaps BACKLOG-039 queue split |
+| **Source** | Warren session (2026-06-24): request for Celery and task parity audit in backlog. `docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md` ┬º1bÔÇô1c (per-importer slot copy-paste, orphan slots on cancel); `apps/api/app/services/imports/import_background_slots.py` (`TASK_SLOTS` registry ÔÇö partial Phase 2); `background_tasks.py` discovery readers; `import_job_task_control.py` + `import_job_background_metadata.py` (`clear_background_task_metadata` legacy gaps); `docs/memory/derived/platform_async_and_background_truth.md`; `.cursor/rules/import-parity.mdc` (apply = async dispatch + registered slot); existing poll/queue items **BACKLOG-039** (queue split), **BACKLOG-041** (compute poll grace), **BACKLOG-038** (dev beat/reaper), **BACKLOG-015** (cancel revoke all tasks); shipment vs DSI dispatch (`_dispatch_shipment_apply`, `_dispatch_dsi_apply`, `dsi_resolution_plan_enqueue`, `product_master_workflow` PM validate/commit slots) |
+| **Idea** | Background work across importers is **not at one parity bar**: Celery task names, enqueue helpers, `staged_metadata` slot keys/kinds, activity-feed registration, cancel/retry slot clearing, dev `in_process_thread` fallback, and frontend poll budgets differ per template. Orphan slots, invisible progress, and false queue-timeout UX recur when a new path writes a slot without registry entry or poll wiring. |
+| **Why it matters / deferrable** | Solo-worker dev topology masks some gaps; shipment backfill and DSI historical soak exposed queue-wait vs execution confusion. Deferrable as an **audit-first** deliverable before wide refactors ÔÇö but should run before scaling imports or on-prem cutover. |
+| **What the work is** | (1) **Audit matrix** (per `template_slug` / pipeline): validate dispatch, apply/commit dispatch, steward bulk, plan compute, derive side-effects (velocity/SOH/forecast/lineup parse); Celery task id; slot key + kind; sync fallback; progress callback; frontend poll route + grace. (2) **Registry gaps:** any writer not using `import_background_slots`; any clearer not using `clear_all_task_slots`; duplicate enqueue helpers (e.g. velocity). (3) **Cancel/retry:** full revoke list vs slot registry; confirm no orphan feed entries after cancel. (4) **Parity targets:** shipment apply/bulk/validate aligned with DSI; PM commit/validate visible in feed; generic `process_job` vs dedicated tasks documented. (5) **Output:** update `IMPORT_FLOW_CAPABILITY_CONTRACT.md` + `platform_async_and_background_truth.md` with as-built table; phased fix list (may feed BACKLOG-039). |
+| **Regression traps** | Breaking `in_process_thread` dev path; revoking wrong Celery ids; clearing slots before worker finishes; changing poll semantics without `DEV_TOPOLOGY` doc; DSI historical auto-apply timing (BACKLOG-040). |
+| **Behavior to retain** | Broker ÔåÆ dev in-process thread ÔåÆ sync fallback chain; every background task registered in activity feed; import-parity governance; latest-job-wins / evidence semantics unchanged. |
+| **Out of scope** | Full Phase 3 declarative wizard (`page.tsx` contract codegen); production multi-worker provisioning (unless audit TRIGGERs infra sprint); changing DSI resolution tier order. |
+| **TRIGGER** | Warren requests Celery/task parity audit; **or** new background task added without `import_background_slots` entry; **or** orphan-slot / invisible-progress incident on any importer; **or** BACKLOG-039 queue split starts (audit is prerequisite). |
+
+---
+
+## BACKLOG-047 ÔÇö Import wizard: stale column-mapping UI after Back + re-upload
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** ┬À 2026-08-16 ÔÇö shipment draft clears on job-id change; mapping panel waits until `mapping-state.id` matches; remount `key`; banner ÔÇ£New file ÔÇö previous mapping clearedÔÇØ. `?job=` remap retained. |
+| **Effort** | SmallÔÇômedium (web); may touch shared `CanonicalColumnMappingPanel` |
+| **Source** | Warren session (2026-06-24): on inbound shipment import, click **Back**, re-upload a **new** file ÔÇö dropdown mapping UI still reflects the **previous** file (column/target selections stale) while validate/apply still proceeds on the new job. `apps/web/src/app/(app)/admin/imports/page.tsx` (`shipmentMapDraft`, `shipment-mapping-state` query, upload `onSuccess` invalidation, wizard Back handlers without full draft reset); `CanonicalColumnMappingPanel.tsx` (Autocomplete sections: ÔÇ£Selected for this columnÔÇØ, ÔÇ£Already mapped in this fileÔÇØ); parallel DSI path (`dsiMapDraft`, `dsi-mapping-state`) likely same class of bug |
+| **Idea** | Wizard **client state** (mapping draft, query cache, panel local filter) is not fully reset when the operator navigates back to upload and creates a **new** job with different headers. UI misleads (old column names / targets in Maps-to dropdown); server uses new job file ÔÇö **silent mismatch** until operator notices or validate surfaces errors. |
+| **Why it matters / deferrable** | Confusing for weekly ACZA re-uploads and BOM-tab workbook iterations; risk of wrong mappings saved if operator trusts stale UI. Deferrable while operators can hard-refresh or avoid Back+re-upload (upload once per session); fix should be shared across shipment + DSI mapping steps. |
+| **What the work is** | (1) **Repro matrix:** shipment + DSI (+ PM if applicable) ÔÇö Back from mapping ÔåÆ re-upload ÔåÆ Next; with/without `?job=` deep link. (2) **Reset contract:** on new `lastJobId` from upload ÔÇö clear `shipmentMapDraft` / `dsiMapDraft` immediately; `removeQueries` or `resetQueries` for prior job mapping-state keys; reset `upload.isSuccess` gate if it pins poll job id; optional `key={lastJobId}` on `CanonicalColumnMappingPanel` to remount. (3) **Loading guard:** do not render mapping table until `shipment-mapping-state` / `dsi-mapping-state` matches current `lastJobId` and infer complete (spinner, not stale rows). (4) **Tests:** vitest for draft reset + query key on re-upload. (5) **UX:** banner ÔÇ£New file ÔÇö previous mapping clearedÔÇØ when job id changes mid-wizard. |
+| **Regression traps** | Breaking revisit `?job=` remap flow (`shipmentPostValidateRemap`); wiping intentional draft edits on same job; race with server-derived step auto-advance (`shipmentDerivedStepRef`); DSI `dsiContinueToApplyAllowed` gate keys. |
+| **Behavior to retain** | Post-validate re-map without re-upload; server `field_mapping` as source of truth after load; save-before-validate gate; deep-link job revisit. |
+| **Out of scope** | Server-side re-upload on same job id; full wizard contract refactor (IMPORT_FLOW_CAPABILITY_CONTRACT Phase 3). |
+| **TRIGGER** | Warren reports stale mapping UI again after ACZA/BOM workbook iteration; **or** BACKLOG-046 sheet-policy work touches mapping infer; **or** import UX hardening sprint (BACKLOG-045/044). |
+
+---
+
+## BACKLOG-046 ÔÇö Shipment ACZA workbook: exclude / handle non-operational sheets (e.g. BOM Not Ready)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-06-24 |
+| **Effort** | SmallÔÇômedium (API + web mapping UX); optional phase 2 if BOM tab becomes first-class feed |
+| **Source** | Warren session (2026-06-24): `ACZA Shipped Unshipped 20260623.xlsx` new **BOM Not Ready** tab pollutes shipment column-mapping stage (different columns); research in chat (no code). `apps/api/app/services/imports/shipment_evidence_import.py` (`_load_frames_for_job` ÔÇö all sheets); `shipment_field_mapping.py` (`_union_frame_headers` ÔÇö unions headers from every sheet for mapping UI); `shipment_evidence_report_detect.py` (`detect_report_type` ÔÇö `REPORT_UNKNOWN` skipped at validate); CST precedent: `customer_sell_through_period.py` (`is_summary_sheet_name`); `docs/platform_import_system_truth.md` / BACKLOG-001 area (multi-sheet mapping deferred) |
+| **Idea** | ACZA shipment workbooks can include **non-operational tabs** (e.g. **BOM Not Ready** ÔÇö BOM / readiness exception queue) alongside **Shipped** and **Unship**. CIP unions **all** sheet headers into one mapping surface but only ingests sheets that pass `detect_report_type`. Operators see confusing extra columns at map time; risk that a tab with Unship-like headers is **misclassified and ingested** as open-order evidence. |
+| **Why it matters / deferrable** | Blocks clean weekly ACZA uploads without manual Excel surgery. Deferrable while operators can trim workbooks (Shipped + Unship only) for current uploads; product fix should follow explicit business rule on whether BOM-hold rows belong in inbound shipment facts. |
+| **What the work is** | (1) **Business rule (Warren):** confirm BOM Not Ready is **out of scope** for `fact_inbound_shipment` / standard ACZA apply (recommended default: exclude). (2) **Sheet inclusion policy:** ACZA allowlist (`Shipped`, `Unship`) and/or denylist patterns (`BOM`, `Not Ready`, summary/index) ÔÇö mirror CST `is_summary_sheet_name` pattern in shipment load path. (3) **Mapping UX:** union headers **only from in-scope sheets**; surface skipped sheets in `inferred_schema.sheets` / validate summary with `report_type: unknown` + ÔÇ£ignoredÔÇØ badge (extend `CanonicalColumnMappingPanel` manifest if needed). (4) **Safety:** audit `detect_report_type` column heuristics so exception tabs sharing Unship/Shipped headers cannot silently ingest (sheet name + allowlist guard). (5) **Optional phase 2:** dedicated `report_type` + per-sheet mapping only if planning needs BOM-hold rows in-platform. |
+| **Regression traps** | Dropping real Shipped/Unship rows; breaking historical ACZA backfill jobs that relied on full workbook; changing `source_key` / line_status for ingested rows; mapping saved on job that no longer matches unioned headers after rule change. |
+| **Behavior to retain** | Shipped + Unship ingest semantics; `REPORT_UNKNOWN` skip at validate; evidence preserved per job; no auto-create masters; latest-job-wins fact upsert. |
+| **Out of scope** | Full per-sheet mapping parity with historical lineup (unless TRIGGER fires for broader multi-sheet mapping); BOM / configurator as separate product module; changing DSI corroboration tier order. |
+| **TRIGGER** | Warren approves product direction after BOM-tab business sign-off; **or** second ACZA upload blocked by mapping noise / wrong-sheet ingest; **or** ASUS workbook adds more non-operational tabs; **or** shipment import parity sprint (BACKLOG-044) starts and sheet policy is prerequisite. |
+
+---
+
+## BACKLOG-045 ÔÇö Import steward UI parity audit (side drawer + workspace layout)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** ┬À 2026-08-12 ÔÇö shipment drawer-body residual closed (duplicate Same/Different + row-action lifecycle + legacy panel retire). Open Channel waived pending OC consolidation. Full shared extract of DSI duplicate dialogs into `import-steward/` deferred. |
+| **Effort** | MediumÔÇôlarge (web); audit-first then phased fixes |
+| **Source** | Warren session (2026-06-24): shipment apply step UX; steward side panel vs DSI; `ShipmentCandidateStewardDrawer` + `ShipmentMappingStewardPanel` vs `DsiCandidateStewardDrawer` + `DsiMappingStewardPanel`; `ShipmentImportJobResolutionSection` vs `DsiImportJobResolutionSection`; `.cursor/rules/import-parity.mdc` steward surface rule; partial parity shipped on `feat/dsi-async-topology` (tabs, toolbar, plan apply, drawer apply banner) ÔÇö **gaps remain** |
+| **Idea** | Several import steward surfaces are **not fully component-paritied** with DSI. Operators see slight layout/behaviour differences: side steward drawer (duplicate review, open channel, peer compare, row-action lifecycle), workspace chrome (pagination placement, bulk slot, plan toolbar), entity-type API wiring (`/mappings/` vs `/shipment-evidence/`), and apply-step completion UX (shipment now has `ImportJobLoadedSuccessCallout`; DSI/historical lineup not unified). |
+| **Why it matters / deferrable** | Shipment backfill (#147) is unblocked enough to apply; full UI parity is polish + regression-risk reduction before scaling steward work across importers. Deferrable until a dedicated UX parity sprint ÔÇö but **audit should be explicit** so drift does not accumulate. |
+| **What the work is** | (1) **Audit matrix:** per importer row in `docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md` ÔÇö side drawer component, workspace layout, plan toolbar, bulk section, apply-loaded callout, row actions (Review vs inline), API family. (2) **Extract shared primitives** where duplication is stable: steward drawer shell, plan-ready banner, apply-complete callout (extend `ImportJobLoadedSuccessCallout`), duplicate-review blocks (shipment may need shipment API adapters). (3) **Close shipment gaps:** wire `DsiMappingStewardPanel`-equivalent behaviours still missing on shipment (duplicate cluster dialogs, open channel if applicable, `onStewardFastComplete` cache eviction, peer lookup). (4) **DSI apply step:** adopt same loaded success callout pattern. |
+| **Code evidence 2026-08-12** | Shipment: `POST ÔÇª/shipment-evidence/ÔÇª/duplicate-review/{same,different}-entity`; drawer Same/Different; `setRowActionPendingId` + `onStewardFastComplete` wired; `ShipmentEntityStewardPanelLegacy` removed. Waived: Mark Open Channel. Not done: full DSI cluster/same-entity dialog extract to shared engine. |
+| **Regression traps** | Wrong steward API paths; breaking shipment entity types (`shipment_customer_token` vs `customer_dealer_token`); removing shipment-only special-category / reject flows; forked bespoke panels instead of shared layout. |
+| **Behavior to retain** | Shipment-evidence steward API family; governance (no auto-create); evidence vs fact semantics; import-parity locked async DB config; shipment plan does **not** gate on `duplicate_review_required` (locked variance). |
+| **Out of scope** | Full `DsiMappingStewardPanel` ÔåÆ single mega-component for all importers without adapter layer; product steward on shipment. |
+| **TRIGGER** | ÔÇö Done. Re-open only if Warren asks shared duplicate-dialog extract or Open Channel on shipment. |
+
+---
+
+## BACKLOG-044 ÔÇö Shipment import: steward UX + resolution intelligence parity with DSI
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** ┬À 2026-08-12 ÔÇö workspace + plan (prior) + drawer-body residual via BACKLOG-045 |
+| **Effort** | Large (web + API services); likely phased after BACKLOG-001 workspace swap |
+| **Source** | Warren session audit (2023 vs 2026 ACZA backfill ÔÇö evidence vs fact confusion, manual per-row steward); `docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md` (`steward_surface`: `shipment_evidence_admin` vs `dsi_resolution_section`); `apps/web/src/app/(app)/admin/shipment-evidence/ShipmentEntityStewardPanel.tsx` (bespoke panel); `apps/web/src/app/(app)/admin/imports/DsiImportJobResolutionSection.tsx` + `ImportStewardCandidateWorkspace` (DSI reference); `apps/api/app/services/imports/dsi_resolution_plan.py` (no shipment equivalent); `apps/web/src/features/import-steward/dsi-mapping-steward-panel.tsx` (comment: shipment remains separate); **BACKLOG-001** (workspace adapter only ÔÇö does not cover plan intelligence) |
+| **Idea** | Shipment evidence import still uses a **different steward surface** and **weaker resolution intelligence** than DSI / other import-parity importers. Operators lack entity tabs, resolution-plan suggestions, ready vs needs-work queues, bulk ÔÇ£apply all readyÔÇØ, historical/previously-resolved hints at the same bar, and the shared steward workspace patterns documented in `.cursor/rules/import-parity.mdc`. |
+| **Code evidence 2026-08-12** | Shared workspace + resolution-plan + drawer chrome (prior); drawer duplicate Same/Different + lifecycle + legacy retire (045). Do **not** rebuild workspace/plan. |
+| **TRIGGER** | ÔÇö Done. Re-audit only if Warren reports shipment steward slot drift vs DSI. |
+
+---
+
+## BACKLOG-037 ÔÇö DSI validate/refresh post-resolution orchestrator unification
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked ┬À 2026-06-19 |
+| **Effort** | Medium (extract shared orchestrator + index loaders + tests) |
+| **Source** | DSI temporal supersession / receipt-tier wiring audit; `refresh_dsi_staging_line_resolution` in `distributor_sales_inventory.py` |
+| **Idea** | Extract `_resolve_dsi_product_post_tiers(...)` shared by bulk validate and `refresh_dsi_staging_line_resolution`: `_resolve_product` ÔåÆ receipt tier ÔåÆ temporal supersession ÔåÆ canonical collapse (as each ships). |
+| **Why / deferrable** | Tier B/C wire validate-only first; wiring new tiers into refresh without receipt upstream would make refresh weaker than validate. Unification is correct but larger than individual tier commits. |
+| **What the work is** | Single orchestrator called from validate row loop and `refresh_dsi_staging_line_resolution`; load `DistributorReceiptProductIndex` + product-id shipment window index once per job/refresh; parity tests that validate and refresh produce identical `resolved_product_id` for the same staging line. |
+| **Regression traps** | Refresh without receipt tier (existing gap today); memo key `(token, evidence_date)` diverging across paths; missing index loaders on steward refresh. |
+| **Behavior to retain** | Validate remains canonical until unified; steward manual alias override unchanged; cross-distributor auto-resolve guard. |
+| **Out of scope** | Changing resolution tier semantics; schema migration. |
+| **TRIGGER** | After Tier B + Tier C validate soak on job #43; or steward refresh bug where post-receipt auto-resolve is expected on re-resolve. |
+
+---
+
+## BACKLOG-004 ÔÇö Import Flow Phase 3: capability-driven wizard componentization
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked ┬À 2026-05-31 |
+| **Effort** | Very large |
+| **Source** | `docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md` (┬º7 Phase 3, ┬º9 D2/D4); `CONTEXT.md` (May 31 ÔÇ£Next: Phase 3 ÔÇª GATED behind PM core-loop re-runÔÇØ) |
+| **Idea** | Replace `isPm` / `isDsi` / `isShipmentEvidence` branches in `admin/imports/page.tsx` with `ImportFlowCapability` from static client map (`packages/types/`), mounting `mapping_ui` and gating steps per importer. |
+| **Why / deferrable** | Contract Phase 1 is design-only done; implementation gated until PM core loop is re-proven end-to-end. |
+| **What the work is** | Static capability map; flag-gated rollout per importer; optional later promotion to `GET /templates` `capability` field (D2 upgrade path). |
+| **Regression traps** | Breaking shipment 4-step inline steward; PM 6-step commit; DSI validate/apply modes. |
+| **Behavior to retain** | Per-importer legitimate differences in `docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md` ┬º5 matrix. |
+| **Out of scope** | Phase 4 write optimizations (separate entry). |
+| **TRIGGER** | PM core-loop re-run passes on target branch **and** explicit approval to start Phase 3 implementation. |
+
+---
+
+## BACKLOG-006 ÔÇö Slim shipment `mapping-candidates` API response (paginate / omit `line_ids`)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked ┬À 2026-06-01 |
+| **Effort** | Medium (API + web) |
+| **Source** | `CONTEXT.md` (Jun 1 steward perf: ÔÇ£Unchanged: ÔÇª mapping-candidates payload shapeÔÇØ); `apps/api/app/api/v1/endpoints/shipment_evidence.py` (`list_shipment_import_job_mapping_candidates` returns full `context` per row); contrast `apps/api/app/schemas/dsi_mapping_candidates.py` (paginated DSI list) |
+| **Idea** | Reduce steward panel load time (~3ÔÇô5s GET for large jobs) by paginating candidates and/or omitting `context.line_ids` from list payload while keeping `row_count` (and fetch line scope only on steward apply server-side). |
+| **Why / deferrable** | Explicitly left unchanged during steward perf work to limit risk; batching addressed apply path first. |
+| **What the work is** | New query params or list DTO; optional `GET .../candidates/{id}/context`; update `ShipmentEntityStewardPanel` / future workspace adapter queries. |
+| **Regression traps** | Steward ops still require `line_ids` server-side (`shipment_evidence_steward_ops._line_ids_from_context`); client must not break bulk selection scope. |
+| **Behavior to retain** | Steward apply semantics and job-bound line verification. |
+| **Out of scope** | Changing enrichment/scoring. |
+| **TRIGGER** | Post-merge steward perf smoke shows `mapping-candidates` GET still dominant in browser waterfall for jobs with 100+ candidates. |
+
+---
+
+## BACKLOG-008 ÔÇö DSI region evidence: read-only hints from shipment evidence
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked ┬À (plan doc) |
+| **Effort** | Medium |
+| **Source** | `docs/DSI_REGION_EVIDENCE_AND_FALLBACK_PLAN.md` (architecture diagram line 47: ÔÇ£(Later) shipment / other modules ÔÇö read-only hintsÔÇØ) |
+| **Idea** | Add shipment-derived region hints into DSI customer region evidence rank (read-only; steward confirm still required for `region_id` from channel). |
+| **Why / deferrable** | Phase AÔÇôB DSI-only region engine first; shipment module is separate consumer. |
+| **What the work is** | Extend `dsi_customer_region_evidence` (or batch builder) with shipment evidence source; unit tests; no auto-write `region_id` from channel/shipment without steward. |
+| **Regression traps** | Channel token geographic hint rules; do not conflate with product shipment tie-break (`dsi_product_shipment_tiebreak.py`). |
+| **Behavior to retain** | DSI resolution order; corroboration tier order. |
+| **Out of scope** | Shipment import changes. |
+| **TRIGGER** | Region evidence Phases AÔÇôB shipped and steward UX stable; user requests cross-module hints. |
+
+---
+
+## BACKLOG-009 ÔÇö PIM: typed-attribute promotion from `specs_json` (longer-term)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked ┬À 2026-05-31 |
+| **Effort** | Very large |
+| **Source** | `docs/PRODUCT_MASTER_PIM_DESIGN_BRIEF.md` (┬º5 proposed architecture ÔÇ£for debateÔÇØ; ┬º7 safety: additive, feature-flagged; ÔÇ£not builtÔÇØ); `CONTEXT.md` (May 31 ÔÇ£full PIM/category-template modelÔÇØ in Not done) |
+| **Idea** | Category templates + typed storage (typed EAV or hybrid JSONB) promoted from todayÔÇÖs canonical `dim_product.specs_json` read store. |
+| **Why / deferrable** | Design brief only; `specs_json` is already canonical for reads; PIM is lower risk as additive path. |
+| **What the work is** | Schema/templates, steward-approved attribute definition creation, feature flag, real-DB scale validation per SQL rule. |
+| **Regression traps** | Hot `product_import_sync` path; 2M-row scale. |
+| **Behavior to retain** | `specs_json` as current read store until flag flip; no silent schema creation. |
+| **Out of scope** | Dropping legacy PAV (separate entry). |
+| **TRIGGER** | Explicit product decision to fund PIM phase + migration plan approved. |
+
+---
+
+## BACKLOG-010 ÔÇö Drop legacy `product_attribute_value` rows (~2M, destructive)
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Done 2026-08-10** ÔÇö local `cip` verified `COUNT(*)=0` (`PM_WRITE_LEGACY_EAV` unset/false); restore snapshot `.tmp/pav_backup_backlog010.jsonl` (0 rows); idempotent `TRUNCATE` via ops script. Table schema retained for escape hatch. |
+| **Effort** | Medium (ops) + approval |
+| **Source** | `CONTEXT.md` (May 31 PM EAV: ÔÇ£left in place (dropping ÔÇª needs explicit approval)ÔÇØ; import audit ÔÇ£still pending: drop existing 2M PAV rowsÔÇØ) |
+| **Idea** | Remove dead write-only PAV data after `specs_json` commit path is proven. |
+| **Why / deferrable** | Destructive; reversible only via DB backup/PITR. |
+| **What shipped** | `apps/api/scripts/ops/drop_legacy_product_attribute_value.py` (`--backup-path`, `--confirm`, refuses non-`cip` and legacy-EAV-on). `.env.example` documents `PM_WRITE_LEGACY_EAV`. |
+| **Regression traps** | Any hidden reader; `PM_WRITE_LEGACY_EAV` escape hatch users. |
+| **Behavior retained** | `specs_json` commit path; table kept so flag can still write if ever needed. |
+| **Out of scope** | Re-enabling EAV writes by default; dropping `attribute_definition` / table DDL. |
+| **Remote note** | Original ~2M rows were on Supabase. If another env still has PAV data: take backup, run the same script with `--confirm`. |
+| **TRIGGER** | ~~Explicit Warren approval + restore point~~ ÔÇö fired 2026-08-10. |
+
+---
+
+## BACKLOG-011 ÔÇö `catalog_product` commit path: per-row `flush()` ÔåÆ bulk `INSERTÔÇªON CONFLICT`
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked ┬À 2026-05-31 |
+| **Effort** | Medium |
+| **Source** | `CONTEXT.md` (May 31 ÔÇ£Not done: catalog_product per-row flush ÔåÆ bulkÔÇØ) |
+| **Idea** | Batch catalog upsert on PM commit like product bulk upsert. |
+| **Why / deferrable** | PM commit already fast after EAV write removal; diminishing returns until large catalogs return. |
+| **TRIGGER** | PM commit profiling shows catalog flush as dominant cost again. |
+
+---
+
+## BACKLOG-013 ÔÇö `customer_sell_through` own import surface (D1)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked ┬À 2026-05-31 |
+| **Effort** | Large |
+| **Source** | `docs/IMPORT_FLOW_CAPABILITY_CONTRACT.md` (┬º9 D1, ┬º5 row, ┬º10; `hidden_from_generic_ui`, deferred `mapping_ui` / `steward_surface`); `apps/api/app/services/imports/customer_sell_through.py` (line 96: parser not implemented for some structure types) |
+| **Idea** | Dedicated UI + parsers for customer sell-through (not generic wizard). |
+| **TRIGGER** | Sell-through importer prioritized in roadmap. |
+
+---
+
+## BACKLOG-014 ÔÇö Customer classification mapping import (template deferred)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked ┬À (template seed) |
+| **Effort** | Medium |
+| **Source** | `apps/api/app/services/imports/template_definitions.py` (line 298: ÔÇ£intentionally deferred; not wired for apply yetÔÇØ) |
+| **TRIGGER** | Business requests customer classification import apply path. |
+
+---
+
+## BACKLOG-016 ÔÇö DSI steward finalize: scoped later items
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked ┬À (plan) |
+| **Effort** | Large (multiple features) |
+| **Source** | `docs/DSI_STEWARD_FINALIZE_PLAN.md` (┬º Deferred); `docs/SESSION_HANDOVER_2026_05_23.md` (┬º6 Scoped for later) |
+| **Idea** | Duplicate Phase 2 clusters; distributor hub/branch SOH; web/registry enrichment for duplicate decisions; open peer cross-page lookup; `shipment_evidence_line.distributor_id` index (`CREATE INDEX CONCURRENTLY`); DSI upload Celery infer backgrounding. |
+| **TRIGGER** | Explicit approval per row in SESSION_HANDOVER ┬º6 (do not bundle). |
+
+---
+
+## BACKLOG-017 ÔÇö DSI embedding-based duplicate detection
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked ┬À (doc) |
+| **Effort** | Large |
+| **Source** | `docs/DSI_RESOLUTION_PERFORMANCE.md` (lines 3ÔÇô7: ÔÇ£not implemented ÔÇª stopped before implementationÔÇØ) |
+| **Idea** | True embedding similarity vs current `difflib` pairwise job-local scoring. |
+| **TRIGGER** | Steward false-positive/negative rate still unacceptable after cascade tuning. |
+
+---
+
+## BACKLOG-018 ÔÇö DSI geo token indexes (recommended, not applied)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked ┬À (doc) |
+| **Effort** | Small (migration, needs approval) |
+| **Source** | `docs/DSI_RESOLUTION_PERFORMANCE.md` (┬º `dsi-unresolved-geo-tokens`: ÔÇ£Recommended indexes ÔÇª not appliedÔÇØ) |
+| **TRIGGER** | `EXPLAIN` on geo collection still slow after cache fix. |
+
+---
+
+## BACKLOG-019 ÔÇö Historical lineup: deferred import Phase items
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked ┬À 2026-04-26 checkpoint |
+| **Effort** | Large (bundle) |
+| **Source** | `docs/memory/derived/platform_import_system_truth.md` (┬º ÔÇ£Deferred items (as of f47bcea)ÔÇØ) |
+| **Idea** | EntityMappingQueue customer token resolution; loaded lineup inspect UI; post-apply navigation; jobs list pagination; duplicate-apply guard; multi-sheet mapping; `match_strategy` JSONB framework; etc. |
+| **TRIGGER** | Historical lineup module prioritized; pick **one** slice per `platform_import_system_truth.md` ÔÇ£Phase 2BÔÇØ guidance. |
+
+---
+
+## BACKLOG-020 ÔÇö Product Master: full job revisit in wizard
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked ┬À (UI) |
+| **Effort** | Medium |
+| **Source** | `apps/web/src/app/(app)/admin/imports/page.tsx` (line 2024: ÔÇ£Full PM revisit is not yet supportedÔÇØ); `page.test.tsx` (ÔÇ£deferred template visibilityÔÇØ) |
+| **TRIGGER** | PM ops need edit mapping / re-validate on committed or validated PM jobs from `?job=`. |
+
+---
+
+## BACKLOG-021 ÔÇö Commercial Planner: RBAC, durable recommendation store, router extraction
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked ┬À 2026-05-30 |
+| **Effort** | Large |
+| **Source** | `docs/COMMERCIAL_PLANNER_GAP_ANALYSIS.md` (executive summary lines 11ÔÇô12, security row) |
+| **TRIGGER** | Commercial Planner production hardening phase approved. |
+
+---
+
+## BACKLOG-025 ÔÇö Generic-pipeline apply ÔåÆ async (masters / historical / sell-through)
+
+| Field | Detail |
+|-------|--------|
+| **Status** | **Done (part A) ┬À 2026-06-05** ÔÇö `/process` endpoint async, returns `{async, task_id, job_id}`. CST is the initial beneficiary. Masters/historical still use the same endpoint and get the async path for free. |
+| **Effort** | Medium |
+| **Source** | This branch's audit; `apps/api/app/api/v1/endpoints/imports.py::process_job` runs `process_import_job_sync` inline |
+| **Idea** | Move the generic `POST /jobs/{id}/process` (apply path for `distributor_master`, `customer_master`, `historical_lineup`, `customer_sell_through`) onto the async-dispatch pattern (brokerÔåÆdev-threadÔåÆsync-fallback) with progress, like DSI/shipment apply. |
+| **Shipped** | `POST /jobs/{job_id}/process` now calls `_enqueue_import_pipeline_job` (reuses `imports.process_job` Celery task) and returns `{"async": bool, "task_id": str\|None, "job_id": int}`. No frontend caller existed so no breaking change. Progress polling via existing `imports.process_job` task slot is available but not yet wired to a frontend panel. |
+| **Remaining** | Frontend progress panel for CST apply (Unit C); slot registration for CST apply; masters/historical may need their own panels if they become async-heavy. |
+
+---
+
+## BACKLOG-026 ÔÇö Product Master: consolidate the two apply pipelines
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done 2026-08-12** ┬À Unit 11 ÔÇö legacy `product_master_upsert` refuses; sole path is `product_master_workflow` |
+| **Effort** | MediumÔÇôlarge |
+| **Source** | This branch's audit; dedicated `product_master_workflow.py` (`pm_validate`/`pm_commit`, bespoke mapping, AI desc-remap) vs generic `pipeline.py::_process_product_master` (inline, channel-only AI) |
+| **Idea** | One product_master apply path. Today two code paths exist for one slug with divergent AI + mapping behavior and double maintenance. |
+| **What shipped** | `process_import_job_sync` raises for `template_slug=product_master`; `_process_product_master` raises BACKLOG-026; tests `test_product_master_pipeline_retired.py`. Import Centre continues to use `/imports/product-master` workflow. |
+| **TRIGGER** | ~~A PM consolidation task is approved~~ ÔÇö fired Unit 11 Q13=D. |
+
+---
+
+## BACKLOG-027 ÔÇö PM + historical mapping UI ÔåÆ shared `CanonicalColumnMappingPanel`
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Done** ┬À 2026-08-12 ÔÇö PM + HL mount `CanonicalColumnMappingPanel`; optional disposition on panel for PM; HL inverted to headerÔåÆcanonical with `hlMappingHelpers`; `pmMappingTargetOptions` deleted |
+| **Effort** | Medium (web) |
+| **Source** | This branch's audit; PM bespoke `pmMappingHelpers`/`pmMappingTargetOptions`; historical override mapping; vs shared panel used by DSI/shipment |
+| **Idea** | Replace the PM and historical-lineup bespoke mapping tables with the shared `CanonicalColumnMappingPanel` (parity rule ┬º4). |
+| **Why / deferrable** | Removes a third/fourth mapping-UI shape; deferrable, cosmetic-ish, no correctness gap. |
+| **What the work is** | Mount the panel with PM/historical target options + samples; keep server validation; delete bespoke helpers once parity verified in-browser. |
+| **Regression traps** | PM `pm_mapping_saved` stage flow; historical override semantics. |
+| **TRIGGER** | ~~A mapping-UI unification task is approved (pairs with BACKLOG-026).~~ ÔÇö fired Unit 11. |
+
+---
+
+## BACKLOG-029 ÔÇö Unit 3 sell-through surface + `ImportFileUploadZone` extraction decision
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked ┬À 2026-06-05 (updated; part (a) already done) |
+| **Effort** | Medium (sell-through surface) + Small (upload-zone decision) |
+| **Source** | This branch: DSI apply async backend committed `c079cc6`; **`dsiApplyAsync` frontend poll committed `153c93c`** (7 occurrences in `page.tsx` ÔÇö `setDsiApplyAsync`, `dsiApplyPollJob`, `dsiApplyAsync || dsiApplyPollJob`, poll `useEffect`, `onSuccess` handler; terminal on `loaded`/`failed`, not `validated`). `ImportFileUploadZone` component committed in `153c93c` but **never rendered as JSX** ÔÇö the import at line 64 of `page.tsx` is unused; the 3 inline upload zones still exist. customer_sell_through backend committed `09d21ef` (no web surface yet). |
+| **Part (a) ÔÇö DONE** | `dsiApplyAsync` poll wiring committed in `153c93c`. Not a pending task. |
+| **Part (b) ÔÇö CST surface** | Build the minimal drivable `customer_sell_through` surface by composing the shared `CanonicalColumnMappingPanel` + `ImportStewardCandidateWorkspace` + async apply (do not build bespoke UI). Requires running browser for verification. |
+| **Part (c) ÔÇö DONE** | `ImportFileUploadZone` extraction committed in `d0a8923` ÔÇö component rendered at 3 sites in `imports/page.tsx`. Browser upload/drag smoke still recommended when touching that page. |
+| **Regression traps** | Apply poll: transits through `validated` before `loaded` ÔÇö terminal condition must stay `loaded`/`failed` only (already correct). Upload zones: preserve drag-and-drop, `canUpload` gating, `pending` progress bar; do not break the DSI / shipment / generic upload flows. |
+| **Governance** | Provisional creation stays steward-initiated; no auto-create. |
+| **TRIGGER** | (b) sell-through: surface prioritized in roadmap + running browser available. (c) upload-zone: a browser-verified frontend task is approved for this branch, or the unused import is flagged by linter in CI. |
+
+---
+
+## BACKLOG-031 ÔÇö Admin data health dashboard (table counts + import evidence viewer)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked ┬À 2026-06-06 |
+| **Effort** | Medium (API read models + web admin page) |
+| **Source** | Jun 6 session: Supabase has ~222k DSI staging lines but Channel Operations sell-out shows 0 until apply; operator needs visibility without raw pgAdmin/SQL. |
+| **Idea** | Read-only admin page: per-table row counts + approximate sizes (facts vs staging vs masters), import job summary (validate vs apply, staging vs fact counts per job), link to existing import bulk-delete. Not a full pgAdmin ÔÇö curated CIP views only. |
+| **Why / deferrable** | Validates system health and explains validateÔëáapply confusion; deferrable until postÔÇôUnit 1ÔÇô5 delivery and steward/apply next steps are chosen. |
+| **What the work is** | API: `GET /admin/data-health` (async, `data_unavailable` graceful); web: `/admin/data-health` with ModuleDataSection cards + job drill-down. Optional: Supabase dashboard link for deep DBA work. |
+| **Regression traps** | Read-only; no destructive actions on this page; do not expose connection strings or raw SQL console by default. |
+| **Behavior to retain** | Import job cancel/bulk-delete stays on imports page; governance unchanged. |
+| **Out of scope** | Embedded pgAdmin; schema migrations; auto-apply. |
+| **TRIGGER** | Operator asks for DB health visibility again, or before next large Supabase soak (apply on job #43). |
+
+---
+
+## BACKLOG-032 ÔÇö Post import bulk-delete: targeted VACUUM / disk reclamation runbook
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked ┬À 2026-06-06 |
+| **Effort** | Small (ops script + docs) ┬À Medium if automated after delete |
+| **Source** | Postgres dev: bulk delete of import jobs (except active job #43); repeated `VACUUM` in SQL editor; `VACUUM FULL` times out; dashboard disk size unchanged. |
+| **Idea** | (local-cip relevant)  Document and optionally script **targeted** post-delete maintenance: `VACUUM (ANALYZE)` on evidence/staging tables affected by import job bulk delete; `VACUUM FULL` only as a manual, maintenance-window ops step when dead-tuple bloat is confirmed ÔÇö not from the app or SQL editor transaction wrapper. |
+| **Why / deferrable** | Regular `VACUUM` does not return disk to the OS; `VACUUM FULL` requires exclusive locks + long runtime (timeouts on Postgres dashboard / pooler). Autovacuum handles most dead tuples; ops step needed only after large evidence deletes when dashboard disk stays high. |
+| **What the work is** | (1) Ops doc: connect via **session** `:5432` psql, `SET statement_timeout = 0`, stop API/worker, one table at a time. (2) Read-only bloat query (`pg_stat_user_tables`, `pg_total_relation_size`) before choosing FULL vs ANALYZE. (3) Optional `apps/api/scripts/vacuum_import_evidence_tables.py` (explicit table list, dry-run, confirms `current_database()`). (4) Do **not** hook into app delete path automatically ÔÇö governance + lock risk. |
+| **Regression traps** | `VACUUM FULL` on `import_distributor_si_staging_line` while job #43 is active blocks steward/validate; never run inside a transaction; avoid `:6543` pooler for long maintenance; credentials never in repo. |
+| **Behavior to retain** | Import bulk delete remains the supported cleanup path; vacuum is follow-up ops only. |
+| **Out of scope** | Embedded pgAdmin; app-triggered `VACUUM FULL` on every delete; `VACUUM FULL` on all public tables. |
+| **TRIGGER** | After large import evidence bulk delete AND (`n_dead_tup` still high 24h later OR Postgres disk quota pressure) AND Warren approves maintenance window. |
+
+---
+
+## BACKLOG-057-D4 ÔÇö Plan D D4: stop duplicating observation payload on legacy evidence lines
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked ┬À 2026-07-02 |
+| **Source** | `docs/SHIPMENT_BITEMPORAL_PLAN_D.md` D4; Plan D cutover complete |
+| **Idea** | Dual-write still populates `shipment_evidence_line` for steward job scope; stop persisting columns that mirror observation payload once all write paths read observations for history. |
+| **TRIGGER** | 30-day soak after Plan D cutover with zero steward regressions; Warren approves D4 start. |
+
+---
+
+## BACKLOG-058-D5 ÔÇö Plan D D5: drop redundant shipment_evidence_line columns
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked ┬À 2026-07-02 |
+| **Source** | `docs/SHIPMENT_BITEMPORAL_PLAN_D.md` D5 |
+| **TRIGGER** | BACKLOG-057 complete + Alembic migration reviewed; no consumer reads raw legacy columns. |
+
+---
+
+## BACKLOG-062 ÔÇö OpenÔåÆshipped fact double-count remediation
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked ┬À 2026-07-02 ┬À **re-measured 2026-07-27** (shipping KPI Phase 0) |
+| **Source** | Plan D phase 1 diagnostic (`open_order_shipped_fact_double_count_diagnostic`); Phase 0 `apps/api/.tmp/shipping_kpi_phase0_diag.json` |
+| **Idea** | When order grain graduates to shipped, retire or supersede open-order fact rows ÔÇö separate from evidence cutover. |
+| **Evidence (cip)** | Plan D: **104** pairs. Phase 0 (looser order_no+product join): **312** pairs, open qty **24,839**, shipped qty **26,750**, open amount **~$18.2M**. Also **109** `status=scheduled` + `line_state=shipped` rows ($5.7M) sit in the scheduled book. |
+| **TRIGGER** | Warren approves fact-layer remediation policy after reviewing diagnostic; **or** after shipping KPI rewrite lands and operators still see open+shipped twins in current-incoming. |
+
+---
+
+## BACKLOG-076 ÔÇö Inbound fact amount / unit-price scale corruption (unship junk)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Closed 2026-08-17** ÔÇö quarantine is the complete fix. Live sample: Qty 36, Unit Price **999999**, Amount 35999964 (= Qty├ùUnit Price). Mapping is not swapped. Re-import would restore the same junk. 17 quarantined, 0 still-suspect (`abs(amount)/qty > 100_000`). KPI exclude remains. Source workbook not on disk at the documented Desktop path. |
+| **Effort** | Medium (import mapping audit + optional purge of junk job facts) |
+| **Source** | Shipping KPI Phase 0 (`docs/SHIPPING_COMMERCIAL_KPI_CONTRACT.md` ┬ºPhase 0; `.tmp/shipping_kpi_phase0_diag.json`). Old ÔÇ£Pipeline valueÔÇØ = **$288M**; **$214M** of that is on **267** scheduled lines with **null ETA and null promise**. Top rows show qty **36** with amount **~$36M** each (`~1e6` unit price) from `acza_workbook_unship` source keys. |
+| **Idea** | Diagnose whether OEM amount/unit_price columns were mapped with wrong scale or currency; quarantine or re-import affected jobs. Do **not** silently rewrite amounts from the `/shipping` UI. |
+| **Mitigation shipped 2026-08-08** | `apps/api/app/services/shipping/amount_scale.py` ÔÇö KPI excludes suspect unit prices. |
+| **Quarantine 2026-08-10** | Zeroed `amount` on rows with `abs(amount)/qty > 100_000`; stamped JSON audit flag. Corrective re-import of Unship workbook still optional if operators want restored true amounts. |
+| **Why deferrable (remaining)** | Closed ÔÇö there are no true commercial amounts in the Unship Amount/Unit Price cells (sentinel 999999). |
+| **Regression traps** | Do not change DAP vs PM cost concepts; do not mass-UPDATE without audit trail; preserve `source_key` upsert semantics. |
+| **Out of scope** | Changing commercial KPI predicates again; MasterDataGridShell rewrite. |
+| **TRIGGER** | ÔÇö closed 2026-08-17 ÔÇö reopen only if a new Unship file has real unit prices (not 999999) and Warren asks to re-import. |
+
+---
+
+## BACKLOG-063 ÔÇö Shipment change events v2: cancelled-candidate via report-coverage
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked ┬À 2026-07-02 |
+| **Source** | Plan D phase 4 scope note; `shipment_change_events.py` v1 |
+| **TRIGGER** | Steward/report-coverage semantics for cancelled lines defined; ETA or channel-ops UI needs cancelled signal. |
+
+---
+
+## BACKLOG-064 ÔÇö Shipment change-event UI surfacing
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked ┬À 2026-07-02 |
+| **Source** | Plan D phase 4 (API/CLI only) |
+| **TRIGGER** | Shipping admin or commercial planner needs in-app event timeline; API contract stable after soak. |
+
+---
+
+## BACKLOG-065 ÔÇö Monthly-phased 1H allocation tier (phased ÔåÆ uniform_half fallback)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Parked** ┬À 2026-07-03 |
+| **Effort** | MediumÔÇôlarge (parser parity + allocation tier stack + sanity gate + steward flags; re-derivation hook already exists for `uniform_half`) |
+| **Source** | Steward session 2026-07-03: 1H split + `uniform_half` shipped (`1893309`, `lineup_half_year_quantity.py`); read-only diagnosis on `cip` ÔÇö 2026 NB 1H files lack Apr/May/Jun-style phasing in stored payloads; 2025-era corpus retains phasing in source workbooks. `historical_lineup.py` already captures `_month_split` ÔåÆ `month_split_json` on **historical** import lines; **`lineup_case_parser.py` (CommercialLineupCase / bulk backfill path) does not** ÔÇö stores `raw_row_payload.uploaded` (all header cells) but never populates `CommercialLineupLine.month_split_json` or a `_month_split` sentinel. |
+| **Idea** | **Allocation tier stack** for 1H half-year splits: **`monthly_phased`** when source carries month phasing columns (Apr/May/Jun-style) that pass a **sum-to-total sanity gate** (monthly values sum to line `quantity_units`, no TBC/blank poisoning) ÔåÆ else **`uniform_half`** fallback (todayÔÇÖs rule). Per-line flag records the tier used (e.g. `allocation=monthly_phased` vs `allocation=uniform_half`). Q1/Q2 case split from phasing: allocate months to calendar quarters from column headers, not blind 50/50. |
+| **Why it matters / deferrable** | **Value concentrates in 2025-era corpus** ÔÇö 2026 lineup format dropped monthly phasing columns, so `uniform_half` is the correct default for current imports. Phased allocation unlocks **intra-quarter phasing intelligence** (plan shape, steward review, later plan-vs-shipped at month grain) ÔÇö separate follow-on, not required for 1H Q1/Q2 case split today. Safe to defer while steward re-derivation runs on `uniform_half` flags. |
+| **What the work is** | (1) **Prerequisite audit** ÔÇö verify whether `lineup_case_parser` / bulk backfill preserves enough raw row evidence for phasing (gap vs preserve-raw principle); port or share month-column detection from `historical_lineup.py` into the CommercialLineupCase parse path; persist `month_split_json` on `commercial_lineup_line`. (2) **Sanity gate** ÔÇö month columns sum to `quantity_units` within tolerance; reject TBC/empty/non-numeric for phased tier. (3) **Tier resolver** in `lineup_half_year_quantity` (or sibling): `monthly_phased` ÔåÆ Q1/Q2 from monthÔåÆquarter map; fallback `uniform_half`. (4) **Preview/apply** ÔÇö show tier per file/line in bulk panel + re-derivation; steward override surface for tier (extends existing allocation flag pattern). (5) **Tests** ÔÇö 2025 fixture with AprÔÇôJun columns (phased), 2026 fixture (uniform_half only), sum-invariance for both tiers. |
+| **Regression traps** | Do not replace `uniform_half` as default when phasing absent; sum invariance must hold per tier; do not auto-pick supersession; `allocation=uniform_half` flags remain the **re-derivation hook** for already-imported 1H cases until steward re-runs with phased tier; historical vs weekly / DSI paths unchanged. |
+| **Behavior to retain** | Settled 1H rules: always split Q1+Q2; soft supersession; collisions to steward; flag Ôëá block; `period_scope=1h_split` from any 1H signal tier (`1893309`). |
+| **Out of scope** | Intra-quarter phasing **reporting** UI and month-grain plan-vs-shipped chips (separate later item); inventing phasing from thin air when columns missing; changing 1H split trigger logic. |
+| **TRIGGER** | **Re-deriving any 2025 1H file** during bulk backfill stewarding (phasing columns present in source), **or** when **month-grain plan-vs-shipped** becomes a reporting target. |
+
+---
+
+## BACKLOG-034 ÔÇö Product Master launch/retire date integrity
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | Parked ┬À 2026-06-14 |
+| **Effort** | Large (audit + governed steward corrections + re-validation plan) |
+| **Source** | Session audit: job #40 unique-SKU `inactive_only` anchor analysis (1,965 lines); `apps/api/app/services/imports/distributor_sales_inventory.py` (`_product_eligible_for_dsi_auto`, launch/retire window); `apps/api/app/models/dimensions.py` (`DimProduct.launch_date`, `retired_date`, `lifecycle_status`); shipment SKU-anchor override commit `6c865ea` (identity routed around bad dates) |
+| **Idea** | Audit and correct `dim_product.launch_date` / `retired_date`. Multiple confirmed corruption classes. |
+| **Why it matters / deferrable** | These dates gate product eligibility in DSI resolution (relaxed/strict) and would gate shipment-evidence, sell-through, and current-assortment views. Bad dates silently mis-classify products. **Confirmed on job-40 unique-SKU inactive_only anchors (1,965 lines):** 319 rows have `retired_date < launch_date` (inverted/impossible); 758 lines ship before `launch_date` (implausible at scale ÔåÆ likely late/wrong launch dates); 268 ship after `retired_date`. Plus: `B1403CVA-S61905W` retired 2025-12-22 before launch 2026-01-19; rows with `is_active=true` AND `lifecycle_status` in (Discarded/Disabled). This is the root cause routed around with the SKU-anchor identity rule. The override is correct for **identity**, but dates stay wrong for every other consumer. Deferrable until commercial outputs depend on lifecycle windows ÔÇö but **before** SKU-anchor override is reconsidered or assortment/sell-through windows go live. |
+| **What the work is** | (1) Start with the **319 inverted-window** rows ÔÇö unambiguously wrong, no domain judgment. (2) Resolve `is_active` vs `lifecycle_status` inconsistency: pick the canonical eligibility driver. (3) **before_launch** cases need Warren's domain call: real pre-launch channel-fill vs late launch dates. (4) Correct via governed update; never guess values ÔÇö derive from OEM/trusted source or steward review. (5) Re-validate affected DSI/shipment jobs after corrections. |
+| **Regression traps** | Fixing dates changes DSI eligibility outcomes ÔåÆ re-validate affected jobs after. Do **not** widen windows blindly; that defeats eligibility purpose. |
+| **Behavior to retain** | SKU-exact shipment identity anchor (identity Ôëá sellability); DSI historical vs weekly mode semantics; steward governance on master edits. |
+| **Out of scope** | Auto-correcting dates from import evidence without steward approval; reversing SKU-anchor identity rule. |
+| **TRIGGER** | Before relying on lifecycle/eligibility for any commercial output (assortment, sell-through windows), and before the SKU-anchor override is reconsidered. **Pairs with** BACKLOG-033 (bitemporal shipment cleanup). |
+
+---
+
+## Unsourced ÔÇö confirm with Warren
+
+These were on a verification checklist but **no deferral/pending wording** was found in repo docs, comments, or planning files:
+
+| Topic | Notes |
+|-------|--------|
+| **`customer_po` shipment column** | Not present in `SHIPMENT_CANONICAL_TARGETS` (`shipment_field_mapping.py`) or docs grep. |
+| **Shipment async steward endpoints** | DSI documents `dsi-steward-bulk-provisional-customers/apply-async` (`docs/DSI_RESOLUTION_PERFORMANCE.md`); shipment-evidence routes have no parallel async steward apply-async pattern in `shipment_evidence.py`. No explicit ÔÇ£defer shipment asyncÔÇØ text ÔÇö parity gap only. |
+
+If either is intended backlog, add a sourced entry after confirming where the decision is recorded.

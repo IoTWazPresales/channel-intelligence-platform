@@ -1,0 +1,1 @@
+{"node":"N-0068","expected_revision":9,"dim":"observability","state":"pending","rationale":"Not met yet: PUT column-grain commits a tenant-wide setting with no log line or audit event, and the PM mapping 400 for an unknown product line is only returned to the caller. Recorded as an open item in N0068_IMPL.md; not added in this run."}

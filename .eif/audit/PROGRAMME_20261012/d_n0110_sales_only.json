@@ -1,0 +1,6 @@
+{
+  "scope": "N-0110",
+  "origin": "operator",
+  "status": "accepted",
+  "statement": "Warren 2026-10-12: a customer sell-through file with units and no reported on-hand is accepted only when the operator marks that upload as sales-only. Every other such file is refused."
+}

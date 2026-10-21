@@ -1,0 +1,15 @@
+ops: always-on supervisor for the local stack and quick tunnel (N-0073)
+
+One hidden supervisor, started at logon from a per-user Startup shortcut,
+keeps WSL Redis, the Celery worker and beat, the API on 127.0.0.1:8001,
+the production web on 127.0.0.1:3000 and the Cloudflare quick tunnel
+running. It adopts healthy processes, restarts dead ones with backoff,
+refuses to open the tunnel unless session auth answers 401, and closes it
+on positive evidence that auth is open. The current public link comes
+from the cloudflared metrics endpoint and is written to a status page and
+a desktop shortcut. dev-worker.js and restart-dev.ps1 refuse to run a
+second worker while the supervisor is live. Web start binds loopback.
+
+Verified by GOV-008 run RUN-20261007-N0073-VER (VERIFIED_WITH_LIMITATIONS).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

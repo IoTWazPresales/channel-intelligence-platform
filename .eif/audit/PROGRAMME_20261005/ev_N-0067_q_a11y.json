@@ -1,0 +1,1 @@
+{"node": "N-0067", "expected_revision": 5, "dim": "a11y", "state": "pass", "evidence": "EV-N0067", "rationale": "Text and chart colours come from the theme semantic and primary colours, which are darkened on paper and lightened on the dark surface. The theme toggle remains in the toolbar."}

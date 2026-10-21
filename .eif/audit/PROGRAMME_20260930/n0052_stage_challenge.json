@@ -1,0 +1,1 @@
+{"node": "N-0052", "expected_revision": 3, "to": "challenge", "stage_note": "Do not GRANT on cip to unlock fx_daily_rate. Document the omitted table. Do not swallow AiResolverUnavailable."}

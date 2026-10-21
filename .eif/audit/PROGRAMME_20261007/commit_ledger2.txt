@@ -1,0 +1,8 @@
+eif: complete N-0073; add sweep nodes N-0085..N-0100 and Warren's decisions
+
+N-0073 accepted by Warren after GOV-008 (VERIFIED_WITH_LIMITATIONS).
+Adds the backlog-sweep work packages as nodes, records D-0059 (budget
+ledger), D-0060 (catalogue grain), D-0061 (listing coverage and polling)
+and D-0062 (listing quality), and unblocks N-0068, N-0078 and N-0079.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

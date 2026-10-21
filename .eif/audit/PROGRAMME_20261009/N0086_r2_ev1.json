@@ -1,0 +1,1 @@
+{"node":"N-0086","path":".eif/audit/PROGRAMME_20261009/N0086_IMPL.md","note":"N-0086 criteria 1 and 2 tested 2026-10-10. pytest 153 passed. vitest 34 passed on proxy headers and steward write gate. Criterion 3 (N-0075 pilot passwords) not built. Operator acceptance pending.","provenance":"implementation-observation","tree_hash":"a44be1ef545b8e02f8135c522baa92938dd965d6"}

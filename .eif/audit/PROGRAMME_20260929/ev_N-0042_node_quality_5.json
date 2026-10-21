@@ -1,0 +1,1 @@
+{"dim": "a11y", "state": "pass", "evidence": {"path": ".eif/audit/PROGRAMME_20260929/n0042/MATCH.md", "summary": "Save and Delete are named buttons. The name field in the dialog is labelled Name."}, "node": "N-0042", "expected_revision": 5}

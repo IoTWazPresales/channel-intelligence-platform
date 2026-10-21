@@ -1,0 +1,81 @@
+pro_rata_full app/services/shipment_strict_pair.py
+sha256 before: f7c217a64800c8d58a50668bf770e6b27a51abff006751154a7e72000d8eb561
+FAILED tests/test_shipment_strict_pair.py::test_shipping_kpi_quantity_counts_remainder
+FAILED tests/test_shipment_strict_pair.py::test_partial_line_value_is_pro_rata[open10_shipped6_amount1000_counts400]
+FAILED tests/test_shipment_strict_pair.py::test_partial_line_value_is_pro_rata[two_twins_summed_counts300]
+FAILED tests/test_shipment_strict_pair.py::test_shipping_kpi_value_is_pro_rata
+4 failed, 51 passed in 13.12s
+sha256 after: f7c217a64800c8d58a50668bf770e6b27a51abff006751154a7e72000d8eb561
+====
+pro_rata_full_orm app/services/shipment_strict_pair.py
+sha256 before: f7c217a64800c8d58a50668bf770e6b27a51abff006751154a7e72000d8eb561
+FAILED tests/test_shipment_strict_pair.py::test_shipping_kpi_quantity_counts_remainder
+FAILED tests/test_shipment_strict_pair.py::test_partial_line_value_is_pro_rata[open10_shipped6_amount1000_counts400]
+FAILED tests/test_shipment_strict_pair.py::test_partial_line_value_is_pro_rata[two_twins_summed_counts300]
+FAILED tests/test_shipment_strict_pair.py::test_shipping_kpi_value_is_pro_rata
+4 failed, 51 passed in 13.88s
+sha256 after: f7c217a64800c8d58a50668bf770e6b27a51abff006751154a7e72000d8eb561
+====
+channel_ops app/api/v1/endpoints/channel_ops.py
+sha256 before: bf44e9e78ec87f8ec9fb6a7f95fa35636eaf0a699b4ee4491cdc7e68289df2f7
+FAILED tests/test_shipment_strict_pair.py::test_channel_ops_movement_shipped_units_count_remainder
+FAILED tests/test_shipment_strict_pair.py::test_channel_ops_weekly_flow_counts_remainder
+FAILED tests/test_shipment_strict_pair.py::test_channel_ops_cover_inbound_open_counts_remainder
+3 failed, 52 passed in 10.78s
+sha256 after: bf44e9e78ec87f8ec9fb6a7f95fa35636eaf0a699b4ee4491cdc7e68289df2f7
+====
+net_requirement (in-memory plugin)
+sha256 before: 9544127eb147d2c2ab16f93b215eaaf4f17dfa626f9b84bbbb053f8f841ad183
+FAILED tests/test_shipment_strict_pair.py::test_net_requirement_in_transit_counts_remainder
+1 failed, 54 passed in 11.02s
+sha256 after: 9544127eb147d2c2ab16f93b215eaaf4f17dfa626f9b84bbbb053f8f841ad183
+====
+po_auto_link app/services/commercial_planner/lineup_po_auto_link.py
+sha256 before: db57402af2b3201875e45f5e76b23fb6a69b08093725327ef20c15c5c717dcab
+Traceback (most recent call last):
+  File "C:\Users\warren_eliason\channel-intelligence-platform\.eif\audit\PROGRAMME_20261007\n0071_r3_mutant.py", line 92, in <module>
+    target.write_bytes(data.encode("utf-8"))
+  File "C:\Users\warren_eliason\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1036, in write_bytes
+    with self.open(mode='wb') as f:
+         ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\warren_eliason\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1013, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [Errno 22] Invalid argument: 'apps\\api\\app\\services\\commercial_planner\\lineup_po_auto_link.py'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\warren_eliason\channel-intelligence-platform\.eif\audit\PROGRAMME_20261007\n0071_r3_mutant.py", line 102, in <module>
+    target.write_bytes(original)
+  File "C:\Users\warren_eliason\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1036, in write_bytes
+    with self.open(mode='wb') as f:
+         ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\warren_eliason\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1013, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [Errno 22] Invalid argument: 'apps\\api\\app\\services\\commercial_planner\\lineup_po_auto_link.py'
+====
+po_reconciliation app/services/commercial_planner/lineup_po_reconciliation.py
+sha256 before: a2bdb86211161a12775ff3c4000cd7746bf8e819cb92006e039bd1d02284f976
+FAILED tests/test_shipment_strict_pair.py::test_po_reconciliation_pipeline_counts_remainder
+1 failed, 54 passed in 8.03s
+sha256 after: a2bdb86211161a12775ff3c4000cd7746bf8e819cb92006e039bd1d02284f976
+====
+hint_1h app/services/commercial_planner/lineup_bulk_rederivation.py
+sha256 before: 52076c2c5ac66ce39723385116a4d571ebc9f557698b18a5505d5af04f4f9f6b
+FAILED tests/test_shipment_strict_pair.py::test_1h_hint_counts_remainder - as...
+1 failed, 54 passed in 7.10s
+sha256 after: 52076c2c5ac66ce39723385116a4d571ebc9f557698b18a5505d5af04f4f9f6b
+====
+grid_still_to_ship app/api/v1/endpoints/shipping.py
+sha256 before: 3821f0fd2dde46f1b98073d44741d0122f394471936e000c1830f93db32b5e91
+FAILED tests/test_shipment_strict_pair.py::test_shipping_grid_still_to_ship
+1 failed, 54 passed in 8.12s
+sha256 after: 3821f0fd2dde46f1b98073d44741d0122f394471936e000c1830f93db32b5e91
+====
+po_auto_link app/services/commercial_planner/lineup_po_auto_link.py
+sha256 before: db57402af2b3201875e45f5e76b23fb6a69b08093725327ef20c15c5c717dcab
+FAILED tests/test_shipment_strict_pair.py::test_po_auto_link_open_order_units_count_remainder
+1 failed, 54 passed in 5.62s
+sha256 after: db57402af2b3201875e45f5e76b23fb6a69b08093725327ef20c15c5c717dcab

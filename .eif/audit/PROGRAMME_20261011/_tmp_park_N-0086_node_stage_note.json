@@ -1,0 +1,1 @@
+{"note": "Criterion 3 still waits on N-0075. Placeholder passwords on admin@local and viewer@local were not retired: those addresses cannot receive mail, and retiring them would lock Local Admin out. Do not call issue_invite until the Gmail app password is in apps/api/.env and send is on.", "node": "N-0086", "expected_revision": 14}

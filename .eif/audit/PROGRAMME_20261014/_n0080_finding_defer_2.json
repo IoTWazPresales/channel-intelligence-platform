@@ -1,0 +1,1 @@
+{"note": "N-0080: full API suite on cip_test: 19 failed, 10 errors outside N-0080 files (platform_audit mock await, promo_plan_builder FakeSession.begin_nested, open-channel copy, seed data, settle-clone test leaves settings on a dropped clone DB).", "code": "DOES_NOT_FIT", "node": "N-0080", "expected_revision": 20}

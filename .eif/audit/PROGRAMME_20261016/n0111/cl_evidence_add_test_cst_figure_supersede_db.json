@@ -1,0 +1,1 @@
+{"path": "apps/api/tests/test_cst_figure_supersede_db.py", "note": "N-0111: DB tests on cip_test: stock-only never wipes sales, sales-only never wipes stock, cross key, whole row, re-upload, year gate.", "provenance": "implementation-observation", "node": "N-0111", "expected_revision": 5}

@@ -1,0 +1,1 @@
+{"stage": "verify", "stage_note": "R2 check under RUN-20261011-N0091-VER, a different run from implementation, same session. Not a different model. VERIFIED_WITH_LIMITATIONS: live line table confirmed; timeline not scrolled; tests/test_shipment_receipt.py 6 passed.", "node": "N-0091", "expected_revision": 15}

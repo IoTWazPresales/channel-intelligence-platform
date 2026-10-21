@@ -1,0 +1,1 @@
+{"node": "N-0067", "expected_revision": 4, "dim": "ux", "state": "pass", "evidence": "EV-N0067", "rationale": "Charts, stock tabs, brief and settlement dividers, and readiness chips now use the theme palette, so light and dark stay in the same family. Light mode was readable on Administration, Planning, Supply, and Execution vs plan."}

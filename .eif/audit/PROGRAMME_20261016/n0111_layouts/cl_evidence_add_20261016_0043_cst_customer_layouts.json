@@ -1,0 +1,1 @@
+{"path": "apps/api/alembic/versions/20261016_0043_cst_customer_layouts.py", "note": "N-0111 layouts: layout table and source_definition.is_hidden; clone proof.", "provenance": "implementation-observation", "node": "N-0111", "expected_revision": 48}

@@ -1,0 +1,29 @@
+{
+  "id": "N-0103",
+  "parent": "N-0085",
+  "title": "N-0085 U6: Proposed listings steward worklist with bulk confirm, and a per-customer Coverage lens",
+  "class": "feature",
+  "origin": "decomposition",
+  "status": "proposed",
+  "facets": [
+    "ui",
+    "api"
+  ],
+  "risk": "R2",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": [
+    "N-0102"
+  ],
+  "acceptance_criteria": [
+    "Feed proposals becomes Proposed listings: customer, product, page link, how found, what the page shows (title, EAN, price); Confirm selected takes corroborated rows only and lists skipped ones",
+    "Coverage lens (?tab=coverage): per customer reported, watched, awaiting steward, failing, not found, not searched, plus site state; drill to products; counts match SQL",
+    "A paused site shows a chip with reason and next try; nothing blocks",
+    "Design: .eif/audit/PROGRAMME_20261007/N0085_DESIGN.md; decisions D-0061 and D-0063",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "auto"
+}

@@ -158,6 +158,35 @@ def shipment_apply_task(self, job_id: int) -> dict:
         return record_shipment_apply_failure(job_id, exc)
 
 
+@celery_app.task(name="imports.cst_apply", bind=True, ack_late=True)
+def cst_apply_task(self, job_id: int) -> dict:
+    """Background apply for a ``customer_sell_through`` job (N-0111; mirrors ``imports.shipment_apply``)."""
+    from app.db.session_sync import SessionLocal
+    from app.services.imports.cst_apply_sync import record_cst_apply_failure, run_cst_apply_sync
+
+    def _on_progress(phase: str, phase_label: str, current_row: int, total_rows: int) -> None:
+        try:
+            self.update_state(
+                state="PROGRESS",
+                meta=_celery_progress_meta(
+                    phase=phase,
+                    phase_label=phase_label,
+                    current_row=current_row,
+                    total_rows=total_rows,
+                    pct=round(current_row / total_rows * 100) if total_rows else 0,
+                ),
+            )
+        except Exception:
+            pass
+
+    try:
+        with SessionLocal() as db:
+            return run_cst_apply_sync(db, job_id, on_progress=_on_progress)
+    except Exception as exc:
+        logger.exception("cst_apply_task failed job_id=%s — recording failure", job_id)
+        return record_cst_apply_failure(job_id, exc)
+
+
 def _shipment_bulk_progress(self, phase: str, phase_label: str):
     def _on_progress(current: int, total: int) -> None:
         try:

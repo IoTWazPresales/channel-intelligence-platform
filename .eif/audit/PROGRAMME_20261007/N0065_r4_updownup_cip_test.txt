@@ -1,0 +1,13 @@
+[before] current_database() = cip_test  alembic = ['20261009_0026']
+INFO  [alembic.runtime.migration] Running downgrade 20261009_0026 -> 20261007_0025, Product-line row security for shipment evidence with no product (lineage), scope-independent current row.
+[before] current_database() = cip_test  alembic = ['20261009_0026']
+[after] current_database() = cip_test  alembic = ['20261007_0025']
+INFO  [alembic.runtime.migration] Running upgrade 20261007_0025 -> 20261009_0026, Product-line row security for shipment evidence with no product (lineage), scope-independent current row.
+[before] current_database() = cip_test  alembic = ['20261007_0025']
+[after] current_database() = cip_test  alembic = ['20261009_0026']
+INFO  [alembic.runtime.migration] Running downgrade 20261009_0026 -> 20261007_0025, Product-line row security for shipment evidence with no product (lineage), scope-independent current row.
+[before] current_database() = cip_test  alembic = ['20261009_0026']
+[after] current_database() = cip_test  alembic = ['20261007_0025']
+INFO  [alembic.runtime.migration] Running upgrade 20261007_0025 -> 20261009_0026, Product-line row security for shipment evidence with no product (lineage), scope-independent current row.
+[before] current_database() = cip_test  alembic = ['20261007_0025']
+[after] current_database() = cip_test  alembic = ['20261009_0026']

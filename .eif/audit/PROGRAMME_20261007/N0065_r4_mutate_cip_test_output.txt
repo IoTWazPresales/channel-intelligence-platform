@@ -1,0 +1,8 @@
+current_database() = cip_test | alembic = ['20261009_0026']
+  [baseline 0026] exit=0 ......................                                                   [100%]
+  [M1 no current pick] exit=1 FAILED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_current_pick_runs_once_and_only_when_scoped | test_lineage_visibility_per_scope[steward A]; test_lineage_visibility_per_scope[planner A]; test_current_pick_runs_once_and_only_when_scoped
+  [M1 no current pick restored] exit=0 ......................                                                   [100%]
+  [M2 0025 null rule] exit=1 FAILED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_insert_of_unresolved_row_still_allowed_without_returning | test_lineage_visibility_per_scope[steward A]; test_lineage_visibility_per_scope[steward, no lines]; test_lineage_visibility_per_scope[planner A]; test_lineage_visibility_per_scope[planner B]; test_lineage_visibility_per_scope[viewer A,B]; test_lineage_visibility_per_scope[planner, no lines]; test_lineage_visibility_per_scope[viewer, no lines, no role]; test_lineage_edit_per_scope; test_insert_of_unresolved_row_still_allowed_without_returning
+  [M2 0025 null rule restored] exit=0 ......................                                                   [100%]
+  [M3 no steward branch] exit=1 FAILED tests/test_shipment_evidence_lineage_rls_n0065_db.py::test_lineage_edit_per_scope | test_lineage_visibility_per_scope[steward A]; test_lineage_visibility_per_scope[steward, no lines]; test_lineage_edit_per_scope
+  [M3 no steward branch restored] exit=0 ......................                                                   [100%]

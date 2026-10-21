@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2628
-  log_sha256: 820a0ba2d25471ff4f9ff1ed38fc7c409abd6d04c5eb151512a50571de66b832
+  snapshot_revision: 2633
+  log_sha256: eecdb228d104112a5207f7ecf7af0406c8d904c58a3bb4d1dcdf31d23d2edd8c
   acceptance_policy:
     milestone: operator
     root: operator
@@ -13191,8 +13191,12 @@ nodes:
     origin: operator
     status: in_progress
     stage: verify
-    revision: 72
-    lease: null
+    revision: 73
+    lease:
+      run: RUN-20261019-N0111-MAP
+      acquired_at: '2026-10-18T22:12:08Z'
+      heartbeat_at: '2026-10-18T22:12:08Z'
+      expires_at: '2026-10-19T00:12:08Z'
     depends_on:
     - N-0110
     - N-0095
@@ -14571,6 +14575,42 @@ decisions:
       the existing column-mapping step to map headers to the standard sell-through columns, and the layout is saved for that
       customer; later uploads match a saved layout by headers automatically; a customer may have several saved layouts (e.g.
       weekly report, history file, wide-week). (4) Test/build-session sources never appear to users.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0116:
+    id: D-0116
+    scope: N-0111
+    statement: 'Warren 2026-10-19: the sell-through column-mapping step offers these standard columns. Main list: Period (sale
+      date, week or month); Sales model / marketing name; Part number; Barcode (EAN or UPC); Customer product code; Units
+      sold; On-hand (stock; not required when Sales-only is ticked); Unit cost; Unit sell price; Total line cost; Total revenue;
+      Store / site; Listing ID (website listing, e.g. ASIN/TSIN). Under ''More columns'': unit MAC, marketplace, on-hand value,
+      in-transit units, on-order units.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0117:
+    id: D-0117
+    scope: N-0111
+    statement: 'Warren 2026-10-19: product identity uses every identifier the file provides, resolved in the platform order:
+      Part number -> Barcode -> Sales model; Customer product code resolves through the customer''s own code aliases. Barcode
+      matches Product Master EAN OR UPC. Exact / normalised-exact only, never fuzzy; one match wins only if unambiguous; disagreements
+      between identifiers on one row are flagged, not guessed. At least one identifier must be mapped.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0118:
+    id: D-0118
+    scope: N-0111
+    statement: 'Warren 2026-10-19: when a unit cost or unit sell price is missing but the total and units are present (units
+      != 0), the unit figure is derived as total / units and marked derived; the stored totals stay as given.'
+    origin: operator
+    status: accepted
+    supersedes: null
+  D-0119:
+    id: D-0119
+    scope: N-0111
+    statement: 'Warren 2026-10-19: ''Customer article code'' is renamed ''Customer product code'' in the UI only.'
     origin: operator
     status: accepted
     supersedes: null
@@ -18007,7 +18047,7 @@ deferred_findings:
   status: deferred
 ids:
   node: 5
-  decision: 115
+  decision: 119
   blocker: 19
   evidence: 182
   baseline: 18

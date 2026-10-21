@@ -1,0 +1,23 @@
+{
+  "id": "N-0082",
+  "parent": null,
+  "title": "Customer approval link for settlement sign-off (spec section 9.2; trigger met: 211 cases settled manually)",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": ["auth", "public_api", "ui"],
+  "risk": "R3",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": ["N-0074"],
+  "acceptance_criteria": [
+    "A planner sends a customer a single-case link; the customer sees only that case's settlement summary and approves or rejects with a comment",
+    "The link is a signed, expiring, single-case token; it opens nothing else and is revocable",
+    "Approval is recorded as a case event with who, when and the version approved",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

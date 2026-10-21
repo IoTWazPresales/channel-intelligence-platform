@@ -1,0 +1,26 @@
+{
+  "id": "N-0092",
+  "parent": null,
+  "title": "Platform audit log for admin, user, settings and case-state actions",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": [
+    "api",
+    "ui",
+    "auth"
+  ],
+  "risk": "R2",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": [],
+  "acceptance_criteria": [
+    "One append-only audit trail for admin, user, settings and case-state actions beyond steward and SQL-viewer events",
+    "The Audit log nav leaf gets its own route",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

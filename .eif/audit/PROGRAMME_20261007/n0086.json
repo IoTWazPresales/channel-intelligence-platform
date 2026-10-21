@@ -1,0 +1,29 @@
+{
+  "id": "N-0086",
+  "parent": null,
+  "title": "Security hardening before 24/7 exposure: proxy login-throttle address, steward-write role checks, pilot passwords",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": [
+    "auth",
+    "api",
+    "ui"
+  ],
+  "risk": "R3",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": [
+    "N-0073"
+  ],
+  "acceptance_criteria": [
+    "The web proxy overwrites X-Forwarded-For with the socket address it saw, so the per-address login throttle cannot be dodged (N-0037 residual)",
+    "CST steward bulk preview/apply/ignore and other steward writes in imports.py require steward or admin; the web hides those controls from other roles (N-0038 residual)",
+    "Placeholder pilot passwords are rotated or retired by the N-0075 invite flow (BACKLOG-205)",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

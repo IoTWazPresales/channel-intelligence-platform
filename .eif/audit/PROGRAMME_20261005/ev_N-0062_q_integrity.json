@@ -1,0 +1,1 @@
+{"node": "N-0062", "expected_revision": 7, "dim": "data_integrity", "state": "pass", "evidence": "EV-N0062", "rationale": "Arrived is pod_date null and line_state arrived. A proof-of-delivery date stays landed. Plan-unit coverage is a derived read by distributor. Neither is a stored column."}

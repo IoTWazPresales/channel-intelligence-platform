@@ -1,0 +1,1 @@
+{"node": "N-0062", "expected_revision": 10, "note": "Failed supply overview reads now log. pytest 30 passed on supply coverage and plan-vs-executed. Supply page in light mode shows open shipments as on order, shipped, or arrived with no proof of delivery, and a plan-unit coverage section. Gates stamped. No cip write."}

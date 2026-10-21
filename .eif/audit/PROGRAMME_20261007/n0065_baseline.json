@@ -1,0 +1,14 @@
+{
+  "id": "BLN-N0065",
+  "provenance": "implementation-observation",
+  "tree_hash": "9c28bdcf9bc7e4bcdf366cc70ef923168aecdd82",
+  "path": ".eif/audit/PROGRAMME_20261007/N0065_DISCOVERY.md",
+  "observed_behavior": "Dirty-tree product-line gate: router binds each signed-in user's assigned lines (read / editable) as session settings; database row security filters dim_product and product-keyed tables; unset = open, empty = none, * = all. Admin with no assignment sees no product data.",
+  "latent_capabilities": ["unset-scope-open-for-workers", "star-scope-all-lines", "admin-catalog-widen-for-assignment", "read-vs-edit-per-line"],
+  "preservation": {
+    "unset-scope-open-for-workers": "kept: workers and forged test identities stay unset",
+    "star-scope-all-lines": "kept and reused for admins",
+    "admin-catalog-widen-for-assignment": "kept",
+    "read-vs-edit-per-line": "kept for non-admins"
+  }
+}

@@ -1,0 +1,7 @@
+{"ts":"2026-10-09T07:05:53Z","kind":"programme.event","event":"node.lease.acquire","seq":1827}
+{"ts":"2026-10-09T12:15:20Z","kind":"programme.event","event":"node.lease.acquire","seq":1844}
+{"ts":"2026-10-09T12:16:19Z","kind":"programme.event","event":"baseline.add","seq":1845}
+{"ts":"2026-10-09T12:18:33Z","kind":"programme.event","event":"node.baseline","seq":1846}
+{"ts":"2026-10-09T12:19:27Z","kind":"programme.event","event":"node.stage","seq":1847}
+{"ts":"2026-10-09T12:20:26Z","kind":"programme.event","event":"node.stage","seq":1848}
+{"ts":"2026-10-09T12:21:43Z","kind":"programme.event","event":"node.stage","seq":1849}

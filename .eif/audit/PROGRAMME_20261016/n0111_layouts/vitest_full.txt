@@ -1,0 +1,554 @@
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mC:/Users/warren_eliason/channel-intelligence-platform/apps/web[39m
+
+ [32m✓[39m src/app/(app)/commercial-planner/page.test.tsx [2m([22m[2m83 tests[22m[2m)[22m[33m 45554[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage[2m > [22mloads planner workspace and summary [33m866[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage[2m > [22mrenders plan selector chips and action buttons in the compact plan controls [33m453[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage[2m > [22mapplies assisted suggestion after preview and confirm [33m719[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage[2m > [22mData map tab shows commercial field map [33m789[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage[2m > [22mloads planner defaults tab and fetches maintenance lists [33m886[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage[2m > [22mshows economics trust banner after Recalculate when API reports low trust [33m676[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — QA polish[2m > [22mColumns opens popover with optional column toggles [33m602[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — QA polish[2m > [22mtoggling Promo mix shows column in grid column defs [33m976[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — QA polish[2m > [22mgrid estimated internal margin shows em dash when line has blocking flag [33m727[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — QA polish[2m > [22mpersists optional column toggles under localStorage key cip.commercial-planner.gridColumns.v4 [33m906[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — QA polish[2m > [22mCPU spec shows value from product_specs_flat when metadata-driven spec column is enabled [33m996[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — QA polish[2m > [22mtoggling effective FX shows column in grid defs [33m896[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — QA polish[2m > [22mAdd from lineup posts new lines without landed_cost_usd and skips plan duplicates [33m2318[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — QA polish[2m > [22mfractional target_units suggestion preview shows rounded value and confirm sends integer [33m856[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — QA polish[2m > [22mshows grid loading overlay while lines request is pending [33m419[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Lineup coverage tab[2m > [22mLineup coverage panel renders empty state when no jobs are available [33m653[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Lineup coverage tab[2m > [22mlineup-jobs endpoint is queried when Lineup coverage tab is active [33m1037[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Lineup coverage tab[2m > [22mauto-selects the latest job and loads coverage lines without manual selection [33m1755[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Lineup coverage tab[2m > [22mplan queries (plans/lines/summary/suggestions) are not called after switching to Lineup Coverage [33m1182[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Lineup coverage tab[2m > [22mdisti_margin_pct 0.0724 displays as 7.24% in coverage table [33m1180[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Lineup coverage tab[2m > [22munresolved customer chips use has_unknown_customer — not has_warnings [33m869[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Lineup coverage tab[2m > [22msummary cards show correct resolved-product and unresolved-customer counts [33m841[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Lineup coverage tab[2m > [22mcoverage table renders line data from the endpoint [33m851[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Lineup coverage tab[2m > [22mshows no-lines state when coverage returns empty array [33m749[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Lineup coverage tab[2m > [22mproduct defaults coverage section renders gap status for each product [33m853[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Lineup coverage tab[2m > [22mcost semantics note renders in product defaults section [33m853[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Lineup coverage tab[2m > [22mtext filter reduces visible coverage rows by matching on model_raw [33m1638[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Lineup coverage tab[2m > [22mcoverage table column headers use MSRP / list and Promo price labels [33m747[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Lineup coverage tab[2m > [22mcommercial completeness summary shows MSRP, Promo, DAP, and month split counts [33m789[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Lineup coverage tab[2m > [22mmonth split data renders in coverage table row [33m806[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Lineup coverage tab[2m > [22mproduct defaults coverage explanation caption is visible [33m721[2mms[22m[39m
+   [33m[2m✓[22m[39m Plan readiness chips[2m > [22mshows missing SKU assumption chip when readiness reports gaps [33m364[2mms[22m[39m
+   [33m[2m✓[22m[39m Plan readiness chips[2m > [22mshows all-defaults-present message when plan is ready [33m398[2mms[22m[39m
+   [33m[2m✓[22m[39m Plan readiness chips[2m > [22mreadiness missing customer term shows Customer admin link and Planner defaults action [33m458[2mms[22m[39m
+   [33m[2m✓[22m[39m Plan readiness chips[2m > [22mreadiness missing distributor term shows Distributor admin link and Planner defaults action [33m387[2mms[22m[39m
+   [33m[2m✓[22m[39m Plan readiness chips[2m > [22mreadiness missing SKU assumption shows Planner defaults action for SKU assumptions [33m393[2mms[22m[39m
+   [33m[2m✓[22m[39m Plan readiness chips[2m > [22mreadiness invalid controlled cost shows warning and link to planner defaults [33m386[2mms[22m[39m
+   [33m[2m✓[22m[39m Plan readiness chips[2m > [22mreadiness UNASSIGNED distributor shows informational alert [33m390[2mms[22m[39m
+   [33m[2m✓[22m[39m Lineup evidence panel in Add line dialog[2m > [22mshows lineup evidence panel when product is selected and evidence is available [33m960[2mms[22m[39m
+   [33m[2m✓[22m[39m Lineup evidence panel in Add line dialog[2m > [22mclicking MSRP chip prefills the Target SRP field [33m1141[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Workspace V1[2m > [22mrecalculate-needed banner appears when a line has null economics [33m353[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Workspace V1[2m > [22mshows plan / customer-facing currency banner from active plan [33m308[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Workspace V1[2m > [22mselected-line detail panel appears when a grid row is clicked [33m635[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Workspace V1[2m > [22mselected-line detail shows "Economics OK" chip for a clean line [33m690[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Workspace V1[2m > [22mselected-line detail shows controlled cost missing warning when flag is present [33m637[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Workspace V1[2m > [22msuggestions panel shows lineup-based source indicator when meta.data_sources.lineup is true [33m637[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Workspace V1[2m > [22mplan summary strip shows "Economics incomplete" when a line has null sell-in price [33m311[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Workspace V1[2m > [22mplan summary strip shows OEM net margin label when economics are complete [33m315[2mms[22m[39m
+   [33m[2m✓[22m[39m CommercialPlannerPage — Workspace V1[2m > [22msuggestions section is collapsible and defaults to open [33m841[2mms[22m[39m
+   [33m[2m✓[22m[39m V3: Column selector modal[2m > [22mopens column selector modal when Columns button is clicked [33m491[2mms[22m[39m
+   [33m[2m✓[22m[39m V3: Column selector modal[2m > [22mshows locked columns note in modal [33m485[2mms[22m[39m
+   [33m[2m✓[22m[39m V3: Column selector modal[2m > [22mpreset button triggers onPreset callback [33m655[2mms[22m[39m
+   [33m[2m✓[22m[39m V3: Add product set[2m > [22mAdd product set button is present when plan is active [33m433[2mms[22m[39m
+   [33m[2m✓[22m[39m V3: Add product set[2m > [22mopens Add product set dialog when button clicked [33m510[2mms[22m[39m
+   [33m[2m✓[22m[39m V3: Add product set[2m > [22mAdd product set dialog shows customer and distributor pickers [33m560[2mms[22m[39m
+   [33m[2m✓[22m[39m V3: Current lineup section[2m > [22mCurrent lineups section renders when plan is active [33m302[2mms[22m[39m
+   [33m[2m✓[22m[39m V3: Current lineup section[2m > [22mUpload current lineup button is present in section [33m314[2mms[22m[39m
+   [33m[2m✓[22m[39m V3: Richer product label[2m > [22mAdd line product shows SKU · model label format [33m526[2mms[22m[39m
+   [33m[2m✓[22m[39m V4: Column metadata and label fixes[2m > [22mcolumn modal receives columnMeta prop when active plan has column metadata [33m497[2mms[22m[39m
+   [33m[2m✓[22m[39m V4: Column metadata and label fixes[2m > [22mplan summary strip shows OEM net margin label not per-unit [33m368[2mms[22m[39m
+   [33m[2m✓[22m[39m CurrentLineupSection — sync to plan[2m > [22msync button visible only for accepted cases [33m832[2mms[22m[39m
+   [33m[2m✓[22m[39m CurrentLineupSection — sync to plan[2m > [22msync preview dialog shows counts when sync button is clicked [33m559[2mms[22m[39m
+   [33m[2m✓[22m[39m CurrentLineupSection — sync to plan[2m > [22mworkbench shows resolve entities and sync preview chip when case is draft and linked to plan [33m524[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/page.test.tsx [2m([22m[2m31 tests[22m[2m)[22m[33m 39783[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage deferred template visibility[2m > [22mkeeps customer_master visible and hides customer_channel_mapping card [33m842[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage job revisit via ?job= URL param[2m > [22mrenders the revisit banner and diagnostic rows when ?job=42 is in the URL [33m610[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage job revisit via ?job= URL param[2m > [22mresumes PM wizard for product_master job revisit (no read-only deferred alert) [33m360[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage historical_lineup Apply button post-success behavior[2m > [22mApply button appears after validate succeeds and a file is present [33m2407[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage historical_lineup Apply button post-success behavior[2m > [22mApply button disappears and apply success Alert appears after apply succeeds [33m1833[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage historical_lineup Apply button post-success behavior[2m > [22mvalidate success Alert shows generic message and does not show apply Alert [33m1301[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage historical_lineup mapping review panel[2m > [22mmapping review panel is absent before validate completes [33m1119[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage historical_lineup mapping review panel[2m > [22mmapping review panel appears and shows source columns after validate [33m3159[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage historical_lineup mapping review panel[2m > [22mmapping review panel renders column samples, required-group chips, and blocking errors [33m1761[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage historical_lineup mapping review panel[2m > [22mre-validate with corrections sends mapping_override in FormData [33m2649[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage historical_lineup mapping review panel[2m > [22mapply with edits sends mapping_override in FormData [33m2579[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage historical_lineup mapping review panel[2m > [22mstart over clears the mapping review panel [33m1345[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage Phase 3B — mapping review label clarity[2m > [22mmapping review shows "Product identity (SKU)" label not bare "SKU" [33m1442[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage Phase 3B — mapping review label clarity[2m > [22mmapping review shows "Base unit (descriptor)" as a target option [33m1783[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage Phase 3B — mapping review label clarity[2m > [22mregression: sku_raw stays unmapped when field_mapping has no sku_raw [33m1387[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage Phase 3B — diagnostic summary chips[2m > [22mdiagnostic summary chips appear with code counts after validate returns rows [33m1069[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage Phase 3C — quality review panel[2m > [22mquality review panel shows apply-ready badge when no blocking errors exist [33m1110[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage Phase 3C — quality review panel[2m > [22mquality review panel groups unknown customer tokens with row counts [33m1170[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage Phase 3C — quality review panel[2m > [22mapply button shows inline confirmation when unresolved customers exist, then applies on confirm [33m1836[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage Sub-pass A — loaded lineup records[2m > [22mloaded lineup section appears after apply and shows line data [33m1359[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage Sub-pass A — loaded lineup records[2m > [22mloaded lineup section shows empty state when no lines returned [33m1385[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage Sub-pass A — loaded lineup records[2m > [22mView apply job link appears in success alert with correct job id [33m1414[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage Sub-pass A — loaded lineup records[2m > [22munresolved customer token chips appear in loaded lineup section when lines have unknown_customer [33m1501[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage Sub-pass A — loaded lineup records[2m > [22munresolved customer token section is absent when all customers are resolved [33m1286[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage distributor sales & inventory guidance[2m > [22mshows DSI contract, unit price ex VAT, shipping preservation, and customer staging copy [33m873[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage steward write gating (N-0086)[2m > [22ma viewer opening a steward template by URL gets a disabled wizard [33m437[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminImportsPage customer sell-through (N-0111: a reporting customer, not a source)[2m > [22moffers no source to pick and goes on without one [33m808[2mms[22m[39m
+ [32m✓[39m src/features/commercial-planner/CurrentLineupSection.test.tsx [2m([22m[2m16 tests[22m[2m)[22m[33m 15508[2mms[22m[39m
+   [33m[2m✓[22m[39m CurrentLineupSection — lineup workbench semantics[2m > [22mshows Open Channel customer as Unassigned (not unresolved token) [33m920[2mms[22m[39m
+   [33m[2m✓[22m[39m CurrentLineupSection — lineup workbench semantics[2m > [22mshows raw upload column value when enabled in workbench columns [33m1597[2mms[22m[39m
+   [33m[2m✓[22m[39m CurrentLineupSection — lineup workbench semantics[2m > [22mdoes not auto-show CPU columns; Processor details preset adds them [33m1330[2mms[22m[39m
+   [33m[2m✓[22m[39m CurrentLineupSection — lineup workbench semantics[2m > [22mshows Distributor unassigned for UNASSIGNED placeholder dim [33m375[2mms[22m[39m
+   [33m[2m✓[22m[39m CurrentLineupSection — lineup workbench semantics[2m > [22mProcessor details preset shows spec:cpu when catalogue has key [33m1314[2mms[22m[39m
+   [33m[2m✓[22m[39m CurrentLineupSection — lineup workbench semantics[2m > [22mentity resolution: apply Open Channel staging sends explicit API action [33m1271[2mms[22m[39m
+   [33m[2m✓[22m[39m CurrentLineupSection — lineup workbench semantics[2m > [22mconfirm-with-po: draft case shows Confirm with PO without status ladder [33m962[2mms[22m[39m
+   [33m[2m✓[22m[39m CurrentLineupSection — lineup workbench semantics[2m > [22mconfirm-with-PO: accepted case sends po_numbers list to confirm endpoint [33m1496[2mms[22m[39m
+   [33m[2m✓[22m[39m CurrentLineupSection — lineup workbench semantics[2m > [22mentity resolution: customer-column token mapped as distributor sends redirect kind [33m1057[2mms[22m[39m
+   [33m[2m✓[22m[39m CurrentLineupSection — lineup workbench semantics[2m > [22mplan-optional: lists unlinked cases grouped by period + product line when no plan selected [33m301[2mms[22m[39m
+   [33m[2m✓[22m[39m CurrentLineupSection — lineup workbench semantics[2m > [22mworkbench opens from an unlinked case (no plan required) [33m345[2mms[22m[39m
+   [33m[2m✓[22m[39m CurrentLineupSection — lineup workbench semantics[2m > [22massign distributor: converged suggestion assigns the existing dim [33m972[2mms[22m[39m
+   [33m[2m✓[22m[39m CurrentLineupSection — lineup workbench semantics[2m > [22massign distributor: ambiguous evidence lets you pick a candidate [33m807[2mms[22m[39m
+   [33m[2m✓[22m[39m CurrentLineupSection — lineup workbench semantics[2m > [22massign distributor: create-new requires confirm and posts create payload [33m1903[2mms[22m[39m
+   [33m[2m✓[22m[39m CurrentLineupSection — lineup workbench semantics[2m > [22mdefault workbench columns omit SKU but show calc chain and formatted pct [33m734[2mms[22m[39m
+ [32m✓[39m src/features/commercial-planner/PoAutoLinkProposalsSection.test.tsx [2m([22m[2m23 tests[22m[2m)[22m[33m 17500[2mms[22m[39m
+   [33m[2m✓[22m[39m PoAutoLinkProposalsSection[2m > [22mdoes not fetch proposals until expanded [33m1039[2mms[22m[39m
+   [33m[2m✓[22m[39m PoAutoLinkProposalsSection[2m > [22mrenders proposal card rows after expand with confidence chip [33m599[2mms[22m[39m
+   [33m[2m✓[22m[39m PoAutoLinkProposalsSection[2m > [22mopens confirm dialog with sales_model_name and sku for matched products [33m974[2mms[22m[39m
+   [33m[2m✓[22m[39m PoAutoLinkProposalsSection[2m > [22mapplies link from confirm dialog [33m1012[2mms[22m[39m
+   [33m[2m✓[22m[39m PoAutoLinkProposalsSection[2m > [22mbulk apply selected proposals after confirm dialog [33m1018[2mms[22m[39m
+   [33m[2m✓[22m[39m PoAutoLinkProposalsSection[2m > [22mrenders two cards with full distinct customer labels for near-identical tokens [33m588[2mms[22m[39m
+   [33m[2m✓[22m[39m PoAutoLinkProposalsSection[2m > [22mshows per-card selection counts when global select-all-high runs on collapsed cards [33m835[2mms[22m[39m
+   [33m[2m✓[22m[39m PoAutoLinkProposalsSection[2m > [22mglobal link confirm lists per-customer totals [33m1097[2mms[22m[39m
+   [33m[2m✓[22m[39m PoAutoLinkProposalsSection[2m > [22mper-card link selected posts only that card proposal keys [33m1122[2mms[22m[39m
+   [33m[2m✓[22m[39m PoAutoLinkProposalsSection[2m > [22mshows Restore on dismissed row when Show dismissed is on [33m681[2mms[22m[39m
+   [33m[2m✓[22m[39m PoAutoLinkProposalsSection[2m > [22mrenders coverage line with plan, proposed shipped+pipeline, and already linked [33m377[2mms[22m[39m
+   [33m[2m✓[22m[39m PoAutoLinkProposalsSection[2m > [22mproposal row annotates pipeline separately from shipped [33m371[2mms[22m[39m
+   [33m[2m✓[22m[39m PoAutoLinkProposalsSection[2m > [22mafter link apply refetch moves units into already-linked header [33m937[2mms[22m[39m
+   [33m[2m✓[22m[39m PoAutoLinkProposalsSection[2m > [22mdefaults period filter empty so API fetch is residual-inclusive [33m534[2mms[22m[39m
+   [33m[2m✓[22m[39m PoAutoLinkProposalsSection[2m > [22mexcludes contested proposals from select-all-high but Review still works [33m1355[2mms[22m[39m
+   [33m[2m✓[22m[39m PoAutoLinkProposalsSection[2m > [22mbucket contested tab filters visible proposals [33m900[2mms[22m[39m
+   [33m[2m✓[22m[39m PoAutoLinkProposalsSection[2m > [22mmanual link resolves exact PO then applies [33m1705[2mms[22m[39m
+   [33m[2m✓[22m[39m PoAutoLinkProposalsSection[2m > [22mmanual link surfaces error when exact PO is missing [33m1139[2mms[22m[39m
+   [33m[2m✓[22m[39m PoAutoLinkProposalsSection[2m > [22mre-apply already-linked pair succeeds without error [33m963[2mms[22m[39m
+[90mstderr[2m | src/app/(app)/admin/products/page.test.tsx[2m > [22m[2mAdminProductsPage pass1 behaviors[2m > [22m[2monly reset column layout action clears persisted layout
+[22m[39mError: Not implemented: navigation (except hash changes)
+    at module.exports (C:\Users\warren_eliason\channel-intelligence-platform\node_modules\.pnpm\jsdom@25.0.1\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at navigateFetch (C:\Users\warren_eliason\channel-intelligence-platform\node_modules\.pnpm\jsdom@25.0.1\node_modules\jsdom\lib\jsdom\living\window\navigation.js:77:3)
+    at exports.navigate (C:\Users\warren_eliason\channel-intelligence-platform\node_modules\.pnpm\jsdom@25.0.1\node_modules\jsdom\lib\jsdom\living\window\navigation.js:55:3)
+    at LocationImpl.reload (C:\Users\warren_eliason\channel-intelligence-platform\node_modules\.pnpm\jsdom@25.0.1\node_modules\jsdom\lib\jsdom\living\window\Location-impl.js:226:5)
+    at Location.reload (C:\Users\warren_eliason\channel-intelligence-platform\node_modules\.pnpm\jsdom@25.0.1\node_modules\jsdom\lib\jsdom\living\generated\Location.js:102:36)
+    at onClick (C:\Users\warren_eliason\channel-intelligence-platform\apps\web\src\components\masterGrid\MasterDataGridShell.tsx:391:31)
+    at executeDispatch (C:\Users\warren_eliason\channel-intelligence-platform\node_modules\.pnpm\react-dom@19.2.5_react@19.2.5\node_modules\react-dom\cjs\react-dom-client.development.js:19116:9)
+    at runWithFiberInDEV (C:\Users\warren_eliason\channel-intelligence-platform\node_modules\.pnpm\react-dom@19.2.5_react@19.2.5\node_modules\react-dom\cjs\react-dom-client.development.js:874:13)
+    at processDispatchQueue (C:\Users\warren_eliason\channel-intelligence-platform\node_modules\.pnpm\react-dom@19.2.5_react@19.2.5\node_modules\react-dom\cjs\react-dom-client.development.js:19166:19)
+    at C:\Users\warren_eliason\channel-intelligence-platform\node_modules\.pnpm\react-dom@19.2.5_react@19.2.5\node_modules\react-dom\cjs\react-dom-client.development.js:19767:9 [90mundefined[39m
+
+ [32m✓[39m src/app/(app)/admin/imports/DsiImportJobResolutionSection.test.tsx [2m([22m[2m16 tests[22m[2m)[22m[33m 13557[2mms[22m[39m
+   [33m[2m✓[22m[39m DsiImportJobResolutionSection bulk steward[2m > [22mopens bulk map form without crashing (StewardBulkActionInlineForm) [33m1695[2mms[22m[39m
+   [33m[2m✓[22m[39m DsiImportJobResolutionSection bulk steward[2m > [22mdisables bulk preview when map_customer is chosen without a customer id [33m741[2mms[22m[39m
+   [33m[2m✓[22m[39m DsiImportJobResolutionSection resolution plan[2m > [22mauto-loads suggestions when candidates are present (no generate click) [33m421[2mms[22m[39m
+   [33m[2m✓[22m[39m DsiImportJobResolutionSection resolution plan[2m > [22mposts apply with candidate ids after suggestions load + apply all [33m1100[2mms[22m[39m
+   [33m[2m✓[22m[39m DsiImportJobResolutionSection resolution plan[2m > [22mshows raw sample text in the in-page candidate grid after suggestions load [33m437[2mms[22m[39m
+   [33m[2m✓[22m[39m DsiImportJobResolutionSection resolution plan[2m > [22mRefresh suggestions is clickable again after a failed initial plan request [33m538[2mms[22m[39m
+   [33m[2m✓[22m[39m DsiImportJobResolutionSection resolution plan[2m > [22mcalls effective endpoint after global distributor confirm is toggled [33m1277[2mms[22m[39m
+   [33m[2m✓[22m[39m DsiImportJobResolutionSection resolution plan[2m > [22mshows 12 candidates in the workspace when plan has 12 rows [33m1064[2mms[22m[39m
+   [33m[2m✓[22m[39m DsiImportJobResolutionSection resolution plan[2m > [22mqueue filter chips narrow visible workspace rows [33m646[2mms[22m[39m
+   [33m[2m✓[22m[39m DsiImportJobResolutionSection resolution plan[2m > [22mentity and action filter chips narrow visible rows [33m1047[2mms[22m[39m
+   [33m[2m✓[22m[39m DsiImportJobResolutionSection resolution plan[2m > [22mdrawer shows full source evidence after Open [33m806[2mms[22m[39m
+   [33m[2m✓[22m[39m DsiImportJobResolutionSection resolution plan[2m > [22mshows unassigned geo badge in drawer for ready provisional customer without region/channel [33m743[2mms[22m[39m
+   [33m[2m✓[22m[39m DsiImportJobResolutionSection resolution plan[2m > [22mapply selected ready uses main grid selection when row is ready [33m1056[2mms[22m[39m
+   [33m[2m✓[22m[39m DsiImportJobResolutionSection resolution plan[2m > [22mchanging an override in the drawer triggers effective refresh [33m1496[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/products/page.test.tsx [2m([22m[2m16 tests[22m[2m)[22m[33m 14979[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminProductsPage pass1 behaviors[2m > [22mapplies URL-backed search/filter state updates [33m698[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminProductsPage pass1 behaviors[2m > [22mopens row detail drawer from grid action [33m977[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminProductsPage pass1 behaviors[2m > [22mshows SKU economics panel in product drawer with empty state and create action [33m647[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminProductsPage pass1 behaviors[2m > [22mSKU economics create dialog uses controlled cost currency select and FX helper text [33m746[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminProductsPage pass1 behaviors[2m > [22mSKU economics dialog takes an optional landed cost and refuses a non-positive one (N-0080) [33m712[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminProductsPage pass1 behaviors[2m > [22mopens grouped columns dialog from toolbar affordance [33m1010[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminProductsPage pass1 behaviors[2m > [22mrenders grouped searchable column options and toggles visibility [33m1032[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminProductsPage pass1 behaviors[2m > [22mpersists chosen column layout across search/filter query changes [33m2045[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminProductsPage pass1 behaviors[2m > [22monly reset column layout action clears persisted layout [33m1792[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminProductsPage pass1 behaviors[2m > [22madds hidden optional pass1.1 columns while keeping default columns visible [33m414[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminProductsPage pass1 behaviors[2m > [22mlists discovered spec columns from API response and can show them [33m1329[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminProductsPage pass1 behaviors[2m > [22mnormalizes missing_required_fields column away from object cell typing [33m365[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminProductsPage DSI delete maintenance[2m > [22mshows DSI maintenance panel and clear affordance when delete is blocked on distributor inventory [33m906[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminProductsPage DSI delete maintenance[2m > [22mdoes not show DSI clear maintenance when conflict references are outside DSI scope [33m662[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminProductsPage DSI delete maintenance[2m > [22mrequires typed confirm token before calling clear endpoint [33m1362[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/dsiStepUtils.test.ts [2m([22m[2m22 tests[22m[2m)[22m[90m 17[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/customers/page.test.tsx [2m([22m[2m14 tests[22m[2m)[22m[33m 18689[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminCustomersPage phase1 behaviors[2m > [22mapplies URL-backed customer search updates [33m1579[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminCustomersPage phase1 behaviors[2m > [22mroutes contextual import actions to imports flow [33m751[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminCustomersPage phase1 behaviors[2m > [22mopens customer detail drawer from row action [33m1565[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminCustomersPage phase1 behaviors[2m > [22mopens column picker dialog from toolbar [33m699[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminCustomersPage phase1 behaviors[2m > [22mopens add customer flow and enforces required fields [33m1633[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminCustomersPage phase1 behaviors[2m > [22msubmits create payload and allows blank code for TMP generation [33m1665[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminCustomersPage phase1 behaviors[2m > [22mrenders drawer locations and contacts sections [33m1058[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminCustomersPage phase1 behaviors[2m > [22msubmits add location and add contact from drawer [33m2976[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminCustomersPage phase1 behaviors[2m > [22msubmits location/contact edit saves from drawer [33m2267[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminCustomersPage phase1 behaviors[2m > [22mhandles distributors returned as paginated envelope without crashing [33m466[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminCustomersPage phase1 behaviors[2m > [22mshows commercial terms empty state in drawer and opens create dialog [33m1200[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminCustomersPage phase1 behaviors[2m > [22mPOSTs customer commercial terms from drawer [33m1209[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminCustomersPage phase1 behaviors[2m > [22mshows commercial terms values and PATCHes on edit [33m1426[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/distributors/page.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 9355[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminDistributorsPage phase1[2m > [22mloads master-first distributors page and keeps transitional tabs visible [33m740[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminDistributorsPage phase1[2m > [22msupports add distributor flow with phase1 payload [33m974[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminDistributorsPage phase1[2m > [22mopens details drawer and routes honest import CTAs [33m1039[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminDistributorsPage phase1[2m > [22mshows distributor commercial terms empty state and can create terms [33m1459[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminDistributorsPage phase1[2m > [22mshows distributor commercial terms and PATCHes on edit [33m1071[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminDistributorsPage phase1[2m > [22mrenders and submits location/contact actions from drawer [33m4070[2mms[22m[39m
+ [32m✓[39m src/features/workbench-ui/useFactColumns.test.tsx [2m([22m[2m11 tests[22m[2m)[22m[33m 1230[2mms[22m[39m
+   [33m[2m✓[22m[39m FactColumnPicker[2m > [22mshows fact fields, then a Reference group, and toggles through the shared dialog [33m374[2mms[22m[39m
+[90mstderr[2m | src/features/reports/ReportBuilderView.test.tsx[2m > [22m[2mReportBuilderView[2m > [22m[2mbar view: sorted low to high, direct values, threshold and state key
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[90mstderr[2m | src/features/reports/ReportBuilderView.test.tsx[2m > [22m[2mReportBuilderView[2m > [22m[2mperiod breakdown offers a trend with the latest point labelled
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+ [32m✓[39m src/features/reports/ReportBuilderView.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 7691[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22msummary tiles, saved reports and recent runs come from the API [33m781[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22mruns the same governed query and shows the KPI tile with unit, target and state counts [33m2045[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22mbar view: sorted low to high, direct values, threshold and state key [33m1387[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22mtable view shows the grid only once [33m621[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22mno engineering vocabulary on screen; formula and scope sit behind "About this figure" [33m659[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22mdistributor is a picker of names; the payload keeps the id filter [33m738[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22msend and schedule explain why they are disabled until the report is saved [33m399[2mms[22m[39m
+   [33m[2m✓[22m[39m ReportBuilderView[2m > [22mperiod breakdown offers a trend with the latest point labelled [33m1060[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/cst-steward/CstStockGapSection.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 1117[2mms[22m[39m
+   [33m[2m✓[22m[39m CstStockGapSection[2m > [22mshows the unit gap on every compared row and flags only rows over the threshold [33m346[2mms[22m[39m
+   [33m[2m✓[22m[39m CstStockGapSection[2m > [22mshows a data gap beside its gap and never as a stock difference [33m357[2mms[22m[39m
+ [32m✓[39m src/features/commercial-planner/PoManagementView.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 5814[2mms[22m[39m
+   [33m[2m✓[22m[39m PoManagementView[2m > [22mshows lineup on file when case exists without upload prompt [33m1197[2mms[22m[39m
+   [33m[2m✓[22m[39m PoManagementView[2m > [22mshows the first-run coverage meter and an upload prompt for unlinked groups [33m1057[2mms[22m[39m
+   [33m[2m✓[22m[39m PoManagementView[2m > [22mrenders Execution vs plan button for linked groups instead of reconciliation dump [33m640[2mms[22m[39m
+   [33m[2m✓[22m[39m PoManagementView[2m > [22mrenders operational worklist summary chips [33m581[2mms[22m[39m
+   [33m[2m✓[22m[39m PoManagementView[2m > [22mshows pending link chip in coverage when proposals exist [33m747[2mms[22m[39m
+   [33m[2m✓[22m[39m PoManagementView[2m > [22mdismisses a gap PO via reason dialog [33m1588[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/CstBulkUploadDialog.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 7104[2mms[22m[39m
+   [33m[2m✓[22m[39m CstBulkUploadDialog (N-0111: pick a reporting customer, not a source)[2m > [22mlists only the reporting customers by name, with no source and no customer code [33m1065[2mms[22m[39m
+   [33m[2m✓[22m[39m CstBulkUploadDialog (N-0111: pick a reporting customer, not a source)[2m > [22mshows the customer's saved layouts and renames one [33m1242[2mms[22m[39m
+   [33m[2m✓[22m[39m CstBulkUploadDialog (N-0111: pick a reporting customer, not a source)[2m > [22ma file that matches a saved layout needs no mapping and uploads for the customer [33m1084[2mms[22m[39m
+   [33m[2m✓[22m[39m CstBulkUploadDialog (N-0111: pick a reporting customer, not a source)[2m > [22man unrecognised layout opens the mapping step, blocks upload until the product is mapped, then saves it [33m2685[2mms[22m[39m
+   [33m[2m✓[22m[39m CstBulkUploadDialog (N-0111: pick a reporting customer, not a source)[2m > [22mkeeps the dialog open and shows the reason when a file could not be placed [33m1026[2mms[22m[39m
+ [32m✓[39m src/app/(app)/commercial-planner/cpor-cases/[id]/page.fxReadiness.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 4476[2mms[22m[39m
+   [33m[2m✓[22m[39m Settlement desk FX anchor / readiness (case 312 shape, ported from CporCaseWorkspace)[2m > [22mshows approved support, readiness chips, reapproval and diagnostics; hides settle when FX blocks [33m660[2mms[22m[39m
+   [33m[2m✓[22m[39m Settlement desk FX anchor / readiness (case 312 shape, ported from CporCaseWorkspace)[2m > [22mputs the FX basis line in the header meta when FX is not blocked [33m478[2mms[22m[39m
+   [33m[2m✓[22m[39m Settlement desk FX anchor / readiness (case 312 shape, ported from CporCaseWorkspace)[2m > [22mconfirms before cancelling and posts the existing transition endpoint [33m1442[2mms[22m[39m
+   [33m[2m✓[22m[39m Settlement desk FX anchor / readiness (case 312 shape, ported from CporCaseWorkspace)[2m > [22mposts the intelligence-exclude switch and re-rollup to their existing endpoints [33m986[2mms[22m[39m
+   [33m[2m✓[22m[39m Settlement desk FX anchor / readiness (case 312 shape, ported from CporCaseWorkspace)[2m > [22mmounts comparable cases lazily in the case tabs [33m613[2mms[22m[39m
+[90mstderr[2m | src/features/promotions-funding/CaseBookSurface.test.tsx[2m > [22m[2mCaseBookSurface[2m > [22m[2mdoes not mount the settlement desk and labels open-book vs FX-blocked scopes
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[90mstderr[2m | src/features/promotions-funding/CaseBookSurface.test.tsx[2m > [22m[2mCaseBookSurface[2m > [22m[2mdoes not mount the settlement desk and labels open-book vs FX-blocked scopes
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[90mstderr[2m | src/features/promotions-funding/CaseBookSurface.test.tsx[2m > [22m[2mCaseBookSurface[2m > [22m[2mmounts the portfolio read collapsed after the ageing grid, money through DualMoney (N-0044)
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[90mstderr[2m | src/features/promotions-funding/CaseBookSurface.test.tsx[2m > [22m[2mCaseBookSurface[2m > [22m[2mmounts the portfolio read collapsed after the ageing grid, money through DualMoney (N-0044)
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+ [32m✓[39m src/features/promotions-funding/CaseBookSurface.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 1150[2mms[22m[39m
+   [33m[2m✓[22m[39m CaseBookSurface[2m > [22mdoes not mount the settlement desk and labels open-book vs FX-blocked scopes [33m733[2mms[22m[39m
+   [33m[2m✓[22m[39m CaseBookSurface[2m > [22mmounts the portfolio read collapsed after the ageing grid, money through DualMoney (N-0044) [33m415[2mms[22m[39m
+ [32m✓[39m src/features/reports/reportPresentation.test.ts [2m([22m[2m14 tests[22m[2m)[22m[90m 159[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/dsi/dsiStewardCandidateFilterLogic.test.ts [2m([22m[2m15 tests[22m[2m)[22m[90m 24[2mms[22m[39m
+ [32m✓[39m src/app/(app)/commercial-planner/cpor-cases/historical-import/CporHistoricalImportJobResolutionSection.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 8555[2mms[22m[39m
+   [33m[2m✓[22m[39m CporHistoricalImportJobResolutionSection[2m > [22mrenders entity tabs when jobId is set [33m2506[2mms[22m[39m
+   [33m[2m✓[22m[39m CporHistoricalImportJobResolutionSection[2m > [22mshows confidence bands, units/value, and plan toolbar from Unit C payload [33m1558[2mms[22m[39m
+   [33m[2m✓[22m[39m CporHistoricalImportJobResolutionSection[2m > [22mopens suggestion-first drawer (not autocomplete-only) [33m2574[2mms[22m[39m
+   [33m[2m✓[22m[39m CporHistoricalImportJobResolutionSection[2m > [22mfilters by plan_class ready_to_map via server plan_class param [33m1428[2mms[22m[39m
+   [33m[2m✓[22m[39m CporHistoricalImportJobResolutionSection[2m > [22muses persisted surrogate ids for row map test ids (not string-hash) [33m476[2mms[22m[39m
+ [32m✓[39m src/features/settlement/SettlementDesk.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 2209[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementDesk[2m > [22mshows customer name primary, not welded to the CIP-minted code [33m754[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementDesk[2m > [22moffers end / cancel only from allowedNext and hands the choice to the caller (N-0044) [33m325[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementDesk[2m > [22mshows the reapproval warning and links pre-approval work to the planner [33m370[2mms[22m[39m
+ [32m✓[39m src/features/commercial-planner/CustomerTokenWorklistSection.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 2795[2mms[22m[39m
+   [33m[2m✓[22m[39m CustomerTokenWorklistSection[2m > [22mrenders target picker and prefers named customer (not OPEN_CHANNEL) [33m715[2mms[22m[39m
+   [33m[2m✓[22m[39m CustomerTokenWorklistSection[2m > [22mposts stamp apply with target_customer_id from opts.target only [33m1046[2mms[22m[39m
+   [33m[2m✓[22m[39m CustomerTokenWorklistSection[2m > [22mtokenless empty_token uses line_ids apply path [33m1032[2mms[22m[39m
+ [32m✓[39m src/features/workbench-ui/ColumnPickerDialog.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 890[2mms[22m[39m
+   [33m[2m✓[22m[39m ColumnPickerDialog size=wide[2m > [22mkeeps locked columns, coverage, presets, reset, evidence alert, and discovered spec keys [33m438[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/PlanWorkspace.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 4661[2mms[22m[39m
+   [33m[2m✓[22m[39m PlanWorkspace approve / FX (N-0044, ported from CporCaseWorkspace)[2m > [22mapproves with no rate typed: the stored rate for the case date books server-side [33m1295[2mms[22m[39m
+   [33m[2m✓[22m[39m PlanWorkspace approve / FX (N-0044, ported from CporCaseWorkspace)[2m > [22ma manual rate needs a reason and carries it [33m1090[2mms[22m[39m
+   [33m[2m✓[22m[39m PlanWorkspace approve / FX (N-0044, ported from CporCaseWorkspace)[2m > [22msends confirm_over_budget_reapproval false when the case is within budget [33m570[2mms[22m[39m
+   [33m[2m✓[22m[39m PlanWorkspace approve / FX (N-0044, ported from CporCaseWorkspace)[2m > [22medits FX mode and the proposed rate on a draft through the existing PATCH [33m625[2mms[22m[39m
+ [32m✓[39m src/features/admin/CustomerPromoteDialog.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 1291[2mms[22m[39m
+   [33m[2m✓[22m[39m CustomerPromoteDialog[2m > [22mpreview shows both warnings and keeps confirm disabled until ack [33m592[2mms[22m[39m
+ [32m✓[39m src/features/cpor/fxDisplay.test.ts [2m([22m[2m21 tests[22m[2m)[22m[90m 13[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/cst-steward/CstArticleAliasesSection.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 1460[2mms[22m[39m
+   [33m[2m✓[22m[39m CstArticleAliasesSection[2m > [22mshows sales model on the face and hides product id / SKU / From-To by default [33m507[2mms[22m[39m
+   [33m[2m✓[22m[39m CstArticleAliasesSection[2m > [22medit uses product search, not a product_id number field [33m553[2mms[22m[39m
+   [33m[2m✓[22m[39m CstArticleAliasesSection[2m > [22mAdditional columns opens the master picker including sales model [33m397[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/BulkLineupBackfillDialog.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 2220[2mms[22m[39m
+   [33m[2m✓[22m[39m BulkLineupBackfillDialog[2m > [22mBU override options and archive folder codes come from the product-lines endpoint [33m1225[2mms[22m[39m
+   [33m[2m✓[22m[39m BulkLineupBackfillDialog[2m > [22mkeeps the dialog open after Apply and shows the completion summary [33m993[2mms[22m[39m
+[90mstderr[2m | src/features/workbench-ui/charts.test.tsx[2m > [22m[2maccessible chart output[2m > [22m[2mRankedBars lists sorted, capped values in its data table
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[90mstderr[2m | src/features/workbench-ui/charts.test.tsx[2m > [22m[2maccessible chart output[2m > [22m[2mTrendChart without summary renders as before; with summary it is named
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+The width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+ [32m✓[39m src/features/workbench-ui/charts.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 380[2mms[22m[39m
+ [32m✓[39m src/features/admin/DistributorBulkPromoteDialog.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 3546[2mms[22m[39m
+   [33m[2m✓[22m[39m DistributorBulkPromoteDialog[2m > [22mpreview shows mixed ready/blocked and confirm posts dry_run false [33m1118[2mms[22m[39m
+   [33m[2m✓[22m[39m DistributorBulkPromoteDialog[2m > [22mmint mode previews and chunks 1200 into 3 requests [33m2420[2mms[22m[39m
+ [32m✓[39m src/features/admin/CustomerBulkPromoteDialog.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 2771[2mms[22m[39m
+   [33m[2m✓[22m[39m CustomerBulkPromoteDialog[2m > [22mpreview shows mixed ready/blocked and confirm posts dry_run false [33m598[2mms[22m[39m
+   [33m[2m✓[22m[39m CustomerBulkPromoteDialog[2m > [22mmint mode previews and chunks 1200 into 3 requests [33m2166[2mms[22m[39m
+ [32m✓[39m src/features/shell/navConfig.roleGating.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 12[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/customers/duplicates/PastMergesSection.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 1030[2mms[22m[39m
+   [33m[2m✓[22m[39m PastMergesSection[2m > [22mpreviews then confirms the keeper the steward picked [33m765[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/shipment-evidence/shipmentEntityStewardFilters.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 7[2mms[22m[39m
+ [32m✓[39m src/features/data-stewardship/StewardFailureQueue.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[90m 239[2mms[22m[39m
+ [32m✓[39m src/features/cpor/CporCaseSupersedeDialog.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 1522[2mms[22m[39m
+   [33m[2m✓[22m[39m CporCaseSupersedeDialog (BACKLOG-138)[2m > [22mlists only live, un-superseded other cases for the customer [33m712[2mms[22m[39m
+   [33m[2m✓[22m[39m CporCaseSupersedeDialog (BACKLOG-138)[2m > [22mpreviews on pick, blocks confirm on blockers, confirms when clean [33m513[2mms[22m[39m
+ [32m✓[39m src/features/supply-inbound/SupplyOverview.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 423[2mms[22m[39m
+   [33m[2m✓[22m[39m SupplyOverview[2m > [22mrenders lab headlines, lifecycle, PO bars, attention, and workflows [33m372[2mms[22m[39m
+ [32m✓[39m src/features/shell/navPageChrome.test.ts [2m([22m[2m15 tests[22m[2m)[22m[90m 14[2mms[22m[39m
+ [32m✓[39m src/features/shipping-mailer/ShippingDigestRecipientsPanel.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 2872[2mms[22m[39m
+   [33m[2m✓[22m[39m ShippingDigestRecipientsPanel[2m > [22mlists recipients from the API [33m321[2mms[22m[39m
+   [33m[2m✓[22m[39m ShippingDigestRecipientsPanel[2m > [22mblocks add without calling the API when the address is invalid [33m804[2mms[22m[39m
+   [33m[2m✓[22m[39m ShippingDigestRecipientsPanel[2m > [22mposts a new recipient and refetches [33m1206[2mms[22m[39m
+   [33m[2m✓[22m[39m ShippingDigestRecipientsPanel[2m > [22mdeletes after confirm [33m342[2mms[22m[39m
+ [32m✓[39m src/features/overview/OverviewHub.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[90m 193[2mms[22m[39m
+ [32m✓[39m src/lib/api.test.ts [2m([22m[2m10 tests[22m[2m)[22m[90m 79[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/dsi/dsiStewardCacheUpdates.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 13[2mms[22m[39m
+ [32m✓[39m src/features/steward-worklist/ResolutionWorklist.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[90m 129[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/mappings/DsiCandidateStewardPanel.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 2462[2mms[22m[39m
+   [33m[2m✓[22m[39m DsiCandidateStewardPanel product steward[2m > [22mopens resolve-product dialog, searches products, and posts resolve-product [33m2171[2mms[22m[39m
+ [32m✓[39m src/features/planning/PlanningOverview.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 469[2mms[22m[39m
+   [33m[2m✓[22m[39m PlanningOverview[2m > [22mrenders lab headlines, paired bars, readiness, attention, and workflows [33m373[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/shipment-evidence/ShipmentMappingStewardPanel.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 585[2mms[22m[39m
+ [32m✓[39m src/features/market-listings/MarketSurface.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 1048[2mms[22m[39m
+   [33m[2m✓[22m[39m MarketSurface[2m > [22mmounts lab chrome and the listings lens, not the /market stub [33m821[2mms[22m[39m
+ [32m✓[39m src/features/tenant/lineIdentifier.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 8[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/dsi/dsiDuplicateSameEntityDialogLogic.test.ts [2m([22m[2m9 tests[22m[2m)[22m[90m 8[2mms[22m[39m
+ [32m✓[39m src/features/settlement/SettlementCaseTabs.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 796[2mms[22m[39m
+ [32m✓[39m src/features/stock/ChannelIntelligenceWorkspace.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 870[2mms[22m[39m
+   [33m[2m✓[22m[39m ChannelIntelligenceWorkspace column picker (N-0034 pass-2 host)[2m > [22mshows the customer name only, and offers the code as its own Reference column [33m869[2mms[22m[39m
+[90mstderr[2m | src/features/plan-vs-executed/PlanVsExecutedView.test.tsx[2m > [22m[2mPlanVsExecutedView[2m > [22m[2mrenders headline KPIs, category tabs, value-rank note when no value coverage, and scope notes
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+ [32m✓[39m src/features/plan-vs-executed/PlanVsExecutedView.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 771[2mms[22m[39m
+   [33m[2m✓[22m[39m PlanVsExecutedView[2m > [22mrenders headline KPIs, category tabs, value-rank note when no value coverage, and scope notes [33m769[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/customers/duplicates/RelatedNameGroupsSection.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 1308[2mms[22m[39m
+   [33m[2m✓[22m[39m RelatedNameGroupsSection[2m > [22mmerges only the ticked subset into the chosen keeper [33m1048[2mms[22m[39m
+ [32m✓[39m src/features/dashboards/WidgetEditorDialog.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 701[2mms[22m[39m
+   [33m[2m✓[22m[39m WidgetEditorDialog[2m > [22mshows formula and week grain for sell-out line [33m485[2mms[22m[39m
+ [32m✓[39m src/app/(app)/commercial-planner/cpor-cases/payment-evidence-import/page.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[90m 221[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/UnifiedLineupImportDialog.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 1427[2mms[22m[39m
+   [33m[2m✓[22m[39m UnifiedLineupImportDialog[2m > [22msubmits selected files as repeated `files` field with shared metadata and registers tasks [33m1150[2mms[22m[39m
+ [32m✓[39m src/components/bulkTable/ImportJobBulkDeleteImpactDialog.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 428[2mms[22m[39m
+ [32m✓[39m src/app/(app)/commercial-planner/cpor-cases/historical-import/CporHistoricalImportPage.uploadFirst.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 631[2mms[22m[39m
+   [33m[2m✓[22m[39m CporHistoricalImportPage[2m > [22mdefault lens is the plan templates surface, not the upload wizard [33m325[2mms[22m[39m
+ [32m✓[39m src/features/commercial-planner/PoCaseLinkWorklistSection.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 993[2mms[22m[39m
+   [33m[2m✓[22m[39m PoCaseLinkWorklistSection[2m > [22mposts unlink with reason and allow_protected for protected case [33m724[2mms[22m[39m
+ [32m✓[39m src/app/(app)/settings/page.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 920[2mms[22m[39m
+   [33m[2m✓[22m[39m SettingsPage semantic overlay gate[2m > [22mshows the semantic catalog panel for admin [33m404[2mms[22m[39m
+ [32m✓[39m src/features/settings/SemanticCatalogOverlayPanel.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 2332[2mms[22m[39m
+   [33m[2m✓[22m[39m SemanticCatalogOverlayPanel[2m > [22mrenders the catalog editor and saves a relabel via PUT [33m1675[2mms[22m[39m
+   [33m[2m✓[22m[39m SemanticCatalogOverlayPanel[2m > [22mcomposed op select offers only ratio and alias [33m655[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/CstImportJobResolutionSection.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 1182[2mms[22m[39m
+   [33m[2m✓[22m[39m CstImportJobResolutionSection[2m > [22mrenders entity tabs and opens drawer with suggestion cards [33m1180[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/dsi/dsiResolutionPlanComputePoll.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 20[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/PromotionPlannerSurface.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 1117[2mms[22m[39m
+   [33m[2m✓[22m[39m PromotionPlannerSurface[2m > [22mlists real CPOR cases and shows line-sum support, not a stale plan total [33m1116[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/PaymentEvidenceOverlay.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 360[2mms[22m[39m
+   [33m[2m✓[22m[39m PaymentEvidenceOverlayPanel[2m > [22mshows exact Case ID match rates and Latest Comment on pending rows [33m358[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/CaseMarginPanel.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 398[2mms[22m[39m
+   [33m[2m✓[22m[39m CaseMarginPanel (N-0080)[2m > [22mnames the cost basis on the headline and keeps landed cost out of the margin [33m330[2mms[22m[39m
+ [32m✓[39m src/features/administration/UsersWorkspace.columnGrain.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 962[2mms[22m[39m
+   [33m[2m✓[22m[39m UsersWorkspace column mapping grain (N-0068)[2m > [22mshows the tenant grain to an admin and saves it [33m561[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/PlanTemplatesSurface.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 460[2mms[22m[39m
+   [33m[2m✓[22m[39m PlanTemplatesSurface[2m > [22mlists stored profiles and keeps export as Planned honesty [33m451[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/pmMappingHelpers.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 8[2mms[22m[39m
+ [32m✓[39m src/app/(app)/roadmap/page.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 810[2mms[22m[39m
+   [33m[2m✓[22m[39m Roadmap grid column picker (N-0034 Tier A host)[2m > [22mopens the picker, adds a registry column and keeps it after a remount [33m808[2mms[22m[39m
+ [32m✓[39m src/features/workbench-ui/HeadlineFigure.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 309[2mms[22m[39m
+ [32m✓[39m src/features/overview/startWork.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 15[2mms[22m[39m
+ [32m✓[39m src/features/administration/AdminOverview.test.tsx [2m([22m[2m1 test[22m[2m)[22m[90m 292[2mms[22m[39m
+[90mstderr[2m | src/app/(app)/shipping/ShippingCommercialSummary.test.tsx[2m > [22m[2mShippingCommercialSummary[2m > [22m[2mshows the same counts on headline figures and hides definitions until About this figure
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+The width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+ [32m✓[39m src/app/(app)/shipping/ShippingCommercialSummary.test.tsx [2m([22m[2m1 test[22m[2m)[22m[90m 281[2mms[22m[39m
+ [32m✓[39m src/features/workbench-ui/gridFind.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 76[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/mappings/page.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[90m 245[2mms[22m[39m
+ [32m✓[39m src/features/cpor/CporUsdPivotPanel.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[90m 268[2mms[22m[39m
+ [32m✓[39m src/app/(app)/shipping/buildShippingLinesUrl.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 7[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/ImportJobLoadReport.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 327[2mms[22m[39m
+ [32m✓[39m src/app/(app)/lineup/page.test.tsx [2m([22m[2m1 test[22m[2m)[22m[90m 275[2mms[22m[39m
+ [32m✓[39m src/app/case-approval/page.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 657[2mms[22m[39m
+   [33m[2m✓[22m[39m CaseApprovalPage[2m > [22mshows one case and records an approval with name and comment [33m560[2mms[22m[39m
+ [32m✓[39m src/components/EnterpriseDataGrid.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[90m 126[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/CstUploadOptions.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 482[2mms[22m[39m
+   [33m[2m✓[22m[39m CstUploadOptionsFields (N-0111)[2m > [22msales-only and stock-only exclude each other [33m372[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/dsi/dsiRegionEvidenceDisplay.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m src/components/masterGrid/MasterColumnPickerDialog.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 387[2mms[22m[39m
+   [33m[2m✓[22m[39m MasterColumnPickerDialog[2m > [22mrenders injected groups and filters by search [33m331[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/dsi/dsiEntityTabs.test.ts [2m([22m[2m7 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m src/app/(app)/promotions/promoPlanDraftMerge.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/cst-steward/page.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 473[2mms[22m[39m
+   [33m[2m✓[22m[39m CST steward page Article aliases tab[2m > [22mmounts the aliases section on tab 2 and does not use MasterDataGridShell [33m386[2mms[22m[39m
+ [32m✓[39m src/components/bulkTable/BulkSelectionToolbar.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[90m 299[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/shipment-evidence/shipmentResolutionWorkspaceTableProps.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[90m 94[2mms[22m[39m
+ [32m✓[39m src/components/bulkTable/MasterBulkDeleteImpactDialog.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 365[2mms[22m[39m
+ [32m✓[39m src/features/commercial-planner/BulkLineup1hRederivationSection.test.tsx [2m([22m[2m1 test[22m[2m)[22m[90m 105[2mms[22m[39m
+ [32m✓[39m src/features/import-steward/StewardEvidenceSummary.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 324[2mms[22m[39m
+ [32m✓[39m src/app/(app)/exceptions/page.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 431[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/shipment-evidence/shipmentImportWizardRouting.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 7[2mms[22m[39m
+ [32m✓[39m src/features/settlement/SettlementConfirmDialog.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 614[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementConfirmDialog[2m > [22mshows the outstanding amount as ZAR with booked USD alongside [33m404[2mms[22m[39m
+ [32m✓[39m src/components/StewardWriteGate.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 458[2mms[22m[39m
+ [32m✓[39m src/features/shell/stewardAccess.test.ts [2m([22m[2m14 tests[22m[2m)[22m[90m 8[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/shipment-evidence/shipmentSteward.engineConfig.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m src/app/(app)/lineup/cases/page.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 492[2mms[22m[39m
+   [33m[2m✓[22m[39m LineupCasesPage[2m > [22mrelocates LineupContainer under Planning chrome [33m314[2mms[22m[39m
+ [32m✓[39m src/features/commercial-planner/lineupBackfillArchivePath.test.ts [2m([22m[2m7 tests[22m[2m)[22m[90m 9[2mms[22m[39m
+ [32m✓[39m src/app/(app)/forecasts/workspace/page.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 1004[2mms[22m[39m
+   [33m[2m✓[22m[39m ForecastsWorkspace 15B[2m > [22mshows Compute from history as the primary CTA and posts confirm [33m1002[2mms[22m[39m
+ [32m✓[39m src/components/ModuleDataSection.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 382[2mms[22m[39m
+ [32m✓[39m src/features/admin/DistributorDispositionDialog.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 612[2mms[22m[39m
+   [33m[2m✓[22m[39m DistributorDispositionDialog[2m > [22mpreview then confirm parked disposition [33m610[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/dsi/dsiProductRunningChangeDisplay.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m src/features/commercial-planner/lineupBackfillStewardOverrides.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m src/features/admin/CustomerDispositionDialog.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 438[2mms[22m[39m
+   [33m[2m✓[22m[39m CustomerDispositionDialog[2m > [22mpreview then confirm parked disposition [33m437[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/users/page.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 352[2mms[22m[39m
+   [33m[2m✓[22m[39m Administration hub at /admin/users[2m > [22mmounts the lab Admin composition instead of the users workspace [33m350[2mms[22m[39m
+ [32m✓[39m src/features/settlement/mapSettlementDeskView.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m src/app/(app)/sell-out/page.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 416[2mms[22m[39m
+   [33m[2m✓[22m[39m ChannelOperationsPage[2m > [22mrenders without crash on empty API responses [33m414[2mms[22m[39m
+ [32m✓[39m src/features/supply-inbound/ShipmentReceiptView.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[90m 105[2mms[22m[39m
+ [32m✓[39m src/features/stock/ExecutionLensView.test.tsx [2m([22m[2m1 test[22m[2m)[22m[90m 121[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/dsi/dsiDuplicateCluster.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 29[2mms[22m[39m
+ [32m✓[39m src/features/import-steward/stewardAsyncPoll.test.ts [2m([22m[2m7 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m src/features/overview/StartWorkLaunch.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 421[2mms[22m[39m
+   [33m[2m✓[22m[39m StartWorkLaunch[2m > [22madmin sees seven action cards with governed hrefs [33m332[2mms[22m[39m
+ [32m✓[39m src/features/dashboards/DashboardWidgetCard.test.tsx [2m([22m[2m1 test[22m[2m)[22m[90m 237[2mms[22m[39m
+ [32m✓[39m src/features/import-steward/stewardDuplicateHintContract.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 7[2mms[22m[39m
+ [32m✓[39m src/features/import-steward/ImportStewardCandidateWorkspace.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[90m 100[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/dsi/dsiImportWizardRouting.test.ts [2m([22m[2m9 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m src/features/lineup/lineupViews.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/dsi/dsiProductCandidateExport.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 8[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/hlMappingHelpers.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 7[2mms[22m[39m
+ [32m✓[39m src/features/stock/StockThinLenses.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[90m 296[2mms[22m[39m
+ [32m✓[39m src/features/stock/coverStatus.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 36[2mms[22m[39m
+ [32m✓[39m src/app/(app)/sell-out/ChannelOpsKpiCards.test.tsx [2m([22m[2m1 test[22m[2m)[22m[90m 222[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/ImportFileUploadZone.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[90m 128[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/shipment-evidence/shipmentStewardListSearch.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/dsi/dsiJobDisplayState.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m src/features/data-stewardship/DataChrome.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m src/lib/lineupImportCsv.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 9[2mms[22m[39m
+ [32m✓[39m src/features/import-steward/StewardEntityTabsBar.test.tsx [2m([22m[2m1 test[22m[2m)[22m[90m 278[2mms[22m[39m
+ [32m✓[39m src/app/(app)/shipping/shippingDistributorDisplay.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m src/app/(app)/channel-intelligence/page.test.tsx [2m([22m[2m1 test[22m[2m)[22m[90m 208[2mms[22m[39m
+ [32m✓[39m src/app/(app)/forecasts/page.test.tsx [2m([22m[2m1 test[22m[2m)[22m[90m 237[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/shipment-evidence/shipmentEntityTabs.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m src/features/import-steward/stewardBulkStewardChunking.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/users/list/page.test.tsx [2m([22m[2m1 test[22m[2m)[22m[90m 169[2mms[22m[39m
+ [32m✓[39m src/components/EmptyWorkspace.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 499[2mms[22m[39m
+   [33m[2m✓[22m[39m EmptyWorkspace[2m > [22mrenders title, description, and links [33m380[2mms[22m[39m
+ [32m✓[39m src/app/(app)/channel-intelligence/workspace/page.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 885[2mms[22m[39m
+   [33m[2m✓[22m[39m ChannelIntelligence workspace leaf[2m > [22mrelocates the CST grid under Stock chrome [33m884[2mms[22m[39m
+ [32m✓[39m src/features/data-stewardship/stewardQueueResolve.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/dsi/DsiProductResolutionEvidenceCard.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[90m 121[2mms[22m[39m
+ [32m✓[39m src/theme/cipTheme.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 9[2mms[22m[39m
+ [32m✓[39m src/features/plan-vs-executed/ExceptionCategoryGrid.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m src/features/shell/CapabilityRail.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/shipment-evidence/shipmentMappingCandidateDisplay.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m src/lib/wipeAvailability.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 8[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/caseScope.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m src/components/gridDeleteColumn.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 317[2mms[22m[39m
+ [32m✓[39m src/features/import-steward/confidenceBand.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 11[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/paymentEvidenceCode.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m src/features/import-steward/stewardPlanScope.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m src/features/overview/StartWorkPanel.test.tsx [2m([22m[2m1 test[22m[2m)[22m[90m 244[2mms[22m[39m
+ [32m✓[39m src/features/stock/stockLenses.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m src/features/import-steward/StewardWorkspaceViewportShell.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[90m 23[2mms[22m[39m
+ [32m✓[39m src/components/BulkPasteDialog.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 502[2mms[22m[39m
+   [33m[2m✓[22m[39m BulkPasteDialog[2m > [22mdisables submit when value is blank [33m378[2mms[22m[39m
+ [32m✓[39m src/features/settlement/customerDisplay.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/FundingChrome.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m src/features/commercial-planner/EntitySearchAutocomplete.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 1096[2mms[22m[39m
+   [33m[2m✓[22m[39m EntitySearchAutocomplete[2m > [22mloads options from server search [33m1095[2mms[22m[39m
+ [32m✓[39m src/components/ModuleGridToolbar.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 448[2mms[22m[39m
+   [33m[2m✓[22m[39m ModuleGridToolbar[2m > [22minvokes refresh and clear handlers [33m412[2mms[22m[39m
+ [32m✓[39m src/features/stock/executionRollup.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/dsi/useDsiEntityTabCounts.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m src/features/stock/StockChrome.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/FundingPointerLens.test.tsx [2m([22m[2m1 test[22m[2m)[22m[90m 284[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/dsi/dsiPlanFileGeoDisplay.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/dsi/dsiResolutionPlanApplyPoll.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m src/features/import-steward/StewardDrawerChrome.test.tsx [2m([22m[2m1 test[22m[2m)[22m[90m 238[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/CstSalesOnlyToggle.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 612[2mms[22m[39m
+   [33m[2m✓[22m[39m CstSalesOnlyToggle[2m > [22mis off by default, labelled, described, and toggles [33m610[2mms[22m[39m
+ [32m✓[39m src/app/login/page.test.tsx [2m([22m[2m1 test[22m[2m)[22m[90m 164[2mms[22m[39m
+ [32m✓[39m src/features/administration/adminPaths.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m src/features/planning/planningPaths.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m src/app/set-password/page.test.tsx [2m([22m[2m1 test[22m[2m)[22m[90m 224[2mms[22m[39m
+ [32m✓[39m src/components/PageHeader.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 346[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/lifecycle.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m src/features/dashboards/DashboardGrid.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/importWizardMappingReset.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m src/features/overview/overviewPaths.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m src/features/shell/AppShell.layout.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 2[2mms[22m[39m
+ [32m✓[39m src/features/reports/inboxVintage.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m src/features/import-steward/ImportJobLoadedSuccessCallout.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m src/lib/queryError.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m src/features/stock/stockLeafPaths.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m src/features/lineup/lineupQuarter.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m src/app/(app)/admin/imports/dsi/dsiSteward.config.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m src/features/supply-inbound/SupplyChrome.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 2[2mms[22m[39m
+ [32m✓[39m src/features/dashboards/formatters.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/format.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m src/features/commercial-planner/poPeriodUtils.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m src/app/providers.integration.test.tsx [2m([22m[2m1 test[22m[2m)[22m[90m 55[2mms[22m[39m
+ [32m✓[39m src/lib/proxyForwardedHeaders.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 397[2mms[22m[39m
+   [33m[2m✓[22m[39m proxy route handler[2m > [22mforwards the trusted address, not the visitor-supplied X-Forwarded-For [33m385[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m188 passed[39m[22m[90m (188)[39m
+[2m      Tests [22m [1m[32m878 passed[39m[22m[90m (878)[39m
+[2m   Start at [22m 13:36:06
+[2m   Duration [22m 1148.71s[2m (transform 14.85s, setup 206.78s, collect 1203.16s, tests 282.28s, environment 386.25s, prepare 113.73s)[22m
+
+vitest exit 0

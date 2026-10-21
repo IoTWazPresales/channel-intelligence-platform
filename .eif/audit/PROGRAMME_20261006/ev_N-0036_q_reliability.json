@@ -1,0 +1,1 @@
+{"node": "N-0036", "expected_revision": 6, "dim": "reliability", "state": "pass", "evidence": "EV-N0036", "rationale": "netstat shows one listener, 127.0.0.1:8001. No 0.0.0.0:8001 and no [::]:8001. node --test scripts/api-bind-host.test.cjs passed 4. Empty CIP_API_HOST stays 127.0.0.1. A non-loopback override is kept and warned."}

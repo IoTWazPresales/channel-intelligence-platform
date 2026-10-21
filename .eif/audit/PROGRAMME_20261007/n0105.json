@@ -1,0 +1,27 @@
+{
+  "id": "N-0105",
+  "parent": "N-0085",
+  "title": "N-0085 U3: Game and Makro readers and discovery (Makro site search per D-0063)",
+  "class": "feature",
+  "origin": "decomposition",
+  "status": "proposed",
+  "facets": [
+    "api"
+  ],
+  "risk": "R2",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": [
+    "N-0102"
+  ],
+  "acceptance_criteria": [
+    "Game: reader for its product pages and search; the 15 reported products proposed",
+    "Makro: reader and site search (Warren D-0063), the 27 reported products proposed; if a site serves only a script shell, record what was tried and show it as not found, never invent",
+    "Design: .eif/audit/PROGRAMME_20261007/N0085_DESIGN.md; decisions D-0061 and D-0063",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "auto"
+}

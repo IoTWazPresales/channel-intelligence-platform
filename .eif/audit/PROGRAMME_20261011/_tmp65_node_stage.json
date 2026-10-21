@@ -1,0 +1,1 @@
+{"stage": "verify", "stage_note": "2026-10-11 read-only cip probe. Planner with no lines: 0 current rows. Planner on one line: 0 rows from other product lines. The one product-less row inherits that line. Same session as the probe, not a different model. VERIFIED_WITH_LIMITATIONS.", "node": "N-0065", "expected_revision": 58}

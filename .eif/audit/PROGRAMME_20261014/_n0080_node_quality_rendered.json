@@ -1,0 +1,1 @@
+{"dim": "rendered", "rationale": "UNABLE_TO_RENDER in the browser: /promotions?plan=223 on 127.0.0.1:3000 opened the sign-in form and no account password may be entered by the agent. Web build b2QCbedv2c--6me-VJRcg is live; /api/v1/cpor/cases/223/margin answers 401 without a session. Component tests cover the panel.", "node": "N-0080", "expected_revision": 13}

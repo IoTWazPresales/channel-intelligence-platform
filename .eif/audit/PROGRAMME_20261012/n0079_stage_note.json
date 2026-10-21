@@ -1,0 +1,5 @@
+{
+  "node": "N-0079",
+  "expected_revision": 13,
+  "note": "2026-10-12 the planner and the lineup budget position use the campaign ledger draw. Caps and the non-campaign reserve are not in that draw. Promotion planner period 2026Q2 shows ledger drawn USD 103644.6669. Pushed b5799854 on feat/ns-2-brief-nav-collapse. Desk, customer rollup, caps, transfers and payment coverage are already on the branch. Not complete: non-campaign rows wait for a real lineup approval, quality gates are pending, operator acceptance is pending. Do not close this node. N-0110 waits until this node is closed."
+}

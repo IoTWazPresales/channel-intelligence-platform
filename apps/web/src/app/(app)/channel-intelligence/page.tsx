@@ -1,12 +1,12 @@
 'use client';
 
 import { StockChrome } from '@/features/stock/StockChrome';
-import { SellthroughHonesty } from '@/features/stock/StockThinLenses';
+import { SellThroughOverview } from '@/features/stock/SellThroughOverview';
 
 export default function ChannelIntelligencePage() {
   return (
     <StockChrome>
-      <SellthroughHonesty />
+      <SellThroughOverview />
     </StockChrome>
   );
 }

@@ -1,0 +1,25 @@
+{
+  "id": "N-0095",
+  "parent": null,
+  "title": "Customer merge completion: loser-name alias seal at confirm, resolvers follow merged_into, related-name worklist and repair scripts (BACKLOG-081 + 083, shipped as a pair)",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": [
+    "api",
+    "data_migration"
+  ],
+  "risk": "R3",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": [],
+  "acceptance_criteria": [
+    "A confirmed merge mints approved loser-name aliases to the keeper, so merged tokens stop returning as steward work",
+    "Resolvers follow merged_into; related-name worklist; repair/backfill scripts proven on a clone before cip",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

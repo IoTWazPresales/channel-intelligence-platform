@@ -1,0 +1,1 @@
+{"node": "N-0056", "expected_revision": 4, "to": "design", "stage_note": "import_event sets skip_cache on execute_query before inbox rows. Failures call emit_task_failure_alert. Inbox cards render inboxVintageLabel and the delivery format."}

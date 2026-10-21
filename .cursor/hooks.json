@@ -3,92 +3,92 @@
   "hooks": {
     "preToolUse": [
       {
-        "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
+        "command": "C:\\Windows\\py.exe -3 -B -X utf8 .cursor/hooks/eif_guard.py",
+        "timeout": 25,
         "failClosed": true
       }
     ],
     "postToolUse": [
       {
-        "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
+        "command": "C:\\Windows\\py.exe -3 -B -X utf8 .cursor/hooks/eif_guard.py",
+        "timeout": 25,
         "failClosed": false
       }
     ],
     "postToolUseFailure": [
       {
-        "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
+        "command": "C:\\Windows\\py.exe -3 -B -X utf8 .cursor/hooks/eif_guard.py",
+        "timeout": 25,
         "failClosed": false
       }
     ],
     "beforeShellExecution": [
       {
-        "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
+        "command": "C:\\Windows\\py.exe -3 -B -X utf8 .cursor/hooks/eif_guard.py",
+        "timeout": 25,
         "failClosed": true
       }
     ],
     "beforeMCPExecution": [
       {
-        "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
+        "command": "C:\\Windows\\py.exe -3 -B -X utf8 .cursor/hooks/eif_guard.py",
+        "timeout": 25,
         "failClosed": true
       }
     ],
     "afterMCPExecution": [
       {
-        "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
+        "command": "C:\\Windows\\py.exe -3 -B -X utf8 .cursor/hooks/eif_guard.py",
+        "timeout": 25,
         "failClosed": false
       }
     ],
     "beforeReadFile": [
       {
-        "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
+        "command": "C:\\Windows\\py.exe -3 -B -X utf8 .cursor/hooks/eif_guard.py",
+        "timeout": 25,
         "failClosed": true
       }
     ],
     "afterFileEdit": [
       {
-        "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
+        "command": "C:\\Windows\\py.exe -3 -B -X utf8 .cursor/hooks/eif_guard.py",
+        "timeout": 25,
         "failClosed": false
       }
     ],
     "subagentStart": [
       {
-        "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
+        "command": "C:\\Windows\\py.exe -3 -B -X utf8 .cursor/hooks/eif_guard.py",
+        "timeout": 25,
         "failClosed": true
       }
     ],
     "subagentStop": [
       {
-        "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
+        "command": "C:\\Windows\\py.exe -3 -B -X utf8 .cursor/hooks/eif_guard.py",
+        "timeout": 25,
         "failClosed": false
       }
     ],
     "stop": [
       {
-        "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
+        "command": "C:\\Windows\\py.exe -3 -B -X utf8 .cursor/hooks/eif_guard.py",
+        "timeout": 25,
         "failClosed": false
       }
     ],
     "sessionStart": [
       {
-        "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
+        "command": "C:\\Windows\\py.exe -3 -B -X utf8 .cursor/hooks/eif_guard.py",
+        "timeout": 25,
         "failClosed": false
       }
     ],
     "sessionEnd": [
       {
-        "command": ".cursor/hooks/eif_guard.cmd",
-        "timeout": 10,
+        "command": "C:\\Windows\\py.exe -3 -B -X utf8 .cursor/hooks/eif_guard.py",
+        "timeout": 25,
         "failClosed": false
       }
     ]

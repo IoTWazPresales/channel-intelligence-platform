@@ -1,0 +1,13 @@
+{
+  "node": "N-0078",
+  "expected_revision": 2,
+  "title": "Listing quality and SEO across all reporting customers: cross-retailer parity, content floor, spec accuracy, freshness, sell-through beside quality, search position",
+  "acceptance_criteria": [
+    "Checks per accepted decision D-0062 (Warren 2026-10-07), on every retailer covered by N-0085",
+    "Each check reads the stored snapshot; re-parse needs no re-fetch; results carry a rules_version and the snapshot age",
+    "A failing check is an amber flag with its evidence, never a hidden score and never a block; missing data shows as 'No data'",
+    "The Market & Listings quality lens shows one row per listing, a column per check, the flag count, snapshot age, and that product's weekly sell-through at the same retailer",
+    "Search position (second step): daily per retailer site search for Warren's terms, polite limits, its own table",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ]
+}

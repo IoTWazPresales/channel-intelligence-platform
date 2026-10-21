@@ -1,0 +1,41 @@
+current_database() = cip | role = cip | 18.3
+proconfig: ['search_path=pg_catalog, public']
+stats: (87171, 225, None, None, datetime.datetime(2026, 9, 21, 18, 0, 22, 369, tzinfo=zoneinfo.ZoneInfo(key='Africa/Johannesburg')))
+relpages, relallvisible: (6415, 4921)
+--- defaults: rows=15807 best of 3 1560.6 ms
+      Subquery Scan on c  (cost=15987.19..16383.11 rows=13834 width=16)
+      Unique  (cost=15987.19..16210.19 rows=13834 width=53)
+      Sort  (cost=15987.19..16098.69 rows=44600 width=53)
+      Sort Key: o.line_identity_key, o.valid_from DESC NULLS LAST, o.id DESC
+      Seq Scan on shipment_evidence_observation o  (cost=3948.73..12543.00 rows=44600 width=53)
+      Seq Scan on dim_product p  (cost=0.00..1953.50 rows=4544 width=4)
+      Function Scan on cip_sev_observation_lineage m  (cost=1965.11..1982.61 rows=500 width=8)
+      Seq Scan on dim_product p_1  (cost=0.00..1953.50 rows=4544 width=4)
+--- enable_sort=off: rows=15807 best of 3 206.8 ms
+      Subquery Scan on c  (cost=3949.15..16847.85 rows=13834 width=16)
+      Unique  (cost=3949.15..16674.92 rows=13834 width=53)
+      Index Only Scan using ix_shipment_ev_obs_identity_latest on shipment_evidence_observation o  (cost=3949.15..16
+      Seq Scan on dim_product p  (cost=0.00..1953.50 rows=4544 width=4)
+      Function Scan on cip_sev_observation_lineage m  (cost=1965.11..1982.61 rows=500 width=8)
+      Seq Scan on dim_product p_1  (cost=0.00..1953.50 rows=4544 width=4)
+--- enable_sort=off + enable_incremental_sort=off: rows=15807 best of 3 219.0 ms
+      Subquery Scan on c  (cost=3949.15..16847.85 rows=13834 width=16)
+      Unique  (cost=3949.15..16674.92 rows=13834 width=53)
+      Index Only Scan using ix_shipment_ev_obs_identity_latest on shipment_evidence_observation o  (cost=3949.15..16
+      Seq Scan on dim_product p  (cost=0.00..1953.50 rows=4544 width=4)
+      Function Scan on cip_sev_observation_lineage m  (cost=1965.11..1982.61 rows=500 width=8)
+      Seq Scan on dim_product p_1  (cost=0.00..1953.50 rows=4544 width=4)
+--- rpc=1000 + enable_sort=off: rows=15807 best of 3 203.9 ms
+      Subquery Scan on c  (cost=3949.15..2506564.08 rows=13834 width=16)
+      Unique  (cost=3949.15..2506391.15 rows=13834 width=53)
+      Index Only Scan using ix_shipment_ev_obs_identity_latest on shipment_evidence_observation o  (cost=3949.15..25
+      Seq Scan on dim_product p  (cost=0.00..1953.50 rows=4544 width=4)
+      Function Scan on cip_sev_observation_lineage m  (cost=1965.11..1982.61 rows=500 width=8)
+      Seq Scan on dim_product p_1  (cost=0.00..1953.50 rows=4544 width=4)
+--- rpc=1000 + enable_sort=off + enable_incremental_sort=off: rows=15807 best of 3 215.7 ms
+      Subquery Scan on c  (cost=3949.15..2506564.08 rows=13834 width=16)
+      Unique  (cost=3949.15..2506391.15 rows=13834 width=53)
+      Index Only Scan using ix_shipment_ev_obs_identity_latest on shipment_evidence_observation o  (cost=3949.15..25
+      Seq Scan on dim_product p  (cost=0.00..1953.50 rows=4544 width=4)
+      Function Scan on cip_sev_observation_lineage m  (cost=1965.11..1982.61 rows=500 width=8)
+      Seq Scan on dim_product p_1  (cost=0.00..1953.50 rows=4544 width=4)

@@ -1,0 +1,1 @@
+{"node": "N-0058", "expected_revision": 12, "to": "implement", "stage_note": "apply_1h_rederivation_sync returns refused_no_month_columns and does not write when uniform_half_line_count > 0. Month-derived proposals still apply."}

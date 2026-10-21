@@ -1,0 +1,1 @@
+{"node": "N-0057", "expected_revision": 4, "to": "design", "stage_note": "UTC nextLineupQuarter supplies period start and label. The action bar mounts beside the empty state. Import links to /admin/imports?unified=1. Export keeps the existing tenant workbook GET."}

@@ -1,0 +1,1 @@
+{"path": "apps/web/src/app/(app)/admin/imports/CstUploadOptions.tsx", "note": "N-0111 (d7807c8b): Sales only / Stock only / Year of the week numbers + Year confirmed on both CST uploads.", "provenance": "implementation-observation", "node": "N-0111", "expected_revision": 5}

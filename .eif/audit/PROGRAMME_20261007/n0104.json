@@ -1,0 +1,26 @@
+{
+  "id": "N-0104",
+  "parent": "N-0085",
+  "title": "N-0085 U4: Computer Mania reader and discovery (Shopify search, sku/barcode corroboration)",
+  "class": "feature",
+  "origin": "decomposition",
+  "status": "proposed",
+  "facets": [
+    "api"
+  ],
+  "risk": "R2",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": [
+    "N-0102"
+  ],
+  "acceptance_criteria": [
+    "Search by part number or model, corroborate via the product's sku/barcode; most of the 36 reported products proposed corroborated",
+    "Design: .eif/audit/PROGRAMME_20261007/N0085_DESIGN.md; decisions D-0061 and D-0063",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "auto"
+}

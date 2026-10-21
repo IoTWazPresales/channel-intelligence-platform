@@ -1,0 +1,5 @@
+{"ts":"2026-10-15T07:54:09Z","kind":"programme.event","event":"node.lease.acquire","seq":2346}
+{"ts":"2026-10-15T07:54:32Z","kind":"programme.event","event":"node.verification","seq":2347}
+{"ts":"2026-10-15T07:54:58Z","kind":"programme.event","event":"node.verification","seq":2348}
+{"ts":"2026-10-15T07:55:20Z","kind":"programme.event","event":"node.stage_note","seq":2349}
+{"ts":"2026-10-15T07:55:42Z","kind":"programme.event","event":"node.lease.release","seq":2350}

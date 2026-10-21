@@ -1,0 +1,1 @@
+{"dim": "content", "state": "pass", "evidence": {"path": ".eif/audit/PROGRAMME_20261011/N0086_INVITE.md", "summary": "Invite sent. Local passwords kept."}, "rationale": "The stage note says the local passwords were kept on purpose.", "node": "N-0086", "expected_revision": 21}

@@ -1,0 +1,12 @@
+old head: SELECT inv_latest.distributor_id, inv_latest.product_id, inv_latest.snapshot_date, inv_lat
+new head: WITH latest_snapshot AS MATERIALIZED (SELECT fact_inventory_distributor.distributor_id AS 
+current_database() = cip | read_only = on
+  scope=None   old: 2481 rows in 1932 ms (nestloop off)
+  scope=None   new: 2481 rows in 1314 ms (nestloop off)
+  scope=None   identical rows: True
+  scope='*'    old: 2481 rows in 3956 ms (nestloop off)
+  scope='*'    new: 2481 rows in 1345 ms (nestloop off)
+  scope='*'    identical rows: True
+  scope='NB'   old: 1099 rows in 2000 ms (nestloop off)
+  scope='NB'   new: 1099 rows in 1228 ms (nestloop off)
+  scope='NB'   identical rows: True

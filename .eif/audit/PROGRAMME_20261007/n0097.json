@@ -1,0 +1,27 @@
+{
+  "id": "N-0097",
+  "parent": null,
+  "title": "Lineup follow-ons: PF quantity columns, workbench identifier split, supersession hardening, margin amounts",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": [
+    "ui",
+    "api"
+  ],
+  "risk": "R2",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": [],
+  "acceptance_criteria": [
+    "PF/desktop template family reads Total Qty / month columns per Warren's mapping choice (BACKLOG-105)",
+    "The lineup workbench shows SKU and Sales model as two columns under 'both' (BACKLOG-210)",
+    "W2 supersession refuses mixed-customer cases; carry provenance column if needed (BACKLOG-122/120, trigger-gated)",
+    "Amount columns capture currency margins when a real workbook with Rand amounts arrives (BACKLOG-052, data-gated)",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

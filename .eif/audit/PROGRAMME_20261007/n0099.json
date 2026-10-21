@@ -1,0 +1,23 @@
+{
+  "id": "N-0099",
+  "parent": null,
+  "title": "Independent second-look verification of self-verified closed nodes before the branch goes to main",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": [
+    "api"
+  ],
+  "risk": "R2",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": [],
+  "acceptance_criteria": [
+    "N-0034, N-0043, N-0049, N-0053 and later self-verified closes get an independent pass from a fresh session or another model, recorded as later evidence (BACKLOG-209, 211)",
+    "The ScopeBar VERIFY debt is cleared or waived in writing by Warren"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

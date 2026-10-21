@@ -1,0 +1,105 @@
+======================================================================
+N-0065 round 4 apply UPGRADE 2026-10-09 02:28:55
+[app]   current_database() = cip | role = cip super=False bypassrls=False | alembic = ['20261007_0025']
+code on disk binds cip.request_role: yes
+[owner] current_database() = cip | role = postgres super=True bypassrls=True | alembic = ['20261007_0025']
+--- BEFORE (0025): rows per scope as the app role (expected = Warren 2026-10-08 decision)
+  worker (unset)         setting_after=None     view=15807/15807 sev_observation=87171/87171 sev_line=87191/87191 fact_inbound_shipment=15255/15255 | view 418 ms
+  admin '*'              setting_after='*'      view=15807/15807 sev_observation=87171/87171 sev_line=87191/87191 fact_inbound_shipment=15255/15255 | view 377 ms
+  planner NB             setting_after='NB'     view=10225/8758 (differs) sev_observation=51028/47314 (differs) sev_line=51048/47314 (differs) fact_inbound_shipment=8851/8307 (differs) | view 358 ms
+  steward NB             setting_after='NB'     view=10225/9253 (differs) sev_observation=51028/49057 (differs) sev_line=51048/49077 (differs) fact_inbound_shipment=8851/8851 | view 277 ms
+  planner NB,NR          setting_after='NB,NR'  view=13192/12016 (differs) sev_observation=68277/65148 (differs) sev_line=68297/65148 (differs) fact_inbound_shipment=12014/11470 (differs) | view 320 ms
+  planner no lines '!'   setting_after='!'      view=2532/0 (differs) sev_observation=5876/0 (differs) sev_line=5896/0 (differs) fact_inbound_shipment=546/0 (differs) | view 412 ms
+  steward no lines '!'   setting_after='!'      view=2532/495 (differs) sev_observation=5876/1743 (differs) sev_line=5896/1763 (differs) fact_inbound_shipment=546/544 (differs) | view 175 ms
+  (0025 rule: rows with no product visible to every scope: {'shipment_evidence_observation': 5876, 'shipment_evidence_line': 5896, 'fact_inbound_shipment': 546})
+heavy-path capture before_0026 (unset, '*', NB; READ ONLY) ...
+  unset 200    4089ms stmts= 14 rows=None commits=0 top=2055.1ms /api/v1/channel-ops/summary  []
+  unset 200    2858ms stmts=  9 rows=2481 commits=0 top=1475.0ms /api/v1/channel-ops/cover-distribution  []
+  unset 200   16104ms stmts= 58 rows=None commits=0 top=1173.3ms /api/v1/plan-vs-executed  []
+  unset 200    1903ms stmts=  9 rows=None commits=0 top=1310.1ms /api/v1/brief/signals  []
+  unset 200     964ms stmts=  7 rows=200 commits=0 top=339.4ms /api/v1/lineup/net-requirement  []
+  star  200    1751ms stmts= 16 rows=None commits=0 top=1136.2ms /api/v1/channel-ops/summary  []
+  star  200    1965ms stmts= 11 rows=2481 commits=0 top=1204.3ms /api/v1/channel-ops/cover-distribution  []
+  star  200   17319ms stmts= 60 rows=None commits=0 top=1522.4ms /api/v1/plan-vs-executed  []
+  star  200    1731ms stmts= 11 rows=None commits=0 top=1107.1ms /api/v1/brief/signals  []
+  star  200    1277ms stmts=  9 rows=200 commits=0 top=409.0ms /api/v1/lineup/net-requirement  []
+  NB    200    1090ms stmts= 16 rows=None commits=0 top=511.1ms /api/v1/channel-ops/summary  []
+  NB    200    1478ms stmts= 11 rows=1099 commits=0 top=677.3ms /api/v1/channel-ops/cover-distribution  []
+  NB    200   11373ms stmts= 54 rows=None commits=0 top=951.3ms /api/v1/plan-vs-executed  []
+  NB    200    1280ms stmts= 11 rows=None commits=0 top=612.6ms /api/v1/brief/signals  []
+  NB    200     801ms stmts=  9 rows=200 commits=0 top=301.2ms /api/v1/lineup/net-requirement  []
+[restart api] before: pid=28016
+Asked the supervisor to restart 'api'. Watch link.html or status.json.
+[restart api] 02:30:55 state=starting pid=27356
+[restart api] 02:31:06 state=starting pid=27356
+[restart api] 02:31:18 state=starting pid=27356
+[restart api] 02:31:29 state=healthy pid=27356
+[restart api] healthy. 02:31:28 local api /health=200 api /auth/me=401 web /login=200 web proxy /auth/me=401
+alembic upgrade 20261009_0026 ...
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade 20261007_0025 -> 20261009_0026, Product-line row security for shipment evidence with no product (lineage), scope-independent current row.
+  done in 1.6 s
+[owner] current_database() = cip | alembic now = ['20261009_0026']
+  helpers (name, security definer, config): [('cip_inbound_shipment_lineage', False, ['search_path=pg_catalog, public']), ('cip_sev_current_observation_ids', False, ['search_path=pg_catalog, public']), ('cip_sev_line_lineage', False, ['search_path=pg_catalog, public']), ('cip_sev_observation_lineage', False, ['search_path=pg_catalog, public'])]
+  helper EXECUTE grants: [('cip_inbound_shipment_lineage', 'cip'), ('cip_inbound_shipment_lineage', 'postgres'), ('cip_sev_current_observation_ids', 'cip'), ('cip_sev_current_observation_ids', 'postgres'), ('cip_sev_line_lineage', 'cip'), ('cip_sev_line_lineage', 'postgres'), ('cip_sev_observation_lineage', 'cip'), ('cip_sev_observation_lineage', 'postgres')]
+  shipment_evidence_observation policies (cmd, using has lineage, check has lineage): [('DELETE', True, None), ('INSERT', None, False), ('SELECT', True, None), ('UPDATE', True, False)]
+  shipment_evidence_line policies (cmd, using has lineage, check has lineage): [('DELETE', True, None), ('INSERT', None, False), ('SELECT', True, None), ('UPDATE', True, False)]
+  fact_inbound_shipment policies (cmd, using has lineage, check has lineage): [('DELETE', True, None), ('INSERT', None, False), ('SELECT', True, None), ('UPDATE', True, False)]
+  view uses current pick: True | reloptions: ['security_invoker=true']
+  index: CREATE INDEX ix_shipment_ev_obs_identity_latest ON public.shipment_evidence_observation USING btree (line_identity_key, valid_from DESC NULLS LAST, id DESC) INCLUDE (product_id, superseded_by_id)
+--- AFTER (0026): rows per scope as the app role (expected = Warren 2026-10-08 decision)
+  worker (unset)         setting_after=None     view=15807/15807 sev_observation=87171/87171 sev_line=87191/87191 fact_inbound_shipment=15255/15255 | view 251 ms plan Execution Time: 200.250 ms pick ['->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (never executed)']
+  admin '*'              setting_after='*'      view=15807/15807 sev_observation=87171/87171 sev_line=87191/87191 fact_inbound_shipment=15255/15255 | view 288 ms plan Execution Time: 216.733 ms pick ['->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (never executed)']
+  planner NB             setting_after='NB'     view=8758/8758 sev_observation=47314/47314 sev_line=47314/47314 fact_inbound_shipment=8307/8307 | view 680 ms plan Execution Time: 745.069 ms pick ['->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (actual rows=15807.00 loops=1)']
+  steward NB             setting_after='NB'     view=9253/9253 sev_observation=49057/49057 sev_line=49077/49077 fact_inbound_shipment=8851/8851 | view 645 ms plan Execution Time: 690.920 ms pick ['->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (actual rows=15807.00 loops=1)']
+  planner NB,NR          setting_after='NB,NR'  view=12016/12016 sev_observation=65148/65148 sev_line=65148/65148 fact_inbound_shipment=11470/11470 | view 699 ms plan Execution Time: 948.960 ms pick ['->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (actual rows=15807.00 loops=1)']
+  planner no lines '!'   setting_after='!'      view=0/0 sev_observation=0/0 sev_line=0/0 fact_inbound_shipment=0/0 | view 227 ms plan Execution Time: 153.312 ms pick ['->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (never executed)']
+  steward no lines '!'   setting_after='!'      view=495/495 sev_observation=1743/1743 sev_line=1763/1763 fact_inbound_shipment=544/544 | view 730 ms plan Execution Time: 563.788 ms pick ['->  Function Scan on cip_sev_current_observation_ids c  (cost=0.25..10.25 rows=1000 width=8) (actual rows=15807.00 loops=1)']
+--- r3 spot tables as the app role (unchanged by 0026; one line = 'NB'):
+  scope='unset'  dim_product=18177/18177 fact_sales_sellout=35582/35582 fact_inventory_distributor=47411/47411 weeks_of_cover_observation=194349/194349
+  scope='*'      dim_product=18177/18177 fact_sales_sellout=35582/35582 fact_inventory_distributor=47411/47411 weeks_of_cover_observation=194349/194349
+  scope='NB'     dim_product=6848/6848 fact_sales_sellout=15995/15995 fact_inventory_distributor=21047/21047 weeks_of_cover_observation=87899/87899
+  scope='!'      dim_product=0/0 fact_sales_sellout=0/0 fact_inventory_distributor=0/0 weeks_of_cover_observation=0/0
+after 0026: every per-scope cell matches the decision; r3 spot tables unchanged
+heavy-path capture after_0026 (unset, '*', NB; READ ONLY) ...
+  unset 200    1973ms stmts= 14 rows=None commits=0 top=1152.6ms /api/v1/channel-ops/summary  []
+  unset 200    1946ms stmts=  9 rows=2481 commits=0 top=1104.7ms /api/v1/channel-ops/cover-distribution  []
+  unset 200   18101ms stmts= 58 rows=None commits=0 top=1332.8ms /api/v1/plan-vs-executed  []
+  unset 200    1554ms stmts=  9 rows=None commits=0 top=1068.1ms /api/v1/brief/signals  []
+  unset 200     779ms stmts=  7 rows=200 commits=0 top=297.1ms /api/v1/lineup/net-requirement  []
+  star  200    1575ms stmts= 16 rows=None commits=0 top=1011.3ms /api/v1/channel-ops/summary  []
+  star  200    1851ms stmts= 11 rows=2481 commits=0 top=1072.3ms /api/v1/channel-ops/cover-distribution  []
+  star  200   19754ms stmts= 60 rows=None commits=0 top=1462.1ms /api/v1/plan-vs-executed  []
+  star  200    1741ms stmts= 11 rows=None commits=0 top=1122.7ms /api/v1/brief/signals  []
+  star  200    1029ms stmts=  9 rows=200 commits=0 top=306.3ms /api/v1/lineup/net-requirement  []
+  NB    200    1088ms stmts= 16 rows=None commits=0 top=639.7ms /api/v1/channel-ops/summary  []
+  NB    200    2343ms stmts= 11 rows=1099 commits=0 top=663.8ms /api/v1/channel-ops/cover-distribution  []
+  NB    200   23276ms stmts= 54 rows=None commits=0 top=2181.7ms /api/v1/plan-vs-executed  []
+  NB    200    1313ms stmts= 11 rows=None commits=0 top=508.2ms /api/v1/brief/signals  []
+  NB    200    1189ms stmts=  9 rows=200 commits=0 top=510.4ms /api/v1/lineup/net-requirement  []
+[restart worker] before: pid=47680
+Asked the supervisor to restart 'worker'. Watch link.html or status.json.
+[restart worker] 02:33:33 state=starting pid=37264
+[restart worker] 02:33:44 state=starting pid=37264
+[restart worker] 02:33:55 state=starting pid=37264
+[restart worker] 02:34:07 state=healthy pid=37264
+[restart worker] healthy. 02:34:06 local api /health=200 api /auth/me=401 web /login=200 web proxy /auth/me=401
+  worker  healthy    pid=37264  adopted=False launches=4 last_healthy=2026-10-09T02:33:55 wrapper pid 37264; worker=1 beat=1
+  api     healthy    pid=27356  adopted=False launches=3 last_healthy=2026-10-09T02:33:55 /health 200; pid 27356
+  tunnel  healthy    pid=33264  adopted=False launches=16 last_healthy=2026-10-09T02:33:56 /ready 200; public /login 200, /auth/me 401; pid 33264
+  02:34:08 local api /health=200 api /auth/me=401 web /login=200 web proxy /auth/me=401
+ANALYZE (approved by Warren 2026-10-08), as owner:
+  ANALYZE dim_product: 525 ms
+  ANALYZE fact_sales_sellout: 310 ms
+  ANALYZE fact_inventory_distributor: 155 ms
+  ANALYZE fact_demand_forecast: 329 ms
+  ANALYZE fact_inventory_reconciliation: 16 ms
+  dim_product                      last_analyze=2026-10-09 02:34:09.118762+02:00 last_autoanalyze=None n_live_tup=18177
+  fact_demand_forecast             last_analyze=2026-10-09 02:34:09.912918+02:00 last_autoanalyze=None n_live_tup=38625
+  fact_inventory_distributor       last_analyze=2026-10-09 02:34:09.583976+02:00 last_autoanalyze=None n_live_tup=47411
+  fact_inventory_reconciliation    last_analyze=2026-10-09 02:34:09.930241+02:00 last_autoanalyze=None n_live_tup=42
+  fact_sales_sellout               last_analyze=2026-10-09 02:34:09.429111+02:00 last_autoanalyze=None n_live_tup=35582
+  dim_product tenant_id='default' estimate: Seq Scan on dim_product  (cost=0.00..999.21 rows=18177 width=973) | actual 18177
+finished 02:34:09 - mismatches: 0
+exit=0

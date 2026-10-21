@@ -1,0 +1,9 @@
+{
+  "id": "BLN-N0043",
+  "provenance": "implementation-observation",
+  "tree_hash": "f6eb2c25925d6fbfbd02c92683ba891b40d36d5b",
+  "path": ".eif/audit/PROGRAMME_20260930/N-0043.md",
+  "observed_behavior": "Fact grids already had an Export button calling community exportDataAsCsv with a file name only. Cover shows name columns (Distributor, Product) and hides code columns unless picked.",
+  "latent_capabilities": [],
+  "preservation": {}
+}

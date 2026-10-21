@@ -1,0 +1,40 @@
+current_database()=cip
+current_database()=cip
+{
+ "tenant": "default",
+ "threshold_units": 1.0,
+ "positions": 701,
+ "compared": 314,
+ "flagged": 243,
+ "flagged_by_first_cause": {
+  "overwrite": 0,
+  "unmatched_shipment": 0,
+  "no_pod": 0,
+  "no_prior_on_hand": 37,
+  "repeated_report": 108,
+  "unreported_weeks": 58,
+  "unexplained": 40
+ },
+ "flagged_with_cause_anywhere": {
+  "overwrite": 0,
+  "unmatched_shipment": 0,
+  "no_pod": 0,
+  "no_prior_on_hand": 37,
+  "repeated_report": 108,
+  "unreported_weeks": 67,
+  "unexplained": 40
+ },
+ "first_cause_by_sign": {
+  "no_prior_on_hand/over": 24,
+  "no_prior_on_hand/short": 13,
+  "repeated_report/over": 108,
+  "unexplained/over": 40,
+  "unreported_weeks/short": 58
+ },
+ "overwrite_by": {},
+ "unexplained_by_customer": {
+  "Takealot": 5,
+  "Evetech": 7,
+  "Computer Mania": 28
+ }
+}

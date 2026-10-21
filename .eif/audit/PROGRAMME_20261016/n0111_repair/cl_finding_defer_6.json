@@ -1,0 +1,1 @@
+{"note": "N-0111 repair: customer sell-through has no upload-time column-mapping screen; a date column with another header needs the source's field mapping or template alias. The distributor mapping step lets the uploader pick any column as Date (transaction_date).", "code": "DOES_NOT_FIT", "node": "N-0111", "expected_revision": 24}

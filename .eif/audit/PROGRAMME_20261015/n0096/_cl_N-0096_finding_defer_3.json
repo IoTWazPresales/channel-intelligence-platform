@@ -1,0 +1,1 @@
+{"note": "N-0096: 21 tests skip on cip_test with a logged reason each (live cip data, ALLOW_TESTS_ON_DEV_DB, remote Supabase, the cip_bulk_smoke clone, migration 0048 fixtures, session-mode e2e). Skips are not failures but they are not run.", "code": "DOES_NOT_FIT", "node": "N-0096", "expected_revision": 3}

@@ -1,0 +1,4 @@
+{"ts":"2026-10-11T13:30:50Z","kind":"programme.event","event":"node.verification","seq":1941}
+{"ts":"2026-10-11T13:31:10Z","kind":"programme.event","event":"node.stage","seq":1942}
+{"ts":"2026-10-11T13:31:29Z","kind":"programme.event","event":"node.accept","seq":1943}
+{"ts":"2026-10-11T13:31:48Z","kind":"programme.event","event":"node.status","seq":1944}

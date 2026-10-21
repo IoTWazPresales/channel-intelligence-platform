@@ -1,0 +1,1 @@
+{"dim": "ux", "state": "pass", "evidence": {"path": ".eif/audit/PROGRAMME_20260929/n0041/MATCH.md", "summary": "One Find field on the Scope bar for the Tier A fact grids. 300ms query. Server search kept where the page already had it."}, "node": "N-0041", "expected_revision": 4}

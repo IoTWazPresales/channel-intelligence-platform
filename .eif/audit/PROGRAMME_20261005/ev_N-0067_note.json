@@ -1,0 +1,1 @@
+{"node": "N-0067", "expected_revision": 8, "note": "Remaining feature and app chart colours, stock and brief dividers, and readiness chips now follow cipTheme. Browser-checked in both modes on the named screens plus Execution vs plan. Dark restored. Login page gradients are already paired to the mode. The inbox email preview stays white as the document canvas."}

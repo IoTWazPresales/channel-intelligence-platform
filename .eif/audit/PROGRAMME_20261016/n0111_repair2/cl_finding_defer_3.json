@@ -1,0 +1,1 @@
+{"note": "N-0111 repair 2 (D-0113): summed repeated distributor lines keep the later line's unit price and currency; no price is recomputed from the totals. Proof is through the real apply function on cip_test with staging lines built directly, not the file parser, and no cip load was made.", "code": "DOES_NOT_FIT", "node": "N-0111", "expected_revision": 38}

@@ -1,0 +1,28 @@
+{
+  "id": "N-0100",
+  "parent": null,
+  "title": "CPOR duty separation: KAM, PM, Ken and Wayne responsibilities on cases (BACKLOG-136)",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": [
+    "auth",
+    "api",
+    "ui"
+  ],
+  "risk": "R3",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": [
+    "N-0065"
+  ],
+  "acceptance_criteria": [
+    "Separation per Warren's mapping (D-0029 Q3); the four system roles stay unless Warren decides otherwise",
+    "PM edits pre-approval only; Ken cannot write MAC or terms (per the mapping)",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

@@ -1,0 +1,22 @@
+current_database() = cip | read_only = on | jit = on | work_mem = 4MB | server = 18.3
+captured: unset /api/v1/brief/signals 4689.9 ms | engine: async | setting: None | sets: []
+SQL: SELECT DISTINCT ON (weeks_of_cover_observation.distributor_id, weeks_of_cover_observation.product_id) weeks_of_cover_observation.id, weeks_of_cover_observation.tenant_id, weeks_of_cover_observation.distributor_id, weeks_of_cover_observation.product_id, weeks_of_cover_observation.snapshot_date, weeks_of_cover_observation.cover_as_of_date, weeks_of_cover_observation.observed_at, weeks_of_cover_observation.import_job_id, weeks_of_cover_observation.trigger, weeks_of_cover_observation.reported_soh, weeks_of_cover_observation.sell_out_since, weeks_of_cover_observation.landed_since, weeks_of_cover_observation.derived_stock, weeks_of_cover_observation.weekly_velocity, weeks_of_cover_observation.weeks_of_cover, weeks_of_cover_observation.replenishment_flag, weeks_of_cover_observation.replenishment_threshold_weeks, weeks_of_cover_observation.params, weeks_of_cover_observation.formula_version, weeks_of_cover_observation.data_vintage, weeks_of_cover_observation.source_key, weeks_of_cover_observation.created_at, weeks_of_cover_observation.updated_at FROM weeks_of_cover_observation WHERE weeks_of_cover_observation.tenant_id = %(tenant_id_1)s::VARCHAR AND weeks_of_cover_observation.tenant_id = %(tid_1)s::VARCHAR ORDER BY weeks_of_cover_observation.distributor_id, weeks_of_cover_observation.product_id, weeks_of_cover_observation.cover_as_of_date DESC, CASE WHEN (weeks_of_cover_observation.trigger = %(trigger_1)s::VARCHAR) THEN %(param_1)s::INTEGER ELSE %(param_2)s::INTEGER END ASC, weeks_of_cover_observation.observed_at DESC
+PARAMS: {'tenant_id_1': 'default', 'tid_1': 'default', 'trigger_1': 'as_of_backfill', 'param_1': 1, 'param_2': 0}
+explain wall ms: 1615
+Unique  (cost=72081.74..72810.43 rows=15887 width=608) (actual time=1399.797..1566.803 rows=2481.00 loops=1)
+  Buffers: shared hit=658 read=30612, temp read=29858 written=29889
+  ->  Sort  (cost=72081.74..72324.64 rows=97159 width=608) (actual time=1399.794..1545.873 rows=194349.00 loops=1)
+        Sort Key: weeks_of_cover_observation.distributor_id, weeks_of_cover_observation.product_id, weeks_of_cover_observation.cover_as_of_date DESC, (CASE WHEN ((weeks_of_cover_observation.trigger)::text = 'as_of_backfill'::text) THEN 1 ELSE 0 END), weeks_of_cover_observation.observed_at DESC
+        Sort Method: external merge  Disk: 119440kB
+        Buffers: shared hit=658 read=30612, temp read=29858 written=29889
+        ->  Seq Scan on weeks_of_cover_observation  (cost=1964.27..37797.06 rows=97159 width=608) (actual time=0.235..250.179 rows=194349.00 loops=1)
+              Filter: (((tenant_id)::text = 'default'::text) AND ((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((product_id)::bigint = (hashed SubPlan 1).col1))))
+              Buffers: shared hit=649 read=30612
+              SubPlan 1
+                ->  Seq Scan on dim_product p  (cost=0.00..1952.92 rows=4542 width=4) (never executed)
+                      Filter: (CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END AND CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END)
+Planning:
+  Buffers: shared hit=371
+Planning Time: 18.387 ms
+Execution Time: 1592.982 ms
+plain execution wall ms: 1284 rows=2481

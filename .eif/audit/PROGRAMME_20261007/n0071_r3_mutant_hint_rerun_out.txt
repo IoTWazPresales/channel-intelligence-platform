@@ -1,0 +1,5 @@
+hint_1h app/services/commercial_planner/lineup_bulk_rederivation.py
+sha256 before: f6d4495f86c38d793730b2e43d487ed62958f114e208dd23b1bb0f1a714dbfbc
+FAILED tests/test_shipment_strict_pair.py::test_1h_hint_counts_remainder - as...
+1 failed, 54 passed in 8.04s
+sha256 after: f6d4495f86c38d793730b2e43d487ed62958f114e208dd23b1bb0f1a714dbfbc

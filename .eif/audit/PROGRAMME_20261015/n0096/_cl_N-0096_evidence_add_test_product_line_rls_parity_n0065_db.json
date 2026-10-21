@@ -1,0 +1,1 @@
+{"path": "apps/api/tests/test_product_line_rls_parity_n0065_db.py", "note": "N-0096: needs 0027 applied, not to be the head; counts 42 protected tables; append-only tables checked for SELECT+INSERT policies; no exemption.", "provenance": "implementation-observation", "node": "N-0096", "expected_revision": 3}

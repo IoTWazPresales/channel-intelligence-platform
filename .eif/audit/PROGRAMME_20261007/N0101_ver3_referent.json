@@ -1,0 +1,1 @@
+{"node": "N-0101", "expected_revision": 33, "kind": "referent", "state": "pass", "evidence": ".eif/audit/PROGRAMME_20261007/N0101_VERIFY.md", "path": "apps/api/app/services/listing_capture/registry.py"}

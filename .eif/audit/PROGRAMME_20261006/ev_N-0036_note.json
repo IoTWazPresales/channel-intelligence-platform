@@ -1,0 +1,1 @@
+{"node": "N-0036", "expected_revision": 9, "note": "Loopback bind is live. netstat listener is 127.0.0.1:8001 only. Bind host tests passed 4. Change-scope blocker closed after scripts were added to the accepted paths. Finops does not apply."}

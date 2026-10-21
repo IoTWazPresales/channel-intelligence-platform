@@ -1,0 +1,1 @@
+{"note": "N-0110 repair 2: loads 955, 956 (Takealot) and 967 (Dispo WK26) stored no on-hand and were replayed marked sales-only; the on-hand rule refuses them otherwise.", "code": "DOES_NOT_FIT", "node": "N-0110", "expected_revision": 43}

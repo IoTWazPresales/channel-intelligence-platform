@@ -1,0 +1,1 @@
+{"dim": "content", "state": "pass", "evidence": {"path": ".eif/audit/PROGRAMME_20261011/N0068_ACCEPT.md", "summary": "Column grain is product line. Catalogue stays. Component test covers the control."}, "rationale": "The control is the column grain for the business. The default value is product_line.", "node": "N-0068", "expected_revision": 21}

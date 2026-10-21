@@ -1,0 +1,1 @@
+{"note": "N-0111 repair: distributor lines of one load with the same invoice, product, date and customer replace each other (the later line wins); the earlier figures are now kept as superseded and the load report names them. Summing them like customer sell-through D-0091 is a Warren decision.", "code": "DOES_NOT_FIT", "node": "N-0111", "expected_revision": 24}

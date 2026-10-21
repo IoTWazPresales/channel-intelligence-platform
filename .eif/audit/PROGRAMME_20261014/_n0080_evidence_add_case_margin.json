@@ -1,0 +1,1 @@
+{"path": "apps/api/app/services/cpor/case_margin.py", "note": "N-0080 CPOR case margin read (GET /api/v1/cpor/cases/{id}/margin). Case 223 on cip: 1837.33 USD over 5 of 9 lines.", "provenance": "implementation-observation", "node": "N-0080", "expected_revision": 8}

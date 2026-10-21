@@ -35,6 +35,17 @@ _SCORECARD_VALUE_MAP = {
 }
 
 
+# Per-quarter trend keys (plan_vs_executed._compute_trend) for the [period] grain.
+_TREND_VALUE_MAP = {
+    "fill_rate": "fill_rate",
+    "line_hit_rate": "line_hit_rate",
+    "over_plan_intake_rate": "deal_stock_units",
+    "short_exposure": "short_exposure_units",
+    "unplanned_intake": "unplanned_intake_units",
+    "pipeline_inbound": "pipeline_units_in_plan",
+}
+
+
 async def handle_a1(
     db: AsyncSession,
     req: QueryRequest,
@@ -85,41 +96,47 @@ async def handle_a1(
         "effective_period": period_range.get("from") or payload.get("default_period"),
     }
 
-    if metric_key == "no_po_blind_spot":
-        value: Any = scorecard.get("no_po_blind_spot")
-    elif metric_key == "volume_bias":
-        value = payload.get("volume_bias")
-    elif metric_key in _SCORECARD_VALUE_MAP:
-        value = scorecard.get(_SCORECARD_VALUE_MAP[metric_key])
-        # over_plan_intake_rate: expose as rate when planned > 0
-        if metric_key == "over_plan_intake_rate":
-            planned = float(scorecard.get("planned_units") or 0)
-            over_u = float(scorecard.get("over_plan_intake_units") or scorecard.get("deal_stock_units") or 0)
-            value = (over_u / planned) if planned > 0 else None
-    else:
-        value = scorecard.get(metric_key)
+    grains = {g.lower() for g in req.grains}
+    label = period_meta.get("effective_period") or period_meta.get("period_from")
+
+    def metric_value(sc: dict[str, Any]) -> Any:
+        """The metric's number from a scorecard (catalog formula: over-plan intake is units)."""
+        if metric_key == "no_po_blind_spot":
+            npo = sc.get("no_po_blind_spot") or {}
+            return npo.get("line_count") if isinstance(npo, dict) else npo
+        if metric_key in _SCORECARD_VALUE_MAP:
+            return sc.get(_SCORECARD_VALUE_MAP[metric_key])
+        return sc.get(metric_key)
 
     rows: list[dict[str, Any]] = []
+    series: list[dict[str, Any]] | None = None
     if metric_key == "volume_bias":
         vb = payload.get("volume_bias") or {}
+        total_lines = 0
+        weighted = 0.0
         for item in vb.get("by_bu") or []:
-            rows.append({"bu": item.get("bu"), "value": item.get("mean_bias"), **item})
-    elif "bu" in {g.lower() for g in req.grains}:
-        # BU grain: surface volume_bias BU rows when available; else single portfolio value
-        vb = payload.get("volume_bias") or {}
-        for item in vb.get("by_bu") or []:
-            rows.append({"bu": item.get("bu"), "value": item.get("mean_bias"), **item})
+            bias = item.get("mean_signed_bias", item.get("mean_bias"))
+            rows.append({**item, "bu": item.get("bu"), "value": bias})
+            if bias is not None:
+                total_lines += int(item.get("line_count") or 0)
+                weighted += float(bias) * int(item.get("line_count") or 0)
+        value: Any = (weighted / total_lines) if total_lines else None
+    elif "bu" in grains:
+        value = metric_value(scorecard)
+        for pl, sc in (payload.get("scorecard_by_bu") or {}).items():
+            rows.append({"period": label, "bu": pl, "value": metric_value(sc)})
         if not rows:
-            rows.append({"period": period_meta.get("effective_period"), "bu": bu, "value": value})
+            rows.append({"period": label, "bu": bu, "value": value})
     else:
-        rows.append(
-            {
-                "period": period_meta.get("effective_period")
-                or period_meta.get("period_from"),
-                "bu": bu,
-                "value": value,
-            }
-        )
+        value = metric_value(scorecard)
+        trend_key = _TREND_VALUE_MAP.get(metric_key)
+        trend = payload.get("trend") or []
+        if trend_key and trend:
+            # One point per quarter in the selected range.
+            series = [{"bucket_key": t.get("period_label"), "value": t.get(trend_key)} for t in trend]
+            rows = [{"period": t.get("period_label"), "bu": bu, "value": t.get(trend_key)} for t in trend]
+        else:
+            rows.append({"period": label, "bu": bu, "value": value})
 
     return HandlerResult(
         status="ok",
@@ -131,6 +148,7 @@ async def handle_a1(
         },
         value=value,
         rows=rows,
+        series=series,
         scorecard=scorecard,
         explain={**EXPLAIN, "metric_key": metric_key, "handler": "a1_pve"},
     )

@@ -1,0 +1,1 @@
+{"node": "N-0059", "expected_revision": 3, "to": "design", "stage_note": "Extend the preview GET with apply, job_status, and job_stage. The dialog polls that view, stays open, and shows Applied and skipped plus Link POs and Review lineup cases."}

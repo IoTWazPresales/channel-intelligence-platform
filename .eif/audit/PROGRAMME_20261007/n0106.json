@@ -1,0 +1,26 @@
+{
+  "id": "N-0106",
+  "parent": "N-0085",
+  "title": "N-0085 U5: Incredible Connection and HiFi Corp shared reader and discovery",
+  "class": "feature",
+  "origin": "decomposition",
+  "status": "proposed",
+  "facets": [
+    "api"
+  ],
+  "risk": "R1",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": [
+    "N-0102"
+  ],
+  "acceptance_criteria": [
+    "One reader for the shared site; their reported products (4 while reports are stopped) proposed; widens automatically when their reports resume",
+    "Design: .eif/audit/PROGRAMME_20261007/N0085_DESIGN.md; decisions D-0061 and D-0063",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "auto"
+}

@@ -1,0 +1,1 @@
+{"path": "apps/api/alembic/versions/20261015_0039_fx_rate_grants_and_provenance.py", "note": "N-0083 (5104f59c): grants SELECT, INSERT, UPDATE on fx_daily_rate and sequence USAGE to cip; adds fx_booked_source, fx_booked_rate_date, fx_override_reason to cpor_case. Clone proof then cip.", "provenance": "implementation-observation", "node": "N-0083", "expected_revision": 3}

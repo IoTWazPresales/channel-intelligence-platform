@@ -1,0 +1,163 @@
+current_database: cip
+{
+ "current_database": "cip",
+ "listings_by_mkt_status": [
+  {
+   "marketplace": "amazon",
+   "status": "active",
+   "n": 51
+  },
+  {
+   "marketplace": "evetech",
+   "status": "active",
+   "n": 36
+  },
+  {
+   "marketplace": "evetech",
+   "status": "out_of_stock",
+   "n": 52
+  },
+  {
+   "marketplace": "takealot",
+   "status": "active",
+   "n": 35
+  },
+  {
+   "marketplace": "takealot",
+   "status": "dead_link",
+   "n": 42
+  },
+  {
+   "marketplace": "takealot",
+   "status": "out_of_stock",
+   "n": 2
+  }
+ ],
+ "obs_by_mkt": [
+  {
+   "marketplace": "amazon",
+   "n": 154,
+   "latest": "2026-10-07 17:32:24.395171+02"
+  },
+  {
+   "marketplace": "evetech",
+   "n": 220,
+   "latest": "2026-10-07 17:33:54.064025+02"
+  },
+  {
+   "marketplace": "takealot",
+   "n": 230,
+   "latest": "2026-10-07 17:33:32.1525+02"
+  }
+ ],
+ "obs_total": [
+  {
+   "n": 604,
+   "max_id": 605
+  }
+ ],
+ "obs_since": [
+  {
+   "marketplace": "amazon",
+   "http_status": 200,
+   "parse_status": "ok",
+   "n": 9,
+   "first_at": "2026-10-07 17:30:30.922764+02",
+   "last_at": "2026-10-07 17:32:06.389049+02"
+  },
+  {
+   "marketplace": "amazon",
+   "http_status": 200,
+   "parse_status": "parse_failed",
+   "n": 42,
+   "first_at": "2026-10-07 17:30:02.691913+02",
+   "last_at": "2026-10-07 17:32:24.395171+02"
+  },
+  {
+   "marketplace": "evetech",
+   "http_status": 200,
+   "parse_status": "ok",
+   "n": 86,
+   "first_at": "2026-10-07 17:30:05.676838+02",
+   "last_at": "2026-10-07 17:33:54.064025+02"
+  },
+  {
+   "marketplace": "evetech",
+   "http_status": 404,
+   "parse_status": "ok",
+   "n": 2,
+   "first_at": "2026-10-07 17:30:00.337883+02",
+   "last_at": "2026-10-07 17:30:02.902237+02"
+  },
+  {
+   "marketplace": "takealot",
+   "http_status": 200,
+   "parse_status": "ok",
+   "n": 37,
+   "first_at": "2026-10-07 17:30:03.347774+02",
+   "last_at": "2026-10-07 17:33:32.1525+02"
+  },
+  {
+   "marketplace": "takealot",
+   "http_status": 200,
+   "parse_status": "parse_failed",
+   "n": 20,
+   "first_at": "2026-10-07 17:30:01.020578+02",
+   "last_at": "2026-10-07 17:32:30.499867+02"
+  },
+  {
+   "marketplace": "takealot",
+   "http_status": 404,
+   "parse_status": "parse_failed",
+   "n": 22,
+   "first_at": "2026-10-07 17:30:45.506734+02",
+   "last_at": "2026-10-07 17:32:47.422683+02"
+  }
+ ],
+ "obs_since_flags": [
+  {
+   "marketplace": "amazon",
+   "transition": null,
+   "reason": "price_noise_or_shell",
+   "n": 42
+  },
+  {
+   "marketplace": "amazon",
+   "transition": null,
+   "reason": null,
+   "n": 9
+  },
+  {
+   "marketplace": "evetech",
+   "transition": null,
+   "reason": null,
+   "n": 88
+  },
+  {
+   "marketplace": "takealot",
+   "transition": null,
+   "reason": "json_no_price",
+   "n": 42
+  },
+  {
+   "marketplace": "takealot",
+   "transition": null,
+   "reason": null,
+   "n": 37
+  }
+ ],
+ "meta_failures": [
+  {
+   "marketplace": "amazon",
+   "with_failures": 0
+  },
+  {
+   "marketplace": "evetech",
+   "with_failures": 0
+  },
+  {
+   "marketplace": "takealot",
+   "with_failures": 42
+  }
+ ]
+}

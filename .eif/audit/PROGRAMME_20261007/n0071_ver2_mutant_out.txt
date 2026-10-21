@@ -1,0 +1,54 @@
+== first_twin_only
+[n0071_ver2] mutant first_twin_only installed in memory
+tests\test_shipment_strict_pair.py:369: AssertionError
+tests\test_shipment_strict_pair.py:366: AssertionError
+tests\test_shipment_strict_pair.py:680: AssertionError
+FAILED tests/test_shipment_strict_pair.py::test_partial_ship_counts_the_remainder[two_twins_summed]
+FAILED tests/test_shipment_strict_pair.py::test_partial_ship_counts_the_remainder[three_twins_cover]
+FAILED tests/test_shipment_strict_pair.py::test_partial_line_value_is_pro_rata[two_twins_summed_counts300]
+3 failed, 52 passed in 11.74s
+== pro_rata_to_full
+[n0071_ver2] mutant pro_rata_to_full installed in memory
+E       AssertionError: assert [{'amount': 4...code': 'USD'}] == [{'amount': 3...code': 'USD'}]
+tests\test_shipment_strict_pair.py:594: AssertionError
+tests\test_shipment_strict_pair.py:680: AssertionError
+tests\test_shipment_strict_pair.py:680: AssertionError
+E       AssertionError: assert {'EUR': 500.0, 'USD': 2600.0} == {'EUR': 500.0, 'USD': 2000.0}
+tests\test_shipment_strict_pair.py:717: AssertionError
+FAILED tests/test_shipment_strict_pair.py::test_shipping_kpi_quantity_counts_remainder
+FAILED tests/test_shipment_strict_pair.py::test_partial_line_value_is_pro_rata[open10_shipped6_amount1000_counts400]
+FAILED tests/test_shipment_strict_pair.py::test_partial_line_value_is_pro_rata[two_twins_summed_counts300]
+FAILED tests/test_shipment_strict_pair.py::test_shipping_kpi_value_is_pro_rata
+4 failed, 51 passed in 8.19s
+== equal_not_covered
+[n0071_ver2] mutant equal_not_covered installed in memory
+tests\test_shipment_strict_pair.py:239: AssertionError
+E       AssertionError: assert ['open_order'...r', 'shipped'] == ['open_order', 'shipped']
+tests\test_shipment_strict_pair.py:285: AssertionError
+tests\test_shipment_strict_pair.py:293: AssertionError
+tests\test_shipment_strict_pair.py:367: AssertionError
+tests\test_shipment_strict_pair.py:367: AssertionError
+tests\test_shipment_strict_pair.py:422: AssertionError
+tests\test_shipment_strict_pair.py:529: AssertionError
+tests\test_shipment_strict_pair.py:572: AssertionError
+tests\test_shipment_strict_pair.py:580: AssertionError
+tests\test_shipment_strict_pair.py:591: AssertionError
+tests\test_shipment_strict_pair.py:719: AssertionError
+FAILED tests/test_shipment_strict_pair.py::test_brief_and_dashboard_not_received_count_skips_twin
+FAILED tests/test_shipment_strict_pair.py::test_eta_shift_scope_skips_twin_without_filters
+FAILED tests/test_shipment_strict_pair.py::test_shipping_summary_counts_match_grid_and_report_skipped
+FAILED tests/test_shipment_strict_pair.py::test_partial_ship_counts_the_remainder[open6_shipped6_skipped]
+FAILED tests/test_shipment_strict_pair.py::test_partial_ship_counts_the_remainder[three_twins_cover]
+FAILED tests/test_shipment_strict_pair.py::test_line_rule_forms_agree
+FAILED tests/test_shipment_strict_pair.py::test_brief_count_keeps_partial_line
+FAILED tests/test_shipment_strict_pair.py::test_eta_shift_scope_keeps_partial_line
+FAILED tests/test_shipment_strict_pair.py::test_shipping_summary_counts_partial_line_once
+FAILED tests/test_shipment_strict_pair.py::test_shipping_kpi_quantity_counts_remainder
+FAILED tests/test_shipment_strict_pair.py::test_shipping_kpi_value_is_pro_rata
+11 failed, 44 passed in 7.17s
+== covered_amount_full
+[n0071_ver2] mutant covered_amount_full installed in memory
+E       AssertionError: assert 600.0 == 0.0
+tests\test_shipment_strict_pair.py:699: AssertionError
+FAILED tests/test_shipment_strict_pair.py::test_covered_line_counted_amount_is_zero_without_kept_filter
+1 failed, 54 passed in 7.89s

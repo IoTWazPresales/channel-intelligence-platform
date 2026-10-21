@@ -1,0 +1,22 @@
+{
+  "id": "N-0080",
+  "parent": null,
+  "title": "One profit definition: PM controlled cost, DAP and landed cost kept apart on lineup and CPOR margin (spec section 9.3)",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": ["api", "ui"],
+  "risk": "R3",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": ["N-0073"],
+  "acceptance_criteria": [
+    "Profit definition per Warren's decision (which cost basis is the margin, and where the other two are shown)",
+    "Lineup profitability and CPOR margin read the same definition; every figure names its cost basis",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

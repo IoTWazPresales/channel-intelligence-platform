@@ -1,0 +1,9 @@
+{
+  "id": "BLN-N0056",
+  "provenance": "implementation-observation",
+  "tree_hash": "a79dde7c8ed20930d55a9ee958d8ab4199bf3ae1",
+  "path": ".eif/audit/PROGRAMME_20260930/N-0056.md",
+  "observed_behavior": "Excel and PDF export, calendar schedules, and import-complete fan-out already existed. Import-event delivery used the query cache. Inbox cards showed created_at and metric, not the data vintage. Delivery failures wrote a failed inbox row and did not call the N-0052 alert.",
+  "latent_capabilities": [],
+  "preservation": {}
+}

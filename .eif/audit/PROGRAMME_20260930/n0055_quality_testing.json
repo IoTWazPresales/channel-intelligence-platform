@@ -1,0 +1,1 @@
+{"node": "N-0055", "expected_revision": 8, "dim": "testing", "state": "pass", "evidence": "EV-N0055", "rationale": "test_tenant_scope proves a second tenant select and Session.get miss the first tenant row, including a switch back to the first tenant."}

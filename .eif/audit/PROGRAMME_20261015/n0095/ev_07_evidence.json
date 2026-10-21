@@ -1,0 +1,1 @@
+{"node": "N-0095", "expected_revision": 6, "path": "apps/api/tests/test_merge_resolvers_follow_db.py", "note": "N-0095: DB proof on cip_test that DSI (DB and cache), shipment (token and stamped line), lineup and sell-through resolvers return the keeper for a merged record's name, code and alias.", "provenance": "implementation-observation"}

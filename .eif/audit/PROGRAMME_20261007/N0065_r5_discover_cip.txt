@@ -1,0 +1,279 @@
+current_database() = cip | read_only = on | alembic = ['20261009_0026']
+commercial_lineup_line: cols=['product_id'] chosen=product_id rows=3454 no_product=61 rls/force/owner=(True, True, 'cip') policies=4
+     ('DELETE', "((product_id IS NULL) OR (COALESCE(current_setting('cip.edit", None)
+     ('INSERT', None, "((product_id IS NULL) OR (COALESCE(current_setting('cip.edit")
+     ('SELECT', "((product_id IS NULL) OR (COALESCE(current_setting('cip.prod", None)
+     ('UPDATE', "((product_id IS NULL) OR (COALESCE(current_setting('cip.edit", "((product_id IS NULL) OR (COALESCE(current_setting('cip.edit")
+cst_listing_seed: cols=['product_id'] chosen=product_id rows=281 no_product=103 rls/force/owner=(True, True, 'postgres') policies=4
+     ('DELETE', "((product_id IS NULL) OR (COALESCE(current_setting('cip.edit", None)
+     ('INSERT', None, "((product_id IS NULL) OR (COALESCE(current_setting('cip.edit")
+     ('SELECT', "((product_id IS NULL) OR (COALESCE(current_setting('cip.prod", None)
+     ('UPDATE', "((product_id IS NULL) OR (COALESCE(current_setting('cip.edit", "((product_id IS NULL) OR (COALESCE(current_setting('cip.edit")
+customer_listing: cols=['product_id'] chosen=product_id rows=218 no_product=91 rls/force/owner=(True, True, 'postgres') policies=4
+     ('DELETE', "((product_id IS NULL) OR (COALESCE(current_setting('cip.edit", None)
+     ('INSERT', None, "((product_id IS NULL) OR (COALESCE(current_setting('cip.edit")
+     ('SELECT', "((product_id IS NULL) OR (COALESCE(current_setting('cip.prod", None)
+     ('UPDATE', "((product_id IS NULL) OR (COALESCE(current_setting('cip.edit", "((product_id IS NULL) OR (COALESCE(current_setting('cip.edit")
+historical_lineup_import_line: cols=['product_id'] chosen=product_id rows=34 no_product=15 rls/force/owner=(True, True, 'cip') policies=4
+     ('DELETE', "((product_id IS NULL) OR (COALESCE(current_setting('cip.edit", None)
+     ('INSERT', None, "((product_id IS NULL) OR (COALESCE(current_setting('cip.edit")
+     ('SELECT', "((product_id IS NULL) OR (COALESCE(current_setting('cip.prod", None)
+     ('UPDATE', "((product_id IS NULL) OR (COALESCE(current_setting('cip.edit", "((product_id IS NULL) OR (COALESCE(current_setting('cip.edit")
+app_user roles (role, users, active): [('admin', 1, 1), ('viewer', 1, 1)]
+--- cip_sev_current_observation_ids [default] best of 3 566.3 ms
+       Subquery Scan on c  (cost=15987.19..16383.11 rows=13834 width=16) (actual time=522.332..556.977 rows=15807.00 loops=1)
+         ->  Unique  (cost=15987.19..16210.19 rows=13834 width=53) (actual time=522.329..554.842 rows=15807.00 loops=1)
+               ->  Sort  (cost=15987.19..16098.69 rows=44600 width=53) (actual time=522.322..544.584 rows=85544.00 loops=1)
+                     Sort Key: o.line_identity_key, o.valid_from DESC NULLS LAST, o.id DESC
+                     Sort Method: external merge  Disk: 5536kB
+                     ->  Seq Scan on shipment_evidence_observation o  (cost=3948.73..12543.00 rows=44600 width=53) (actual time=0.023..85.960 rows=85544.00 l
+                           Filter: ((superseded_by_id IS NULL) AND ((COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::te
+                           SubPlan 1
+                             ->  Seq Scan on dim_product p  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+                           SubPlan 3
+                             ->  Function Scan on cip_sev_observation_lineage m  (cost=1965.11..1982.61 rows=500 width=8) (never executed)
+                                   Filter: ((ANY (inherited_product_id = (hashed SubPlan 2).col1)) OR ((inherited_product_id IS NULL) AND (COALESCE(current_s
+                                   SubPlan 2
+                                     ->  Seq Scan on dim_product p_1  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+       Execution Time: 566.312 ms
+--- cip_sev_current_observation_ids [enable_sort=off] best of 3 64.0 ms
+       Subquery Scan on c  (cost=3949.15..16847.85 rows=13834 width=16) (actual time=0.025..63.291 rows=15807.00 loops=1)
+         ->  Unique  (cost=3949.15..16674.92 rows=13834 width=53) (actual time=0.024..61.178 rows=15807.00 loops=1)
+               ->  Index Only Scan using ix_shipment_ev_obs_identity_latest on shipment_evidence_observation o  (cost=3949.15..16563.42 rows=44600 width=53) 
+                     Filter: ((superseded_by_id IS NULL) AND ((COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[]))
+                     Heap Fetches: 19901
+                     SubPlan 1
+                       ->  Seq Scan on dim_product p  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+                     SubPlan 3
+                       ->  Function Scan on cip_sev_observation_lineage m  (cost=1965.11..1982.61 rows=500 width=8) (never executed)
+                             Filter: ((ANY (inherited_product_id = (hashed SubPlan 2).col1)) OR ((inherited_product_id IS NULL) AND (COALESCE(current_setting
+                             SubPlan 2
+                               ->  Seq Scan on dim_product p_1  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+       Execution Time: 63.972 ms
+--- cip_sev_current_observation_ids [enable_sort=off+enable_hashagg=off] best of 3 53.6 ms
+       Subquery Scan on c  (cost=3949.15..16847.85 rows=13834 width=16) (actual time=0.021..53.126 rows=15807.00 loops=1)
+         ->  Unique  (cost=3949.15..16674.92 rows=13834 width=53) (actual time=0.021..51.417 rows=15807.00 loops=1)
+               ->  Index Only Scan using ix_shipment_ev_obs_identity_latest on shipment_evidence_observation o  (cost=3949.15..16563.42 rows=44600 width=53) 
+                     Filter: ((superseded_by_id IS NULL) AND ((COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[]))
+                     Heap Fetches: 19901
+                     SubPlan 1
+                       ->  Seq Scan on dim_product p  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+                     SubPlan 3
+                       ->  Function Scan on cip_sev_observation_lineage m  (cost=1965.11..1982.61 rows=500 width=8) (never executed)
+                             Filter: ((ANY (inherited_product_id = (hashed SubPlan 2).col1)) OR ((inherited_product_id IS NULL) AND (COALESCE(current_setting
+                             SubPlan 2
+                               ->  Seq Scan on dim_product p_1  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+       Execution Time: 53.641 ms
+--- cip_sev_observation_lineage [default] best of 3 128.6 ms
+       Seq Scan on shipment_evidence_observation o  (cost=3948.73..12121247.43 rows=3063 width=16) (actual time=0.069..127.922 rows=5876.00 loops=1)
+         Filter: ((product_id IS NULL) AND ((COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((product
+         SubPlan 4
+           ->  Limit  (cost=3949.15..3953.21 rows=1 width=61) (actual time=0.011..0.012 rows=0.70 loops=5876)
+                 ->  Index Only Scan using ix_shipment_ev_obs_identity_latest on shipment_evidence_observation r  (cost=3949.15..3961.35 rows=3 width=61) (ac
+                       Filter: ((product_id IS NOT NULL) AND ((COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[]))
+                       Heap Fetches: 5595
+                       SubPlan 1
+                         ->  Seq Scan on dim_product p  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+                       SubPlan 3
+                         ->  Function Scan on cip_sev_observation_lineage m  (cost=1965.11..1982.61 rows=500 width=8) (never executed)
+                               Filter: ((ANY (inherited_product_id = (hashed SubPlan 2).col1)) OR ((inherited_product_id IS NULL) AND (COALESCE(current_setti
+                               SubPlan 2
+                                 ->  Seq Scan on dim_product p_1  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+         SubPlan 5
+           ->  Seq Scan on dim_product p_2  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+         SubPlan 7
+           ->  Function Scan on cip_sev_observation_lineage m_1  (cost=1965.11..1982.61 rows=500 width=8) (never executed)
+                 Filter: ((ANY (inherited_product_id = (hashed SubPlan 6).col1)) OR ((inherited_product_id IS NULL) AND (COALESCE(current_setting('cip.reques
+                 SubPlan 6
+                   ->  Seq Scan on dim_product p_3  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+       Execution Time: 128.580 ms
+--- cip_sev_observation_lineage [enable_sort=off] best of 3 133.5 ms
+       Seq Scan on shipment_evidence_observation o  (cost=3948.73..12121247.43 rows=3063 width=16) (actual time=0.072..143.844 rows=5876.00 loops=1)
+         Filter: ((product_id IS NULL) AND ((COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((product
+         SubPlan 4
+           ->  Limit  (cost=3949.15..3953.21 rows=1 width=61) (actual time=0.014..0.014 rows=0.70 loops=5876)
+                 ->  Index Only Scan using ix_shipment_ev_obs_identity_latest on shipment_evidence_observation r  (cost=3949.15..3961.35 rows=3 width=61) (ac
+                       Filter: ((product_id IS NOT NULL) AND ((COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[]))
+                       Heap Fetches: 5595
+                       SubPlan 1
+                         ->  Seq Scan on dim_product p  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+                       SubPlan 3
+                         ->  Function Scan on cip_sev_observation_lineage m  (cost=1965.11..1982.61 rows=500 width=8) (never executed)
+                               Filter: ((ANY (inherited_product_id = (hashed SubPlan 2).col1)) OR ((inherited_product_id IS NULL) AND (COALESCE(current_setti
+                               SubPlan 2
+                                 ->  Seq Scan on dim_product p_1  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+         SubPlan 5
+           ->  Seq Scan on dim_product p_2  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+         SubPlan 7
+           ->  Function Scan on cip_sev_observation_lineage m_1  (cost=1965.11..1982.61 rows=500 width=8) (never executed)
+                 Filter: ((ANY (inherited_product_id = (hashed SubPlan 6).col1)) OR ((inherited_product_id IS NULL) AND (COALESCE(current_setting('cip.reques
+                 SubPlan 6
+                   ->  Seq Scan on dim_product p_3  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+       Execution Time: 144.601 ms
+--- cip_sev_observation_lineage [enable_sort=off+enable_hashagg=off] best of 3 126.4 ms
+       Seq Scan on shipment_evidence_observation o  (cost=3948.73..12121247.43 rows=3063 width=16) (actual time=0.074..125.760 rows=5876.00 loops=1)
+         Filter: ((product_id IS NULL) AND ((COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((product
+         SubPlan 4
+           ->  Limit  (cost=3949.15..3953.21 rows=1 width=61) (actual time=0.012..0.012 rows=0.70 loops=5876)
+                 ->  Index Only Scan using ix_shipment_ev_obs_identity_latest on shipment_evidence_observation r  (cost=3949.15..3961.35 rows=3 width=61) (ac
+                       Filter: ((product_id IS NOT NULL) AND ((COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[]))
+                       Heap Fetches: 5595
+                       SubPlan 1
+                         ->  Seq Scan on dim_product p  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+                       SubPlan 3
+                         ->  Function Scan on cip_sev_observation_lineage m  (cost=1965.11..1982.61 rows=500 width=8) (never executed)
+                               Filter: ((ANY (inherited_product_id = (hashed SubPlan 2).col1)) OR ((inherited_product_id IS NULL) AND (COALESCE(current_setti
+                               SubPlan 2
+                                 ->  Seq Scan on dim_product p_1  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+         SubPlan 5
+           ->  Seq Scan on dim_product p_2  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+         SubPlan 7
+           ->  Function Scan on cip_sev_observation_lineage m_1  (cost=1965.11..1982.61 rows=500 width=8) (never executed)
+                 Filter: ((ANY (inherited_product_id = (hashed SubPlan 6).col1)) OR ((inherited_product_id IS NULL) AND (COALESCE(current_setting('cip.reques
+                 SubPlan 6
+                   ->  Seq Scan on dim_product p_3  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+       Execution Time: 126.428 ms
+--- cip_sev_line_lineage [default] best of 3 172.7 ms
+       GroupAggregate  (cost=24175.69..6444319.29 rows=3114 width=20) (actual time=100.152..171.461 rows=5896.00 loops=1)
+           ->  Bitmap Heap Scan on shipment_evidence_line s  (cost=4038.55..11015.15 rows=3114 width=4) (actual time=0.828..7.499 rows=5896.00 loops=1)
+                 Filter: ((COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((product_id)::bigint = (ha
+                 ->  Bitmap Index Scan on ix_shipment_evidence_line_product_id  (cost=0.00..89.04 rows=5966 width=0) (actual time=0.531..0.532 rows=6114.00 l
+                 SubPlan 1
+                   ->  Seq Scan on dim_product p  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+                 SubPlan 3
+                   ->  Function Scan on cip_sev_line_lineage m  (cost=1965.11..1982.61 rows=500 width=8) (never executed)
+                         Filter: ((ANY (inherited_product_id = (hashed SubPlan 2).col1)) OR ((inherited_product_id IS NULL) AND (COALESCE(current_setting('ci
+                         SubPlan 2
+                           ->  Seq Scan on dim_product p_1  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+         ->  Merge Left Join  (cost=13160.55..6433249.64 rows=3114 width=12) (actual time=100.130..168.640 rows=5896.00 loops=1)
+               ->  Sort  (cost=242.96..250.75 rows=3114 width=4) (actual time=10.060..10.499 rows=5896.00 loops=1)
+                     Sort Key: nl.id
+                     Sort Method: quicksort  Memory: 193kB
+                     ->  CTE Scan on nl  (cost=0.00..62.28 rows=3114 width=4) (actual time=0.836..8.765 rows=5896.00 loops=1)
+                     ->  Subquery Scan on k  (cost=12917.58..6432966.75 rows=1624 width=12) (actual time=90.054..153.258 rows=5876.00 loops=1)
+                           ->  Unique  (cost=12917.58..12929.76 rows=1624 width=45) (actual time=89.999..92.109 rows=5876.00 loops=1)
+                                 ->  Sort  (cost=12917.58..12921.64 rows=1624 width=45) (actual time=89.997..90.680 rows=5876.00 loops=1)
+                                       Sort Key: o.evidence_line_id, o.line_identity_key
+                                       Sort Method: quicksort  Memory: 560kB
+                                       ->  Hash Join  (cost=4049.93..12830.98 rows=1624 width=45) (actual time=1.224..87.991 rows=5876.00 loops=1)
+                                             ->  Seq Scan on shipment_evidence_observation o  (cost=3948.73..12543.00 rows=45475 width=45) (actual time=0.038
+                                                   Filter: ((COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) O
+                                                   SubPlan 9
+                                                     ->  Seq Scan on dim_product p_4  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+                                                   SubPlan 11
+                                                     ->  Function Scan on cip_sev_observation_lineage m_2  (cost=1965.11..1982.61 rows=500 width=8) (never ex
+                                                           Filter: ((ANY (inherited_product_id = (hashed SubPlan 10).col1)) OR ((inherited_product_id IS NULL
+                                                           SubPlan 10
+                                                             ->  Seq Scan on dim_product p_5  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+                                                   ->  CTE Scan on nl nl_1  (cost=0.00..62.28 rows=3114 width=4) (actual time=0.001..0.469 rows=5896.00 loops
+                           SubPlan 8
+                             ->  Limit  (cost=3949.15..3953.21 rows=1 width=61) (actual time=0.010..0.010 rows=0.70 loops=5876)
+                                   ->  Index Only Scan using ix_shipment_ev_obs_identity_latest on shipment_evidence_observation r  (cost=3949.15..3961.35 ro
+                                         Filter: ((product_id IS NOT NULL) AND ((COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY (
+                                         Heap Fetches: 5595
+                                         SubPlan 5
+                                           ->  Seq Scan on dim_product p_2  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+                                         SubPlan 7
+                                           ->  Function Scan on cip_sev_observation_lineage m_1  (cost=1965.11..1982.61 rows=500 width=8) (never executed)
+                                                 Filter: ((ANY (inherited_product_id = (hashed SubPlan 6).col1)) OR ((inherited_product_id IS NULL) AND (COAL
+                                                 SubPlan 6
+                                                   ->  Seq Scan on dim_product p_3  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+       Execution Time: 172.650 ms
+--- cip_sev_line_lineage [enable_sort=off] best of 3 185.2 ms
+       HashAggregate  (cost=6444046.58..6444085.51 rows=3114 width=20) (actual time=183.790..185.046 rows=5896.00 loops=1)
+           ->  Bitmap Heap Scan on shipment_evidence_line s  (cost=4038.55..11015.15 rows=3114 width=4) (actual time=0.987..9.209 rows=5896.00 loops=1)
+                 Filter: ((COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((product_id)::bigint = (ha
+                 ->  Bitmap Index Scan on ix_shipment_evidence_line_product_id  (cost=0.00..89.04 rows=5966 width=0) (actual time=0.658..0.658 rows=6114.00 l
+                 SubPlan 1
+                   ->  Seq Scan on dim_product p  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+                 SubPlan 3
+                   ->  Function Scan on cip_sev_line_lineage m  (cost=1965.11..1982.61 rows=500 width=8) (never executed)
+                         Filter: ((ANY (inherited_product_id = (hashed SubPlan 2).col1)) OR ((inherited_product_id IS NULL) AND (COALESCE(current_setting('ci
+                         SubPlan 2
+                           ->  Seq Scan on dim_product p_1  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+         ->  Hash Right Join  (cost=12940.31..6433015.86 rows=3114 width=12) (actual time=98.465..180.540 rows=5896.00 loops=1)
+               ->  Subquery Scan on k  (cost=12839.10..6432892.33 rows=1624 width=12) (actual time=86.645..163.511 rows=5876.00 loops=1)
+                     ->  HashAggregate  (cost=12839.10..12855.34 rows=1624 width=45) (actual time=86.536..88.726 rows=5876.00 loops=1)
+                           ->  Hash Join  (cost=4049.93..12830.98 rows=1624 width=45) (actual time=1.285..82.985 rows=5876.00 loops=1)
+                                 ->  Seq Scan on shipment_evidence_observation o  (cost=3948.73..12543.00 rows=45475 width=45) (actual time=0.058..67.425 row
+                                       Filter: ((COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((pro
+                                       SubPlan 9
+                                         ->  Seq Scan on dim_product p_4  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+                                       SubPlan 11
+                                         ->  Function Scan on cip_sev_observation_lineage m_2  (cost=1965.11..1982.61 rows=500 width=8) (never executed)
+                                               Filter: ((ANY (inherited_product_id = (hashed SubPlan 10).col1)) OR ((inherited_product_id IS NULL) AND (COALE
+                                               SubPlan 10
+                                                 ->  Seq Scan on dim_product p_5  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+                                       ->  CTE Scan on nl nl_1  (cost=0.00..62.28 rows=3114 width=4) (actual time=0.001..0.482 rows=5896.00 loops=1)
+                     SubPlan 8
+                       ->  Limit  (cost=3949.15..3953.21 rows=1 width=61) (actual time=0.012..0.012 rows=0.70 loops=5876)
+                             ->  Index Only Scan using ix_shipment_ev_obs_identity_latest on shipment_evidence_observation r  (cost=3949.15..3961.35 rows=3 w
+                                   Filter: ((product_id IS NOT NULL) AND ((COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*
+                                   Heap Fetches: 5595
+                                   SubPlan 5
+                                     ->  Seq Scan on dim_product p_2  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+                                   SubPlan 7
+                                     ->  Function Scan on cip_sev_observation_lineage m_1  (cost=1965.11..1982.61 rows=500 width=8) (never executed)
+                                           Filter: ((ANY (inherited_product_id = (hashed SubPlan 6).col1)) OR ((inherited_product_id IS NULL) AND (COALESCE(c
+                                           SubPlan 6
+                                             ->  Seq Scan on dim_product p_3  (cost=0.00..1953.50 rows=4544 width=4) (never executed)
+                     ->  CTE Scan on nl  (cost=0.00..62.28 rows=3114 width=4) (actual time=0.994..10.746 rows=5896.00 loops=1)
+       Execution Time: 186.335 ms
+Traceback (most recent call last):
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\psycopg\cursor.py", line 97, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.QueryCanceled: canceling statement due to statement timeout
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\warren_eliason\channel-intelligence-platform\.eif\audit\PROGRAMME_20261007\N0065_r5_discover.py", line 82, in <module>
+    plan = c.execute(sa.text("explain (analyze, buffers) " + q)).all()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1421, in execute
+    return meth(
+           ^^^^^
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1643, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1848, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1988, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2365, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "C:\Users\warren_eliason\channel-intelligence-platform\apps\api\.venv\Lib\site-packages\psycopg\cursor.py", line 97, in execute
+    raise ex.with_traceback(None)
+sqlalchemy.exc.OperationalError: (psycopg.errors.QueryCanceled) canceling statement due to statement timeout
+[SQL: explain (analyze, buffers) 
+
+      WITH nl AS (
+        SELECT s.id FROM public.shipment_evidence_line s WHERE s.product_id IS NULL
+      ), k AS (
+        SELECT DISTINCT o.evidence_line_id, o.line_identity_key
+        FROM public.shipment_evidence_observation o JOIN nl ON nl.id = o.evidence_line_id
+      ), kl AS (
+        SELECT k.evidence_line_id, (
+          SELECT r.product_id::bigint
+          FROM public.shipment_evidence_observation r
+          WHERE r.line_identity_key = k.line_identity_key AND r.product_id IS NOT NULL
+          ORDER BY r.line_identity_key, r.valid_from DESC NULLS LAST, r.id DESC
+          LIMIT 1) AS pid
+        FROM k
+      )
+      SELECT nl.id::bigint, max(kl.pid)
+      FROM nl LEFT JOIN kl ON kl.evidence_line_id = nl.id
+      GROUP BY nl.id]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)

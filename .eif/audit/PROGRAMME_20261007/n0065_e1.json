@@ -1,0 +1,1 @@
+{"node": "N-0065", "expected_revision": 3, "baseline_ref": "BLN-N0065", "preservation": {"unset-scope-open-for-workers": "kept", "star-scope-all-lines": "kept and reused for admins", "admin-catalog-widen-for-assignment": "kept", "read-vs-edit-per-line": "kept for non-admins"}}

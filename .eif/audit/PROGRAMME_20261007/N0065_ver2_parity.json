@@ -1,0 +1,2187 @@
+{
+ "n_tables": 45,
+ "definer_bypasses_rls": false,
+ "cells_0024": 720,
+ "mismatches_0024": [],
+ "cells_0025": 720,
+ "mismatches_0025": [],
+ "view_counts_0024": {
+  "read None": 3,
+  "read ''": 2,
+  "read '!'": 2,
+  "read '*'": 3,
+  "read 'A'": 2,
+  "read 'A,B'": 2,
+  "read 'NOPE'": 2
+ },
+ "view_counts_0025": {
+  "read None": 3,
+  "read ''": 3,
+  "read '!'": 2,
+  "read '*'": 3,
+  "read 'A'": 2,
+  "read 'A,B'": 2,
+  "read 'NOPE'": 2
+ },
+ "view_reloptions_0024": null,
+ "view_reloptions_0025": [
+  "security_invoker=true"
+ ],
+ "plan_0024": [
+  "Aggregate",
+  "  ->  Seq Scan on fact_sales_sellout",
+  "        Filter: cip_product_id_visible((product_id)::bigint)"
+ ],
+ "plan_0025": [
+  "Aggregate",
+  "  ->  Seq Scan on fact_sales_sellout",
+  "        Filter: ((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{\"\",*}'::text[])) OR (ANY ((product_id)::bigint = (hashed SubPlan 1).col1)))",
+  "        SubPlan 1",
+  "          ->  Seq Scan on dim_product p",
+  "                Filter: (CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{\"\",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END AND CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{\"\",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END)"
+ ],
+ "cross_version_differences": [
+  [
+   "dim_product",
+   "read ''",
+   true
+  ],
+  [
+   "dim_product",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "buy_recommendation",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "buy_recommendation",
+   "read None",
+   false
+  ],
+  [
+   "buy_recommendation",
+   "read ''",
+   true
+  ],
+  [
+   "buy_recommendation",
+   "read '*'",
+   false
+  ],
+  [
+   "buy_recommendation",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "buy_recommendation",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "catalog_product",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "catalog_product",
+   "read None",
+   false
+  ],
+  [
+   "catalog_product",
+   "read ''",
+   true
+  ],
+  [
+   "catalog_product",
+   "read '*'",
+   false
+  ],
+  [
+   "catalog_product",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "catalog_product",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "commercial_lineup_line",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "commercial_lineup_line",
+   "read None",
+   false
+  ],
+  [
+   "commercial_lineup_line",
+   "read ''",
+   true
+  ],
+  [
+   "commercial_lineup_line",
+   "read '*'",
+   false
+  ],
+  [
+   "commercial_lineup_line",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "commercial_lineup_line",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "commercial_plan_line",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "commercial_plan_line",
+   "read None",
+   false
+  ],
+  [
+   "commercial_plan_line",
+   "read ''",
+   true
+  ],
+  [
+   "commercial_plan_line",
+   "read '*'",
+   false
+  ],
+  [
+   "commercial_plan_line",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "commercial_plan_line",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "commercial_sku_assumption",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "commercial_sku_assumption",
+   "read None",
+   false
+  ],
+  [
+   "commercial_sku_assumption",
+   "read ''",
+   true
+  ],
+  [
+   "commercial_sku_assumption",
+   "read '*'",
+   false
+  ],
+  [
+   "commercial_sku_assumption",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "commercial_sku_assumption",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "competitive_positioning",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "competitive_positioning",
+   "read None",
+   false
+  ],
+  [
+   "competitive_positioning",
+   "read ''",
+   true
+  ],
+  [
+   "competitive_positioning",
+   "read '*'",
+   false
+  ],
+  [
+   "competitive_positioning",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "competitive_positioning",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "cpor_case_line",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "cpor_case_line",
+   "read None",
+   false
+  ],
+  [
+   "cpor_case_line",
+   "read ''",
+   true
+  ],
+  [
+   "cpor_case_line",
+   "read '*'",
+   false
+  ],
+  [
+   "cpor_case_line",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "cpor_case_line",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "cpor_claim_evidence_line",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "cpor_claim_evidence_line",
+   "read None",
+   false
+  ],
+  [
+   "cpor_claim_evidence_line",
+   "read ''",
+   true
+  ],
+  [
+   "cpor_claim_evidence_line",
+   "read '*'",
+   false
+  ],
+  [
+   "cpor_claim_evidence_line",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "cpor_claim_evidence_line",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "cst_listing_seed",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "cst_listing_seed",
+   "read None",
+   false
+  ],
+  [
+   "cst_listing_seed",
+   "read ''",
+   true
+  ],
+  [
+   "cst_listing_seed",
+   "read '*'",
+   false
+  ],
+  [
+   "cst_listing_seed",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "cst_listing_seed",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "customer_article_alias",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "customer_article_alias",
+   "read None",
+   false
+  ],
+  [
+   "customer_article_alias",
+   "read ''",
+   true
+  ],
+  [
+   "customer_article_alias",
+   "read '*'",
+   false
+  ],
+  [
+   "customer_article_alias",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "customer_article_alias",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "customer_listing",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "customer_listing",
+   "read None",
+   false
+  ],
+  [
+   "customer_listing",
+   "read ''",
+   true
+  ],
+  [
+   "customer_listing",
+   "read '*'",
+   false
+  ],
+  [
+   "customer_listing",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "customer_listing",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "exception_inbox_item",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "exception_inbox_item",
+   "read None",
+   false
+  ],
+  [
+   "exception_inbox_item",
+   "read ''",
+   true
+  ],
+  [
+   "exception_inbox_item",
+   "read '*'",
+   false
+  ],
+  [
+   "exception_inbox_item",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "exception_inbox_item",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "fact_activation",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "fact_activation",
+   "read None",
+   false
+  ],
+  [
+   "fact_activation",
+   "read ''",
+   true
+  ],
+  [
+   "fact_activation",
+   "read '*'",
+   false
+  ],
+  [
+   "fact_activation",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "fact_activation",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "fact_buy_plan",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "fact_buy_plan",
+   "read None",
+   false
+  ],
+  [
+   "fact_buy_plan",
+   "read ''",
+   true
+  ],
+  [
+   "fact_buy_plan",
+   "read '*'",
+   false
+  ],
+  [
+   "fact_buy_plan",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "fact_buy_plan",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "fact_competitor_mapping",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "fact_competitor_mapping",
+   "read None",
+   false
+  ],
+  [
+   "fact_competitor_mapping",
+   "read ''",
+   true
+  ],
+  [
+   "fact_competitor_mapping",
+   "read '*'",
+   false
+  ],
+  [
+   "fact_competitor_mapping",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "fact_competitor_mapping",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "fact_customer_sellthrough",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "fact_customer_sellthrough",
+   "read None",
+   false
+  ],
+  [
+   "fact_customer_sellthrough",
+   "read ''",
+   true
+  ],
+  [
+   "fact_customer_sellthrough",
+   "read '*'",
+   false
+  ],
+  [
+   "fact_customer_sellthrough",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "fact_customer_sellthrough",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "fact_customer_velocity",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "fact_customer_velocity",
+   "read None",
+   false
+  ],
+  [
+   "fact_customer_velocity",
+   "read ''",
+   true
+  ],
+  [
+   "fact_customer_velocity",
+   "read '*'",
+   false
+  ],
+  [
+   "fact_customer_velocity",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "fact_customer_velocity",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "fact_demand_forecast",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "fact_demand_forecast",
+   "read None",
+   false
+  ],
+  [
+   "fact_demand_forecast",
+   "read ''",
+   true
+  ],
+  [
+   "fact_demand_forecast",
+   "read '*'",
+   false
+  ],
+  [
+   "fact_demand_forecast",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "fact_demand_forecast",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "fact_dsi_forecast",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "fact_dsi_forecast",
+   "read None",
+   false
+  ],
+  [
+   "fact_dsi_forecast",
+   "read ''",
+   true
+  ],
+  [
+   "fact_dsi_forecast",
+   "read '*'",
+   false
+  ],
+  [
+   "fact_dsi_forecast",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "fact_dsi_forecast",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "fact_forecast",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "fact_forecast",
+   "read None",
+   false
+  ],
+  [
+   "fact_forecast",
+   "read ''",
+   true
+  ],
+  [
+   "fact_forecast",
+   "read '*'",
+   false
+  ],
+  [
+   "fact_forecast",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "fact_forecast",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "fact_inbound_shipment",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "fact_inbound_shipment",
+   "read None",
+   false
+  ],
+  [
+   "fact_inbound_shipment",
+   "read ''",
+   true
+  ],
+  [
+   "fact_inbound_shipment",
+   "read '*'",
+   false
+  ],
+  [
+   "fact_inbound_shipment",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "fact_inbound_shipment",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "fact_inventory_customer",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "fact_inventory_customer",
+   "read None",
+   false
+  ],
+  [
+   "fact_inventory_customer",
+   "read ''",
+   true
+  ],
+  [
+   "fact_inventory_customer",
+   "read '*'",
+   false
+  ],
+  [
+   "fact_inventory_customer",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "fact_inventory_customer",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "fact_inventory_distributor",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "fact_inventory_distributor",
+   "read None",
+   false
+  ],
+  [
+   "fact_inventory_distributor",
+   "read ''",
+   true
+  ],
+  [
+   "fact_inventory_distributor",
+   "read '*'",
+   false
+  ],
+  [
+   "fact_inventory_distributor",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "fact_inventory_distributor",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "fact_inventory_reconciliation",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "fact_inventory_reconciliation",
+   "read None",
+   false
+  ],
+  [
+   "fact_inventory_reconciliation",
+   "read ''",
+   true
+  ],
+  [
+   "fact_inventory_reconciliation",
+   "read '*'",
+   false
+  ],
+  [
+   "fact_inventory_reconciliation",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "fact_inventory_reconciliation",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "fact_lineup_plan_item",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "fact_lineup_plan_item",
+   "read None",
+   false
+  ],
+  [
+   "fact_lineup_plan_item",
+   "read ''",
+   true
+  ],
+  [
+   "fact_lineup_plan_item",
+   "read '*'",
+   false
+  ],
+  [
+   "fact_lineup_plan_item",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "fact_lineup_plan_item",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "fact_pricing",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "fact_pricing",
+   "read None",
+   false
+  ],
+  [
+   "fact_pricing",
+   "read ''",
+   true
+  ],
+  [
+   "fact_pricing",
+   "read '*'",
+   false
+  ],
+  [
+   "fact_pricing",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "fact_pricing",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "fact_product_roadmap",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "fact_product_roadmap",
+   "read None",
+   false
+  ],
+  [
+   "fact_product_roadmap",
+   "read ''",
+   true
+  ],
+  [
+   "fact_product_roadmap",
+   "read '*'",
+   false
+  ],
+  [
+   "fact_product_roadmap",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "fact_product_roadmap",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "fact_promotion_performance",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "fact_promotion_performance",
+   "read None",
+   false
+  ],
+  [
+   "fact_promotion_performance",
+   "read ''",
+   true
+  ],
+  [
+   "fact_promotion_performance",
+   "read '*'",
+   false
+  ],
+  [
+   "fact_promotion_performance",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "fact_promotion_performance",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "fact_promotion_plan",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "fact_promotion_plan",
+   "read None",
+   false
+  ],
+  [
+   "fact_promotion_plan",
+   "read ''",
+   true
+  ],
+  [
+   "fact_promotion_plan",
+   "read '*'",
+   false
+  ],
+  [
+   "fact_promotion_plan",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "fact_promotion_plan",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "fact_returns",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "fact_returns",
+   "read None",
+   false
+  ],
+  [
+   "fact_returns",
+   "read ''",
+   true
+  ],
+  [
+   "fact_returns",
+   "read '*'",
+   false
+  ],
+  [
+   "fact_returns",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "fact_returns",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "fact_sales_sellin",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "fact_sales_sellin",
+   "read None",
+   false
+  ],
+  [
+   "fact_sales_sellin",
+   "read ''",
+   true
+  ],
+  [
+   "fact_sales_sellin",
+   "read '*'",
+   false
+  ],
+  [
+   "fact_sales_sellin",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "fact_sales_sellin",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "fact_sales_sellout",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "fact_sales_sellout",
+   "read None",
+   false
+  ],
+  [
+   "fact_sales_sellout",
+   "read ''",
+   true
+  ],
+  [
+   "fact_sales_sellout",
+   "read '*'",
+   false
+  ],
+  [
+   "fact_sales_sellout",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "fact_sales_sellout",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "fact_support",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "fact_support",
+   "read None",
+   false
+  ],
+  [
+   "fact_support",
+   "read ''",
+   true
+  ],
+  [
+   "fact_support",
+   "read '*'",
+   false
+  ],
+  [
+   "fact_support",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "fact_support",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "forecast_summary",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "forecast_summary",
+   "read None",
+   false
+  ],
+  [
+   "forecast_summary",
+   "read ''",
+   true
+  ],
+  [
+   "forecast_summary",
+   "read '*'",
+   false
+  ],
+  [
+   "forecast_summary",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "forecast_summary",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "historical_lineup_import_line",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "historical_lineup_import_line",
+   "read None",
+   false
+  ],
+  [
+   "historical_lineup_import_line",
+   "read ''",
+   true
+  ],
+  [
+   "historical_lineup_import_line",
+   "read '*'",
+   false
+  ],
+  [
+   "historical_lineup_import_line",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "historical_lineup_import_line",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "pricing_recommendation",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "pricing_recommendation",
+   "read None",
+   false
+  ],
+  [
+   "pricing_recommendation",
+   "read ''",
+   true
+  ],
+  [
+   "pricing_recommendation",
+   "read '*'",
+   false
+  ],
+  [
+   "pricing_recommendation",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "pricing_recommendation",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "product_alias",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "product_alias",
+   "read None",
+   false
+  ],
+  [
+   "product_alias",
+   "read ''",
+   true
+  ],
+  [
+   "product_alias",
+   "read '*'",
+   false
+  ],
+  [
+   "product_alias",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "product_alias",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "promo_readiness",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "promo_readiness",
+   "read None",
+   false
+  ],
+  [
+   "promo_readiness",
+   "read ''",
+   true
+  ],
+  [
+   "promo_readiness",
+   "read '*'",
+   false
+  ],
+  [
+   "promo_readiness",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "promo_readiness",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "shipment_evidence_line",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "shipment_evidence_line",
+   "read None",
+   false
+  ],
+  [
+   "shipment_evidence_line",
+   "read ''",
+   true
+  ],
+  [
+   "shipment_evidence_line",
+   "read '*'",
+   false
+  ],
+  [
+   "shipment_evidence_line",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "shipment_evidence_line",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "shipment_evidence_observation",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "shipment_evidence_observation",
+   "read None",
+   false
+  ],
+  [
+   "shipment_evidence_observation",
+   "read ''",
+   true
+  ],
+  [
+   "shipment_evidence_observation",
+   "read '*'",
+   false
+  ],
+  [
+   "shipment_evidence_observation",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "shipment_evidence_observation",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "stock_health",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "stock_health",
+   "read None",
+   false
+  ],
+  [
+   "stock_health",
+   "read ''",
+   true
+  ],
+  [
+   "stock_health",
+   "read '*'",
+   false
+  ],
+  [
+   "stock_health",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "stock_health",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "stock_risk",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "stock_risk",
+   "read None",
+   false
+  ],
+  [
+   "stock_risk",
+   "read ''",
+   true
+  ],
+  [
+   "stock_risk",
+   "read '*'",
+   false
+  ],
+  [
+   "stock_risk",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "stock_risk",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "weeks_of_cover_observation",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "weeks_of_cover_observation",
+   "read None",
+   false
+  ],
+  [
+   "weeks_of_cover_observation",
+   "read ''",
+   true
+  ],
+  [
+   "weeks_of_cover_observation",
+   "read '*'",
+   false
+  ],
+  [
+   "weeks_of_cover_observation",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "weeks_of_cover_observation",
+   "edit r='' e=''",
+   true
+  ],
+  [
+   "weeks_of_stock",
+   "edit r=None e=None",
+   false
+  ],
+  [
+   "weeks_of_stock",
+   "read None",
+   false
+  ],
+  [
+   "weeks_of_stock",
+   "read ''",
+   true
+  ],
+  [
+   "weeks_of_stock",
+   "read '*'",
+   false
+  ],
+  [
+   "weeks_of_stock",
+   "edit r='*' e='*'",
+   false
+  ],
+  [
+   "weeks_of_stock",
+   "edit r='' e=''",
+   true
+  ]
+ ],
+ "per_table_0025": {
+  "dim_product": {
+   "edit r=None e=None": 21,
+   "read None": 21,
+   "read ''": 21,
+   "read '!'": 0,
+   "read '*'": 21,
+   "read 'A'": 2,
+   "read 'A,B'": 4,
+   "read 'NOPE'": 0,
+   "edit r='*' e='*'": 21,
+   "edit r='A,B' e='A'": 2,
+   "edit r='A,B' e='A,B'": 4,
+   "edit r='A' e='!'": 0,
+   "edit r='!' e='!'": 0,
+   "edit r='' e=''": 21,
+   "edit r='*' e='A'": 2,
+   "edit r='!' e='A'": 0
+  },
+  "buy_recommendation": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "catalog_product": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "commercial_lineup_line": {
+   "edit r=None e=None": 14,
+   "read None": 14,
+   "read ''": 14,
+   "read '!'": 1,
+   "read '*'": 14,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 14,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 14,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "commercial_plan_line": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "commercial_sku_assumption": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "competitive_positioning": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "cpor_case_line": {
+   "edit r=None e=None": 12,
+   "read None": 12,
+   "read ''": 12,
+   "read '!'": 1,
+   "read '*'": 12,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 12,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 12,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "cpor_claim_evidence_line": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "cst_listing_seed": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "customer_article_alias": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "customer_listing": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "exception_inbox_item": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "fact_activation": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "fact_buy_plan": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "fact_competitor_mapping": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "fact_customer_sellthrough": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "fact_customer_velocity": {
+   "edit r=None e=None": 9,
+   "read None": 9,
+   "read ''": 9,
+   "read '!'": 1,
+   "read '*'": 9,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 9,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 9,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "fact_demand_forecast": {
+   "edit r=None e=None": 21,
+   "read None": 21,
+   "read ''": 21,
+   "read '!'": 1,
+   "read '*'": 21,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 21,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 21,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "fact_dsi_forecast": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "fact_forecast": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "fact_inbound_shipment": {
+   "edit r=None e=None": 22,
+   "read None": 22,
+   "read ''": 22,
+   "read '!'": 8,
+   "read '*'": 22,
+   "read 'A'": 10,
+   "read 'A,B'": 12,
+   "read 'NOPE'": 8,
+   "edit r='*' e='*'": 22,
+   "edit r='A,B' e='A'": 10,
+   "edit r='A,B' e='A,B'": 12,
+   "edit r='A' e='!'": 8,
+   "edit r='!' e='!'": 8,
+   "edit r='' e=''": 22,
+   "edit r='*' e='A'": 10,
+   "edit r='!' e='A'": 8
+  },
+  "fact_inventory_customer": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "fact_inventory_distributor": {
+   "edit r=None e=None": 22,
+   "read None": 22,
+   "read ''": 22,
+   "read '!'": 1,
+   "read '*'": 22,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 22,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 22,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "fact_inventory_reconciliation": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "fact_lineup_plan_item": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "fact_pricing": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "fact_product_roadmap": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "fact_promotion_performance": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "fact_promotion_plan": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "fact_returns": {
+   "edit r=None e=None": 9,
+   "read None": 9,
+   "read ''": 9,
+   "read '!'": 1,
+   "read '*'": 9,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 9,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 9,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "fact_sales_sellin": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "fact_sales_sellout": {
+   "edit r=None e=None": 39,
+   "read None": 39,
+   "read ''": 39,
+   "read '!'": 1,
+   "read '*'": 39,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 39,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 39,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "fact_support": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "forecast_summary": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "historical_lineup_import_line": {
+   "edit r=None e=None": 64,
+   "read None": 64,
+   "read ''": 64,
+   "read '!'": 25,
+   "read '*'": 64,
+   "read 'A'": 27,
+   "read 'A,B'": 29,
+   "read 'NOPE'": 25,
+   "edit r='*' e='*'": 64,
+   "edit r='A,B' e='A'": 27,
+   "edit r='A,B' e='A,B'": 29,
+   "edit r='A' e='!'": 25,
+   "edit r='!' e='!'": 25,
+   "edit r='' e=''": 64,
+   "edit r='*' e='A'": 27,
+   "edit r='!' e='A'": 25
+  },
+  "pricing_recommendation": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "product_alias": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "promo_readiness": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "shipment_evidence_line": {
+   "edit r=None e=None": 35,
+   "read None": 35,
+   "read ''": 35,
+   "read '!'": 23,
+   "read '*'": 35,
+   "read 'A'": 25,
+   "read 'A,B'": 27,
+   "read 'NOPE'": 23,
+   "edit r='*' e='*'": 35,
+   "edit r='A,B' e='A'": 25,
+   "edit r='A,B' e='A,B'": 27,
+   "edit r='A' e='!'": 23,
+   "edit r='!' e='!'": 23,
+   "edit r='' e=''": 35,
+   "edit r='*' e='A'": 25,
+   "edit r='!' e='A'": 23
+  },
+  "shipment_evidence_observation": {
+   "edit r=None e=None": 21,
+   "read None": 21,
+   "read ''": 21,
+   "read '!'": 9,
+   "read '*'": 21,
+   "read 'A'": 11,
+   "read 'A,B'": 13,
+   "read 'NOPE'": 9,
+   "edit r='*' e='*'": 21,
+   "edit r='A,B' e='A'": 11,
+   "edit r='A,B' e='A,B'": 13,
+   "edit r='A' e='!'": 9,
+   "edit r='!' e='!'": 9,
+   "edit r='' e=''": 21,
+   "edit r='*' e='A'": 11,
+   "edit r='!' e='A'": 9
+  },
+  "stock_health": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "stock_risk": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "weeks_of_cover_observation": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  },
+  "weeks_of_stock": {
+   "edit r=None e=None": 8,
+   "read None": 8,
+   "read ''": 8,
+   "read '!'": 1,
+   "read '*'": 8,
+   "read 'A'": 3,
+   "read 'A,B'": 5,
+   "read 'NOPE'": 1,
+   "edit r='*' e='*'": 8,
+   "edit r='A,B' e='A'": 3,
+   "edit r='A,B' e='A,B'": 5,
+   "edit r='A' e='!'": 1,
+   "edit r='!' e='!'": 1,
+   "edit r='' e=''": 8,
+   "edit r='*' e='A'": 3,
+   "edit r='!' e='A'": 1
+  }
+ }
+}

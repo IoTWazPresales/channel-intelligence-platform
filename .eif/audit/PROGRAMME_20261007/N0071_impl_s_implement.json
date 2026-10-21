@@ -1,0 +1,1 @@
+{"node": "N-0071", "expected_revision": 6, "stage": "implement", "stage_note": "Implementation run RUN-20261007-N0071-IMPL builds the design in N0071_IMPL.md: shipment_strict_pair.py rewrite, plus wiring in brief_signals, dashboard, inbound_lineup_quarter, shipping (/summary, ETA-shift), intake_weighted_mac. Tests: tests/test_shipment_strict_pair.py."}

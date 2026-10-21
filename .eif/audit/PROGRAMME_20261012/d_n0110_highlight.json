@@ -1,0 +1,6 @@
+{
+  "scope": "N-0110",
+  "origin": "operator",
+  "status": "accepted",
+  "statement": "Warren 2026-10-12: the unit gap is shown on every compared row. Highlight is an editable setting in absolute units. A row highlights when the absolute gap is at least the number the user has set. The distributor 10 percent variance is not used."
+}

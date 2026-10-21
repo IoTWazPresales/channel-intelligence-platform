@@ -1,0 +1,1 @@
+{"node": "N-0064", "expected_revision": 12, "dim": "a11y", "state": "pass", "evidence": "EV-N0064", "rationale": "The bias tile text is in the page. No control was removed. Chart strokes use the theme palette."}

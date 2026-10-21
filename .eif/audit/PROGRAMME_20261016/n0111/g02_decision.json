@@ -1,0 +1,1 @@
+{"scope": "N-0111", "origin": "operator", "status": "accepted", "statement": "Warren 2026-10-16: history files carry a sale date per line. A line with a full date loads at day grain and rolls up into Monday-Sunday weeks for weekly views. Daily reporting is the direction going forward."}

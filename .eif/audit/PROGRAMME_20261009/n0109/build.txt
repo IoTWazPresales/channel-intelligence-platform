@@ -1,0 +1,219 @@
+
+> @cip/web@0.0.1 build C:\Users\warren_eliason\channel-intelligence-platform\apps\web
+> next build
+
+   ▲ Next.js 15.5.15
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 120s
+   Linting and checking validity of types ...
+
+./src/app/(app)/admin/customers/duplicates/AliasScopeConflictsSection.tsx
+192:6  Warning: React Hook useMemo has a missing dependency: 'survivorForGroup'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(app)/admin/customers/duplicates/NameSimilarityMergeSection.tsx
+198:6  Warning: React Hook useMemo has a missing dependency: 'survivorForGroup'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+213:5  Warning: React Hook useMemo has a missing dependency: 'survivorForGroup'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(app)/admin/customers/page.tsx
+757:5  Warning: React Hook useMemo has an unnecessary dependency: 'delCustomer.isPending'. Either exclude it or remove the dependency array.  react-hooks/exhaustive-deps
+793:6  Warning: React Hook useMemo has an unnecessary dependency: 'bulkSelectedCount'. Either exclude it or remove the dependency array.  react-hooks/exhaustive-deps
+798:6  Warning: React Hook useMemo has an unnecessary dependency: 'bulkSelectedCount'. Either exclude it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(app)/admin/distributors/duplicates/DistributorNameSimilarityMergeSection.tsx
+196:6  Warning: React Hook useMemo has a missing dependency: 'survivorForGroup'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+211:5  Warning: React Hook useMemo has a missing dependency: 'survivorForGroup'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(app)/admin/distributors/page.tsx
+661:5  Warning: React Hook useMemo has an unnecessary dependency: 'delDist.isPending'. Either exclude it or remove the dependency array.  react-hooks/exhaustive-deps
+703:6  Warning: React Hook useMemo has an unnecessary dependency: 'bulkSelectedCount'. Either exclude it or remove the dependency array.  react-hooks/exhaustive-deps
+708:6  Warning: React Hook useMemo has an unnecessary dependency: 'bulkSelectedCount'. Either exclude it or remove the dependency array.  react-hooks/exhaustive-deps
+750:5  Warning: React Hook useMemo has an unnecessary dependency: 'delSell.isPending'. Either exclude it or remove the dependency array.  react-hooks/exhaustive-deps
+775:5  Warning: React Hook useMemo has an unnecessary dependency: 'delInbound.isPending'. Either exclude it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(app)/admin/imports/DsiCoveragePanel.tsx
+98:9  Warning: The 'flags' logical expression could make the dependencies of useMemo Hook (at line 99) change on every render. To fix this, wrap the initialization of 'flags' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+
+./src/app/(app)/admin/imports/DsiImportJobResolutionSection.tsx
+311:6  Warning: React Hook useEffect has a missing dependency: 'candidatesPage'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+530:5  Warning: React Hook useMemo has a missing dependency: 'plan'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(app)/admin/imports/page.tsx
+1504:6  Warning: React Hook useEffect has a missing dependency: 'dsiValidate'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+1854:9  Warning: The 'hlSourceColumns' logical expression could make the dependencies of useMemo Hook (at line 1882) change on every render. To fix this, wrap the initialization of 'hlSourceColumns' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+2005:6  Warning: React Hook useEffect has a missing dependency: 'shipmentImportJob'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+2057:6  Warning: React Hook useEffect has a missing dependency: 'shipmentMappingState'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+2407:6  Warning: React Hook useEffect has a missing dependency: 'pmJobState.file_headers'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(app)/admin/imports/PmImportProgressPanel.tsx
+118:6  Warning: React Hook useMemo has an unnecessary dependency: 'progress.phase_description'. Either exclude it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(app)/admin/mappings/page.tsx
+104:6  Warning: React Hook useMemo has an unnecessary dependency: 'delRow.isPending'. Either exclude it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(app)/admin/products/page.test.tsx
+129:8  Warning: React Hook useEffect has missing dependencies: 'columnDefs' and 'rowData'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(app)/admin/shipment-evidence/ShipmentImportJobResolutionSection.tsx
+309:6  Warning: React Hook useEffect has a missing dependency: 'candidatesPage'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(app)/admin/shipment-evidence/useShipmentCandidatesPage.ts
+53:24  Warning: React Hook useEffect has a spread element in its dependency array. This means we can't statically verify whether you've passed the correct dependencies.  react-hooks/exhaustive-deps
+
+./src/app/(app)/budget-requests/page.tsx
+53:6  Warning: React Hook useMemo has an unnecessary dependency: 'delRow.isPending'. Either exclude it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(app)/buy-plans/page.tsx
+110:6  Warning: React Hook useMemo has a missing dependency: 'openDrawer'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(app)/exceptions/page.tsx
+69:6  Warning: React Hook useMemo has an unnecessary dependency: 'delRow.isPending'. Either exclude it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(app)/inventory/page.tsx
+137:6  Warning: React Hook useMemo has an unnecessary dependency: 'delRow.isPending'. Either exclude it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(app)/pricing/page.tsx
+199:6  Warning: React Hook useMemo has an unnecessary dependency: 'delFact.isPending'. Either exclude it or remove the dependency array.  react-hooks/exhaustive-deps
+211:6  Warning: React Hook useMemo has an unnecessary dependency: 'delRec.isPending'. Either exclude it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(app)/roadmap/page.tsx
+61:6  Warning: React Hook useMemo has an unnecessary dependency: 'delRow.isPending'. Either exclude it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/features/commercial-planner/CustomerTokenWorklistSection.tsx
+158:9  Warning: The 'items' logical expression could make the dependencies of useMemo Hook (at line 163) change on every render. To fix this, wrap the initialization of 'items' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+158:9  Warning: The 'items' logical expression could make the dependencies of useMemo Hook (at line 168) change on every render. To fix this, wrap the initialization of 'items' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+
+./src/features/commercial-planner/PoAutoLinkProposalsSection.tsx
+1102:9  Warning: The 'proposals' logical expression could make the dependencies of useMemo Hook (at line 1105) change on every render. Move it inside the useMemo callback. Alternatively, wrap the initialization of 'proposals' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+
+./src/features/commercial-planner/PoCaseLinkWorklistSection.tsx
+107:9  Warning: The 'links' logical expression could make the dependencies of useMemo Hook (at line 112) change on every render. To fix this, wrap the initialization of 'links' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+
+./src/features/commercial-planner/PoManagementView.tsx
+297:5  Warning: React Hook useMemo has a missing dependency: 'viewShipmentsForPo'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/features/import-steward/useStewardBulkSteward.ts
+162:6  Warning: React Hook useMemo has a missing dependency: 'selectedIds.length'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/features/market-listings/MarketSurface.tsx
+369:9  Warning: The 'listings' logical expression could make the dependencies of useMemo Hook (at line 413) change on every render. To fix this, wrap the initialization of 'listings' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+
+./src/features/plan-vs-executed/PlanVsExecutedView.tsx
+510:9  Warning: The 'activeExceptionRows' logical expression could make the dependencies of useMemo Hook (at line 514) change on every render. To fix this, wrap the initialization of 'activeExceptionRows' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+
+./src/features/promotions-funding/CaseBookSurface.tsx
+207:9  Warning: The 'allItems' logical expression could make the dependencies of useMemo Hook (at line 245) change on every render. To fix this, wrap the initialization of 'allItems' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+207:9  Warning: The 'allItems' logical expression could make the dependencies of useMemo Hook (at line 246) change on every render. To fix this, wrap the initialization of 'allItems' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+220:9  Warning: The 'scopedItems' conditional could make the dependencies of useMemo Hook (at line 232) change on every render. Move it inside the useMemo callback. Alternatively, wrap the initialization of 'scopedItems' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+
+./src/features/promotions-funding/PlanTemplatesSurface.tsx
+121:9  Warning: The 'profiles' logical expression could make the dependencies of useMemo Hook (at line 151) change on every render. To fix this, wrap the initialization of 'profiles' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+
+./src/features/settings/SemanticCatalogOverlayPanel.tsx
+118:9  Warning: The 'baseMetrics' logical expression could make the dependencies of useMemo Hook (at line 123) change on every render. To fix this, wrap the initialization of 'baseMetrics' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+118:9  Warning: The 'baseMetrics' logical expression could make the dependencies of useMemo Hook (at line 149) change on every render. To fix this, wrap the initialization of 'baseMetrics' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+
+./src/features/stock/ForecastsWorkspace.tsx
+213:6  Warning: React Hook useMemo has an unnecessary dependency: 'delRow.isPending'. Either exclude it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/features/supply-inbound/InboundShipmentsWorkspace.tsx
+362:9  Warning: The 'custOptions' logical expression could make the dependencies of useEffect Hook (at line 385) change on every render. To fix this, wrap the initialization of 'custOptions' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+
+./src/test-utils/agGridReactMock.tsx
+27:10  Warning: React Hook React.useEffect has a missing dependency: 'api'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules
+   Collecting page data ...
+   Generating static pages (0/72) ...
+   Generating static pages (18/72) 
+   Generating static pages (36/72) 
+   Generating static pages (54/72) 
+ ✓ Generating static pages (72/72)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                                    Size  First Load JS
+┌ ○ /                                                         133 B         103 kB
+├ ○ /_not-found                                                1 kB         104 kB
+├ ○ /admin/channels-regions                                 16.5 kB         456 kB
+├ ○ /admin/cst-steward                                      24.2 kB         501 kB
+├ ○ /admin/customer-commercial-terms                        12.7 kB         496 kB
+├ ○ /admin/customers                                        26.1 kB         506 kB
+├ ○ /admin/customers/duplicates                             11.7 kB         227 kB
+├ ○ /admin/distributors                                     19.4 kB         506 kB
+├ ○ /admin/distributors/duplicates                          9.96 kB         226 kB
+├ ○ /admin/imports                                          50.7 kB         767 kB
+├ ○ /admin/mappings                                         8.34 kB         711 kB
+├ ○ /admin/masters                                          8.34 kB         299 kB
+├ ○ /admin/ops                                              5.37 kB         431 kB
+├ ○ /admin/po-management                                    35.8 kB         534 kB
+├ ○ /admin/product-master-gaps                              10.5 kB         473 kB
+├ ○ /admin/products                                         16.7 kB         497 kB
+├ ○ /admin/shipment-evidence                                14.3 kB         539 kB
+├ ○ /admin/sql-viewer                                       6.09 kB         211 kB
+├ ○ /admin/steward-audit                                    10.8 kB         464 kB
+├ ○ /admin/users                                            9.68 kB         310 kB
+├ ○ /admin/users/list                                       9.97 kB         463 kB
+├ ƒ /api/v1/[[...path]]                                       133 B         103 kB
+├ ○ /brief                                                  9.23 kB         639 kB
+├ ○ /budget-requests                                        10.9 kB         422 kB
+├ ○ /budgets                                                9.47 kB         194 kB
+├ ○ /buy-plans                                                13 kB         483 kB
+├ ○ /channel-intelligence                                     304 B         177 kB
+├ ○ /channel-intelligence/workspace                         11.8 kB         495 kB
+├ ○ /commercial-planner                                     69.6 kB         555 kB
+├ ○ /commercial-planner/cpor-cases                          22.7 kB         618 kB
+├ ƒ /commercial-planner/cpor-cases/[id]                     18.5 kB         627 kB
+├ ○ /commercial-planner/cpor-cases/claims                   4.27 kB         175 kB
+├ ○ /commercial-planner/cpor-cases/historical-import        31.5 kB         399 kB
+├ ○ /commercial-planner/cpor-cases/payment-evidence-import  9.89 kB         230 kB
+├ ○ /competition                                              346 B         638 kB
+├ ○ /dashboard                                              7.66 kB         173 kB
+├ ○ /dashboards                                             26.8 kB         692 kB
+├ ○ /design-lab                                               13 kB         305 kB
+├ ○ /design-lab/admin                                         209 B         296 kB
+├ ○ /design-lab/data                                        23.5 kB         586 kB
+├ ○ /design-lab/density                                     5.81 kB         514 kB
+├ ○ /design-lab/directory                                   5.42 kB         178 kB
+├ ○ /design-lab/funding                                     29.2 kB         661 kB
+├ ○ /design-lab/market                                      21.8 kB         594 kB
+├ ○ /design-lab/planning                                      209 B         296 kB
+├ ○ /design-lab/reports                                     9.01 kB         302 kB
+├ ○ /design-lab/stock                                         13 kB         557 kB
+├ ○ /design-lab/supply                                        208 B         296 kB
+├ ○ /directory                                              8.95 kB         181 kB
+├ ○ /exceptions                                             6.04 kB         432 kB
+├ ○ /forecasts                                                303 B         177 kB
+├ ○ /forecasts/workspace                                    11.7 kB         481 kB
+├ ○ /getting-started                                        8.24 kB         158 kB
+├ ○ /icon.svg                                                   0 B            0 B
+├ ○ /inbox                                                  5.72 kB         180 kB
+├ ○ /inventory                                                12 kB         482 kB
+├ ○ /lineup                                                 13.3 kB         309 kB
+├ ○ /lineup/cases                                           9.26 kB         553 kB
+├ ○ /listing-capture                                          345 B         638 kB
+├ ○ /login                                                  5.83 kB         187 kB
+├ ○ /market                                                  4.3 kB         161 kB
+├ ○ /plan-vs-executed                                       14.3 kB         608 kB
+├ ○ /pricing                                                8.34 kB         478 kB
+├ ○ /promotions                                             26.9 kB         635 kB
+├ ○ /reports                                                31.8 kB         622 kB
+├ ○ /roadmap                                                7.57 kB         477 kB
+├ ○ /sell-out                                               12.4 kB         612 kB
+├ ○ /settings                                               16.8 kB         226 kB
+├ ○ /shipping                                                 336 B         604 kB
+├ ○ /stock                                                  11.1 kB         642 kB
+├ ○ /supply                                                 13.3 kB         309 kB
+└ ○ /supply/shipments                                       1.77 kB         608 kB
++ First Load JS shared by all                                103 kB
+  ├ chunks/09c3fec0-94e3da4552b145f2.js                     54.2 kB
+  ├ chunks/7826-a692a719705ae31f.js                         45.8 kB
+  └ other shared chunks (total)                             2.58 kB
+
+
+ƒ Middleware                                                  34 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+exit 0

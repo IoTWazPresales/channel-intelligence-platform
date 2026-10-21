@@ -1,0 +1,86 @@
+current_database() = cip | read_only = on
+captured ms: 21321.5 | setting: None | nestloop_off: False
+Nested Loop Left Join  (cost=1108.34..2255.13 rows=1 width=80) (actual time=579.241..27807.079 rows=2481.00 loops=1)
+  Join Filter: ((fact_inbound_shipment.distributor_id = fact_inventory_distributor.distributor_id) AND (fact_inbound_shipment.product_id = fact_inventory_distributor.product_id))
+  Rows Removed by Join Filter: 219195
+  Buffers: shared hit=15064689
+  CTE latest_snapshot
+    ->  GroupAggregate  (cost=563.86..565.43 rows=78 width=12) (actual time=320.282..327.895 rows=2481.00 loops=1)
+          Group Key: fact_inventory_distributor_1.distributor_id, fact_inventory_distributor_1.product_id
+          Buffers: shared hit=143186
+          ->  Sort  (cost=563.86..564.06 rows=79 width=12) (actual time=320.261..322.290 rows=47411.00 loops=1)
+                Sort Key: fact_inventory_distributor_1.distributor_id, fact_inventory_distributor_1.product_id
+                Sort Method: quicksort  Memory: 3018kB
+                Buffers: shared hit=143186
+                ->  Bitmap Heap Scan on fact_inventory_distributor fact_inventory_distributor_1  (cost=6.09..561.37 rows=79 width=12) (actual time=30.527..303.823 rows=47411.00 loops=1)
+                      Recheck Cond: (tenant_id = 'default'::text)
+                      Filter: cip_product_id_visible((product_id)::bigint)
+                      Heap Blocks: exact=727
+                      Buffers: shared hit=143183
+                      ->  Bitmap Index Scan on ix_fact_inventory_distributor_tenant_id  (cost=0.00..6.07 rows=237 width=0) (actual time=1.052..1.053 rows=47588.00 loops=1)
+                            Index Cond: (tenant_id = 'default'::text)
+                            Index Searches: 1
+                            Buffers: shared hit=42
+  ->  Nested Loop Left Join  (cost=542.63..1098.86 rows=1 width=48) (actual time=572.873..3028.431 rows=2481.00 loops=1)
+        Join Filter: ((fact_sales_sellout.distributor_id = fact_inventory_distributor.distributor_id) AND (fact_sales_sellout.product_id = fact_inventory_distributor.product_id))
+        Rows Removed by Join Filter: 1377194
+        Buffers: shared hit=394139
+        ->  Hash Join  (cost=9.01..565.19 rows=1 width=16) (actual time=337.774..1033.244 rows=2481.00 loops=1)
+              Hash Cond: ((fact_inventory_distributor.distributor_id = latest_snapshot.distributor_id) AND (fact_inventory_distributor.product_id = latest_snapshot.product_id) AND (fact_inventory_distributor.as_of_date = latest_snapshot.snapshot_date))
+              Buffers: shared hit=286188
+              ->  Bitmap Heap Scan on fact_inventory_distributor  (cost=6.09..561.37 rows=79 width=16) (actual time=1.240..663.727 rows=47411.00 loops=1)
+                    Recheck Cond: (tenant_id = 'default'::text)
+                    Filter: cip_product_id_visible((product_id)::bigint)
+                    Heap Blocks: exact=727
+                    Buffers: shared hit=143002
+                    ->  Bitmap Index Scan on ix_fact_inventory_distributor_tenant_id  (cost=0.00..6.07 rows=237 width=0) (actual time=1.043..1.043 rows=47588.00 loops=1)
+                          Index Cond: (tenant_id = 'default'::text)
+                          Index Searches: 1
+                          Buffers: shared hit=42
+              ->  Hash  (cost=1.56..1.56 rows=78 width=12) (actual time=328.741..328.742 rows=2481.00 loops=1)
+                    Buckets: 4096 (originally 1024)  Batches: 1 (originally 1)  Memory Usage: 139kB
+                    Buffers: shared hit=143186
+                    ->  CTE Scan on latest_snapshot  (cost=0.00..1.56 rows=78 width=12) (actual time=320.286..328.365 rows=2481.00 loops=1)
+                          Storage: Memory  Maximum Storage: 129kB
+                          Buffers: shared hit=143186
+        ->  GroupAggregate  (cost=533.61..533.64 rows=1 width=40) (actual time=0.103..0.761 rows=555.35 loops=2481)
+              Group Key: fact_sales_sellout.distributor_id, fact_sales_sellout.product_id
+              Buffers: shared hit=107951
+              ->  Sort  (cost=533.61..533.62 rows=1 width=13) (actual time=0.096..0.206 rows=1241.75 loops=2481)
+                    Sort Key: fact_sales_sellout.distributor_id, fact_sales_sellout.product_id
+                    Sort Method: quicksort  Memory: 93kB
+                    Buffers: shared hit=107951
+                    ->  Hash Join  (cost=8.37..533.60 rows=1 width=13) (actual time=2.521..234.025 rows=1432.00 loops=1)
+                          Hash Cond: ((fact_sales_sellout.distributor_id = latest_snapshot_1.distributor_id) AND (fact_sales_sellout.product_id = latest_snapshot_1.product_id))
+                          Join Filter: (fact_sales_sellout.transaction_date > latest_snapshot_1.snapshot_date)
+                          Rows Removed by Join Filter: 33987
+                          Buffers: shared hit=107951
+                          ->  Bitmap Heap Scan on fact_sales_sellout  (cost=5.64..530.42 rows=59 width=17) (actual time=1.040..222.038 rows=35582.00 loops=1)
+                                Recheck Cond: (tenant_id = 'default'::text)
+                                Filter: cip_product_id_visible((product_id)::bigint)
+                                Heap Blocks: exact=1174
+                                Buffers: shared hit=107951
+                                ->  Bitmap Index Scan on ix_fact_sales_sellout_tenant_id  (cost=0.00..5.62 rows=178 width=0) (actual time=0.847..0.847 rows=35733.00 loops=1)
+                                      Index Cond: (tenant_id = 'default'::text)
+                                      Index Searches: 1
+                                      Buffers: shared hit=31
+                          ->  Hash  (cost=1.56..1.56 rows=78 width=12) (actual time=0.387..0.387 rows=2481.00 loops=1)
+                                Buckets: 4096 (originally 1024)  Batches: 1 (originally 1)  Memory Usage: 139kB
+                                ->  CTE Scan on latest_snapshot latest_snapshot_1  (cost=0.00..1.56 rows=78 width=12) (actual time=0.003..0.135 rows=2481.00 loops=1)
+                                      Storage: Memory  Maximum Storage: 129kB
+  ->  GroupAggregate  (cost=0.29..590.82 rows=1 width=40) (actual time=0.651..9.969 rows=88.39 loops=2481)
+        Group Key: fact_inbound_shipment.distributor_id, fact_inbound_shipment.product_id
+        Buffers: shared hit=14670550
+        ->  Nested Loop  (cost=0.29..590.80 rows=1 width=13) (actual time=0.592..9.752 rows=283.56 loops=2481)
+              Buffers: shared hit=14670550
+              ->  CTE Scan on latest_snapshot latest_snapshot_2  (cost=0.00..1.56 rows=78 width=12) (actual time=0.001..0.380 rows=2439.88 loops=2481)
+                    Storage: Memory  Maximum Storage: 129kB
+              ->  Index Scan using ix_fact_inbound_shipment_woc_asof on fact_inbound_shipment  (cost=0.29..7.54 rows=1 width=17) (actual time=0.002..0.003 rows=0.12 loops=6053350)
+                    Index Cond: ((distributor_id = latest_snapshot_2.distributor_id) AND (product_id = latest_snapshot_2.product_id) AND (pod_date > latest_snapshot_2.snapshot_date) AND (pod_date IS NOT NULL))
+                    Filter: ((tenant_id = 'default'::text) AND cip_product_id_visible((product_id)::bigint) AND (lower((line_state)::text) = 'shipped'::text))
+                    Index Searches: 6053350
+                    Buffers: shared hit=14670550
+Planning:
+  Buffers: shared hit=668
+Planning Time: 197.157 ms
+Execution Time: 27809.664 ms

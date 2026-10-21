@@ -42,6 +42,8 @@ type KeyAccountRow = {
   overdue_threshold_days: number;
   notes: string | null;
   feed_profile_json: Record<string, unknown> | null;
+  replen_min_weeks_of_cover?: number | null;
+  replen_target_weeks_of_cover?: number | null;
 };
 
 type SlotItem = {
@@ -69,6 +71,8 @@ export default function CstStewardPage() {
   const [cadence, setCadence] = useState('weekly');
   const [structureType, setStructureType] = useState('');
   const [threshold, setThreshold] = useState('10');
+  const [replenMin, setReplenMin] = useState('');
+  const [replenTarget, setReplenTarget] = useState('');
   const [notes, setNotes] = useState('');
   const [feedRaw, setFeedRaw] = useState('');
 
@@ -101,6 +105,8 @@ export default function CstStewardPage() {
         expected_cadence: cadence,
         report_structure_type: structureType.trim() || null,
         overdue_threshold_days: Number(threshold),
+        replen_min_weeks_of_cover: replenMin.trim() ? Number(replenMin) : null,
+        replen_target_weeks_of_cover: replenTarget.trim() ? Number(replenTarget) : null,
         notes: notes.trim() || null,
         feed_profile_raw: feedRaw.trim() || '',
       });
@@ -126,6 +132,8 @@ export default function CstStewardPage() {
     setCadence(row.expected_cadence || 'weekly');
     setStructureType(row.report_structure_type || '');
     setThreshold(String(row.overdue_threshold_days ?? 10));
+    setReplenMin(row.replen_min_weeks_of_cover != null ? String(row.replen_min_weeks_of_cover) : '');
+    setReplenTarget(row.replen_target_weeks_of_cover != null ? String(row.replen_target_weeks_of_cover) : '');
     setNotes(row.notes ?? '');
     setFeedRaw(row.feed_profile_json ? JSON.stringify(row.feed_profile_json, null, 2) : '');
   };
@@ -299,6 +307,7 @@ export default function CstStewardPage() {
               onChange={(e) => setCadence(e.target.value)}
               fullWidth
             >
+              <option value="daily">daily</option>
               <option value="weekly">weekly</option>
               <option value="monthly">monthly</option>
               <option value="adhoc">adhoc</option>
@@ -328,6 +337,30 @@ export default function CstStewardPage() {
               onChange={(e) => setThreshold(e.target.value)}
               fullWidth
             />
+            <Stack direction="row" spacing={1}>
+              <TextField
+                size="small"
+                type="number"
+                label="Replenish below (weeks of cover)"
+                value={replenMin}
+                onChange={(e) => setReplenMin(e.target.value)}
+                placeholder="4"
+                helperText="Empty uses 4 weeks"
+                fullWidth
+                inputProps={{ 'data-testid': 'cst-replen-min', min: 0.5, step: 0.5 }}
+              />
+              <TextField
+                size="small"
+                type="number"
+                label="Order up to (weeks of cover)"
+                value={replenTarget}
+                onChange={(e) => setReplenTarget(e.target.value)}
+                placeholder="6"
+                helperText="Empty uses 6 weeks"
+                fullWidth
+                inputProps={{ 'data-testid': 'cst-replen-target', min: 0.5, step: 0.5 }}
+              />
+            </Stack>
             <TextField
               size="small"
               label="Notes"

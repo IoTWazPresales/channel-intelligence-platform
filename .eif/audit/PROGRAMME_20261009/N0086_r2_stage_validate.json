@@ -1,0 +1,1 @@
+{"node":"N-0086","expected_revision":11,"stage":"validate","stage_note":"Criteria 1 and 2 tested (pytest 153, vitest 34). Criterion 3, pilot passwords via N-0075, is not built. UX, a11y, rendered and content stay pending (no browser pass). Operator acceptance is pending. Not closed."}

@@ -1,0 +1,162 @@
+{
+  "label": "before",
+  "probe_utc": "2026-10-07T14:51:23+00:00",
+  "current_database": "cip",
+  "transaction_read_only": "on",
+  "row_security": "on",
+  "db_today_sast": "2026-10-07",
+  "independent_pairs": 552,
+  "independent_skipped": 542,
+  "independent_partial_lines": 10,
+  "independent_partial_open_units": 904.0,
+  "independent_partial_remainder_units": 336.0,
+  "independent_partial_multi_shipped_twins": 0,
+  "partial_lines": [
+    {
+      "id": 299,
+      "open_qty": 120.0,
+      "shipped_total": 100.0,
+      "n_shipped": 1,
+      "status": "scheduled",
+      "eta_date": "2026-08-17",
+      "promise_date": "2026-06-16",
+      "pod_date": "None",
+      "has_amount": true
+    },
+    {
+      "id": 300,
+      "open_qty": 120.0,
+      "shipped_total": 100.0,
+      "n_shipped": 1,
+      "status": "scheduled",
+      "eta_date": "2026-08-17",
+      "promise_date": "2026-06-17",
+      "pod_date": "None",
+      "has_amount": true
+    },
+    {
+      "id": 302,
+      "open_qty": 120.0,
+      "shipped_total": 100.0,
+      "n_shipped": 1,
+      "status": "scheduled",
+      "eta_date": "2026-08-17",
+      "promise_date": "2026-06-20",
+      "pod_date": "None",
+      "has_amount": true
+    },
+    {
+      "id": 308,
+      "open_qty": 60.0,
+      "shipped_total": 50.0,
+      "n_shipped": 1,
+      "status": "scheduled",
+      "eta_date": "2026-08-17",
+      "promise_date": "2026-05-30",
+      "pod_date": "None",
+      "has_amount": true
+    },
+    {
+      "id": 100351,
+      "open_qty": 108.0,
+      "shipped_total": 36.0,
+      "n_shipped": 1,
+      "status": "scheduled",
+      "eta_date": "2026-06-18",
+      "promise_date": "2026-06-18",
+      "pod_date": "None",
+      "has_amount": true
+    },
+    {
+      "id": 100374,
+      "open_qty": 108.0,
+      "shipped_total": 36.0,
+      "n_shipped": 1,
+      "status": "scheduled",
+      "eta_date": "2026-07-10",
+      "promise_date": "2026-07-10",
+      "pod_date": "None",
+      "has_amount": true
+    },
+    {
+      "id": 100797,
+      "open_qty": 36.0,
+      "shipped_total": 18.0,
+      "n_shipped": 1,
+      "status": "scheduled",
+      "eta_date": "2026-06-29",
+      "promise_date": "2026-06-29",
+      "pod_date": "None",
+      "has_amount": true
+    },
+    {
+      "id": 100962,
+      "open_qty": 60.0,
+      "shipped_total": 40.0,
+      "n_shipped": 1,
+      "status": "scheduled",
+      "eta_date": "2026-07-29",
+      "promise_date": "2026-07-29",
+      "pod_date": "None",
+      "has_amount": true
+    },
+    {
+      "id": 100963,
+      "open_qty": 160.0,
+      "shipped_total": 80.0,
+      "n_shipped": 1,
+      "status": "scheduled",
+      "eta_date": "2026-07-29",
+      "promise_date": "2026-07-29",
+      "pod_date": "None",
+      "has_amount": true
+    },
+    {
+      "id": 107364,
+      "open_qty": 12.0,
+      "shipped_total": 8.0,
+      "n_shipped": 1,
+      "status": "scheduled",
+      "eta_date": "2026-08-04",
+      "promise_date": "2026-08-04",
+      "pod_date": "None",
+      "has_amount": true
+    }
+  ],
+  "supply_overview_s": 1.9,
+  "supply_overview": {
+    "data_unavailable": false,
+    "open_lines": 1561,
+    "open_units": 114496.0,
+    "eta_past_no_pod_lines": 1218,
+    "oldest_eta_past": "2026-05-07",
+    "oldest_days_past_eta": 153,
+    "pipeline_lines": 1223,
+    "pipeline_units": 84914.0,
+    "shipped_lines": 338,
+    "shipped_units": 29582.0,
+    "landed_lines": 13142,
+    "landed_units": 1318693.0,
+    "arrived_lines": 0,
+    "overdue_commercial_lines": 375
+  },
+  "brief_not_received": 1561,
+  "brief_s": 0.35,
+  "summary_s": 3.35,
+  "summary": {
+    "total_lines": 14703,
+    "open_lines_skipped_shipped_twin": 552,
+    "by_line_state": [
+      {
+        "key": "open_order",
+        "count": 1223
+      },
+      {
+        "key": "shipped",
+        "count": 13480
+      }
+    ]
+  },
+  "shipping_overdue_kpi_lines": 364,
+  "shipping_overdue_kpi_s": 0.27
+}

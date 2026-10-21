@@ -1,0 +1,1 @@
+{"node": "N-0058", "expected_revision": 15, "dim": "observability", "state": "pass", "evidence": "EV-N0058", "rationale": "A refused re-derivation returns outcome refused_no_month_columns on the proposal result and writes no lines. Month-derived applies still return their normal result. The refuse is visible on the apply result rather than a silent skip."}

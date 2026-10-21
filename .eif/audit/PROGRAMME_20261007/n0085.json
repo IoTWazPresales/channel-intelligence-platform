@@ -1,0 +1,32 @@
+{
+  "id": "N-0085",
+  "parent": null,
+  "title": "Listing coverage for all eight reporting customers: find, confirm and watch our product pages at Game, Makro, Computer Mania, Incredible Connection, HiFi Corp, Evetech, Takealot and Amazon",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": [
+    "api",
+    "ui",
+    "schema"
+  ],
+  "risk": "R2",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": [
+    "N-0073"
+  ],
+  "acceptance_criteria": [
+    "Warren 2026-10-07: listing intelligence is needed for all reporting customers, not only Takealot and Evetech",
+    "For every product a reporting customer sells (from CST rows), CIP proposes that retailer's product page found by EAN or model on the retailer's own site; a steward confirms; nothing auto-registers",
+    "One page reader per retailer extracts price, stock, title, images, description and specs from the stored snapshot",
+    "Fetching respects robots rules, uses per-retailer spacing, and stops on 403/429; refusals are recorded, not retried hard",
+    "Amazon's 51 registered listings are linked to products or flagged",
+    "Coverage view: per customer, products sold vs listings watched",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

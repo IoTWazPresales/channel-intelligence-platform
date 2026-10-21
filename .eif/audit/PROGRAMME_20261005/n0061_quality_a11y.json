@@ -1,0 +1,1 @@
+{"node": "N-0061", "expected_revision": 8, "dim": "a11y", "state": "pass", "evidence": "EV-N0061", "rationale": "The column header is the word Evidence. The tooltip carries the full caption when the cell truncates. The pinned Reset control has aria-label Reset to suggested. Screen reader and contrast were not re-measured this session."}

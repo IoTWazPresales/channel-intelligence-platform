@@ -1,0 +1,1 @@
+{"node": "N-0058", "expected_revision": 13, "to": "validate", "stage_note": "pytest tests/test_lineup_1h_rederivation.py tests/test_lineup_month_derived_allocation.py: 24 passed. The refuse test covers uniform_half_line_count > 0. cip was not written."}

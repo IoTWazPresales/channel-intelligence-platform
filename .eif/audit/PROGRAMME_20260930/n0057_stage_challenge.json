@@ -1,0 +1,1 @@
+{"node": "N-0057", "expected_revision": 3, "to": "challenge", "stage_note": "Do not point Start work at an empty draft POST. Keep unified import as the file path. Derive next quarter instead of a hardcoded 2026Q2. Leave the bar visible when the plan is empty. Do not write to cip."}

@@ -1,0 +1,36 @@
+current_database: cip
+{
+  "label": "after",
+  "pre_fix_expression_in_memory": false,
+  "probe_utc": "2026-10-08T13:21:24+00:00",
+  "current_database": "cip",
+  "transaction_read_only": "on",
+  "row_security": "on",
+  "evidence_model": "shipment_evidence_current",
+  "cases": 36,
+  "elapsed_s": 168.27,
+  "suggest_pos": {
+    "cases_with_suggestions": 33,
+    "suggestions": 2697,
+    "total_shipped_units": 725145.0,
+    "indep_shipped_only": 725145.0,
+    "indep_all_states": 775204.0,
+    "rows_equal_shipped_only": 2697,
+    "rows_equal_all_states": 2441,
+    "rows_zero_shipped": 35,
+    "mismatch_vs_shipped_only_examples": []
+  },
+  "suggest_distributors": {
+    "cases_with_suggestions": 33,
+    "suggestions": 232,
+    "total_shipped_units": 985821.0,
+    "indep_shipped_only": 985821.0,
+    "indep_all_states": 1041463.0,
+    "rows_equal_shipped_only": 232,
+    "rows_equal_all_states": 156,
+    "rows_zero_shipped": 5,
+    "mismatch_vs_shipped_only_examples": [],
+    "order_follows_matched_then_units": true,
+    "cases_where_all_states_key_orders_differently": 5
+  }
+}

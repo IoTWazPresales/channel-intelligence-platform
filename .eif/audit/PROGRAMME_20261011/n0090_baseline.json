@@ -1,0 +1,11 @@
+{
+  "id": "BLN-N0090",
+  "provenance": "implementation-observation",
+  "tree_hash": "e7aac28fe91114aac3a627c799b90ec36b29e360",
+  "path": "apps/api/app/services/brief_signals.py",
+  "observed_behavior": "Before the signal, late and missing customer sell-through slots lived only on the CST steward worklist. Attention did not name them.",
+  "latent_capabilities": ["cst-steward-slots"],
+  "preservation": {
+    "cst-steward-slots": "kept: the worklist stays the place the signal opens"
+  }
+}

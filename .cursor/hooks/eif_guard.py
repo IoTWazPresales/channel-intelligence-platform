@@ -173,6 +173,7 @@ CRASH_REASON_CODES = frozenset({
     'SESSION_GIT_FAILURE', 'IDENTITY_GIT_FAILURE', 'RUNTIME_INTEGRITY', 'RUNTIME_LOCK_FAILURE',
 })
 WATCHDOG_DEFAULT_SEC = 8.0
+WATCHDOG_MAX_SEC = 20.0
 _EMITTED = False
 _EMIT_RC = 1
 _EMIT_LOCK = threading.Lock()
@@ -313,16 +314,15 @@ def _operator_log_path() -> Path:
 
 def watchdog_sec() -> float:
     """Seconds before the guard self-denies HOOK_TIMEOUT. Default 8.
-
     Host config (no EIF release): `.eif/hook-guard.json` `watchdog_sec`.
     Session/test override: environment variable `EIF_HOOK_WATCHDOG_SEC`.
-    Invalid, nonpositive and over-budget values use the safe 8-second default.
+    Invalid, nonpositive, and values above 20 seconds use the 8-second default.
     """
     raw = os.environ.get('EIF_HOOK_WATCHDOG_SEC')
     if raw not in (None, ''):
         try:
             value = float(raw)
-            return value if math.isfinite(value) and 0 < value <= WATCHDOG_DEFAULT_SEC else WATCHDOG_DEFAULT_SEC
+            return value if math.isfinite(value) and 0 < value <= WATCHDOG_MAX_SEC else WATCHDOG_DEFAULT_SEC
         except ValueError:
             pass
     cfg = _project_root() / '.eif' / 'hook-guard.json'
@@ -331,11 +331,10 @@ def watchdog_sec() -> float:
             data = json.loads(cfg.read_text(encoding='utf-8'))
             if isinstance(data, dict) and 'watchdog_sec' in data:
                 value = float(data['watchdog_sec'])
-                return value if math.isfinite(value) and 0 < value <= WATCHDOG_DEFAULT_SEC else WATCHDOG_DEFAULT_SEC
+                return value if math.isfinite(value) and 0 < value <= WATCHDOG_MAX_SEC else WATCHDOG_DEFAULT_SEC
     except Exception:
         pass
     return WATCHDOG_DEFAULT_SEC
-
 
 def _append_operator_log(code, message, extra=None):
     """Append a line an operator can open in the editor; no CLI required."""

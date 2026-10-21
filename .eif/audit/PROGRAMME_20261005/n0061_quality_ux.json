@@ -1,0 +1,1 @@
+{"node": "N-0061", "expected_revision": 7, "dim": "ux", "state": "pass", "evidence": "EV-N0061", "rationale": "Evidence is pinned on the right. The helper says the column shows listing, competitor price, and observed cover and does not set the quantity. Operator saw 3 lines for seed case 309 / 2025Q2 starting Not listed · No competitor price. Create draft was not clicked."}

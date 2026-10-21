@@ -1,0 +1,54 @@
+--- N-0078
+status in_progress stage discovery rev 7
+risk R2 class feature acceptance operator pending
+facets api,ui
+lease False
+criterion Checks per accepted decision D-0062 (Warren 2026-10-07), on every retailer covered by N-0085
+criterion Each check reads the stored snapshot; re-parse needs no re-fetch; results carry a rules_version and the snapshot age
+criterion A failing check is an amber flag with its evidence, never a hidden score and never a block; missing data shows as 'No data'
+criterion The Market & Listings quality lens shows one row per listing, a column per check, the flag count, snapshot age, and that product's weekly sell-through at the same retailer
+criterion Search position (second step): daily per retailer site search for Warren's terms, polite limits, its own table
+criterion Tests green on touched areas, tsc exit 0, eslint clean on changed files
+quality testing pending
+quality observability pending
+quality ux pending
+quality a11y pending
+quality rendered pending
+quality content pending
+--- N-0079
+status in_progress stage discovery rev 6
+risk R3 class feature acceptance operator pending
+facets api,schema,ui
+lease False
+criterion Rules per accepted decision D-0059 (Warren 2026-10-07): derived reserve, commit at approve, consume at settle, paid separate with link coverage, audited transfers, campaign/non-campaign reserve rows with a view switch, historical settled cases loaded as consumption, unplanned-spend and unknown-quarter buckets, optional admin caps that flag and never block
+criterion Every ledger row is written in the same transaction as its source event; no updates or deletes; balances are sums; corrections are reversing rows
+criterion The planner budget check, lineup budget position and reapproval gate read the ledger; draft and cancelled cases no longer count
+criterion The historical load is proven on a clone of cip before it runs on cip
+criterion Budgets page shows product line x quarter with reserved, committed, pending, consumed, released, paid, remaining, cap, and drills to entries
+criterion Tests green on touched areas, tsc exit 0, eslint clean on changed files
+quality testing pending
+quality observability pending
+quality data_integrity pending
+quality backup_recovery pending
+quality migration_safety pending
+quality ux pending
+quality a11y pending
+quality rendered pending
+quality content pending
+--- N-0086
+status in_progress stage validate rev 16
+risk R3 class feature acceptance operator pending
+facets api,auth,ui
+lease False
+criterion The web proxy overwrites X-Forwarded-For with the socket address it saw, so the per-address login throttle cannot be dodged (N-0037 residual)
+criterion CST steward bulk preview/apply/ignore and other steward writes in imports.py require steward or admin; the web hides those controls from other roles (N-0038 residual)
+criterion Placeholder pilot passwords are rotated or retired by the N-0075 invite flow (BACKLOG-205)
+criterion Tests green on touched areas, tsc exit 0, eslint clean on changed files
+quality testing pass
+quality observability pass
+quality security pass
+quality threat pass
+quality ux pending
+quality a11y pending
+quality rendered pending
+quality content pending

@@ -112,3 +112,30 @@ def test_load_groups_by_site() -> None:
     assert out["items"][0]["velocity_4wk"] == 5.0
     assert out["items"][0]["customer_name"] is None
     assert out["items"][0]["product_name"] is None
+
+
+def test_rows_measured_to_the_same_day() -> None:
+    """Warren 2026-10-19: a product with nothing since January is not "selling" when others report in October."""
+    session = MagicMock()
+
+    def row(pid: int, d: date) -> SimpleNamespace:
+        return SimpleNamespace(
+            customer_id=1,
+            product_id=pid,
+            site_label=None,
+            period_start_date=d,
+            period_type="weekly",
+            units_sold=5,
+            reported_soh=None,
+            unit_sell_price=None,
+        )
+
+    stale = [row(2, date(2026, 1, d)) for d in (5, 12, 19, 26)]
+    fresh = [row(3, date(2026, 10, d)) for d in (5, 12)]
+    session.scalars.return_value = MagicMock(all=MagicMock(return_value=stale + fresh))
+    out = load_cst_read_model(session, min_observed_weeks=1)
+    assert out["as_of"] == "2026-10-12"
+    by_product = {i["product_id"]: i for i in out["items"]}
+    assert by_product[2]["velocity_4wk"] == 0.0
+    assert by_product[2]["last_period"] == "2026-01-26"
+    assert out["items"][0]["product_id"] == 3  # most recently reported first

@@ -1,0 +1,14 @@
+{
+  "node": "N-0077",
+  "expected_revision": 0,
+  "title": "Competitor listing monitoring and price position: competitor product pages captured and tracked by CIP itself, suggested matches, impact on our price and sell-out (spec section 9.9)",
+  "acceptance_criteria": [
+    "Warren 2026-10-07: CIP's own competitor monitoring must be good enough that a separate scraper is pointless; CIP does not ingest anyone's scraper output",
+    "Competitor product pages are registered and polled by CIP's own capture scheduler, with polite per-marketplace limits, and each observation is stored with its snapshot",
+    "Competitor prices land in fact_competitor_price keyed to approved our-SKU to competitor-SKU matches",
+    "Suggested competitor matches are offered for steward approval; nothing auto-approves",
+    "Competition screen and the promotion line show the latest competitor price, our price position, and its history; empty means no rows, not zero",
+    "Impact view: our price gap to the cheapest matched competitor beside our sell-out for the same weeks, from stored rows only",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ]
+}

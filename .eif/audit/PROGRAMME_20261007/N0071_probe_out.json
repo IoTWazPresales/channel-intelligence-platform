@@ -1,0 +1,110 @@
+current_database = cip
+{
+ "current_database": "cip",
+ "line_state_counts": [
+  {
+   "ls": "open_order",
+   "status": "scheduled",
+   "n": 1775,
+   "q": 127870.0
+  },
+  {
+   "ls": "shipped",
+   "status": "received",
+   "n": 13142,
+   "q": 1318693.0
+  },
+  {
+   "ls": "shipped",
+   "status": "scheduled",
+   "n": 338,
+   "q": 29582.0
+  }
+ ],
+ "strict_pair_open_rows": [
+  {
+   "n": 552,
+   "q": 42956.0,
+   "amt": 27833737.92,
+   "with_pod": 0,
+   "st_received": 0,
+   "st_scheduled": 552,
+   "st_not_received": 552,
+   "with_po": 410,
+   "with_dist_prod": 440,
+   "with_customer": 513,
+   "with_ship_confirm": 0,
+   "with_eta_or_promise": 552,
+   "tenants": 1
+  }
+ ],
+ "qty_compare": [
+  {
+   "pairs": 552,
+   "open_eq_shipped": 471,
+   "open_lt_shipped": 71,
+   "open_gt_shipped": 10,
+   "multi_shipped_twins": 46,
+   "same_order_line": 552,
+   "open_q": 42956.0,
+   "shipped_q": 51453.0,
+   "open_q_where_gt": 904.0
+  }
+ ],
+ "open_rows_with_pod_any": [
+  {
+   "count": 0
+  }
+ ],
+ "arrived_twin_opens": [
+  {
+   "count": 0
+  }
+ ],
+ "impact_brief_inbound_open_lines": [
+  {
+   "count": 552
+  }
+ ],
+ "impact_lineup_quarter_pipeline_units": [
+  {
+   "count": 552,
+   "coalesce": 42956.0
+  }
+ ],
+ "impact_lineup_quarter_with_po": [
+  {
+   "count": 410,
+   "coalesce": 32591.0
+  }
+ ],
+ "impact_current_incoming_scheduled_no_pod": [
+  {
+   "count": 552,
+   "coalesce": 42956.0
+  }
+ ],
+ "impact_landed_readers_pod_not_null": [
+  {
+   "count": 0,
+   "coalesce": 0.0
+  }
+ ],
+ "impact_mac_po_price_qty": [
+  {
+   "count": 410,
+   "coalesce": 32591.0
+  }
+ ],
+ "impact_attribution_resolved_dist": [
+  {
+   "count": 468,
+   "coalesce": 32548.0
+  }
+ ],
+ "impact_eta_shift_with_evidence": [
+  {
+   "count": 552
+  }
+ ]
+}

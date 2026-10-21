@@ -1,0 +1,1 @@
+{"kind": "behavioral", "state": "pass", "evidence": "apps/api/tests/test_cst_figure_supersede_db.py", "node": "N-0111", "expected_revision": 18}

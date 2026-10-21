@@ -1,0 +1,15 @@
+current_database() = cip | read_only = on
+view owner = postgres | reloptions = ['security_invoker=true']
+view columns = ['id', 'line_identity_key', 'import_job_id', 'source_key', 'source_row_hash', 'evidence_line_id', 'valid_from', 'observed_at', 'superseded_by_id', 'source_sheet', 'source_row_number', 'report_type', 'line_state', 'raw_source_row', 'operating_unit', 'bill_to_raw', 'ship_to_raw', 'order_no', 'customer_po', 'purchase_order_id', 'order_line', 'delivery_no', 'invoice_line', 'item_code', 'sales_model_name', 'customer_item', 'ean_code', 'upc_code', 'mpor_item_no', 'quantity', 'unit_price', 'amount', 'currency_code', 'ship_confirm_date', 'schedule_ship_date', 'promise_date', 'exwork_date', 'erd_date', 'est_pod_date', 'pod_date', 'product_id', 'product_resolution_status', 'product_resolution_token', 'product_resolution_detail', 'distributor_id', 'distributor_resolution_status', 'distributor_resolution_token', 'customer_dealer_token', 'customer_id', 'customer_resolution_status', 'resolved_customer_id', 'resolved_distributor_id', 'crad_date', 'created_at', 'updated_at']
+view reads = ['shipment_evidence_line', 'shipment_evidence_observation']
+product column = product_id
+under '*': total=15807 null_product=496 orphan=0 by line=[('NB', 8757), ('NR', 3258), ('NX', 1711), ('PF', 608), ('PT', 564), ('XB', 265), ('NV', 144), ('AI', 4)]
+  scope=None         setting=''           view rows= 15807 expected= 15807 other-line rows=0 OK
+  scope='*'          setting='*'          view rows= 15807 expected= 15807 other-line rows=0 OK
+  scope='!'          setting='!'          view rows=  2532 expected=   496 other-line rows=0 MISMATCH
+  scope='NB'         setting='NB'         view rows= 10225 expected=  9253 other-line rows=0 MISMATCH
+  scope='AZ'         setting='AZ'         view rows=  2532 expected=   496 other-line rows=0 MISMATCH
+  scope='NB,NR'      setting='NB,NR'      view rows= 13192 expected= 12511 other-line rows=0 MISMATCH
+  scope=''           setting=''           view rows= 15807 expected= 15807 other-line rows=0 OK
+columns a no-lines user can read on null-product rows (subset, names only): ['item_code', 'quantity', 'distributor_id', 'customer_id']
+mismatches: 4

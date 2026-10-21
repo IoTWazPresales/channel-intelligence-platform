@@ -14,6 +14,7 @@ from app.query.cache import (
 )
 from app.query.compose import evaluate_composed, resolve_composed
 from app.query.handlers import dispatch_handler, handler_name_for
+from app.query.labels import attach_names
 from app.query.types import CacheMeta, QueryRequest, QueryResult
 from app.semantics.registry import catalog_for_tenant_cached, validate_metric_grain
 
@@ -131,6 +132,9 @@ async def execute_query(
             )
 
     handler_name, hr = await _run(explain=False)
+    if hr.status == "ok":
+        # Names beside ids on every row (Warren 2026-10-20); cached with the result.
+        await attach_names(db, hr.rows, hr.series)
 
     result = QueryResult(
         ok=hr.status == "ok",

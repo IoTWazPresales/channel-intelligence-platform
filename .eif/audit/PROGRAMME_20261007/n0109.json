@@ -1,0 +1,27 @@
+{
+  "id": "N-0109",
+  "parent": null,
+  "title": "Reports, dashboards and KPI tiles on the design lab system: one chart system, one KPI tile, one table style (build to mockup-report-system)",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": ["ui", "design_experience", "dependency_change"],
+  "risk": "R2",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": [],
+  "acceptance_criteria": [
+    "Audit: .eif/audit/PROGRAMME_20261007/REPORTS_VISUAL_AUDIT.md; target: .eif/audit/PROGRAMME_20261008/reports/mockup-report-system.html (Warren 2026-10-09: build to the mockup)",
+    "Reports builder, dashboard widgets, Shipping commercial summary, Channel ops overview/KPI cards and Plan vs executed use features/workbench-ui/charts.tsx (extended as needed) and one KPI tile (HeadlineFigure extended: label, value + unit, delta with period, target, sparkline, loading/empty/stale); components/KpiCard.tsx and ECharts are retired",
+    "Cover-type bars are coloured by state (red < 2 weeks, amber < 4 weeks, blue otherwise) with a threshold line, sorted and directly labelled (Warren 2026-10-09)",
+    "Formula and scope text sit behind an 'About this figure' disclosure in plain words, available to everyone; no raw metric keys, invariant codes or free-text id inputs on screen (Warren 2026-10-09)",
+    "Result tables: right-aligned numerics, units in headers, totals recomputed from sums, status chips, names first and codes in their own column",
+    "Reports page shows its own heading, single-line buttons, saved reports with pinned state and recent runs; the sticky-header overlap is fixed",
+    "Numbers identical before and after for the same API responses; rendered light and dark at 1440 and 390 for every listed surface compared with the lab and mockup; contrast and chart text alternatives pass",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

@@ -26,7 +26,7 @@
 
 ## In progress / leased
 
-_none_
+- **N-0111** Sell-through and distributor history upload readiness (2 years: Amazon, Takealot, Pinnacle) stage=verify run=RUN-20261019-N0111-MAP expires=2026-10-19T00:12:08Z note=Pinnacle job 1670 loaded (status loaded, 2026-10-18 21:12): rows read 36275, loaded 26226, not loaded 10049; sell-out 22546 rows / 222796 units, returns 3618 rows / 9265, inventory 0; loaded net 213531 units vs file net 256706 (difference 43175: 43028 product left out by the steward, 20 staff-customer lines, 127 identical duplicate copies). Five findings fixed this session (header row, ignored customers, slow apply, apply/validate customer-alias mismatch, tests reaching the live worker). Still at verify, VERIFIED_WITH_LIMITATIONS, operator acceptance pending. Self-verified in the build session, not independent. Full API pytest on cip_test 3091 passed, 21 skipped, 0 failed; web unchanged since vitest 189 files 884 passed. Limits: not rendered (sign-in); the apply and validate for job 1670 were started by the agent at Warren's instruction through the endpoint helpers, not the browser; load report label 'Sale with no matched customer' also counts the steward-ignored staff accounts.
 
 ## Decision queue
 

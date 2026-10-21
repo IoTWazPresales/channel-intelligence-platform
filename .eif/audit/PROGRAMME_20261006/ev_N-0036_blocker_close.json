@@ -1,0 +1,1 @@
+{"node": "N-0036", "expected_revision": 5, "id": "BL-0009", "note": "scripts path is in the accepted change scope. Bind is live on 127.0.0.1:8001. node --test scripts/api-bind-host.test.cjs passed 4. No 0.0.0.0:8001 listener."}

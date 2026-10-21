@@ -1,0 +1,1 @@
+{"node": "N-0055", "expected_revision": 3, "to": "discovery", "stage_note": "Fourteen modules read tenant-owned models with no tenant predicate. Twenty already filter. Facts without a tenant_id column are not tenant-owned rows."}

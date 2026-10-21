@@ -1,0 +1,1 @@
+{"kind": "referent", "state": "pass", "evidence": ".eif/audit/PROGRAMME_20261011/N0065_SCOPE_PROBE.md", "path": "apps/api/alembic/versions/20261009_0027_current_pick_index_order_no_product_steward.py", "node": "N-0065", "expected_revision": 57}

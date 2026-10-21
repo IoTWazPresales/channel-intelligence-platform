@@ -36,6 +36,9 @@ def _user_is_admin(user: dict | None) -> bool:
 def _catalog_payload(catalog: SemanticCatalog, user: dict | None) -> dict:
     """Non-admins omit hidden metrics; admins see them flagged so they can un-hide."""
     payload = catalog.as_dict()
+    # Builders offer only metrics a query can actually run (audit 2026-10-20: 10 had no handler).
+    for m in payload["metrics"]:
+        m["handler_backed"] = handler_name_for(m.get("key") or "", catalog) is not None
     if _user_is_admin(user):
         return payload
     payload["metrics"] = [m for m in payload["metrics"] if not m.get("hidden")]

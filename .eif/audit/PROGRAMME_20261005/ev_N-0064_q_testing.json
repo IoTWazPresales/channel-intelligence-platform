@@ -1,0 +1,1 @@
+{"node": "N-0064", "expected_revision": 9, "dim": "testing", "state": "pass", "evidence": "EV-N0064", "rationale": "pytest test_plan_vs_executed.py includes show-after-6, apply-after-8, late shipment scored off the plan quarter, and buy_plan_bias_factors omitting display-only lines. 30 passed together with the supply coverage tests. No cip write."}

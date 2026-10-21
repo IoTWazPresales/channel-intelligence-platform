@@ -1,0 +1,1 @@
+{"path": "apps/api/app/services/imports/cst_layout_migration.py", "note": "N-0111 layouts: sources with applied jobs become layouts; all sources hidden.", "provenance": "implementation-observation", "node": "N-0111", "expected_revision": 48}

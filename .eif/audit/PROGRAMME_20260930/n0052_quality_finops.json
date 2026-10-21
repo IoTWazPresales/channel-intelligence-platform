@@ -1,0 +1,1 @@
+{"node": "N-0052", "expected_revision": 8, "dim": "finops", "state": "pass", "evidence": "EV-N0052", "rationale": "Alert channel is a local log line and an optional file. No external pager. Dump stays under .tmp."}

@@ -1,0 +1,1 @@
+{"node": "N-0055", "expected_revision": 4, "to": "challenge", "stage_note": "Do not add a tenant_id column and do not write to cip. Scope selects after login, not during the user load."}

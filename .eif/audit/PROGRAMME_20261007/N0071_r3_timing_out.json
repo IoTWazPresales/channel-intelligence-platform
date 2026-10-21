@@ -1,0 +1,30 @@
+{
+  "current_database": "cip",
+  "transaction_read_only": "on",
+  "movement_d0057_s": [
+    0.21,
+    0.12,
+    0.24
+  ],
+  "movement_d0057_total": 1079.0,
+  "movement_d0065_s": [
+    0.39,
+    0.35,
+    0.58
+  ],
+  "movement_d0065_total": 1079.0,
+  "cover_inbound_open_d0057_s": [
+    0.17,
+    0.17,
+    0.2
+  ],
+  "cover_inbound_open_d0057_total": 86482.0,
+  "cover_inbound_open_d0065_s": [
+    0.33,
+    0.35,
+    0.3
+  ],
+  "cover_inbound_open_d0065_total": 86818.0,
+  "latest_woc_observations_s": 3.01,
+  "movement_lens_s": 5.15
+}

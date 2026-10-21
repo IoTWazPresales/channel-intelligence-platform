@@ -1,0 +1,1 @@
+{"node": "N-0071", "expected_revision": 9, "dim": "migration_safety", "state": "na", "evidence": {"path": ".eif/audit/PROGRAMME_20261007/N0071_IMPL.md", "summary": "No Alembic migration, no index, no fact rewrite (D-0057 keeps rows as imported). Files changed are read-side Python only."}, "rationale": "No migration in this node."}

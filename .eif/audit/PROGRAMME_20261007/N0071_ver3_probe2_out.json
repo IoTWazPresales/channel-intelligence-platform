@@ -1,0 +1,33 @@
+{
+  "current_database": "cip",
+  "transaction_read_only": "on",
+  "observation_ts_columns": [
+    "valid_from",
+    "observed_at",
+    "created_at",
+    "updated_at"
+  ],
+  "observation_valid_from": {
+    "max": "2026-09-21 18:32:06.630350+02:00",
+    "rows_since_ver2": 0
+  },
+  "observation_observed_at": {
+    "max": "2026-09-21 18:32:06.630350+02:00",
+    "rows_since_ver2": 0
+  },
+  "observation_created_at": {
+    "max": "2026-09-21 18:32:06.623791+02:00",
+    "rows_since_ver2": 0
+  },
+  "observation_updated_at": {
+    "max": "2026-09-21 18:32:06.623791+02:00",
+    "rows_since_ver2": 0
+  },
+  "fact_inbound_shipment": {
+    "max_created": "2026-09-21 18:15:13.551273+02:00",
+    "max_updated": "2026-09-21 18:15:13.551273+02:00",
+    "rows": 15255
+  },
+  "import_jobs_today": [],
+  "transaction_read_only_end": "on"
+}

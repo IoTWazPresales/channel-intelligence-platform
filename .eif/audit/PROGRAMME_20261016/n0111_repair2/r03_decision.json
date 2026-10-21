@@ -1,0 +1,1 @@
+{"scope": "N-0111", "origin": "operator", "status": "accepted", "statement": "Warren 2026-10-16: the Compuspeed (1152) / Syntech (4145) un-merge from OPEN_CHANNEL is PARKED. No partial un-merge. One read-only count on cip is taken and written to docs/BACKLOG.md with the trace file path and the trigger 'before distributor-level reporting is shown to users'."}

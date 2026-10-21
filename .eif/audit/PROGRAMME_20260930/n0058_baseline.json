@@ -1,0 +1,9 @@
+{
+  "id": "BLN-N0058",
+  "provenance": "implementation-observation",
+  "tree_hash": "9d8a07c339d3a5de62480ef4119280fa3042edd2",
+  "path": ".eif/audit/PROGRAMME_20260930/N-0058.md",
+  "observed_behavior": "Before the write gate, a half-year re-derivation with no month columns persisted a uniform_half split (ceil/floor of the total). The calculator still returns those numbers for preview. Unified and bulk parse already refused a split without month columns.",
+  "latent_capabilities": [],
+  "preservation": {}
+}

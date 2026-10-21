@@ -1,0 +1,1 @@
+{"node": "N-0101", "expected_revision": 8, "path": "apps/api/app/services/listing_capture/observation.py", "note": "N-0101 / D-0063: ordinary desktop Chrome User-Agent and Accept-Language; pause, spacing default and 600 s run-limit constants. Uncommitted.", "provenance": "implementation-observation", "tree_hash": "a86eff9489c859f885ef35aaa80b80a3a2fca52b"}

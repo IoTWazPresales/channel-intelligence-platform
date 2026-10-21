@@ -1,0 +1,1 @@
+{"stage": "design", "stage_note": "One pure function (profit_definition.compute_profit). Lineup, planner and CPOR read it. Landed cost is an optional SKU field in the controlled cost currency.", "node": "N-0080", "expected_revision": 6}

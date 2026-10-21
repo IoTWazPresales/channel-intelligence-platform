@@ -1,0 +1,1 @@
+{"node": "N-0043", "expected_revision": 8, "dim": "content", "state": "pass", "evidence": "EV-N0043", "rationale": "Cover headers are Distributor and Product. Code columns are not on screen unless picked, and export uses those displayed columns."}

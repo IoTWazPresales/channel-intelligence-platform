@@ -1,0 +1,1 @@
+{"node": "N-0095", "expected_revision": 13, "code": "DOES_NOT_FIT", "note": "N-0095: the existing customer merge preview, bulk preview and confirm endpoints check sign-in only, not role. The new keeper-change endpoints require steward. Gating the old merge endpoints is not in this node."}

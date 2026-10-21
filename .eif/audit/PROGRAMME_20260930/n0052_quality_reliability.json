@@ -1,0 +1,1 @@
+{"node": "N-0052", "expected_revision": 7, "dim": "reliability", "state": "pass", "evidence": "EV-N0052", "rationale": "Readable-table dump restored into cip_alembic_smoke with dim_product parity 18177. fx_daily_rate omitted and documented. Resolver fails loudly when the client is missing."}

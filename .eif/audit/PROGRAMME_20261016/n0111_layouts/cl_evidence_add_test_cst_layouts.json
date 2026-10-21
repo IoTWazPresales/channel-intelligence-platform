@@ -1,0 +1,1 @@
+{"path": "apps/api/tests/test_cst_layouts.py", "note": "N-0111 layouts: fingerprint, header sniffing, mapping checks (pure).", "provenance": "implementation-observation", "node": "N-0111", "expected_revision": 48}

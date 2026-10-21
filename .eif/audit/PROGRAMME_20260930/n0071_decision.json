@@ -1,0 +1,6 @@
+{
+  "scope": "N-0071",
+  "origin": "operator",
+  "status": "accepted",
+  "statement": "Warren 2026-10-01: once units are arrived they leave the open pipeline and are counted once. Do not count the same units as both open and arrived."
+}

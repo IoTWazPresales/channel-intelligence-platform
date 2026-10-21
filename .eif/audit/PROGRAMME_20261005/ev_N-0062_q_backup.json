@@ -1,0 +1,1 @@
+{"node": "N-0062", "expected_revision": 8, "dim": "backup_recovery", "state": "na", "evidence": "EV-N0062", "rationale": "No schema change and no new stored column. Backup and recovery do not apply."}

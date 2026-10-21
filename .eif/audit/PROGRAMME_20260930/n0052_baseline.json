@@ -1,0 +1,9 @@
+{
+  "id": "BLN-N0052",
+  "provenance": "implementation-observation",
+  "tree_hash": "fa9b2f15a3d77a5be621e4b564e82290bc0cef65",
+  "path": ".eif/audit/PROGRAMME_20260930/N-0052.md",
+  "observed_behavior": "Local dump and restore scripts exist. A full pg_dump as role cip fails because fx_daily_rate is owned by postgres and cip cannot lock it. Celery failures were written to the task ledger without a separate alert channel. The AI resolver logged and returned None when the client was missing.",
+  "latent_capabilities": [],
+  "preservation": {}
+}

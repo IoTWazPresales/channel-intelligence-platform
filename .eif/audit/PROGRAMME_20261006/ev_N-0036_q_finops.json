@@ -1,0 +1,1 @@
+{"node": "N-0036", "expected_revision": 7, "dim": "finops", "state": "na", "evidence": "EV-N0036", "rationale": "No new host, capacity, or paid service. The existing local API process listens on loopback."}

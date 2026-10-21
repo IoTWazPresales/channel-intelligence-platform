@@ -1,0 +1,1 @@
+{"path": "apps/api/tests/test_fx_case_rate_db.py", "note": "N-0083: 13 DB tests on cip_test: app role privileges, fetch stores and updates, failed fetch stores nothing, poller stores, case-date and weekend lookup, no stale substitute, create/approve/override/never-revisited.", "provenance": "implementation-observation", "node": "N-0083", "expected_revision": 3}

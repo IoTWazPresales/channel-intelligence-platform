@@ -1,0 +1,1 @@
+{"scope": "N-0111", "origin": "operator", "status": "accepted", "statement": "Warren 2026-10-16: a load that drops rows must say so. A job with rows not loaded is never shown as a plain 'Completed'; it reports rows read, rows loaded and rows not loaded with the reason per category."}

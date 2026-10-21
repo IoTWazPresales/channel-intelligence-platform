@@ -1,0 +1,58 @@
+current_database() = cip | read_only = on | jit = on | work_mem = 4MB | server = 18.3
+captured: NB /api/v1/channel-ops/cover-distribution 713.9 ms | engine: async | setting: NB | sets: []
+SQL: WITH anon_1 AS MATERIALIZED (SELECT anon_2.fact_id AS fact_id, CASE WHEN (anon_2.open_qty > anon_2.shipped_qty) THEN anon_2.open_qty - anon_2.shipped_qty ELSE %(param_2)s::INTEGER END AS counted_qty FROM (SELECT fact_inbound_shipment_1.id AS fact_id, lower(fact_inbound_shipment_1.line_state) AS state, coalesce(fact_inbound_shipment_1.quantity, %(coalesce_3)s::INTEGER) AS open_qty, sum(CASE WHEN (lower(fact_inbound_shipment_1.line_state) = %(lower_1)s::VARCHAR) THEN coalesce(fact_inbound_shipment_1.quantity, %(coalesce_4)s::INTEGER) ELSE %(param_3)s::INTEGER END) OVER (PARTITION BY fact_inbound_shipment_1.tenant_id, lower(trim(coalesce(fact_inbound_shipment_1.operating_unit, ''))), lower(trim(fact_inbound_shipment_1.order_no)), lower(trim(fact_inbound_shipment_1.item_code))) AS shipped_qty, sum(CASE WHEN (lower(fact_inbound_shipment_1.line_state) = %(lower_1)s::VARCHAR) THEN %(param_4)s::INTEGER ELSE %(param_5)s::INTEGER END) OVER (PARTITION BY fact_inbound_shipment_1.tenant_id, lower(trim(coalesce(fact_inbound_shipment_1.operating_unit, ''))), lower(trim(fact_inbound_shipment_1.order_no)), lower(trim(fact_inbound_shipment_1.item_code))) AS n_shipped FROM fact_inbound_shipment AS fact_inbound_shipment_1 WHERE fact_inbound_shipment_1.order_no IS NOT NULL AND fact_inbound_shipment_1.item_code IS NOT NULL AND trim(fact_inbound_shipment_1.order_no) != '' AND trim(fact_inbound_shipment_1.item_code) != '' AND lower(fact_inbound_shipment_1.line_state) IN (%(lower_2_1)s::VARCHAR, %(lower_2_2)s::VARCHAR) AND fact_inbound_shipment_1.tenant_id = %(tid_1)s::VARCHAR) AS anon_2 WHERE anon_2.state = %(state_1)s::VARCHAR AND anon_2.n_shipped > %(n_shipped_1)s::INTEGER) SELECT CAST(coalesce(fact_inbound_shipment.ship_confirm_date, fact_inbound_shipment.pod_date) AS DATE) - (CAST(EXTRACT(isodow FROM CAST(coalesce(fact_inbound_shipment.ship_confirm_date, fact_inbound_shipment.pod_date) AS DATE)) AS INTEGER) - %(param_1)s::INTEGER) AS wk, coalesce(sum(coalesce(anon_1.counted_qty, fact_inbound_shipment.quantity)), %(coalesce_2)s::INTEGER) AS coalesce_1 FROM fact_inbound_shipment LEFT OUTER JOIN anon_1 ON anon_1.fact_id = fact_inbound_shipment.id WHERE fact_inbound_shipment.tenant_id = %(tenant_id_1)s::VARCHAR AND coalesce(fact_inbound_shipment.ship_confirm_date, fact_inbound_shipment.pod_date) IS NOT NULL AND coalesce(fact_inbound_shipment.ship_confirm_date, fact_inbound_shipment.pod_date) >= %(coalesce_5)s::DATE AND coalesce(fact_inbound_shipment.ship_confirm_date, fact_inbound_shipment.pod_date) <= %(coalesce_6)s::DATE AND (anon_1.fact_id IS NULL OR anon_1.counted_qty > %(counted_qty_1)s::INTEGER) AND fact_inbound_shipment.tenant_id = %(tid_1)s::VARCHAR GROUP BY CAST(coalesce(fact_inbound_shipment.ship_confirm_date, fact_inbound_shipment.pod_date) AS DATE) - (CAST(EXTRACT(isodow FROM CAST(coalesce(fact_inbound_shipment.ship_confirm_date, fact_inbound_shipment.pod_date) AS DATE)) AS INTEGER) - %(param_1)s::INTEGER)
+PARAMS: {'param_1': 1, 'coalesce_2': 0, 'param_2': 0, 'coalesce_3': 0, 'lower_1': 'shipped', 'coalesce_4': 0, 'param_3': 0, 'param_4': 1, 'param_5': 0, 'tid_1': 'default', 'state_1': 'open_order', 'n_shipped_1': 0, 'tenant_id_1': 'default', 'coalesce_5': '2026-06-11', 'coalesce_6': '2026-09-10', 'counted_qty_1': 0, 'lower_2_1': 'shipped', 'lower_2_2': 'open_order'}
+explain wall ms: 229
+GroupAggregate  (cost=14187.51..14187.90 rows=13 width=36) (actual time=190.631..190.713 rows=12.00 loops=1)
+  Group Key: ((COALESCE(fact_inbound_shipment.ship_confirm_date, fact_inbound_shipment.pod_date) - ((EXTRACT(isodow FROM COALESCE(fact_inbound_shipment.ship_confirm_date, fact_inbound_shipment.pod_date)))::integer - 1)))
+  Buffers: shared hit=10808
+  CTE anon_1
+    ->  Subquery Scan on anon_2  (cost=7168.90..7174.24 rows=1 width=36) (actual time=138.478..143.174 rows=289.00 loops=1)
+          Filter: ((anon_2.n_shipped > 0) AND (anon_2.state = 'open_order'::text))
+          Rows Removed by Filter: 8550
+          Buffers: shared hit=5404
+          ->  WindowAgg  (cost=7168.90..7173.05 rows=79 width=213) (actual time=126.381..142.434 rows=8839.00 loops=1)
+                Window: w1 AS (PARTITION BY (lower(TRIM(BOTH FROM COALESCE(fact_inbound_shipment_1.operating_unit, ''::character varying)))), (lower(TRIM(BOTH FROM fact_inbound_shipment_1.order_no))), (lower(TRIM(BOTH FROM fact_inbound_shipment_1.item_code))))
+                Storage: Memory  Maximum Storage: 17kB
+                Buffers: shared hit=5404
+                ->  Sort  (cost=7168.90..7169.10 rows=79 width=122) (actual time=126.343..127.043 rows=8839.00 loops=1)
+                      Sort Key: (lower(TRIM(BOTH FROM COALESCE(fact_inbound_shipment_1.operating_unit, ''::character varying)))), (lower(TRIM(BOTH FROM fact_inbound_shipment_1.order_no))), (lower(TRIM(BOTH FROM fact_inbound_shipment_1.item_code)))
+                      Sort Method: quicksort  Memory: 1075kB
+                      Buffers: shared hit=5404
+                      ->  Seq Scan on fact_inbound_shipment fact_inbound_shipment_1  (cost=1964.27..7166.41 rows=79 width=122) (actual time=29.351..81.480 rows=8839.00 loops=1)
+                            Filter: ((order_no IS NOT NULL) AND (item_code IS NOT NULL) AND (tenant_id = 'default'::text) AND ((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((product_id)::bigint = (hashed SubPlan 1).col1))) AND (TRIM(BOTH FROM order_no) <> ''::text) AND (TRIM(BOTH FROM item_code) <> ''::text) AND (lower((line_state)::text) = ANY ('{shipped,open_order}'::text[])))
+                            Rows Removed by Filter: 6416
+                            Buffers: shared hit=5401
+                            SubPlan 1
+                              ->  Seq Scan on dim_product p  (cost=0.00..1952.92 rows=4542 width=4) (actual time=0.030..26.892 rows=6848.00 loops=1)
+                                    Filter: (CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END AND CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END)
+                                    Rows Removed by Filter: 11329
+                                    Buffers: shared hit=772
+  ->  Sort  (cost=7013.27..7013.30 rows=13 width=41) (actual time=190.613..190.632 rows=287.00 loops=1)
+        Sort Key: ((COALESCE(fact_inbound_shipment.ship_confirm_date, fact_inbound_shipment.pod_date) - ((EXTRACT(isodow FROM COALESCE(fact_inbound_shipment.ship_confirm_date, fact_inbound_shipment.pod_date)))::integer - 1)))
+        Sort Method: quicksort  Memory: 33kB
+        Buffers: shared hit=10808
+        ->  Hash Left Join  (cost=1964.31..7013.03 rows=13 width=41) (actual time=180.881..190.504 rows=287.00 loops=1)
+              Hash Cond: (fact_inbound_shipment.id = anon_1.fact_id)
+              Filter: ((anon_1.fact_id IS NULL) OR (anon_1.counted_qty > '0'::numeric))
+              Buffers: shared hit=10805
+              ->  Seq Scan on fact_inbound_shipment  (cost=1964.27..7012.70 rows=40 width=17) (actual time=37.456..46.876 rows=287.00 loops=1)
+                    Filter: ((tenant_id = 'default'::text) AND ((product_id IS NULL) OR (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) OR (ANY ((product_id)::bigint = (hashed SubPlan 3).col1))) AND (COALESCE(ship_confirm_date, pod_date) IS NOT NULL) AND (COALESCE(ship_confirm_date, pod_date) >= '2026-06-11'::date) AND (COALESCE(ship_confirm_date, pod_date) <= '2026-09-10'::date))
+                    Rows Removed by Filter: 14968
+                    Buffers: shared hit=5401
+                    SubPlan 3
+                      ->  Seq Scan on dim_product p_1  (cost=0.00..1952.92 rows=4542 width=4) (actual time=0.045..25.262 rows=6848.00 loops=1)
+                            Filter: (CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END AND CASE WHEN (COALESCE(current_setting('cip.product_lines'::text, true), ''::text) = ANY ('{"",*}'::text[])) THEN true WHEN (current_setting('cip.product_lines'::text, true) = '!'::text) THEN false ELSE (((product_line)::text IS NOT NULL) AND ((product_line)::text = ANY (string_to_array(current_setting('cip.product_lines'::text, true), ','::text)))) END)
+                            Rows Removed by Filter: 11329
+                            Buffers: shared hit=772
+              ->  Hash  (cost=0.02..0.02 rows=1 width=36) (actual time=143.389..143.390 rows=289.00 loops=1)
+                    Buckets: 1024  Batches: 1  Memory Usage: 20kB
+                    Buffers: shared hit=5404
+                    ->  CTE Scan on anon_1  (cost=0.00..0.02 rows=1 width=36) (actual time=138.483..143.294 rows=289.00 loops=1)
+                          Storage: Memory  Maximum Storage: 26kB
+                          Buffers: shared hit=5404
+Planning:
+  Buffers: shared hit=507
+Planning Time: 32.314 ms
+Execution Time: 191.638 ms
+plain execution wall ms: 194 rows=12

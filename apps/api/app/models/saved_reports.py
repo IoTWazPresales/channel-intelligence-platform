@@ -16,7 +16,7 @@ class SavedReport(Base):
     __table_args__ = (
         CheckConstraint("visibility IN ('personal', 'published')", name="ck_saved_report_visibility"),
         CheckConstraint(
-            "visual IN ('kpi', 'table', 'bar', 'line', 'area')",
+            "visual IN ('kpi', 'table', 'bar', 'hbar', 'stacked_bar', 'line', 'area', 'pie', 'donut')",
             name="ck_saved_report_visual",
         ),
         CheckConstraint(
@@ -84,7 +84,7 @@ class DashboardWidget(Base):
     __tablename__ = "dashboard_widget"
     __table_args__ = (
         CheckConstraint(
-            "visual IN ('kpi', 'table', 'bar', 'line', 'area')",
+            "visual IN ('kpi', 'table', 'bar', 'hbar', 'stacked_bar', 'line', 'area', 'pie', 'donut')",
             name="ck_dashboard_widget_visual",
         ),
         CheckConstraint(

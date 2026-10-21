@@ -1,0 +1,1032 @@
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mC:/Users/warren_eliason/channel-intelligence-platform/apps/web[39m
+
+ [32m✓[39m src/features/supply-inbound/SupplyOverview.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 1571[2mms[22m[39m
+   [33m[2m✓[22m[39m SupplyOverview[2m > [22mrenders lab headlines, lifecycle, PO bars, attention, and workflows [33m1264[2mms[22m[39m
+ [32m✓[39m src/features/planning/PlanningOverview.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 1600[2mms[22m[39m
+   [33m[2m✓[22m[39m PlanningOverview[2m > [22mrenders lab headlines, paired bars, readiness, attention, and workflows [33m1295[2mms[22m[39m
+ [32m✓[39m src/app/(app)/lineup/page.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 1086[2mms[22m[39m
+   [33m[2m✓[22m[39m Planning hub at /lineup[2m > [22mmounts the lab Planning composition instead of LineupContainer [33m1082[2mms[22m[39m
+ [32m✓[39m src/features/settlement/SettlementCaseTabs.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 2890[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementCaseTabs[2m > [22mexposes the orphaned case tabs and mounts only the active one [33m669[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementCaseTabs[2m > [22mnames the panel by its active tab and links every tab to the panel [33m1021[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementCaseTabs[2m > [22mswitches to Events and renders the API rows through the panel [33m416[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementCaseTabs[2m > [22mmounts the existing promo-load and payment panels unchanged [33m360[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementCaseTabs[2m > [22mmounts comparable cases as a tab wired to the shared panel, with the empty state [33m419[2mms[22m[39m
+ [31m❯[39m src/features/administration/UsersWorkspace.columnGrain.test.tsx [2m([22m[2m5 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 4014[2mms[22m[39m
+   [33m[2m✓[22m[39m UsersWorkspace column mapping grain (N-0068)[2m > [22mshows the tenant grain to an admin and saves it [33m2529[2mms[22m[39m
+[31m   [31m×[31m UsersWorkspace column mapping grain (N-0068)[2m > [22mdisables save for a blank grain[33m 998[2mms[22m[31m[39m
+[31m     → [2mexpect([22m[31melement[31m[2m).toBeDisabled()[22m
+
+Received element is not disabled:
+  [31m<button
+  class="MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedPrimary MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorPrimary MuiButton-root MuiButton-contained MuiButton-containedPrimary MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorPrimary css-1ixt3dt-MuiButtonBase-root-MuiButton-root"
+  data-testid="column-grain-save"
+  tabindex="0"
+  type="button"
+/>[31m[39m
+ [32m✓[39m src/features/stock/ChannelIntelligenceWorkspace.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 3930[2mms[22m[39m
+   [33m[2m✓[22m[39m ChannelIntelligenceWorkspace column picker (N-0034 pass-2 host)[2m > [22mshows the customer name only, and offers the code as its own Reference column [33m3925[2mms[22m[39m
+ [31m❯[39m src/features/promotions-funding/PaymentEvidenceOverlay.test.tsx [2m([22m[2m1 test[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 910[2mms[22m[39m
+[31m   [31m×[31m PaymentEvidenceOverlayPanel[2m > [22mshows exact Case ID match rates and Latest Comment on pending rows[33m 905[2mms[22m[31m[39m
+[31m     → Unable to find an element with the text: /historical source attestation/i. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"MuiStack-root css-1sazv7p-MuiStack-root"[31m
+      [33mdata-testid[31m=[32m"cpor-payment-overlay"[31m
+    [36m>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"MuiBox-root css-ji0gmt"[31m
+      [36m>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-qfouw-MuiPaper-root"[31m
+          [33mdata-state[31m=[32m"ready"[31m
+          [33mstyle[31m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[31m
+        [36m>[31m
+          [36m<span[31m
+            [33mclass[31m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[31m
+          [36m>[31m
+            [0mCIP cases in this file[0m
+          [36m</span>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[31m
+          [36m>[31m
+            [36m<span[31m
+              [33mclass[31m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[31m
+            [36m>[31m
+              [0m264 / 311[0m
+            [36m</span>[31m
+          [36m</div>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"MuiBox-root css-1jkjn5n"[31m
+          [36m>[31m
+            [36m<span[31m
+              [33mclass[31m=[32m"MuiTypography-root MuiTypography-caption css-9h85rr-MuiTypography-root"[31m
+            [36m>[31m
+              [0mExact Case ID match 85% — no fuzzy[0m
+            [36m</span>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-qfouw-MuiPaper-root"[31m
+          [33mdata-state[31m=[32m"ready"[31m
+          [33mstyle[31m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[31m
+        [36m>[31m
+          [36m<span[31m
+            [33mclass[31m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[31m
+          [36m>[31m
+            [0mUnmatched CIP cases[0m
+          [36m</span>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[31m
+          [36m>[31m
+            [36m<span[31m
+              [33mclass[31m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[31m
+            [36m>[31m
+              [0m47[0m
+            [36m</span>[31m
+          [36m</div>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"MuiBox-root css-1jkjn5n"[31m
+          [36m>[31m
+            [36m<span[31m
+              [33mclass[31m=[32m"MuiTypography-root MuiTypography-caption css-9h85rr-MuiTypography-root"[31m
+            [36m>[31m
+              [0mStay reviewable — not auto-created[0m
+            [36m</span>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-qfouw-MuiPaper-root"[31m
+          [33mdata-state[31m=[32m"ready"[31m
+          [33mstyle[31m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[31m
+        [36m>[31m
+          [36m<span[31m
+            [33mclass[31m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[31m
+          [36m>[31m
+            [0mUnmatched file cases[0m
+          [36m</span>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[31m
+          [36m>[31m
+            [36m<span[31m
+              [33mclass[31m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[31m
+            [36m>[31m
+              [0m2 280[0m
+            [36m</span>[31m
+          [36m</div>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"MuiBox-root css-1jkjn5n"[31m
+          [36m>[31m
+            [36m<span[31m
+              [33mclass[31m=[32m"MuiTypography-root MuiTypography-caption css-9h85rr-MuiTypography-root"[31m
+            [36m>[31m
+              [0m— closed/paid source-attested · 2 544 distinct Case IDs[0m
+            [36m</span>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-qfouw-MuiPaper-root"[31m
+          [33mdata-state[31m=[32m"ready"[31m
+          [33mstyle[31m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[31m
+        [36m>[31m
+          [36m<span[31m
+            [33mclass[31m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[31m
+          [36m>[31m
+            [0mPending rows[0m
+          [36m</span>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[31m
+          [36m>[31m
+            [36m<span[31m
+              [33mclass[31m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[31m
+            [36m>[31m
+              [0m80[0m
+            [36m</span>[31m
+          [36m</div>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"MuiBox-root css-1jkjn5n"[31m
+          [36m>[31m
+            [36m<span[31m
+              [33mclass[31m=[32m"MuiTypography-root MuiTypography-caption css-9h85rr-MuiTypography-root"[31m
+            [36m>[31m
+              [0m16 carry Latest Comment (dispute text)[0m
+            [36m</span>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+      [36m</div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 MuiAlert-root MuiAlert-colorWarning MuiAlert-outlinedWarning MuiAlert-outlined css-5l9dvz-MuiPaper-root-MuiAlert-root"[31m
+        [33mdata-testid[31m=[32m"cpor-payment-paid-note"[31m
+        [33mrole[31m=[32m"alert"[31m
+        [33mstyle[31m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[31m
+      [36m>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"MuiAlert-icon css-vab54s-MuiAlert-icon"[31m
+        [36m>[31m
+          [36m<svg[31m
+            [33maria-hidden[31m=[32m"true"[31m
+            [33mclass[31m=[32m"MuiSvgIcon-root MuiSvgIcon-fontSizeInherit css-1ckov0h-MuiSvgIcon-root"[31m
+            [33mdata-testid[31m=[32m"ReportProblemOutlinedIcon"[31m
+            [33mfocusable[31m=[32m"false"[31m
+            [33mviewBox[31m=[32m"0 0 24 24"[31m
+          [36m>[31m
+            [36m<path[31m
+              [33md[31m=[32m"M12 5.99L19.53 19H4.47L12 5.99M12 2L1 21h22L12 2zm1 14h-2v2h2v-2zm0-6h-2v4h2v-4z"[31m
+            [36m/>[31m
+          [36m</svg>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"MuiAlert-message css-zioonp-MuiAlert-message"[31m
+        [36m>[31m
+          [0mPaid on the ZAR open book only sums linked evidence in the case currency. This ASUS pending report is almost all USD, so it does not move R0 paid / R6.0m outstanding.[0m
+          [0m [0m
+          [0mThis is payment and credit-note evidence, not claim lines. Unmatched closed or paid case codes below come from the file — they are not promotion cases. Ageing stays on claim lines; uplift stays blocked.[0m
+        [36m</div>[31m
+      [36m</div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-1ifvym2-MuiPaper-root"[31m
+        [33mstyle[31m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[31m
+      [36m>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"MuiStack-root css-igw2xg-MuiStack-root"[31m
+        [36m>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"MuiBox-root css-31l7gp"[31m
+          [36m>[31m
+            [36m<h6[31m
+              [33mclass[31m=[32m"MuiTypography-root MuiTypography-subtitle2 css-njr1bq-MuiTypography-root"[31m
+            [36m>[31m
+              [0mPending — Latest Comment[0m
+            [36m</h6>[31m
+            [36m<span[31m
+              [33mclass[31m=[32m"MuiTypography-root MuiTypography-caption css-142hzdu-MuiTypography-root"[31m
+            [36m>[31m
+              [0mTo_Be_Applied / To_Be_Clarified / Processed (and blank status). Comment is the file Latest Comment column, not Subject.[0m
+            [36m</span>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"MuiBox-root css-1rp0hap"[31m
+        [36m>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"MuiStack-root css-106vpu7-MuiStack-root"[31m
+          [36m>[31m
+            [36m<a[31m
+              [33mclass[31m=[32m"MuiBox-root css-fq3te4"[31m
+              [33mhref[31m=[32m"/commercial-planner/cpor-cases/payment-evidence-import?code=C25659655"[31m
+            [36m>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"MuiBox-root css-1toae9w"[31m
+              [36m>[31m
+                [36m<div[31m
+                  [33mclass[31m=[32m"MuiBox-root css-1fjtzvx"[31m
+                [36m>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"MuiTypography-root MuiTypography-body2 MuiTypography-noWrap css-ipe7f3-MuiTypography-root"[31m
+                  [36m>[31m
+                    [0mC25659655 · to_be_clarified[0m
+                  [36m</div>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"MuiTypography-root MuiTypography-caption MuiTypography-noWrap css-1szidyb-MuiTypography-root"[31m
+                  [36m>[31m
+                    [0moverclaim 75 units, please check and update.[0m
+                  [36m</div>[31m
+                [36m</div>[31m
+                [36m<div[31m
+                  [33mclass[31m=[32m"MuiTypography-root MuiTypography-body2 css-cc48qi-MuiTypography-root"[31m
+                [36m>[31m
+                  [0munlinked[0m
+                [36m</div>[31m
+              [36m</div>[31m
+            [36m</a>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+      [36m</div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-1ifvym2-MuiPaper-root"[31m
+        [33mstyle[31m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[31m
+      [36m>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"MuiStack-root css-igw2xg-MuiStack-root"[31m
+        [36m>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"MuiBox-root css-31l7gp"[31m
+          [36m>[31m
+            [36m<h6[31m
+              [33mclass[31m=[32m"MuiTypography-root MuiTypography-subtitle2 css-njr1bq-MuiTypography-root"[31m
+            [36m>[31m
+              [0mUnmatched historical Case IDs[0m
+            [36m</h6>[31m
+            [36m<span[31m
+              [33mclass[31m=[32m"MuiTypography-root MuiTypography-caption css-142hzdu-MuiTypography-root"[31m
+            [36m>[31m
+              [0mPayment rows that name a case code with no matching promotion case. Closed or paid is what the file said.[0m
+            [36m</span>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"MuiBox-root css-1rp0hap"[31m
+        [36m>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"MuiStack-root css-106vpu7-MuiStack-root"[31m
+            [33mdata-testid[31m=[32m"cpor-unmatched-file-evidence"[31m
+          [36m>[31m
+            [36m<span[31m
+              [33mclass[31m=[32m"MuiTypography-root MuiTypography-caption css-1ec9ngn-MuiTypography-root"[31m
+            [36m/>[31m
+            [36m<a[31m
+              [33mclass[31m=[32m"MuiBox-root css-fq3te4"[31m
+              [33mhref[31m=[32m"/commercial-planner/cpor-cases/payment-evidence-import?code=C19A50693"[31m
+            [36m>[31m
+              [36m<div[31m
+                [33mclass[31m=[32m"MuiBox-root css-rwzrbo"[31m
+              [36m>[31m
+                [36m<div[31m
+                  [33mclass[31m=[32m"MuiBox-root css-1fjtzvx"[31m
+                [36m>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"MuiTypography-root MuiTypography-body2 MuiTypography-noWrap css-ipe7f3-MuiTypography-root"[31m
+                  [36m>[31m
+                    [0mC19A50693 · Source attested[0m
+                  [36m</div>[31m
+                  [36m<div[31m
+                    [33mclass[31m=[32m"MuiTypography-root MuiTypography-caption MuiTypography-noWrap css-1szidyb-MuiTypography-root"[31m
+                  [36m>[31m
+                    [0mHIST-CUST · closed[0m
+                  [36m</div>[31m
+                [36m</div>[31m
+                [36m<div[31m
+                  [33mclass[31m=[32m"MuiTypography-root MuiTypography-body2 css-cc48qi-MuiTypography-root"[31m
+                [36m>[31m
+                  [0m$1k[0m
+                [36m</div>[31m
+              [36m</div>[31m
+            [36m</a>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+[36m</body>[31m[39m
+ [32m✓[39m src/features/data-stewardship/StewardFailureQueue.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 1028[2mms[22m[39m
+   [33m[2m✓[22m[39m StewardFailureQueue[2m > [22mgroups from API entity_type, including uncovered future types [33m691[2mms[22m[39m
+   [33m[2m✓[22m[39m StewardFailureQueue[2m > [22mshows empty title when the queue has no candidates [33m332[2mms[22m[39m
+ [32m✓[39m src/features/administration/AdminOverview.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 1752[2mms[22m[39m
+   [33m[2m✓[22m[39m AdminOverview[2m > [22mrenders lab headlines, operations rows, attention, and remapped workflows [33m1742[2mms[22m[39m
+ [31m❯[39m src/features/promotions-funding/PlanTemplatesSurface.test.tsx [2m([22m[2m2 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 2408[2mms[22m[39m
+[31m   [31m×[31m PlanTemplatesSurface[2m > [22mlists stored profiles and keeps export as Planned honesty[33m 2393[2mms[22m[31m[39m
+[31m     → Unable to find an element with the text: /template-driven export is not built/i. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"MuiStack-root css-11zvfn9-MuiStack-root"[31m
+      [33mdata-testid[31m=[32m"plan-templates"[31m
+    [36m>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 MuiAlert-root MuiAlert-colorInfo MuiAlert-outlinedInfo MuiAlert-outlined css-18505lp-MuiPaper-root-MuiAlert-root"[31m
+        [33mrole[31m=[32m"alert"[31m
+        [33mstyle[31m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[31m
+      [36m>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"MuiAlert-icon css-vab54s-MuiAlert-icon"[31m
+        [36m>[31m
+          [36m<svg[31m
+            [33maria-hidden[31m=[32m"true"[31m
+            [33mclass[31m=[32m"MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"[31m
+            [33mdata-testid[31m=[32m"SwapHorizOutlinedIcon"[31m
+            [33mfocusable[31m=[32m"false"[31m
+            [33mviewBox[31m=[32m"0 0 24 24"[31m
+          [36m>[31m
+            [36m<path[31m
+              [33md[31m=[32m"M6.99 11 3 15l3.99 4v-3H14v-2H6.99zM21 9l-3.99-4v3H10v2h7.01v3z"[31m
+            [36m/>[31m
+          [36m</svg>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"MuiAlert-message css-zioonp-MuiAlert-message"[31m
+        [36m>[31m
+          [36m<b>[31m
+            [0mLearn once, use both ways.[0m
+          [36m</b>[31m
+          [0m A customer’s promotion-plan workbook is mapped once — usually from a historical plan they already sent. The same profile then reads their future files. Writing a plan back into that layout is not built — export stays the fixed workbook.[0m
+        [36m</div>[31m
+      [36m</div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"MuiBox-root css-ji0gmt"[31m
+      [36m>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-qfouw-MuiPaper-root"[31m
+          [33mdata-state[31m=[32m"ready"[31m
+          [33mstyle[31m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[31m
+        [36m>[31m
+          [36m<span[31m
+            [33mclass[31m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[31m
+          [36m>[31m
+            [0mTemplates[0m
+          [36m</span>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[31m
+          [36m>[31m
+            [36m<span[31m
+              [33mclass[31m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[31m
+            [36m>[31m
+              [0m1[0m
+            [36m</span>[31m
+          [36m</div>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"MuiBox-root css-1jkjn5n"[31m
+          [36m>[31m
+            [36m<span[31m
+              [33mclass[31m=[32m"MuiTypography-root MuiTypography-caption css-9h85rr-MuiTypography-root"[31m
+            [36m>[31m
+              [0m1 with a stored column map[0m
+            [36m</span>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-qfouw-MuiPaper-root"[31m
+          [33mdata-state[31m=[32m"ready"[31m
+          [33mstyle[31m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[31m
+        [36m>[31m
+          [36m<span[31m
+            [33mclass[31m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[31m
+          [36m>[31m
+            [0mPlans read through templates[0m
+          [36m</span>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[31m
+          [36m>[31m
+            [36m<span[31m
+              [33mclass[31m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[31m
+            [36m>[31m
+              [0m1[0m
+            [36m</span>[31m
+          [36m</div>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"MuiBox-root css-1jkjn5n"[31m
+          [36m>[31m
+            [36m<span[31m
+              [33mclass[31m=[32m"MuiTypography-root MuiTypography-caption css-9h85rr-MuiTypography-root"[31m
+            [36m>[31m
+              [0mPlans that came in through a historical import. The column map is not stored on the case.[0m
+            [36m</span>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-qfouw-MuiPaper-root"[31m
+          [33mdata-state[31m=[32m"ready"[31m
+          [33mstyle[31m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[31m
+        [36m>[31m
+          [36m<span[31m
+            [33mclass[31m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[31m
+          [36m>[31m
+            [0mPlan fields[0m
+          [36m</span>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[31m
+          [36m>[31m
+            [36m<span[31m
+              [33mclass[31m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[31m
+            [36m>[31m
+              [0m7[0m
+            [36m</span>[31m
+          [36m</div>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"MuiBox-root css-1jkjn5n"[31m
+          [36m>[31m
+            [36m<span[31m
+              [33mclass[31m=[32m"MuiTypography-root MuiTypography-caption css-9h85rr-MuiTypography-root"[31m
+            [36m>[31m
+              [0m6 required groups[0m
+            [36m</span>[31m
+          [36m</div>[31m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-qfouw-MuiPaper-root"[31m
+          [33mdata-state[31m=[32m"ready"[31m
+          [33mstyle[31m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[31m
+        [36m>[31m
+          [36m<span[31m
+            [33mclass[31m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[31m
+          [36m>[31m
+            [0mExport side[0m
+          [36m</span>[31m
+          [36m<div[31m
+            [33mclass[31m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[31m
+          [36m>[31m
+            [36m<span[31m
+              [33mclass[31m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[31m
+            [36...[39m
+[90mstderr[2m | src/features/promotions-funding/CaseBookSurface.test.tsx[2m > [22m[2mCaseBookSurface[2m > [22m[2mdoes not mount the settlement desk and labels open-book vs FX-blocked scopes
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[90mstderr[2m | src/features/promotions-funding/CaseBookSurface.test.tsx[2m > [22m[2mCaseBookSurface[2m > [22m[2mdoes not mount the settlement desk and labels open-book vs FX-blocked scopes
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[90mstderr[2m | src/features/promotions-funding/CaseBookSurface.test.tsx[2m > [22m[2mCaseBookSurface[2m > [22m[2mmounts the portfolio read collapsed after the ageing grid, money through DualMoney (N-0044)
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+ [32m✓[39m src/features/promotions-funding/PromotionPlannerSurface.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 5132[2mms[22m[39m
+   [33m[2m✓[22m[39m PromotionPlannerSurface[2m > [22mlists real CPOR cases and shows line-sum support, not a stale plan total [33m5128[2mms[22m[39m
+[90mstderr[2m | src/features/promotions-funding/CaseBookSurface.test.tsx[2m > [22m[2mCaseBookSurface[2m > [22m[2mmounts the portfolio read collapsed after the ageing grid, money through DualMoney (N-0044)
+[22m[39mThe width(0) and height(0) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+ [32m✓[39m src/features/market-listings/MarketSurface.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 4952[2mms[22m[39m
+   [33m[2m✓[22m[39m MarketSurface[2m > [22mmounts lab chrome and the listings lens, not the /market stub [33m4207[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/CaseBookSurface.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 5297[2mms[22m[39m
+   [33m[2m✓[22m[39m CaseBookSurface[2m > [22mdoes not mount the settlement desk and labels open-book vs FX-blocked scopes [33m3379[2mms[22m[39m
+   [33m[2m✓[22m[39m CaseBookSurface[2m > [22mmounts the portfolio read collapsed after the ageing grid, money through DualMoney (N-0044) [33m1911[2mms[22m[39m
+ [32m✓[39m src/features/settlement/SettlementDesk.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 6213[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementDesk[2m > [22mshows customer name primary, not welded to the CIP-minted code [33m3027[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementDesk[2m > [22mrenders an honest unbooked USD line instead of a live conversion [33m579[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementDesk[2m > [22msurfaces FX blocked with the existing Alert primitive [33m495[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementDesk[2m > [22moffers end / cancel only from allowedNext and hands the choice to the caller (N-0044) [33m1066[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementDesk[2m > [22mshows the reapproval warning and links pre-approval work to the planner [33m512[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementDesk[2m > [22mputs approved support first in the headline strip via DualMoney [33m523[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/PlanWorkspace.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 13149[2mms[22m[39m
+   [33m[2m✓[22m[39m PlanWorkspace approve / FX (N-0044, ported from CporCaseWorkspace)[2m > [22mapproves through the book-FX dialog carrying fx_rate and the over-budget reapproval [33m5409[2mms[22m[39m
+   [33m[2m✓[22m[39m PlanWorkspace approve / FX (N-0044, ported from CporCaseWorkspace)[2m > [22msends confirm_over_budget_reapproval false when the case is within budget [33m2318[2mms[22m[39m
+   [33m[2m✓[22m[39m PlanWorkspace approve / FX (N-0044, ported from CporCaseWorkspace)[2m > [22medits FX mode and the proposed rate on a draft through the existing PATCH [33m2746[2mms[22m[39m
+   [33m[2m✓[22m[39m PlanWorkspace approve / FX (N-0044, ported from CporCaseWorkspace)[2m > [22mlocks FX edits outside draft/rejected [33m885[2mms[22m[39m
+   [33m[2m✓[22m[39m PlanWorkspace approve / FX (N-0044, ported from CporCaseWorkspace)[2m > [22mroutes settle to the desk instead of posting it from the planner [33m930[2mms[22m[39m
+   [33m[2m✓[22m[39m PlanWorkspace approve / FX (N-0044, ported from CporCaseWorkspace)[2m > [22mshows the PM comment on a rejected plan (was a workspace header chip) [33m855[2mms[22m[39m
+ [32m✓[39m src/features/settlement/mapSettlementDeskView.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 20[2mms[22m[39m
+ [32m✓[39m src/features/lineup/lineupViews.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 28[2mms[22m[39m
+ [32m✓[39m src/features/stock/coverStatus.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 140[2mms[22m[39m
+ [32m✓[39m src/features/data-stewardship/stewardQueueResolve.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 27[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/caseScope.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 18[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/paymentEvidenceCode.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 24[2mms[22m[39m
+ [32m✓[39m src/features/stock/stockLenses.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 14[2mms[22m[39m
+ [32m✓[39m src/features/settlement/customerDisplay.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 15[2mms[22m[39m
+ [32m✓[39m src/features/stock/executionRollup.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 16[2mms[22m[39m
+ [32m✓[39m src/features/settlement/settlementViews.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 14[2mms[22m[39m
+ [32m✓[39m src/features/administration/adminPaths.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 11[2mms[22m[39m
+ [32m✓[39m src/features/planning/planningPaths.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 12[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/lifecycle.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 13[2mms[22m[39m
+ [32m✓[39m src/features/stock/stockLeafPaths.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 9[2mms[22m[39m
+ [32m✓[39m src/features/lineup/lineupQuarter.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 11[2mms[22m[39m
+ [32m✓[39m src/features/supply-inbound/SupplyChrome.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 10[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/format.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 12[2mms[22m[39m
+ [32m✓[39m src/features/stock/ExecutionLensView.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 358[2mms[22m[39m
+   [33m[2m✓[22m[39m ExecutionLensView[2m > [22mrenders lab headlines and relocates the existing workspace [33m351[2mms[22m[39m
+ [32m✓[39m src/features/stock/StockThinLenses.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 621[2mms[22m[39m
+   [33m[2m✓[22m[39m StockThinLenses[2m > [22mrenders sell-through honesty with remapped workspace href [33m546[2mms[22m[39m
+ [32m✓[39m src/features/settlement/SettlementConfirmDialog.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 1171[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementConfirmDialog[2m > [22mshows the outstanding amount as ZAR with booked USD alongside [33m893[2mms[22m[39m
+ [32m✓[39m src/features/settlement/SettlementScopeBar.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 671[2mms[22m[39m
+   [33m[2m✓[22m[39m SettlementScopeBar[2m > [22mrenders deferred structural filters and disabled Apply honestly [33m665[2mms[22m[39m
+ [32m✓[39m src/features/data-stewardship/DataChrome.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 39[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/FundingChrome.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 12[2mms[22m[39m
+ [32m✓[39m src/features/stock/StockChrome.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 20[2mms[22m[39m
+ [32m✓[39m src/features/promotions-funding/FundingPointerLens.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 1169[2mms[22m[39m
+   [33m[2m✓[22m[39m FundingPointerLens[2m > [22mrenders a single empty-state pointer with Import Center CTA [33m1161[2mms[22m[39m
+ [32m✓[39m src/app/(app)/lineup/cases/page.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 1841[2mms[22m[39m
+   [33m[2m✓[22m[39m LineupCasesPage[2m > [22mrelocates LineupContainer under Planning chrome [33m1087[2mms[22m[39m
+   [33m[2m✓[22m[39m LineupCasesPage[2m > [22mhonours Cover ?product= as an exact product_id chip [33m749[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[1m[7m Failed Tests 3 [27m[22m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[31m[1m[7m FAIL [27m[22m[39m src/features/administration/UsersWorkspace.columnGrain.test.tsx[2m > [22mUsersWorkspace column mapping grain (N-0068)[2m > [22mdisables save for a blank grain
+[31m[1mError[22m: [2mexpect([22m[31melement[31m[2m).toBeDisabled()[22m
+
+Received element is not disabled:
+  [31m<button
+  class="MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedPrimary MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorPrimary MuiButton-root MuiButton-contained MuiButton-containedPrimary MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorPrimary css-1ixt3dt-MuiButtonBase-root-MuiButton-root"
+  data-testid="column-grain-save"
+  tabindex="0"
+  type="button"
+/>[31m[39m
+[36m [2m❯[22m src/features/administration/UsersWorkspace.columnGrain.test.tsx:[2m63:53[22m[39m
+    [90m 61| [39m    [35mconst[39m input [33m=[39m ([35mawait[39m screen[33m.[39m[34mfindByTestId[39m([32m'column-grain-input'[39m)) [35mas[39m…
+    [90m 62| [39m    fireEvent[33m.[39m[34mchange[39m(input[33m,[39m { target[33m:[39m { value[33m:[39m [32m'   '[39m } })[33m;[39m
+    [90m 63| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByTestId[39m([32m'column-grain-save'[39m))[33m.[39m[34mtoBeDisabled[39m()[33m;[39m
+    [90m   | [39m                                                    [31m^[39m
+    [90m 64| [39m  })[33m;[39m
+    [90m 65| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m src/features/promotions-funding/PaymentEvidenceOverlay.test.tsx[2m > [22mPaymentEvidenceOverlayPanel[2m > [22mshows exact Case ID match rates and Latest Comment on pending rows
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: /historical source attestation/i. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"MuiStack-root css-1sazv7p-MuiStack-root"[39m
+      [33mdata-testid[39m=[32m"cpor-payment-overlay"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"MuiBox-root css-ji0gmt"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-qfouw-MuiPaper-root"[39m
+          [33mdata-state[39m=[32m"ready"[39m
+          [33mstyle[39m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[39m
+          [36m>[39m
+            [0mCIP cases in this file[0m
+          [36m</span>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[39m
+            [36m>[39m
+              [0m264 / 311[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-1jkjn5n"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-9h85rr-MuiTypography-root"[39m
+            [36m>[39m
+              [0mExact Case ID match 85% — no fuzzy[0m
+            [36m</span>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-qfouw-MuiPaper-root"[39m
+          [33mdata-state[39m=[32m"ready"[39m
+          [33mstyle[39m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[39m
+          [36m>[39m
+            [0mUnmatched CIP cases[0m
+          [36m</span>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[39m
+            [36m>[39m
+              [0m47[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-1jkjn5n"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-9h85rr-MuiTypography-root"[39m
+            [36m>[39m
+              [0mStay reviewable — not auto-created[0m
+            [36m</span>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-qfouw-MuiPaper-root"[39m
+          [33mdata-state[39m=[32m"ready"[39m
+          [33mstyle[39m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[39m
+          [36m>[39m
+            [0mUnmatched file cases[0m
+          [36m</span>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[39m
+            [36m>[39m
+              [0m2 280[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-1jkjn5n"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-9h85rr-MuiTypography-root"[39m
+            [36m>[39m
+              [0m— closed/paid source-attested · 2 544 distinct Case IDs[0m
+            [36m</span>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-qfouw-MuiPaper-root"[39m
+          [33mdata-state[39m=[32m"ready"[39m
+          [33mstyle[39m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[39m
+          [36m>[39m
+            [0mPending rows[0m
+          [36m</span>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[39m
+            [36m>[39m
+              [0m80[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-1jkjn5n"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-9h85rr-MuiTypography-root"[39m
+            [36m>[39m
+              [0m16 carry Latest Comment (dispute text)[0m
+            [36m</span>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 MuiAlert-root MuiAlert-colorWarning MuiAlert-outlinedWarning MuiAlert-outlined css-5l9dvz-MuiPaper-root-MuiAlert-root"[39m
+        [33mdata-testid[39m=[32m"cpor-payment-paid-note"[39m
+        [33mrole[39m=[32m"alert"[39m
+        [33mstyle[39m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiAlert-icon css-vab54s-MuiAlert-icon"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"MuiSvgIcon-root MuiSvgIcon-fontSizeInherit css-1ckov0h-MuiSvgIcon-root"[39m
+            [33mdata-testid[39m=[32m"ReportProblemOutlinedIcon"[39m
+            [33mfocusable[39m=[32m"false"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+          [36m>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M12 5.99L19.53 19H4.47L12 5.99M12 2L1 21h22L12 2zm1 14h-2v2h2v-2zm0-6h-2v4h2v-4z"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiAlert-message css-zioonp-MuiAlert-message"[39m
+        [36m>[39m
+          [0mPaid on the ZAR open book only sums linked evidence in the case currency. This ASUS pending report is almost all USD, so it does not move R0 paid / R6.0m outstanding.[0m
+          [0m [0m
+          [0mThis is payment and credit-note evidence, not claim lines. Unmatched closed or paid case codes below come from the file — they are not promotion cases. Ageing stays on claim lines; uplift stays blocked.[0m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-1ifvym2-MuiPaper-root"[39m
+        [33mstyle[39m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiStack-root css-igw2xg-MuiStack-root"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-31l7gp"[39m
+          [36m>[39m
+            [36m<h6[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-subtitle2 css-njr1bq-MuiTypography-root"[39m
+            [36m>[39m
+              [0mPending — Latest Comment[0m
+            [36m</h6>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-142hzdu-MuiTypography-root"[39m
+            [36m>[39m
+              [0mTo_Be_Applied / To_Be_Clarified / Processed (and blank status). Comment is the file Latest Comment column, not Subject.[0m
+            [36m</span>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiBox-root css-1rp0hap"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiStack-root css-106vpu7-MuiStack-root"[39m
+          [36m>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"MuiBox-root css-fq3te4"[39m
+              [33mhref[39m=[32m"/commercial-planner/cpor-cases/payment-evidence-import?code=C25659655"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"MuiBox-root css-1toae9w"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"MuiBox-root css-1fjtzvx"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"MuiTypography-root MuiTypography-body2 MuiTypography-noWrap css-ipe7f3-MuiTypography-root"[39m
+                  [36m>[39m
+                    [0mC25659655 · to_be_clarified[0m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption MuiTypography-noWrap css-1szidyb-MuiTypography-root"[39m
+                  [36m>[39m
+                    [0moverclaim 75 units, please check and update.[0m
+                  [36m</div>[39m
+                [36m</div>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"MuiTypography-root MuiTypography-body2 css-cc48qi-MuiTypography-root"[39m
+                [36m>[39m
+                  [0munlinked[0m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</a>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-1ifvym2-MuiPaper-root"[39m
+        [33mstyle[39m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiStack-root css-igw2xg-MuiStack-root"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-31l7gp"[39m
+          [36m>[39m
+            [36m<h6[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-subtitle2 css-njr1bq-MuiTypography-root"[39m
+            [36m>[39m
+              [0mUnmatched historical Case IDs[0m
+            [36m</h6>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-142hzdu-MuiTypography-root"[39m
+            [36m>[39m
+              [0mPayment rows that name a case code with no matching promotion case. Closed or paid is what the file said.[0m
+            [36m</span>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiBox-root css-1rp0hap"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiStack-root css-106vpu7-MuiStack-root"[39m
+            [33mdata-testid[39m=[32m"cpor-unmatched-file-evidence"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-1ec9ngn-MuiTypography-root"[39m
+            [36m/>[39m
+            [36m<a[39m
+              [33mclass[39m=[32m"MuiBox-root css-fq3te4"[39m
+              [33mhref[39m=[32m"/commercial-planner/cpor-cases/payment-evidence-import?code=C19A50693"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"MuiBox-root css-rwzrbo"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"MuiBox-root css-1fjtzvx"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"MuiTypography-root MuiTypography-body2 MuiTypography-noWrap css-ipe7f3-MuiTypography-root"[39m
+                  [36m>[39m
+                    [0mC19A50693 · Source attested[0m
+                  [36m</div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption MuiTypography-noWrap css-1szidyb-MuiTypography-root"[39m
+                  [36m>[39m
+                    [0mHIST-CUST · closed[0m
+                  [36m</div>[39m
+                [36m</div>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"MuiTypography-root MuiTypography-body2 css-cc48qi-MuiTypography-root"[39m
+                [36m>[39m
+                  [0m$1k[0m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</a>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m Object.getElementError ../../node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m ../../node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m ../../node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m ../../node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/features/promotions-funding/PaymentEvidenceOverlay.test.tsx:[2m71:19[22m[39m
+    [90m 69| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([36m/overclaim 75 units/i[39m))[33m.[39m[34mtoBeInTheDocument[39m(…
+    [90m 70| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByTestId[39m([32m'cpor-payment-paid-note'[39m))[33m.[39m[34mtoHaveTextCon[39m…
+    [90m 71| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([36m/historical source attestation/i[39m))[33m.[39m[34mtoBeInT[39m…
+    [90m   | [39m                  [31m^[39m
+    [90m 72| [39m    [35mconst[39m unmatched [33m=[39m screen[33m.[39m[34mgetByRole[39m([32m'link'[39m[33m,[39m { name[33m:[39m [36m/C19A50693/i[39m })[33m;[39m
+    [90m 73| [39m    [34mexpect[39m(unmatched)[33m.[39m[34mtoHaveAttribute[39m(
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m src/features/promotions-funding/PlanTemplatesSurface.test.tsx[2m > [22mPlanTemplatesSurface[2m > [22mlists stored profiles and keeps export as Planned honesty
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: /template-driven export is not built/i. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"MuiStack-root css-11zvfn9-MuiStack-root"[39m
+      [33mdata-testid[39m=[32m"plan-templates"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 MuiAlert-root MuiAlert-colorInfo MuiAlert-outlinedInfo MuiAlert-outlined css-18505lp-MuiPaper-root-MuiAlert-root"[39m
+        [33mrole[39m=[32m"alert"[39m
+        [33mstyle[39m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiAlert-icon css-vab54s-MuiAlert-icon"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"[39m
+            [33mdata-testid[39m=[32m"SwapHorizOutlinedIcon"[39m
+            [33mfocusable[39m=[32m"false"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+          [36m>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M6.99 11 3 15l3.99 4v-3H14v-2H6.99zM21 9l-3.99-4v3H10v2h7.01v3z"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiAlert-message css-zioonp-MuiAlert-message"[39m
+        [36m>[39m
+          [36m<b>[39m
+            [0mLearn once, use both ways.[0m
+          [36m</b>[39m
+          [0m A customer’s promotion-plan workbook is mapped once — usually from a historical plan they already sent. The same profile then reads their future files. Writing a plan back into that layout is not built — export stays the fixed workbook.[0m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"MuiBox-root css-ji0gmt"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-qfouw-MuiPaper-root"[39m
+          [33mdata-state[39m=[32m"ready"[39m
+          [33mstyle[39m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[39m
+          [36m>[39m
+            [0mTemplates[0m
+          [36m</span>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[39m
+            [36m>[39m
+              [0m1[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-1jkjn5n"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-9h85rr-MuiTypography-root"[39m
+            [36m>[39m
+              [0m1 with a stored column map[0m
+            [36m</span>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-qfouw-MuiPaper-root"[39m
+          [33mdata-state[39m=[32m"ready"[39m
+          [33mstyle[39m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[39m
+          [36m>[39m
+            [0mPlans read through templates[0m
+          [36m</span>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[39m
+            [36m>[39m
+              [0m1[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-1jkjn5n"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-9h85rr-MuiTypography-root"[39m
+            [36m>[39m
+              [0mPlans that came in through a historical import. The column map is not stored on the case.[0m
+            [36m</span>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-qfouw-MuiPaper-root"[39m
+          [33mdata-state[39m=[32m"ready"[39m
+          [33mstyle[39m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[39m
+          [36m>[39m
+            [0mPlan fields[0m
+          [36m</span>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[39m
+            [36m>[39m
+              [0m7[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-1jkjn5n"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-9h85rr-MuiTypography-root"[39m
+            [36m>[39m
+              [0m6 required groups[0m
+            [36m</span>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation0 css-qfouw-MuiPaper-root"[39m
+          [33mdata-state[39m=[32m"ready"[39m
+          [33mstyle[39m=[32m"--Paper-shadow: none; --Paper-overlay: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0));"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-1c1vr21-MuiTypography-root"[39m
+          [36m>[39m
+            [0mExport side[0m
+          [36m</span>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiStack-root css-1ac69x3-MuiStack-root"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-body1 css-1r3370f-MuiTypography-root"[39m
+            [36...
+[90m [2m❯[22m Object.getElementError ../../node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m ../../node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m ../../node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:[2m109:15[22m[39m
+[36m [2m❯[22m src/features/promotions-funding/PlanTemplatesSurface.test.tsx:[2m74:19[22m[39m
+    [90m 72| [39m    })[33m;[39m
+    [90m 73| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByTestId[39m([32m'template-learn'[39m))[33m.[39m[34mtoBeInTheDocument[39m()[33m;[39m
+    [90m 74| [39m    [34mexpect[39m(screen[33m.[39m[34mgetAllByText[39m([36m/template-driven export is not built/i[39m)…
+    [90m   | [39m                  [31m^[39m
+    [90m 75| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByTestId[39m([32m'capability-status-planned'[39m))[33m.[39m[34mtoBeInTheD[39m…
+    [90m 76| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByTestId[39m([32m'capability-status-partial'[39m))[33m.[39m[34mtoBeInTheD[39m…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯[22m[39m
+
+[2m Test Files [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m38 passed[39m[22m[90m (41)[39m
+[2m      Tests [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m97 passed[39m[22m[90m (100)[39m
+[2m   Start at [22m 13:55:43
+[2m   Duration [22m 283.33s[2m (transform 46.63s, setup 356.10s, collect 2303.66s, tests 62.23s, environment 795.97s, prepare 182.66s)[22m
+
+undefined
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "vitest" not found
+
+Did you mean "pnpm exec vitest"?

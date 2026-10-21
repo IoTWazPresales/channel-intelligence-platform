@@ -1,0 +1,1 @@
+{"node": "N-0058", "expected_revision": 11, "to": "design", "stage_note": "Keep the month-derived calculator. Gate the write: any uniform_half line refuses the whole re-derivation proposal with outcome refused_no_month_columns. Parse paths stay on HalfYearSplitRequiresMonthColumnsError."}

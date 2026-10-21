@@ -447,3 +447,100 @@ def test_a_job_row_that_is_unresolved_is_counted_in_the_candidate_with_all_its_i
     assert "identifier_conflict_rows" not in cand.context
     job = session.get(ImportJob, out["import_job_id"])
     assert job.staged_metadata["customer_sellthrough_flat"]["unresolved"] == 2
+
+
+def _apply_step(db: Session, job_id: int):
+    """What the wizard's Apply step (POST /jobs/{id}/cst-load) runs."""
+    from app.services.imports.cst_mapping_candidates import mark_steward_mapped_cst_lines_resolved
+    from app.services.imports.customer_sell_through_apply import apply_customer_sellthrough_staging
+
+    mark_steward_mapped_cst_lines_resolved(db, job_id)
+    return apply_customer_sellthrough_staging(db, job_id)
+
+
+def test_a_token_mapped_in_the_steward_loads_its_rows_on_apply(session: Session) -> None:
+    """N-0111: mapping a token marks its rows resolved, so Apply loads them without a re-process.
+    Before, the rows kept their unresolved status and the load step never took them."""
+    from app.services.imports.cst_mapping_candidates import mark_steward_mapped_cst_lines_resolved
+
+    a, _b = _two_products(session)
+    cid = _customer(session, "N0111M-STEWARD-LOAD")
+    data = _csv(HEADER, [["N0111M-Y1", "5550001110002", None, 3, 20, DAY], ["N0111M-Y1", "5550001110002", None, 2, 5, "2026-03-09"]])
+    out = _upload(session, cid, data, SLOTS)
+    jid = out["import_job_id"]
+    assert _fact_products(session, cid) == []
+    cand = session.scalar(
+        select(ImportEntityMappingCandidate).where(
+            ImportEntityMappingCandidate.import_job_id == jid,
+            ImportEntityMappingCandidate.entity_type == "cst_product_token",
+        )
+    )
+
+    resolve_cst_candidate_sync(session, jid, int(cand.id), int(a.id))
+    assert {(ln.resolved_product_id, ln.resolution_status) for ln in _lines(session, jid)} == {(a.id, "resolved")}
+    assert _apply_step(session, jid).applied >= 1
+    assert set(_fact_products(session, cid)) == {a.id}
+    # Nothing left to repair or load a second time.
+    assert mark_steward_mapped_cst_lines_resolved(session, jid) == 0
+    assert _apply_step(session, jid).applied == 0
+
+
+def test_rows_mapped_before_the_fix_are_repaired_and_loaded_on_apply(session: Session) -> None:
+    a, _b = _two_products(session)
+    cid = _customer(session, "N0111M-STEWARD-OLD")
+    out = _upload(session, cid, _csv(HEADER, [["N0111M-Z1", None, None, 4, 20, DAY]]), SLOTS)
+    jid = out["import_job_id"]
+    for ln in _lines(session, jid):  # what an earlier steward mapping left behind
+        ln.resolved_product_id = int(a.id)
+        ln.resolution_status = "unresolved"
+    session.flush()
+    assert _apply_step(session, jid).applied == 1
+    assert _fact_products(session, cid) == [a.id]
+
+
+def test_an_upload_in_validate_mode_loads_nothing_until_apply(session: Session) -> None:
+    """N-0111: the sell-through upload used to ignore the wizard's import mode (always validate) and
+    the wizard had no Apply step. Apply loads the matched rows once."""
+    a, _b = _two_products(session)
+    cid = _customer(session, "N0111M-VALIDATE-LOAD")
+    data = _csv(HEADER, [[a.part_number, None, None, 3, 20, DAY]])
+    info = inspect_files_for_customer(session, cid, [("file.csv", data)])[0]
+    out = create_customer_upload_jobs(
+        session,
+        customer_id=cid,
+        filenames_and_bytes=[("file.csv", data)],
+        new_layouts=[{"signature": info["layout_signature"], "name": "L", "field_mapping": SLOTS}],
+        import_mode="validate",
+    )
+    jid = out[0]["import_job_id"]
+    assert _fact_products(session, cid) == []
+    assert _apply_step(session, jid).applied == 1
+    assert _fact_products(session, cid) == [a.id]
+    assert _apply_step(session, jid).applied == 0  # never twice
+
+
+def test_the_apply_worker_loads_matched_rows_and_marks_the_job_loaded(session: Session) -> None:
+    """N-0111 Apply step (imports.cst_apply → run_cst_apply_sync), as shipment apply: facts written,
+    job loaded, and a second run writes nothing."""
+    from app.services.imports.cst_apply_sync import run_cst_apply_sync
+
+    a, _b = _two_products(session)
+    cid = _customer(session, "N0111M-APPLY-WORKER")
+    data = _csv(HEADER, [[a.part_number, None, None, 3, 20, DAY], ["N0111M-NOPE", None, None, 1, 1, DAY]])
+    info = inspect_files_for_customer(session, cid, [("file.csv", data)])[0]
+    out = create_customer_upload_jobs(
+        session,
+        customer_id=cid,
+        filenames_and_bytes=[("file.csv", data)],
+        new_layouts=[{"signature": info["layout_signature"], "name": "L", "field_mapping": SLOTS}],
+        import_mode="validate",
+    )
+    jid = out[0]["import_job_id"]
+    seen: list[str] = []
+    res = run_cst_apply_sync(session, jid, on_progress=lambda phase, *_: seen.append(phase))
+    assert res["outcome"] == "loaded" and res["applied"] == 1 and res["skipped_unresolved"] == 1
+    job = session.get(ImportJob, jid)
+    assert (job.stage, job.status, job.import_mode) == ("loaded", "completed", "apply")
+    assert _fact_products(session, cid) == [a.id]
+    assert "writing_facts" in seen
+    assert run_cst_apply_sync(session, jid)["applied"] == 0

@@ -1,0 +1,1 @@
+{"node": "N-0074", "expected_revision": 1, "status": "deferred", "decision": "D-0054", "note": "Warren 2026-10-07: stay on the Cloudflare quick tunnel; no domain or named tunnel for now. Reopen if company users must reach CIP from managed Chrome."}

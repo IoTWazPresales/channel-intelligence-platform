@@ -1,0 +1,25 @@
+{
+  "id": "N-0098",
+  "parent": null,
+  "title": "Shipment evidence Plan D: stop the dual write, then drop redundant columns (BACKLOG-057 D4, 058 D5)",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": [
+    "schema",
+    "data_migration"
+  ],
+  "risk": "R3",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": [],
+  "acceptance_criteria": [
+    "D4 runs only after the 30-day soak and Warren's approval; D5 after D4 plus migration review",
+    "Proven on a clone of cip before cip",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

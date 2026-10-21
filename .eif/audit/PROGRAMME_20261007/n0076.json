@@ -1,0 +1,24 @@
+{
+  "id": "N-0076",
+  "parent": null,
+  "title": "Listing intelligence v1: price-change alert on every observed change, and promotion late-activation / early-deactivation detection (spec section 9.6)",
+  "class": "feature",
+  "origin": "operator",
+  "status": "proposed",
+  "facets": ["api", "ui"],
+  "risk": "R2",
+  "risk_class": "full",
+  "touches_existing": true,
+  "depends_on": ["N-0073", "N-0061"],
+  "acceptance_criteria": [
+    "Every observed price change on a registered listing creates one alert row (not only first-versus-latest), visible on Market & Listings and in the notification inbox",
+    "For an active CPOR case, an observed price above the funded price after the window start lands on a worklist as late activation; a return to the normal price before the window end lands as early deactivation",
+    "Alerts are derived from listing_observation history; nothing is invented when observations are missing, and a gap is shown as a gap",
+    "The planned/partial labels on Market & Listings for these panels are removed only when the panel is real",
+    "Tests green on touched areas, tsc exit 0, eslint clean on changed files"
+  ],
+  "conservation_tags": [],
+  "parity_source": [],
+  "fingerprint": null,
+  "acceptance": "operator"
+}

@@ -1,5 +1,5 @@
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { OverviewHub } from './OverviewHub';
@@ -131,5 +131,32 @@ describe('OverviewHub', () => {
     expect(screen.queryByText('Hidden report')).toBeNull();
     expect(screen.getByTestId('unpin-report-1')).toBeInTheDocument();
     expect(screen.queryByText('sellout_units')).toBeNull();
+  });
+
+  it('lays dashboard charts out in a grid with a 1/2/3 per-row choice kept in the browser', () => {
+    window.localStorage.removeItem('cip.overview.dashboard.columns.v1');
+    queryByKey.dashboards = {
+      isLoading: false,
+      isError: false,
+      data: {
+        items: [
+          {
+            id: 1,
+            name: 'Main',
+            widgets: [
+              { id: 1, title: 'Sell-out', metric_key: 'm' },
+              { id: 2, title: 'Cover', metric_key: 'm' },
+            ],
+          },
+        ],
+      },
+    };
+    renderHub();
+    const grid = screen.getByTestId('dashboard-widget-grid');
+    expect(grid).toHaveTextContent('Sell-out');
+    expect(screen.getByRole('button', { name: '2 per row' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: '3 per row' }));
+    expect(window.localStorage.getItem('cip.overview.dashboard.columns.v1')).toBe('3');
+    expect(screen.getByRole('button', { name: '3 per row' })).toHaveAttribute('aria-pressed', 'true');
   });
 });

@@ -1,0 +1,1 @@
+{"note": "N-0083: the approve dialog and the plan's rate-basis line were not rendered in a browser (sign-in). ux, a11y and rendered stay pending.", "code": "DOES_NOT_FIT", "node": "N-0083", "expected_revision": 4}

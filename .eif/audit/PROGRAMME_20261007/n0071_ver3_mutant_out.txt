@@ -1,0 +1,26 @@
+=== twin_open_counted
+[n0071_ver3] mutant twin_open_counted installed in memory
+E       assert 25.0 == 15.0
+tests\test_lineup_case_suggested_pos.py:199: AssertionError
+FAILED tests/test_lineup_case_suggested_pos.py::test_shipped_units_count_shipped_lines_only_and_order_distributors
+1 failed, 4 passed in 3.80s
+=== where_not_filter
+[n0071_ver3] mutant where_not_filter installed in memory
+E       AssertionError: assert ['PO-A', 'PO-B'] == ['PO-A', 'PO-B', 'PO-C']
+tests\test_lineup_case_suggested_pos.py:198: AssertionError
+FAILED tests/test_lineup_case_suggested_pos.py::test_shipped_units_count_shipped_lines_only_and_order_distributors
+1 failed, 4 passed in 4.32s
+=== order_asc
+[n0071_ver3] mutant order_asc installed in memory
+E       assert [(1, 15.0), (2, 42.0)] == [(2, 42.0), (1, 15.0)]
+tests\test_lineup_case_suggested_pos.py:208: AssertionError
+FAILED tests/test_lineup_case_suggested_pos.py::test_shipped_units_count_shipped_lines_only_and_order_distributors
+1 failed, 4 passed in 4.70s
+=== all_states
+[n0071_ver3] mutant all_states installed in memory
+E       assert 75.0 == 15.0
+tests\test_lineup_case_suggested_pos.py:199: AssertionError
+FAILED tests/test_lineup_case_suggested_pos.py::test_shipped_units_count_shipped_lines_only_and_order_distributors
+1 failed, 4 passed in 4.55s
+=== no mutant (plugin loaded, env unset)
+5 passed in 6.85s

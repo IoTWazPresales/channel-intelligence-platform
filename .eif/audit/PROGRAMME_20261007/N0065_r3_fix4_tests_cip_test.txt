@@ -1,0 +1,6 @@
+DATABASE_URL db = cip_test
+DATABASE_URL_SYNC db = cip_test
+current_database() = cip_test
+role = cip super = False bypassrls = False
+...........................................                              [100%]
+43 passed in 16.80s
