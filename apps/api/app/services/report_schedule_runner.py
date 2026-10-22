@@ -293,7 +293,8 @@ def run_due_schedules_sync(*, now: datetime | None = None) -> dict[str, Any]:
 def run_due_schedules_safe(*, reason: str) -> dict[str, Any]:
     try:
         out = run_due_schedules_sync()
-        logger.warning("report schedule poll reason=%s %s", reason, out)
+        # WARNING was the only level the API wrote before it had logging config; an idle poll is INFO (N-0089).
+        (logger.info if not out.get("due_count") else logger.warning)("report schedule poll reason=%s %s", reason, out)
         return out
     except Exception as exc:
         logger.exception("report schedule poll failed reason=%s", reason)

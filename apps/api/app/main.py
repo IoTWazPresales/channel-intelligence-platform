@@ -8,9 +8,11 @@ from sqlalchemy import text
 from app.api.v1.router import api_router, public_router
 from app.core.config import get_settings
 from app.core.dev_celery_logging import DEV_CELERY_LOGGER
+from app.core.logging_setup import configure_api_app_logging
 from app.db.session import AsyncSessionLocal
 
 settings = get_settings()
+configure_api_app_logging()
 
 
 @asynccontextmanager
@@ -42,6 +44,8 @@ app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
 @app.middleware("http")
 async def add_no_store_headers(request: Request, call_next):
     response = await call_next(request)
+    if response.headers.get("content-type", "").startswith("text/event-stream"):
+        return response  # the live log stream sets its own no-cache, no-transform
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
     return response

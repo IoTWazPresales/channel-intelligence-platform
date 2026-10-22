@@ -104,6 +104,7 @@ from app.api.v1.endpoints import (
     platform_audit,
     mappings,
     ops,
+    ops_logs,
     plan_vs_executed,
     po_management,
     product_master_gaps,
@@ -205,6 +206,7 @@ api_router.include_router(steward_audit.router, prefix="/admin", tags=["admin"])
 api_router.include_router(platform_audit.router, prefix="/admin", tags=["admin"])
 api_router.include_router(sql_viewer.router, prefix="/admin", tags=["admin"])
 api_router.include_router(ops.router, prefix="/admin", tags=["admin"])
+api_router.include_router(ops_logs.router, prefix="/admin", tags=["admin"])
 api_router.include_router(product_master_gaps.router, prefix="/product-master-gaps", tags=["product-master-gaps"])
 api_router.include_router(exceptions.router, prefix="/exceptions", tags=["exceptions"])
 api_router.include_router(dev_wipe.router, prefix="/dev", tags=["dev"])

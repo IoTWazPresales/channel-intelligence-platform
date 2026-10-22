@@ -103,6 +103,7 @@ import { DataChrome } from '@/features/data-stewardship/DataChrome';
 import { ImportCenterOverview, ImportStartPanel } from '@/features/data-stewardship/ImportCenterOverview';
 import { ImportJobCards } from '@/features/data-stewardship/ImportJobCards';
 import { StewardWriteFieldset, StewardWriteNotice } from '@/components/StewardWriteGate';
+import { ShowJobLogButton } from '@/features/ops-logs/ShowJobLogButton';
 import { canRunImportTemplate, useStewardWriteAccess } from '@/features/shell/stewardAccess';
 
 import { CstImportJobResolutionSection } from './CstImportJobResolutionSection';
@@ -3066,6 +3067,12 @@ function AdminImportsPageContent() {
             </Step>
           ))}
         </Stepper>
+
+        {lastJobId != null ? (
+          <Box sx={{ mb: 2 }}>
+            <ShowJobLogButton jobId={lastJobId} />
+          </Box>
+        ) : null}
 
         {isPm && lastJobId != null ? (
           <PmImportProgressPanel

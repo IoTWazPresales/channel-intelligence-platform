@@ -8,6 +8,7 @@ import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 import NotificationsNoneOutlinedIcon from '@mui/icons-material/NotificationsNoneOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import TerminalIcon from '@mui/icons-material/Terminal';
 import ViewCompactOutlinedIcon from '@mui/icons-material/ViewCompactOutlined';
 import {
   Badge,
@@ -28,6 +29,9 @@ import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { GlobalBackgroundTasksIndicator } from '@/features/background-tasks/GlobalBackgroundTasksIndicator';
+import { LogDrawer } from '@/features/ops-logs/LogDrawer';
+import { useLogDrawerStore } from '@/features/ops-logs/logDrawerStore';
+import { useNewLogError } from '@/features/ops-logs/useNewLogError';
 import { CapabilityRail, DOMAIN_ICONS, RAIL_WIDTH, domainBadgesFromSpine } from '@/features/shell/CapabilityRail';
 import { CommandPalette } from '@/features/shell/CommandPalette';
 import { railNavGroups, roleMayAccess } from '@/features/shell/navConfig';
@@ -66,6 +70,9 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
   const qc = useQueryClient();
   const [logoutBusy, setLogoutBusy] = useState(false);
   const role = me?.role ? String(me.role) : null;
+  const isAdmin = roleMayAccess(role, ['admin']);
+  const openLogs = useLogDrawerStore((s) => s.openLogs);
+  const { hasNewError, newErrorCount } = useNewLogError(isAdmin);
 
   const displayName =
     (me?.display_name && me.display_name.trim()) ||
@@ -237,6 +244,20 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
             </IconButton>
           </Tooltip>
           <GlobalBackgroundTasksIndicator />
+          {isAdmin ? (
+            <Tooltip title={hasNewError ? `${newErrorCount} new error${newErrorCount === 1 ? '' : 's'} in the logs` : 'Live logs'}>
+              <IconButton
+                color="inherit"
+                onClick={() => openLogs()}
+                aria-label={hasNewError ? 'Live logs, new error' : 'Live logs'}
+                data-testid="topbar-logs"
+              >
+                <Badge variant="dot" color="error" invisible={!hasNewError} data-testid="topbar-logs-dot">
+                  <TerminalIcon />
+                </Badge>
+              </IconButton>
+            </Tooltip>
+          ) : null}
           <Tooltip title={density === 'compact' ? 'Comfortable row height' : 'Compact row height'}>
             <IconButton
               color="inherit"
@@ -256,7 +277,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
               {colorMode === 'dark' ? <LightModeOutlinedIcon /> : <DarkModeOutlinedIcon />}
             </IconButton>
           </Tooltip>
-          {roleMayAccess(role, ['admin']) ? (
+          {isAdmin ? (
             <Tooltip title="Settings">
               <IconButton color="inherit" component={Link} href="/settings" aria-label="Settings">
                 <SettingsOutlinedIcon />
@@ -328,6 +349,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
       </Paper>
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} role={role} />
+      {isAdmin ? <LogDrawer /> : null}
     </Box>
   );
 }
