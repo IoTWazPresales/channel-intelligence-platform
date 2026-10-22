@@ -26,7 +26,7 @@
 
 ## In progress / leased
 
-- **N-0112** Deleting an import job removes the data it loaded and restores what it superseded stage=design run=RUN-20261022-N0112-IMPL expires=2026-10-22T13:06:11Z note=Design (2026-10-22): bulk_delete_import_jobs calls JobDataRemoval (services/imports/import_job_delete_figures.py) before the job rows go, in the same transaction; preview runs the same code and rolls back, so preview counts equal delete counts. Per fact row a deleted job holds: walk back to the newest holder that stays, using the superseded record the deleted job wrote, else the earlier load's staging lines (CST per figure via figure_import_jobs; DSI sell-out/returns per line; inventory from staging; shipped shipments from other loads' evidence lines, open orders removed). Later loads that stay keep their figures; their records are relinked past the deleted job. Superseded records the deleted jobs wrote or hold are removed (migration 20261022_0047 adds DELETE policies). Then: report slots reopened, distributor-derived tables rebuilt per distributor touched, stock positions recomputed per customer touched. Aliases kept by default (link cleared). platform_audit_event area admin action import_jobs_delete with counts per job.
+_none_
 
 ## Decision queue
 
