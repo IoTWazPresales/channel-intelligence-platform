@@ -1,0 +1,249 @@
+{
+ "note": "Rows Warren named as test data on 2026-10-22 (N-0113 second pass).",
+ "rows": [
+  {
+   "table": "commercial_lineup_line",
+   "id": 8430,
+   "expect": {
+    "case_id": 131,
+    "customer_token": "unit6b-preview-87f961d5"
+   },
+   "reason": "added to the real lineup case 131 on 2026-08-07 by tests/test_lineup_customer_token_stamp.py (Unit 6b), which takes the first case in the database"
+  },
+  {
+   "table": "commercial_lineup_line",
+   "id": 8431,
+   "expect": {
+    "case_id": 131,
+    "customer_token": "unit6b-preview-87f961d5"
+   },
+   "reason": "added to the real lineup case 131 on 2026-08-07 by tests/test_lineup_customer_token_stamp.py (Unit 6b), which takes the first case in the database"
+  },
+  {
+   "table": "commercial_lineup_line",
+   "id": 8432,
+   "expect": {
+    "case_id": 131,
+    "customer_token": "unit6b-apply-c7a162dc"
+   },
+   "reason": "added to the real lineup case 131 on 2026-08-07 by tests/test_lineup_customer_token_stamp.py (Unit 6b), which takes the first case in the database"
+  },
+  {
+   "table": "commercial_lineup_line",
+   "id": 8433,
+   "expect": {
+    "case_id": 131,
+    "customer_token": "unit6b-apply-c7a162dc"
+   },
+   "reason": "added to the real lineup case 131 on 2026-08-07 by tests/test_lineup_customer_token_stamp.py (Unit 6b), which takes the first case in the database"
+  },
+  {
+   "table": "commercial_lineup_line",
+   "id": 8434,
+   "expect": {
+    "case_id": 131,
+    "customer_token": "unit6b-rollback-4f0f694f"
+   },
+   "reason": "added to the real lineup case 131 on 2026-08-07 by tests/test_lineup_customer_token_stamp.py (Unit 6b), which takes the first case in the database"
+  },
+  {
+   "table": "commercial_lineup_line",
+   "id": 8435,
+   "expect": {
+    "case_id": 131,
+    "customer_token": "unit6b-revoke-a29ccb23"
+   },
+   "reason": "added to the real lineup case 131 on 2026-08-07 by tests/test_lineup_customer_token_stamp.py (Unit 6b), which takes the first case in the database"
+  },
+  {
+   "table": "commercial_lineup_line",
+   "id": 8436,
+   "expect": {
+    "case_id": 131,
+    "customer_token": "unit6b-revoke-a29ccb23"
+   },
+   "reason": "added to the real lineup case 131 on 2026-08-07 by tests/test_lineup_customer_token_stamp.py (Unit 6b), which takes the first case in the database"
+  },
+  {
+   "table": "commercial_lineup_line",
+   "id": 8442,
+   "expect": {
+    "case_id": 131,
+    "customer_token": "unit6b-conflict-c7e56909"
+   },
+   "reason": "added to the real lineup case 131 on 2026-08-07 by tests/test_lineup_customer_token_stamp.py (Unit 6b), which takes the first case in the database"
+  },
+  {
+   "table": "customer_source_token_alias",
+   "id": 5760,
+   "expect": {
+    "customer_id": 7,
+    "distributor_id": 2,
+    "raw_token": "unit6b-conflict-c7e56909"
+   },
+   "reason": "made on the real customer 7 (Apex High School), scoped to the test distributor DIST-01, by tests/test_lineup_customer_token_stamp.py (Unit 6b conflict case)"
+  },
+  {
+   "table": "shipment_evidence_line",
+   "id": 125518,
+   "expect": {
+    "import_job_id": 4,
+    "resolved_distributor_id": 61
+   },
+   "reason": "made for the test distributor DIST-FULL-A-021dc6c9 by tests/test_distributor_full_merge.py, tagged with import job 4 (a product-master import) because the test borrows the first job"
+  },
+  {
+   "table": "shipment_evidence_line",
+   "id": 125519,
+   "expect": {
+    "import_job_id": 4,
+    "resolved_distributor_id": 63
+   },
+   "reason": "made for the test distributor DIST-PO-K-f01ad873 by tests/test_distributor_full_merge.py, tagged with import job 4 (a product-master import) because the test borrows the first job"
+  },
+  {
+   "table": "shipment_evidence_line",
+   "id": 125529,
+   "expect": {
+    "import_job_id": 4,
+    "resolved_distributor_id": 73
+   },
+   "reason": "made for the test distributor DIST-FULL-A-3128705c by tests/test_distributor_full_merge.py, tagged with import job 4 (a product-master import) because the test borrows the first job"
+  },
+  {
+   "table": "shipment_evidence_line",
+   "id": 125530,
+   "expect": {
+    "import_job_id": 4,
+    "resolved_distributor_id": 75
+   },
+   "reason": "made for the test distributor DIST-PO-K-bd9b6a59 by tests/test_distributor_full_merge.py, tagged with import job 4 (a product-master import) because the test borrows the first job"
+  },
+  {
+   "table": "shipment_evidence_line",
+   "id": 140236,
+   "expect": {
+    "import_job_id": 4,
+    "resolved_distributor_id": 86
+   },
+   "reason": "made for the test distributor DIST-FULL-A-8bd5d017 by tests/test_distributor_full_merge.py, tagged with import job 4 (a product-master import) because the test borrows the first job"
+  },
+  {
+   "table": "shipment_evidence_line",
+   "id": 140237,
+   "expect": {
+    "import_job_id": 4,
+    "resolved_distributor_id": 88
+   },
+   "reason": "made for the test distributor DIST-PO-K-eebcd692 by tests/test_distributor_full_merge.py, tagged with import job 4 (a product-master import) because the test borrows the first job"
+  },
+  {
+   "table": "shipment_evidence_line",
+   "id": 140260,
+   "expect": {
+    "import_job_id": 4,
+    "resolved_distributor_id": 99
+   },
+   "reason": "made for the test distributor DIST-FULL-A-0393a7ff by tests/test_distributor_full_merge.py, tagged with import job 4 (a product-master import) because the test borrows the first job"
+  },
+  {
+   "table": "shipment_evidence_line",
+   "id": 140261,
+   "expect": {
+    "import_job_id": 4,
+    "resolved_distributor_id": 101
+   },
+   "reason": "made for the test distributor DIST-PO-K-81aaa5fb by tests/test_distributor_full_merge.py, tagged with import job 4 (a product-master import) because the test borrows the first job"
+  },
+  {
+   "table": "shipment_evidence_line",
+   "id": 140280,
+   "expect": {
+    "import_job_id": 4,
+    "resolved_distributor_id": 111
+   },
+   "reason": "made for the test distributor DIST-FULL-A-52028a24 by tests/test_distributor_full_merge.py, tagged with import job 4 (a product-master import) because the test borrows the first job"
+  },
+  {
+   "table": "shipment_evidence_line",
+   "id": 140281,
+   "expect": {
+    "import_job_id": 4,
+    "resolved_distributor_id": 113
+   },
+   "reason": "made for the test distributor DIST-PO-K-c820e5d0 by tests/test_distributor_full_merge.py, tagged with import job 4 (a product-master import) because the test borrows the first job"
+  },
+  {
+   "table": "shipment_evidence_line",
+   "id": 148549,
+   "expect": {
+    "import_job_id": 4,
+    "resolved_distributor_id": 124
+   },
+   "reason": "made for the test distributor DIST-FULL-A-d63ffffd by tests/test_distributor_full_merge.py, tagged with import job 4 (a product-master import) because the test borrows the first job"
+  },
+  {
+   "table": "shipment_evidence_line",
+   "id": 148550,
+   "expect": {
+    "import_job_id": 4,
+    "resolved_distributor_id": 126
+   },
+   "reason": "made for the test distributor DIST-PO-K-c9685c77 by tests/test_distributor_full_merge.py, tagged with import job 4 (a product-master import) because the test borrows the first job"
+  },
+  {
+   "table": "shipment_evidence_line",
+   "id": 163885,
+   "expect": {
+    "import_job_id": 4,
+    "resolved_distributor_id": 138
+   },
+   "reason": "made for the test distributor DIST-FULL-A-84c6fe51 by tests/test_distributor_full_merge.py, tagged with import job 4 (a product-master import) because the test borrows the first job"
+  },
+  {
+   "table": "shipment_evidence_line",
+   "id": 163886,
+   "expect": {
+    "import_job_id": 4,
+    "resolved_distributor_id": 140
+   },
+   "reason": "made for the test distributor DIST-PO-K-905751ba by tests/test_distributor_full_merge.py, tagged with import job 4 (a product-master import) because the test borrows the first job"
+  },
+  {
+   "table": "shipment_evidence_line",
+   "id": 164019,
+   "expect": {
+    "import_job_id": 4,
+    "resolved_distributor_id": 151
+   },
+   "reason": "made for the test distributor DIST-FULL-A-146ad525 by tests/test_distributor_full_merge.py, tagged with import job 4 (a product-master import) because the test borrows the first job"
+  },
+  {
+   "table": "shipment_evidence_line",
+   "id": 164020,
+   "expect": {
+    "import_job_id": 4,
+    "resolved_distributor_id": 153
+   },
+   "reason": "made for the test distributor DIST-PO-K-7baf43c0 by tests/test_distributor_full_merge.py, tagged with import job 4 (a product-master import) because the test borrows the first job"
+  },
+  {
+   "table": "shipment_evidence_line",
+   "id": 164030,
+   "expect": {
+    "import_job_id": 4,
+    "resolved_distributor_id": 164
+   },
+   "reason": "made for the test distributor DIST-FULL-A-448f4adc by tests/test_distributor_full_merge.py, tagged with import job 4 (a product-master import) because the test borrows the first job"
+  },
+  {
+   "table": "shipment_evidence_line",
+   "id": 164031,
+   "expect": {
+    "import_job_id": 4,
+    "resolved_distributor_id": 166
+   },
+   "reason": "made for the test distributor DIST-PO-K-329c3b26 by tests/test_distributor_full_merge.py, tagged with import job 4 (a product-master import) because the test borrows the first job"
+  }
+ ]
+}

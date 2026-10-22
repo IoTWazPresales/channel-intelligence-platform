@@ -12,10 +12,17 @@ each row is from a real job, real record, a deleted test job or unlinked) and wh
 every delete's row count against the plan, writes one platform_audit_event holding every removed row in
 full, and commits. Any mismatch or error rolls everything back.
 
+``--named-rows FILE`` adds rows Warren names as test data although a column ties them to real data (a
+test borrowed a real job or case): {"rows": [{"table", "id", "expect": {column: value}, "reason"}]}.
+Each must still match its ``expect`` values or nothing runs. Each is removed on its own, with the rows
+below it under the rules above, and leaves the record it sits in; the report shows that record's rows and
+units before and after. The audit event lists each named row with its reason.
+
 Usage (from apps/api):
   python scripts/ops/cleanup_test_masters.py                          dry run on the configured database
   python scripts/ops/cleanup_test_masters.py --apply --expect-db cip  remove (all or nothing)
   --out FILE    also write the report to FILE
+  --named-rows scripts/ops/cleanup_test_masters_named_rows.json
 """
 
 from __future__ import annotations
@@ -194,10 +201,22 @@ def master_label(conn: Connection, table: str, eid: int) -> str:
     return f"{MASTERS[table]} {eid} {r.code if r else '?'} {r.name if r else ''}".strip()
 
 
-class Plan:
-    """Every row reachable from the test records, each classified, and which records can go."""
+def load_named_rows(path: str | None) -> list[dict[str, Any]]:
+    """Rows Warren names as test data: [{table, id, expect: {column: value}, reason}]."""
+    if not path:
+        return []
+    return json.loads(Path(path).read_text(encoding="utf-8"))["rows"]
 
-    def __init__(self, conn: Connection) -> None:
+
+class Plan:
+    """Every row reachable from the test records, each classified, and which records can go.
+
+    Named rows are test data by Warren's word even where a column says otherwise (a test borrowed a real
+    job or case). Each is removed on its own, with the rows below it under the usual rules, and leaves
+    the record it sits in.
+    """
+
+    def __init__(self, conn: Connection, named_rows: list[dict[str, Any]] | None = None) -> None:
         self.conn = conn
         self.schema = load_schema(conn)
         self.test = test_masters(conn)
@@ -205,9 +224,30 @@ class Plan:
         self.jobs = set(conn.execute(text("SELECT id FROM import_job")).scalars())
         self.rows: dict[tuple[str, Any], Row] = {}
         self.missing_pk: set[str] = set()
+        self.named: dict[tuple[str, Any], dict[str, Any]] = {}
+        self.named_gone: list[dict[str, Any]] = []
+        self._check_named(named_rows or [])
         self._walk()
         self._outside_parents()
         self._decide()
+
+    def _check_named(self, named_rows: list[dict[str, Any]]) -> None:
+        for n in named_rows:
+            table, pk = n["table"], n["id"]
+            pkcol = self.schema.pk[table]
+            d = self.conn.execute(
+                text(f"SELECT to_jsonb(t) AS j FROM {table} t WHERE {pkcol} = :i"), {"i": pk}
+            ).scalar()
+            if d is None:
+                self.named_gone.append(n)
+                continue
+            wrong = {c: (v, d.get(c)) for c, v in n.get("expect", {}).items() if d.get(c) != v}
+            if wrong:
+                raise SystemExit(f"STOP: named row {table} {pk} is not the row described: {wrong}")
+            self.named[(table, pk)] = {**n, "data": d}
+
+    def label(self, rec: tuple[str, Any]) -> str:
+        return master_label(self.conn, *rec) if rec[0] in MASTERS else f"{rec[0]} {rec[1]}"
 
     # ------------------------------------------------------------------ walk
     def _classify(self, table: str, data: dict[str, Any]) -> tuple[str, str | None]:
@@ -244,7 +284,7 @@ class Plan:
         key = (table, data[pkcol])
         row = self.rows.get(key)
         if row is None:
-            kind, why = self._classify(table, data)
+            kind, why = ("named test row", None) if key in self.named else self._classify(table, data)
             row = Row(table, data[pkcol], data, set(origins), why, kind)
             self.rows[key] = row
             return row
@@ -264,6 +304,10 @@ class Plan:
                 row = self._add(table, d, {(table, d["id"])})
                 if row:
                     frontier[table].append(row)
+        for key, n in self.named.items():
+            row = self._add(key[0], n["data"], {key})
+            if row:
+                frontier[key[0]].append(row)
         while frontier:
             nxt: dict[str, list[Row]] = defaultdict(list)
             for parent, prow in frontier.items():
@@ -291,7 +335,7 @@ class Plan:
     def _outside_parents(self) -> None:
         """A test or unlinked row that belongs to a record outside the test data (a case, a plan) is real."""
         for row in self.rows.values():
-            if row.real is not None:
+            if row.real is not None or (row.table, row.pk) in self.named:
                 continue
             for ref in self.schema.refs:
                 if ref.child != row.table or ref.parent in MASTERS or ref.parent == "import_job":
@@ -310,7 +354,8 @@ class Plan:
         for row in self.rows.values():
             for o in row.origins:
                 self.tree[o].append(row)
-        records = [(t, i) for t, ids in self.test.items() for i in ids]
+        self.records = [(t, i) for t, ids in self.test.items() for i in ids] + list(self.named)
+        records = self.records
         self.blocked: dict[tuple[str, int], str] = {}
         for rec in records:
             real = [r for r in self.tree[rec] if r.real is not None]
@@ -333,7 +378,7 @@ class Plan:
                     changed = True
 
     def _collect(self) -> None:
-        self.removable = [(t, i) for t, ids in self.test.items() for i in ids if (t, i) not in self.blocked]
+        self.removable = [rec for rec in self.records if rec not in self.blocked]
         self.doomed = {(r.table, r.pk): r for rec in self.removable for r in self.tree[rec]}
 
     def _stays_with(self, rec: tuple[str, int]) -> str | None:
@@ -341,6 +386,8 @@ class Plan:
             other = (r.table, r.pk)
             if r.table in MASTERS and other != rec and other in self.blocked:
                 return f"depends on {master_label(self.conn, *other)}, which stays"
+            if other in self.named:
+                continue  # a named row leaves the record it sits in
             for ref in self.schema.refs:
                 if ref.child != r.table or ref.parent in MASTERS or ref.parent in CONTEXT_TABLES or ref.parent == "import_job":
                     continue
@@ -348,6 +395,41 @@ class Plan:
                 if parent[1] is not None and parent in self.rows and parent not in self.doomed:
                     return f"{r.table} {r.pk} belongs to {ref.parent} {parent[1]}, which stays"
         return None
+
+    def parents_left(self) -> list[dict[str, Any]]:
+        """For each record a removed named row leaves (a case, an order): its rows and units before and after."""
+        groups: dict[tuple[str, str, str, Any], list[Row]] = defaultdict(list)
+        for key in self.named:
+            row = self.doomed.get(key)
+            if row is None:
+                continue
+            for ref in self.schema.refs:
+                if ref.child != row.table or ref.parent in MASTERS or ref.parent in CONTEXT_TABLES or ref.parent == "import_job":
+                    continue
+                v = row.data.get(ref.col)
+                if v is not None and (ref.parent, v) not in self.doomed:
+                    groups[(ref.parent, row.table, ref.col, v)].append(row)
+        out = []
+        for (parent, child, col, v), rows in sorted(groups.items(), key=str):
+            unit_cols = self.conn.execute(
+                text(
+                    "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = :t "
+                    "AND data_type IN ('numeric', 'integer', 'bigint', 'double precision') "
+                    "AND column_name ~ '(quantity|units|qty)'"
+                ),
+                {"t": child},
+            ).scalars().all()
+            before = self.conn.execute(text(f"SELECT count(*) FROM {child} WHERE {col} = :v"), {"v": v}).scalar()
+            units = {
+                c: float(self.conn.execute(text(f"SELECT coalesce(sum({c}), 0) FROM {child} WHERE {col} = :v"), {"v": v}).scalar())
+                for c in unit_cols
+            }
+            gone = {c: sum(float(r.data.get(c) or 0) for r in rows) for c in unit_cols}
+            out.append({
+                "record": f"{parent} {v}", "rows_in": child, "column": col, "id": v, "rows_before": before, "rows_after": before - len(rows),
+                "units_before": units, "units_after": {c: units[c] - gone[c] for c in unit_cols},
+            })
+        return out
 
     def fingerprint(self) -> str:
         keys = sorted(f"{t}:{pk}" for t, pk in self.doomed)
@@ -387,6 +469,17 @@ def report(plan: Plan, say) -> None:
                 counts[(r.table, r.kind)] += 1
             for (t, kind), n in sorted(counts.items()):
                 say(f"      {t:<44} {n:>6}  {kind}")
+    if plan.named or plan.named_gone:
+        say("\n== rows named as test data")
+        for rec, n in plan.named.items():
+            verdict = "KEEP: " + plan.blocked[rec] if rec in plan.blocked else "REMOVE"
+            below = len(plan.tree[rec]) - 1
+            say(f"  named {rec[0]} {rec[1]}  -> {verdict}{f' (with {below} rows below it)' if below else ''}  [{n['reason']}]")
+        for n in plan.named_gone:
+            say(f"  named {n['table']} {n['id']}  -> already gone")
+        for p in plan.parents_left():
+            say(f"  {p['record']} keeps {p['rows_after']} of its {p['rows_before']} {p['rows_in']} rows; units "
+                + ", ".join(f"{c} {p['units_before'][c]:g} -> {p['units_after'][c]:g}" for c in p["units_before"]))
     by_table: dict[str, int] = defaultdict(int)
     for t, _ in plan.doomed:
         by_table[t] += 1
@@ -394,13 +487,16 @@ def report(plan: Plan, say) -> None:
     for table in MASTERS:
         rem = [i for t, i in plan.removable if t == table]
         say(f"  {MASTERS[table]}s: remove {len(rem)}, keep {len(plan.test[table]) - len(rem)}")
+    if plan.named or plan.named_gone:
+        rem = [r for r in plan.removable if r in plan.named]
+        say(f"  named rows: remove {len(rem)}, keep {len(plan.named) - len(rem)}, already gone {len(plan.named_gone)}")
     say(f"  rows to remove: {sum(by_table.values())} in {len(by_table)} tables (plan {plan.fingerprint()})")
     for t, n in sorted(by_table.items()):
         say(f"      {t:<44} {n:>6}")
     kept = sorted(plan.blocked.items())
     say(f"  kept for you to look at: {len(kept)}")
-    for (t, i), why in kept:
-        say(f"      {master_label(conn, t, i)}: {why}")
+    for rec, why in kept:
+        say(f"      {plan.label(rec)}: {why}")
 
 
 def preflight(plan: Plan) -> list[str]:
@@ -429,6 +525,10 @@ def apply(plan: Plan, say, *, fail_before_commit: bool = False) -> dict[str, int
         ids = [i for t, i in plan.removable if t == table]
         if ids:
             conn.execute(text(f"SELECT id FROM {table} WHERE id = ANY(:ids) FOR UPDATE"), {"ids": ids})
+    for t, pk in plan.removable:
+        if t not in MASTERS:
+            conn.execute(text(f"SELECT 1 FROM {t} WHERE {plan.schema.pk[t]} = :i FOR UPDATE"), {"i": pk})
+    parents_left = plan.parents_left()
     by_table: dict[str, list[Any]] = defaultdict(list)
     for t, pk in plan.doomed:
         by_table[t].append(pk)
@@ -461,7 +561,16 @@ def apply(plan: Plan, say, *, fail_before_commit: bool = False) -> dict[str, int
             actor_label="scripts/ops/cleanup_test_masters.py",
             detail={
                 "removed_records": {MASTERS[t]: sorted(i for tt, i in plan.removable if tt == t) for t in MASTERS},
-                "kept_records": {f"{MASTERS[t]} {i}": why for (t, i), why in sorted(plan.blocked.items())},
+                "kept_records": {plan.label(rec): why for rec, why in sorted(plan.blocked.items(), key=str)},
+                # Rows Warren named as test data, each with the reason, and what they leave behind.
+                "named_rows_removed": [
+                    {"table": t, "id": pk, "reason": plan.named[(t, pk)]["reason"]}
+                    for t, pk in plan.removable
+                    if (t, pk) in plan.named
+                ],
+                "named_rows_kept": {plan.label(rec): why for rec, why in plan.blocked.items() if rec in plan.named},
+                "named_rows_already_gone": [{"table": n["table"], "id": n["id"]} for n in plan.named_gone],
+                "records_left": parents_left,
                 "counts": removed,
                 # Every removed row in full, as it was before the delete.
                 "rows_removed": {t: [plan.doomed[(t, pk)].data for pk in sorted(by_table[t], key=str)] for t in sorted(by_table)},
@@ -479,6 +588,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--apply", action="store_true", help="remove the removable records (needs --expect-db)")
     p.add_argument("--expect-db", default=None, help="required with --apply; must equal current_database()")
     p.add_argument("--out", default=None, help="also write the report to this file")
+    p.add_argument("--named-rows", default=None, help="JSON file of rows Warren names as test data (see the docstring)")
     p.add_argument("--fail-before-commit", action="store_true", help=argparse.SUPPRESS)
     args = p.parse_args(argv)
     lines: list[str] = []
@@ -506,7 +616,7 @@ def main(argv: list[str] | None = None) -> int:
         if not args.apply and ro != "on":
             say("STOP: the dry run is not read-only")
             return 2
-        plan = Plan(conn)
+        plan = Plan(conn, load_named_rows(args.named_rows))
         report(plan, say)
         problems = preflight(plan)
         say("  preflight: " + ("; ".join(problems) if problems else f"role {role} can delete from every table in the plan"))

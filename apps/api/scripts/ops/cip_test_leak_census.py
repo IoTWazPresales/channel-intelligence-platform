@@ -11,6 +11,8 @@ Usage (from apps/api):
   python scripts/ops/cip_test_leak_census.py --ids            the test job ids only, comma-separated
   python scripts/ops/cip_test_leak_census.py --jobs 1675,1679 what the Import Center delete does with each row
                                                               (the delete's own preview gives exact counts)
+  python scripts/ops/cip_test_leak_census.py --open-jobs      failed / pending / unfinished jobs: test or real, fact
+                                                              rows, and whether the failed count includes them
 """
 
 from __future__ import annotations
@@ -260,6 +262,49 @@ def real_fact_refs(conn: Connection, entity_col: str, ids: list[int], test_ids: 
     return out
 
 
+def open_jobs(conn: Connection) -> None:
+    """Every job not finished cleanly (failed, pending, with errors, or validated but never loaded): test or real,
+    its fact and staging rows, and whether the Attention / Brief / Ops failed count includes it."""
+    primary, other = test_file_names()
+    storage = set(
+        conn.execute(text("SELECT DISTINCT job_id FROM raw_file_metadata WHERE storage_key LIKE 'imports/test/%'")).scalars()
+    )
+    jobs = conn.execute(
+        text(
+            """
+            SELECT id, template_slug, import_mode, status, stage, file_name, created_at, archived_at
+            FROM import_job
+            WHERE status <> 'completed' OR stage NOT IN ('loaded', 'pm_committed')
+            ORDER BY status, stage, id
+            """
+        )
+    ).all()
+    ids = [j.id for j in jobs] or [0]
+    fact: dict[int, dict[str, int]] = defaultdict(dict)
+    staging: dict[int, int] = defaultdict(int)
+    for table, col in job_columns(conn):
+        if table in ("import_job",) or col not in columns(conn, table):
+            continue
+        for jid, n in conn.execute(text(f"SELECT {col}, count(*) FROM {table} WHERE {col} = ANY(:ids) GROUP BY 1"), {"ids": ids}):
+            if table.startswith("fact_") or table in ("customer_stock_position", "shipment_evidence_line"):
+                fact[jid][table] = fact[jid].get(table, 0) + n
+            else:
+                staging[jid] += n
+    print(f"\n== Jobs not finished cleanly: {len(jobs)}")
+    print("   Attention, Brief and Ops count a job as failed only when status = 'failed' and it is not archived.")
+    for j in jobs:
+        kind = "TEST" if (j.file_name in primary or j.id in storage) else ("test-named" if j.file_name in other else "real")
+        counted = "counted" if (j.status == "failed" and j.archived_at is None) else (
+            "archived, not counted" if j.archived_at is not None else "not counted")
+        facts = ", ".join(f"{t}={n}" for t, n in sorted(fact.get(j.id, {}).items())) or "no fact rows"
+        print(f"  job {j.id:>5} {j.status:<21} {j.stage:<22} {j.template_slug or '-':<28} {j.created_at:%Y-%m-%d} "
+              f"{kind:<10} {counted:<22} {facts}; staging/other rows {staging.get(j.id, 0)}  {j.file_name}")
+    summary: dict[tuple[str, str, str], int] = defaultdict(int)
+    for j in jobs:
+        summary[(j.status, j.stage, "archived" if j.archived_at else "open")] += 1
+    print("  by status / stage / archived: " + "; ".join(f"{s} {st} {a} {n}" for (s, st, a), n in sorted(summary.items())))
+
+
 def main(argv: list[str]) -> int:
     ids_only = "--ids" in argv
     check_jobs: list[int] = []
@@ -281,6 +326,10 @@ def main(argv: list[str]) -> int:
 
         if check_jobs:
             job_delete_check(conn, check_jobs)
+            conn.rollback()
+            return 0
+        if "--open-jobs" in argv:
+            open_jobs(conn)
             conn.rollback()
             return 0
 

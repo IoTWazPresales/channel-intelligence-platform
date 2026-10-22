@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { grainsFor, overviewQuery, readFilters, resolveWindow, writeFilters, type SellThroughPreset } from './sellThroughFilters';
+import {
+  grainsFor,
+  incompleteNote,
+  overviewQuery,
+  readFilters,
+  resolveWindow,
+  writeFilters,
+  type SellThroughPreset,
+} from './sellThroughFilters';
 
 const PRESETS: SellThroughPreset[] = [
   { key: 'last_4_weeks', label: 'Last 4 weeks', date_from: '2026-09-21', date_to: '2026-10-18', grain: 'day' },
@@ -52,8 +60,7 @@ describe('sell-through filters in the address', () => {
 });
 
 describe('incomplete periods', () => {
-  it('names the customers still to report for the trailing periods only', async () => {
-    const { incompleteNote } = await import('./SellThroughOverview');
+  it('names the customers still to report for the trailing periods only', () => {
     expect(
       incompleteNote([
         { label: 'W40', incomplete_customers: ['Old'] },

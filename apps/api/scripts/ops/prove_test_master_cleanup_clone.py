@@ -35,11 +35,29 @@ from app.core.config import get_settings  # noqa: E402
 from scripts.ops.prove_job_delete_restore_clone import LINES, create_clone, db_name, drop_clone, say, swap_db  # noqa: E402
 
 SCRIPT = API_ROOT / "scripts" / "ops" / "cleanup_test_masters.py"
+NAMED_ARGS: list[str] = []  # --named-rows FILE, passed to every run of the script
 
 
 def run_cleanup(env: dict[str, str], *args: str) -> tuple[int, str]:
-    out = subprocess.run([sys.executable, str(SCRIPT), *args], cwd=str(API_ROOT), env=env, capture_output=True, text=True)
+    out = subprocess.run(
+        [sys.executable, str(SCRIPT), *args, *NAMED_ARGS], cwd=str(API_ROOT), env=env, capture_output=True, text=True
+    )
     return out.returncode, out.stdout + out.stderr
+
+
+def measure_left(db, entries: list[dict]) -> list[tuple]:
+    """Rows and units now in each record the named rows leave (case 131 and the like)."""
+    from sqlalchemy import text
+
+    out = []
+    for e in entries:
+        n = db.execute(text(f"SELECT count(*) FROM {e['rows_in']} WHERE {e['column']} = :v"), {"v": e["id"]}).scalar()
+        units = {
+            c: float(db.execute(text(f"SELECT coalesce(sum({c}), 0) FROM {e['rows_in']} WHERE {e['column']} = :v"), {"v": e["id"]}).scalar())
+            for c in e["units_before"]
+        }
+        out.append((n, units))
+    return out
 
 
 def plan_of(output: str) -> str | None:
@@ -83,7 +101,10 @@ def main() -> int:
     p.add_argument("--drop", action="store_true", help="drop --db at the end")
     p.add_argument("--expect-plan", help="the plan the dry run printed on cip; the clone's must match")
     p.add_argument("--out", help="also write the report to this file")
+    p.add_argument("--named-rows", help="the script's --named-rows file")
     args = p.parse_args()
+    if args.named_rows:
+        NAMED_ARGS.extend(["--named-rows", str(Path(args.named_rows).resolve())])
     if args.db == "cip":
         raise SystemExit("STOP: never cip")
     admin = os.environ.get("CIP_CLONE_ADMIN_URL", "").strip() or None
@@ -129,18 +150,21 @@ def main() -> int:
                 ok &= match
 
             # The plan's rows and the tables to fingerprint, read the way the script reads them.
-            from scripts.ops.cleanup_test_masters import MASTERS, Plan
+            from scripts.ops.cleanup_test_masters import MASTERS, Plan, load_named_rows
 
-            pl = Plan(db)
+            pl = Plan(db, load_named_rows(args.named_rows))
             doomed_rows = {k: r.data for k, r in pl.doomed.items()}
             by_table: dict[str, list] = {}
             for t, pk in pl.doomed:
                 by_table.setdefault(t, []).append(pk)
-            kept = sorted(pl.blocked)
-            removed_records = sorted(pl.removable)
+            kept = sorted(pl.blocked, key=str)
+            removed_records = sorted(pl.removable, key=str)
+            named_removed = [r for r in pl.removable if r in pl.named]
+            left = pl.parents_left()
+            left_before = measure_left(db, left)
             watched = sorted(
                 {t for t in by_table}
-                | {r.child for r in pl.schema.refs if r.parent in MASTERS}
+                | {r.child for r in pl.schema.refs if r.parent in MASTERS or r.parent in by_table}
             )
             prints_before = fingerprints(db, watched, pl.schema.pk, by_table)
             db.rollback()
@@ -190,6 +214,14 @@ def main() -> int:
             say(f"  {len(removed_records)} removed records gone: {'YES' if gone else 'NO'}; "
                 f"{len(kept)} kept records still there: {'YES' if still else 'NO'}")
             ok &= gone and still
+            left_after = measure_left(db, left)
+            db.rollback()
+            for e, (n0, u0), (n1, u1) in zip(left, left_before, left_after):
+                as_planned = (n0, u0, n1, u1) == (e["rows_before"], e["units_before"], e["rows_after"], e["units_after"])
+                say(f"  {e['record']} ({e['rows_in']}): rows {n0} -> {n1}; "
+                    + ", ".join(f"{c} {u0[c]:g} -> {u1[c]:g}" for c in u0)
+                    + f"; as the dry run said: {'YES' if as_planned else 'NO'}")
+                ok &= as_planned
 
             say("\n== 5. Audit event")
             ev = db.execute(
@@ -214,6 +246,12 @@ def main() -> int:
                     f"equals the plan: {'YES' if n == len(doomed_rows) else 'NO'}; every row in full, as before the "
                     f"delete: {'YES' if full else 'NO'}; kept records listed: {len(e.detail_json['kept_records'])}")
                 ok &= n == len(doomed_rows) and full and len(e.detail_json["kept_records"]) == len(kept)
+                named = e.detail_json.get("named_rows_removed", [])
+                reasons = all(x.get("reason") for x in named)
+                say(f"  named rows listed with their reason: {len(named)} of {len(named_removed)}: "
+                    f"{'YES' if len(named) == len(named_removed) and reasons else 'NO'}; records left: "
+                    + "; ".join(f"{x['record']} {x['rows_before']} -> {x['rows_after']} rows" for x in e.detail_json.get("records_left", [])))
+                ok &= len(named) == len(named_removed) and reasons
 
             say("\n== 6. Second dry run")
             code, out = run_cleanup(env)

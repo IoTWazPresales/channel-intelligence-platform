@@ -133,3 +133,17 @@ export function grainsFor(w: { dateFrom: string; dateTo: string } | null): SellT
   const days = (Date.parse(w.dateTo) - Date.parse(w.dateFrom)) / 86_400_000;
   return GRAINS.filter((g) => !(g === 'day' && days > 120));
 }
+
+/** Names the customers still to report for the trailing periods, so a late file is not read as a drop. */
+export function incompleteNote(trend: { label: string; incomplete_customers?: string[] }[]): string {
+  const tail: { label: string; names: string[] }[] = [];
+  for (let i = trend.length - 1; i >= 0; i--) {
+    const names = trend[i].incomplete_customers ?? [];
+    if (!names.length) break;
+    tail.unshift({ label: trend[i].label, names });
+  }
+  if (!tail.length) return '';
+  const names = Array.from(new Set(tail.flatMap((t) => t.names)));
+  const span = tail.length === 1 ? tail[0].label : `${tail[0].label} to ${tail[tail.length - 1].label}`;
+  return `${span} not complete: ${names.slice(0, 3).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''} not reported yet.`;
+}
