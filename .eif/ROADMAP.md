@@ -114,3 +114,4 @@
 - N-0110 **Customer sell-through stock gap: the customer report is on-hand, CIP flags the difference** `in_progress`/`in_progress` (feature)
 - N-0111 **Sell-through and distributor history upload readiness (2 years: Amazon, Takealot, Pinnacle)** `in_progress`/`in_progress` (feature)
 - N-0112 **Deleting an import job removes the data it loaded and restores what it superseded** `in_progress`/`in_progress` (feature)
+- N-0113 **Guarded cleanup of test customers, distributors and products left on cip by test runs** `in_progress`/`in_progress` (feature)
