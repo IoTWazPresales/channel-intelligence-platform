@@ -63,9 +63,10 @@ LINEAGE = frozenset({"shipment_evidence_observation", "shipment_evidence_line", 
 # Round 5 (0027): rows with no product are admin (open) / steward only, no inheritance.
 NO_PRODUCT_STEWARD = frozenset(
     {"commercial_lineup_line", "cst_listing_seed", "customer_listing", "historical_lineup_import_line"})
-# N-0096: append-only audit tables have SELECT and INSERT policies and deliberately no UPDATE or DELETE
-# policy (N-0110 repair, 20261015_0038), so the update/delete/move cells of this matrix do not apply to
-# them. They are left out of the measured set and checked for their policy shape below.
+# N-0096: append-only audit tables have SELECT and INSERT policies and deliberately no UPDATE policy
+# (N-0110 repair, 20261015_0038), so the update/move cells of this matrix do not apply to them. N-0112
+# (20261022_0047) adds DELETE, used only by the import job delete for the records a deleted job owns.
+# They are left out of the measured set and checked for their policy shape below.
 APPEND_ONLY = frozenset({"fact_customer_sellthrough_superseded", "fact_distributor_line_superseded"})
 STEWARD = "steward"
 ALL = "ALL"
@@ -631,7 +632,7 @@ def test_parity_0024_to_0027_every_protected_table() -> None:
     assert "cip_product_id_visible" not in plan25 and "hashed SubPlan" in plan25, plan25
 
 
-def test_append_only_audit_tables_have_select_and_insert_policies_and_no_update_or_delete():
+def test_append_only_audit_tables_have_select_insert_and_delete_policies_and_no_update():
     eng = _engine()
     try:
         with eng.connect() as conn:
@@ -646,7 +647,7 @@ def test_append_only_audit_tables_have_select_and_insert_policies_and_no_update_
                         text("select cmd, policyname from pg_policies where tablename = :t"), {"t": table}
                     )
                 }
-                assert sorted(cmds) == ["INSERT", "SELECT"], (table, cmds)
+                assert sorted(cmds) == ["DELETE", "INSERT", "SELECT"], (table, cmds)
                 rls = conn.execute(
                     text("select relrowsecurity, relforcerowsecurity from pg_class where relname = :t"),
                     {"t": table},

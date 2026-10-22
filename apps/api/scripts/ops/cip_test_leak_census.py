@@ -9,7 +9,8 @@ an upload tuple in the tests are listed separately: those names are common and m
 Usage (from apps/api):
   python scripts/ops/cip_test_leak_census.py                  full census
   python scripts/ops/cip_test_leak_census.py --ids            the test job ids only, comma-separated
-  python scripts/ops/cip_test_leak_census.py --jobs 1675,1679 what the Import Center delete would clear
+  python scripts/ops/cip_test_leak_census.py --jobs 1675,1679 what the Import Center delete does with each row
+                                                              (the delete's own preview gives exact counts)
 """
 
 from __future__ import annotations
@@ -117,6 +118,27 @@ BULK_DELETE_ALIASES = {
     "distributor_source_token_alias",
 }
 BULK_DELETE_CLEARS = {("commercial_lineup_case", "import_job_id"), ("catalog_product", "last_import_job_id")}
+# N-0112: the delete removes these, or gives each row back the figures of the newest load that stays.
+BULK_DELETE_RESTORES = {
+    ("fact_returns", "import_job_id"),
+    ("fact_customer_sellthrough", "import_job_id"),
+    ("fact_inbound_shipment", "import_job_id"),
+    ("fact_customer_sellthrough_superseded", "import_job_id"),
+    ("fact_customer_sellthrough_superseded", "superseded_by_import_job_id"),
+    ("fact_distributor_line_superseded", "previous_import_job_id"),
+    ("fact_distributor_line_superseded", "superseded_by_import_job_id"),
+}
+# N-0112: recomputed for every customer or distributor the delete touches.
+BULK_DELETE_RECOMPUTES = {
+    "customer_stock_position",
+    "fact_customer_velocity",
+    "fact_dsi_forecast",
+    "fact_inventory_reconciliation",
+    "weeks_of_cover_observation",
+    "customer_cst_report_slot",
+}
+# Kept on purpose, job link cleared (import_job_delete_figures.KEPT_LINKS).
+BULK_DELETE_KEEPS = {"cpor_claim_evidence_line", "cpor_payment_evidence", "cst_listing_seed", "customer_sellthrough_layout"}
 FK_ON_DELETE = {"c": "cascade", "n": "set null", "d": "set default", "a": "no action", "r": "restrict"}
 
 
@@ -137,10 +159,13 @@ def fk_actions(conn: Connection) -> dict[tuple[str, str], str]:
 
 
 def job_delete_check(conn: Connection, job_ids: list[int]) -> None:
-    """Every row pointing at these jobs, and what the existing Import Center delete does with it."""
+    """Every row pointing at these jobs, and what the Import Center delete (with N-0112) does with it."""
     found = set(conn.execute(text("SELECT id FROM import_job WHERE id = ANY(:ids)"), {"ids": job_ids}).scalars())
     print(f"\n== Delete check for jobs {', '.join(map(str, job_ids))} (found: {', '.join(map(str, sorted(found))) or 'none'})")
     actions = fk_actions(conn)
+    views = set(
+        conn.execute(text("SELECT table_name FROM information_schema.views WHERE table_schema = 'public'")).scalars()
+    )
     pairs = sorted(set(job_columns(conn)) | {("fact_competitor_price", "source_job_id"), ("entity_mapping_queue", "job_id")})
     left_behind = 0
     for table, col in pairs:
@@ -150,11 +175,17 @@ def job_delete_check(conn: Connection, job_ids: list[int]) -> None:
             text(f"SELECT {col}, count(*) FROM {table} WHERE {col} = ANY(:ids) GROUP BY 1 ORDER BY 1"), {"ids": job_ids}
         ):
             fk = actions.get((table, col))
-            if (table, col) in BULK_DELETE_REMOVES:
-                verdict = "removed"
+            if table in views:
+                verdict = "a view over other tables: follows them"
+            elif (table, col) in BULK_DELETE_REMOVES:
+                verdict = "removed (or, for a fact row, given back the figures of the newest load that stays)"
+            elif (table, col) in BULK_DELETE_RESTORES:
+                verdict = "removed, or given back the figures of the newest load that stays"
+            elif table in BULK_DELETE_RECOMPUTES:
+                verdict = "recomputed for the customers and distributors touched"
             elif table in BULK_DELETE_ALIASES:
-                verdict = "kept unless 'also delete learned aliases' is ticked (the delete refuses otherwise)"
-            elif (table, col) in BULK_DELETE_CLEARS:
+                verdict = "kept unless 'also delete learned aliases' is ticked (job link cleared)"
+            elif (table, col) in BULK_DELETE_CLEARS or table in BULK_DELETE_KEEPS:
                 verdict = "row kept, job link cleared"
             elif fk == "cascade":
                 verdict = "removed (cascade when the job row goes)"
@@ -168,7 +199,7 @@ def job_delete_check(conn: Connection, job_ids: list[int]) -> None:
                 verdict = "LEFT BEHIND: no foreign key, row keeps pointing at a deleted job"
                 left_behind += n
             print(f"  job {jid}: {table}.{col} = {n:<5} -> {verdict}")
-    print(f"  rows the existing delete would leave or trip on: {left_behind}")
+    print(f"  rows the delete would leave or trip on: {left_behind}")
 
 
 def entity_refs(conn: Connection, target: str) -> list[tuple[str, str]]:

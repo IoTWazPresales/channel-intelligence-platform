@@ -55,7 +55,12 @@ from app.services.imports.import_background_slots import (
     set_task_slot_on_job,
 )
 from app.services.imports.import_job_background_metadata import ACTIVE_CELERY_STATES, read_main_celery_state
-from app.services.imports.import_job_bulk_delete import bulk_delete_import_jobs, normalize_job_ids, preview_import_job_bulk_delete
+from app.services.imports.import_job_bulk_delete import (
+    MAX_JOBS,
+    bulk_delete_import_jobs,
+    normalize_job_ids,
+    preview_import_job_bulk_delete,
+)
 from app.services.imports.db_transient_retry import is_readonly_db_error
 from app.services.imports.template_definitions import product_master_sample_csv
 from app.utils.json_safe import to_jsonable
@@ -500,14 +505,26 @@ async def post_import_jobs_bulk_delete_preview(
     body: ImportJobBulkIdsBody,
     _user: dict = Depends(require_roles(Role.ADMIN)),
 ):
-    """Return artifact counts for selected import jobs (admin maintenance; preview before delete)."""
+    """What deleting these jobs removes, restores and recomputes, per job (admin; writes nothing).
+
+    N-0112: the preview runs the delete and rolls it back, so its counts are the delete's counts.
+    Up to 200 job ids per call, from the grid selection or typed in by id.
+    """
     if not normalize_job_ids(body.job_ids):
         raise HTTPException(
             status_code=400,
             detail={"error": "no_valid_job_ids", "message": "Provide at least one valid import job id."},
         )
+    if len({j for j in body.job_ids if isinstance(j, int) and j > 0}) > MAX_JOBS:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "too_many_job_ids", "message": f"Preview up to {MAX_JOBS} jobs at a time."},
+        )
     with SessionLocal() as db:
-        return preview_import_job_bulk_delete(db, body.job_ids)
+        try:
+            return preview_import_job_bulk_delete(db, body.job_ids)
+        finally:
+            db.rollback()
 
 
 @router.post("/jobs/bulk-delete-confirm")
@@ -515,11 +532,20 @@ async def post_import_jobs_bulk_delete_confirm(
     body: ImportJobBulkDeleteConfirmBody,
     _user: dict = Depends(require_roles(Role.ADMIN)),
 ):
-    """Transactionally delete import jobs and directly linked ingestion artifacts (admin only)."""
+    """Delete import jobs, the data they loaded and their linked artifacts, all or nothing (admin only).
+
+    N-0112: figures the jobs replaced come back; learned aliases stay unless
+    ``delete_semantic_artifacts``; a ``platform_audit_event`` records the counts.
+    """
     if not normalize_job_ids(body.job_ids):
         raise HTTPException(
             status_code=400,
             detail={"error": "no_valid_job_ids", "message": "Provide at least one valid import job id."},
+        )
+    if len({j for j in body.job_ids if isinstance(j, int) and j > 0}) > MAX_JOBS:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "too_many_job_ids", "message": f"Delete up to {MAX_JOBS} jobs at a time."},
         )
     with SessionLocal() as db:
         try:
@@ -527,7 +553,9 @@ async def post_import_jobs_bulk_delete_confirm(
                 db,
                 body.job_ids,
                 delete_semantic_artifacts=body.delete_semantic_artifacts,
+                user=_user,
             )
+            out.pop("data", None)
             db.commit()
         except OperationalError as exc:
             db.rollback()
@@ -555,19 +583,10 @@ async def post_import_jobs_bulk_delete_confirm(
                         "message": "One or more job ids no longer exist; refresh the list and try again.",
                     },
                 )
-            if code == "semantic_artifacts_present":
-                raise HTTPException(
-                    status_code=422,
-                    detail={
-                        "error": code,
-                        "message": (
-                            "Steward aliases linked to these jobs still exist. "
-                            "Preview counts are in the risky section; either remove aliases elsewhere first, "
-                            "or confirm with delete_semantic_artifacts=true."
-                        ),
-                    },
-                )
             raise HTTPException(status_code=400, detail={"error": code}) from exc
+        except Exception:
+            db.rollback()
+            raise
     return out
 
 

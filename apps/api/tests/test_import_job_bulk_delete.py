@@ -1,4 +1,7 @@
-"""Admin import job bulk delete preview + confirm (mutates DB — same cip guard as import pipeline tests)."""
+"""Admin import job bulk delete preview + confirm (mutates DB — same cip guard as import pipeline tests).
+
+N-0112: the preview lists what each job removes and restores; learned aliases are kept by default.
+"""
 
 from __future__ import annotations
 
@@ -179,6 +182,11 @@ def test_bulk_delete_preview_and_confirm_round_trip() -> None:
         assert body["risky"]["customer_source_token_aliases"] == 0
         assert body["risky"]["channel_source_token_aliases"] == 0
         assert body["risky"]["region_source_token_aliases"] == 0
+        (job,) = body["jobs"]
+        assert job["id"] == job_id
+        assert job["counts"]["fact_sales_sellout_rows_removed"] >= 1
+        assert job["counts"]["fact_inventory_distributor_rows_removed"] >= 1
+        assert job["counts"]["dsi_staging_rows"] >= 1
 
         cr = client.post(
             "/api/v1/imports/jobs/bulk-delete-confirm",
@@ -194,7 +202,8 @@ def test_bulk_delete_preview_and_confirm_round_trip() -> None:
         assert gone.json()["counts"]["import_jobs_missing"] == 1
 
 
-def test_bulk_delete_confirm_blocked_by_customer_aliases() -> None:
+def test_bulk_delete_keeps_customer_aliases_by_default() -> None:
+    """N-0112 (Warren 2026-10-22): learned aliases are kept by default; their job link is cleared."""
     _skip_mutations_on_shared_cip()
     with SessionLocal() as session:
         _seed_import_core(session)
@@ -216,36 +225,36 @@ def test_bulk_delete_confirm_blocked_by_customer_aliases() -> None:
         )
         session.add(job)
         session.flush()
-        session.add(
-            CustomerSourceTokenAlias(
-                customer_id=c.id,
-                raw_token=f"raw-{job.id}",
-                normalized_token=f"norm-{job.id}",
-                created_from_import_job_id=job.id,
-            )
+        alias = CustomerSourceTokenAlias(
+            customer_id=c.id,
+            raw_token=f"raw-{job.id}",
+            normalized_token=f"norm-{job.id}",
+            created_from_import_job_id=job.id,
         )
+        session.add(alias)
         session.commit()
         job_id = job.id
+        alias_id = alias.id
 
     admin = {"X-User-Role": "admin", "X-User-Id": "test"}
     with TestClient(app) as client:
-        br = client.post(
+        ok = client.post(
             "/api/v1/imports/jobs/bulk-delete-confirm",
             json={"job_ids": [job_id], "delete_semantic_artifacts": False},
             headers=admin,
         )
-        assert br.status_code == 422
-
-        ok = client.post(
-            "/api/v1/imports/jobs/bulk-delete-confirm",
-            json={"job_ids": [job_id], "delete_semantic_artifacts": True},
-            headers=admin,
-        )
         assert ok.status_code == 200
-        assert ok.json()["deleted"].get("customer_source_token_aliases_deleted", 0) >= 1
+        assert ok.json()["deleted"]["customer_source_token_aliases_kept"] == 1
+        assert ok.json()["deleted"]["customer_source_token_aliases_deleted"] == 0
+
+    with SessionLocal() as session:
+        kept = session.get(CustomerSourceTokenAlias, alias_id)
+        assert kept is not None and kept.created_from_import_job_id is None
+        session.delete(kept)
+        session.commit()
 
 
-def test_bulk_delete_confirm_blocked_by_distributor_aliases() -> None:
+def test_bulk_delete_removes_distributor_aliases_when_asked() -> None:
     _skip_mutations_on_shared_cip()
     with SessionLocal() as session:
         _seed_import_core(session)
@@ -280,13 +289,6 @@ def test_bulk_delete_confirm_blocked_by_distributor_aliases() -> None:
 
     admin = {"X-User-Role": "admin", "X-User-Id": "test"}
     with TestClient(app) as client:
-        br = client.post(
-            "/api/v1/imports/jobs/bulk-delete-confirm",
-            json={"job_ids": [job_id], "delete_semantic_artifacts": False},
-            headers=admin,
-        )
-        assert br.status_code == 422
-
         ok = client.post(
             "/api/v1/imports/jobs/bulk-delete-confirm",
             json={"job_ids": [job_id], "delete_semantic_artifacts": True},
@@ -296,7 +298,7 @@ def test_bulk_delete_confirm_blocked_by_distributor_aliases() -> None:
         assert ok.json()["deleted"].get("distributor_source_token_aliases_deleted", 0) >= 1
 
 
-def test_bulk_delete_confirm_blocked_by_channel_aliases() -> None:
+def test_bulk_delete_preview_counts_channel_aliases_and_removes_them_when_asked() -> None:
     _skip_mutations_on_shared_cip()
     with SessionLocal() as session:
         _seed_import_core(session)
@@ -333,13 +335,7 @@ def test_bulk_delete_confirm_blocked_by_channel_aliases() -> None:
         pr = client.post("/api/v1/imports/jobs/bulk-delete-preview", json={"job_ids": [job_id]}, headers=admin)
         assert pr.status_code == 200
         assert pr.json()["risky"]["channel_source_token_aliases"] >= 1
-
-        br = client.post(
-            "/api/v1/imports/jobs/bulk-delete-confirm",
-            json={"job_ids": [job_id], "delete_semantic_artifacts": False},
-            headers=admin,
-        )
-        assert br.status_code == 422
+        assert pr.json()["jobs"][0]["counts"]["channel_source_token_aliases"] >= 1
 
         ok = client.post(
             "/api/v1/imports/jobs/bulk-delete-confirm",

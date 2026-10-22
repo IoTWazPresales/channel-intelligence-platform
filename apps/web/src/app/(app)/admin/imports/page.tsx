@@ -593,6 +593,7 @@ function AdminImportsPageContent() {
   const [importJobBulkDeleteBusy, setImportJobBulkDeleteBusy] = useState(false);
   const [importJobDeleteSemanticArtifacts, setImportJobDeleteSemanticArtifacts] = useState(false);
   const [importJobBulkDeleteAck, setImportJobBulkDeleteAck] = useState(false);
+  const [importJobDeleteById, setImportJobDeleteById] = useState(false);
   const [shipmentApplyWarning, setShipmentApplyWarning] = useState<string | null>(null);
   const [shipmentMapDraft, setShipmentMapDraft] = useState<Record<string, string>>({});
   const [shipmentMappingResetBanner, setShipmentMappingResetBanner] = useState(false);
@@ -2698,10 +2699,34 @@ function AdminImportsPageContent() {
     }
   }, []);
 
+  // N-0112: any job by id, not only the newest 100 the grid lists (up to 200 at a time).
+  const openImportJobDeleteById = useCallback(() => {
+    setImportJobDeleteById(true);
+    setImportJobBulkDeletePreview(null);
+    setImportJobDeleteSemanticArtifacts(false);
+    setImportJobBulkDeleteAck(false);
+    setImportJobBulkDeleteOpen(true);
+  }, []);
+
+  const previewImportJobIds = useCallback(async (ids: number[]) => {
+    if (!ids.length) return;
+    setImportJobBulkDeleteBusy(true);
+    setImportJobBulkDeleteAck(false);
+    try {
+      const data = await apiPost<ImportJobBulkDeletePreview>('/api/v1/imports/jobs/bulk-delete-preview', { job_ids: ids });
+      setImportJobBulkDeletePreview(data);
+    } catch (e) {
+      alert(safeDisplayError(e));
+    } finally {
+      setImportJobBulkDeleteBusy(false);
+    }
+  }, []);
+
   const closeImportJobBulkDeleteDialog = useCallback(() => {
     if (importJobBulkDeleteBusy) return;
     setImportJobBulkDeleteOpen(false);
     setImportJobBulkDeletePreview(null);
+    setImportJobDeleteById(false);
   }, [importJobBulkDeleteBusy]);
 
   const confirmImportJobBulkDelete = useCallback(async () => {
@@ -2714,6 +2739,7 @@ function AdminImportsPageContent() {
       });
       setImportJobBulkDeleteOpen(false);
       setImportJobBulkDeletePreview(null);
+      setImportJobDeleteById(false);
       setJobsBulkSelectionMode('normal');
       void qc.invalidateQueries({ queryKey: ['import-jobs'] });
     } catch (e) {
@@ -5257,6 +5283,16 @@ function AdminImportsPageContent() {
                 previewDangerDisabled={importJobBulkDeleteBusy}
                 busy={importJobBulkDeleteBusy}
               />
+              <Button
+                size="small"
+                color="error"
+                variant="text"
+                onClick={openImportJobDeleteById}
+                disabled={importJobBulkDeleteBusy}
+                data-testid="delete-jobs-by-id"
+              >
+                Delete by job id
+              </Button>
             </Stack>
           }
         >
@@ -5283,6 +5319,7 @@ function AdminImportsPageContent() {
           onImpactAcknowledgedChange={setImportJobBulkDeleteAck}
           onClose={closeImportJobBulkDeleteDialog}
           onConfirm={() => void confirmImportJobBulkDelete()}
+          onPreviewIds={importJobDeleteById ? (ids) => void previewImportJobIds(ids) : undefined}
         />
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
           Lineup files are applied from the{' '}
