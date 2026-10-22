@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2676
-  log_sha256: 25ce4a5890be185f9f2d0abb4a0a2c3b57acf80d9d0f398cf3db1e348c792134
+  snapshot_revision: 2679
+  log_sha256: 7b37cb4747497db30101eff806e7c508f289dfbd16326fab7a34dda0bbe908cc
   acceptance_policy:
     milestone: operator
     root: operator
@@ -11041,7 +11041,7 @@ nodes:
     origin: operator
     status: in_progress
     stage: discovery
-    revision: 4
+    revision: 7
     lease: null
     depends_on:
     - N-0073
@@ -11114,18 +11114,21 @@ nodes:
     blockers: []
     conservation_tags: []
     fingerprint: null
-    stage_note: 'Session scoped to the live log view only (Warren 2026-10-22); the data-health page, vacuum runbook, CST progress,
-      dispatch matrix and evidence-read items stay open. Built and pushed a21b93ed: GET /admin/logs/stream (SSE) and /admin/logs/errors
-      read the supervisor''s log files (%LOCALAPPDATA%/CIP/always-on/logs), admin only, secrets masked on the server (env
-      and .env secret values incl. PG_OWNER and connection-string passwords, key=value pairs, bearer values, key shapes);
-      imports.* Celery tasks tag every log line [job_id=N] and write start/finish lines; API app loggers now write timestamp
-      and level; an idle report-schedule poll is INFO. Web: top-bar Logs icon (admin only) with red dot on a new ERROR, workbench-ui
-      drawer with source/level/search, pause, 3000-line cap, Web-requests toggle (off by default); Show this job''s log on
-      the import job page. Restarted worker, API and web; all healthy; real log files parse and no known secret value survives
-      masking. NOT rendered in a browser (sign-in required; agent may not sign in). Not exercised against the live API with
-      a real admin session. Self-verified, not independent. Known limits: the log view reads the current file generation (plus
-      the previous one for a job view); API uvicorn access lines have no time of their own and show ~time; rotation is still
-      only at process launch (no size cap); lines logged by API request handlers are not job-tagged, only worker tasks.'
+    stage_note: 'Log view follow-up 2026-10-23 (commit 26e583c2, restarted API, worker, web). (1) The log panel is a docked,
+      non-modal bottom panel: in the page layout, no backdrop or focus trap, drag or arrow-key resize, collapses to a thin
+      bar that keeps the red error dot, open/collapsed/height remembered per browser, full width above the bottom nav on narrow
+      screens; default level Info and above. (2) tenant_scope bound is DEBUG. (3) Reaper: celery inspect cannot answer while
+      a --pool=solo worker runs a task (including the reaper''s own task, which runs in that worker), so every run timed out
+      at about 3 s with inspected False and no stuck running job was ever reaped. Measured on a throwaway worker on Redis
+      db 14: solo answers only when idle; a threads pool of 1 answers always. Fixed inside apps/api (scripts/dev-worker.js
+      is outside the accepted change scope, so the pool was not changed): the worker publishes a Redis heartbeat (running
+      and held task ids, written on every task state change and every 15 s, expires after 90 s) and the reaper reads it plus
+      the tasks still waiting in the broker queues, so a job queued behind a long task is not reaped (a job is set running
+      at dispatch). Proof: solo worker busy: inspect NO ANSWER, heartbeat SEES the task; live worker after restart: reap_stale_running_jobs
+      succeeded in 0.14 s with inspected True. Not proven on the live worker: reaping a real dead task (no stuck job exists
+      to test; unit tests cover it). Full API pytest on cip_test 3271 passed, 21 skipped, 0 failed; full web vitest 199 files
+      passed; tsc clean. Panel not rendered in a browser (sign-in). Self-verified, not independent. The other items on this
+      node stay open.'
     debug_iterations: 0
     split_into: null
     deferred: null
