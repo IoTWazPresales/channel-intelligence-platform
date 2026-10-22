@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2662
-  log_sha256: 79fcf72a89f7899fcd062a8aa134e5ee90826fdff400a767becbb3da094540e4
+  snapshot_revision: 2671
+  log_sha256: 316cb27138502756fb361b659545d6713142c7022147fa4cbdcf16b6c1190dcd
   acceptance_policy:
     milestone: operator
     root: operator
@@ -13191,7 +13191,7 @@ nodes:
     origin: operator
     status: in_progress
     stage: verify
-    revision: 73
+    revision: 76
     lease: null
     depends_on:
     - N-0110
@@ -13203,7 +13203,7 @@ nodes:
     risk: R3
     touches_existing: true
     acceptance: operator
-    acceptance_state: pending
+    acceptance_state: accepted
     acceptance_criteria:
     - Monday-Sunday is the tenant default week calendar for every customer and distributor; a per-customer override stays
       possible.
@@ -13371,7 +13371,7 @@ nodes:
     origin: operator
     status: in_progress
     stage: implement
-    revision: 8
+    revision: 11
     lease: null
     depends_on:
     - N-0111
@@ -13383,7 +13383,7 @@ nodes:
     risk: R3
     touches_existing: true
     acceptance: operator
-    acceptance_state: pending
+    acceptance_state: accepted
     acceptance_criteria:
     - The existing Import Center job delete, its admin preview and bulk delete are extended, no parallel path
     - Deleting a job removes the fact rows it loaded in every fact table that references import_job (sell-through, distributor
@@ -13478,7 +13478,7 @@ nodes:
     origin: operator
     status: in_progress
     stage: implement
-    revision: 12
+    revision: 15
     lease: null
     depends_on:
     - N-0112
@@ -13487,7 +13487,7 @@ nodes:
     risk: R3
     touches_existing: true
     acceptance: operator
-    acceptance_state: pending
+    acceptance_state: accepted
     acceptance_criteria:
     - 'Read-only census on cip lists every remaining test customer, distributor and product with what references it: table,
       row count, and whether each row is from a real job, a real record, a real case, a deleted test job or unlinked'
