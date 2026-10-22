@@ -3322,3 +3322,48 @@ No write landed that should have been denied. No unrelated action got `SESSION_R
 | **Behavior to retain** | Pinnacle sell-out and inventory rules (D-0091, D-0110, D-0113); the Date column mapping. |
 | **Out of scope** | Customer sell-through (done); distributor expected-report slots. |
 | **TRIGGER** | A second distributor starts uploading files with its own header set, or Warren asks for the distributor picker. |
+
+## BACKLOG-214 — A fresh database cannot be built: `alembic upgrade head` fails on the create_all baseline
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** · 2026-10-22 · Warren's test-leak brief (Step 1). |
+| **Effort** | Small to medium: make each named migration idempotent, then prove `upgrade head` on an empty database and on a clone of `cip`. |
+| **Source** | Migrations `0020`, `0021`, `0022`, `0023`, `0036`, `0037` and `0039` fail with `DuplicateColumn` / `DuplicateTable` when run after the `create_all` baseline, because the models already create what they add. |
+| **Idea** | Every migration after the baseline must run on a database the baseline built, as later migrations already do (`CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, guarded policy creation). |
+| **Why it matters / deferrable** | Today only `cip` and `cip_test` exist and both were built incrementally, so no one hits it. CI, a second tenant instance or a rebuilt `cip_test` would. The N-0111 verification on 2026-10-19 used a scratch database built from the models for this reason. |
+| **Resume-context** | Pattern to copy: `20261016_0042` (`IF NOT EXISTS` on table and indexes). Row-security policies need a `DO $$ ... IF NOT EXISTS (SELECT 1 FROM pg_policies ...)` guard. The migration role is the table owner (`DATABASE_URL_SYNC_MIGRATE`). |
+| **Regression traps** | Do not change what a migration does on `cip` or `cip_test` (both already past these revisions; the change must be a no-op there). Do not reorder or rename revisions. Keep downgrades working. Clone proof before anything touches `cip`. |
+| **Behavior to retain** | Schema on `cip` and `cip_test` unchanged; `alembic current` unchanged. |
+| **Out of scope** | Squashing migrations; the test-fixture seed (BACKLOG-215). |
+| **TRIGGER** | Before main promotion, CI, or a second tenant instance — whichever comes first. |
+
+## BACKLOG-215 — Hidden test dependencies on `cip_test` history
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** · 2026-10-22 · Warren's test-leak brief (Step 1). |
+| **Effort** | Small per test. |
+| **Source** | Two tests in `tests/test_dsi_customer_ignore_revalidate.py` and `test_dsi_candidate_steward_map_customer_and_alias_persisted` in `tests/test_distributor_sales_inventory_import.py` pass only because `cip_test` already holds rows earlier runs left. `test_refresh_loads_shipment_evidence_and_ignored_customers_once` is also order-dependent (its query count depends on what ran before it). |
+| **Idea** | Each test seeds the rows it needs inside its own transaction or fixture, and cleans them, so it passes on an empty database and in any order. |
+| **Why it matters / deferrable** | They pass on today's `cip_test`, so the suite reads green; on a fresh database (BACKLOG-214) or in CI they fail, or pass and fail by order. |
+| **Resume-context** | Run each alone and with `-p no:randomly` / reversed order on `cip_test` to see what they lean on. The conftest guard (`753a927f`) keeps them off `cip`. Related: BACKLOG-203. |
+| **Regression traps** | Do not widen assertions. Do not seed into shared master data (`CUST-1001`, `DIST-01`, `SKU-ALPHA-01`) by name without cleaning up; that is how test rows reached `cip`. Never run them on `cip`. |
+| **Behavior to retain** | What each test proves (ignored customers stay excluded on revalidate; steward map persists customer and alias; the refresh loads evidence and ignored customers once). |
+| **Out of scope** | The migration baseline (BACKLOG-214); row security under a superuser (BACKLOG-216). |
+| **TRIGGER** | Before main promotion, CI, or a second tenant instance. |
+
+## BACKLOG-216 — Row-security tests fail when the test role is a superuser (CI's setup)
+
+| Field | Detail |
+|-------|--------|
+| **Status / parked** | **Open** · 2026-10-22 · Warren's test-leak brief (Step 1). |
+| **Effort** | Small: decide the CI role, then make the tests use a non-superuser role or skip with a reason. |
+| **Source** | `tests/test_product_line_rls_n0065_db.py`, `tests/test_product_line_rls_parity_n0065_db.py`, `tests/test_shipment_evidence_lineage_rls_n0065_db.py`. A superuser (or `BYPASSRLS`) role skips row security even under `FORCE ROW LEVEL SECURITY`, so the tests that expect rows hidden see them. Locally the app role `cip` is not a superuser, so they pass. |
+| **Idea** | CI connects as a superuser by default (the database image's owner). The tests should connect as, or `SET ROLE` to, a non-superuser app role created for the run, the way the app connects in production. |
+| **Why it matters / deferrable** | They guard product-line isolation (D-0056). A run as superuser would fail them, or worse, someone "fixes" them by loosening the check. Nothing runs them as superuser today. |
+| **Resume-context** | The parity test already reads `rolsuper or rolbypassrls` for function owners. Pattern: create role `cip` without `BYPASSRLS` in the CI setup, grant as the migrations do, connect the app URL as `cip` and the migration URL as the owner. |
+| **Regression traps** | Do not drop `FORCE ROW LEVEL SECURITY` or skip the tests silently. Do not give the app role `BYPASSRLS`. |
+| **Behavior to retain** | Product-line row security on every scoped table; the parity test with no exemption. |
+| **Out of scope** | BACKLOG-099 (live API in CI) itself. |
+| **TRIGGER** | Before main promotion, CI, or a second tenant instance. |
