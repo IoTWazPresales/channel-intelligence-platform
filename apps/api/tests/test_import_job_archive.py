@@ -128,6 +128,38 @@ def test_archive_with_a_missing_id_changes_nothing() -> None:
             client.post("/api/v1/imports/jobs/bulk-delete-confirm", json={"job_ids": [job_id]}, headers=ADMIN)
 
 
+@pytest.mark.parametrize("status", ["failed", "pending"])
+def test_import_center_status_counts_skip_archived_jobs(status: str) -> None:
+    """Failed and pending chips and the 'older jobs' card leave out archived jobs (Warren 2026-10-22)."""
+    _skip_mutations_on_shared_cip()
+    summary = "/api/v1/imports/stewardship-summary"
+    all_key, week_key = f"{status}_all", f"{status}_7d"
+
+    def counts(client: TestClient) -> tuple[int, int]:
+        body = client.get(summary, headers=ADMIN).json()
+        return body[all_key], body[week_key]
+
+    with SessionLocal() as session:
+        job_id = _seed_job_with_artifacts(session)
+        with TestClient(app) as client:
+            base = counts(client)
+        session.get(ImportJob, job_id).status = status
+        session.commit()
+    try:
+        with TestClient(app) as client:
+            assert counts(client) == (base[0] + 1, base[1] + 1)
+            client.post(CONFIRM, json={"job_ids": [job_id], "archive": True}, headers=ADMIN)
+            assert counts(client) == base
+            if status == "pending":
+                caption = client.get(summary, headers=ADMIN).json()["captions"]["pending_7d"]
+                assert caption == f"{base[0]} older jobs still waiting for a column map"
+            client.post(CONFIRM, json={"job_ids": [job_id], "archive": False}, headers=ADMIN)
+            assert counts(client) == (base[0] + 1, base[1] + 1)
+    finally:
+        with TestClient(app) as client:
+            client.post("/api/v1/imports/jobs/bulk-delete-confirm", json={"job_ids": [job_id]}, headers=ADMIN)
+
+
 def test_archive_refuses_more_than_200_ids() -> None:
     with TestClient(app) as client:
         r = client.post(PREVIEW, json={"job_ids": list(range(1, 202)), "archive": True}, headers=ADMIN)

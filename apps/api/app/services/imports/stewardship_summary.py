@@ -29,17 +29,18 @@ async def stewardship_summary(db: AsyncSession, user: dict | None) -> dict[str, 
                     WHERE (created_at AT TIME ZONE 'Africa/Johannesburg')::date >= {_ISO_WEEK_START_SAST}
                   ) AS jobs_iso_week,
                   count(*) FILTER (WHERE created_at >= now() - interval '7 days') AS jobs_last_7d,
+                  -- Failed and pending skip archived jobs, as Attention, Brief and Ops do (N-0113).
                   count(*) FILTER (
-                    WHERE status = 'failed' AND created_at >= now() - interval '7 days'
+                    WHERE status = 'failed' AND archived_at IS NULL AND created_at >= now() - interval '7 days'
                   ) AS failed_7d,
-                  count(*) FILTER (WHERE status = 'failed') AS failed_all,
+                  count(*) FILTER (WHERE status = 'failed' AND archived_at IS NULL) AS failed_all,
                   count(*) FILTER (
                     WHERE status = 'completed' AND created_at >= now() - interval '7 days'
                   ) AS completed_7d,
                   count(*) FILTER (WHERE status = 'completed') AS completed_all,
-                  count(*) FILTER (WHERE status = 'pending') AS pending_all,
+                  count(*) FILTER (WHERE status = 'pending' AND archived_at IS NULL) AS pending_all,
                   count(*) FILTER (
-                    WHERE status = 'pending' AND created_at >= now() - interval '7 days'
+                    WHERE status = 'pending' AND archived_at IS NULL AND created_at >= now() - interval '7 days'
                   ) AS pending_7d,
                   count(*) FILTER (WHERE archived_at IS NULL) AS jobs_unarchived
                 FROM import_job

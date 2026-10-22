@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  IMPORT_JOB_DELETE_MAX,
   ImportJobBulkDeleteImpactDialog,
   parseJobIds,
   type ImportJobBulkDeletePreview,
@@ -125,5 +126,24 @@ describe('parseJobIds', () => {
   it('reads ids in any separator and drops repeats', () => {
     expect(parseJobIds('1164,1184\n1199  1184; x 0')).toEqual([1164, 1184, 1199]);
     expect(parseJobIds('')).toEqual([]);
+  });
+
+  it('expands ranges written with a hyphen or any dash, mixed with single ids', () => {
+    expect(parseJobIds('1230-1234')).toEqual([1230, 1231, 1232, 1233, 1234]);
+    expect(parseJobIds('1230–1232, 1240 — 1241\n1250−1251\n1260‑1261‐1262')).toEqual([
+      1230, 1231, 1232, 1240, 1241, 1250, 1251, 1260, 1261, 1262,
+    ]);
+    expect(parseJobIds('1100 1230 - 1231 1500')).toEqual([1100, 1230, 1231, 1500]);
+  });
+
+  it('reads a backwards range, drops overlaps, and keeps ids above zero', () => {
+    expect(parseJobIds('1234-1232, 1231-1233')).toEqual([1232, 1233, 1234, 1231]);
+    expect(parseJobIds('0-2')).toEqual([1, 2]);
+  });
+
+  it('does not hang on a huge range: it stops expanding, and the box refuses it as too many', () => {
+    const ids = parseJobIds('1-999999999');
+    expect(ids.length).toBeGreaterThan(IMPORT_JOB_DELETE_MAX);
+    expect(ids.length).toBeLessThanOrEqual(10_000);
   });
 });

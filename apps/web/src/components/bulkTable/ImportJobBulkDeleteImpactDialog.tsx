@@ -84,13 +84,22 @@ const ALIAS_KEYS = [
   'region_source_token_aliases',
 ];
 
-/** Job ids typed or pasted in any form: "1164, 1184 1199" or one per line. */
+/** Past this many ids a range stops expanding; the box already refuses more than IMPORT_JOB_DELETE_MAX. */
+const JOB_ID_EXPAND_CAP = 10_000;
+/** A range is two ids joined by any dash: hyphen, non-breaking hyphen, figure, en or em dash, minus sign. */
+const JOB_ID_TOKEN = /(\d+)\s*[-‐‑‒–—−]\s*(\d+)|(\d+)/g;
+
+/** Job ids typed or pasted in any form: "1164, 1184 1199", one per line, or ranges like "1230-1234". */
 export function parseJobIds(raw: string): number[] {
   const seen = new Set<number>();
-  for (const part of raw.split(/[^0-9]+/)) {
-    if (!part) continue;
-    const n = Number(part);
-    if (Number.isSafeInteger(n) && n > 0) seen.add(n);
+  for (const m of raw.matchAll(JOB_ID_TOKEN)) {
+    if (seen.size >= JOB_ID_EXPAND_CAP) break;
+    const a = Number(m[3] ?? m[1]);
+    const b = Number(m[3] ?? m[2]);
+    if (!Number.isSafeInteger(a) || !Number.isSafeInteger(b)) continue;
+    const lo = Math.min(a, b);
+    const hi = Math.max(a, b);
+    for (let n = Math.max(lo, 1); n <= hi && seen.size < JOB_ID_EXPAND_CAP; n++) seen.add(n);
   }
   return [...seen];
 }
@@ -118,7 +127,7 @@ export function JobIdEntry({
     <Stack spacing={1} data-testid={testId}>
       <TextField
         label="Job ids"
-        placeholder="1164, 1184, 1199 or one per line"
+        placeholder="1164, 1184, 1230-1234 or one per line"
         value={idText}
         onChange={(e) => setIdText(e.target.value)}
         multiline

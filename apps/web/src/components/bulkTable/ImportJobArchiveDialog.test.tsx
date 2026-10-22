@@ -50,6 +50,15 @@ describe('ImportJobArchiveDialog (N-0113)', () => {
     expect(screen.getByTestId('confirm-archive')).toBeDisabled();
   });
 
+  it('previews a typed range, with either dash, as every id in it', async () => {
+    const user = userEvent.setup();
+    const { onPreviewIds } = renderDialog();
+    await user.type(screen.getByLabelText('Job ids to archive'), '1230-1232, 1240–1241');
+    expect(screen.getByText(/5 job ids/)).toBeInTheDocument();
+    await user.click(screen.getByTestId('preview-archive-job-ids'));
+    expect(onPreviewIds).toHaveBeenCalledWith([1230, 1231, 1232, 1240, 1241]);
+  });
+
   it('starts from the ids selected in the grid', () => {
     renderDialog({ initialIds: [7, 8] });
     expect(screen.getByLabelText('Job ids to archive')).toHaveValue('7, 8');
