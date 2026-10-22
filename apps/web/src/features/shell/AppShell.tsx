@@ -29,7 +29,7 @@ import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { GlobalBackgroundTasksIndicator } from '@/features/background-tasks/GlobalBackgroundTasksIndicator';
-import { LogDrawer } from '@/features/ops-logs/LogDrawer';
+import { LogDock } from '@/features/ops-logs/LogDock';
 import { useLogDrawerStore } from '@/features/ops-logs/logDrawerStore';
 import { useNewLogError } from '@/features/ops-logs/useNewLogError';
 import { CapabilityRail, DOMAIN_ICONS, RAIL_WIDTH, domainBadgesFromSpine } from '@/features/shell/CapabilityRail';
@@ -72,6 +72,8 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
   const role = me?.role ? String(me.role) : null;
   const isAdmin = roleMayAccess(role, ['admin']);
   const openLogs = useLogDrawerStore((s) => s.openLogs);
+  const closeLogs = useLogDrawerStore((s) => s.closeLogs);
+  const logsShown = useLogDrawerStore((s) => s.open && !s.collapsed);
   const { hasNewError, newErrorCount } = useNewLogError(isAdmin);
 
   const displayName =
@@ -245,11 +247,20 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
           </Tooltip>
           <GlobalBackgroundTasksIndicator />
           {isAdmin ? (
-            <Tooltip title={hasNewError ? `${newErrorCount} new error${newErrorCount === 1 ? '' : 's'} in the logs` : 'Live logs'}>
+            <Tooltip
+              title={
+                hasNewError
+                  ? `${newErrorCount} new error${newErrorCount === 1 ? '' : 's'} in the logs`
+                  : logsShown
+                    ? 'Close live logs'
+                    : 'Live logs'
+              }
+            >
               <IconButton
                 color="inherit"
-                onClick={() => openLogs()}
+                onClick={() => (logsShown ? closeLogs() : openLogs())}
                 aria-label={hasNewError ? 'Live logs, new error' : 'Live logs'}
+                aria-pressed={logsShown}
                 data-testid="topbar-logs"
               >
                 <Badge variant="dot" color="error" invisible={!hasNewError} data-testid="topbar-logs-dot">
@@ -305,6 +316,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
         >
           {children}
         </Box>
+        {isAdmin ? <LogDock /> : null}
       </Box>
 
       <Paper
@@ -349,7 +361,6 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
       </Paper>
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} role={role} />
-      {isAdmin ? <LogDrawer /> : null}
     </Box>
   );
 }

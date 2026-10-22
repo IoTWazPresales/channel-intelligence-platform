@@ -25,7 +25,9 @@ export type LogLine = ServerLogLine & { uid: number };
 /** The most lines the page keeps; older ones drop off the top. */
 export const LOG_BUFFER_CAP = 3000;
 
-export type LevelFilter = 'all' | 'warning' | 'error';
+/** The least severe level shown. The panel starts at 'info', so DEBUG is not shown unless asked for. */
+export type LevelFilter = 'debug' | 'info' | 'warning' | 'error';
+export const DEFAULT_LEVEL_FILTER: LevelFilter = 'info';
 
 const LEVEL_RANK: Record<LogLevel, number> = { DEBUG: 10, INFO: 20, WARNING: 30, ERROR: 40, CRITICAL: 50 };
 
@@ -83,10 +85,10 @@ export function newerThanShown(existing: LogLine[], backlog: ServerLogLine[], wi
   return backlog.filter((l) => !seen.has(lineKey(l)));
 }
 
+const FILTER_RANK: Record<LevelFilter, number> = { debug: 0, info: LEVEL_RANK.INFO, warning: LEVEL_RANK.WARNING, error: LEVEL_RANK.ERROR };
+
 export function matchesLevel(l: Pick<ServerLogLine, 'level'>, filter: LevelFilter): boolean {
-  if (filter === 'all') return true;
-  const need = filter === 'error' ? LEVEL_RANK.ERROR : LEVEL_RANK.WARNING;
-  return LEVEL_RANK[l.level] >= need;
+  return LEVEL_RANK[l.level] >= FILTER_RANK[filter];
 }
 
 export function filterLines(

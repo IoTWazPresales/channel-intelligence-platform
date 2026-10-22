@@ -85,6 +85,7 @@ celery_app.conf.task_routes = build_task_routes()
 
 import app.worker.tasks  # noqa: E402, F401 — register tasks
 import app.worker.job_log_signals  # noqa: E402, F401 — N-0089: tag import task log lines with the job id
+import app.worker.liveness  # noqa: E402, F401 — N-0089: worker heartbeat in Redis for the stale-job reaper
 
 
 @worker_ready.connect

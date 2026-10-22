@@ -58,7 +58,7 @@ def test_is_reap_candidate_marks_when_not_active_even_if_checkpoint_fresh() -> N
         now=datetime.now(timezone.utc),
     )
     assert ok is True
-    assert "inspect/active" in reason
+    assert "worker heartbeat" in reason
 
 
 def test_reap_skips_when_inspect_unavailable() -> None:

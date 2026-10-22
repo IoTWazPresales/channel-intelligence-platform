@@ -369,6 +369,22 @@ def test_stream_sends_the_backlog_then_new_lines_masked(tmp_path: Path, monkeypa
     assert FAKE_PW not in body
 
 
+def test_tenant_scope_binding_is_debug_not_info(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """It was logged at INFO on every request and flooded the view; at INFO the log stays quiet."""
+    monkeypatch.setenv("CIP_LOG_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        with caplog.at_level(logging.INFO, logger="app.api.v1.router"):
+            assert client.get("/api/v1/admin/logs/errors", headers=ADMIN).status_code == 200
+        assert not [r for r in caplog.records if "tenant_scope bound" in r.getMessage()]
+        caplog.clear()
+        with caplog.at_level(logging.DEBUG, logger="app.api.v1.router"):
+            assert client.get("/api/v1/admin/logs/errors", headers=ADMIN).status_code == 200
+        bound = [r for r in caplog.records if "tenant_scope bound" in r.getMessage()]
+        assert bound and all(r.levelno == logging.DEBUG for r in bound)
+
+
 def test_errors_endpoint_returns_the_newest_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CIP_LOG_DIR", str(tmp_path))
     _write(tmp_path / "worker.err.log", _celery("10:00:00,000", "ERROR", "bad thing"))

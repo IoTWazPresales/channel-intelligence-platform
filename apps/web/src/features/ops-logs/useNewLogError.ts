@@ -23,7 +23,8 @@ export const LOG_ERRORS_POLL_MS = 30_000;
 export function useNewLogError(enabled: boolean) {
   const lastSeen = useLogDrawerStore((s) => s.lastSeenErrorTs);
   const markSeen = useLogDrawerStore((s) => s.markErrorsSeen);
-  const drawerOpen = useLogDrawerStore((s) => s.open);
+  // Watching = the panel is open and not collapsed; a collapsed bar keeps the dot lit.
+  const drawerOpen = useLogDrawerStore((s) => s.open && !s.collapsed);
 
   const query = useQuery({
     queryKey: ['ops-logs', 'errors', lastSeen],

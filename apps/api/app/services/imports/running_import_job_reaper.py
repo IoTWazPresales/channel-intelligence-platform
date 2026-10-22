@@ -1,7 +1,10 @@
 """Periodic reaper for import jobs stuck in ``status=running`` after Celery work died.
 
-Uses ``celery.control.inspect().active()`` only — never terminates DB sessions or
-connections. When inspect is unavailable, does nothing (fail-safe).
+Which tasks are alive comes from the worker heartbeat in Redis plus the tasks still queued
+(``app.worker.liveness``), not from ``celery.control.inspect()``: a ``--pool=solo`` worker cannot answer
+``inspect`` while it runs a task, and the reaper itself runs in that worker, so ``inspect`` always timed out
+(``'inspected': False``) and nothing was ever reaped (N-0089). Never terminates DB sessions or connections.
+When liveness cannot be read, does nothing (fail-safe).
 """
 
 from __future__ import annotations
@@ -20,7 +23,7 @@ from app.services.imports.background_tasks import _parse_iso_datetime
 from app.services.imports.import_background_slots import SLOT_MAIN, clear_task_slot
 from app.services.imports.import_job_background_metadata import main_celery_task_id
 from app.utils.json_safe import to_jsonable
-from app.worker.celery_app import celery_app
+from app.worker.liveness import live_task_ids
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +31,6 @@ _DEV_IN_PROCESS_TASK_ID = "dev-in-process-thread"
 _DEFAULT_BEAT_INTERVAL_S = 120
 _DEFAULT_CHECKPOINT_STALE_MINUTES = 5
 _DEFAULT_DISPATCH_GRACE_MINUTES = 2
-_DEFAULT_INSPECT_TIMEOUT_S = 3.0
 
 
 def _env_int(name: str, default: int, *, minimum: int = 1) -> int:
@@ -49,28 +51,9 @@ def dispatch_grace_age() -> timedelta:
     return timedelta(minutes=_env_int("CIP_RUNNING_JOB_REAPER_DISPATCH_GRACE_MINUTES", _DEFAULT_DISPATCH_GRACE_MINUTES))
 
 
-def collect_active_celery_task_ids(*, timeout_s: float = _DEFAULT_INSPECT_TIMEOUT_S) -> set[str] | None:
-    """Active task ids from all workers, or ``None`` when inspect did not respond."""
-    try:
-        inspector = celery_app.control.inspect(timeout=timeout_s)
-        active_by_worker = inspector.active()
-    except Exception as exc:
-        logger.warning("running_import_job_reaper: celery inspect failed: %s", exc)
-        return None
-    if active_by_worker is None:
-        logger.warning("running_import_job_reaper: celery inspect returned no workers")
-        return None
-    out: set[str] = set()
-    for tasks in active_by_worker.values():
-        if not tasks:
-            continue
-        for task in tasks:
-            if not isinstance(task, dict):
-                continue
-            tid = task.get("id")
-            if isinstance(tid, str) and tid.strip():
-                out.add(tid.strip())
-    return out
+def collect_active_celery_task_ids() -> set[str] | None:
+    """Ids of tasks a live worker runs or holds, plus tasks still queued; ``None`` when that cannot be read."""
+    return live_task_ids()
 
 
 def _pipeline_dispatch_time(meta: dict[str, Any]) -> datetime | None:
@@ -107,12 +90,12 @@ def _is_reap_candidate(
         else:
             detail = f"last checkpoint {checkpoint_at.isoformat()}"
         return True, (
-            "Import worker is not running this task (Celery inspect/active) and validation "
+            "Import worker is not running this task (not in the worker heartbeat or the queues) and validation "
             f"progress is stale ({detail}). Re-dispatch validation or cancel and retry."
         )
 
     return True, (
-        "Import worker is not running this task (Celery inspect/active). "
+        "Import worker is not running this task (not in the worker heartbeat or the queues). "
         "The background task may have exited without updating the job. Re-dispatch or retry."
     )
 

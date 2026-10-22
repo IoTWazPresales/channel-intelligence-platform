@@ -57,7 +57,7 @@ async def _bind_request_tenant(
         # later transaction, on this session or any SessionLocal(), is bound by the listener.
         await apply_product_line_guc(db)
         scope_kind = "all" if is_admin else f"assigned:{len(read)}"
-    logger.info("tenant_scope bound tenant=%s product_lines=%s", tid, scope_kind)
+    logger.debug("tenant_scope bound tenant=%s product_lines=%s", tid, scope_kind)  # DEBUG: once per request (N-0089)
     try:
         yield
     finally:

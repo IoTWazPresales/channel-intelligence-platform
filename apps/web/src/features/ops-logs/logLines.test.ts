@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  DEFAULT_LEVEL_FILTER,
   appendCapped,
   displayTime,
   filterLines,
@@ -80,7 +81,14 @@ describe('filterLines', () => {
   const all = new Set<LogSource>(['api', 'worker', 'web', 'supervisor']);
 
   it('filters by source', () => {
-    expect(filterLines(lines, { sources: new Set<LogSource>(['worker']), level: 'all', query: '' }).map((l) => l.uid)).toEqual([2, 3]);
+    expect(filterLines(lines, { sources: new Set<LogSource>(['worker']), level: 'debug', query: '' }).map((l) => l.uid)).toEqual([2, 3]);
+  });
+
+  it('the default level hides debug lines; "debug" shows everything', () => {
+    const withDebug = [...lines, line({ uid: 5, level: 'DEBUG', text: 'tenant detail' })];
+    expect(DEFAULT_LEVEL_FILTER).toBe('info');
+    expect(filterLines(withDebug, { sources: all, level: DEFAULT_LEVEL_FILTER, query: '' }).map((l) => l.uid)).toEqual([1, 2, 3, 4]);
+    expect(filterLines(withDebug, { sources: all, level: 'debug', query: '' }).map((l) => l.uid)).toEqual([1, 2, 3, 4, 5]);
   });
 
   it('filters by level, counting critical as an error', () => {
@@ -89,10 +97,10 @@ describe('filterLines', () => {
   });
 
   it('searches text, source and job id, ignoring case', () => {
-    expect(filterLines(lines, { sources: all, level: 'all', query: 'FAILED' }).map((l) => l.uid)).toEqual([3]);
-    expect(filterLines(lines, { sources: all, level: 'all', query: '1688' }).map((l) => l.uid)).toEqual([2, 3]);
-    expect(filterLines(lines, { sources: all, level: 'all', query: 'supervisor' }).map((l) => l.uid)).toEqual([4]);
-    expect(filterLines(lines, { sources: all, level: 'all', query: '  ' })).toHaveLength(4);
+    expect(filterLines(lines, { sources: all, level: 'debug', query: 'FAILED' }).map((l) => l.uid)).toEqual([3]);
+    expect(filterLines(lines, { sources: all, level: 'debug', query: '1688' }).map((l) => l.uid)).toEqual([2, 3]);
+    expect(filterLines(lines, { sources: all, level: 'debug', query: 'supervisor' }).map((l) => l.uid)).toEqual([4]);
+    expect(filterLines(lines, { sources: all, level: 'debug', query: '  ' })).toHaveLength(4);
   });
 });
 
