@@ -61,6 +61,7 @@ from app.services.imports.import_job_bulk_delete import (
     normalize_job_ids,
     preview_import_job_bulk_delete,
 )
+from app.services.imports.import_job_archive import preview_import_job_archive, set_import_jobs_archived
 from app.services.imports.db_transient_retry import is_readonly_db_error
 from app.services.imports.template_definitions import product_master_sample_csv
 from app.utils.json_safe import to_jsonable
@@ -289,6 +290,11 @@ class ImportJobBulkIdsBody(BaseModel):
 
 class ImportJobBulkDeleteConfirmBody(ImportJobBulkIdsBody):
     delete_semantic_artifacts: bool = False
+
+
+class ImportJobBulkArchiveBody(ImportJobBulkIdsBody):
+    # True archives, False unarchives (N-0113).
+    archive: bool = True
 
 
 def _template_to_api(t: ImportTemplate) -> dict[str, Any]:
@@ -581,6 +587,63 @@ async def post_import_jobs_bulk_delete_confirm(
                     detail={
                         "error": code,
                         "message": "One or more job ids no longer exist; refresh the list and try again.",
+                    },
+                )
+            raise HTTPException(status_code=400, detail={"error": code}) from exc
+        except Exception:
+            db.rollback()
+            raise
+    return out
+
+
+def _check_archive_ids(job_ids: list[int]) -> None:
+    if not normalize_job_ids(job_ids):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "no_valid_job_ids", "message": "Provide at least one valid import job id."},
+        )
+    if len({j for j in job_ids if isinstance(j, int) and j > 0}) > MAX_JOBS:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "too_many_job_ids", "message": f"Up to {MAX_JOBS} jobs at a time."},
+        )
+
+
+@router.post("/jobs/bulk-archive-preview")
+async def post_import_jobs_bulk_archive_preview(
+    body: ImportJobBulkArchiveBody,
+    _user: dict = Depends(require_roles(Role.ADMIN)),
+):
+    """Each job with its status and whether archiving (or unarchiving) changes it (admin; writes nothing)."""
+    _check_archive_ids(body.job_ids)
+    with SessionLocal() as db:
+        try:
+            return preview_import_job_archive(db, body.job_ids, archive=body.archive)
+        finally:
+            db.rollback()
+
+
+@router.post("/jobs/bulk-archive-confirm")
+async def post_import_jobs_bulk_archive_confirm(
+    body: ImportJobBulkArchiveBody,
+    _user: dict = Depends(require_roles(Role.ADMIN)),
+):
+    """Archive (``archive: true``) or unarchive import jobs by id (admin only). Only ``archived_at``
+    changes; a ``platform_audit_event`` records the ids (N-0113)."""
+    _check_archive_ids(body.job_ids)
+    with SessionLocal() as db:
+        try:
+            out = set_import_jobs_archived(db, body.job_ids, archive=body.archive, user=_user)
+            db.commit()
+        except ValueError as exc:
+            db.rollback()
+            code = str(exc)
+            if code == "not_all_jobs_found":
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "error": code,
+                        "message": "One or more job ids do not exist; remove them and preview again.",
                     },
                 )
             raise HTTPException(status_code=400, detail={"error": code}) from exc

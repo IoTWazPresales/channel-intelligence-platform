@@ -16,6 +16,8 @@ Usage (from apps/api):
   python scripts/ops/cip_test_leak_census.py --coverage       sell-through jobs validated but not loaded, and jobs
                                                               completed with errors: is each one's customer and
                                                               period held by a later loaded job
+  python scripts/ops/cip_test_leak_census.py --dates          loaded figures dated after today, and the same file
+                                                              name loaded into two different years
 """
 
 from __future__ import annotations
@@ -423,6 +425,76 @@ def coverage(conn: Connection) -> None:
                   f"{f' ({unres} without a customer/distributor)' if unres else ''}; later-load rows {later_rows}  {j.file_name}")
 
 
+# Loaded figures by date: (table, job column, entity column, entity table, date column, units column).
+DATED_FACTS = (
+    ("fact_customer_sellthrough", "import_job_id", "customer_id", "dim_customer", "period_start_date", "units_sold"),
+    ("fact_sales_sellout", "source_import_job_id", "distributor_id", "dim_distributor", "transaction_date", "units"),
+    ("fact_returns", "import_job_id", "distributor_id", "dim_distributor", "transaction_date", "return_quantity"),
+    ("fact_inventory_distributor", "source_import_job_id", "distributor_id", "dim_distributor", "as_of_date", "on_hand_units"),
+)
+
+
+def dates_check(conn: Connection) -> None:
+    """Loaded sell-through and distributor figures dated after today, and file names loaded into two years."""
+    today = conn.execute(text("SELECT (now() AT TIME ZONE 'Africa/Johannesburg')::date")).scalar()
+    print(f"\n== Loaded figures dated after today ({today}, Africa/Johannesburg)")
+    future_jobs: set[int] = set()
+    for table, job_col, ent_col, ent_table, date_col, units_col in DATED_FACTS:
+        rows = conn.execute(
+            text(
+                f"""
+                SELECT f.{job_col} AS job, j.file_name, f.{ent_col} AS ent, e.name, f.{date_col} AS d,
+                       count(*) AS n, sum(f.{units_col}) AS units
+                FROM {table} f
+                LEFT JOIN import_job j ON j.id = f.{job_col}
+                LEFT JOIN {ent_table} e ON e.id = f.{ent_col}
+                WHERE f.{date_col} > :today
+                GROUP BY 1, 2, 3, 4, 5 ORDER BY 1, 5
+                """
+            ),
+            {"today": today},
+        ).all()
+        print(f"  {table}: {len(rows)} job/date groups")
+        for r in rows:
+            future_jobs.add(r.job) if r.job is not None else None
+            print(f"    job {r.job} {r.file_name!r}: {r.name} ({r.ent}) {r.d}  rows {r.n}, units {r.units}")
+
+    print("\n== The same file name loaded into different years (each job's dates, by file name)")
+    shifted_jobs: set[int] = set()
+    for table, job_col, ent_col, ent_table, date_col, units_col in DATED_FACTS:
+        rows = conn.execute(
+            text(
+                f"""
+                SELECT j.file_name, f.{job_col} AS job, f.{ent_col} AS ent, e.name,
+                       min(f.{date_col}) AS d0, max(f.{date_col}) AS d1, count(*) AS n, sum(f.{units_col}) AS units
+                FROM {table} f
+                JOIN import_job j ON j.id = f.{job_col}
+                LEFT JOIN {ent_table} e ON e.id = f.{ent_col}
+                GROUP BY 1, 2, 3, 4 ORDER BY 1, 2
+                """
+            )
+        ).all()
+        by_name: dict[str, list] = defaultdict(list)
+        for r in rows:
+            by_name[r.file_name].append(r)
+        for name, group in sorted(by_name.items()):
+            # Two loads of one file whose dates do not overlap and sit in different years: a year read wrongly.
+            flagged = [
+                (a, b) for a in group for b in group
+                if a.job < b.job and a.ent == b.ent and a.d0.year != b.d0.year and (a.d1 < b.d0 or b.d1 < a.d0)
+            ]
+            if not flagged:
+                continue
+            jobs = sorted({x.job for pair in flagged for x in pair})
+            shifted_jobs.update(jobs)
+            print(f"  {table} {name!r}:")
+            for r in group:
+                if r.job in jobs:
+                    print(f"    job {r.job}: {r.name} ({r.ent}) {r.d0} to {r.d1}  rows {r.n}, units {r.units}")
+    print(f"\n  jobs with figures dated after today: {', '.join(map(str, sorted(future_jobs))) or 'none'}")
+    print(f"  jobs in a same-file, different-year pair: {', '.join(map(str, sorted(shifted_jobs))) or 'none'}")
+
+
 def main(argv: list[str]) -> int:
     ids_only = "--ids" in argv
     check_jobs: list[int] = []
@@ -444,6 +516,10 @@ def main(argv: list[str]) -> int:
 
         if check_jobs:
             job_delete_check(conn, check_jobs)
+            conn.rollback()
+            return 0
+        if "--dates" in argv:
+            dates_check(conn)
             conn.rollback()
             return 0
         if "--coverage" in argv:

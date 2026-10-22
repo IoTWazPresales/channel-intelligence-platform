@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.models.fact_customer_sellthrough import FactCustomerSellthrough
 from app.models.import_customer_sellthrough_staging import ImportCustomerSellthroughStagingLine
+from app.services.imports.upload_date_rule import dated_after, upload_day
 
 _T = "fact_customer_sellthrough"
 
@@ -120,6 +121,8 @@ class ApplySummary:
     # figures of each kind were superseded, same key or not).
     superseded_partial_rows: int = 0
     superseded_figures: dict[str, int] = field(default_factory=dict)
+    # N-0113: rows whose period starts after the upload day, left staged (load report: check the year).
+    skipped_dated_after_upload: int = 0
 
 
 def apply_customer_sellthrough_staging(
@@ -149,6 +152,9 @@ def apply_customer_sellthrough_staging(
 
     N-0111: a job whose files carry week numbers without a year applies nothing until the
     uploader confirms the year.
+
+    N-0113: a row whose period starts after the day the file was uploaded is not loaded
+    (``upload_date_rule``); it stays staged and the load report counts it.
     """
     from app.models.ingestion import ImportJob
     from app.services.imports.customer_sell_through import (
@@ -189,6 +195,7 @@ def apply_customer_sellthrough_staging(
     )
 
     now = datetime.now(timezone.utc)
+    uploaded_on = upload_day(job) if job is not None else None
 
     # Group by source_key (D-0091): differing lines are summed, identical copies count once. Every
     # line in the group is remembered so it is marked and pointed at the resulting fact id.
@@ -202,6 +209,9 @@ def apply_customer_sellthrough_staging(
             or (line.units_sold is None and all(getattr(line, k, None) is None for k in _STOCK_FIELDS))
         ):
             summary.skipped_unresolved += 1
+            continue
+        if dated_after(line.period_start_date, uploaded_on):
+            summary.skipped_dated_after_upload += 1
             continue
         cust_id = int(line.resolved_customer_id)
         prod_id = int(line.resolved_product_id)

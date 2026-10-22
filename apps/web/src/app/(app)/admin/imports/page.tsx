@@ -49,6 +49,11 @@ import {
   ImportJobBulkDeleteImpactDialog,
   type ImportJobBulkDeletePreview,
 } from '@/components/bulkTable/ImportJobBulkDeleteImpactDialog';
+import {
+  ImportJobArchiveDialog,
+  type ImportJobArchiveAction,
+  type ImportJobArchivePreview,
+} from '@/components/bulkTable/ImportJobArchiveDialog';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { ModuleGridToolbar } from '@/components/ModuleGridToolbar';
@@ -594,6 +599,12 @@ function AdminImportsPageContent() {
   const [importJobDeleteSemanticArtifacts, setImportJobDeleteSemanticArtifacts] = useState(false);
   const [importJobBulkDeleteAck, setImportJobBulkDeleteAck] = useState(false);
   const [importJobDeleteById, setImportJobDeleteById] = useState(false);
+  // N-0113: archive / unarchive by id (or the grid selection), admin only.
+  const [importJobArchive, setImportJobArchive] = useState<{ action: ImportJobArchiveAction; initialIds: number[] } | null>(
+    null,
+  );
+  const [importJobArchivePreview, setImportJobArchivePreview] = useState<ImportJobArchivePreview | null>(null);
+  const [importJobArchiveBusy, setImportJobArchiveBusy] = useState(false);
   const [shipmentApplyWarning, setShipmentApplyWarning] = useState<string | null>(null);
   const [shipmentMapDraft, setShipmentMapDraft] = useState<Record<string, string>>({});
   const [shipmentMappingResetBanner, setShipmentMappingResetBanner] = useState(false);
@@ -2748,6 +2759,59 @@ function AdminImportsPageContent() {
       setImportJobBulkDeleteBusy(false);
     }
   }, [importJobBulkDeletePreview, importJobDeleteSemanticArtifacts, qc]);
+
+  const previewImportJobArchive = useCallback(async (action: ImportJobArchiveAction, ids: number[]) => {
+    if (!ids.length) return;
+    setImportJobArchiveBusy(true);
+    try {
+      const data = await apiPost<ImportJobArchivePreview>('/api/v1/imports/jobs/bulk-archive-preview', {
+        job_ids: ids,
+        archive: action === 'archive',
+      });
+      setImportJobArchivePreview(data);
+    } catch (e) {
+      alert(safeDisplayError(e));
+    } finally {
+      setImportJobArchiveBusy(false);
+    }
+  }, []);
+
+  const openImportJobArchive = useCallback(
+    (action: ImportJobArchiveAction) => {
+      const ids = jobsGridApiRef.current?.getSelectedRows().map((r) => r.id) ?? [];
+      setImportJobArchive({ action, initialIds: ids });
+      setImportJobArchivePreview(null);
+      if (ids.length) void previewImportJobArchive(action, ids);
+    },
+    [previewImportJobArchive],
+  );
+
+  const closeImportJobArchive = useCallback(() => {
+    if (importJobArchiveBusy) return;
+    setImportJobArchive(null);
+    setImportJobArchivePreview(null);
+  }, [importJobArchiveBusy]);
+
+  const confirmImportJobArchive = useCallback(async () => {
+    if (!importJobArchive || !importJobArchivePreview) return;
+    setImportJobArchiveBusy(true);
+    try {
+      await apiPost('/api/v1/imports/jobs/bulk-archive-confirm', {
+        job_ids: importJobArchivePreview.job_ids,
+        archive: importJobArchive.action === 'archive',
+      });
+      setImportJobArchive(null);
+      setImportJobArchivePreview(null);
+      setJobsBulkSelectionMode('normal');
+      void qc.invalidateQueries({ queryKey: ['import-jobs'] });
+    } catch (e) {
+      alert(safeDisplayError(e));
+    } finally {
+      setImportJobArchiveBusy(false);
+    }
+  }, [importJobArchive, importJobArchivePreview, qc]);
+
+  const archiveAllowed = !stewardAccess.known || stewardAccess.role === 'admin';
 
   const canGoUploadGeneric =
     selectedSlug &&
@@ -5293,6 +5357,19 @@ function AdminImportsPageContent() {
               >
                 Delete by job id
               </Button>
+              {(['archive', 'unarchive'] as const).map((action) => (
+                <Button
+                  key={action}
+                  size="small"
+                  variant="text"
+                  onClick={() => openImportJobArchive(action)}
+                  disabled={importJobArchiveBusy || !archiveAllowed}
+                  title={archiveAllowed ? undefined : 'Archiving import jobs needs the admin role.'}
+                  data-testid={`${action}-jobs-by-id`}
+                >
+                  {action === 'archive' ? 'Archive by job id' : 'Unarchive by job id'}
+                </Button>
+              ))}
             </Stack>
           }
         >
@@ -5320,6 +5397,16 @@ function AdminImportsPageContent() {
           onClose={closeImportJobBulkDeleteDialog}
           onConfirm={() => void confirmImportJobBulkDelete()}
           onPreviewIds={importJobDeleteById ? (ids) => void previewImportJobIds(ids) : undefined}
+        />
+        <ImportJobArchiveDialog
+          open={importJobArchive != null}
+          action={importJobArchive?.action ?? 'archive'}
+          busy={importJobArchiveBusy}
+          preview={importJobArchivePreview}
+          initialIds={importJobArchive?.initialIds ?? []}
+          onPreviewIds={(ids) => importJobArchive && void previewImportJobArchive(importJobArchive.action, ids)}
+          onClose={closeImportJobArchive}
+          onConfirm={() => void confirmImportJobArchive()}
         />
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
           Lineup files are applied from the{' '}

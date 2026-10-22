@@ -14,6 +14,9 @@ row gets one reason from its staging line, using the same conditions as the appl
   differs, counted once when identical in every source column (D-0091); otherwise not matched, no
   date, no figures, or waiting to apply.
 
+Both paths (N-0113): a row dated after the day its file was uploaded is not loaded and counts as
+"Dated after the upload date (check the year)" (``upload_date_rule``).
+
 The counts come from the staging tables on every read; nothing is stored beyond what the CST
 parser records in ``staged_metadata.cst_load_parse``.
 """
@@ -27,7 +30,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
-CST = "customer_sell_through"
+from app.services.imports.upload_date_rule import DATED_AFTER_UPLOAD, DATED_AFTER_UPLOAD_LABEL, UPLOAD_DAY_SQL
+
+CST ="customer_sell_through"
 DSI = "distributor_inventory"
 COMPLETED = ("completed", "completed_with_errors")
 
@@ -47,6 +52,7 @@ LABELS: dict[str, str] = {
     "no_period": "No sale date or period",
     "no_figures": "No units or stock figures",
     "waiting_to_apply": "Matched, not applied yet",
+    DATED_AFTER_UPLOAD: DATED_AFTER_UPLOAD_LABEL,
     # distributor
     "distributor_not_matched": "Distributor not matched (finish in the steward)",
     "customer_not_matched": "Sale with no matched customer",
@@ -59,22 +65,24 @@ LABELS: dict[str, str] = {
 }
 PARTLY = frozenset(k for k in LABELS if k.startswith("partly_"))
 
-_CST_SQL = """
-SELECT import_job_id, CASE
-    WHEN apply_status = 'applied' THEN 'loaded'
-    WHEN apply_status = 'duplicate' THEN 'duplicate'
-    WHEN resolution_status <> 'resolved' OR resolved_product_id IS NULL THEN 'product_not_matched'
-    WHEN resolved_customer_id IS NULL THEN 'customer_not_set'
-    WHEN period_start_date IS NULL THEN 'no_period'
-    WHEN units_sold IS NULL AND reported_soh IS NULL AND in_transit_units IS NULL AND on_order_units IS NULL
+_CST_SQL = f"""
+SELECT s.import_job_id, CASE
+    WHEN s.apply_status = 'applied' THEN 'loaded'
+    WHEN s.apply_status = 'duplicate' THEN 'duplicate'
+    WHEN s.resolution_status <> 'resolved' OR s.resolved_product_id IS NULL THEN 'product_not_matched'
+    WHEN s.resolved_customer_id IS NULL THEN 'customer_not_set'
+    WHEN s.period_start_date IS NULL THEN 'no_period'
+    WHEN s.units_sold IS NULL AND s.reported_soh IS NULL AND s.in_transit_units IS NULL AND s.on_order_units IS NULL
         THEN 'no_figures'
+    WHEN s.period_start_date > {UPLOAD_DAY_SQL} THEN '{DATED_AFTER_UPLOAD}'
     ELSE 'waiting_to_apply' END AS reason, count(*)
-FROM import_customer_sellthrough_staging_line
-WHERE import_job_id = ANY(:ids)
+FROM import_customer_sellthrough_staging_line s
+JOIN import_job j ON j.id = s.import_job_id
+WHERE s.import_job_id = ANY(:ids)
 GROUP BY 1, 2
 """
 
-_DSI_SQL = """
+_DSI_SQL = f"""
 SELECT s.import_job_id, CASE
     WHEN s.apply_status LIKE 'duplicate%' THEN 'duplicate'
     WHEN s.apply_status <> 'pending' AND coalesce(s.quantity_sold, 0) <> 0
@@ -87,6 +95,7 @@ SELECT s.import_job_id, CASE
     WHEN s.resolved_product_id IS NULL THEN 'product_not_matched'
     WHEN coalesce(s.quantity_sold, 0) = 0 AND s.stock_on_hand IS NULL THEN 'no_figures'
     WHEN s.transaction_date IS NULL AND s.snapshot_date IS NULL THEN 'no_date'
+    WHEN s.transaction_date > {UPLOAD_DAY_SQL} OR s.snapshot_date > {UPLOAD_DAY_SQL} THEN '{DATED_AFTER_UPLOAD}'
     WHEN coalesce(s.quantity_sold, 0) <> 0 AND s.resolved_customer_id IS NULL
          AND (s.snapshot_date IS NULL OR s.stock_on_hand IS NULL) THEN 'customer_not_matched'
     WHEN coalesce(s.quantity_sold, 0) <> 0 AND s.transaction_date IS NULL
@@ -94,6 +103,7 @@ SELECT s.import_job_id, CASE
     WHEN coalesce(s.quantity_sold, 0) = 0 AND s.snapshot_date IS NULL THEN 'no_snapshot_date'
     ELSE 'waiting_to_apply' END AS reason, count(*)
 FROM import_distributor_si_staging_line s
+JOIN import_job j ON j.id = s.import_job_id
 WHERE s.import_job_id = ANY(:ids)
 GROUP BY 1, 2
 """

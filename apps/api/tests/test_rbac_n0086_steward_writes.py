@@ -51,6 +51,8 @@ _WRITE_MATRIX: dict[tuple[str, str], frozenset[Role]] = {
     # imports.py — pre-existing admin-only bulk delete
     ("POST", f"{_I}/jobs/bulk-delete-preview"): _ADMIN,
     ("POST", f"{_I}/jobs/bulk-delete-confirm"): _ADMIN,
+    ("POST", f"{_I}/jobs/bulk-archive-preview"): _ADMIN,
+    ("POST", f"{_I}/jobs/bulk-archive-confirm"): _ADMIN,
     # imports.py — job runner: planner admitted at the route, then checked per template
     ("POST", f"{_I}/jobs"): _RUNNER,
     ("POST", f"{_I}/jobs/{{job_id}}/cancel"): _RUNNER,

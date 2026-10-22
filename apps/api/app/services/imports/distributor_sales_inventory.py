@@ -3894,6 +3894,16 @@ def upsert_dsi_facts_for_staging_job(
         .where(ImportDistributorSiStagingLine.import_job_id == job.id)
         .order_by(ImportDistributorSiStagingLine.source_row_number)
     ).all()
+    # N-0113: a line whose sale or stock date is after the upload day is not loaded; it stays
+    # pending and the load report counts it as dated after the upload date.
+    from app.services.imports.upload_date_rule import dated_after, upload_day
+
+    uploaded_on = upload_day(job)
+    lines = [
+        ln
+        for ln in lines
+        if not (dated_after(ln.transaction_date, uploaded_on) or dated_after(ln.snapshot_date, uploaded_on))
+    ]
     applied_sell = 0
     applied_inv = 0
     applied_ret = 0

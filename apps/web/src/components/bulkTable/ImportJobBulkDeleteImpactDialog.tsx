@@ -95,6 +95,59 @@ export function parseJobIds(raw: string): number[] {
   return [...seen];
 }
 
+/** The box to type or paste job ids into, and its Preview button (delete, archive and unarchive). */
+export function JobIdEntry({
+  busy,
+  onPreview,
+  initialText = '',
+  ariaLabel,
+  testId = 'job-id-entry',
+  previewTestId = 'preview-job-ids',
+}: {
+  busy: boolean;
+  onPreview: (ids: number[]) => void;
+  initialText?: string;
+  ariaLabel: string;
+  testId?: string;
+  previewTestId?: string;
+}) {
+  const [idText, setIdText] = useState(initialText);
+  const typedIds = parseJobIds(idText);
+  const tooMany = typedIds.length > IMPORT_JOB_DELETE_MAX;
+  return (
+    <Stack spacing={1} data-testid={testId}>
+      <TextField
+        label="Job ids"
+        placeholder="1164, 1184, 1199 or one per line"
+        value={idText}
+        onChange={(e) => setIdText(e.target.value)}
+        multiline
+        minRows={2}
+        maxRows={6}
+        size="small"
+        disabled={busy}
+        error={tooMany}
+        helperText={
+          tooMany
+            ? `${typedIds.length} ids: preview up to ${IMPORT_JOB_DELETE_MAX} at a time.`
+            : `${typedIds.length} job id${typedIds.length === 1 ? '' : 's'}. Any job, not only the newest 100 in the list. Up to ${IMPORT_JOB_DELETE_MAX} at a time.`
+        }
+        inputProps={{ 'aria-label': ariaLabel }}
+      />
+      <Box>
+        <Button
+          variant="outlined"
+          onClick={() => onPreview(typedIds)}
+          disabled={busy || typedIds.length === 0 || tooMany}
+          data-testid={previewTestId}
+        >
+          Preview these jobs
+        </Button>
+      </Box>
+    </Stack>
+  );
+}
+
 function jobLines(counts: Record<string, number>): string[] {
   const lines = COUNT_LABELS.filter(([k]) => (counts[k] ?? 0) > 0).map(([k, label]) => `${label}: ${counts[k]}`);
   const aliases = ALIAS_KEYS.reduce((n, k) => n + (counts[k] ?? 0), 0);
@@ -126,9 +179,6 @@ export function ImportJobBulkDeleteImpactDialog({
   /** When given, the dialog offers a box to preview jobs by id (any job, not only the newest 100). */
   onPreviewIds?: (ids: number[]) => void;
 }) {
-  const [idText, setIdText] = useState('');
-  const typedIds = parseJobIds(idText);
-  const tooMany = typedIds.length > IMPORT_JOB_DELETE_MAX;
   const c = preview?.counts ?? {};
   const risky = preview?.risky ?? {};
   const aliasTotal = ALIAS_KEYS.reduce((n, k) => n + (risky[k] ?? 0), 0);
@@ -146,38 +196,7 @@ export function ImportJobBulkDeleteImpactDialog({
       <DialogContent dividers>
         {busy ? <LinearProgress sx={{ mb: 2 }} /> : null}
         <Stack spacing={2}>
-          {onPreviewIds ? (
-            <Stack spacing={1} data-testid="job-id-entry">
-              <TextField
-                label="Job ids"
-                placeholder="1164, 1184, 1199 or one per line"
-                value={idText}
-                onChange={(e) => setIdText(e.target.value)}
-                multiline
-                minRows={2}
-                maxRows={6}
-                size="small"
-                disabled={busy}
-                error={tooMany}
-                helperText={
-                  tooMany
-                    ? `${typedIds.length} ids: preview up to ${IMPORT_JOB_DELETE_MAX} at a time.`
-                    : `${typedIds.length} job id${typedIds.length === 1 ? '' : 's'}. Any job, not only the newest 100 in the list. Up to ${IMPORT_JOB_DELETE_MAX} at a time.`
-                }
-                inputProps={{ 'aria-label': 'Job ids to delete' }}
-              />
-              <Box>
-                <Button
-                  variant="outlined"
-                  onClick={() => onPreviewIds(typedIds)}
-                  disabled={busy || typedIds.length === 0 || tooMany}
-                  data-testid="preview-job-ids"
-                >
-                  Preview these jobs
-                </Button>
-              </Box>
-            </Stack>
-          ) : null}
+          {onPreviewIds ? <JobIdEntry busy={busy} onPreview={onPreviewIds} ariaLabel="Job ids to delete" /> : null}
           {!preview ? (
             onPreviewIds ? null : <Typography color="text.secondary">No preview loaded.</Typography>
           ) : (
