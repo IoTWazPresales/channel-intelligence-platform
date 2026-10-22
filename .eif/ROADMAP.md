@@ -113,3 +113,4 @@
 - N-0109 **Reports, dashboards and KPI tiles on the design lab system: one chart system, one KPI tile, one table style (build to mockup-report-system)** `complete`/`complete` (feature)
 - N-0110 **Customer sell-through stock gap: the customer report is on-hand, CIP flags the difference** `in_progress`/`in_progress` (feature)
 - N-0111 **Sell-through and distributor history upload readiness (2 years: Amazon, Takealot, Pinnacle)** `in_progress`/`in_progress` (feature)
+- N-0112 **Deleting an import job removes the data it loaded and restores what it superseded** `in_progress`/`in_progress` (feature)
