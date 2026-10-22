@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2657
-  log_sha256: 97d79b6d0a794f5077fb39828560ae8374b172bc9056c65c3779552115b53e9b
+  snapshot_revision: 2658
+  log_sha256: 0c70a9a571fcb02efccb5b257ce6132f22dbb1a2ed47c96ac5ce22cd8a558d15
   acceptance_policy:
     milestone: operator
     root: operator
@@ -16593,6 +16593,17 @@ evidence:
       the seed returns row, the 18 distributors, the named rows and the rows below them); every other row of 73 watched tables
       identical; case 131 lines 9 -> 1, quantity_units 24 -> 24 as the dry run said; audit event lists all 77 rows in full
       and the 27 named rows with their reasons; second dry run removes nothing. Not yet run on cip.'
+  EV-N0113-APPLY-2:
+    id: EV-N0113-APPLY-2
+    provenance: implementation-observation
+    path: .eif/audit/CIP_TEST_LEAK_20261021/masters_named_apply_cip.txt
+    tree_hash: null
+    note: 'N-0113 second pass run on cip 2026-10-22 on Warren''s ''run against cip (plan cc1810cf2ec334c5)'': dry run first
+      (masters_named_dryrun_cip_pre_apply.txt, plan unchanged), then --named-rows ... --apply --expect-db cip as role cip:
+      77 rows removed (8 lineup lines, 1 CPOR case with its event and line, 8 aliases, 1 customer, 19 distributors, 1 product,
+      9 inbound shipments, 1 returns row, 9 purchase orders, 18 shipment lines), committed; platform_audit_event 11 lists
+      all 77 rows and the 27 named rows with reasons. After: case 131 has 1 line and 24 units; job 4 has no shipment lines;
+      dry run again removes nothing (all 27 named rows already gone). Read-only follow-up: census --coverage (coverage_cip.txt).'
 baselines:
   BLN-0001:
     id: BLN-0001
