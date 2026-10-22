@@ -13,6 +13,9 @@ Usage (from apps/api):
                                                               (the delete's own preview gives exact counts)
   python scripts/ops/cip_test_leak_census.py --open-jobs      failed / pending / unfinished jobs: test or real, fact
                                                               rows, and whether the failed count includes them
+  python scripts/ops/cip_test_leak_census.py --coverage       sell-through jobs validated but not loaded, and jobs
+                                                              completed with errors: is each one's customer and
+                                                              period held by a later loaded job
 """
 
 from __future__ import annotations
@@ -305,6 +308,121 @@ def open_jobs(conn: Connection) -> None:
     print("  by status / stage / archived: " + "; ".join(f"{s} {st} {a} {n}" for (s, st, a), n in sorted(summary.items())))
 
 
+def _bucket(keys: set, by_key: dict, job_id: int) -> tuple[str, int, int, int]:
+    """keys: the job's (entity, period) keys; by_key: key -> set of jobs holding loaded figures for it."""
+    later = sum(1 for k in keys if any(j > job_id for j in by_key.get(k, ())))
+    held = sum(1 for k in keys if by_key.get(k))
+    if not keys:
+        return "nothing staged (cannot tell)", 0, 0, 0
+    if later == len(keys):
+        return "covered by a later load", later, held, len(keys)
+    if held == len(keys):
+        return "covered, but only by this or an earlier load", later, held, len(keys)
+    if held:
+        return "partly covered (data may be missing)", later, held, len(keys)
+    return "not covered (data may be missing)", later, held, len(keys)
+
+
+def coverage(conn: Connection) -> None:
+    """For sell-through jobs validated but not loaded, and every completed-with-errors job: is each one's customer
+    (or distributor) and period already held by a later loaded job? Checked per customer and week (sell-through)
+    or per distributor and date (distributor files); whether every product is there is not checked."""
+    jobs = conn.execute(
+        text(
+            """
+            SELECT id, template_slug, status, stage, file_name, staged_metadata->>'customer_id' AS meta_customer
+            FROM import_job
+            WHERE (template_slug = 'customer_sell_through' AND status = 'completed' AND stage = 'validated')
+               OR status = 'completed_with_errors'
+            ORDER BY template_slug, id
+            """
+        )
+    ).all()
+    names = dict(conn.execute(text("SELECT id, name FROM dim_customer")).all())
+    dnames = dict(conn.execute(text("SELECT id, name FROM dim_distributor")).all())
+    rows_out: list[tuple] = []
+    for j in jobs:
+        if j.template_slug == "customer_sell_through":
+            staged = conn.execute(
+                text(
+                    "SELECT resolved_customer_id AS e, period_type AS pt, period_start_date AS d, count(*) AS n "
+                    "FROM import_customer_sellthrough_staging_line WHERE import_job_id = :j GROUP BY 1, 2, 3"
+                ),
+                {"j": j.id},
+            ).all()
+            ents = {r.e for r in staged if r.e is not None} or ({int(j.meta_customer)} if j.meta_customer else set())
+            keys = {(r.e, r.pt, r.d) for r in staged if r.e is not None}
+            by_key: dict = defaultdict(set)
+            later_rows = 0
+            if keys:
+                for e, t, d, job, n in conn.execute(
+                    text(
+                        "SELECT customer_id, period_type, period_start_date, import_job_id, count(*) "
+                        "FROM fact_customer_sellthrough WHERE customer_id = ANY(:c) AND period_start_date = ANY(:d) "
+                        "AND import_job_id IS NOT NULL GROUP BY 1, 2, 3, 4"
+                    ),
+                    {"c": list(ents), "d": list({k[2] for k in keys})},
+                ):
+                    if (e, t, d) in keys:
+                        by_key[(e, t, d)].add(job)
+                        later_rows += n if job > j.id else 0
+            who = ", ".join(f"{names.get(e, '?')} ({e})" for e in sorted(ents)) or "no customer"
+            dates = sorted(k[2] for k in keys)
+            unresolved = sum(r.n for r in staged if r.e is None)
+        elif j.template_slug == "distributor_inventory":
+            staged = conn.execute(
+                text(
+                    "SELECT resolved_distributor_id AS e, coalesce(transaction_date, snapshot_date) AS d, "
+                    "transaction_date IS NULL AS stock, count(*) AS n FROM import_distributor_si_staging_line "
+                    "WHERE import_job_id = :j GROUP BY 1, 2, 3"
+                ),
+                {"j": j.id},
+            ).all()
+            keys = {(r.e, r.stock, r.d) for r in staged if r.e is not None and r.d is not None}
+            ents = {r.e for r in staged if r.e is not None}
+            by_key = defaultdict(set)
+            later_rows = 0
+            for stock, table, col in ((False, "fact_sales_sellout", "transaction_date"), (True, "fact_inventory_distributor", "as_of_date")):
+                ds = list({k[2] for k in keys if k[1] == stock})
+                if not ds:
+                    continue
+                for e, d, job, n in conn.execute(
+                    text(
+                        f"SELECT distributor_id, {col}, source_import_job_id, count(*) FROM {table} "
+                        f"WHERE distributor_id = ANY(:e) AND {col} = ANY(:d) AND source_import_job_id IS NOT NULL GROUP BY 1, 2, 3"
+                    ),
+                    {"e": list(ents), "d": ds},
+                ):
+                    if (e, stock, d) in keys:
+                        by_key[(e, stock, d)].add(job)
+                        later_rows += n if job > j.id else 0
+            who = ", ".join(f"{dnames.get(e, '?')} ({e})" for e in sorted(ents)) or "no distributor resolved"
+            dates = sorted(k[2] for k in keys)
+            unresolved = sum(r.n for r in staged if r.e is None)
+        else:
+            n = conn.execute(text("SELECT count(*) FROM cpor_claim_evidence_line WHERE import_job_id = :j"), {"j": j.id}).scalar()
+            rows_out.append((j, f"loaded itself ({n} claim evidence lines); a CPOR tracking table, not a period load",
+                             "-", "-", 0, 0, 0, 0, 0, 0))
+            continue
+        bucket, later, held, total = _bucket(keys, by_key, j.id)
+        span = f"{dates[0]} to {dates[-1]}" if dates else "-"
+        rows_out.append((j, bucket, who, span, total, later, held, sum(r.n for r in staged), unresolved, later_rows))
+    order = ["covered by a later load", "covered, but only by this or an earlier load", "partly covered (data may be missing)",
+             "not covered (data may be missing)", "nothing staged (cannot tell)"]
+    print(f"\n== Coverage of {len(jobs)} jobs (sell-through validated but not loaded, and completed with errors)")
+    print("   periods: the job's distinct customer-weeks (sell-through) or distributor-dates (distributor files);")
+    print("   'later' = held by a loaded job with a higher id. Product completeness is not checked.")
+    for b in order + sorted({r[1] for r in rows_out} - set(order)):
+        group = [r for r in rows_out if r[1] == b]
+        if not group:
+            continue
+        print(f"\n-- {b}: {len(group)}")
+        for j, _, who, span, total, later, held, n, unres, later_rows in group:
+            print(f"  job {j.id:>5} {j.template_slug:<22} {j.status}/{j.stage:<10} {who[:44]:<44} {span:<24} "
+                  f"periods {total:>3} (later load {later}, any load {held}); staged rows {n}"
+                  f"{f' ({unres} without a customer/distributor)' if unres else ''}; later-load rows {later_rows}  {j.file_name}")
+
+
 def main(argv: list[str]) -> int:
     ids_only = "--ids" in argv
     check_jobs: list[int] = []
@@ -326,6 +444,10 @@ def main(argv: list[str]) -> int:
 
         if check_jobs:
             job_delete_check(conn, check_jobs)
+            conn.rollback()
+            return 0
+        if "--coverage" in argv:
+            coverage(conn)
             conn.rollback()
             return 0
         if "--open-jobs" in argv:
