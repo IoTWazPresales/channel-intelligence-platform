@@ -33,8 +33,8 @@ programme:
     form: pre_history
     project_id: null
     root_commit: null
-  snapshot_revision: 2675
-  log_sha256: ed6d078cdf63ca2143d43af1863ea993bd66835491f1611969a32c956512f082
+  snapshot_revision: 2676
+  log_sha256: 25ce4a5890be185f9f2d0abb4a0a2c3b57acf80d9d0f398cf3db1e348c792134
   acceptance_policy:
     milestone: operator
     root: operator
@@ -11041,12 +11041,8 @@ nodes:
     origin: operator
     status: in_progress
     stage: discovery
-    revision: 3
-    lease:
-      run: RUN-20261022-N0089-LOGVIEW
-      acquired_at: '2026-10-22T19:57:07Z'
-      heartbeat_at: '2026-10-22T19:57:07Z'
-      expires_at: '2026-10-22T20:57:07Z'
+    revision: 4
+    lease: null
     depends_on:
     - N-0073
     facets:

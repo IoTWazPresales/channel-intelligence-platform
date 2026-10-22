@@ -25,7 +25,7 @@
 
 ## In progress / leased
 
-- **N-0089** Operations and data health: data-health page, vacuum runbook, CST apply progress, retry coverage, background-task parity, visible evidence-read failures stage=discovery run=RUN-20261022-N0089-LOGVIEW expires=2026-10-22T20:57:07Z note=Session scoped to the live log view only (Warren 2026-10-22); the data-health page, vacuum runbook, CST progress, dispatch matrix and evidence-read items stay open. Built and pushed a21b93ed: GET /admin/logs/stream (SSE) and /admin/logs/errors read the supervisor's log files (%LOCALAPPDATA%/CIP/always-on/logs), admin only, secrets masked on the server (env and .env secret values incl. PG_OWNER and connection-string passwords, key=value pairs, bearer values, key shapes); imports.* Celery tasks tag every log line [job_id=N] and write start/finish lines; API app loggers now write timestamp and level; an idle report-schedule poll is INFO. Web: top-bar Logs icon (admin only) with red dot on a new ERROR, workbench-ui drawer with source/level/search, pause, 3000-line cap, Web-requests toggle (off by default); Show this job's log on the import job page. Restarted worker, API and web; all healthy; real log files parse and no known secret value survives masking. NOT rendered in a browser (sign-in required; agent may not sign in). Not exercised against the live API with a real admin session. Self-verified, not independent. Known limits: the log view reads the current file generation (plus the previous one for a job view); API uvicorn access lines have no time of their own and show ~time; rotation is still only at process launch (no size cap); lines logged by API request handlers are not job-tagged, only worker tasks.
+_none_
 
 ## Decision queue
 
