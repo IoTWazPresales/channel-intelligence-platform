@@ -4,7 +4,7 @@
 
 **Status:** active  
 **Charter:** accepted  
-**Snapshot revision:** 2671
+**Snapshot revision:** 2675
 
 ## Outcome (verbatim)
 
@@ -110,7 +110,7 @@ _none_
 | N-0086 | Security hardening before 24/7 exposure: proxy login-throttle address, steward-write role checks, pilot passwords | feature | complete | complete | yes |  | full loop |
 | N-0087 | Honest surfaces: pricing page stops creating products, stub routes and stub import templates resolved, legacy promotion scaffold and dead settlement code retired | feature | complete | complete | yes |  | full loop |
 | N-0088 | Promotion planner: suggested line quantities, and plans exported in the customer's own workbook layout | feature | proposed | proposed | yes |  | full loop |
-| N-0089 | Operations and data health: data-health page, vacuum runbook, CST apply progress, retry coverage, background-task parity, visible evidence-read failures | feature | proposed | proposed | yes |  | full loop |
+| N-0089 | Operations and data health: data-health page, vacuum runbook, CST apply progress, retry coverage, background-task parity, visible evidence-read failures | feature | in_progress | in_progress | yes |  | full loop |
 | N-0090 | Alert on late and missing customer sell-through reports | feature | complete | complete | yes |  | full loop |
 | N-0091 | Shipment receipt page and shipment change timeline | feature | complete | complete | yes |  | full loop |
 | N-0092 | Platform audit log for admin, user, settings and case-state actions | feature | complete | complete | yes |  | full loop |
