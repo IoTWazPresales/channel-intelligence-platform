@@ -55,6 +55,15 @@ def get_semantic_catalog(user: dict | None = Depends(get_optional_current_user))
     return _catalog_payload(_catalog_for_request(user), user)
 
 
+@router.get("/v2/catalog")
+def get_semantic_catalog_v2(user: dict = Depends(get_current_user)) -> dict:
+    """N-0115 model catalog: measures (base / calculated / governed), derived breakdowns, walls."""
+    from app.query.model.catalog import catalog_v2
+    from app.query.model.loader import default_model
+
+    return catalog_v2(default_model(), _catalog_for_request(user), is_admin=_user_is_admin(user))
+
+
 @router.get("/metrics")
 def list_semantic_metrics(
     status: str | None = Query(default=None, description="Filter: implemented|do_not_build|spec_only|partial"),

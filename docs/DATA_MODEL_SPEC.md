@@ -135,7 +135,47 @@ exact equality on Decimal-summed values (float rounding to 6 dp allowed). Run on
 on a pg_dump clone of cip; print old vs new per metric. A metric that differs keeps `serve_v1_from:
 handler` and is listed.
 
-## 10. Proposed decisions for Warren (not picked)
+## 10. Tonight's build after the challenge (`.eif/audit/PROGRAMME_20261023/N0115_CHALLENGE.md`)
+
+Built now:
+- Models **dsi_sellout**, **cst_sellthrough**, **cpor** (lines, with case attributes; case-grain counts as
+  distinct case over visible lines). Shipments, distributor_stock, returns, lineup_plan and recorded_prices
+  are declared later (recorded_prices as written is not buildable: `listing_observation` has no
+  product_id, tenant_id or date column of that name).
+- Walls as in section 4; **one model per v2 query** (a widget with measures from two models sends two
+  queries), so W-CUSTOMER-ROLE holds by construction and is also checked.
+- Calculated: ratio, difference, prior_period, pct_change, per_week_rate. Deferred: prior_year,
+  running_total, share_of_total.
+- Catalog v2 (`GET /semantics/v2/catalog`) and `POST /query/v2/execute`, `POST /query/v2/explain` (explain
+  also validates). Both on the signed-in router with `get_current_user` (anonymous = 401).
+- **No v1 switch:** `/query/execute`, stored widgets, saved reports and the schedule stay on today's
+  handlers. Parity is a script plus tests comparing the compiler with `volume_series` (not a live switch).
+- Tenant isolation structural: every model compiles `tenant_id = :tid` on its base table or declares
+  `tenant_via: dim_product` (inner join on product tenant); the loader refuses a model with neither.
+  Joins to dimensions for attributes are LEFT JOINs with an "Unassigned" bucket.
+- Product-line scope: the compiler runs only on the request `AsyncSession`; a test asserts the scope
+  setting is bound inside the compiled transaction. CPOR case attributes are read through visible lines.
+- Ids (measure, breakdown, sort) resolve by lookup in the loaded model only; filter values are bound and
+  coerced; list filters capped at 1,000; a limit above 5,000 is refused, not clamped; totals come from SQL.
+- Cache: the v2 key hashes the whole canonical request plus tenant, catalog version, scope and role.
+- Deferred last: spec-key breakdowns (pre-aggregate by product first), day grain (decision 1).
+
+As built (N-0115 implementation, corrections to the text above):
+- CPOR "voided" is a **line** rule, not a case status: the portfolio service leaves out lines whose remark
+  carries `[voided]` or `[split into layers]` and lines with no positive estimate, over non-superseded cases
+  that are not `intelligence_exclude`. It does not filter on `cpor_case.status`. The model follows the service.
+- `cpor_case_line` has no `tenant_id`: the CPOR model's tenant comes through its inner base join to
+  `cpor_case` (`tenant_via: case`), a third structural path beside `tenant_column` and `tenant_via: dim_product`.
+- The store breakdown id is `site_label` (the v1 dimension id, label "Store / site"), so v1 refuse_examples
+  map one to one.
+- Value measures (DSI decision 2, CST decision 3), customer stock cover, restock flags, CPOR "open" and
+  CPOR "value" are not built; they are listed under `pending:` in the model file and in the v2 catalog.
+
+Not invented tonight (each is a proposed decision): which CPOR status is "open" and which value a CPOR
+"value" means; customer stock cover and restock flags (reuse the sell-through code's own definitions if
+they exist, otherwise show reported on-hand beside per-week sell-through with no derived cover).
+
+## 11. Proposed decisions for Warren (not picked)
 
 1. Day grain: the mandate asks for day; today day is refused on purpose ("no daily widget grain"). Proposed
    default tonight: allow day only on models dated by day (DSI, shipments, returns, CPOR) and only from the

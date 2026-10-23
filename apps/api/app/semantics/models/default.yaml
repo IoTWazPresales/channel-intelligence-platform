@@ -1,0 +1,313 @@
+# N-0115 data model under the dashboard builder (docs/DATA_MODEL_SPEC.md section 10).
+#
+# Config, not code: tables, columns, joins and measures are named here; the compiler
+# (app/query/model/) resolves every name against the ORM metadata at load time and refuses
+# anything it cannot find. No SQL expression is ever read from this file: the few rules that
+# need SQL (CPOR portfolio line rules, CPOR support USD) are named here and built in code
+# (app/query/model/rules.py), mirroring the owning service.
+#
+# Breakdowns are DERIVED per model: period (when the model has a time column) + every join
+# + every attribute of a joined dimension + every local breakdown, minus walls; up to 3 at
+# once; one model per query.
+#
+# v1 (/query/execute, saved reports, dashboards, report exports, schedules) does not read
+# this file. legacy_key only links a measure to the v1 catalog metric it answers the same
+# way (parity is a script and tests, not a live switch).
+
+version: 1
+source_doc: docs/DATA_MODEL_SPEC.md
+
+groups: [Time, Product, Customer, Distributor, Store, Promotion]
+
+period:
+  label: Period
+  group: Time
+  grains: [week, month, quarter, year]
+  default_grain: quarter
+
+dimensions:
+  product:
+    label: Product
+    group: Product
+    table: dim_product
+    key: id
+    tenant_column: tenant_id
+    attributes:
+      bu: {column: product_line, label: "Business unit (product line)"}
+      business_unit: {column: business_unit, label: "Business unit (product master)"}
+      category: {column: category, label: Category}
+      series: {column: series_name, label: Series}
+      form_factor: {column: form_factor, label: Form factor}
+      price_band: {column: price_band, label: Price band}
+      sales_model: {column: sales_model_name, label: Sales model}
+      lifecycle: {column: lifecycle_status, label: Lifecycle}
+  customer:
+    label: Customer
+    group: Customer
+    table: dim_customer
+    key: id
+    tenant_column: tenant_id
+    attributes:
+      partner_tier: {column: partner_tier, label: Partner tier}
+    # Region and channel hang off the customer's CURRENT assignment (labelled "current").
+    # preferred_distributor_id is deliberately absent: it must never link CST to distributor.
+    references:
+      region: {table: dim_region, fk: region_id, key: id, name_column: name, label: "Region (current)"}
+      channel: {table: dim_channel, fk: channel_id, key: id, name_column: name, label: "Channel (current)"}
+  distributor:
+    label: Distributor
+    group: Distributor
+    table: dim_distributor
+    key: id
+    tenant_column: tenant_id
+
+models:
+  dsi_sellout:
+    label: Distributor sell-out (DSI)
+    table: fact_sales_sellout
+    tenant_column: tenant_id
+    time: {column: transaction_date, floor: day}
+    joins:
+      product: {fk: product_id}
+      customer: {fk: customer_id, role: dsi_dealer}
+      # Rows with no distributor are left out when distributor is a breakdown (as volume_series does).
+      distributor: {fk: distributor_id, null_keys: exclude_when_grouped}
+    measures:
+      units:
+        label: Sell-out units
+        unit: units
+        agg: sum
+        column: units
+        additivity: additive
+        legacy_key: sellout_units
+      priced_units:
+        label: Sell-out units with a price
+        unit: units
+        agg: sum
+        column: units
+        when_not_null: unit_sellout_price_ex_tax_amount
+        additivity: additive
+      lines:
+        label: Sell-out lines
+        unit: count
+        agg: count
+        additivity: additive
+      dealers:
+        label: Dealers selling
+        unit: count
+        agg: count_distinct
+        column: customer_id
+        additivity: non_additive
+
+  cst_sellthrough:
+    label: Customer sell-through (CST)
+    table: fact_customer_sellthrough
+    tenant_column: tenant_id
+    # Never finer than the coarsest stored period_type in scope (refused with the v1 message).
+    time: {column: period_start_date, floor: stored_period_type, period_type_column: period_type}
+    joins:
+      product: {fk: product_id}
+      customer: {fk: customer_id, role: cst_retailer}
+    local:
+      site_label: {column: site_label, label: "Store / site", group: Store}
+    measures:
+      units:
+        label: Sell-through units
+        unit: units
+        agg: sum
+        column: units_sold
+        additivity: additive
+        legacy_key: cst_sellthrough_units
+      priced_units:
+        label: Sell-through units with a price
+        unit: units
+        agg: sum
+        column: units_sold
+        when_not_null: unit_sell_price
+        additivity: additive
+      lines:
+        label: Sell-through report lines
+        unit: count
+        agg: count
+        additivity: additive
+      stores_reporting:
+        label: Stores / sites reporting
+        unit: count
+        agg: count_distinct
+        column: site_label
+        additivity: non_additive
+      # Same rule as sell_through_overview.load_stock_positions: each customer's latest stock
+      # report on or before the period end (never dropped for age); a product missing from that
+      # report holds 0. Never summed across dates, so no period breakdown (W-SNAPSHOT-NOT-SUMMED).
+      reported_soh:
+        label: Reported stock on hand (latest report)
+        unit: units
+        agg: latest_sum
+        column: reported_soh
+        latest_per: customer_id
+        additivity: semi_additive
+
+  cpor:
+    label: CPOR promotion lines
+    table: cpor_case_line
+    base_joins:
+      case: {table: cpor_case, fk: case_id, key: id}
+    # cpor_case_line has no tenant_id: the tenant is the case's (inner join, never optional).
+    tenant_via: case
+    tenant_column: tenant_id
+    # The portfolio service's own rules (services/cpor/portfolio_intelligence.py): non-superseded,
+    # commercial (not intelligence_exclude) cases; voided / split lines and lines with no
+    # positive estimate left out.
+    rules: [cpor_portfolio_lines]
+    # Dated by the case window start. a2 support_spend is all-time and refuses a period; these
+    # measures carry "(window start in period)" in their labels and are never the same figure.
+    # `via: case` = the column lives on the base join `case` (cpor_case), read through visible lines.
+    time: {column: window_start, via: case, floor: day}
+    joins:
+      product: {fk: product_id}
+      distributor: {fk: distributor_id}
+      customer: {fk: customer_id, via: case, role: cpor_account}
+    local:
+      promo_type: {column: promotion_type, via: case, label: Promotion type, group: Promotion}
+      status: {column: status, via: case, label: Case status, group: Promotion}
+      workflow_status: {column: workflow_status, via: case, label: Case approval status, group: Promotion}
+    measures:
+      estimate_units:
+        label: Estimated units (window start in period)
+        unit: units
+        agg: sum
+        column: estimate_qty
+        additivity: additive
+      result_units:
+        label: Result units (window start in period)
+        unit: units
+        agg: sum
+        column: result_qty
+        additivity: additive
+      support_usd:
+        label: Support USD (window start in period)
+        unit: usd
+        agg: sum
+        rule: cpor_line_support_usd
+        additivity: additive
+      support_zar:
+        label: Support ZAR (window start in period)
+        unit: zar
+        agg: sum
+        column: ttl_support
+        additivity: additive
+      lines:
+        label: Promotion lines
+        unit: count
+        agg: count
+        additivity: additive
+      cases:
+        label: Promotion cases
+        unit: count
+        agg: count_distinct
+        column: case_id
+        additivity: non_additive
+
+calculated:
+  dsi_sellout.units_prior_period: {kind: prior_period, inputs: [dsi_sellout.units], label: "Sell-out units, previous period", unit: units}
+  dsi_sellout.units_change: {kind: difference, inputs: [dsi_sellout.units, dsi_sellout.units_prior_period], label: "Sell-out units change vs previous period", unit: units}
+  dsi_sellout.units_pct_change: {kind: pct_change, inputs: [dsi_sellout.units], label: "Sell-out units % change vs previous period", unit: ratio}
+  dsi_sellout.units_per_week: {kind: per_week_rate, inputs: [dsi_sellout.units], label: "Sell-out units per week", unit: units_per_week}
+  cst_sellthrough.units_prior_period: {kind: prior_period, inputs: [cst_sellthrough.units], label: "Sell-through units, previous period", unit: units}
+  cst_sellthrough.units_change: {kind: difference, inputs: [cst_sellthrough.units, cst_sellthrough.units_prior_period], label: "Sell-through units change vs previous period", unit: units}
+  cst_sellthrough.units_pct_change: {kind: pct_change, inputs: [cst_sellthrough.units], label: "Sell-through units % change vs previous period", unit: ratio}
+  cst_sellthrough.units_per_week: {kind: per_week_rate, inputs: [cst_sellthrough.units], label: "Sell-through units per week", unit: units_per_week}
+  cpor.delivery_rate: {kind: ratio, inputs: [cpor.result_units, cpor.estimate_units], label: "Delivery rate (window start in period)", unit: ratio}
+  cpor.support_per_unit_usd: {kind: ratio, inputs: [cpor.support_usd, cpor.result_units], label: "Support USD per unit sold (window start in period)", unit: usd_per_unit}
+
+# Declared once. A request that hits a wall is refused with the reason. An exact match on a v1
+# refuse_example for the measure's legacy metric returns that example's own text (verbatim; the
+# loader checks every text below against the v1 catalog and every v1 example is mapped here).
+walls:
+  - id: W-SITE-CST-ONLY
+    reason: "Store / site comes only from customer sell-through reports. Distributor sell-out has no store."
+    trigger: {breakdown: site_label}
+    keeps:
+      - metric: sellout_units
+        grains: [site_label]
+        text: "site_label is CST-only. DSI sell-out does not have a site grain."
+      - metric: weeks_of_cover
+        grains: [customer, product, site_label]
+        text: "CST customer×product×site velocity is a separate surface — do not conflate with Channel Ops WoC."
+  - id: W-CUSTOMER-ROLE
+    reason: "A distributor's dealer and a retailer reporting its own sales are different customers and are never combined."
+    trigger: {mixed_models: true}
+    keeps:
+      - metric: sellout_units
+        grains: [customer, product, site_label]
+        text: "Do not conflate DSI sell-out with CST customer×product×site. Use cst_sellthrough_units."
+      - metric: weeks_of_cover
+        grains: [customer, product, site_label]
+        text: "CST customer×product×site velocity is a separate surface — do not conflate with Channel Ops WoC."
+  - id: W-CST-NO-DISTRIBUTOR
+    reason: "Customer sell-through reports do not say which distributor supplied the stock."
+    trigger: {breakdown: distributor, models: [cst_sellthrough]}
+    keeps:
+      - metric: cst_sellthrough_units
+        grains: [distributor, product]
+        text: "CST is customer sell-through, not Channel Ops distributor×product (WoC wall retained)."
+  - id: W-SNAPSHOT-NOT-SUMMED
+    reason: "Stock is a count on a day. It is shown as the latest count, never added up across dates."
+    trigger: {semi_additive_with: period}
+    keeps:
+      - metric: channel_stock
+        grains: [period]
+        text: "Channel stock is latest-per-(distributor, product) — not a period sum. SOH by lineup quarter is refused."
+  - id: W-A3-GRAIN-LOCK
+    reason: "Channel stock and weeks of cover are worked out per distributor and product only."
+    trigger: {governed: [channel_stock, weeks_of_cover, replenishment_flag]}
+    keeps:
+      - metric: channel_stock
+        grains: [customer, product]
+        text: "Channel Ops stock grain is distributor × product, not customer × product (CST is a separate surface)."
+      - metric: weeks_of_cover
+        grains: [period, bu]
+        text: "Weeks of cover is only meaningful at distributor × product (A3 grain lock)."
+  - id: W-LINEUP-QUARTER
+    reason: "Lineup quarter belongs to the plan, not to the calendar."
+    trigger: {breakdown: lineup_quarter}
+    keeps:
+      - metric: fill_rate
+        grains: [lineup_quarter]
+        text: "Fill rate is not defined at lineup-quarter alone without plan period context; use period (± BU)."
+      - metric: channel_stock
+        grains: [lineup_quarter]
+        text: "SOH by lineup quarter is refused — derived channel stock grain is distributor × product only."
+  - id: W-PVE-GRAIN
+    reason: "Plan vs executed is measured by period and business unit, not by distributor stock."
+    trigger: {governed: [fill_rate, line_hit_rate, over_plan_intake_rate, short_exposure, unplanned_intake, no_po_blind_spot, pipeline_inbound, volume_bias]}
+    keeps:
+      - metric: fill_rate
+        grains: [distributor, product]
+        text: "Fill rate is plan-vs-executed (period × optional BU), not channel stock grain."
+      - metric: pipeline_inbound
+        grains: [distributor, product]
+        text: "Pipeline here is plan-linked open_order on PvE — not Channel Ops derived stock."
+  - id: W-ONE-STORED-PERIOD
+    reason: "Sell-through reported weekly or monthly cannot be split into smaller periods."
+    trigger: {stored_period_finer: true}
+    keeps: []
+  - id: W-NOT-COMPUTABLE
+    reason: "This metric cannot be computed from the data held (see its own reason)."
+    trigger: {governed_refuse_all: true}
+    keeps: []
+
+# Not built: the definition is a proposed decision for Warren (docs/DATA_MODEL_SPEC.md section 11),
+# or the model is declared later (section 10). Listed in the v2 catalog so the builder can say why.
+pending:
+  - {id: dsi_sellout.value_ex_vat, reason: "Proposed decision 2: DSI sales value (units x price ex VAT on priced rows; no currency recorded) is not picked."}
+  - {id: cst_sellthrough.value, reason: "Proposed decision 3: CST sales value and its VAT basis conversion is not picked."}
+  - {id: cst_sellthrough.stock_cover, reason: "Customer stock cover is not defined for the builder; show reported stock beside units per week (no derived cover)."}
+  - {id: cst_sellthrough.restock_flag, reason: "Restock flags live in the sell-through overview's SKU problem rules (per-customer config, forward cover); not a compiler measure tonight."}
+  - {id: cpor.open_cases, reason: "Which CPOR status counts as open is a proposed decision; break cases down by status or workflow_status instead."}
+  - {id: cpor.value, reason: "Which value a CPOR 'value' means (support USD, support ZAR or estimate) is a proposed decision."}
+  - {id: shipments, reason: "Model declared later (mixed currencies)."}
+  - {id: distributor_stock, reason: "Model declared later; Channel Ops stock stays the governed channel_stock metric."}
+  - {id: returns, reason: "Model declared later (no tenant_id; tenant via dim_product)."}
+  - {id: lineup_plan, reason: "Model declared later (no tenant_id; tenant via dim_product)."}
+  - {id: recorded_prices, reason: "Not buildable as written: listing_observation has no product_id, tenant_id or observed date column."}
