@@ -459,9 +459,48 @@ _GOVERNED_FILTER_MAP = {
     "product": "product_id",
     "distributor": "distributor_id",
     "bu": "bu",
-    "promo_type": "promo_type",
     "site_label": "site_label",
 }
+
+# The filters each v1 handler actually reads (handlers/a1_pve.py, a2_cpor.py, a3_stock.py,
+# volume_series.py). Any other filter is refused, never accepted and silently ignored, so a figure
+# never looks filtered when it is not. ``dates``: whether period.from / period.to reach the handler.
+_GOVERNED_HANDLER_FILTERS: dict[str, tuple[frozenset[str], bool]] = {
+    "a1_pve": (frozenset({"bu"}), True),
+    "a2_cpor": (frozenset({"customer", "bu"}), True),  # the handler itself refuses a period (all-time)
+    "a3_stock": (frozenset({"distributor", "product"}), False),
+    "volume_series": (frozenset({"customer", "product", "distributor", "site_label"}), True),
+}
+_FAMILY_HANDLER = {"a1": "a1_pve", "a2": "a2_cpor", "a3": "a3_stock", "volume": "volume_series"}
+
+
+def _governed_handler(metric: Any, v1_catalog: Any) -> str | None:
+    from app.query.handlers import fact_family_for, handler_name_for
+
+    name = handler_name_for(metric.key, v1_catalog)
+    if name == "composed" and getattr(metric, "compose", None) is not None and metric.compose.inputs:
+        return _FAMILY_HANDLER.get(fact_family_for(metric.compose.inputs[0]) or "")
+    return name
+
+
+def _limit_refusal(req: V2Request, plan: Plan) -> Refusal | None:
+    """Limit: refused above the maximum, never clamped (model and governed measures alike)."""
+    if req.limit is None:
+        plan.limit = DEFAULT_LIMIT
+        return None
+    try:
+        lim = int(req.limit)
+    except (TypeError, ValueError):
+        lim = -1
+    if lim < 1:
+        return Refusal(measure=None, reason="limit must be a whole number of at least 1.")
+    if lim > MAX_LIMIT:
+        return Refusal(
+            measure=None,
+            reason=f"limit {lim} is above the maximum of {MAX_LIMIT} rows; narrow the query (refused, not clamped).",
+        )
+    plan.limit = lim
+    return None
 
 
 def _plan_governed(
@@ -488,20 +527,49 @@ def _plan_governed(
             wall = "W-NOT-COMPUTABLE"
         plan.refusals.append(Refusal(measure=metric.key, reason=v.message, wall=wall))
         return plan
+    handler = _governed_handler(metric, v1_catalog)
+    reads, reads_dates = _GOVERNED_HANDLER_FILTERS.get(handler or "", (frozenset(), False))
     filters: dict[str, Any] = {}
     for raw_key, raw_val in (req.filters or {}).items():
         bid = _norm_id(raw_key)
         target = _GOVERNED_FILTER_MAP.get(bid)
-        if target is None or isinstance(raw_val, (list, tuple, dict)):
+        if target is None or bid not in reads:
             plan.refusals.append(
-                Refusal(measure=metric.key, reason=f"Filter {bid!r} is not available on governed metric {metric.key} (one value per filter).")
+                Refusal(measure=metric.key, reason=f"{metric.label} cannot be filtered by {bid}: the figure is worked out without it.")
+            )
+            return plan
+        if isinstance(raw_val, (list, tuple, dict)):
+            plan.refusals.append(
+                Refusal(measure=metric.key, reason=f"{metric.label} takes one {bid} at a time.")
             )
             return plan
         filters[target] = raw_val
+    if (req.period_from or req.period_to) and not reads_dates:
+        plan.refusals.append(
+            Refusal(measure=metric.key, reason=f"{metric.label} is the latest position, not a period figure; it cannot be filtered by dates.")
+        )
+        return plan
     if req.period_from:
         filters["period_from"] = req.period_from
     if req.period_to:
         filters["period_to"] = req.period_to
+    # Sort and limit apply to governed rows too (execute._run_governed).
+    if req.sort_by not in (None, ""):
+        by = str(req.sort_by).strip()
+        if by != metric.key and _norm_id(by) not in breakdowns:
+            plan.refusals.append(Refusal(measure=None, reason=f"Sort by {by!r}: sort by one of the requested measures or breakdowns."))
+            return plan
+        plan.sort_by = by if by == metric.key else _norm_id(by)
+    default_asc = plan.sort_by in breakdowns or (plan.sort_by is None and "period" in breakdowns)
+    direction = _norm_id(req.sort_dir) or ("asc" if default_asc else "desc")
+    if direction not in ("asc", "desc"):
+        plan.refusals.append(Refusal(measure=None, reason="sort.dir is asc or desc."))
+        return plan
+    plan.sort_dir = direction
+    limit_refusal = _limit_refusal(req, plan)
+    if limit_refusal is not None:
+        plan.refusals.append(limit_refusal)
+        return plan
     plan.governed = metric
     plan.governed_filters = filters
     plan.breakdowns = breakdowns

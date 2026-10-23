@@ -43,7 +43,9 @@ def run_pytest(args: list[str]) -> int:
             print(f"ABORT: {key} would not point at cip_test", file=sys.stderr)
             return 2
     print("pytest on cip_test")
-    cmd = [sys.executable, "-m", "pytest", "tests", "-q", "-p", "no:cacheprovider", *args]
+    # Test paths given: run only those; otherwise the whole suite.
+    paths = [a for a in args if not a.startswith("-") and (a.startswith("tests") or a.endswith(".py"))]
+    cmd = [sys.executable, "-m", "pytest", *([] if paths else ["tests"]), "-q", "-p", "no:cacheprovider", *args]
     return subprocess.call(cmd, cwd=str(API_DIR), env=env)
 
 

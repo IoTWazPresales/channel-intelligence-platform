@@ -214,6 +214,20 @@ async def _run_governed(db: AsyncSession, plan: Plan, *, tid: str, explain_only:
         columns.append({"id": g, "kind": "breakdown", "label": dim.label if dim else g, "fields": fields, "group": None})
     columns.append({"id": metric.key, "kind": "measure", "label": metric.label, "fields": [metric.key], "unit": None})
     rows = [{**r, metric.key: r.get("value")} for r in (res.rows or []) if isinstance(r, dict)]
+    if plan.sort_by:
+        by = plan.sort_by
+
+        def _key(r: dict[str, Any]) -> tuple[int, Any]:
+            v = r.get(by) if by == metric.key else (
+                r.get("bucket_key") if by == "period" else r.get(f"{by}_name") or r.get(by) or r.get(f"{by}_id")
+            )
+            return (1, v) if v is None else (0, v if isinstance(v, (int, float)) else str(v).lower())
+
+        present = [r for r in rows if _key(r)[0] == 0]
+        missing = [r for r in rows if _key(r)[0] == 1]
+        rows = sorted(present, key=_key, reverse=plan.sort_dir == "desc") + missing
+    truncated = len(rows) > plan.limit
+    rows = rows[: plan.limit]
     refusals = [] if res.ok else [Refusal(measure=metric.key, reason=res.message or res.status)]
     explain = {
         "engine": "governed_handler",
@@ -234,4 +248,5 @@ async def _run_governed(db: AsyncSession, plan: Plan, *, tid: str, explain_only:
         refusals=refusals,
         explain=explain,
         cache=res.cache.as_dict() if res.cache else None,
+        truncated=truncated,
     )

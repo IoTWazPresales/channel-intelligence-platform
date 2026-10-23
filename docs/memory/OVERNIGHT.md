@@ -115,6 +115,39 @@ from the last unit not marked DONE.
   (`cip:query:v2:`); test `test_cache_key_separates_product_line_scope_and_role`;
   `tests/test_query_engine.py` 12 passed.
 
+## After 06:00
+
+- Full API pytest on cip_test with the cache fix: **3,272 passed, 21 skipped, 0 failed** (the ops-logs
+  stream test passed this time: flaky under load, not broken). Pushed `6db990b6` (cache key fix, data-model
+  spec, discovery, data-architect seat). Worker and API restarted through the supervisor; API /health 200,
+  web /login 200.
+- N-0115 ledger: evidence (spec, seat, cache fix), finding (reduced panel), 5 proposed decisions (day grain,
+  DSI value, CST value VAT, distributor stock by period, shipment date).
+- Unit A: spec delivered at `.eif/audit/PROGRAMME_20261023/N0114_SPEC_PROPOSAL.md`. N-0114 lease re-taken,
+  baseline BLN-N0114, 2 proposed decisions (number style; top N replaces the Other fold), findings,
+  stage design (the challenge stage event was skipped by a revision slip; its note is carried in later
+  notes). Implementation subagent running (frontend, test, accessibility lenses).
+- Unit B: challenge subagent running on `docs/DATA_MODEL_SPEC.md` (simplicity, cost/scale, security).
+- Slip: one shell command used `cd` into the run folder while writing payloads; the session folder was
+  moved back to the project root at once. No files outside the run folder were touched.
+
+## Units A and B built (07:00-11:20)
+
+- **Unit A (N-0114) DONE to validate, `5b79a7fd`.** Implementation subagent report
+  `.eif/audit/PROGRAMME_20261023/N0114_IMPL_REPORT.md`. Full web vitest 202 files / 1,018 tests passed;
+  tsc exit 0; API unchanged by Unit A (pytest 3,321 passed). Rendered `/design-lab/charts` on the production
+  build, light and dark, 1280x800 and 390x844 (390 via iframes: the window cannot shrink below the
+  screen minimum). **Defect found at render and fixed:** page was 787 px wide at 390 (hidden data
+  tables); fixed in `ChartFigure`, 372 px after rebuild. Evidence `.eif/audit/PROGRAMME_20261023/N0114_RENDER.md`.
+  Signed-in pages not rendered (sign-in). Web build `0h3KxTXBgdgBZOwtX4RUz`.
+- **Unit B (N-0115) DONE to validate, `be38feb5`.** Report `.eif/audit/PROGRAMME_20261023/N0115_IMPL_REPORT.md`.
+  Models dsi_sellout, cst_sellthrough, cpor; 9 walls (all 11 refuse_examples verbatim); compiler;
+  `GET /api/v1/semantics/v2/catalog`, `POST /api/v1/query/v2/execute`, `/v2/explain` (sign-in required);
+  v1 untouched. Full API pytest on cip_test **3,321 passed, 21 skipped, 0 failed**. No migration.
+- Services: web rebuilt and restarted twice, API and worker restarted 11:16; /health 200, /login 200.
+- Ledger: N-0114 and N-0115 at validate, quality dims recorded, leases released (rev 2730).
+- Running: GOV-008 verification subagent for both (separate verification runs); Unit C definition subagent.
+
 ## Morning handoff
 
 - **Done:** start check, three nodes, Unit B discovery of catalog, handlers, engine and callers (above),

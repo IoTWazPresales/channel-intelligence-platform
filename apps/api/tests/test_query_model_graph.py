@@ -294,6 +294,36 @@ def test_limit_above_max_is_refused_not_clamped(dm, v1):
     assert _plan(dm, v1, measures=["dsi_sellout.units"]).limit == 500
 
 
+def test_governed_metrics_check_limit_and_sort_like_model_measures(dm, v1):
+    """Verification D1: the governed path returned before the limit and sort checks."""
+    grains = ["distributor", "product"]
+    ok = _plan(dm, v1, measures=["weeks_of_cover"], breakdowns=grains, limit=25, sort_by="weeks_of_cover", sort_dir="asc")
+    assert ok.refusals == [] and ok.governed is not None and ok.limit == 25 and ok.sort_dir == "asc"
+    big = _plan(dm, v1, measures=["weeks_of_cover"], breakdowns=grains, limit=999_999)
+    assert big.governed is None and "refused, not clamped" in big.refusals[0].reason
+    bad_sort = _plan(dm, v1, measures=["support_spend"], breakdowns=["customer"], sort_by="nonsense")
+    assert bad_sort.governed is None and "Sort by" in bad_sort.refusals[0].reason
+    bad_dir = _plan(dm, v1, measures=["support_spend"], breakdowns=["customer"], sort_dir="sideways")
+    assert bad_dir.governed is None
+
+
+def test_governed_metrics_refuse_filters_their_handler_never_reads(dm, v1):
+    """A filter the v1 handler ignores is refused in plain words, never accepted and dropped."""
+    grains = ["distributor", "product"]
+    p = _plan(dm, v1, measures=["weeks_of_cover"], breakdowns=grains, filters={"customer": "18"})
+    assert p.governed is None and "cannot be filtered by customer" in p.refusals[0].reason
+    p = _plan(dm, v1, measures=["weeks_of_cover"], breakdowns=grains, filters={"distributor": "3"})
+    assert p.refusals == [] and p.governed_filters == {"distributor_id": "3"}
+    p = _plan(dm, v1, measures=["weeks_of_cover"], breakdowns=grains, period_from="2026-01-01")
+    assert p.governed is None and "cannot be filtered by dates" in p.refusals[0].reason
+    p = _plan(dm, v1, measures=["pipeline_inbound"], breakdowns=["period"], filters={"customer": "18"})
+    assert p.governed is None and "cannot be filtered by customer" in p.refusals[0].reason
+    p = _plan(dm, v1, measures=["support_spend"], breakdowns=["customer"], filters={"customer": "18"})
+    assert p.refusals == [] and p.governed_filters == {"customer_id": "18"}
+    p = _plan(dm, v1, measures=["support_spend"], breakdowns=["customer"], filters={"promo_type": "x"})
+    assert p.governed is None
+
+
 def test_cpor_compiles_the_portfolio_rules_and_case_tenant(dm, v1):
     p = _plan(dm, v1, measures=["cpor.support_usd", "cpor.cases"], breakdowns=["status"])
     sql = compile_plan(dm, p, tenant_id="default").sql_text()
