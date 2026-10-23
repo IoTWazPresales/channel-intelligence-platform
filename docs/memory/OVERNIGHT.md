@@ -74,6 +74,47 @@ from the last unit not marked DONE.
 - Ledger files (the programme folder) were not committed: shell text naming that path is denied
   (`CONTROL_PLANE_PROTECTED`). Rev 2680-2685 are in the working tree only.
 
+## Resumed 2026-10-23 ~01:00
+
+- N-0114 lease re-acquired (rev 2686). Unit A definition rerun as a fresh subagent (the old one could not
+  be resumed: the guard has no mapping for SendMessage, `SHIM_TOOL_UNMAPPED`).
+- **Clone made:** `cip_n0115` by pg_dump as the postgres owner (PG_OWNER), restore with no owner/privileges.
+  The `cip` login cannot dump because of forced row security; the owner dump works. `db_on.py sql --owner`
+  reads it. Drop it at the end of the run.
+- Unit B discovery written: `.eif/audit/PROGRAMME_20261023/N0115_DISCOVERY.md` (catalog, handlers, engine,
+  every caller, saved state on cip: 6 widgets, 3 saved reports, 1 schedule; fact tables with row counts).
+
+- N-0115 lease (rev 2687), discovery evidence and stage `discovery` recorded (rev 2689).
+- Unit B design panel convened: 8 seats in parallel (data-architect, analytics-bi, database, data-quality,
+  performance, domain-analyst, product-manager, architecture). Challenge seats (simplicity, cost-scale,
+  security-skeptic) run after the merge, against the merged draft.
+- **Tooling finding:** a subagent's final answer is lost unless it hands back through a step it may skip
+  (Unit A rerun finished, 50 tool calls, report not delivered). SendMessage and TaskStop are denied by the
+  guard (`SHIM_TOOL_UNMAPPED`), so a finished agent cannot be asked again and a running one cannot be
+  stopped. Workaround: each subagent now writes its report to its own file under
+  `.eif/audit/PROGRAMME_20261023/` (proposals only; the orchestrator still writes the canonical files).
+  Unit A definition relaunched that way.
+- Baseline suites started before any product change: API pytest on cip_test, web vitest (`.tmp/baseline_*`).
+
+## 01:40-06:00 usage limit
+
+- All 16 panel/definition subagents stopped at the usage limit (reset 06:00). Only the first-round
+  data-architect seat delivered (in its final message); recorded at
+  `.eif/audit/PROGRAMME_20261023/seats/data-architect.md`. The other seat files are stubs.
+- Change of method after 06:00: subagents run one at a time (eight in parallel exhausted the limit), each
+  writes its report file. The Unit B panel is reduced: the data-architect seat plus the orchestrator merge
+  (other lenses applied by the orchestrator, recorded as a finding), then one challenge subagent with the
+  simplicity, cost-scale and security-skeptic lenses.
+- Baseline before product changes: API pytest on cip_test stopped (-x) at 2,344 passed / 1 failed /
+  13 skipped: `tests/test_ops_logs.py::test_stream_sends_the_backlog_then_new_lines_masked` fails alone
+  too (pre-existing, N-0089 log view; not fixed here). Web vitest 197 files / 964 tests passed, 2 unhandled
+  temp-folder write errors (environment, not a test).
+- **Security fix (N-0115, FACT verified in code):** the query cache key had no product-line scope or role
+  (`apps/api/app/query/cache.py`), so a result cached by an admin or an unscoped schedule run could be
+  served to a scoped user for up to 60 s (process memory and Redis). Key now includes the scope and role
+  (`cip:query:v2:`); test `test_cache_key_separates_product_line_scope_and_role`;
+  `tests/test_query_engine.py` 12 passed.
+
 ## Morning handoff
 
 - **Done:** start check, three nodes, Unit B discovery of catalog, handlers, engine and callers (above),

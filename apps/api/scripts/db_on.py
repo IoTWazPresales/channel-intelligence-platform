@@ -47,15 +47,24 @@ def run_pytest(args: list[str]) -> int:
     return subprocess.call(cmd, cwd=str(API_DIR), env=env)
 
 
-def run_sql(db: str, sql: str, *, timing: bool) -> int:
+def clone_url(db: str, *, owner: bool) -> str:
+    """Sync URL for a non-cip database; ``owner`` logs in as postgres with the PG_OWNER password."""
     if db.strip().lower() == "cip":
-        print("ABORT: refusing to run on cip; use a pg_dump clone", file=sys.stderr)
-        return 2
-    from sqlalchemy import create_engine, text  # noqa: PLC0415
+        raise SystemExit("ABORT: refusing to run on cip; use a pg_dump clone")
+    from sqlalchemy.engine import make_url  # noqa: PLC0415
 
     from app.db.sync_url import sqlalchemy_sync_engine_url  # noqa: PLC0415
 
-    engine = create_engine(sqlalchemy_sync_engine_url(_swap_db(_settings().database_url_sync, db)))
+    url = make_url(sqlalchemy_sync_engine_url(_swap_db(_settings().database_url_sync, db)))
+    if owner:
+        url = url.set(username="postgres", password=os.environ["PG_OWNER"])
+    return url.render_as_string(hide_password=False)
+
+
+def run_sql(db: str, sql: str, *, timing: bool, owner: bool = False) -> int:
+    from sqlalchemy import create_engine, text  # noqa: PLC0415
+
+    engine = create_engine(clone_url(db, owner=owner))
     try:
         with engine.connect() as conn:
             conn.execute(text("SET TRANSACTION READ ONLY"))
@@ -85,11 +94,12 @@ def main() -> int:
     q.add_argument("--file")
     q.add_argument("-c", "--command")
     q.add_argument("--timing", action="store_true")
+    q.add_argument("--owner", action="store_true", help="log in as postgres (PG_OWNER) on the clone")
     args, rest = p.parse_known_args()
     if args.mode == "pytest":
         return run_pytest(rest)
     sql = Path(args.file).read_text(encoding="utf-8") if args.file else (args.command or "")
-    return run_sql(args.db, sql, timing=args.timing)
+    return run_sql(args.db, sql, timing=args.timing, owner=args.owner)
 
 
 if __name__ == "__main__":

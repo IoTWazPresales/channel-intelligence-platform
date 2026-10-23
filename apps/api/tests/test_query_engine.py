@@ -266,6 +266,38 @@ def test_cache_key_stable():
     assert get_cached(k1)["value"] == 1
 
 
+def test_cache_key_separates_product_line_scope_and_role():
+    """A result cached for one product-line scope or role is never served to another (D-0056)."""
+    from app.core.product_line_scope import ALL_PRODUCT_LINES, request_product_lines, request_role
+
+    def key() -> str:
+        return cache_key(
+            tenant_id="default", metric="sellout_units", grains=["period"], filters={}, catalog_version=2
+        )
+
+    unscoped = key()
+    tokens = [request_product_lines.set(ALL_PRODUCT_LINES), request_role.set("admin")]
+    try:
+        admin = key()
+    finally:
+        request_role.reset(tokens[1])
+        request_product_lines.reset(tokens[0])
+    tokens = [request_product_lines.set(frozenset({"NB"})), request_role.set("viewer")]
+    try:
+        nb_viewer = key()
+    finally:
+        request_role.reset(tokens[1])
+        request_product_lines.reset(tokens[0])
+    tokens = [request_product_lines.set(frozenset()), request_role.set("viewer")]
+    try:
+        no_lines = key()
+    finally:
+        request_role.reset(tokens[1])
+        request_product_lines.reset(tokens[0])
+    assert len({unscoped, admin, nb_viewer, no_lines}) == 4
+    assert key() == unscoped
+
+
 def test_p3_1_validate_still_owns_grain_rules():
     r = validate_metric_grain("channel_stock", ["lineup_quarter"])
     assert r.ok is False

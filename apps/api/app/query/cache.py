@@ -48,6 +48,8 @@ def cache_key(
     catalog_version: int,
     period_grain: str | None = None,
 ) -> str:
+    from app.core.product_line_scope import request_product_lines, request_role, scope_csv
+
     canonical = {
         "tenant_id": tenant_id,
         "metric": (metric or "").strip().lower(),
@@ -55,10 +57,14 @@ def cache_key(
         "filters": _canonicalize_filters(filters),
         "catalog_version": int(catalog_version),
         "period_grain": (str(period_grain).strip().lower() if period_grain else None),
+        # Row security filters the facts by the request's product lines and role (D-0056), so a
+        # result cached under one scope (an admin, an unscoped schedule run) must never serve another.
+        "product_lines": scope_csv(request_product_lines.get()),
+        "role": request_role.get(),
     }
     raw = json.dumps(canonical, sort_keys=True, separators=(",", ":"), default=str)
     digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
-    return f"cip:query:v1:{digest}"
+    return f"cip:query:v2:{digest}"
 
 
 def _canonicalize_filters(filters: dict[str, Any] | None) -> dict[str, Any]:
