@@ -364,6 +364,11 @@ export function CoverLensView() {
             x="bucket"
             y="pairs"
             height={180}
+            unit="count"
+            xAxisTitle="Weeks of cover"
+            yAxisTitle="Distributor × product pairs"
+            // Cover buckets are ordered: no top N or re-sort.
+            controls={false}
             onRowClick={(row) => {
               const next = String(row.bucket ?? '');
               setBucket(bucket === next ? null : next);
@@ -387,6 +392,9 @@ export function CoverLensView() {
             data={flow?.points ?? []}
             x="week"
             height={180}
+            unit="units"
+            xAxisTitle="Week"
+            yAxisTitle="Units per week (units)"
             series={[
               { key: 'shipped', label: 'Shipped in', kind: 'bar', tone: 'muted' },
               { key: 'sellOut', label: 'Sell-out', kind: 'line', tone: 'primary' },

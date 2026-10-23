@@ -146,9 +146,9 @@ export function ShippingCommercialSummary({
 
   const arrivingQty = commercial.arriving_this_week.quantity ?? commercial.arriving_this_week.total ?? 0;
   const arrivingLines = commercial.arriving_this_week.line_count ?? 0;
+  // Full names: the chart wraps long names and keeps the whole name on hover (N-0114).
   const arrivingData = (commercial.arriving_this_week.by_distributor ?? []).map((d) => ({
-    name: d.label.length > 14 ? `${d.label.slice(0, 14)}…` : d.label,
-    fullName: d.label,
+    name: d.label,
     count: d.quantity ?? d.count,
   }));
 
@@ -229,8 +229,11 @@ export function ShippingCommercialSummary({
             x="name"
             y="count"
             horizontal
-            height={Math.max(112, arrivingData.length * 28)}
-            format={formatQty}
+            height={112}
+            // quantity ?? count mixes units and line counts, so the value title carries no unit yet (N-0114 F13).
+            unit="count"
+            xAxisTitle="Distributor"
+            yAxisTitle="Arriving this week"
           />
         </Box>
       ) : null}

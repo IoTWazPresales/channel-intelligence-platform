@@ -88,6 +88,9 @@ export function ChannelOpsOverviewTab({
             data={chartData}
             x="label"
             height={280}
+            unit="units"
+            xAxisTitle="Week starting"
+            yAxisTitle="Sell-out (units)"
             series={[
               { key: 'units', label: 'Sell-out units', kind: 'bar' },
               { key: 'units', label: 'Trend', kind: 'line' },
@@ -97,7 +100,16 @@ export function ChannelOpsOverviewTab({
             ]}
           />
         ) : (
-          <CategoryBars data={chartData} x="label" y="units" height={280} />
+          <CategoryBars
+            data={chartData}
+            x="label"
+            y="units"
+            height={280}
+            timeAxis
+            unit="units"
+            xAxisTitle="Week starting"
+            yAxisTitle="Sell-out (units)"
+          />
         )}
       </Paper>
     </Box>

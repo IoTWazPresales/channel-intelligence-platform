@@ -4,7 +4,8 @@
  * - Rows are labelled by name (customer, distributor, product, store, period), never by id codes.
  * - Each breakdown only offers visuals that make sense for it: lines and areas need a period; pie and
  *   donut need exactly one category; a single number is a KPI.
- * - Long category lists keep the biggest values and fold the rest into "Other".
+ * - Category bars and pies show the viewer's top N with no "Other" (N-0114; pie shares are of the
+ *   full total). Over time split by a category, the colour cap keeps seven series plus "Other".
  */
 
 import { metricPresentation } from '@/features/reports/reportPresentation';
@@ -26,8 +27,8 @@ export const VISUALS: { id: WidgetVisual; label: string; hint: string }[] = [
 
 const CATEGORY_GRAINS = new Set(['customer', 'distributor', 'product', 'bu', 'sales_model', 'channel', 'region', 'site_label', 'promo_type']);
 
-export const TOP_N = 15;
-export const PIE_SLICES = 6; // five named slices plus "Other"
+export const TOP_N = 15; // starting top N for ranked bars and columns; the viewer can change it
+export const PIE_SLICES = 6; // five named slices plus "Other" (topWithOther; no longer drawn on pies)
 export const SERIES_MAX = 7; // seven named series plus "Other"
 
 /** Which visuals make sense for a breakdown, best first. */

@@ -779,7 +779,9 @@ export function PlanVsExecutedView() {
                       data={data.trend as Record<string, unknown>[]}
                       x="period_label"
                       height={240}
-                      format={(v) => fmtPct(v)}
+                      unit="percent"
+                      xAxisTitle="Period"
+                      yAxisTitle="Rate (%)"
                       series={[
                         { key: 'fill_rate', label: 'Fill rate', kind: 'line' },
                         { key: 'line_hit_rate', label: 'Line-hit rate', kind: 'line', tone: 'secondary' },

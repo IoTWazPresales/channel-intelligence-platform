@@ -625,7 +625,12 @@ export function CaseBookSurface() {
               x="bucket"
               y="value"
               height={170}
-              format={(v) => fmtCompact(v, ccy)}
+              // Other currencies keep bare ticks; the title names the currency (N-0114).
+              unit={ccy === 'ZAR' ? 'zar' : ccy === 'USD' ? 'usd' : 'number'}
+              xAxisTitle={hasClaimAge ? 'Age since claim sale date (days)' : 'Age since window end (days)'}
+              yAxisTitle={`Outstanding (${ccy === 'ZAR' ? 'R' : ccy === 'USD' ? 'US$' : ccy})`}
+              // Age buckets are ordered: no top N or re-sort.
+              controls={false}
               colorBy={(r) =>
                 String(r.bucket) === '60d+'
                   ? theme.palette.error.main

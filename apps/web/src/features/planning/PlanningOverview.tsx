@@ -122,7 +122,9 @@ export function PlanningOverview() {
                     aLabel="Plan"
                     bLabel="Shipped"
                     height={260}
-                    compact
+                    unit="units"
+                    xAxisTitle="Customer"
+                    yAxisTitle="Units, plan and shipped (units)"
                   />
                 ) : (
                   <Typography variant="body2" color="text.secondary">

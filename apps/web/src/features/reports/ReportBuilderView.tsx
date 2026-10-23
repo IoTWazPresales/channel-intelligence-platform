@@ -37,7 +37,8 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { EnterpriseDataGrid } from '@/components/EnterpriseDataGrid';
 import { ModuleDataSection } from '@/components/ModuleDataSection';
 import { useProductLines } from '@/features/catalog/useProductLines';
-import { RankedBars, StateKey, TrendChart, formatMeasure, rankBars } from '@/features/workbench-ui/charts';
+import type { ChartControlsState } from '@/features/workbench-ui/ChartControls';
+import { RankedBars, StateKey, TrendChart, axisTitle, formatMeasure, rankBars, type MeasureUnit } from '@/features/workbench-ui/charts';
 import { HeadlineFigure, HeadlineStrip } from '@/features/workbench-ui/HeadlineFigure';
 import { Panel, PanelRow } from '@/features/workbench-ui/Panel';
 import { StatusChip } from '@/features/workbench-ui/controls';
@@ -696,6 +697,8 @@ export function ReportBuilderView() {
                       series={series}
                       table={table}
                       unitFormat={(v) => formatMeasure(v, presentation.unit, 'short')}
+                      unit={presentation.unit}
+                      grains={result.grains}
                     />
                   ) : null}
                 </Box>
@@ -949,6 +952,8 @@ function ResultVisual({
   series,
   table,
   unitFormat,
+  unit,
+  grains,
 }: {
   visual: VisualMode;
   metric: SemanticMetric | null;
@@ -957,6 +962,9 @@ function ResultVisual({
   series: { label: string; value: number }[] | null;
   table: ResultTable | null;
   unitFormat: (v: number) => string;
+  unit: MeasureUnit;
+  /** Breakdown of the result: titles the category axis ("Distributor × Product"). */
+  grains: string[];
 }) {
   const label = metric?.label ?? 'Result';
   if (visual === 'kpi') {
@@ -998,11 +1006,13 @@ function ResultVisual({
           x="label"
           series={[{ key: 'value', label, kind: 'line', tone: 'primary' }]}
           height={260}
-          format={unitFormat}
+          unit={unit}
+          // The result carries no week/month/quarter word, so the time axis is titled "Period".
+          xAxisTitle={dimensionLabel('period')}
+          yAxisTitle={axisTitle(label, unit)}
           lastPointLabel
           legend={false}
           summary={`Line chart of ${label} by period, ${series[0].label} to ${series[series.length - 1].label}, latest ${unitFormat(series[series.length - 1].value)}`}
-          table={{ caption: `${label} by period`, columns: ['Period', label], rows: series.map((s) => [s.label, unitFormat(s.value)]) }}
         />
       </Box>
     );
@@ -1026,27 +1036,52 @@ function ResultVisual({
       </Typography>
     );
   }
-  const MAX = 20;
-  const ranked = rankBars(bars.data, { sort: bars.sort, max: MAX });
-  const sortWords = bars.sort === 'asc' ? 'lowest first' : 'highest first';
+  // Keyed by the starting sort so a metric with the other direction starts fresh.
+  return <ReportBars key={bars.sort} bars={bars} label={label} unit={unit} categoryTitle={grainSetLabel(grains)} />;
+}
+
+/** Ranked bars with the toolbar state held here, so the caption above and the chart agree (N-0114). */
+function ReportBars({
+  bars,
+  label,
+  unit,
+  categoryTitle,
+}: {
+  bars: NonNullable<ReturnType<typeof buildBars>>;
+  label: string;
+  unit: MeasureUnit;
+  categoryTitle: string;
+}) {
+  // 25 is the nearest offered top-N choice to the previous fixed cap of 20.
+  const [controls, setControls] = useState<ChartControlsState>({ topN: 25, sort: { by: 'value', dir: bars.sort } });
+  const ranked = rankBars(bars.data, { sort: bars.sort, max: Infinity });
+  const shown = controls.topN === 'all' ? ranked.total : Math.min(controls.topN, ranked.total);
+  const sortWords =
+    controls.sort.by === 'name'
+      ? 'by name'
+      : controls.sort.by === 'period'
+        ? 'as listed'
+        : controls.sort.dir === 'asc'
+          ? 'lowest first'
+          : 'highest first';
   return (
     <Box data-testid="report-bar">
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
         {`Sorted ${sortWords}`}
         {bars.threshold ? ` · ${bars.threshold.label} marked` : ''}
-        {ranked.total > ranked.shown.length ? ` · showing ${ranked.shown.length} of ${ranked.total}` : ''}
         {ranked.withoutValue ? ` · ${ranked.withoutValue} without a value` : ''}
       </Typography>
       <RankedBars
         data={bars.data}
         sort={bars.sort}
-        max={MAX}
+        controls={{ ...controls, onChange: setControls }}
         threshold={bars.threshold}
-        format={unitFormat}
-        axisFormat={(v) => unitFormat(v).replace(/\.0(?=\D*$)/, '')}
-        summary={`Horizontal bar chart of ${label}, ${ranked.shown.length} rows sorted ${sortWords}${bars.threshold ? `, ${bars.threshold.label} marked` : ''}. Values are listed in the table that follows.`}
-        labelHeader="Row"
+        unit={unit}
+        summary={`Horizontal bar chart of ${label}, ${shown} rows sorted ${sortWords}${bars.threshold ? `, ${bars.threshold.label} marked` : ''}. Values are listed in the table that follows.`}
+        labelHeader={categoryTitle}
         valueHeader={label}
+        xAxisTitle={categoryTitle}
+        yAxisTitle={axisTitle(label, unit)}
         testId="report-bars"
       />
       {bars.key ? <StateKey items={bars.key} /> : null}

@@ -57,5 +57,5 @@ export function WidgetBody({ metricKey, metricLabel, formula, visual: saved, gra
   if (visual === 'table') {
     return <EnterpriseDataGrid rowData={result.rows ?? []} columnDefs={colDefs} height="100%" />;
   }
-  return <WidgetChart visual={visual} grains={grains} series={result.series} rows={result.rows} unit={unit} height={chartHeight} />;
+  return <WidgetChart visual={visual} grains={grains} series={result.series} rows={result.rows} unit={unit} metricLabel={metricLabel} height={chartHeight} />;
 }

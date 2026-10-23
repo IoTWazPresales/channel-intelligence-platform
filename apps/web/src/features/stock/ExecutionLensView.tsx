@@ -93,6 +93,9 @@ export function ExecutionLensView() {
               aLabel="Plan"
               bLabel="Shipped"
               height={280}
+              unit="units"
+              xAxisTitle="Customer"
+              yAxisTitle="Units, plan and shipped (units)"
             />
           </Panel>
         </>

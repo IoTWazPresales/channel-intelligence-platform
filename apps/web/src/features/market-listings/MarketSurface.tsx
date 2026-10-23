@@ -849,7 +849,9 @@ export function MarketSurface() {
                     x="date"
                     height={220}
                     yScale="fit"
-                    format={(v) => fmtMoney(v)}
+                    unit="zar"
+                    xAxisTitle="Date"
+                    yAxisTitle="Price (R)"
                     series={[
                       { key: 'casePrice', label: 'Case SRP (window)', kind: 'area', tone: 'muted' },
                       { key: 'price', label: 'Observed price', kind: 'line', tone: 'primary' },
@@ -1535,7 +1537,9 @@ export function MarketSurface() {
                 x="date"
                 height={160}
                 yScale="fit"
-                format={(v) => fmtMoney(v)}
+                unit="zar"
+                xAxisTitle="Date"
+                yAxisTitle="Price (R)"
                 series={[
                   { key: 'casePrice', label: 'Case SRP', kind: 'area', tone: 'muted' },
                   { key: 'price', label: 'Observed', kind: 'line', tone: 'primary' },

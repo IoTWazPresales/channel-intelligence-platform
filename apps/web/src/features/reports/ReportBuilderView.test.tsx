@@ -178,7 +178,8 @@ describe('ReportBuilderView', () => {
     expect(within(bar).getByRole('img', { name: /sorted lowest first, 4-week threshold marked/ })).toBeInTheDocument();
     const rows = within(within(bar).getByRole('table')).getAllByRole('row').slice(1);
     expect(rows[0]).toHaveTextContent('Kwazulu Channel Partners · Product #1040');
-    expect(rows[0]).toHaveTextContent('0.4w');
+    // The chart's data table gives the full value with its unit (N-0114); the number is unchanged.
+    expect(rows[0]).toHaveTextContent('0.4 weeks');
     expect(rows.map((r) => r.textContent)).toHaveLength(9);
     expect(within(bar).getByText(/1 without a value/)).toBeInTheDocument();
     expect(within(bar).getByText('Under 2 weeks')).toBeInTheDocument();

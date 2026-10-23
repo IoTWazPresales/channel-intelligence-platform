@@ -97,6 +97,9 @@ export function MovementLensView() {
                 data={series}
                 x="week"
                 height={260}
+                unit="units"
+                xAxisTitle="Week"
+                yAxisTitle="Sell-out (units)"
                 series={[{ key: 'sellOut', label: 'Sell-out', kind: 'line', tone: 'primary' }]}
               />
             </Panel>
@@ -104,7 +107,16 @@ export function MovementLensView() {
               title={h?.sell_out_week ? `Sell-out by family, ${h.sell_out_week}` : 'Sell-out by family'}
               subtitle="Units and week-on-week change"
             >
-              <CategoryBars data={data.family_week ?? []} x="family" y="units" height={260} horizontal />
+              <CategoryBars
+                data={data.family_week ?? []}
+                x="family"
+                y="units"
+                height={260}
+                horizontal
+                unit="units"
+                xAxisTitle="Product family"
+                yAxisTitle="Sell-out (units)"
+              />
             </Panel>
           </Box>
         </>

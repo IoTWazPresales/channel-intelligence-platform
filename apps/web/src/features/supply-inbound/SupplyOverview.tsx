@@ -103,6 +103,11 @@ export function SupplyOverview() {
                   y="count"
                   height={230}
                   horizontal
+                  unit="count"
+                  xAxisTitle="Lifecycle state"
+                  yAxisTitle="Shipments"
+                  // Lifecycle states are ordered: no top N or re-sort.
+                  controls={false}
                 />
               </Panel>
               <Panel

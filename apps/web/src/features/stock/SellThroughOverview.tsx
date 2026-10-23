@@ -138,6 +138,9 @@ export function SellThroughOverview() {
       ? [{ key: metric === 'units' ? 'compare_units' : 'compare_value', label: COMPARE_LABEL[filters.compare], kind: 'line' as const, tone: 'muted' as const }]
       : []),
   ];
+  // The sales-value currency is not confirmed (listing-price estimates): no unit in its title yet (N-0114 F7).
+  const valueUnit = metric === 'units' ? 'units' : 'number';
+  const valueTitle = metric === 'units' ? 'Units sold (units)' : 'Sales value';
 
   return (
     <Stack spacing={2} sx={{ mt: 2 }} data-testid="sellthrough-overview">
@@ -367,7 +370,9 @@ export function SellThroughOverview() {
                 x="label"
                 height={240}
                 series={trendSeries}
-                format={fmtCompact}
+                unit={valueUnit}
+                xAxisTitle={GRAIN_LABEL[data.filters.grain]}
+                yAxisTitle={valueTitle}
                 summary={`${metric === 'units' ? 'Units' : 'Sales value'} by ${data.filters.grain}`}
               />
             </Panel>
@@ -390,7 +395,10 @@ export function SellThroughOverview() {
                 aLabel="Last year"
                 bLabel="This year"
                 height={240}
-                format={fmtCompact}
+                timeAxis
+                unit={valueUnit}
+                xAxisTitle="Quarter"
+                yAxisTitle={valueTitle}
               />
             </Panel>
           </Box>
@@ -404,11 +412,12 @@ export function SellThroughOverview() {
                     label: t.change_pct != null ? `${t.label}  ${t.change_pct >= 0 ? '▲' : '▼'}${Math.abs(t.change_pct * 100).toFixed(0)}%` : t.label,
                     value: t.units,
                   }))}
-                  format={fmtCompact}
+                  unit="units"
                   summary="Best-selling products by units"
                   labelHeader="Product"
                   valueHeader="Units"
-                  labelWidth={260}
+                  xAxisTitle="Product"
+                  yAxisTitle="Units sold (units)"
                   onRowClick={(d) => d.key && setPanel({ productId: Number(d.key), focus: null })}
                   testId="sellthrough-top-sellers"
                 />
@@ -422,10 +431,12 @@ export function SellThroughOverview() {
               {data.customer_split.length ? (
                 <RankedBars
                   data={data.customer_split.map((c) => ({ key: String(c.customer_id), label: c.name, value: c.units }))}
-                  format={fmtCompact}
+                  unit="units"
                   summary="Units by customer"
                   labelHeader="Customer"
                   valueHeader="Units"
+                  xAxisTitle="Customer"
+                  yAxisTitle="Units sold (units)"
                   onRowClick={(d) => d.key && toggleCustomer(Number(d.key))}
                   testId="sellthrough-by-customer"
                 />

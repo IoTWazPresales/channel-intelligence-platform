@@ -81,7 +81,8 @@ describe('PlanVsExecutedView', () => {
   it('renders headline KPIs, category tabs, value-rank note when no value coverage, and scope notes', () => {
     render(<PlanVsExecutedView />);
     expect(screen.getByText(/Fill rate \(headline\)/)).toBeTruthy();
-    expect(screen.getByText('46.0%')).toBeTruthy();
+    // The headline tile; the fill-rate chart's hidden data table lists the same 46.0% in a cell (N-0114).
+    expect(screen.getByText('46.0%', { selector: 'span' })).toBeTruthy();
     expect(screen.getByText('Pipeline (inbound)')).toBeTruthy();
     expect(screen.getByText('1 plan lines inbound · 3 cold')).toBeTruthy();
     expect(screen.getByText(/What this view answers/)).toBeTruthy();

@@ -72,6 +72,7 @@ export const labDomains: LabDomain[] = [
       { label: 'Business dashboard', href: '/design-lab', what: 'Configurable widgets over ~30 governed metrics; publish per role.' },
       { label: 'Attention', href: '/design-lab?zone=attention', what: 'Live signals with counts and deep links: failed imports, cover breaches, blocked funding, stale stock.' },
       { label: 'Reports', href: '/design-lab/reports', what: 'Governed report builder: metric, grain, dimensions; run, save, export, schedule; pin to dashboard.' },
+      { label: 'Charts', href: '/design-lab/charts', what: 'Charts: shared chart grammar fixtures. Axis titles, legends, long names, top N and sort, units; light and dark.' },
     ],
   },
   {
@@ -189,7 +190,7 @@ export const labDomains: LabDomain[] = [
 ];
 
 export function domainForPath(pathname: string): LabDomain | undefined {
-  if (pathname === '/design-lab' || pathname === '/design-lab/reports') return labDomains[0];
+  if (pathname === '/design-lab' || pathname === '/design-lab/reports' || pathname === '/design-lab/charts') return labDomains[0];
   return labDomains.find((d) => d.href !== '/design-lab' && pathname.startsWith(d.href));
 }
 
