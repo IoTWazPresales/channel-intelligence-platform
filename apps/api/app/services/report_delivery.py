@@ -10,11 +10,44 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.report_delivery import ReportDelivery, ReportSchedule
 from app.models.saved_reports import SavedReport
 from app.query.engine import execute_query
+from app.services.dashboard_definitions import request_from_definition, runs_v1
 from app.services.report_export import detect_missing_data
 from app.services.saved_report_access import parse_user_id
 
 Format = Literal["xlsx", "pdf"]
 Trigger = Literal["manual", "schedule", "import_event"]
+
+
+async def _v2_payload(
+    db: AsyncSession, definition: dict[str, Any], *, tenant_id: str, skip_cache: bool
+) -> dict[str, Any]:
+    """A v2-only report (no v1 equivalent) through ``run_v2`` on the same session.
+
+    Shaped like the v1 payload the delivery row reads: ``value`` = totals[first measure], ``ok``,
+    ``message`` = the first refusal reason, ``rows``, ``data_vintage`` from explain. No dates are
+    stored on a definition, so the report covers all dates held.
+    """
+    from app.query.model.execute import run_v2
+
+    req = request_from_definition(definition)
+    res = await run_v2(db, req, tenant_id=tenant_id, skip_cache=skip_cache)
+    first = req.measures[0] if req.measures else None
+    explain = res.get("explain") or {}
+    vintage = explain.get("data_vintage")
+    refusals = res.get("refusals") or []
+    return {
+        "ok": bool(res.get("ok")),
+        "status": "ok" if res.get("ok") else "refused",
+        "value": (res.get("totals") or {}).get(first) if first else None,
+        "rows": res.get("rows") or [],
+        "message": refusals[0]["reason"] if refusals and not res.get("ok") else None,
+        "data_vintage": (
+            {"engine": "v2", "min": vintage.get("min"), "max": vintage.get("max"),
+             "as_of_utc": datetime.now(timezone.utc).isoformat()}
+            if isinstance(vintage, dict)
+            else vintage
+        ),
+    }
 
 
 def import_event_skips_cache(trigger: str) -> bool:
@@ -51,15 +84,20 @@ async def deliver_saved_report(
     skip_cache: bool = False,
 ) -> ReportDelivery:
     tid = report.tenant_id
-    result = await execute_query(
-        db,
-        metric=report.metric_key,
-        grains=list(report.grains or []),
-        filters=dict(report.filters or {}),
-        tenant_id=tid,
-        skip_cache=skip_cache,
-    )
-    payload = result.as_dict()
+    definition = getattr(report, "definition_v2", None)
+    if runs_v1(definition):
+        # N-0116 s.2.5: no definition, or a v1-equivalent one: exactly the v1 call as before.
+        result = await execute_query(
+            db,
+            metric=report.metric_key,
+            grains=list(report.grains or []),
+            filters=dict(report.filters or {}),
+            tenant_id=tid,
+            skip_cache=skip_cache,
+        )
+        payload = result.as_dict()
+    else:
+        payload = await _v2_payload(db, definition, tenant_id=tid, skip_cache=skip_cache)
     missing = detect_missing_data(payload)
     vintage = payload.get("data_vintage") or {
         "as_of_utc": datetime.now(timezone.utc).isoformat(),

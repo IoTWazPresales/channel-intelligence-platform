@@ -63,6 +63,14 @@ def clone_url(db: str, *, owner: bool) -> str:
     return url.render_as_string(hide_password=False)
 
 
+def run_alembic(db: str, args: list[str], *, owner: bool) -> int:
+    """Alembic against a non-cip database (cip_test or a clone); the URL goes only into the child env."""
+    url = clone_url(db, owner=owner)
+    env = dict(os.environ, DATABASE_URL_SYNC=url, DATABASE_URL_SYNC_MIGRATE=url)
+    print(f"alembic on {db}{' as owner' if owner else ''}")
+    return subprocess.call([sys.executable, "-m", "alembic", *args], cwd=str(API_DIR), env=env)
+
+
 def run_sql(db: str, sql: str, *, timing: bool, owner: bool = False) -> int:
     from sqlalchemy import create_engine, text  # noqa: PLC0415
 
@@ -97,9 +105,14 @@ def main() -> int:
     q.add_argument("-c", "--command")
     q.add_argument("--timing", action="store_true")
     q.add_argument("--owner", action="store_true", help="log in as postgres (PG_OWNER) on the clone")
+    a = sub.add_parser("alembic")
+    a.add_argument("--db", required=True)
+    a.add_argument("--owner", action="store_true")
     args, rest = p.parse_known_args()
     if args.mode == "pytest":
         return run_pytest(rest)
+    if args.mode == "alembic":
+        return run_alembic(args.db, rest, owner=args.owner)
     sql = Path(args.file).read_text(encoding="utf-8") if args.file else (args.command or "")
     return run_sql(args.db, sql, timing=args.timing, owner=args.owner)
 

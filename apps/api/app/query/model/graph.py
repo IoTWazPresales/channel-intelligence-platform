@@ -472,6 +472,45 @@ _GOVERNED_HANDLER_FILTERS: dict[str, tuple[frozenset[str], bool]] = {
     "volume_series": (frozenset({"customer", "product", "distributor", "site_label"}), True),
 }
 _FAMILY_HANDLER = {"a1": "a1_pve", "a2": "a2_cpor", "a3": "a3_stock", "volume": "volume_series"}
+# Handlers whose dates reach them but who refuse any period themselves (a2_cpor.py: all-time
+# portfolio). The dates pass through (so the handler's own text is the refusal); the catalog says so
+# with ``honours.all_time_only`` so a builder does not send a date range it knows will be refused.
+_GOVERNED_ALL_TIME = frozenset({"a2_cpor"})
+
+
+def governed_honours(metric: Any, v1_catalog: Any) -> dict[str, Any]:
+    """What a governed measure is filtered by, from the same table ``_plan_governed`` enforces.
+
+    ``filters``: the v2 filter ids the handler reads (one value each); ``dates``: whether
+    period.from / period.to reach the handler; ``all_time_only``: the handler refuses any period.
+    """
+    handler = _governed_handler(metric, v1_catalog)
+    reads, reads_dates = _GOVERNED_HANDLER_FILTERS.get(handler or "", (frozenset(), False))
+    return {
+        "handler": handler,
+        "filters": sorted(b for b in reads if b in _GOVERNED_FILTER_MAP),
+        "dates": bool(reads_dates),
+        "all_time_only": handler in _GOVERNED_ALL_TIME,
+        "one_value_per_filter": True,
+    }
+
+
+def filter_refusals(dm: DataModel, model: FactModel) -> dict[str, str]:
+    """{breakdown id: reason} for every breakdown a filter on this model would be refused for.
+
+    Built with the planner's own ``_breakdown_refusal``; the planner's filter refusal reads
+    ``Filter '<id>': <reason>`` with exactly this reason. ``period`` is not a filter (dates use
+    period.from / period.to), so it is never listed.
+    """
+    allowed = derived_breakdowns(dm, model)
+    out: dict[str, str] = {}
+    for bid in sorted(dm.breakdown_ids()):
+        if bid == "period":
+            continue
+        r = _breakdown_refusal(dm, model, bid, allowed)
+        if r is not None:
+            out[bid] = r.reason
+    return out
 
 
 def _governed_handler(metric: Any, v1_catalog: Any) -> str | None:

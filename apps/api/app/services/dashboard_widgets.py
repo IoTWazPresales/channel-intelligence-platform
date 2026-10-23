@@ -8,8 +8,13 @@ from fastapi import HTTPException
 
 from app.semantics.registry import validate_metric_grain
 
-# Same set as the ck_dashboard_widget_visual check (migration 0046) and the endpoint Visual literal.
-WIDGET_VISUALS = frozenset({"kpi", "table", "bar", "hbar", "stacked_bar", "line", "area", "pie", "donut"})
+# Same set as the ck_dashboard_widget_visual / ck_saved_report_visual checks (migration 0048) and the
+# endpoint Visual literals. combo, dual_axis, scatter, pivot added by N-0116 (0048).
+WIDGET_VISUAL_ORDER = (
+    "kpi", "table", "bar", "hbar", "stacked_bar", "line", "area", "pie", "donut",
+    "combo", "dual_axis", "scatter", "pivot",
+)
+WIDGET_VISUALS = frozenset(WIDGET_VISUAL_ORDER)
 
 
 def default_layout(index: int) -> dict[str, int]:
@@ -31,6 +36,7 @@ def widget_to_dict(row: Any) -> dict[str, Any]:
         "layout_json": layout,
         "saved_report_id": int(row.saved_report_id) if row.saved_report_id is not None else None,
         "sort_order": int(row.sort_order or 0),
+        "definition_v2": getattr(row, "definition_v2", None),
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }

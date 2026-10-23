@@ -16,7 +16,8 @@ class SavedReport(Base):
     __table_args__ = (
         CheckConstraint("visibility IN ('personal', 'published')", name="ck_saved_report_visibility"),
         CheckConstraint(
-            "visual IN ('kpi', 'table', 'bar', 'hbar', 'stacked_bar', 'line', 'area', 'pie', 'donut')",
+            "visual IN ('kpi', 'table', 'bar', 'hbar', 'stacked_bar', 'line', 'area', 'pie', 'donut', "
+            "'combo', 'dual_axis', 'scatter', 'pivot')",
             name="ck_saved_report_visual",
         ),
         CheckConstraint(
@@ -41,6 +42,8 @@ class SavedReport(Base):
     filters: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
     visual: Mapped[str] = mapped_column(Text, nullable=False, default="kpi", server_default="kpi")
     period_grain: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # N-0116 (0048): v2 definition (query + display). NULL = the v1 columns run as before.
+    definition_v2: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -66,6 +69,9 @@ class Dashboard(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     visibility: Mapped[str] = mapped_column(Text, nullable=False, default="personal", server_default="personal")
     shared_roles: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
+    # N-0116 (0048): saved filter bar and the starter template a dashboard was made from.
+    filters_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
+    template_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -84,7 +90,8 @@ class DashboardWidget(Base):
     __tablename__ = "dashboard_widget"
     __table_args__ = (
         CheckConstraint(
-            "visual IN ('kpi', 'table', 'bar', 'hbar', 'stacked_bar', 'line', 'area', 'pie', 'donut')",
+            "visual IN ('kpi', 'table', 'bar', 'hbar', 'stacked_bar', 'line', 'area', 'pie', 'donut', "
+            "'combo', 'dual_axis', 'scatter', 'pivot')",
             name="ck_dashboard_widget_visual",
         ),
         CheckConstraint(
@@ -111,6 +118,8 @@ class DashboardWidget(Base):
         BigInteger, ForeignKey("saved_report.id", ondelete="SET NULL"), nullable=True, index=True
     )
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    # N-0116 (0048): v2 definition (query + display). NULL = the v1 columns run as before.
+    definition_v2: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

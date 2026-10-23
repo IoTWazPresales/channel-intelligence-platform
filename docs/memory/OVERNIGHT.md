@@ -148,6 +148,32 @@ from the last unit not marked DONE.
 - Ledger: N-0114 and N-0115 at validate, quality dims recorded, leases released (rev 2730).
 - Running: GOV-008 verification subagent for both (separate verification runs); Unit C definition subagent.
 
+## Verification and Unit C start (11:20-12:20)
+
+- GOV-008 verification subagent (fresh context, same model): N-0114 and N-0115 **VERIFIED_WITH_LIMITATIONS**
+  (`.eif/audit/PROGRAMME_20261023/VERIFY_N0114_N0115.md`). It found D1: governed v2 metrics skipped the
+  limit and sort checks; the Unit C definition found governed metrics silently ignored filters their v1
+  handler never reads (e.g. a customer filter on weeks of cover). Both fixed in `b324806a` (refused in plain
+  words; 2 new tests); `db_on.py pytest` now runs only given files. Full API pytest **3,323 passed, 21
+  skipped, 0 failed**. API restarted 12:13, /health 200. Ledger: both nodes at stage verify (rev 2736).
+- Unit C (N-0116): definition delivered (`.eif/audit/PROGRAMME_20261023/N0116_SPEC_PROPOSAL.md`; 14 MUST,
+  6 SHOULD, 1 LATER). Lease, baseline, 6 proposed decisions, findings, stages to design (rev 2751).
+  Implementation split into two subagent runs (API, then web). API half running.
+- `db_on.py alembic --db <name> [--owner] <args>` added: alembic on cip_test or a clone only (refuses cip).
+
+## Unit C API half (12:20-12:56)
+
+- Report `.eif/audit/PROGRAMME_20261023/N0116_IMPL_API_REPORT.md`. Migration **`20261023_0048`**
+  (definition_v2 on dashboard_widget and saved_report, filters_json and template_key on dashboard, wider
+  visual checks): clone round trip upgrade/downgrade/upgrade with counts 3/6/3/1 unchanged; **applied to
+  cip_test** (head 20261023_0048). **NOT applied to cip.** Definition migration script
+  `apps/api/scripts/n0116_migrate_definitions.py`: clone 9 of 9 rows mapped, re-run writes 0, prove 9 rows
+  0 mismatches (v1 vs v2 totals and rows); cip_test has no dashboards (cip-shaped rows proven in a test).
+- **DEPLOY HAZARD:** the API and worker code now needs the 0048 columns. cip is at 0047. Do NOT restart the
+  API or worker until 0048 is applied to cip; the running processes use the earlier code. If the supervisor
+  restarts one on its own before then, dashboards, saved reports and the Monday 07:00 schedule fail on cip.
+  The web half is being built to keep working against the old API.
+
 ## Morning handoff
 
 - **Done:** start check, three nodes, Unit B discovery of catalog, handlers, engine and callers (above),

@@ -23,24 +23,32 @@ from app.services.saved_report_access import (
     parse_user_id,
 )
 from app.semantics.registry import validate_metric_grain
+from app.services.dashboard_definitions import CheckedDefinition, DefinitionRefused, check_definition
 
 router = APIRouter()
 
-Visual = Literal["kpi", "table", "bar", "hbar", "stacked_bar", "line", "area", "pie", "donut"]
+# Same set as WIDGET_VISUALS and the 0048 check constraints.
+Visual = Literal[
+    "kpi", "table", "bar", "hbar", "stacked_bar", "line", "area", "pie", "donut",
+    "combo", "dual_axis", "scatter", "pivot",
+]
 Visibility = Literal["personal", "published"]
 PeriodGrain = Literal["week", "month", "quarter"]
+_V1_QUERY_FIELDS = frozenset({"metric", "grains", "period_grain", "filters"})
 
 
 class SavedReportCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: str | None = None
-    metric: str = Field(..., min_length=1)
+    metric: str | None = Field(default=None, min_length=1)
     grains: list[str] = Field(default_factory=list)
     filters: dict[str, Any] = Field(default_factory=dict)
     visual: Visual = "kpi"
     period_grain: PeriodGrain | None = None
     visibility: Visibility = "personal"
     shared_roles: list[str] = Field(default_factory=list)
+    # N-0116: v2 definition; when given, metric / grains / period_grain / filters are mirrored from it.
+    definition_v2: dict[str, Any] | None = None
 
 
 class SavedReportUpdate(BaseModel):
@@ -53,6 +61,24 @@ class SavedReportUpdate(BaseModel):
     period_grain: PeriodGrain | None = None
     visibility: Visibility | None = None
     shared_roles: list[str] | None = None
+    # Sent: checked and stored. Sent as null: back to the v1 path. Not sent: kept, unless v1 query
+    # fields (metric, grains, period_grain, filters) are sent, which make the report v1 again.
+    definition_v2: dict[str, Any] | None = None
+
+
+def _checked(definition_v2: dict[str, Any], tenant_id: str) -> CheckedDefinition:
+    try:
+        return check_definition(definition_v2, tenant_id=tenant_id)
+    except DefinitionRefused as exc:
+        raise exc.http() from exc
+
+
+def _mirror_onto(row: SavedReport, checked: CheckedDefinition) -> None:
+    row.metric_key = checked.v1.metric_key
+    row.grains = list(checked.v1.grains)
+    row.filters = dict(checked.v1.filters)
+    row.period_grain = checked.v1.period_grain
+    row.definition_v2 = checked.definition
 
 
 class PublishBody(BaseModel):
@@ -126,12 +152,6 @@ async def create_saved_report(
     user: dict | None = Depends(get_optional_current_user),
 ) -> dict[str, Any]:
     tid = tenant_id_from_user(user)
-    validation = validate_metric_grain(
-        body.metric, body.grains, tenant_id=tid, period_grain=body.period_grain
-    )
-    if not validation.ok:
-        raise HTTPException(status_code=400, detail=validation.as_dict())
-
     row = SavedReport(
         tenant_id=tid,
         owner_user_id=parse_user_id(user),
@@ -139,12 +159,22 @@ async def create_saved_report(
         description=(body.description or "").strip() or None,
         visibility=body.visibility,
         shared_roles=normalize_shared_roles(body.shared_roles),
-        metric_key=validation.metric_key or body.metric,
-        grains=list(validation.requested_grains),
-        filters=dict(body.filters or {}),
         visual=body.visual,
-        period_grain=validation.period_grain,
     )
+    if body.definition_v2 is not None:
+        _mirror_onto(row, _checked(body.definition_v2, tid))
+    else:
+        if not body.metric:
+            raise HTTPException(status_code=400, detail="Send metric (v1 report) or definition_v2 (v2 report).")
+        validation = validate_metric_grain(
+            body.metric, body.grains, tenant_id=tid, period_grain=body.period_grain
+        )
+        if not validation.ok:
+            raise HTTPException(status_code=400, detail=validation.as_dict())
+        row.metric_key = validation.metric_key or body.metric
+        row.grains = list(validation.requested_grains)
+        row.filters = dict(body.filters or {})
+        row.period_grain = validation.period_grain
     db.add(row)
     await db.commit()
     await db.refresh(row)
@@ -251,6 +281,12 @@ async def update_saved_report(
     if not can_edit_owned_item(owner_user_id=row.owner_user_id, user=user):
         raise HTTPException(status_code=403, detail="Not allowed to edit this report")
 
+    sent = body.model_fields_set
+    v2_sent = "definition_v2" in sent
+    checked = _checked(body.definition_v2, tid) if v2_sent and body.definition_v2 is not None else None
+    back_to_v1 = row.definition_v2 is not None and (
+        (v2_sent and body.definition_v2 is None) or (not v2_sent and bool(_V1_QUERY_FIELDS & sent))
+    )
     if body.name is not None:
         row.name = body.name.strip()
     if body.description is not None:
@@ -261,9 +297,18 @@ async def update_saved_report(
         row.visibility = body.visibility
     if body.shared_roles is not None:
         row.shared_roles = normalize_shared_roles(body.shared_roles)
-    if body.filters is not None:
-        row.filters = dict(body.filters)
-    if body.metric is not None or body.grains is not None or body.period_grain is not None:
+    if checked is not None:
+        _mirror_onto(row, checked)
+    elif row.definition_v2 is not None and not back_to_v1:
+        pass  # v2 report, no query change: the definition and its v1 mirror stay as they are
+    else:
+        if body.filters is not None:
+            row.filters = dict(body.filters)
+        if back_to_v1:
+            row.definition_v2 = None
+    if checked is None and (back_to_v1 or (row.definition_v2 is None and (
+        body.metric is not None or body.grains is not None or body.period_grain is not None
+    ))):
         metric = body.metric or row.metric_key
         grains = body.grains if body.grains is not None else list(row.grains or [])
         period_grain = body.period_grain if body.period_grain is not None else row.period_grain

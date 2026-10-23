@@ -103,6 +103,14 @@ def item_to_dict(row: Any, *, kind: str = "report") -> dict[str, Any]:
                 "filters": dict(row.filters or {}),
                 "visual": row.visual,
                 "period_grain": row.period_grain,
+                "definition_v2": getattr(row, "definition_v2", None),
+            }
+        )
+    elif kind == "dashboard":
+        base.update(
+            {
+                "filters_json": dict(getattr(row, "filters_json", None) or {}),
+                "template_key": getattr(row, "template_key", None),
             }
         )
     return base

@@ -12,9 +12,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_db
-from app.core.security import get_optional_current_user
+from app.core.security import get_current_user, get_optional_current_user
 from app.core.tenant_scope import tenant_id_from_user
 from app.models.saved_reports import Dashboard, DashboardWidget, SavedReport
+from app.services.dashboard_definitions import (
+    CheckedDefinition,
+    DefinitionRefused,
+    check_dashboard_filters,
+    check_definition,
+)
 from app.services.dashboard_widgets import (
     default_layout,
     validate_widget_query,
@@ -32,33 +38,42 @@ from app.services.saved_report_access import (
 router = APIRouter()
 
 Visibility = Literal["personal", "published"]
-Visual = Literal["kpi", "table", "bar", "hbar", "stacked_bar", "line", "area", "pie", "donut"]
+# Same set as WIDGET_VISUALS and the 0048 check constraints.
+Visual = Literal[
+    "kpi", "table", "bar", "hbar", "stacked_bar", "line", "area", "pie", "donut",
+    "combo", "dual_axis", "scatter", "pivot",
+]
 PeriodGrain = Literal["week", "month", "quarter"]
+_V1_QUERY_FIELDS = frozenset({"metric_key", "grains", "period_grain", "filters"})
 
 
 class WidgetSpec(BaseModel):
     id: int | None = None
     title: str = Field(..., min_length=1, max_length=200)
     visual: Visual = "kpi"
-    metric_key: str = Field(..., min_length=1)
+    metric_key: str | None = Field(default=None, min_length=1)
     grains: list[str] = Field(default_factory=list)
     filters: dict[str, Any] = Field(default_factory=dict)
     period_grain: PeriodGrain | None = None
     layout_json: dict[str, Any] | None = None
     saved_report_id: int | None = None
     sort_order: int = 0
+    # N-0116: the v2 definition. When given, it is checked with the v2 planner and the v1 columns
+    # are mirrored from it; metric_key / grains / period_grain / filters are then ignored.
+    definition_v2: dict[str, Any] | None = None
 
 
 class WidgetCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     visual: Visual = "kpi"
-    metric_key: str = Field(..., min_length=1)
+    metric_key: str | None = Field(default=None, min_length=1)
     grains: list[str] = Field(default_factory=list)
     filters: dict[str, Any] = Field(default_factory=dict)
     period_grain: PeriodGrain | None = None
     layout_json: dict[str, Any] | None = None
     saved_report_id: int | None = None
     sort_order: int | None = None
+    definition_v2: dict[str, Any] | None = None
 
 
 class WidgetUpdate(BaseModel):
@@ -70,6 +85,22 @@ class WidgetUpdate(BaseModel):
     period_grain: PeriodGrain | None = None
     layout_json: dict[str, Any] | None = None
     sort_order: int | None = None
+    # Sent: checked and stored (v1 columns mirrored). Sent as null: back to the v1 path.
+    # Not sent: kept, unless v1 query fields are sent (then the widget becomes v1 again).
+    definition_v2: dict[str, Any] | None = None
+
+
+class LayoutItem(BaseModel):
+    id: int
+    x: int = Field(..., ge=0, le=1000)
+    y: int = Field(..., ge=0, le=100000)
+    w: int = Field(..., ge=1, le=12)
+    h: int = Field(..., ge=1, le=1000)
+
+
+class FromTemplateBody(BaseModel):
+    key: str = Field(..., min_length=1, max_length=64)
+    name: str | None = Field(default=None, min_length=1, max_length=200)
 
 
 class WidgetsBody(BaseModel):
@@ -83,6 +114,7 @@ class DashboardCreate(BaseModel):
     shared_roles: list[str] = Field(default_factory=list)
     saved_report_ids: list[int] = Field(default_factory=list)
     widgets: list[WidgetSpec] = Field(default_factory=list)
+    filters_json: dict[str, Any] | None = None
 
 
 class DashboardUpdate(BaseModel):
@@ -90,6 +122,7 @@ class DashboardUpdate(BaseModel):
     description: str | None = None
     visibility: Visibility | None = None
     shared_roles: list[str] | None = None
+    filters_json: dict[str, Any] | None = None  # N-0116 s.2.3; validated, replaces the saved bar
 
 
 class PublishBody(BaseModel):
@@ -119,12 +152,19 @@ def _visible_clause(user: dict | None):
     return Dashboard.visibility == "published"
 
 
+def _checked(definition_v2: dict[str, Any], tenant_id: str) -> CheckedDefinition:
+    try:
+        return check_definition(definition_v2, tenant_id=tenant_id)
+    except DefinitionRefused as exc:
+        raise exc.http() from exc
+
+
 def _apply_widget_fields(
     w: DashboardWidget,
     *,
     title: str,
     visual: str,
-    metric_key: str,
+    metric_key: str | None,
     grains: list[str],
     filters: dict[str, Any],
     period_grain: str | None,
@@ -132,24 +172,55 @@ def _apply_widget_fields(
     sort_order: int,
     saved_report_id: int | None,
     tenant_id: str,
+    definition_v2: dict[str, Any] | None = None,
+    keep_v2: bool = False,
 ) -> None:
-    validation = validate_widget_query(
-        metric=metric_key,
-        grains=grains,
-        period_grain=period_grain,
-        visual=visual,
-        tenant_id=tenant_id,
-    )
+    """Set a widget's fields. Three query paths, decided by the caller:
+
+    - ``definition_v2`` given: v2 planner check (400 on any refusal); v1 columns mirrored from it;
+    - ``keep_v2``: the stored v2 definition and its mirrored v1 columns stay; no query check;
+    - otherwise: v1 validation as before, and ``definition_v2`` is cleared (NULL = v1 path).
+    """
+    if definition_v2 is not None:
+        checked = _checked(definition_v2, tenant_id)
+        w.metric_key = checked.v1.metric_key
+        w.grains = list(checked.v1.grains)
+        w.filters = dict(checked.v1.filters)
+        w.period_grain = checked.v1.period_grain
+        w.definition_v2 = checked.definition
+    elif not keep_v2:
+        if not metric_key:
+            raise HTTPException(status_code=400, detail="Send metric_key (v1 widget) or definition_v2 (v2 widget).")
+        validation = validate_widget_query(
+            metric=metric_key,
+            grains=grains,
+            period_grain=period_grain,
+            visual=visual,
+            tenant_id=tenant_id,
+        )
+        w.metric_key = validation.metric_key or metric_key
+        w.grains = list(validation.requested_grains)
+        w.filters = dict(filters or {})
+        w.period_grain = validation.period_grain
+        w.definition_v2 = None
     w.title = title.strip()
     w.visual = visual
-    w.metric_key = validation.metric_key or metric_key
-    w.grains = list(validation.requested_grains)
-    w.filters = dict(filters or {})
-    w.period_grain = validation.period_grain
     w.layout_json = layout_json
     w.sort_order = sort_order
     w.saved_report_id = saved_report_id
     w.updated_at = datetime.now(timezone.utc)
+
+
+def _spec_keeps_v2(spec: WidgetSpec, w: DashboardWidget) -> bool:
+    """PUT body without definition_v2 for a v2 widget whose mirrored v1 fields are unchanged."""
+    if w.definition_v2 is None or spec.definition_v2 is not None:
+        return False
+    return (
+        spec.metric_key in (None, w.metric_key)
+        and list(spec.grains or []) == list(w.grains or [])
+        and (spec.period_grain or None) == (w.period_grain or None)
+        and dict(spec.filters or {}) == dict(w.filters or {})
+    )
 
 
 async def _widget_from_saved_report(
@@ -171,6 +242,22 @@ async def _widget_from_saved_report(
         user=user,
     ):
         raise HTTPException(status_code=403, detail=f"Cannot add report {report_id} to dashboard")
+    if report.definition_v2 is not None:
+        checked = _checked(report.definition_v2, tenant_id)
+        return DashboardWidget(
+            dashboard_id=dashboard_id,
+            tenant_id=tenant_id,
+            title=report.name,
+            visual=report.visual,
+            metric_key=checked.v1.metric_key,
+            grains=list(checked.v1.grains),
+            filters=dict(checked.v1.filters),
+            period_grain=checked.v1.period_grain,
+            definition_v2=checked.definition,
+            layout_json=default_layout(index),
+            saved_report_id=report.id,
+            sort_order=index,
+        )
     validation = validate_widget_query(
         metric=report.metric_key,
         grains=list(report.grains or []),
@@ -213,8 +300,13 @@ async def _get_editable_dashboard(
 
 
 async def _reload(db: AsyncSession, dashboard_id: int) -> Dashboard:
+    # populate_existing: the dashboard is already in this session with the widget list it had before
+    # the write (expire_on_commit=False), so without it the response showed the old widgets (N-0116 F).
     result = await db.execute(
-        select(Dashboard).where(Dashboard.id == dashboard_id).options(_widget_load())
+        select(Dashboard)
+        .where(Dashboard.id == dashboard_id)
+        .options(_widget_load())
+        .execution_options(populate_existing=True)
     )
     return result.scalar_one()
 
@@ -262,32 +354,14 @@ async def create_dashboard(
         description=(body.description or "").strip() or None,
         visibility=body.visibility,
         shared_roles=normalize_shared_roles(body.shared_roles),
+        filters_json=check_dashboard_filters(body.filters_json) if body.filters_json is not None else {},
     )
     db.add(row)
     await db.flush()
 
     index = 0
     for spec in body.widgets:
-        validate_widget_query(
-            metric=spec.metric_key,
-            grains=spec.grains,
-            period_grain=spec.period_grain,
-            visual=spec.visual,
-            tenant_id=tid,
-        )
-        w = DashboardWidget(
-            dashboard_id=row.id,
-            tenant_id=tid,
-            title=spec.title.strip(),
-            visual=spec.visual,
-            metric_key=spec.metric_key,
-            grains=list(spec.grains or []),
-            filters=dict(spec.filters or {}),
-            period_grain=spec.period_grain,
-            layout_json=spec.layout_json or default_layout(index),
-            saved_report_id=spec.saved_report_id,
-            sort_order=spec.sort_order if spec.sort_order else index,
-        )
+        w = DashboardWidget(dashboard_id=row.id, tenant_id=tid, title=spec.title.strip())
         _apply_widget_fields(
             w,
             title=spec.title,
@@ -300,6 +374,7 @@ async def create_dashboard(
             sort_order=spec.sort_order if spec.sort_order else index,
             saved_report_id=spec.saved_report_id,
             tenant_id=tid,
+            definition_v2=spec.definition_v2,
         )
         db.add(w)
         index += 1
@@ -317,6 +392,64 @@ async def create_dashboard(
         )
         index += 1
 
+    await db.commit()
+    return _dashboard_dict(await _reload(db, row.id))
+
+
+@router.get("/templates")
+async def list_dashboard_templates(user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    """N-0116 S14: the starter dashboards (key, title, description, what is left out and why)."""
+    from app.services.dashboard_templates import template_list
+
+    items = template_list()
+    return {"items": items, "count": len(items)}
+
+
+@router.post("/from-template")
+async def create_dashboard_from_template(
+    body: FromTemplateBody,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    """N-0116 S14: a personal dashboard for the caller from a starter; every widget planner-checked first."""
+    from app.services.dashboard_templates import TEMPLATE_BY_KEY
+
+    t = TEMPLATE_BY_KEY.get(body.key.strip())
+    if t is None:
+        raise HTTPException(status_code=404, detail=f"Unknown starter {body.key!r}. Use GET /dashboards/templates.")
+    uid = parse_user_id(user)
+    if uid is None:
+        raise HTTPException(status_code=401, detail="Sign in to create a dashboard from a starter")
+    tid = tenant_id_from_user(user)
+    checked = [(tw, _checked(tw.definition(), tid)) for tw in t.widgets]  # every widget checked before any write
+    row = Dashboard(
+        tenant_id=tid,
+        owner_user_id=uid,
+        name=(body.name or t.title).strip(),
+        description=t.description,
+        visibility="personal",
+        shared_roles=[],
+        filters_json=check_dashboard_filters(t.filters_json),
+        template_key=t.key,
+    )
+    db.add(row)
+    await db.flush()
+    for i, (tw, c) in enumerate(checked):
+        db.add(
+            DashboardWidget(
+                dashboard_id=row.id,
+                tenant_id=tid,
+                title=tw.title,
+                visual=tw.visual,
+                metric_key=c.v1.metric_key,
+                grains=list(c.v1.grains),
+                filters=dict(c.v1.filters),
+                period_grain=c.v1.period_grain,
+                definition_v2=c.definition,
+                layout_json=tw.layout_json(),
+                sort_order=i,
+            )
+        )
     await db.commit()
     return _dashboard_dict(await _reload(db, row.id))
 
@@ -363,7 +496,35 @@ async def update_dashboard(
         row.visibility = body.visibility
     if body.shared_roles is not None:
         row.shared_roles = normalize_shared_roles(body.shared_roles)
+    if body.filters_json is not None:
+        row.filters_json = check_dashboard_filters(body.filters_json)
     row.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    return _dashboard_dict(await _reload(db, row.id))
+
+
+@router.patch("/{dashboard_id}/layout")
+async def update_dashboard_layout(
+    dashboard_id: int,
+    body: list[LayoutItem],
+    db: AsyncSession = Depends(get_db),
+    user: dict | None = Depends(get_optional_current_user),
+) -> dict[str, Any]:
+    """N-0116 S3: write only ``layout_json`` (x, y, w, h). No query check, no deletes, nothing else."""
+    tid = tenant_id_from_user(user)
+    row = await _get_editable_dashboard(db, dashboard_id, tid, user)
+    existing = {int(w.id): w for w in (row.widgets or [])}
+    ids = [item.id for item in body]
+    dupes = sorted({i for i in ids if ids.count(i) > 1})
+    if dupes:
+        raise HTTPException(status_code=400, detail=f"Widget ids sent more than once: {dupes}. Nothing was written.")
+    unknown = sorted(i for i in ids if i not in existing)
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Widgets not on this dashboard: {unknown}. Nothing was written.")
+    for item in body:
+        w = existing[item.id]
+        old = dict(w.layout_json) if isinstance(w.layout_json, dict) else {}
+        w.layout_json = {**old, "x": item.x, "y": item.y, "w": item.w, "h": item.h}
     await db.commit()
     return _dashboard_dict(await _reload(db, row.id))
 
@@ -395,6 +556,8 @@ async def replace_dashboard_widgets(
                 sort_order=spec.sort_order if spec.sort_order else i,
                 saved_report_id=spec.saved_report_id if spec.saved_report_id is not None else w.saved_report_id,
                 tenant_id=tid,
+                definition_v2=spec.definition_v2,
+                keep_v2=_spec_keeps_v2(spec, w),
             )
             seen.add(spec.id)
         else:
@@ -411,6 +574,7 @@ async def replace_dashboard_widgets(
                 sort_order=spec.sort_order if spec.sort_order else i,
                 saved_report_id=spec.saved_report_id,
                 tenant_id=tid,
+                definition_v2=spec.definition_v2,
             )
             db.add(w)
     for wid, w in existing.items():
@@ -444,6 +608,7 @@ async def add_dashboard_widget(
         sort_order=body.sort_order if body.sort_order is not None else index,
         saved_report_id=body.saved_report_id,
         tenant_id=tid,
+        definition_v2=body.definition_v2,
     )
     db.add(w)
     row.updated_at = datetime.now(timezone.utc)
@@ -470,6 +635,9 @@ async def update_dashboard_widget(
     period_grain = body.period_grain if body.period_grain is not None else w.period_grain
     if body.period_grain is None and body.grains is not None and "period" not in grains:
         period_grain = None
+    sent = body.model_fields_set
+    new_v2 = body.definition_v2 if "definition_v2" in sent else None
+    keep_v2 = "definition_v2" not in sent and w.definition_v2 is not None and not (_V1_QUERY_FIELDS & sent)
     _apply_widget_fields(
         w,
         title=body.title if body.title is not None else w.title,
@@ -482,6 +650,8 @@ async def update_dashboard_widget(
         sort_order=body.sort_order if body.sort_order is not None else int(w.sort_order or 0),
         saved_report_id=w.saved_report_id,
         tenant_id=tid,
+        definition_v2=new_v2,
+        keep_v2=keep_v2,
     )
     row.updated_at = datetime.now(timezone.utc)
     await db.commit()
@@ -519,25 +689,42 @@ async def promote_widget_to_saved_report(
     w = next((x for x in (row.widgets or []) if int(x.id) == widget_id), None)
     if w is None:
         raise HTTPException(status_code=404, detail="Widget not found")
-    validation = validate_widget_query(
-        metric=w.metric_key,
-        grains=list(w.grains or []),
-        period_grain=w.period_grain,
-        visual=w.visual,
-        tenant_id=tid,
-    )
-    report = SavedReport(
-        tenant_id=tid,
-        owner_user_id=parse_user_id(user),
-        name=w.title,
-        visibility="personal",
-        shared_roles=[],
-        metric_key=validation.metric_key or w.metric_key,
-        grains=list(validation.requested_grains),
-        filters=dict(w.filters or {}),
-        visual=w.visual,
-        period_grain=validation.period_grain,
-    )
+    if w.definition_v2 is not None:
+        # N-0116: the report carries the same v2 definition (re-checked) and its v1 mirror.
+        checked = _checked(w.definition_v2, tid)
+        report = SavedReport(
+            tenant_id=tid,
+            owner_user_id=parse_user_id(user),
+            name=w.title,
+            visibility="personal",
+            shared_roles=[],
+            metric_key=checked.v1.metric_key,
+            grains=list(checked.v1.grains),
+            filters=dict(checked.v1.filters),
+            visual=w.visual,
+            period_grain=checked.v1.period_grain,
+            definition_v2=checked.definition,
+        )
+    else:
+        validation = validate_widget_query(
+            metric=w.metric_key,
+            grains=list(w.grains or []),
+            period_grain=w.period_grain,
+            visual=w.visual,
+            tenant_id=tid,
+        )
+        report = SavedReport(
+            tenant_id=tid,
+            owner_user_id=parse_user_id(user),
+            name=w.title,
+            visibility="personal",
+            shared_roles=[],
+            metric_key=validation.metric_key or w.metric_key,
+            grains=list(validation.requested_grains),
+            filters=dict(w.filters or {}),
+            visual=w.visual,
+            period_grain=validation.period_grain,
+        )
     db.add(report)
     await db.flush()
     w.saved_report_id = report.id

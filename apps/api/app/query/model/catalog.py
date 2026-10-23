@@ -9,7 +9,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.query.model.graph import MAX_BREAKDOWNS, derived_breakdowns, measure_breakdowns, needs_period
+from app.query.model.graph import (
+    MAX_BREAKDOWNS,
+    derived_breakdowns,
+    filter_refusals,
+    governed_honours,
+    measure_breakdowns,
+    needs_period,
+)
 from app.query.model.loader import Calculated, DataModel
 
 COMBINATION_RULE = (
@@ -111,6 +118,8 @@ def catalog_v2(dm: DataModel, v1_catalog: Any, *, is_admin: bool) -> dict[str, A
                 "refuse_all": metric.refuse_all,
                 "refuse_reason": metric.refuse_reason,
                 "hidden": metric.hidden,
+                # N-0116 S5: the filters the handler reads (anything else is refused, not ignored).
+                "honours": governed_honours(metric, v1_catalog),
             }
         )
 
@@ -126,6 +135,8 @@ def catalog_v2(dm: DataModel, v1_catalog: Any, *, is_admin: bool) -> dict[str, A
                 "label": m.label,
                 "customer_role": m.joins["customer"].role if "customer" in m.joins else None,
                 "breakdowns": derived_breakdowns(dm, m),
+                # N-0116 S5: why a filter on any other breakdown is refused (the planner's own text).
+                "filter_refusals": filter_refusals(dm, m),
             }
             for m in dm.models.values()
         ],
