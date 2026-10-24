@@ -3,6 +3,10 @@
 import AlignHorizontalLeftOutlinedIcon from '@mui/icons-material/AlignHorizontalLeftOutlined';
 import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined';
 import DonutLargeOutlinedIcon from '@mui/icons-material/DonutLargeOutlined';
+import MultilineChartOutlinedIcon from '@mui/icons-material/MultilineChartOutlined';
+import PivotTableChartOutlinedIcon from '@mui/icons-material/PivotTableChartOutlined';
+import ScatterPlotOutlinedIcon from '@mui/icons-material/ScatterPlotOutlined';
+import SsidChartOutlinedIcon from '@mui/icons-material/SsidChartOutlined';
 import NumbersOutlinedIcon from '@mui/icons-material/NumbersOutlined';
 import PieChartOutlineOutlinedIcon from '@mui/icons-material/PieChartOutlineOutlined';
 import ShowChartOutlinedIcon from '@mui/icons-material/ShowChartOutlined';
@@ -43,7 +47,7 @@ const PERIOD_GRAINS: { id: PeriodGrain; label: string }[] = [
   { id: 'quarter', label: 'Quarter' },
 ];
 
-const VISUAL_ICON: Record<WidgetVisual, ReactNode> = {
+export const VISUAL_ICON: Record<WidgetVisual, ReactNode> = {
   kpi: <NumbersOutlinedIcon />,
   table: <TableChartOutlinedIcon />,
   hbar: <AlignHorizontalLeftOutlinedIcon />,
@@ -53,6 +57,10 @@ const VISUAL_ICON: Record<WidgetVisual, ReactNode> = {
   area: <StackedLineChartOutlinedIcon />,
   pie: <PieChartOutlineOutlinedIcon />,
   donut: <DonutLargeOutlinedIcon />,
+  combo: <MultilineChartOutlinedIcon />,
+  dual_axis: <SsidChartOutlinedIcon />,
+  scatter: <ScatterPlotOutlinedIcon />,
+  pivot: <PivotTableChartOutlinedIcon />,
 };
 
 export type WidgetEditorValue = {

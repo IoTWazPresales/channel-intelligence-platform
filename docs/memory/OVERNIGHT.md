@@ -3,6 +3,32 @@
 Branch `feat/ns-2-brief-nav-collapse`. Start HEAD `57b3a98e`. Read this file first on resume and continue
 from the last unit not marked DONE.
 
+## Execution resumed 2026-10-24 (Codex)
+
+- Warren confirmed original functional scope and authorised development, tests, EIF updates and
+  explicit-path commits/pushes. Temporary cuts are not accepted permanent deferrals; incomplete nodes
+  receive no acceptance. Production cip migration/deployment, API/worker restarts and main remain forbidden.
+- N-0116 ownership restored with supported lease + stage events under
+  `RUN-20261024-N0116-IMPL-CODEX`; stage implement. Lease re-acquired after the later continuation
+  because the earlier four-hour lease had expired. All inherited frontend files preserved.
+- Corrected colour assertion (50 matches >=20; 5 tests the ignored fourth rule), without changing matcher.
+  Four regressions first failed in 8 cases, then builder suite passed 60 tests: dashboard switch state,
+  empty intersections, mixed units on shared axes and unsupported drill-total equality claims.
+- Added actual dual-axis, scatter and pivot, complete fixture snapshots of all 22 current starter widgets,
+  catalog-driven extra attribute filters, compatibility/export/workspace/editor/render tests. Sample
+  builder + charts 119 passed; workspace/filter integration 10 passed. Final checks are in progress.
+- Five isolated Playwright checks passed: every visual and current starter at 1280/390, light/dark
+  verified by actual computed background colour; chart click, Esc, full screen, rows and PNG download.
+  Accepted captures are only `PROGRAMME_20261024/renders/accepted/`; earlier captures had an unchecked
+  mobile hydration/theme race. Isolated :3106, `.tmp/builder-next`, proxy disabled; production untouched.
+- Independent different-model sample re-executed 42 focused tests and found three further defects:
+  missing catalog dropping filters, hidden own filters after model change, and summed non-additive
+  Other series. Targeted fixes/regressions applied. Verifier exhausted its usage before final report;
+  no completed independent verification gate is claimed.
+- Original S16 comparisons, S17 widget filter/date overrides, S19 CPOR cases and the missing original
+  N-0115/business definitions remain open work, not permanent deferrals. No node is closed.
+- Current execution evidence: `.eif/audit/PROGRAMME_20261024/`. Clean final test results are in N0116_TEST_EVIDENCE.md; commit pin follows. EIF verify integrity true at rev 2759; same nine acknowledged older-node gate issues. Programme ledger/views remain local under the existing protected-path checkpoint boundary.
+
 ## Start check (2026-10-23)
 
 - Closure verifier: `SESSION_CLOSURE_OK` (ledger commit = remote head `57b3a98e`).
@@ -19,9 +45,9 @@ from the last unit not marked DONE.
 
 | Unit | Node | Status |
 |---|---|---|
-| A. Chart fixes | N-0114 (feature, R2, ui) | PARKED at definition, no code changed, lease released |
-| B. Data model under the builder | N-0115 (inception, R3, api+schema, depends on N-0114) | DISCOVERY STARTED (read only), no ledger events |
-| C. The builder | N-0116 (feature, R3, ui+api+data_migration, depends on N-0115) | NOT STARTED |
+| A. Chart fixes | N-0114 (feature, R2, ui) | Implemented; verify with limitations; original acceptance pending |
+| B. Data model under the builder | N-0115 (inception, R3, api+schema, depends on N-0114) | Partial original scope implemented; verify with limitations; acceptance pending |
+| C. The builder | N-0116 (feature, R3, ui+api+data_migration, depends on N-0115) | Execution resumed 24 October; implement; original scope open; acceptance pending |
 
 ## Log
 
@@ -175,6 +201,9 @@ from the last unit not marked DONE.
   The web half is being built to keep working against the old API.
 
 ## Morning handoff
+
+Historical stale handoff, superseded by the dated execution/progress sections above. Do not resume
+from the unstarted claims below; preserved only as the original interrupted handoff record.
 
 - **Done:** start check, three nodes, Unit B discovery of catalog, handlers, engine and callers (above),
   the `db_on.py` helper.

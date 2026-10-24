@@ -1,0 +1,6 @@
+{
+  "node": "N-0116",
+  "expected_revision": 8,
+  "stage_note": "Bounded frontend checkpoint: inherited implementation preserved and integrated; colour assertion and four correctness concerns reproduced and fixed; dual-axis/scatter/pivot and attribute filters implemented; follow-up metadata, hidden filter, non-additive Other and stale-export defects fixed. Final-source Unit C 104/104, cip_test API 3363 passed/21 skipped, isolated fixture browser 5/5, tsc and lint passed (50 existing warnings). Evidence PROGRAMME_20261024/N0116_TEST_EVIDENCE.md. Full web result still pending. Original S16/S17/S19, missing original N0115/business requirements, authenticated/RLS and full R3 acceptance remain open. Next executable development unit after tested frontend commit: extend existing CPOR model's named local breakdown for case ID/name and wire view-rows, regression-first. No production migration/deployment, API/worker restart, main change or incomplete-node acceptance. Programme ledger remains local under protected checkpoint boundary; no bypass attempted.",
+  "note": "Bounded frontend checkpoint; full detail in stage_note and N0116_TEST_EVIDENCE.md. N-0116 remains implement, original acceptance pending."
+}

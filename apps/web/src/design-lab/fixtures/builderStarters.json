@@ -1,0 +1,828 @@
+[
+  {
+    "id": 1000,
+    "name": "Account overview",
+    "description": "One retailer's own sell-through: what it sold, its weekly rate, its latest reported stock, which products and stores sell, and stock beside rate for each product. Pick a customer above.",
+    "visibility": "personal",
+    "shared_roles": [],
+    "widgets": [
+      {
+        "id": 100000,
+        "dashboard_id": 1000,
+        "title": "Sell-through units",
+        "visual": "kpi",
+        "metric_key": "cst_sellthrough.units",
+        "grains": [],
+        "filters": {},
+        "period_grain": null,
+        "layout_json": {
+          "x": 0,
+          "y": 0,
+          "w": 3,
+          "h": 5
+        },
+        "saved_report_id": null,
+        "sort_order": 0,
+        "definition_v2": {
+          "v": 1,
+          "query": {
+            "measures": [
+              "cst_sellthrough.units"
+            ],
+            "breakdowns": []
+          },
+          "display": {
+            "kpi": {
+              "compare": true,
+              "sparkline": true
+            }
+          }
+        }
+      },
+      {
+        "id": 100001,
+        "dashboard_id": 1000,
+        "title": "Units per week",
+        "visual": "kpi",
+        "metric_key": "cst_sellthrough.units_per_week",
+        "grains": [],
+        "filters": {},
+        "period_grain": null,
+        "layout_json": {
+          "x": 3,
+          "y": 0,
+          "w": 3,
+          "h": 5
+        },
+        "saved_report_id": null,
+        "sort_order": 1,
+        "definition_v2": {
+          "v": 1,
+          "query": {
+            "measures": [
+              "cst_sellthrough.units_per_week"
+            ],
+            "breakdowns": []
+          },
+          "display": {
+            "kpi": {
+              "compare": true,
+              "sparkline": false
+            }
+          }
+        }
+      },
+      {
+        "id": 100002,
+        "dashboard_id": 1000,
+        "title": "Reported stock on hand (latest report)",
+        "visual": "kpi",
+        "metric_key": "cst_sellthrough.reported_soh",
+        "grains": [],
+        "filters": {},
+        "period_grain": null,
+        "layout_json": {
+          "x": 6,
+          "y": 0,
+          "w": 3,
+          "h": 5
+        },
+        "saved_report_id": null,
+        "sort_order": 2,
+        "definition_v2": {
+          "v": 1,
+          "query": {
+            "measures": [
+              "cst_sellthrough.reported_soh"
+            ],
+            "breakdowns": []
+          },
+          "display": {
+            "kpi": {
+              "compare": false,
+              "sparkline": false
+            },
+            "caption": "as of latest report on or before {to}"
+          }
+        }
+      },
+      {
+        "id": 100003,
+        "dashboard_id": 1000,
+        "title": "Stores / sites reporting",
+        "visual": "kpi",
+        "metric_key": "cst_sellthrough.stores_reporting",
+        "grains": [],
+        "filters": {},
+        "period_grain": null,
+        "layout_json": {
+          "x": 9,
+          "y": 0,
+          "w": 3,
+          "h": 5
+        },
+        "saved_report_id": null,
+        "sort_order": 3,
+        "definition_v2": {
+          "v": 1,
+          "query": {
+            "measures": [
+              "cst_sellthrough.stores_reporting"
+            ],
+            "breakdowns": []
+          },
+          "display": {
+            "kpi": {
+              "compare": false,
+              "sparkline": false
+            }
+          }
+        }
+      },
+      {
+        "id": 100004,
+        "dashboard_id": 1000,
+        "title": "Sell-through units by week",
+        "visual": "line",
+        "metric_key": "cst_sellthrough.units",
+        "grains": [
+          "period"
+        ],
+        "filters": {},
+        "period_grain": "week",
+        "layout_json": {
+          "x": 0,
+          "y": 5,
+          "w": 8,
+          "h": 8
+        },
+        "saved_report_id": null,
+        "sort_order": 4,
+        "definition_v2": {
+          "v": 1,
+          "query": {
+            "measures": [
+              "cst_sellthrough.units"
+            ],
+            "breakdowns": [
+              "period"
+            ],
+            "period": {
+              "grain": "week"
+            }
+          }
+        }
+      },
+      {
+        "id": 100005,
+        "dashboard_id": 1000,
+        "title": "Top products",
+        "visual": "hbar",
+        "metric_key": "cst_sellthrough.units",
+        "grains": [
+          "product"
+        ],
+        "filters": {},
+        "period_grain": null,
+        "layout_json": {
+          "x": 8,
+          "y": 5,
+          "w": 4,
+          "h": 8
+        },
+        "saved_report_id": null,
+        "sort_order": 5,
+        "definition_v2": {
+          "v": 1,
+          "query": {
+            "measures": [
+              "cst_sellthrough.units"
+            ],
+            "breakdowns": [
+              "product"
+            ]
+          },
+          "display": {
+            "top_n": 15
+          }
+        }
+      },
+      {
+        "id": 100006,
+        "dashboard_id": 1000,
+        "title": "Stock beside sell-through, by product",
+        "visual": "table",
+        "metric_key": "cst_sellthrough.units",
+        "grains": [
+          "product"
+        ],
+        "filters": {},
+        "period_grain": null,
+        "layout_json": {
+          "x": 0,
+          "y": 13,
+          "w": 12,
+          "h": 10
+        },
+        "saved_report_id": null,
+        "sort_order": 6,
+        "definition_v2": {
+          "v": 1,
+          "query": {
+            "measures": [
+              "cst_sellthrough.units",
+              "cst_sellthrough.units_per_week",
+              "cst_sellthrough.reported_soh"
+            ],
+            "breakdowns": [
+              "product"
+            ],
+            "sort": {
+              "by": "cst_sellthrough.units",
+              "dir": "desc"
+            }
+          }
+        }
+      },
+      {
+        "id": 100007,
+        "dashboard_id": 1000,
+        "title": "Sell-through by store / site",
+        "visual": "hbar",
+        "metric_key": "cst_sellthrough.units",
+        "grains": [
+          "site_label"
+        ],
+        "filters": {},
+        "period_grain": null,
+        "layout_json": {
+          "x": 0,
+          "y": 23,
+          "w": 12,
+          "h": 8
+        },
+        "saved_report_id": null,
+        "sort_order": 7,
+        "definition_v2": {
+          "v": 1,
+          "query": {
+            "measures": [
+              "cst_sellthrough.units"
+            ],
+            "breakdowns": [
+              "site_label"
+            ]
+          },
+          "display": {
+            "top_n": 15
+          }
+        }
+      }
+    ],
+    "filters_json": {
+      "date": {
+        "preset": "last_52_weeks",
+        "from": null,
+        "to": null
+      },
+      "compare": "previous_period",
+      "customer": [],
+      "distributor": [],
+      "product": [],
+      "bu": [],
+      "channel": [],
+      "region": [],
+      "required": [
+        "customer"
+      ]
+    },
+    "template_key": "account_overview"
+  },
+  {
+    "id": 1001,
+    "name": "Sell-through & stock across customers",
+    "description": "Sell-through and latest reported stock for each retailer, side by side, and the monthly trend.",
+    "visibility": "personal",
+    "shared_roles": [],
+    "widgets": [
+      {
+        "id": 100100,
+        "dashboard_id": 1001,
+        "title": "Sell-through units",
+        "visual": "kpi",
+        "metric_key": "cst_sellthrough.units",
+        "grains": [],
+        "filters": {},
+        "period_grain": null,
+        "layout_json": {
+          "x": 0,
+          "y": 0,
+          "w": 4,
+          "h": 5
+        },
+        "saved_report_id": null,
+        "sort_order": 0,
+        "definition_v2": {
+          "v": 1,
+          "query": {
+            "measures": [
+              "cst_sellthrough.units"
+            ],
+            "breakdowns": []
+          },
+          "display": {
+            "kpi": {
+              "compare": true,
+              "sparkline": true
+            }
+          }
+        }
+      },
+      {
+        "id": 100101,
+        "dashboard_id": 1001,
+        "title": "Units per week",
+        "visual": "kpi",
+        "metric_key": "cst_sellthrough.units_per_week",
+        "grains": [],
+        "filters": {},
+        "period_grain": null,
+        "layout_json": {
+          "x": 4,
+          "y": 0,
+          "w": 4,
+          "h": 5
+        },
+        "saved_report_id": null,
+        "sort_order": 1,
+        "definition_v2": {
+          "v": 1,
+          "query": {
+            "measures": [
+              "cst_sellthrough.units_per_week"
+            ],
+            "breakdowns": []
+          },
+          "display": {
+            "kpi": {
+              "compare": true,
+              "sparkline": false
+            }
+          }
+        }
+      },
+      {
+        "id": 100102,
+        "dashboard_id": 1001,
+        "title": "Reported stock on hand (latest report)",
+        "visual": "kpi",
+        "metric_key": "cst_sellthrough.reported_soh",
+        "grains": [],
+        "filters": {},
+        "period_grain": null,
+        "layout_json": {
+          "x": 8,
+          "y": 0,
+          "w": 4,
+          "h": 5
+        },
+        "saved_report_id": null,
+        "sort_order": 2,
+        "definition_v2": {
+          "v": 1,
+          "query": {
+            "measures": [
+              "cst_sellthrough.reported_soh"
+            ],
+            "breakdowns": []
+          },
+          "display": {
+            "kpi": {
+              "compare": false,
+              "sparkline": false
+            },
+            "caption": "as of latest report on or before {to}"
+          }
+        }
+      },
+      {
+        "id": 100103,
+        "dashboard_id": 1001,
+        "title": "Sell-through by customer",
+        "visual": "hbar",
+        "metric_key": "cst_sellthrough.units",
+        "grains": [
+          "customer"
+        ],
+        "filters": {},
+        "period_grain": null,
+        "layout_json": {
+          "x": 0,
+          "y": 5,
+          "w": 6,
+          "h": 8
+        },
+        "saved_report_id": null,
+        "sort_order": 3,
+        "definition_v2": {
+          "v": 1,
+          "query": {
+            "measures": [
+              "cst_sellthrough.units"
+            ],
+            "breakdowns": [
+              "customer"
+            ]
+          },
+          "display": {
+            "top_n": 15
+          }
+        }
+      },
+      {
+        "id": 100104,
+        "dashboard_id": 1001,
+        "title": "Sell-through by customer, monthly",
+        "visual": "line",
+        "metric_key": "cst_sellthrough.units",
+        "grains": [
+          "customer",
+          "period"
+        ],
+        "filters": {},
+        "period_grain": "month",
+        "layout_json": {
+          "x": 6,
+          "y": 5,
+          "w": 6,
+          "h": 8
+        },
+        "saved_report_id": null,
+        "sort_order": 4,
+        "definition_v2": {
+          "v": 1,
+          "query": {
+            "measures": [
+              "cst_sellthrough.units"
+            ],
+            "breakdowns": [
+              "customer",
+              "period"
+            ],
+            "period": {
+              "grain": "month"
+            }
+          }
+        }
+      },
+      {
+        "id": 100105,
+        "dashboard_id": 1001,
+        "title": "Stock beside sell-through, by customer",
+        "visual": "table",
+        "metric_key": "cst_sellthrough.units",
+        "grains": [
+          "customer"
+        ],
+        "filters": {},
+        "period_grain": null,
+        "layout_json": {
+          "x": 0,
+          "y": 13,
+          "w": 12,
+          "h": 8
+        },
+        "saved_report_id": null,
+        "sort_order": 5,
+        "definition_v2": {
+          "v": 1,
+          "query": {
+            "measures": [
+              "cst_sellthrough.units",
+              "cst_sellthrough.units_per_week",
+              "cst_sellthrough.reported_soh",
+              "cst_sellthrough.stores_reporting"
+            ],
+            "breakdowns": [
+              "customer"
+            ],
+            "sort": {
+              "by": "cst_sellthrough.units",
+              "dir": "desc"
+            }
+          }
+        }
+      }
+    ],
+    "filters_json": {
+      "date": {
+        "preset": "last_52_weeks",
+        "from": null,
+        "to": null
+      },
+      "compare": "previous_period",
+      "customer": [],
+      "distributor": [],
+      "product": [],
+      "bu": [],
+      "channel": [],
+      "region": [],
+      "required": []
+    },
+    "template_key": "sellthrough_stock"
+  },
+  {
+    "id": 1002,
+    "name": "CPOR cases",
+    "description": "How many promotion cases there are, what support they carry, how well they delivered, and how they split by status, quarter and account. CPOR dates are the case window start.",
+    "visibility": "personal",
+    "shared_roles": [],
+    "widgets": [
+      {
+        "id": 100200,
+        "dashboard_id": 1002,
+        "title": "Promotion cases",
+        "visual": "kpi",
+        "metric_key": "cpor.cases",
+        "grains": [],
+        "filters": {},
+        "period_grain": null,
+        "layout_json": {
+          "x": 0,
+          "y": 0,
+          "w": 3,
+          "h": 5
+        },
+        "saved_report_id": null,
+        "sort_order": 0,
+        "definition_v2": {
+          "v": 1,
+          "query": {
+            "measures": [
+              "cpor.cases"
+            ],
+            "breakdowns": []
+          },
+          "display": {
+            "kpi": {
+              "compare": false,
+              "sparkline": false
+            }
+          }
+        }
+      },
+      {
+        "id": 100201,
+        "dashboard_id": 1002,
+        "title": "Support USD",
+        "visual": "kpi",
+        "metric_key": "cpor.support_usd",
+        "grains": [],
+        "filters": {},
+        "period_grain": null,
+        "layout_json": {
+          "x": 3,
+          "y": 0,
+          "w": 3,
+          "h": 5
+        },
+        "saved_report_id": null,
+        "sort_order": 1,
+        "definition_v2": {
+          "v": 1,
+          "query": {
+            "measures": [
+              "cpor.support_usd"
+            ],
+            "breakdowns": []
+          },
+          "display": {
+            "kpi": {
+              "compare": false,
+              "sparkline": false
+            }
+          }
+        }
+      },
+      {
+        "id": 100202,
+        "dashboard_id": 1002,
+        "title": "Support ZAR",
+        "visual": "kpi",
+        "metric_key": "cpor.support_zar",
+        "grains": [],
+        "filters": {},
+        "period_grain": null,
+        "layout_json": {
+          "x": 6,
+          "y": 0,
+          "w": 3,
+          "h": 5
+        },
+        "saved_report_id": null,
+        "sort_order": 2,
+        "definition_v2": {
+          "v": 1,
+          "query": {
+            "measures": [
+              "cpor.support_zar"
+            ],
+            "breakdowns": []
+          },
+          "display": {
+            "kpi": {
+              "compare": false,
+              "sparkline": false
+            }
+          }
+        }
+      },
+      {
+        "id": 100203,
+        "dashboard_id": 1002,
+        "title": "Delivery rate",
+        "visual": "kpi",
+        "metric_key": "cpor.delivery_rate",
+        "grains": [],
+        "filters": {},
+        "period_grain": null,
+        "layout_json": {
+          "x": 9,
+          "y": 0,
+          "w": 3,
+          "h": 5
+        },
+        "saved_report_id": null,
+        "sort_order": 3,
+        "definition_v2": {
+          "v": 1,
+          "query": {
+            "measures": [
+              "cpor.delivery_rate"
+            ],
+            "breakdowns": []
+          },
+          "display": {
+            "kpi": {
+              "compare": false,
+              "sparkline": false
+            }
+          }
+        }
+      },
+      {
+        "id": 100204,
+        "dashboard_id": 1002,
+        "title": "Cases by status",
+        "visual": "hbar",
+        "metric_key": "cpor.cases",
+        "grains": [
+          "status"
+        ],
+        "filters": {},
+        "period_grain": null,
+        "layout_json": {
+          "x": 0,
+          "y": 5,
+          "w": 4,
+          "h": 8
+        },
+        "saved_report_id": null,
+        "sort_order": 4,
+        "definition_v2": {
+          "v": 1,
+          "query": {
+            "measures": [
+              "cpor.cases"
+            ],
+            "breakdowns": [
+              "status"
+            ]
+          }
+        }
+      },
+      {
+        "id": 100205,
+        "dashboard_id": 1002,
+        "title": "Status and approval status",
+        "visual": "table",
+        "metric_key": "cpor.cases",
+        "grains": [
+          "status",
+          "workflow_status"
+        ],
+        "filters": {},
+        "period_grain": null,
+        "layout_json": {
+          "x": 4,
+          "y": 5,
+          "w": 8,
+          "h": 8
+        },
+        "saved_report_id": null,
+        "sort_order": 5,
+        "definition_v2": {
+          "v": 1,
+          "query": {
+            "measures": [
+              "cpor.cases",
+              "cpor.support_usd",
+              "cpor.support_zar",
+              "cpor.estimate_units",
+              "cpor.result_units",
+              "cpor.delivery_rate"
+            ],
+            "breakdowns": [
+              "status",
+              "workflow_status"
+            ]
+          }
+        }
+      },
+      {
+        "id": 100206,
+        "dashboard_id": 1002,
+        "title": "Support USD by quarter (window start)",
+        "visual": "bar",
+        "metric_key": "cpor.support_usd",
+        "grains": [
+          "period"
+        ],
+        "filters": {},
+        "period_grain": "quarter",
+        "layout_json": {
+          "x": 0,
+          "y": 13,
+          "w": 6,
+          "h": 8
+        },
+        "saved_report_id": null,
+        "sort_order": 6,
+        "definition_v2": {
+          "v": 1,
+          "query": {
+            "measures": [
+              "cpor.support_usd"
+            ],
+            "breakdowns": [
+              "period"
+            ],
+            "period": {
+              "grain": "quarter"
+            }
+          }
+        }
+      },
+      {
+        "id": 100207,
+        "dashboard_id": 1002,
+        "title": "Support USD by customer",
+        "visual": "hbar",
+        "metric_key": "cpor.support_usd",
+        "grains": [
+          "customer"
+        ],
+        "filters": {},
+        "period_grain": null,
+        "layout_json": {
+          "x": 6,
+          "y": 13,
+          "w": 6,
+          "h": 8
+        },
+        "saved_report_id": null,
+        "sort_order": 7,
+        "definition_v2": {
+          "v": 1,
+          "query": {
+            "measures": [
+              "cpor.support_usd"
+            ],
+            "breakdowns": [
+              "customer"
+            ]
+          },
+          "display": {
+            "top_n": 15
+          }
+        }
+      }
+    ],
+    "filters_json": {
+      "date": {
+        "preset": "all_time",
+        "from": null,
+        "to": null
+      },
+      "compare": "none",
+      "customer": [],
+      "distributor": [],
+      "product": [],
+      "bu": [],
+      "channel": [],
+      "region": [],
+      "required": []
+    },
+    "template_key": "cpor_cases"
+  }
+]

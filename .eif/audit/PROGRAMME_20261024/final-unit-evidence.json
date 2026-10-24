@@ -1,0 +1,7 @@
+{
+  "node": "N-0116",
+  "expected_revision": 8,
+  "path": ".eif/audit/PROGRAMME_20261024/N0116_TEST_EVIDENCE.md",
+  "note": "N-0116 bounded Unit C frontend: final focused suite 104/104; cip_test API 3363 passed, 21 skipped; refreshed fixture browser 5/5; TypeScript and root lint exit 0, 50 existing lint warnings. source-sha256.json pins the 51 source files. Full web still collecting. Original requirements and authenticated/RLS evidence remain open; no node acceptance or production action.",
+  "provenance": "implementation-observation"
+}

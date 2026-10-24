@@ -1,0 +1,7 @@
+{
+  "node": "N-0116",
+  "expected_revision": 9,
+  "path": ".eif/audit/PROGRAMME_20261024/full-web-final.json",
+  "note": "N-0116 full web suite exit 0: 1121/1121 tests, 216 files, 1976 seconds. Final source additionally verified by later complete Unit C suite 104/104, browser fixture 5/5, tsc/lint exit 0; cip_test API 3363 passed/21 skipped. Historical failures superseded, limitations retained in execution report. No node acceptance or production change.",
+  "provenance": "implementation-observation"
+}

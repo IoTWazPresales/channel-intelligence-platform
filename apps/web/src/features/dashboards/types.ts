@@ -1,4 +1,20 @@
-export type WidgetVisual = 'kpi' | 'table' | 'bar' | 'hbar' | 'stacked_bar' | 'line' | 'area' | 'pie' | 'donut';
+import type { DashboardFilters, DefinitionV2 } from './builder/types';
+
+export type WidgetVisual =
+  | 'kpi'
+  | 'table'
+  | 'bar'
+  | 'hbar'
+  | 'stacked_bar'
+  | 'line'
+  | 'area'
+  | 'pie'
+  | 'donut'
+  // N-0116 (0048): combo is MUST; dual_axis, scatter and pivot are accepted by the API (SHOULD, not drawn yet).
+  | 'combo'
+  | 'dual_axis'
+  | 'scatter'
+  | 'pivot';
 export type PeriodGrain = 'week' | 'month' | 'quarter';
 
 export type DashboardWidget = {
@@ -13,6 +29,8 @@ export type DashboardWidget = {
   layout_json: { x?: number; y?: number; w?: number; h?: number } | null;
   saved_report_id: number | null;
   sort_order: number;
+  /** N-0116: set = run v2 execute; null or absent (an API before 0048) = the v1 path as before. */
+  definition_v2?: DefinitionV2 | null;
 };
 
 export type Dashboard = {
@@ -22,6 +40,10 @@ export type Dashboard = {
   visibility: string;
   shared_roles: string[];
   widgets: DashboardWidget[];
+  /** N-0116: saved filter bar; `{}` by default, absent on an API before 0048. */
+  filters_json?: Partial<DashboardFilters> | Record<string, never>;
+  template_key?: string | null;
+  owner_user_id?: number | null;
 };
 
 export type SemanticMetric = {

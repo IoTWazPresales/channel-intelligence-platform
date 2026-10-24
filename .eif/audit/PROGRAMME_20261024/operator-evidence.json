@@ -1,0 +1,1 @@
+{"node":"N-0116","expected_revision":6,"path":".eif/audit/PROGRAMME_20261024/N0116_OPERATOR_EXECUTION.md","note":"N-0116: direct operator authorises execution against original overnight functional scope; temporary cuts are not permanent deferrals. No incomplete-node acceptance, cip migration, deployment, API or worker restart.","provenance":"operator-instruction"}

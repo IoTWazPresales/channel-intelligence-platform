@@ -1,8 +1,8 @@
 'use client';
 
-import { Box, Stack, Typography } from '@mui/material';
+import { Box, ButtonBase, Stack, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import {
   Area,
   Bar,
@@ -15,6 +15,8 @@ import {
   PieChart,
   ReferenceLine,
   ResponsiveContainer,
+  Scatter,
+  ScatterChart,
   Tooltip,
   XAxis,
   YAxis,
@@ -40,7 +42,15 @@ import { applyTopN, sortRows, topNCaption, type RowSort, type TopN } from './cha
  * the full name on hover and in the tooltip; category charts go horizontal when labels are long or
  * many; the chart toolbar (`ChartControls`) sets top N and sort; `ShareChart` draws pies and donuts.
  * Only formatting and layout change: every number is the caller's.
+ *
+ * N-0116 (click to filter): optional click callbacks hand back the clicked datum and the mouse event
+ * (so Ctrl/Cmd-click can add): `onRowClick` on `CategoryBars` and `RankedBars`, `onPointClick` and
+ * `onSeriesClick` on `TrendChart`, `onSliceClick` on `ShareChart`. Legend items become buttons when
+ * clickable, so the same filter is reachable by keyboard (Enter or Space).
  */
+
+/** Mouse event handed to a chart click callback (Ctrl/Cmd adds to a selection). */
+export type ChartClickEvent = ReactMouseEvent | MouseEvent | undefined;
 
 /* ------------------------------------------------------------------------------------------------
  * Number and unit formatting
@@ -552,18 +562,52 @@ export function ChartFrame({ height = 220, children }: { height?: number; childr
 }
 
 /** Swatch legend above the plot: full names, wrapping, series colours. */
-export function ChartLegend({ items }: { items: { label: string; color: string; value?: string; share?: string }[] }) {
+export function ChartLegend({
+  items,
+  onItemClick,
+}: {
+  items: { label: string; color: string; value?: string; share?: string; clickable?: boolean; selected?: boolean }[];
+  /** Legend items become buttons (keyboard reachable) when set; `clickable: false` keeps one plain. */
+  onItemClick?: (index: number, e: ChartClickEvent) => void;
+}) {
   return (
     <Box component="ul" sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.75, rowGap: 0.5, m: 0, mb: 1, p: 0, listStyle: 'none' }} data-testid="chart-legend">
-      {items.map((it, i) => (
-        <Box component="li" key={`${it.label}-${i}`} sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
-          <Box component="span" aria-hidden sx={{ width: 10, height: 10, borderRadius: '2px', bgcolor: it.color, flexShrink: 0 }} />
-          <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-            {it.label}
-            {it.value || it.share ? ` · ${[it.value, it.share].filter(Boolean).join(' · ')}` : ''}
-          </Typography>
-        </Box>
-      ))}
+      {items.map((it, i) => {
+        const content = (
+          <>
+            <Box component="span" aria-hidden sx={{ width: 10, height: 10, borderRadius: '2px', bgcolor: it.color, flexShrink: 0 }} />
+            <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere', fontWeight: it.selected ? 700 : undefined }}>
+              {it.label}
+              {it.value || it.share ? ` · ${[it.value, it.share].filter(Boolean).join(' · ')}` : ''}
+            </Typography>
+          </>
+        );
+        const clickable = Boolean(onItemClick) && it.clickable !== false;
+        return (
+          <Box component="li" key={`${it.label}-${i}`} sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
+            {clickable ? (
+              <ButtonBase
+                onClick={(e) => onItemClick?.(i, e)}
+                aria-pressed={Boolean(it.selected)}
+                aria-label={`Filter by ${it.label}`}
+                data-testid="chart-legend-item"
+                sx={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 0.75,
+                  borderRadius: 1,
+                  px: 0.25,
+                  '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 1 },
+                }}
+              >
+                {content}
+              </ButtonBase>
+            ) : (
+              content
+            )}
+          </Box>
+        );
+      })}
     </Box>
   );
 }
@@ -695,7 +739,7 @@ export function CategoryBars({
   /** Legend for the single series (off by default). */
   legend?: boolean;
   summary?: string;
-  onRowClick?: (row: Row) => void;
+  onRowClick?: (row: Row, e?: ChartClickEvent) => void;
   testId?: string;
 }) {
   const c = useChartTheme();
@@ -725,9 +769,9 @@ export function CategoryBars({
       }
     : undefined;
   const click = onRowClick
-    ? (state: unknown) => {
+    ? (state: unknown, _index?: number, e?: ChartClickEvent) => {
         const payload = (state as { payload?: Row }).payload;
-        if (payload) onRowClick(payload);
+        if (payload) onRowClick(payload, e);
       }
     : undefined;
   return (
@@ -952,17 +996,22 @@ export function TrendChart({
   unit,
   xAxisTitle,
   yAxisTitle,
+  yRightAxisTitle,
+  xTickFormat,
   yScale = 'zero',
   lastPointLabel = false,
   legend,
   stack = false,
   summary,
   table,
+  onPointClick,
+  onSeriesClick,
+  selectedSeries,
   testId,
 }: {
   data: Row[];
   x: string;
-  series: { key: string; label: string; kind: 'line' | 'area' | 'bar'; tone?: ChartTone }[];
+  series: { key: string; label: string; kind: 'line' | 'area' | 'bar'; tone?: ChartTone; clickable?: boolean; axis?: 'left' | 'right'; unit?: MeasureUnit; dash?: string }[];
   height?: number;
   format?: (v: number) => string;
   unit?: MeasureUnit;
@@ -970,6 +1019,8 @@ export function TrendChart({
   xAxisTitle?: string;
   /** Title of the value axis, unit included ("Sell-out (units)"). */
   yAxisTitle?: string;
+  yRightAxisTitle?: string;
+  xTickFormat?: (v: unknown) => string;
   /** 'zero' (default) anchors the axis at 0 — right for volumes. 'fit' zooms to the data — right for prices/rates. */
   yScale?: 'zero' | 'fit';
   /** Direct-label the last point of the first line/area series (reports). Off by default. */
@@ -981,11 +1032,25 @@ export function TrendChart({
   /** Accessible name; defaults to the axis titles. With a name the chart also gets a hidden data table. */
   summary?: string;
   table?: ChartDataTable;
+  /** A click on the plot hands back the x row under the pointer (a period, or a category). */
+  onPointClick?: (row: Row, index: number, e?: ChartClickEvent) => void;
+  /** A click on a legend item (a series). Legend items are buttons when set. */
+  onSeriesClick?: (seriesKey: string, e?: ChartClickEvent) => void;
+  selectedSeries?: string[];
   testId?: string;
 }) {
   const c = useChartTheme();
   useUntitledWarning('TrendChart', xAxisTitle, yAxisTitle);
   const fmt = chartFormatters(unit, format);
+  const seriesFmt = (s: (typeof series)[number]) => chartFormatters(s.unit ?? unit, format);
+  const hasRight = series.some((s) => s.axis === 'right');
+  const leftSeries = series.filter((s) => s.axis !== 'right');
+  const rightSeries = series.filter((s) => s.axis === 'right');
+  const leftFmt = chartFormatters(leftSeries[0]?.unit ?? unit, format);
+  const rightUnit = rightSeries[0]?.unit ?? unit;
+  const rightFmt = chartFormatters(rightUnit, format);
+  const axisDomain = (ss: typeof series): [(v: number) => number, (v: number) => number] | ['auto', 'auto'] =>
+    ss.some((s) => s.kind === 'bar') ? [(v) => Math.min(0, v), (v) => Math.max(0, v)] : ['auto', 'auto'];
   const showLegend = legend ?? series.length > 1;
   const colorOf = (s: (typeof series)[number], i: number) =>
     s.tone ? toneColor(c, s.tone) : series.length > 1 ? c.series[i % c.series.length] : c.primary;
@@ -993,14 +1058,14 @@ export function TrendChart({
   const lastIndex = data.length - 1;
   const titled = Boolean(xAxisTitle || yAxisTitle);
   const valueWidth = isMoney(unit) ? 68 : yScale === 'fit' ? 64 : 60;
-  const figureSummary = autoSummary(summary, xAxisTitle, yAxisTitle);
+  const figureSummary = autoSummary(summary, xAxisTitle, [yAxisTitle, yRightAxisTitle].filter(Boolean).join(' / '));
   const figureTable: ChartDataTable | undefined =
     table ??
     (figureSummary
       ? {
           caption: figureSummary,
-          columns: [xAxisTitle ?? x, ...series.map((s) => s.label)],
-          rows: data.map((r) => [String(r[x] ?? ''), ...series.map((s) => cellText(fmt.full, r[s.key]))]),
+          columns: [xAxisTitle ?? x, ...series.map((s) => s.unit ? axisTitle(s.label, s.unit) : s.label)],
+          rows: data.map((r) => [xTickFormat ? xTickFormat(r[x]) : String(r[x] ?? ''), ...series.map((s) => cellText(seriesFmt(s).full, r[s.key]))]),
         }
       : undefined);
   const lastLabel = labelled
@@ -1019,7 +1084,7 @@ export function TrendChart({
                 fontWeight={600}
                 data-testid="trend-last-label"
               >
-                {fmt.label(Number(props.value))}
+                {seriesFmt(series.find((s) => s.key === labelled)!).label(Number(props.value))}
               </text>
             );
           }}
@@ -1029,10 +1094,20 @@ export function TrendChart({
   return (
     <ChartShell
       testId={testId}
-      legend={showLegend ? <ChartLegend items={series.map((s, i) => ({ label: s.label, color: colorOf(s, i) }))} /> : null}
+      legend={
+        showLegend ? (
+          <ChartLegend
+            items={series.map((s, i) => ({ label: hasRight ? `${s.label} (${s.axis ?? 'left'} axis)` : s.label, color: colorOf(s, i), clickable: s.clickable, selected: selectedSeries?.includes(s.key) }))}
+            onItemClick={onSeriesClick ? (i, e) => onSeriesClick(series[i].key, e) : undefined}
+          />
+        ) : null
+      }
       summary={figureSummary}
       table={figureTable}
-      top={<AxisCaption testId="chart-axis-title-top">{yAxisTitle}</AxisCaption>}
+      top={<Stack direction="row" justifyContent="space-between" flexWrap="wrap" useFlexGap spacing={1}>
+        <AxisCaption testId="chart-axis-title-top">{yAxisTitle}</AxisCaption>
+        {yRightAxisTitle ? <AxisCaption testId="chart-axis-title-right">{yRightAxisTitle}</AxisCaption> : null}
+      </Stack>}
       bottom={
         <AxisCaption testId="chart-axis-title-bottom" align="center" inset={valueWidth}>
           {xAxisTitle}
@@ -1040,32 +1115,54 @@ export function TrendChart({
       }
     >
       <ChartFrame height={height}>
-        <ComposedChart data={data} margin={{ top: lastPointLabel ? 18 : 8, right: 12, left: titled ? 0 : -12, bottom: 0 }}>
+        <ComposedChart
+          data={data}
+          margin={{ top: lastPointLabel ? 18 : 8, right: 12, left: titled ? 0 : -12, bottom: 0 }}
+          style={onPointClick ? { cursor: 'pointer' } : undefined}
+          onClick={
+            onPointClick
+              ? (state: unknown, e?: ChartClickEvent) => {
+                  const i = (state as { activeTooltipIndex?: number } | null)?.activeTooltipIndex;
+                  if (typeof i === 'number' && data[i]) onPointClick(data[i], i, e);
+                }
+              : undefined
+          }
+        >
           <CartesianGrid stroke={c.grid} vertical={false} strokeDasharray="2 4" />
-          <XAxis dataKey={x} tick={{ fill: c.axis, fontSize: 11 }} axisLine={false} tickLine={false} />
+          <XAxis dataKey={x} tick={{ fill: c.axis, fontSize: 11 }} tickFormatter={xTickFormat} axisLine={false} tickLine={false} />
           <YAxis
+            yAxisId={hasRight ? 'left' : 0}
             tick={{ fill: c.axis, fontSize: 11 }}
-            tickFormatter={fmt.tick}
+            tickFormatter={hasRight ? leftFmt.tick : fmt.tick}
             axisLine={false}
             tickLine={false}
             width={valueWidth}
-            domain={yScale === 'fit' ? ['auto', 'auto'] : [0, 'auto']}
+            domain={hasRight ? axisDomain(leftSeries) : yScale === 'fit' ? ['auto', 'auto'] : [0, 'auto']}
           />
-          <Tooltip {...c.tooltip} formatter={(v) => fmt.full(Number(v))} cursor={{ fill: c.cursor }} />
+          {hasRight ? <YAxis yAxisId="right" orientation="right" tick={{ fill: c.axis, fontSize: 11 }}
+            tickFormatter={rightFmt.tick} axisLine={false} tickLine={false} width={isMoney(rightUnit) ? 68 : 60}
+            domain={axisDomain(rightSeries)} /> : null}
+          <Tooltip {...c.tooltip} labelFormatter={(v) => xTickFormat ? xTickFormat(v) : String(v ?? '')}
+            formatter={(v, name, item) => {
+              const s = series.find((s) => s.key === String(item.dataKey));
+              return [(s ? seriesFmt(s) : fmt).full(Number(v)), String(name)];
+            }} cursor={{ fill: c.cursor }} />
           {series.map((s, i) =>
             s.kind === 'bar' ? (
               <Bar
+                yAxisId={hasRight ? s.axis ?? 'left' : 0}
                 isAnimationActive={false}
                 key={`${s.key}-${i}`}
                 dataKey={s.key}
                 name={s.label}
                 fill={colorOf(s, i)}
-                stackId={stack ? 'bar' : undefined}
+                stackId={stack && !hasRight ? 'bar' : undefined}
                 radius={stack ? undefined : [3, 3, 0, 0]}
                 maxBarSize={22}
               />
             ) : s.kind === 'area' ? (
               <Area
+                yAxisId={hasRight ? s.axis ?? 'left' : 0}
                 isAnimationActive={false}
                 key={`${s.key}-${i}`}
                 dataKey={s.key}
@@ -1076,12 +1173,14 @@ export function TrendChart({
                 fillOpacity={stack ? 0.25 : 0.12}
                 strokeWidth={2}
                 dot={false}
-                stackId={stack ? 'area' : undefined}
+                stackId={stack && !hasRight ? 'area' : undefined}
+                strokeDasharray={s.dash}
               >
                 {s.key === labelled ? lastLabel : null}
               </Area>
             ) : (
               <Line
+                yAxisId={hasRight ? s.axis ?? 'left' : 0}
                 isAnimationActive={false}
                 key={`${s.key}-${i}`}
                 dataKey={s.key}
@@ -1089,6 +1188,7 @@ export function TrendChart({
                 type="monotone"
                 stroke={colorOf(s, i)}
                 strokeWidth={2}
+                strokeDasharray={s.dash}
                 dot={
                   s.key === labelled
                     ? (p: { index?: number; cx?: number; cy?: number }) =>
@@ -1113,6 +1213,52 @@ export function TrendChart({
 /* ------------------------------------------------------------------------------------------------
  * RankedBars: horizontal bars, sorted, directly labelled, optional threshold line and state colour.
  * ---------------------------------------------------------------------------------------------- */
+
+export type ScatterPoint = { key: string; label: string; x: number; y: number };
+export function ScatterPlot({ data, xUnit, yUnit, xAxisTitle, yAxisTitle, summary,
+  height = 220, onPointClick, testId = 'scatter-plot',
+}: {
+  data: ScatterPoint[]; xUnit: MeasureUnit; yUnit: MeasureUnit;
+  xAxisTitle: string; yAxisTitle: string; summary: string; height?: number;
+  onPointClick?: (point: ScatterPoint, e?: ChartClickEvent) => void; testId?: string;
+}) {
+  const c = useChartTheme();
+  const table: ChartDataTable = { caption: summary,
+    columns: ['Category', xAxisTitle, yAxisTitle],
+    rows: data.map((d) => [d.label, formatChartValue(d.x, xUnit), formatChartValue(d.y, yUnit)]),
+  };
+  return <ChartShell testId={testId} summary={summary} table={table}
+    top={<AxisCaption testId="chart-axis-title-top">{yAxisTitle}</AxisCaption>}
+    bottom={<AxisCaption testId="chart-axis-title-bottom" align="center">{xAxisTitle}</AxisCaption>}>
+    <ChartFrame height={height}>
+      <ScatterChart margin={{ top: 8, right: 16, bottom: 0, left: 8 }}>
+        <CartesianGrid stroke={c.grid} strokeDasharray="2 4" />
+        <XAxis type="number" dataKey="x" name={xAxisTitle} domain={['auto', 'auto']}
+          tick={{ fill: c.axis, fontSize: 11 }} tickFormatter={(v: number) => formatChartValue(v, xUnit, 'tick')}
+          axisLine={false} tickLine={false} />
+        <YAxis type="number" dataKey="y" name={yAxisTitle} domain={['auto', 'auto']}
+          tick={{ fill: c.axis, fontSize: 11 }} tickFormatter={(v: number) => formatChartValue(v, yUnit, 'tick')}
+          width={isMoney(yUnit) ? 68 : 60} axisLine={false} tickLine={false} />
+        <Tooltip content={({ active, payload }) => {
+          const d = payload?.[0]?.payload as ScatterPoint | undefined;
+          if (!active || !d) return null;
+          return <Box sx={{ p: 1, border: 1, borderColor: 'divider', borderRadius: 1,
+            bgcolor: 'background.paper', color: 'text.primary', maxWidth: 280, overflowWrap: 'anywhere' }}>
+            <Typography variant="caption" fontWeight={700} display="block">{d.label}</Typography>
+            <Typography variant="caption" display="block">{xAxisTitle}: {formatChartValue(d.x, xUnit)}</Typography>
+            <Typography variant="caption" display="block">{yAxisTitle}: {formatChartValue(d.y, yUnit)}</Typography>
+          </Box>;
+        }} />
+        <Scatter data={data} fill={c.primary} isAnimationActive={false}
+          cursor={onPointClick ? 'pointer' : undefined}
+          onClick={onPointClick ? (entry: unknown, _i: number, e?: ChartClickEvent) => {
+            const d = (entry as { payload?: ScatterPoint }).payload;
+            if (d) onPointClick(d, e);
+          } : undefined} />
+      </ScatterChart>
+    </ChartFrame>
+  </ChartShell>;
+}
 
 export type RankedBarDatum = { label: string; value: number | null; tone?: ChartTone; key?: string };
 
@@ -1189,7 +1335,7 @@ export function RankedBars({
   labelWidth?: number;
   rowHeight?: number;
   controls?: ChartControlsProp;
-  onRowClick?: (d: RankedBarDatum) => void;
+  onRowClick?: (d: RankedBarDatum, e?: ChartClickEvent) => void;
   testId?: string;
 }) {
   const c = useChartTheme();
@@ -1282,9 +1428,9 @@ export function RankedBars({
             cursor={onRowClick ? 'pointer' : undefined}
             onClick={
               onRowClick
-                ? (state) => {
+                ? (state: unknown, _index: number, e?: ChartClickEvent) => {
                     const payload = (state as { payload?: RankedBarDatum }).payload;
-                    if (payload) onRowClick(payload);
+                    if (payload) onRowClick(payload, e);
                   }
                 : undefined
             }
@@ -1309,7 +1455,7 @@ export function RankedBars({
  * ShareChart: pie or donut with a legend of full names, values and shares of the full total.
  * ---------------------------------------------------------------------------------------------- */
 
-export type ShareDatum = { label: string; value: number };
+export type ShareDatum = { label: string; value: number; key?: string; clickable?: boolean };
 
 export function ShareChart({
   data,
@@ -1321,6 +1467,8 @@ export function ShareChart({
   valueHeader = 'Value',
   height = 220,
   controls = true,
+  onSliceClick,
+  selectedKeys,
   testId = 'share-chart',
 }: {
   /** Every category: shares are computed against all of them, not only the slices shown. */
@@ -1334,6 +1482,9 @@ export function ShareChart({
   valueHeader?: string;
   height?: number;
   controls?: ChartControlsProp;
+  /** A click on a slice or its legend row (legend rows are buttons when set). */
+  onSliceClick?: (d: ShareDatum, e?: ChartClickEvent) => void;
+  selectedKeys?: string[];
   testId?: string;
 }) {
   const c = useChartTheme();
@@ -1375,9 +1526,18 @@ export function ShareChart({
                 stroke={c.paper}
                 strokeWidth={2}
                 isAnimationActive={false}
+                cursor={onSliceClick ? 'pointer' : undefined}
+                onClick={
+                  onSliceClick
+                    ? (entry: unknown, _index: number, e?: ChartClickEvent) => {
+                        const d = (entry as { payload?: ShareDatum }).payload;
+                        if (d && d.clickable !== false) onSliceClick(d, e);
+                      }
+                    : undefined
+                }
               >
                 {shown.map((d, i) => (
-                  <Cell key={`${d.label}-${i}`} fill={color(i)} />
+                  <Cell key={d.key ?? `${d.label}-${i}`} fill={color(i)} />
                 ))}
               </Pie>
               <Tooltip {...c.tooltip} formatter={(v) => `${full(Number(v))} · ${share(Number(v))}`} />
@@ -1385,17 +1545,46 @@ export function ShareChart({
           </ResponsiveContainer>
         </Box>
         <Stack component="ul" spacing={0.75} sx={{ flex: 1, minWidth: 0, m: 0, p: 0, listStyle: 'none' }} data-testid="share-chart-legend">
-          {shown.map((d, i) => (
-            <Stack component="li" key={`${d.label}-${i}`} direction="row" spacing={1} alignItems="flex-start">
-              <Box aria-hidden sx={{ width: 10, height: 10, mt: 0.5, borderRadius: '2px', flexShrink: 0, bgcolor: color(i) }} />
-              <Typography variant="caption" sx={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
-                {d.label}
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-                {full(d.value)} · {share(d.value)}
-              </Typography>
-            </Stack>
-          ))}
+          {shown.map((d, i) => {
+            const selected = Boolean(d.key && selectedKeys?.includes(d.key));
+            const row = (
+              <>
+                <Box aria-hidden sx={{ width: 10, height: 10, mt: 0.5, borderRadius: '2px', flexShrink: 0, bgcolor: color(i) }} />
+                <Typography variant="caption" sx={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', textAlign: 'left', fontWeight: selected ? 700 : undefined }}>
+                  {d.label}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                  {full(d.value)} · {share(d.value)}
+                </Typography>
+              </>
+            );
+            return (
+              <Stack component="li" key={d.key ?? `${d.label}-${i}`} direction="row" spacing={1} alignItems="flex-start">
+                {onSliceClick && d.clickable !== false ? (
+                  <ButtonBase
+                    onClick={(e) => onSliceClick(d, e)}
+                    aria-pressed={selected}
+                    aria-label={`Filter by ${d.label}`}
+                    data-testid="share-chart-legend-item"
+                    sx={{
+                      display: 'flex',
+                      flex: 1,
+                      minWidth: 0,
+                      gap: 1,
+                      alignItems: 'flex-start',
+                      justifyContent: 'flex-start',
+                      borderRadius: 1,
+                      '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 1 },
+                    }}
+                  >
+                    {row}
+                  </ButtonBase>
+                ) : (
+                  row
+                )}
+              </Stack>
+            );
+          })}
         </Stack>
       </Stack>
     </ChartShell>
