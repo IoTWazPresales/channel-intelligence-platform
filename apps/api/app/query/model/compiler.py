@@ -220,6 +220,11 @@ def _breakdown(ctx: _Ctx, bid: str, grain: str | None) -> _Breakdown:
     if bid in model.local:
         loc = model.local[bid]
         col = ctx.owner(loc.on).c[loc.column]
+        if loc.name_column:
+            return _Breakdown(
+                id=bid, kind="reference", key_expr=col,
+                name_expr=ctx.owner(loc.on).c[loc.name_column], filter_expr=col,
+            )
         expr = func.coalesce(col, _UNASSIGNED_SQL)
         return _Breakdown(id=bid, kind="local", key_expr=expr, filter_expr=expr)
     for did in model.joins:

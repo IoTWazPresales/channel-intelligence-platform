@@ -10,8 +10,8 @@ A definition is the v2 query a widget or report runs plus its display options (s
      "migrated_from": {...}}           # only on rows the migration script wrote
 
 Checks run the v2 planner (``plan_request``, no SQL), the same code ``/query/v2/explain`` uses. Any
-refusal refuses the whole write (400 with the refusal texts). Dates are never stored: they come from
-the dashboard at run time, so a model definition is planned against a nominal dashboard window
+refusal refuses the whole write (400 with the refusal texts). Query dates come from the dashboard
+or an explicit S17 fixed window. Otherwise a model definition is planned against a nominal window
 (a units-per-week figure is valid on a dashboard, which always supplies from / to, except "all time").
 
 The v1 columns are mirrored (spec s.2.1) so old readers (report builder, exports, v1 delivery) keep
@@ -41,12 +41,12 @@ from app.query.model.graph import (
 from app.query.model.loader import DataModel, Measure, default_model
 
 DEFINITION_VERSION = 1
-_TOP_KEYS = frozenset({"v", "kind", "query", "display", "v1_equivalent", "migrated_from"})
+_TOP_KEYS = frozenset({"v", "kind", "query", "display", "dashboard", "v1_equivalent", "migrated_from"})
 _QUERY_KEYS = frozenset({"measures", "breakdowns", "period", "filters", "sort", "limit"})
 _MAX_DISPLAY_BYTES = 8192
 _MAX_MIGRATED_BYTES = 4096
 _V1_GRAINS = ("week", "month", "quarter")
-# Nominal dashboard window used only to plan a model definition (dates are never stored).
+# Nominal planning window when the widget has no explicit fixed window.
 _NOMINAL_FROM = "2000-01-01"
 
 
@@ -146,6 +146,8 @@ def _shape(raw: Any) -> tuple[dict[str, Any], V2Request]:
             raise _refuse("definition_v2.display is an object.")
         if _json_size(display) > _MAX_DISPLAY_BYTES:
             raise _refuse(f"definition_v2.display is larger than {_MAX_DISPLAY_BYTES} bytes.")
+        if display.get("compare") is not None and not isinstance(display["compare"], bool):
+            raise _refuse("definition_v2.display.compare is true or false.")
         top_n = display.get("top_n")
         if top_n is not None and (isinstance(top_n, bool) or not isinstance(top_n, int) or not 1 <= top_n <= MAX_LIMIT):
             raise _refuse(f"definition_v2.display.top_n is a whole number from 1 to {MAX_LIMIT}.")
@@ -171,6 +173,35 @@ def _shape(raw: Any) -> tuple[dict[str, Any], V2Request]:
 
 def _clean(plan: Plan) -> bool:
     return plan.ok and not plan.refusals
+
+
+def _dashboard_options(raw: Any, dm: DataModel) -> dict[str, Any]:
+    """S17 explicit exceptions; they never alter the widget's own query filters or tenant scope."""
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict) or set(raw) - {"ignore_filters", "fixed_window"}:
+        raise _refuse("definition_v2.dashboard is {ignore_filters, fixed_window}.")
+    out: dict[str, Any] = {}
+    ignore = raw.get("ignore_filters", [])
+    allowed = (dm.breakdown_ids() - {"period"}) | {"date"}
+    if not isinstance(ignore, list) or len(ignore) > len(allowed) or any(not isinstance(k, str) or k not in allowed for k in ignore):
+        raise _refuse("definition_v2.dashboard.ignore_filters is a list of catalog filter ids or date.")
+    if ignore:
+        out["ignore_filters"] = list(dict.fromkeys(ignore))
+    fixed = raw.get("fixed_window")
+    if fixed is not None:
+        if not isinstance(fixed, dict) or set(fixed) != {"from", "to"}:
+            raise _refuse("definition_v2.dashboard.fixed_window needs from and to ISO dates.")
+        try:
+            for value in fixed.values():
+                if not isinstance(value, str) or date.fromisoformat(value).isoformat() != value:
+                    raise ValueError
+        except (ValueError, TypeError):
+            raise _refuse("definition_v2.dashboard.fixed_window needs valid ISO dates.") from None
+        if fixed["from"] > fixed["to"]:
+            raise _refuse("definition_v2.dashboard.fixed_window.from is after to.")
+        out["fixed_window"] = dict(fixed)
+    return out
 
 
 def _v1_mirror(dm: DataModel, plan: Plan, req: V2Request, v1_catalog: Any) -> tuple[V1Mirror, bool]:
@@ -229,9 +260,13 @@ def check_definition(
     dm = dm or default_model()
     v1_catalog = v1_catalog or catalog_for_tenant_cached((tenant_id or "default").strip() or "default")
     raw, req = _shape(raw)
+    dashboard = _dashboard_options(raw.get("dashboard"), dm)
+    fixed = dashboard.get("fixed_window")
+    if fixed:
+        req.period_from, req.period_to = fixed["from"], fixed["to"]
     plan = plan_request(dm, req, v1_catalog=v1_catalog)
     needs_dates = False
-    if not _clean(plan) and plan.governed is None and plan.model is not None:
+    if not fixed and not _clean(plan) and plan.governed is None and plan.model is not None:
         # A model definition runs with the dashboard's dates; plan it the way it will run.
         dated = V2Request(**{**req.__dict__, "period_from": _NOMINAL_FROM, "period_to": (today or date.today()).isoformat()})
         dated_plan = plan_request(dm, dated, v1_catalog=v1_catalog)
@@ -242,6 +277,8 @@ def check_definition(
         raise DefinitionRefused(plan.refusals or [Refusal(measure=None, reason="definition_v2 refused by the v2 planner.")])
 
     mirror, v1_equivalent = _v1_mirror(dm, plan, req, v1_catalog)
+    if fixed:
+        v1_equivalent = False  # v1 delivery cannot carry a stored fixed date window.
     query: dict[str, Any] = {"measures": list(req.measures), "breakdowns": list(plan.breakdowns)}
     if "period" in plan.breakdowns and plan.period_grain:
         query["period"] = {"grain": plan.period_grain}
@@ -260,6 +297,8 @@ def check_definition(
     }
     if raw.get("display") is not None:
         definition["display"] = raw["display"]
+    if dashboard:
+        definition["dashboard"] = dashboard
     definition["v1_equivalent"] = v1_equivalent
     if raw.get("migrated_from") is not None:
         definition["migrated_from"] = raw["migrated_from"]
@@ -269,10 +308,16 @@ def check_definition(
 def request_from_definition(
     definition: dict[str, Any], *, period_from: str | None = None, period_to: str | None = None
 ) -> V2Request:
-    """The v2 request a stored definition runs (dates from the caller, never from the definition)."""
+    """The v2 request, using the caller's dates unless this widget explicitly overrides them."""
     q = definition.get("query") or {}
     period = q.get("period") or {}
     sort = q.get("sort") or {}
+    settings = definition.get("dashboard") or {}
+    fixed = settings.get("fixed_window")
+    if fixed:
+        period_from, period_to = fixed["from"], fixed["to"]
+    elif "date" in settings.get("ignore_filters", []):
+        period_from = period_to = None
     return V2Request(
         measures=list(q.get("measures") or []),
         breakdowns=list(q.get("breakdowns") or []),

@@ -151,6 +151,33 @@ def test_derived_breakdowns_per_model(dm):
     assert "site_label" not in cpor
 
 
+def test_cpor_named_case_breakdown_uses_the_existing_tenant_join(dm, v1):
+    p = _plan(dm, v1, measures=["cpor.cases"], breakdowns=["case"], filters={"case": [17]})
+    assert p.ok and not p.refusals
+    compiled = compile_plan(dm, p, tenant_id="example")
+    assert compiled.columns[0].fields == ["case_id", "case_name"]
+    sql = compiled.sql_text()
+    assert "b_case.case_name" in sql and "b_case.id AS case_id" in sql
+    assert "b_case.tenant_id = %(tenant_id)s" in sql
+    assert "filter_case" in sql and "17" not in sql
+    assert p.filters[0].values == [17]
+    numeric = _plan(dm, v1, measures=["cpor.cases"], filters={"case": ["17"]})
+    assert numeric.ok and numeric.filters[0].values == [17]
+    for value in [True, None, "not-an-id", 1.5, 2**40]:
+        refused = _plan(dm, v1, measures=["cpor.cases"], filters={"case": [value]})
+        assert not refused.ok and "Filter 'case'" in _reasons(refused)[0]
+
+
+def test_named_local_breakdown_refuses_an_unknown_name_column(tmp_path):
+    def invalid(d):
+        d["models"]["cpor"]["local"]["case"] = {
+            "column": "id", "via": "case", "name_column": "missing_case_name", "label": "Case",
+        }
+
+    with pytest.raises(ModelLoadError, match="has no column.*missing_case_name"):
+        load_model(_write(tmp_path, invalid))
+
+
 def test_any_three_derived_breakdowns_are_valid(dm, v1):
     p = _plan(dm, v1, measures=["dsi_sellout.units"], breakdowns=["period", "region", "bu"], period_grain="month")
     assert p.refusals == [] and p.measures

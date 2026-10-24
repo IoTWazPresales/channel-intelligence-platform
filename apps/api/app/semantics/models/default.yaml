@@ -168,6 +168,7 @@ models:
       distributor: {fk: distributor_id}
       customer: {fk: customer_id, via: case, role: cpor_account}
     local:
+      case: {column: id, via: case, name_column: case_name, label: Case, group: Promotion}
       promo_type: {column: promotion_type, via: case, label: Promotion type, group: Promotion}
       status: {column: status, via: case, label: Case status, group: Promotion}
       workflow_status: {column: workflow_status, via: case, label: Case approval status, group: Promotion}

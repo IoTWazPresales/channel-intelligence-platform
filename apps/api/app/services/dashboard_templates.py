@@ -165,9 +165,9 @@ TEMPLATES: tuple[Template, ...] = (
             TemplateWidget("Delivery rate", "kpi", ("cpor.delivery_rate",), layout=(9, 0, 3, 5), display=_KPI_PLAIN),
             TemplateWidget("Cases by status", "hbar", ("cpor.cases",), ("status",), layout=(0, 5, 4, 8)),
             TemplateWidget(
-                "Status and approval status", "table",
+                "Promotion cases and outcomes", "table",
                 ("cpor.cases", "cpor.support_usd", "cpor.support_zar", "cpor.estimate_units", "cpor.result_units", "cpor.delivery_rate"),
-                ("status", "workflow_status"), layout=(4, 5, 8, 8),
+                ("case", "status", "workflow_status"), layout=(4, 5, 8, 8),
             ),
             TemplateWidget("Support USD by quarter (window start)", "bar", ("cpor.support_usd",), ("period",), "quarter", (0, 13, 6, 8)),
             TemplateWidget("Support USD by customer", "hbar", ("cpor.support_usd",), ("customer",), layout=(6, 13, 6, 8), display=_TOP15),
@@ -175,7 +175,6 @@ TEMPLATES: tuple[Template, ...] = (
         left_out=(
             LeftOut("Open cases", pending="cpor.open_cases"),
             LeftOut("Case value", pending="cpor.value"),
-            LeftOut("A list of cases", reason="There is no case breakdown yet, so cases cannot be listed one by one."),
             LeftOut("Cases as a pie", reason="Cases is a distinct count, so its parts do not add up to a whole; bars are used."),
         ),
     ),

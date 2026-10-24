@@ -30,7 +30,7 @@ MAX_FILTER_TEXT = 256
 # Same text as registry._validate_period_grain (v1): day stays refused until decision 1 is taken.
 DAILY_REFUSAL = "Lowest calendar grain is week; daily is not this unit (transaction_date stays storage-only)."
 
-ENTITY_BREAKDOWNS = frozenset({"product", "customer", "distributor"})
+ENTITY_BREAKDOWNS = frozenset({"product", "customer", "distributor", "case"})
 
 
 @dataclass

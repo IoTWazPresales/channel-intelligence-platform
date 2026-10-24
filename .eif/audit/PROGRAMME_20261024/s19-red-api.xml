@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="3" skipped="0" tests="3" time="7.120" timestamp="2026-10-24T22:12:39.734257+02:00" hostname="RF2300014-NB3"><testcase classname="tests.test_query_model_graph" name="test_cpor_named_case_breakdown_uses_the_existing_tenant_join" time="1.047"><failure message="assert (False)&#10; +  where False = Plan(model=FactModel(id='cpor', label='CPOR promotion lines', table='cpor_case_line', tenant_column='tenant_id', tenan...wn breakdown 'case'. Use the breakdowns in the v2 catalog.&quot;, wall=None)], governed=None, governed_filters={}, notes=[]).ok">dm = DataModel(version=1, digest='8150d2edca27000373228fe014f06164f62afd2f704b406b21b974d66ae9ca35', source_doc='docs/DATA_...n='case_id', rule=None, when_not_null=None, latest_per=None, additivity='non_additive', legacy_key=None, kind='base')})
+v1 = SemanticCatalog(version=2, source_doc='docs/COMMERCIAL_SEMANTICS.md', dimensions=(DimensionDef(id='period', label='Per...amples=(), notes=None, calendar_period=False, hidden=False, compose=None)), tenant_id='default', overlay_applied=False)
+
+    def test_cpor_named_case_breakdown_uses_the_existing_tenant_join(dm, v1):
+        p = _plan(dm, v1, measures=["cpor.cases"], breakdowns=["case"], filters={"case": [17]})
+&gt;       assert p.ok and not p.refusals
+E       assert (False)
+E        +  where False = Plan(model=FactModel(id='cpor', label='CPOR promotion lines', table='cpor_case_line', tenant_column='tenant_id', tenan...wn breakdown 'case'. Use the breakdowns in the v2 catalog.", wall=None)], governed=None, governed_filters={}, notes=[]).ok
+
+tests\test_query_model_graph.py:156: AssertionError</failure></testcase><testcase classname="tests.test_query_model_graph" name="test_named_local_breakdown_refuses_an_unknown_name_column" time="0.238"><failure message="Failed: DID NOT RAISE &lt;class 'app.query.model.loader.ModelLoadError'&gt;">tmp_path = WindowsPath('C:/Users/warren_eliason/AppData/Local/Temp/pytest-of-Warren_Eliason/pytest-135/test_named_local_breakdown_ref0')
+
+    def test_named_local_breakdown_refuses_an_unknown_name_column(tmp_path):
+        def invalid(d):
+            d["models"]["cpor"]["local"]["case"] = {
+                "column": "id", "via": "case", "name_column": "missing_case_name", "label": "Case",
+            }
+    
+&gt;       with pytest.raises(ModelLoadError, match="has no column.*missing_case_name"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE &lt;class 'app.query.model.loader.ModelLoadError'&gt;
+
+tests\test_query_model_graph.py:171: Failed</failure></testcase><testcase classname="tests.test_query_model_db" name="test_cpor_measures_follow_the_portfolio_service[asyncio]" time="1.422"><failure message="assert False">@pytest.mark.anyio
+    async def test_cpor_measures_follow_the_portfolio_service():
+        from app.services.cpor.portfolio_intelligence import build_portfolio_intelligence
+    
+        db = await _session_or_skip()
+        try:
+            s = await _seed(db)
+    
+            def case(code, **kw):
+                c = CporCase(
+                    case_code=_key(code)[-60:], tenant_id=TA, customer_id=s.cA1.id, promotion_type="Price drop",
+                    window_start=date(2026, 3, 2), window_end=date(2026, 3, 29), **kw,
+                )
+                db.add(c)
+                return c
+    
+            live, superseded, excluded = case("live", status="approved"), case("sup"), case("exc", intelligence_exclude=True)
+            await db.flush()
+            superseded.superseded_by_case_id = live.id
+    
+            def line(c, prod, est, res, usd, *, remark=None, ttl_usd=None, ws=date(2026, 3, 2)):
+                db.add(
+                    CporCaseLine(
+                        case_id=c.id, product_id=prod.id, distributor_id=s.dA.id, window_start=ws, window_end=ws + timedelta(days=27),
+                        srp=100, vat_rate=15, dealer_margin_pct=10, estimate_qty=est, result_qty=res, support_usd=usd,
+                        ttl_support_usd=ttl_usd, ttl_support=(usd or 0) * est * 18, remark=remark,
+                    )
+                )
+    
+            line(live, s.pA1, 10, 8, 2.5)
+            line(live, s.pA2, 4, 0, 1.0, ttl_usd=7, ws=date(2026, 3, 9))
+            line(live, s.pA1, 5, 5, 3.0, remark="[voided] by steward", ws=date(2026, 3, 16))
+            line(live, s.pA2, 0, 0, 3.0, ws=date(2026, 3, 23))
+            line(superseded, s.pA1, 99, 99, 9.0)
+            line(excluded, s.pA1, 77, 77, 9.0)
+            await db.flush()
+    
+            portfolio = await db.run_sync(build_portfolio_intelligence)
+            mine = next(c for c in portfolio["by_customer"] if c["customer_id"] == s.cA1.id)
+            r = await _v2(
+                db, ["cpor.support_usd", "cpor.support_zar", "cpor.estimate_units", "cpor.result_units", "cpor.delivery_rate",
+                     "cpor.support_per_unit_usd", "cpor.cases", "cpor.lines"],
+                ["customer"], filters={"customer": s.cA1.id},
+            )
+            row = r["rows"][0]
+            assert row["cpor.support_usd"] == pytest.approx(mine["support_usd"]) == pytest.approx(25 + 7)
+            assert row["cpor.support_zar"] == pytest.approx(mine["support_zar"])
+            assert row["cpor.estimate_units"] == mine["estimate_qty"] == 14.0
+            assert row["cpor.result_units"] == mine["result_qty"] == 8.0
+            assert row["cpor.delivery_rate"] == pytest.approx(mine["delivery_rate"])
+            assert row["cpor.support_per_unit_usd"] == pytest.approx(mine["support_per_unit_sold_usd"])
+            assert row["cpor.cases"] == 1.0 and row["cpor.lines"] == 2.0
+            # Ratio null when the denominator is 0: product a2 sold nothing.
+            byp = await _v2(db, ["cpor.support_per_unit_usd"], ["product"], filters={"customer": s.cA1.id})
+            vals = {x["product_id"]: x["cpor.support_per_unit_usd"] for x in byp["rows"]}
+            assert vals[s.pA2.id] is None and vals[s.pA1.id] == pytest.approx(25 / 8)
+            st = await _v2(db, ["cpor.cases"], ["status", "workflow_status"], filters={"customer": s.cA1.id})
+            assert [(x["status"], x["workflow_status"]) for x in st["rows"]] == [("approved", "draft")]
+            # Tenant B sees none of tenant A's cases.
+            none = await _v2(db, ["cpor.support_usd"], ["customer"], tenant=TB)
+            assert none["rows"] == [] and none["totals"]["cpor.support_usd"] == 0.0
+    
+            # S19: labels may repeat or be absent; cases stay distinct by the case ID.
+            live.case_name = "Autumn promotion"
+            twin = case("twin", case_name="Autumn promotion")
+            unnamed = case("unnamed")
+            await db.flush()
+            line(twin, s.pA1, 2, 1, 1)
+            line(unnamed, s.pA1, 3, 1, 1)
+            await db.flush()
+            cases = await _v2(db, ["cpor.cases", "cpor.support_usd"], ["case"])
+&gt;           assert cases["ok"]
+E           assert False
+
+tests\test_query_model_db.py:475: AssertionError</failure></testcase></testsuite></testsuites>

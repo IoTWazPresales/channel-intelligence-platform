@@ -20,11 +20,13 @@ from app.models.report_delivery import ReportDelivery, ReportSchedule
 from app.models.saved_reports import SavedReport
 from app.query.engine import execute_query
 from app.services.report_delivery import (
+    _v2_payload,
     deliver_saved_report,
     delivery_to_dict,
     next_run_for_cadence,
     schedule_to_dict,
 )
+from app.services.dashboard_definitions import runs_v1
 from app.services.report_export import build_pdf_bytes, build_xlsx_bytes, detect_missing_data
 from app.services.saved_report_access import can_view_owned_item, parse_user_id
 
@@ -142,18 +144,23 @@ async def export_saved_report(
         user=user,
     ):
         raise HTTPException(status_code=403, detail="Not allowed")
-    result = await execute_query(
-        db,
-        metric=row.metric_key,
-        grains=list(row.grains or []),
-        filters=dict(row.filters or {}),
-        tenant_id=tid,
-    )
+    definition = getattr(row, "definition_v2", None)
+    grains = list(row.grains or [])
+    if runs_v1(definition):
+        result = await execute_query(
+            db, metric=row.metric_key, grains=grains, filters=dict(row.filters or {}), tenant_id=tid,
+        )
+        payload = result.as_dict()
+    else:
+        payload = await _v2_payload(db, definition, tenant_id=tid, skip_cache=False)
+        if not payload.get("ok"):
+            raise HTTPException(status_code=400, detail=payload)
+        grains = list((definition.get("query") or {}).get("breakdowns") or [])
     return await _export_from_result(
         title=row.name,
         metric_key=row.metric_key,
-        grains=list(row.grains or []),
-        result_payload=result.as_dict(),
+        grains=grains,
+        result_payload=payload,
         fmt=format,
     )
 

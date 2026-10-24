@@ -98,6 +98,8 @@ class Local:
     on: str | None
     label: str
     group: str
+    # Optional named identity on the same owner, e.g. CPOR case ID + case_name.
+    name_column: str | None = None
 
 
 @dataclass(frozen=True)
@@ -392,6 +394,10 @@ def _parse_model(
             on=on,
             label=str(lb.get("label") or lid),
             group=str(lb.get("group") or ""),
+            name_column=(
+                _column(tables, owner, lb["name_column"], f"model {mid} local {lid} name")
+                if lb.get("name_column") is not None else None
+            ),
         )
 
     measures: dict[str, Measure] = {}

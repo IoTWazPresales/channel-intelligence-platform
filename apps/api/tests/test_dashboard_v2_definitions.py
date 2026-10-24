@@ -89,6 +89,27 @@ def test_catalog_governed_honours_and_planner_refuses_what_is_not_honoured() -> 
 # ----------------------------------------------------------------------------- definitions
 
 
+def test_widget_fixed_window_is_validated_preserved_and_never_delivered_through_v1() -> None:
+    fixed = {"from": "2026-01-01", "to": "2026-01-31"}
+    c = check_definition({"query": {"measures": ["dsi_sellout.units"]},
+                          "dashboard": {"ignore_filters": ["customer"], "fixed_window": fixed}}, tenant_id="default")
+    assert c.definition["dashboard"] == {"ignore_filters": ["customer"], "fixed_window": fixed}
+    assert not c.v1_equivalent and not runs_v1(c.definition)
+    req = request_from_definition(c.definition, period_from="2026-07-01", period_to="2026-07-31")
+    assert (req.period_from, req.period_to) == (fixed["from"], fixed["to"])
+
+
+@pytest.mark.parametrize("settings", [
+    {"ignore_filters": ["unknown_filter"]}, {"ignore_filters": "customer"},
+    {"fixed_window": {"from": "2026-02-30", "to": "2026-03-01"}},
+    {"fixed_window": {"from": "2026-03-01", "to": "2026-01-01"}},
+    {"fixed_window": {"from": "2026-01-01"}}, {"unknown": True},
+])
+def test_widget_dashboard_overrides_refuse_invalid_shapes(settings) -> None:
+    with pytest.raises(DefinitionRefused, match="dashboard"):
+        check_definition({"query": {"measures": ["dsi_sellout.units"]}, "dashboard": settings}, tenant_id="default")
+
+
 def test_definition_valid_model_and_governed_with_v1_mirror() -> None:
     c = check_definition({"query": {"measures": ["dsi_sellout.units"], "breakdowns": ["period"], "period": {"grain": "week"}}, "v1_equivalent": False}, tenant_id="default")
     assert c.definition == {"v": 1, "kind": "model", "query": {"measures": ["dsi_sellout.units"], "breakdowns": ["period"], "period": {"grain": "week"}}, "v1_equivalent": True}
@@ -127,6 +148,7 @@ def test_definition_valid_model_and_governed_with_v1_mirror() -> None:
         ({"query": {"measures": ["dsi_sellout.units"], "breakdowns": ["period"], "period": {"grain": "day"}}}, "Lowest calendar grain is week"),
         ({"query": {"measures": ["cst_sellthrough.reported_soh"], "breakdowns": ["period"]}}, "never added up across dates"),
         ({"query": {"measures": ["dsi_sellout.units"]}, "display": {"top_n": 0}}, "top_n"),
+        ({"query": {"measures": ["dsi_sellout.units"]}, "display": {"compare": "false"}}, "compare is true or false"),
     ],
 )
 def test_definition_refused_with_the_planners_text(raw, needle) -> None:
@@ -217,6 +239,9 @@ def test_every_starter_widget_plans_with_no_refusals() -> None:
     reasons = [lo["reason"] for lo in listing["account_overview"]["left_out"]]
     assert any(r.startswith("Customer stock cover is not defined for the builder") for r in reasons)
     assert all(lo["reason"] for t in listing.values() for lo in t["left_out"])
+    cases = next(t for t in TEMPLATES if t.key == "cpor_cases")
+    assert any(w.visual == "table" and "case" in w.breakdowns for w in cases.widgets)
+    assert not any(lo["what"] == "A list of cases" for lo in listing["cpor_cases"]["left_out"])
 
 
 # ----------------------------------------------------------------------------- DB: 0048, script, delivery

@@ -25,7 +25,7 @@ async def _v2_payload(
 
     Shaped like the v1 payload the delivery row reads: ``value`` = totals[first measure], ``ok``,
     ``message`` = the first refusal reason, ``rows``, ``data_vintage`` from explain. No dates are
-    stored on a definition, so the report covers all dates held.
+    stored in query.period; an explicit widget fixed window is retained on promotion/delivery.
     """
     from app.query.model.execute import run_v2
 
@@ -34,6 +34,12 @@ async def _v2_payload(
     first = req.measures[0] if req.measures else None
     explain = res.get("explain") or {}
     vintage = explain.get("data_vintage")
+    query_context = {
+        "period": {"from": req.period_from, "to": req.period_to},
+        "truncated": bool(res.get("truncated")),
+        "returned_rows": len(res.get("rows") or []),
+        "row_count": explain.get("row_count"),
+    }
     refusals = res.get("refusals") or []
     return {
         "ok": bool(res.get("ok")),
@@ -43,9 +49,9 @@ async def _v2_payload(
         "message": refusals[0]["reason"] if refusals and not res.get("ok") else None,
         "data_vintage": (
             {"engine": "v2", "min": vintage.get("min"), "max": vintage.get("max"),
-             "as_of_utc": datetime.now(timezone.utc).isoformat()}
+             "as_of_utc": datetime.now(timezone.utc).isoformat(), **query_context}
             if isinstance(vintage, dict)
-            else vintage
+            else {"engine": "v2", **query_context}
         ),
     }
 

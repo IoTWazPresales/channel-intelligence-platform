@@ -462,6 +462,27 @@ async def test_cpor_measures_follow_the_portfolio_service():
         # Tenant B sees none of tenant A's cases.
         none = await _v2(db, ["cpor.support_usd"], ["customer"], tenant=TB)
         assert none["rows"] == [] and none["totals"]["cpor.support_usd"] == 0.0
+
+        # S19: labels may repeat or be absent; cases stay distinct by the case ID.
+        live.case_name = "Autumn promotion"
+        twin = case("twin", case_name="Autumn promotion")
+        unnamed = case("unnamed")
+        await db.flush()
+        line(twin, s.pA1, 2, 1, 1)
+        line(unnamed, s.pA1, 3, 1, 1)
+        await db.flush()
+        cases = await _v2(db, ["cpor.cases", "cpor.support_usd"], ["case"])
+        assert cases["ok"]
+        by_id = {r["case_id"]: r for r in cases["rows"]}
+        assert set(by_id) == {live.id, twin.id, unnamed.id}
+        assert by_id[live.id]["case_name"] == by_id[twin.id]["case_name"] == "Autumn promotion"
+        assert by_id[unnamed.id]["case_name"] == "Unassigned"
+        assert cases["totals"]["cpor.cases"] == 3
+        only_live = await _v2(db, ["cpor.support_usd"], ["case"], filters={"case": [live.id]})
+        assert [r["case_id"] for r in only_live["rows"]] == [live.id]
+        assert only_live["totals"]["cpor.support_usd"] == 32
+        isolated = await _v2(db, ["cpor.cases"], ["case"], tenant=TB)
+        assert isolated["ok"] and isolated["rows"] == []
     finally:
         await db.rollback()
         await db.close()

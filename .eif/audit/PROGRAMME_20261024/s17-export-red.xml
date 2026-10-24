@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="2" time="7.182" timestamp="2026-10-24T22:24:51.272246+02:00" hostname="RF2300014-NB3"><testcase classname="tests.test_dashboard_v2_export" name="test_saved_fixed_window_export_never_runs_the_all_time_v1_query[asyncio-xlsx]" time="0.287"><failure message="AssertionError: fixed-window download must not use v1">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x00000213053D8D40&gt;
+fmt = 'xlsx'
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("fmt", ["xlsx", "pdf"])
+    async def test_saved_fixed_window_export_never_runs_the_all_time_v1_query(monkeypatch, fmt):
+        fixed = {"from": "2026-01-01", "to": "2026-01-31"}
+        definition = check_definition({"query": {"measures": ["dsi_sellout.units"]}, "dashboard": {"fixed_window": fixed}}, tenant_id="default")
+        row = SimpleNamespace(tenant_id="default", owner_user_id=1, visibility="personal", shared_roles=[],
+                              name="Fixed January", metric_key=definition.v1.metric_key, grains=[], filters={}, definition_v2=definition.definition)
+        db = SimpleNamespace(get=AsyncMock(return_value=row))
+        v1 = AsyncMock(side_effect=AssertionError("fixed-window download must not use v1"))
+        v2 = AsyncMock(return_value={"ok": True, "rows": [], "totals": {"dsi_sellout.units": 13}, "truncated": False,
+                                    "explain": {"row_count": 0, "data_vintage": {"min": None, "max": None}}})
+        monkeypatch.setattr(report_exports, "execute_query", v1)
+        monkeypatch.setattr(v2_execute, "run_v2", v2)
+&gt;       response = await report_exports.export_saved_report(1, format=fmt, db=db, user={"id": 1, "role": "viewer", "tenant_id": "default"})
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_dashboard_v2_export.py:27: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+app\api\v1\endpoints\report_exports.py:145: in export_saved_report
+    result = await execute_query(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = &lt;AsyncMock id='2280715610464'&gt;
+args = (namespace(get=&lt;AsyncMock id='2280715604128'&gt;),)
+kwargs = {'filters': {}, 'grains': [], 'metric': 'dsi_sellout.units', 'tenant_id': 'default'}
+_call = call(namespace(get=&lt;AsyncMock id='2280715604128'&gt;), metric='dsi_sellout.units', grains=[], filters={}, tenant_id='default')
+effect = AssertionError('fixed-window download must not use v1')
+
+    async def _execute_mock_call(self, /, *args, **kwargs):
+        # This is nearly just like super(), except for special handling
+        # of coroutines
+    
+        _call = _Call((args, kwargs), two=True)
+        self.await_count += 1
+        self.await_args = _call
+        self.await_args_list.append(_call)
+    
+        effect = self.side_effect
+        if effect is not None:
+            if _is_exception(effect):
+&gt;               raise effect
+E               AssertionError: fixed-window download must not use v1
+
+..\..\..\AppData\Local\Programs\Python\Python312\Lib\unittest\mock.py:2291: AssertionError</failure></testcase><testcase classname="tests.test_dashboard_v2_export" name="test_saved_fixed_window_export_never_runs_the_all_time_v1_query[asyncio-pdf]" time="0.008"><failure message="AssertionError: fixed-window download must not use v1">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x00000213054631D0&gt;
+fmt = 'pdf'
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("fmt", ["xlsx", "pdf"])
+    async def test_saved_fixed_window_export_never_runs_the_all_time_v1_query(monkeypatch, fmt):
+        fixed = {"from": "2026-01-01", "to": "2026-01-31"}
+        definition = check_definition({"query": {"measures": ["dsi_sellout.units"]}, "dashboard": {"fixed_window": fixed}}, tenant_id="default")
+        row = SimpleNamespace(tenant_id="default", owner_user_id=1, visibility="personal", shared_roles=[],
+                              name="Fixed January", metric_key=definition.v1.metric_key, grains=[], filters={}, definition_v2=definition.definition)
+        db = SimpleNamespace(get=AsyncMock(return_value=row))
+        v1 = AsyncMock(side_effect=AssertionError("fixed-window download must not use v1"))
+        v2 = AsyncMock(return_value={"ok": True, "rows": [], "totals": {"dsi_sellout.units": 13}, "truncated": False,
+                                    "explain": {"row_count": 0, "data_vintage": {"min": None, "max": None}}})
+        monkeypatch.setattr(report_exports, "execute_query", v1)
+        monkeypatch.setattr(v2_execute, "run_v2", v2)
+&gt;       response = await report_exports.export_saved_report(1, format=fmt, db=db, user={"id": 1, "role": "viewer", "tenant_id": "default"})
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_dashboard_v2_export.py:27: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+app\api\v1\endpoints\report_exports.py:145: in export_saved_report
+    result = await execute_query(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = &lt;AsyncMock id='2280716185728'&gt;
+args = (namespace(get=&lt;AsyncMock id='2280716118320'&gt;),)
+kwargs = {'filters': {}, 'grains': [], 'metric': 'dsi_sellout.units', 'tenant_id': 'default'}
+_call = call(namespace(get=&lt;AsyncMock id='2280716118320'&gt;), metric='dsi_sellout.units', grains=[], filters={}, tenant_id='default')
+effect = AssertionError('fixed-window download must not use v1')
+
+    async def _execute_mock_call(self, /, *args, **kwargs):
+        # This is nearly just like super(), except for special handling
+        # of coroutines
+    
+        _call = _Call((args, kwargs), two=True)
+        self.await_count += 1
+        self.await_args = _call
+        self.await_args_list.append(_call)
+    
+        effect = self.side_effect
+        if effect is not None:
+            if _is_exception(effect):
+&gt;               raise effect
+E               AssertionError: fixed-window download must not use v1
+
+..\..\..\AppData\Local\Programs\Python\Python312\Lib\unittest\mock.py:2291: AssertionError</failure></testcase></testsuite></testsuites>
